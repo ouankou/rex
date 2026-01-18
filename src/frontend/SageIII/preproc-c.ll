@@ -198,32 +198,7 @@ write test cases so that
 #include "general_token_defs.h"
 
 
-#if 0
-// DQ (1/21/2008): This definition is now redundent with what is in general_token_defs.h
-struct token_element
-{
-    std::string token_lexeme;
-    int token_id;
-};
-#endif
 
-#if 0
-// These are now defined in general_defs.h
-//Ideally this should inherit from Sg_File_Info
-//But for now, this will work
-struct file_pos_info
-{
-    int line_num;
-    int column_num;
-};
-
-struct stream_element
-{ 
-    struct token_element * p_tok_elem;
-    struct file_pos_info beginning_fpi;
-    struct file_pos_info ending_fpi;
-};
-#endif
 
 
 using namespace std;
@@ -396,14 +371,6 @@ int getColumnNumberOfEndOfString( std::string internalString )
 
   // printf ("lexer: getColumnNumberOfEndOfString(): endingColumnNumber = %d \n",endingColumnNumber);
 
-#if 0
-  // If this is a one line comment then the ending position is the length of the comment PLUS the starting column position
-     if (getNumberOfLines(internalString) == 1)
-        {
-       // endingColumnNumber += get_file_info()->get_col() - 1;
-          endingColumnNumber += internalString.length() - 1;
-        }
-#endif
 
      return endingColumnNumber;
    }
@@ -423,18 +390,6 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
      //printf("%s is either a %s token \n",str.c_str(),(is_keyword != -1) ? "keyword" : "identifier");
 #endif
 
-#if 0
-     printf("%s is a %s token str.length() = %zu \n",str.c_str(),(is_keyword != -1) ? "keyword" : "identifier",str.length());
-     if (str.length() == 1)
-        {
-          printf ("str[0] = %d \n",str[0]);
-        }
-     if (str.length() == 2)
-        {
-          printf ("str[0] = %d \n",str[0]);
-          printf ("str[1] = %d \n",str[1]);
-        }
-#endif
 
   // found a keyword?
      if (tokenId == C_CXX_PRAGMA)
@@ -508,9 +463,6 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
         {
           if (str[0] == '\r' && str[1] == '\n')
              {
-#if 0
-	               printf ("Found a CRLF line ending pair, reset the column number \n");
-#endif
                preproc_column_num = 1;
              }
             else
@@ -526,23 +478,6 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
   // push the element onto the token stream
      ROSE_token_stream_pointer->push_back(p_se);
 
-#if 0
-  // DQ (11/29/2018): Investigating form-feeds and CRLF line endings (and how the token-based unparsing is removing them).
-     if (p_tok_elem->token_id == C_CXX_WHITESPACE)
-        {
-          printf ("p_se->beginning_fpi.line_num   = (%d,%d) \n",p_se->beginning_fpi.line_num,p_se->beginning_fpi.column_num);
-          if (p_tok_elem->token_lexeme.length() == 1)
-             {
-               printf ("Found token of length one \n");
-               char character = p_tok_elem->token_lexeme[0];
-               printf ("character = %d \n",(int)character);
-             }
-#if 0
-          printf ("Exiting as a test! \n");
-          ROSE_ABORT();
-#endif
-        }
-#endif
    }
 
 
@@ -596,14 +531,8 @@ void add_preprocessingInfo_to_token_stream (PreprocessingInfo* preprocessingInfo
   // been taken care of in the processing of the CPP directive or C/C++ comment.
   // int numberOfLines = preprocessingInfo->getNumberOfLines();
   // ROSE_ASSERT(numberOfLines >= 1);
-#if 0
-     printf ("In add_token(PreprocessingInfo*,int,int&): line column number correctly?: numberOfLines = %d \n",numberOfLines);
-#endif
   // p_se->ending_fpi.line_num   = preproc_line_num + (numberOfLines - 1);
 
-#if 0
-     printf ("In add_token(PreprocessingInfo*,int,int&): line column number correctly?: number_of_lines = %d \n",number_of_lines);
-#endif
      p_se->ending_fpi.line_num = preproc_line_num + number_of_lines;
 
   // preproc_column_num = preprocessingInfo->getColumnNumberOfEndOfString();
@@ -1118,48 +1047,10 @@ BEGIN NORMAL;
    }
 
 <NORMAL>[a-zA-Z_][a-zA-Z0-9_]* {
-#if 1
 #if DEBUG_LEX_PASS
     printf("%s matched identifier regex \n",yytext);
 #endif
      add_token(yytext,preproc_line_num,preproc_column_num,0);
-#else
-     token_element *p_tok_elem = new token_element;
-     p_tok_elem->token_lexeme = yytext;
-
-     int is_keyword = identify_if_C_CXX_keyword(yytext);
-
-#if DEBUG_LEX_PASS
-     printf("%s is either a %s token \n",yytext,(is_keyword != -1) ? "keyword" : "identifier");
-#endif
-
-  // found a keyword?
-     if(is_keyword != -1)
-        {   
-       // printf("%s is a keyword\n", yytext); 
-          p_tok_elem->token_id = is_keyword;
-        }
-       else
-        {   
-       // printf("%s is not a keyword\n", yytext); 
-          p_tok_elem->token_id = C_CXX_IDENTIFIER;
-        }
-
-     stream_element *p_se = new stream_element;
-     p_se->p_tok_elem = p_tok_elem;
-
-  // DQ (9/29/2013): uncommented so that we can
-  // set the source position.
-  // p_se->beginning_fpi.line_num = preproc_column_num;
-     p_se->beginning_fpi.line_num = preproc_line_num;
-     p_se->beginning_fpi.column_num = preproc_column_num;
-     preproc_column_num += strlen(yytext);
-     p_se->ending_fpi.line_num = preproc_line_num;
-     p_se->ending_fpi.column_num = preproc_column_num-1;
-
-  // push the element onto the token stream
-     ROSE_token_stream_pointer->push_back(p_se);
-#endif
    }
 
         /*begin handling the C++ style comments. */
@@ -1488,38 +1379,8 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
      ROSEAttributesList *preprocessorInfoList = new ROSEAttributesList; // create a new list
      ROSE_ASSERT (preprocessorInfoList != NULL);
 
-#if 0
-  // DQ (8/18/2019): Debugging the performance overhead of the header file unparsing support.
-     printf ("&&&&&&&&&&&&&&&&&&& Inside of lex file: getPreprocessorDirectives(): fileName = %s new_filename = %s \n",fileName.c_str(),new_filename.c_str());
-#endif
 
-#if 0
-     printf ("Saving list of processed files to insure that files are not processed more than once! \n");
-#endif
-#if 0
-     static std::set<std::string> file_set;
-     if (file_set.find(fileName) == file_set.end())
-        {
-          file_set.insert(fileName);
-        }
-       else
-        {
-       // DQ (5/22/2020): We need to allow this in the narrow case of a source file that is being copied.
-          printf ("WARNING: fileName has been processed previously (allowed for source files being copied): %s \n",fileName.c_str());
-       // ROSE_ABORT();
-        }
-#endif
 
-#if 0
-  // DQ (8/18/2019): Trying to find where this is called in the processing of the header files.
-     static int counter = 0;
-     if (counter > 10)
-        {
-          printf ("Exiting as a test while processing the 10th file \n");
-          ROSE_ABORT();
-        }
-     counter++;
-#endif
 
   // printf ("Inside of lex file: getPreprocessorDirectives() \n");
   // ROSE_ABORT();
@@ -1540,16 +1401,10 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
      if (new_filename != "")
         {
           globalFileName = new_filename;
-#if 0
-          printf ("Using non-physical new_filename: globalFileName = %s \n",globalFileName.c_str());
-#endif
         }
        else
         {
           globalFileName = fileName;
-#if 0
-          printf ("Using physical filename: globalFileName = %s \n",globalFileName.c_str());
-#endif
         }
 
 
@@ -1582,11 +1437,6 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
                     printf ("In getPreprocessorDirectives(): DONE: calling yylex() \n");
 #endif
 
-#if 0
-                 // DQ (8/17/2020): Debugging code.
-                 // Writes all gathered information to stdout
-                    preprocessorList.display("TEST Collection of Comments and CPP Directives");
-#endif
                  // bugfix (9/29/2001)
                  // The semantics required here is to move the elements accumulated into the
                  // preprocessorList into the preprocessorInfoList and delete them from the
@@ -1633,18 +1483,7 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
      printf ("Leaving getPreprocessorDirectives(): preprocessorInfoList->get_rawTokenStream()->size() = %" PRIuPTR " \n",preprocessorInfoList->get_rawTokenStream()->size());
 #endif
 
-#if 0
-     if (preprocessorInfoList->getFileName() == "/home/quinlan1/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test0/Simple.h")
-        {
-          printf ("Found specific file: tests/nonsmoke/functional/CompileTests/UnparseHeadersUsingTokenStream_tests/test0/Simple.h \n");
-          ROSE_ABORT();
-        }
-#endif
 
-#if 0
-     printf ("Exiting in getPreprocessorDirectives() \n");
-     ROSE_ABORT();
-#endif
 
      return preprocessorInfoList;
    }

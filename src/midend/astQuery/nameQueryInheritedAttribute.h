@@ -3,55 +3,55 @@
 
 /** @brief Inherited attribute for NameQuery class.
  *
- * This class defines the inherited attribute used within the traversal associated with the NameQuery library.
+ * This class defines the inherited attribute used within the traversal
+ * associated with the NameQuery library.
  *
  * See @ref nameQueryLib.
  */
-class NameQueryInheritedAttributeType
-{
-  public:
+class NameQueryInheritedAttributeType {
+public:
+  // string matchingName;
 
+  // Used for building data field names in structures (prepends structure name
+  // to data field (e.g. structureName::nestedStructureName::fieldName). An
+  // alternative would be to handle this query using a different query library
+  // which returned a list of lists of strings (e.g. list< list<string> >). Then
+  // we could more readily handle function names! string prefixName;
 
-    // string matchingName;
+  //! @{
+  /*!
+    \name  Constructors,Destructor,Assignment Operator, etc.
+    \brief The usual class member functions.
+   */
+  //! Destructor
+  ~NameQueryInheritedAttributeType();
+  //! Default constructor
+  NameQueryInheritedAttributeType();
+  //! The useful constructor
+  // NameQueryInheritedAttributeType( NameQuery::TypeOfQueryType X );
+  //! The useful constructor
+  // NameQueryInheritedAttributeType ( const NameQueryInheritedAttributeType & X
+  // );
+  //! Assignment operator
+  // NameQueryInheritedAttributeType & operator= ( const
+  // NameQueryInheritedAttributeType & X );
+  //! @}
 
-    // Used for building data field names in structures (prepends structure name to data field
-    // (e.g. structureName::nestedStructureName::fieldName). An alternative would be to handle
-    // this query using a different query library which returned a list of lists of strings
-    // (e.g. list< list<string> >). Then we could more readily handle function names!
-    // string prefixName;
+  // void setMatchingName ( const string & name );
+  // string getMatchingName() const;
 
-    //! @{
-    /*! 
-      \name  Constructors,Destructor,Assignment Operator, etc.
-      \brief The usual class member functions.
-     */
-    //! Destructor
-    ~NameQueryInheritedAttributeType ();
-    //! Default constructor
-    NameQueryInheritedAttributeType ();
-    //! The useful constructor
-    //NameQueryInheritedAttributeType( NameQuery::TypeOfQueryType X );
-    //! The useful constructor
-    //NameQueryInheritedAttributeType ( const NameQueryInheritedAttributeType & X );
-    //! Assignment operator
-    //NameQueryInheritedAttributeType & operator= ( const NameQueryInheritedAttributeType & X );
-    //! @}
+  //@{
+  /** Access functions for typeOfQuery member data */
+  /*
+     void setQuery ( const NameQuery::TypeOfQueryType X );
+     NameQuery::TypeOfQueryType getQuery () const;
+   */
+  //@}
 
-    // void setMatchingName ( const string & name );
-    // string getMatchingName() const;
+  //@{
+  /** Access function for depthOfQuery date member */
 
-    //@{
-    /** Access functions for typeOfQuery member data */
-    /*
-       void setQuery ( const NameQuery::TypeOfQueryType X );
-       NameQuery::TypeOfQueryType getQuery () const;
-     */
-    //@}
-
-    //@{
-    /** Access function for depthOfQuery date member */
-
-    //@}
+  //@}
 };
 
 // endif for  ROSE_NODE_QUERY_INHERITED_ATTRIBUTE_H

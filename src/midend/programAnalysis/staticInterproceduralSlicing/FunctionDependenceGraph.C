@@ -1,24 +1,22 @@
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 20,5 MB to 10,2MB
-#include "sage3basic.h"
+// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 20,5 MB to
+// 10,2MB
 #include "DependenceGraph.h"
+#include "sage3basic.h"
 
 #include <map>
 using namespace std;
 
-FunctionDependenceGraph::FunctionDependenceGraph(ControlDependenceGraph * cdg, DataDependenceGraph * ddg,
-                                                 InterproceduralInfo */*ii*/):
-_cdg(cdg), _ddg(ddg)
-{
-    //_interprocedural = ii;
-    mergeGraph(cdg);
-    mergeGraph(ddg);
-                completeFDG();
-    //_summarize();
+FunctionDependenceGraph::FunctionDependenceGraph(ControlDependenceGraph *cdg,
+                                                 DataDependenceGraph *ddg,
+                                                 InterproceduralInfo * /*ii*/)
+    : _cdg(cdg), _ddg(ddg) {
+  //_interprocedural = ii;
+  mergeGraph(cdg);
+  mergeGraph(ddg);
+  completeFDG();
+  //_summarize();
 }
-void FunctionDependenceGraph::completeFDG()
-{
-}
-
+void FunctionDependenceGraph::completeFDG() {}
 
 // void FunctionDependenceGraph::_addCDG() {
 
@@ -64,40 +62,44 @@ void FunctionDependenceGraph::completeFDG()
 // }
 // }
 
-void FunctionDependenceGraph::_summarize()
-{/*TODO
+void FunctionDependenceGraph::
+    _summarize() { /*TODO
 
-    // This is temporary!
-    map < SgFunctionCallExp *, InterproceduralInfo::CallSiteStructure >::iterator funcCalls;
-    for (funcCalls = _interprocedural->callsite_map.begin();
-         funcCalls != _interprocedural->callsite_map.end(); funcCalls++)
-    {
-        InterproceduralInfo::CallSiteStructure callsite = funcCalls->second;
-        map < SgExpression *, DependenceNode * >::iterator i;
-        map < SgExpression *, DependenceNode * >::iterator j;
-        for (i = callsite.actual_in.begin(); i != callsite.actual_in.end(); i++)
-        {
-            DependenceNode *dep_from = createNode(i->second);
+                      // This is temporary!
+                      map < SgFunctionCallExp *,
+                      InterproceduralInfo::CallSiteStructure >::iterator
+                      funcCalls; for (funcCalls =
+                      _interprocedural->callsite_map.begin(); funcCalls !=
+                      _interprocedural->callsite_map.end(); funcCalls++)
+                      {
+                          InterproceduralInfo::CallSiteStructure callsite =
+                      funcCalls->second; map < SgExpression *, DependenceNode *
+                      >::iterator i; map < SgExpression *, DependenceNode *
+                      >::iterator j; for (i = callsite.actual_in.begin(); i !=
+                      callsite.actual_in.end(); i++)
+                          {
+                              DependenceNode *dep_from = createNode(i->second);
 
-            // for (j = callsite.actual_out.begin(); j !=
-            // callsite.actual_out.end(); j++) {
-            // DependenceNode * dep_to = createNode(j->second);
-            // establishEdge(dep_from, dep_to, SUMMARY);
-            // }
-            DependenceNode *dep_to = createNode(callsite.actual_return);
+                              // for (j = callsite.actual_out.begin(); j !=
+                              // callsite.actual_out.end(); j++) {
+                              // DependenceNode * dep_to =
+                      createNode(j->second);
+                              // establishEdge(dep_from, dep_to, SUMMARY);
+                              // }
+                              DependenceNode *dep_to =
+                      createNode(callsite.actual_return);
 
-            establishEdge(dep_from, dep_to, SUMMARY);
-        }
-    }*/
+                              establishEdge(dep_from, dep_to, SUMMARY);
+                          }
+                      }*/
 }
 
-set < DependenceNode * >FunctionDependenceGraph::getSlice(DependenceNode * node)
-{
+set<DependenceNode *> FunctionDependenceGraph::getSlice(DependenceNode *node) {
 
-    int edgeTypesToFollow = CONTROL | DATA | SUMMARY | CALL/* | RETURN*/;
+  int edgeTypesToFollow = CONTROL | DATA | SUMMARY | CALL /* | RETURN*/;
 
-    set < DependenceNode * >start;
-    start.insert(node);
+  set<DependenceNode *> start;
+  start.insert(node);
 
-    return _getReachable(start, edgeTypesToFollow);
+  return _getReachable(start, edgeTypesToFollow);
 }

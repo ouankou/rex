@@ -5,10 +5,11 @@
 
 namespace POET {
 class GenAnnot_AstParse : public TransformAstTree {
-  bool operator()(AstInterface& fa, const AstNodePtr& n, AstNodePtr& result);
- public:
-  void apply(AstInterface& fa, const AstNodePtr& n);
+  bool operator()(AstInterface &fa, const AstNodePtr &n, AstNodePtr &result);
+
+public:
+  void apply(AstInterface &fa, const AstNodePtr &n);
 };
-}
+} // namespace POET
 
 #endif

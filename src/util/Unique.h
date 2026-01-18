@@ -11,7 +11,7 @@ namespace Unique {
 
 ROSE_UTIL_API std::string genUniqueID();
 
-} // namespace
-} // namespace
+} // namespace Unique
+} // namespace Rose
 
 #endif

@@ -81,21 +81,6 @@ using namespace std;
 #include "general_token_defs.h"
 #include "./rose_fortran_token_maps.h"
 
-#if 0
-// These are now defined in general_defs.h
-struct file_pos_info
-{
-    int line_num;
-    int column_num;
-};
-
-struct stream_element
-{ 
-    struct token_element * p_tok_elem;
-    struct file_pos_info beginning_fpi;
-    struct file_pos_info ending_fpi;
-};
-#endif
 
 // DQ (3/19/2017): Define this so that we can avoid output spew from generated rule #36 
 // in generated file which maps to %% on line 468 of this file.
@@ -171,21 +156,6 @@ static int identify_if_keyword(string str)
 //It will be fixed.
 #define NUM_OPERATORS 23
 
-#if 0
-static int identify_operator_matching(string str)
-{
-    //printf("got called with %s. \n", str.c_str());
-
-    for(int i = 0; i < NUM_OPERATORS; i++)
-    {
-        if(str == ROSE_Fortran_Operator_map[i].token_lexeme)
-        {
-            return (ROSE_Fortran_Operator_map[i].token_id);
-        }
-    }
-    return -1;
-}
-#endif
 
 static void process_operator(string) 
 {
@@ -476,25 +446,6 @@ mlinkagespecification        ^{whitespace}*"extern"{whitespace}*(("\"C\"")|("\"C
 // static int popbracestack() { return bracestack[--top]; }
 // static bool isemptystack() { return top==0; }
 
-#if 0
-static int adjust_new_line_counter()
-{
-    return 1;
-}
-#endif
-#if 0
-static int num_of_newlines(char* s)
-{
-     int num = 0;
-     while(*s != '\0')
-        {
-          if(*s == '\n')
-               num++;
-          s++;
-        }
-     return num;
-}
-#endif
 
 // int getFortranFixedFormatPreprocessorDirectives( std::string fileName )
 LexTokenStreamTypePointer
@@ -554,114 +505,6 @@ getFortranFixedFormatPreprocessorDirectives( std::string fileName )
      return ROSE_Fortran_fixed_format_token_stream_pointer;
    }
 
-#if 0
-static void clean_up_stream()
-{
 
-    //
-    //This "rudimentary" post processing of the token stream helps in correct identification of keywords.
-
-    //int e g e r 
-    //is a sequence of identifiers
-    //recognize the token_ids and map them.
-    //If the tokens are 
-
-
-    for(SE_ITR ii = ROSE_Fortran_fixed_format_token_stream.begin(); ii != ROSE_Fortran_fixed_format_token_stream.end(); ii++)
-    {
-        if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_COMMENTS)
-        { 
-            cout<<"## COMMENT -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        }
-        else if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_STRING_LITERALS)
-        {
-            cout<<"## STRING_LIT -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        }
-        else if(((*ii)->p_tok_elem->token_id > 2) && ((*ii)->p_tok_elem->token_id < 67))
-        {
-            cout<<"## KEYWORD -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        } 
-        else if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_IDENTIFIER)
-        {
-            cout<<"## IDENTIFIER -->";
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        } 
-        else
-        {
-            cout<<"## ????Unrecognized element in the token stream##"; 
-        }
-        cout<<"\n";  
-    }
-}
-#endif
-
-#if 0
-int main(int argc, char *argv[])
-{
-    if(argc == 1) 
-    {   //The "default" for now
-        getFortranFixedFormatPreprocessorDirectives("triangle-fixed.f77");
-    }
-    else
-    {
-        getFortranFixedFormatPreprocessorDirectives(argv[1]);
-    }
-
-    clean_up_stream();
-
-    printf("*****************here is the stream *************\n"); 
-    for(SE_ITR ii = ROSE_Fortran_fixed_format_token_stream.begin(); ii != ROSE_Fortran_fixed_format_token_stream.end(); ii++)
-    {
-        if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_COMMENTS)
-        { 
-            cout<<"## COMMENT -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        }
-        else if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_STRING_LITERALS)
-        {
-            cout<<"## STRING_LIT -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        }
-        else if(((*ii)->p_tok_elem->token_id > 2) && ((*ii)->p_tok_elem->token_id < 67))
-        {
-            cout<<"## KEYWORD -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        } 
-        else if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_IDENTIFIER)
-        {
-            cout<<"## IDENTIFIER -->";
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        } 
-        else
-        {
-            cout<<"## ????Unrecognized element in the token stream##"; 
-        }
-        cout<<"\n"; 
- 
-    }
-    printf("*****************the stream is over*************\n"); 
-
-    return 1;
-}
-#endif
 
 // }//This ends the namespace Rose_Fortran_fixed_format_namespace

@@ -1,25 +1,25 @@
 // $Id: IRInterface.h,v 1.2 2006/04/24 00:21:34 dquinlan Exp $
 // -*-C++-*-
 // * BeginRiceCopyright *****************************************************
-// 
-// Copyright ((c)) 2002, Rice University 
+//
+// Copyright ((c)) 2002, Rice University
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
-// 
+//
 // * Redistributions of source code must retain the above copyright
 //   notice, this list of conditions and the following disclaimer.
-// 
+//
 // * Redistributions in binary form must reproduce the above copyright
 //   notice, this list of conditions and the following disclaimer in the
 //   documentation and/or other materials provided with the distribution.
-// 
+//
 // * Neither the name of Rice University (RICE) nor the names of its
 //   contributors may be used to endorse or promote products derived from
 //   this software without specific prior written permission.
-// 
+//
 // This software is provided by RICE and contributors "as is" and any
 // express or implied warranties, including, but not limited to, the
 // implied warranties of merchantability and fitness for a particular
@@ -30,8 +30,8 @@
 // business interruption) however caused and on any theory of liability,
 // whether in contract, strict liability, or tort (including negligence
 // or otherwise) arising in any way out of the use of this software, even
-// if advised of the possibility of such damage. 
-// 
+// if advised of the possibility of such damage.
+//
 // ******************************************************* EndRiceCopyright *
 
 #ifndef IRInterface_h
@@ -46,37 +46,36 @@
 
 //-----------------------------------------------------------------------------
 // Below are generic types for handles to relate objects to a user's IR. 0 is
-// reserved as a NULL value.  There are two sets of types: 
-//  1) one whose type/size is relative to the current platform, and 
+// reserved as a NULL value.  There are two sets of types:
+//  1) one whose type/size is relative to the current platform, and
 //  2) one whose type/size is maximum, which is useful for cross-platform tools
 //
 //   OA_IRHANDLETYPE_UL:  For handles on this platform
-//   OA_IRHANDLETYPE_SZ64: Maximum size for cross-platform handles 
+//   OA_IRHANDLETYPE_SZ64: Maximum size for cross-platform handles
 //-----------------------------------------------------------------------------
 
 #include "inttypes.h"
 
 #if defined(OA_IRHANDLETYPE_UL)
 
-  typedef unsigned long openanal_base_type;
+typedef unsigned long openanal_base_type;
 
 #elif defined(OA_IRHANDLETYPE_SZ64)
 
-  typedef uint64_t openanal_base_type;
+typedef uint64_t openanal_base_type;
 
 #else
 
-# error OpenAnalysis handle type must be specified!
+#error OpenAnalysis handle type must be specified!
 
 #endif
 
 typedef openanal_base_type ProcHandle;
 typedef openanal_base_type StmtHandle;
-typedef openanal_base_type ExprHandle; 
+typedef openanal_base_type ExprHandle;
 typedef openanal_base_type LeafHandle; // An expr that happens to be a leaf.
 typedef openanal_base_type StmtLabel;
 typedef openanal_base_type SymHandle;
-
 
 //-----------------------------------------------------------------------------
 //
@@ -85,11 +84,11 @@ typedef openanal_base_type SymHandle;
 // Enumerate all the procedures in a certain IR
 class IRProcIterator {
 public:
-  IRProcIterator() { }
-  virtual ~IRProcIterator() { }
-  
-  virtual ProcHandle Current() = 0;   // Returns the current item.
-  virtual bool IsValid () = 0;        // False when all items are exhausted. 
+  IRProcIterator() {}
+  virtual ~IRProcIterator() {}
+
+  virtual ProcHandle Current() = 0; // Returns the current item.
+  virtual bool IsValid() = 0;       // False when all items are exhausted.
   virtual void operator++() = 0;
   void operator++(int) { ++*this; }
 
@@ -100,13 +99,13 @@ public:
 // in a procedure or a loop.
 class IRStmtIterator {
 public:
-  IRStmtIterator() { }
-  virtual ~IRStmtIterator() { };
+  IRStmtIterator() {}
+  virtual ~IRStmtIterator() {};
 
-  virtual StmtHandle Current() = 0;  // Returns the current item.
-  virtual bool IsValid() = 0;        // False when all items are exhausted.
+  virtual StmtHandle Current() = 0; // Returns the current item.
+  virtual bool IsValid() = 0;       // False when all items are exhausted.
   virtual void operator++() = 0;
-  void operator++(int) { operator++(); } ;
+  void operator++(int) { operator++(); };
 
   virtual void Reset() = 0;
 };
@@ -118,11 +117,11 @@ class IRUseDefIterator {
 public:
   enum { Uses, Defs };
 
-  IRUseDefIterator() { }
-  virtual ~IRUseDefIterator() { }
+  IRUseDefIterator() {}
+  virtual ~IRUseDefIterator() {}
 
-  virtual LeafHandle Current() = 0;   // Returns the current item.
-  virtual bool IsValid () = 0;        // False when all items are exhausted. 
+  virtual LeafHandle Current() = 0; // Returns the current item.
+  virtual bool IsValid() = 0;       // False when all items are exhausted.
   virtual void operator++() = 0;
   void operator++(int) { ++*this; }
 
@@ -132,11 +131,11 @@ public:
 // Enumerate all the procedure calls in a statement.
 class IRCallsiteIterator {
 public:
-  IRCallsiteIterator() { }
-  virtual ~IRCallsiteIterator() { }
+  IRCallsiteIterator() {}
+  virtual ~IRCallsiteIterator() {}
 
-  virtual ExprHandle Current() = 0;   // Returns the current item.
-  virtual bool IsValid () = 0;        // False when all items are exhausted. 
+  virtual ExprHandle Current() = 0; // Returns the current item.
+  virtual bool IsValid() = 0;       // False when all items are exhausted.
   virtual void operator++() = 0;
   void operator++(int) { ++*this; }
 
@@ -146,22 +145,19 @@ public:
 // Enumerate all (actual) parameters within a callsite
 class IRCallsiteParamIterator {
 public:
-  IRCallsiteParamIterator() { }
-  virtual ~IRCallsiteParamIterator() { }
+  IRCallsiteParamIterator() {}
+  virtual ~IRCallsiteParamIterator() {}
 
-  virtual ExprHandle Current() = 0;   // Returns the current item.
-  virtual bool IsValid () = 0;        // False when all items are exhausted. 
+  virtual ExprHandle Current() = 0; // Returns the current item.
+  virtual bool IsValid() = 0;       // False when all items are exhausted.
   virtual void operator++() = 0;
   void operator++(int) { ++*this; }
 
   virtual void Reset() = 0;
 };
 
-
-
 // Procedures are classified into one of the following types:
-enum IRProcType 
-{
+enum IRProcType {
   ProcType_PGM,
   ProcType_SUB,
   ProcType_FUNC,
@@ -170,10 +166,9 @@ enum IRProcType
 };
 
 // Statements are classified into one of the following types:
-enum IRStmtType 
-{
+enum IRStmtType {
   SIMPLE,                       // Anything not covered below.
-  COMPOUND,                     // A block of statements. 
+  COMPOUND,                     // A block of statements.
   LOOP,                         // Any type of top-tested, structured loop.
   END_TESTED_LOOP,              // Any type of end-tested, structured loop.
   STRUCT_TWOWAY_CONDITIONAL,    // Structured if-then-else.
@@ -181,7 +176,7 @@ enum IRStmtType
   USTRUCT_TWOWAY_CONDITIONAL_T, // Unstructured branch (on true).
   USTRUCT_TWOWAY_CONDITIONAL_F, // Unstructured branch (on false).
   USTRUCT_MULTIWAY_CONDITIONAL, // Unstructured multiway branch
-                                //  (e.g., computed goto in Fortran or 
+                                //  (e.g., computed goto in Fortran or
                                 //  jump tables in low-level/assembly
                                 //  languages).
   RETURN,                       // Return statement.
@@ -196,20 +191,19 @@ enum IRStmtType
   NONE
 };
 
-
 class EdgeInfo;
 
 //-----------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------
 
-// The IRInterface abstract base class gives a set of methods for manipulating 
+// The IRInterface abstract base class gives a set of methods for manipulating
 // a program.  This is the primary interface to the underlying intermediate
 // representation.
 class IRInterface {
- public:
-  IRInterface() { }
-  virtual ~IRInterface() { }
+public:
+  IRInterface() {}
+  virtual ~IRInterface() {}
 
   //--------------------------------------------------------
   // Procedures and call sites
@@ -217,25 +211,24 @@ class IRInterface {
 
   // Given a procedure, return its IRProcType.
   virtual IRProcType GetProcType(ProcHandle h) = 0;
-  
+
   // Given a ProcHandle, return an IRStmtIterator* for the
   // procedure. The user must free the iterator's memory via delete.
   virtual IRStmtIterator *ProcBody(ProcHandle h) = 0;
-  
-  // Get IRCallsiteIterator* for a statement. The user must free the
-  // iterator's memory via delete.
-  virtual IRCallsiteIterator *GetCallsites(StmtHandle h) = 0; 
 
   // Get IRCallsiteIterator* for a statement. The user must free the
   // iterator's memory via delete.
-  virtual IRCallsiteParamIterator *GetCallsiteParams(ExprHandle h) = 0; 
+  virtual IRCallsiteIterator *GetCallsites(StmtHandle h) = 0;
+
+  // Get IRCallsiteIterator* for a statement. The user must free the
+  // iterator's memory via delete.
+  virtual IRCallsiteParamIterator *GetCallsiteParams(ExprHandle h) = 0;
 
   virtual bool IsParamProcRef(ExprHandle h) = 0;
 
   // Given an expression representing a callsite, is this an
   // invocation through a procedure parameter.
   virtual bool IsCallThruProcParam(ExprHandle h) = 0;
-
 
   //--------------------------------------------------------
   // Statements: General
@@ -251,37 +244,37 @@ class IRInterface {
   // Given a compound statement, return an IRStmtIterator* for the
   // statements.  The user must free the iterator's memory via delete.
   // A compound is a list of statements.
-  virtual IRStmtIterator *GetFirstInCompound(StmtHandle h) = 0; 
-  
+  virtual IRStmtIterator *GetFirstInCompound(StmtHandle h) = 0;
+
   //--------------------------------------------------------
   // Loops
   //--------------------------------------------------------
 
   // Given a loop statement, return an IRStmtIterator* for the loop body.
   // The user must free the iterator's memory via delete.
-  virtual IRStmtIterator *LoopBody(StmtHandle h) = 0; 
+  virtual IRStmtIterator *LoopBody(StmtHandle h) = 0;
 
-  // Given a loop statement, return the loop header statement.  This 
+  // Given a loop statement, return the loop header statement.  This
   // would be the initialization statement in a C 'for' loop, for example.
   virtual StmtHandle LoopHeader(StmtHandle h) = 0;
 
-  // Given a loop statement, return the increment statement. 
+  // Given a loop statement, return the increment statement.
   virtual StmtHandle GetLoopIncrement(StmtHandle h) = 0;
 
   // Given a loop statement, return:
-  // 
+  //
   // True: If the number of loop iterations is defined
-  // at loop entry (i.e. Fortran semantics).  This causes the CFG builder 
+  // at loop entry (i.e. Fortran semantics).  This causes the CFG builder
   // to add the loop statement representative to the header node so that
   // definitions from inside the loop don't reach the condition and increment
   // specifications in the loop statement.
   //
   // False: If the number of iterations is not defined at
   // entry (i.e. C semantics), we add the loop statement to a node that
-  // is inside the loop in the CFG so definitions inside the loop will 
-  // reach uses in the conditional test. For C style semantics, the 
+  // is inside the loop in the CFG so definitions inside the loop will
+  // reach uses in the conditional test. For C style semantics, the
   // increment itself may be a separate statement. if so, it will appear
-  // explicitly at the bottom of the loop. 
+  // explicitly at the bottom of the loop.
   virtual bool LoopIterationsDefinedAtEntry(StmtHandle h) = 0;
 
   //--------------------------------------------------------
@@ -312,7 +305,7 @@ class IRInterface {
   //     else
   //       s3;
   //     end;
-  //   end; 
+  //   end;
   //--------------------------------------------------------
 
   // Given a structured two-way conditional statement, return an
@@ -336,7 +329,7 @@ class IRInterface {
   virtual int NumMultiCases(StmtHandle h) = 0;
 
   // Given a structured multi-way branch, return an IRStmtIterator* for
-  // the body corresponding to target 'bodyIndex'. The n targets are 
+  // the body corresponding to target 'bodyIndex'. The n targets are
   // indexed [0..n-1].  The user must free the iterator's memory via delete.
   virtual IRStmtIterator *MultiBody(StmtHandle h, int bodyIndex) = 0;
 
@@ -351,15 +344,15 @@ class IRInterface {
   // Given a structured multi-way branch, return an IRStmtIterator*
   // for the body corresponding to default/catchall case.  The user
   // must free the iterator's memory via delete.
-  virtual IRStmtIterator * GetMultiCatchall (StmtHandle h) = 0;
+  virtual IRStmtIterator *GetMultiCatchall(StmtHandle h) = 0;
 
   //--------------------------------------------------------
-  // Unstructured two-way conditionals: 
+  // Unstructured two-way conditionals:
   //--------------------------------------------------------
 
   // Given an unstructured two-way branch, return the label of the
   // target statement.  The second parameter is currently unused.
-  virtual StmtLabel  GetTargetLabel(StmtHandle h, int n) = 0;
+  virtual StmtLabel GetTargetLabel(StmtHandle h, int n) = 0;
 
   //--------------------------------------------------------
   // Unstructured multi-way conditionals
@@ -371,7 +364,7 @@ class IRInterface {
   virtual int NumUMultiTargets(StmtHandle h) = 0;
 
   // Given an unstructured multi-way branch, return the label of the target
-  // statement at 'targetIndex'. The n targets are indexed [0..n-1]. 
+  // statement at 'targetIndex'. The n targets are indexed [0..n-1].
   virtual StmtLabel GetUMultiTargetLabel(StmtHandle h, int targetIndex) = 0;
 
   // Given an unstructured multi-way branch, return label of the target
@@ -383,7 +376,7 @@ class IRInterface {
   // Special, for assembly-language level instructions only.
   // These are necessary because there are some intricacies involved
   // in building a CFG for an instruction set which has delayed branches,
-  // and in particular, allows branches within branch delay slots. 
+  // and in particular, allows branches within branch delay slots.
   //--------------------------------------------------------
 
   // Given a statement, return true if it issues in parallel with its
@@ -391,20 +384,15 @@ class IRInterface {
   // is a low-level/assembly-level language for a VLIW or superscalar
   // instruction set. The default implementation (which is appropriate
   // for most IR's) is to return false.
-  virtual bool ParallelWithSuccessor(StmtHandle) {
-      return false;
-  }
+  virtual bool ParallelWithSuccessor(StmtHandle) { return false; }
 
   // Given an unstructured branch/jump statement, return the number
   // of delay slots. Again, this would be used when the underlying IR
   // is a low-level/assembly-level language for a VLIW or superscalar
   // instruction set. The default implementation (which is appropriate
   // for most IR's) is to return 0.
-  virtual int NumberOfDelaySlots(StmtHandle) {
-      return 0;
-  }
+  virtual int NumberOfDelaySlots(StmtHandle) { return 0; }
 
-  
   //--------------------------------------------------------
   // Obtain uses and defs
   //--------------------------------------------------------
@@ -412,12 +400,12 @@ class IRInterface {
   // Given a statement, return an IRUseDefIterator* (which is used by the
   // client to enumerate all the variables referenced by the statement).
   // The user must free the iterator's memory via delete.
-  virtual IRUseDefIterator *GetUses(StmtHandle h) = 0; 
+  virtual IRUseDefIterator *GetUses(StmtHandle h) = 0;
 
   // Given a statement, return an IRUseDefIterator* (which is used by the
   // client to enumerate all the variables defined by the statement).
   // The user must free the iterator's memory via delete.
-  virtual IRUseDefIterator *GetDefs(StmtHandle h) = 0; 
+  virtual IRUseDefIterator *GetDefs(StmtHandle h) = 0;
 
   //--------------------------------------------------------
   // Symbol Handles
@@ -429,24 +417,24 @@ class IRInterface {
   // Given an ExprHandle containing a use or def (including a
   // callsite), return the SymHandle.  The SymHandle is mapped to a
   // symbol table entry for the variable or callsite.
-  //virtual SymHandle GetSymHandle(LeafHandle vh) = 0; FIXME
+  // virtual SymHandle GetSymHandle(LeafHandle vh) = 0; FIXME
   virtual SymHandle GetSymHandle(ExprHandle h) = 0; // GetExprSymHandle
 
   // Given a SymHandle, return the textual name.
   virtual const char *GetSymNameFromSymHandle(SymHandle sh) = 0;
-  
+
   //--------------------------------------------------------
   // Debugging
-  //--------------------------------------------------------  
+  //--------------------------------------------------------
 
   // Given a LeafHandle, pretty-print it to the output stream os.
   // The default implementation does nothing.
-  virtual void PrintLeaf(LeafHandle, std::ostream&) {}
+  virtual void PrintLeaf(LeafHandle, std::ostream &) {}
 
   // Given a statement, pretty-print it to the output stream os.
   // The default implementation does nothing.
-  virtual void Dump(StmtHandle, std::ostream&) {}
-  
+  virtual void Dump(StmtHandle, std::ostream &) {}
+
   //--------------------------------------------------------
   // FIXME: the procedures below are of undetermined utility at the moment.
   //--------------------------------------------------------
@@ -455,29 +443,34 @@ class IRInterface {
   // This is the expression that tests for loop termination.
   virtual ExprHandle GetLoopCondition(StmtHandle h) = 0;
 
-  // DQ (11/27/2005): I think this is not used.  Most locations (all but SgDoWhileStmt) 
-  // represent the condition as a SgStatement (especially true now with the current 
-  // modifications (required by C and C++ grammar specification)).
-  // Given an unstructured two-way branch, return the branch condition expression.
-  // virtual ExprHandle GetCondition(StmtHandle h) = 0;
+  // DQ (11/27/2005): I think this is not used.  Most locations (all but
+  // SgDoWhileStmt) represent the condition as a SgStatement (especially true
+  // now with the current modifications (required by C and C++ grammar
+  // specification)). Given an unstructured two-way branch, return the branch
+  // condition expression. virtual ExprHandle GetCondition(StmtHandle h) = 0;
   // virtual StmtHandle GetCondition(StmtHandle h) = 0;
 
   // Given an unstructured multi-way branch, return the condition
   // expression corresponding to target 'targetIndex'. The n targets
   // are indexed [0..n-1].
-  virtual ExprHandle GetUMultiCondition(StmtHandle h, int targetIndex) = 0; // multiway target condition 
+  virtual ExprHandle
+  GetUMultiCondition(StmtHandle h,
+                     int targetIndex) = 0; // multiway target condition
 
   // Given a structured multi-way branch, return the condition
   // expression corresponding to target 'bodyIndex'. The n targets are
   // indexed [0..n-1].
-  virtual ExprHandle GetSMultiCondition(StmtHandle h, int bodyIndex) = 0; //condition for multi body 
+  virtual ExprHandle
+  GetSMultiCondition(StmtHandle h,
+                     int bodyIndex) = 0; // condition for multi body
 
   // Given a structured multi-way branch, return the switch/selector
   // expression.
-  virtual ExprHandle GetMultiExpr(StmtHandle h) = 0; //multi-way beginning expression
+  virtual ExprHandle
+  GetMultiExpr(StmtHandle h) = 0; // multi-way beginning expression
 };
 
 // FIXME: Used from CFG::ltnode
-//const char *IRGetSymNameFromLeafHandle(LeafHandle vh); 
+// const char *IRGetSymNameFromLeafHandle(LeafHandle vh);
 
 #endif // IRInterface_h

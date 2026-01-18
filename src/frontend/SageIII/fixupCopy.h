@@ -6,9 +6,10 @@
 #define DEBUG_FIXUP_COPY 0
 #define DEBUG_FIXUP_COPY_OUTPUT_MAP 0
 
-void outputMap ( SgCopyHelp & help );
+void outputMap(SgCopyHelp &help);
 
-// DQ (10/16/2007): This is a macro to simplify the code associated with fixing up data member in the AST copy.
+// DQ (10/16/2007): This is a macro to simplify the code associated with fixing
+// up data member in the AST copy.
 #if DEBUG_FIXUP_COPY
 #define FixupCopyDataMemberMacro(IR_node_copy, IR_node_type,                   \
                                  get_accessFunctionName,                       \
@@ -45,18 +46,21 @@ void outputMap ( SgCopyHelp & help );
         #get_accessFunctionName, this, #get_accessFunctionName, IR_node_copy); \
   }
 #else
-#define FixupCopyDataMemberMacro(IR_node_copy,IR_node_type,get_accessFunctionName,set_accessFunctionName)                \
-     if (IR_node_copy->get_accessFunctionName() == this->get_accessFunctionName())                                       \
-        {                                                                                                                \
-          SgCopyHelp::copiedNodeMapTypeIterator i = help.get_copiedNodeMap().find(this->get_accessFunctionName());       \
-          if (i != help.get_copiedNodeMap().end())                                                                       \
-             {                                                                                                           \
-               SgNode* associated_node_copy = i->second;                                                                 \
-               ROSE_ASSERT(associated_node_copy != NULL);                                                                \
-               IR_node_type* local_copy = is##IR_node_type(associated_node_copy);                                        \
-               ROSE_ASSERT(local_copy != NULL);                                                                          \
-               IR_node_copy->set_accessFunctionName(local_copy);                                                         \
-             }                                                                                                           \
-          ROSE_ASSERT(IR_node_copy->get_accessFunctionName()->variantT() == this->get_accessFunctionName()->variantT()); \
-        }
+#define FixupCopyDataMemberMacro(IR_node_copy, IR_node_type,                   \
+                                 get_accessFunctionName,                       \
+                                 set_accessFunctionName)                       \
+  if (IR_node_copy->get_accessFunctionName() ==                                \
+      this->get_accessFunctionName()) {                                        \
+    SgCopyHelp::copiedNodeMapTypeIterator i =                                  \
+        help.get_copiedNodeMap().find(this->get_accessFunctionName());         \
+    if (i != help.get_copiedNodeMap().end()) {                                 \
+      SgNode *associated_node_copy = i->second;                                \
+      ROSE_ASSERT(associated_node_copy != NULL);                               \
+      IR_node_type *local_copy = is##IR_node_type(associated_node_copy);       \
+      ROSE_ASSERT(local_copy != NULL);                                         \
+      IR_node_copy->set_accessFunctionName(local_copy);                        \
+    }                                                                          \
+    ROSE_ASSERT(IR_node_copy->get_accessFunctionName()->variantT() ==          \
+                this->get_accessFunctionName()->variantT());                   \
+  }
 #endif

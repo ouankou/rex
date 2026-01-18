@@ -1,6 +1,6 @@
 
 #ifndef _CLANG_TO_DOT_FRONTEND_HPP_
-# define _CLANG_TO_DOT_FRONTEND_HPP_
+#define _CLANG_TO_DOT_FRONTEND_HPP_
 
 class SgSourceFile;
 

@@ -27,43 +27,40 @@
 
     \implementation
  */
-void 
-fixupGlobalFunctionSymbolTable (SgFunctionTypeTable* globalFunctionTypeSymbolTable);
+void fixupGlobalFunctionSymbolTable(
+    SgFunctionTypeTable *globalFunctionTypeSymbolTable);
 
-
-class FixUpGlobalFunctionTypeTable : public ROSE_VisitTraversal
-   {
-     public:
-     virtual ~FixUpGlobalFunctionTypeTable() {};
-      //! Required traversal function
-          void visit (SgNode* node);
-   };
-
+class FixUpGlobalFunctionTypeTable : public ROSE_VisitTraversal {
+public:
+  virtual ~FixUpGlobalFunctionTypeTable() {};
+  //! Required traversal function
+  void visit(SgNode *node);
+};
 
 // DQ (6/27/2005):
-   /*! \brief Fixup global and local symbol tables.
+/*! \brief Fixup global and local symbol tables.
 
-       The global symbol table needs to be rebuilt (since it was originally
-      constructed using legacy frontend names and we have changed the names of
-      templates to (more readable) Sage III names (e.g. converting
-       "_A___L1234" to "A < int >").
+    The global symbol table needs to be rebuilt (since it was originally
+   constructed using legacy frontend names and we have changed the names of
+   templates to (more readable) Sage III names (e.g. converting
+    "_A___L1234" to "A < int >").
 
-       Local symbol tables are fixed as well, but all that apepars required is
-      to give all scopes (e.g. empty scopes) a valid symbol table pointer.
+    Local symbol tables are fixed as well, but all that apepars required is
+   to give all scopes (e.g. empty scopes) a valid symbol table pointer.
 
-       \implementation the global function type symbol table is not rebuilt yet.
-    */
-   void fixupAstSymbolTables(SgNode *node);
+    \implementation the global function type symbol table is not rebuilt yet.
+ */
+void fixupAstSymbolTables(SgNode *node);
 
-   class FixupAstSymbolTables : public AstSimpleProcessing {
-     // This class uses a traversal to test the values of the
-     // definingDeclaration and firstNondefiningDeclaration pointers in each
-     // SgDeclarationStatement.  See code for details, since both of these
-     // pointers are not always set.
+class FixupAstSymbolTables : public AstSimpleProcessing {
+  // This class uses a traversal to test the values of the
+  // definingDeclaration and firstNondefiningDeclaration pointers in each
+  // SgDeclarationStatement.  See code for details, since both of these
+  // pointers are not always set.
 
-   public:
-     void visit(SgNode *node);
-   };
+public:
+  void visit(SgNode *node);
+};
 
 // endif for FIXUP_SYMBOL_TABLES_H
 #endif

@@ -7,8 +7,9 @@
  *
  * Analyzing and transforming the AST.
  *
- * The "midend" is the second of three phases of analysis and transformation. This phase is responsible for analyzing and/or
- * transforming the abstract syntax tree (AST).
+ * The "midend" is the second of three phases of analysis and transformation.
+ * This phase is responsible for analyzing and/or transforming the abstract
+ * syntax tree (AST).
  *
  * See @ref library_general_principles.
  */

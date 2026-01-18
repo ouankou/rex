@@ -10,4 +10,3 @@
 size_t checkPhysicalSourcePosition(SgNode *ast);
 
 #endif
-

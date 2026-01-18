@@ -33,25 +33,24 @@
     \implementation Since we test for valid pointers in numerous within ROSE,
    this fixup could be considered to partial defeat those tests.
  */
-void 
-fixupNullPointersInAST (SgNode* node);
-
+void fixupNullPointersInAST(SgNode *node);
 
 // DQ (3/11/2006):
-/*! \brief Fixup pointers in the AST that user's may have left as NULL, but should not be NULL.
+/*! \brief Fixup pointers in the AST that user's may have left as NULL, but
+   should not be NULL.
 
-    This is lower level support for the fixupNullPointersInAST(SgNode*) function.
+    This is lower level support for the fixupNullPointersInAST(SgNode*)
+   function.
 
  */
-class FixupNullPointersInAST : public AstSimpleProcessing
-   {
-  // This class uses a traversal to test the values of the definingDeclaration and
-  // firstNondefiningDeclaration pointers in each SgDeclarationStatement.  See code for
-  // details, since both of these pointers are not always set.
+class FixupNullPointersInAST : public AstSimpleProcessing {
+  // This class uses a traversal to test the values of the definingDeclaration
+  // and firstNondefiningDeclaration pointers in each SgDeclarationStatement.
+  // See code for details, since both of these pointers are not always set.
 
-     public:
-          void visit ( SgNode* node );
-   };
+public:
+  void visit(SgNode *node);
+};
 
 // endif for FIXUP_NULL_POINTERS_H
 #endif

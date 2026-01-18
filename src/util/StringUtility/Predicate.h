@@ -19,19 +19,21 @@ namespace StringUtility {
  * @param longString String to search.
  * @param shortString Subsequence to find.
  * @return True if contained. */
-inline bool isContainedIn(const std::string &longString, const std::string &shortString) {
-    return longString.find(shortString) != std::string::npos;
+inline bool isContainedIn(const std::string &longString,
+                          const std::string &shortString) {
+  return longString.find(shortString) != std::string::npos;
 }
 
 /** Returns true if the string ends with line termination.
  *
- *  Only common ASCII-based line terminations are recognized: CR+LF, LF+CR, CR (only), or LF (only).
+ *  Only common ASCII-based line terminations are recognized: CR+LF, LF+CR, CR
+ * (only), or LF (only).
  *
  * @param s Input string.
  * @return True if the string ends with a line terminator. */
 ROSE_UTIL_API bool isLineTerminated(const std::string &s);
 
-} // namespace
-} // namespace
+} // namespace StringUtility
+} // namespace Rose
 
 #endif

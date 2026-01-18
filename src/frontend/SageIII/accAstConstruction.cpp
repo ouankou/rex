@@ -58,14 +58,15 @@ convertOpenACCDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   }
 
   SageInterface::setOneSourcePositionForTransformation(result);
-  SgPragmaDeclaration* pdecl = current_OpenACCIR_to_SageIII.first;
-  copyStartFileInfo (pdecl, result);
-  copyEndFileInfo (pdecl, result);
+  SgPragmaDeclaration *pdecl = current_OpenACCIR_to_SageIII.first;
+  copyStartFileInfo(pdecl, result);
+  copyEndFileInfo(pdecl, result);
 
   //! For C/C++ replace OpenMP pragma declaration with an SgOmpxxStatement
-  SgScopeStatement* scope = pdecl ->get_scope();
-  ROSE_ASSERT(scope !=NULL);
-  SageInterface::moveUpPreprocessingInfo(result, pdecl); // keep #ifdef etc attached to the pragma
+  SgScopeStatement *scope = pdecl->get_scope();
+  ROSE_ASSERT(scope != NULL);
+  SageInterface::moveUpPreprocessingInfo(
+      result, pdecl); // keep #ifdef etc attached to the pragma
   SageInterface::replaceStatement(pdecl, result);
 
   return result;

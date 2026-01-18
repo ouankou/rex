@@ -13,29 +13,19 @@ typedef int bool;
 #endif
 #endif
 
-#include "rose.h"
 #include "grammarBaseClass.h"
+#include "rose.h"
 
-ROSE_BaseGrammar::ROSE_BaseGrammar ()
-   {
-   }
+ROSE_BaseGrammar::ROSE_BaseGrammar() {}
 
+bool ROSE_BaseGrammar::isRootGrammar() const {
+  return (parentGrammar == NULL) ? false : true;
+}
 
-bool
-ROSE_BaseGrammar::isRootGrammar() const
-   {
-     return (parentGrammar == NULL) ? false : true;
-   }
+void ROSE_BaseGrammar::setParentGrammar(ROSE_BaseGrammar *Xptr) {
+  parentGrammar = Xptr;
+}
 
-void
-ROSE_BaseGrammar::setParentGrammar ( ROSE_BaseGrammar* Xptr )
-   {
-     parentGrammar = Xptr;
-   }
-
-ROSE_BaseGrammar*
-ROSE_BaseGrammar::getParentGrammar () const
-   {
-     return parentGrammar;
-   }
-
+ROSE_BaseGrammar *ROSE_BaseGrammar::getParentGrammar() const {
+  return parentGrammar;
+}

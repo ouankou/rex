@@ -14,23 +14,6 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
         {
           ROSE_ASSERT($CLASSNAME::pool_live_flags.size() == $CLASSNAME::pools.size());
           unsigned char** pool_bases = $CLASSNAME::pools.data();
-#if 0
-       // Iterate over the memory pools
-         for (unsigned int i=0; i < $CLASSNAME::pools.size(); i++)
-            {
-           // objectArray[i] is a single memory pool
-               for (int j=0; j < $CLASSNAME::pool_size; j++)
-                  {
-                    if (objectArray[i][j].p_freepointer == IS_VALID_POINTER)
-                       {
-                         $CLASSNAME* current = &(objectArray[i][j]);
-                         if (Rose::shouldSkipMemoryPoolTraversal(current))
-                            continue;
-                         traversal.visit(current);
-                       }
-                  }
-             }
-#else
        // DQ (10/26/2016): To avoid operations in the visit functions that might change the list, 
        // compute the list first and then call the visit function on each list element.
 
@@ -63,9 +46,6 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
           for (size_t i=0; i < nodeListSize; i++)
              {
                ROSE_ASSERT(nodeList[i].node != NULL);
-#if 0
-               traversal.visit(nodeList[i].node);
-#else
                if ($CLASSNAME::pool_live_flags[nodeList[i].pool_index][nodeList[i].slot_index])
                   {
                     $CLASSNAME* current = nodeList[i].node;
@@ -73,9 +53,7 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
                        continue;
                     traversal.visit(current);
                   }
-#endif
              }
-#endif
         }
 
   // This should not be required since all previously static data members are 
@@ -167,13 +145,6 @@ $CLASSNAME::visitRepresentativeNode(ROSE_VisitTraversal & traversal)
                i++;
              }
 
-#if 0
-       // DQ (10/28/2020): Commented out this output spew that happens in the output of IR node statistics.
-          if (done == false)
-             {
-               printf ("No representative for $CLASSNAME found in memory pools \n");
-             }
-#endif
         }
    }
 

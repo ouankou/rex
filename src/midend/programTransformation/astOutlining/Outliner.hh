@@ -102,37 +102,6 @@ namespace Outliner
  // DQ (7/13/2021): Save the SgSourceFile used when handling dynamic libraries.
     ROSE_DLL_API extern SgSourceFile* saved_source_file_for_dynamic_library;
 
-#if 0
-  // DQ (11/19/2020): We need to expand the use of this to cover deffered transformations of common SageInterface transformations (e.g. replaceStatement).
-  // So I need to move this out of being specific to the outliner and make it more generally data structure in the SageInterface.
-  struct DeferredTransformation
-     {
-    // DQ (11/15/2020): Need to add the concept of deffered transformation to cover replaceStatement operations.
-
-    // DQ (8/7/2019): Store data required to support defering the transformation to insert the outlined function prototypes 
-    // into class declaration (when this is required to support the outlined function's access to protected or private data members).
-    // This is part of an optimization to support the optimization of header file unparsing (limiting the overhead of supporting any 
-    // header file to just focus on the few (typically one) header file that would have to be unparsed.
-
-       SgClassDefinition* class_definition;
-       SgDeclarationStatement* target_class_member;
-       SgDeclarationStatement* new_function_prototype;
-
-       typedef std::set<SgClassDefinition *> ClassDefSet_t;
-       ClassDefSet_t targetClasses;
-
-       typedef std::vector<SgFunctionDeclaration *> FuncDeclList_t;
-       FuncDeclList_t targetFriends;
-
-    // DQ (12/5/2019): Added ROSE_DLL_API for shared-library symbol visibility.
-       ROSE_DLL_API DeferredTransformation();
-       ROSE_DLL_API DeferredTransformation(SgClassDefinition* class_definition, SgDeclarationStatement* target_class_member, SgDeclarationStatement* new_function_prototype);
-       ROSE_DLL_API DeferredTransformation (const DeferredTransformation& X); //! Copy constructor.
-       ROSE_DLL_API ~DeferredTransformation (void); //! Shallow; does not delete fields.
-
-       ROSE_DLL_API DeferredTransformation & operator= (const DeferredTransformation& X); //! operator=()
-     };
-#endif
 
   //! Stores the main results of an outlining transformation.
   struct Result

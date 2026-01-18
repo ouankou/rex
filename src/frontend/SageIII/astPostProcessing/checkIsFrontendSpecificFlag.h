@@ -9,5 +9,4 @@
  * number of violations found/fixed. */
 size_t checkIsFrontendSpecificFlag(SgNode *ast);
 
-
 #endif

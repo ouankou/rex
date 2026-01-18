@@ -575,7 +575,6 @@ SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
   return first_def != NULL ? first_def : scope;
 }
 
-
 bool isSkippableLineBetweenPragmaAndStatement(const std::string &trimmed_line) {
   if (trimmed_line.empty()) {
     return true;
@@ -3854,9 +3853,9 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         clang::SourceManager &sm = p_compiler_instance->getSourceManager();
         clang::SourceLocation callee_loc = direct_callee->getLocation();
         clang::SourceLocation call_loc = call_expr->getExprLoc();
-        const bool call_in_system =
-            !call_loc.isValid() || sm.isInSystemHeader(call_loc) ||
-            sm.isWrittenInBuiltinFile(call_loc);
+        const bool call_in_system = !call_loc.isValid() ||
+                                    sm.isInSystemHeader(call_loc) ||
+                                    sm.isWrittenInBuiltinFile(call_loc);
         if (!callee_loc.isValid()) {
           eligible = false;
         } else if ((sm.isInSystemHeader(callee_loc) ||
@@ -4589,20 +4588,22 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
               if (!isSgDeclarationStatement(defDecl->get_parent())) {
                 defDecl->set_parent(var_decl);
                 var_decl->set_baseTypeDefiningDeclaration(defDecl);
-                var_decl->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
-                    true);
+                var_decl
+                    ->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
+                        true);
               }
             }
           } else if (SgEnumDeclaration *enumDecl = isSgEnumDeclaration(node)) {
             enumDecl->set_isAutonomousDeclaration(false);
-            if (SgEnumDeclaration *defDecl = isSgEnumDeclaration(
-                    enumDecl->get_definingDeclaration())) {
+            if (SgEnumDeclaration *defDecl =
+                    isSgEnumDeclaration(enumDecl->get_definingDeclaration())) {
               defDecl->set_isAutonomousDeclaration(false);
               if (!isSgDeclarationStatement(defDecl->get_parent())) {
                 defDecl->set_parent(var_decl);
                 var_decl->set_baseTypeDefiningDeclaration(defDecl);
-                var_decl->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
-                    true);
+                var_decl
+                    ->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
+                        true);
               }
             }
           }
@@ -5536,9 +5537,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         clang::SourceManager &sm = p_compiler_instance->getSourceManager();
         clang::SourceLocation callee_loc = func_decl->getLocation();
         clang::SourceLocation ref_loc = decl_ref_expr->getExprLoc();
-        const bool ref_in_system =
-            !ref_loc.isValid() || sm.isInSystemHeader(ref_loc) ||
-            sm.isWrittenInBuiltinFile(ref_loc);
+        const bool ref_in_system = !ref_loc.isValid() ||
+                                   sm.isInSystemHeader(ref_loc) ||
+                                   sm.isWrittenInBuiltinFile(ref_loc);
         if (!callee_loc.isValid()) {
           eligible = false;
         } else if ((sm.isInSystemHeader(callee_loc) ||

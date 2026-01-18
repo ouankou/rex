@@ -2,71 +2,72 @@
 #include "sage3basic.h"
 
 #if !defined(ROSE_PEDANTIC_FIXUP_CONSTANT_FOLDING)
-#  define ROSE_PEDANTIC_FIXUP_CONSTANT_FOLDING 0
+#define ROSE_PEDANTIC_FIXUP_CONSTANT_FOLDING 0
 #endif
 
 #if !defined(ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING)
-#  define ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING 0
+#define ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING 0
 #endif
 
 #if !defined(ROSE_GRAPHVIZ_EXPRESSION_TREES)
-#  define ROSE_GRAPHVIZ_EXPRESSION_TREES ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING
+#define ROSE_GRAPHVIZ_EXPRESSION_TREES ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING
 #endif
 
 #if !defined(ROSE_WARN_ORPHAN_EXPRESSIONS)
-#  define ROSE_WARN_ORPHAN_EXPRESSIONS ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING
+#define ROSE_WARN_ORPHAN_EXPRESSIONS ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING
 #endif
 
 #if !defined(ROSE_WARN_DISCONNECTED_EXPRESSIONS)
-#  define ROSE_WARN_DISCONNECTED_EXPRESSIONS ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING
+#define ROSE_WARN_DISCONNECTED_EXPRESSIONS ROSE_DIAGNOSE_FIXUP_CONSTANT_FOLDING
 #endif
 
 // ****************************************************************************
 //   Supporting function used in both cases of the constant folding handling
 // ****************************************************************************
 
-static void deleteExpressionAndOriginalExpressionTree(SgNode * node) {
+static void deleteExpressionAndOriginalExpressionTree(SgNode *node) {
   // Skip node that have already been deleted
-  if (!SgNode::isLiveNode(node)) return;
+  if (!SgNode::isLiveNode(node))
+    return;
 
   // If it is an expression delete the associated original expression tree
-  SgExpression * exp = isSgExpression(node);
+  SgExpression *exp = isSgExpression(node);
   if (exp != NULL && exp->get_originalExpressionTree() != NULL) {
-    deleteExpressionAndOriginalExpressionTree(exp->get_originalExpressionTree());
+    deleteExpressionAndOriginalExpressionTree(
+        exp->get_originalExpressionTree());
   }
 
   // Traverse the AST and delete successors
-  std::vector<SgNode*> successors = node->get_traversalSuccessorContainer();
-  for (std::vector<SgNode*>::iterator n = successors.begin(); n != successors.end(); ++n) {
-    if (*n != NULL ) {
+  std::vector<SgNode *> successors = node->get_traversalSuccessorContainer();
+  for (std::vector<SgNode *>::iterator n = successors.begin();
+       n != successors.end(); ++n) {
+    if (*n != NULL) {
       deleteExpressionAndOriginalExpressionTree(*n);
     }
   }
-  
+
   delete node;
 }
 
 struct ReplacePointerInParent : public SimpleReferenceToPointerHandler {
-  SgNode * old_ptr;
-  SgNode * new_ptr;
+  SgNode *old_ptr;
+  SgNode *new_ptr;
   unsigned count;
 
-  ReplacePointerInParent(SgNode * old_ptr_, SgNode * new_ptr_) :
-    old_ptr(old_ptr_),
-    new_ptr(new_ptr_),
-    count(0)
-  {}
+  ReplacePointerInParent(SgNode *old_ptr_, SgNode *new_ptr_)
+      : old_ptr(old_ptr_), new_ptr(new_ptr_), count(0) {}
 
-  virtual void operator()(SgNode* & key, const SgName & /*debugStringName*/, bool /*is_traversed*/) {
+  virtual void operator()(SgNode *&key, const SgName & /*debugStringName*/,
+                          bool /*is_traversed*/) {
     if (key == old_ptr) {
       ROSE_ASSERT(count == 0);
       key = new_ptr;
       count++;
     }
   }
-  
-  static void apply(SgNode * op, SgNode * np) {
-    SgNode * parent = op->get_parent();
+
+  static void apply(SgNode *op, SgNode *np) {
+    SgNode *parent = op->get_parent();
     ROSE_ASSERT(parent != NULL);
 
     ReplacePointerInParent r(op, np);
@@ -87,7 +88,8 @@ struct CollectExpressionTrees : public ROSE_VisitTraversal {
   // Root of an original expression tree (not part of the AST)
   std::set<SgExpression *> originals;
 
-  // Root of an expression tree not reacheable from the AST (only testing successors)
+  // Root of an expression tree not reacheable from the AST (only testing
+  // successors)
   std::set<SgExpression *> disconnected;
 
 #if ROSE_GRAPHVIZ_EXPRESSION_TREES
@@ -95,16 +97,16 @@ struct CollectExpressionTrees : public ROSE_VisitTraversal {
   std::set<SgExpression *> subtrees;
 #endif
 
-  void visit (SgNode * node) {
-    SgExpression * expr = isSgExpression(node);
+  void visit(SgNode *node) {
+    SgExpression *expr = isSgExpression(node);
     if (expr != NULL) {
-      SgNode * parent = expr->get_parent();
+      SgNode *parent = expr->get_parent();
       if (parent == NULL) {
         orphans.insert(expr);
         return;
       }
 
-      SgExpression * expr_parent = isSgExpression(parent);
+      SgExpression *expr_parent = isSgExpression(parent);
       if (expr_parent == NULL) {
         roots.insert(expr);
         return;
@@ -115,22 +117,26 @@ struct CollectExpressionTrees : public ROSE_VisitTraversal {
         return;
       }
 
-      std::vector<SgNode*> successors = expr_parent->get_traversalSuccessorContainer();
-      if (std::find(successors.begin(), successors.end(), node) != successors.end()) {
+      std::vector<SgNode *> successors =
+          expr_parent->get_traversalSuccessorContainer();
+      if (std::find(successors.begin(), successors.end(), node) !=
+          successors.end()) {
 #if ROSE_GRAPHVIZ_EXPRESSION_TREES
         subtrees.insert(expr);
 #endif
         return;
       }
 
-      SgTypeTraitBuiltinOperator * ttbo_parent = isSgTypeTraitBuiltinOperator(expr_parent);
+      SgTypeTraitBuiltinOperator *ttbo_parent =
+          isSgTypeTraitBuiltinOperator(expr_parent);
       if (ttbo_parent != NULL) {
 #if defined(__cpp_range_based_for) && __cpp_range_based_for >= 200907
-        for (auto arg: ttbo_parent->get_args()) {
+        for (auto arg : ttbo_parent->get_args()) {
 #else
-        SgNodePtrList & args = ttbo_parent->get_args();
-        for (SgNodePtrList::iterator it = args.begin(); it != args.end(); it++) {
-          SgNode * arg = *it;
+        SgNodePtrList &args = ttbo_parent->get_args();
+        for (SgNodePtrList::iterator it = args.begin(); it != args.end();
+             it++) {
+          SgNode *arg = *it;
 #endif
           if (arg == expr) {
 #if ROSE_GRAPHVIZ_EXPRESSION_TREES
@@ -146,36 +152,50 @@ struct CollectExpressionTrees : public ROSE_VisitTraversal {
   }
 
 #if ROSE_GRAPHVIZ_EXPRESSION_TREES
-  void toDot(std::ostream & out) {
+  void toDot(std::ostream &out) {
     out << "digraph expr_trees {" << std::endl;
-    for (auto expr: orphans) {
-      out << "  n_" << std::hex << expr << " [label=\"orphan\n" << std::hex << expr << "\n" << expr->class_name() << "\", color=red];" << std::endl;
+    for (auto expr : orphans) {
+      out << "  n_" << std::hex << expr << " [label=\"orphan\n"
+          << std::hex << expr << "\n"
+          << expr->class_name() << "\", color=red];" << std::endl;
     }
-    for (auto expr: roots) {
-      out << "  n_" << std::hex << expr << " [label=\"root\n" << std::hex << expr << "\n" << expr->class_name() << "\"];" << std::endl;
+    for (auto expr : roots) {
+      out << "  n_" << std::hex << expr << " [label=\"root\n"
+          << std::hex << expr << "\n"
+          << expr->class_name() << "\"];" << std::endl;
     }
-    for (auto child: originals) {
+    for (auto child : originals) {
       auto folded = child->get_parent();
-      out << "  n_" << std::hex << child << " [label=\"original\n" << std::hex << child << "\n" << child->class_name() << "\"];" << std::endl;
-      out << "  n_" << std::hex << folded << " -> n_" << std::hex << child << " [constraint=false, label=\"original\", color=green];" << std::endl;
+      out << "  n_" << std::hex << child << " [label=\"original\n"
+          << std::hex << child << "\n"
+          << child->class_name() << "\"];" << std::endl;
+      out << "  n_" << std::hex << folded << " -> n_" << std::hex << child
+          << " [constraint=false, label=\"original\", color=green];"
+          << std::endl;
     }
-    for (auto child: disconnected) {
+    for (auto child : disconnected) {
       auto parent = child->get_parent();
-      out << "  n_" << std::hex << child << " [label=\"disconnected\n" << std::hex << child << "\n" << child->class_name() << "\"];" << std::endl;
-      out << "  n_" << std::hex << parent << " -> n_" << std::hex << child << " [constraint=false, color=red];" << std::endl;
+      out << "  n_" << std::hex << child << " [label=\"disconnected\n"
+          << std::hex << child << "\n"
+          << child->class_name() << "\"];" << std::endl;
+      out << "  n_" << std::hex << parent << " -> n_" << std::hex << child
+          << " [constraint=false, color=red];" << std::endl;
     }
-    for (auto child: subtrees) {
+    for (auto child : subtrees) {
       auto parent = child->get_parent();
-      out << "  n_" << std::hex << child << " [label=\"subtree\n" << std::hex << child << "\n" << child->class_name() << "\"];" << std::endl;
-      out << "  n_" << std::hex << parent << " -> n_" << std::hex << child << " [constraint=true, color=blue];" << std::endl;
+      out << "  n_" << std::hex << child << " [label=\"subtree\n"
+          << std::hex << child << "\n"
+          << child->class_name() << "\"];" << std::endl;
+      out << "  n_" << std::hex << parent << " -> n_" << std::hex << child
+          << " [constraint=true, color=blue];" << std::endl;
     }
     out << "}" << std::endl;
   }
 #endif
 };
 
-inline SgExpression * get_parent_if_folded_in(SgExpression * expr) {
-  SgExpression * result = isSgExpression(expr->get_parent());
+inline SgExpression *get_parent_if_folded_in(SgExpression *expr) {
+  SgExpression *result = isSgExpression(expr->get_parent());
   if (result != NULL && result->get_originalExpressionTree() == expr) {
     return result;
   } else {
@@ -183,7 +203,7 @@ inline SgExpression * get_parent_if_folded_in(SgExpression * expr) {
   }
 }
 
-void removeConstantFoldedValue(SgProject* /*project*/) {
+void removeConstantFoldedValue(SgProject * /*project*/) {
   CollectExpressionTrees cet;
   cet.traverseMemoryPool();
 
@@ -194,21 +214,33 @@ void removeConstantFoldedValue(SgProject* /*project*/) {
 
 #if ROSE_WARN_ORPHAN_EXPRESSIONS
   if (!cet.orphans.empty()) {
-    std::cerr << "# Found " << std::dec << cet.orphans.size() << " orphaned expressions: parent is not set." << std::endl;
-    for (auto expr: cet.orphans) {
-      std::cerr << "#  - " << std::hex << expr << " ( " << expr->class_name() << " )" << std::endl;
+    std::cerr << "# Found " << std::dec << cet.orphans.size()
+              << " orphaned expressions: parent is not set." << std::endl;
+    for (auto expr : cet.orphans) {
+      std::cerr << "#  - " << std::hex << expr << " ( " << expr->class_name()
+                << " )" << std::endl;
     }
-    std::cerr << "# These nodes and all their successors will be deleted from the AST." << std::endl << std::endl;
+    std::cerr << "# These nodes and all their successors will be deleted from "
+                 "the AST."
+              << std::endl
+              << std::endl;
   }
 #endif
 
 #if ROSE_WARN_DISCONNECTED_EXPRESSIONS
   if (!cet.disconnected.empty()) {
-    std::cerr << "# Found " << std::dec << cet.disconnected.size() << " disconnected expressions: parent is set but expression is not in its successors." << std::endl;
-    for (auto expr: cet.disconnected) {
-      std::cerr << "#  - " << std::hex << expr << " ( " << expr->class_name() << " )" << std::endl;
+    std::cerr << "# Found " << std::dec << cet.disconnected.size()
+              << " disconnected expressions: parent is set but expression is "
+                 "not in its successors."
+              << std::endl;
+    for (auto expr : cet.disconnected) {
+      std::cerr << "#  - " << std::hex << expr << " ( " << expr->class_name()
+                << " )" << std::endl;
     }
-    std::cerr << "# These nodes and all their successors will be deleted from the AST." << std::endl << std::endl;
+    std::cerr << "# These nodes and all their successors will be deleted from "
+                 "the AST."
+              << std::endl
+              << std::endl;
   }
 #endif
 
@@ -219,18 +251,20 @@ void removeConstantFoldedValue(SgProject* /*project*/) {
   delete_set.insert(cet.orphans.begin(), cet.orphans.end());
 
   // We cut the chain as we process it starting from the latest element.
-  // Some visited links could be seen as last element of a chain that has been cut by mistake.
-  std::set<SgExpression *> seen_in_ot_chain; 
+  // Some visited links could be seen as last element of a chain that has been
+  // cut by mistake.
+  std::set<SgExpression *> seen_in_ot_chain;
 
-  for (auto child: cet.originals) {
+  for (auto child : cet.originals) {
     // Check that it is the actual original tree of a *potential* chain of
     // substitutions
     //    Note: I am not sure chain of substitutions occur with latest version
     //    of legacy frontend
-    if (child->get_originalExpressionTree() == NULL && seen_in_ot_chain.find(child) == seen_in_ot_chain.end()) {
+    if (child->get_originalExpressionTree() == NULL &&
+        seen_in_ot_chain.find(child) == seen_in_ot_chain.end()) {
       seen_in_ot_chain.insert(child);
 
-      SgExpression * folded = get_parent_if_folded_in(child);
+      SgExpression *folded = get_parent_if_folded_in(child);
       ROSE_ASSERT(folded != NULL);
       ROSE_ASSERT(folded != child);
 
@@ -240,7 +274,7 @@ void removeConstantFoldedValue(SgProject* /*project*/) {
       seen_in_ot_chain.insert(folded);
 
       // Traverse the chain of substitutions to find its first element
-      SgExpression * tmp = get_parent_if_folded_in(folded);
+      SgExpression *tmp = get_parent_if_folded_in(folded);
       while (tmp != NULL) {
         folded = tmp;
         seen_in_ot_chain.insert(folded);
@@ -280,7 +314,10 @@ void removeConstantFoldedValue(SgProject* /*project*/) {
       replace_folded_by_child &= !isSgLambdaExp(child);
 
       if (replace_folded_by_child) {
-        child->set_parent(folded->get_parent()); // prevent replacement from creating self loop if child is direct descendant of folded
+        child->set_parent(
+            folded
+                ->get_parent()); // prevent replacement from creating self loop
+                                 // if child is direct descendant of folded
 
         replace_map[folded] = child;
         delete_set.insert(folded);
@@ -292,18 +329,18 @@ void removeConstantFoldedValue(SgProject* /*project*/) {
 
   edgePointerReplacement(replace_map);
 
-  for (auto expr: delete_set) {
+  for (auto expr : delete_set) {
     deleteExpressionAndOriginalExpressionTree(expr);
   }
 }
 
 struct RemoveOriginalExpressionTrees : public ROSE_VisitTraversal {
-  void visit (SgNode* node) {
+  void visit(SgNode *node) {
     ROSE_ASSERT(node != nullptr);
 
-    SgExpression * exp = isSgExpression(node);
+    SgExpression *exp = isSgExpression(node);
     if (exp != nullptr) {
-      SgExpression * oet = exp->get_originalExpressionTree();
+      SgExpression *oet = exp->get_originalExpressionTree();
       if (oet != nullptr) {
         exp->set_originalExpressionTree(nullptr);
         deleteExpressionAndOriginalExpressionTree(oet);
@@ -314,27 +351,22 @@ struct RemoveOriginalExpressionTrees : public ROSE_VisitTraversal {
 
 //! This removes the original expression tree from value expressions where it
 //! has been constant folded by legacy frontend.
-void resetConstantFoldedValues( SgNode* node ) {
+void resetConstantFoldedValues(SgNode *node) {
 
-#if 1
-  if (!isSgProject(node) || !((SgProject *)node)->get_frontendConstantFolding()) {
-    TimingPerformance timer1 ("Fixup Constant Folded Values (replace with original expression trees):");
+  if (!isSgProject(node) ||
+      !((SgProject *)node)->get_frontendConstantFolding()) {
+    TimingPerformance timer1("Fixup Constant Folded Values (replace with "
+                             "original expression trees):");
 
-#if 1
-    SgProject* project = isSgProject(node);
+    SgProject *project = isSgProject(node);
     ROSE_ASSERT(project != NULL);
     removeConstantFoldedValue(project);
-#else
-    printf ("In resetConstantFoldedValues(): Skipping call to removeConstantFoldedValue() \n");
-#endif
 
   } else {
-    TimingPerformance timer1 ("Fixup Constant Folded Values (remove the original expression tree, leaving the constant folded values):");
+    TimingPerformance timer1(
+        "Fixup Constant Folded Values (remove the original expression tree, "
+        "leaving the constant folded values):");
     RemoveOriginalExpressionTrees astFixupTraversal;
     astFixupTraversal.traverseMemoryPool();
   }
-#else
-    printf ("In resetConstantFoldedValues(): Skipping body of resetConstantFoldedValues() \n");
-#endif
-
 }

@@ -16,10 +16,9 @@
 //    (dbx: File '../bin/rose_script' is not in ELF format)
 #define USE_ARCHITECTURE_SPECIFIC_SCRIPT false
 
-
 extern int ROSE_DEBUG;
 
-ROSE_DLL_API extern const char* roseGlobalVariantNameList[];
+ROSE_DLL_API extern const char *roseGlobalVariantNameList[];
 
 // ifndef ROSE_INTERNAL_H
 #endif

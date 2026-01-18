@@ -1,11 +1,11 @@
 #ifndef OA_CFG
 #define OA_CFG
 
-#include <set>
+#include <cstring>
 #include <list>
 #include <map>
+#include <set>
 #include <string>
-#include <cstring>
 
 #include <OAConfig.h>
 namespace OpenAnalysis {

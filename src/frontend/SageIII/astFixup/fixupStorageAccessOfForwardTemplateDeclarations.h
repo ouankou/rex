@@ -1,5 +1,5 @@
 #ifndef __fixupStorageAccess
-#define  __fixupStorageAccess
+#define __fixupStorageAccess
 // DQ (5/20/2005):
 /*! \brief Fixup the storage access of all compiler-generated forward
    declarations (non-defining declarations) to match that of the defining
@@ -19,7 +19,7 @@
    transformed templates are output, but such template instatiations would be
    redundently put out in each file where they were used.
  */
-void fixupStorageAccessOfForwardTemplateDeclarations( SgNode* node );
+void fixupStorageAccessOfForwardTemplateDeclarations(SgNode *node);
 
 /*! \brief Fixup the storage access of all compiler-generated forward
    declarations (non-defining declarations) to match that of the defining
@@ -39,12 +39,11 @@ void fixupStorageAccessOfForwardTemplateDeclarations( SgNode* node );
    transformed templates are output, but such template instatiations would be
    redundently put out in each file where they were used.
  */
-class FixupStorageAccessOfForwardTemplateDeclarations : public SgSimpleProcessing
-   {
-     public:
-      //! Required traversal function
-          void visit (SgNode* node);
-   };
-
+class FixupStorageAccessOfForwardTemplateDeclarations
+    : public SgSimpleProcessing {
+public:
+  //! Required traversal function
+  void visit(SgNode *node);
+};
 
 #endif

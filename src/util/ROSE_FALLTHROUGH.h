@@ -1,8 +1,8 @@
 #ifndef ROSE_FALLTHROUGH_H
 #define ROSE_FALLTHROUGH_H
 
-// Marks case branches that fall through to the next case, so that the compiler does not generate
-// "this statement may fall through" warnings (i.e., GCC).
+// Marks case branches that fall through to the next case, so that the compiler
+// does not generate "this statement may fall through" warnings (i.e., GCC).
 //
 //    | 1|int foo(int x) {
 //    | 2|  int res = 0;
@@ -13,7 +13,8 @@
 //    | 7|  return res;
 //    | 8|}
 //
-// The compiler will emit a implicit-fallthrough warning for the end of 'case 0:' at line 4.
+// The compiler will emit a implicit-fallthrough warning for the end of 'case
+// 0:' at line 4.
 //
 // The best way is to use C++17 attributes.
 //
@@ -26,7 +27,8 @@
 //    | 7|  return res;
 //    | 8|}
 //
-// Until we support C++17 in ROSE fully, we can rely on older attributes for the GNU compiler.
+// Until we support C++17 in ROSE fully, we can rely on older attributes for the
+// GNU compiler.
 // [[gnu::fallthrough]]
 //
 //    | 1|int foo(int x) {
@@ -38,8 +40,8 @@
 //    | 7|  return res;
 //    | 8|}
 //
-// reference for gcc: https://developers.redhat.com/blog/2017/03/10/wimplicit-fallthrough-in-gcc-7
-
+// reference for gcc:
+// https://developers.redhat.com/blog/2017/03/10/wimplicit-fallthrough-in-gcc-7
 
 #if __cplusplus >= 201703L
 #define ROSE_FALLTHROUGH [[fallthrough]]
@@ -49,6 +51,5 @@
 // this may not work as intended
 #define ROSE_FALLTHROUGH /* FALL THROUGH */
 #endif
-
 
 #endif

@@ -1,23 +1,20 @@
-#include "sage3basic.h"
 #include "InterProcDataFlowAnalysis.h"
+#include "sage3basic.h"
 #include <iostream>
 
-
-void InterProcDataFlowAnalysis::run ()
-{
+void InterProcDataFlowAnalysis::run() {
   bool change = false;
-  int  iteration = 0;
+  int iteration = 0;
 
-  do
-  {
+  do {
     ++iteration;
     change = false;
 
-    std::vector<SgFunctionDeclaration*> processingOrder;
+    std::vector<SgFunctionDeclaration *> processingOrder;
 
     getFunctionDeclarations(processingOrder);
 
-    for (SgFunctionDeclaration* funcDecl : processingOrder) {
+    for (SgFunctionDeclaration *funcDecl : processingOrder) {
       change |= runAndCheckIntraProcAnalysis(funcDecl);
     }
   } while (change);

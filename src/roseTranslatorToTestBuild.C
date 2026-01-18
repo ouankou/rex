@@ -6,18 +6,18 @@
 #include <config.h>
 #endif
 
-#include <string>
 #include <iomanip>
+#include <string>
 
 #include "AstTests.h"
 
-int
-main( int argc, char * argv[] ) {
+int main(int argc, char *argv[]) {
   RoseTestTranslator test;
-  return test.translate(argc,argv); // returns an error if any of the ends fails
+  return test.translate(argc,
+                        argv); // returns an error if any of the ends fails
 }
 
-/* 
+/*
    alternative usage:
    int main( int argc, char * argv[] ) {
       SgProject* sageProject=frontend(argc,argv);

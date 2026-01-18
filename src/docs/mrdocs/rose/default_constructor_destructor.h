@@ -5,10 +5,11 @@
 
 /** @brief Default constructors and destructors
  *
- * ROSE does not individually document default constructors and destructors in the API reference.
- * Unless otherwise noted, they perform straightforward initialization and cleanup for AST nodes
- * and follow standard C++ semantics. This page exists to preserve legacy references from the
- * generated SAGE grammar.
+ * ROSE does not individually document default constructors and destructors in
+ * the API reference. Unless otherwise noted, they perform straightforward
+ * initialization and cleanup for AST nodes and follow standard C++ semantics.
+ * This page exists to preserve legacy references from the generated SAGE
+ * grammar.
  */
 struct defaultConstructorDestructorDocumentationPage {};
 

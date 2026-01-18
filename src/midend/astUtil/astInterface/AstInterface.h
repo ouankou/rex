@@ -28,7 +28,14 @@ public:
   typedef SgNode BaseType;
   //! The UNKNOWN_AST and NULL_AST types have null as their values.
   //! The other types have concrete BaseType pointers as their values.
-  enum class SpecialAstType { SG_AST, GLOBAL_SIGNATURE, UNKNOWN_FUNCTION_CALL, UNKNOWN_PTR_REF, UNKNOWN_AST, NULL_AST };
+  enum class SpecialAstType {
+    SG_AST,
+    GLOBAL_SIGNATURE,
+    UNKNOWN_FUNCTION_CALL,
+    UNKNOWN_PTR_REF,
+    UNKNOWN_AST,
+    NULL_AST
+  };
 
 private:
   BaseType *repr_;
@@ -36,33 +43,44 @@ private:
   std::string sig_;
 
 public:
-  AstNodePtr(BaseType *_repr = 0) : repr_(_repr), nodetype_(SpecialAstType::SG_AST) {
+  AstNodePtr(BaseType *_repr = 0)
+      : repr_(_repr), nodetype_(SpecialAstType::SG_AST) {
     if (_repr == 0)
       nodetype_ = SpecialAstType::NULL_AST;
   }
-  AstNodePtr(const AstNodePtr &that) : repr_(that.repr_), nodetype_(that.nodetype_), sig_(that.sig_) {}
+  AstNodePtr(const AstNodePtr &that)
+      : repr_(that.repr_), nodetype_(that.nodetype_), sig_(that.sig_) {}
   AstNodePtr(const std::string &sig)
       : repr_(0), nodetype_(SpecialAstType::GLOBAL_SIGNATURE), sig_(sig) {}
-  AstNodePtr(SpecialAstType t, BaseType *_repr = 0) : repr_(_repr), nodetype_(t) {
+  AstNodePtr(SpecialAstType t, BaseType *_repr = 0)
+      : repr_(_repr), nodetype_(t) {
     switch (t) {
-      case SpecialAstType::UNKNOWN_PTR_REF:
-      case SpecialAstType::UNKNOWN_FUNCTION_CALL:
-      case SpecialAstType::UNKNOWN_AST:
-      case SpecialAstType::NULL_AST:
-        break;
-      default:
-        std::cerr << "Error: UNKNOWN Special AST type!";
-        assert(0);
+    case SpecialAstType::UNKNOWN_PTR_REF:
+    case SpecialAstType::UNKNOWN_FUNCTION_CALL:
+    case SpecialAstType::UNKNOWN_AST:
+    case SpecialAstType::NULL_AST:
+      break;
+    default:
+      std::cerr << "Error: UNKNOWN Special AST type!";
+      assert(0);
     }
   }
   ~AstNodePtr() {}
   bool is_sage_ast() const { return nodetype_ == SpecialAstType::SG_AST; }
   bool is_null() const { return nodetype_ == SpecialAstType::NULL_AST; }
   bool is_unknown() const { return nodetype_ == SpecialAstType::UNKNOWN_AST; }
-  bool is_unknown_function_call() const { return nodetype_ == SpecialAstType::UNKNOWN_FUNCTION_CALL; }
-  bool is_unknown_reference() const { return nodetype_ == SpecialAstType::UNKNOWN_PTR_REF; }
-  void set_is_unknown_function_call() { nodetype_ = SpecialAstType::UNKNOWN_FUNCTION_CALL; }
-  void set_is_unknown_reference() { nodetype_ = SpecialAstType::UNKNOWN_PTR_REF; }
+  bool is_unknown_function_call() const {
+    return nodetype_ == SpecialAstType::UNKNOWN_FUNCTION_CALL;
+  }
+  bool is_unknown_reference() const {
+    return nodetype_ == SpecialAstType::UNKNOWN_PTR_REF;
+  }
+  void set_is_unknown_function_call() {
+    nodetype_ = SpecialAstType::UNKNOWN_FUNCTION_CALL;
+  }
+  void set_is_unknown_reference() {
+    nodetype_ = SpecialAstType::UNKNOWN_PTR_REF;
+  }
   AstNodePtr &operator=(const AstNodePtr &that) {
     repr_ = that.repr_;
     nodetype_ = that.nodetype_;
@@ -70,17 +88,20 @@ public:
     return *this;
   }
   bool operator!=(const AstNodePtr &that) const {
-    return repr_ != that.repr_ || nodetype_ != that.nodetype_ || sig_ != that.sig_;
+    return repr_ != that.repr_ || nodetype_ != that.nodetype_ ||
+           sig_ != that.sig_;
   }
   bool operator==(const AstNodePtr &that) const {
-    return repr_ == that.repr_ && nodetype_ == that.nodetype_ && sig_ == that.sig_;
+    return repr_ == that.repr_ && nodetype_ == that.nodetype_ &&
+           sig_ == that.sig_;
   }
   bool operator==(BaseType *p) const { return repr_ == p; }
   bool operator!=(BaseType *p) const { return repr_ != p; }
   // The < operator is required to allow AstNodePtr be stored in set containers.
   bool operator<(const AstNodePtr &that) const {
     return repr_ < that.repr_ || (repr_ == that.repr_ && sig_ < that.sig_) ||
-           (repr_ == that.repr_ && sig_ == that.sig_ && nodetype_ < that.nodetype_);
+           (repr_ == that.repr_ && sig_ == that.sig_ &&
+            nodetype_ < that.nodetype_);
   }
   BaseType *operator->() const { return repr_; }
   BaseType *get_ptr() const { return repr_; }
@@ -89,7 +110,8 @@ public:
 };
 #define AST_NULL AstNodePtr(AstNodePtr::SpecialAstType::NULL_AST)
 #define AST_UNKNOWN AstNodePtr(AstNodePtr::SpecialAstType::UNKNOWN_AST)
-#define AST_UNKNOWN_CALL(x) AstNodePtr(AstNodePtr::SpecialAstType::UNKNOWN_FUNCTION_CALL, x)
+#define AST_UNKNOWN_CALL(x)                                                    \
+  AstNodePtr(AstNodePtr::SpecialAstType::UNKNOWN_FUNCTION_CALL, x)
 
 class AstNodeType {
 public:
@@ -102,21 +124,23 @@ private:
 
 public:
   AstNodeType() : repr_(0), nodetype_(SpecialAstType::NULL_TYPE) {}
-  AstNodeType(BaseType *repr) : repr_(repr), nodetype_(SpecialAstType::SG_TYPE) {
+  AstNodeType(BaseType *repr)
+      : repr_(repr), nodetype_(SpecialAstType::SG_TYPE) {
     if (repr_ == 0)
       nodetype_ = SpecialAstType::NULL_TYPE;
   }
   AstNodeType(SpecialAstType t) : repr_(0), nodetype_(t) {
     switch (t) {
-      case SpecialAstType::UNKNOWN_TYPE:
-      case SpecialAstType::NULL_TYPE:
-        break;
-      default:
-        std::cerr << "Error: UNKNOWN Special AST type!";
-        assert(0);
+    case SpecialAstType::UNKNOWN_TYPE:
+    case SpecialAstType::NULL_TYPE:
+      break;
+    default:
+      std::cerr << "Error: UNKNOWN Special AST type!";
+      assert(0);
     }
   }
-  AstNodeType(const AstNodeType &that) : repr_(that.repr_), nodetype_(that.nodetype_) {}
+  AstNodeType(const AstNodeType &that)
+      : repr_(that.repr_), nodetype_(that.nodetype_) {}
   AstNodeType &operator=(const AstNodeType &that) {
     repr_ = that.repr_;
     nodetype_ = that.nodetype_;
@@ -218,7 +242,7 @@ public:
   AstNodePtr getNULL() const { return AST_NULL; }
   void SetRoot(const AstNodePtr &root);
   static void SetFunctionNameMangling(
-      std::function<std::string(const SgFunctionDeclaration*)> f);
+      std::function<std::string(const SgFunctionDeclaration *)> f);
 
   typedef enum {
     PreOrder,
@@ -253,8 +277,8 @@ public:
   bool IsDecls(const AstNodePtr &s);
   bool IsVariableDecl(const AstNodePtr &exp, AstList *vars = 0,
                       AstList *inits = 0);
-  //! Check if exp declares a set of variables to be aliased to non-local storages,
-  //! represented by the returned global_signatures.
+  //! Check if exp declares a set of variables to be aliased to non-local
+  //! storages, represented by the returned global_signatures.
   bool IsAliasingDecl(const AstNodePtr &exp, AstList *vars = 0,
                       AstList *aliases = 0);
   bool IsExecutableStmt(const AstNodePtr &s);
@@ -324,9 +348,8 @@ public:
   //! \brief Returns true iff s is a function call, false otherwise. But also
   //! attempts to extract
   //!        a bunch of info about the call.
-  bool IsFunctionCall(const AstNodePtr &s, AstNodePtr *f = 0,
-                      AstList *args = 0, AstList *outargs = 0,
-                      AstTypeList *paramtypes = 0,
+  bool IsFunctionCall(const AstNodePtr &s, AstNodePtr *f = 0, AstList *args = 0,
+                      AstList *outargs = 0, AstTypeList *paramtypes = 0,
                       AstNodeType *returntype = 0);
   bool IsMin(const AstNodePtr &exp);
   bool IsMax(const AstNodePtr &exp);
@@ -338,7 +361,8 @@ public:
                                 AstList::const_iterator args_end);
 
   AstNodePtr GetFunctionDefinition(const AstNodePtr &n, std::string *name = 0);
-  static AstNodePtr GetFunctionDefinitionFromDeclaration(const AstNodePtr &decl);
+  static AstNodePtr
+  GetFunctionDefinitionFromDeclaration(const AstNodePtr &decl);
   static bool IsFunctionDefinition(const AstNodePtr &s, std::string *name = 0,
                                    AstList *params = 0, AstList *outpars = 0,
                                    AstNodePtr *body = 0,
@@ -351,17 +375,21 @@ public:
                            AstNodePtr *rhs = 0, bool *readlhs = 0);
   AstNodePtr CreateAssignment(const AstNodePtr &lhs, const AstNodePtr &rhs);
   AstNodePtr CreateFieldRef(std::string name1, std::string name2);
-  AstNodePtr CreateMethodRef(std::string classname, std::string fieldname, bool createIfNotFound);
+  AstNodePtr CreateMethodRef(std::string classname, std::string fieldname,
+                             bool createIfNotFound);
 
   bool IsIOInputStmt(const AstNodePtr &s, AstList *varlist = 0);
   bool IsIOOutputStmt(const AstNodePtr &s, AstList *explist = 0);
 
   bool IsAddressOfOp(const AstNodePtr &_s);
   static bool IsMemoryAccess(const AstNodePtr &s);
-  static bool IsMemoryAllocation(const AstNodePtr &s, AstNodeType *allocType = 0,
+  static bool IsMemoryAllocation(const AstNodePtr &s,
+                                 AstNodeType *allocType = 0,
                                  AstNodePtr *init = 0);
-  static bool IsMemoryFree(const AstNodePtr &s, AstNodeType *freedType = 0, AstNodePtr *freedVariable = 0);
-  static bool IsExpression(const AstNodePtr &s, AstNodeType *exptype = 0, AstNodePtr *strip_exp = 0);
+  static bool IsMemoryFree(const AstNodePtr &s, AstNodeType *freedType = 0,
+                           AstNodePtr *freedVariable = 0);
+  static bool IsExpression(const AstNodePtr &s, AstNodeType *exptype = 0,
+                           AstNodePtr *strip_exp = 0);
   static AstNodeType GetExpressionType(const AstNodePtr &s);
 
   bool IsConstInt(const AstNodePtr &exp, int *value = 0);
@@ -418,8 +446,9 @@ public:
   AstNodeType GetType(const std::string &name);
   bool IsCompatibleType(const AstNodeType &t1, const AstNodeType &t2);
   static void GetTypeInfo(const AstNodeType &t, std::string *name = 0,
-                          std::string *stripname = 0, int *size = 0, bool use_global_unique_name = false);
-  static AstNodeType GetBaseType(const AstNodeType& t1);
+                          std::string *stripname = 0, int *size = 0,
+                          bool use_global_unique_name = false);
+  static AstNodeType GetBaseType(const AstNodeType &t1);
   static std::string GetTypeName(const AstNodeType &t) {
     std::string r;
     GetTypeInfo(t, &r);

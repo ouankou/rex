@@ -11,22 +11,29 @@
 #include <unordered_set>
 
 class AstTerm {
- public:
-  static std::string astTermToMultiLineString(SgNode* node,int sep=1, int pos=0);
-  static std::string astTermWithNullValuesAndTypesToString(SgNode* node);
-  static std::string astTermWithNullValuesToString(SgNode* node);
-  static std::string astTermWithNullValuesToString(SgNode* node, bool withNumbers);
-  static std::string astTermWithNullValuesToString(SgNode* node, bool withNumbers, bool withTypes);
-  static std::string astTermWithNullValuesToDot(SgNode* root);
-  static std::string astTermWithoutNullValuesToDot(SgNode* root);
-  static std::string astTermWithNullValuesToDotFragment(SgNode* root) ;
-  static std::string astTermToDot(RoseAst::iterator start, RoseAst::iterator end);
-  static std::string functionAstTermsWithNullValuesToDot(SgNode* root);
-  static std::string pointerExprToString(SgNode* node);
- private:
-  static std::string nodeTypeName(SgNode* node);
+public:
+  static std::string astTermToMultiLineString(SgNode *node, int sep = 1,
+                                              int pos = 0);
+  static std::string astTermWithNullValuesAndTypesToString(SgNode *node);
+  static std::string astTermWithNullValuesToString(SgNode *node);
+  static std::string astTermWithNullValuesToString(SgNode *node,
+                                                   bool withNumbers);
+  static std::string
+  astTermWithNullValuesToString(SgNode *node, bool withNumbers, bool withTypes);
+  static std::string astTermWithNullValuesToDot(SgNode *root);
+  static std::string astTermWithoutNullValuesToDot(SgNode *root);
+  static std::string astTermWithNullValuesToDotFragment(SgNode *root);
+  static std::string astTermToDot(RoseAst::iterator start,
+                                  RoseAst::iterator end);
+  static std::string functionAstTermsWithNullValuesToDot(SgNode *root);
+  static std::string pointerExprToString(SgNode *node);
+
+private:
+  static std::string nodeTypeName(SgNode *node);
   static std::string dotFragmentToDot(std::string fragment);
-  static std::string astTermWithNullValuesToString(SgNode* node, bool withNumbers, bool withTypes, std::unordered_set<SgNode*>& visited);
+  static std::string
+  astTermWithNullValuesToString(SgNode *node, bool withNumbers, bool withTypes,
+                                std::unordered_set<SgNode *> &visited);
 };
 
 #endif

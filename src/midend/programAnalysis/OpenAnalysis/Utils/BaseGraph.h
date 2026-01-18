@@ -1,25 +1,25 @@
 // $Id: BaseGraph.h,v 1.3 2008/01/08 02:56:40 dquinlan Exp $
 // -*-C++-*-
 // * BeginRiceCopyright *****************************************************
-// 
-// Copyright ((c)) 2002, Rice University 
+//
+// Copyright ((c)) 2002, Rice University
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
-// 
+//
 // * Redistributions of source code must retain the above copyright
 //   notice, this list of conditions and the following disclaimer.
-// 
+//
 // * Redistributions in binary form must reproduce the above copyright
 //   notice, this list of conditions and the following disclaimer in the
 //   documentation and/or other materials provided with the distribution.
-// 
+//
 // * Neither the name of Rice University (RICE) nor the names of its
 //   contributors may be used to endorse or promote products derived from
 //   this software without specific prior written permission.
-// 
+//
 // This software is provided by RICE and contributors "as is" and any
 // express or implied warranties, including, but not limited to, the
 // implied warranties of merchantability and fitness for a particular
@@ -30,14 +30,15 @@
 // business interruption) however caused and on any theory of liability,
 // whether in contract, strict liability, or tort (including negligence
 // or otherwise) arising in any way out of the use of this software, even
-// if advised of the possibility of such damage. 
-// 
+// if advised of the possibility of such damage.
+//
 // ******************************************************* EndRiceCopyright *
 
 // Best seen in 120-column wide window (or print in landscape mode).
 //--------------------------------------------------------------------------------------------------------------------
 // This file is part of Mint.
-// Arun Chauhan (achauhan@cs.rice.edu), Dept of Computer Science, Rice University, 2001.
+// Arun Chauhan (achauhan@cs.rice.edu), Dept of Computer Science, Rice
+// University, 2001.
 //--------------------------------------------------------------------------------------------------------------------
 
 #ifndef BaseGraph_H
@@ -52,11 +53,11 @@ using ::std::ostream;
 #include <set>
 
 // Mint headers
-#include "Iterator.h"
 #include "Exception.h"
+#include "Iterator.h"
 
 namespace std {
-  using namespace ::std;
+using namespace ::std;
 }
 //--------------------------------------------------------------------------------------------------------------------
 // BaseGraph
@@ -124,97 +125,135 @@ public:
   /** EmptyEdge exception is thrown if an edge being added is null (0) */
   class EmptyEdge : public Exception {
   public:
-    EmptyEdge () {}
-    ~EmptyEdge () {}
-    void report (std::ostream& o) const { o << "E!  Adding a null edge to a graph." << std::endl; }
+    EmptyEdge() {}
+    ~EmptyEdge() {}
+    void report(std::ostream &o) const {
+      o << "E!  Adding a null edge to a graph." << std::endl;
+    }
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** DuplicateEdge exception is thrown if an edge being added is already a part of the graph. */
+  /** DuplicateEdge exception is thrown if an edge being added is already a part
+   * of the graph. */
   class DuplicateEdge : public Exception {
   public:
-    DuplicateEdge (BaseGraph::Edge* e) { offending_edge = e; }
-    ~DuplicateEdge () {}
-    void report (std::ostream& o) const;
+    DuplicateEdge(BaseGraph::Edge *e) { offending_edge = e; }
+    ~DuplicateEdge() {}
+    void report(std::ostream &o) const;
+
   private:
-    BaseGraph::Edge* offending_edge;
+    BaseGraph::Edge *offending_edge;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** NonexistentEdge exception is thrown if an edge being deleted is not a part of the graph. */
+  /** NonexistentEdge exception is thrown if an edge being deleted is not a part
+   * of the graph. */
   class NonexistentEdge : public Exception {
   public:
-    NonexistentEdge (BaseGraph::Edge* e) { offending_edge = e; }
-    ~NonexistentEdge () {}
-    void report (std::ostream& o) const { o << "E!  Removing a non-existent edge from a graph." << std::endl; }
+    NonexistentEdge(BaseGraph::Edge *e) { offending_edge = e; }
+    ~NonexistentEdge() {}
+    void report(std::ostream &o) const {
+      o << "E!  Removing a non-existent edge from a graph." << std::endl;
+    }
+
   private:
-    BaseGraph::Edge* offending_edge;
+    BaseGraph::Edge *offending_edge;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** EdgeInUse exception is thrown if an edge being added is already a part of another graph. */
+  /** EdgeInUse exception is thrown if an edge being added is already a part of
+   * another graph. */
   class EdgeInUse : public Exception {
   public:
-    EdgeInUse (BaseGraph::Edge* e) { offending_edge = e; }
-    ~EdgeInUse () {}
-    void report (std::ostream& o) const { o << "E!  Adding an edge that is already a part of another graph." << std::endl; }
+    EdgeInUse(BaseGraph::Edge *e) { offending_edge = e; }
+    ~EdgeInUse() {}
+    void report(std::ostream &o) const {
+      o << "E!  Adding an edge that is already a part of another graph."
+        << std::endl;
+    }
+
   private:
-    BaseGraph::Edge* offending_edge;
+    BaseGraph::Edge *offending_edge;
   };
   //------------------------------------------------------------------------------------------------------------------
   /** EmptyNode exception is thrown if a node being added is null (0) */
   class EmptyNode : public Exception {
   public:
-    EmptyNode () {}
-    ~EmptyNode () {}
-    void report (std::ostream& o) const { o << "E!  Adding a null node to a graph." << std::endl; }
+    EmptyNode() {}
+    ~EmptyNode() {}
+    void report(std::ostream &o) const {
+      o << "E!  Adding a null node to a graph." << std::endl;
+    }
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** DuplicateNode exception is thrown if a node being added is already a part of the graph. */
+  /** DuplicateNode exception is thrown if a node being added is already a part
+   * of the graph. */
   class DuplicateNode : public Exception {
   public:
-    DuplicateNode (BaseGraph::Node* n) { offending_node = n; }
-    ~DuplicateNode () {}
-    void report (std::ostream& o) const { o << "E!  Adding a duplicate node to a graph." << std::endl; }
+    DuplicateNode(BaseGraph::Node *n) { offending_node = n; }
+    ~DuplicateNode() {}
+    void report(std::ostream &o) const {
+      o << "E!  Adding a duplicate node to a graph." << std::endl;
+    }
+
   private:
-    BaseGraph::Node* offending_node;
+    BaseGraph::Node *offending_node;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** NonexistentNode exception is thrown if a node being deleted is not a part of the graph. */
+  /** NonexistentNode exception is thrown if a node being deleted is not a part
+   * of the graph. */
   class NonexistentNode : public Exception {
   public:
-    NonexistentNode (BaseGraph::Node* n) { offending_node = n; }
-    ~NonexistentNode () {}
-    void report (std::ostream& o) const { o << "E!  Removing a non-existent node from a graph." << std::endl; }
+    NonexistentNode(BaseGraph::Node *n) { offending_node = n; }
+    ~NonexistentNode() {}
+    void report(std::ostream &o) const {
+      o << "E!  Removing a non-existent node from a graph." << std::endl;
+    }
+
   private:
-    BaseGraph::Node* offending_node;
+    BaseGraph::Node *offending_node;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** NodeInUse exception is thrown if a node being added is already a part of another graph. */
+  /** NodeInUse exception is thrown if a node being added is already a part of
+   * another graph. */
   class NodeInUse : public Exception {
   public:
-    NodeInUse (BaseGraph::Node* n) { offending_node = n; }
-    ~NodeInUse () {}
-    void report (std::ostream& o) const { o << "E!  Addiing a node that is already a part of another graph." << std::endl; }
+    NodeInUse(BaseGraph::Node *n) { offending_node = n; }
+    ~NodeInUse() {}
+    void report(std::ostream &o) const {
+      o << "E!  Addiing a node that is already a part of another graph."
+        << std::endl;
+    }
+
   private:
-    BaseGraph::Node* offending_node;
+    BaseGraph::Node *offending_node;
   };
   //------------------------------------------------------------------------------------------------------------------
   class DeletingRootOfNonSingletonGraph : public Exception {
   public:
-    DeletingRootOfNonSingletonGraph (BaseGraph::Node* n) { offending_node = n; }
-    ~DeletingRootOfNonSingletonGraph () {}
-    void report (std::ostream& o) const { o << "E!  Deleting the root node of a non-singleton graph." << std::endl; }
+    DeletingRootOfNonSingletonGraph(BaseGraph::Node *n) { offending_node = n; }
+    ~DeletingRootOfNonSingletonGraph() {}
+    void report(std::ostream &o) const {
+      o << "E!  Deleting the root node of a non-singleton graph." << std::endl;
+    }
+
   private:
-    BaseGraph::Node* offending_node;
+    BaseGraph::Node *offending_node;
   };
   //------------------------------------------------------------------------------------------------------------------
   class Node {
   public:
-    Node () { dfs_succ = bfs_succ = 0; in_use = false; }
-    virtual ~Node () { dfs_succ = NULL; bfs_succ = NULL; }
-    virtual void dump (std::ostream& os) { os << this; }
+    Node() {
+      dfs_succ = bfs_succ = 0;
+      in_use = false;
+    }
+    virtual ~Node() {
+      dfs_succ = NULL;
+      bfs_succ = NULL;
+    }
+    virtual void dump(std::ostream &os) { os << this; }
+
   protected:
     bool in_use;
-    Node* dfs_succ;
-    Node* bfs_succ;
+    Node *dfs_succ;
+    Node *bfs_succ;
     friend class BaseGraph;
     friend class BaseGraph::DFSIterator;
     friend class BaseGraph::BFSIterator;
@@ -222,64 +261,91 @@ public:
   //------------------------------------------------------------------------------------------------------------------
   class Edge {
   public:
-    Edge (Node* _n1, Node* _n2) { n1 = _n1; n2 = _n2; in_use = false; }
-    virtual ~Edge () { n1 = NULL; n2 = NULL; }
-    virtual void dump (std::ostream& os) { os << this; }
+    Edge(Node *_n1, Node *_n2) {
+      n1 = _n1;
+      n2 = _n2;
+      in_use = false;
+    }
+    virtual ~Edge() {
+      n1 = NULL;
+      n2 = NULL;
+    }
+    virtual void dump(std::ostream &os) { os << this; }
+
   protected:
     bool in_use;
-    Node* n1;
-    Node* n2;
+    Node *n1;
+    Node *n2;
     friend class BaseGraph;
     friend class BaseGraph::DFSIterator;
     friend class BaseGraph::BFSIterator;
     friend class BaseGraph::DuplicateEdge;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** The DFSiterator calls the virtual function create_DFS_links the first time it is called, or if the graph has
-      been changed since the last call.  */
+  /** The DFSiterator calls the virtual function create_DFS_links the first time
+     it is called, or if the graph has been changed since the last call.  */
   class DFSIterator : public Iterator {
   public:
-    DFSIterator (BaseGraph& g);
-    ~DFSIterator () {}
-    void operator++ () { if (p != 0) p = p->dfs_succ; std::cerr << "advance " << p << std::endl; }
-    operator bool () { return (p != 0); }
+    DFSIterator(BaseGraph &g);
+    ~DFSIterator() {}
+    void operator++() {
+      if (p != 0)
+        p = p->dfs_succ;
+      std::cerr << "advance " << p << std::endl;
+    }
+    operator bool() { return (p != 0); }
+
   protected:
-    Node* p;
+    Node *p;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** The BFSiterator calls the virtual function create_BFS_links the first time it is called, or if the graph has
-      been changed since the last call. */
+  /** The BFSiterator calls the virtual function create_BFS_links the first time
+     it is called, or if the graph has been changed since the last call. */
   class BFSIterator : public Iterator {
   public:
-    BFSIterator (BaseGraph& g);
-    ~BFSIterator () {}
-    void operator++ () { if (p != 0) p = p->bfs_succ; }
-    operator bool () { return (p != 0); }
+    BFSIterator(BaseGraph &g);
+    ~BFSIterator() {}
+    void operator++() {
+      if (p != 0)
+        p = p->bfs_succ;
+    }
+    operator bool() { return (p != 0); }
+
   protected:
-    Node* p;
+    Node *p;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** The node iterator iterates over all the nodes in the graph in no particular order. */
+  /** The node iterator iterates over all the nodes in the graph in no
+   * particular order. */
   class NodesIterator : public Iterator {
   public:
-    NodesIterator (BaseGraph& g) { gr = &g;  iter = gr->node_set.begin(); }
-    ~NodesIterator () {}
-    void operator++ () { ++iter; }
-    operator bool () { return (iter != gr->node_set.end()); }
+    NodesIterator(BaseGraph &g) {
+      gr = &g;
+      iter = gr->node_set.begin();
+    }
+    ~NodesIterator() {}
+    void operator++() { ++iter; }
+    operator bool() { return (iter != gr->node_set.end()); }
+
   protected:
-    std::set<Node*>::iterator iter;
-    BaseGraph* gr;
+    std::set<Node *>::iterator iter;
+    BaseGraph *gr;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** The bi-directional node iterator iterates over all the nodes in the graph in no particular order -- except
-      that the Forward direction is guaranteed to be opposite of the Reverse direction.  */
+  /** The bi-directional node iterator iterates over all the nodes in the graph
+     in no particular order -- except that the Forward direction is guaranteed
+     to be opposite of the Reverse direction.  */
   class BiDirNodesIterator : public Iterator {
   public:
-    enum dirType { Forward, Reverse }; 
+    enum dirType { Forward, Reverse };
     // Default to forward direction if client doesn't specify the direction.
-    BiDirNodesIterator (BaseGraph&) { dir = Forward; iter = gr->node_set.begin(); }
-    BiDirNodesIterator (BaseGraph& g, dirType d) {
-      gr = &g; dir = d;
+    BiDirNodesIterator(BaseGraph &) {
+      dir = Forward;
+      iter = gr->node_set.begin();
+    }
+    BiDirNodesIterator(BaseGraph &g, dirType d) {
+      gr = &g;
+      dir = d;
       if (dir == Forward)
         iter = gr->node_set.begin();
       else {
@@ -289,68 +355,78 @@ public:
         --pre_begin;
       }
     }
-    ~BiDirNodesIterator () {}
-    void operator++ () { ++iter; }
-    void operator-- () { --iter; }
-    operator bool () {
+    ~BiDirNodesIterator() {}
+    void operator++() { ++iter; }
+    void operator--() { --iter; }
+    operator bool() {
       if (dir == Forward)
         return iter != gr->node_set.end();
       else {
         return iter != pre_begin;
       }
     }
+
   protected:
-    std::set<Node*>::iterator iter;
-    std::set<Node*>::iterator pre_begin;
-    BaseGraph* gr;
+    std::set<Node *>::iterator iter;
+    std::set<Node *>::iterator pre_begin;
+    BaseGraph *gr;
     dirType dir;
   };
   //------------------------------------------------------------------------------------------------------------------
-  /** The edge iterator iterates over all the edges in the graph in no particular order. */
+  /** The edge iterator iterates over all the edges in the graph in no
+   * particular order. */
   class EdgesIterator : public Iterator {
   public:
-    EdgesIterator (BaseGraph& g) { gr = &g;  iter = gr->edge_set.begin(); }
-    ~EdgesIterator () {}
-    void operator++ () { ++iter; }
-    operator bool () { return (iter != gr->edge_set.end()); }
+    EdgesIterator(BaseGraph &g) {
+      gr = &g;
+      iter = gr->edge_set.begin();
+    }
+    ~EdgesIterator() {}
+    void operator++() { ++iter; }
+    operator bool() { return (iter != gr->edge_set.end()); }
+
   protected:
-    std::set<Edge*>::iterator iter;
-    BaseGraph* gr;
+    std::set<Edge *>::iterator iter;
+    BaseGraph *gr;
   };
   //------------------------------------------------------------------------------------------------------------------
-  BaseGraph () { root_node = 0; }
-  BaseGraph (Node* root) { root_node = 0; add(root); }
-  virtual ~BaseGraph (); 
-  
-  Node* root () { return root_node; }
-  void  set_root (Node* n) { root_node = n; }
+  BaseGraph() { root_node = 0; }
+  BaseGraph(Node *root) {
+    root_node = 0;
+    add(root);
+  }
+  virtual ~BaseGraph();
 
-  int num_nodes () { return node_set.size(); }
-  int num_edges () { return edge_set.size(); }
+  Node *root() { return root_node; }
+  void set_root(Node *n) { root_node = n; }
 
-  bool isempty () { return (root_node == 0); }
+  int num_nodes() { return node_set.size(); }
+  int num_edges() { return edge_set.size(); }
 
-  void dump (std::ostream&);
+  bool isempty() { return (root_node == 0); }
+
+  void dump(std::ostream &);
 
 protected:
-  std::set<Node*> node_set;                                  // the set of all the graph nodes
-  std::set<Edge*> edge_set;                                  // the set of all the graph edges
-  Node* root_node;                                           // the root node
-  bool DFS_needed, BFS_needed;                               // has a DFS / BFS been done on this graph?
+  std::set<Node *> node_set;   // the set of all the graph nodes
+  std::set<Edge *> edge_set;   // the set of all the graph edges
+  Node *root_node;             // the root node
+  bool DFS_needed, BFS_needed; // has a DFS / BFS been done on this graph?
 #if __cplusplus < 201103L
-  void add (Edge* e) throw (DuplicateEdge, EdgeInUse, EmptyEdge,
-                            DuplicateNode, NodeInUse, EmptyNode);
-  void add (Node* n) throw (DuplicateNode, NodeInUse, EmptyNode);
-  void remove (Edge* e) throw (NonexistentEdge, EmptyEdge);
-  void remove (Node* n) throw (NonexistentNode, DeletingRootOfNonSingletonGraph, EmptyNode);
+  void add(Edge *e) throw(DuplicateEdge, EdgeInUse, EmptyEdge, DuplicateNode,
+                          NodeInUse, EmptyNode);
+  void add(Node *n) throw(DuplicateNode, NodeInUse, EmptyNode);
+  void remove(Edge *e) throw(NonexistentEdge, EmptyEdge);
+  void remove(Node *n) throw(NonexistentNode, DeletingRootOfNonSingletonGraph,
+                             EmptyNode);
 #else
-  void add (Edge* e);
-  void add (Node* n);
-  void remove (Edge* e);
-  void remove (Node* n);
+  void add(Edge *e);
+  void add(Node *n);
+  void remove(Edge *e);
+  void remove(Node *n);
 #endif
-  virtual Node* create_DFS_links (Node* start_node) = 0;
-  virtual Node* create_BFS_links (Node* start_node) = 0;
+  virtual Node *create_DFS_links(Node *start_node) = 0;
+  virtual Node *create_BFS_links(Node *start_node) = 0;
 };
 //--------------------------------------------------------------------------------------------------------------------
 

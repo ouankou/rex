@@ -1,13 +1,8 @@
 #ifndef CHECK_ISMODIFIED_FLAG_H
 #define CHECK_ISMODIFIED_FLAG_H
 
-#if 0
-// DQ (4/16/2015): Replaced with better implementations.
-bool checkIsModifiedFlag( SgNode *node);
-bool CheckIsModifiedFlagSupport( SgNode *node);
-#endif
-
-// DQ (4/16/2015): This functions have clearer sematics and a better implementation.
+// DQ (4/16/2015): This functions have clearer sematics and a better
+// implementation.
 ROSE_DLL_API void reportNodesMarkedAsModified(SgNode *node);
 ROSE_DLL_API void unsetNodesMarkedAsModified(SgNode *node);
 

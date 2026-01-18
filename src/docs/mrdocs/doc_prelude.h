@@ -28,8 +28,8 @@
 #include "docs/mrdocs/modules/transformation_support_lib.h"
 #include "docs/mrdocs/modules/utility_classes.h"
 
-#include "docs/mrdocs/sage/sage_groups.h"
 #include "docs/mrdocs/sage/extra_ast_nodes.h"
+#include "docs/mrdocs/sage/sage_groups.h"
 
 #include "docs/mrdocs/rose/ast_construction.h"
 #include "docs/mrdocs/rose/ast_properties.h"

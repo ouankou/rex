@@ -12,94 +12,133 @@
 class SgNode;
 class SgFunctionDeclaration;
 namespace AstUtilInterface {
-   class DependenceTable;
-   class WholeProgramDependenceAnalysis;
+class DependenceTable;
+class WholeProgramDependenceAnalysis;
 
-   enum OperatorSideEffect {
-     Modify, Read, Kill, Alias, Call, Decl, Allocate, Free, Parameter, Return
-   };
-   inline std::string OperatorSideEffectName(OperatorSideEffect what) {
-     switch (what) {
-      case OperatorSideEffect::Modify: return "modify";
-      case OperatorSideEffect::Read: return "read";
-      case OperatorSideEffect::Kill: return "kill";
-      case OperatorSideEffect::Call: return "call";
-      case OperatorSideEffect::Parameter: return "parameter";
-      case OperatorSideEffect::Return: return "return";
-      case OperatorSideEffect::Decl: return "decl";
-      case OperatorSideEffect::Allocate: return "allocate";
-      case OperatorSideEffect::Free: return "free";
-      case OperatorSideEffect::Alias: return "alias";
-      default:
-          std::cerr << "Error: Unexpected enum value:" << what << "\n";
-          assert(false);
-          return "";
-     }
-   }
-
-   class SaveOperatorSideEffectInterface {
-     public:
-      virtual ~SaveOperatorSideEffectInterface() = default;
-      virtual void ClearOperatorSideEffect(SgNode* op) = 0;
-      virtual bool SaveOperatorSideEffect(SgNode* op, const AstNodePtr& ref,
-                                          AstUtilInterface::OperatorSideEffect relation,
-                                          SgNode* details = 0) = 0;
-   };
-
-   class SaveOperatorSideEffectIntoVectors : public SaveOperatorSideEffectInterface {
-       std::vector<AstNodePtr> *readp, *writep, *callp;
-     public:
-      SaveOperatorSideEffectIntoVectors(std::vector<AstNodePtr>* readset = 0,
-                                        std::vector<AstNodePtr>* writeset = 0,
-                                        std::vector<AstNodePtr>* callset = 0)
-          : readp(readset), writep(writeset), callp(callset) {}
-
-       void ClearOperatorSideEffect(SgNode* /*op*/) override {}
-       bool SaveOperatorSideEffect(SgNode* /*op*/, const AstNodePtr& varref,
-                                   AstUtilInterface::OperatorSideEffect relation,
-                                   SgNode* /*details*/ = 0) override {
-           switch (relation) {
-               case OperatorSideEffect::Modify: if (writep != 0) writep->push_back(varref); break;
-               case OperatorSideEffect::Read: if (readp != 0) readp->push_back(varref); break;
-               case OperatorSideEffect::Call: if (callp != 0) callp->push_back(varref); break;
-               default: break;
-           }
-           return true;
-       }
-   };
-
-   //! Returns the collection of memory references modified, read, and invoked (as
-   //! function calls) as potential side effects of running the given ast, inside the
-   //! given scope.
-    void ComputeAstSideEffects(
-        SgNode* ast,
-        std::function<bool(const AstNodePtr&, const AstNodePtr&,
-                           OperatorSideEffect)>* collect = 0,
-        SaveOperatorSideEffectInterface* add_to_dep_table = 0);
-
-   //!Collect non-local variables that are read and written within the given ast. This is a wrapper
-   //! of the ComputeAstSideEffects function to provide a more convenient user interface.
-   //!Returns true if the returned variables are guaranteed to be complete; returns false otherwise.
-    inline void CollectSideEffectVariables(SgNode* ast,
-                                           std::vector<AstNodePtr>* writeVars = 0,
-                                           std::vector<AstNodePtr>* readVars = 0,
-                                           std::vector<AstNodePtr>* callVars = 0) {
-        SaveOperatorSideEffectIntoVectors save(readVars, writeVars, callVars);
-        ComputeAstSideEffects(ast, 0, &save);
-    }
-
-    void RegisterOperatorSideEffectAnnotation();
-    void ReadAnnotations(std::istream& input, DependenceTable* use_dep_table = 0);
-    void OutputOperatorSideEffectAnnotations(std::ostream& output, DependenceTable* use_dep_analysis = 0);
-    void AddOperatorSideEffectAnnotation(SgNode* op_ast, const AstNodePtr& var, OperatorSideEffect relation);
-    void SetFunctionNameMangling(std::string (*)(const SgFunctionDeclaration*));
-    //! Returns a string that uniquely identifies the given variable.
-    //! If provided with a dict_table, save the file name and line number for the signature.
-    std::string GetVariableSignature(const AstNodePtr& variable);
-    // Set configuration to save the file name and line number for each variable signature.
-    void SetSaveVariableDictionary(bool doit);
-    // Output a dictionary that maps each signature to its file name and location..
-    void OutputSignatureDictionary(std::ostream& output);
-    bool IsLocalRef(SgNode* ref, SgNode* scope, bool* has_ptr_deref = 0);
+enum OperatorSideEffect {
+  Modify,
+  Read,
+  Kill,
+  Alias,
+  Call,
+  Decl,
+  Allocate,
+  Free,
+  Parameter,
+  Return
 };
+inline std::string OperatorSideEffectName(OperatorSideEffect what) {
+  switch (what) {
+  case OperatorSideEffect::Modify:
+    return "modify";
+  case OperatorSideEffect::Read:
+    return "read";
+  case OperatorSideEffect::Kill:
+    return "kill";
+  case OperatorSideEffect::Call:
+    return "call";
+  case OperatorSideEffect::Parameter:
+    return "parameter";
+  case OperatorSideEffect::Return:
+    return "return";
+  case OperatorSideEffect::Decl:
+    return "decl";
+  case OperatorSideEffect::Allocate:
+    return "allocate";
+  case OperatorSideEffect::Free:
+    return "free";
+  case OperatorSideEffect::Alias:
+    return "alias";
+  default:
+    std::cerr << "Error: Unexpected enum value:" << what << "\n";
+    assert(false);
+    return "";
+  }
+}
+
+class SaveOperatorSideEffectInterface {
+public:
+  virtual ~SaveOperatorSideEffectInterface() = default;
+  virtual void ClearOperatorSideEffect(SgNode *op) = 0;
+  virtual bool
+  SaveOperatorSideEffect(SgNode *op, const AstNodePtr &ref,
+                         AstUtilInterface::OperatorSideEffect relation,
+                         SgNode *details = 0) = 0;
+};
+
+class SaveOperatorSideEffectIntoVectors
+    : public SaveOperatorSideEffectInterface {
+  std::vector<AstNodePtr> *readp, *writep, *callp;
+
+public:
+  SaveOperatorSideEffectIntoVectors(std::vector<AstNodePtr> *readset = 0,
+                                    std::vector<AstNodePtr> *writeset = 0,
+                                    std::vector<AstNodePtr> *callset = 0)
+      : readp(readset), writep(writeset), callp(callset) {}
+
+  void ClearOperatorSideEffect(SgNode * /*op*/) override {}
+  bool SaveOperatorSideEffect(SgNode * /*op*/, const AstNodePtr &varref,
+                              AstUtilInterface::OperatorSideEffect relation,
+                              SgNode * /*details*/ = 0) override {
+    switch (relation) {
+    case OperatorSideEffect::Modify:
+      if (writep != 0)
+        writep->push_back(varref);
+      break;
+    case OperatorSideEffect::Read:
+      if (readp != 0)
+        readp->push_back(varref);
+      break;
+    case OperatorSideEffect::Call:
+      if (callp != 0)
+        callp->push_back(varref);
+      break;
+    default:
+      break;
+    }
+    return true;
+  }
+};
+
+//! Returns the collection of memory references modified, read, and invoked (as
+//! function calls) as potential side effects of running the given ast, inside
+//! the given scope.
+void ComputeAstSideEffects(
+    SgNode *ast,
+    std::function<bool(const AstNodePtr &, const AstNodePtr &,
+                       OperatorSideEffect)> *collect = 0,
+    SaveOperatorSideEffectInterface *add_to_dep_table = 0);
+
+//! Collect non-local variables that are read and written within the given ast.
+//! This is a wrapper
+//!  of the ComputeAstSideEffects function to provide a more convenient user
+//!  interface.
+//! Returns true if the returned variables are guaranteed to be complete;
+//! returns false otherwise.
+inline void CollectSideEffectVariables(SgNode *ast,
+                                       std::vector<AstNodePtr> *writeVars = 0,
+                                       std::vector<AstNodePtr> *readVars = 0,
+                                       std::vector<AstNodePtr> *callVars = 0) {
+  SaveOperatorSideEffectIntoVectors save(readVars, writeVars, callVars);
+  ComputeAstSideEffects(ast, 0, &save);
+}
+
+void RegisterOperatorSideEffectAnnotation();
+void ReadAnnotations(std::istream &input, DependenceTable *use_dep_table = 0);
+void OutputOperatorSideEffectAnnotations(std::ostream &output,
+                                         DependenceTable *use_dep_analysis = 0);
+void AddOperatorSideEffectAnnotation(SgNode *op_ast, const AstNodePtr &var,
+                                     OperatorSideEffect relation);
+void SetFunctionNameMangling(std::string (*)(const SgFunctionDeclaration *));
+//! Returns a string that uniquely identifies the given variable.
+//! If provided with a dict_table, save the file name and line number for the
+//! signature.
+std::string GetVariableSignature(const AstNodePtr &variable);
+// Set configuration to save the file name and line number for each variable
+// signature.
+void SetSaveVariableDictionary(bool doit);
+// Output a dictionary that maps each signature to its file name and location..
+void OutputSignatureDictionary(std::ostream &output);
+bool IsLocalRef(SgNode *ref, SgNode *scope, bool *has_ptr_deref = 0);
+}; // namespace AstUtilInterface
 #endif

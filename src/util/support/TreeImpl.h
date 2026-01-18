@@ -2,172 +2,184 @@
 #ifndef TREE_IMPL_H
 #define TREE_IMPL_H
 
-#include <iostream>
 #include <DoublyLinkedList.h>
+#include <iostream>
 #include <mlog.h>
 
-template<class T>
-class TreeNodeImpl
-{
-  T* parent;
-  DoublyLinkedListWrap<T*> children;
-  typedef DoublyLinkedEntryWrap<T*> HolderType;
+template <class T> class TreeNodeImpl {
+  T *parent;
+  DoublyLinkedListWrap<T *> children;
+  typedef DoublyLinkedEntryWrap<T *> HolderType;
   HolderType *holder;
 
- protected:
-  void Unlink() 
-    { if (holder != 0) {
-          parent->children.Delete(holder); holder = 0; parent = 0; 
-      }
+protected:
+  void Unlink() {
+    if (holder != 0) {
+      parent->children.Delete(holder);
+      holder = 0;
+      parent = 0;
     }
+  }
 
- public:
+public:
   TreeNodeImpl() : parent(0), holder(0) {}
-  virtual ~TreeNodeImpl() 
-    { for (iterator p = ChildrenIterator(); !p.ReachEnd(); ++p) {
-         TreeNodeImpl<T>* n = (*p);
-         n->holder = 0;
-         delete n;
-      }
-      Unlink(); 
+  virtual ~TreeNodeImpl() {
+    for (iterator p = ChildrenIterator(); !p.ReachEnd(); ++p) {
+      TreeNodeImpl<T> *n = (*p);
+      n->holder = 0;
+      delete n;
     }
-  typedef typename DoublyLinkedListWrap<T*>::iterator iterator;
-  typedef typename DoublyLinkedListWrap<T*>::const_iterator const_iterator;
+    Unlink();
+  }
+  typedef typename DoublyLinkedListWrap<T *>::iterator iterator;
+  typedef typename DoublyLinkedListWrap<T *>::const_iterator const_iterator;
 
   typedef enum {
-      AsFirstChild, ///< Insert as first child.
-      AsLastChild,  ///< Insert as last child.
-      AsPrevSibling, ///< Insert before the reference sibling.
-      AsNextSibling  ///< Insert after the reference sibling.
+    AsFirstChild,  ///< Insert as first child.
+    AsLastChild,   ///< Insert as last child.
+    AsPrevSibling, ///< Insert before the reference sibling.
+    AsNextSibling  ///< Insert after the reference sibling.
   } LinkOption;
 
-  T* Parent() const { return parent; }
-  T* FirstChild() const { return (ChildCount() > 0)? children.First()->GetEntry() : 0; }
-  T* LastChild() const { return (ChildCount() > 0)? children.Last()->GetEntry() : 0; }
+  T *Parent() const { return parent; }
+  T *FirstChild() const {
+    return (ChildCount() > 0) ? children.First()->GetEntry() : 0;
+  }
+  T *LastChild() const {
+    return (ChildCount() > 0) ? children.Last()->GetEntry() : 0;
+  }
   iterator ChildrenIterator() { return iterator(children); }
   const_iterator ChildrenIterator() const { return const_iterator(children); }
-  T* NextSibling() const {  HolderType *h = (holder==0)? 0 : parent->children.Next(holder);
-                            return (h != 0)? h->GetEntry() : 0; }
-  T* PrevSibling() const { HolderType *h = (holder==0)? 0 : parent->children.Prev(holder);
-                           return (h != 0)? h->GetEntry() : 0; }
+  T *NextSibling() const {
+    HolderType *h = (holder == 0) ? 0 : parent->children.Next(holder);
+    return (h != 0) ? h->GetEntry() : 0;
+  }
+  T *PrevSibling() const {
+    HolderType *h = (holder == 0) ? 0 : parent->children.Prev(holder);
+    return (h != 0) ? h->GetEntry() : 0;
+  }
   unsigned ChildCount() const { return children.NumberOfEntries(); }
 
-  void Link(T* pos, LinkOption opt)
-     { ASSERT_require(holder == 0);
-       T* entry = static_cast<T*>(this);
-       switch (opt) {
-       case AsFirstChild: 
-           parent = pos; holder = pos->children.PushFirst(entry); break;
-       case AsLastChild:
-           parent = pos; holder = pos->children.AppendLast(entry); break;
-       case AsPrevSibling:
-           parent = pos->parent; 
-           holder = parent->children.InsertBefore(entry, pos->holder);
-           break;
-       case AsNextSibling:
-           parent = pos->parent;
-           holder = parent->children.InsertAfter(entry, pos->holder);
-           break;
-       default:
-           ROSE_ABORT();
-       }
-     }
-  virtual void write(std::ostream& out) const {
-      for (const_iterator p = ChildrenIterator(); !p.ReachEnd(); ++p) 
-         (*p)->write(out);
-      if (ChildCount() > 0) 
-        out << "endtree\n";
+  void Link(T *pos, LinkOption opt) {
+    ASSERT_require(holder == 0);
+    T *entry = static_cast<T *>(this);
+    switch (opt) {
+    case AsFirstChild:
+      parent = pos;
+      holder = pos->children.PushFirst(entry);
+      break;
+    case AsLastChild:
+      parent = pos;
+      holder = pos->children.AppendLast(entry);
+      break;
+    case AsPrevSibling:
+      parent = pos->parent;
+      holder = parent->children.InsertBefore(entry, pos->holder);
+      break;
+    case AsNextSibling:
+      parent = pos->parent;
+      holder = parent->children.InsertAfter(entry, pos->holder);
+      break;
+    default:
+      ROSE_ABORT();
+    }
   }
-  void write() const 
-    { write(std::cerr); }
+  virtual void write(std::ostream &out) const {
+    for (const_iterator p = ChildrenIterator(); !p.ReachEnd(); ++p)
+      (*p)->write(out);
+    if (ChildCount() > 0)
+      out << "endtree\n";
+  }
+  void write() const { write(std::cerr); }
 };
 
-template <class T>
-class TreeTraverse 
-{
- public:
+template <class T> class TreeTraverse {
+public:
   typedef enum {
-      PreOrder,     ///< Visit node before its children.
-      PostOrder,    ///< Visit node after its children.
-      ChildrenOnly  ///< Only traverse immediate children.
+    PreOrder,    ///< Visit node before its children.
+    PostOrder,   ///< Visit node after its children.
+    ChildrenOnly ///< Only traverse immediate children.
   } TraversalOpt;
-  static T* FirstNode(T *n, TraversalOpt opt=PreOrder)
-    { switch (opt) {
-       case PreOrder: return n;
-       case PostOrder:
-          while (n->FirstChild() != 0)
-             n = n->FirstChild();
-          return n;
-       case ChildrenOnly:
-          return n->FirstChild();
-       default:
-          ROSE_ABORT();
-      }
+  static T *FirstNode(T *n, TraversalOpt opt = PreOrder) {
+    switch (opt) {
+    case PreOrder:
+      return n;
+    case PostOrder:
+      while (n->FirstChild() != 0)
+        n = n->FirstChild();
+      return n;
+    case ChildrenOnly:
+      return n->FirstChild();
+    default:
+      ROSE_ABORT();
     }
-  static T* LastNode( T *n, TraversalOpt opt=PreOrder)
-   { switch (opt) {
-      case PostOrder: return n;
-      case PreOrder:
-         while (n->LastChild() != 0)
-             n = n->LastChild();
-         return n;
-      case ChildrenOnly: return n->LastChild();
-      default:
-         ROSE_ABORT();
+  }
+  static T *LastNode(T *n, TraversalOpt opt = PreOrder) {
+    switch (opt) {
+    case PostOrder:
+      return n;
+    case PreOrder:
+      while (n->LastChild() != 0)
+        n = n->LastChild();
+      return n;
+    case ChildrenOnly:
+      return n->LastChild();
+    default:
+      ROSE_ABORT();
+    }
+  }
+  static T *PrevNode(T *n, TraversalOpt opt = PreOrder) {
+    T *result = 0;
+    switch (opt) {
+    case PreOrder:
+      result = n->PrevSibling();
+      if (result != 0)
+        return LastNode(result, PreOrder);
+      else
+        return n->Parent();
+    case PostOrder:
+      result = n->LastChild();
+      if (result == 0) {
+        for (result = n->PrevSibling(); result == 0;
+             result = n->PrevSibling()) {
+          n = n->Parent();
+          if (n == 0)
+            break;
+        }
       }
-   }
-  static T* PrevNode( T *n, TraversalOpt opt=PreOrder)
-   { T *result = 0;
-     switch (opt ) {
-      case PreOrder:
-          result = n->PrevSibling();
-          if ( result != 0)
-              return LastNode( result, PreOrder );
-          else
-              return n->Parent();
-      case PostOrder:
-          result = n->LastChild();
-          if ( result == 0) {
-             for ( result = n->PrevSibling(); result == 0;
-                   result = n->PrevSibling()) {
-                n = n->Parent();
-               if (n == 0)
-                  break;
-             }
-          }
-          return result;
-      case ChildrenOnly:
-          return n->PrevSibling();
-      default:
-          ROSE_ABORT();
-     }
-   }
-  static T* NextNode( T *n, TraversalOpt opt=PreOrder)
-   { T *result = 0;
-     switch (opt ) {
-      case PostOrder:
-         result = n->NextSibling();
-         if ( result != 0)
-            return FirstNode( result, PostOrder );
-         else
-            return n->Parent();
-      case PreOrder:
-         result = n->FirstChild();
-         if ( result == 0) {
-            for ( result = n->NextSibling(); result == 0;
-                  result = n->NextSibling()) {
-                n = n->Parent();
-                if (n == 0)
-                  break;
-            }
-         }
-         return result;
-     case ChildrenOnly:
-          return n->NextSibling();
-     default:
-          ROSE_ABORT();
-     }
-   }
+      return result;
+    case ChildrenOnly:
+      return n->PrevSibling();
+    default:
+      ROSE_ABORT();
+    }
+  }
+  static T *NextNode(T *n, TraversalOpt opt = PreOrder) {
+    T *result = 0;
+    switch (opt) {
+    case PostOrder:
+      result = n->NextSibling();
+      if (result != 0)
+        return FirstNode(result, PostOrder);
+      else
+        return n->Parent();
+    case PreOrder:
+      result = n->FirstChild();
+      if (result == 0) {
+        for (result = n->NextSibling(); result == 0;
+             result = n->NextSibling()) {
+          n = n->Parent();
+          if (n == 0)
+            break;
+        }
+      }
+      return result;
+    case ChildrenOnly:
+      return n->NextSibling();
+    default:
+      ROSE_ABORT();
+    }
+  }
 };
 
 #endif

@@ -19,13 +19,12 @@
    directives could make this very difficult.  At the moment we search in the
    class, clearly that is not good enough generally.
  */
-class FixupEnumValues : public ROSE_VisitTraversal
-   {
-     public:
-     virtual ~FixupEnumValues() {};
-      //! Required traversal function
-          void visit (SgNode* node);
-   };
+class FixupEnumValues : public ROSE_VisitTraversal {
+public:
+  virtual ~FixupEnumValues() {};
+  //! Required traversal function
+  void visit(SgNode *node);
+};
 
 void fixupEnumValues();
 

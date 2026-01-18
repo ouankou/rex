@@ -10,8 +10,7 @@ namespace MemPool {
 void snapshot(std::ostream &);
 void snapshot(std::string const &);
 
-}
-}
+} // namespace MemPool
+} // namespace Rose
 
 #endif /* __ROSE_MEMPOOL_SNAPSHOT_H__ */
-

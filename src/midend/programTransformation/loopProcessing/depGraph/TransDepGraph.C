@@ -1,8 +1,8 @@
-#include <TransDepGraph.h>
 #include "TransDepGraphImpl.h"
-#include <vector>
 #include <TransAnalysis.C>
+#include <TransDepGraph.h>
+#include <vector>
 
 template class TransInfoGraph<DepInfoSet>;
-template class std::vector <TransAnalSCCGraphNode<DepInfoSet>::TwinNode>;
+template class std::vector<TransAnalSCCGraphNode<DepInfoSet>::TwinNode>;
 template class GraphTransAnalysis<DepInfoSet>;

@@ -222,7 +222,8 @@ splitQualifiedNameOutsideTemplates(const std::string &name) {
 }
 
 bool hasTemplateSyntaxComponent(const std::string &name) {
-  return name.find('<') != std::string::npos && name.find('>') != std::string::npos;
+  return name.find('<') != std::string::npos &&
+         name.find('>') != std::string::npos;
 }
 
 std::string stripTemplateArgs(const std::string &name) {
@@ -1833,7 +1834,8 @@ ClangToSageTranslator::buildTemplateParameters(
   return param_list;
 }
 
-SgTemplateClassDeclaration *ClangToSageTranslator::getOrCreateTemplateDeclaration(
+SgTemplateClassDeclaration *
+ClangToSageTranslator::getOrCreateTemplateDeclaration(
     const std::string &template_name,
     const clang::TemplateSpecializationType *clang_type,
     SgScopeStatement *scope_override) {
@@ -1866,8 +1868,8 @@ SgTemplateClassDeclaration *ClangToSageTranslator::getOrCreateTemplateDeclaratio
         }
 
         if (has_template) {
-          SgNonrealType *nr_type = SageBuilder::buildNonrealType(
-              SgName(name), scope, nullptr);
+          SgNonrealType *nr_type =
+              SageBuilder::buildNonrealType(SgName(name), scope, nullptr);
           SgNonrealDecl *nr_decl = isSgNonrealDecl(nr_type->get_declaration());
           ROSE_ASSERT(nr_decl != nullptr);
           scope = nr_decl->get_nonreal_decl_scope();
@@ -2595,7 +2597,8 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
   return nrtype;
 }
 
-SgScopeStatement *ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
+SgScopeStatement *
+ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
     clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope) {
   if (qualifier == nullptr) {
     return scope;
@@ -2921,8 +2924,8 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     SgScopeStatement *template_scope = nullptr;
     if (clang_template_decl != nullptr) {
       clang::DeclContext *decl_context = clang_template_decl->getDeclContext();
-      template_scope =
-          resolveScopeFromDeclContext(decl_context, SageBuilder::topScopeStack());
+      template_scope = resolveScopeFromDeclContext(
+          decl_context, SageBuilder::topScopeStack());
     }
 
     if (template_scope == nullptr) {

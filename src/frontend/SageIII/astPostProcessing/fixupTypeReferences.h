@@ -1,7 +1,7 @@
 #ifndef FIXUP_TYPE_REFERENCES_H
 #define FIXUP_TYPE_REFERENCES_H
 
-// This post-processing pass fixes up reference to types that didn't exist 
+// This post-processing pass fixes up reference to types that didn't exist
 // as parts of the AST were being constructed and so we built type
 // wrappers (reusing a SgModifierType IR node to hold the reference.
 
@@ -15,20 +15,18 @@
 // conversion comments.
 
 class FixupTypeReferencesOnMemoryPool
-// : public SgSimpleProcessing
-   : public ROSE_VisitTraversal
-   {
-     public:
-      //! Function to support traversal of types (where islands can hide)
-       // void visitType ( SgType* typeNode );
+    // : public SgSimpleProcessing
+    : public ROSE_VisitTraversal {
+public:
+  //! Function to support traversal of types (where islands can hide)
+  // void visitType ( SgType* typeNode );
 
-      //! Required traversal function
-          void visit (SgNode* node);
+  //! Required traversal function
+  void visit(SgNode *node);
 
-       // This avoids a warning by g++
-         virtual ~FixupTypeReferencesOnMemoryPool(); 
-   };
-
+  // This avoids a warning by g++
+  virtual ~FixupTypeReferencesOnMemoryPool();
+};
 
 void fixupTypeReferences();
 

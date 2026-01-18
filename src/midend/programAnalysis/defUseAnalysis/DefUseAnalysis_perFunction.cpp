@@ -4,8 +4,8 @@
  * created by tps in Feb 2007
  *****************************************/
 // tps : Switching from rose.h to sage3 changed size from 18,6 MB to 8,3MB
-#include "sage3basic.h"
 #include "DefUseAnalysis_perFunction.h"
+#include "sage3basic.h"
 
 #if ROSE_WITH_LIBHARU
 #include "AstPDFGeneration.h"
@@ -17,10 +17,11 @@ using namespace std;
  * Make sure all nodes (even arguments if &argument) are in table
  * so they can be found for analysis
  *********************************************************/
-bool DefUseAnalysisPF::makeSureThatTheDefIsInTable(SgInitializedName* initName) {
+bool DefUseAnalysisPF::makeSureThatTheDefIsInTable(
+    SgInitializedName *initName) {
   bool addedNode = false;
-  vector<pair<SgInitializedName*, SgNode*> > mymap = dfa->getDefMultiMapFor(
-                                                                            initName);
+  vector<pair<SgInitializedName *, SgNode *>> mymap =
+      dfa->getDefMultiMapFor(initName);
   if (mymap.size() == 0) {
     dfa->addDefElement(initName, initName, initName);
     addedNode = true;
@@ -38,10 +39,11 @@ bool DefUseAnalysisPF::makeSureThatTheDefIsInTable(SgInitializedName* initName) 
  * Make sure all nodes (even arguments if &argument) are in table
  * so they can be found for analysis
  *********************************************************/
-bool DefUseAnalysisPF::makeSureThatTheUseIsInTable(SgInitializedName* initName) {
+bool DefUseAnalysisPF::makeSureThatTheUseIsInTable(
+    SgInitializedName *initName) {
   bool addedNode = false;
-  vector<pair<SgInitializedName*, SgNode*> > mymap = dfa->getUseMultiMapFor(
-                                                                            initName);
+  vector<pair<SgInitializedName *, SgNode *>> mymap =
+      dfa->getUseMultiMapFor(initName);
   if (mymap.size() == 0) {
     dfa->addUseElement(initName, initName, initName);
     addedNode = true;
@@ -60,23 +62,22 @@ bool DefUseAnalysisPF::makeSureThatTheUseIsInTable(SgInitializedName* initName) 
  * determine whether a change has occured at that path
  * until the first split (2 inedges) or root.
  *********************************************************/
-template<typename T>
+template <typename T>
 bool DefUseAnalysisPF::hasANodeAboveCurrentChanged(T source) {
   bool changed = false;
   // go cfg back until split or root
   // check nodeChangeMap if a all nodes have changed.
   // if any has changed return true.
-  vector<FilteredCFGEdge<IsDFAFilter> > in_edges = source.inEdges();
+  vector<FilteredCFGEdge<IsDFAFilter>> in_edges = source.inEdges();
   if (in_edges.size() == 1) {
     FilteredCFGEdge<IsDFAFilter> filterEdge = in_edges[0];
     FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.source();
-    SgNode* sgNode = filterNode.getNode();
+    SgNode *sgNode = filterNode.getNode();
     ROSE_ASSERT(sgNode);
     bool changedInTable = nodeChangedMap[sgNode];
     if (DEBUG_MODE)
       cout << " >>> backward CFG : visiting node : " << sgNode << " "
-           << sgNode->class_name() << "  changed : " << changedInTable
-           << endl;
+           << sgNode->class_name() << "  changed : " << changedInTable << endl;
     if (changedInTable) {
       return true;
     } else {
@@ -84,7 +85,6 @@ bool DefUseAnalysisPF::hasANodeAboveCurrentChanged(T source) {
     }
   }
   return changed;
-
 }
 
 /**********************************************************
@@ -92,41 +92,42 @@ bool DefUseAnalysisPF::hasANodeAboveCurrentChanged(T source) {
  *  This is the main analysis function. Return true if the OUT[n] is changed?
  *  It determines what should happen at each DFG node
  *********************************************************/
-template<typename T>
+template <typename T>
 bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
-  SgNode* sgNode = cfgNode.getNode();
-  SgNode* sgNodeBefore = getCFGPredNode(cfgNode);
+  SgNode *sgNode = cfgNode.getNode();
+  SgNode *sgNodeBefore = getCFGPredNode(cfgNode);
   ROSE_ASSERT(sgNode);
 
   bool dont_handle = false;
   bool dont_replace = false;
-  if (DEBUG_MODE)
-  {
-    cout
-      << "\n\n------------------------------------------------------------------\ncurrent Node: "
-      << sgNode <<" "<< sgNode->class_name() 
-      <<"  previous Node : " << sgNodeBefore <<" "; 
-   if (sgNodeBefore) 
-       cout << sgNodeBefore->class_name(); 
-   cout<< endl;
+  if (DEBUG_MODE) {
+    cout << "\n\n--------------------------------------------------------------"
+            "----\ncurrent Node: "
+         << sgNode << " " << sgNode->class_name()
+         << "  previous Node : " << sgNodeBefore << " ";
+    if (sgNodeBefore)
+      cout << sgNodeBefore->class_name();
+    cout << endl;
   }
   bool isDefinition = false;
   //  bool isUse=false;
   bool isUsage = false;
-  SgInitializedName* initName = NULL;
+  SgInitializedName *initName = NULL;
 
   if (isSgUnaryOp(sgNode)) {
-    SgUnaryOp* unary = isSgUnaryOp(sgNode);
-    SgExpression* l_expr = unary->get_operand();
-    SgVarRefExp* varRefExp = NULL;
+    SgUnaryOp *unary = isSgUnaryOp(sgNode);
+    SgExpression *l_expr = unary->get_operand();
+    SgVarRefExp *varRefExp = NULL;
     if (DEBUG_MODE)
       cout << " **********  UNARY OP. " << unary << "  " << varRefExp << endl;
     if (isSgAssignOp(l_expr)) {
       // maybe the subtree on the left hand side has a varRefExp.
-      // find first leftmost varRefExp -- this would currently work for (t=i)++ but not for (t.x=i)++ 
-      Rose_STL_Container<SgNode*> vars  = NodeQuery::querySubTree(l_expr,V_SgVarRefExp);
-      if (vars.size()>0) 
-        l_expr=isSgVarRefExp(*vars.begin());
+      // find first leftmost varRefExp -- this would currently work for (t=i)++
+      // but not for (t.x=i)++
+      Rose_STL_Container<SgNode *> vars =
+          NodeQuery::querySubTree(l_expr, V_SgVarRefExp);
+      if (vars.size() > 0)
+        l_expr = isSgVarRefExp(*vars.begin());
     }
     if (isSgVarRefExp(l_expr)) {
       // if left side is a varrefexp
@@ -135,46 +136,39 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
       ROSE_ASSERT(initName);
       if (DEBUG_MODE)
         cout << " UNARY OP: " << initName->get_qualified_name().str()
-             << "  name: " << initName << "  varRefExp: "
-             << varRefExp << endl;
+             << "  name: " << initName << "  varRefExp: " << varRefExp << endl;
       ROSE_ASSERT(unary);
       switch (unary->variantT()) {
       case V_SgPlusPlusOp:
       case V_SgMinusMinusOp: {
         isDefinition = true;
-        //isUse=true;
+        // isUse=true;
         break;
       }
       default: {
         isDefinition = false;
-        //isUse=true;
+        // isUse=true;
         if (DEBUG_MODE)
           cout << " **** reached default. no action taken. " << endl;
         break;
       }
       }
     } else {
-       if (DEBUG_MODE)
-         cerr << " **********  UNARY OP : CANT HANDLE YET: "
-              << l_expr->class_name() << endl;
-       dont_handle = true;
+      if (DEBUG_MODE)
+        cerr << " **********  UNARY OP : CANT HANDLE YET: "
+             << l_expr->class_name() << endl;
+      dont_handle = true;
     }
   }
 
   else if (isSgBinaryOp(sgNode)) {
-    SgBinaryOp* binary = isSgBinaryOp(sgNode);
-    SgExpression* l_expr = binary->get_lhs_operand();
-    SgVarRefExp* varRefExp = isSgVarRefExp(l_expr);
-#if 1
-    SgPntrArrRefExp* varPntrRefExp = isSgPntrArrRefExp(l_expr);
-#endif
+    SgBinaryOp *binary = isSgBinaryOp(sgNode);
+    SgExpression *l_expr = binary->get_lhs_operand();
+    SgVarRefExp *varRefExp = isSgVarRefExp(l_expr);
+    SgPntrArrRefExp *varPntrRefExp = isSgPntrArrRefExp(l_expr);
     if (DEBUG_MODE)
       cout << " **********  BINARY OP. " << binary << endl;
-    if (varRefExp
-#if 1
-        || varPntrRefExp
-#endif
-        ) {
+    if (varRefExp || varPntrRefExp) {
       // if left side is a varrefexp
       if (DEBUG_MODE)
         cout << " **********  BINARY OP IS_VAR_REF_EXP. " << endl;
@@ -182,65 +176,41 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
         ROSE_ASSERT(varRefExp->get_symbol());
         initName = varRefExp->get_symbol()->get_declaration();
         if (DEBUG_MODE)
-          cout << " BINARY OP: "
-               << initName->get_qualified_name().str()
-               << "  name: " << initName << "  varRefExp: "
-               << varRefExp << endl;
-      }
-#if 1
-      else if (varPntrRefExp) {
+          cout << " BINARY OP: " << initName->get_qualified_name().str()
+               << "  name: " << initName << "  varRefExp: " << varRefExp
+               << endl;
+      } else if (varPntrRefExp) {
         while (isSgPntrArrRefExp(varPntrRefExp->get_lhs_operand())) {
-          varPntrRefExp = isSgPntrArrRefExp(
-                                            varPntrRefExp->get_lhs_operand());
+          varPntrRefExp = isSgPntrArrRefExp(varPntrRefExp->get_lhs_operand());
         }
-        SgVarRefExp* varRefExpL = isSgVarRefExp(
-                                                varPntrRefExp->get_lhs_operand());
+        SgVarRefExp *varRefExpL =
+            isSgVarRefExp(varPntrRefExp->get_lhs_operand());
         if (varRefExpL == NULL) {
-          Rose_STL_Container<SgNode*> vars = NodeQuery::querySubTree(varPntrRefExp, V_SgVarRefExp);
-          if (vars.size()>1) {
-            //cerr << " There is more than one VarRefExp in this PntrArrRefExp. " << endl;
-            //      ROSE_ASSERT(varRefExpL);
+          Rose_STL_Container<SgNode *> vars =
+              NodeQuery::querySubTree(varPntrRefExp, V_SgVarRefExp);
+          if (vars.size() > 1) {
+            // cerr << " There is more than one VarRefExp in this PntrArrRefExp.
+            // " << endl;
+            //       ROSE_ASSERT(varRefExpL);
             varRefExpL = isSgVarRefExp(*vars.begin());
-          } else if (vars.size()==1)
+          } else if (vars.size() == 1)
             varRefExpL = isSgVarRefExp(*vars.begin());
-          if (varRefExpL==NULL) {
-            //cerr << " TYPE of LHS : " << varPntrRefExp->get_lhs_operand()->class_name() << endl;
+          if (varRefExpL == NULL) {
+            // cerr << " TYPE of LHS : " <<
+            // varPntrRefExp->get_lhs_operand()->class_name() << endl;
             ROSE_ASSERT(varRefExpL);
           }
         }
-#if 0
-        SgArrowExp* arrow = isSgArrowExp(varPntrRefExp->get_lhs_operand());
-        if (arrow) {
-          if (DEBUG_MODE) {
-            cerr << " TYPE of LHS OF ARROW: left: " << arrow->get_lhs_operand()->class_name() << endl;
-            cerr << " TYPE of LHS OF ARROW: right: " << arrow->get_rhs_operand()->class_name() << endl;
-          }
-          varRefExpL = isSgVarRefExp( arrow->get_rhs_operand());
-          if (varRefExpL==NULL)
-            if (DEBUG_MODE)
-              cerr << " TYPE of LHS IN ARROW: " << arrow->get_rhs_operand()->class_name() << endl;
-          ROSE_ASSERT(varRefExpL);
-        }
-        if (varRefExpL) {
-          ROSE_ASSERT(varRefExpL);
-          ROSE_ASSERT(varRefExpL->get_symbol());
-        } else if (arrow) {
-        } else {
-          if (DEBUG_MODE)
-            cerr << " TYPE of LHS : " << varPntrRefExp->get_lhs_operand()->class_name() << endl;
-          ROSE_ASSERT(varRefExpL);
-        }
-#endif
 
         initName = varRefExpL->get_symbol()->get_declaration();
         if (DEBUG_MODE)
           cout << " BINARY OP: " << initName->get_qualified_name().str()
-               << "  name: " << initName << "  varRefExp: " << varRefExp << endl;
+               << "  name: " << initName << "  varRefExp: " << varRefExp
+               << endl;
       }
-#endif
       ROSE_ASSERT(initName);
       ROSE_ASSERT(binary);
-      switch(binary->variantT()) {
+      switch (binary->variantT()) {
       case V_SgAssignOp:
       case V_SgModAssignOp:
       case V_SgDivAssignOp:
@@ -251,21 +221,21 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
       case V_SgAndAssignOp:
       case V_SgMinusAssignOp:
       case V_SgPlusAssignOp: {
-        isDefinition=true;
+        isDefinition = true;
         break;
       }
       default: {
         if (DEBUG_MODE)
           cout << " **** reached default. no action taken. " << endl;
-        isDefinition=false;
-        //isUse=true;
+        isDefinition = false;
+        // isUse=true;
         break;
       }
       }
-    }
-    else {
+    } else {
       if (DEBUG_MODE)
-        cout << " **********  BINARY OP : CANT HANDLE YET: " << l_expr->class_name() << endl;
+        cout << " **********  BINARY OP : CANT HANDLE YET: "
+             << l_expr->class_name() << endl;
       dont_handle = true;
     }
   }
@@ -273,28 +243,32 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
   else if (isSgAssignInitializer(sgNode)) {
     if (DEBUG_MODE)
       cout << " **********  ASSIGNINITIALIZER " << endl;
-    SgNode* l_expr = isSgAssignInitializer(sgNode)->get_parent();
+    SgNode *l_expr = isSgAssignInitializer(sgNode)->get_parent();
     ROSE_ASSERT(l_expr);
     if (isSgInitializedName(l_expr)) {
-      initName =isSgInitializedName(l_expr);
+      initName = isSgInitializedName(l_expr);
       if (DEBUG_MODE)
-        cout << " **********  ASSIGNINITIALIZER: " << isSgAssignInitializer(sgNode) << endl;
+        cout << " **********  ASSIGNINITIALIZER: "
+             << isSgAssignInitializer(sgNode) << endl;
       // if left side is not a varrefexp
-      //isUse = false;
-      isDefinition=true;
+      // isUse = false;
+      isDefinition = true;
     } else if (isSgExprListExp(l_expr)) {
-      SgExprListExp* listexp = isSgExprListExp(l_expr);
+      SgExprListExp *listexp = isSgExprListExp(l_expr);
       Rose_STL_Container<SgNode *> exprs =
-        listexp->get_traversalSuccessorContainer();
+          listexp->get_traversalSuccessorContainer();
       if (DEBUG_MODE)
-        cout << " DefuseAnalysis:: unhandled condition : SgExprListExp ...  size: " << exprs.size() <<
-          "  file : " << l_expr->get_file_info()->get_filenameString() <<
-          "  line : " << l_expr->get_file_info()->get_line() << endl;
+        cout << " DefuseAnalysis:: unhandled condition : SgExprListExp ...  "
+                "size: "
+             << exprs.size()
+             << "  file : " << l_expr->get_file_info()->get_filenameString()
+             << "  line : " << l_expr->get_file_info()->get_line() << endl;
       return false;
     } else {
       if (DEBUG_MODE)
         cout << " DefuseAnalysis:: unhandled condition - AssignInitializer ... "
-             << "  AssignInitializer - l_expr : " << l_expr->class_name() << "  file : " << l_expr->get_file_info()->get_filenameString()
+             << "  AssignInitializer - l_expr : " << l_expr->class_name()
+             << "  file : " << l_expr->get_file_info()->get_filenameString()
              << "  line : " << l_expr->get_file_info()->get_line() << endl;
       if (DEBUG_MODE)
         cout << " unparse : " << l_expr->unparseToCompleteString() << endl;
@@ -304,158 +278,162 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
   }
 
   else if (isSgInitializedName(sgNode)) {
-    initName =isSgInitializedName(sgNode);
+    initName = isSgInitializedName(sgNode);
     if (DEBUG_MODE)
       cout << " **********  INITNAME. " << initName << endl;
-    //isUse=false;
-    isDefinition=true;
+    // isUse=false;
+    isDefinition = true;
     if (DEBUG_MODE)
       cout << " **********  INITNAME. "
            << " def " << resBool(isDefinition) << endl;
   }
 
   else if (isSgVarRefExp(sgNode)) {
-    SgVarRefExp* varRefExp = isSgVarRefExp(sgNode);
+    SgVarRefExp *varRefExp = isSgVarRefExp(sgNode);
     initName = varRefExp->get_symbol()->get_declaration();
     string name = initName->get_qualified_name().str();
     if (DEBUG_MODE)
       cout << " **********  VARREFEXP. " << varRefExp << " .. " << name << endl;
-    //isUse=true;
-    isDefinition=false;
-    SgNode* parent = varRefExp->get_parent();
+    // isUse=true;
+    isDefinition = false;
+    SgNode *parent = varRefExp->get_parent();
     ROSE_ASSERT(parent);
     // go up to the parent and check if there is an assignment happening.
     // If yes, check if VarRefExp on right side,
     // if yes, we have a usage -- otherwise its a definition
-    SgPntrArrRefExp* array = isSgPntrArrRefExp(parent);
+    SgPntrArrRefExp *array = isSgPntrArrRefExp(parent);
     if (array)
       ROSE_ASSERT(array->get_lhs_operand());
-    SgNode* parentsparent = parent->get_parent();
+    SgNode *parentsparent = parent->get_parent();
     ROSE_ASSERT(parentsparent);
-#if 0
-    if ((isSgAssignOp(parentsparent) && isSgAssignOp(parentsparent)->get_lhs_operand()==array)) {
-      //isDefinition=true;
-    } else {
-      // array on right hand side ...
-      isUsage=true;
-    }
-#else
-    if ((isSgAssignOp(parent) && (isSgAssignOp(parent)->get_lhs_operand()==varRefExp)) ||
-        ((isSgPntrArrRefExp(parent) && (isSgPntrArrRefExp(parent)->get_lhs_operand()==varRefExp)) &&
-        (isSgAssignOp(parentsparent) && (isSgAssignOp(parentsparent)->get_lhs_operand()==array))))
-        {
+    if ((isSgAssignOp(parent) &&
+         (isSgAssignOp(parent)->get_lhs_operand() == varRefExp)) ||
+        ((isSgPntrArrRefExp(parent) &&
+          (isSgPntrArrRefExp(parent)->get_lhs_operand() == varRefExp)) &&
+         (isSgAssignOp(parentsparent) &&
+          (isSgAssignOp(parentsparent)->get_lhs_operand() == array)))) {
       // definition .. dont handle
     } else {
       // usage
-      isUsage =true;
+      isUsage = true;
     }
-#endif
   } // else if
 
-
   else if (isSgFunctionCallExp(sgNode)) {
-    SgFunctionCallExp* fcallExp = isSgFunctionCallExp(sgNode);
-    isDefinition=false;
-    //isUse=false;
+    SgFunctionCallExp *fcallExp = isSgFunctionCallExp(sgNode);
+    isDefinition = false;
+    // isUse=false;
     if (DEBUG_MODE)
       cout << " **********  FUNCTIONCALL. " << fcallExp << endl;
-    SgExprListExp* exprList = fcallExp->get_args();
-    SgExpressionPtrList& list = exprList->get_expressions();
-    bool isHandled=false;
-    if (list.size()==0)
-      dont_handle=true;
+    SgExprListExp *exprList = fcallExp->get_args();
+    SgExpressionPtrList &list = exprList->get_expressions();
+    bool isHandled = false;
+    if (list.size() == 0)
+      dont_handle = true;
     else {
-      int counter=0;
+      int counter = 0;
       SgExpressionPtrList::iterator i;
-      SgNode* tmpBefore= sgNodeBefore;
+      SgNode *tmpBefore = sgNodeBefore;
       for (i = list.begin(); i != list.end(); ++i) {
-        SgExpression* expr = *i;
+        SgExpression *expr = *i;
         counter++;
         bool hit = false;
         if (isSgCastExp(expr))
           expr = resolveCast(expr);
         if (isSgVarRefExp(expr)) {
-          SgVarRefExp* varRefExp = isSgVarRefExp(expr);
+          SgVarRefExp *varRefExp = isSgVarRefExp(expr);
           initName = varRefExp->get_symbol()->get_declaration();
           if (DEBUG_MODE)
-            cout << counter <<" VarRefExp::: expr found in param: << " << expr->class_name() <<
-              "  initName: " << initName->get_qualified_name().str() << endl;
-          //isUse=true;
+            cout << counter << " VarRefExp::: expr found in param: << "
+                 << expr->class_name()
+                 << "  initName: " << initName->get_qualified_name().str()
+                 << endl;
+          // isUse=true;
         } else if (isSgAddressOfOp(expr)) {
           if (DEBUG_MODE)
-            cout << counter << " AddressOfOp::: expr found in param: << " << expr->class_name() << endl;
-          SgNode* node = isSgAddressOfOp(expr)->get_operand();
+            cout << counter << " AddressOfOp::: expr found in param: << "
+                 << expr->class_name() << endl;
+          SgNode *node = isSgAddressOfOp(expr)->get_operand();
           ROSE_ASSERT(node);
           if (isSgVarRefExp(node)) {
-            SgVarRefExp* varRefExp = isSgVarRefExp(node);
+            SgVarRefExp *varRefExp = isSgVarRefExp(node);
             initName = varRefExp->get_symbol()->get_declaration();
             if (DEBUG_MODE)
-              cout << "   --> hit : definition changes conservatively. " <<
-                "  initName: " << initName->get_qualified_name().str() << endl;
+              cout << "   --> hit : definition changes conservatively. "
+                   << "  initName: " << initName->get_qualified_name().str()
+                   << endl;
             // we want to add this node to the current set
-            //isUse=true;
+            // isUse=true;
             // but we do not want it to be replaced
-            dont_replace=true;
+            dont_replace = true;
             hit = true;
           }
         } else {
           if (DEBUG_MODE)
-            cout <<counter << " PARAMETER in FUNC NOT HANDLED YET:: expr found in param: << " << expr->class_name() << endl;
+            cout << counter
+                 << " PARAMETER in FUNC NOT HANDLED YET:: expr found in param: "
+                    "<< "
+                 << expr->class_name() << endl;
         } // if
-        // at any circumstance make sure that all nodes have a unique nr and are in the table
-        // that might not happened, if variables are defined global and are not present in the table,
-        // e.g. MPI_SEND_WORLD
+        // at any circumstance make sure that all nodes have a unique nr and are
+        // in the table that might not happened, if variables are defined global
+        // and are not present in the table, e.g. MPI_SEND_WORLD
         if (hit) {
-          isDefinition=true;
-          bool changedTable= performUseAndDefinition(sgNode, initName, false, isDefinition,
-                                                     tmpBefore, dont_replace, cfgNode);
+          isDefinition = true;
+          bool changedTable =
+              performUseAndDefinition(sgNode, initName, false, isDefinition,
+                                      tmpBefore, dont_replace, cfgNode);
           if (changedTable) {
             if (DEBUG_MODE)
               cout << "TableChanged" << endl;
           }
-          tmpBefore=sgNode;
-          hit=false;
-          isHandled=true;
+          tmpBefore = sgNode;
+          hit = false;
+          isHandled = true;
         }
         // for each variable, we need to add a definition
 
       } // for
       // if we get arguments that have no initName at all,
       // then we do not handle this function call
-      if (isHandled==false) {
-        dont_handle=true;
+      if (isHandled == false) {
+        dont_handle = true;
       } else {
         // in this case we have a special case
         // we assume that the table has changed.
-        if (DEBUG_MODE) 
-          cout << "  isHandled is true, assuming the table has changed.  ???" <<endl;
+        if (DEBUG_MODE)
+          cout << "  isHandled is true, assuming the table has changed.  ???"
+               << endl;
         return true;
       }
       if (DEBUG_MODE)
-        cout << " Checking of Parameters done: done_handle: " << resBool(dont_handle) <<endl;
+        cout << " Checking of Parameters done: done_handle: "
+             << resBool(dont_handle) << endl;
     } // function call exp
-  } //else if
+  } // else if
 
   else if (isSgFunctionDefinition(sgNode)) {
     // make sure global variables are added to the node
     // iterate through all global variables and get initName
     // then call performUseAndDefinition
-    vector <SgInitializedName* > globals = dfa->getGlobalVariables();
-    bool funcEntry=false;
-    if (cfgNode.getIndex()==0)
-      funcEntry=true;
+    vector<SgInitializedName *> globals = dfa->getGlobalVariables();
+    bool funcEntry = false;
+    if (cfgNode.getIndex() == 0)
+      funcEntry = true;
     if (funcEntry && DEBUG_MODE)
-      cout << "\n\n %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% FUNCTION Definition %%%%%%\n" << endl;
+      cout << "\n\n %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% FUNCTION Definition "
+              "%%%%%%\n"
+           << endl;
     if (DEBUG_MODE)
-      cout << " found global vars: " << globals.size() << " funEntry " <<
-        resBool(funcEntry) << endl;
+      cout << " found global vars: " << globals.size() << " funEntry "
+           << resBool(funcEntry) << endl;
 
     if (funcEntry) {
       dfa->addID(sgNode);
-      vector <SgInitializedName* >:: iterator it = globals.begin();
-      SgInitializedName* otherIn = NULL;
+      vector<SgInitializedName *>::iterator it = globals.begin();
+      SgInitializedName *otherIn = NULL;
       for (; it != globals.end(); ++it) {
-        SgInitializedName* initNameTmp = *it;
+        SgInitializedName *initNameTmp = *it;
         ROSE_ASSERT(initNameTmp);
         // union of global var with current node (function)
         if (otherIn == NULL) {
@@ -466,46 +444,51 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
         otherIn = initNameTmp;
 
         if (DEBUG_MODE)
-          cout << "\n >> %%%%% handling globalvar: " << initNameTmp->get_qualified_name().str() << endl;
+          cout << "\n >> %%%%% handling globalvar: "
+               << initNameTmp->get_qualified_name().str() << endl;
       }
       return true;
     } else {
-      dont_handle=true;
+      dont_handle = true;
     }
   } // else if
 
   else {
     // none of the above breakPointForWhiles is hit
-    dont_handle=true;
-    // take care of the case where we have none of the above within a loop (breakPointForWhile)
-    // i.e. no : VarRefExp, InitializedName, FunctionDefinition ...
-    // If this unhandled node has been added to the map before (visited)
-    // then we do want to mark it as handled.
-    if (isSgWhileStmt(sgNode) || isSgForStatement(sgNode)
-        || isSgDoWhileStmt(sgNode)) {
-      if (breakPointForWhileNode==NULL) {
-        breakPointForWhileNode=sgNode;
+    dont_handle = true;
+    // take care of the case where we have none of the above within a loop
+    // (breakPointForWhile) i.e. no : VarRefExp, InitializedName,
+    // FunctionDefinition ... If this unhandled node has been added to the map
+    // before (visited) then we do want to mark it as handled.
+    if (isSgWhileStmt(sgNode) || isSgForStatement(sgNode) ||
+        isSgDoWhileStmt(sgNode)) {
+      if (breakPointForWhileNode == NULL) {
+        breakPointForWhileNode = sgNode;
         breakPointForWhile++;
         if (DEBUG_MODE)
-          cout << ">>> Setting Breakpoint : " << sgNode->class_name() << " " <<sgNode << " " << breakPointForWhile <<endl;
-      } else if (sgNode==breakPointForWhileNode) {
+          cout << ">>> Setting Breakpoint : " << sgNode->class_name() << " "
+               << sgNode << " " << breakPointForWhile << endl;
+      } else if (sgNode == breakPointForWhileNode) {
         // reaching the breakPoint for a second time
-        // check if any node above this node up to the branch or root has changed
+        // check if any node above this node up to the branch or root has
+        // changed
         breakPointForWhile++;
         bool hasAnyNodeAboveChanged = hasANodeAboveCurrentChanged(cfgNode);
-        if (hasAnyNodeAboveChanged==false) {
+        if (hasAnyNodeAboveChanged == false) {
           // need to break this loop
           // add current node to doNotVisitMap
           doNotVisitMap.insert(sgNode);
         }
 
         if (DEBUG_MODE)
-          cout << ">>> Inc Breakpoint : " << sgNode->class_name() << " " <<sgNode << " " << breakPointForWhile <<endl;
+          cout << ">>> Inc Breakpoint : " << sgNode->class_name() << " "
+               << sgNode << " " << breakPointForWhile << endl;
         *unhandled = false;
-        breakPointForWhileNode=NULL;
-        breakPointForWhile=0;
+        breakPointForWhileNode = NULL;
+        breakPointForWhile = 0;
         if (DEBUG_MODE)
-          cout << ">>> Resetting Breakpoint : " << sgNode->class_name() << " " <<sgNode << " " << breakPointForWhile <<endl;
+          cout << ">>> Resetting Breakpoint : " << sgNode->class_name() << " "
+               << sgNode << " " << breakPointForWhile << endl;
       } else {
         if (DEBUG_MODE)
           cout << ">>> Skipping unhandled node ... " << endl;
@@ -516,11 +499,12 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
   // nodes that are not of interest are handled here
   // i.e they are just copied
   if (dont_handle) {
-    if (DEBUG_MODE)
-    {
-      cout << " ********** UNHANDLED.  This is an unhandled node " << sgNode->class_name()  << endl;
-      if (SgLocatedNode* lnode = isSgLocatedNode(sgNode))
-        cout<<"\t @"<< lnode->get_file_info()->get_line()<<":"<<lnode->get_file_info()->get_col()  <<endl;
+    if (DEBUG_MODE) {
+      cout << " ********** UNHANDLED.  This is an unhandled node "
+           << sgNode->class_name() << endl;
+      if (SgLocatedNode *lnode = isSgLocatedNode(sgNode))
+        cout << "\t @" << lnode->get_file_info()->get_line() << ":"
+             << lnode->get_file_info()->get_col() << endl;
     }
     dfa->addID(sgNode);
     *unhandled = true;
@@ -533,11 +517,12 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
   // that it is a new variable that never occured before
   // e.g. it is a function argument f(&var)
   // we need to make sure the variable is inserted to the def table
-  if (initName!=NULL && isSgVarRefExp(sgNode)) {
+  if (initName != NULL && isSgVarRefExp(sgNode)) {
     bool inserted = makeSureThatTheDefIsInTable(initName);
     if (inserted) {
       if (DEBUG_MODE)
-        cout << " ... adding to table " << initName->get_qualified_name().str() << endl;
+        cout << " ... adding to table " << initName->get_qualified_name().str()
+             << endl;
     }
   }
 
@@ -551,25 +536,24 @@ bool DefUseAnalysisPF::defuse(T cfgNode, bool *unhandled) {
 /**********************************************************
  *  Build CFG for each function and do DefUse analysis
  *********************************************************/
-template<typename T>
-bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
-                                               SgInitializedName* initName, bool isUsage, bool isDefinition,
-                                               SgNode* sgNodeBefore, bool dont_replace, T cfgNode) {
+template <typename T>
+bool DefUseAnalysisPF::performUseAndDefinition(SgNode *sgNode,
+                                               SgInitializedName *initName,
+                                               bool isUsage, bool isDefinition,
+                                               SgNode *sgNodeBefore,
+                                               bool dont_replace, T cfgNode) {
   bool changedTableEntry = false;
   int nrOfInEdges = cfgNode.inEdges().size();
 
   // how do we handle global variables ?
-  //SgInitializedName* gNode = varRefExp->get_symbol()->get_declaration();
+  // SgInitializedName* gNode = varRefExp->get_symbol()->get_declaration();
   bool globalVar = dfa->isNodeGlobalVariable(initName);
-  if (DEBUG_MODE)
-  {
-    cout<<"performUseAndDefinition ( sgNode:"<<sgNode <<
-            "  initName:"<< initName <<
-            "  isUsage:"<< isUsage <<
-            "  isDefinition:"<< isDefinition <<
-            "  sgNodeBefore:"<< sgNodeBefore <<
-            "  dont_replace:"<< dont_replace <<
-            ")" <<endl;  
+  if (DEBUG_MODE) {
+    cout << "performUseAndDefinition ( sgNode:" << sgNode
+         << "  initName:" << initName << "  isUsage:" << isUsage
+         << "  isDefinition:" << isDefinition
+         << "  sgNodeBefore:" << sgNodeBefore
+         << "  dont_replace:" << dont_replace << ")" << endl;
     cout << " isGlobalVar: " << resBool(globalVar) << endl;
   }
   // if it is a global variable, make sure its added to the table
@@ -590,8 +574,8 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
          << resBool(changedTableEntry) << endl;
 
   if (DEBUG_MODE)
-    cout << "  ----- Copy Use Info. " <<endl; 
-  
+    cout << "  ----- Copy Use Info. " << endl;
+
   handleUseCopy(sgNode, cfgNode.inEdges().size(), sgNodeBefore, cfgNode);
 
   if (isUsage) {
@@ -604,47 +588,44 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
   if (globalVar && isUsage == false) {
     if (DEBUG_MODE)
       cout << " **********  GLOBALVAR :  " << resBool(globalVar)
-           << "  initName: " << initName->get_qualified_name().str()
-           << endl;
-    // check if global var is contained in this multimap, if not, we nned to add it
+           << "  initName: " << initName->get_qualified_name().str() << endl;
+    // check if global var is contained in this multimap, if not, we nned to add
+    // it
     multitype mmap = dfa->getDefMultiMapFor(sgNode);
     bool isGlobalContainedinMM = searchMulti(&mmap, initName);
     bool isGlobalContainedinM = dfa->searchMap(initName);
     if (DEBUG_MODE) {
-      cout << " globalVariable is containd in MultiMap ? " << resBool(
-                                                                      isGlobalContainedinMM) << endl;
-      cout << " globalVariable is containd in Map ? " << resBool(
-                                                                 isGlobalContainedinM) << endl;
+      cout << " globalVariable is containd in MultiMap ? "
+           << resBool(isGlobalContainedinMM) << endl;
+      cout << " globalVariable is containd in Map ? "
+           << resBool(isGlobalContainedinM) << endl;
     }
     if (isGlobalContainedinMM == false) {
-      //isDefinition=true;
-      // make sure to add the globalvar in the current sgNode as a definition
+      // isDefinition=true;
+      //  make sure to add the globalvar in the current sgNode as a definition
       if (nrOfInEdges <= 1) {
         // if we have only one in-edge, then we overwrite the value
         // add this as a new entry to the table
         dfa->mapDefUnion(sgNodeBefore, NULL, sgNode);
         dfa->addDefElement(sgNode, initName, initName);
         if (DEBUG_MODE)
-          cout
-            << "  ----- globalvar: changed table (one incoming) entry to "
-            << sgNode << endl;
+          cout << "  ----- globalvar: changed table (one incoming) entry to "
+               << sgNode << endl;
       } else {
         // union of the current new Node with the previous CFG Node
-        SgNode* otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
+        SgNode *otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
         ROSE_ASSERT(otherInNode);
         dfa->mapDefUnion(sgNodeBefore, otherInNode, sgNode);
         dfa->addDefElement(sgNode, initName, initName);
         if (DEBUG_MODE)
-          cout
-            << "  ----- globalvar: changed table (multi incoming) entry to "
-            << sgNode << " .. otherNode: " << otherInNode
-            << endl;
+          cout << "  ----- globalvar: changed table (multi incoming) entry to "
+               << sgNode << " .. otherNode: " << otherInNode << endl;
       }
-      //changedTableEntry = true;
+      // changedTableEntry = true;
       if (DEBUG_MODE) {
         cout << " GLOBALCINTAINED : printDEFMAP : " << endl;
-        //dfa->printDefMap();
-        dfa->printMultiMap (dfa->getDefMultiMapFor(sgNode));
+        // dfa->printDefMap();
+        dfa->printMultiMap(dfa->getDefMultiMapFor(sgNode));
       }
     }
     // in addition, if we have a change of a global var
@@ -664,30 +645,31 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
 
     bool isCurrentValueContained = false;
     multitype mul = dfa->getDefMultiMapFor(initName);
-    //multitype mul = dfa->getDefUseFor(sgNode);
+    // multitype mul = dfa->getDefUseFor(sgNode);
     if (mul.size() > 0) {
       isCurrentValueContained = searchMulti(&mul, initName);
     }
     /*
     // DEBUG HELP
     if (isSgFunctionCallExp(sgNode)) {
-    cerr << " found the function call " << initName->get_qualified_name().str() <<
+    cerr << " found the function call " << initName->get_qualified_name().str()
+    <<
     "- contained : " << resBool(isCurrentValueContained) << endl;
     for (multitype::const_iterator j = mul.begin(); j != mul.end(); ++j) {
     SgInitializedName* sgInitMM = (*j).first;
     SgNode* sgNodeMM = (*j).second;
     ROSE_ASSERT(sgInitMM);
     ROSE_ASSERT(sgNodeMM);
-    cerr << "  ..  initName:" << sgInitMM->get_qualified_name().str() << " ( " <<
-    ToString(dfa->getIntForSgNode(sgInitMM)) << " ) - SgNode " <<
+    cerr << "  ..  initName:" << sgInitMM->get_qualified_name().str() << " ( "
+    << ToString(dfa->getIntForSgNode(sgInitMM)) << " ) - SgNode " <<
     ToString(dfa->getIntForSgNode(sgNodeMM)) << endl;
     }
     }
     */
 
     if (DEBUG_MODE)
-      cout << "  ----- Definition. Is value contained ?  " << resBool(
-                                                                      isCurrentValueContained) << endl;
+      cout << "  ----- Definition. Is value contained ?  "
+           << resBool(isCurrentValueContained) << endl;
     // read this value from table, if changed return that a change has
     // occurred and update table. Otherwise no change
     // map (cfgNode, multimap (initname, cfgNode))
@@ -702,18 +684,17 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
         dfa->mapDefUnion(sgNodeBefore, NULL, sgNode);
         dfa->addDefElement(sgNode, initName, sgNode);
         if (DEBUG_MODE)
-          cout << "  ----- changed table (one incoming) entry to "
-               << sgNode << endl;
+          cout << "  ----- changed table (one incoming) entry to " << sgNode
+               << endl;
       } else {
         // union of the current new Node with the previous CFG Node
-        SgNode* otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
+        SgNode *otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
         ROSE_ASSERT(otherInNode);
         dfa->mapDefUnion(sgNodeBefore, otherInNode, sgNode);
         dfa->addDefElement(sgNode, initName, sgNode);
         if (DEBUG_MODE)
-          cout << "  ----- changed table (multi incoming) entry to "
-               << sgNode << " .. otherNode: " << otherInNode
-               << endl;
+          cout << "  ----- changed table (multi incoming) entry to " << sgNode
+               << " .. otherNode: " << otherInNode << endl;
       }
       changedTableEntry = true;
 
@@ -729,13 +710,13 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
       if (nrOfInEdges <= 1) {
         multitype oldTable = dfa->getDefMultiMapFor(sgNode);
         /* / --
-           cout << " !!!!!!!!!!!!!! oldTable " << dfa->getIntForSgNode(sgNode) << endl;
-           dfa->printMultiMap(&oldTable);
+           cout << " !!!!!!!!!!!!!! oldTable " << dfa->getIntForSgNode(sgNode)
+           << endl; dfa->printMultiMap(&oldTable);
         */
         dfa->mapDefUnion(sgNodeBefore, NULL, sgNode);
         /*/ ---
-          cout << " !!!!!!!!!!!!!! unionTable " << dfa->getIntForSgNode(sgNode) << endl;
-          multitype unionTable = dfa->getDefUseFor(sgNode);
+          cout << " !!!!!!!!!!!!!! unionTable " << dfa->getIntForSgNode(sgNode)
+          << endl; multitype unionTable = dfa->getDefUseFor(sgNode);
           dfa->printMultiMap(&unionTable);
           // --
 
@@ -755,24 +736,24 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
           dfa->replaceElement(sgNode, initName);
         mm = dfa->getDefMultiMapFor(sgNode);
         /*/ ---
-          cout << " !!!!!!!!!!!!!! newTable " << dfa->getIntForSgNode(sgNode) << endl;
-          multitype mm2 = dfa->getDefUseFor(sgNode);
+          cout << " !!!!!!!!!!!!!! newTable " << dfa->getIntForSgNode(sgNode) <<
+          endl; multitype mm2 = dfa->getDefUseFor(sgNode);
           dfa->printMultiMap(&mm2);
           // -- */
         changedTableEntry = checkElementsForChange(&oldTable, &(mm));
         if (DEBUG_MODE)
           cout << "  ----- changed table (one incoming)  "
-               << resBool(changedTableEntry) << "  dont_replace: "
-               << resBool(dont_replace) << endl;
+               << resBool(changedTableEntry)
+               << "  dont_replace: " << resBool(dont_replace) << endl;
         /*/ ---
-          cout << " !!!!!!!!!!!!!! newTable after check elements " << dfa->getIntForSgNode(sgNode) << endl;
-          multitype mm3 = dfa->getDefUseFor(sgNode);
-          dfa->printMultiMap(&mm3);
+          cout << " !!!!!!!!!!!!!! newTable after check elements " <<
+          dfa->getIntForSgNode(sgNode) << endl; multitype mm3 =
+          dfa->getDefUseFor(sgNode); dfa->printMultiMap(&mm3);
           // -- */
 
       } else {
         // otherwise, it we have more than one in-edge, we union the maps
-        SgNode* otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
+        SgNode *otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
         ROSE_ASSERT(otherInNode);
         multitype oldTable = dfa->getDefMultiMapFor(sgNode);
         dfa->mapDefUnion(sgNodeBefore, otherInNode, sgNode);
@@ -782,16 +763,15 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
           // important case: if the decision node (2 inedges) is
           // changing the value as well, handle special
           dfa->replaceElement(sgNode, initName);
-          //cout << ">>> addElement" << endl;
+          // cout << ">>> addElement" << endl;
           changedTableEntry = false;
           breakPointForWhileNode = NULL;
           breakPointForWhile = 0;
         } else {
           dfa->replaceElement(sgNode, initName);
-          //cout << ">>> replaceElement" << endl;
+          // cout << ">>> replaceElement" << endl;
           multitype mm = dfa->getDefMultiMapFor(sgNode);
-          changedTableEntry = checkElementsForChange(&oldTable,
-                                                       &(mm));
+          changedTableEntry = checkElementsForChange(&oldTable, &(mm));
         }
 
         if (DEBUG_MODE)
@@ -802,10 +782,10 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
     // return that a change has taken place!
     if (DEBUG_MODE) {
       cout << " FINAL DEFMAP : " << endl;
-     // dfa->printDefMap();
-     dfa->printMultiMap (dfa->getDefMultiMapFor(sgNode));
-     cout << " FINAL USEMAP : " << endl;
-     dfa->printMultiMap (dfa->getUseMultiMapFor(sgNode));
+      // dfa->printDefMap();
+      dfa->printMultiMap(dfa->getDefMultiMapFor(sgNode));
+      cout << " FINAL USEMAP : " << endl;
+      dfa->printMultiMap(dfa->getUseMultiMapFor(sgNode));
     }
   }
 
@@ -815,14 +795,15 @@ bool DefUseAnalysisPF::performUseAndDefinition(SgNode* sgNode,
 /**********************************************************
  * plain copy of the table
  *********************************************************/
-void DefUseAnalysisPF::handleDefCopy(SgNode* sgNode, int nrOfInEdges,
-                                     SgNode* sgNodeBefore, filteredCFGNodeType cfgNode) {
+void DefUseAnalysisPF::handleDefCopy(SgNode *sgNode, int nrOfInEdges,
+                                     SgNode *sgNodeBefore,
+                                     filteredCFGNodeType cfgNode) {
   multitype oldTable = dfa->getDefMultiMapFor(sgNode);
   if (DEBUG_MODE) {
-    cout<<"--------------------------------------"<<endl;  
+    cout << "--------------------------------------" << endl;
     cout << " DEFMAP BEFORE UNION of OUT[pred]: " << endl;
-    //dfa->printDefMap();
-    dfa->printMultiMap (&oldTable);
+    // dfa->printDefMap();
+    dfa->printMultiMap(&oldTable);
   }
   if (nrOfInEdges <= 1) {
     if (DEBUG_MODE)
@@ -831,95 +812,94 @@ void DefUseAnalysisPF::handleDefCopy(SgNode* sgNode, int nrOfInEdges,
     //  replaceElement(sgNode, initName);
   } else {
     if (DEBUG_MODE)
-      cout << "\t DEFCOPY: "<< nrOfInEdges  << "incoming EDGEs " << sgNode << endl;
+      cout << "\t DEFCOPY: " << nrOfInEdges << "incoming EDGEs " << sgNode
+           << endl;
     // otherwise, it we have more than one in-edge, we union the maps
-    SgNode* otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
+    SgNode *otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
     ROSE_ASSERT(otherInNode);
     dfa->mapDefUnion(sgNodeBefore, otherInNode, sgNode);
-    //replaceElement(sgNode, initName);
+    // replaceElement(sgNode, initName);
   }
   if (DEBUG_MODE) {
     cout << " DEFMAP AFTER UNION of OUT[pred]: " << endl;
-    //dfa->printDefMap();
-    dfa->printMultiMap (dfa->getDefMultiMapFor(sgNode));
+    // dfa->printDefMap();
+    dfa->printMultiMap(dfa->getDefMultiMapFor(sgNode));
   }
 }
 
 /**********************************************************
  * plain copy of the table
  *********************************************************/
-void DefUseAnalysisPF::handleUseCopy(SgNode* sgNode, int nrOfInEdges,
-                                     SgNode* sgNodeBefore, filteredCFGNodeType cfgNode) {
+void DefUseAnalysisPF::handleUseCopy(SgNode *sgNode, int nrOfInEdges,
+                                     SgNode *sgNodeBefore,
+                                     filteredCFGNodeType cfgNode) {
   multitype oldTable = dfa->getUseMultiMapFor(sgNode);
   if (DEBUG_MODE) {
-    cout<<"--------------------------------------"<<endl;  
+    cout << "--------------------------------------" << endl;
     cout << " USEMAP BEFORE UNION of OUT[pred]: " << endl;
-    //dfa->printUseMap();
-    dfa->printMultiMap (dfa->getUseMultiMapFor(sgNode));
+    // dfa->printUseMap();
+    dfa->printMultiMap(dfa->getUseMultiMapFor(sgNode));
   }
 
   if (nrOfInEdges <= 1) {
     if (DEBUG_MODE)
       cout << "\t USECOPY: 1 EDGE " << sgNode << endl;
-    
+
     dfa->mapUseUnion(sgNodeBefore, NULL, sgNode);
     //  replaceElement(sgNode, initName);
   } else {
     if (DEBUG_MODE)
-      cout << "\t USECOPY: "<<nrOfInEdges<<" EDGEs " << sgNode << endl;
+      cout << "\t USECOPY: " << nrOfInEdges << " EDGEs " << sgNode << endl;
     // otherwise, it we have more than one in-edge, we union the maps
-    SgNode* otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
+    SgNode *otherInNode = getOtherInNode(cfgNode, sgNodeBefore);
     ROSE_ASSERT(otherInNode);
     dfa->mapUseUnion(sgNodeBefore, otherInNode, sgNode);
-    //replaceElement(sgNode, initName);
+    // replaceElement(sgNode, initName);
   }
   if (DEBUG_MODE) {
     cout << " USEMAP AFTER UNION of OUT[pred]: " << endl;
-    //dfa->printUseMap();
-    dfa->printMultiMap (dfa->getUseMultiMapFor(sgNode));
+    // dfa->printUseMap();
+    dfa->printMultiMap(dfa->getUseMultiMapFor(sgNode));
   }
 }
 
 /**********************************************************
  *  How many nodes where visited per function?
  *********************************************************/
-int DefUseAnalysisPF::getNumberOfNodesVisited() {
-  return nrOfNodesVisitedPF;
-}
+int DefUseAnalysisPF::getNumberOfNodesVisited() { return nrOfNodesVisitedPF; }
 
 // A helper function to fill in the work list
-static void initList(
-        vector<FilteredCFGNode<IsDFAFilter> >& worklist,
-        vector<FilteredCFGNode<IsDFAFilter> > &debug_path,
-        FilteredCFGNode<IsDFAFilter> source) {
-    // stop condition: if the source node is already inside of the list, stop
-    if (find(worklist.begin(), worklist.end(), source) != worklist.end())
-        return;
-    else // otherwise push it
-    {
-        worklist.push_back(source);
-        debug_path.push_back(source);
-    }
+static void initList(vector<FilteredCFGNode<IsDFAFilter>> &worklist,
+                     vector<FilteredCFGNode<IsDFAFilter>> &debug_path,
+                     FilteredCFGNode<IsDFAFilter> source) {
+  // stop condition: if the source node is already inside of the list, stop
+  if (find(worklist.begin(), worklist.end(), source) != worklist.end())
+    return;
+  else // otherwise push it
+  {
+    worklist.push_back(source);
+    debug_path.push_back(source);
+  }
 
-    //and recursively process its children
-    vector<FilteredCFGEdge<IsDFAFilter> > out_edges = source.outEdges();
-    // for each out edge
-    for (vector<FilteredCFGEdge<IsDFAFilter> >::const_iterator i =
-            out_edges.begin(); i != out_edges.end(); ++i) {
-        FilteredCFGEdge<IsDFAFilter> filterEdge = *i;
-        // Obtain the out Node
-        FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.target();
-        // process the child node      
-        initList(worklist, debug_path, filterNode);
-        //            debug_path.push_back(filterNode);
-    }
-
+  // and recursively process its children
+  vector<FilteredCFGEdge<IsDFAFilter>> out_edges = source.outEdges();
+  // for each out edge
+  for (vector<FilteredCFGEdge<IsDFAFilter>>::const_iterator i =
+           out_edges.begin();
+       i != out_edges.end(); ++i) {
+    FilteredCFGEdge<IsDFAFilter> filterEdge = *i;
+    // Obtain the out Node
+    FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.target();
+    // process the child node
+    initList(worklist, debug_path, filterNode);
+    //            debug_path.push_back(filterNode);
+  }
 }
 /**********************************************************
  *  Build CFG for each function and do DefUse analysis
  *********************************************************/
-FilteredCFGNode<IsDFAFilter> DefUseAnalysisPF::run(
-                                                   SgFunctionDefinition* funcDecl, bool& abortme) {
+FilteredCFGNode<IsDFAFilter>
+DefUseAnalysisPF::run(SgFunctionDefinition *funcDecl, bool &abortme) {
   // filter functions -- to only functions in analyzed file
   nrOfNodesVisitedPF = 0;
   breakPointForWhileNode = NULL;
@@ -931,9 +911,9 @@ FilteredCFGNode<IsDFAFilter> DefUseAnalysisPF::run(
   string funcName = getFullName(funcDecl);
   //  DEBUG_MODE = false;
   DEBUG_MODE_EXTRA = false;
-  
+
   // maintain counters to detect infinite looping, only for debugging
-  // static std::map <SgNode*, int> counters; 
+  // static std::map <SgNode*, int> counters;
 
   if (funcName == "") {
     FilteredCFGNode<IsDFAFilter> empty(CFGNode(NULL, 0));
@@ -945,12 +925,13 @@ FilteredCFGNode<IsDFAFilter> DefUseAnalysisPF::run(
     cout << " Found function " << funcName << endl;
 
   // DFA on that function
-  vector<FilteredCFGNode<IsDFAFilter> > worklist;
-  vector<FilteredCFGNode<IsDFAFilter> > debug_path;
-  //waitAtMergeNode.clear();
+  vector<FilteredCFGNode<IsDFAFilter>> worklist;
+  vector<FilteredCFGNode<IsDFAFilter>> debug_path;
+  // waitAtMergeNode.clear();
 
   // add this node to worklist and work through the outgoing edges
-  FilteredCFGNode<IsDFAFilter> source = FilteredCFGNode<IsDFAFilter> (funcDecl->cfgForBeginning());
+  FilteredCFGNode<IsDFAFilter> source =
+      FilteredCFGNode<IsDFAFilter>(funcDecl->cfgForBeginning());
   FilteredCFGNode<IsDFAFilter> rem_source = source;
 
   if (DEBUG_MODE) {
@@ -959,13 +940,8 @@ FilteredCFGNode<IsDFAFilter> DefUseAnalysisPF::run(
     f.close();
   }
 
-#if 0  
-  worklist.push_back(source);
-  debug_path.push_back(source);
-#else
   // using the classic way to init the worklist: putting all CFG nodes into it
-  initList (worklist, debug_path, source);
-#endif   
+  initList(worklist, debug_path, source);
   bool valueHasChanged = false;
   bool unhandledNode = false;
   while (!worklist.empty()) {
@@ -973,85 +949,60 @@ FilteredCFGNode<IsDFAFilter> DefUseAnalysisPF::run(
     worklist.erase(worklist.begin());
     // do current node
     unhandledNode = false;
-    SgNode* next = source.getNode();
-   // counters[next] ++; 
+    SgNode *next = source.getNode();
+    // counters[next] ++;
 
-    if (doNotVisitMap.find(next) != doNotVisitMap.end()) //Visited or not
+    if (doNotVisitMap.find(next) != doNotVisitMap.end()) // Visited or not
       continue;
-    
+
     multitype oldDefTable = dfa->getDefMultiMapFor(next);
     multitype oldUseTable = dfa->getUseMultiMapFor(next);
-    //Transfer function here
+    // Transfer function here
     valueHasChanged = defuse(source, &unhandledNode);
     nodeChangedMap[source.getNode()] = valueHasChanged;
     // do follow-up nodes
     // get nodes of outgoing edges and pushback (if not already contained)
     if (DEBUG_MODE) {
-      cout << " Current Node: " << source.getNode() << " changed: "
-           << resBool(valueHasChanged) << endl;
-      cout << " Current Node: " << source.getNode() << " unhandled: "
-           << resBool(unhandledNode) << endl;
+      cout << " Current Node: " << source.getNode()
+           << " changed: " << resBool(valueHasChanged) << endl;
+      cout << " Current Node: " << source.getNode()
+           << " unhandled: " << resBool(unhandledNode) << endl;
     }
-    
-#if 0
-    // unhandledNode is a bad name. The nodes are still handled to propagate info.
-    // for unhandled Node, we additionally check if its DEF, USE info have changed
-    // if not, we set unhandledNode as false to avoid processing its successors. 
-    // This hack is to avoid infinite looping for is.c 3.3 version
-    if (unhandledNode)
-    {
-        multitype newTable = dfa->getDefMultiMapFor(next);
-        if (checkElementsForChange(&oldTable, &newTable)) // changed?
-          unhandledNode = true; // handled, and changed. Set to true
-        else
-          unhandledNode = false; // handled, and not changes so far  , set to false
-    }
-#endif
-    
+
     multitype newDefTable = dfa->getDefMultiMapFor(next);
     multitype newUseTable = dfa->getUseMultiMapFor(next);
-    
+
     // Use the classic condition: if either def or use info. is changed?
-    bool defChanged= checkElementsForChange(&oldDefTable, &newDefTable); 
-    bool useChanged = checkElementsForChange(&oldUseTable, &newUseTable); 
+    bool defChanged = checkElementsForChange(&oldDefTable, &newDefTable);
+    bool useChanged = checkElementsForChange(&oldUseTable, &newUseTable);
     if (defChanged || useChanged)
-    //if (valueHasChanged || unhandledNode) 
+    // if (valueHasChanged || unhandledNode)
     {
-        if (DEBUG_MODE) {
-            cout<<"---------------->>>trying to add outgoing nodes due to: "<<endl;
-           cout<<"DefMap changed?" << defChanged <<endl; 
-           cout<<"UseMap changed?" << useChanged <<endl; 
-        }
-#if 0        
-        if (counters[next] >= 1000) {
-            cerr << "Found a node visited 1000 times, possibly infinite looping. aborted!" << endl;
-            cerr << next << " Node type:" << next->class_name() << endl;
-            if (SgLocatedNode * lnode = isSgLocatedNode(next))
-                cerr << "@" << lnode->get_file_info()->get_line() << ":" << lnode->get_file_info()->get_col() << endl;
-            cerr << "Dumping AST into a pdf file" << endl;
-            AstPDFGeneration pdf;
-            pdf.generateInputFiles(SageInterface::getProject());
-            ROSE_ABORT();
-        }
-#endif        
-      vector<FilteredCFGEdge<IsDFAFilter> > out_edges = source.outEdges();
-      for (vector<FilteredCFGEdge<IsDFAFilter> >::const_iterator i =
-             out_edges.begin(); i != out_edges.end(); ++i) {
+      if (DEBUG_MODE) {
+        cout << "---------------->>>trying to add outgoing nodes due to: "
+             << endl;
+        cout << "DefMap changed?" << defChanged << endl;
+        cout << "UseMap changed?" << useChanged << endl;
+      }
+      vector<FilteredCFGEdge<IsDFAFilter>> out_edges = source.outEdges();
+      for (vector<FilteredCFGEdge<IsDFAFilter>>::const_iterator i =
+               out_edges.begin();
+           i != out_edges.end(); ++i) {
         FilteredCFGEdge<IsDFAFilter> filterEdge = *i;
         FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.target();
-        if (find(worklist.begin(), worklist.end(), filterNode)
-            == worklist.end()) {
+        if (find(worklist.begin(), worklist.end(), filterNode) ==
+            worklist.end()) {
           worklist.push_back(filterNode);
           debug_path.push_back(filterNode);
         }
       }
       if (DEBUG_MODE)
         printCFGVector(worklist);
-    }
-    else
-    {
-       if (DEBUG_MODE) 
-          cout<<"---------------->>>No need for adding outgoing nodes since no changes to use or def map "<<endl;
+    } else {
+      if (DEBUG_MODE)
+        cout << "---------------->>>No need for adding outgoing nodes since no "
+                "changes to use or def map "
+             << endl;
     }
   }
   if (DEBUG_MODE)

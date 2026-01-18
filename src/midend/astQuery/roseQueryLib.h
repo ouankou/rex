@@ -3,8 +3,8 @@
 
 #include "astQuery.h"
 #include "booleanQuery.h"
-#include "nodeQuery.h"
 #include "nameQuery.h"
+#include "nodeQuery.h"
 #include "numberQuery.h"
 /* include "projectQuery.h" */
 

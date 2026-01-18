@@ -5,33 +5,38 @@
 #define ASTSIMPLEREVERSEPROCESSING_H
 
 // tps (01/08/2010) Added sage3basic since this doesnt compile under gcc4.1.2
-//#include "sage3basic.h"
-//#include "sage3.h"
+// #include "sage3basic.h"
+// #include "sage3.h"
 
 #include "AstReverseProcessing.h"
 
-// these functions have to be put in a different file than the other 3 templated versions to compile&link with gcc
+// these functions have to be put in a different file than the other 3 templated
+// versions to compile&link with gcc
 
 //////////////////////////////////////////////////////////////////////////////////////////
-// REVERSE PRFIX PROCESSING 
+// REVERSE PRFIX PROCESSING
 //////////////////////////////////////////////////////////////////////////////////////////
 
 class AstReversePrefixSimpleProcessing : public AstSimpleProcessing {
- public:
+public:
   AstReversePrefixSimpleProcessing();
- protected:
-  virtual void setNodeSuccessors(SgNode* node, SuccessorsContainer& succContainer);
+
+protected:
+  virtual void setNodeSuccessors(SgNode *node,
+                                 SuccessorsContainer &succContainer);
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////
-// REVERSE BRANCH PROCESSING 
+// REVERSE BRANCH PROCESSING
 //////////////////////////////////////////////////////////////////////////////////////////
 
 class AstReverseBranchSimpleProcessing : public AstSimpleProcessing {
- public:
+public:
   AstReverseBranchSimpleProcessing();
- protected:
-  virtual void setNodeSuccessors(SgNode* node, SuccessorsContainer& succContainer);
+
+protected:
+  virtual void setNodeSuccessors(SgNode *node,
+                                 SuccessorsContainer &succContainer);
 };
 
 #endif

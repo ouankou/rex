@@ -18,13 +18,6 @@
 
 namespace ASTtools
 {
-#if 0  
-  //! Returns the closest enclosing class definition, or NULL if none exists.
-  const SgClassDefinition* getEnclosingClassDef (const SgNode* n);
-  //! Given a statement, returns the statement following it in the same scope.
-  const SgStatement* findNextStatement (const SgStatement* s);
-
-#endif
   //! Stores a collection of SgVariableSymbols (var syms).
   typedef std::set<const SgVariableSymbol *> VarSymSet_t;
 

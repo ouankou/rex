@@ -4,12 +4,6 @@
 #include "numberQuery.h"
 #include "numberQueryInheritedAttribute.h"
 
-NumberQueryInheritedAttributeType::~NumberQueryInheritedAttributeType ()
-{
+NumberQueryInheritedAttributeType::~NumberQueryInheritedAttributeType() {}
 
-}
-
-NumberQueryInheritedAttributeType::NumberQueryInheritedAttributeType ()
-{
-
-}
+NumberQueryInheritedAttributeType::NumberQueryInheritedAttributeType() {}

@@ -13,14 +13,12 @@
     but a similar analysis and transformation may be appropriate for C++
     to handle the "using" declaration and namespace aliasing.
  */
-void
-fixupFortranUseDeclarations ( SgNode* node );
+void fixupFortranUseDeclarations(SgNode *node);
 
-class FixupFortranUseDeclarations : public AstSimpleProcessing
-   {
-     public:
-          void visit ( SgNode* node );
-   };
+class FixupFortranUseDeclarations : public AstSimpleProcessing {
+public:
+  void visit(SgNode *node);
+};
 
 // endif for FIXUP_FORTRAN_USE_DECLARATIONS_H
 #endif

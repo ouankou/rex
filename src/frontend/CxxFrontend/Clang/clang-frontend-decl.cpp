@@ -662,9 +662,8 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
 
           SgFunctionParameterList *param_list = NULL;
           if (type != NULL && type->get_argument_list() != NULL) {
-            param_list =
-                SageBuilder::buildFunctionParameterList_nfi(
-                    type->get_argument_list());
+            param_list = SageBuilder::buildFunctionParameterList_nfi(
+                type->get_argument_list());
           }
           if (param_list == NULL) {
             param_list = SageBuilder::buildFunctionParameterList_nfi();
@@ -894,9 +893,9 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
             func_decl->getTemplateSpecializationKind() ==
                 clang::TSK_ImplicitInstantiation) {
           SgScopeStatement *target_scope =
-              namespace_scope != NULL ? namespace_scope
-                                      : normalizeNamespaceScope(
-                                            SageBuilder::topScopeStack());
+              namespace_scope != NULL
+                  ? namespace_scope
+                  : normalizeNamespaceScope(SageBuilder::topScopeStack());
           if (target_scope == NULL) {
             target_scope = getGlobalScope();
           }
@@ -909,9 +908,8 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
 
           SgFunctionParameterList *param_list = NULL;
           if (type != NULL && type->get_argument_list() != NULL) {
-            param_list =
-                SageBuilder::buildFunctionParameterList_nfi(
-                    type->get_argument_list());
+            param_list = SageBuilder::buildFunctionParameterList_nfi(
+                type->get_argument_list());
           }
           if (param_list == NULL) {
             param_list = SageBuilder::buildFunctionParameterList_nfi();
@@ -2154,8 +2152,7 @@ void ClangToSageTranslator::populateClassDefinition(
                 isSgTemplateTypedefDeclaration(decl)) {
           return new SgTemplateTypedefSymbol(tmpl_typedef);
         }
-        if (SgTypedefDeclaration *typedef_decl =
-                isSgTypedefDeclaration(decl)) {
+        if (SgTypedefDeclaration *typedef_decl = isSgTypedefDeclaration(decl)) {
           return new SgTypedefSymbol(typedef_decl);
         }
         if (SgTemplateMemberFunctionDeclaration *tmpl_member =
@@ -2208,8 +2205,7 @@ void ClangToSageTranslator::populateClassDefinition(
       };
 
       bool is_friend_member =
-          is_friend_decl &&
-          (isSgMemberFunctionDeclaration(child_decl) != NULL);
+          is_friend_decl && (isSgMemberFunctionDeclaration(child_decl) != NULL);
       bool force_class_scope = !is_friend_decl;
       if (SgFunctionDeclaration *func_decl =
               isSgFunctionDeclaration(child_decl)) {
@@ -3684,8 +3680,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
     if (decl == NULL) {
       return;
     }
-    if (SgFunctionDeclaration *func_decl =
-            isSgFunctionDeclaration(decl)) {
+    if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(decl)) {
       if (isSgMemberFunctionDeclaration(func_decl) != NULL) {
         return;
       }
@@ -3695,25 +3690,24 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
     }
   };
 
-  auto ensure_scope_and_parent = [](SgDeclarationStatement *decl,
-                                    SgScopeStatement *parent_scope,
-                                    SgScopeStatement *decl_scope,
-                                    bool force_scope) {
-    if (decl == NULL)
-      return;
-    if (parent_scope != NULL && decl->get_parent() == NULL) {
-      decl->set_parent(parent_scope);
-    }
-    if (decl_scope != NULL) {
-      if (force_scope) {
-        if (decl->get_scope() != decl_scope) {
-          decl->set_scope(decl_scope);
+  auto ensure_scope_and_parent =
+      [](SgDeclarationStatement *decl, SgScopeStatement *parent_scope,
+         SgScopeStatement *decl_scope, bool force_scope) {
+        if (decl == NULL)
+          return;
+        if (parent_scope != NULL && decl->get_parent() == NULL) {
+          decl->set_parent(parent_scope);
         }
-      } else if (decl->get_scope() == NULL) {
-        decl->set_scope(decl_scope);
-      }
-    }
-  };
+        if (decl_scope != NULL) {
+          if (force_scope) {
+            if (decl->get_scope() != decl_scope) {
+              decl->set_scope(decl_scope);
+            }
+          } else if (decl->get_scope() == NULL) {
+            decl->set_scope(decl_scope);
+          }
+        }
+      };
 
   force_friend_function_scope(sg_decl);
   if (sg_decl->get_scope() == NULL && friend_scope != NULL) {
@@ -5757,7 +5751,7 @@ bool ClangToSageTranslator::VisitCXXRecordDecl(
           if (SgTemplateInstantiationDecl *nondef_inst =
                   isSgTemplateInstantiationDecl(nonDef)) {
             SageBuilder::setTemplateArgumentsInDeclaration(nondef_inst,
-                                                          template_args);
+                                                           template_args);
             if (nondef_inst->get_templateName().is_null()) {
               nondef_inst->set_templateName(template_name);
             }
@@ -6247,50 +6241,49 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     }
   };
 
-  auto rehome_instantiation_symbol =
-      [&](SgTemplateInstantiationDecl *decl,
-          SgScopeStatement *desired_scope) {
-        if (decl == NULL || desired_scope == NULL) {
-          return;
-        }
-        SgSymbol *symbol = decl->get_symbol_from_symbol_table();
-        if (symbol == NULL) {
-          return;
-        }
+  auto rehome_instantiation_symbol = [&](SgTemplateInstantiationDecl *decl,
+                                         SgScopeStatement *desired_scope) {
+    if (decl == NULL || desired_scope == NULL) {
+      return;
+    }
+    SgSymbol *symbol = decl->get_symbol_from_symbol_table();
+    if (symbol == NULL) {
+      return;
+    }
 
-        SgSymbolTable *parent_table = isSgSymbolTable(symbol->get_parent());
-        SgSymbolTable *desired_table = desired_scope->get_symbol_table();
-        if (parent_table == desired_table) {
-          if (decl->get_scope() != desired_scope) {
-            decl->set_scope(desired_scope);
-          }
-          return;
-        }
-        if (parent_table != NULL && parent_table != desired_table) {
-          if (SgScopeStatement *parent_scope =
-                  isSgScopeStatement(parent_table->get_parent())) {
-            bool can_use_scope_remove = parent_scope->symbol_exists(symbol);
-            if (SgNamespaceDefinitionStatement *ns_scope =
-                    isSgNamespaceDefinitionStatement(parent_scope)) {
-              if (ns_scope->get_global_definition() == ns_scope) {
-                can_use_scope_remove = false;
-              }
-            }
-            if (can_use_scope_remove) {
-              parent_scope->remove_symbol(symbol);
-            } else if (parent_table->exists(symbol)) {
-              parent_table->remove(symbol);
-            }
-          } else if (parent_table->exists(symbol)) {
-            parent_table->remove(symbol);
-          }
-        }
-
+    SgSymbolTable *parent_table = isSgSymbolTable(symbol->get_parent());
+    SgSymbolTable *desired_table = desired_scope->get_symbol_table();
+    if (parent_table == desired_table) {
+      if (decl->get_scope() != desired_scope) {
         decl->set_scope(desired_scope);
-        if (!desired_scope->symbol_exists(symbol)) {
-          desired_scope->insert_symbol(symbol->get_name(), symbol);
+      }
+      return;
+    }
+    if (parent_table != NULL && parent_table != desired_table) {
+      if (SgScopeStatement *parent_scope =
+              isSgScopeStatement(parent_table->get_parent())) {
+        bool can_use_scope_remove = parent_scope->symbol_exists(symbol);
+        if (SgNamespaceDefinitionStatement *ns_scope =
+                isSgNamespaceDefinitionStatement(parent_scope)) {
+          if (ns_scope->get_global_definition() == ns_scope) {
+            can_use_scope_remove = false;
+          }
         }
-      };
+        if (can_use_scope_remove) {
+          parent_scope->remove_symbol(symbol);
+        } else if (parent_table->exists(symbol)) {
+          parent_table->remove(symbol);
+        }
+      } else if (parent_table->exists(symbol)) {
+        parent_table->remove(symbol);
+      }
+    }
+
+    decl->set_scope(desired_scope);
+    if (!desired_scope->symbol_exists(symbol)) {
+      desired_scope->insert_symbol(symbol->get_name(), symbol);
+    }
+  };
 
   // Implement Two-Declaration Pattern for consistency
   // Always create a non-defining declaration (forward decl) and a defining
@@ -6337,11 +6330,6 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
         SgClassDeclaration *existing_decl = class_symbol->get_declaration();
         firstNondefiningDeclaration =
             isSgTemplateInstantiationDecl(existing_decl);
-#if 0
-                if (firstNondefiningDeclaration) {
-                    std::cout << "Reuse existing SgTemplateInstantiationDecl: " << firstNondefiningDeclaration << " name: " << firstNondefiningDeclaration->get_name().getString() << std::endl;
-                }
-#endif
       }
     }
   }
@@ -6646,8 +6634,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
         return;
       }
       ensure_decl_in_scope_child_list_preserve_scope(
-          decl, parent_scope,
-          "VisitClassTemplateSpecializationDecl:lexical");
+          decl, parent_scope, "VisitClassTemplateSpecializationDecl:lexical");
     };
 
     attach_lexically(nondef_decl);
@@ -7255,8 +7242,7 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
       if (enum_scope != NULL) {
         enumerator->set_scope(enum_scope);
         if (enum_scope->find_symbol_from_declaration(enumerator) == NULL) {
-          SgEnumFieldSymbol *field_symbol =
-              new SgEnumFieldSymbol(enumerator);
+          SgEnumFieldSymbol *field_symbol = new SgEnumFieldSymbol(enumerator);
           enum_scope->insert_symbol(enumerator->get_name(), field_symbol);
         }
       }
@@ -8429,8 +8415,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     clang::CXXRecordDecl *parentClassDecl =
         static_cast<clang::CXXConstructorDecl *>(function_decl)->getParent();
     SgClassDeclaration *CxxRecordDeclaration = NULL;
-    auto lookup_class_decl = [&](clang::CXXRecordDecl *record)
-        -> SgClassDeclaration * {
+    auto lookup_class_decl =
+        [&](clang::CXXRecordDecl *record) -> SgClassDeclaration * {
       if (record == NULL) {
         return NULL;
       }
@@ -8464,9 +8450,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
     bool parent_in_progress = false;
     auto check_in_progress = [&](clang::CXXRecordDecl *record) {
-      if (record != NULL &&
-          p_decl_translation_in_progress.find(record) !=
-              p_decl_translation_in_progress.end()) {
+      if (record != NULL && p_decl_translation_in_progress.find(record) !=
+                                p_decl_translation_in_progress.end()) {
         parent_in_progress = true;
       }
     };
@@ -8477,7 +8462,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
     }
     if (!parent_in_progress) {
-      if (clang::CXXRecordDecl *canonical = parentClassDecl->getCanonicalDecl()) {
+      if (clang::CXXRecordDecl *canonical =
+              parentClassDecl->getCanonicalDecl()) {
         check_in_progress(canonical);
       }
     }
@@ -8591,9 +8577,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       cloned_init = SageInterface::deepCopy(init);
     }
 
-    SgInitializedName *cloned =
-        SageBuilder::buildInitializedName_nfi(source->get_name(),
-                                              source->get_type(), cloned_init);
+    SgInitializedName *cloned = SageBuilder::buildInitializedName_nfi(
+        source->get_name(), source->get_type(), cloned_init);
     applySourceRange(cloned, param_decl->getSourceRange());
     cloned->set_is_parameter_pack(source->get_is_parameter_pack());
     cloned->set_is_pack_element(source->get_is_pack_element());
@@ -8821,9 +8806,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         } else if (SgTemplateClassDefinition *template_class_def =
                        isSgTemplateClassDefinition(class_node)) {
           lexical_friend_class_def = template_class_def;
-          if (SgTemplateClassDeclaration *decl =
-                  isSgTemplateClassDeclaration(
-                      template_class_def->get_declaration())) {
+          if (SgTemplateClassDeclaration *decl = isSgTemplateClassDeclaration(
+                  template_class_def->get_declaration())) {
             class_scope = decl->get_scope();
           }
         }
@@ -9013,7 +8997,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             p_decl_translation_on_demand.end()) {
       TraverseOnDemand(record);
     }
-    return ensure_definition_populated(record, resolve_class_definition(record));
+    return ensure_definition_populated(record,
+                                       resolve_class_definition(record));
   };
 
   // For member functions (including friend methods), use the class definition
@@ -9207,7 +9192,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         isSgTemplateClassDefinition(lexical_scope) != NULL) {
       lexical_friend_class_def = lexical_scope;
       friend_lexically_inside_class = true;
-      lexical_friend_enclosing_scope = getEnclosingNamespaceScope(lexical_scope);
+      lexical_friend_enclosing_scope =
+          getEnclosingNamespaceScope(lexical_scope);
       if (lexical_friend_enclosing_scope == NULL) {
         lexical_friend_enclosing_scope = getGlobalScope();
       }
@@ -9239,7 +9225,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
          isSgGlobal(semantic_scope) != NULL)) {
       friend_symbol_scope = normalizeNamespaceScope(semantic_scope);
     } else if (lexical_friend_enclosing_scope != NULL) {
-      friend_symbol_scope = normalizeNamespaceScope(lexical_friend_enclosing_scope);
+      friend_symbol_scope =
+          normalizeNamespaceScope(lexical_friend_enclosing_scope);
     }
     if (friend_symbol_scope == NULL) {
       friend_symbol_scope = getGlobalScope();
@@ -9249,212 +9236,208 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     scope_for_symbol_table = friend_symbol_scope;
   }
 
+  auto normalize_existing_function_symbol_scope = [&](SgScopeStatement
+                                                          *symbol_scope) {
+    if (symbol_scope == NULL || isMethodDecl) {
+      return;
+    }
 
-  auto normalize_existing_function_symbol_scope =
-      [&](SgScopeStatement *symbol_scope) {
-        if (symbol_scope == NULL || isMethodDecl) {
-          return;
+    SgFunctionType *func_type =
+        SageBuilder::buildFunctionType(ret_type, param_list);
+    if (func_type == NULL) {
+      return;
+    }
+
+    auto rehome_symbol = [&](SgSymbol *sym) {
+      if (sym == NULL) {
+        return;
+      }
+      SgSymbolTable *desired_table =
+          symbol_scope != NULL ? symbol_scope->get_symbol_table() : NULL;
+      if (desired_table == NULL) {
+        return;
+      }
+      SgSymbolTable *parent_table = isSgSymbolTable(sym->get_parent());
+      if (parent_table == desired_table) {
+        return;
+      }
+
+      bool removed_from_parent = false;
+      if (parent_table != NULL) {
+        if (SgScopeStatement *parent_scope =
+                isSgScopeStatement(parent_table->get_parent())) {
+          if (parent_scope->symbol_exists(sym)) {
+            parent_scope->remove_symbol(sym);
+            removed_from_parent = true;
+          } else if (parent_table->exists(sym)) {
+            parent_table->remove(sym);
+            removed_from_parent = true;
+          }
+        } else if (parent_table->exists(sym)) {
+          parent_table->remove(sym);
+          removed_from_parent = true;
+        }
+      } else if (SgScopeStatement *parent_scope =
+                     isSgScopeStatement(sym->get_parent())) {
+        if (parent_scope->symbol_exists(sym)) {
+          parent_scope->remove_symbol(sym);
+          removed_from_parent = true;
+        }
+      }
+
+      if (!symbol_scope->symbol_exists(sym)) {
+        symbol_scope->insert_symbol(sym->get_name(), sym);
+      } else if (sym->get_parent() != desired_table) {
+        sym->set_parent(desired_table);
+      }
+    };
+
+    auto normalize_decl_scope = [&](SgFunctionDeclaration *decl) {
+      if (decl == NULL) {
+        return;
+      }
+      SgScopeStatement *decl_scope = decl->get_scope();
+      if (decl_scope == NULL) {
+        return;
+      }
+      if (decl_scope == symbol_scope) {
+        return;
+      }
+
+      if (normalizeNamespaceScope(decl_scope) == symbol_scope) {
+        decl->set_scope(symbol_scope);
+        return;
+      }
+
+      if (isFriendFreeFunction &&
+          (isSgNamespaceDefinitionStatement(symbol_scope) != NULL ||
+           isSgGlobal(symbol_scope) != NULL)) {
+        decl->set_scope(symbol_scope);
+      }
+    };
+
+    auto normalize_symbol_decl = [&](SgFunctionSymbol *sym) {
+      if (sym == NULL) {
+        return;
+      }
+      normalize_decl_scope(isSgFunctionDeclaration(sym->get_declaration()));
+      normalize_decl_scope(isSgFunctionDeclaration(
+          sym->get_declaration()
+              ? sym->get_declaration()->get_firstNondefiningDeclaration()
+              : NULL));
+      rehome_symbol(sym);
+    };
+
+    auto normalize_symbol_from_decl = [&](clang::FunctionDecl *decl) -> bool {
+      if (decl == NULL) {
+        return false;
+      }
+      if (SgSymbol *sym = GetSymbolFromSymbolTable(decl)) {
+        if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
+          normalize_symbol_decl(func_sym);
+          return true;
+        }
+        if (SgTemplateFunctionSymbol *tmpl_sym =
+                isSgTemplateFunctionSymbol(sym)) {
+          normalize_decl_scope(
+              isSgFunctionDeclaration(tmpl_sym->get_declaration()));
+          rehome_symbol(tmpl_sym);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    auto rehome_from_namespace_chain = [&]() {
+      SgNamespaceDefinitionStatement *canonical_ns =
+          isSgNamespaceDefinitionStatement(symbol_scope);
+      if (canonical_ns == NULL) {
+        return;
+      }
+
+      SgNamespaceDefinitionStatement *first_def =
+          isSgNamespaceDefinitionStatement(
+              normalizeNamespaceScope(canonical_ns));
+      if (first_def == NULL) {
+        first_def = canonical_ns;
+      }
+
+      std::vector<SgSymbol *> symbols_to_rehome;
+      std::set<SgSymbol *> seen_symbols;
+      for (SgNamespaceDefinitionStatement *ns = first_def; ns != NULL;
+           ns = ns->get_nextNamespaceDefinition()) {
+        if (ns == canonical_ns) {
+          continue;
+        }
+        SgSymbolTable *table = ns->get_symbol_table();
+        if (table == NULL) {
+          continue;
         }
 
-        SgFunctionType *func_type =
-            SageBuilder::buildFunctionType(ret_type, param_list);
-        if (func_type == NULL) {
-          return;
-        }
-
-        auto rehome_symbol = [&](SgSymbol *sym) {
-          if (sym == NULL) {
-            return;
-          }
-          SgSymbolTable *desired_table =
-              symbol_scope != NULL ? symbol_scope->get_symbol_table() : NULL;
-          if (desired_table == NULL) {
-            return;
-          }
-          SgSymbolTable *parent_table = isSgSymbolTable(sym->get_parent());
-          if (parent_table == desired_table) {
-            return;
-          }
-
-          bool removed_from_parent = false;
-          if (parent_table != NULL) {
-            if (SgScopeStatement *parent_scope =
-                    isSgScopeStatement(parent_table->get_parent())) {
-              if (parent_scope->symbol_exists(sym)) {
-                parent_scope->remove_symbol(sym);
-                removed_from_parent = true;
-              } else if (parent_table->exists(sym)) {
-                parent_table->remove(sym);
-                removed_from_parent = true;
-              }
-            } else if (parent_table->exists(sym)) {
-              parent_table->remove(sym);
-              removed_from_parent = true;
-            }
-          } else if (SgScopeStatement *parent_scope =
-                         isSgScopeStatement(sym->get_parent())) {
-            if (parent_scope->symbol_exists(sym)) {
-              parent_scope->remove_symbol(sym);
-              removed_from_parent = true;
-            }
-          }
-
-          if (!symbol_scope->symbol_exists(sym)) {
-            symbol_scope->insert_symbol(sym->get_name(), sym);
-          } else if (sym->get_parent() != desired_table) {
-            sym->set_parent(desired_table);
-          }
-        };
-
-        auto normalize_decl_scope = [&](SgFunctionDeclaration *decl) {
-          if (decl == NULL) {
-            return;
-          }
-          SgScopeStatement *decl_scope = decl->get_scope();
-          if (decl_scope == NULL) {
-            return;
-          }
-          if (decl_scope == symbol_scope) {
-            return;
-          }
-
-          if (normalizeNamespaceScope(decl_scope) == symbol_scope) {
-            decl->set_scope(symbol_scope);
-            return;
-          }
-
-          if (isFriendFreeFunction &&
-              (isSgNamespaceDefinitionStatement(symbol_scope) != NULL ||
-               isSgGlobal(symbol_scope) != NULL)) {
-            decl->set_scope(symbol_scope);
-          }
-        };
-
-        auto normalize_symbol_decl = [&](SgFunctionSymbol *sym) {
-          if (sym == NULL) {
-            return;
-          }
-          normalize_decl_scope(isSgFunctionDeclaration(sym->get_declaration()));
-          normalize_decl_scope(isSgFunctionDeclaration(
-              sym->get_declaration()
-                  ? sym->get_declaration()->get_firstNondefiningDeclaration()
-                  : NULL));
-          rehome_symbol(sym);
-        };
-
-        auto normalize_symbol_from_decl =
-            [&](clang::FunctionDecl *decl) -> bool {
-          if (decl == NULL) {
-            return false;
-          }
-          if (SgSymbol *sym = GetSymbolFromSymbolTable(decl)) {
-            if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
-              normalize_symbol_decl(func_sym);
-              return true;
-            }
-            if (SgTemplateFunctionSymbol *tmpl_sym =
-                    isSgTemplateFunctionSymbol(sym)) {
-              normalize_decl_scope(
-                  isSgFunctionDeclaration(tmpl_sym->get_declaration()));
-              rehome_symbol(tmpl_sym);
-              return true;
-            }
-          }
-          return false;
-        };
-
-        auto rehome_from_namespace_chain = [&]() {
-          SgNamespaceDefinitionStatement *canonical_ns =
-              isSgNamespaceDefinitionStatement(symbol_scope);
-          if (canonical_ns == NULL) {
-            return;
-          }
-
-          SgNamespaceDefinitionStatement *first_def =
-              isSgNamespaceDefinitionStatement(
-                  normalizeNamespaceScope(canonical_ns));
-          if (first_def == NULL) {
-            first_def = canonical_ns;
-          }
-
-          std::vector<SgSymbol *> symbols_to_rehome;
-          std::set<SgSymbol *> seen_symbols;
-          for (SgNamespaceDefinitionStatement *ns = first_def; ns != NULL;
-               ns = ns->get_nextNamespaceDefinition()) {
-            if (ns == canonical_ns) {
-              continue;
-            }
-            SgSymbolTable *table = ns->get_symbol_table();
-            if (table == NULL) {
-              continue;
-            }
-
-            const std::string key = name.getString();
-            if (rose_hash_multimap *symtab = table->get_table()) {
-              auto range = symtab->equal_range(key);
-              for (auto it = range.first; it != range.second; ++it) {
-                if (it->second != NULL &&
-                    seen_symbols.insert(it->second).second) {
-                  symbols_to_rehome.push_back(it->second);
-                }
-              }
-            }
-          }
-
-          for (SgSymbol *sym : symbols_to_rehome) {
-            if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
-              rehome_symbol(func_sym);
-            } else if (SgTemplateFunctionSymbol *tmpl_sym =
-                           isSgTemplateFunctionSymbol(sym)) {
-              rehome_symbol(tmpl_sym);
-            }
-          }
-        };
-
-        if (SgFunctionSymbol *sym =
-                symbol_scope->lookup_function_symbol(name, func_type)) {
-          normalize_symbol_decl(sym);
-        } else {
-          bool normalized = normalize_symbol_from_decl(function_decl);
-          clang::FunctionDecl *first_decl = function_decl->getFirstDecl();
-          if (!normalized && first_decl != function_decl) {
-            normalized = normalize_symbol_from_decl(first_decl);
-          }
-          clang::FunctionDecl *canonical_decl =
-              function_decl->getCanonicalDecl();
-          if (!normalized && canonical_decl != NULL &&
-              canonical_decl != function_decl && canonical_decl != first_decl) {
-            normalize_symbol_from_decl(canonical_decl);
-          }
-        }
-
-        std::vector<SgSymbol *> symbols_to_normalize;
-        std::set<SgSymbol *> seen_symbols;
-        if (SgSymbolTable *symtab = symbol_scope->get_symbol_table()) {
-          if (rose_hash_multimap *table = symtab->get_table()) {
-            const std::string key = name.getString();
-            auto range = table->equal_range(key);
-            for (auto it = range.first; it != range.second; ++it) {
-              if (it->second != NULL && seen_symbols.insert(it->second).second) {
-                symbols_to_normalize.push_back(it->second);
-              }
+        const std::string key = name.getString();
+        if (rose_hash_multimap *symtab = table->get_table()) {
+          auto range = symtab->equal_range(key);
+          for (auto it = range.first; it != range.second; ++it) {
+            if (it->second != NULL && seen_symbols.insert(it->second).second) {
+              symbols_to_rehome.push_back(it->second);
             }
           }
         }
+      }
 
-        for (SgSymbol *sym : symbols_to_normalize) {
-          if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
-            normalize_symbol_decl(func_sym);
-          } else if (SgTemplateFunctionSymbol *tmpl_sym =
-                         isSgTemplateFunctionSymbol(sym)) {
-            normalize_decl_scope(
-                isSgFunctionDeclaration(tmpl_sym->get_declaration()));
-            rehome_symbol(tmpl_sym);
+      for (SgSymbol *sym : symbols_to_rehome) {
+        if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
+          rehome_symbol(func_sym);
+        } else if (SgTemplateFunctionSymbol *tmpl_sym =
+                       isSgTemplateFunctionSymbol(sym)) {
+          rehome_symbol(tmpl_sym);
+        }
+      }
+    };
+
+    if (SgFunctionSymbol *sym =
+            symbol_scope->lookup_function_symbol(name, func_type)) {
+      normalize_symbol_decl(sym);
+    } else {
+      bool normalized = normalize_symbol_from_decl(function_decl);
+      clang::FunctionDecl *first_decl = function_decl->getFirstDecl();
+      if (!normalized && first_decl != function_decl) {
+        normalized = normalize_symbol_from_decl(first_decl);
+      }
+      clang::FunctionDecl *canonical_decl = function_decl->getCanonicalDecl();
+      if (!normalized && canonical_decl != NULL &&
+          canonical_decl != function_decl && canonical_decl != first_decl) {
+        normalize_symbol_from_decl(canonical_decl);
+      }
+    }
+
+    std::vector<SgSymbol *> symbols_to_normalize;
+    std::set<SgSymbol *> seen_symbols;
+    if (SgSymbolTable *symtab = symbol_scope->get_symbol_table()) {
+      if (rose_hash_multimap *table = symtab->get_table()) {
+        const std::string key = name.getString();
+        auto range = table->equal_range(key);
+        for (auto it = range.first; it != range.second; ++it) {
+          if (it->second != NULL && seen_symbols.insert(it->second).second) {
+            symbols_to_normalize.push_back(it->second);
           }
         }
+      }
+    }
 
-        rehome_from_namespace_chain();
-      };
+    for (SgSymbol *sym : symbols_to_normalize) {
+      if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
+        normalize_symbol_decl(func_sym);
+      } else if (SgTemplateFunctionSymbol *tmpl_sym =
+                     isSgTemplateFunctionSymbol(sym)) {
+        normalize_decl_scope(
+            isSgFunctionDeclaration(tmpl_sym->get_declaration()));
+        rehome_symbol(tmpl_sym);
+      }
+    }
+
+    rehome_from_namespace_chain();
+  };
 
   normalize_existing_function_symbol_scope(scope_for_symbol_table);
 
@@ -9627,16 +9610,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           return false;
         };
 
-        auto decl_in_old_body =
-            [&](SgDeclarationStatement *decl) -> bool {
+        auto decl_in_old_body = [&](SgDeclarationStatement *decl) -> bool {
           if (decl == NULL) {
             return false;
           }
           if (is_in_old_body(decl)) {
             return true;
           }
-          if (SgDeclarationStatement *def =
-                  decl->get_definingDeclaration()) {
+          if (SgDeclarationStatement *def = decl->get_definingDeclaration()) {
             if (is_in_old_body(def)) {
               return true;
             }
@@ -9703,9 +9684,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           old_body_is_placeholder = old_body->get_statements().empty();
         }
 
-        bool need_invalidate =
-            (body_it != p_stmt_translation_map.end()) ||
-            (old_body != NULL && !old_body_is_placeholder);
+        bool need_invalidate = (body_it != p_stmt_translation_map.end()) ||
+                               (old_body != NULL && !old_body_is_placeholder);
 
         const bool isolate_template_body =
             allow_template_instantiation &&
@@ -9810,8 +9790,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 }
                 if (SgVariableDeclaration *var_decl =
                         isSgVariableDeclaration(node)) {
-                  for (SgInitializedName *init :
-                       var_decl->get_variables()) {
+                  for (SgInitializedName *init : var_decl->get_variables()) {
                     removeSymbol(init->get_symbol_from_symbol_table());
                   }
                   return;
@@ -9831,7 +9810,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             placeholder_body->set_parent(function_definition);
             function_definition->set_body(placeholder_body);
             SageInterface::deleteAST(
-                old_body, SageInterface::DeleteAstMode::kSkipExternalReferences);
+                old_body,
+                SageInterface::DeleteAstMode::kSkipExternalReferences);
             old_body = NULL;
           }
           recursive_invalidate_stmt(body_stmt);
@@ -9888,7 +9868,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
       defining_decl->set_definition(function_definition);
       function_definition->set_parent(defining_decl);
-
     }
 
     return body_res;
@@ -10564,13 +10543,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         if (decl_scope == NULL) {
           return false;
         }
-        SgFunctionSymbol *func_sym =
-            decl_scope->lookup_function_symbol(decl->get_name(),
-                                               decl->get_type());
+        SgFunctionSymbol *func_sym = decl_scope->lookup_function_symbol(
+            decl->get_name(), decl->get_type());
         if (func_sym == NULL) {
           func_sym = decl_scope->lookup_function_symbol(decl->get_name());
-          if (func_sym != NULL &&
-              func_sym->get_declaration() != NULL &&
+          if (func_sym != NULL && func_sym->get_declaration() != NULL &&
               func_sym->get_declaration()->get_type() != decl->get_type()) {
             func_sym = NULL;
           }
@@ -10896,9 +10873,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       (*it)->set_declptr(sg_function_decl);
     }
 
-    SgFunctionDeclaration *existing_first_nondef =
-        isSgFunctionDeclaration(
-            sg_function_decl->get_firstNondefiningDeclaration());
+    SgFunctionDeclaration *existing_first_nondef = isSgFunctionDeclaration(
+        sg_function_decl->get_firstNondefiningDeclaration());
     bool preserve_existing_first_nondef = false;
     if (existing_first_nondef != NULL &&
         existing_first_nondef != sg_function_decl) {
@@ -10969,7 +10945,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
       }
     }
-
   }
 
   if (is_explicitly_defaulted_or_deleted) {
@@ -11028,44 +11003,43 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
     auto resolve_symbol_decl =
         [&](SgFunctionDeclaration *candidate) -> SgFunctionDeclaration * {
-          if (candidate == NULL) {
-            return NULL;
-          }
-          SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
-              candidate->get_firstNondefiningDeclaration());
-          SgFunctionDeclaration *def_decl = isSgFunctionDeclaration(
-              candidate->get_definingDeclaration());
-          auto is_class_scope = [](SgScopeStatement *scope) -> bool {
-            return isSgClassDefinition(scope) != NULL ||
-                   isSgTemplateClassDefinition(scope) != NULL ||
-                   isSgTemplateInstantiationDefn(scope) != NULL;
-          };
+      if (candidate == NULL) {
+        return NULL;
+      }
+      SgFunctionDeclaration *first_nondef =
+          isSgFunctionDeclaration(candidate->get_firstNondefiningDeclaration());
+      SgFunctionDeclaration *def_decl =
+          isSgFunctionDeclaration(candidate->get_definingDeclaration());
+      auto is_class_scope = [](SgScopeStatement *scope) -> bool {
+        return isSgClassDefinition(scope) != NULL ||
+               isSgTemplateClassDefinition(scope) != NULL ||
+               isSgTemplateInstantiationDefn(scope) != NULL;
+      };
 
-          if (first_nondef != NULL &&
-              is_class_scope(first_nondef->get_scope())) {
-            return first_nondef;
-          }
-          if (def_decl != NULL && is_class_scope(def_decl->get_scope())) {
-            return def_decl;
-          }
+      if (first_nondef != NULL && is_class_scope(first_nondef->get_scope())) {
+        return first_nondef;
+      }
+      if (def_decl != NULL && is_class_scope(def_decl->get_scope())) {
+        return def_decl;
+      }
 
-          if (first_nondef != NULL &&
-              scopes_match(first_nondef->get_scope(), candidate->get_scope())) {
-            return first_nondef;
-          }
-          if (def_decl != NULL &&
-              scopes_match(def_decl->get_scope(), candidate->get_scope())) {
-            return def_decl;
-          }
+      if (first_nondef != NULL &&
+          scopes_match(first_nondef->get_scope(), candidate->get_scope())) {
+        return first_nondef;
+      }
+      if (def_decl != NULL &&
+          scopes_match(def_decl->get_scope(), candidate->get_scope())) {
+        return def_decl;
+      }
 
-          if (first_nondef != NULL) {
-            return first_nondef;
-          }
-          if (def_decl != NULL) {
-            return def_decl;
-          }
-          return candidate;
-        };
+      if (first_nondef != NULL) {
+        return first_nondef;
+      }
+      if (def_decl != NULL) {
+        return def_decl;
+      }
+      return candidate;
+    };
 
     SgFunctionDeclaration *symbol_decl = resolve_symbol_decl(decl);
     if (symbol_decl == NULL) {
@@ -11119,8 +11093,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
     if (SgTemplateFunctionDeclaration *tmpl_decl =
             isSgTemplateFunctionDeclaration(decl)) {
-      SgTemplateParameterPtrList *params =
-          &tmpl_decl->get_templateParameters();
+      SgTemplateParameterPtrList *params = &tmpl_decl->get_templateParameters();
       if (SgTemplateFunctionSymbol *tmpl_sym =
               symbol_scope->lookup_template_function_symbol(
                   tmpl_decl->get_name(), tmpl_decl->get_type(), params)) {
@@ -11505,10 +11478,10 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         if (inst_decl->get_scope() == NULL) {
           SgScopeStatement *fallback_scope =
               explicit_instantiation_directive->get_scope();
-          inst_decl->set_scope(scope_for_symbol_table != NULL
-                                   ? scope_for_symbol_table
-                                   : (lexical_scope != NULL ? lexical_scope
-                                                            : fallback_scope));
+          inst_decl->set_scope(
+              scope_for_symbol_table != NULL
+                  ? scope_for_symbol_table
+                  : (lexical_scope != NULL ? lexical_scope : fallback_scope));
         }
       }
     }
@@ -11592,7 +11565,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
   applySourceRange(sg_function_decl, function_decl->getSourceRange());
   *node = sg_function_decl;
-
 
   bool visit_res = VisitDeclaratorDecl(function_decl, node) && res;
 
@@ -12715,8 +12687,8 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
       // nondefining declaration; leaving it unattached can cause symbol-table
       // cleanup to drop the symbol and later trip name-qualification
       // assertions.
-        if (SgFunctionDeclaration *func_decl =
-                isSgFunctionDeclaration(inst_decl)) {
+      if (SgFunctionDeclaration *func_decl =
+              isSgFunctionDeclaration(inst_decl)) {
         if (SgDeclarationStatement *first_nondef =
                 func_decl->get_firstNondefiningDeclaration()) {
           if (first_nondef != func_decl) {

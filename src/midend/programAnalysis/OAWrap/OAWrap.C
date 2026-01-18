@@ -1,4 +1,5 @@
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 18,7 MB to 9,5MB
+// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 18,7 MB to
+// 9,5MB
 
 #include "sage3basic.h"
 
@@ -15,8 +16,8 @@
 using namespace std;
 
 namespace OpenAnalysis {
+#include <OpenAnalysis/CFG/CFG.C>
 #include <OpenAnalysis/Utils/BaseGraph.C>
 #include <OpenAnalysis/Utils/DGraph.C>
-#include <OpenAnalysis/CFG/CFG.C>
-};
+}; // namespace OpenAnalysis
 #endif

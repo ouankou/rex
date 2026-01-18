@@ -3,7 +3,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif 
+#endif
 
 #include "token.h"
 
@@ -15,6 +15,6 @@ void fortran_error_handler_begin();
 
 #ifdef __cplusplus
 }
-#endif 
+#endif
 
 #endif

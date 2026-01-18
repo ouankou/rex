@@ -11,14 +11,12 @@
 
     \implementation This may not be required if OFP is fixed.
  */
-void
-insertFortranContainsStatement ( SgNode* node );
+void insertFortranContainsStatement(SgNode *node);
 
-class InsertFortranContainsStatement : public AstSimpleProcessing
-   {
-     public:
-          void visit ( SgNode* node );
-   };
+class InsertFortranContainsStatement : public AstSimpleProcessing {
+public:
+  void visit(SgNode *node);
+};
 
 // endif for INSERT_FORTRAN_CONTAINS_STATEMENT_H
 #endif

@@ -107,16 +107,6 @@ void omp_set_num_devices (int count)
 }
 void xomp_acc_init(void)
 {
-#if 0  
-  cudaError_t err;
-  int maxDevice = 0;
-  err = cudaGetDeviceCount(&maxDevice);
-  if(err != cudaSuccess)
-  {
-      fprintf(stderr,"XOMP acc_init: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);
-      exit(err);
-  }
-#endif 
   // to be safe, we preallocate memory based on max device count
   xomp_max_num_devices = xomp_get_max_devices();
 
@@ -205,7 +195,6 @@ size_t xomp_get_maxThreadsPerBlock(int devID)
 */
 size_t xomp_get_max1DBlock(int devID, size_t s)
 {
-#if 1  
   size_t block_num = s/xomp_get_maxThreadsPerBlock(devID);
   if (s % xomp_get_maxThreadsPerBlock(devID)!= 0)
      block_num ++;
@@ -218,9 +207,6 @@ size_t xomp_get_max1DBlock(int devID, size_t s)
   /* max threads per multiprocessor / threads-per-block  * num_multiprocessor */
   //return xomp_getCudaDeviceProp()->multiProcessorCount*(xomp_getCudaDeviceProp()->maxThreadsPerMultiProcessor /xomp_get_maxThreadsPerBlock()) ;
   //return xomp_getCudaDeviceProp()->maxThreadsPerMultiProcessor /xomp_get_maxThreadsPerBlock() ;
-#else
-  return xomp_getCudaDeviceProp()->multiProcessorCount* xomp_get_maxThreadBlocksPerMultiprocessor();
-#endif
 }
 
 // Get the max number threads for one dimension (x or y) of a 2D block
@@ -467,28 +453,8 @@ bool xomp_freeHost(void* hostPtr)
 
 //------------------------------------------------------
 // data set size checking functions
-#if 0
-  // make sure the length of the array can be mapped to the cuda threads
-  assert (SIZE <= max_blocks_per_grid_x* max_threads_per_block);
-  // make sure the data will fit into the device memory (shared memory)
-  printf("matrix-vector multiplication with size=%d\n", SIZE);
-  // one matrix and two vectors
-  int mem_required = SIZE*SIZE*sizeof(float) + SIZE* sizeof(float) *2;
-  if (global_memory_size > 0) //sometimes the number is too large and it overflows to be a negative integer
-    assert (mem_required  <= global_memory_size);
-#endif
 
 //------------------------------------------------------
-#if 0
-double xomp_time_stamp()
-{
-  struct timeval t;
-  double time;
-  gettimeofday(&t, NULL);
-  time = t.tv_sec + 1.0e-6*t.tv_usec;
-  return time;
-}
-#endif
 //------------------------------------------------------
 // Host side helper functions
 //--- a helper function to allocate 2-D arrays
@@ -570,83 +536,6 @@ void xomp_freeArrayPointer (void* array, int * dimensions, size_t dimension_num)
   }
 }
 
-#if 0
-/*  reduction minus is handled the same way as reduction plus since we just replace the reduction variable with its local copy for each thread
-    The associated statement is intact except for the variable replacement : e.g. a-=5 becomes local_a -= 5;
-    in the end of each thread accumulates thread local negative values.
-    At the block level, we just simply add them all to be the block level negative values
-*/
-/* we have to encode the type into function name since C function signature does not include parameter list! */
-#define XOMP_INNER_BLOCK_REDUCTION_DEF(dtype) \
-__device__ void xomp_inner_block_reduction_##dtype(dtype local_value, dtype * grid_level_results, int reduction_op) \
-{ \
-  /* __shared__ float* sdata[gridDim.x]; not compilable */ \
-  /* block size of data, size is specified by the kernel launch parameter (3rd one) */ \
-  /* shared data has to have different names for different types. Cannot reuse name across types. */ \
-  extern __shared__ dtype sdata_##dtype[];  \
-  sdata_##dtype[threadIdx.x] = local_value;  \
-  __syncthreads(); \
-  /* blockDim.x is the block size */ \
-  int isEvenSize = (blockDim.x % 2 ==0); \
-  /* contiguous range pattern: half folding and add */ \
-  for(int offset = blockDim.x / 2; \
-      offset > 0;    /* folding and add */ \
-      offset >>= 1) /* offset shrinks half each time */ \
-  { \
-    if(threadIdx.x < offset)  \
-    { \
-      /* add a partial sum upstream to our own */ \
-      switch (reduction_op){ \
-        case XOMP_REDUCTION_PLUS: \
-        case XOMP_REDUCTION_MINUS: \
-            sdata_##dtype[threadIdx.x] += sdata_##dtype[threadIdx.x + offset]; \
-            break; \
-         /*  TODO add support for more operations*/ \
-         default:  \
-            { \
-              /* TODO: add assertion or set cudaError with an error code */ \
-              /* cannot call a host function */ \
-              /* fprintf (stderr, "Error. xomp_inner_block_reduction() unhandled reduction operation:%d\n",reduction_op); */ \
-              /* ROSE_ABORT(); */ \
-             } \
-      } /* end switch */ \
-    } \
-    /* remember to handle the left element */ \
-    if ((threadIdx.x == 0) && !isEvenSize) \
-    { \
-      switch (reduction_op){ \
-        case XOMP_REDUCTION_PLUS: \
-        case XOMP_REDUCTION_MINUS: \
-          sdata_##dtype[0]+= sdata_##dtype[2*offset];  \
-          break; \
-        /* TODO add more operation support */  \
-        default: \
-          {  \
-            /* TODO: add assertion or set cudaError with an error code */  \
-            /* cannot call a host function */ \
-            /* fprintf (stderr, "Error. xomp_inner_block_reduction() unhandled reduction operation:%d\n",reduction_op); */ \
-            /* ROSE_ABORT(); */ \
-          } \
-      } /* end switch */ \
-    } \
-    isEvenSize = ( offset % 2 ==0); /* prepare next round*/ \
-    /* MUST wait until all threads in the block have updated their partial sums */ \
-    __syncthreads(); /* sync after each folding */ \
-  } \
-  /* thread 0 writes the final result to the partial sum of this thread block */ \
-  if(threadIdx.x == 0) \
-  { \
-    grid_level_results[blockIdx.x] = sdata_##dtype[0]; \
-  } \
-}
-
-XOMP_INNER_BLOCK_REDUCTION_DEF(int)
-XOMP_INNER_BLOCK_REDUCTION_DEF(float)
-XOMP_INNER_BLOCK_REDUCTION_DEF(double)
-
-#undef XOMP_INNER_BLOCK_REDUCTION_DEF 
-
-#endif
 
 // TODO: handle more different reduction operations
 // TODO : add assertion support
@@ -682,13 +571,6 @@ XOMP_BEYOND_BLOCK_REDUCTION_DEF(double)
 #undef XOMP_BEYOND_BLOCK_REDUCTION_DEF 
 
 /* some of the ompacc runtime API */
-#if 0
-int omp_get_num_devices() {
-  int deviceCount = 0;
-  cudaGetDeviceCount(&deviceCount);
-  return deviceCount;
-}
-#endif
 
 //! A helper function to copy a mapped variable from src to desc
 void copy_mapped_variable (struct XOMP_mapped_variable* desc, struct XOMP_mapped_variable* src)

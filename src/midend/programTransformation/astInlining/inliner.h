@@ -1,13 +1,12 @@
 #ifndef INLINER_H
 #define INLINER_H
 
-// DQ (3/12/2006): This is now not required, the file name is 
+// DQ (3/12/2006): This is now not required, the file name is
 // changed to rose_config.h and is included directly by rose.h.
 // #include "config.h"
 
-
-#include "replaceExpressionWithStatement.h"
 #include "inlinerSupport.h"
+#include "replaceExpressionWithStatement.h"
 
 //! Main inliner code.  Accepts a function call as a parameter, and inlines
 //! only that single function call.  Returns true if it succeeded, and false
@@ -18,14 +17,14 @@
 //! Recursive procedures are handled properly (when allowRecursion is set), by
 //! inlining one copy of the procedure into itself.  Any other restrictions on
 //! what can be inlined are bugs in the inliner code.
-ROSE_DLL_API bool doInline(SgFunctionCallExp* funcall, bool allowRecursion = false);
-
+ROSE_DLL_API bool doInline(SgFunctionCallExp *funcall,
+                           bool allowRecursion = false);
 
 // a namespace
 namespace Inliner {
-  // if set to true, ignore function calls within headers. Default is false. 
-  extern bool skipHeaders;   
-  extern bool verbose; // if set to true, generate debugging information   
-}
+// if set to true, ignore function calls within headers. Default is false.
+extern bool skipHeaders;
+extern bool verbose; // if set to true, generate debugging information
+} // namespace Inliner
 
 #endif // INLINER_H

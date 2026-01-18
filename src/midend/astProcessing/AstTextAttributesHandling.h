@@ -4,31 +4,33 @@
 #ifndef ASTTEXTATTRIBUTEHANDLING_H
 #define ASTTEXTATTRIBUTEHANDLING_H
 
-#include <string>
-#include <sstream>
 #include <iomanip>
+#include <sstream>
+#include <string>
 
-#include "Cxx_Grammar.h"
 #include "AstProcessing.h"
+#include "Cxx_Grammar.h"
 
 class AstTextAttribute : public AstAttribute {
 public:
   AstTextAttribute(std::string s) : source(s) {}
   virtual std::string toString() { return source; }
- protected:
+
+protected:
   std::string source;
 };
 
 class AstTextAttributesHandling : public SgSimpleProcessing {
 public:
-  AstTextAttributesHandling(SgProject* p);
+  AstTextAttributesHandling(SgProject *p);
   ~AstTextAttributesHandling();
   void setAll();
   void removeAll();
+
 protected:
-  enum {M_set, M_remove} mode;
-  virtual void visit(SgNode* node);
-  SgProject* projectnode;
+  enum { M_set, M_remove } mode;
+  virtual void visit(SgNode *node);
+  SgProject *projectnode;
 };
 
 #endif

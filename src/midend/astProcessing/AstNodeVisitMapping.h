@@ -4,18 +4,18 @@
 #ifndef ASTNODEVISITMAPPING_H
 #define ASTNODEVISITMAPPING_H
 
+#include "AstProcessing.h"
 #include <map>
 #include <string>
-#include "AstProcessing.h"
 
 class AstNodeVisitMapping : public SgSimpleProcessing {
 public:
-  AstNodeVisitMapping(int pn):pagenum(pn) {}
-  typedef std::map<std::string,int> MappingType;
+  AstNodeVisitMapping(int pn) : pagenum(pn) {}
+  typedef std::map<std::string, int> MappingType;
   typedef MappingType::value_type MappingPairType;
   MappingType address_pagenum;
   int pagenum;
-  void visit(SgNode* node);
+  void visit(SgNode *node);
 };
 
 #endif

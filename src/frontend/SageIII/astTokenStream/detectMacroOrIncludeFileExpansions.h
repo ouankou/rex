@@ -15,90 +15,106 @@ struct MacroDirective {
   bool is_define;
 };
 
-using MacroDirectiveMap = std::map<std::string, std::vector<MacroDirective> >;
+using MacroDirectiveMap = std::map<std::string, std::vector<MacroDirective>>;
 
-class MacroExpansion
-   {
-     public:
-       // The name of the macro that is expanded.
-          std::string macro_name;
+class MacroExpansion {
+public:
+  // The name of the macro that is expanded.
+  std::string macro_name;
 
-       // Mark this as a shared macro expansion if multiple statements are associated with it.
-          bool shared;
+  // Mark this as a shared macro expansion if multiple statements are associated
+  // with it.
+  bool shared;
 
-       // Save the position of the macro expansion so that we can distinquish between different macro expansions.
-          int line;
-          int column;
+  // Save the position of the macro expansion so that we can distinquish between
+  // different macro expansions.
+  int line;
+  int column;
 
-       // The starting and ending positions of the macro call in the token sequence.
-          int token_start;
-          int token_end;
+  // The starting and ending positions of the macro call in the token sequence.
+  int token_start;
+  int token_end;
 
-       // Use a vector as a container for the associated IR nodes for this macro expansion when it is shared.
-          std::vector<SgStatement*> associatedStatementVector;
+  // Use a vector as a container for the associated IR nodes for this macro
+  // expansion when it is shared.
+  std::vector<SgStatement *> associatedStatementVector;
 
-       // Mark the macro expansion as transformed if all of it's statements have been marked as transformed 
-       // as part of processing in SageInterface::resetInternalMapsForTargetStatement().
-          bool isTransformed;
+  // Mark the macro expansion as transformed if all of it's statements have been
+  // marked as transformed as part of processing in
+  // SageInterface::resetInternalMapsForTargetStatement().
+  bool isTransformed;
 
-          MacroExpansion(const std::string & name);
+  MacroExpansion(const std::string &name);
+};
 
-   };
+class DetectMacroOrIncludeFileExpansionsInheritedAttribute {
+  // I don't think there is anything to do for this case (but I have implemented
+  // this as a SgTopDownBottomUpProcessing in case there is a requirement for
+  // the inherited attribute).
+public:
+  MacroExpansion *macroExpansion;
 
+  DetectMacroOrIncludeFileExpansionsInheritedAttribute();
+  DetectMacroOrIncludeFileExpansionsInheritedAttribute(
+      const DetectMacroOrIncludeFileExpansionsInheritedAttribute &X);
+};
 
-class DetectMacroOrIncludeFileExpansionsInheritedAttribute
-   {
-  // I don't think there is anything to do for this case (but I have implemented this as a 
-  // SgTopDownBottomUpProcessing in case there is a requirement for the inherited attribute).
-     public:
-          MacroExpansion* macroExpansion;
+class DetectMacroOrIncludeFileExpansionsSynthesizedAttribute {
+private:
+public:
+  SgNode *node;
+  MacroExpansion *macroExpansion;
 
-          DetectMacroOrIncludeFileExpansionsInheritedAttribute();
-          DetectMacroOrIncludeFileExpansionsInheritedAttribute( const DetectMacroOrIncludeFileExpansionsInheritedAttribute & X );
-   };
+  DetectMacroOrIncludeFileExpansionsSynthesizedAttribute();
+  DetectMacroOrIncludeFileExpansionsSynthesizedAttribute(SgNode *n);
+  DetectMacroOrIncludeFileExpansionsSynthesizedAttribute(
+      const DetectMacroOrIncludeFileExpansionsSynthesizedAttribute &X);
+};
 
-class DetectMacroOrIncludeFileExpansionsSynthesizedAttribute
-   {
-     private:
+class DetectMacroOrIncludeFileExpansions
+    : public SgTopDownBottomUpProcessing<
+          DetectMacroOrIncludeFileExpansionsInheritedAttribute,
+          DetectMacroOrIncludeFileExpansionsSynthesizedAttribute> {
+public:
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
+      &tokenStreamSequenceMap;
+  SgSourceFile *sourceFile;
+  MacroDirectiveMap macroDirectives;
 
-     public:
-          SgNode* node;
-          MacroExpansion* macroExpansion;
+  std::vector<MacroExpansion *> macroExpansionStack;
 
-          DetectMacroOrIncludeFileExpansionsSynthesizedAttribute();
-          DetectMacroOrIncludeFileExpansionsSynthesizedAttribute( SgNode* n );
-          DetectMacroOrIncludeFileExpansionsSynthesizedAttribute( const DetectMacroOrIncludeFileExpansionsSynthesizedAttribute & X );
-   };
+  // DetectMacroOrIncludeFileExpansions(SgSourceFile* sourceFile);
+  // DetectMacroOrIncludeFileExpansions(
+  // std::map<SgNode*,TokenStreamSequenceToNodeMapping*> &
+  // input_tokenStreamSequenceMap );
+  DetectMacroOrIncludeFileExpansions(
+      SgSourceFile *input_sourceFile,
+      std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
+          &input_tokenStreamSequenceMap);
 
-class DetectMacroOrIncludeFileExpansions 
-   : public SgTopDownBottomUpProcessing<DetectMacroOrIncludeFileExpansionsInheritedAttribute,
-                                        DetectMacroOrIncludeFileExpansionsSynthesizedAttribute>
-   {
-     public:
-          std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap;
-          SgSourceFile* sourceFile;
-          MacroDirectiveMap macroDirectives;
+  // virtual function must be defined
+  DetectMacroOrIncludeFileExpansionsInheritedAttribute
+  evaluateInheritedAttribute(
+      SgNode *n,
+      DetectMacroOrIncludeFileExpansionsInheritedAttribute inheritedAttribute);
 
-          std::vector<MacroExpansion*> macroExpansionStack;
+  // virtual function must be defined
+  DetectMacroOrIncludeFileExpansionsSynthesizedAttribute
+  evaluateSynthesizedAttribute(
+      SgNode *n,
+      DetectMacroOrIncludeFileExpansionsInheritedAttribute inheritedAttribute,
+      SubTreeSynthesizedAttributes synthesizedAttributeList);
 
-       // DetectMacroOrIncludeFileExpansions(SgSourceFile* sourceFile);
-       // DetectMacroOrIncludeFileExpansions( std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & input_tokenStreamSequenceMap );
-          DetectMacroOrIncludeFileExpansions( SgSourceFile* input_sourceFile, std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & input_tokenStreamSequenceMap );
-
-       // virtual function must be defined
-          DetectMacroOrIncludeFileExpansionsInheritedAttribute evaluateInheritedAttribute(SgNode* n, DetectMacroOrIncludeFileExpansionsInheritedAttribute inheritedAttribute);
-
-       // virtual function must be defined
-          DetectMacroOrIncludeFileExpansionsSynthesizedAttribute evaluateSynthesizedAttribute (SgNode* n, DetectMacroOrIncludeFileExpansionsInheritedAttribute inheritedAttribute, SubTreeSynthesizedAttributes synthesizedAttributeList );
-
-       // Support function
-          MacroExpansion* isPartOfMacroExpansion( SgStatement* statement, std::string & name, int & startingToken, int & endingToken );
-          MacroExpansion* isPartOfMacroExpansion( SgLocatedNode* locatedNode, std::string & name, int & startingToken, int & endingToken );
-   };
-
-
+  // Support function
+  MacroExpansion *isPartOfMacroExpansion(SgStatement *statement,
+                                         std::string &name, int &startingToken,
+                                         int &endingToken);
+  MacroExpansion *isPartOfMacroExpansion(SgLocatedNode *locatedNode,
+                                         std::string &name, int &startingToken,
+                                         int &endingToken);
+};
 
 // Main API function to call the AST traversals
-void detectMacroOrIncludeFileExpansions ( SgSourceFile* sourceFile );
+void detectMacroOrIncludeFileExpansions(SgSourceFile *sourceFile);
 
-#endif  // DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H
+#endif // DETECT_MACRO_OR_INCLUDE_FILE_EXPANSIONS_H

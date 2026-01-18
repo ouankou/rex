@@ -1,9 +1,7 @@
 #ifndef __UNPARSER_ASSIST_H__
 #define __UNPARSER_ASSIST_H__
-extern void
-generateModFile(SgFile *sfile);
+extern void generateModFile(SgFile *sfile);
 
-#define MOD_FILE_SUFFIX  ".rmod"
+#define MOD_FILE_SUFFIX ".rmod"
 
 #endif
-

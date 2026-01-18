@@ -1,6 +1,6 @@
 
 #ifndef _CLANG_FRONTEND_HPP_
-# define _CLANG_FRONTEND_HPP_
+#define _CLANG_FRONTEND_HPP_
 
 class SgSourceFile;
 

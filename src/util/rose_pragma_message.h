@@ -5,13 +5,15 @@
 #define ROSE_STRINGIZE(X) ROSE_DO_STRINGIZE(X)
 #define ROSE_DO_STRINGIZE(X) #X
 
-// Possibly show a message from the compiler. Argument should be a string literal.
+// Possibly show a message from the compiler. Argument should be a string
+// literal.
 #if defined(__INTEL_COMPILER)
-# define ROSE_PRAGMA_MESSAGE(x) __pragma(message(__FILE__, ":" ROSE_STRINGIZE(__LINE__) ": note: " x))
+#define ROSE_PRAGMA_MESSAGE(x)                                                 \
+  __pragma(message(__FILE__, ":" ROSE_STRINGIZE(__LINE__) ": note: " x))
 #elif defined(__GNUC__)
-# define ROSE_PRAGMA_MESSAGE(x) _Pragma(ROSE_STRINGIZE(message(x)))
+#define ROSE_PRAGMA_MESSAGE(x) _Pragma(ROSE_STRINGIZE(message(x)))
 #else
-# define ROSE_PRAGMA_MESSAGE(x) /*silent*/
+#define ROSE_PRAGMA_MESSAGE(x) /*silent*/
 #endif
 
 #endif

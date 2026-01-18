@@ -56,8 +56,7 @@ private:
 
   template <class Archive>
   void CEREAL_SERIALIZE_FUNCTION_NAME(Archive &archive) {
-    archive(cereal::make_nvp("file", file_),
-            cereal::make_nvp("line", line_),
+    archive(cereal::make_nvp("file", file_), cereal::make_nvp("line", line_),
             cereal::make_nvp("column", column_));
   }
 #endif

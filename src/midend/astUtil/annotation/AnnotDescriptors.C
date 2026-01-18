@@ -1,8 +1,8 @@
 #include "AnnotDescriptors.h"
+#include "AstInterface.h"
+#include <ROSE_ASSERT.h>
 #include <list>
 #include <sstream>
-#include <ROSE_ASSERT.h>
-#include "AstInterface.h"
 
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
@@ -151,24 +151,23 @@ bool NameDescriptor::read(istream &in) {
 }
 
 //! Read in a variable name, supporting qualified names
-bool NameDescriptor::write(std::ostream& out) const
-{
+bool NameDescriptor::write(std::ostream &out) const {
   std::string content = get_name();
-  auto output_char = [&out] (const char c) {
-       if (std::isalnum(c) || c == ':') {
-         out << c;
-       } else if (c == '_' || c == ',' || c == '(' || c == ')') {
-         out << '_';
-       } else if (c == '&') {
-         out << "_ref_";
-       } else if (c == ' ' || c == '\t' || c == '\n') {
-         /* skip empty space */
-       } else {
-          out << c;
-       }
+  auto output_char = [&out](const char c) {
+    if (std::isalnum(c) || c == ':') {
+      out << c;
+    } else if (c == '_' || c == ',' || c == '(' || c == ')') {
+      out << '_';
+    } else if (c == '&') {
+      out << "_ref_";
+    } else if (c == ' ' || c == '\t' || c == '\n') {
+      /* skip empty space */
+    } else {
+      out << c;
+    }
   };
   for (const char c : content) {
-     output_char(c);
+    output_char(c);
   }
   return true;
 }

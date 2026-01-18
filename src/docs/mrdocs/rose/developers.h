@@ -7,8 +7,8 @@
  *
  * Documentation oriented toward those working on ROSE.
  *
- * This module serves as the top level for developer-specific documentation that should not appear in the main end-user
- * table of contents.
+ * This module serves as the top level for developer-specific documentation that
+ * should not appear in the main end-user table of contents.
  */
 struct developer_docs {};
 

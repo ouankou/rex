@@ -143,12 +143,6 @@ HEADER_START
 
       // JJW (10/16/2008): Changed to a single function in Node.code, and put
       // getVariant() in #if 0 block to prevent confusing documentation tools
-#if 0
-      /*! returns old style Sage II enum values */
-          virtual int variant() const ROSE_DEPRECATED_FUNCTION;
-      /*! returns old style Sage II enum values */
-       // virtual int getVariant() const ROSE_DEPRECATED_FUNCTION;
-#endif
       /* */
 
 
@@ -326,15 +320,6 @@ HEADER_END
 SOURCE_START
 // *** COMMON CODE SECTION BEGINS HERE ***
 
-#if 0
-int
-$CLASSNAME::getVariant() const
-   {
-     // This function is used in ROSE while "variant()" is used in SAGE 
-     assert(this != NULL);
-     return variant();
-   }
-#endif
 
 // This function is used in ROSE in treeTraversal code
 // eventually replaces getVariant() and variant()
@@ -350,15 +335,6 @@ $CLASSNAME::variantT() const
      return V_$CLASSNAME;
    }
 
-#if 0
-int
-$CLASSNAME::variant() const
-   {
-  // This function is used in SAGE
-     ROSE_ASSERT(this != NULL);
-     return $CLASSTAG;
-   }
-#endif
 
 ROSE_DLL_API const char*
 $CLASSNAME::sage_class_name() const

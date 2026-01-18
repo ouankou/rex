@@ -10,25 +10,6 @@ virtual $GRAMMAR_PREFIX_Node* $CLASSNAME::copy ( $GRAMMAR_PREFIX_CopyHelp& help)
   // The default value of the depth is 0, so after this call the depth is 1!
      help.incrementDepth();
 
-#if 0
-  // DQ (10/22/2005): This is a useful test for the copy mechanism (in preprocessor.C)
-  // but it is not generally true that things can only be copied once!
-  // Check and see if this has been marked as copied! (detects recursive copy bug)
-  // AstAttribute* existingAttribute = const_cast<$CLASSNAME*>(this)->attribute["copied"];
-     bool previouslyCopied = const_cast<$CLASSNAME*>(this)->attribute.exists("copied");
-     if (previouslyCopied == true)
-        {
-          this->get_file_info()->display("Called from copy $CLASSNAME: debug");
-        }
-     ROSE_ASSERT(previouslyCopied == false);
-
-  // If not previously copied then build an attribute (on the heap) to mark it as copied
-     AstAttribute* newAttribute = new AstAttribute();
-     ROSE_ASSERT(newAttribute != NULL);
-
-  // Add it to the AST (so it can be found later in any other attempt to copy this AST node)
-     const_cast<$CLASSNAME*>(this)->attribute.add("copied",newAttribute);
-#endif
 
   // Copy data members from base classes
 $CONSTRUCT_ARG_COPY 
@@ -53,13 +34,6 @@ $POST_CONSTRUCT_COPY
        // If this is a SgLocatedNode then check the parents of the Sg_File_Info objects
           Sg_File_Info* start = locatedNode->get_startOfConstruct();
           ROSE_ASSERT(start != NULL);
-#if 0
-       // Debugging information
-          if (start->get_parent() == NULL)
-             {
-               printf ("Detected a result->get_startOfConstruct() with NULL parent for result = %p = %s \n",result,result->class_name().c_str());
-             }
-#endif
           start->set_parent(locatedNode);
           ROSE_ASSERT(start->get_parent() != NULL);
 
@@ -74,13 +48,6 @@ $POST_CONSTRUCT_COPY
              }
             else
              {
-#if 0
-            // Debugging information
-               if (end->get_parent() == NULL)
-                  {
-                    printf ("Detected a result->get_endOfConstruct() with NULL parent for result = %p = %s \n",result,result->class_name().c_str());
-                  }
-#endif
                end->set_parent(locatedNode);
                ROSE_ASSERT(end->get_parent() != NULL);
              }
@@ -93,13 +60,6 @@ $POST_CONSTRUCT_COPY
             // Not all SgExpression IR nodes have a valid operatorPosition (only applies to actual operators)
                if (operatorPosition != NULL)
                   {
-#if 0
-                 // Debugging information
-                    if (operatorPosition->get_parent() == NULL)
-                       {
-                         printf ("Detected a result->get_operatorPosition() with NULL parent for result = %p = %s \n",result,result->class_name().c_str());
-                       }
-#endif
                     operatorPosition->set_parent(expression);
                     ROSE_ASSERT(operatorPosition->get_parent() != NULL);
                   }
@@ -113,36 +73,9 @@ $POST_CONSTRUCT_COPY
        // If this is a SgLocatedNode then check the parents of the Sg_File_Info objects
           Sg_File_Info* start = initializedName->get_startOfConstruct();
           ROSE_ASSERT(start != NULL);
-#if 0
-       // Debugging information
-          if (start->get_parent() == NULL)
-             {
-               printf ("Detected a result->get_startOfConstruct() with NULL parent for result = %p = %s \n",result,result->class_name().c_str());
-             }
-#endif
           start->set_parent(initializedName);
           ROSE_ASSERT(start->get_parent() != NULL);
 
-#if 0
-       // DQ (10/16/2007): Note that a SgInitializedName does not have a get_endOfConstruct() member function yet with g++ this does compile!
-          Sg_File_Info* end = initializedName->get_endOfConstruct();
-
-       // DQ (10/16/2007): For the moment allow the initializedName->get_endOfConstruct() to be NULL and issue a warning.
-       // ROSE_ASSERT(end != NULL);
-          if (end == NULL)
-             {
-               printf ("Detected a result->get_endOfConstruct() == NULL for result = %p = %s \n",result,result->class_name().c_str());
-             }
-            else
-             {
-               if (end->get_parent() == NULL)
-                  {
-                    printf ("Detected a result->get_endOfConstruct() with NULL parent for result = %p = %s \n",result,result->class_name().c_str());
-                  }
-               end->set_parent(initializedName);
-               ROSE_ASSERT(end->get_parent() != NULL);
-             }
-#endif
         }
 
   // DQ (10/15/2007): Add everything to the map held internally so that we can more easily reference things like scopes.

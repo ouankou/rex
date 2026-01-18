@@ -4,16 +4,16 @@
 #ifndef AST_WARNINGS_H
 #define AST_WARNINGS_H
 
-#include <string>
-#include <iomanip>
-#include "AstProcessing.h"
 #include "AstNodePtrs.h"
+#include "AstProcessing.h"
+#include <iomanip>
+#include <string>
 
-/*! \brief This is a mechanism for reporting warnings about the AST, subtrees, 
+/*! \brief This is a mechanism for reporting warnings about the AST, subtrees,
            and IR nodes.
 
-    Possible problems with the AST which constitute concerns but not fatal errors are reported.
-    Such information includes: \n
+    Possible problems with the AST which constitute concerns but not fatal
+   errors are reported. Such information includes: \n
     -#) shared nodes,
     -#) nodes with default file source position imformation
     -#) ...
@@ -28,25 +28,23 @@
 //   2) External file output (for more complete statistics)
 //   3) A mechanism to report on hotspots, performance data, etc. ???
 
-class AstWarnings : public SgSimpleProcessing
-   {
-     public:
-          typedef SgNode* ElementType;
-          typedef std::vector<ElementType> ElementListType;
+class AstWarnings : public SgSimpleProcessing {
+public:
+  typedef SgNode *ElementType;
+  typedef std::vector<ElementType> ElementListType;
 
-          AstWarnings();
-         ~AstWarnings();
+  AstWarnings();
+  ~AstWarnings();
 
-     protected:
-          virtual void visit(SgNode* node);
-          std::string outputWarnings();
-//        string cmpStatistics(AstWarnings & q);
-//        string generateCMPStatisticsValueString(string name, ElementType v1, ElementType v2);
-//        StatisticsContainerType getStatisticsData();
+protected:
+  virtual void visit(SgNode *node);
+  std::string outputWarnings();
+  //        string cmpStatistics(AstWarnings & q);
+  //        string generateCMPStatisticsValueString(string name, ElementType v1,
+  //        ElementType v2); StatisticsContainerType getStatisticsData();
 
-     private:
-//        StatisticsContainerType& numNodeTypes;
-   };
+private:
+  //        StatisticsContainerType& numNodeTypes;
+};
 
 #endif
-

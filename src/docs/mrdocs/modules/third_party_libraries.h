@@ -7,8 +7,9 @@
  *
  * A number of independent libraries used in ROSE.
  *
- * These are libraries that are not dependent on ROSE and which are used internally. In some cases these will be made
- * available separately from ROSE in later distributions.
+ * These are libraries that are not dependent on ROSE and which are used
+ * internally. In some cases these will be made available separately from ROSE
+ * in later distributions.
  */
 struct ROSE_3rdPartyLibrariesGroup {};
 

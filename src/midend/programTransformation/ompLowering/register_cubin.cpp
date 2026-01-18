@@ -1,7 +1,7 @@
 #include "rex_kmp.h"
+#include <memory>
 #include <stdio.h>
 #include <stdlib.h>
-#include <memory>
 #include <vector>
 
 namespace {
@@ -73,7 +73,8 @@ struct __tgt_bin_desc *register_cubin(const char *filename) {
   }
 
   storage->device_image.ImageStart = storage->image.data();
-  storage->device_image.ImageEnd = storage->image.data() + storage->image.size();
+  storage->device_image.ImageEnd =
+      storage->image.data() + storage->image.size();
   storage->device_image.EntriesBegin = &__start_omp_offloading_entries;
   storage->device_image.EntriesEnd = &__stop_omp_offloading_entries;
 

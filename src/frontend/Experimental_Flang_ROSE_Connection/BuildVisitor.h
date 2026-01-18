@@ -6,8 +6,7 @@ class BuildVisitor {
 public:
   BuildVisitor() : cooked_{nullptr} {}
   BuildVisitor(Fortran::parser::AllCookedSources &cooked)
-    : cooked_{&cooked}, type_{nullptr}, label_{std::nullopt} {
-  }
+      : cooked_{&cooked}, type_{nullptr}, label_{std::nullopt} {}
 
   // In nearly all cases, this code avoids defining Boolean-valued Pre()
   // callbacks for the parse tree walking framework in favor of two void
@@ -41,7 +40,7 @@ public:
       // Format the expression representation from semantics
       if (asFortran_ && x.typedExpr) {
         // Probably not useful for high-level builder?
-        //asFortran_->expr(out_, *x.typedExpr);
+        // asFortran_->expr(out_, *x.typedExpr);
         return false;
       } else {
         return true;
@@ -59,45 +58,48 @@ public:
     // KindSelector std::variant<ScalarIntConstantExpr, StarSize> u;
     using namespace Fortran;
     if (x) {
-      common::visit(common::visitors {
-          [&] (parser::KindSelector::StarSize &y) {
-                 if (type_ != nullptr) {
-                   type_->set_hasTypeKindStar(true);
-                 }
-             },
-          [&] (auto &y) { return; }
-        },
-        x->u);
-      }
+      common::visit(common::visitors{[&](parser::KindSelector::StarSize &y) {
+                                       if (type_ != nullptr) {
+                                         type_->set_hasTypeKindStar(true);
+                                       }
+                                     },
+                                     [&](auto &y) { return; }},
+                    x->u);
+    }
   }
 
   void Post(Fortran::parser::IntrinsicTypeSpec &x) {
-    // IntrinsicTypeSpec std::variant<IntegerTypeSpec, Real, DoublePrecision, Complex, Character, Logical, DoubleComplex> u;
+    // IntrinsicTypeSpec std::variant<IntegerTypeSpec, Real, DoublePrecision,
+    // Complex, Character, Logical, DoubleComplex> u;
     using namespace Fortran;
-    common::visit(common::visitors {
-        [&] (Fortran::parser::IntrinsicTypeSpec::DoublePrecision &y) { return; },
-        [&] (Fortran::parser::IntrinsicTypeSpec::Character &y) { return; },
-        [&] (Fortran::parser::IntrinsicTypeSpec::DoubleComplex &y) { return; },
-//TODO: put back setting kind selector by integrating with latest flang version
-        [&] (Fortran::parser::IntegerTypeSpec &y) { /*setKindSelectorType(y.v);*/ },
-        [&] (auto &y) { /*setKindSelectorType(y.kind);*/ }
-      },
-      x.u);
+    common::visit(
+        common::visitors{
+            [&](Fortran::parser::IntrinsicTypeSpec::DoublePrecision &y) {
+              return;
+            },
+            [&](Fortran::parser::IntrinsicTypeSpec::Character &y) { return; },
+            [&](Fortran::parser::IntrinsicTypeSpec::DoubleComplex &y) {
+              return;
+            },
+            // TODO: put back setting kind selector by integrating with latest
+            // flang version
+            [&](Fortran::parser::IntegerTypeSpec
+                    &y) { /*setKindSelectorType(y.v);*/ },
+            [&](auto &y) { /*setKindSelectorType(y.kind);*/ }},
+        x.u);
   }
 
   // Call back to the traversal framework.
-  template <typename T> void Walk(T &x) {
-    Fortran::parser::Walk(x, *this);
-  }
+  template <typename T> void Walk(T &x) { Fortran::parser::Walk(x, *this); }
 
   // Call back to the traversal framework for Expr
-  template <typename T> void Walk(/*const*/ T &x, SgExpression* sage) {
+  template <typename T> void Walk(/*const*/ T &x, SgExpression *sage) {
     std::cerr << "--> TODO: make an expression visitor???\n";
     Fortran::parser::Walk(x, *this);
   }
 
   // Call back to the traversal framework.
-  template <typename T, typename S> void Walk(T &x, S* sage) {
+  template <typename T, typename S> void Walk(T &x, S *sage) {
     std::cerr << "--> TODO: What is this for???\n";
     Fortran::parser::Walk(x, *this);
   }
@@ -149,11 +151,11 @@ public:
   void Done() const { std::cerr << "Done()\n"; }
 
   void BuildPrefix(std::list<Fortran::parser::PrefixSpec> &,
-                   LanguageTranslation::FunctionModifierList &, SgType* &);
+                   LanguageTranslation::FunctionModifierList &, SgType *&);
   void BuildSuffix(Fortran::parser::Suffix &, std::string &);
 
   // Build types using a synthesized attribute
-  void BuildType(Fortran::parser::DeclarationTypeSpec &x, SgType* &type) {
+  void BuildType(Fortran::parser::DeclarationTypeSpec &x, SgType *&type) {
     Walk(x);
     this->get(type); // get synthesized attribute
   }
@@ -168,19 +170,19 @@ public:
   }
 
   // Access functions for synthesized attributes
-  void get(SgType* &type) {
+  void get(SgType *&type) {
     type = type_;
     type_ = nullptr;
   }
-  void set(SgType* type) {
+  void set(SgType *type) {
     ASSERT_not_null(type);
     ASSERT_require(type_ == nullptr);
     type_ = type;
   }
 
 private:
-  Fortran::parser::AllCookedSources* cooked_;
-  SgType* type_; // synthesized attribute
+  Fortran::parser::AllCookedSources *cooked_;
+  SgType *type_; // synthesized attribute
   std::optional<Fortran::parser::Label> label_;
 
 }; // BuildVisitor

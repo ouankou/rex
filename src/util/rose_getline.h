@@ -20,7 +20,7 @@
  * a buffer `n` bytes long, allocated with malloc().  If this buffer is long
  * enough to hold the line, rose_getline() stores the line in this buffer.
  * Otherwise, rose_getline() makes the buffer bigger using realloc(), storing
-* the new buffer address back in `lineptr` and the increased size back in `n`.
+ * the new buffer address back in `lineptr` and the increased size back in `n`.
  *
  *  If you set `lineptr` to a null pointer, and `n` to zero, before the call,
  * then rose_getline() allocates the initial buffer for you by calling malloc().
@@ -46,14 +46,16 @@
  *
  * @{ */
 ROSE_UTIL_API ssize_t rose_getline(char **lineptr, size_t *n, FILE *stream);
-ROSE_UTIL_API ssize_t rose_getline(char **lineptr, size_t *n, std::istream &stream);
+ROSE_UTIL_API ssize_t rose_getline(char **lineptr, size_t *n,
+                                   std::istream &stream);
 /** @} */
 
 /** Reads a line of text from a stream.
  *
- *  This function reads an entire line from `stream` and returns the line along with any line termination characters that were
- *  present.  Returns an empty string when the end of the stream is reached. NUL characters that appear as part of the input
- *  are preserved in the return value.
+ *  This function reads an entire line from `stream` and returns the line along
+ * with any line termination characters that were present.  Returns an empty
+ * string when the end of the stream is reached. NUL characters that appear as
+ * part of the input are preserved in the return value.
  *
  * @param stream Input stream.
  * @return Line content including terminators, or empty string on EOF.

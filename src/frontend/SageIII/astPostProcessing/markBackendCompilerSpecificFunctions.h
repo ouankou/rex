@@ -15,27 +15,29 @@
     `rose_required_macros_and_functions.h` and are specific to the selected
    backend compiler.
  */
-void markBackendSpecificFunctionsAsCompilerGenerated( SgNode* node );
+void markBackendSpecificFunctionsAsCompilerGenerated(SgNode *node);
 
-/*! \brief Supporting traversal to mark an backend specific functions as compiler generated.
+/*! \brief Supporting traversal to mark an backend specific functions as
+   compiler generated.
 
-    This class is a traversal specif to the lower level support of the 
+    This class is a traversal specif to the lower level support of the
     markBackendSpecificFunctionsAsCompilerGenerated(SgNode*) function.
  */
-// DQ (5/8/2006): Implement this using the memory pool traversal so that we will visit every IR node
-// class MarkBackendSpecificFunctionsAsCompilerGenerated : public SgSimpleProcessing
-class MarkBackendSpecificFunctionsAsCompilerGenerated : public ROSE_VisitTraversal
-   {
-     public:
-          std::string targetFileName;
-          Sg_File_Info* targetFile;
+// DQ (5/8/2006): Implement this using the memory pool traversal so that we will
+// visit every IR node class MarkBackendSpecificFunctionsAsCompilerGenerated :
+// public SgSimpleProcessing
+class MarkBackendSpecificFunctionsAsCompilerGenerated
+    : public ROSE_VisitTraversal {
+public:
+  std::string targetFileName;
+  Sg_File_Info *targetFile;
 
-          virtual ~MarkBackendSpecificFunctionsAsCompilerGenerated();
-          MarkBackendSpecificFunctionsAsCompilerGenerated();
+  virtual ~MarkBackendSpecificFunctionsAsCompilerGenerated();
+  MarkBackendSpecificFunctionsAsCompilerGenerated();
 
-      //! Required traversal function
-          void visit (SgNode* node);
-   };
+  //! Required traversal function
+  void visit(SgNode *node);
+};
 
 // endif for MARK_BACKEND_COMPILER_SPECIFIC_FUNCTIONS_AS_COMPILER_GENERATED_H
 #endif

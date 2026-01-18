@@ -3,7 +3,7 @@
 
 /*! \brief Sets names of template classes (calls custom traversal).
  */
-void resetTemplateNames( SgNode* node );
+void resetTemplateNames(SgNode *node);
 
 /*! \brief Sets names of template classes.
 
@@ -21,41 +21,37 @@ void resetTemplateNames( SgNode* node );
    have to be called within a post processing phase (because of the complexity
    of C and C++ some parents might not be set or known).
  */
-class ResetTemplateNames 
-   : public SgSimpleProcessing
-   {
-     public:
-      //! Function to support traversal of types (where islands can hide)
-          void visitType ( SgType* typeNode );
+class ResetTemplateNames : public SgSimpleProcessing {
+public:
+  //! Function to support traversal of types (where islands can hide)
+  void visitType(SgType *typeNode);
 
-      //! Required traversal function
-          void visit (SgNode* node);
+  //! Required traversal function
+  void visit(SgNode *node);
 
-      //! Function to support reset of types required for qualified names
-          void resetTemplateNamesInAllScopes ( SgScopeStatement* scope );
-   };
+  //! Function to support reset of types required for qualified names
+  void resetTemplateNamesInAllScopes(SgScopeStatement *scope);
+};
 
-#if 1
-// If this traveral is useful then the other one should be remove or commented out!
-// DQ (2/10/2007): Converted this traversal to use the memory pool traversal
+// If this traveral is useful then the other one should be remove or commented
+// out! DQ (2/10/2007): Converted this traversal to use the memory pool
+// traversal
 class ResetTemplateNamesOnMemoryPool
-// : public SgSimpleProcessing
-   : public ROSE_VisitTraversal
-   {
-     public:
-      //! Function to support traversal of types (where islands can hide)
-       // void visitType ( SgType* typeNode );
+    // : public SgSimpleProcessing
+    : public ROSE_VisitTraversal {
+public:
+  //! Function to support traversal of types (where islands can hide)
+  // void visitType ( SgType* typeNode );
 
-      //! Required traversal function
-          void visit (SgNode* node);
+  //! Required traversal function
+  void visit(SgNode *node);
 
-      //! Function to support reset of types required for qualified names
-       // void resetTemplateNamesInAllScopes ( SgScopeStatement* scope );
+  //! Function to support reset of types required for qualified names
+  // void resetTemplateNamesInAllScopes ( SgScopeStatement* scope );
 
-       // This avoids a warning by g++
-         virtual ~ResetTemplateNamesOnMemoryPool() {};         
-   };
-#endif
+  // This avoids a warning by g++
+  virtual ~ResetTemplateNamesOnMemoryPool() {};
+};
 
 // endif for RESET_TEMPLATE_NAMES_H
 #endif

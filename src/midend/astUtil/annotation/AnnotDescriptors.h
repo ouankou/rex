@@ -161,8 +161,9 @@ public:
 //! A descriptor for an identifier
 class StringDescriptor {
   std::string name_;
+
 protected:
-  void set_name(const std::string& n) { name_ = n; }
+  void set_name(const std::string &n) { name_ = n; }
 
 public:
   StringDescriptor() : name_("") {}

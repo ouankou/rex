@@ -104,14 +104,6 @@
        // for both global function and member functions
           SgFunctionSymbol*  nextfunc();
 
-#if 0
-       // DQ (9/7/2006): Previously removed functionality, restored by request from Beata at ANL.
-       // The next for functions have been placed back into the Sage III interface.
-          SgVariableSymbol*  findfirstvar();
-          SgVariableSymbol*  nextvar();
-          SgSymbol*          nextany();
-          SgSymbol*          findfirstany();
-#endif
        // This is a cute operator to use, but since it can't specify a type of SgSymbol it is not so useful in practice.
           SgSymbol* operator[](const SgName &);
 

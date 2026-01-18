@@ -7,13 +7,14 @@
 #if ASTTRAVERSAL_USE_VISIT_FLAG
 
 class AstClearVisitFlags {
- public:
-  void traverse(SgNode* node);
- protected:
-  void visit(SgNode* node);
+public:
+  void traverse(SgNode *node);
+
+protected:
+  void visit(SgNode *node);
 };
 
 // endif for ASTTRAVERSAL_USE_VISIT_FLAG
-#endif 
+#endif
 
 #endif

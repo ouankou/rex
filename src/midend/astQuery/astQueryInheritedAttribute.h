@@ -3,59 +3,59 @@
 
 /** @brief Inherited attribute for AstQuery class.
  *
- * This class defines the inherited attribute used within the traversal associated with the AstQuery library.
+ * This class defines the inherited attribute used within the traversal
+ * associated with the AstQuery library.
  *
  * See @ref nodeQueryLib.
  */
-namespace AstQueryNamespace{
+namespace AstQueryNamespace {
 
-  class AstQueryInheritedAttributeType
-  {
-    public:
+class AstQueryInheritedAttributeType {
+public:
+  // string matchingName;
 
+  // Used for building data field names in structures (prepends structure name
+  // to data field (e.g. structureName::nestedStructureName::fieldName). An
+  // alternative would be to handle this query using a different query library
+  // which returned a list of lists of strings (e.g. list< list<string> >). Then
+  // we could more readily handle function names! string prefixName;
 
-      // string matchingName;
+  //! @{
+  /*!
+    \name  Constructors,Destructor,Assignment Operator, etc.
+    \brief The usual class member functions.
+   */
+  //! Destructor
+  ~AstQueryInheritedAttributeType();
+  //! Default constructor
+  AstQueryInheritedAttributeType();
+  //! The useful constructor
+  // AstQueryInheritedAttributeType( AstQuery::TypeOfQueryType X );
+  //! The useful constructor
+  // AstQueryInheritedAttributeType ( const AstQueryInheritedAttributeType & X
+  // );
+  //! Assignment operator
+  // AstQueryInheritedAttributeType & operator= ( const
+  // AstQueryInheritedAttributeType & X );
+  //! @}
 
-      // Used for building data field names in structures (prepends structure name to data field
-      // (e.g. structureName::nestedStructureName::fieldName). An alternative would be to handle
-      // this query using a different query library which returned a list of lists of strings
-      // (e.g. list< list<string> >). Then we could more readily handle function names!
-      // string prefixName;
+  // void setMatchingName ( const string & name );
+  // string getMatchingName() const;
 
-      //! @{
-      /*! 
-        \name  Constructors,Destructor,Assignment Operator, etc.
-        \brief The usual class member functions.
-       */
-      //! Destructor
-      ~AstQueryInheritedAttributeType ();
-      //! Default constructor
-      AstQueryInheritedAttributeType ();
-      //! The useful constructor
-      //AstQueryInheritedAttributeType( AstQuery::TypeOfQueryType X );
-      //! The useful constructor
-      //AstQueryInheritedAttributeType ( const AstQueryInheritedAttributeType & X );
-      //! Assignment operator
-      //AstQueryInheritedAttributeType & operator= ( const AstQueryInheritedAttributeType & X );
-      //! @}
+  //@{
+  /** Access functions for typeOfQuery member data */
+  /*
+     void setQuery ( const AstQuery::TypeOfQueryType X );
+     AstQuery::TypeOfQueryType getQuery () const;
+   */
+  //@}
 
-      // void setMatchingName ( const string & name );
-      // string getMatchingName() const;
+  //@{
+  /** Access function for depthOfQuery date member */
 
-      //@{
-      /** Access functions for typeOfQuery member data */
-      /*
-         void setQuery ( const AstQuery::TypeOfQueryType X );
-         AstQuery::TypeOfQueryType getQuery () const;
-       */
-      //@}
+  //@}
+};
 
-      //@{
-      /** Access function for depthOfQuery date member */
-
-      //@}
-  };
-
-}//END NAMESPACE
+} // namespace AstQueryNamespace
 // endif for  ROSE_NODE_QUERY_INHERITED_ATTRIBUTE_H
 #endif
