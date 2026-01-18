@@ -76,7 +76,7 @@ jobs:
         FC: flang-${{ matrix.llvm }}
       run: |
         cd $GITHUB_WORKSPACE
-        ./build-rex.sh $GITHUB_WORKSPACE/../rex_install Debug
+        ./build-rex.sh $GITHUB_WORKSPACE/rex_install Debug
 
     # Run frontend-related tests
     - name: Run astInterface, translator, and astQuery Tests

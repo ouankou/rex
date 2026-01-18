@@ -561,12 +561,10 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
     // the current scope stack. Resolve them via the translated parent record so
     // that we retrieve a SgMemberFunctionSymbol when available.
     auto *method_decl = llvm::cast<clang::CXXMethodDecl>(decl);
+    bool is_system_or_builtin = false;
     if (p_compiler_instance != NULL) {
       clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-      if (isSystemOrBuiltinFunctionDecl(method_decl, sm)) {
-        p_symbol_lookup_in_progress.erase(decl);
-        return NULL;
-      }
+      is_system_or_builtin = isSystemOrBuiltinFunctionDecl(method_decl, sm);
     }
     clang::CXXRecordDecl *parent_decl = method_decl->getParent();
 
@@ -577,11 +575,15 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
       if (it_decl != p_decl_translation_map.end()) {
         parent_node = it_decl->second;
       } else {
-        if (p_symbol_lookup_in_progress.find(parent_decl) ==
-            p_symbol_lookup_in_progress.end()) {
+        if (!is_system_or_builtin &&
+            p_symbol_lookup_in_progress.find(parent_decl) ==
+                p_symbol_lookup_in_progress.end()) {
           parent_node = TraverseOnDemand(parent_decl);
         }
       }
+    }
+    if (parent_node == NULL) {
+      break;
     }
 
     SgClassDeclaration *sg_class_decl = isSgClassDeclaration(parent_node);
@@ -1299,6 +1301,15 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
 SgScopeStatement *
 ClangToSageTranslator::resolveScopeFromDeclContext(clang::DeclContext *context,
                                                    SgScopeStatement *fallback) {
+  if (context == NULL) {
+    return fallback;
+  }
+
+  // Linkage specs are not scopes in ROSE; resolve through them to the
+  // enclosing namespace/global context.
+  while (context != NULL && llvm::isa<clang::LinkageSpecDecl>(context)) {
+    context = context->getParent();
+  }
   if (context == NULL) {
     return fallback;
   }
@@ -8715,6 +8726,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   // class but are NOT members - keep them in the class syntactically and expose
   // them via the enclosing namespace/global scope symbol table.
   clang::DeclContext *decl_context = function_decl->getDeclContext();
+  clang::DeclContext *semantic_context = decl_context;
+  while (semantic_context != NULL &&
+         llvm::isa<clang::LinkageSpecDecl>(semantic_context)) {
+    semantic_context = semantic_context->getParent();
+  }
   SgScopeStatement *proper_scope = getGlobalScope(); // Default fallback
 
   bool isDefinition = is_definition_decl_for_params;
@@ -9092,9 +9108,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
   // For non-member functions, use DeclContext (namespace or class)
-  else if (!scope_assigned && decl_context &&
-           !decl_context->isTranslationUnit()) {
-    clang::Decl *context_decl = llvm::dyn_cast<clang::Decl>(decl_context);
+  else if (!scope_assigned && semantic_context &&
+           !semantic_context->isTranslationUnit()) {
+    clang::Decl *context_decl = llvm::dyn_cast<clang::Decl>(semantic_context);
     if (context_decl) {
       std::map<clang::Decl *, SgNode *>::iterator it =
           p_decl_translation_map.find(context_decl);
