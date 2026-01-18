@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <astGraph.h>
 
 namespace AST_Graph {
