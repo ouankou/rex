@@ -10,6 +10,8 @@ copy-based unparser.
 #ifndef __fixupSourcePos
 #define __fixupSourcePos
 
+#include "AstProcessing.h"
+
 void fixupSourcePositionInformation(SgNode *node);
 
 class FixupSourcePositionInformationInheritedAttribute {

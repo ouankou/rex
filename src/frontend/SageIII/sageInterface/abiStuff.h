@@ -1,9 +1,15 @@
 #ifndef ROSE_ABISTUFF_H
 #define ROSE_ABISTUFF_H
 
+#include "rosedll.h"
+
+#include <cstddef>
 #include <iosfwd>
 #include <string>
 #include <vector>
+
+class SgNode;
+class SgType;
 
 //! Support for cross compilation or customized primitive type layouts.
 struct StructCustomizedSizes {

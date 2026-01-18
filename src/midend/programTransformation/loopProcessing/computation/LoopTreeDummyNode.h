@@ -5,6 +5,7 @@
 #include <LoopTransformInterface.h>
 #include <LoopTree.h>
 #include <LoopTreeHoldNode.h>
+#include <LoopTreeTransform.h>
 #include <SymbolicVal.h>
 
 class LoopTreeDummyNode : public LoopTreeNode {

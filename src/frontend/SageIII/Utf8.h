@@ -8,6 +8,7 @@
 
 #include "rosedll.h"
 #include <exception>
+#include <string>
 using namespace std;
 
 class ROSE_DLL_API Utf8 {

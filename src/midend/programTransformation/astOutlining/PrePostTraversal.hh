@@ -9,36 +9,34 @@
 #if !defined(INC_PREPOSTTRAVERSAL_HH)
 #define INC_PREPOSTTRAVERSAL_HH //!< PrePostTraversal.hh included.
 
+#include "AstProcessing.h"
 
+namespace ASTtools {
+class PrePostTraversal
+    : public AstTopDownBottomUpProcessing<_DummyAttribute, _DummyAttribute> {
+public:
+  //! Called as we descend the tree.
+  virtual void visitTopDown(SgNode *) = 0;
 
-namespace ASTtools
-{
-  class PrePostTraversal
-    : public AstTopDownBottomUpProcessing<_DummyAttribute, _DummyAttribute>
-  {
-  public:
-    //! Called as we descend the tree.
-    virtual void visitTopDown (SgNode *) = 0;
-    
-    //! Called as we ascend the tree.
-    virtual void visitBottomUp (SgNode *) = 0;
+  //! Called as we ascend the tree.
+  virtual void visitBottomUp(SgNode *) = 0;
 
-    //! \name Traversal routines.
-    //@{
-    virtual void traverse (SgNode *);
-    virtual void traverseWithinFile (SgNode *);
-    //@}
-    
-  private:
-    // Hide the usual attribute evaluation routines.
-    virtual _DummyAttribute
-    evaluateInheritedAttribute (SgNode* node, _DummyAttribute);
-    
-    virtual _DummyAttribute
-    evaluateSynthesizedAttribute (SgNode *, _DummyAttribute,
-                                  SynthesizedAttributesList);
-  };
-}
+  //! \name Traversal routines.
+  //@{
+  virtual void traverse(SgNode *);
+  virtual void traverseWithinFile(SgNode *);
+  //@}
+
+private:
+  // Hide the usual attribute evaluation routines.
+  virtual _DummyAttribute evaluateInheritedAttribute(SgNode *node,
+                                                     _DummyAttribute);
+
+  virtual _DummyAttribute
+  evaluateSynthesizedAttribute(SgNode *, _DummyAttribute,
+                               SynthesizedAttributesList);
+};
+} // namespace ASTtools
 
 #endif // !defined(INC_PREPOSTTRAVERSAL_HH)
 

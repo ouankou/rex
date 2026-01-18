@@ -6,6 +6,7 @@
 
 #ifndef __LivenessAnalysisBUP_HXX_LOADED__
 #define __LivenessAnalysisBUP_HXX_LOADED__
+#include "AstProcessing.h"
 #include "LivenessAnalysis.h"
 #include <string>
 

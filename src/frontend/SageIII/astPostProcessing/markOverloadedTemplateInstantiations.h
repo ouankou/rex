@@ -1,6 +1,8 @@
 #ifndef MARK_OVERLOADED_TEMPLATE_INSTANTIATIONS_H
 #define MARK_OVERLOADED_TEMPLATE_INSTANTIATIONS_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (5/22/2005):
 /*! \brief Mark any template instatiations that are overloaded (we can't output
    these since g++ can't resolve them).

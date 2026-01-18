@@ -5,6 +5,8 @@
 #ifndef FIXUP_SELF_REFERENTIAL_MACROS_H
 #define FIXUP_SELF_REFERENTIAL_MACROS_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (10/5/2012):
 /*! \brief Fixup known macros that reference themselves and cause recursive
    macro expansion in the generated (unparsed) code.

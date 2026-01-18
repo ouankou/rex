@@ -2,6 +2,8 @@
 #ifndef FIXUP_FORTRAN_USE_DECLARATIONS_H
 #define FIXUP_FORTRAN_USE_DECLARATIONS_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (9/26/2008):
 /*! \brief Fixup Fortran Use declarations.
 

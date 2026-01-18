@@ -1,6 +1,8 @@
 #ifndef MARK_FOR_OUTPUT_IN_CODE_GENERATION_H
 #define MARK_FOR_OUTPUT_IN_CODE_GENERATION_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (5/22/2005):
 /*! \brief Mark an AST subtree as compiler generated and to be output in the
    source file (code generation phase).

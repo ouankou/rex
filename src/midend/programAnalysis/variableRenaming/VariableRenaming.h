@@ -3,6 +3,8 @@
 #ifndef SSAANALYSIS_H
 #define SSAANALYSIS_H
 
+#include "AstAttributeMechanism.h"
+#include "AstProcessing.h"
 #include "filteredCFG.h"
 #include <algorithm>
 #include <fstream>
@@ -127,7 +129,7 @@ struct IsDefUseFilter {
    * @param cfgn The node in question.
    * @return Whether it should be traversed.
    */
-  bool operator()(CFGNode cfgn) const {
+  bool operator()(VirtualCFG::CFGNode cfgn) const {
     SgNode *node = cfgn.getNode();
 
     // If it is the last node in a function call, keep it
@@ -227,10 +229,10 @@ public:
   typedef std::vector<SgInitializedName *> InitNameVec;
   /** A filtered CFGNode that is used for DefUse traversal.
    */
-  typedef FilteredCFGNode<IsDefUseFilter> cfgNode;
+  typedef VirtualCFG::FilteredCFGNode<IsDefUseFilter> cfgNode;
   /** A filtered CFGEdge that is used for DefUse traversal.
    */
-  typedef FilteredCFGEdge<IsDefUseFilter> cfgEdge;
+  typedef VirtualCFG::FilteredCFGEdge<IsDefUseFilter> cfgEdge;
   /** A vector of cfgNodes.
    */
   typedef std::vector<cfgNode> cfgNodeVec;

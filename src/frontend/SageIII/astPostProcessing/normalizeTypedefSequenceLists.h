@@ -1,6 +1,13 @@
 #ifndef FIXUP_TYPEDEF_SEQUENCE_LISTS_H
 #define FIXUP_TYPEDEF_SEQUENCE_LISTS_H
 
+#include "Cxx_Grammar.h"
+
+#include <cstddef>
+#include <map>
+#include <string>
+#include <vector>
+
 /*! \brief This traversal uses the Memory Pool traversal to fixup the lists of
  * typedef using this base type.
  */

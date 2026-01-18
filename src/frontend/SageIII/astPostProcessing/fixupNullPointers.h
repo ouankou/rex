@@ -1,6 +1,8 @@
 #ifndef FIXUP_NULL_POINTERS_H
 #define FIXUP_NULL_POINTERS_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (3/11/2006):
 /*! \brief Fixup specific pointers in the AST that we would like to not have be
    NULL.

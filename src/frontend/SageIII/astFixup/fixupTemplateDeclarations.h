@@ -7,6 +7,9 @@ line 67 is marked as a compiler generated template)
  */
 #ifndef __fixupTemplate
 #define __fixupTemplate
+
+#include "AstProcessing.h"
+
 void fixupTemplateDeclarations(SgNode *node);
 
 class FixupTemplateDeclarations : public AstSimpleProcessing {

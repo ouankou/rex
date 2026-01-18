@@ -1,6 +1,8 @@
 #ifndef FIXUP_PRETTY_FUNCTION_H
 #define FIXUP_PRETTY_FUNCTION_H
 
+#include "AstProcessing.h"
+
 class FixupPrettyFunctionVariablesInheritedAttribute {
 public:
   SgFunctionDeclaration *functionDeclaration;

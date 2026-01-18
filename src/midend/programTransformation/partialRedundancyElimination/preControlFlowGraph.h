@@ -6,6 +6,9 @@
 #include "CFG.h"
 #include <sstream>
 
+class SgFunctionDefinition;
+class SgNode;
+
 namespace legacy {
 
 // DQ (3/21/2006): Added namespace to separate the

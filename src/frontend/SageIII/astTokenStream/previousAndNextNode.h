@@ -1,6 +1,15 @@
 #ifndef PREVIOUS_AND_NEXT_NODE_HEADER
 #define PREVIOUS_AND_NEXT_NODE_HEADER
 
+#include "AstAttributeMechanism.h"
+
+#include <map>
+#include <string>
+#include <vector>
+
+class FrontierNode;
+class SgGlobal;
+
 class PreviousAndNextNodeData {
 public:
   SgNode *previous;

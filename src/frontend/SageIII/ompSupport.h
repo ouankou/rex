@@ -18,7 +18,10 @@
 #include <map>
 #include <string>
 #include <vector>
+class SgExpression;
 class SgNode;
+class SgOmpClause;
+class SgStatement;
 /** Types and functions to support OpenMP
  *
  *  OpenMP specific data types and functions are put into this namespace */

@@ -1,6 +1,10 @@
 #ifndef ROSE_fixupFileInfoFlags_H
 #define ROSE_fixupFileInfoFlags_H
 
+#include "Cxx_Grammar.h"
+
+#include <cstddef>
+
 /** Checks and fixes up inconsistanties in the settings of Sg_File_Info flags
  * (e.g. isTransformation flag) in the Sg_File_Info object
  *

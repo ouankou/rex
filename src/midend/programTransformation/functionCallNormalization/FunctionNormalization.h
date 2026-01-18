@@ -1,9 +1,14 @@
 #ifndef FUNCTION_CALL_NORMALIZATION_H
 #define FUNCTION_CALL_NORMALIZATION_H
 
+#include "AstSimpleProcessing.h"
+
 #include <iostream>
+#include <list>
+#include <map>
 #include <sstream>
 #include <string>
+#include <utility>
 // #include "rose.h"
 
 struct Declaration {

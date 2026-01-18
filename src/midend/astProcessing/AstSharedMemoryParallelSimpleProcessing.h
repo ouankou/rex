@@ -8,6 +8,7 @@
 #ifndef ASTSHAREDMEMORYPARALLELSIMPLEPROCESSING_H
 #define ASTSHAREDMEMORYPARALLELSIMPLEPROCESSING_H
 
+#include "AstCombinedSimpleProcessing.h"
 #include "AstSharedMemoryParallelProcessing.h"
 #include "AstSimpleProcessing.h"
 

@@ -6,7 +6,13 @@
 
 #ifndef __DFA_HXX_LOADED__
 #define __DFA_HXX_LOADED__
+#include <map>
 #include <string>
+#include <utility>
+#include <vector>
+
+class SgInitializedName;
+class SgNode;
 
 class DFAnalysis {
 public:

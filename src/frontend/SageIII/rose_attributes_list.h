@@ -3,9 +3,15 @@
 
 // #include "setup.h"
 
-// #include <list>
-// #include <vector>
+#include "rosedefs.h"
+#include "rosedll.h"
+
 #include <map>
+#include <set>
+#include <string>
+#include <vector>
+
+// #include <list>
 // Include the ROSE lex specific definitions of tokens
 #include "general_token_defs.h"
 

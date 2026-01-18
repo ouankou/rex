@@ -20,7 +20,6 @@
 
 #include "astPostProcessing.h"
 #include "rose_paths.h"
-#include <sys/stat.h>
 
 #include "omp_lowering.h"
 

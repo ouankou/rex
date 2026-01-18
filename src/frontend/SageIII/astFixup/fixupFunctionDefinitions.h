@@ -6,6 +6,9 @@
  */
 #ifndef __fixupFuncDefinition
 #define __fixupFuncDefinition
+
+#include "AstProcessing.h"
+
 void fixupFunctionDefinitions(SgNode *node);
 
 class FixupFunctionDefinitions : public AstSimpleProcessing {

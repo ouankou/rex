@@ -2,6 +2,9 @@
 #ifndef ROSE_LEX_TOKEN_DEFINITIONS
 #define ROSE_LEX_TOKEN_DEFINITIONS 1
 
+#include <list>
+#include <string>
+
 class PreprocessingInfo;
 
 // These have been moved from the preproc.ll file so that they can

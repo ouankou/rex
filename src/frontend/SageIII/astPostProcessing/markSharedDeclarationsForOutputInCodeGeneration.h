@@ -1,6 +1,10 @@
 #ifndef MARK_SHARED_DECLARATIONS_FOR_OUTPUT_IN_CODE_GENERATION_H
 #define MARK_SHARED_DECLARATIONS_FOR_OUTPUT_IN_CODE_GENERATION_H
 
+#include "AstProcessing.h"
+
+#include <set>
+
 // DQ (2/26/2019):
 /*! \brief Mark an AST subtree to be unparsed using an alternative file (for
    multi-file unparsing).

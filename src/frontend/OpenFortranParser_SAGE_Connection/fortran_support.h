@@ -2,6 +2,12 @@
 #ifndef ROSE_FORTRAN_SUPPORT
 #define ROSE_FORTRAN_SUPPORT
 
+#include "Cxx_Grammar.h"
+
+#include <list>
+#include <string>
+#include <vector>
+
 extern SgSourceFile *OpenFortranParser_globalFilePointer;
 
 #ifdef __cplusplus

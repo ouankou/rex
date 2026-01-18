@@ -1,6 +1,12 @@
 #ifndef IR_NODE_GRAPH_H
 #define IR_NODE_GRAPH_H
 
+#include "Cxx_Grammar.h"
+
+#include <fstream>
+#include <set>
+#include <vector>
+
 class IntermediateRepresentationNodeGraph : public ROSE_VisitTraversal {
   // DQ (8/21/2013): This class supports the generation of DOT files of specific
   // IR nodes in the AST.  The goal is to support:

@@ -29,6 +29,17 @@
 // referencedNameSet ); void generateNameQualificationSupport( SgNode* node,
 // NameQualificationSetType & referencedNameSet );
 
+#include "AstProcessing.h"
+
+#include <map>
+#include <set>
+#include <string>
+#include <vector>
+
+namespace SageInterface {
+class DeclarationSets;
+}
+
 class NameQualificationInheritedAttribute {
 private:
   SgScopeStatement *currentScope;

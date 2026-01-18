@@ -12,6 +12,8 @@
 #ifndef FIXUP_INITIALIZERS_H
 #define FIXUP_INITIALIZERS_H
 
+#include "AstProcessing.h"
+
 // DQ (8/25/2020):
 /*! \brief Fixup known ways in which inlcude files are used to initialized
    variable.

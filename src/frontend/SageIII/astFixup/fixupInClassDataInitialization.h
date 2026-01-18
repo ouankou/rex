@@ -8,6 +8,9 @@
  */
 #ifndef __fixupClassData
 #define __fixupClassData
+
+#include "AstProcessing.h"
+
 void fixupInClassDataInitialization(SgNode *node);
 
 /*! \brief Modified const double variable initialized in-class to be static

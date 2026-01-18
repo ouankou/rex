@@ -1,6 +1,8 @@
 #ifndef RESET_TEMPLATE_NAMES_H
 #define RESET_TEMPLATE_NAMES_H
 
+#include "AstSimpleProcessing.h"
+
 /*! \brief Sets names of template classes (calls custom traversal).
  */
 void resetTemplateNames(SgNode *node);

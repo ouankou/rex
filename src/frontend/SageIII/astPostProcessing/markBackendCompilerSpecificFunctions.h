@@ -1,6 +1,10 @@
 #ifndef MARK_BACKEND_COMPILER_SPECIFIC_FUNCTIONS_AS_COMPILER_GENERATED_H
 #define MARK_BACKEND_COMPILER_SPECIFIC_FUNCTIONS_AS_COMPILER_GENERATED_H
 
+#include "Cxx_Grammar.h"
+
+#include <string>
+
 // DQ (3/5/2006):
 // This file declares the ROSE support that marks backend (vendor compiler)
 // specific declarations as compiler generated. These declarations are injected

@@ -1,6 +1,10 @@
 #ifndef ROSE_checkFrontendSpecificFlag_H
 #define ROSE_checkFrontendSpecificFlag_H
 
+#include <cstddef>
+
+class SgNode;
+
 /** Checks whether appropriate nodes of an AST are marked as front-end specific.
  *
  *  A node is frontend-specific if it was parsed from the

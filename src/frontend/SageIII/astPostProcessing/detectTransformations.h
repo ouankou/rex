@@ -1,6 +1,8 @@
 #ifndef DETECT_TRANSFORMATIONS_H
 #define DETECT_TRANSFORMATIONS_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (5/1/2012):
 /*! \brief Detect nodes marked as transformations (should not be present coming
  * out of the frontend translation).

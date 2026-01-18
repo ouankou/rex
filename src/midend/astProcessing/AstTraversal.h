@@ -5,6 +5,10 @@
 #define ASTTRAVERSAL_H
 
 #include "TreeTraversal.h"
+#include <list>
+
+class SgNode;
+
 // #include "sage3.h"
 
 // WORK IN PROGRESS. DO NOT MODIFY OR THINK ABOUT IT.

@@ -1,6 +1,11 @@
 #ifndef INLINERSUPPORT_H
 #define INLINERSUPPORT_H
 
+#include "Cxx_Grammar.h"
+#include "rosedll.h"
+
+#include <set>
+
 // DQ (3/12/2006): This is now not required, the file name is
 // changed to rose_config.h and is included directly by rose.h.
 // #include "config.h"

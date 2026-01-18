@@ -1,6 +1,8 @@
 #ifndef MARK_LHS_VALUES_H
 #define MARK_LHS_VALUES_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (1/19/2008):
 /*! \brief Mark relavant expressions as l-values explicitly.
 

@@ -1,5 +1,8 @@
 #ifndef __fixupStorageAccess
 #define __fixupStorageAccess
+
+#include "AstProcessing.h"
+
 // DQ (5/20/2005):
 /*! \brief Fixup the storage access of all compiler-generated forward
    declarations (non-defining declarations) to match that of the defining

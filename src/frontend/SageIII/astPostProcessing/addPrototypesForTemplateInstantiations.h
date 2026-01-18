@@ -1,6 +1,10 @@
 #ifndef ADD_PROTOTYPES_FOR_TEMPLATE_INSTANTIATIONS_H
 #define ADD_PROTOTYPES_FOR_TEMPLATE_INSTANTIATIONS_H
 
+#include "AstSimpleProcessing.h"
+
+#include <set>
+
 // This post processing step is build to support the testTemplates translator
 // which forces all instantations to be output and demonstrates that some
 // template instantaitions require prototypes that legacy frontend has not

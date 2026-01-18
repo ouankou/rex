@@ -2,6 +2,8 @@
 #ifndef INSERT_FORTRAN_CONTAINS_STATEMENT_H
 #define INSERT_FORTRAN_CONTAINS_STATEMENT_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (11/24/2007):
 /*! \brief Insert Fortran "CONTAINS" statement.
 

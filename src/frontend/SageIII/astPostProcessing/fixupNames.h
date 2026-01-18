@@ -1,6 +1,8 @@
 #ifndef FIXUP_NAMES_H
 #define FIXUP_NAMES_H
 
+#include "Cxx_Grammar.h"
+
 /*! \brief This traversal uses the Memory Pool traversal to fixup names of
 declarations that are inconsistant (e.g SgclassDeclarations).
 

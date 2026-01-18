@@ -56,6 +56,8 @@
 
 #include "inttypes.h"
 
+#include <iosfwd>
+
 #if defined(OA_IRHANDLETYPE_UL)
 
 typedef unsigned long openanal_base_type;

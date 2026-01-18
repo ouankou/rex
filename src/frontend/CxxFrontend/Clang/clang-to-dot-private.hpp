@@ -2,6 +2,7 @@
 #ifndef _CLANG_TO_DOT_FRONTEND_PRIVATE_HPP_
 #define _CLANG_TO_DOT_FRONTEND_PRIVATE_HPP_
 
+#include "AstProcessing.h"
 #include "clang-frontend.hpp"
 
 #include <memory>

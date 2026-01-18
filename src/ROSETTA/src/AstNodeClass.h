@@ -4,6 +4,7 @@
 #include "ROSETTA_macros.h"
 
 #include "FileUtility.h"
+#include "grammar.h"
 #include <memory>
 #include <string>
 

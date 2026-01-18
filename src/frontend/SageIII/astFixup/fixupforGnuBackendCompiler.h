@@ -7,6 +7,9 @@
  */
 #ifndef __fixupBackendComp
 #define __fixupBackendComp
+
+#include "AstProcessing.h"
+
 void fixupforGnuBackendCompiler(SgNode *node);
 
 /*! \brief Recognize and eliminate redundent calls to the same casting operator

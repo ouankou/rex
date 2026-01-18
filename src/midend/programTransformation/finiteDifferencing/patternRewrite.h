@@ -4,7 +4,13 @@
 // #include "config.h"
 
 // #include "rose.h"
+#include "rosedll.h"
+
+#include <map>
+#include <string>
 #include <vector>
+
+class SgNode;
 
 //! Definition of a rewrite rule on a given SgNode.  The rule modifies the node
 //! and/or its children in-place, and then returns true for success or false for

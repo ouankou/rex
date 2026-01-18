@@ -1,6 +1,10 @@
 #ifndef ROSE_checkPhysicalSourcePosition_H
 #define ROSE_checkPhysicalSourcePosition_H
 
+#include "Cxx_Grammar.h"
+
+#include <cstddef>
+
 /** Checks whether the physical source position information is consistant in the
  * Sg_File_Info object
  *

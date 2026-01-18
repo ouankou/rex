@@ -195,6 +195,4 @@ private:
 
 #include "AstCombinedProcessingImpl.h"
 
-#include "AstCombinedSimpleProcessing.h"
-
 #endif

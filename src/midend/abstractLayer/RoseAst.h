@@ -6,8 +6,16 @@
  * Author   : Markus Schordan                                *
  *************************************************************/
 
+#include "Cxx_GrammarVariants.h"
 #include "roseInternal.h"
+#include <cstddef>
+#include <list>
 #include <stack>
+#include <string>
+
+class SgFunctionDeclaration;
+class SgFunctionDefinition;
+class SgNode;
 
 /** Interface for iterating over an AST.
  *

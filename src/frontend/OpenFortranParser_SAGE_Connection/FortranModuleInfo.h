@@ -10,6 +10,10 @@
 // #include "rose.h"
 // #include "fortran_support.h"
 
+#include <map>
+#include <string>
+#include <vector>
+
 #define SKIP_SYNTAX_CHECK "-rose:skip_syntax_check"
 
 // DQ (10/11/2010): Never use using declarations in a header file since
@@ -17,6 +21,10 @@
 // using std::vector;
 // using std::map;
 // using std::string;
+
+class SgModuleStatement;
+class SgProject;
+class SgSourceFile;
 
 class FortranModuleInfo {
 private:

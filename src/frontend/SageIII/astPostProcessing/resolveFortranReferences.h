@@ -2,6 +2,8 @@
 #ifndef FIXUP_FORTRAN_ARRAY_VS_FUNCTION_REFERENCES_H
 #define FIXUP_FORTRAN_ARRAY_VS_FUNCTION_REFERENCES_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (11/24/2007):
 /*! \brief Fixup Fortran array vs. function references.
 

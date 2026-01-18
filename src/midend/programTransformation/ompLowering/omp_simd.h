@@ -1,5 +1,11 @@
 #pragma once
 
+#include "Cxx_Grammar.h"
+#include "rosedefs.h"
+
+#include <stack>
+#include <string>
+
 enum SimdType { Nothing, Addr3, ArmAddr3, Intel_AVX512, Arm_SVE2 };
 
 enum OpType {

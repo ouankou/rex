@@ -2,6 +2,10 @@
 #ifndef PROPAGATE_HIDDEN_LIST_DATA_H
 #define PROPAGATE_HIDDEN_LIST_DATA_H
 
+#include "AstProcessing.h"
+
+#include <set>
+
 // DQ (6/26/2005):
 /*! \brief Propagate hidden list information for variables, types, and class
    elaboration.

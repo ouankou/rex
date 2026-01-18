@@ -5,6 +5,12 @@
 // AstNameListType.
 #include "fortran_support.h"
 
+#include <list>
+#include <map>
+#include <stack>
+#include <string>
+#include <vector>
+
 #define DeclAttributes (FortranParserState::getDeclAttrSpec())
 #define astScopeStack (*(FortranParserState::getCurrentScopeStack()))
 #define astExpressionStack (*(FortranParserState::getCurrentExpressionStack()))

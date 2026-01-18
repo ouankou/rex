@@ -1,6 +1,8 @@
 #ifndef MARK_TRANSFORMATION_FOR_OUTPUT_H
 #define MARK_TRANSFORMATION_FOR_OUTPUT_H
 
+#include "AstProcessing.h"
+
 // DQ (8/19/2005):
 /*! \brief Fixups transformations (which are often marked at a high level and
    need to be marked properly through their subtree).

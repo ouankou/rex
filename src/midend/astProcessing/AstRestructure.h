@@ -6,7 +6,9 @@
 
 #include "roseInternal.h"
 // #include "sage3.h"
+#include <map>
 #include <set>
+#include <string>
 #include <utility>
 
 /*
@@ -32,6 +34,11 @@ public:
   RestructureSynType(SgNode* n):AST_Rewrite::SynthesizedAttribute (n) {}
 };
 */
+
+class SgExpression;
+class SgNode;
+class SgProject;
+class SgStatement;
 
 class AstRestructure {
 public:

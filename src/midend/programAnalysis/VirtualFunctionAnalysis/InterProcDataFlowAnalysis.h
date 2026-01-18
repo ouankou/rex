@@ -6,6 +6,8 @@
  */
 #ifndef INTERPROCDATAFLOWANALYSIS_H
 #define INTERPROCDATAFLOWANALYSIS_H
+#include "Cxx_Grammar.h"
+
 #include <vector>
 
 class InterProcDataFlowAnalysis {

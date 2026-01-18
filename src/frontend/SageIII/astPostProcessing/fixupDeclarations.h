@@ -1,6 +1,8 @@
 #ifndef FIXUP_DECLARATIONS_H
 #define FIXUP_DECLARATIONS_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (4/19/2005):
 /*! \brief Fixup definingDeclaration and firstNondefiningDeclaration pointers in
  * SgDeclarationStatement.

@@ -1,6 +1,8 @@
 #ifndef FIXUP_SYMBOL_TABLES_H
 #define FIXUP_SYMBOL_TABLES_H
 
+#include "AstProcessing.h"
+
 // DQ (6/26/2005):
 /*! \brief Fixup the names used build the global function symbol table.
 

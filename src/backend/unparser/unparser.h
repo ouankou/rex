@@ -32,6 +32,7 @@
 #include "includeFileSupport.h"
 
 class Unparser_Nameq;
+class Unparse_Debug;
 class Unparse_MOD_SAGE;
 
 // Macro used for debugging.  If true it fixes the anonymous typedef and

@@ -1,6 +1,10 @@
 #ifndef FIXUP_TEMPLATE_ARGUMENTS_H
 #define FIXUP_TEMPLATE_ARGUMENTS_H
 
+#include "AstSimpleProcessing.h"
+
+#include <string>
+
 // DQ (11/27/2016): Provide alternative typedef type that when unparsed will not
 // contain private types). legacy frontend can in some cases cause a template
 // argument to reference a type which could not be used in the generated

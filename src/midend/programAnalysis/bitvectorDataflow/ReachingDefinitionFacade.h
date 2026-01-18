@@ -9,9 +9,13 @@
  * ReachingDefinition Analysis using SgNode.
  *  */
 
+#include "Cxx_Grammar.h"
 #include "ReachingDefinition.h"
+
 #include <AstInterface_ROSE.h>
 #include <DefUseChain.h>
+
+#include <string>
 
 #ifndef REACHINGDEFINITIONFACADE_H
 #define REACHINGDEFINITIONFACADE_H

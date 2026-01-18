@@ -1,6 +1,10 @@
 #ifndef CHECK_ISMODIFIED_FLAG_H
 #define CHECK_ISMODIFIED_FLAG_H
 
+#include "rosedll.h"
+
+class SgNode;
+
 // DQ (4/16/2015): This functions have clearer sematics and a better
 // implementation.
 ROSE_DLL_API void reportNodesMarkedAsModified(SgNode *node);
