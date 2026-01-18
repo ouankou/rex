@@ -173,10 +173,13 @@ ConstantFoldingTraversal::evaluateInheritedAttribute ( SgNode* astNode, Constant
                  // We can just remove a subtree that we have not yet traversed, is this perfectly safe?
                  // I think it is safe since it is a child and not a sibling! However, this does not delete 
                  // the existing constant folded trees, it just disconnects them from the AST.
+                    SgExpression* original_tree =
+                        originalExpression->get_originalExpressionTree();
 #if PRINT_DEVELOPER_WARNINGS
-                    printf ("Deleting the original expression tree within ConstantFoldingTraversal::evaluateInheritedAttribute ... (likely memory leak) \n");
+                    printf ("Deleting the original expression tree within ConstantFoldingTraversal::evaluateInheritedAttribute.\n");
 #endif
                     originalExpression->set_originalExpressionTree(NULL);
+                    SageInterface::deepDelete(original_tree);
                   }
              }
         }
@@ -784,7 +787,6 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  // printf ("Propagated values: lhsSynthesizedValue = %p rhsSynthesizedValue = %p \n",lhsSynthesizedValue,rhsSynthesizedValue);
 
                  // Replace the lhs and/or rhs if generated at a child node in the AST traversal
-                 // Note that this overwrites the existing pointer and is likely a memory leak!
                  if (lhsSynthesizedValue != NULL) {
                    replaceExpressionWithDeferredDelete(
                        binaryOperator->get_lhs_operand(), lhsSynthesizedValue);
@@ -807,7 +809,6 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  ROSE_ASSERT(synthesizedAttributeList.size() == 1 || (synthesizedAttributeList.size() == 2 && isSgCastExp(unaryOperator)));
                  SgExpression* synthesizedValue = synthesizedAttributeList[SgUnaryOp_operand_i].newValueExp;
                  // Replace the lhs and/or rhs if generated at a child node in the AST traversal
-                 // Note that this overwrites the existing pointer and is likely a memory leak!
                  if (synthesizedValue != NULL) {
                    replaceExpressionWithDeferredDelete(unaryOperator->get_operand(),
                                                        synthesizedValue);
@@ -845,7 +846,6 @@ ConstantFoldingTraversal::evaluateSynthesizedAttribute (
                  ROSE_ASSERT(synthesizedAttributeList.size() == 1);
                  SgExpression* synthesizedValue = synthesizedAttributeList[SgAssignInitializer_operand_i].newValueExp;
                  // Replace the lhs and/or rhs if generated at a child node in the AST traversal
-                 // Note that this overwrites the existing pointer and is likely a memory leak!
                  if (synthesizedValue != NULL) {
                    replaceExpressionWithDeferredDelete(assignInit->get_operand(),
                                                        synthesizedValue);
@@ -996,11 +996,12 @@ ConstantUnFoldingTraversal::evaluateSynthesizedAttribute (
           SgExpression* rhsSynthesizedValue = synthesizedAttributeList[SgBinaryOp_rhs_operand_i].newExp;
 
        // Replace the lhs and/or rhs if generated at a child node in the AST traversal
-       // Note that this overwrites the existing pointer and is likely a memory leak!
           if (lhsSynthesizedValue != NULL)
-               binaryOperator->set_lhs_operand(lhsSynthesizedValue);
+               SageInterface::replaceExpression(
+                   binaryOperator->get_lhs_operand(), lhsSynthesizedValue);
           if (rhsSynthesizedValue != NULL)
-               binaryOperator->set_rhs_operand(rhsSynthesizedValue);
+               SageInterface::replaceExpression(
+                   binaryOperator->get_rhs_operand(), rhsSynthesizedValue);
         }
 
      return returnAttribute;
