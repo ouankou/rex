@@ -1,11 +1,16 @@
 // is_trivial example
 #include <iostream>
+
 #include <type_traits>
 
 class A {};
-class B { B() {} };
+class B {
+  B() {}
+};
 class C : B {};
-class D { virtual void fn() {} };
+class D {
+  virtual void fn() {}
+};
 
 int main() {
   std::cout << std::boolalpha;
@@ -17,4 +22,3 @@ int main() {
   std::cout << "D: " << std::is_trivial<D>::value << std::endl;
   return 0;
 }
-

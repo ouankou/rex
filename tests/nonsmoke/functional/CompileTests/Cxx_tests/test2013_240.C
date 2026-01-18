@@ -1,12 +1,13 @@
-#include <iostream>
 #include <deque>
+
+#include <iostream>
+
 #include <iterator>
 
-#include "boost/graph/adjacency_list.hpp"
-#include "boost/graph/topological_sort.hpp"
+#include <boost/graph/adjacency_list.hpp>
 
-int main()
-{
+#include <boost/graph/topological_sort.hpp>
+int main() {
 #if 0
  // DQ (6/27/2013): This fails to compile with some versions of boost.
 
@@ -43,6 +44,5 @@ int main()
     }
 #endif
 
-    return 0;
+  return 0;
 }
-

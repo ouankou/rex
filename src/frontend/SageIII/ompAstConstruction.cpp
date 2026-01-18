@@ -1,10 +1,14 @@
 // Put here code used to construct SgOmp* nodes
 // Liao 10/8/2010
-#include "sage3basic.h"
-#include "rose_paths.h"
-#include "astPostProcessing.h"
-#include "sageBuilder.h"
 #include "ompAstConstruction.h"
+
+#include "astPostProcessing.h"
+
+#include "rose_paths.h"
+
+#include "sage3basic.h"
+
+#include "sageBuilder.h"
 
 #include <tuple>
 
@@ -169,11 +173,10 @@ void SgVarRefExpVisitor::visit(SgNode *node) {
   }
 }
 
-SgExpression *
-replace_expression_with_macro_value(std::string define_macro,
-                                    SgExpression *old_exp,
-                                    bool &macro_replaced,
-                                    omp_construct_enum) {
+SgExpression *replace_expression_with_macro_value(std::string define_macro,
+                                                  SgExpression *old_exp,
+                                                  bool &macro_replaced,
+                                                  omp_construct_enum) {
   SgExpression *newExp = old_exp;
   // Parse the macro: we are only interested in macros with the form #define
   // MACRO_NAME MACRO_VALUE, the constant macro
@@ -1386,7 +1389,7 @@ void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
     } else
       return; // There is nothing further to do if the optional end directives
               // do not exist
-  }           // end if sanity check
+  } // end if sanity check
 
   // at this point, we have found a matching end directive/pragma
   ROSE_ASSERT(end_decl);

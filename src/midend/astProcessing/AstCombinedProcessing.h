@@ -20,170 +20,179 @@
 
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 class SgCombinedTreeTraversal
-    : public SgTreeTraversal< std::vector<InheritedAttributeType> *, std::vector<SynthesizedAttributeType> *>
-{
+    : public SgTreeTraversal<std::vector<InheritedAttributeType> *,
+                             std::vector<SynthesizedAttributeType> *> {
 public:
-    typedef SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType> TraversalType;
-    typedef TraversalType *TraversalPtr;
-    typedef std::vector<TraversalPtr> TraversalPtrList;
-    typedef std::vector<InheritedAttributeType> InheritedAttributeTypeList;
-    typedef std::vector<SynthesizedAttributeType> SynthesizedAttributeTypeList;
-    typedef SgTreeTraversal<std::vector<InheritedAttributeType> *, std::vector<SynthesizedAttributeType> *> Superclass;
-    typedef typename Superclass::SynthesizedAttributesList SynthesizedAttributesList;
+  typedef SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>
+      TraversalType;
+  typedef TraversalType *TraversalPtr;
+  typedef std::vector<TraversalPtr> TraversalPtrList;
+  typedef std::vector<InheritedAttributeType> InheritedAttributeTypeList;
+  typedef std::vector<SynthesizedAttributeType> SynthesizedAttributeTypeList;
+  typedef SgTreeTraversal<std::vector<InheritedAttributeType> *,
+                          std::vector<SynthesizedAttributeType> *>
+      Superclass;
+  typedef
+      typename Superclass::SynthesizedAttributesList SynthesizedAttributesList;
 
-    //! default constructor
-    SgCombinedTreeTraversal();
-    //! constructor that makes an internal copy of an existing list of traversals
-    SgCombinedTreeTraversal(const TraversalPtrList &);
+  //! default constructor
+  SgCombinedTreeTraversal();
+  //! constructor that makes an internal copy of an existing list of traversals
+  SgCombinedTreeTraversal(const TraversalPtrList &);
 
-    //! simple function for adding a traversal to the internal list
-    void addTraversal(TraversalPtr);
-    //! function for obtaining a reference to the internal list of
-    //! traversals, you can use this for any container operations you like
-    //! (deleting elements etc.)
-    TraversalPtrList &get_traversalPtrListRef();
+  //! simple function for adding a traversal to the internal list
+  void addTraversal(TraversalPtr);
+  //! function for obtaining a reference to the internal list of
+  //! traversals, you can use this for any container operations you like
+  //! (deleting elements etc.)
+  TraversalPtrList &get_traversalPtrListRef();
 
 protected:
-    virtual InheritedAttributeTypeList *evaluateInheritedAttribute(
-            SgNode *astNode,
-            InheritedAttributeTypeList *inheritedValues);
-    virtual SynthesizedAttributeTypeList *evaluateSynthesizedAttribute(
-            SgNode *astNode,
-            InheritedAttributeTypeList *inheritedValues,
-            SynthesizedAttributesList synthesizedAttributes);
-    virtual SynthesizedAttributeTypeList *defaultSynthesizedAttribute(InheritedAttributeTypeList *);
-    virtual void atTraversalStart();
-    virtual void atTraversalEnd();
+  virtual InheritedAttributeTypeList *
+  evaluateInheritedAttribute(SgNode *astNode,
+                             InheritedAttributeTypeList *inheritedValues);
+  virtual SynthesizedAttributeTypeList *
+  evaluateSynthesizedAttribute(SgNode *astNode,
+                               InheritedAttributeTypeList *inheritedValues,
+                               SynthesizedAttributesList synthesizedAttributes);
+  virtual SynthesizedAttributeTypeList *
+  defaultSynthesizedAttribute(InheritedAttributeTypeList *);
+  virtual void atTraversalStart();
+  virtual void atTraversalEnd();
 
-    TraversalPtrList traversals;
+  TraversalPtrList traversals;
 
 private:
-    typename TraversalPtrList::iterator tBegin, tEnd;
-    typename TraversalPtrList::size_type numberOfTraversals;
+  typename TraversalPtrList::iterator tBegin, tEnd;
+  typename TraversalPtrList::size_type numberOfTraversals;
 };
 
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 class AstCombinedTopDownBottomUpProcessing
-    : public AstTopDownBottomUpProcessing<std::vector<InheritedAttributeType> *, std::vector<SynthesizedAttributeType> *>
-{
+    : public AstTopDownBottomUpProcessing<
+          std::vector<InheritedAttributeType> *,
+          std::vector<SynthesizedAttributeType> *> {
 public:
-    typedef AstTopDownBottomUpProcessing<InheritedAttributeType, SynthesizedAttributeType> TraversalType;
-    typedef TraversalType *TraversalPtr;
-    typedef std::vector<TraversalPtr> TraversalPtrList;
-    typedef std::vector<InheritedAttributeType> InheritedAttributeTypeList;
-    typedef std::vector<SynthesizedAttributeType> SynthesizedAttributeTypeList;
-    typedef AstTopDownBottomUpProcessing<std::vector<InheritedAttributeType> *, std::vector<SynthesizedAttributeType> *> Superclass;
-    typedef typename Superclass::SynthesizedAttributesList SynthesizedAttributesList;
+  typedef AstTopDownBottomUpProcessing<InheritedAttributeType,
+                                       SynthesizedAttributeType>
+      TraversalType;
+  typedef TraversalType *TraversalPtr;
+  typedef std::vector<TraversalPtr> TraversalPtrList;
+  typedef std::vector<InheritedAttributeType> InheritedAttributeTypeList;
+  typedef std::vector<SynthesizedAttributeType> SynthesizedAttributeTypeList;
+  typedef AstTopDownBottomUpProcessing<std::vector<InheritedAttributeType> *,
+                                       std::vector<SynthesizedAttributeType> *>
+      Superclass;
+  typedef
+      typename Superclass::SynthesizedAttributesList SynthesizedAttributesList;
 
-    //! default constructor
-    AstCombinedTopDownBottomUpProcessing();
-    //! constructor that makes an internal copy of an existing list of traversals
-    AstCombinedTopDownBottomUpProcessing(const TraversalPtrList &);
+  //! default constructor
+  AstCombinedTopDownBottomUpProcessing();
+  //! constructor that makes an internal copy of an existing list of traversals
+  AstCombinedTopDownBottomUpProcessing(const TraversalPtrList &);
 
-    //! simple function for adding a traversal to the internal list
-    void addTraversal(TraversalPtr);
-    //! function for obtaining a reference to the internal list of
-    //! traversals, you can use this for any container operations you like
-    //! (deleting elements etc.)
-    TraversalPtrList &get_traversalPtrListRef();
+  //! simple function for adding a traversal to the internal list
+  void addTraversal(TraversalPtr);
+  //! function for obtaining a reference to the internal list of
+  //! traversals, you can use this for any container operations you like
+  //! (deleting elements etc.)
+  TraversalPtrList &get_traversalPtrListRef();
 
 protected:
-    virtual InheritedAttributeTypeList *evaluateInheritedAttribute(
-            SgNode *astNode,
-            InheritedAttributeTypeList *inheritedValues);
-    virtual SynthesizedAttributeTypeList *evaluateSynthesizedAttribute(
-            SgNode *astNode,
-            InheritedAttributeTypeList *inheritedValues,
-            SynthesizedAttributesList synthesizedAttributes);
-    virtual SynthesizedAttributeTypeList *defaultSynthesizedAttribute(InheritedAttributeTypeList *);
-    virtual void atTraversalStart();
-    virtual void atTraversalEnd();
+  virtual InheritedAttributeTypeList *
+  evaluateInheritedAttribute(SgNode *astNode,
+                             InheritedAttributeTypeList *inheritedValues);
+  virtual SynthesizedAttributeTypeList *
+  evaluateSynthesizedAttribute(SgNode *astNode,
+                               InheritedAttributeTypeList *inheritedValues,
+                               SynthesizedAttributesList synthesizedAttributes);
+  virtual SynthesizedAttributeTypeList *
+  defaultSynthesizedAttribute(InheritedAttributeTypeList *);
+  virtual void atTraversalStart();
+  virtual void atTraversalEnd();
 
-    TraversalPtrList traversals;
+  TraversalPtrList traversals;
 
 private:
-    typename TraversalPtrList::iterator tBegin, tEnd;
-    typename TraversalPtrList::size_type numberOfTraversals;
+  typename TraversalPtrList::iterator tBegin, tEnd;
+  typename TraversalPtrList::size_type numberOfTraversals;
 };
 
 template <class InheritedAttributeType>
 class AstCombinedTopDownProcessing
-    : public AstTopDownProcessing<std::vector<InheritedAttributeType> *>
-{
+    : public AstTopDownProcessing<std::vector<InheritedAttributeType> *> {
 public:
-    typedef AstTopDownProcessing<InheritedAttributeType> TraversalType;
-    typedef TraversalType *TraversalPtr;
-    typedef std::vector<TraversalPtr> TraversalPtrList;
-    typedef std::vector<InheritedAttributeType> InheritedAttributeTypeList;
+  typedef AstTopDownProcessing<InheritedAttributeType> TraversalType;
+  typedef TraversalType *TraversalPtr;
+  typedef std::vector<TraversalPtr> TraversalPtrList;
+  typedef std::vector<InheritedAttributeType> InheritedAttributeTypeList;
 
-    //! default constructor
-    AstCombinedTopDownProcessing();
-    //! constructor that makes an internal copy of an existing list of traversals
-    AstCombinedTopDownProcessing(const TraversalPtrList &);
+  //! default constructor
+  AstCombinedTopDownProcessing();
+  //! constructor that makes an internal copy of an existing list of traversals
+  AstCombinedTopDownProcessing(const TraversalPtrList &);
 
-    //! simple function for adding a traversal to the internal list
-    void addTraversal(TraversalPtr);
-    //! function for obtaining a reference to the internal list of
-    //! traversals, zou can use this for any container operations you like
-    //! (deleting elements etc.)
-    TraversalPtrList &get_traversalPtrListRef();
+  //! simple function for adding a traversal to the internal list
+  void addTraversal(TraversalPtr);
+  //! function for obtaining a reference to the internal list of
+  //! traversals, zou can use this for any container operations you like
+  //! (deleting elements etc.)
+  TraversalPtrList &get_traversalPtrListRef();
 
 protected:
-    virtual InheritedAttributeTypeList *evaluateInheritedAttribute(
-            SgNode *astNode,
-            InheritedAttributeTypeList *inheritedValues);
-    virtual void atTraversalStart();
-    virtual void atTraversalEnd();
-    virtual void destroyInheritedValue(SgNode*, InheritedAttributeTypeList *);
+  virtual InheritedAttributeTypeList *
+  evaluateInheritedAttribute(SgNode *astNode,
+                             InheritedAttributeTypeList *inheritedValues);
+  virtual void atTraversalStart();
+  virtual void atTraversalEnd();
+  virtual void destroyInheritedValue(SgNode *, InheritedAttributeTypeList *);
 
-    TraversalPtrList traversals;
+  TraversalPtrList traversals;
 
 private:
-    typename TraversalPtrList::iterator tBegin, tEnd;
-    typename TraversalPtrList::size_type numberOfTraversals;
+  typename TraversalPtrList::iterator tBegin, tEnd;
+  typename TraversalPtrList::size_type numberOfTraversals;
 };
 
 template <class SynthesizedAttributeType>
 class AstCombinedBottomUpProcessing
-    : public AstBottomUpProcessing<std::vector<SynthesizedAttributeType> *>
-{
+    : public AstBottomUpProcessing<std::vector<SynthesizedAttributeType> *> {
 public:
-    typedef AstBottomUpProcessing<SynthesizedAttributeType> TraversalType;
-    typedef TraversalType *TraversalPtr;
-    typedef std::vector<TraversalPtr> TraversalPtrList;
-    typedef std::vector<SynthesizedAttributeType> SynthesizedAttributeTypeList;
-    typedef AstBottomUpProcessing<SynthesizedAttributeTypeList *> Superclass;
-    typedef typename Superclass::SynthesizedAttributesList SynthesizedAttributesList;
+  typedef AstBottomUpProcessing<SynthesizedAttributeType> TraversalType;
+  typedef TraversalType *TraversalPtr;
+  typedef std::vector<TraversalPtr> TraversalPtrList;
+  typedef std::vector<SynthesizedAttributeType> SynthesizedAttributeTypeList;
+  typedef AstBottomUpProcessing<SynthesizedAttributeTypeList *> Superclass;
+  typedef
+      typename Superclass::SynthesizedAttributesList SynthesizedAttributesList;
 
-    //! default constructor
-    AstCombinedBottomUpProcessing();
-    //! constructor that makes an internal copy of an existing list of traversals
-    AstCombinedBottomUpProcessing(const TraversalPtrList &);
+  //! default constructor
+  AstCombinedBottomUpProcessing();
+  //! constructor that makes an internal copy of an existing list of traversals
+  AstCombinedBottomUpProcessing(const TraversalPtrList &);
 
-    //! simple function for adding a traversal to the internal list
-    void addTraversal(TraversalPtr);
-    //! function for obtaining a reference to the internal list of
-    //! traversals, you can use this for any container operations you like
-    //! (deleting elements etc.)
-    TraversalPtrList &get_traversalPtrListRef();
+  //! simple function for adding a traversal to the internal list
+  void addTraversal(TraversalPtr);
+  //! function for obtaining a reference to the internal list of
+  //! traversals, you can use this for any container operations you like
+  //! (deleting elements etc.)
+  TraversalPtrList &get_traversalPtrListRef();
 
 protected:
-    virtual SynthesizedAttributeTypeList *evaluateSynthesizedAttribute(
-            SgNode *astNode,
-            SynthesizedAttributesList synthesizedAttributes);
-    virtual SynthesizedAttributeTypeList *defaultSynthesizedAttribute();
-    virtual void atTraversalStart();
-    virtual void atTraversalEnd();
+  virtual SynthesizedAttributeTypeList *
+  evaluateSynthesizedAttribute(SgNode *astNode,
+                               SynthesizedAttributesList synthesizedAttributes);
+  virtual SynthesizedAttributeTypeList *defaultSynthesizedAttribute();
+  virtual void atTraversalStart();
+  virtual void atTraversalEnd();
 
-    TraversalPtrList traversals;
+  TraversalPtrList traversals;
 
 private:
-    typename TraversalPtrList::iterator tBegin, tEnd;
-    typename TraversalPtrList::size_type numberOfTraversals;
+  typename TraversalPtrList::iterator tBegin, tEnd;
+  typename TraversalPtrList::size_type numberOfTraversals;
 };
 
 #include "AstCombinedProcessingImpl.h"
-
-#include "AstCombinedSimpleProcessing.h"
 
 #endif

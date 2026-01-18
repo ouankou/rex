@@ -1,12 +1,16 @@
 #include <iostream>
+
 #include <stdlib.h>
 
-#include <LoopTransformInterface.h>
+#include "LoopTransformInterface.h"
 
-#include <DepGraphBuild.h>
-#include <DomainInfo.h>
-#include <PtrSet.h>
-#include <mlog.h>
+#include "DepGraphBuild.h"
+
+#include "DomainInfo.h"
+
+#include "PtrSet.h"
+
+#include "mlog.h"
 
 class DepGraphEdgeCreate : public CollectObject<DepInfo> {
 public:

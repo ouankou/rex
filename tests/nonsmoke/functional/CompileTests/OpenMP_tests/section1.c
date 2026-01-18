@@ -1,11 +1,11 @@
 #include <omp.h>
+
 #include <stdio.h>
-int main()
-{
+int main() {
 #pragma omp parallel
   {
 #pragma omp single
-    printf ("This is from the single directive\n");
+    printf("This is from the single directive\n");
 #pragma omp sections nowait
     {
 #pragma omp section
@@ -21,7 +21,6 @@ int main()
         printf("hello from section 3\n");
       }
     } /* end of sections */
-  }/* end of parallel */
+  } /* end of parallel */
   return 0;
 }
-

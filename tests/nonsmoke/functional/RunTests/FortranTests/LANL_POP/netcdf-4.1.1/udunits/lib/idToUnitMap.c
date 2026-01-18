@@ -11,63 +11,54 @@
 
 /*LINTLIBRARY*/
 
-#ifndef	_XOPEN_SOURCE
-#   define _XOPEN_SOURCE 500
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 500
 #endif
 
 #include <assert.h>
+
 #include <search.h>
+
 #include <stdlib.h>
+
 #include <string.h>
+
 #include <strings.h>
 
-#include "udunits2.h"
-#include "unitAndId.h"
 #include "systemMap.h"
 
+#include "udunits2.h"
+
+#include "unitAndId.h"
+
 typedef struct {
-    int			(*compare)(const void*, const void*);
-    void*		tree;
+  int (*compare)(const void *, const void *);
+  void *tree;
 } IdToUnitMap;
 
-static SystemMap*	systemToNameToUnit;
-static SystemMap*	systemToSymbolToUnit;
+static SystemMap *systemToNameToUnit;
+static SystemMap *systemToSymbolToUnit;
 
-
-static int
-sensitiveCompare(
-    const void* const	node1,
-    const void* const	node2)
-{
-    return strcmp(((const UnitAndId*)node1)->id, 
-	((const UnitAndId*)node2)->id);
+static int sensitiveCompare(const void *const node1, const void *const node2) {
+  return strcmp(((const UnitAndId *)node1)->id, ((const UnitAndId *)node2)->id);
 }
 
-
-static int
-insensitiveCompare(
-    const void* const	node1,
-    const void* const	node2)
-{
-    return strcasecmp(((const UnitAndId*)node1)->id, 
-	((const UnitAndId*)node2)->id);
+static int insensitiveCompare(const void *const node1,
+                              const void *const node2) {
+  return strcasecmp(((const UnitAndId *)node1)->id,
+                    ((const UnitAndId *)node2)->id);
 }
 
+static IdToUnitMap *itumNew(int (*compare)(const void *, const void *)) {
+  IdToUnitMap *map = (IdToUnitMap *)malloc(sizeof(IdToUnitMap));
 
-static IdToUnitMap*
-itumNew(
-    int		(*compare)(const void*, const void*))
-{
-    IdToUnitMap*	map = (IdToUnitMap*)malloc(sizeof(IdToUnitMap));
+  if (map != NULL) {
+    map->tree = NULL;
+    map->compare = compare;
+  }
 
-    if (map != NULL) {
-	map->tree = NULL;
-	map->compare = compare;
-    }
-
-    return map;
+  return map;
 }
-
 
 /*
  * Frees an identifier-to-unit map.  All entries are freed.
@@ -76,22 +67,18 @@ itumNew(
  *	map		Pointer to the identifier-to-unit map.
  * Returns:
  */
-static void
-itumFree(
-    IdToUnitMap*	map)
-{
-    if (map != NULL) {
-	while (map->tree != NULL) {
-	    UnitAndId*	uai = *(UnitAndId**)map->tree;
+static void itumFree(IdToUnitMap *map) {
+  if (map != NULL) {
+    while (map->tree != NULL) {
+      UnitAndId *uai = *(UnitAndId **)map->tree;
 
-	    (void)tdelete(uai, &map->tree, map->compare);
-	    uaiFree(uai);
-	}
+      (void)tdelete(uai, &map->tree, map->compare);
+      uaiFree(uai);
+    }
 
-	free(map);
-    }					/* valid arguments */
+    free(map);
+  } /* valid arguments */
 }
-
 
 /*
  * Adds an entry to an identifier-to-unit map.
@@ -105,48 +92,40 @@ itumFree(
  *	UT_EXISTS	"id" already maps to a different unit.
  *	UT_SUCCESS	Success.
  */
-static ut_status
-itumAdd(
-    IdToUnitMap*		map,
-    const char* const		id,
-    const ut_unit* const	unit)
-{
-    ut_status		status;
-    UnitAndId*		targetEntry;
+static ut_status itumAdd(IdToUnitMap *map, const char *const id,
+                         const ut_unit *const unit) {
+  ut_status status;
+  UnitAndId *targetEntry;
 
-    assert(map != NULL);
-    assert(id != NULL);
-    assert(unit != NULL);
+  assert(map != NULL);
+  assert(id != NULL);
+  assert(unit != NULL);
 
-    targetEntry = uaiNew(unit, id);
+  targetEntry = uaiNew(unit, id);
 
-    if (targetEntry != NULL) {
-	UnitAndId**	treeEntry = tsearch(targetEntry, &map->tree,
-	    map->compare);
+  if (targetEntry != NULL) {
+    UnitAndId **treeEntry = tsearch(targetEntry, &map->tree, map->compare);
 
-	if (treeEntry == NULL) {
-	    uaiFree(targetEntry);
-	    status = UT_OS;
-	}
-	else {
-	    if (ut_compare((*treeEntry)->unit, unit) == 0) {
-		status = UT_SUCCESS;
-	    }
-	    else {
-		status = UT_EXISTS;
-                ut_set_status(status);
-		ut_handle_error_message(
-		    "\"%s\" already maps to existing but different unit", id);
-	    }
+    if (treeEntry == NULL) {
+      uaiFree(targetEntry);
+      status = UT_OS;
+    } else {
+      if (ut_compare((*treeEntry)->unit, unit) == 0) {
+        status = UT_SUCCESS;
+      } else {
+        status = UT_EXISTS;
+        ut_set_status(status);
+        ut_handle_error_message(
+            "\"%s\" already maps to existing but different unit", id);
+      }
 
-            if (targetEntry != *treeEntry)
-                uaiFree(targetEntry);
-	}				/* found entry */
-    }					/* "targetEntry" allocated */
+      if (targetEntry != *treeEntry)
+        uaiFree(targetEntry);
+    } /* found entry */
+  } /* "targetEntry" allocated */
 
-    return status;
+  return status;
 }
-
 
 /*
  * Removes an entry to an identifier-to-unit map.
@@ -157,30 +136,25 @@ itumAdd(
  * Returns:
  *	UT_SUCCESS	Success.
  */
-static ut_status
-itumRemove(
-    IdToUnitMap*	map,
-    const char* const	id)
-{
-    UnitAndId		targetEntry;
-    UnitAndId**		treeEntry;
+static ut_status itumRemove(IdToUnitMap *map, const char *const id) {
+  UnitAndId targetEntry;
+  UnitAndId **treeEntry;
 
-    assert(map != NULL);
-    assert(id != NULL);
-    
-    targetEntry.id = (char*)id;
-    treeEntry = tfind(&targetEntry, &map->tree, map->compare);
+  assert(map != NULL);
+  assert(id != NULL);
 
-    if (treeEntry != NULL) {
-	UnitAndId*	uai = *treeEntry;
+  targetEntry.id = (char *)id;
+  treeEntry = tfind(&targetEntry, &map->tree, map->compare);
 
-	(void)tdelete(uai, &map->tree, map->compare);
-	uaiFree(uai);
-    }
+  if (treeEntry != NULL) {
+    UnitAndId *uai = *treeEntry;
 
-    return UT_SUCCESS;
+    (void)tdelete(uai, &map->tree, map->compare);
+    uaiFree(uai);
+  }
+
+  return UT_SUCCESS;
 }
-
 
 /*
  * Finds the entry in an identifier-to-unit map that corresponds to an
@@ -194,27 +168,22 @@ itumRemove(
  *		to "id".
  *	else	Pointer to the entry corresponding to "id".
  */
-static const UnitAndId*
-itumFind(
-    IdToUnitMap*	map,
-    const char* const	id)
-{
-    UnitAndId*		entry = NULL;	/* failure */
-    UnitAndId		targetEntry;
-    UnitAndId**		treeEntry;
+static const UnitAndId *itumFind(IdToUnitMap *map, const char *const id) {
+  UnitAndId *entry = NULL; /* failure */
+  UnitAndId targetEntry;
+  UnitAndId **treeEntry;
 
-    assert(map != NULL);
-    assert(id != NULL);
+  assert(map != NULL);
+  assert(id != NULL);
 
-    targetEntry.id = (char*)id;
-    treeEntry = tfind(&targetEntry, &map->tree, map->compare);
+  targetEntry.id = (char *)id;
+  treeEntry = tfind(&targetEntry, &map->tree, map->compare);
 
-    if (treeEntry != NULL)
-	entry = *treeEntry;
+  if (treeEntry != NULL)
+    entry = *treeEntry;
 
-    return entry;
+  return entry;
 }
-
 
 /*
  * Adds to a particular unit-system a mapping from an identifier to a unit.
@@ -229,55 +198,47 @@ itumFind(
  *	UT_OS		Operating-sytem failure.  See "errno".
  *	UT_SUCCESS	Success.
  */
-static ut_status
-mapIdToUnit(
-    SystemMap** const		systemMap,
-    const char* const		id,
-    const ut_unit* const	unit,
-    int				(*compare)(const void*, const void*))
-{
-    ut_status		status = UT_SUCCESS;
+static ut_status mapIdToUnit(SystemMap **const systemMap, const char *const id,
+                             const ut_unit *const unit,
+                             int (*compare)(const void *, const void *)) {
+  ut_status status = UT_SUCCESS;
 
-    if (id == NULL) {
-	status = UT_BAD_ARG;
+  if (id == NULL) {
+    status = UT_BAD_ARG;
+  } else if (unit == NULL) {
+    status = UT_BAD_ARG;
+  } else {
+    ut_system *system = ut_get_system(unit);
+
+    if (*systemMap == NULL) {
+      *systemMap = smNew();
+
+      if (*systemMap == NULL)
+        status = UT_OS;
     }
-    else if (unit == NULL) {
-	status = UT_BAD_ARG;
-    }
-    else {
-	ut_system*	system = ut_get_system(unit);
 
-	if (*systemMap == NULL) {
-	    *systemMap = smNew();
+    if (*systemMap != NULL) {
+      IdToUnitMap **const idToUnit =
+          (IdToUnitMap **)smSearch(*systemMap, system);
 
-	    if (*systemMap == NULL)
-		status = UT_OS;
-	}
+      if (idToUnit == NULL) {
+        status = UT_OS;
+      } else {
+        if (*idToUnit == NULL) {
+          *idToUnit = itumNew(compare);
 
-	if (*systemMap != NULL) {
-	    IdToUnitMap** const	idToUnit =
-		(IdToUnitMap**)smSearch(*systemMap, system);
+          if (*idToUnit == NULL)
+            status = UT_OS;
+        }
 
-	    if (idToUnit == NULL) {
-		status = UT_OS;
-	    }
-	    else {
-		if (*idToUnit == NULL) {
-		    *idToUnit = itumNew(compare);
+        if (*idToUnit != NULL)
+          status = itumAdd(*idToUnit, id, unit);
+      } /* have system-map entry */
+    } /* have system-map */
+  } /* valid arguments */
 
-		    if (*idToUnit == NULL)
-			status = UT_OS;
-		}
-
-		if (*idToUnit != NULL)
-		    status = itumAdd(*idToUnit, id, unit);
-	    }				/* have system-map entry */
-	}				/* have system-map */
-    }					/* valid arguments */
-
-    return status;
+  return status;
 }
-
 
 /*
  * Removes the mapping from an identifier to a unit.
@@ -290,30 +251,22 @@ mapIdToUnit(
  *	UT_BAD_ARG	"id" is NULL, "system" is NULL, or "compare" is NULL.
  *	UT_SUCCESS	Success.
  */
-static ut_status
-unmapId(
-    SystemMap* const	systemMap,
-    const char* const	id,
-    ut_system*		system)
-{
-    ut_status		status;
+static ut_status unmapId(SystemMap *const systemMap, const char *const id,
+                         ut_system *system) {
+  ut_status status;
 
-    if (systemMap == NULL || id == NULL || system == NULL) {
-	status = UT_BAD_ARG;
-    }
-    else {
-	IdToUnitMap** const	idToUnit =
-	    (IdToUnitMap**)smFind(systemMap, system);
+  if (systemMap == NULL || id == NULL || system == NULL) {
+    status = UT_BAD_ARG;
+  } else {
+    IdToUnitMap **const idToUnit = (IdToUnitMap **)smFind(systemMap, system);
 
-	status = 
-	    (idToUnit == NULL || *idToUnit == NULL)
-		? UT_SUCCESS
-		: itumRemove(*idToUnit, id);
-    }					/* valid arguments */
+    status = (idToUnit == NULL || *idToUnit == NULL)
+                 ? UT_SUCCESS
+                 : itumRemove(*idToUnit, id);
+  } /* valid arguments */
 
-    return status;
+  return status;
 }
-
 
 /*
  * Adds a mapping from a name to a unit.
@@ -330,18 +283,14 @@ unmapId(
  *	UT_EXISTS	"name" already maps to a different unit.
  *	UT_SUCCESS	Success.
  */
-ut_status
-ut_map_name_to_unit(
-    const char* const		name,
-    const ut_encoding		encoding,
-    const ut_unit* const	unit)
-{
-    ut_set_status(
-	mapIdToUnit(&systemToNameToUnit, name, unit, insensitiveCompare));
+ut_status ut_map_name_to_unit(const char *const name,
+                              const ut_encoding encoding,
+                              const ut_unit *const unit) {
+  ut_set_status(
+      mapIdToUnit(&systemToNameToUnit, name, unit, insensitiveCompare));
 
-    return ut_get_status();
+  return ut_get_status();
 }
-
 
 /*
  * Removes a mapping from a name to a unit.  After this function,
@@ -355,17 +304,12 @@ ut_map_name_to_unit(
  *	UT_SUCCESS	Success.
  *	UT_BAD_ARG	"system" or "name" is NULL.
  */
-ut_status
-ut_unmap_name_to_unit(
-    ut_system*		system,
-    const char* const	name,
-    const ut_encoding   encoding)
-{
-    ut_set_status(unmapId(systemToNameToUnit, name, system));
+ut_status ut_unmap_name_to_unit(ut_system *system, const char *const name,
+                                const ut_encoding encoding) {
+  ut_set_status(unmapId(systemToNameToUnit, name, system));
 
-    return ut_get_status();
+  return ut_get_status();
 }
-
 
 /*
  * Adds a mapping from a symbol to a unit.
@@ -382,18 +326,14 @@ ut_unmap_name_to_unit(
  *	UT_EXISTS	"symbol" already maps to a different unit.
  *	UT_SUCCESS	Success.
  */
-ut_status
-ut_map_symbol_to_unit(
-    const char* const		symbol,
-    const ut_encoding		encoding,
-    const ut_unit* const	unit)
-{
-    ut_set_status(
-	mapIdToUnit(&systemToSymbolToUnit, symbol, unit, sensitiveCompare));
+ut_status ut_map_symbol_to_unit(const char *const symbol,
+                                const ut_encoding encoding,
+                                const ut_unit *const unit) {
+  ut_set_status(
+      mapIdToUnit(&systemToSymbolToUnit, symbol, unit, sensitiveCompare));
 
-    return ut_get_status();
+  return ut_get_status();
 }
-
 
 /*
  * Removes a mapping from a symbol to a unit.  After this function,
@@ -407,17 +347,12 @@ ut_map_symbol_to_unit(
  *	UT_SUCCESS	Success.
  *	UT_BAD_ARG	"system" or "symbol" is NULL.
  */
-ut_status
-ut_unmap_symbol_to_unit(
-    ut_system*		system,
-    const char* const	symbol,
-    const ut_encoding   encoding)
-{
-    ut_set_status(unmapId(systemToSymbolToUnit, symbol, system));
+ut_status ut_unmap_symbol_to_unit(ut_system *system, const char *const symbol,
+                                  const ut_encoding encoding) {
+  ut_set_status(unmapId(systemToSymbolToUnit, symbol, system));
 
-    return ut_get_status();
+  return ut_get_status();
 }
-
 
 /*
  * Returns the unit to which an identifier maps in a particular unit-system.
@@ -433,37 +368,30 @@ ut_unmap_symbol_to_unit(
  *	else	Pointer to the unit in "system" with the identifier "id".
  *		Should be passed to ut_free() when no longer needed.
  */
-static ut_unit*
-getUnitById(
-    const SystemMap* const	systemMap,
-    const ut_system* const	system,
-    const char* const		id)
-{
-    ut_unit*	unit = NULL;		/* failure */
+static ut_unit *getUnitById(const SystemMap *const systemMap,
+                            const ut_system *const system,
+                            const char *const id) {
+  ut_unit *unit = NULL; /* failure */
 
-    if (system == NULL) {
-	ut_set_status(UT_BAD_ARG);
-	ut_handle_error_message("getUnitById(): NULL unit-system argument");
+  if (system == NULL) {
+    ut_set_status(UT_BAD_ARG);
+    ut_handle_error_message("getUnitById(): NULL unit-system argument");
+  } else if (id == NULL) {
+    ut_set_status(UT_BAD_ARG);
+    ut_handle_error_message("getUnitById(): NULL identifier argument");
+  } else if (systemMap != NULL) {
+    IdToUnitMap **const idToUnit = (IdToUnitMap **)smFind(systemMap, system);
+
+    if (idToUnit != NULL) {
+      const UnitAndId *uai = itumFind(*idToUnit, id);
+
+      if (uai != NULL)
+        unit = ut_clone(uai->unit);
     }
-    else if (id == NULL) {
-	ut_set_status(UT_BAD_ARG);
-	ut_handle_error_message("getUnitById(): NULL identifier argument");
-    }
-    else if (systemMap != NULL) {
-	IdToUnitMap** const	idToUnit =
-	    (IdToUnitMap**)smFind(systemMap, system);
+  } /* valid arguments */
 
-	if (idToUnit != NULL) {
-	    const UnitAndId*	uai = itumFind(*idToUnit, id);
-
-	    if (uai != NULL)
-		unit = ut_clone(uai->unit);
-	}
-    }					/* valid arguments */
-
-    return unit;
+  return unit;
 }
-
 
 /*
  * Returns the unit with a given name from a unit-system.  Name comparisons
@@ -481,19 +409,15 @@ getUnitById(
  *		The pointer should be passed to ut_free() when the unit is
  *		no longer needed.
  */
-ut_unit*
-ut_get_unit_by_name(
-    const ut_system* const	system,
-    const char* const		name)
-{
-    ut_set_status(UT_SUCCESS);
+ut_unit *ut_get_unit_by_name(const ut_system *const system,
+                             const char *const name) {
+  ut_set_status(UT_SUCCESS);
 
-    return getUnitById(systemToNameToUnit, system, name);
+  return getUnitById(systemToNameToUnit, system, name);
 }
 
-
 /*
- * Returns the unit with a given symbol from a unit-system.  Symbol 
+ * Returns the unit with a given symbol from a unit-system.  Symbol
  * comparisons are case-sensitive.
  *
  * Arguments:
@@ -509,16 +433,12 @@ ut_get_unit_by_name(
  *		The pointer should be passed to ut_free() when the unit is no
  *		longer needed.
  */
-ut_unit*
-ut_get_unit_by_symbol(
-    const ut_system* const	system,
-    const char* const		symbol)
-{
-    ut_set_status(UT_SUCCESS);
+ut_unit *ut_get_unit_by_symbol(const ut_system *const system,
+                               const char *const symbol) {
+  ut_set_status(UT_SUCCESS);
 
-    return getUnitById(systemToSymbolToUnit, system, symbol);
+  return getUnitById(systemToSymbolToUnit, system, symbol);
 }
-
 
 /*
  * Frees resources associated with a unit-system.
@@ -527,27 +447,24 @@ ut_get_unit_by_symbol(
  *	system		Pointer to the unit-system to have its associated
  *			resources freed.
  */
-void
-itumFreeSystem(
-    ut_system*	system)
-{
-    if (system != NULL) {
-	SystemMap*	systemMaps[2];
-	int		i;
+void itumFreeSystem(ut_system *system) {
+  if (system != NULL) {
+    SystemMap *systemMaps[2];
+    int i;
 
-	systemMaps[0] = systemToNameToUnit;
-	systemMaps[1] = systemToSymbolToUnit;
+    systemMaps[0] = systemToNameToUnit;
+    systemMaps[1] = systemToSymbolToUnit;
 
-	for (i = 0; i < 2; i++) {
-	    if (systemMaps[i] != NULL) {
-		IdToUnitMap** const	idToUnit =
-		    (IdToUnitMap**)smFind(systemMaps[i], system);
+    for (i = 0; i < 2; i++) {
+      if (systemMaps[i] != NULL) {
+        IdToUnitMap **const idToUnit =
+            (IdToUnitMap **)smFind(systemMaps[i], system);
 
-		if (idToUnit != NULL)
-		    itumFree(*idToUnit);
+        if (idToUnit != NULL)
+          itumFree(*idToUnit);
 
-		smRemove(systemMaps[i], system);
-	    }
-	}
-    }					/* valid arguments */
+        smRemove(systemMaps[i], system);
+      }
+    }
+  } /* valid arguments */
 }

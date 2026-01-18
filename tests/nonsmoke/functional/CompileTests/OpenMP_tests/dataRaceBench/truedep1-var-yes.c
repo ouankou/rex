@@ -44,28 +44,28 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/* 
+/*
 This program has data races due to true dependence within a loop.
 Data race pair: a[i+1]@68:5 vs. a[i]@68:12
 */
 #include <stdlib.h>
+
 #include <stdio.h>
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char *argv[]) {
   int i;
-  int len=100;
+  int len = 100;
 
-  if (argc>1)
+  if (argc > 1)
     len = atoi(argv[1]);
 
   int a[len];
-  for (i=0;i<len;i++)
-    a[i]=i;
+  for (i = 0; i < len; i++)
+    a[i] = i;
 
 #pragma omp parallel for
-  for (i=0;i<len-1;i++)
-    a[i+1]=a[i]+1;
+  for (i = 0; i < len - 1; i++)
+    a[i + 1] = a[i] + 1;
 
   return 0;
 }

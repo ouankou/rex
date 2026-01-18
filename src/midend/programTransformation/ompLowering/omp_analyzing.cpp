@@ -452,7 +452,7 @@ int patchUpFirstprivateVariables(SgFile *file) {
       addClauseVariable(init_var, target, V_SgOmpFirstprivateClause);
       result++;
     } // end for each variable reference
-  }   // end for each SgOmpTaskStatement
+  } // end for each SgOmpTaskStatement
   return result;
 } // end patchUpFirstprivateVariables()
 

@@ -1,7 +1,10 @@
 
 #include "CommandOptions.h"
+
 #include "SymbolicBound.h"
+
 #include "SymbolicExpr.h"
+
 #include "SymbolicSelect.h"
 
 bool DebugReplaceVal() {

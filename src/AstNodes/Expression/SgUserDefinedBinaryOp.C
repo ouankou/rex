@@ -1,16 +1,12 @@
-#include <sage3basic.h>
+#include "sage3basic.h"
 
-SgType*
-SgUserDefinedBinaryOp::get_type() const
-   {
+SgType *SgUserDefinedBinaryOp::get_type() const {
   // DQ (10/8/2008): Unclear how this should be implemented right now!
-     ROSE_ASSERT(get_symbol() != NULL);
+  ROSE_ASSERT(get_symbol() != NULL);
 
-#if 1
-     printf ("In SgUserDefinedBinaryOp::get_type() \n");
-#endif
+  printf("In SgUserDefinedBinaryOp::get_type() \n");
 
-     SgType* returnType = get_symbol()->get_type();
-     ROSE_ASSERT(returnType != NULL);
-     return returnType;
-   }
+  SgType *returnType = get_symbol()->get_type();
+  ROSE_ASSERT(returnType != NULL);
+  return returnType;
+}

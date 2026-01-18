@@ -1,18 +1,26 @@
-# include <stdlib.h>
-# include <stdio.h>
-# include <time.h>
-# include <math.h>
-# include <omp.h>
-#include "libxomp.h" 
-void compute(int np,int nd,double pos[],double vel[],double mass,double f[],double *pot,double *kin);
-double dist(int nd,double r1[],double r2[],double dr[]);
-void initialize(int np,int nd,double box[],int *seed,double pos[],double vel[],double acc[]);
+#include <stdlib.h>
+
+#include <stdio.h>
+
+#include <time.h>
+
+#include <math.h>
+
+#include <omp.h>
+
+#include "libxomp.h"
+void compute(int np, int nd, double pos[], double vel[], double mass,
+             double f[], double *pot, double *kin);
+double dist(int nd, double r1[], double r2[], double dr[]);
+void initialize(int np, int nd, double box[], int *seed, double pos[],
+                double vel[], double acc[]);
 double r8_uniform_01(int *seed);
 void timestamp();
-void update(int np,int nd,double pos[],double vel[],double f[],double acc[],double mass,double dt);
+void update(int np, int nd, double pos[], double vel[], double f[],
+            double acc[], double mass, double dt);
 /******************************************************************************/
 
-int main(int argc,char *argv[])
+int main(int argc, char *argv[])
 /******************************************************************************/
 /*
   Purpose:
@@ -20,10 +28,10 @@ int main(int argc,char *argv[])
   Discussion:
     MD implements a simple molecular dynamics simulation.
     The program uses Open MP directives to allow parallel computation.
-    The velocity Verlet time integration scheme is used. 
+    The velocity Verlet time integration scheme is used.
     The particles interact with a central pair potential.
   Licensing:
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
   Modified:
     30 July 2009
   Author:
@@ -34,14 +42,14 @@ int main(int argc,char *argv[])
 */
 {
   int status = 0;
-  XOMP_init(argc,argv);
+  XOMP_init(argc, argv);
   double *acc;
   double *box;
   double dt = 0.0001;
   double e0;
   double *force;
   int i;
-//int id;
+  // int id;
   double kinetic;
   double mass = 1.0;
   int nd = 3;
@@ -59,47 +67,47 @@ int main(int argc,char *argv[])
   double wtime;
   timestamp();
   proc_num = omp_get_num_procs();
-  acc = ((double *)(malloc((nd * np) * sizeof(double ))));
-  box = ((double *)(malloc(nd * sizeof(double ))));
-  force = ((double *)(malloc((nd * np) * sizeof(double ))));
-  pos = ((double *)(malloc((nd * np) * sizeof(double ))));
-  vel = ((double *)(malloc((nd * np) * sizeof(double ))));
+  acc = ((double *)(malloc((nd * np) * sizeof(double))));
+  box = ((double *)(malloc(nd * sizeof(double))));
+  force = ((double *)(malloc((nd * np) * sizeof(double))));
+  pos = ((double *)(malloc((nd * np) * sizeof(double))));
+  vel = ((double *)(malloc((nd * np) * sizeof(double))));
   printf("\n");
   printf("MD_OPEN_MP\n");
   printf("  C/OpenMP version\n");
   printf("\n");
   printf("  A molecular dynamics program.\n");
   printf("\n");
-  printf("  NP, the number of particles in the simulation is %d\n",np);
-  printf("  STEP_NUM, the number of time steps, is %d\n",step_num);
-  printf("  DT, the size of each time step, is %f\n",dt);
+  printf("  NP, the number of particles in the simulation is %d\n", np);
+  printf("  STEP_NUM, the number of time steps, is %d\n", step_num);
+  printf("  DT, the size of each time step, is %f\n", dt);
   printf("\n");
-  printf("  Number of processors available = %d\n",(omp_get_num_procs()));
-  printf("  Number of threads =              %d\n",(omp_get_max_threads()));
-/*
-  Set the dimensions of the box.
-*/
+  printf("  Number of processors available = %d\n", (omp_get_num_procs()));
+  printf("  Number of threads =              %d\n", (omp_get_max_threads()));
+  /*
+    Set the dimensions of the box.
+  */
   for (i = 0; i < nd; i++) {
     box[i] = 10.0;
   }
   printf("\n");
   printf("  Initializing positions, velocities, and accelerations.\n");
-/*
-  Set initial positions, velocities, and accelerations.
-*/
-  initialize(np,nd,box,&seed,pos,vel,acc);
-/*
-  Compute the forces and energies.
-*/
+  /*
+    Set initial positions, velocities, and accelerations.
+  */
+  initialize(np, nd, box, &seed, pos, vel, acc);
+  /*
+    Compute the forces and energies.
+  */
   printf("\n");
   printf("  Computing initial forces and energies.\n");
-  compute(np,nd,pos,vel,mass,force,&potential,&kinetic);
+  compute(np, nd, pos, vel, mass, force, &potential, &kinetic);
   e0 = potential + kinetic;
-/*
-  This is the main time stepping loop:
-    Compute forces and energies,
-    Update positions, velocities, accelerations.
-*/
+  /*
+    This is the main time stepping loop:
+      Compute forces and energies,
+      Update positions, velocities, accelerations.
+  */
   printf("\n");
   printf("  At each step, we report the potential and kinetic energies.\n");
   printf("  The sum of these energies should be a constant.\n");
@@ -107,29 +115,32 @@ int main(int argc,char *argv[])
   printf("  in the total energy.\n");
   printf("\n");
   printf("      Step      Potential       Kinetic        (P+K-E0)/E0\n");
-  printf("                Energy P        Energy K       Relative Energy Error\n");
+  printf(
+      "                Energy P        Energy K       Relative Energy Error\n");
   printf("\n");
   step_print = 0;
   step_print_index = 0;
   step_print_num = 10;
   step = 0;
-  printf("  %8d  %14f  %14f  %14e\n",step,potential,kinetic,(potential + kinetic - e0) / e0);
+  printf("  %8d  %14f  %14f  %14e\n", step, potential, kinetic,
+         (potential + kinetic - e0) / e0);
   step_print_index = step_print_index + 1;
   step_print = step_print_index * step_num / step_print_num;
   wtime = omp_get_wtime();
   for (step = 1; step <= step_num; step++) {
-    compute(np,nd,pos,vel,mass,force,&potential,&kinetic);
+    compute(np, nd, pos, vel, mass, force, &potential, &kinetic);
     if (step == step_print) {
-      printf("  %8d  %14f  %14f  %14e\n",step,potential,kinetic,(potential + kinetic - e0) / e0);
+      printf("  %8d  %14f  %14f  %14e\n", step, potential, kinetic,
+             (potential + kinetic - e0) / e0);
       step_print_index = step_print_index + 1;
       step_print = step_print_index * step_num / step_print_num;
     }
-    update(np,nd,pos,vel,force,acc,mass,dt);
+    update(np, nd, pos, vel, force, acc, mass, dt);
   }
   wtime = omp_get_wtime() - wtime;
   printf("\n");
   printf("  Elapsed time for main computation:\n");
-  printf("  %f seconds.\n",wtime);
+  printf("  %f seconds.\n", wtime);
   free(acc);
   free(box);
   free(force);
@@ -145,8 +156,7 @@ int main(int argc,char *argv[])
 }
 /******************************************************************************/
 
-struct OUT__2__9996___data 
-{
+struct OUT__2__9996___data {
   void *np_p;
   void *nd_p;
   double **pos_p;
@@ -155,11 +165,11 @@ struct OUT__2__9996___data
   void *ke_p;
   void *pe_p;
   void *PI2_p;
-}
-;
+};
 static void OUT__2__9996__(void *__out_argv);
 
-void compute(int np,int nd,double pos[],double vel[],double mass,double f[],double *pot,double *kin)
+void compute(int np, int nd, double pos[], double vel[], double mass,
+             double f[], double *pot, double *kin)
 /******************************************************************************/
 /*
   Purpose:
@@ -173,7 +183,7 @@ void compute(int np,int nd,double pos[],double vel[],double mass,double f[],doub
       dv(x) = 2.0 * sin ( min ( x, PI2 ) ) * cos ( min ( x, PI2 ) )
             = sin ( 2.0 * min ( x, PI2 ) )
   Licensing:
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
   Modified:
     21 November 2007
   Author:
@@ -202,30 +212,35 @@ void compute(int np,int nd,double pos[],double vel[],double mass,double f[],doub
   pe = 0.0;
   ke = 0.0;
   struct OUT__2__9996___data __out_argv2__9996__;
-  __out_argv2__9996__ . PI2_p = ((void *)(&PI2));
-  __out_argv2__9996__ . pe_p = ((void *)(&pe));
-  __out_argv2__9996__ . ke_p = ((void *)(&ke));
-  __out_argv2__9996__ . f_p = &f;
-  __out_argv2__9996__ . vel_p = &vel;
-  __out_argv2__9996__ . pos_p = &pos;
-  __out_argv2__9996__ . nd_p = ((void *)(&nd));
-  __out_argv2__9996__ . np_p = ((void *)(&np));
-  XOMP_parallel_start(OUT__2__9996__,&__out_argv2__9996__,1,0,"/home/awang15/Projects/rexdev/rex_src/tests/nonsmoke/functional/CompileTests/OpenMP_tests/md_open_mp.c",256);
-  XOMP_parallel_end("/home/awang15/Projects/rexdev/rex_src/tests/nonsmoke/functional/CompileTests/OpenMP_tests/md_open_mp.c",304);
+  __out_argv2__9996__.PI2_p = ((void *)(&PI2));
+  __out_argv2__9996__.pe_p = ((void *)(&pe));
+  __out_argv2__9996__.ke_p = ((void *)(&ke));
+  __out_argv2__9996__.f_p = &f;
+  __out_argv2__9996__.vel_p = &vel;
+  __out_argv2__9996__.pos_p = &pos;
+  __out_argv2__9996__.nd_p = ((void *)(&nd));
+  __out_argv2__9996__.np_p = ((void *)(&np));
+  XOMP_parallel_start(OUT__2__9996__, &__out_argv2__9996__, 1, 0,
+                      "/home/awang15/Projects/rexdev/rex_src/tests/nonsmoke/"
+                      "functional/CompileTests/OpenMP_tests/md_open_mp.c",
+                      256);
+  XOMP_parallel_end("/home/awang15/Projects/rexdev/rex_src/tests/nonsmoke/"
+                    "functional/CompileTests/OpenMP_tests/md_open_mp.c",
+                    304);
   ke = ke * 0.5 * mass;
-   *pot = pe;
-   *kin = ke;
-  return ;
+  *pot = pe;
+  *kin = ke;
+  return;
 }
 /******************************************************************************/
 
-double dist(int nd,double r1[],double r2[],double dr[])
+double dist(int nd, double r1[], double r2[], double dr[])
 /******************************************************************************/
 /*
   Purpose:
     DIST computes the displacement (and its norm) between two particles.
   Licensing:
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
   Modified:
     21 November 2007
   Author:
@@ -250,13 +265,14 @@ double dist(int nd,double r1[],double r2[],double dr[])
 }
 /******************************************************************************/
 
-void initialize(int np,int nd,double box[],int *seed,double pos[],double vel[],double acc[])
+void initialize(int np, int nd, double box[], int *seed, double pos[],
+                double vel[], double acc[])
 /******************************************************************************/
 /*
   Purpose:
     INITIALIZE initializes the positions, velocities, and accelerations.
   Licensing:
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
   Modified:
     21 November 2007
   Author:
@@ -275,9 +291,9 @@ void initialize(int np,int nd,double box[],int *seed,double pos[],double vel[],d
 {
   int i;
   int j;
-/*
-  Give the particles random positions within the box.
-*/
+  /*
+    Give the particles random positions within the box.
+  */
   for (i = 0; i < nd; i++) {
     for (j = 0; j < np; j++) {
       pos[i + j * nd] = box[i] * r8_uniform_01(seed);
@@ -293,7 +309,7 @@ void initialize(int np,int nd,double box[],int *seed,double pos[],double vel[],d
       acc[i + j * nd] = 0.0;
     }
   }
-  return ;
+  return;
 }
 /******************************************************************************/
 
@@ -309,7 +325,7 @@ double r8_uniform_01(int *seed)
     The integer arithmetic never requires more than 32 bits,
     including a sign bit.
   Licensing:
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
   Modified:
     11 August 2004
   Author:
@@ -332,12 +348,12 @@ double r8_uniform_01(int *seed)
 {
   int k;
   double r;
-  k =  *seed / 127773;
-   *seed = 16807 * ( *seed - k * 127773) - k * 2836;
-  if ( *seed < 0) {
-     *seed =  *seed + 2147483647;
+  k = *seed / 127773;
+  *seed = 16807 * (*seed - k * 127773) - k * 2836;
+  if (*seed < 0) {
+    *seed = *seed + 2147483647;
   }
-  r = ((double )( *seed)) * 4.656612875E-10;
+  r = ((double)(*seed)) * 4.656612875E-10;
   return r;
 }
 /******************************************************************************/
@@ -350,7 +366,7 @@ void timestamp()
   Example:
     31 May 2001 09:45:54 AM
   Licensing:
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
   Modified:
     24 September 2003
   Author:
@@ -359,22 +375,21 @@ void timestamp()
     None
 */
 {
-# define TIME_SIZE 40
+#define TIME_SIZE 40
   static char time_buffer[40];
   const struct tm *tm;
   size_t len;
   time_t now;
   now = time(((void *)0));
   tm = (localtime((&now)));
-  len = strftime(time_buffer,40,"%d %B %Y %I:%M:%S %p",tm);
-  printf("%s\n",time_buffer);
-  return ;
-# undef TIME_SIZE
+  len = strftime(time_buffer, 40, "%d %B %Y %I:%M:%S %p", tm);
+  printf("%s\n", time_buffer);
+  return;
+#undef TIME_SIZE
 }
 /******************************************************************************/
 
-struct OUT__1__9996___data 
-{
+struct OUT__1__9996___data {
   void *np_p;
   void *nd_p;
   double **pos_p;
@@ -383,11 +398,11 @@ struct OUT__1__9996___data
   double **acc_p;
   void *dt_p;
   void *rmass_p;
-}
-;
+};
 static void OUT__1__9996__(void *__out_argv);
 
-void update(int np,int nd,double pos[],double vel[],double f[],double acc[],double mass,double dt)
+void update(int np, int nd, double pos[], double vel[], double f[],
+            double acc[], double mass, double dt)
 /******************************************************************************/
 /*
   Purpose:
@@ -399,7 +414,7 @@ void update(int np,int nd,double pos[],double vel[],double f[],double acc[],doub
     v(t+dt) = v(t) + 0.5 * ( a(t) + a(t+dt) ) * dt
     a(t+dt) = f(t) / m
   Licensing:
-    This code is distributed under the GNU LGPL license. 
+    This code is distributed under the GNU LGPL license.
   Modified:
     17 April 2009
   Author:
@@ -421,55 +436,65 @@ void update(int np,int nd,double pos[],double vel[],double f[],double acc[],doub
   double rmass;
   rmass = 1.0 / mass;
   struct OUT__1__9996___data __out_argv1__9996__;
-  __out_argv1__9996__ . rmass_p = ((void *)(&rmass));
-  __out_argv1__9996__ . dt_p = ((void *)(&dt));
-  __out_argv1__9996__ . acc_p = &acc;
-  __out_argv1__9996__ . f_p = &f;
-  __out_argv1__9996__ . vel_p = &vel;
-  __out_argv1__9996__ . pos_p = &pos;
-  __out_argv1__9996__ . nd_p = ((void *)(&nd));
-  __out_argv1__9996__ . np_p = ((void *)(&np));
-  XOMP_parallel_start(OUT__1__9996__,&__out_argv1__9996__,1,0,"/home/awang15/Projects/rexdev/rex_src/tests/nonsmoke/functional/CompileTests/OpenMP_tests/md_open_mp.c",607);
-  XOMP_parallel_end("/home/awang15/Projects/rexdev/rex_src/tests/nonsmoke/functional/CompileTests/OpenMP_tests/md_open_mp.c",620);
-  return ;
+  __out_argv1__9996__.rmass_p = ((void *)(&rmass));
+  __out_argv1__9996__.dt_p = ((void *)(&dt));
+  __out_argv1__9996__.acc_p = &acc;
+  __out_argv1__9996__.f_p = &f;
+  __out_argv1__9996__.vel_p = &vel;
+  __out_argv1__9996__.pos_p = &pos;
+  __out_argv1__9996__.nd_p = ((void *)(&nd));
+  __out_argv1__9996__.np_p = ((void *)(&np));
+  XOMP_parallel_start(OUT__1__9996__, &__out_argv1__9996__, 1, 0,
+                      "/home/awang15/Projects/rexdev/rex_src/tests/nonsmoke/"
+                      "functional/CompileTests/OpenMP_tests/md_open_mp.c",
+                      607);
+  XOMP_parallel_end("/home/awang15/Projects/rexdev/rex_src/tests/nonsmoke/"
+                    "functional/CompileTests/OpenMP_tests/md_open_mp.c",
+                    620);
+  return;
 }
 
-static void OUT__1__9996__(void *__out_argv)
-{
-  int *np = (int *)(((struct OUT__1__9996___data *)__out_argv) -> np_p);
-  int *nd = (int *)(((struct OUT__1__9996___data *)__out_argv) -> nd_p);
-  double **pos = (double **)(((struct OUT__1__9996___data *)__out_argv) -> pos_p);
-  double **vel = (double **)(((struct OUT__1__9996___data *)__out_argv) -> vel_p);
-  double **f = (double **)(((struct OUT__1__9996___data *)__out_argv) -> f_p);
-  double **acc = (double **)(((struct OUT__1__9996___data *)__out_argv) -> acc_p);
-  double *dt = (double *)(((struct OUT__1__9996___data *)__out_argv) -> dt_p);
-  double *rmass = (double *)(((struct OUT__1__9996___data *)__out_argv) -> rmass_p);
+static void OUT__1__9996__(void *__out_argv) {
+  int *np = (int *)(((struct OUT__1__9996___data *)__out_argv)->np_p);
+  int *nd = (int *)(((struct OUT__1__9996___data *)__out_argv)->nd_p);
+  double **pos = (double **)(((struct OUT__1__9996___data *)__out_argv)->pos_p);
+  double **vel = (double **)(((struct OUT__1__9996___data *)__out_argv)->vel_p);
+  double **f = (double **)(((struct OUT__1__9996___data *)__out_argv)->f_p);
+  double **acc = (double **)(((struct OUT__1__9996___data *)__out_argv)->acc_p);
+  double *dt = (double *)(((struct OUT__1__9996___data *)__out_argv)->dt_p);
+  double *rmass =
+      (double *)(((struct OUT__1__9996___data *)__out_argv)->rmass_p);
   int _p_i;
   int _p_j;
   long p_index_;
   long p_lower_;
   long p_upper_;
-  XOMP_loop_default(0, *np - 1,1,&p_lower_,&p_upper_);
+  XOMP_loop_default(0, *np - 1, 1, &p_lower_, &p_upper_);
   for (p_index_ = p_lower_; p_index_ <= p_upper_; p_index_ += 1) {
-    for (_p_i = 0; _p_i <  *nd; _p_i++) {
-      ( *pos)[_p_i + p_index_ *  *nd] = ( *pos)[_p_i + p_index_ *  *nd] + ( *vel)[_p_i + p_index_ *  *nd] *  *dt + 0.5 * ( *acc)[_p_i + p_index_ *  *nd] *  *dt *  *dt;
-      ( *vel)[_p_i + p_index_ *  *nd] = ( *vel)[_p_i + p_index_ *  *nd] + 0.5 *  *dt * (( *f)[_p_i + p_index_ *  *nd] *  *rmass + ( *acc)[_p_i + p_index_ *  *nd]);
-      ( *acc)[_p_i + p_index_ *  *nd] = ( *f)[_p_i + p_index_ *  *nd] *  *rmass;
+    for (_p_i = 0; _p_i < *nd; _p_i++) {
+      (*pos)[_p_i + p_index_ * *nd] =
+          (*pos)[_p_i + p_index_ * *nd] + (*vel)[_p_i + p_index_ * *nd] * *dt +
+          0.5 * (*acc)[_p_i + p_index_ * *nd] * *dt * *dt;
+      (*vel)[_p_i + p_index_ * *nd] =
+          (*vel)[_p_i + p_index_ * *nd] +
+          0.5 * *dt *
+              ((*f)[_p_i + p_index_ * *nd] * *rmass +
+               (*acc)[_p_i + p_index_ * *nd]);
+      (*acc)[_p_i + p_index_ * *nd] = (*f)[_p_i + p_index_ * *nd] * *rmass;
     }
   }
   XOMP_barrier();
 }
 
-static void OUT__2__9996__(void *__out_argv)
-{
-  int *np = (int *)(((struct OUT__2__9996___data *)__out_argv) -> np_p);
-  int *nd = (int *)(((struct OUT__2__9996___data *)__out_argv) -> nd_p);
-  double **pos = (double **)(((struct OUT__2__9996___data *)__out_argv) -> pos_p);
-  double **vel = (double **)(((struct OUT__2__9996___data *)__out_argv) -> vel_p);
-  double **f = (double **)(((struct OUT__2__9996___data *)__out_argv) -> f_p);
-  double *ke = (double *)(((struct OUT__2__9996___data *)__out_argv) -> ke_p);
-  double *pe = (double *)(((struct OUT__2__9996___data *)__out_argv) -> pe_p);
-  double *PI2 = (double *)(((struct OUT__2__9996___data *)__out_argv) -> PI2_p);
+static void OUT__2__9996__(void *__out_argv) {
+  int *np = (int *)(((struct OUT__2__9996___data *)__out_argv)->np_p);
+  int *nd = (int *)(((struct OUT__2__9996___data *)__out_argv)->nd_p);
+  double **pos = (double **)(((struct OUT__2__9996___data *)__out_argv)->pos_p);
+  double **vel = (double **)(((struct OUT__2__9996___data *)__out_argv)->vel_p);
+  double **f = (double **)(((struct OUT__2__9996___data *)__out_argv)->f_p);
+  double *ke = (double *)(((struct OUT__2__9996___data *)__out_argv)->ke_p);
+  double *pe = (double *)(((struct OUT__2__9996___data *)__out_argv)->pe_p);
+  double *PI2 = (double *)(((struct OUT__2__9996___data *)__out_argv)->PI2_p);
   double _p_d;
   double _p_d2;
   int _p_i;
@@ -483,44 +508,45 @@ static void OUT__2__9996__(void *__out_argv)
   long p_index_;
   long p_lower_;
   long p_upper_;
-  XOMP_loop_default(0, *np - 1,1,&p_lower_,&p_upper_);
+  XOMP_loop_default(0, *np - 1, 1, &p_lower_, &p_upper_);
   for (p_index_ = p_lower_; p_index_ <= p_upper_; p_index_ += 1) {
-/*
-  Compute the potential energy and forces.
-*/
-    for (_p_i = 0; _p_i <  *nd; _p_i++) {
-      ( *f)[_p_i + p_index_ *  *nd] = 0.0;
+    /*
+      Compute the potential energy and forces.
+    */
+    for (_p_i = 0; _p_i < *nd; _p_i++) {
+      (*f)[_p_i + p_index_ * *nd] = 0.0;
     }
-    for (_p_j = 0; _p_j <  *np; _p_j++) {
+    for (_p_j = 0; _p_j < *np; _p_j++) {
       if (p_index_ != _p_j) {
-        _p_d = dist( *nd, *pos + p_index_ *  *nd, *pos + _p_j *  *nd,_p_rij);
-/*
-  Attribute half of the potential energy to particle J.
-*/
-        if (_p_d <  *PI2) {
+        _p_d = dist(*nd, *pos + p_index_ * *nd, *pos + _p_j * *nd, _p_rij);
+        /*
+          Attribute half of the potential energy to particle J.
+        */
+        if (_p_d < *PI2) {
           _p_d2 = _p_d;
+        } else {
+          _p_d2 = *PI2;
         }
-         else {
-          _p_d2 =  *PI2;
-        }
-        _p_pe = _p_pe + 0.5 * pow((sin(_p_d2)),2);
-        for (_p_i = 0; _p_i <  *nd; _p_i++) {
-          ( *f)[_p_i + p_index_ *  *nd] = ( *f)[_p_i + p_index_ *  *nd] - _p_rij[_p_i] * sin(2.0 * _p_d2) / _p_d;
+        _p_pe = _p_pe + 0.5 * pow((sin(_p_d2)), 2);
+        for (_p_i = 0; _p_i < *nd; _p_i++) {
+          (*f)[_p_i + p_index_ * *nd] = (*f)[_p_i + p_index_ * *nd] -
+                                        _p_rij[_p_i] * sin(2.0 * _p_d2) / _p_d;
         }
       }
     }
-/*
-  Compute the kinetic energy.
-*/
-    for (_p_i = 0; _p_i <  *nd; _p_i++) {
-      _p_ke = _p_ke + ( *vel)[_p_i + p_index_ *  *nd] * ( *vel)[_p_i + p_index_ *  *nd];
+    /*
+      Compute the kinetic energy.
+    */
+    for (_p_i = 0; _p_i < *nd; _p_i++) {
+      _p_ke =
+          _p_ke + (*vel)[_p_i + p_index_ * *nd] * (*vel)[_p_i + p_index_ * *nd];
     }
   }
   XOMP_barrier();
   XOMP_atomic_start();
-   *ke =  *ke + _p_ke;
+  *ke = *ke + _p_ke;
   XOMP_atomic_end();
   XOMP_atomic_start();
-   *pe =  *pe + _p_pe;
+  *pe = *pe + _p_pe;
   XOMP_atomic_end();
 }

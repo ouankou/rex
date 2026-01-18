@@ -1,4 +1,4 @@
-#include <Predicate.h>
+#include "Predicate.h"
 
 namespace Rose {
 namespace StringUtility {
@@ -7,10 +7,9 @@ namespace StringUtility {
 //                                      Predicates
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool
-isLineTerminated(const std::string &s) {
-    return !s.empty() && ('\n'==s[s.size()-1] || '\r'==s[s.size()-1]);
+bool isLineTerminated(const std::string &s) {
+  return !s.empty() && ('\n' == s[s.size() - 1] || '\r' == s[s.size() - 1]);
 }
 
-} // namespace
-} // namespace
+} // namespace StringUtility
+} // namespace Rose

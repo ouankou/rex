@@ -2,14 +2,9 @@
 #include "sage3basic.h"
 
 #include "nodeQuery.h"
+
 #include "nodeQueryInheritedAttribute.h"
 
-NodeQueryInheritedAttributeType::~NodeQueryInheritedAttributeType ()
-   {
-   }
+NodeQueryInheritedAttributeType::~NodeQueryInheritedAttributeType() {}
 
-NodeQueryInheritedAttributeType::NodeQueryInheritedAttributeType ()
-   {
-   }
-
-
+NodeQueryInheritedAttributeType::NodeQueryInheritedAttributeType() {}

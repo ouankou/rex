@@ -1,15 +1,18 @@
-//===-- src/frontend/Experimental_General_Language_Support/Tokens.C ----*- C++ -*-===//
+//===-- src/frontend/Experimental_General_Language_Support/Tokens.C ----*- C++
+//-*-===//
 //
 // Supports reading tokens from files (for now)
 //
 //===-----------------------------------------------------------------------------===//
 
 #include "Tokens.h"
+
 #include <iostream>
+
 #include <sstream>
 
 namespace Rose {
-  namespace builder {
+namespace builder {
 
 TokenStream::TokenStream(std::istringstream &is) {
   std::vector<std::string> row(6);
@@ -19,21 +22,21 @@ TokenStream::TokenStream(std::istringstream &is) {
     // Read type and line,column information
     for (int i = 0; i < 5; i++) {
       row[i].clear(); // clear old string
-      if ((error = getTokenElement(is,row[i])) < 0) break;
+      if ((error = getTokenElement(is, row[i])) < 0)
+        break;
     }
 
     // Read lexeme
     TokenKind type = static_cast<TK>(std::stoi(row[0]));
     if (!error && type == TokenKind::comment) {
       row[5].clear(); // clear old string
-      error = getTokenComment(is,row[5]);
+      error = getTokenComment(is, row[5]);
     }
 
     if (!error) {
       // Append the token
       tokens_.emplace_back(Token{row});
-    }
-    else {
+    } else {
       std::cerr << "TokenStream:: WARNING, error occurred, skipping row\n";
       break;
     }
@@ -45,10 +48,13 @@ int TokenStream::getTokenElement(std::istream &is, std::string &word) {
   char c;
 
   while (is.get(c)) {
-    if (c != ',') word.append(1,c);
-    else return 0; // success
+    if (c != ',')
+      word.append(1, c);
+    else
+      return 0; // success
   }
-  std::cerr << "TokenStream::getTokenElement: WARNING, error finding token element\n";
+  std::cerr
+      << "TokenStream::getTokenElement: WARNING, error finding token element\n";
   return 1; // failure
 }
 
@@ -59,32 +65,33 @@ int TokenStream::getTokenComment(std::istream &is, std::string &comment) {
   // Get comment terminal (percent or quote).
   if (is.get(terminal)) {
     if (terminal == '%' || terminal == '"') {
-      comment.append(1,terminal);
+      comment.append(1, terminal);
     }
     error = 0;
   }
 
   if (!error) {
     while (is.get(c)) {
-      comment.append(1,c);
+      comment.append(1, c);
       if (c == terminal && is.get(c)) {
-        if (c == '\n') return 0; // success
+        if (c == '\n')
+          return 0; // success
       }
     }
   }
 
   // Report an error
-  std::cerr << "TokenStream::getTokenComment: WARNING, error finding comment, lexeme will be empty\n";
+  std::cerr << "TokenStream::getTokenComment: WARNING, error finding comment, "
+               "lexeme will be empty\n";
   comment.clear();
   return 1; // failure
 }
 
-std::ostream& operator<< (std::ostream &os, const Token &tk) {
-  os << static_cast<int>(tk.type_) << ','
-     << tk.bLine_ << ',' << tk.bCol_ << ','
+std::ostream &operator<<(std::ostream &os, const Token &tk) {
+  os << static_cast<int>(tk.type_) << ',' << tk.bLine_ << ',' << tk.bCol_ << ','
      << tk.eLine_ << ',' << tk.eCol_ << ',' << tk.lexeme_;
   return os;
 }
 
-  } // namespace builder
+} // namespace builder
 } // namespace Rose

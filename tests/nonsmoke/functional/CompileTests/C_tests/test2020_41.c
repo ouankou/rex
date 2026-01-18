@@ -3,9 +3,7 @@
 // void foobar (int, ...);
 
 #include <stdarg.h> /* library of macros for "..." */
-
-int bits(unsigned int x, char sr, ...)  
-   {
+int bits(unsigned int x, char sr, ...) {
 #if 0
      int a, b=0;va_list listptr;   /* declare list pointer */
      va_start(listptr, sr);        /* start after var sr   */
@@ -22,6 +20,6 @@ int bits(unsigned int x, char sr, ...)
        else 
           return(x);
 #else
-     return 42;
+  return 42;
 #endif
-   }
+}

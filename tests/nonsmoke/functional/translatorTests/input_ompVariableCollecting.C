@@ -6,12 +6,10 @@ variable references within OpenMP pragma
 #include <omp.h>
 #endif
 
-void foo()
-{
+void foo() {
   float x;
 #pragma omp parallel private(x)
   {
-     x=10;
+    x = 10;
   }
 }
-

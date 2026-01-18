@@ -1,8 +1,8 @@
 #include "sage3basic.h"
 
 void SgNode::clearMemoryPool() {
-  auto& pools = allPools();
-  for (const auto& pool : pools) {
+  auto &pools = allPools();
+  for (const auto &pool : pools) {
     if (pool.base) {
       ROSE_FREE(pool.base);
     }
@@ -14,6 +14,4 @@ void SgNode::clearMemoryPool() {
   releaseAllPools();
 }
 
-void SgNode::deleteMemoryPool() {
-  clearMemoryPool();
-}
+void SgNode::deleteMemoryPool() { clearMemoryPool(); }

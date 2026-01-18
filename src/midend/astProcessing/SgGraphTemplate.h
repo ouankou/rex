@@ -2,18 +2,28 @@
 #define ROSE_SG_GRAPH_TEMPLATE_H
 
 #include <algorithm>
+
 #include <cstddef>
+
 #include <map>
+
 #include <memory>
+
 #include <set>
+
 #include <tuple>
+
 #include <unordered_set>
+
 #include <utility>
+
 #include <vector>
 
-#include <interproceduralCFG.h>
-#include <rose.h>
-#include <staticCFG.h>
+#include "interproceduralCFG.h"
+
+#include "rose.h"
+
+#include "staticCFG.h"
 
 struct Vertex {
   SgGraphNode *sg = nullptr;

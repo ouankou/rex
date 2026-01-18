@@ -13,19 +13,13 @@
 // #define FALSE 0
 // #define TRUE 1
 
-#if 0
-#ifndef INLINE
-#define INLINE inline
-#endif
-#endif
-
 class PreprocessingInfo;
 
 // DQ (12/30/2005): This is a Bad Bad thing to do (I can explain)
-// it hides names in the global namespace and causes errors in 
+// it hides names in the global namespace and causes errors in
 // otherwise valid and useful code. Where it is needed it should
-// appear only in *.C files (and only ones not included for template 
+// appear only in *.C files (and only ones not included for template
 // instantiation reasons) else they effect user who use ROSE unexpectedly.
 // using namespace std;
 
-#endif  /* general_h */
+#endif /* general_h */

@@ -16,11 +16,14 @@
 //! ASTtools/Copy.hh included.
 #define INC_ASTTOOLS_COPY_HH
 
-namespace ASTtools
-{
-  //! Create a deep-copy of an SgNode
-  ROSE_DLL_API SgNode* deepCopy (const SgNode* n);
-}
+#include "rosedll.h"
+
+class SgNode;
+
+namespace ASTtools {
+//! Create a deep-copy of an SgNode
+ROSE_DLL_API SgNode *deepCopy(const SgNode *n);
+} // namespace ASTtools
 
 #endif // !defined(INC_ASTTOOLS_COPY_HH)
 

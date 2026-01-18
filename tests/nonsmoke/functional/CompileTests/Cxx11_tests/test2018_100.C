@@ -17,72 +17,67 @@
 
 #include <bits/hashtable_policy.h>
 
+namespace std {
 
+template <
 
-namespace std
-{
+    typename _Tp,
 
-  template<
+    typename _Hash>
 
-typename _Tp,
+using __cache_default
 
-typename _Hash>
+    = __not_<__and_< // Do not cache for fast hasher.
 
-    using __cache_default
+        __is_fast_hash<_Hash>,
 
-      =  __not_<__and_<// Do not cache for fast hasher.
+        // Mandatory to have erase not throwing.
 
-                  __is_fast_hash<_Hash>,
+        __detail::__is_noexcept_hash<_Tp, _Hash>>>;
 
-                  // Mandatory to have erase not throwing.
+template <
 
-                  __detail::__is_noexcept_hash<_Tp, _Hash>>>;
+    typename _Key,
 
- 
+    typename _Value,
 
-  template<
+    typename _Alloc,
 
-typename _Key,
+    typename _ExtractKey,
 
-typename _Value,
+    typename _Equal,
 
-typename _Alloc,
+    typename _H1,
 
-typename _ExtractKey,
+    typename _H2,
 
-typename _Equal,
+    typename _Hash,
 
-typename _H1,
+    typename _RehashPolicy,
 
-typename _H2,
+    typename _Traits>
 
-typename _Hash,
-
-typename _RehashPolicy,
-
-typename _Traits>
-
-    class _Hashtable
+class _Hashtable
 
     : public __detail::_Hashtable_base<_Key, _Value, _ExtractKey, _Equal,
 
-                            _H1, _H2, _Hash, _Traits>,
+                                       _H1, _H2, _Hash, _Traits>,
 
       public __detail::_Map_base<_Key, _Value, _Alloc, _ExtractKey, _Equal,
 
-                     _H1, _H2, _Hash, _RehashPolicy, _Traits>,
+                                 _H1, _H2, _Hash, _RehashPolicy, _Traits>,
 
       public __detail::_Insert<_Key, _Value, _Alloc, _ExtractKey, _Equal,
 
-                       _H1, _H2, _Hash, _RehashPolicy, _Traits>,
+                               _H1, _H2, _Hash, _RehashPolicy, _Traits>,
 
       public __detail::_Rehash_base<_Key, _Value, _Alloc, _ExtractKey, _Equal,
 
-                         _H1, _H2, _Hash, _RehashPolicy, _Traits>,
+                                    _H1, _H2, _Hash, _RehashPolicy, _Traits>,
 
       public __detail::_Equality<_Key, _Value, _Alloc, _ExtractKey, _Equal,
 
-                     _H1, _H2, _Hash, _RehashPolicy, _Traits>
+                                 _H1, _H2, _Hash, _RehashPolicy, _Traits>
 #if 0
 ,
 
@@ -94,11 +89,11 @@ typename _Traits>
 
                        _Traits::__hash_cached::value> >::__type>
 #endif
-    {
+{
 
-      using __hash_cached = typename _Traits::__hash_cached;
+  using __hash_cached = typename _Traits::__hash_cached;
 
-      using __node_type = __detail::_Hash_node<_Value, __hash_cached::value>;
+  using __node_type = __detail::_Hash_node<_Value, __hash_cached::value>;
 
 #if 0
       using __node_alloc_type =
@@ -117,129 +112,97 @@ typename _Traits>
      typename __hashtable_alloc::__node_alloc_traits;
 #endif
 
- 
+public:
+  typedef _Key key_type;
 
-    public:
+  typedef _Value value_type;
 
-      typedef _Key                              key_type;
+  typedef _Alloc allocator_type;
 
-      typedef _Value                            value_type;
+  typedef _Equal key_equal;
 
-      typedef _Alloc                            allocator_type;
+  // mapped_type, if present, comes from _Map_base.
 
-      typedef _Equal                            key_equal;
+  // hasher, if present, comes from _Hash_code_base/_Hashtable_base.
 
- 
+  // typedef typename __value_alloc_traits::pointer        pointer;
 
-      // mapped_type, if present, comes from _Map_base.
+private:
+  using __hashtable_base = __detail::
 
-      // hasher, if present, comes from _Hash_code_base/_Hashtable_base.
+      _Hashtable_base<_Key, _Value, _ExtractKey,
 
-      // typedef typename __value_alloc_traits::pointer        pointer;
+                      _Equal, _H1, _H2, _Hash, _Traits>;
 
- 
+public:
+  using const_iterator = typename __hashtable_base::const_iterator;
 
-    private:
-
-      using __hashtable_base = __detail::
-
-                       _Hashtable_base<_Key, _Value, _ExtractKey,
-
-                                 _Equal, _H1, _H2, _Hash, _Traits>;
-
-    public:
-
-      using const_iterator = typename __hashtable_base::const_iterator;
-
- 
-
-  // _Hashtable& operator=(_Hashtable&& __ht) noexcept(__node_alloc_traits::_S_nothrow_move()) {}
-
-    };
-
- 
-
- 
-
- 
+  // _Hashtable& operator=(_Hashtable&& __ht)
+  // noexcept(__node_alloc_traits::_S_nothrow_move()) {}
+};
 
 _GLIBCXX_END_NAMESPACE_VERSION
 
 } // namespace std
 
- 
+template <bool _Cache>
 
- 
+using __umap_traits = std::__detail::_Hashtable_traits<_Cache, false, true>;
 
-  template<bool _Cache>
+template <
 
-    using __umap_traits = std::__detail::_Hashtable_traits<_Cache, false, true>;
+    typename _Key,
 
- 
+    typename _Tp>
 
-  template<
+using __umap_hashtable = std::_Hashtable<
+    _Key, std::pair<const _Key, _Tp>,
 
-typename _Key,
+    std::allocator<std::pair<const _Key, _Tp>>,
 
-typename _Tp>
+    std::__detail::_Select1st,
 
-    using __umap_hashtable = std::_Hashtable<_Key, std::pair<const _Key, _Tp>,
+    std::equal_to<_Key>,
 
-                                        std::allocator<std::pair<const _Key, _Tp>>,
+    std::hash<_Key>,
 
-                                        std::__detail::_Select1st,
+    std::__detail::_Mod_range_hashing,
 
-                             std::equal_to<_Key>,
+    std::__detail::_Default_ranged_hash,
 
-                             std::hash<_Key>,
+    std::__detail::_Prime_rehash_policy,
 
-                             std::__detail::_Mod_range_hashing,
+    __umap_traits<std::__cache_default<_Key, std::hash<_Key>>::value>>;
 
-                             std::__detail::_Default_ranged_hash,
+template <
 
-                             std::__detail::_Prime_rehash_policy,
+    class _Key,
 
-                                        __umap_traits<std::__cache_default<_Key, std::hash<_Key>>::value>>;
+    class _Tp>
 
- 
+class unordered_map
 
-  template<
+{
 
-class _Key,
+  __umap_hashtable<_Key, _Tp> _M_h;
 
-class _Tp >
+public:
+  typedef typename __umap_hashtable<_Key, _Tp>::const_iterator const_iterator;
 
-    class unordered_map
+  unordered_map &
 
-    {
+  operator=(const unordered_map &) = default;
 
-     __umap_hashtable<_Key, _Tp>  _M_h;
+  unordered_map &
 
-    public:
-
-      typedef typename __umap_hashtable<_Key, _Tp>::const_iterator     const_iterator;
-
-      unordered_map&
-
-      operator=(const unordered_map&) = default;
-
-      unordered_map&
-
-      operator=(unordered_map&&) = default;
-
-    };
-
- 
+  operator=(unordered_map &&) = default;
+};
 
 namespace namespace_1 {
 
-class Class_1
-{
+class Class_1 {
 public:
-   typedef unordered_map<int, int>::const_iterator typedef_1;
-
+  typedef unordered_map<int, int>::const_iterator typedef_1;
 };
 
-}
-
- 
+} // namespace namespace_1

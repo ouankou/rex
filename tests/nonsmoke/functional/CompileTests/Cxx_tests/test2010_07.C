@@ -4,9 +4,9 @@
 // #include "sage3basic.h"
 // #include "processSupport.h" // This includes RoseAsserts.h
 
-#include "assert.h"
-
 #include "roseInternal.h"
+
+#include <assert.h>
 
 // void __assert_fail(const char*, const char*, unsigned int, const char*);
 // extern "C" void __assert_fail();
@@ -20,11 +20,9 @@
 // 21, __PRETTY_FUNCTION__), static_cast<void> (0))); But legacy frontend will
 // substitute "__PRETTY_FUNCTION__" with "__assert_fail", or so it seems.
 
-struct Y
-   {
-     void foo1()
-        {
-          ROSE_ASSERT (!"Inside of struct Y::foo1 (using ROSE_ASSERT)");
-          assert (!"Inside of struct Y::foo1 (using assert)");
-        }
-   };
+struct Y {
+  void foo1() {
+    ROSE_ASSERT(!"Inside of struct Y::foo1 (using ROSE_ASSERT)");
+    assert(!"Inside of struct Y::foo1 (using assert)");
+  }
+};

@@ -1,6 +1,10 @@
 #ifndef FIXUP_TEMPLATE_ARGUMENTS_H
 #define FIXUP_TEMPLATE_ARGUMENTS_H
 
+#include "AstSimpleProcessing.h"
+
+#include <string>
+
 // DQ (11/27/2016): Provide alternative typedef type that when unparsed will not
 // contain private types). legacy frontend can in some cases cause a template
 // argument to reference a type which could not be used in the generated
@@ -16,39 +20,33 @@
 // it instead.  This appears to be a normalization within legacy frontend, one
 // that only effects the use in ROSE as a source-to-source compiler.
 
-#if 0
-class FixupTemplateArguments
-// : public SgSimpleProcessing
-   : public ROSE_VisitTraversal
-#else
-class FixupTemplateArguments : public SgSimpleProcessing
-#endif
-   {
-     public:
-      //! Function to support traversal of types (where islands can hide)
-       // void visitType ( SgType* typeNode );
+class FixupTemplateArguments : public SgSimpleProcessing {
+public:
+  //! Function to support traversal of types (where islands can hide)
+  // void visitType ( SgType* typeNode );
 
-      //! Required traversal function
-          void visit (SgNode* node);
+  //! Required traversal function
+  void visit(SgNode *node);
 
-       // FixupTemplateArguments () {}
-          void processTemplateArgument ( SgTemplateArgument* templateArgument, SgScopeStatement* targetScope );
+  // FixupTemplateArguments () {}
+  void processTemplateArgument(SgTemplateArgument *templateArgument,
+                               SgScopeStatement *targetScope);
 
-       // This avoids a warning by g++
-       // virtual ~FixupTemplateArgumentsOnMemoryPool(); 
+  // This avoids a warning by g++
+  // virtual ~FixupTemplateArgumentsOnMemoryPool();
 
-          bool contains_private_type ( SgType* type, SgScopeStatement* targetScope );
-          bool contains_private_type ( SgTemplateArgument* templateArgument, SgScopeStatement* targetScope );
-          bool contains_private_type ( SgTemplateArgumentPtrList & templateArgListPtr, SgScopeStatement* targetScope );
+  bool contains_private_type(SgType *type, SgScopeStatement *targetScope);
+  bool contains_private_type(SgTemplateArgument *templateArgument,
+                             SgScopeStatement *targetScope);
+  bool contains_private_type(SgTemplateArgumentPtrList &templateArgListPtr,
+                             SgScopeStatement *targetScope);
 
-       // DQ (2/11/2017): Debugging support.
-          std::string generate_string_name ( SgType* type, SgNode* nodeReferenceToType );
-   };
-
+  // DQ (2/11/2017): Debugging support.
+  std::string generate_string_name(SgType *type, SgNode *nodeReferenceToType);
+};
 
 // void fixupTemplateArguments();
-void fixupTemplateArguments( SgNode* node );
+void fixupTemplateArguments(SgNode *node);
 
 // endif for FIXUP_TEMPLATE_ARGUMENTS_H
 #endif
-

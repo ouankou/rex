@@ -12,15 +12,15 @@
 
 /*LINTLIBRARY*/
 
-#ifndef	_XOPEN_SOURCE
-#   define _XOPEN_SOURCE 500
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 500
 #endif
 
 #include <stdarg.h>
+
 #include <stdio.h>
 
 #include "udunits2.h"
-
 
 /*
  * Writes an error-message to the standard-error stream when received and
@@ -34,18 +34,13 @@
  *	else	The number of bytes of "fmt" and "arg" written excluding any
  *		terminating NUL.
  */
-int
-ut_write_to_stderr(
-    const char* const	fmt,
-    va_list		args)
-{
-    int	nbytes = vfprintf(stderr, fmt, args);
+int ut_write_to_stderr(const char *const fmt, va_list args) {
+  int nbytes = vfprintf(stderr, fmt, args);
 
-    (void)fputc('\n', stderr);
+  (void)fputc('\n', stderr);
 
-    return nbytes;
+  return nbytes;
 }
-
 
 /*
  * Does nothing with an error-message.
@@ -56,17 +51,9 @@ ut_write_to_stderr(
  * Returns:
  *	0	Always.
  */
-int
-ut_ignore(
-    const char* const	fmt,
-    va_list		args)
-{
-    return 0;
-}
+int ut_ignore(const char *const fmt, va_list args) { return 0; }
 
-
-static ut_error_message_handler	errorMessageHandler = ut_write_to_stderr;
-
+static ut_error_message_handler errorMessageHandler = ut_write_to_stderr;
 
 /*
  * Returns the previously-installed error-message handler and optionally
@@ -74,23 +61,20 @@ static ut_error_message_handler	errorMessageHandler = ut_write_to_stderr;
  *
  * Arguments:
  *      handler		NULL or pointer to the error-message handler.  If NULL,
- *			then the handler is not changed.  The 
+ *			then the handler is not changed.  The
  *			currently-installed handler can be obtained this way.
  * Returns:
  *	Pointer to the previously-installed error-message handler.
  */
 ut_error_message_handler
-ut_set_error_message_handler(
-    ut_error_message_handler	handler)
-{
-    ut_error_message_handler	prev = errorMessageHandler;
+ut_set_error_message_handler(ut_error_message_handler handler) {
+  ut_error_message_handler prev = errorMessageHandler;
 
-    if (handler != NULL)
-	errorMessageHandler = handler;
+  if (handler != NULL)
+    errorMessageHandler = handler;
 
-    return prev;
+  return prev;
 }
-
 
 /*
  * Handles an error-message.
@@ -103,19 +87,15 @@ ut_set_error_message_handler(
  *	else	The number of bytes of "fmt" and "arg" written excluding any
  *		terminating NUL.
  */
-int
-ut_handle_error_message(
-    const char* const	fmt,
-    ...)
-{
-    int			nbytes;
-    va_list		args;
+int ut_handle_error_message(const char *const fmt, ...) {
+  int nbytes;
+  va_list args;
 
-    va_start(args, fmt);
+  va_start(args, fmt);
 
-    nbytes = errorMessageHandler(fmt, args);
+  nbytes = errorMessageHandler(fmt, args);
 
-    va_end(args);
+  va_end(args);
 
-    return nbytes;
+  return nbytes;
 }

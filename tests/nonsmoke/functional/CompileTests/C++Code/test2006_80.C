@@ -106,9 +106,9 @@ class X
 // never have a matching defining declaration.  Even if it would not link
 // it should still compile!
 // #include <dirent.h>
+
 #include <glob.h>
 #endif
-
 
 #if 0
 int f(int x);
@@ -126,12 +126,10 @@ class StringDict {
 #endif
 
 #if 1
-void foo()
-   {
-     const int n = 10;
-     for (int i = 0, j = 1; i < n; i++)
-        {
-          j++;
-        }
-   }
+void foo() {
+  const int n = 10;
+  for (int i = 0, j = 1; i < n; i++) {
+    j++;
+  }
+}
 #endif

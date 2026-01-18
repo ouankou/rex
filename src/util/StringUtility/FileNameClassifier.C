@@ -1,535 +1,327 @@
 // DQ (6/25/2009): Added comments to this file.
 
-// This file contains the code to classify files as being either user files or system files.
-// The classification levesl are more envolved but this support allows users to extress
-// rules that apply to there own code differently than to the STL for example.  The
-// approach is to associate a classification with files based on their location and 
-// sometimes also the filename. Thus analysis can be done for user code that checks
-// a rule but skips non-user code where that rule might not be valid.
+// This file contains the code to classify files as being either user files or
+// system files. The classification levesl are more envolved but this support
+// allows users to extress rules that apply to there own code differently than
+// to the STL for example.  The approach is to associate a classification with
+// files based on their location and sometimes also the filename. Thus analysis
+// can be done for user code that checks a rule but skips non-user code where
+// that rule might not be valid.
 
-// DQ (6/25/2009): Greg White reported that the file locations for STL (and other system files)
-// are not correctly interpreted when soft-links are used.  Need to use "lstat()" and "readlink()"
-// to chase down and resolved links so that we can more robustly classify files.  
-// Note that system files used in ROSE are in fact links to the system files used in the
-// back-end vendor compiler, so this is important for classification of system files
-// used in processing software using ROSE.
+// DQ (6/25/2009): Greg White reported that the file locations for STL (and
+// other system files) are not correctly interpreted when soft-links are used.
+// Need to use "lstat()" and "readlink()" to chase down and resolved links so
+// that we can more robustly classify files. Note that system files used in ROSE
+// are in fact links to the system files used in the back-end vendor compiler,
+// so this is important for classification of system files used in processing
+// software using ROSE.
 
-// DQ (2/11/2010): Added so that we can detect what compiler is being used to compile this file.
-#include "rose_config.h"
-
+// DQ (2/11/2010): Added so that we can detect what compiler is being used to
+// compile this file.
 #include "FileUtility.h"
+
+#include "Rose/StringUtility.h"
+
 #include "mlog.h"
-#include <Rose/StringUtility.h>
+
 #include <algorithm>
+
 #include <cassert>
+
 #include <cstdlib>
+
 #include <filesystem>
+
 #include <map>
+
+#include "rose_config.h"
 
 #include <sys/utsname.h>
 
 using namespace std;
 using namespace Rose;
 
-// DQ (2/8/2010): I don't like namespaces used to define functions (too unclear).
-// namespace Rose {
-// namespace StringUtility {
+// DQ (2/8/2010): I don't like namespaces used to define functions (too
+// unclear). namespace Rose { namespace StringUtility {
 
-    namespace
-    {
-        bool startsWith(const string& str, const string& substr)
-        {
-            if (str.length() < substr.length())
-                return false;
-            int result = str.compare(0, substr.length(), substr);
-            return (result == 0);
-        }
+namespace {
+bool startsWith(const string &str, const string &substr) {
+  if (str.length() < substr.length())
+    return false;
+  int result = str.compare(0, substr.length(), substr);
+  return (result == 0);
+}
 
-        bool endsWith(const string& str, const string& substr)
-        {
-            if (str.length() < substr.length())
-                return false;
-            int result = str.compare(str.length() - substr.length(),
-                    substr.length(), substr);
-            return (result == 0);
-        }
+bool endsWith(const string &str, const string &substr) {
+  if (str.length() < substr.length())
+    return false;
+  int result =
+      str.compare(str.length() - substr.length(), substr.length(), substr);
+  return (result == 0);
+}
 
-        // TODO can we static initialize stl structures?
-        // if so it'd be better to create these as sets
-        // test for existance, which would be *much* faster (and safer)
-        const char* LINUX_INCLUDES[] = {
-            "acpi",
-            "asm",
-            "asm-generic",
-            "asm-i386",
-            "asm-x86_64",
-            "config",
-            "linux",
-            "math-emu",
-            "media",
-            "net",
-            "pcmcia",
-            "rxrpc",
-            "scsi",
-            "sound",
-            "video",
-            NULL };
+// TODO can we static initialize stl structures?
+// if so it'd be better to create these as sets
+// test for existance, which would be *much* faster (and safer)
+const char *LINUX_INCLUDES[] = {
+    "acpi",  "asm",      "asm-generic", "asm-i386", "asm-x86_64", "config",
+    "linux", "math-emu", "media",       "net",      "pcmcia",     "rxrpc",
+    "scsi",  "sound",    "video",       NULL};
 
-        const char* GLIBC_INCLUDES[] = {
-            "_G_config.h", 
-            "a.out.h", 
-            "aio.h", 
-            "aliases.h", 
-            "alloca.h", 
-            "ar.h", 
-            "argp.h", 
-            "argz.h", 
-            "arpa", 
-            "assert.h", 
-            "bits", 
-            "byteswap.h", 
-            "complex.h", 
-            "cpio.h", 
-            "crypt.h", 
-            "ctype.h", 
-            "dirent.h", 
-            "dlfcn.h", 
-            "elf.h", 
-            "endian.h", 
-            "envz.h", 
-            "err.h", 
-            "errno.h", 
-            "error.h", 
-            "execinfo.h", 
-            "fcntl.h", 
-            "features.h", 
-            "fenv.h",
-            "fmtmsg.h", 
-            "fnmatch.h", 
-            "fpu_control.h", 
-            "fstab.h", 
-            "fts.h", 
-            "ftw.h", 
-            "gconv.h", 
-            "getopt.h", 
-            "glob.h", 
-            "gnu", 
-            "grp.h", 
-            "iconv.h", 
-            "ieee754.h", 
-            "ifaddrs.h", 
-            "inttypes.h", 
-            "langinfo.h", 
-            "lastlog.h", 
-            "libgen.h", 
-            "libintl.h", 
-            "libio.h", 
-            "limits.h", 
-            "link.h", 
-            "locale.h", 
-            "malloc.h", 
-            "math.h", 
-            "mcheck.h", 
-            "memory.h", 
-            "mntent.h", 
-            "monetary.h", 
-            "mqueue.h", 
-            "net", 
-            "netash", 
-            "netatalk", 
-            "netax25", 
-            "netdb.h", 
-            "neteconet", 
-            "netinet", 
-            "netipx", 
-            "netpacket", 
-            "netrom", 
-            "netrose", 
-            "nfs", 
-            "nl_types.h", 
-            "nptl", 
-            "nss.h", 
-            "obstack.h", 
-            "paths.h", 
-            "poll.h", 
-            "printf.h", 
-            "protocols", 
-            "pthread.h", 
-            "pty.h", 
-            "pwd.h", 
-            "re_comp.h", 
-            "regex.h", 
-            "regexp.h", 
-            "resolv.h", 
-            "rpc", 
-            "rpcsvc", 
-            "sched.h", 
-            "scsi", 
-            "search.h", 
-            "semaphore.h", 
-            "setjmp.h", 
-            "sgtty.h", 
-            "shadow.h", 
-            "signal.h", 
-            "spawn.h", 
-            "stab.h", 
-            "stdint.h", 
-            "stdio.h", 
-            "stdio_ext.h", 
-            "stdlib.h", 
-            "string.h", 
-            "strings.h", 
-            "stropts.h", 
-            "sys", 
-            "syscall.h", 
-            "sysexits.h", 
-            "syslog.h", 
-            "tar.h", 
-            "termio.h", 
-            "termios.h", 
-            "tgmath.h", 
-            "thread_db.h", 
-            "time.h", 
-            "ttyent.h", 
-            "ucontext.h", 
-            "ulimit.h", 
-            "unistd.h", 
-            "ustat.h", 
-            "utime.h", 
-            "utmp.h", 
-            "utmpx.h", 
-            "values.h", 
-            "wait.h", 
-            "wchar.h", 
-            "wctype.h", 
-            "wordexp.h", 
-            "xlocale.h",
-            NULL };
+const char *GLIBC_INCLUDES[] = {
+    "_G_config.h",   "a.out.h",    "aio.h",       "aliases.h",  "alloca.h",
+    "ar.h",          "argp.h",     "argz.h",      "arpa",       "assert.h",
+    "bits",          "byteswap.h", "complex.h",   "cpio.h",     "crypt.h",
+    "ctype.h",       "dirent.h",   "dlfcn.h",     "elf.h",      "endian.h",
+    "envz.h",        "err.h",      "errno.h",     "error.h",    "execinfo.h",
+    "fcntl.h",       "features.h", "fenv.h",      "fmtmsg.h",   "fnmatch.h",
+    "fpu_control.h", "fstab.h",    "fts.h",       "ftw.h",      "gconv.h",
+    "getopt.h",      "glob.h",     "gnu",         "grp.h",      "iconv.h",
+    "ieee754.h",     "ifaddrs.h",  "inttypes.h",  "langinfo.h", "lastlog.h",
+    "libgen.h",      "libintl.h",  "libio.h",     "limits.h",   "link.h",
+    "locale.h",      "malloc.h",   "math.h",      "mcheck.h",   "memory.h",
+    "mntent.h",      "monetary.h", "mqueue.h",    "net",        "netash",
+    "netatalk",      "netax25",    "netdb.h",     "neteconet",  "netinet",
+    "netipx",        "netpacket",  "netrom",      "netrose",    "nfs",
+    "nl_types.h",    "nptl",       "nss.h",       "obstack.h",  "paths.h",
+    "poll.h",        "printf.h",   "protocols",   "pthread.h",  "pty.h",
+    "pwd.h",         "re_comp.h",  "regex.h",     "regexp.h",   "resolv.h",
+    "rpc",           "rpcsvc",     "sched.h",     "scsi",       "search.h",
+    "semaphore.h",   "setjmp.h",   "sgtty.h",     "shadow.h",   "signal.h",
+    "spawn.h",       "stab.h",     "stdint.h",    "stdio.h",    "stdio_ext.h",
+    "stdlib.h",      "string.h",   "strings.h",   "stropts.h",  "sys",
+    "syscall.h",     "sysexits.h", "syslog.h",    "tar.h",      "termio.h",
+    "termios.h",     "tgmath.h",   "thread_db.h", "time.h",     "ttyent.h",
+    "ucontext.h",    "ulimit.h",   "unistd.h",    "ustat.h",    "utime.h",
+    "utmp.h",        "utmpx.h",    "values.h",    "wait.h",     "wchar.h",
+    "wctype.h",      "wordexp.h",  "xlocale.h",   NULL};
 
-        const char * STL_INCLUDES[] = {
-            "algorithm",
-            "bitset",
-            "complex",
-            "deque",
-            "functional",
-            "list",
-            "map",
-            "numeric",
-            "queue",
-            "set",
-            "stack",
-            "utility",
-            "valarray",
-            "vector",
-            NULL };
+const char *STL_INCLUDES[] = {"algorithm",  "bitset", "complex", "deque",
+                              "functional", "list",   "map",     "numeric",
+                              "queue",      "set",    "stack",   "utility",
+                              "valarray",   "vector", NULL};
 
-        // CH (2/2/2010): Standard C++ header files (include new C++ 0x header files)
-        const char * GLIBCXX_INCLUDES[] = { 
-            "algorithm",
-            "bitset",
-            "cassert",
-            "cctype",
-            "cerrno",
-            "climits",
-            "clocale",
-            "cmath",
-            "complex",
-            "csetjmp",
-            "csignal",
-            "cstdarg",
-            "cstddef",
-            "cstdio",
-            "cstdlib",
-            "cstring",
-            "ctime",
-            "deque",
-            "exception",
-            "fstream",
-            "functional",
-            "iomanip",
-            "ios",
-            "iosfwd",
-            "iostream",
-            "istream",
-            "iterator",
-            "limits",
-            "list",
-            "locale",
-            "map",
-            "memory",
-            "new",
-            "numeric",
-            "ostream",
-            "queue",
-            "set",
-            "sstream",
-            "stack",
-            "stdexcept",
-            "streambuf",
-            "string",
-            "typeinfo",
-            "utility",
-            "valarray",
-            "vector",
-            NULL };
+// CH (2/2/2010): Standard C++ header files (include new C++ 0x header files)
+const char *GLIBCXX_INCLUDES[] = {
+    "algorithm", "bitset",  "cassert",    "cctype",    "cerrno",    "climits",
+    "clocale",   "cmath",   "complex",    "csetjmp",   "csignal",   "cstdarg",
+    "cstddef",   "cstdio",  "cstdlib",    "cstring",   "ctime",     "deque",
+    "exception", "fstream", "functional", "iomanip",   "ios",       "iosfwd",
+    "iostream",  "istream", "iterator",   "limits",    "list",      "locale",
+    "map",       "memory",  "new",        "numeric",   "ostream",   "queue",
+    "set",       "sstream", "stack",      "stdexcept", "streambuf", "string",
+    "typeinfo",  "utility", "valarray",   "vector",    NULL};
 
-#if 0
-// DQ (10/14/2010): This is defined but not used.
-        const char * GLIBCXX0X_INCLUDES[] = {
-            "array",
-            "random",
-            "regex",
-            "tuple",
-            "type_traits",
-            "unordered_map",
-            "unordered_set",
-            NULL };
-#endif
+bool charListMatches(const char **clist, const string &prefix,
+                     const string &fileName) {
+  const char **substr;
+  substr = clist;
+  while (*substr != NULL) {
+    string inclstr = prefix;
+    inclstr += *substr;
+    if (fileName.find(inclstr) != string::npos)
+      return true;
+    substr++;
+  }
+  return false;
+}
 
-
-        bool
-            charListMatches(const char** clist,
-                    const string& prefix,
-                    const string& fileName)
-            {
-                const char **substr;
-                substr = clist;
-                while(*substr != NULL)
-                {
-                    string inclstr = prefix;
-                    inclstr += *substr;
-                    if (fileName.find(inclstr) != string::npos)
-                        return true;
-                    substr++;
-                }
-                return false;
-            }
-
-        Rose::StringUtility::FileNameLibrary
-            classifyLibrary(const string& fileName)
-            {
+Rose::StringUtility::FileNameLibrary classifyLibrary(const string &fileName) {
 #ifndef CXX_IS_ROSE_CODE_GENERATION
-                using namespace std::filesystem;
+  using namespace std::filesystem;
 
-                if (charListMatches(LINUX_INCLUDES, "include/", fileName))
-                {
-                    return Rose::StringUtility::FILENAME_LIBRARY_LINUX;
-                }
-                if (charListMatches(GLIBC_INCLUDES, "include/", fileName))
-                {
-                    return Rose::StringUtility::FILENAME_LIBRARY_C;
-                }
-                if (fileName.find("lib/gcc") != string::npos)
-                {
-                    return Rose::StringUtility::FILENAME_LIBRARY_GCC;
-                }
-                if (fileName.find("rose.h") != string::npos ||
-                        fileName.find("include-staging/g++_HEADERS") != string::npos ||
-                        fileName.find("include-staging/gcc_HEADERS") != string::npos)
-                {
-                    return Rose::StringUtility::FILENAME_LIBRARY_ROSE;
-                }
+  if (charListMatches(LINUX_INCLUDES, "include/", fileName)) {
+    return Rose::StringUtility::FILENAME_LIBRARY_LINUX;
+  }
+  if (charListMatches(GLIBC_INCLUDES, "include/", fileName)) {
+    return Rose::StringUtility::FILENAME_LIBRARY_C;
+  }
+  if (fileName.find("lib/gcc") != string::npos) {
+    return Rose::StringUtility::FILENAME_LIBRARY_GCC;
+  }
+  if (fileName.find("rose.h") != string::npos ||
+      fileName.find("include-staging/g++_HEADERS") != string::npos ||
+      fileName.find("include-staging/gcc_HEADERS") != string::npos) {
+    return Rose::StringUtility::FILENAME_LIBRARY_ROSE;
+  }
 
-                // the path of C++ header files does not have to contain "c++"
-                //if (fileName.find("c++") != string::npos)
-                {
-                    const char ** substr = STL_INCLUDES;
-                    while (*substr != NULL)
-                    {
-                        if (endsWith(fileName, *substr))
-                            return Rose::StringUtility::FILENAME_LIBRARY_STL;
-                        ++substr;
-                    }
-                }
+  // the path of C++ header files does not have to contain "c++"
+  // if (fileName.find("c++") != string::npos)
+  {
+    const char **substr = STL_INCLUDES;
+    while (*substr != NULL) {
+      if (endsWith(fileName, *substr))
+        return Rose::StringUtility::FILENAME_LIBRARY_STL;
+      ++substr;
+    }
+  }
 
-                path p = fileName;
-                while (!p.empty())
-                {
-                    p = p.parent_path();
-                    if(exists(p / path("rose.h")))
-                        return Rose::StringUtility::FILENAME_LIBRARY_ROSE;
+  path p = fileName;
+  while (!p.empty()) {
+    p = p.parent_path();
+    if (exists(p / path("rose.h")))
+      return Rose::StringUtility::FILENAME_LIBRARY_ROSE;
 
-                    const char ** substr = GLIBCXX_INCLUDES;
-                    bool isCxxHeader = true;
-                    while (*substr != NULL)
-                    {
-                        if (!exists(p / path(*substr)))
-                        {
-                            isCxxHeader = false;
-                            break;
-                        }
-                        ++substr;
-                    }
-                    if(isCxxHeader)
-                        return Rose::StringUtility::FILENAME_LIBRARY_STDCXX;
-                }
+    const char **substr = GLIBCXX_INCLUDES;
+    bool isCxxHeader = true;
+    while (*substr != NULL) {
+      if (!exists(p / path(*substr))) {
+        isCxxHeader = false;
+        break;
+      }
+      ++substr;
+    }
+    if (isCxxHeader)
+      return Rose::StringUtility::FILENAME_LIBRARY_STDCXX;
+  }
 
-                /* 
-                if (fileName.find("c++") != string::npos)
-                {
-                    const char ** substr = GLIBCXX_INCLUDES;
-                    while (*substr != NULL)
-                    {
-                        if (endsWith(fileName, *substr))
-                            return FILENAME_LIBRARY_STDCXX;
-                        ++substr;
-                    }
-                }
-                */
+  /*
+  if (fileName.find("c++") != string::npos)
+  {
+      const char ** substr = GLIBCXX_INCLUDES;
+      while (*substr != NULL)
+      {
+          if (endsWith(fileName, *substr))
+              return FILENAME_LIBRARY_STDCXX;
+          ++substr;
+      }
+  }
+  */
 #endif
-                return Rose::StringUtility::FILENAME_LIBRARY_UNKNOWN;
-            }
-    } // end unnamed namespace for file location definitions
+  return Rose::StringUtility::FILENAME_LIBRARY_UNKNOWN;
+}
+} // namespace
 
-    int
-        Rose::StringUtility::directoryDistance(const string& left, const string& right)
-        {
-            vector<string> lvec;
-            splitStringIntoStrings(left, '/', lvec);
-            vector<string> rvec;
-            splitStringIntoStrings(right, '/', rvec);
+int Rose::StringUtility::directoryDistance(const string &left,
+                                           const string &right) {
+  vector<string> lvec;
+  splitStringIntoStrings(left, '/', lvec);
+  vector<string> rvec;
+  splitStringIntoStrings(right, '/', rvec);
 
-            assert(!lvec.empty());
-            assert(!rvec.empty());
+  assert(!lvec.empty());
+  assert(!rvec.empty());
 
-            lvec.erase(lvec.end());
-            rvec.erase(rvec.end());
+  lvec.erase(lvec.end());
+  rvec.erase(rvec.end());
 
-            vector<string>::iterator l = lvec.begin();
-            vector<string>::iterator r = rvec.begin();
-            // empty body, this is just to advance the iters as long
-            // as elts match
-            for (; l != lvec.end() && r != rvec.end() && *l == *r; l++, r++)
-                ;
+  vector<string>::iterator l = lvec.begin();
+  vector<string>::iterator r = rvec.begin();
+  // empty body, this is just to advance the iters as long
+  // as elts match
+  for (; l != lvec.end() && r != rvec.end() && *l == *r; l++, r++)
+    ;
 
-            return distance(l, lvec.end()) + distance(r, rvec.end());
-        }
+  return distance(l, lvec.end()) + distance(r, rvec.end());
+}
 
-        Rose::StringUtility::OSType Rose::StringUtility::getOSType() {
-          struct utsname val;
+Rose::StringUtility::OSType Rose::StringUtility::getOSType() {
+  struct utsname val;
 
-          int ret = uname(&val);
-          if (ret == -1)
-            return OS_TYPE_UNKNOWN;
+  int ret = uname(&val);
+  if (ret == -1)
+    return OS_TYPE_UNKNOWN;
 
-          string sysname = val.sysname;
-          if (sysname == "Linux")
-            return OS_TYPE_LINUX;
-          else
-            return OS_TYPE_UNKNOWN;
-        }
+  string sysname = val.sysname;
+  if (sysname == "Linux")
+    return OS_TYPE_LINUX;
+  else
+    return OS_TYPE_UNKNOWN;
+}
 
-        void Rose::StringUtility::homeDir(string &dir) {
-          const char *home = getenv("HOME");
-          ROSE_ASSERT(home);
-          dir = home;
-        }
+void Rose::StringUtility::homeDir(string &dir) {
+  const char *home = getenv("HOME");
+  ROSE_ASSERT(home);
+  dir = home;
+}
 
-    // Update FileNameInfo class with details about where the
-    // file comes from and what library it might be a part of
-    Rose::StringUtility::FileNameClassification
-        Rose::StringUtility::classifyFileName(const string& fileName,
-                const string& appPath)
-        {
-            return classifyFileName(fileName, appPath, std::map<string, string>(), getOSType());
-        }
+// Update FileNameInfo class with details about where the
+// file comes from and what library it might be a part of
+Rose::StringUtility::FileNameClassification
+Rose::StringUtility::classifyFileName(const string &fileName,
+                                      const string &appPath) {
+  return classifyFileName(fileName, appPath, std::map<string, string>(),
+                          getOSType());
+}
 
-    Rose::StringUtility::FileNameClassification
-        Rose::StringUtility::classifyFileName(const string& fileName,
-                const string& appPath,
-                OSType os)
-        {
-            return classifyFileName(fileName, appPath, std::map<string, string>(), os);
-        }
+Rose::StringUtility::FileNameClassification
+Rose::StringUtility::classifyFileName(const string &fileName,
+                                      const string &appPath, OSType os) {
+  return classifyFileName(fileName, appPath, std::map<string, string>(), os);
+}
 
-    Rose::StringUtility::FileNameClassification
-        Rose::StringUtility::classifyFileName(const string& filename,
-                const string& appPath,
-                const std::map<string, string>& libPathCollection)
-        {
-            return classifyFileName(filename, appPath, libPathCollection, getOSType());
-        }
+Rose::StringUtility::FileNameClassification
+Rose::StringUtility::classifyFileName(
+    const string &filename, const string &appPath,
+    const std::map<string, string> &libPathCollection) {
+  return classifyFileName(filename, appPath, libPathCollection, getOSType());
+}
 
-    // Internal function to above public interface, this version
-    // is exposed just for testing purposes 
-    Rose::StringUtility::FileNameClassification
-        Rose::StringUtility::classifyFileName(const string& fileName,
-                const string& appPathConst,
-                const std::map<string, string>& libPathCollection,
-                OSType os)
-        {
-            // First, check if this file exists. Filename may be changed 
-            // into an illegal one by #line directive
-            if(!std::filesystem::exists(fileName))
-                return FileNameClassification(FILENAME_LOCATION_NOT_EXIST,
-                        "Unknown",
-                        0);
+// Internal function to above public interface, this version
+// is exposed just for testing purposes
+Rose::StringUtility::FileNameClassification
+Rose::StringUtility::classifyFileName(
+    const string &fileName, const string &appPathConst,
+    const std::map<string, string> &libPathCollection, OSType os) {
+  // First, check if this file exists. Filename may be changed
+  // into an illegal one by #line directive
+  if (!std::filesystem::exists(fileName))
+    return FileNameClassification(FILENAME_LOCATION_NOT_EXIST, "Unknown", 0);
 
-            string appPath = appPathConst;
+  string appPath = appPathConst;
 
-            for(std::map<string, string>::const_iterator it = libPathCollection.begin();
-                it != libPathCollection.end(); ++it)    
-            {
-                if (startsWith(fileName, it->first))
-                {
-                    return FileNameClassification(FILENAME_LOCATION_LIBRARY,
-                            it->second,
-                            directoryDistance(fileName, appPath));
-                }
-            }
+  for (std::map<string, string>::const_iterator it = libPathCollection.begin();
+       it != libPathCollection.end(); ++it) {
+    if (startsWith(fileName, it->first)) {
+      return FileNameClassification(FILENAME_LOCATION_LIBRARY, it->second,
+                                    directoryDistance(fileName, appPath));
+    }
+  }
 
-            // Consider all non-absolute paths to be application code.
-            // Ensure all appPaths are given with a trailing slash since they
-            // represent directories.
-            if (appPath.empty() || *(appPath.end() - 1) != '/')
-              appPath += '/';
+  // Consider all non-absolute paths to be application code.
+  // Ensure all appPaths are given with a trailing slash since they
+  // represent directories.
+  if (appPath.empty() || *(appPath.end() - 1) != '/')
+    appPath += '/';
 
-            if (!startsWith(fileName, "/")) {
-              return FileNameClassification(FILENAME_LOCATION_USER,
-                                            "User", // FILENAME_LIBRARY_USER,
-                                            0);
-            }
+  if (!startsWith(fileName, "/")) {
+    return FileNameClassification(FILENAME_LOCATION_USER,
+                                  "User", // FILENAME_LIBRARY_USER,
+                                  0);
+  }
 
-            // If this is anywhere in the home dir or whitelis
-            // then return that it's part of the application/user code
-            if (startsWith(fileName, appPath))
-            {
-                return FileNameClassification(FILENAME_LOCATION_USER,
-                        "User", //FILENAME_LIBRARY_USER,
-                        0);
-            }
+  // If this is anywhere in the home dir or whitelis
+  // then return that it's part of the application/user code
+  if (startsWith(fileName, appPath)) {
+    return FileNameClassification(FILENAME_LOCATION_USER,
+                                  "User", // FILENAME_LIBRARY_USER,
+                                  0);
+  }
 
-            FileNameLibrary filenameLib = classifyLibrary(fileName);
-            if (filenameLib != Rose::StringUtility::FILENAME_LIBRARY_UNKNOWN)
-            {
-                return FileNameClassification(FILENAME_LOCATION_LIBRARY,
-                        filenameLib,
-                        directoryDistance(fileName, appPath));
-            }
+  FileNameLibrary filenameLib = classifyLibrary(fileName);
+  if (filenameLib != Rose::StringUtility::FILENAME_LIBRARY_UNKNOWN) {
+    return FileNameClassification(FILENAME_LOCATION_LIBRARY, filenameLib,
+                                  directoryDistance(fileName, appPath));
+  }
 
-            if (os == OS_TYPE_LINUX)
-            {
-                if (startsWith(fileName, "/usr") ||
-                        startsWith(fileName, "/opt"))
-                {
-                    return FileNameClassification(FILENAME_LOCATION_LIBRARY,
-                            classifyLibrary(fileName),
-                            directoryDistance(fileName,
-                                appPath));
-                }
-            }
-            return FileNameClassification(FILENAME_LOCATION_UNKNOWN,
-                    "Unknown", //FILENAME_LIBRARY_UNKNOWN,
-                    directoryDistance(fileName, appPath));
-        }
+  if (os == OS_TYPE_LINUX) {
+    if (startsWith(fileName, "/usr") || startsWith(fileName, "/opt")) {
+      return FileNameClassification(FILENAME_LOCATION_LIBRARY,
+                                    classifyLibrary(fileName),
+                                    directoryDistance(fileName, appPath));
+    }
+  }
+  return FileNameClassification(FILENAME_LOCATION_UNKNOWN,
+                                "Unknown", // FILENAME_LIBRARY_UNKNOWN,
+                                directoryDistance(fileName, appPath));
+}
 
 const string
-Rose::StringUtility::stripDotsFromHeaderFileName(const string& name)
-   {
-     if (name.empty() || (name[0] != '.' && name[0] != ' '))
-          return name;
-     return name.substr(name.find(" ") + 1);
-   }
+Rose::StringUtility::stripDotsFromHeaderFileName(const string &name) {
+  if (name.empty() || (name[0] != '.' && name[0] != ' '))
+    return name;
+  return name.substr(name.find(" ") + 1);
+}
 
-   // } namespace
-   // } namespace
+// } namespace
+// } namespace

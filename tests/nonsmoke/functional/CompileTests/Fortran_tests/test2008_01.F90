@@ -4,7 +4,9 @@ include "fortran_foo_double_quote.h"
 
 ! OFP appears to ignore CPP directives.
 #include "cpp_foo.h"
-#include <cpp_foobar.h>
+
+
+#include "cpp_foobar.h"
 
 end
 

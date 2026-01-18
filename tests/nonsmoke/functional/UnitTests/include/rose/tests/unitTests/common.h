@@ -1,7 +1,7 @@
 #ifndef ROSE_UNIT_TESTS_COMMON_H_
 #define ROSE_UNIT_TESTS_COMMON_H_
 
-#include <rose.h>
+#include "rose.h"
 
 namespace Rose {
 namespace Tests {
@@ -19,18 +19,15 @@ namespace UnitTests {
 #define check(COND) ASSERT_require(COND)
 #define check2(COND, MESG) ASSERT_require2(COND, MESG)
 
-template<typename T>
-bool is(SgNode* t){
- return (dynamic_cast<T*>(t) != NULL);
+template <typename T> bool is(SgNode *t) {
+  return (dynamic_cast<T *>(t) != NULL);
 }
 
-bool isNull(SgNode* n) {
-  return (n == NULL);
-}
+bool isNull(SgNode *n) { return (n == NULL); }
 
-//using namespace UnitTests::Diagnostics;
-}//::Rose::Tests::UnitTests
-}//::Rose::Tests
-}//::Rose
+// using namespace UnitTests::Diagnostics;
+} // namespace UnitTests
+} // namespace Tests
+} // namespace Rose
 
 #endif

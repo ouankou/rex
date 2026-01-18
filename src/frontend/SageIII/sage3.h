@@ -1,5 +1,4 @@
 // DQ (6/25/2011): remove to isolate name qualification error
-#if 1
 
 /*
  * this includes the forward declarations of all the sage node classes
@@ -10,11 +9,11 @@
 #ifndef SAGE3_CLASSES_H
 #define SAGE3_CLASSES_H
 
-//#include "sage3basic.h"
+// #include "sage3basic.h"
 
 // DQ (12/9/2004): The name of this file has been changed to be the new location
-// of many future Sage III AST manipulation functions in the future.  A namespace
-// (SageInterface) is defined in sageInterface.h.
+// of many future Sage III AST manipulation functions in the future.  A
+// namespace (SageInterface) is defined in sageInterface.h.
 #include "sageInterface.h"
 
 #include "AstProcessing.h"
@@ -27,31 +26,32 @@
 
 #include "astPostProcessing.h"
 
-//Liao, 2/8/2008. SAGE III node building interface
+// Liao, 2/8/2008. SAGE III node building interface
 #include "sageBuilder.h"
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 // Liao, 11/14/2008, support for annotation-based array optimization
 // The headers bring some garbage which cannot be compiled
-//#include "ArrayAnnot.h"
-//#include "ArrayInterface.h"
-//include "ArrayRewrite.h"
+// #include "ArrayAnnot.h"
+// #include "ArrayInterface.h"
+// include "ArrayRewrite.h"
 // Liao, 8/11/2009, support for OpenMP lowering
-#include "omp_lowering.h" 
+#include "omp_lowering.h"
 #else
-// DQ (11/12/2011): This is included in the omp_lowering.h and it is needed in sageInterface.C.
-// #include "astQuery.h"
+// DQ (11/12/2011): This is included in the omp_lowering.h and it is needed in
+// sageInterface.C. #include "astQuery.h"
+
 #include "nodeQuery.h"
 #endif
 
 // JJW 10-23-2007
 // Add possibility to include Valgrind header for memcheck
 #if ROSE_USE_VALGRIND
-#include <valgrind/valgrind.h>
 #include <valgrind/memcheck.h>
+
+#include <valgrind/valgrind.h>
 #endif
 
 #endif
 
 // DQ (6/25/2011): remove to isolate name qualification error
-#endif

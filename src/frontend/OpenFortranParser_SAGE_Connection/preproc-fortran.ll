@@ -79,21 +79,6 @@ using namespace std;
 #include "general_token_defs.h"
 #include "./rose_fortran_token_maps.h"
 
-#if 0
-// These are now defined in general_defs.h
-struct file_pos_info
-{
-    int line_num;
-    int column_num;
-};
-
-struct stream_element
-{ 
-    struct token_element * p_tok_elem;
-    struct file_pos_info beginning_fpi;
-    struct file_pos_info ending_fpi;
-};
-#endif
 
 // DQ (1/21/2008): Modified this to be a pointer so it could be built and returned to ROSE.
 LexTokenStreamTypePointer ROSE_Fortran_free_format_token_stream_pointer = NULL;
@@ -166,21 +151,6 @@ static int identify_if_keyword(string str)
 //It will be fixed.
 #define NUM_OPERATORS 23
 
-#if 0
-static int identify_operator_matching(string str)
-{
-    //printf("got called with %s. \n", str.c_str());
-
-    for(int i = 0; i < NUM_OPERATORS; i++)
-    {
-        if(str == ROSE_Fortran_Operator_map[i].token_lexeme)
-        {
-            return (ROSE_Fortran_Operator_map[i].token_id);
-        }
-    }
-    return -1;
-}
-#endif
 
 static void process_operator(string) 
 {
@@ -476,9 +446,6 @@ getFortranFreeFormatPreprocessorDirectives( std::string fileName )
 
      globalFileName = fileName;
 
-#if 0
-     printf ("In getFortranFreeFormatPreprocessorDirectives(): Lexical pass to retrieve the token stream (Opening Free Format Fortran file: %s) \n",fileName.c_str());
-#endif
 
      if(fileName.empty() == false) 
         {
@@ -514,103 +481,6 @@ clean_up_stream()
     //If the tokens are 
 
 
-#if 0
-    for(SE_ITR ii = ROSE_Fortran_free_format_token_stream_pointer->begin(); ii != ROSE_Fortran_free_format_token_stream_pointer->end(); ii++)
-    {
-        if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_COMMENTS)
-        { 
-            cout<<"## COMMENT -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        }
-        else if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_STRING_LITERALS)
-        {
-            cout<<"## STRING_LIT -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        }
-        else if(((*ii)->p_tok_elem->token_id > 2) && ((*ii)->p_tok_elem->token_id < 67))
-        {
-            cout<<"## KEYWORD -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        } 
-        else if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_IDENTIFIER)
-        {
-            cout<<"## IDENTIFIER -->";
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        } 
-        else
-        {
-            cout<<"## ????Unrecognized element in the token stream##"; 
-        }
-        cout<<"\n"; 
- 
-    }
-#endif
 }
 
-#if 0
-int main(int argc, char *argv[])
-{
-    if(argc == 1) 
-    {   //The "default" for now
-        getFortranFreeFormatPreprocessorDirectives("triangle.f90");
-    }
-    else
-    {
-        getFortranFreeFormatPreprocessorDirectives(argv[1]);
-    }
-
-    clean_up_stream();
-
-    printf("*****************here is the stream *************\n"); 
-    for(SE_ITR ii = ROSE_Fortran_free_format_token_stream.begin(); ii != ROSE_Fortran_free_format_token_stream.end(); ii++)
-    {
-        if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_COMMENTS)
-        { 
-            cout<<"## COMMENT -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        }
-        else if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_STRING_LITERALS)
-        {
-            cout<<"## STRING_LIT -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        }
-        else if(((*ii)->p_tok_elem->token_id > 2) && ((*ii)->p_tok_elem->token_id < 67))
-        {
-            cout<<"## KEYWORD -->"; 
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        } 
-        else if((*ii)->p_tok_elem->token_id == SgToken::FORTRAN_IDENTIFIER)
-        {
-            cout<<"## IDENTIFIER -->";
-            cout<<(*ii)->p_tok_elem->token_lexeme; 
-            cout<<"<-- From "<<"("<<(*ii)->beginning_fpi.line_num<<","<<(*ii)->beginning_fpi.column_num<<") to " 
-                <<"("<<(*ii)->ending_fpi.line_num<<","<<(*ii)->ending_fpi.column_num<<")";
-        } 
-        else
-        {
-            cout<<"## ????Unrecognized element in the token stream##"; 
-        }
-        cout<<"\n"; 
- 
-    }
-    printf("*****************the stream is over*************\n"); 
-
-    return 1;
-}
-
-#endif
 // }//This ends the namespace Rose_Fortran_free_format_namespace

@@ -1,9 +1,11 @@
 #ifndef _SLICING_INFO_H_
 #define _SLICING_INFO_H_
 
-#include <set>
-#include <string>
 #include <list>
+
+#include <set>
+
+#include <string>
 /* ! \class SlicingInfo
 
    This class scans throught the AST for two different pragmas: First, a
@@ -19,71 +21,52 @@
 
  */
 
-class ROSE_DLL_API SlicingInfo:public AstSimpleProcessing
-{
+class ROSE_DLL_API SlicingInfo : public AstSimpleProcessing {
 
-  public:
+public:
+  SlicingInfo();
+  // manually add a node to the slicing set
+  void addNode(SgNode *sgNode) { targets.push_back(sgNode); }
+  void setSliceTargetString(std::string target) { sliceStatement = target; };
 
-    SlicingInfo();
-                // manually add a node to the slicing set
-                void addNode(SgNode * sgNode)
-                {       
-                        targets.push_back(sgNode);      
-                }
-                void setSliceTargetString(std::string target)
-                {
-                        sliceStatement=target;  
-                };
+  // ! Returns the SgFunctionDeclaration that we are targeting
+  SgFunctionDeclaration *getTargetFunction() { return _func; };
 
-    // ! Returns the SgFunctionDeclaration that we are targeting
-    SgFunctionDeclaration *getTargetFunction()
-    {
-        return _func;
-    };
+  // ! Returns the statements that are part of the slicing criterion
+  SgNode *getSlicingCriterion() { return _target; };
 
-    // ! Returns the statements that are part of the slicing criterion
-    SgNode *getSlicingCriterion()
-    {
-        return _target;
-    };
+  std::list<SgNode *> getSlicingTargets() { return targets; };
 
-    std::list < SgNode * >getSlicingTargets()
-    {
-        return targets;
-    };
+protected:
+  // std::list < SgStatement * >targets;
+  std::list<SgNode *> targets;
+  virtual void visit(SgNode *node);
 
-  protected:
+  // ! The target function which is to be sliced.
+  SgFunctionDeclaration *_func;
 
-    //std::list < SgStatement * >targets;
-    std::list < SgNode * >targets;
-    virtual void visit(SgNode * node);
+  // ! The slicing criterion.
+  SgNode *_target;
 
-    // ! The target function which is to be sliced.
-    SgFunctionDeclaration *_func;
+  /* ! \brief true when we need to mark the target function
 
-    // ! The slicing criterion.
-    SgNode *_target;
+     This is set to true when we see the pragma "SliceFunction." Once we
+     find the next function declaration, we assign it to _func and set this
+     to false again. */
+  bool _markFunction;
 
-    /* ! \brief true when we need to mark the target function
+  /* ! \brief true when we need to mark the slicing criterion
 
-       This is set to true when we see the pragma "SliceFunction." Once we
-       find the next function declaration, we assign it to _func and set this
-       to false again. */
-    bool _markFunction;
+     This is set to true when we see the pragma "SliceTarget." Once we find
+     the next SgStatement, we assign it to _target and set this to false
+     again. */
+  bool _markStatement;
 
-    /* ! \brief true when we need to mark the slicing criterion
-
-       This is set to true when we see the pragma "SliceTarget." Once we find
-       the next SgStatement, we assign it to _target and set this to false
-       again. */
-    bool _markStatement;
-
-                
-                // string for pragma to identify for slicing for functions calls of given function
-    std::string sliceFunctionCalls;
-                // string for pragma to slice for the following statement
-    std::string sliceStatement;
+  // string for pragma to identify for slicing for functions calls of given
+  // function
+  std::string sliceFunctionCalls;
+  // string for pragma to slice for the following statement
+  std::string sliceStatement;
 };
-
 
 #endif

@@ -7,7 +7,6 @@
 // #undef _COMPLEX_H
 
 #include <complex.h>
-
 #ifdef __INTEL_COMPILER
 // DQ (2/4/2017): I think this needs to be defined to map to legacy frontend's
 // representation of complex type.
@@ -18,13 +17,11 @@
 typedef complex float complex_float;
 typedef float _Complex complex_float;
 
-int main()
-{
-    complex float x;
-    _Complex float y;
-    x = 1.0;
-    y = 1.0;
-    return 0;
+int main() {
+  complex float x;
+  _Complex float y;
+  x = 1.0;
+  y = 1.0;
+  return 0;
 }
 #endif
-

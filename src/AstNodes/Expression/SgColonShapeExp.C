@@ -1,12 +1,7 @@
-#include <sage3basic.h>
+#include "sage3basic.h"
 
-void
-SgColonShapeExp::post_construction_initialization()
-   { }
+void SgColonShapeExp::post_construction_initialization() {}
 
-
-SgType*
-SgColonShapeExp::get_type() const
-   {
-     return SgTypeDefault::createType();
-   }
+SgType *SgColonShapeExp::get_type() const {
+  return SgTypeDefault::createType();
+}

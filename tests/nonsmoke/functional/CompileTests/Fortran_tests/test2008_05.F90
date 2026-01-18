@@ -11,6 +11,8 @@ subroutine foobar()
 end subroutine foobar
 
 ! CPP include direction used: #include "test2007_46_c.h"
+
+
 #include "test2007_46_c.h"
 
 ! Using #line directive to mark this function to be from "foobar_header_file"

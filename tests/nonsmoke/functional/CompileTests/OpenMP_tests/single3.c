@@ -1,13 +1,14 @@
 /*
-*/
-#include <stdio.h>
+ */
+#include <assert.h>
+
 #include <omp.h>
-#include<assert.h>
+
+#include <stdio.h>
 
 int a;
 int b;
-int main(void)
-{
+int main(void) {
 
 #pragma omp parallel
   {
@@ -16,12 +17,10 @@ int main(void)
     {
       int num_threads = 2;
     }
-#pragma omp single nowait copyprivate(a,b)
+#pragma omp single nowait copyprivate(a, b)
     {
       int num_threads = 3;
     }
-
   }
   return 0;
 }
-

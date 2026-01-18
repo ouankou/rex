@@ -1,38 +1,40 @@
-// ROSE is a tool for building preprocessors, this file is an example preprocessor built with ROSE.
-// rose.C: Example (default) ROSE Preprocessor: used for testing ROSE infrastructure
+// ROSE is a tool for building preprocessors, this file is an example
+// preprocessor built with ROSE. rose.C: Example (default) ROSE Preprocessor:
+// used for testing ROSE infrastructure
 #include "rose.h"
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#include "config.h"
 #endif
 
-#include <string>
 #include <iomanip>
 
-#include "AstTests.h"
+#include <string>
+
+#include <AstTests.h>
 
 #include <algorithm>
 
-#include "sageCommonSourceHeader.h"
-
+#include <sageCommonSourceHeader.h>
 using namespace Rose;
 
 extern an_il_header il_header;
 
-int
-main ( int argc, char* argv[] )
-   {
+int main(int argc, char *argv[]) {
   // Main Function for default example ROSE Preprocessor
   // This is an example of a preprocessor that can be built with ROSE
   // This example can be used to test the ROSE infrastructure
 
 #if 1
-     list<string> l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
-     printf ("Preprocessor (before): argv = \n%s \n",StringUtility::listToString(l).c_str());
+  list<string> l =
+      CommandlineProcessing::generateArgListFromArgcArgv(argc, argv);
+  printf("Preprocessor (before): argv = \n%s \n",
+         StringUtility::listToString(l).c_str());
 
-     printf ("argc = %d \n",argc);
-     l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
-     printf ("l.size() = %d \n",l.size());
-     printf ("Preprocessor (after): argv = \n%s \n",StringUtility::listToString(l).c_str());
+  printf("argc = %d \n", argc);
+  l = CommandlineProcessing::generateArgListFromArgcArgv(argc, argv);
+  printf("l.size() = %d \n", l.size());
+  printf("Preprocessor (after): argv = \n%s \n",
+         StringUtility::listToString(l).c_str());
 
   // printf ("Exiting in main! \n");
   // ROSE_ASSERT(1 == 2);
@@ -74,10 +76,8 @@ main ( int argc, char* argv[] )
         }
 #endif
 
-
-
-     SgProject* project = frontend(argc,argv);
-     ROSE_ASSERT (project != NULL);
+  SgProject *project = frontend(argc, argv);
+  ROSE_ASSERT(project != NULL);
 
   // DQ (2/6/2004): These tests fail in Coco for test2004_14.C
   // AstTests::runAllTests(const_cast<SgProject*>(project));
@@ -85,21 +85,11 @@ main ( int argc, char* argv[] )
   // printf ("Generate the pdf output of the SAGE III AST \n");
   // generatePDF ( project );
 
-     printf ("Generate the DOT output of the SAGE III AST \n");
-     generateDOT ( *project );
+  printf("Generate the DOT output of the SAGE III AST \n");
+  generateDOT(*project);
 
-     return backend(project);
+  return backend(project);
 
   // alternative form
   // return backend(frontend(argc,argv));
-   }
-
-
-
-
-
-
-
-
-
-
+}

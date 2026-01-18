@@ -13,6 +13,7 @@ and have a lambda that can take an argument of any type. It's the equivalent of 
 // Slightly modified test case from David, generic-lambda.cxx
 // Liao 8/12/2016
 #include <typeinfo>
+
 #include <iostream>
 
 int main(int argc, char* argv[]) {
@@ -49,15 +50,15 @@ Errors in Processing Input File: throwing an instance of "frontend_failed" excep
 
 #endif
 
-
 #include <typeinfo>
+
 #include <iostream>
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   int a = 0;
   std::string test = "testing";
 
-  auto my_lambda = [=] (auto val) {
+  auto my_lambda = [=](auto val) {
     std::cout << val << " is a " << typeid(decltype(val)).name() << std::endl;
   };
 

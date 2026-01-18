@@ -1,21 +1,23 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 #ifndef ANALYSIS_COMMON
 #define ANALYSIS_COMMON
 
-#include "genericDataflowCommon.h"
-#include "cfgUtils.h"
 #include "CallGraphTraverse.h"
 
+#include "cfgUtils.h"
+
+#include "genericDataflowCommon.h"
+
 // initializes the compiler analysis framework
-void initAnalysis(SgProject* p);
+void initAnalysis(SgProject *p);
 
 // returns the SgProject object that represents our current project
-//SgProject* getProject();
+// SgProject* getProject();
 
 // returns the call graph of the current project
-SgIncidenceDirectedGraph* getCallGraph();
+SgIncidenceDirectedGraph *getCallGraph();
 
 #endif
 #endif

@@ -30,23 +30,25 @@ Errors in legacy frontend Processing!
 Andreas
 #endif
 
-
 #include <fstream>
+
 #include <list>
 using namespace std;
 #define Boolean int
 
-class BoolAttribute
-{
+class BoolAttribute {
   Boolean val;
- public:
-  BoolAttribute( Boolean v = true) : val(v) {}
+
+public:
+  BoolAttribute(Boolean v = true) : val(v) {}
   operator Boolean() const { return val; }
 };
 
-
-// The comment below now appears in ROSE/src/midend/astUtil/astInterface/AstInterface.C
-// DQ (12/28/2005): ROSE can't compile these lines and they appear to not make any sense, 
-// and it seems that we don't need them, so let's comment them out.
-// template BoolAttribute * __uninitialized_copy_aux<BoolAttribute const *,BoolAttribute *>(BoolAttribute const *, BoolAttribute const *,BoolAttribute *, __false_type);
-// template BoolAttribute * __uninitialized_copy_aux<BoolAttribute *,BoolAttribute *>      (BoolAttribute *, BoolAttribute *, BoolAttribute *,__false_type);
+// The comment below now appears in
+// ROSE/src/midend/astUtil/astInterface/AstInterface.C DQ (12/28/2005): ROSE
+// can't compile these lines and they appear to not make any sense, and it seems
+// that we don't need them, so let's comment them out. template BoolAttribute *
+// __uninitialized_copy_aux<BoolAttribute const *,BoolAttribute *>(BoolAttribute
+// const *, BoolAttribute const *,BoolAttribute *, __false_type); template
+// BoolAttribute * __uninitialized_copy_aux<BoolAttribute *,BoolAttribute *>
+// (BoolAttribute *, BoolAttribute *, BoolAttribute *,__false_type);

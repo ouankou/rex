@@ -1,89 +1,88 @@
 #ifndef GLOBALS_H_
 #define GLOBALS_H_
 #include "constant.h"
+
 #include "mpp_domain.h"
 
-#define MAXATT   4096
+#define MAXATT 4096
 #define MAXSTRING 10240
-#define MAXENTRY  512
-#define NVAR     2048
-#define NFILE    32
-#define MAXDIM   10
+#define MAXENTRY 512
+#define NVAR 2048
+#define NFILE 32
+#define MAXDIM 10
 /* constants for grid type and grid location */
-#define ZERO   0
+#define ZERO 0
 #define NINETY 1
 #define MINUS_NINETY -1
 #define ONE_HUNDRED_EIGHTY 2
 #define CENTER 3
 #define CORNER 4
-#define EAST   4
-#define NORTH  5
-#define WEST   6
-#define SOUTH  7
-
-
+#define EAST 4
+#define NORTH 5
+#define WEST 6
+#define SOUTH 7
 
 /* constants for option */
 #define CONSERVE_ORDER1 1
 #define CONSERVE_ORDER2 2
-#define BILINEAR        4
-#define VECTOR          8
-#define TARGET          16
-#define SYMMETRY        32
-#define AGRID           64
-#define BGRID           128
-#define READ            256
-#define WRITE           512
-#define CHECK_CONSERVE  1024
+#define BILINEAR 4
+#define VECTOR 8
+#define TARGET 16
+#define SYMMETRY 32
+#define AGRID 64
+#define BGRID 128
+#define READ 256
+#define WRITE 512
+#define CHECK_CONSERVE 1024
 
 typedef struct {
-  char   name[STRING];   /* variable name */
-  int    vid;
-  int    type;
-  int    ndim;
-  int    index[4];
-  int    nz;
-  int    kstart;
-  int    kend;
-  int    lstart;
-  int    lend;
-  int    has_zaxis;
-  int    has_taxis;
+  char name[STRING]; /* variable name */
+  int vid;
+  int type;
+  int ndim;
+  int index[4];
+  int nz;
+  int kstart;
+  int kend;
+  int lstart;
+  int lend;
+  int has_zaxis;
+  int has_taxis;
   double missing;
-  int    has_missing;
+  int has_missing;
 } Var_config;
 
 typedef struct {
-  char       *file;
-  int        *fid;
-  int         nvar;
-  double     *data;   /* array to store one variable data */
-  double     *grad_x; /* array to store one variable data gradient in x-direction */
-  double     *grad_y; /* array to store one variable data gradient in y-direction */
-  int        *grad_mask; /* array to store the mask for gradient */
+  char *file;
+  int *fid;
+  int nvar;
+  double *data;   /* array to store one variable data */
+  double *grad_x; /* array to store one variable data gradient in x-direction */
+  double *grad_y; /* array to store one variable data gradient in y-direction */
+  int *grad_mask; /* array to store the mask for gradient */
   Var_config *var;
 } Field_config;
 
 typedef struct {
   char name[STRING];
   char bndname[STRING];
-  int  dimid;
-  int  vid;
-  int  bndid;
-  int  size;
-  int  type;
-  char cart; 
-  int  bndtype;
+  int dimid;
+  int vid;
+  int bndid;
+  int size;
+  int type;
+  char cart;
+  int bndtype;
   double *bnddata;
-  double *data; 
+  double *data;
 } Axis_config;
 
 typedef struct {
-  int  nt;
+  int nt;
   char name[STRING];
   int fid;
   int ndim;
-  Axis_config  *axis;
+  Axis_config *axis;
   int has_tavg_info;
   int id_t1, id_t2, id_dt;
   double *t1, *t2, *dt;
@@ -100,11 +99,10 @@ typedef struct {
   double *dj_in;
   double *area;
   double *weight;
-  int    *index;
-  char   remap_file[STRING];
-  int    file_exist;
+  int *index;
+  char remap_file[STRING];
+  int file_exist;
 } Interp_config;
-
 
 typedef struct {
   int halo;
@@ -145,11 +143,11 @@ typedef struct {
   double *vlat_t;
   double *cosrot;
   double *sinrot;
-  int    rotate;
+  int rotate;
   domain2D domain;
 } Grid_config;
 
-typedef struct{
+typedef struct {
   int nbound;
   int *tile2;
   int *is1, *ie1, *js1, *je1;
@@ -157,7 +155,7 @@ typedef struct{
   int *rotate;
 } Bound_config;
 
-typedef struct{
+typedef struct {
   double *data;
   int nx;
   int ny;

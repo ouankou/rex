@@ -46,54 +46,49 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 /*
 The restrict type qualifier is an indication to the compiler that,
-if the memory addressed by the restrict -qualified pointer is modified, no other pointer will access that same memory.
-If a particular chunk of memory is not modified, it can be aliased through more than one restricted pointer.
-A C99 restrict feature.
-For gcc, you must use -std=c99 to compile this program.
+if the memory addressed by the restrict -qualified pointer is modified, no other
+pointer will access that same memory. If a particular chunk of memory is not
+modified, it can be aliased through more than one restricted pointer. A C99
+restrict feature. For gcc, you must use -std=c99 to compile this program.
 */
 
 #include <stdlib.h>
+
 #include <stdio.h>
 
-void foo(int n, int * restrict  a, int * restrict b, int * restrict  c)
-{
+void foo(int n, int *restrict a, int *restrict b, int *restrict c) {
   int i;
-#pragma omp parallel for 
+#pragma omp parallel for
   for (i = 0; i < n; i++)
-    a[i] = b[i] + c[i];  
+    a[i] = b[i] + c[i];
 }
 
-int main()
-{
+int main() {
   int n = 1000;
-  int * a , *b, *c;
+  int *a, *b, *c;
 
-  a = (int*) malloc (n* sizeof (int));
-  if (a ==0)
-  {
-    fprintf (stderr, "skip the execution due to malloc failures.\n");
+  a = (int *)malloc(n * sizeof(int));
+  if (a == 0) {
+    fprintf(stderr, "skip the execution due to malloc failures.\n");
     return 1;
   }
 
-  b = (int*) malloc (n* sizeof (int));
-  if (b ==0)
-  {
-    fprintf (stderr, "skip the execution due to malloc failures.\n");
+  b = (int *)malloc(n * sizeof(int));
+  if (b == 0) {
+    fprintf(stderr, "skip the execution due to malloc failures.\n");
     return 1;
   }
 
-  c = (int*) malloc (n* sizeof (int));
-  if (c ==0)
-  {
-    fprintf (stderr, "skip the execution due to malloc failures.\n");
+  c = (int *)malloc(n * sizeof(int));
+  if (c == 0) {
+    fprintf(stderr, "skip the execution due to malloc failures.\n");
     return 1;
   }
 
-  foo (n, a, b,c);
+  foo(n, a, b, c);
 
-  free (a);
-  free (b);
-  free (c);
+  free(a);
+  free(b);
+  free(c);
   return 0;
-}  
-
+}

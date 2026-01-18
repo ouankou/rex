@@ -1,14 +1,22 @@
 #include "AnnotExpr.h"
-#include "CPPAstInterface.h"
-#include "SymbolicMultiply.h"
-#include "SymbolicPlus.h"
-#include "SymbolicSelect.h"
-#include <cerrno>
-#include <cstdlib>
-#include <limits>
-#include <mlog.h>
-#include <string.h>
 
+#include "CPPAstInterface.h"
+
+#include "SymbolicMultiply.h"
+
+#include "SymbolicPlus.h"
+
+#include "SymbolicSelect.h"
+
+#include "mlog.h"
+
+#include <cerrno>
+
+#include <cstdlib>
+
+#include <limits>
+
+#include <string.h>
 using namespace std;
 
 namespace {
@@ -558,7 +566,7 @@ void DefineVariableDescriptor::Dump() const { write(cerr); }
 
 #ifndef TEMPLATE_ONLY
 #define TEMPLATE_ONLY
-#include <AnnotDescriptors.C>
+#include "AnnotDescriptors.C"
 template class WriteContainer<list<SymbolicFunctionDeclaration>, ',', '(', ')'>;
 template class WriteContainer<vector<SymbolicFunctionDeclaration>, ',', '(',
                               ')'>;

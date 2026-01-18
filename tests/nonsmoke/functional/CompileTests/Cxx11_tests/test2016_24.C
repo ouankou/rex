@@ -34,15 +34,13 @@
 
 #include <bits/memoryfwd.h>
 // #include <bits/ptr_traits.h>
+
 #include <ext/numeric_traits.h>
 
-namespace std _GLIBCXX_VISIBILITY(default)
-{
+namespace std _GLIBCXX_VISIBILITY(default) {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-  template<typename _Alloc, typename _Tp>
-    class __alloctr_rebind_helper
-    {
+template <typename _Alloc, typename _Tp> class __alloctr_rebind_helper {
 #if 0
       template<typename _Alloc2, typename _Tp2>
 	static constexpr true_type
@@ -55,53 +53,50 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     public:
       using __type = decltype(_S_chk<_Alloc, _Tp>(nullptr));
 #endif
-    };
+};
 
-  template<typename _Alloc, typename _Tp,
-	   bool = __alloctr_rebind_helper<_Alloc, _Tp>::__type::value>
-    struct __alloctr_rebind;
+template <typename _Alloc, typename _Tp,
+          bool = __alloctr_rebind_helper<_Alloc, _Tp>::__type::value>
+struct __alloctr_rebind;
 
-  template<typename _Alloc, typename _Tp>
-    struct __alloctr_rebind<_Alloc, _Tp, true>
-    {
-      typedef typename _Alloc::template rebind<_Tp>::other __type;
-    };
+template <typename _Alloc, typename _Tp>
+struct __alloctr_rebind<_Alloc, _Tp, true> {
+  typedef typename _Alloc::template rebind<_Tp>::other __type;
+};
 
-  template<template<typename, typename...> class _Alloc, typename _Tp,
-	   typename _Up, typename... _Args>
-    struct __alloctr_rebind<_Alloc<_Up, _Args...>, _Tp, false>
-    {
-      typedef _Alloc<_Tp, _Args...> __type;
-    };
+template <template <typename, typename...> class _Alloc, typename _Tp,
+          typename _Up, typename... _Args>
+struct __alloctr_rebind<_Alloc<_Up, _Args...>, _Tp, false> {
+  typedef _Alloc<_Tp, _Args...> __type;
+};
+
+/**
+ * @brief  Uniform interface to all allocator types.
+ * @ingroup allocators
+ */
+template <typename _Alloc> struct allocator_traits {
+  /// The allocator type
+  typedef _Alloc allocator_type;
+  /// The allocated type
+  typedef typename _Alloc::value_type value_type;
+
+#define _GLIBCXX_ALLOC_TR_NESTED_TYPE(_NTYPE, _ALT)                            \
+private:                                                                       \
+  template <typename _Tp>                                                      \
+  static typename _Tp::_NTYPE _S_##_NTYPE##_helper(_Tp *);                     \
+  static _ALT _S_##_NTYPE##_helper(...);                                       \
+  typedef decltype(_S_##_NTYPE##_helper((_Alloc *)0)) __##_NTYPE;              \
+                                                                               \
+public:
+
+  _GLIBCXX_ALLOC_TR_NESTED_TYPE(pointer, value_type *)
 
   /**
-   * @brief  Uniform interface to all allocator types.
-   * @ingroup allocators
-  */
-  template<typename _Alloc>
-    struct allocator_traits
-    {
-      /// The allocator type
-      typedef _Alloc allocator_type;
-      /// The allocated type
-      typedef typename _Alloc::value_type value_type;
-
-#define _GLIBCXX_ALLOC_TR_NESTED_TYPE(_NTYPE, _ALT) \
-  private: \
-  template<typename _Tp> \
-    static typename _Tp::_NTYPE _S_##_NTYPE##_helper(_Tp*); \
-  static _ALT _S_##_NTYPE##_helper(...); \
-    typedef decltype(_S_##_NTYPE##_helper((_Alloc*)0)) __##_NTYPE; \
-  public:
-
-_GLIBCXX_ALLOC_TR_NESTED_TYPE(pointer, value_type*)
-
-      /**
-       * @brief   The allocator's pointer type.
-       *
-       * @c Alloc::pointer if that type exists, otherwise @c value_type*
-      */
-      typedef __pointer pointer;
+   * @brief   The allocator's pointer type.
+   *
+   * @c Alloc::pointer if that type exists, otherwise @c value_type*
+   */
+  typedef __pointer pointer;
 
 #if 0
 _GLIBCXX_ALLOC_TR_NESTED_TYPE(const_pointer,
@@ -209,15 +204,13 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
 
 #undef _GLIBCXX_ALLOC_TR_NESTED_TYPE
 
-      template<typename _Tp>
-	using rebind_alloc = typename __alloctr_rebind<_Alloc, _Tp>::__type;
-      template<typename _Tp>
-	using rebind_traits = allocator_traits<rebind_alloc<_Tp>>;
+  template <typename _Tp>
+  using rebind_alloc = typename __alloctr_rebind<_Alloc, _Tp>::__type;
+  template <typename _Tp>
+  using rebind_traits = allocator_traits<rebind_alloc<_Tp>>;
 
-    private:
-      template<typename _Alloc2>
-	struct __allocate_helper
-	{
+private:
+  template <typename _Alloc2> struct __allocate_helper {
 #if 0
 	  template<typename _Alloc3,
 	    typename = decltype(std::declval<_Alloc3*>()->allocate(
@@ -230,10 +223,10 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
 
 	  using type = decltype(__test<_Alloc>(0));
 #endif
-	};
+  };
 
-      template<typename _Alloc2>
-	using __has_allocate = typename __allocate_helper<_Alloc2>::type;
+  template <typename _Alloc2>
+  using __has_allocate = typename __allocate_helper<_Alloc2>::type;
 
 #if 0
       template<typename _Alloc2,
@@ -249,9 +242,7 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
 	{ return __a.allocate(__n); }
 #endif
 
-      template<typename _Tp, typename... _Args>
-	struct __construct_helper
-	{
+  template <typename _Tp, typename... _Args> struct __construct_helper {
 #if 0
 	  template<typename _Alloc2,
 	    typename = decltype(std::declval<_Alloc2*>()->construct(
@@ -263,11 +254,10 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
 
 	  using type = decltype(__test<_Alloc>(0));
 #endif
-	};
+  };
 
-      template<typename _Tp, typename... _Args>
-	using __has_construct
-	  = typename __construct_helper<_Tp, _Args...>::type;
+  template <typename _Tp, typename... _Args>
+  using __has_construct = typename __construct_helper<_Tp, _Args...>::type;
 
 #if 0
       template<typename _Tp, typename... _Args>
@@ -367,7 +357,7 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
 	{ return __a; }
 #endif
 
-    public:
+public:
 #if 0
       /**
        *  @brief  Allocate memory.
@@ -457,7 +447,7 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
       select_on_container_copy_construction(const _Alloc& __rhs)
       { return _S_select(__rhs, 0); }
 #endif
-    };
+};
 
 #if 0
   template<typename _Alloc>
@@ -554,7 +544,7 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
 #endif
 
 _GLIBCXX_END_NAMESPACE_VERSION
-} // namespace std
+} // namespace std _GLIBCXX_VISIBILITY(default)
 
 #endif
 #endif

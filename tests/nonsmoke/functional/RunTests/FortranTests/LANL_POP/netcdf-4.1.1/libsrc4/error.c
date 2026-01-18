@@ -13,13 +13,17 @@ conditions.
 $Id: error.c,v 1.6 2009/02/20 17:40:33 ed Exp $
 */
 
-#include <config.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include "error.h"
-#include "assert.h"
 
+#include "config.h"
+
+#include < stdarg.h>
+
+#include < stdlib.h>
+
+#include <assert.h>
+
+#include <stdio.h>
 /* This contents of this file get skipped if LOGGING is not defined
  * during compile. */
 #ifdef LOGGING
@@ -29,7 +33,7 @@ extern int nc_log_level;
 /* This function prints out a message, if the severity of the message
    is lower than the global nc_log_level. To use it, do something like
    this:
-   
+
    nc_log(0, "this computer will explode in %d seconds", i);
 
    After the first arg (the severity), use the rest like a normal
@@ -37,32 +41,30 @@ extern int nc_log_level;
 
    This function is heavily based on the function in section 15.5 of
    the C FAQ. */
-void nc_log(int severity, const char *fmt, ...)
-{
-   va_list argp;
-   int t;
+void nc_log(int severity, const char *fmt, ...) {
+  va_list argp;
+  int t;
 
-   /* If the severity is greater than the log level, we don' care to
-      print this message. */
-   if (severity > nc_log_level)
-      return;
+  /* If the severity is greater than the log level, we don' care to
+     print this message. */
+  if (severity > nc_log_level)
+    return;
 
-   /* If the severity is zero, this is an error. Otherwise insert that
-      many tabs before the message. */
-   if (!severity)
-      fprintf(stdout, "ERROR: ");
-   for (t=0; t<severity; t++)
-      fprintf(stdout, "\t");
+  /* If the severity is zero, this is an error. Otherwise insert that
+     many tabs before the message. */
+  if (!severity)
+    fprintf(stdout, "ERROR: ");
+  for (t = 0; t < severity; t++)
+    fprintf(stdout, "\t");
 
-   /* Print out the variable list of args with vprintf. */
-   va_start(argp, fmt);
-   vfprintf(stdout, fmt, argp);
-   va_end(argp);
-   
-   /* Put on a final linefeed. */
-   fprintf(stdout, "\n");
-   fflush(stdout);
+  /* Print out the variable list of args with vprintf. */
+  va_start(argp, fmt);
+  vfprintf(stdout, fmt, argp);
+  va_end(argp);
+
+  /* Put on a final linefeed. */
+  fprintf(stdout, "\n");
+  fflush(stdout);
 }
 
 #endif /* ifdef LOGGING */
-

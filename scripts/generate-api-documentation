@@ -393,7 +393,9 @@ text = proc.stderr.decode("utf-8", errors="ignore")
 paths = []
 in_block = False
 for line in text.splitlines():
-    if line.strip() == "#include <...> search starts here:":
+    if line.strip() == "
+
+#include <...> search starts here:":
         in_block = True
         continue
     if in_block:

@@ -1,7 +1,7 @@
-class Simple{
+class Simple {
 
-  public:
-    #include <Inner_test8.h>
+public:
+#include "Inner_test8.h"
 
-    Simple();
+  Simple();
 };

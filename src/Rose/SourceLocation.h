@@ -1,16 +1,20 @@
 #ifndef ROSE_SOURCELOCATION_H
 #define ROSE_SOURCELOCATION_H
 
-#include <featureTests.h>
+#include "featureTests.h"
 
 #ifdef ROSE_HAVE_CEREAL
 #include <cereal/access.hpp>
+
 #include <cereal/cereal.hpp>
+
 #include <cereal/types/optional.hpp>
 #endif
 
 #include <optional>
+
 #include <string>
+
 #include <tuple>
 
 namespace Rose {
@@ -56,8 +60,7 @@ private:
 
   template <class Archive>
   void CEREAL_SERIALIZE_FUNCTION_NAME(Archive &archive) {
-    archive(cereal::make_nvp("file", file_),
-            cereal::make_nvp("line", line_),
+    archive(cereal::make_nvp("file", file_), cereal::make_nvp("line", line_),
             cereal::make_nvp("column", column_));
   }
 #endif

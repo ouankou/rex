@@ -1,18 +1,28 @@
 #include "sage3basic.h"
 
 #include "AstInterface.h"
+
 #include "AstInterface_ROSE.h"
-#include "OperatorAnnotation.h"
-#include "unparser.h"
-#include "unparser_opt.h"
-#include <CommandOptions.h>
-#include <iostream>
-#include <stdexcept>
-#include <stdlib.h>
-#include <string.h>
 
 #include "AstTraversal.h"
+
+#include "CommandOptions.h"
+
+#include "OperatorAnnotation.h"
+
 #include "astPostProcessing.h"
+
+#include "unparser.h"
+
+#include "unparser_opt.h"
+
+#include <iostream>
+
+#include <stdexcept>
+
+#include <stdlib.h>
+
+#include <string.h>
 
 // jichi (9/29/2009): Add test for Fortran language
 #define IS_FORTRAN_LANGUAGE() SageInterface::is_Fortran_language()
@@ -97,7 +107,7 @@ namespace {
 DebugLog DebugVariable("-debugvariable");
 DebugLog DebugScope("-debugscope");
 DebugLog DebugDiff("-debugdiff");
-static std::function<std::string(const SgFunctionDeclaration*)>
+static std::function<std::string(const SgFunctionDeclaration *)>
     function_name_mangling_;
 } // namespace
 
@@ -308,9 +318,10 @@ SgStatement *GetScope(SgNode *loc) {
       loc = loc->get_parent();
       r = isSgMemberFunctionDeclaration(loc);
     }
-        return (r == 0)? 0 : r->get_class_scope();
+    return (r == 0) ? 0 : r->get_class_scope();
   }
-  if (loc->get_parent() != 0 && loc->get_parent()->variantT() == V_SgLambdaCapture) {
+  if (loc->get_parent() != 0 &&
+      loc->get_parent()->variantT() == V_SgLambdaCapture) {
     // Go up to the expression chain to the enclosing statement.
     while (loc != 0 && loc->get_parent() != 0 && isSgStatement(loc) == 0) {
       loc = loc->get_parent();
@@ -321,13 +332,15 @@ SgStatement *GetScope(SgNode *loc) {
   {
     const SgInitializedName *initializedName = isSgInitializedName(loc);
     if (initializedName != NULL) {
-      if (loc->get_parent() != 0 && loc->get_parent()->variantT() == V_SgFunctionParameterList) {
+      if (loc->get_parent() != 0 &&
+          loc->get_parent()->variantT() == V_SgFunctionParameterList) {
         return initializedName->get_scope();
       }
       DebugScope([loc, initializedName]() {
         return "GetScope invoked: loc is " + AstInterface::AstToString(loc) +
-               "; parent->parent is " + loc->get_parent()->get_parent()->class_name() +
-               "; scope=" + AstInterface::AstToString(initializedName->get_scope());
+               "; parent->parent is " +
+               loc->get_parent()->get_parent()->class_name() + "; scope=" +
+               AstInterface::AstToString(initializedName->get_scope());
       });
       return GetScope(loc->get_parent());
     }
@@ -345,9 +358,7 @@ SgStatement *GetScope(SgNode *loc) {
   }
 }
 
-SgStatement *AstInterfaceImpl::GetScope(SgNode *loc) {
-  return ::GetScope(loc);
-}
+SgStatement *AstInterfaceImpl::GetScope(SgNode *loc) { return ::GetScope(loc); }
 
 // Strip leading "const" and tailing '&'
 std::string StripParameterType(const std::string &name) {
@@ -377,9 +388,8 @@ SgNode *CreateAssignment(AstInterfaceImpl &fa, SgExpression *lhsexp,
   if (lhstype->variantT() == V_SgClassType) {
     SgClassType *lhstype1 = isSgClassType(lhstype);
     SgName classname = lhstype1->get_name();
-    SgClassDeclaration *c = isSgClassDeclaration(
-        fa.LookupNestedDeclaration(std::string(classname.str()),
-                                   fa.get_scope(lhsexp)));
+    SgClassDeclaration *c = isSgClassDeclaration(fa.LookupNestedDeclaration(
+        std::string(classname.str()), fa.get_scope(lhsexp)));
     assert(c != 0);
     SgExpressionPtrList args;
     args.push_back(rhsexp);
@@ -594,17 +604,18 @@ SgVariableSymbol *LookupVar(const std::string &name, SgScopeStatement *loc) {
   }
 }
 
-SgNode* AstInterfaceImpl::LookupNestedDeclaration(const std::string& name, SgNode* loc) {
-  int sz=name.size();
-  assert (sz!=0); 
-  assert (loc); 
+SgNode *AstInterfaceImpl::LookupNestedDeclaration(const std::string &name,
+                                                  SgNode *loc) {
+  int sz = name.size();
+  assert(sz != 0);
+  assert(loc);
 
   int pos = 0;
   // skip leading :: if they are present.
   if (sz >= 2 && name[0] == ':' && name[1] == ':')
-    pos = 2; 
+    pos = 2;
 
-  assert (sz-2!=0); 
+  assert(sz - 2 != 0);
 
   // Save the current matching declarations in cur_results.
   // Save the declarations to sewarch in to_search_next.
@@ -612,13 +623,13 @@ SgNode* AstInterfaceImpl::LookupNestedDeclaration(const std::string& name, SgNod
   to_search_next.push_back(SageInterface::getGlobalScope(loc));
 
   // split the name into segments
-  std::string currentname; 
-  DebugVariable([&name](){return "Looking for variable:" + name; });
+  std::string currentname;
+  DebugVariable([&name]() { return "Looking for variable:" + name; });
   // Search for each scope name and advance the search accordingly.
-  while (pos <= sz) {  // we reach the last + 1 pos, very tricky here!!
+  while (pos <= sz) { // we reach the last + 1 pos, very tricky here!!
     if (name[pos] != ':' && pos < sz) {
-     // characters other than :, accumulate to current name
-     // We have not yet reached the end of a scope name.
+      // characters other than :, accumulate to current name
+      // We have not yet reached the end of a scope name.
       currentname.push_back(name[pos++]);
       continue;
     }
@@ -626,76 +637,91 @@ SgNode* AstInterfaceImpl::LookupNestedDeclaration(const std::string& name, SgNod
     assert(currentname.size() != 0);
     // First, advance the given name to the next scope if needed.
     if (pos < sz && name[pos] == ':') {
-        if (name[pos - 1] != ':') { // this is the first : of ::
-          assert(pos + 1 < sz && name[pos + 1] == ':');
-          pos += 2;  // skip two chars
-        }
-    }
-    else {
-       // last char. Advance pos to exit the surrounding while loop.
-        pos++; 
+      if (name[pos - 1] != ':') { // this is the first : of ::
+        assert(pos + 1 < sz && name[pos + 1] == ':');
+        pos += 2; // skip two chars
+      }
+    } else {
+      // last char. Advance pos to exit the surrounding while loop.
+      pos++;
     }
 
     // Use decl_ptr_list as a work list to store all declarations to check.
     // Use matched_decls to save all declarations that match the current name.
     // Use new_decls to save new declarations to search for current name.
     AstInterface::AstNodeList decl_ptr_list;
-    // Start from all matching declarations before reaching current name. 
+    // Start from all matching declarations before reaching current name.
     decl_ptr_list = to_search_next;
-    cur_results.clear(); to_search_next.clear();
+    cur_results.clear();
+    to_search_next.clear();
     // Now search for the scope that have the given scope name..
-    DebugVariable([&currentname]() { return "Looking for name:" + currentname; });
+    DebugVariable(
+        [&currentname]() { return "Looking for name:" + currentname; });
     // Iterate until the list is empty.
     while (!decl_ptr_list.empty()) {
-        // Pop out the current declaration.
-        auto cur_decl= decl_ptr_list.back();
-        decl_ptr_list.pop_back(); 
+      // Pop out the current declaration.
+      auto cur_decl = decl_ptr_list.back();
+      decl_ptr_list.pop_back();
 
-        DebugVariable([&cur_decl]() { return "processing decl:" + ((cur_decl==0)?"NULL":AstInterface::AstToString(cur_decl)); });
-        std::string tmp_name;
-        AstInterface::AstNodeList new_decls;
-        if (AstInterface::IsBlock(cur_decl, &tmp_name, &new_decls)) {
-          size_t i = tmp_name.rfind("::");
-          if (i < tmp_name.size()) { // strip qualified names.
-             tmp_name = tmp_name.substr(i+2, tmp_name.size()-i+2);
-          }
-          DebugVariable([&tmp_name]() { return "Is Block " + tmp_name;});
-          if (tmp_name == currentname) {
-            cur_results.push_back(cur_decl); 
-            DebugVariable([&currentname]() { return "Found name : " + currentname; });
-            to_search_next.insert(to_search_next.end(), new_decls.begin(), new_decls.end());
-          } else {
-             decl_ptr_list.insert(decl_ptr_list.end(), new_decls.begin(), new_decls.end());
-          }
+      DebugVariable([&cur_decl]() {
+        return "processing decl:" +
+               ((cur_decl == 0) ? "NULL" : AstInterface::AstToString(cur_decl));
+      });
+      std::string tmp_name;
+      AstInterface::AstNodeList new_decls;
+      if (AstInterface::IsBlock(cur_decl, &tmp_name, &new_decls)) {
+        size_t i = tmp_name.rfind("::");
+        if (i < tmp_name.size()) { // strip qualified names.
+          tmp_name = tmp_name.substr(i + 2, tmp_name.size() - i + 2);
         }
-        else if (SgVariableDeclaration* var_decl = isSgVariableDeclaration(cur_decl.get_ptr())) {
-          DebugVariable([]() { return "Is variable declaration."; });
-          auto vars = var_decl->get_variables();
-          decl_ptr_list.insert(decl_ptr_list.end(), vars.begin(), vars.end());
-        } else if (SgInitializedName* initname  = isSgInitializedName(cur_decl.get_ptr())) {
-             DebugVariable([&initname]() { return "name:" + initname->get_name().getString(); });
-             if (initname->get_name().getString() == currentname) {
-               cur_results.push_back(cur_decl);
-               DebugVariable([&currentname]() { return "Found name : " + currentname; });
-             }
-         } else if (auto* typedef_decl = isSgTypedefType(cur_decl.get_ptr())) {
-             if (typedef_decl->get_name().str() == currentname) {
-                cur_results.push_back(cur_decl); 
-                DebugVariable([&currentname]() { return "Found name : " + currentname; });
-                auto* decl1 = typedef_decl->get_base_type();
-                to_search_next.push_back(decl1);
-             } 
-         } else {
-             DebugVariable([&cur_decl]() { return "Not looking at:" + AstInterface::AstToString(cur_decl); });
-         }
+        DebugVariable([&tmp_name]() { return "Is Block " + tmp_name; });
+        if (tmp_name == currentname) {
+          cur_results.push_back(cur_decl);
+          DebugVariable(
+              [&currentname]() { return "Found name : " + currentname; });
+          to_search_next.insert(to_search_next.end(), new_decls.begin(),
+                                new_decls.end());
+        } else {
+          decl_ptr_list.insert(decl_ptr_list.end(), new_decls.begin(),
+                               new_decls.end());
+        }
+      } else if (SgVariableDeclaration *var_decl =
+                     isSgVariableDeclaration(cur_decl.get_ptr())) {
+        DebugVariable([]() { return "Is variable declaration."; });
+        auto vars = var_decl->get_variables();
+        decl_ptr_list.insert(decl_ptr_list.end(), vars.begin(), vars.end());
+      } else if (SgInitializedName *initname =
+                     isSgInitializedName(cur_decl.get_ptr())) {
+        DebugVariable([&initname]() {
+          return "name:" + initname->get_name().getString();
+        });
+        if (initname->get_name().getString() == currentname) {
+          cur_results.push_back(cur_decl);
+          DebugVariable(
+              [&currentname]() { return "Found name : " + currentname; });
+        }
+      } else if (auto *typedef_decl = isSgTypedefType(cur_decl.get_ptr())) {
+        if (typedef_decl->get_name().str() == currentname) {
+          cur_results.push_back(cur_decl);
+          DebugVariable(
+              [&currentname]() { return "Found name : " + currentname; });
+          auto *decl1 = typedef_decl->get_base_type();
+          to_search_next.push_back(decl1);
+        }
+      } else {
+        DebugVariable([&cur_decl]() {
+          return "Not looking at:" + AstInterface::AstToString(cur_decl);
+        });
+      }
     }
     if (cur_results.empty()) {
-       // The search fails. Output a warning and return NULL.
-       std::cerr<<"Warning: cannot find qualified name for "<< currentname << "\n";
-       return NULL; // cannot find the declaration
+      // The search fails. Output a warning and return NULL.
+      std::cerr << "Warning: cannot find qualified name for " << currentname
+                << "\n";
+      return NULL; // cannot find the declaration
     } else {
-      // reset scope name to accept next name   
-      currentname = ""; 
+      // reset scope name to accept next name
+      currentname = "";
     }
   }
   assert(!cur_results.empty());
@@ -707,78 +733,81 @@ SgVariableSymbol *AstInterfaceImpl::LookupVar(const std::string &name,
   assert(loc != 0);
   const char *start = name.c_str();
 
-  // check if it is a fully qualified name, if yes, use the special lookup function instead
+  // check if it is a fully qualified name, if yes, use the special lookup
+  // function instead
   if (name.find("::") != std::string::npos) {
     AstNodePtr result = LookupNestedDeclaration(name, loc);
-    SgInitializedName* initname = isSgInitializedName(result.get_ptr());
+    SgInitializedName *initname = isSgInitializedName(result.get_ptr());
     if (initname != 0) {
-      SgVariableSymbol* varsym =
+      SgVariableSymbol *varsym =
           isSgVariableSymbol(initname->search_for_symbol_from_symbol_table());
       if (varsym == 0) {
-         NEW_SYMBOL(varsym, SgVariableSymbol, initname->get_scope(), initname);
+        NEW_SYMBOL(varsym, SgVariableSymbol, initname->get_scope(), initname);
       }
       return varsym;
     }
     return 0;
   }
   {
-    SgNamedType* t = isSgNamedType(loc);
+    SgNamedType *t = isSgNamedType(loc);
     if (t != 0) {
       return LookupVar(name, t->getAssociatedDeclaration());
     }
   }
   {
-    SgClassDeclaration* class_decl = isSgClassDeclaration(loc); 
+    SgClassDeclaration *class_decl = isSgClassDeclaration(loc);
     if (class_decl != 0) {
       return LookupVar(name, GetClassDefn(class_decl));
     }
   }
   SgClassDefinition *cdef = isSgClassDefinition(loc);
   if (cdef != 0) {
-     SgVariableSymbol* r = dynamic_cast<SgVariableSymbol*>(cdef->lookup_symbol(start));
-     if (DebugSymbol()) {
-        if (r == 0) 
-           std:: cerr << "failed to find variable " << start;
+    SgVariableSymbol *r =
+        dynamic_cast<SgVariableSymbol *>(cdef->lookup_symbol(start));
+    if (DebugSymbol()) {
+      if (r == 0)
+        std::cerr << "failed to find variable " << start;
+      else
+        std::cerr << "found variable " << start;
+      std::cerr << " in scope " << unparseToString(loc) << "\n";
+      std::cerr << " symbols of which include: ";
+      for (SgSymbol *p = cdef->first_any_symbol(); p != 0;
+           p = cdef->next_any_symbol())
+        std::cerr << p->get_name().str() << ";";
+      std::cerr << "\n";
+    }
+    if (r != 0)
+      return r;
+    SgBaseClassPtrList &l = cdef->get_inheritances();
+    for (SgBaseClassPtrList::iterator p = l.begin(); p != l.end(); ++p) {
+      SgBaseClass *cur = *p;
+      SgClassDeclaration *decl = cur->get_base_class();
+      assert(decl != 0);
+      SgClassDefinition *def = GetClassDefn(decl);
+      assert(def != 0);
+      r = LookupVar(name, def);
+      if (r != 0)
+        return r;
+    }
+    return 0;
+  } else {
+    SgScopeStatement *loc_scope = isSgScopeStatement(loc);
+    assert(loc_scope != 0);
+    SgVariableSymbol *f = 0;
+    do {
+      f = dynamic_cast<SgVariableSymbol *>(loc_scope->lookup_symbol(start));
+      if (DebugSymbol()) {
+        if (f == 0)
+          std::cerr << "failed to find variable ";
         else
-           std:: cerr << "found variable " << start;
-        std:: cerr << " in scope " << unparseToString(loc) << "\n"; 
-        std:: cerr << " symbols of which include: "; 
-        for (SgSymbol* p=cdef->first_any_symbol(); p != 0; p = cdef->next_any_symbol())
-           std:: cerr << p->get_name().str() << ";"; 
-        std:: cerr << "\n";
-     }
-     if (r != 0) return r;
-     SgBaseClassPtrList& l = cdef->get_inheritances();
-     for (SgBaseClassPtrList::iterator p = l.begin(); p != l.end(); ++p) {
-        SgBaseClass* cur = *p;
-        SgClassDeclaration* decl = cur->get_base_class();
-        assert(decl != 0);
-        SgClassDefinition* def = GetClassDefn(decl);
-        assert(def != 0);
-        r = LookupVar(name, def);
-        if (r != 0) return r;
-     }
-     return 0;
-  }
-  else {
-     SgScopeStatement *loc_scope = isSgScopeStatement(loc);
-     assert(loc_scope != 0);
-     SgVariableSymbol* f = 0;
-     do {
-        f = dynamic_cast<SgVariableSymbol*>(loc_scope->lookup_symbol(start));
-        if (DebugSymbol()) {
-           if (f == 0) 
-              std:: cerr << "failed to find variable ";
-           else
-              std:: cerr << "found variable ";
-           std:: cerr << start << " in scope " << unparseToString(loc) << "\n"; 
-        }
-        if (loc_scope->variantT() == V_SgGlobal || f != 0)
-             break;
-        loc_scope = loc_scope->get_scope();
-     }
-     while ( loc_scope != 0 && f == 0);
-     return f;
+          std::cerr << "found variable ";
+        std::cerr << start << " in scope " << unparseToString(loc) << "\n";
+      }
+      if (loc_scope->variantT() == V_SgGlobal || f != 0)
+        break;
+      loc_scope = loc_scope->get_scope();
+    } while (loc_scope != 0 && f == 0);
+    return f;
   }
 }
 
@@ -929,7 +958,8 @@ void AstInterfaceImpl::set_top(SgNode *top) {
   }
 }
 
-SgFunctionSymbol *AstInterfaceImpl::LookupFunction(const char *start, SgScopeStatement* in_scope) {
+SgFunctionSymbol *AstInterfaceImpl::LookupFunction(const char *start,
+                                                   SgScopeStatement *in_scope) {
   assert(in_scope != 0);
   SgScopeStatement *cur = in_scope;
   SgFunctionSymbol *f = 0;
@@ -1119,14 +1149,14 @@ AstInterfaceImpl ::NewMemberFunc(SgClassDeclaration *classDecl,
 
 AstNodePtr GetFunctionDecl(const AstNodePtr &_s);
 
-std::string AstInterface::
-GetGlobalUniqueName(const AstNodePtr& _scope, std::string expname) {
-  SgNode* scope = AstNodePtrImpl(_scope).get_ptr();
+std::string AstInterface::GetGlobalUniqueName(const AstNodePtr &_scope,
+                                              std::string expname) {
+  SgNode *scope = AstNodePtrImpl(_scope).get_ptr();
   assert(scope != 0);
   std::string result = expname;
   std::string scopename = expname;
   if (function_name_mangling_ && IsFunctionDefinition(_scope)) {
-    auto* decl = isSgFunctionDeclaration(GetFunctionDecl(_scope).get_ptr());
+    auto *decl = isSgFunctionDeclaration(GetFunctionDecl(_scope).get_ptr());
     assert(decl != 0);
     scopename = function_name_mangling_(decl);
     if (expname != "") {
@@ -1135,34 +1165,46 @@ GetGlobalUniqueName(const AstNodePtr& _scope, std::string expname) {
     return scopename;
   }
   while (scope != 0 && scope->variantT() != V_SgGlobal) {
-       DebugVariable([&scope](){ return "GetGlobalUniqueName:scope:" + AstToString(scope); });
-       if (IsBlock(scope, &scopename) && scopename != "" && result.find(scopename+"::") >= result.size()) {
-            DebugVariable([&scopename](){ return "GetGlobalUniqueName:scope_name:" + scopename; });
-            if (result == "") result = scopename;
-            else {
-            auto result_in_scopename_index = scopename.find(result);
-            bool result_in_scopename = result_in_scopename_index < scopename.size(); 
-            // Check that result is indeed part of the scope name on both ends (b0 and b1).
-            bool b0_is_good = result_in_scopename_index == 0 ||
-                              (result_in_scopename && scopename[result_in_scopename_index-1] == ':');
-            bool b1_is_good = result_in_scopename && 
-                (result_in_scopename_index + result.size() == scopename.size() || 
-                  scopename[result_in_scopename_index + result.size()] == '_');
-            if (b0_is_good && b1_is_good) result = scopename;
-            else result = scopename + "::" + result;
-            }
-       } 
-       scope = AstInterfaceImpl::GetScope(scope);
+    DebugVariable([&scope]() {
+      return "GetGlobalUniqueName:scope:" + AstToString(scope);
+    });
+    if (IsBlock(scope, &scopename) && scopename != "" &&
+        result.find(scopename + "::") >= result.size()) {
+      DebugVariable([&scopename]() {
+        return "GetGlobalUniqueName:scope_name:" + scopename;
+      });
+      if (result == "")
+        result = scopename;
+      else {
+        auto result_in_scopename_index = scopename.find(result);
+        bool result_in_scopename = result_in_scopename_index < scopename.size();
+        // Check that result is indeed part of the scope name on both ends (b0
+        // and b1).
+        bool b0_is_good = result_in_scopename_index == 0 ||
+                          (result_in_scopename &&
+                           scopename[result_in_scopename_index - 1] == ':');
+        bool b1_is_good =
+            result_in_scopename &&
+            (result_in_scopename_index + result.size() == scopename.size() ||
+             scopename[result_in_scopename_index + result.size()] == '_');
+        if (b0_is_good && b1_is_good)
+          result = scopename;
+        else
+          result = scopename + "::" + result;
+      }
+    }
+    scope = AstInterfaceImpl::GetScope(scope);
   }
   if (scopename == "main") {
     std::string filename = scope->get_file_info()->get_filenameString();
     auto location = filename.rfind("/");
     if (location < filename.size()) {
-       filename = filename.substr(location+1);
+      filename = filename.substr(location + 1);
     }
     result = filename + "::" + result;
   }
-  result.erase(std::remove_if(result.begin(), result.end(), ::isspace), result.end());
+  result.erase(std::remove_if(result.begin(), result.end(), ::isspace),
+               result.end());
   return result;
 }
 
@@ -1203,28 +1245,28 @@ std::string AstInterface::unparseToString(const AstNodePtr &n) {
 std::string AstInterface::AstTypeToString(const AstNodePtr &n) {
   std::string res;
   switch (n.get_type()) {
-    case AstNodePtr::SpecialAstType::NULL_AST:
-      res = "_NULL_";
-      break;
-    case AstNodePtr::SpecialAstType::UNKNOWN_AST:
-      res = "_UNKNOWN_";
-      break;
-    case AstNodePtr::SpecialAstType::UNKNOWN_FUNCTION_CALL:
-      res = "_UNKNOWN_FUNCTION_CALL_";
-      break;
-    case AstNodePtr::SpecialAstType::UNKNOWN_PTR_REF:
-      res = "_UNKNOWN_PTR_REF_";
-      break;
-    case AstNodePtr::SpecialAstType::SG_AST:
-      res = "";
-      break;
-    case AstNodePtr::SpecialAstType::GLOBAL_SIGNATURE:
-      res = "_GLOBAL_" + n.get_signature();
-      break;
-    default:
-      std::cerr << "Error: Unhandled case."
-                << "\n";
-      assert(0);
+  case AstNodePtr::SpecialAstType::NULL_AST:
+    res = "_NULL_";
+    break;
+  case AstNodePtr::SpecialAstType::UNKNOWN_AST:
+    res = "_UNKNOWN_";
+    break;
+  case AstNodePtr::SpecialAstType::UNKNOWN_FUNCTION_CALL:
+    res = "_UNKNOWN_FUNCTION_CALL_";
+    break;
+  case AstNodePtr::SpecialAstType::UNKNOWN_PTR_REF:
+    res = "_UNKNOWN_PTR_REF_";
+    break;
+  case AstNodePtr::SpecialAstType::SG_AST:
+    res = "";
+    break;
+  case AstNodePtr::SpecialAstType::GLOBAL_SIGNATURE:
+    res = "_GLOBAL_" + n.get_signature();
+    break;
+  default:
+    std::cerr << "Error: Unhandled case."
+              << "\n";
+    assert(0);
   }
   return res;
 }
@@ -1338,7 +1380,8 @@ bool AstInterface::IsDecls(const AstNodePtr &_s) {
   case V_SgTemplateDeclaration:
     return true;
   default:
-    DebugVariable([&s]() { return std::string("Not decl: ") + s->class_name(); });
+    DebugVariable(
+        [&s]() { return std::string("Not decl: ") + s->class_name(); });
     return false;
   }
 }
@@ -1617,8 +1660,8 @@ bool AstInterface::IsFunctionDefinition(const AstNodePtr &_s, std::string *name,
     if (paramtype != 0 || params != 0)
       l = decl->get_parameterList();
     if (def == 0) {
-      AstNodePtr def_node =
-          AstInterface::GetFunctionDefinitionFromDeclaration(AstNodePtrImpl(decl));
+      AstNodePtr def_node = AstInterface::GetFunctionDefinitionFromDeclaration(
+          AstNodePtrImpl(decl));
       def = isSgFunctionDefinition(def_node.get_ptr());
     }
     break;
@@ -1669,8 +1712,8 @@ bool AstInterface::IsFunctionDefinition(const AstNodePtr &_s, std::string *name,
       }
     }
     if (def == 0) {
-      AstNodePtr def_node =
-          AstInterface::GetFunctionDefinitionFromDeclaration(AstNodePtrImpl(decl));
+      AstNodePtr def_node = AstInterface::GetFunctionDefinitionFromDeclaration(
+          AstNodePtrImpl(decl));
       def = isSgFunctionDefinition(def_node.get_ptr());
     }
     break;
@@ -1716,18 +1759,17 @@ bool AstInterfaceImpl::IsAssignment(const SgNode *s, SgNode **lhs, SgNode **rhs,
     case V_SgMultAssignOp:
     case V_SgDivAssignOp:
     case V_SgModAssignOp:
-    case V_SgXorAssignOp:
-      {
-        const SgBinaryOp *s2 = isSgBinaryOp(exp);
-        if (lhs != 0)
-          *lhs = s2->get_lhs_operand();
-        if (rhs != 0) {
-          *rhs = const_cast<SgExpression *>(exp);
-        }
-        if (readlhs != 0)
-          *readlhs = true;
-        return true;
+    case V_SgXorAssignOp: {
+      const SgBinaryOp *s2 = isSgBinaryOp(exp);
+      if (lhs != 0)
+        *lhs = s2->get_lhs_operand();
+      if (rhs != 0) {
+        *rhs = const_cast<SgExpression *>(exp);
       }
+      if (readlhs != 0)
+        *readlhs = true;
+      return true;
+    }
     case V_SgAssignOp: {
       const SgBinaryOp *s2 = isSgBinaryOp(exp);
       if (lhs != 0)
@@ -1783,9 +1825,9 @@ bool AstInterface::IsVariableDecl(const AstNodePtr &_s, AstNodeList *vars,
          ++p) {
       SgInitializedName *var = (*p);
       SgExpression *def = var->get_initializer();
-        if (def != 0 && def->variantT() == V_SgAssignInitializer) {
-          def = isSgAssignInitializer(def)->get_operand();
-        }
+      if (def != 0 && def->variantT() == V_SgAssignInitializer) {
+        def = isSgAssignInitializer(def)->get_operand();
+      }
       if (vars != 0)
         vars->push_back(var);
       if (init != 0)
@@ -1812,8 +1854,8 @@ bool AstInterface::IsAliasingDecl(const AstNodePtr &_s, AstNodeList *vars,
         if (vars != 0)
           vars->push_back(v->get_symbol()->get_declaration());
         if (aliases != 0) {
-          AstNodePtr global("_COMMON_" + comm->get_block_name() + "::" +
-                            v->get_symbol()->get_name().str());
+          AstNodePtr global("_COMMON_" + comm->get_block_name() +
+                            "::" + v->get_symbol()->get_name().str());
           aliases->push_back(global);
         }
       }
@@ -1998,169 +2040,176 @@ bool AstInterface::IsMax(const AstNodePtr &_exp) {
 //! Check if $_exp$ is a variable reference (including all name references which
 //! may have functions or objects have values)
 /* Does not deal correctly with templates SgNorealExp */
-bool AstInterfaceImpl::
-IsVarRef(SgNode* exp, SgType** vartype, std::string* varname,
-          SgNode** _scope, bool *defined_in_global,
-          bool use_global_unique_name, bool *has_ptr_deref)
-{ 
-  if (exp == 0) return false;
+bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
+                                std::string *varname, SgNode **_scope,
+                                bool *defined_in_global,
+                                bool use_global_unique_name,
+                                bool *has_ptr_deref) {
+  if (exp == 0)
+    return false;
   SgNode *decl = 0, *scope = 0;
   switch (exp->variantT()) {
-    case V_SgNonrealRefExp:
-      {
-         SgNonrealSymbol *sb = isSgNonrealRefExp(exp)->get_symbol();
-         assert(sb != 0);
-         SgScopeStatement *cdef = sb->get_scope();
-         assert(cdef != 0);
-         if (varname != 0) {
-            *varname = StripGlobalQualifier(cdef->get_qualified_name())+"::"+StripGlobalQualifier(sb->get_name().str());
-         }
-         if (vartype != 0) *vartype = sb->get_type();
-      }
-      break;
-    case V_SgMemberFunctionRefExp: 
-      {
-        const SgMemberFunctionRefExp *var = isSgMemberFunctionRefExp( exp );
-        assert(var != 0);
-        SgFunctionSymbol *sb = var->get_symbol();
-        assert(sb != 0);
-        decl = sb->get_declaration();
-        if (vartype != 0) *vartype = sb->get_type();
-        if (varname != 0)  *varname = sb->get_name().str();
-        scope = decl;
-      }
-      break;
-    case V_SgTemplateMemberFunctionRefExp: 
-      {
-        const SgTemplateMemberFunctionRefExp *var = isSgTemplateMemberFunctionRefExp( exp );
-        assert(var != 0);
-        SgFunctionSymbol *sb = var->get_symbol();
-        assert(sb != 0);
-        decl = sb->get_declaration();
-        if (vartype != 0) *vartype = sb->get_type();
-        if (varname != 0)  *varname = sb->get_name().str();
-        scope = decl;
-      }
-      break;
-    case V_SgTemplateFunctionRefExp:
-      {
-        const SgTemplateFunctionRefExp *var = isSgTemplateFunctionRefExp( exp );
-        assert(var != 0);
-        SgFunctionSymbol *sb = var->get_symbol();
-        assert(sb != 0);
-        decl = sb->get_declaration();
-        if (vartype != 0) *vartype = sb->get_type();
-        if (varname != 0)  *varname = sb->get_name().str();
-        scope = decl;
-      }
-      break;
-    case V_SgFunctionRefExp:
-      {
-        const SgFunctionRefExp *var = isSgFunctionRefExp( exp );
-        assert(var != 0);
-        SgFunctionSymbol *sb = var->get_symbol();
-        assert(sb != 0);
-        decl = sb->get_declaration();
-        if (vartype != 0) *vartype = sb->get_type();
-        if (varname != 0)  *varname = sb->get_name().str();
-        scope = decl;
-      }
-      break;
-    case V_SgVarRefExp:
-      {
-        const SgVarRefExp *var = isSgVarRefExp( exp );
-        SgVariableSymbol *sb = var->get_symbol();
-        if (vartype != 0) *vartype = sb->get_type();
-        if (varname != 0) *varname = sb->get_name().str();
-        decl = sb->get_declaration();
-        scope = AstInterfaceImpl::GetScope(decl);
-      }
-      break;
-    case V_SgThisExp:
-      {
-        const SgThisExp *var = isSgThisExp( exp );
-        if (vartype != 0) *vartype = var->get_type();
-        if (varname != 0) *varname = "this";
-        scope = GetScope(exp);
-      }
-       break;
-    case V_SgInitializedName:
-      {
-        SgInitializedName* var = isSgInitializedName(exp);
-        if (var->get_name().str() == 0) {
-           std::cerr << "no name for initname " << var->unparseToString() << "\n";
-           return false;
-        }
-        SgType* t = var->get_type();
-        assert( t != 0);
-        if (vartype != 0) *vartype = t;
-        if (varname != 0) *varname = var->get_name().str();
-        decl = var;
-        scope = AstInterfaceImpl::GetScope(var);
-      }
-      break;
-    case V_SgPointerDerefExp:
-       if (IsVarRef(isSgPointerDerefExp(exp)->get_operand(), vartype, varname, _scope, defined_in_global, use_global_unique_name, has_ptr_deref)) {
-          if (has_ptr_deref != 0) {
-            *has_ptr_deref = true;
-          }
-          if (varname != 0) {
-            (*varname) = "*" + (*varname);
-          }
-          if (vartype != 0) {
-            SgPointerType* ptype = isSgPointerType(AstNodeTypeImpl(*vartype).get_ptr());
-            if (ptype != 0) {
-                *vartype =  AstNodeTypeImpl(ptype->get_base_type()).get_ptr();
-            }
-          }
-          break;
-       }
-       return false; 
-    case V_SgDotStarOp:
-      {
-       const SgBinaryOp *exp1 = isSgBinaryOp(exp);
-       SgVarRefExp* var2 = isSgVarRefExp(exp1->get_rhs_operand());
-       if (var2 == 0)
-          return false;
-       if (has_ptr_deref != 0) {
-         *has_ptr_deref = true;
-       }
-       SgVariableSymbol *sb2 = var2->get_symbol();
-       if (vartype != 0) *vartype = sb2->get_type();
-       if (varname != 0) {
-          *varname = StripQualifier(std::string(sb2->get_name().str()));
-       }
-     }
-     break;
-    case V_SgArrowExp:
-       if (has_ptr_deref != 0 && !isSgThisExp(isSgBinaryOp(exp)->get_lhs_operand())) {
-         *has_ptr_deref = true;
-       }
-    case V_SgDotExp:
-     {
-       const SgBinaryOp *exp1 = isSgBinaryOp(exp);
-       SgNode* lhs = exp1->get_lhs_operand();
-       if (isSgThisExp(lhs)!=0) { 
-          if (!IsVarRef(exp1->get_rhs_operand(),vartype,varname,_scope, defined_in_global, use_global_unique_name, has_ptr_deref)) {
-              return false;
-          }
-          return true;
-       } 
-       std::string varname1;
-       if (!IsVarRef(lhs,0, &varname1, &scope, defined_in_global, use_global_unique_name, has_ptr_deref)) {
-          return false;
-       }
-       SgVarRefExp* var2 = isSgVarRefExp(exp1->get_rhs_operand());
-       if (var2 == 0)
-          return false;
-       SgVariableSymbol *sb2 = var2->get_symbol();
-       if (vartype != 0) *vartype = sb2->get_type();
-       if (varname != 0) {
-          auto dot = (exp->variantT() == V_SgDotExp)? "." : "->";
-          *varname = varname1 + dot + StripQualifier(std::string(sb2->get_name().str()));
-       }
+  case V_SgNonrealRefExp: {
+    SgNonrealSymbol *sb = isSgNonrealRefExp(exp)->get_symbol();
+    assert(sb != 0);
+    SgScopeStatement *cdef = sb->get_scope();
+    assert(cdef != 0);
+    if (varname != 0) {
+      *varname = StripGlobalQualifier(cdef->get_qualified_name()) +
+                 "::" + StripGlobalQualifier(sb->get_name().str());
     }
-     break;
+    if (vartype != 0)
+      *vartype = sb->get_type();
+  } break;
+  case V_SgMemberFunctionRefExp: {
+    const SgMemberFunctionRefExp *var = isSgMemberFunctionRefExp(exp);
+    assert(var != 0);
+    SgFunctionSymbol *sb = var->get_symbol();
+    assert(sb != 0);
+    decl = sb->get_declaration();
+    if (vartype != 0)
+      *vartype = sb->get_type();
+    if (varname != 0)
+      *varname = sb->get_name().str();
+    scope = decl;
+  } break;
+  case V_SgTemplateMemberFunctionRefExp: {
+    const SgTemplateMemberFunctionRefExp *var =
+        isSgTemplateMemberFunctionRefExp(exp);
+    assert(var != 0);
+    SgFunctionSymbol *sb = var->get_symbol();
+    assert(sb != 0);
+    decl = sb->get_declaration();
+    if (vartype != 0)
+      *vartype = sb->get_type();
+    if (varname != 0)
+      *varname = sb->get_name().str();
+    scope = decl;
+  } break;
+  case V_SgTemplateFunctionRefExp: {
+    const SgTemplateFunctionRefExp *var = isSgTemplateFunctionRefExp(exp);
+    assert(var != 0);
+    SgFunctionSymbol *sb = var->get_symbol();
+    assert(sb != 0);
+    decl = sb->get_declaration();
+    if (vartype != 0)
+      *vartype = sb->get_type();
+    if (varname != 0)
+      *varname = sb->get_name().str();
+    scope = decl;
+  } break;
+  case V_SgFunctionRefExp: {
+    const SgFunctionRefExp *var = isSgFunctionRefExp(exp);
+    assert(var != 0);
+    SgFunctionSymbol *sb = var->get_symbol();
+    assert(sb != 0);
+    decl = sb->get_declaration();
+    if (vartype != 0)
+      *vartype = sb->get_type();
+    if (varname != 0)
+      *varname = sb->get_name().str();
+    scope = decl;
+  } break;
+  case V_SgVarRefExp: {
+    const SgVarRefExp *var = isSgVarRefExp(exp);
+    SgVariableSymbol *sb = var->get_symbol();
+    if (vartype != 0)
+      *vartype = sb->get_type();
+    if (varname != 0)
+      *varname = sb->get_name().str();
+    decl = sb->get_declaration();
+    scope = AstInterfaceImpl::GetScope(decl);
+  } break;
+  case V_SgThisExp: {
+    const SgThisExp *var = isSgThisExp(exp);
+    if (vartype != 0)
+      *vartype = var->get_type();
+    if (varname != 0)
+      *varname = "this";
+    scope = GetScope(exp);
+  } break;
+  case V_SgInitializedName: {
+    SgInitializedName *var = isSgInitializedName(exp);
+    if (var->get_name().str() == 0) {
+      std::cerr << "no name for initname " << var->unparseToString() << "\n";
+      return false;
+    }
+    SgType *t = var->get_type();
+    assert(t != 0);
+    if (vartype != 0)
+      *vartype = t;
+    if (varname != 0)
+      *varname = var->get_name().str();
+    decl = var;
+    scope = AstInterfaceImpl::GetScope(var);
+  } break;
+  case V_SgPointerDerefExp:
+    if (IsVarRef(isSgPointerDerefExp(exp)->get_operand(), vartype, varname,
+                 _scope, defined_in_global, use_global_unique_name,
+                 has_ptr_deref)) {
+      if (has_ptr_deref != 0) {
+        *has_ptr_deref = true;
+      }
+      if (varname != 0) {
+        (*varname) = "*" + (*varname);
+      }
+      if (vartype != 0) {
+        SgPointerType *ptype =
+            isSgPointerType(AstNodeTypeImpl(*vartype).get_ptr());
+        if (ptype != 0) {
+          *vartype = AstNodeTypeImpl(ptype->get_base_type()).get_ptr();
+        }
+      }
+      break;
+    }
+    return false;
+  case V_SgDotStarOp: {
+    const SgBinaryOp *exp1 = isSgBinaryOp(exp);
+    SgVarRefExp *var2 = isSgVarRefExp(exp1->get_rhs_operand());
+    if (var2 == 0)
+      return false;
+    if (has_ptr_deref != 0) {
+      *has_ptr_deref = true;
+    }
+    SgVariableSymbol *sb2 = var2->get_symbol();
+    if (vartype != 0)
+      *vartype = sb2->get_type();
+    if (varname != 0) {
+      *varname = StripQualifier(std::string(sb2->get_name().str()));
+    }
+  } break;
+  case V_SgArrowExp:
+    if (has_ptr_deref != 0 &&
+        !isSgThisExp(isSgBinaryOp(exp)->get_lhs_operand())) {
+      *has_ptr_deref = true;
+    }
+  case V_SgDotExp: {
+    const SgBinaryOp *exp1 = isSgBinaryOp(exp);
+    SgNode *lhs = exp1->get_lhs_operand();
+    if (isSgThisExp(lhs) != 0) {
+      if (!IsVarRef(exp1->get_rhs_operand(), vartype, varname, _scope,
+                    defined_in_global, use_global_unique_name, has_ptr_deref)) {
+        return false;
+      }
+      return true;
+    }
+    std::string varname1;
+    if (!IsVarRef(lhs, 0, &varname1, &scope, defined_in_global,
+                  use_global_unique_name, has_ptr_deref)) {
+      return false;
+    }
+    SgVarRefExp *var2 = isSgVarRefExp(exp1->get_rhs_operand());
+    if (var2 == 0)
+      return false;
+    SgVariableSymbol *sb2 = var2->get_symbol();
+    if (vartype != 0)
+      *vartype = sb2->get_type();
+    if (varname != 0) {
+      auto dot = (exp->variantT() == V_SgDotExp) ? "." : "->";
+      *varname =
+          varname1 + dot + StripQualifier(std::string(sb2->get_name().str()));
+    }
+  } break;
   default:
     return false;
   }
@@ -2170,24 +2219,30 @@ IsVarRef(SgNode* exp, SgType** vartype, std::string* varname,
       assert(false);
     }
     if (_scope != 0 && scope != 0) {
-        *_scope =  (isSgScopeStatement(scope)? scope : AstInterfaceImpl::GetScope(scope));
+      *_scope = (isSgScopeStatement(scope) ? scope
+                                           : AstInterfaceImpl::GetScope(scope));
     }
     if (defined_in_global != 0)
-       *defined_in_global = (scope == 0 || scope->variantT() == V_SgGlobal);
+      *defined_in_global = (scope == 0 || scope->variantT() == V_SgGlobal);
     if (use_global_unique_name && varname != 0 && (*varname) != "") {
-       DebugVariable([varname,scope](){ return "Variable-scope:" + *varname + ":" + AstInterface::AstToString(scope); });
-       if (scope != 0) {
-          if (decl != scope) {
-            *varname = AstInterface::GetGlobalUniqueName(scope, *varname);
-          } else {
-            *varname = AstInterface::GetGlobalUniqueName(scope, "");
-          }
-       }
-       DebugVariable([varname](){ return "global Variable name:" + *varname; });
+      DebugVariable([varname, scope]() {
+        return "Variable-scope:" + *varname + ":" +
+               AstInterface::AstToString(scope);
+      });
+      if (scope != 0) {
+        if (decl != scope) {
+          *varname = AstInterface::GetGlobalUniqueName(scope, *varname);
+        } else {
+          *varname = AstInterface::GetGlobalUniqueName(scope, "");
+        }
+      }
+      DebugVariable([varname]() { return "global Variable name:" + *varname; });
     }
   }
   if (varname != 0) {
-     DebugVariable([exp,varname](){ return "IsVarRef:" + exp->class_name() + ":" + *varname; });
+    DebugVariable([exp, varname]() {
+      return "IsVarRef:" + exp->class_name() + ":" + *varname;
+    });
   }
   return true;
 }
@@ -2206,8 +2261,7 @@ SgNode *AstInterface::SkipCasting(SgNode *exp) {
 bool AstInterface::IsVarRef(const AstNodePtr &_exp, AstNodeType *vartype,
                             string *varname, AstNodePtr *scope,
                             bool *defined_in_global,
-                            bool use_global_unique_name,
-                            bool *has_ptr_deref) {
+                            bool use_global_unique_name, bool *has_ptr_deref) {
   if (_exp == AST_NULL)
     return false;
   SgNode *var_scope = 0;
@@ -2258,7 +2312,8 @@ bool AstInterface::IsFunctionType(const AstNodeType &t,
   if (type == nullptr) {
     return false;
   }
-  type = type->stripType(SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE);
+  type =
+      type->stripType(SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE);
   if (SgPointerType *ptr = isSgPointerType(type)) {
     type = ptr->get_base_type();
   }
@@ -2356,119 +2411,119 @@ void AstInterfaceImpl::CopyNewVarDecls(SgBasicBlock *blk, bool clear) {
     newVarList.clear();
 }
 
-SgVarRefExp*
-AstInterfaceImpl:: CreateFieldRef(SgNode* decl, std::string name2)
-{
+SgVarRefExp *AstInterfaceImpl::CreateFieldRef(SgNode *decl, std::string name2) {
   assert(decl != 0);
-  SgVariableSymbol *vs = LookupVar( name2, decl);
-  SgVarRefExp* r = new SgVarRefExp(GetFileInfo(),vs);
+  SgVariableSymbol *vs = LookupVar(name2, decl);
+  SgVarRefExp *r = new SgVarRefExp(GetFileInfo(), vs);
   r->set_endOfConstruct(r->get_file_info());
   return r;
 }
 
-AstNodePtr AstInterface:: CreateFieldRef(std::string name1, std::string name2) {
-  auto* decl = impl->LookupNestedDeclaration(name1, impl->get_scope(0));
+AstNodePtr AstInterface::CreateFieldRef(std::string name1, std::string name2) {
+  auto *decl = impl->LookupNestedDeclaration(name1, impl->get_scope(0));
   return AstNodePtrImpl(impl->CreateFieldRef(decl, name2));
 }
 
-AstNodePtr AstInterface::
-CreateMethodRef(std::string classname, std::string fieldname, bool createIfNotFound)
-{ 
-      SgClassDeclaration *c = isSgClassDeclaration(impl->LookupNestedDeclaration(classname, impl->get_scope(0)));
-      if (c == 0) {
-         std::cerr << "Error: cannot find class declaration for " << classname << std::endl;
-         ROSE_ABORT();
-      }
-      SgMemberFunctionSymbol *f1 = impl->GetMemberFunc(c, fieldname);
-      if (f1 == 0) {
-         if (!createIfNotFound) {
-            std::cerr << "Error: cannot find member function " << fieldname << std::endl;
-            ROSE_ABORT();
-         }
-         else {
-            f1 = impl->NewMemberFunc(c, fieldname, 
-                  impl->GetTypeInt(), std::list<SgInitializedName*>()); 
-        }
-      }
-      SgMemberFunctionRefExp *NEW_MFUNCTION_REF(fr,f1);
-      return AstNodePtrImpl(fr);
+AstNodePtr AstInterface::CreateMethodRef(std::string classname,
+                                         std::string fieldname,
+                                         bool createIfNotFound) {
+  SgClassDeclaration *c = isSgClassDeclaration(
+      impl->LookupNestedDeclaration(classname, impl->get_scope(0)));
+  if (c == 0) {
+    std::cerr << "Error: cannot find class declaration for " << classname
+              << std::endl;
+    ROSE_ABORT();
+  }
+  SgMemberFunctionSymbol *f1 = impl->GetMemberFunc(c, fieldname);
+  if (f1 == 0) {
+    if (!createIfNotFound) {
+      std::cerr << "Error: cannot find member function " << fieldname
+                << std::endl;
+      ROSE_ABORT();
+    } else {
+      f1 = impl->NewMemberFunc(c, fieldname, impl->GetTypeInt(),
+                               std::list<SgInitializedName *>());
+    }
+  }
+  SgMemberFunctionRefExp *NEW_MFUNCTION_REF(fr, f1);
+  return AstNodePtrImpl(fr);
 }
 
-
-SgDotExp* AstInterfaceImpl::
-CreateVarMemberRef(std::string name1, std::string name2, SgNode* loc)
-{
-   auto* obj = CreateVarRef(name1, loc);
-   if (obj == 0) return 0;
-   SgType* vartype = AstInterface::GetBaseType(obj->get_type()).get_ptr();
-   assert(vartype != 0);
-   auto *field = CreateFieldRef(vartype, name2);
-   SgDotExp* NEW_BIN_OP(r, SgDotExp, obj, field);
-   return r;
+SgDotExp *AstInterfaceImpl::CreateVarMemberRef(std::string name1,
+                                               std::string name2, SgNode *loc) {
+  auto *obj = CreateVarRef(name1, loc);
+  if (obj == 0)
+    return 0;
+  SgType *vartype = AstInterface::GetBaseType(obj->get_type()).get_ptr();
+  assert(vartype != 0);
+  auto *field = CreateFieldRef(vartype, name2);
+  SgDotExp *NEW_BIN_OP(r, SgDotExp, obj, field);
+  return r;
 }
 
-SgExpression* AstInterfaceImpl::
-CreateVarRef(std::string varname, SgNode* loc) {
-    SgNode *loc1 = AstNodePtrImpl(loc).get_ptr();
-    if (loc1 == 0) loc1 = scope;
-    int hasdot = varname.rfind(".", varname.size()-1);
-    if (hasdot > 0) {
-         std::string name1 = varname.substr(0, hasdot);
-         std::string name2 = varname.substr( hasdot+1, varname.size()-hasdot);
-         return CreateVarMemberRef(name1, name2, loc1);
-    }
-    int hasarrow = varname.rfind("->", varname.size()-1);
-    if (hasarrow > 0) {
-         std::string name1 = varname.substr(0, hasarrow);
-         std::string name2 = varname.substr( hasarrow+2, varname.size()-hasarrow);
-         return CreateVarMemberRef(name1, name2, loc1);
-    }
-    SgScopeStatement* loc1_s = isSgScopeStatement(loc1);
-    if (loc1_s == 0) {
-      loc1_s = isSgScopeStatement(GetScope(loc1));
-    }
-    assert(loc1_s != 0);
-    int is_this = varname.rfind("::this", varname.size()-1);
-    if (is_this > 0) {
-         std::string name1 = varname.substr(0, is_this);
-         auto* decl = LookupNestedDeclaration(name1, loc1_s);
-         assert(decl != 0);
-         SgClassDeclaration* decl1 = isSgClassDeclaration(decl);
-         assert(decl1 != 0);
-         SgSymbol* class_symbol = decl1->get_symbol_from_symbol_table();
-         ROSE_ASSERT(class_symbol != NULL);
-         SgThisExp* p =
-             new SgThisExp(GetFileInfo(), isSgClassSymbol(class_symbol),
-                           isSgNonrealSymbol(class_symbol), 0);
-         p->set_endOfConstruct(p->get_file_info());
-         return p;
-    }
-    size_t deref_count = 0;
-    while (deref_count < varname.size() && varname[deref_count] == '*') {
-      ++deref_count;
-    }
-    std::string lookup_name = varname.substr(deref_count);
-    SgVariableSymbol *sym = LookupVar(lookup_name, loc1_s);
-    if (sym == 0) {
-         std::cerr << "Error : variable " << varname << " not found in scope " << loc1->class_name() << ", which is derived from " << ((loc==0)? "NULL" : loc->class_name()) << "\n";
-         ROSE_ABORT();
-    }
-    SgVarRefExp *ref = new SgVarRefExp(GetFileInfo(), sym);
-    ref->set_endOfConstruct(ref->get_file_info());
-    SgExpression *r = ref;
-    for (size_t i = 0; i < deref_count; ++i) {
-      r = new SgPointerDerefExp(GetFileInfo(), r, r->get_type());
-    }
-    return r;
- }
+SgExpression *AstInterfaceImpl::CreateVarRef(std::string varname, SgNode *loc) {
+  SgNode *loc1 = AstNodePtrImpl(loc).get_ptr();
+  if (loc1 == 0)
+    loc1 = scope;
+  int hasdot = varname.rfind(".", varname.size() - 1);
+  if (hasdot > 0) {
+    std::string name1 = varname.substr(0, hasdot);
+    std::string name2 = varname.substr(hasdot + 1, varname.size() - hasdot);
+    return CreateVarMemberRef(name1, name2, loc1);
+  }
+  int hasarrow = varname.rfind("->", varname.size() - 1);
+  if (hasarrow > 0) {
+    std::string name1 = varname.substr(0, hasarrow);
+    std::string name2 = varname.substr(hasarrow + 2, varname.size() - hasarrow);
+    return CreateVarMemberRef(name1, name2, loc1);
+  }
+  SgScopeStatement *loc1_s = isSgScopeStatement(loc1);
+  if (loc1_s == 0) {
+    loc1_s = isSgScopeStatement(GetScope(loc1));
+  }
+  assert(loc1_s != 0);
+  int is_this = varname.rfind("::this", varname.size() - 1);
+  if (is_this > 0) {
+    std::string name1 = varname.substr(0, is_this);
+    auto *decl = LookupNestedDeclaration(name1, loc1_s);
+    assert(decl != 0);
+    SgClassDeclaration *decl1 = isSgClassDeclaration(decl);
+    assert(decl1 != 0);
+    SgSymbol *class_symbol = decl1->get_symbol_from_symbol_table();
+    ROSE_ASSERT(class_symbol != NULL);
+    SgThisExp *p = new SgThisExp(GetFileInfo(), isSgClassSymbol(class_symbol),
+                                 isSgNonrealSymbol(class_symbol), 0);
+    p->set_endOfConstruct(p->get_file_info());
+    return p;
+  }
+  size_t deref_count = 0;
+  while (deref_count < varname.size() && varname[deref_count] == '*') {
+    ++deref_count;
+  }
+  std::string lookup_name = varname.substr(deref_count);
+  SgVariableSymbol *sym = LookupVar(lookup_name, loc1_s);
+  if (sym == 0) {
+    std::cerr << "Error : variable " << varname << " not found in scope "
+              << loc1->class_name() << ", which is derived from "
+              << ((loc == 0) ? "NULL" : loc->class_name()) << "\n";
+    ROSE_ABORT();
+  }
+  SgVarRefExp *ref = new SgVarRefExp(GetFileInfo(), sym);
+  ref->set_endOfConstruct(ref->get_file_info());
+  SgExpression *r = ref;
+  for (size_t i = 0; i < deref_count; ++i) {
+    r = new SgPointerDerefExp(GetFileInfo(), r, r->get_type());
+  }
+  return r;
+}
 
-AstNodePtr AstInterface::
-CreateVarRef(std::string varname, const AstNodePtr& loc) {
-    auto result = impl->CreateVarRef(varname, loc.get_ptr());
-    if (result == 0) {
-         return AST_UNKNOWN;
-    }
-    return AstNodePtrImpl(result);
+AstNodePtr AstInterface::CreateVarRef(std::string varname,
+                                      const AstNodePtr &loc) {
+  auto result = impl->CreateVarRef(varname, loc.get_ptr());
+  if (result == 0) {
+    return AST_UNKNOWN;
+  }
+  return AstNodePtrImpl(result);
 }
 
 AstNodeType AstInterface::GetType(const string &name) {
@@ -2498,8 +2553,8 @@ AstNodeType AstInterface::GetType(const string &name) {
   else if (name == "bool")
     return AstNodeTypeImpl(new SgTypeBool());
   else {
-    SgClassDeclaration *c =
-        isSgClassDeclaration(impl->LookupNestedDeclaration(name, impl->get_scope(0)));
+    SgClassDeclaration *c = isSgClassDeclaration(
+        impl->LookupNestedDeclaration(name, impl->get_scope(0)));
     if (c == 0) {
       cerr << "Error: not recognize type name : " << name << endl;
       ROSE_ABORT();
@@ -2878,8 +2933,8 @@ bool AstInterface::IsUnaryOp(const AstNodePtr &_exp, OperatorEnum *opr,
   }
 }
 
-bool AstInterface::IsBlock(const AstNodePtr& _n, std::string* blockname,
-                            AstNodeList* _stmts) {
+bool AstInterface::IsBlock(const AstNodePtr &_n, std::string *blockname,
+                           AstNodeList *_stmts) {
   if (_n.is_null()) {
     return false;
   }
@@ -2891,7 +2946,7 @@ bool AstInterface::IsBlock(const AstNodePtr& _n, std::string* blockname,
     }
     return true;
   }
-  SgNode* n = AstNodePtrImpl(_n).get_ptr();
+  SgNode *n = AstNodePtrImpl(_n).get_ptr();
   if (n == 0) {
     return false;
   }
@@ -2915,12 +2970,12 @@ bool AstInterface::IsBlock(const AstNodePtr& _n, std::string* blockname,
   case V_SgTemplateInstantiationDefn:
   case V_SgTemplateClassDefinition:
   case V_SgClassDefinition: {
-    SgClassDefinition* def = isSgClassDefinition(n);
+    SgClassDefinition *def = isSgClassDefinition(n);
     if (blockname != 0) {
       *blockname = def->get_declaration()->get_name().getString();
     }
     if (_stmts != 0) {
-      SgDeclarationStatementPtrList& decls = def->get_members();
+      SgDeclarationStatementPtrList &decls = def->get_members();
       for (SgDeclarationStatementPtrList::iterator p = decls.begin();
            p != decls.end(); ++p) {
         _stmts->push_back(*p);
@@ -2930,15 +2985,15 @@ bool AstInterface::IsBlock(const AstNodePtr& _n, std::string* blockname,
   }
   case V_SgClassDeclaration:
   case V_SgTemplateClassDeclaration: {
-    SgClassDeclaration* decl = isSgClassDeclaration(n);
+    SgClassDeclaration *decl = isSgClassDeclaration(n);
     if (decl != 0) {
       if (blockname != 0) {
         *blockname = decl->get_name().getString();
       }
       if (_stmts != 0) {
-        SgClassDefinition* def = GetClassDefn(decl);
+        SgClassDefinition *def = GetClassDefn(decl);
         if (def != 0) {
-          SgDeclarationStatementPtrList& decls = def->get_members();
+          SgDeclarationStatementPtrList &decls = def->get_members();
           for (SgDeclarationStatementPtrList::iterator p = decls.begin();
                p != decls.end(); ++p) {
             _stmts->push_back(*p);
@@ -2950,15 +3005,15 @@ bool AstInterface::IsBlock(const AstNodePtr& _n, std::string* blockname,
     break;
   }
   case V_SgNamespaceDeclarationStatement: {
-    SgNamespaceDeclarationStatement* decl =
+    SgNamespaceDeclarationStatement *decl =
         isSgNamespaceDeclarationStatement(n);
     if (blockname != 0) {
       *blockname = decl->get_name().getString();
     }
     if (_stmts != 0) {
-      SgNamespaceDefinitionStatement* def = decl->get_definition();
+      SgNamespaceDefinitionStatement *def = decl->get_definition();
       if (def != 0) {
-        SgDeclarationStatementPtrList& decls = def->get_declarations();
+        SgDeclarationStatementPtrList &decls = def->get_declarations();
         for (SgDeclarationStatementPtrList::iterator p = decls.begin();
              p != decls.end(); ++p) {
           _stmts->push_back(*p);
@@ -2968,13 +3023,12 @@ bool AstInterface::IsBlock(const AstNodePtr& _n, std::string* blockname,
     return true;
   }
   case V_SgNamespaceDefinitionStatement: {
-    SgNamespaceDefinitionStatement* def =
-        isSgNamespaceDefinitionStatement(n);
+    SgNamespaceDefinitionStatement *def = isSgNamespaceDefinitionStatement(n);
     if (blockname != 0) {
       *blockname = def->get_namespaceDeclaration()->get_name().getString();
     }
     if (_stmts != 0) {
-      SgDeclarationStatementPtrList& decls = def->get_declarations();
+      SgDeclarationStatementPtrList &decls = def->get_declarations();
       for (SgDeclarationStatementPtrList::iterator p = decls.begin();
            p != decls.end(); ++p) {
         _stmts->push_back(*p);
@@ -3188,7 +3242,9 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
       if (returntype != 0)
         *returntype = AstNodeTypeImpl(ftype->get_return_type());
     } else { // not a function type
-      DebugVariable([&s](){ return "Non-function type called: " + AstInterface::AstToString(s); });
+      DebugVariable([&s]() {
+        return "Non-function type called: " + AstInterface::AstToString(s);
+      });
       return false;
     }
     // Store arguments of reference types into outargs
@@ -3209,23 +3265,21 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
   return true;
 }
 
-AstNodeType AstInterface::
-GetBaseType(const AstNodeType& t) {
+AstNodeType AstInterface::GetBaseType(const AstNodeType &t) {
   {
-    SgPointerType* pointer_type = isSgPointerType(t.get_ptr());
+    SgPointerType *pointer_type = isSgPointerType(t.get_ptr());
     if (pointer_type != 0) {
-       return GetBaseType(pointer_type->get_base_type());
+      return GetBaseType(pointer_type->get_base_type());
     }
   }
   {
-    SgModifierType* mod_type = isSgModifierType(t.get_ptr());
+    SgModifierType *mod_type = isSgModifierType(t.get_ptr());
     if (mod_type != 0) {
-       return GetBaseType(mod_type->get_base_type());
+      return GetBaseType(mod_type->get_base_type());
     }
   }
   return t;
 }
-
 
 void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
                                    std::string *stripname, int *size,
@@ -3256,10 +3310,10 @@ void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
   std::string r1 = ::StripGlobalQualifier(typeName);
   std::string result = "";
   for (size_t i = 0; i < r1.size(); ++i) {
-    if (r1[i] == '[' || r1[i] == ']' || r1[i] == '{' || r1[i] == '}' || r1[i] == ',') {
+    if (r1[i] == '[' || r1[i] == ']' || r1[i] == '{' || r1[i] == '}' ||
+        r1[i] == ',') {
       result.push_back('_');
-    }
-    else if (r1[i] != ' ')
+    } else if (r1[i] != ' ')
       result.push_back(r1[i]);
     else if (i + 2 < r1.size() && r1[i + 1] == ':' && r1[i + 2] == ':') {
       i += 2;
@@ -3274,9 +3328,9 @@ void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
     *size = 4;
 }
 
-
 void AstInterface::GetTypeInfo(const AstNodeType &t, string *tname,
-                               string *stripname, int *size, bool use_global_name) {
+                               string *stripname, int *size,
+                               bool use_global_name) {
   AstInterfaceImpl::GetTypeInfo(AstNodeTypeImpl(t).get_ptr(), tname, stripname,
                                 size, use_global_name);
 }
@@ -4733,10 +4787,12 @@ private:
       break;
     case V_SgVarRefExp: {
       SgVarRefExp *var = isSgVarRefExp(ast);
-      SgScopeStatement *scope = isSgScopeStatement(AstInterfaceImpl::GetScope(ast));
+      SgScopeStatement *scope =
+          isSgScopeStatement(AstInterfaceImpl::GetScope(ast));
       assert(scope != 0);
       string name = var->get_symbol()->get_name().str();
-      SgVariableSymbol *r = isSgVariableSymbol(AstInterfaceImpl::LookupVar(name, scope));
+      SgVariableSymbol *r =
+          isSgVariableSymbol(AstInterfaceImpl::LookupVar(name, scope));
       if (r == 0) {
         cerr << "failed to find symbol for variable: " << name << " in scope "
              << scope << endl;
@@ -4792,9 +4848,9 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
     return isSgNamespaceDeclarationStatement(variable)->get_name().getString();
   case V_SgUsingDirectiveStatement:
     return "using_" + isSgUsingDirectiveStatement(variable)
-                           ->get_namespaceDeclaration()
-                           ->get_name()
-                           .getString();
+                          ->get_namespaceDeclaration()
+                          ->get_name()
+                          .getString();
   case V_SgTypedefDeclaration:
   case V_SgTemplateTypedefDeclaration:
     return "typedef_" +
@@ -4810,15 +4866,15 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
   if (AstInterface::IsFunctionDefinition(variable)) {
     return OperatorDeclaration::operator_signature(fa, variable);
   }
-    {
-      std::string value, valtype;
-      if (fa.IsConstant(variable, &valtype, &value)) {
-         if (valtype == "int") {
-             return value;
-         }
-      return "CONSTANT";
+  {
+    std::string value, valtype;
+    if (fa.IsConstant(variable, &valtype, &value)) {
+      if (valtype == "int") {
+        return value;
       }
+      return "CONSTANT";
     }
+  }
   {
     AstNodePtr f;
     AstNodeList args;
@@ -4839,12 +4895,13 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
       return res;
     }
   }
-    {
-     AstNodeType alloc_type; 
-     if (IsMemoryAllocation(variable, &alloc_type)) {
-      return res + "new_" + GetGlobalUniqueName(variable, GetTypeName(alloc_type));
-     }
+  {
+    AstNodeType alloc_type;
+    if (IsMemoryAllocation(variable, &alloc_type)) {
+      return res + "new_" +
+             GetGlobalUniqueName(variable, GetTypeName(alloc_type));
     }
+  }
   {
     std::string name;
     if (IsVarRef(variable, 0, &name, 0, 0, /*use_global_unique_name=*/true)) {
@@ -4855,8 +4912,8 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
   return res;
 }
 
-bool AstInterface::IsLocalRef(const AstNodePtr& ref, const AstNodePtr& scope,
-                              bool* has_ptr_deref) {
+bool AstInterface::IsLocalRef(const AstNodePtr &ref, const AstNodePtr &scope,
+                              bool *has_ptr_deref) {
   if (ref == AST_UNKNOWN) {
     return false;
   }
@@ -4917,11 +4974,12 @@ bool AstInterface::IsLocalRef(const AstNodePtr& ref, const AstNodePtr& scope,
   return false;
 }
 
-SgVariableSymbol* AstInterfaceImpl::
-LookupVar(const std:: string& name) { return LookupVar(name, scope); }
+SgVariableSymbol *AstInterfaceImpl::LookupVar(const std::string &name) {
+  return LookupVar(name, scope);
+}
 
 void AstInterface::SetFunctionNameMangling(
-    std::function<std::string(const SgFunctionDeclaration*)> f) {
+    std::function<std::string(const SgFunctionDeclaration *)> f) {
   function_name_mangling_ = f;
 }
 

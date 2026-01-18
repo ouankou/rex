@@ -1,10 +1,13 @@
 
 #include <iostream>
+
 #include <sstream>
 
-#include <CommandOptions.h>
-#include <PtrAnal.h>
-#include <ROSE_ASSERT.h>
+#include "CommandOptions.h"
+
+#include "PtrAnal.h"
+
+#include "ROSE_ASSERT.h"
 
 using namespace std;
 
@@ -406,7 +409,8 @@ bool PtrAnal::ProcessTree(AstInterface &fa, const AstNodePtr &s,
     AstNodePtr lhs, rhs;
     AstInterface::AstNodeList vars, args;
     if (fa.IsStatement(s)) {
-      DebugAliasAnal([&s](){ return "pre visiting " + AstInterface::AstToString(s); });
+      DebugAliasAnal(
+          [&s]() { return "pre visiting " + AstInterface::AstToString(s); });
       stmt_active.push_back(stmts.size());
     }
 
@@ -441,16 +445,19 @@ bool PtrAnal::ProcessTree(AstInterface &fa, const AstNodePtr &s,
       Skip(s);
     }
   } else {
-   DebugPtrAnal([&s](){ return "post visiting " + AstInterface::AstToString(s); });
+    DebugPtrAnal(
+        [&s]() { return "post visiting " + AstInterface::AstToString(s); });
     if (fa.IsStatement(s)) {
       size_t stmt_firstIndex = stmt_active.back();
       stmt_active.pop_back();
       if (stmt_firstIndex < stmts.size()) {
-          DebugPtrAnal([](){ return "setting stmt mapping"; });
+        DebugPtrAnal([]() { return "setting stmt mapping"; });
         stmtmap[s.get_ptr()] =
             pair<size_t, size_t>(stmt_firstIndex, stmts.size() - 1);
       } else {
-          DebugAliasAnal([&s](){ return "no translation: " + AstInterface::AstToString(s); });
+        DebugAliasAnal([&s]() {
+          return "no translation: " + AstInterface::AstToString(s);
+        });
       }
     }
   }

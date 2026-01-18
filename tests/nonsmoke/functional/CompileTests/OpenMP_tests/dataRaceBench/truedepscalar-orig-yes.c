@@ -44,30 +44,28 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-/* 
+/*
 Loop carried true dep between tmp =..  and ..= tmp.
 Data race pair: tmp@66:12 vs. tmp@67:5
 */
 #include <stdlib.h>
+
 #include <stdio.h>
 
-int main(int argc, char* argv[])
-{ 
-  int i; 
+int main(int argc, char *argv[]) {
+  int i;
   int tmp;
   tmp = 10;
-  int len=100;
+  int len = 100;
 
   int a[100];
 
 #pragma omp parallel for
-  for (i=0;i<len;i++)
-  { 
+  for (i = 0; i < len; i++) {
     a[i] = tmp;
-    tmp =a[i]+i;
+    tmp = a[i] + i;
   }
 
   printf("a[50]=%d\n", a[50]);
-  return 0;      
+  return 0;
 }
-

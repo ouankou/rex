@@ -1,10 +1,10 @@
-#include <stdio.h>
-#include <omp.h>
 #include "omp_testsuite.h"
 
-int
-check_omp_master_thread (FILE * logFile)
-{
+#include <omp.h>
+
+#include <stdio.h>
+
+int check_omp_master_thread(FILE *logFile) {
   int nthreads = 0;
   int executing_thread = -1;
 #pragma omp parallel
@@ -13,18 +13,16 @@ check_omp_master_thread (FILE * logFile)
     {
 #pragma omp critical
       {
-	nthreads++;
+        nthreads++;
       }
-      executing_thread = omp_get_thread_num ();
+      executing_thread = omp_get_thread_num();
 
-    }				/* end of master */
-  }				/* end of parallel */
+    } /* end of master */
+  } /* end of parallel */
   return ((nthreads == 1) && (executing_thread == 0));
 }
 
-int
-crosscheck_omp_master_thread (FILE * logFile)
-{
+int crosscheck_omp_master_thread(FILE *logFile) {
   int nthreads = 0;
   int executing_thread = -1;
 #pragma omp parallel
@@ -33,11 +31,11 @@ crosscheck_omp_master_thread (FILE * logFile)
     {
 #pragma omp critical
       {
-	nthreads++;
+        nthreads++;
       }
-      executing_thread = omp_get_thread_num ();
+      executing_thread = omp_get_thread_num();
 
-    }				/* end of master */
-  }				/* end of parallel */
+    } /* end of master */
+  } /* end of parallel */
   return ((nthreads == 1) && (executing_thread == 0));
 }

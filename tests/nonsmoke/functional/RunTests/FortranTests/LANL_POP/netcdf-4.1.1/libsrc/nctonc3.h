@@ -1,8 +1,8 @@
 #ifndef _NCTONC3_CONV_
 #define _NCTONC3_CONV_
 
-#include <stddef.h> /* size_t, ptrdiff_t */
 #include <errno.h>  /* netcdf functions sometimes return system errors */
+#include <stddef.h> /* size_t, ptrdiff_t */
 
 #if defined(__cplusplus)
 extern "C" {
@@ -31,7 +31,6 @@ extern "C" {
 #define nc_inq_natts nc3_inq_natts
 #define nc_inq_unlimdim nc3_inq_unlimdim
 #define nc_inq_format nc3_inq_format
-
 
 /* Begin _dim */
 
@@ -71,7 +70,7 @@ extern "C" {
 #define nc_get_att_float nc3_get_att_float
 #define nc_put_att_double nc3_put_att_double
 #define nc_get_att_double nc3_get_att_double
-  /* End {put,get}_att */
+/* End {put,get}_att */
 /* Begin _var */
 #define nc_def_var nc3_def_var
 #define nc_inq_var nc3_inq_var
@@ -85,7 +84,8 @@ extern "C" {
 #define nc_copy_var nc3_copy_var
 
 /* support the old name for now */
-#define ncvarcpy(ncid_in, varid, ncid_out) ncvarcopy((ncid_in), (varid), (ncid_out))
+#define ncvarcpy(ncid_in, varid, ncid_out)                                     \
+  ncvarcopy((ncid_in), (varid), (ncid_out))
 
 /* End _var */
 /* Begin {put,get}_var1 */
@@ -129,7 +129,7 @@ extern "C" {
 #define nc_put_vara_double nc3_put_vara_double
 #define nc_get_vara_double nc3_get_vara_double
 
-/* End {put,get}_vara */
+/* End {put,get}_vara */
 /* Begin {put,get}_vars */
 
 #define nc_put_vars nc3_put_vars
@@ -213,9 +213,7 @@ extern "C" {
 
 #define nc__create_mp nc3__create_mp
 
-
 #define nc__open_mp nc3__open_mp
-
 
 #define nc_delete_mp nc3_delete_mp
 #define nc_set_base_pe nc3_set_base_pe

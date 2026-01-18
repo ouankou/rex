@@ -1,8 +1,11 @@
-//From https://raw.githubusercontent.com/forflo/bugReproductionPackage05/master/outline.cpp
+// From
+// https://raw.githubusercontent.com/forflo/bugReproductionPackage05/master/outline.cpp
 
-#include <rose.h>
+#include "Outliner.hh"
+
+#include "rose.h"
+
 #include <stdio.h>
-#include <Outliner.hh>
 
 using namespace SageInterface;
 
@@ -66,7 +69,6 @@ int main(int argc, char **argv) {
   // ... get the SgBasicBlock beneath the omp target node ...
   SgStatement *body = targetRegion->get_body();
   ROSE_ASSERT(body->variantT() == V_SgBasicBlock);
-
 
   OutlWrap outliner(false, true);
   auto outlinerResult = outliner.outline(body);

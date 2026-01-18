@@ -1,5 +1,6 @@
 // #include <string>
 // #include <ios>
+
 #include <type_traits>
 
 #if 0 
@@ -45,14 +46,17 @@ void g(const Container& c) { typename Container::value_type n; }
 
 #if 1
 // type alias used to simplify the syntax of std::enable_if
-template<typename T>
-using Invoke = typename T::type;
-template<typename Condition>
+template <typename T> using Invoke = typename T::type;
+template <typename Condition>
 using EnableIf = Invoke<std::enable_if<Condition::value>>;
-template<typename T, typename = EnableIf<std::is_polymorphic<T>>>
-int fpoly_only(T t) { return 1; }
- 
-struct S { virtual ~S() {} };
+template <typename T, typename = EnableIf<std::is_polymorphic<T>>>
+int fpoly_only(T t) {
+  return 1;
+}
+
+struct S {
+  virtual ~S() {}
+};
 #endif
 
 #if 0 

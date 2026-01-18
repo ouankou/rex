@@ -1,12 +1,11 @@
-#include <rose.h>
+#include "rose.h"
 
-int main (int argc, char** argv)
-   {
+int main(int argc, char **argv) {
   // Build the AST used by ROSE
-     SgProject* project = frontend(argc, argv);
+  SgProject *project = frontend(argc, argv);
 
   // Run internal consistency tests on AST
-     AstTests::runAllTests(project);
+  AstTests::runAllTests(project);
 
 #if 0
      generateDOT(*project);
@@ -18,8 +17,10 @@ int main (int argc, char** argv)
 #endif
 
   // get class definition of Foo
-     Rose_STL_Container<SgNode*> class_definitions = NodeQuery::querySubTree(project, V_SgClassDefinition);
-     SgClassDefinition* class_def_foo = isSgClassDefinition(class_definitions.at(0));
+  Rose_STL_Container<SgNode *> class_definitions =
+      NodeQuery::querySubTree(project, V_SgClassDefinition);
+  SgClassDefinition *class_def_foo =
+      isSgClassDefinition(class_definitions.at(0));
 
 #if 0
      printf ("class_definitions.size() = %zu \n",class_definitions.size());
@@ -28,7 +29,8 @@ int main (int argc, char** argv)
 #endif
 
   // get the defining function declaration of Foo::bar
-     SgFunctionDeclaration *func_decl = SageInterface::findFunctionDeclaration( class_def_foo,"bar",NULL,true ) ;
+  SgFunctionDeclaration *func_decl =
+      SageInterface::findFunctionDeclaration(class_def_foo, "bar", NULL, true);
 
-     return 0;
-   }
+  return 0;
+}

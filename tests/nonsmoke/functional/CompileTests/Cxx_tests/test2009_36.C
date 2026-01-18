@@ -12,24 +12,28 @@ identity unparser:
 ---------------------------------------------
 /* wait.c */
 #include <sys/types.h>
+
 #include <sys/wait.h>
 
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
   int err;
   wait(&err);
 
   return 0;
 }
----------------------------------------------
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-unparses to something fairly odd:
----------------------------------------------
+                                                                  unparses to
+                                                                      something
+                                                                          fairly
+                                                                              odd
+    : -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 #include <sys/types.h>
+
 #include <sys/wait.h>
 
-int main(int argc,char **argv)
-{
+      int
+      main(int argc, char **argv) {
   int err;
   wait(.__iptr = (&err));
   return 0;
@@ -64,8 +68,8 @@ travitch@cs.wisc.edu
 http://pages.cs.wisc.edu/~travitch
 */
 
-
 #include <sys/types.h>
+
 #include <sys/wait.h>
 
 int main(int argc, char** argv)

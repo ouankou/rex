@@ -6,36 +6,32 @@
  *  that exposes the top-down and bottom-up visits.
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
-#include "sage3basic.h"
 #include "PrePostTraversal.hh"
 
+#include "sage3basic.h"
+
 _DummyAttribute
-ASTtools::PrePostTraversal::evaluateInheritedAttribute (SgNode* node,
-                                                        _DummyAttribute d)
-{
-  visitTopDown (node);
+ASTtools::PrePostTraversal::evaluateInheritedAttribute(SgNode *node,
+                                                       _DummyAttribute d) {
+  visitTopDown(node);
   return d;
 }
 
-_DummyAttribute
-ASTtools::PrePostTraversal::evaluateSynthesizedAttribute (SgNode* node,
-                                                          _DummyAttribute d,
-                                                          SynthesizedAttributesList)
-{
-  visitBottomUp (node);
+_DummyAttribute ASTtools::PrePostTraversal::evaluateSynthesizedAttribute(
+    SgNode *node, _DummyAttribute d, SynthesizedAttributesList) {
+  visitBottomUp(node);
   return d;
 }
 
-void
-ASTtools::PrePostTraversal::traverse (SgNode* node)
-{
-  AstTopDownBottomUpProcessing<_DummyAttribute, _DummyAttribute>::traverse (node, _DummyAttribute ());
+void ASTtools::PrePostTraversal::traverse(SgNode *node) {
+  AstTopDownBottomUpProcessing<_DummyAttribute, _DummyAttribute>::traverse(
+      node, _DummyAttribute());
 }
 
-void
-ASTtools::PrePostTraversal::traverseWithinFile (SgNode* node)
-{
-  AstTopDownBottomUpProcessing<_DummyAttribute, _DummyAttribute>::traverseWithinFile (node, _DummyAttribute ());
+void ASTtools::PrePostTraversal::traverseWithinFile(SgNode *node) {
+  AstTopDownBottomUpProcessing<
+      _DummyAttribute, _DummyAttribute>::traverseWithinFile(node,
+                                                            _DummyAttribute());
 }
 
 // eof

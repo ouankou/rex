@@ -2,102 +2,115 @@
 #ifndef BLOCKING_ANALYSIS
 #define BLOCKING_ANALYSIS
 
-#include <CompSliceDepGraph.h>
-#include <CompSliceLocality.h>
-#include <LoopTransformOptions.h>
+#include "CompSliceDepGraph.h"
+
+#include "CompSliceLocality.h"
+
+#include "LoopTransformOptions.h"
+
 #include <vector>
 
-class LoopBlocking 
-{
+class LoopBlocking {
   int block_index;
-  int SetIndex( int index);
- protected:
+  int SetIndex(int index);
+
+protected:
   std::vector<SymbolicVal> blocksize;
   LoopBlocking() : block_index(2) {}
-  virtual LoopTreeNode* 
-          ApplyBlocking( const CompSliceDepGraphNode::FullNestInfo& nestInfo, 
-                            LoopTreeDepComp& comp, 
-                            DependenceHoisting &op, 
-                            LoopTreeNode *&top);
- public:
+  virtual LoopTreeNode *
+  ApplyBlocking(const CompSliceDepGraphNode::FullNestInfo &nestInfo,
+                LoopTreeDepComp &comp, DependenceHoisting &op,
+                LoopTreeNode *&top);
+
+public:
   virtual ~LoopBlocking() {}
-  virtual LoopTransformOptions::OptType GetOptimizationType()  = 0;
+  virtual LoopTransformOptions::OptType GetOptimizationType() = 0;
 
   /* return the innermost slice after blocking */
-  virtual const CompSlice* 
-  SetBlocking( CompSliceLocalityRegistry *anal, 
-                        const CompSliceDepGraphNode::FullNestInfo& nestInfo)=0;
+  virtual const CompSlice *
+  SetBlocking(CompSliceLocalityRegistry *anal,
+              const CompSliceDepGraphNode::FullNestInfo &nestInfo) = 0;
 
   /* QY:return the root of blocked loops (excluding block enumerating loops) */
-  LoopTreeNode* apply( const CompSliceDepGraphNode::FullNestInfo& nestInfo, 
-                      LoopTreeDepComp& comp, DependenceHoisting &op, 
+  LoopTreeNode *apply(const CompSliceDepGraphNode::FullNestInfo &nestInfo,
+                      LoopTreeDepComp &comp, DependenceHoisting &op,
                       LoopTreeNode *top);
-  const SymbolicVal& BlockSize( int index) const { return blocksize[index]; }
-  SymbolicVal& BlockSize( int index) { return blocksize[index]; }
+  const SymbolicVal &BlockSize(int index) const { return blocksize[index]; }
+  SymbolicVal &BlockSize(int index) { return blocksize[index]; }
   int NumOfLoops() const { return blocksize.size(); }
-  int FirstIndex() { block_index=2; return SetIndex(blocksize.size()-1); } 
-  int NextIndex(int index)
-      {  if (index >= 0) return SetIndex( index - 1); 
-         return -1;  }
+  int FirstIndex() {
+    block_index = 2;
+    return SetIndex(blocksize.size() - 1);
+  }
+  int NextIndex(int index) {
+    if (index >= 0)
+      return SetIndex(index - 1);
+    return -1;
+  }
 };
 
-class LoopNoBlocking : public LoopBlocking
-{
- public:
-  virtual LoopTransformOptions::OptType GetOptimizationType() { return LoopTransformOptions::NO_OPT; }
+class LoopNoBlocking : public LoopBlocking {
+public:
+  virtual LoopTransformOptions::OptType GetOptimizationType() {
+    return LoopTransformOptions::NO_OPT;
+  }
   /* return the innermost slice after blocking */
-  virtual const CompSlice* 
-  SetBlocking( CompSliceLocalityRegistry *anal, 
-                        const CompSliceDepGraphNode::FullNestInfo& nestInfo);
+  virtual const CompSlice *
+  SetBlocking(CompSliceLocalityRegistry *anal,
+              const CompSliceDepGraphNode::FullNestInfo &nestInfo);
 };
 
-class OuterLoopReuseBlocking : public LoopBlocking
-{
+class OuterLoopReuseBlocking : public LoopBlocking {
   unsigned spill;
- public:
+
+public:
   OuterLoopReuseBlocking(unsigned i) : spill(i) {}
-  virtual LoopTransformOptions::OptType GetOptimizationType() { return LoopTransformOptions::LOOP_NEST_OPT; }
+  virtual LoopTransformOptions::OptType GetOptimizationType() {
+    return LoopTransformOptions::LOOP_NEST_OPT;
+  }
   /* return the innermost slice after blocking */
-  virtual const CompSlice* 
-  SetBlocking( CompSliceLocalityRegistry *anal, 
-                        const CompSliceDepGraphNode::FullNestInfo& nestInfo);
+  virtual const CompSlice *
+  SetBlocking(CompSliceLocalityRegistry *anal,
+              const CompSliceDepGraphNode::FullNestInfo &nestInfo);
 };
 
-class InnerLoopReuseBlocking : public LoopBlocking
-{
- public:
-  virtual LoopTransformOptions::OptType GetOptimizationType() { return LoopTransformOptions::LOOP_NEST_OPT; }
+class InnerLoopReuseBlocking : public LoopBlocking {
+public:
+  virtual LoopTransformOptions::OptType GetOptimizationType() {
+    return LoopTransformOptions::LOOP_NEST_OPT;
+  }
   /* return the innermost slice after blocking */
-  virtual const CompSlice* 
-  SetBlocking( CompSliceLocalityRegistry *anal, 
-                        const CompSliceDepGraphNode::FullNestInfo& nestInfo);
+  virtual const CompSlice *
+  SetBlocking(CompSliceLocalityRegistry *anal,
+              const CompSliceDepGraphNode::FullNestInfo &nestInfo);
 };
 
-class AllLoopReuseBlocking : public LoopBlocking
-{
- public:
-  virtual LoopTransformOptions::OptType GetOptimizationType() { return LoopTransformOptions::LOOP_NEST_OPT; }
+class AllLoopReuseBlocking : public LoopBlocking {
+public:
+  virtual LoopTransformOptions::OptType GetOptimizationType() {
+    return LoopTransformOptions::LOOP_NEST_OPT;
+  }
   /* return the innermost slice after blocking */
-  virtual const CompSlice* 
-  SetBlocking( CompSliceLocalityRegistry *anal, 
-                        const CompSliceDepGraphNode::FullNestInfo& nestInfo);
+  virtual const CompSlice *
+  SetBlocking(CompSliceLocalityRegistry *anal,
+              const CompSliceDepGraphNode::FullNestInfo &nestInfo);
 };
 
-class ParameterizeBlocking : public AllLoopReuseBlocking
-{
- protected:
-  virtual LoopTreeNode* 
-          ApplyBlocking( const CompSliceDepGraphNode::FullNestInfo& nestInfo, 
-                                      LoopTreeDepComp& comp, 
-                                      DependenceHoisting &op, 
-                                      LoopTreeNode *&top);
- public:
-  virtual LoopTransformOptions::OptType GetOptimizationType() { return LoopTransformOptions::LOOP_NEST_OPT; }
-  /* return the innermost slice after blocking */
-  virtual const CompSlice* 
-  SetBlocking( CompSliceLocalityRegistry *anal, 
-                        const CompSliceDepGraphNode::FullNestInfo& nestInfo);
+class ParameterizeBlocking : public AllLoopReuseBlocking {
+protected:
+  virtual LoopTreeNode *
+  ApplyBlocking(const CompSliceDepGraphNode::FullNestInfo &nestInfo,
+                LoopTreeDepComp &comp, DependenceHoisting &op,
+                LoopTreeNode *&top);
 
+public:
+  virtual LoopTransformOptions::OptType GetOptimizationType() {
+    return LoopTransformOptions::LOOP_NEST_OPT;
+  }
+  /* return the innermost slice after blocking */
+  virtual const CompSlice *
+  SetBlocking(CompSliceLocalityRegistry *anal,
+              const CompSliceDepGraphNode::FullNestInfo &nestInfo);
 };
 
 #endif

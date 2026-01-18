@@ -1,7 +1,7 @@
 // ************************************************************************
 //                           Traversal To Root
 // ************************************************************************
-// This traversal represents a 2nd alternative traversal from any AST node 
+// This traversal represents a 2nd alternative traversal from any AST node
 // back up the AST to the AST Root node (SgFile or SgProject) along the
 // unique chain defined by the parent pointers at each node in the AST.
 // This traversal can be helpful for queries (or potentially transformations)
@@ -13,62 +13,51 @@
 // context information though an inherited attribute).
 // ************************************************************************
 
-template< class InheritedAttributeType, class SynthesizedAttributeType >
-class TraverseToRoot
-   {
-     public:
-//        ReverseTraversal();
+template <class InheritedAttributeType, class SynthesizedAttributeType>
+class TraverseToRoot {
+public:
+  //        ReverseTraversal();
 
-          SynthesizedAttributeType traverse (
-               SgNode* astNode,
-               InheritedAttributeType inputInheritedAttribute );
+  SynthesizedAttributeType
+  traverse(SgNode *astNode, InheritedAttributeType inputInheritedAttribute);
 
-          virtual InheritedAttributeType evaluateInheritedAttribute (
-               SgNode* astNode,
-               InheritedAttributeType inputInheritedAttribute ) = 0;
+  virtual InheritedAttributeType evaluateInheritedAttribute(
+      SgNode *astNode, InheritedAttributeType inputInheritedAttribute) = 0;
 
-          virtual SynthesizedAttributeType evaluateSynthesizedAttribute (
-               SgNode* astNode,
-               InheritedAttributeType inputInheritedAttribute,
-               SynthesizedAttributeType inputSynthesizedAttribute ) = 0;
-   };
-
+  virtual SynthesizedAttributeType evaluateSynthesizedAttribute(
+      SgNode *astNode, InheritedAttributeType inputInheritedAttribute,
+      SynthesizedAttributeType inputSynthesizedAttribute) = 0;
+};
 
 // Implementation of traverse function
-template< class InheritedAttributeType, class SynthesizedAttributeType >
+template <class InheritedAttributeType, class SynthesizedAttributeType>
 SynthesizedAttributeType
-TraverseToRoot<InheritedAttributeType,SynthesizedAttributeType>::traverse (
-   SgNode* node,
-   InheritedAttributeType inputInheritedAttribute)
-   {
-  // Trace the current node back as far as possible (should be able to reach SgGlobal)
-  // printf ("Starting at node->sage_class_name() = %s \n",node->sage_class_name());
-#if 1
-     printf ("In traverse: at node->sage_class_name() = %s \n",node->sage_class_name());
-#endif
+TraverseToRoot<InheritedAttributeType, SynthesizedAttributeType>::traverse(
+    SgNode *node, InheritedAttributeType inputInheritedAttribute) {
+  // Trace the current node back as far as possible (should be able to reach
+  // SgGlobal) printf ("Starting at node->sage_class_name() = %s
+  // \n",node->sage_class_name());
+  printf("In traverse: at node->sage_class_name() = %s \n",
+         node->sage_class_name());
 
-     SynthesizedAttributeType returnAttribute;
+  SynthesizedAttributeType returnAttribute;
 
-     if (node->get_parent() != NULL)
-        {
-          SgNode* parentNode = node->get_parent();
-       // printf ("     parentNode->sage_class_name() = %s \n",parentNode->sage_class_name());
+  if (node->get_parent() != NULL) {
+    SgNode *parentNode = node->get_parent();
+    // printf ("     parentNode->sage_class_name() = %s
+    // \n",parentNode->sage_class_name());
 
-          InheritedAttributeType localInheritedAttribute = evaluateInheritedAttribute(parentNode,inputInheritedAttribute);
-          SynthesizedAttributeType localSynthesizedAttribute = traverse (parentNode,localInheritedAttribute);
+    InheritedAttributeType localInheritedAttribute =
+        evaluateInheritedAttribute(parentNode, inputInheritedAttribute);
+    SynthesizedAttributeType localSynthesizedAttribute =
+        traverse(parentNode, localInheritedAttribute);
 
-          returnAttribute =
-               evaluateSynthesizedAttribute (parentNode,localInheritedAttribute,localSynthesizedAttribute);
-        }
-#if 1
-       else
-        {
-          printf ("final node in chain of parents is a %s \n",node->sage_class_name());
-        }
-#endif
+    returnAttribute = evaluateSynthesizedAttribute(
+        parentNode, localInheritedAttribute, localSynthesizedAttribute);
+  } else {
+    printf("final node in chain of parents is a %s \n",
+           node->sage_class_name());
+  }
 
-     return returnAttribute;
-   }
-
-
-
+  return returnAttribute;
+}

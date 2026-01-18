@@ -11,6 +11,7 @@ The changed vector instance is demonstrated with this code:
 #endif
 
 #include <algorithm>
+
 #include <vector>
 std::vector<unsigned> local1;
 
@@ -21,4 +22,3 @@ gets unparsed into:
 // #include <vector>
 // std::vector< std::char_traits< unsigned int > ::int_type , class std::allocator< std::char_traits< unsigned int > ::int_type > > local1;
 #endif
-

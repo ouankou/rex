@@ -63,7 +63,7 @@ SI system of units.
 
 Coding:
 @example
-#include <udunits2.h>
+#include "udunits2.h"
 @quotation
 @multitable {ut_error_message_handler} {ut_get_dimensionless_unit_one(}
 @item ut_system* @tab ut_read_xml(const char* @var{path});
@@ -529,7 +529,7 @@ another, compatible unit by means of a converter.
 For example
 
 @example
-#include <udunits2.h>
+#include "udunits2.h"
 ...
     ut_unit*      from = ...;
     ut_unit*      to = ...;
@@ -634,7 +634,9 @@ its binary representation:
 
 @example
 #include <stdlib.h>
-#include <udunits2.h>
+
+
+#include "udunits2.h"
 ...
     ut_system*   unitSystem = @ref{ut_read_xml(),ut_read_xml(NULL)};
     const char* string = "kg.m2/s3";

@@ -43,34 +43,33 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
 IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 */
-/* 
+/*
 A kernel for two level parallelizable loop with reduction:
 if reduction(+:sum) is missing, there is race condition.
-Data race pairs: 
-  sum@72:7 vs. sum@72:7 
+Data race pairs:
+  sum@72:7 vs. sum@72:7
   sum@72:7 vs. sum@72:13
 */
 #include <stdio.h>
+
 #include <stdlib.h>
-int main(int argc, char* argv[])
-{
-  int i,j;
-  float temp, sum=0.0;
-  int len=100;
-  if (argc>1)
+int main(int argc, char *argv[]) {
+  int i, j;
+  float temp, sum = 0.0;
+  int len = 100;
+  if (argc > 1)
     len = atoi(argv[1]);
   float u[len][len];
   for (i = 0; i < len; i++)
     for (j = 0; j < len; j++)
-        u[i][j] = 0.5;
+      u[i][j] = 0.5;
 
-#pragma omp parallel for private (temp,i,j)
+#pragma omp parallel for private(temp, i, j)
   for (i = 0; i < len; i++)
-    for (j = 0; j < len; j++)
-    {
+    for (j = 0; j < len; j++) {
       temp = u[i][j];
       sum = sum + temp * temp;
     }
-  printf ("sum = %f\n", sum); 
+  printf("sum = %f\n", sum);
   return 0;
 }

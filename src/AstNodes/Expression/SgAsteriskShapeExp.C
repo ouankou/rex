@@ -1,11 +1,7 @@
-#include <sage3basic.h>
+#include "sage3basic.h"
 
-void
-SgAsteriskShapeExp::post_construction_initialization()
-   { }
+void SgAsteriskShapeExp::post_construction_initialization() {}
 
-SgType*
-SgAsteriskShapeExp::get_type() const
-   {
-     return SgTypeDefault::createType();
-   }
+SgType *SgAsteriskShapeExp::get_type() const {
+  return SgTypeDefault::createType();
+}

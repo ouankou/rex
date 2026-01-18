@@ -14,12 +14,13 @@
  *  1. Move #includes into .C file if they are not needed here.
  *---------------------------------------------------------------------------*/
 // tps (01/14/2010) : Switching from rose.h to sage3.
-// sage3basic.h should not be included by librose header files, only by .C files per policy. [Robb P. Matzke 2015-01-07]
-//#include "sage3basic.h"
+// sage3basic.h should not be included by librose header files, only by .C files
+// per policy. [Robb P. Matzke 2015-01-07]
+// #include "sage3basic.h"
+
+#include "astPostProcessing.h"
 
 #include "rose_paths.h"
-#include "astPostProcessing.h"
-#include <sys/stat.h>
 
 #include "omp_lowering.h"
 
@@ -28,11 +29,15 @@
 #include "sageBuilder.h"
 
 #include "CollectionHelper.h"
-#include "IncludeDirective.h"
+
 #include "CompilerOutputParser.h"
+
+#include "IncludeDirective.h"
+
 #include "IncludingPreprocessingInfosCollector.h"
 
 #include <libgen.h>
+
 #include <sys/wait.h>
 
 // DQ (10/14/2010):  This should only be included by source files that require
@@ -40,13 +45,13 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-
 #ifdef HAVE_DLADDR
-   #include <dlfcn.h>
+#include <dlfcn.h>
 #endif
 
 // Needed for std::filesystem::exists(...)
 #include <filesystem>
+
 #include <stdio.h>
 
 // Liao 10/8/2010, refactored OpenMP related code to ompAstConstruction.C
@@ -54,9 +59,9 @@
 
 namespace Rose {
 namespace Frontend {
-  int Run(SgProject* project);
-  int RunSerial(SgProject* project);
-}// ::Rose::Frontend
-}
+int Run(SgProject *project);
+int RunSerial(SgProject *project);
+} // namespace Frontend
+} // namespace Rose
 
 #endif // ROSE_SAGESUPPORT_H

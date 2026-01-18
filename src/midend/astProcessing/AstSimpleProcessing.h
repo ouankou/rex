@@ -18,38 +18,42 @@
 class AstCombinedPrePostProcessing;
 
 class ROSE_DLL_API AstPrePostProcessing
-    : public SgTreeTraversal<DummyAttribute, DummyAttribute>
-{
+    : public SgTreeTraversal<DummyAttribute, DummyAttribute> {
 public:
-    //! traverse the entire AST
-    void traverse(SgNode *node);
+  //! traverse the entire AST
+  void traverse(SgNode *node);
 
-    //! traverse only nodes which represent the same file as where the traversal was started
-    void traverseWithinFile(SgNode *node);
+  //! traverse only nodes which represent the same file as where the traversal
+  //! was started
+  void traverseWithinFile(SgNode *node);
 
-    //! traverse only nodes which represent files which were specified on the command line (=input files).
-    void traverseInputFiles(SgProject *projectNode);
+  //! traverse only nodes which represent files which were specified on the
+  //! command line (=input files).
+  void traverseInputFiles(SgProject *projectNode);
 
-    friend class AstCombinedPrePostProcessing;
+  friend class AstCombinedPrePostProcessing;
 
 protected:
-    //! this method is called at every traversed node before its children are traversed
-    virtual void preOrderVisit(SgNode *astNode) = 0;
+  //! this method is called at every traversed node before its children are
+  //! traversed
+  virtual void preOrderVisit(SgNode *astNode) = 0;
 
-    //! this method is called at every traversed node after its children were traversed
-    virtual void postOrderVisit(SgNode *astNode) = 0;
+  //! this method is called at every traversed node after its children were
+  //! traversed
+  virtual void postOrderVisit(SgNode *astNode) = 0;
 
-    //! functions called when the traversal starts and ends, respectively
-    virtual void atTraversalStart();
-    virtual void atTraversalEnd();
+  //! functions called when the traversal starts and ends, respectively
+  virtual void atTraversalStart();
+  virtual void atTraversalEnd();
 
 private:
-    DummyAttribute evaluateInheritedAttribute(SgNode *astNode, DummyAttribute inheritedValue);
-    DummyAttribute evaluateSynthesizedAttribute(SgNode* astNode, DummyAttribute inheritedValue,
-            SynthesizedAttributesList l);
-    DummyAttribute defaultSynthesizedAttribute(DummyAttribute inheritedValue);
+  DummyAttribute evaluateInheritedAttribute(SgNode *astNode,
+                                            DummyAttribute inheritedValue);
+  DummyAttribute evaluateSynthesizedAttribute(SgNode *astNode,
+                                              DummyAttribute inheritedValue,
+                                              SynthesizedAttributesList l);
+  DummyAttribute defaultSynthesizedAttribute(DummyAttribute inheritedValue);
 };
-
 
 // Logically, AstSimpleProcessing could be derived from
 // AstPrePostProcessing, but that results in a (barely) measurable
@@ -57,43 +61,47 @@ private:
 class AstCombinedSimpleProcessing;
 
 class ROSE_DLL_API AstSimpleProcessing
-    : public SgTreeTraversal<DummyAttribute, DummyAttribute>
-{
+    : public SgTreeTraversal<DummyAttribute, DummyAttribute> {
 public:
-    typedef t_traverseOrder Order;
+  typedef t_traverseOrder Order;
 
-    //! traverse the entire AST. Order defines preorder (preorder) or postorder (postorder) traversal. Default is 'preorder'.
-    void traverse(SgNode* node, Order treeTraversalOrder);
+  //! traverse the entire AST. Order defines preorder (preorder) or postorder
+  //! (postorder) traversal. Default is 'preorder'.
+  void traverse(SgNode *node, Order treeTraversalOrder);
 
-    //! traverse only nodes which represent the same file as where the traversal was started
-    void traverseWithinFile(SgNode* node, Order treeTraversalOrder);
+  //! traverse only nodes which represent the same file as where the traversal
+  //! was started
+  void traverseWithinFile(SgNode *node, Order treeTraversalOrder);
 
-    //! traverse only nodes which represent files which were specified on the command line (=input files).
-    void traverseInputFiles(SgProject* projectNode, Order treeTraversalOrder);
+  //! traverse only nodes which represent files which were specified on the
+  //! command line (=input files).
+  void traverseInputFiles(SgProject *projectNode, Order treeTraversalOrder);
 
-    friend class AstCombinedSimpleProcessing;
+  friend class AstCombinedSimpleProcessing;
 
 protected:
-    //! this method is called at every traversed node.
-    virtual void visit(SgNode* astNode) = 0;
+  //! this method is called at every traversed node.
+  virtual void visit(SgNode *astNode) = 0;
 
-    //! GB (06/04/2007): A new virtual function called at the start of the
-    //! traversal, before any node is actually visited; can be used to
-    //! perform a "last-minute" computation of attributes that may have
-    //! changed since the constructor was executed, but are constant
-    //! during the traversal itself. A no-op by default.
-    virtual void atTraversalStart();
-    virtual void atTraversalEnd();
+  //! GB (06/04/2007): A new virtual function called at the start of the
+  //! traversal, before any node is actually visited; can be used to
+  //! perform a "last-minute" computation of attributes that may have
+  //! changed since the constructor was executed, but are constant
+  //! during the traversal itself. A no-op by default.
+  virtual void atTraversalStart();
+  virtual void atTraversalEnd();
 
 private:
-    DummyAttribute evaluateInheritedAttribute(SgNode *astNode, DummyAttribute inheritedValue);
-    DummyAttribute evaluateSynthesizedAttribute(SgNode* astNode, DummyAttribute inheritedValue,
-            SynthesizedAttributesList l);
-    DummyAttribute defaultSynthesizedAttribute(DummyAttribute inheritedValue);
+  DummyAttribute evaluateInheritedAttribute(SgNode *astNode,
+                                            DummyAttribute inheritedValue);
+  DummyAttribute evaluateSynthesizedAttribute(SgNode *astNode,
+                                              DummyAttribute inheritedValue,
+                                              SynthesizedAttributesList l);
+  DummyAttribute defaultSynthesizedAttribute(DummyAttribute inheritedValue);
 };
 
-
-/** @deprecated Use AstSimpleProcessing instead. (provided for compatibility with existing user code - will be removed at some point in future). */
+/** @deprecated Use AstSimpleProcessing instead. (provided for compatibility
+ * with existing user code - will be removed at some point in future). */
 class SgSimpleProcessing : public AstSimpleProcessing {};
 
 #endif

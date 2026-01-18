@@ -1,18 +1,16 @@
-#include<omp.h>
+#include <omp.h>
+
 #include <stdio.h>
 
-void paroutput(char* s)
-{
-}
+void paroutput(char *s) {}
 
-int main(void)
-{
+int main(void) {
 #ifdef _OPENMP
   omp_set_nested(1);
 #endif
 
 #pragma omp parallel num_threads(4)
-  { 
+  {
 #pragma omp parallel num_threads(4)
     printf("before single.\n");
 
@@ -27,5 +25,3 @@ int main(void)
   }
   return 0;
 }
-
-

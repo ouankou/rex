@@ -1,11 +1,16 @@
 // Example ROSE Translator: used within ROSE/tutorial
 
-#include "rose.h"
-#include <GraphUpdate.h>
 #include "CFGImpl.h"
-#include "GraphDotOutput.h"
-#include "preControlFlowGraph.h"
+
 #include "CommandOptions.h"
+
+#include "GraphDotOutput.h"
+
+#include "GraphUpdate.h"
+
+#include "preControlFlowGraph.h"
+
+#include "rose.h"
 
 using namespace std;
 
@@ -14,48 +19,43 @@ using namespace std;
 // We want to use the one in the PRE namespace.
 using namespace legacy::PRE;
 
-class visitorTraversal : public AstSimpleProcessing
-   {
-     public:
-          virtual void visit(SgNode* n);
-   };
+class visitorTraversal : public AstSimpleProcessing {
+public:
+  virtual void visit(SgNode *n);
+};
 
-void visitorTraversal::visit(SgNode* n)
-   {
-     SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(n);
-     if (functionDeclaration != NULL)
-        {
-          SgFunctionDefinition* functionDefinition = functionDeclaration->get_definition();
-          if (functionDefinition != NULL)
-             {
-               SgBasicBlock* functionBody = functionDefinition->get_body();
-               ROSE_ASSERT(functionBody != NULL);
+void visitorTraversal::visit(SgNode *n) {
+  SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(n);
+  if (functionDeclaration != NULL) {
+    SgFunctionDefinition *functionDefinition =
+        functionDeclaration->get_definition();
+    if (functionDefinition != NULL) {
+      SgBasicBlock *functionBody = functionDefinition->get_body();
+      ROSE_ASSERT(functionBody != NULL);
 
-               ControlFlowGraph controlflow;
+      ControlFlowGraph controlflow;
 
-            // The CFG can only be called on a function definition (at present)
-               makeCfg(functionDefinition,controlflow);
-               string fileName = functionDeclaration->get_name().str();
-               fileName += ".dot";
-               ofstream dotfile(fileName.c_str());
-               printCfgAsDot(dotfile, controlflow);
-             }
-        }
-   }
+      // The CFG can only be called on a function definition (at present)
+      makeCfg(functionDefinition, controlflow);
+      string fileName = functionDeclaration->get_name().str();
+      fileName += ".dot";
+      ofstream dotfile(fileName.c_str());
+      printCfgAsDot(dotfile, controlflow);
+    }
+  }
+}
 
-int main( int argc, char * argv[] )
-   {
+int main(int argc, char *argv[]) {
   // Build the AST used by ROSE
-     SgProject* project = frontend(argc,argv);
+  SgProject *project = frontend(argc, argv);
 
-     CmdOptions::GetInstance()->SetOptions(argc,argv);
+  CmdOptions::GetInstance()->SetOptions(argc, argv);
 
   // Build the traversal object
-     visitorTraversal exampleTraversal;
+  visitorTraversal exampleTraversal;
 
   // Call the traversal starting at the project node of the AST
-     exampleTraversal.traverseInputFiles(project,preorder);
+  exampleTraversal.traverseInputFiles(project, preorder);
 
-     return 0;
-   }
-
+  return 0;
+}

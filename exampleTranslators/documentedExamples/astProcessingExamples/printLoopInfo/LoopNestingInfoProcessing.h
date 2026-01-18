@@ -5,8 +5,8 @@
 #define PRINTVARS_H
 
 #include <string>
-#include <iostream>
 
+#include <iostream>
 
 // using namespace std;
 
@@ -22,14 +22,16 @@ typedef NestingDepth SynNestingDepth;
 */
 class NestingLevelAnnotation : public AstAttribute {
 public:
-  NestingLevelAnnotation(NestingLevel n,NestingDepth d)
-    : _nestingLevel(n),_nestingDepth(d) {}
+  NestingLevelAnnotation(NestingLevel n, NestingDepth d)
+      : _nestingLevel(n), _nestingDepth(d) {}
   NestingLevel getNestingLevel() { return _nestingLevel; }
   NestingDepth getNestingDepth() { return _nestingDepth; }
-  string toString() { 
-    ostringstream ss; ss<<_nestingLevel<<","<<_nestingDepth; 
-    return ss.str(); 
+  string toString() {
+    ostringstream ss;
+    ss << _nestingLevel << "," << _nestingDepth;
+    return ss.str();
   }
+
 private:
   NestingLevel _nestingLevel;
   NestingDepth _nestingDepth;
@@ -44,28 +46,33 @@ The maximum nesting level of the whole AST is computed as
 "accumulated" value in a member variable and can be accessed with
 getMaxNestingLevel().
 */
-class LoopLevelProcessing : public AstTopDownBottomUpProcessing<InhNestingLevel,SynNestingDepth> {
+class LoopLevelProcessing
+    : public AstTopDownBottomUpProcessing<InhNestingLevel, SynNestingDepth> {
 public:
-  LoopLevelProcessing():_maxNestingLevel(0) {}
+  LoopLevelProcessing() : _maxNestingLevel(0) {}
 
-  /*! Performs a traversal of the AST and computes loop-nesting information by using
-      inherited and synthesized attributes. The results are attached to the AST as
-      annotation.
+  /*! Performs a traversal of the AST and computes loop-nesting information by
+     using inherited and synthesized attributes. The results are attached to the
+     AST as annotation.
   */
-  void attachLoopNestingAnnotaton(SgProject* node) { traverseInputFiles(node,0); }
+  void attachLoopNestingAnnotaton(SgProject *node) {
+    traverseInputFiles(node, 0);
+  }
 
-  /*! Returns the maximum nesting level of the entire AST (of the input file). 
+  /*! Returns the maximum nesting level of the entire AST (of the input file).
       Requires attachLoopNestingAnnotation (to be called before)
   */
   NestingLevel getMaxNestingLevel() { return _maxNestingLevel; }
 
 protected:
   //! computes the nesting level
-  InhNestingLevel evaluateInheritedAttribute(SgNode*,InhNestingLevel);
+  InhNestingLevel evaluateInheritedAttribute(SgNode *, InhNestingLevel);
   //! computes the nesting depth
-  SynNestingDepth evaluateSynthesizedAttribute(SgNode*,InhNestingLevel,SynthesizedAttributesList);
+  SynNestingDepth evaluateSynthesizedAttribute(SgNode *, InhNestingLevel,
+                                               SynthesizedAttributesList);
   //! provides the default value 0 for the nesting depth
   SynNestingDepth defaultSynthesizedAttribute(InhNestingLevel inh);
+
 private:
   NestingLevel _maxNestingLevel;
 };

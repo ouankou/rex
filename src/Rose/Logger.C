@@ -5,15 +5,19 @@
 
 #include <cassert>
 
-#include <strings.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdarg.h>
+
+#include <stdio.h>
+
+#include <stdlib.h>
+
+#include <strings.h>
+
 #include <vector>
 
 namespace Rose {
 
-static std::string format_message(const char * format, va_list va_args) {
+static std::string format_message(const char *format, va_list va_args) {
   va_list va_args_copy;
   va_copy(va_args_copy, va_args);
   int required = vsnprintf(nullptr, 0, format, va_args_copy);
@@ -26,21 +30,28 @@ static std::string format_message(const char * format, va_list va_args) {
   return std::string(buffer.data(), static_cast<size_t>(required));
 }
 
-static const char * level_to_string(Logger::Level lvl) {
+static const char *level_to_string(Logger::Level lvl) {
   switch (lvl) {
-    case Logger::Level::debug:   return "Debug   : ";
-    case Logger::Level::info:    return "Info    : ";
-    case Logger::Level::warning: return "Warning : ";
-    case Logger::Level::error:   return "Error   : ";
-    case Logger::Level::enter:   return "Enter   : ";
-    case Logger::Level::leave:   return "Leave   : ";
-    default: abort();
+  case Logger::Level::debug:
+    return "Debug   : ";
+  case Logger::Level::info:
+    return "Info    : ";
+  case Logger::Level::warning:
+    return "Warning : ";
+  case Logger::Level::error:
+    return "Error   : ";
+  case Logger::Level::enter:
+    return "Enter   : ";
+  case Logger::Level::leave:
+    return "Leave   : ";
+  default:
+    abort();
   }
   abort();
 }
 
 Logger Logger::root{};
-Logger * Logger::current{nullptr};
+Logger *Logger::current{nullptr};
 
 std::string Logger::indent{"  "};
 bool Logger::indent_first{false};
@@ -51,9 +62,10 @@ std::map<std::string, Logger::Level> Logger::mnemonic_to_level{};
 std::map<std::string, std::string> Logger::mnemonic_to_function{};
 #endif
 
-void Logger::display(Level const lvl, std::string const & message) {
+void Logger::display(Level const lvl, std::string const &message) {
   if (lvl == Level::fatal) {
-    std::cerr << "FATAL: " << mnemonic << "(" << std::hex << ptr_id << "):" << message << std::endl;
+    std::cerr << "FATAL: " << mnemonic << "(" << std::hex << ptr_id
+              << "):" << message << std::endl;
   } else {
     bool indentable = indent.size() > 0 && depth > 0;
     if (indent_first && indentable)
@@ -67,7 +79,7 @@ void Logger::display(Level const lvl, std::string const & message) {
   }
 }
 
-void Logger::display(Level const lvl, const char * format, ...) {
+void Logger::display(Level const lvl, const char *format, ...) {
   va_list va_args;
   va_start(va_args, format);
   std::string message(format_message(format, va_args));
@@ -75,19 +87,14 @@ void Logger::display(Level const lvl, const char * format, ...) {
   display(lvl, message);
 }
 
-Logger::Logger() :
-  Logger("root", "root", nullptr, Logger::Level::fatal)
-{}
+Logger::Logger() : Logger("root", "root", nullptr, Logger::Level::fatal) {}
 
-Logger::Logger(const char * function_, const char * mnemonic_, void * const ptr_id_, Level const level_) :
-  function(function_),
-  mnemonic(mnemonic_),
-  ptr_id(ptr_id_),
-  level(level_),
-  parent(current),
-  depth(-1)
-{
-  assert(level <= Level::fatal); // Cannot use Level::enter or Level::leave when constructing a Logger.
+Logger::Logger(const char *function_, const char *mnemonic_,
+               void *const ptr_id_, Level const level_)
+    : function(function_), mnemonic(mnemonic_), ptr_id(ptr_id_), level(level_),
+      parent(current), depth(-1) {
+  assert(level <= Level::fatal); // Cannot use Level::enter or Level::leave when
+                                 // constructing a Logger.
   current = this;
   if (parent != nullptr) {
     depth = parent->depth + 1;
@@ -95,7 +102,8 @@ Logger::Logger(const char * function_, const char * mnemonic_, void * const ptr_
 #if DEBUG__Rose__Loggers
   auto it_m2f = mnemonic_to_function.find(mnemonic);
   if (it_m2f == mnemonic_to_function.end()) {
-    mnemonic_to_function.insert(std::pair<std::string const, std::string const>(mnemonic, function));
+    mnemonic_to_function.insert(
+        std::pair<std::string const, std::string const>(mnemonic, function));
   } else {
     assert(it_m2f->second == function);
   }
@@ -117,8 +125,9 @@ Logger::~Logger() {
     display(Level::leave, "%s(%p)", mnemonic.c_str(), ptr_id);
 }
 
-void Logger::debug(const char * format, ...) {
-  if (level > Level::debug) return; 
+void Logger::debug(const char *format, ...) {
+  if (level > Level::debug)
+    return;
   va_list va_args;
   va_start(va_args, format);
   std::string message(format_message(format, va_args));
@@ -126,8 +135,9 @@ void Logger::debug(const char * format, ...) {
   display(Level::debug, message);
 }
 
-void Logger::info(const char * format, ...) {
-  if (level > Level::info) return;
+void Logger::info(const char *format, ...) {
+  if (level > Level::info)
+    return;
   va_list va_args;
   va_start(va_args, format);
   std::string message(format_message(format, va_args));
@@ -135,8 +145,9 @@ void Logger::info(const char * format, ...) {
   display(Level::info, message);
 }
 
-void Logger::warning(const char * format, ...) {
-  if (level > Level::warning) return;
+void Logger::warning(const char *format, ...) {
+  if (level > Level::warning)
+    return;
   va_list va_args;
   va_start(va_args, format);
   std::string message(format_message(format, va_args));
@@ -144,8 +155,9 @@ void Logger::warning(const char * format, ...) {
   display(Level::warning, message);
 }
 
-void Logger::error(const char * format, ...) {
-  if (level > Level::error) return;
+void Logger::error(const char *format, ...) {
+  if (level > Level::error)
+    return;
   va_list va_args;
   va_start(va_args, format);
   std::string message(format_message(format, va_args));
@@ -153,7 +165,7 @@ void Logger::error(const char * format, ...) {
   display(Level::error, message);
 }
 
-void Logger::fatal(const char * format, ...) {
+void Logger::fatal(const char *format, ...) {
   va_list va_args;
   va_start(va_args, format);
   std::string message(format_message(format, va_args));
@@ -161,5 +173,4 @@ void Logger::fatal(const char * format, ...) {
   display(Level::fatal, message);
 }
 
-
-}
+} // namespace Rose

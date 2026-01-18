@@ -2,9 +2,12 @@
 #define SYMBOLIC_SELECT
 
 #include "SymbolicExpr.h"
+
 #include "const.h"
+
+#include "mlog.h"
+
 #include <iostream>
-#include <mlog.h>
 
 class SymbolicSelect : public SymbolicExpr {
   int opt;
@@ -32,7 +35,8 @@ public:
       return 0;
   }
 
-  AstNodePtr CodeGenOP(AstInterface &, const AstNodePtr &, const AstNodePtr &) const {
+  AstNodePtr CodeGenOP(AstInterface &, const AstNodePtr &,
+                       const AstNodePtr &) const {
     ROSE_ABORT();
   }
   AstNodePtr CodeGen(AstInterface &fa) const;

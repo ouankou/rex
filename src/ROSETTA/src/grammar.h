@@ -4,20 +4,29 @@
 // DQ (3/12/2006): We want to remove config.h from being placed in every source
 // file
 #include "rose_paths.h"
-#include <rose_config.h>
+
+#include "rose_config.h"
 
 #include <stdio.h>
+
 #include <stdlib.h>
 
 #include <assert.h>
 
 #include "FileUtility.h"
+
 #include "GrammarFile.h"
+
 #include "ROSETTA_macros.h"
+
 #include <map>
+
 #include <set>
+
 #include <sstream>
+
 #include <string>
+
 #include <vector>
 
 #define COMPLETERTI 1
@@ -578,14 +587,9 @@ public:
   std::string naiveTraverseGrammar(AstNodeClass &,
                                    evaluateStringAttributeFunctionType);
   // DQ (9/28/2022): Fixing compiler warning for argument not used.
-#if 1
   typedef GrammarSynthesizedAttribute (
       Grammar::*evaluateGAttributeFunctionType)(
       AstNodeClass *, std::vector<GrammarSynthesizedAttribute>);
-#else
-  typedef GrammarSynthesizedAttribute (
-      Grammar::*evaluateGAttributeFunctionType)(AstNodeClass *);
-#endif
   // filtered member variables are all those that are not required to create a
   // vailid AST (or can computed by other means) this function is used by the
   // ATerm grammar generation and when generating constructors for all data
@@ -597,22 +601,13 @@ public:
                      evaluateGAttributeFunctionType evaluateGAttributeFunction);
   // MS: build a Latex output that shows the abstract Cpp grammar
   // DQ (9/28/2022): Fixing compiler warning for argument not used.
-#if 1
   GrammarSynthesizedAttribute
   CreateGrammarDotString(AstNodeClass *grammarnode,
                          std::vector<GrammarSynthesizedAttribute> v);
-#else
-  GrammarSynthesizedAttribute CreateGrammarDotString(AstNodeClass *grammarnode);
-#endif
   // DQ (9/28/2022): Fixing compiler warning for argument not used.
-#if 1
   GrammarSynthesizedAttribute
   CreateAbstractTreeGrammarString(AstNodeClass *grammarnode,
                                   std::vector<GrammarSynthesizedAttribute> v);
-#else
-  GrammarSynthesizedAttribute
-  CreateAbstractTreeGrammarString(AstNodeClass *grammarnode);
-#endif
   void buildGrammarDotFile(AstNodeClass *rootNode,
                            std::ostream &GrammarDotFile);
   void buildAbstractTreeGrammarFile(AstNodeClass *rootNode,
@@ -728,13 +723,8 @@ private:
       std::string grammarSymListOpPrefix, std::string grammarSymListOpPostfix);
   std::set<std::string> traversedTerminals;
   // DQ (9/28/2022): Fixing compiler warning for argument not used.
-#if 1
   GrammarSynthesizedAttribute CreateMinimalTraversedGrammarSymbolsSet(
       AstNodeClass *grammarnode, std::vector<GrammarSynthesizedAttribute> v);
-#else
-  GrammarSynthesizedAttribute
-  CreateMinimalTraversedGrammarSymbolsSet(AstNodeClass *grammarnode);
-#endif
   bool isAbstractTreeGrammarSymbol(AstNodeClass *);
   bool isAbstractTreeGrammarSymbol(std::string);
 

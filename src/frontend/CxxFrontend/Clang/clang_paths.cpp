@@ -1,15 +1,22 @@
 #include "clang_paths.h"
 
 #include <cstdlib>
+
 #include <filesystem>
+
 #include <optional>
+
 #include <sstream>
+
 #include <string>
+
 #include <vector>
 
 #include "ROSE_ASSERT.h"
-#include "rose_config.h"
+
 #include "rose_paths.h"
+
+#include "rose_config.h"
 
 #ifdef HAVE_DLADDR
 #include <dlfcn.h>

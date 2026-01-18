@@ -1,25 +1,25 @@
 // $Id: TarjanIntervals.h,v 1.1 2004/07/07 10:26:34 dquinlan Exp $
 // -*-C++-*-
 // * BeginRiceCopyright *****************************************************
-// 
-// Copyright ((c)) 2002, Rice University 
+//
+// Copyright ((c)) 2002, Rice University
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
-// 
+//
 // * Redistributions of source code must retain the above copyright
 //   notice, this list of conditions and the following disclaimer.
-// 
+//
 // * Redistributions in binary form must reproduce the above copyright
 //   notice, this list of conditions and the following disclaimer in the
 //   documentation and/or other materials provided with the distribution.
-// 
+//
 // * Neither the name of Rice University (RICE) nor the names of its
 //   contributors may be used to endorse or promote products derived from
 //   this software without specific prior written permission.
-// 
+//
 // This software is provided by RICE and contributors "as is" and any
 // express or implied warranties, including, but not limited to, the
 // implied warranties of merchantability and fitness for a particular
@@ -30,8 +30,8 @@
 // business interruption) however caused and on any theory of liability,
 // whether in contract, strict liability, or tort (including negligence
 // or otherwise) arising in any way out of the use of this software, even
-// if advised of the possibility of such damage. 
-// 
+// if advised of the possibility of such damage.
+//
 // ******************************************************* EndRiceCopyright *
 
 //
@@ -57,19 +57,27 @@
 
 //*************************** User Include Files ****************************
 
-
 // OpenAnalysis headers.
+#include "OpenAnalysis/Utils/UnionFindUniverse.h"
+
 #include "RIFG.h"
-#include <OpenAnalysis/Utils/UnionFindUniverse.h>
 
-enum RITarjType {RI_TARJ_NOTHING, RI_TARJ_ACYCLIC, RI_TARJ_INTERVAL, RI_TARJ_IRREDUCIBLE };
+enum RITarjType {
+  RI_TARJ_NOTHING,
+  RI_TARJ_ACYCLIC,
+  RI_TARJ_INTERVAL,
+  RI_TARJ_IRREDUCIBLE
+};
 
-enum RITarjEdgeType { RI_TARJ_NORMAL, RI_TARJ_LOOP_ENTRY, RI_TARJ_IRRED_ENTRY, RI_TARJ_ITERATE };
-
+enum RITarjEdgeType {
+  RI_TARJ_NORMAL,
+  RI_TARJ_LOOP_ENTRY,
+  RI_TARJ_IRRED_ENTRY,
+  RI_TARJ_ITERATE
+};
 
 class TarjWork;
 class TarjTreeNode;
-
 
 //*********************** Forward Class Definitions *************************
 
@@ -86,7 +94,6 @@ public:
   void Create();
 
   ~TarjanIntervals();
-
 
   // Updates the prenumbering of the tree.  Useful if some change
   // has been made to the cfg where one knows how to update the
@@ -136,7 +143,7 @@ public:
   // Given an interval, return its parent (header) interval.
   RIFGNodeId TarjOuter(RIFGNodeId id);
 
-  // Given an interval, return its next sibling interval. 
+  // Given an interval, return its next sibling interval.
   RIFGNodeId TarjNext(RIFGNodeId id);
 
   // Given an interval header, return its last nested interval.
@@ -177,6 +184,5 @@ private: // data
   // A map from RIFGNodeId to DFS number.
   std::map<RIFGNodeId, int> nodeid_to_dfnum_map;
 };
-
 
 #endif

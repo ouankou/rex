@@ -1,16 +1,19 @@
 #if 0
-#include <stdio.h>                      
+#include <stdarg.h> // #include <varargs.h>
+
+#include <stdio.h>
+
 #include <stdlib.h>
-#include <stdarg.h>
-// #include <varargs.h>
 #endif
 
 #if 0
-#include "irs.h"
-#include "irsctl.h"
-#include "AEStackElm.h"
-#include "Rgst.h"
+#include <AEStackElm.h>
+
+#include <Rgst.h>
 #endif
+#include <irs.h>
+
+#include <irsctl.h>
 
 #if 0
 double type;
@@ -25,10 +28,11 @@ void foo(...)
 #endif
 
 // Include portable var arg mechanism
-#include <stdio.h>                      
+#include <stdarg.h> // #include <varargs.h>
+
+#include <stdio.h>
+
 #include <stdlib.h>
-#include <stdarg.h>
-// #include <varargs.h>
 
 // typedef int __builtin_va_alist_t __attribute__((__mode__(__word__)));
 // #define va_start(v)   __builtin_varargs_start((v))
@@ -44,21 +48,20 @@ void foo(...)
 
 #if 0
 #if 0
-#define __builtin_stdarg_start(a,b) (void*)(a,b)
-#define __builtin_va_end(a) (void*)(a)
+#define __builtin_stdarg_start(a, b) (void *)(a, b)
+#define __builtin_va_end(a) (void *)(a)
 #else
 // #define __builtin_stdarg_start(a,b) va_start(a,b)
 // #define __builtin_va_end(a) va_end(a)
-#define va_start(a,b) (void*)(a,b)
-#define va_end(a) (void*)(a)
-#define va_arg(a,b) (void*)((a),sizeof(b))
+#define va_start(a, b) (void *)(a, b)
+#define va_end(a) (void *)(a)
+#define va_arg(a, b) (void *)((a), sizeof(b))
 #endif
 #endif
 
-void foo(char *fmt, ...)
-   {
-     va_list args;
-     va_start(args,fmt);
-     va_arg(args,int);
-     va_end(args);
-   }
+void foo(char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  va_arg(args, int);
+  va_end(args);
+}

@@ -2,14 +2,9 @@
 #include "sage3basic.h"
 
 #include "numberQuery.h"
+
 #include "numberQueryInheritedAttribute.h"
 
-NumberQueryInheritedAttributeType::~NumberQueryInheritedAttributeType ()
-{
+NumberQueryInheritedAttributeType::~NumberQueryInheritedAttributeType() {}
 
-}
-
-NumberQueryInheritedAttributeType::NumberQueryInheritedAttributeType ()
-{
-
-}
+NumberQueryInheritedAttributeType::NumberQueryInheritedAttributeType() {}

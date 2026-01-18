@@ -1,14 +1,14 @@
 // Original Code:
 //   vector<string> dataList(commSize);
 // Generated Code:
-//   class std::vector< std::string  , std::allocator< std::string  >  > dataList = (commSize);
+//   class std::vector< std::string  , std::allocator< std::string  >  >
+//   dataList = (commSize);
 
+#include <string>
 
-#include<string>
-#include<vector>
+#include <vector>
 
-void foo()
-   {
-     int commSize = 2;
-     std::vector<std::string> dataList(commSize);
-   }
+void foo() {
+  int commSize = 2;
+  std::vector<std::string> dataList(commSize);
+}

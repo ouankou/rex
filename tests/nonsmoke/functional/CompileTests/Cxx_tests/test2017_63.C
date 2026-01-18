@@ -1,9 +1,8 @@
 
-#include "boost/pool/pool.hpp"
-
+#include <boost/pool/pool.hpp>
 #if 0
 
-#include <boost/config.hpp>  // for workarounds
+#include <boost/config.hpp> // for workarounds
 
 // std::less, std::less_equal, std::greater
 #include <functional>
@@ -30,11 +29,13 @@
 #include <boost/assert.hpp>
 
 #ifdef BOOST_POOL_INSTRUMENT
+#include <iomanip>
+
 #include <iostream>
-#include<iomanip>
 #endif
 #ifdef BOOST_POOL_VALGRIND
 #include <set>
+
 #include <valgrind/memcheck.h>
 #endif
 

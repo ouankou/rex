@@ -2,6 +2,7 @@
 The following test program used to work in ROSE (last version I know that it worked for sure was 0.8.6a)
 
 #include <malloc.h>
+
 #include <stdlib.h>
 void *(*Malloc)(unsigned int)= (void*(*)(unsigned int))malloc;
 int  (*Free)(void *,int,char*) = (int (*)(void *, int, char *))free;
@@ -10,6 +11,7 @@ int  (*Free)(void *,int,char*) = (int (*)(void *, int, char *))free;
 (it used to unparse to:
 
 #include <malloc.h>
+
 #include <stdlib.h>
 void *(*Malloc)(unsigned int ) = malloc;
 int (*Free)(void *, int , char *) = (int (*)(void *, int , char *))free;
@@ -26,5 +28,5 @@ Abort (core dumped)
 #endif
 
 #include <stdlib.h>
-void *(*Malloc)(unsigned int)= (void*(*)(unsigned int))malloc;
-int  (*Free)(void *,int,char*) = (int (*)(void *, int, char *))free;
+void *(*Malloc)(unsigned int) = (void *(*)(unsigned int))malloc;
+int (*Free)(void *, int, char *) = (int (*)(void *, int, char *))free;

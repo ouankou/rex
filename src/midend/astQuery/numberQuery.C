@@ -16,86 +16,87 @@
 
 // #include "arrayTransformationSupport.h"
 
-
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
-  NumberQuerySynthesizedAttributeType
-NumberQuery::queryNumberOfArgsInParenthesisOperator (SgNode * astNode, string typeName)
-{
-  ROSE_ASSERT (astNode != 0);
-  const char *matchingTypeName = typeName.data ();
+NumberQuerySynthesizedAttributeType
+NumberQuery::queryNumberOfArgsInParenthesisOperator(SgNode *astNode,
+                                                    string typeName) {
+  ROSE_ASSERT(astNode != 0);
+  const char *matchingTypeName = typeName.data();
 
   NumberQuerySynthesizedAttributeType returnNumberList;
 
-  SgExprListExp *sageExprListExp = isSgExprListExp (astNode);
+  SgExprListExp *sageExprListExp = isSgExprListExp(astNode);
 
-  switch (astNode->variantT ())
+  switch (astNode->variantT()) {
+  case V_SgExprListExp: // SgExprListExp
   {
-    case V_SgExprListExp:       // SgExprListExp
-      {
-        // char *typeName = "XXX";
-        int numberOfArgs = sageExprListExp->get_expressions ().size ();
+    // char *typeName = "XXX";
+    int numberOfArgs = sageExprListExp->get_expressions().size();
 
 #if DEBUG_NUMBERQUER
-        printf ("Found a list of arguments \n");
-        printf ("In case: numberOfArgs = %d  matchingTypeName = %s \n",numberOfArgs, matchingTypeName);
+    printf("Found a list of arguments \n");
+    printf("In case: numberOfArgs = %d  matchingTypeName = %s \n", numberOfArgs,
+           matchingTypeName);
 #endif
 
-        returnNumberList.push_back (numberOfArgs);
-        break;
-      }
+    returnNumberList.push_back(numberOfArgs);
+    break;
+  }
 
-    case V_SgFunctionCallExp:   //SgExprCallExp
-      {
-        // const char *matchingFunctionName = "operator()";
+  case V_SgFunctionCallExp: // SgExprCallExp
+  {
+    // const char *matchingFunctionName = "operator()";
 
-        // Looking for different types of overloaded functions (of the correct type)
-        SgFunctionCallExp *functionCallExp = isSgFunctionCallExp (astNode);
-        ROSE_ASSERT (functionCallExp != NULL);
+    // Looking for different types of overloaded functions (of the correct type)
+    SgFunctionCallExp *functionCallExp = isSgFunctionCallExp(astNode);
+    ROSE_ASSERT(functionCallExp != NULL);
 
-        //yanyh15 (2023-01-31): donot quite understand this and need to check later
-        SgFunctionDeclaration* funcDeclaration = SageInterface::getFunctionDeclaration (functionCallExp);
-        std::string functionTypeNameStr = SageInterface::getTypeName(funcDeclaration->get_type()->get_return_type());
-        const char *functionTypeName = functionTypeNameStr.c_str();
+    // yanyh15 (2023-01-31): donot quite understand this and need to check later
+    SgFunctionDeclaration *funcDeclaration =
+        SageInterface::getFunctionDeclaration(functionCallExp);
+    std::string functionTypeNameStr = SageInterface::getTypeName(
+        funcDeclaration->get_type()->get_return_type());
+    const char *functionTypeName = functionTypeNameStr.c_str();
 
-        ROSE_ASSERT (functionTypeName != NULL);
+    ROSE_ASSERT(functionTypeName != NULL);
 
-        if (functionTypeName == matchingTypeName)
-        {
-          ROSE_ASSERT (functionCallExp->get_args() != NULL);
-          // ROSE_ASSERT (functionCallExp->get_args()->get_expressions().size() >= 0);
-          int numberOfArgs = functionCallExp->get_args()->get_expressions().size();
-          returnNumberList.push_back (numberOfArgs);
-        }
-        break;
-      } /* End case FUNC_CALL */
+    if (functionTypeName == matchingTypeName) {
+      ROSE_ASSERT(functionCallExp->get_args() != NULL);
+      // ROSE_ASSERT (functionCallExp->get_args()->get_expressions().size() >=
+      // 0);
+      int numberOfArgs = functionCallExp->get_args()->get_expressions().size();
+      returnNumberList.push_back(numberOfArgs);
+    }
+    break;
+  } /* End case FUNC_CALL */
 
-    default:
-      {
-        // Nothing to do here (implemented to avoid g++ warnings about unhandled enum values)
-        break;
-      }
+  default: {
+    // Nothing to do here (implemented to avoid g++ warnings about unhandled
+    // enum values)
+    break;
+  }
 
   } /* End switch-case */
 
   return returnNumberList;
-}                               // End function queryNumberOfArgsInParenthesisOperator() 
+} // End function queryNumberOfArgsInParenthesisOperator()
 
-
-  NumberQuerySynthesizedAttributeType
-NumberQuery::queryNumberOfArgsInConstructor (SgNode * astNode)
-{
-  ROSE_ASSERT (astNode != 0);
+NumberQuerySynthesizedAttributeType
+NumberQuery::queryNumberOfArgsInConstructor(SgNode *astNode) {
+  ROSE_ASSERT(astNode != 0);
   NumberQuerySynthesizedAttributeType returnNumberList;
 
-  SgConstructorInitializer *sageConstructorInitializer = isSgConstructorInitializer (astNode);
+  SgConstructorInitializer *sageConstructorInitializer =
+      isSgConstructorInitializer(astNode);
 
   if (sageConstructorInitializer != NULL) {
-    if (SgExprListExp* args = sageConstructorInitializer->get_args()) {
-      // Only count explicitly-provided constructor argument lists. Implicit/default
-      // initializations introduce zero-arg constructor initializers in many places and
-      // would swamp the query with zeros (e.g., compiler-generated defaults). 
+    if (SgExprListExp *args = sageConstructorInitializer->get_args()) {
+      // Only count explicitly-provided constructor argument lists.
+      // Implicit/default initializations introduce zero-arg constructor
+      // initializers in many places and would swamp the query with zeros (e.g.,
+      // compiler-generated defaults).
       if (!args->get_expressions().empty()) {
         int numberOfArgs = args->get_expressions().size();
         returnNumberList.push_back(numberOfArgs);
@@ -104,345 +105,317 @@ NumberQuery::queryNumberOfArgsInConstructor (SgNode * astNode)
   }
 
   return returnNumberList;
-} // End function queryNumberOfArgsInConstructor() 
+} // End function queryNumberOfArgsInConstructor()
 
-
-  NumberQuerySynthesizedAttributeType
-NumberQuery::queryNumberOfOperands (SgNode * astNode)
-{
-  ROSE_ASSERT (astNode != 0);
+NumberQuerySynthesizedAttributeType
+NumberQuery::queryNumberOfOperands(SgNode *astNode) {
+  ROSE_ASSERT(astNode != 0);
   NumberQuerySynthesizedAttributeType returnNumberList;
 
   int numberOfArgs = 0;
 
-  switch (astNode->variantT ())
-  {
-    case V_SgAddOp:
-    case V_SgAndAssignOp:
-    case V_SgAndOp:
-    case V_SgArrowExp:
-    case V_SgArrowStarOp:
-    case V_SgAssignOp:
-    case V_SgBitAndOp:
-    case V_SgBitOrOp:
-    case V_SgBitXorOp:
-    case V_SgCommaOpExp:
-    case V_SgDivAssignOp:
-    case V_SgDivideOp:
-    case V_SgDotExp:
-    case V_SgDotStarOp:
-    case V_SgEqualityOp:
-    case V_SgGreaterOrEqualOp:
-    case V_SgGreaterThanOp:
-    case V_SgIntegerDivideOp:
-    case V_SgIorAssignOp:
-    case V_SgLessOrEqualOp:
-    case V_SgLessThanOp:
-    case V_SgLshiftAssignOp:
-    case V_SgLshiftOp:
-    case V_SgMinusAssignOp:
-    case V_SgModAssignOp:
-    case V_SgModOp:
-    case V_SgMultAssignOp:
-    case V_SgMultiplyOp:
-    case V_SgNotEqualOp:
-    case V_SgOrOp:
-    case V_SgPlusAssignOp:
-    case V_SgPntrArrRefExp:
-    case V_SgRshiftAssignOp:
-    case V_SgRshiftOp:
-    case V_SgScopeOp:
-    case V_SgSubtractOp:
-    case V_SgXorAssignOp:
-      if (isSgBinaryOp (astNode)->get_lhs_operand () != NULL)
-        numberOfArgs += 1;
-      if (isSgBinaryOp (astNode)->get_rhs_operand () != NULL)
-        numberOfArgs += 1;
-      break;
-
-    case V_SgSizeOfOp:
-      {
-        ROSE_ASSERT (isSgTypeIdOp (astNode)->get_operand_expr () != NULL);
-        numberOfArgs += 1;
-        break;
-      }
-
-    case V_SgAddressOfOp:
-    case V_SgBitComplementOp:
-    case V_SgCastExp:
-    case V_SgExpressionRoot:
-    case V_SgMinusMinusOp:
-    case V_SgMinusOp:
-    case V_SgNotOp:
-    case V_SgPlusPlusOp:
-    case V_SgPointerDerefExp:
-    case V_SgThrowOp:
-    case V_SgUnaryAddOp:
-      ROSE_ASSERT (isSgUnaryOp (astNode)->get_operand () != NULL);
+  switch (astNode->variantT()) {
+  case V_SgAddOp:
+  case V_SgAndAssignOp:
+  case V_SgAndOp:
+  case V_SgArrowExp:
+  case V_SgArrowStarOp:
+  case V_SgAssignOp:
+  case V_SgBitAndOp:
+  case V_SgBitOrOp:
+  case V_SgBitXorOp:
+  case V_SgCommaOpExp:
+  case V_SgDivAssignOp:
+  case V_SgDivideOp:
+  case V_SgDotExp:
+  case V_SgDotStarOp:
+  case V_SgEqualityOp:
+  case V_SgGreaterOrEqualOp:
+  case V_SgGreaterThanOp:
+  case V_SgIntegerDivideOp:
+  case V_SgIorAssignOp:
+  case V_SgLessOrEqualOp:
+  case V_SgLessThanOp:
+  case V_SgLshiftAssignOp:
+  case V_SgLshiftOp:
+  case V_SgMinusAssignOp:
+  case V_SgModAssignOp:
+  case V_SgModOp:
+  case V_SgMultAssignOp:
+  case V_SgMultiplyOp:
+  case V_SgNotEqualOp:
+  case V_SgOrOp:
+  case V_SgPlusAssignOp:
+  case V_SgPntrArrRefExp:
+  case V_SgRshiftAssignOp:
+  case V_SgRshiftOp:
+  case V_SgScopeOp:
+  case V_SgSubtractOp:
+  case V_SgXorAssignOp:
+    if (isSgBinaryOp(astNode)->get_lhs_operand() != NULL)
       numberOfArgs += 1;
-      break;
+    if (isSgBinaryOp(astNode)->get_rhs_operand() != NULL)
+      numberOfArgs += 1;
+    break;
 
-    default:
-      {
-        // Nothing to do here (implemented to avoid g++ warnings about unhandled enum values)
-        break;
-      }
-  }                             /* End switch-case */
+  case V_SgSizeOfOp: {
+    ROSE_ASSERT(isSgTypeIdOp(astNode)->get_operand_expr() != NULL);
+    numberOfArgs += 1;
+    break;
+  }
 
-  if (numberOfArgs > 0)
-  {
-    returnNumberList.push_back (numberOfArgs);
+  case V_SgAddressOfOp:
+  case V_SgBitComplementOp:
+  case V_SgCastExp:
+  case V_SgExpressionRoot:
+  case V_SgMinusMinusOp:
+  case V_SgMinusOp:
+  case V_SgNotOp:
+  case V_SgPlusPlusOp:
+  case V_SgPointerDerefExp:
+  case V_SgThrowOp:
+  case V_SgUnaryAddOp:
+    ROSE_ASSERT(isSgUnaryOp(astNode)->get_operand() != NULL);
+    numberOfArgs += 1;
+    break;
+
+  default: {
+    // Nothing to do here (implemented to avoid g++ warnings about unhandled
+    // enum values)
+    break;
+  }
+  } /* End switch-case */
+
+  if (numberOfArgs > 0) {
+    returnNumberList.push_back(numberOfArgs);
     cout << numberOfArgs << endl;
 
 #if DEBUG_NUMBERQUER
-    printf ("\nHere is a declaration:Line = %d Columns = %d \n",
-        Rose::getLineNumber (isSgLocatedNode (astNode)),
-        Rose::getColumnNumber (isSgLocatedNode (astNode)));
+    printf("\nHere is a declaration:Line = %d Columns = %d \n",
+           Rose::getLineNumber(isSgLocatedNode(astNode)),
+           Rose::getColumnNumber(isSgLocatedNode(astNode)));
 #endif
   }
 
   return returnNumberList;
-} // End function queryNumberOperands() 
+} // End function queryNumberOperands()
 
-
-
-
-  NumberQuerySynthesizedAttributeType
-NumberQuery::queryNumberOfArgsInScalarIndexingOperator (SgNode * astNode)
-{
-  ROSE_ASSERT (astNode != 0);
+NumberQuerySynthesizedAttributeType
+NumberQuery::queryNumberOfArgsInScalarIndexingOperator(SgNode *astNode) {
+  ROSE_ASSERT(astNode != 0);
 
   const char *matchingTypeName = "int";
 
   NumberQuerySynthesizedAttributeType returnNumberList;
 
-  SgExprListExp *sageExprListExp = isSgExprListExp (astNode);
+  SgExprListExp *sageExprListExp = isSgExprListExp(astNode);
 
-  switch (astNode->variantT ())
+  switch (astNode->variantT()) {
+  case V_SgExprListExp: // SgExprListExp
   {
-    case V_SgExprListExp:       // SgExprListExp
-      {
-        // char *typeName = "XXX";
-        int numberOfArgs = sageExprListExp->get_expressions ().size ();
+    // char *typeName = "XXX";
+    int numberOfArgs = sageExprListExp->get_expressions().size();
 
 #if DEBUG_NUMBERQUER
-        printf ("Found a list of arguments \n");
-        printf ("In case: numberOfArgs = %d  matchingTypeName = %s \n",numberOfArgs, matchingTypeName);
+    printf("Found a list of arguments \n");
+    printf("In case: numberOfArgs = %d  matchingTypeName = %s \n", numberOfArgs,
+           matchingTypeName);
 #endif
 
-        returnNumberList.push_back (numberOfArgs);
-        break;
-      }
+    returnNumberList.push_back(numberOfArgs);
+    break;
+  }
 
-    case V_SgFunctionCallExp:   //SgExprCallExp
-      {
-        // const char *matchingFunctionName = "operator()";
+  case V_SgFunctionCallExp: // SgExprCallExp
+  {
+    // const char *matchingFunctionName = "operator()";
 
-        // Looking for different types of overloaded functions (of the correct type)
-        SgFunctionCallExp *functionCallExp = isSgFunctionCallExp (astNode);
-        ROSE_ASSERT (functionCallExp != NULL);
+    // Looking for different types of overloaded functions (of the correct type)
+    SgFunctionCallExp *functionCallExp = isSgFunctionCallExp(astNode);
+    ROSE_ASSERT(functionCallExp != NULL);
 
-        //yanyh15 (2023-01-31): donot quite understand this and need to check later
-        SgFunctionDeclaration* funcDeclaration = SageInterface::getFunctionDeclaration (functionCallExp);
-        std::string functionTypeNameStr = SageInterface::getTypeName(funcDeclaration->get_type()->get_return_type());
-        const char *functionTypeName = functionTypeNameStr.c_str();
+    // yanyh15 (2023-01-31): donot quite understand this and need to check later
+    SgFunctionDeclaration *funcDeclaration =
+        SageInterface::getFunctionDeclaration(functionCallExp);
+    std::string functionTypeNameStr = SageInterface::getTypeName(
+        funcDeclaration->get_type()->get_return_type());
+    const char *functionTypeName = functionTypeNameStr.c_str();
 
-        ROSE_ASSERT (functionTypeName != NULL);
+    ROSE_ASSERT(functionTypeName != NULL);
 
-        if (functionTypeName == matchingTypeName)
-        {
-          ROSE_ASSERT (functionCallExp->get_args() != NULL);
-          // ROSE_ASSERT (functionCallExp->get_args()->get_expressions().size() >= 0);
-          int numberOfArgs = functionCallExp->get_args()->get_expressions().size();
-          returnNumberList.push_back (numberOfArgs);
-        }
-        break;
-      } /* End case FUNC_CALL */
+    if (functionTypeName == matchingTypeName) {
+      ROSE_ASSERT(functionCallExp->get_args() != NULL);
+      // ROSE_ASSERT (functionCallExp->get_args()->get_expressions().size() >=
+      // 0);
+      int numberOfArgs = functionCallExp->get_args()->get_expressions().size();
+      returnNumberList.push_back(numberOfArgs);
+    }
+    break;
+  } /* End case FUNC_CALL */
 
-    default:
-      {
-        // Nothing to do here (implemented to avoid g++ warnings about unhandled enum values)
-        break;
-      }
+  default: {
+    // Nothing to do here (implemented to avoid g++ warnings about unhandled
+    // enum values)
+    break;
+  }
   } /* End switch-case */
 
   return returnNumberList;
-} // End function queryNumberOfArgsInScalarIndexingOperator() 
+} // End function queryNumberOfArgsInScalarIndexingOperator()
 
+std::function<NumberQuerySynthesizedAttributeType(SgNode *)>
+NumberQuery::getFunction(NumberQuery::TypeOfQueryTypeOneParameter oneParam) {
+  NumberQuery::roseFunctionPointerOneParameter __x;
+  switch (oneParam) {
+  case UnknownListElementType: {
+    printf("This is element number 0 in the list. It is not used to anything "
+           "predefined.\n");
+    ROSE_ABORT();
+  }
+  case NumberOfArgsInConstructor: {
+    __x = queryNumberOfArgsInConstructor;
+    break;
+  }
+  case NumberOfOperands: {
+    __x = queryNumberOfOperands;
+    break;
+  }
 
-std::function<NumberQuerySynthesizedAttributeType(SgNode*)> NumberQuery::getFunction(NumberQuery::TypeOfQueryTypeOneParameter oneParam){
-  NumberQuery::roseFunctionPointerOneParameter __x; 
-  switch (oneParam)
-  {
-    case UnknownListElementType:
-      {
-        printf ("This is element number 0 in the list. It is not used to anything predefined.\n");
-        ROSE_ABORT ();
-      }
-    case NumberOfArgsInConstructor:
-      {
-        __x = queryNumberOfArgsInConstructor;
-        break;
-      }
-    case NumberOfOperands:
-      {
-        __x = queryNumberOfOperands;
-        break;
-      }
-
-    default:
-      {
-        printf ("This is an invalid member of the enum  TypeOfQueryTypeOneParameter.\n");
-        ROSE_ABORT ();
-      }
+  default: {
+    printf("This is an invalid member of the enum  "
+           "TypeOfQueryTypeOneParameter.\n");
+    ROSE_ABORT();
+  }
   } /* End switch-case */
   return __x;
-
 }
 
-std::function<NumberQuerySynthesizedAttributeType(SgNode*, std::string) > NumberQuery::getFunction(NumberQuery::TypeOfQueryTypeTwoParameters twoParam){
+std::function<NumberQuerySynthesizedAttributeType(SgNode *, std::string)>
+NumberQuery::getFunction(NumberQuery::TypeOfQueryTypeTwoParameters twoParam) {
   NumberQuery::roseFunctionPointerTwoParameters __x;
-  switch (twoParam)
-  {
-    case UnknownListElementTypeTwoParameters:
-      {
-        printf ("This is element number 0 in the list. It is not used to anything predefined.\n");
-        ROSE_ABORT ();
-      }
-    case NumberOfArgsInParanthesisOperator:
-      {
-        __x =
-          queryNumberOfArgsInParenthesisOperator;
-        break;
-      }
+  switch (twoParam) {
+  case UnknownListElementTypeTwoParameters: {
+    printf("This is element number 0 in the list. It is not used to anything "
+           "predefined.\n");
+    ROSE_ABORT();
+  }
+  case NumberOfArgsInParanthesisOperator: {
+    __x = queryNumberOfArgsInParenthesisOperator;
+    break;
+  }
 
-    default:
-      {
-        printf ("This is an invalid member of the enum  TypeOfQueryTypeOneParameter.\n");
-        ROSE_ABORT ();
-      }
+  default: {
+    printf("This is an invalid member of the enum  "
+           "TypeOfQueryTypeOneParameter.\n");
+    ROSE_ABORT();
+  }
   }
   return __x;
 }
 
-
-NumberQuerySynthesizedAttributeType NumberQuery::querySubTree 
-( SgNode * subTree,
-  NumberQuery::TypeOfQueryTypeOneParameter elementReturnType,
-  AstQueryNamespace::QueryDepth defineQueryType){
-  return AstQueryNamespace::querySubTree(subTree, getFunction(elementReturnType), defineQueryType);
+NumberQuerySynthesizedAttributeType NumberQuery::querySubTree(
+    SgNode *subTree, NumberQuery::TypeOfQueryTypeOneParameter elementReturnType,
+    AstQueryNamespace::QueryDepth defineQueryType) {
+  return AstQueryNamespace::querySubTree(
+      subTree, getFunction(elementReturnType), defineQueryType);
 }
 
 // get the SgNode's conforming to the test in querySolverFunction or
-// get the SgNode's conforming to the test in the TypeOfQueryTypeTwoParamters the user specify.
-NumberQuerySynthesizedAttributeType NumberQuery::querySubTree
-( SgNode * subTree,
-  std::string traversal,
-  NumberQuery::roseFunctionPointerTwoParameters querySolverFunction,
-  AstQueryNamespace::QueryDepth defineQueryType){
-  return AstQueryNamespace::querySubTree(subTree,
-      std::bind(querySolverFunction,std::placeholders::_1,traversal), defineQueryType);
-
-
+// get the SgNode's conforming to the test in the TypeOfQueryTypeTwoParamters
+// the user specify.
+NumberQuerySynthesizedAttributeType NumberQuery::querySubTree(
+    SgNode *subTree, std::string traversal,
+    NumberQuery::roseFunctionPointerTwoParameters querySolverFunction,
+    AstQueryNamespace::QueryDepth defineQueryType) {
+  return AstQueryNamespace::querySubTree(
+      subTree, std::bind(querySolverFunction, std::placeholders::_1, traversal),
+      defineQueryType);
 };
-NumberQuerySynthesizedAttributeType NumberQuery::querySubTree
-( SgNode * subTree,
-  std::string traversal,
-  NumberQuery::TypeOfQueryTypeTwoParameters elementReturnType,
-  AstQueryNamespace::QueryDepth defineQueryType ){
-  return AstQueryNamespace::querySubTree(subTree, 
-      std::bind(getFunction(elementReturnType),std::placeholders::_1,traversal), defineQueryType);
+NumberQuerySynthesizedAttributeType NumberQuery::querySubTree(
+    SgNode *subTree, std::string traversal,
+    NumberQuery::TypeOfQueryTypeTwoParameters elementReturnType,
+    AstQueryNamespace::QueryDepth defineQueryType) {
+  return AstQueryNamespace::querySubTree(
+      subTree,
+      std::bind(getFunction(elementReturnType), std::placeholders::_1,
+                traversal),
+      defineQueryType);
 };
-
-
 
 // perform a query on a list<SgNode>
-NumberQuerySynthesizedAttributeType NumberQuery::queryNodeList
-( Rose_STL_Container< SgNode * >nodeList,
-  NumberQuery::roseFunctionPointerOneParameter querySolverFunction){
+NumberQuerySynthesizedAttributeType NumberQuery::queryNodeList(
+    Rose_STL_Container<SgNode *> nodeList,
+    NumberQuery::roseFunctionPointerOneParameter querySolverFunction) {
   return AstQueryNamespace::queryRange(nodeList.begin(), nodeList.end(),
-      querySolverFunction);
-
+                                       querySolverFunction);
 };
-NumberQuerySynthesizedAttributeType NumberQuery::queryNodeList 
-( Rose_STL_Container<SgNode*> nodeList,
-  NumberQuery::TypeOfQueryTypeOneParameter elementReturnType ){
-  return AstQueryNamespace::queryRange(nodeList.begin(), nodeList.end(),getFunction(elementReturnType));
-
-};
-
-NumberQuerySynthesizedAttributeType
-NumberQuery::querySubTree
-(SgNode * subTree,
- NumberQuery::roseFunctionPointerOneParameter elementReturnType,
- AstQueryNamespace::QueryDepth defineQueryType
- ){
-
-  return  AstQueryNamespace::querySubTree(subTree,
-      elementReturnType,defineQueryType);
-
-};
-
-
-
-NumberQuerySynthesizedAttributeType NumberQuery::queryNodeList
-( Rose_STL_Container<SgNode*> nodeList,
-  std::string targetNode,
-  NumberQuery::roseFunctionPointerTwoParameters querySolverFunction ){
+NumberQuerySynthesizedAttributeType NumberQuery::queryNodeList(
+    Rose_STL_Container<SgNode *> nodeList,
+    NumberQuery::TypeOfQueryTypeOneParameter elementReturnType) {
   return AstQueryNamespace::queryRange(nodeList.begin(), nodeList.end(),
+                                       getFunction(elementReturnType));
+};
+
+NumberQuerySynthesizedAttributeType NumberQuery::querySubTree(
+    SgNode *subTree,
+    NumberQuery::roseFunctionPointerOneParameter elementReturnType,
+    AstQueryNamespace::QueryDepth defineQueryType) {
+
+  return AstQueryNamespace::querySubTree(subTree, elementReturnType,
+                                         defineQueryType);
+};
+
+NumberQuerySynthesizedAttributeType NumberQuery::queryNodeList(
+    Rose_STL_Container<SgNode *> nodeList, std::string targetNode,
+    NumberQuery::roseFunctionPointerTwoParameters querySolverFunction) {
+  return AstQueryNamespace::queryRange(
+      nodeList.begin(), nodeList.end(),
       std::bind(querySolverFunction, std::placeholders::_1, targetNode));
-  //                                  std::bind2nd(getFunction(elementReturnType),traversal), defineQueryType);
-
+  //                                  std::bind2nd(getFunction(elementReturnType),traversal),
+  //                                  defineQueryType);
 };
-NumberQuerySynthesizedAttributeType NumberQuery::queryNodeList 
-( Rose_STL_Container<SgNode*> nodeList,
-  std::string targetNode,
-  NumberQuery::TypeOfQueryTypeTwoParameters elementReturnType ){
+NumberQuerySynthesizedAttributeType NumberQuery::queryNodeList(
+    Rose_STL_Container<SgNode *> nodeList, std::string targetNode,
+    NumberQuery::TypeOfQueryTypeTwoParameters elementReturnType) {
   return AstQueryNamespace::queryRange(nodeList.begin(), nodeList.end(),
-      std::bind(getFunction(elementReturnType), std::placeholders::_1, targetNode));
-
+                                       std::bind(getFunction(elementReturnType),
+                                                 std::placeholders::_1,
+                                                 targetNode));
 };
-
-
 
 /********************************************************************************
  * The function
  *      NumberQuerySynthesizedAttributeType queryMemoryPool ( SgNode * subTree,
  *                   _Result (*__x)(SgNode*,_Arg), _Arg x_arg,
  *                   VariantVector* ){
- * will on every node of the memory pool which has a corresponding variant in VariantVector
- * performa the action specified by the second argument and return a NodeQuerySynthesizedAttributeType.
+ * will on every node of the memory pool which has a corresponding variant in
+ *VariantVector performa the action specified by the second argument and return
+ *a NodeQuerySynthesizedAttributeType.
  ********************************************************************************/
-NumberQuerySynthesizedAttributeType
-NumberQuery::queryMemoryPool
-(
- std::string traversal,
- NumberQuery::roseFunctionPointerTwoParameters querySolverFunction, VariantVector* targetVariantVector)
-{
+NumberQuerySynthesizedAttributeType NumberQuery::queryMemoryPool(
+    std::string traversal,
+    NumberQuery::roseFunctionPointerTwoParameters querySolverFunction,
+    VariantVector *targetVariantVector) {
   return AstQueryNamespace::queryMemoryPool(
-      std::bind(querySolverFunction,std::placeholders::_1,traversal), targetVariantVector);
-
+      std::bind(querySolverFunction, std::placeholders::_1, traversal),
+      targetVariantVector);
 };
-
 
 /********************************************************************************
  * The function
  *      _Result queryMemoryPool ( SgNode * subTree,
  *                   _Result (*__x)(SgNode*),
  *                   VariantVector* ){
- * will on every node of the memory pool which has a corresponding variant in VariantVector
- * performa the action specified by the second argument and return a NodeQuerySynthesizedAttributeType.
+ * will on every node of the memory pool which has a corresponding variant in
+ *VariantVector performa the action specified by the second argument and return
+ *a NodeQuerySynthesizedAttributeType.
  ********************************************************************************/
-NumberQuerySynthesizedAttributeType
-NumberQuery::queryMemoryPool
-(
- std::string traversal,
- NumberQuery::roseFunctionPointerOneParameter querySolverFunction, VariantVector* targetVariantVector)
-{
-  return  AstQueryNamespace::queryMemoryPool(
-      querySolverFunction,targetVariantVector);
-
-
+NumberQuerySynthesizedAttributeType NumberQuery::queryMemoryPool(
+    std::string traversal,
+    NumberQuery::roseFunctionPointerOneParameter querySolverFunction,
+    VariantVector *targetVariantVector) {
+  return AstQueryNamespace::queryMemoryPool(querySolverFunction,
+                                            targetVariantVector);
 };
 
 /********************************************************************************
@@ -450,22 +423,19 @@ NumberQuery::queryMemoryPool
  *      _Result queryMemoryPool ( SgNode * subTree, SgNode*,
  *                   TypeOfQueryTypeTwoParameters,
  *                   VariantVector* ){
- * will on every node of the memory pool which has a corresponding variant in VariantVector
- * performa the predefined action specified by the second argument and return a 
- * NodeQuerySynthesizedAttributeType.
+ * will on every node of the memory pool which has a corresponding variant in
+ *VariantVector performa the predefined action specified by the second argument
+ *and return a NodeQuerySynthesizedAttributeType.
  ********************************************************************************/
 
-NumberQuerySynthesizedAttributeType
-NumberQuery::queryMemoryPool
-(
- std::string traversal,
- NumberQuery::TypeOfQueryTypeTwoParameters elementReturnType,
- VariantVector* targetVariantVector)
-{
-  return AstQueryNamespace::queryMemoryPool( 
-      std::bind(getFunction(elementReturnType),std::placeholders::_1,traversal), targetVariantVector);
-
-
+NumberQuerySynthesizedAttributeType NumberQuery::queryMemoryPool(
+    std::string traversal,
+    NumberQuery::TypeOfQueryTypeTwoParameters elementReturnType,
+    VariantVector *targetVariantVector) {
+  return AstQueryNamespace::queryMemoryPool(
+      std::bind(getFunction(elementReturnType), std::placeholders::_1,
+                traversal),
+      targetVariantVector);
 };
 
 /********************************************************************************
@@ -473,19 +443,15 @@ NumberQuery::queryMemoryPool
  *      _Result queryMemoryPool ( SgNode * subTree,
  *                   TypeOfQueryTypeOneParameter,
  *                   VariantVector* ){
- * will on every node of the memory pool which has a corresponding variant in VariantVector
- * performa the predefined action specified by the second argument and return a 
- * NodeQuerySynthesizedAttributeType.
+ * will on every node of the memory pool which has a corresponding variant in
+ *VariantVector performa the predefined action specified by the second argument
+ *and return a NodeQuerySynthesizedAttributeType.
  ********************************************************************************/
 
-NumberQuerySynthesizedAttributeType
-NumberQuery::queryMemoryPool
-(
- NumberQuery::TypeOfQueryTypeOneParameter elementReturnType,
- VariantVector* targetVariantVector)
-{
+NumberQuerySynthesizedAttributeType NumberQuery::queryMemoryPool(
+    NumberQuery::TypeOfQueryTypeOneParameter elementReturnType,
+    VariantVector *targetVariantVector) {
 
-  return AstQueryNamespace::queryMemoryPool(getFunction(elementReturnType), targetVariantVector);
-
+  return AstQueryNamespace::queryMemoryPool(getFunction(elementReturnType),
+                                            targetVariantVector);
 };
-

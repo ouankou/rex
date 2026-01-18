@@ -2,6 +2,8 @@
 #ifndef INSERT_FORTRAN_CONTAINS_STATEMENT_H
 #define INSERT_FORTRAN_CONTAINS_STATEMENT_H
 
+#include "AstSimpleProcessing.h"
+
 // DQ (11/24/2007):
 /*! \brief Insert Fortran "CONTAINS" statement.
 
@@ -11,14 +13,12 @@
 
     \implementation This may not be required if OFP is fixed.
  */
-void
-insertFortranContainsStatement ( SgNode* node );
+void insertFortranContainsStatement(SgNode *node);
 
-class InsertFortranContainsStatement : public AstSimpleProcessing
-   {
-     public:
-          void visit ( SgNode* node );
-   };
+class InsertFortranContainsStatement : public AstSimpleProcessing {
+public:
+  void visit(SgNode *node);
+};
 
 // endif for INSERT_FORTRAN_CONTAINS_STATEMENT_H
 #endif

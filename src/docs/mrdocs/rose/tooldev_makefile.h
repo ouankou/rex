@@ -7,9 +7,10 @@
  *
  * Using a build system to build tools.
  *
- * Once the ROSE library has been configured, built, and installed it can be used. Any program that uses ROSE will likely need
- * to be compiled with the same switches and software components as ROSE itself. The easiest way to get this information is by
- * running `rose-config --help`.
+ * Once the ROSE library has been configured, built, and installed it can be
+ * used. Any program that uses ROSE will likely need to be compiled with the
+ * same switches and software components as ROSE itself. The easiest way to get
+ * this information is by running `rose-config --help`.
  *
  * Here's an example makefile:
  *
@@ -38,10 +39,8 @@
  * # supported by "rose-config" [September 2015].
  * ##############################################################################
  *
- * #If the ROSE bin directory is in your path, rose-config can be found automatically
- * ifndef ROSE_HOME
- * ROSE_HOME = $(shell rose-config prefix)
- * endif
+ * #If the ROSE bin directory is in your path, rose-config can be found
+ * automatically ifndef ROSE_HOME ROSE_HOME = $(shell rose-config prefix) endif
  *
  * include $(ROSE_HOME)/lib/rose-config.cfg
  *
@@ -65,7 +64,8 @@
  * 	$(ROSE_CXX) $(ROSE_CPPFLAGS) $(ROSE_CXXFLAGS) -o $@ -c $^
  *
  * demo: demo.o
- * 	$(ROSE_CXX) $(ROSE_CXXFLAGS) -o $@ $^ $(ROSE_LDFLAGS) $(ROSE_LINK_RPATHS) -Wl,-rpath=$(ROSE_HOME)/lib
+ * 	$(ROSE_CXX) $(ROSE_CXXFLAGS) -o $@ $^ $(ROSE_LDFLAGS)
+ * $(ROSE_LINK_RPATHS) -Wl,-rpath=$(ROSE_HOME)/lib
  *
  * MOSTLYCLEANFILES += demo demo.o
  *

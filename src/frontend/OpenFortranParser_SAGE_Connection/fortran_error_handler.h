@@ -3,10 +3,9 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif 
+#endif
 
-#include "token.h"
-
+#include <token.h>
 void set_current_token(Token_t *token);
 
 void fortran_error_handler_end();
@@ -15,6 +14,6 @@ void fortran_error_handler_begin();
 
 #ifdef __cplusplus
 }
-#endif 
+#endif
 
 #endif

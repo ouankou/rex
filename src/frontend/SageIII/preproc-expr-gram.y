@@ -298,22 +298,12 @@ int yylex()
 { 
 //std::string input_lexemes_stream = "0 + 1";
 
-#if 0
-int max_ctr = 3;
-int tok_stream[] =         {INT_LIT, PLUS, INT_LIT, EOF }; 
-std::string lex_stream[] = { "1", "+", "0", "0"};
-#endif
 
 
 int max_ctr = 5;
 int tok_stream[] =         {C_CXX_LEFTPAREN, INT_LIT, C_CXX_PLUS, INT_LIT, C_CXX_RIGHTPAREN, EOF }; 
 std::string lex_stream[] = {"(", "1", "+", "0", ")", "0"};
 
-#if 0
-int max_ctr = 1;
-int tok_stream[] =         {INT_LIT, EOF }; 
-std::string lex_stream[] = {"1", "0"};
-#endif
 
 static int i = 0;
 for(; i < max_ctr;)

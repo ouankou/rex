@@ -1,91 +1,96 @@
 // A hand-crafted OpenMP parser for Fortran comments within a SgSourceFile
-// It only exposes a few interface functions: 
+// It only exposes a few interface functions:
 //   omp_fortran_parse()
 // void parse_fortran_openmp(SgSourceFile *sageFilePtr) // preferred
 //
-// All other supporting functions should be declared with "static" (file scope only)
-// Liao, 5/24/2009
+// All other supporting functions should be declared with "static" (file scope
+// only) Liao, 5/24/2009
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
-#include "sage3basic.h"
 #include "sageBuilder.h"
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <string>
+
+#include "sage3basic.h"
+
 #include "OpenMPIR.h"
+
+#include <cstdio>
+
+#include <cstdlib>
+
+#include <cstring>
+
+#include <string>
 
 using namespace std;
 using namespace OmpSupport;
 
-extern std::vector<std::tuple<SgLocatedNode*, PreprocessingInfo*, OpenMPDirective*>> fortran_omp_pragma_list;
-extern OpenMPDirective* ompparser_OpenMPIR;
-void parseOpenMPFortran(SgSourceFile*);
-bool isFortranPairedDirective(OpenMPDirective*);
+extern std::vector<
+    std::tuple<SgLocatedNode *, PreprocessingInfo *, OpenMPDirective *>>
+    fortran_omp_pragma_list;
+extern OpenMPDirective *ompparser_OpenMPIR;
+void parseOpenMPFortran(SgSourceFile *);
+bool isFortranPairedDirective(OpenMPDirective *);
 
-// A file scope char* to avoid passing and returning target c string for every and each function
-static const char* c_char = NULL; // current characters being scanned
-static SgNode* c_sgnode = NULL; // current SgNode associated with the OpenMP directive
+// A file scope char* to avoid passing and returning target c string for every
+// and each function
+static const char *c_char = NULL; // current characters being scanned
+static SgNode *c_sgnode =
+    NULL; // current SgNode associated with the OpenMP directive
 
 //--------------omp fortran scanner (ofs) functions------------------
 //
 // note: ofs_skip_xxx() optional skip 0 or more patterns
 //       ofs_match_xxx() try to match a pattern, undo side effect if failed.
 
-//!Skip 0 or more whitespace or tabs
-static bool ofs_skip_whitespace()
-{
+//! Skip 0 or more whitespace or tabs
+static bool ofs_skip_whitespace() {
   bool result = false;
-  while ((*c_char)==' '||(*c_char)=='\t')
-  {
+  while ((*c_char) == ' ' || (*c_char) == '\t') {
     c_char++;
-    result= true;
+    result = true;
   }
   return result;
 }
 
-
-//! Match a given sub c string from the input c string, again skip heading space/tabs if any
-//  checkTrail: Check the immediate following character after the match, it must be one of
+//! Match a given sub c string from the input c string, again skip heading
+//! space/tabs if any
+//  checkTrail: Check the immediate following character after the match, it must
+//  be one of
 //      whitespace, end of str, newline, tab, or '!'
-//      Set to true by default, used to ensure the matched substr is a full identifier/keywords.
+//      Set to true by default, used to ensure the matched substr is a full
+//      identifier/keywords.
 //
-//      But Fortran OpenMP allows blanks/tabs to be ignored between certain pair of keywords:
-//      e.g: end critical == endcritical  , parallel do == paralleldo
-//      to match the 'end' and 'parallel', we have to skip trail checking.
-// return values: 
-//    true: find a match, the current char is pointed to the next char after the substr
-//    false: no match, the current char is intact
+//      But Fortran OpenMP allows blanks/tabs to be ignored between certain pair
+//      of keywords: e.g: end critical == endcritical  , parallel do ==
+//      paralleldo to match the 'end' and 'parallel', we have to skip trail
+//      checking.
+// return values:
+//    true: find a match, the current char is pointed to the next char after the
+//    substr false: no match, the current char is intact
 
-static bool ofs_match_substr(const char* substr, bool checkTrail = true)
-{
+static bool ofs_match_substr(const char *substr, bool checkTrail = true) {
   bool result = true;
-  const char* old_char = c_char;
+  const char *old_char = c_char;
   // we skip leading space from the target string
   ofs_skip_whitespace();
-  size_t len =strlen(substr);
-  for (size_t i =0; i<len; i++)
-  {
-    if ((*c_char)==substr[i])
-    {
+  size_t len = strlen(substr);
+  for (size_t i = 0; i < len; i++) {
+    if ((*c_char) == substr[i]) {
       c_char++;
-    }
-    else
-    {
+    } else {
       result = false;
       c_char = old_char;
       break;
     }
   }
-  // handle the next char after the substr match: 
+  // handle the next char after the substr match:
   // could only be either space or \n, \0, \t, !comments
-  // or the match is revoked, e.g: "parallel1" match sub str "parallel" but 
+  // or the match is revoked, e.g: "parallel1" match sub str "parallel" but
   // the trail is not legal
   // TODO: any other characters?
-  if (checkTrail)
-  {
-    if (*c_char!=' '&&*c_char!='\0'&&*c_char!='\n'&&*c_char!='\t' &&*c_char!='!')
-    {
+  if (checkTrail) {
+    if (*c_char != ' ' && *c_char != '\0' && *c_char != '\n' &&
+        *c_char != '\t' && *c_char != '!') {
       result = false;
       c_char = old_char;
     }
@@ -94,24 +99,23 @@ static bool ofs_match_substr(const char* substr, bool checkTrail = true)
 }
 
 //! Check if the current Fortran SgFile has fixed source form
-static bool isFixedSourceForm()
-{
+static bool isFixedSourceForm() {
   bool result = false;
-  SgFile * file = SageInterface::getEnclosingFileNode(c_sgnode);
+  SgFile *file = SageInterface::getEnclosingFileNode(c_sgnode);
   ROSE_ASSERT(file != NULL);
 
   // Only make sense for Fortran files
-  ROSE_ASSERT (file->get_Fortran_only());
-  if (file->get_inputFormat()==SgFile::e_unknown_output_format )
-  { // default case: only f77 has fixed form
+  ROSE_ASSERT(file->get_Fortran_only());
+  if (file->get_inputFormat() ==
+      SgFile::e_unknown_output_format) { // default case: only f77 has fixed
+                                         // form
     if (file->get_F77_only())
       result = true;
-    else 
+    else
       result = false;
-  }
-  else // explicit case: any Fortran could be set to fixed form 
+  } else // explicit case: any Fortran could be set to fixed form
   {
-    if (file->get_inputFormat()==SgFile::e_fixed_form_output_format)
+    if (file->get_inputFormat() == SgFile::e_fixed_form_output_format)
       result = true;
     else
       result = false;
@@ -119,17 +123,16 @@ static bool isFixedSourceForm()
   return result;
 }
 
-//Check if the current c string starts with one of the legal OpenMP directive sentinels.
-// Two cases: 
-//    fixed source form: !$omp | c$omp | *$omp , then whitespace, continuation apply to the rest
-//    free source form: !$omp only
-static bool ofs_is_omp_sentinels()
-{
+// Check if the current c string starts with one of the legal OpenMP directive
+// sentinels.
+//  Two cases:
+//     fixed source form: !$omp | c$omp | *$omp , then whitespace, continuation
+//     apply to the rest free source form: !$omp only
+static bool ofs_is_omp_sentinels() {
   bool result = false;
   // two additional case for fixed form
-  if (isFixedSourceForm())
-  {
-    if (ofs_match_substr("c$omp")||ofs_match_substr("*$omp"))
+  if (isFixedSourceForm()) {
+    if (ofs_match_substr("c$omp") || ofs_match_substr("*$omp"))
       result = true;
   }
   // a common case for all situations
@@ -138,52 +141,48 @@ static bool ofs_is_omp_sentinels()
   return result;
 }
 
-
-//! A helper function to remove Fortran '!comments', but not '!$omp ...' from a string
+//! A helper function to remove Fortran '!comments', but not '!$omp ...' from a
+//! string
 // handle complex cases like:
 // ... !... !$omp .. !...
-static void removeFortranComments(string &buffer)
-{
-  size_t pos1 ;
+static void removeFortranComments(string &buffer) {
+  size_t pos1;
   size_t pos2;
-  size_t pos3=string::npos;
+  size_t pos3 = string::npos;
 
-  pos1= buffer.rfind("!", pos3);
-  while (pos1!=string::npos)
-  {
-    pos2= buffer.rfind("!$omp",pos3);
-    if (pos1!=pos2) // is a real comment if not !$omp
+  pos1 = buffer.rfind("!", pos3);
+  while (pos1 != string::npos) {
+    pos2 = buffer.rfind("!$omp", pos3);
+    if (pos1 != pos2) // is a real comment if not !$omp
     {
       buffer.erase(pos1);
-    }
-    else // find "!$omp", cannot stop here since there might have another '!' before it
-      //limit the search range
+    } else // find "!$omp", cannot stop here since there might have another '!'
+           // before it
+           // limit the search range
     {
-      if (pos2>=1)
-        pos3= pos2-1;
+      if (pos2 >= 1)
+        pos3 = pos2 - 1;
       else
         break;
     }
-    pos1= buffer.rfind("!", pos3);
+    pos1 = buffer.rfind("!", pos3);
   }
 }
 
-//!  A helper function to tell if a line has an ending '&', followed by optional space , tab , '\n', 
-// "!comments" should be already removed  (call removeFortranComments()) before calling this function
-static bool hasFortranLineContinuation(const string& buffer)
-{
+//!  A helper function to tell if a line has an ending '&', followed by optional
+//!  space , tab , '\n',
+// "!comments" should be already removed  (call removeFortranComments()) before
+// calling this function
+static bool hasFortranLineContinuation(const string &buffer) {
   // search backwards for '&'
   size_t pos = buffer.rfind("&");
-  if (pos ==string::npos)
+  if (pos == string::npos)
     return false;
-  else
-  {
+  else {
     // make sure the characters after & is legal
-    for (size_t i = ++pos; i<buffer.length(); i++)
-    {
-      char c= buffer[i];
-      if ((c!=' ')&&(c!='\t'))
-      {
+    for (size_t i = ++pos; i < buffer.length(); i++) {
+      char c = buffer[i];
+      if ((c != ' ') && (c != '\t')) {
         return false;
       }
     }
@@ -191,51 +190,49 @@ static bool hasFortranLineContinuation(const string& buffer)
   return true;
 }
 
-
-//!Assume two Fortran OpenMP comment lines are just merged, remove" & !$omp [&]" within them
-// Be careful about the confusing case 
+//! Assume two Fortran OpenMP comment lines are just merged, remove" & !$omp
+//! [&]" within them
+// Be careful about the confusing case
 //   the 2nd & and  the end & as another continuation character
-static void postProcessingMergedContinuedLine(std::string & buffer)
-{
+static void postProcessingMergedContinuedLine(std::string &buffer) {
   size_t first_pos, second_pos, last_pos, next_cont_pos;
   removeFortranComments(buffer);
   // locate the first &
   first_pos = buffer.find("&");
-  assert(first_pos!=string::npos);
+  assert(first_pos != string::npos);
 
   // locate the !$omp, must have it for OpenMP directive
-  second_pos = buffer.find("$omp",first_pos);
-  assert(second_pos!=string::npos);
-  second_pos +=3; //shift to the end 'p' of "$omp"
+  second_pos = buffer.find("$omp", first_pos);
+  assert(second_pos != string::npos);
+  second_pos += 3; // shift to the end 'p' of "$omp"
   // search for the optional next '&'
-  last_pos = buffer.find("&",second_pos);
+  last_pos = buffer.find("&", second_pos);
 
   // locate the possible real cont &
   // If it is also the found optional next '&'
   // discard it as the next '&'
-  if (hasFortranLineContinuation(buffer))
-  {
+  if (hasFortranLineContinuation(buffer)) {
     next_cont_pos = buffer.rfind("&");
     if (last_pos == next_cont_pos)
       last_pos = string::npos;
   }
 
-  if (last_pos==string::npos)
+  if (last_pos == string::npos)
     last_pos = second_pos;
   // we can now remove from first to last pos from the buffer
   buffer.erase(first_pos, last_pos - first_pos + 1);
 }
 
-//-------------- the implementation for the external interface -------------------
-//! Check if a line is an OpenMP directive, 
+//-------------- the implementation for the external interface
+//-------------------
+//! Check if a line is an OpenMP directive,
 // the associated node is needed to tell the programming language
-bool  ofs_is_omp_sentinels(const char* str, SgNode* node)
-{
-  bool result; 
-  assert (node&&str);
+bool ofs_is_omp_sentinels(const char *str, SgNode *node) {
+  bool result;
+  assert(node && str);
   // make sure it is side effect free
-  const char* old_char = c_char;
-  SgNode* old_node = c_sgnode;
+  const char *old_char = c_char;
+  SgNode *old_node = c_sgnode;
 
   c_char = str;
   c_sgnode = node;

@@ -7,10 +7,10 @@
 #include <omp.h>
 #endif
 
-void c_print_results( )
-{
-  int num_threads, max_threads, omp =0, dynamic =0, none =0; // none is another OpenMP keyword used with default()
-
+void c_print_results() {
+  int num_threads, max_threads,
+      omp = 0, dynamic = 0,
+      none = 0; // none is another OpenMP keyword used with default()
 
   max_threads = 1;
   num_threads = 1;
@@ -18,12 +18,10 @@ void c_print_results( )
   /*   figure out number of threads used */
 #ifdef _OPENMP
   max_threads = omp_get_max_threads();
-#pragma omp parallel num_threads(6) shared(num_threads,omp, none,dynamic)
-  {   
+#pragma omp parallel num_threads(6) shared(num_threads, omp, none, dynamic)
+  {
 #pragma omp master
-    num_threads = omp_get_num_threads()+none+omp+dynamic;
+    num_threads = omp_get_num_threads() + none + omp + dynamic;
   }
 #endif
-
-
 }

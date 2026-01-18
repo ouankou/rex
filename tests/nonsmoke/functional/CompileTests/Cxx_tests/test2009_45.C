@@ -5,18 +5,11 @@ This compiles with g++, but not with the ROSE identity translator:
 */
 
 #include <signal.h>
+
 #include <unistd.h>
 
-static struct sigaction sigtermact ;
+static struct sigaction sigtermact;
 
-void SigTermDieGracefully(int sig)
-   {
-   }
+void SigTermDieGracefully(int sig) {}
 
-void foo()
-   {
-     sigtermact.sa_handler = SigTermDieGracefully;
-   }
-
-
-
+void foo() { sigtermact.sa_handler = SigTermDieGracefully; }

@@ -2,16 +2,16 @@
 #define FIXUP_DECLARATION_SCOPE_H
 
 // DQ (6/11/2013):
-/*! \brief Fixup all SgDeclarationStatement to have a consistant scope (between the defining and all non-defining declarations).
+/*! \brief Fixup all SgDeclarationStatement to have a consistant scope (between
+   the defining and all non-defining declarations).
 
     \implementation Some declarations are there own defining declarations.
  */
-void fixupAstDeclarationScope ( SgNode* node );
+void fixupAstDeclarationScope(SgNode *node);
 
 class FixupAstDeclarationScope
-// : public AstSimpleProcessing
-   : public ROSE_VisitTraversal
-   {
+    // : public AstSimpleProcessing
+    : public ROSE_VisitTraversal {
   // DQ (6/11/2013): This corrects where legacy frontend can set the scope of a
   // friend declaration to be different from the defining declaration. We need
   // it to be a rule in ROSE that the scope of the declarations are consistant
@@ -25,7 +25,7 @@ public:
 
   virtual ~FixupAstDeclarationScope() {};
   void visit(SgNode *node);
-   };
+};
 
 // endif for FIXUP_DECLARATION_SCOPE_H
 #endif

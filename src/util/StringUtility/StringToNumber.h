@@ -1,12 +1,16 @@
 #ifndef ROSE_StringUtility_StringToNumber_H
 #define ROSE_StringUtility_StringToNumber_H
 
-#include <rosedll.h>
+#include "rosedll.h"
 
 #include <cctype>
+
 #include <limits>
+
 #include <optional>
+
 #include <string>
+
 #include <type_traits>
 namespace Rose {
 namespace StringUtility {
@@ -17,19 +21,19 @@ namespace StringUtility {
 
 /** Convert an ASCII hexadecimal character to an integer.
  *
- *  Converts the characters 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, a, b, c, d, e, f, A, B, C, D, E, and F into their hexadecimal integer
- *  equivalents. Returns zero if the input character is not in this set.
+ *  Converts the characters 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, a, b, c, d, e, f, A,
+ * B, C, D, E, and F into their hexadecimal integer equivalents. Returns zero if
+ * the input character is not in this set.
  *
  * @return Integer value for the character, or zero on failure. */
 ROSE_UTIL_API unsigned hexadecimalToInt(char);
 
-template<typename T>
-class NumberParseResult {
+template <typename T> class NumberParseResult {
   bool ok_;
   T value_;
   std::string error_message_;
 
- public:
+public:
   explicit NumberParseResult(const T &value) : ok_(true), value_(value) {}
   explicit NumberParseResult(std::string message)
       : ok_(false), value_(), error_message_(std::move(message)) {}
@@ -46,9 +50,8 @@ class NumberParseResult {
   }
 };
 
-template<typename T>
-inline NumberParseResult<T>
-toNumber(const std::string &input) {
+template <typename T>
+inline NumberParseResult<T> toNumber(const std::string &input) {
   static_assert(std::is_integral<T>::value,
                 "Rose::StringUtility::toNumber requires an integral type");
 
@@ -101,8 +104,10 @@ toNumber(const std::string &input) {
   bool last_sep = false;
 
   auto overflow_message = [&]() {
-    return negative ? std::string("overflow error: less than minimum value for type")
-                    : std::string("overflow error: greater than maximum value for type");
+    return negative
+               ? std::string("overflow error: less than minimum value for type")
+               : std::string(
+                     "overflow error: greater than maximum value for type");
   };
 
   auto invalid_digit_message = [&]() {
@@ -120,7 +125,8 @@ toNumber(const std::string &input) {
           last_sep = true;
           continue;
         }
-        return make_error("syntax error: separator not allowed before first digit");
+        return make_error(
+            "syntax error: separator not allowed before first digit");
       }
       if (last_sep) {
         return make_error("syntax error: invalid use of digit separator");
@@ -149,12 +155,11 @@ toNumber(const std::string &input) {
     }
 
     if (value > (max_allowed - static_cast<Unsigned>(digit)) /
-                     static_cast<Unsigned>(base)) {
+                    static_cast<Unsigned>(base)) {
       return make_error(overflow_message());
     }
 
-    value = value * static_cast<Unsigned>(base) +
-            static_cast<Unsigned>(digit);
+    value = value * static_cast<Unsigned>(base) + static_cast<Unsigned>(digit);
     ++digits;
     last_sep = false;
   }
@@ -183,7 +188,7 @@ toNumber(const std::string &input) {
   }
   return NumberParseResult<T>(static_cast<T>(value));
 }
-} // namespace
-} // namespace
+} // namespace StringUtility
+} // namespace Rose
 
 #endif

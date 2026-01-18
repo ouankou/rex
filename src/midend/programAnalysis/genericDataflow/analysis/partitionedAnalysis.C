@@ -1,4 +1,4 @@
-#include <featureTests.h>
+#include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
 // WE ASSUME THAT EACH CFG NODE CONTAINS ONLY ONE NODE STATE.
@@ -8,9 +8,13 @@
 
 #include "partitionedAnalysis.h"
 // #include "ConstrGraph.h"
+
 #include <iostream>
+
 #include <list>
+
 #include <set>
+
 #include <vector>
 
 using std::cout;
@@ -608,12 +612,6 @@ bool IntraPartitionFWDataflow::runAnalysis(const Function &func,
                                            bool analyzeDueToCallers,
                                            set<Function> calleesUpdated) {
   ROSE_ABORT();
-#if 0 // [Robb Matzke 2021-03-24]: unreached
-        bool joinPart=false, splitPart=false;
-        IntraPartitionDataflowCheckpoint* outChkpt;
-        //IntraPartitionDataflowCheckpoint* chkpt = NULL;
-        return runAnalysisResume(func, fState, NULL, splitPart, joinPart, outChkpt);
-#endif
 }
 
 bool IntraPartitionFWDataflow::runAnalysis(

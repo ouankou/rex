@@ -13,8 +13,10 @@ struct ROSE_FrontEndGroup {};
  *
  * High-level SAGE III AST node and subtree builders.
  *
- * Building AST trees using raw SgNode constructors is tedious and error-prone, especially with symbol tables. This interface
- * provides AST node builders on top of constructors to handle symbol tables, scope edges, and parent relationships.
+ * Building AST trees using raw SgNode constructors is tedious and error-prone,
+ * especially with symbol tables. This interface provides AST node builders on
+ * top of constructors to handle symbol tables, scope edges, and parent
+ * relationships.
  *
  * See @ref ROSE_FrontEndGroup.
  */

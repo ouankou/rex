@@ -3,21 +3,21 @@
 #include "rose.h" // POLICY_OK because this demos a user-level program rather than being part of the ROSE library.
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#include "config.h"
 #endif
 
-#include <string>
 #include <iomanip>
 
-#include "AstTests.h"
+#include <string>
 
-int
-main( int argc, char * argv[] ) {
+#include <AstTests.h>
+int main(int argc, char *argv[]) {
   RoseTestTranslator test;
-  return test.translate(argc,argv); // returns an error if any of the ends fails
+  return test.translate(argc,
+                        argv); // returns an error if any of the ends fails
 }
 
-/* 
+/*
    alternative usage:
    int main( int argc, char * argv[] ) {
       SgProject* sageProject=frontend(argc,argv);

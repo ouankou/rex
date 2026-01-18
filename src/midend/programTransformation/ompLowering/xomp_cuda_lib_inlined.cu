@@ -254,24 +254,20 @@ __device__ int XOMP_static_sched_next(
         *lb = b;
         *ub = e;
         *loop_sched_index = e;
-#if 1 // need to adjust here!
     if (orig_step >0)
        *ub --; // expect the user code will use the upper bound as an inclusive one, so minus one in advance
     else
        *ub ++;
-#endif
         return 1;
     } // thread team has 1 thread only
 
     *loop_sched_index += loop_stride;
 
     e = b + loop_chunk_size;
-#if 1 // must timely adjust e here !!
     if (orig_step >0)
        e --; // expect the user code will use the upper bound as an inclusive one, so minus one in advance
     else
        e ++;
-#endif
 
     if(loop_chunk_size > 0){
         if(b >= loop_end) return 0;
@@ -282,12 +278,6 @@ __device__ int XOMP_static_sched_next(
     } else {
 
         if(b <= loop_end) return 0;
-#if 0 // too late to adjust, e is already used before!!
-        if(e <= tp->loop_end){
-            e = tp->loop_end;
-            tp->is_last = 1;
-        }
-#endif
     }
     *lb = b;
     *ub = e;

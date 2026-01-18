@@ -97,7 +97,9 @@ for header in ${STL_HEADERS}; do
     ROSE_TEST_HEADER_PP_C="rose_${TEST_HEADER}_${LANG_STANDARD_NO_PLUS}.pp.C"
 
     printf "TESTING: %-17s: " "$header"
-    printf "#include <$header>\nint main(){ return 0; }\n" > ${TEST_HEADER_C}
+    printf "
+
+#include <$header>\nint main(){ return 0; }\n" > ${TEST_HEADER_C}
     # option -P: inhibit generation of linemarkers
     #cpp -P -std=$LANG_STANDARD -x c++ ${TEST_HEADER_C} ${TEST_HEADER_PP_C}
     $TOOL1 -P -std=$LANG_STANDARD -E ${TEST_HEADER_C} > ${TEST_HEADER_PP_C}

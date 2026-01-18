@@ -1,11 +1,13 @@
 
 
 #include "AnnotIO.h"
-#include "CommandOptions.h"
-#include <cstdio> // Liao, 7/10/2009, required by GCC 4.4.0
-#include <mlog.h>
-#include <string.h>
 
+#include "CommandOptions.h"
+
+#include "mlog.h"
+
+#include <cstdio> // Liao, 7/10/2009, required by GCC 4.4.0
+#include <string.h>
 using namespace std;
 
 namespace annotation {

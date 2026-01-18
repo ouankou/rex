@@ -7,8 +7,9 @@
  *
  * This library simplifies the development of useful queries upon the AST.
  *
- * The design of the Query Library is somewhat ad hoc; it highlights the importance of query abstractions for simplifying
- * many preprocessing operations, but leaves room for a cleaner design in the future.
+ * The design of the Query Library is somewhat ad hoc; it highlights the
+ * importance of query abstractions for simplifying many preprocessing
+ * operations, but leaves room for a cleaner design in the future.
  *
  * Metadata:
  * - Authors: Quinlan (Last checked in by $Author: dquinlan $)
@@ -19,8 +20,10 @@
  *
  * TODO:
  * - Finish documentation.
- * - Make the source code directory structure for Query lib match the documentation.
- * - Make the library more extensible (perhaps designed like the PDF and DOT libraries).
+ * - Make the source code directory structure for Query lib match the
+ * documentation.
+ * - Make the library more extensible (perhaps designed like the PDF and DOT
+ * libraries).
  *
  * Note: Large parts of documentation contained in ROSE/QueryLibs/QueryLib.docs.
  *
@@ -30,9 +33,11 @@ struct queryLib {};
 
 /** @brief Local Node Query Library
  *
- * This library simplifies the development of useful queries upon individual AST nodes.
+ * This library simplifies the development of useful queries upon individual AST
+ * nodes.
  *
- * It provides reusable queries that are specific to certain node types and can later migrate into Sage III directly.
+ * It provides reusable queries that are specific to certain node types and can
+ * later migrate into Sage III directly.
  *
  * Bug: No known bugs.
  * Warning: Documentation is incomplete.
@@ -46,10 +51,11 @@ struct localNodeQueryLib {};
 
 /** @brief Subtree Query Library
  *
- * This library simplifies the development of useful queries that require traversal of an AST subtree.
+ * This library simplifies the development of useful queries that require
+ * traversal of an AST subtree.
  *
- * It represents a family of queries that use AST processing and operate upon whole subtrees. Return values are most commonly
- * lists.
+ * It represents a family of queries that use AST processing and operate upon
+ * whole subtrees. Return values are most commonly lists.
  *
  * Bug: Not finished yet.
  * Warning: Documentation is incomplete.
@@ -57,7 +63,8 @@ struct localNodeQueryLib {};
  *
  * Note: Large parts of documentation contained in ROSE/QueryLibs/QueryLib.docs.
  *
- * Internal: None of these functions should be expected to move into Sage III without careful consideration.
+ * Internal: None of these functions should be expected to move into Sage III
+ * without careful consideration.
  *
  * See @ref queryLib.
  */

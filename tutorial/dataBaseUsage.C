@@ -10,11 +10,10 @@ using namespace Rose;
 // seems like it is not supposed to be included
 #if 0
 //#ifdef HAVE_MYSQL
-   #include "GlobalDatabaseConnectionMYSQL.h"
+#include <GlobalDatabaseConnectionMYSQL.h>
 #endif
 
-int main( int argc, char * argv[] ) 
-   {
+int main(int argc, char *argv[]) {
 // TPS (01Dec2008): Enabled mysql and this fails.
 // seems like it is not supposed to be included
 #if 0
@@ -37,35 +36,34 @@ int main( int argc, char * argv[] )
 #endif
 
   // Build the AST used by ROSE
-     SgProject* project = frontend(argc,argv);
+  SgProject *project = frontend(argc, argv);
 
   // Run internal consistency tests on AST
-     AstTests::runAllTests(project);
-     
+  AstTests::runAllTests(project);
+
   // Build a list of functions within the AST
-     Rose_STL_Container<SgNode*> functionDeclarationList = 
-          NodeQuery::querySubTree (project,V_SgFunctionDeclaration);
+  Rose_STL_Container<SgNode *> functionDeclarationList =
+      NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
 
-     int counter = 0;
-     for (Rose_STL_Container<SgNode*>::iterator i = functionDeclarationList.begin(); 
-                i != functionDeclarationList.end(); i++)
-        {
-       // Build a pointer to the current type so that we can call 
-       // the get_name() member function.
-          SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(*i);
-          ROSE_ASSERT(functionDeclaration != NULL);
-          
-          SgName func_name = functionDeclaration->get_name();
-      // Skip builtin functions for shorter output, Liao 4/28/2008   
-          if (func_name.getString().find("__builtin",0)==0)
-            continue;
+  int counter = 0;
+  for (Rose_STL_Container<SgNode *>::iterator i =
+           functionDeclarationList.begin();
+       i != functionDeclarationList.end(); i++) {
+    // Build a pointer to the current type so that we can call
+    // the get_name() member function.
+    SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(*i);
+    ROSE_ASSERT(functionDeclaration != NULL);
 
-       // output the function number and the name of the function
-          printf ("function name #%d is %s at line %d \n",
-               counter++,func_name.str(),
-               functionDeclaration->get_file_info()->get_line());
+    SgName func_name = functionDeclaration->get_name();
+    // Skip builtin functions for shorter output, Liao 4/28/2008
+    if (func_name.getString().find("__builtin", 0) == 0)
+      continue;
 
-          string functionName = functionDeclaration->get_qualified_name().str();
+    // output the function number and the name of the function
+    printf("function name #%d is %s at line %d \n", counter++, func_name.str(),
+           functionDeclaration->get_file_info()->get_line());
+
+    string functionName = functionDeclaration->get_qualified_name().str();
 
 // TPS (01Dec2008): Enabled mysql and this fails.
 // seems like it is not supposed to be included
@@ -79,7 +77,7 @@ int main( int argc, char * argv[] )
        // q->execute();
           gDB->execute(command.c_str());
 #endif
-        }
+  }
 
 // TPS (01Dec2008): Enabled mysql and this fails.
 // seems like it is not supposed to be included
@@ -111,9 +109,9 @@ int main( int argc, char * argv[] )
 
      gDB->shutdown();
 #else
-     printf ("Program compiled without data base connection support (add using ROSE configure option) \n");
+  printf("Program compiled without data base connection support (add using "
+         "ROSE configure option) \n");
 #endif
 
-     return 0;
-   }
-
+  return 0;
+}

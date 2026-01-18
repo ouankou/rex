@@ -300,8 +300,14 @@ Added namespace declaration at file top:
 
 ```cpp
 #include "sage3basic.h"
+
+
 #include "clang-frontend-private.hpp"
+
+
 #include "clang-to-rose-support.hpp"
+
+
 #include <regex>
 
 using llvm::isa;  // For LLVM type checking (isa<Type>)

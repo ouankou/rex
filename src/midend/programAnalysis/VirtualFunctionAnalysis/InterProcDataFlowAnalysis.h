@@ -1,4 +1,4 @@
-/* 
+/*
  * File:   InterProcDataFlowAnalysis.h
  * Author: rahman2
  *
@@ -6,27 +6,26 @@
  */
 #ifndef INTERPROCDATAFLOWANALYSIS_H
 #define INTERPROCDATAFLOWANALYSIS_H
-#include <vector>
+#include "Cxx_Grammar.h"
 
+#include <vector>
 
 class InterProcDataFlowAnalysis {
 protected:
-    //! Stored the Project Object
-    SgProject *project;
+  //! Stored the Project Object
+  SgProject *project;
 
 public:
-    InterProcDataFlowAnalysis(SgProject *_project) : project(_project){};
-    //! Get the list of Function Declaration participating in DataFlow Analysis
-    virtual void getFunctionDeclarations(std::vector<SgFunctionDeclaration*> &) = 0;
-    
-    //! Execute IntraProc DataFlow Analysis and check whether anything changed
-    virtual bool runAndCheckIntraProcAnalysis(SgFunctionDeclaration *) = 0;
-    
-    //! Function which actually performs the DataFlowAnalyis
-    virtual void run();
+  InterProcDataFlowAnalysis(SgProject *_project) : project(_project) {};
+  //! Get the list of Function Declaration participating in DataFlow Analysis
+  virtual void
+  getFunctionDeclarations(std::vector<SgFunctionDeclaration *> &) = 0;
+
+  //! Execute IntraProc DataFlow Analysis and check whether anything changed
+  virtual bool runAndCheckIntraProcAnalysis(SgFunctionDeclaration *) = 0;
+
+  //! Function which actually performs the DataFlowAnalyis
+  virtual void run();
 };
 
-
-
-#endif  /* INTERPROCDATAFLOWANALYSIS_H */
-
+#endif /* INTERPROCDATAFLOWANALYSIS_H */

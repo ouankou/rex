@@ -13,8 +13,14 @@ Successfully enabled the REX/ROSE Clang frontend to generate C++ code from files
 
 ```cpp
 #include <array>
+
+
 #include <cstddef>
+
+
 #include <cmath>
+
+
 #include <numeric>
 
 static constexpr std::size_t kElements = 1u << 10;

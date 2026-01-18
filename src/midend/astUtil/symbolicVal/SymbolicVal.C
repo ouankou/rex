@@ -1,15 +1,23 @@
 #include "SymbolicVal.h"
-#include <mlog.h>
 
-#include "SymbolicMultiply.h"
-#include "SymbolicPlus.h"
+#include "mlog.h"
+
 #include "BooleanOperators.h"
-#include "UnaryOperators.h"
-#include "SymbolicSelect.h"
+
 #include "CommandOptions.h"
 
+#include "SymbolicMultiply.h"
+
+#include "SymbolicPlus.h"
+
+#include "SymbolicSelect.h"
+
+#include "UnaryOperators.h"
+
 #include <list>
+
 #include <sstream>
+
 #include <stdio.h>
 using namespace std;
 void SymbolicValImpl ::Dump() const { std::cerr << toString(); }
@@ -54,7 +62,7 @@ std::string SymbolicVar ::toString() const { return varname; }
 
 AstNodePtr SymbolicVar ::CodeGen(AstInterface &fa) const {
   if (exp_ != 0) {
-     return fa.CopyAstTree(exp_);
+    return fa.CopyAstTree(exp_);
   }
   return fa.CreateVarRef(varname, scope);
 }
@@ -237,16 +245,14 @@ AstNodePtr SymbolicPlus::CodeGenOP(AstInterface &fa, const AstNodePtr &a1,
   return fa.CreateBinaryOP(AstInterface::BOP_PLUS, a1, a2);
 }
 
-AstNodePtr SymbolicAnd::
-CodeGenOP(AstInterface &fa, const AstNodePtr& a1, const AstNodePtr& a2) const
-{
-   return fa.CreateBinaryOP(AstInterface::BOP_AND, a1, a2);
+AstNodePtr SymbolicAnd::CodeGenOP(AstInterface &fa, const AstNodePtr &a1,
+                                  const AstNodePtr &a2) const {
+  return fa.CreateBinaryOP(AstInterface::BOP_AND, a1, a2);
 }
 
-AstNodePtr SymbolicEq::
-CodeGenOP(AstInterface &fa, const AstNodePtr& a1, const AstNodePtr& a2) const
-{
-   return fa.CreateBinaryOP(AstInterface::BOP_EQ, a1, a2);
+AstNodePtr SymbolicEq::CodeGenOP(AstInterface &fa, const AstNodePtr &a1,
+                                 const AstNodePtr &a2) const {
+  return fa.CreateBinaryOP(AstInterface::BOP_EQ, a1, a2);
 }
 
 SymbolicVal SymbolicValGenerator::GetSymbolicVal(const std::string &sig) {
@@ -392,7 +398,8 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
         SymbolicVal cur = GetSymbolicVal(fa, *p);
         args.push_back(cur);
       }
-      return new SymbolicFunction(AstInterface::OP_NONE, new SymbolicAstWrap(s1), args);
+      return new SymbolicFunction(AstInterface::OP_NONE,
+                                  new SymbolicAstWrap(s1), args);
     }
   } else if (fa.IsVarRef(exp, 0, &name, &scope)) {
     return new SymbolicVar(name, scope, exp);

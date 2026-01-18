@@ -1,88 +1,90 @@
-/******************************************                                           
-  * Category: DFA                                                                      
-  * DefUse Analysis Declaration (per Function)                                         
-  * created by tps in Feb 2007                                                         
-  *****************************************/   
+/******************************************
+ * Category: DFA
+ * DefUse Analysis Declaration (per Function)
+ * created by tps in Feb 2007
+ *****************************************/
 // tps : Switching from rose.h to sage3 changed size from 17,5 MB to 7,2MB
-#include "sage3basic.h"
 #include "DefUseAnalysisAbstract.h"
 
-using namespace std;
+#include "sage3basic.h"
 
+using namespace std;
 
 /**********************************************************
  *  find element in vector
  *********************************************************/
-bool DefUseAnalysisAbstract::searchVector(vector <filteredCFGNodeType> done, 
-                                    filteredCFGNodeType cfgNode) {
+bool DefUseAnalysisAbstract::searchVector(vector<filteredCFGNodeType> done,
+                                          filteredCFGNodeType cfgNode) {
   bool found = false;
-  for (vector<filteredCFGNodeType >::const_iterator i = done.begin(); i != done.end(); ++i) {
+  for (vector<filteredCFGNodeType>::const_iterator i = done.begin();
+       i != done.end(); ++i) {
     filteredCFGNodeType node = *i;
-    if (node==cfgNode)
-      found=true;
+    if (node == cfgNode)
+      found = true;
   }
   return found;
 }
 
-
-
-
 /**********************************************************
  *  Search for the value and key in the multimap
  *********************************************************/
-bool DefUseAnalysisAbstract::isDoubleExactEntry(const multitype* multi, 
-                                          SgInitializedName* name, SgNode* sgNode) {
-  bool isCurrentValueContained=false;
-  multitype::const_iterator i = multi->begin();    
-  //SgNode* sgNodeMM = NULL;
+bool DefUseAnalysisAbstract::isDoubleExactEntry(const multitype *multi,
+                                                SgInitializedName *name,
+                                                SgNode *sgNode) {
+  bool isCurrentValueContained = false;
+  multitype::const_iterator i = multi->begin();
+  // SgNode* sgNodeMM = NULL;
   for (; i != multi->end(); ++i) {
-    SgInitializedName* initNameMM = (*i).first;
-    SgNode* sgnodeMM = (*i).second;
-    if (initNameMM==name && sgnodeMM==sgNode)
-      isCurrentValueContained=true;
-    // cout << " comparing -  map: " << initNameMM << " vs. search: " << initName <<
+    SgInitializedName *initNameMM = (*i).first;
+    SgNode *sgnodeMM = (*i).second;
+    if (initNameMM == name && sgnodeMM == sgNode)
+      isCurrentValueContained = true;
+    // cout << " comparing -  map: " << initNameMM << " vs. search: " <<
+    // initName <<
     //  "   result euqal? " << resBool(isCurrentValueContained) << endl;
-  } 
+  }
   return isCurrentValueContained;
 }
 
 /**********************************************************
  *  Search for the value for a certain key in the multimap
  *********************************************************/
-bool DefUseAnalysisAbstract::searchMulti(const multitype* multi, SgInitializedName* initName) {
-  bool isCurrentValueContained=false;
-  multitype::const_iterator i = multi->begin();    
-  //SgNode* sgNodeMM = NULL;
+bool DefUseAnalysisAbstract::searchMulti(const multitype *multi,
+                                         SgInitializedName *initName) {
+  bool isCurrentValueContained = false;
+  multitype::const_iterator i = multi->begin();
+  // SgNode* sgNodeMM = NULL;
   for (; i != multi->end(); ++i) {
-    SgInitializedName* initNameMM = (*i).first;
-    if (initNameMM==initName)
-      isCurrentValueContained=true;
-    // cout << " comparing -  map: " << initNameMM << " vs. search: " << initName <<
+    SgInitializedName *initNameMM = (*i).first;
+    if (initNameMM == initName)
+      isCurrentValueContained = true;
+    // cout << " comparing -  map: " << initNameMM << " vs. search: " <<
+    // initName <<
     //  "   result euqal? " << resBool(isCurrentValueContained) << endl;
-  } 
+  }
   return isCurrentValueContained;
 }
 
-
 /**********************************************************
- *  check if two multimaps are equal , not equal? changed or not. true if changed.
+ *  check if two multimaps are equal , not equal? changed or not. true if
+ *changed.
  *********************************************************/
-bool DefUseAnalysisAbstract::checkElementsForChange(const multitype* t1, const multitype* t2) {
+bool DefUseAnalysisAbstract::checkElementsForChange(const multitype *t1,
+                                                    const multitype *t2) {
   // if every element of t2 is contained in t1, then no change
   // occurred in the map
-  
-  typedef set<pair<SgInitializedName*, SgNode*> > st;
+
+  typedef set<pair<SgInitializedName *, SgNode *>> st;
   st s1(t1->begin(), t1->end());
   st s2(t2->begin(), t2->end());
-  assert (s1.size() == t1->size());
+  assert(s1.size() == t1->size());
 
   //  if (s2.size() != t2->size())
   //    printMultiMap(t2);
-  if (s2.size() != t2->size())
-  {
-    cerr<<"s2.size()="<< s2.size() <<endl;
-    cerr<<"t2.size()="<< t2->size() <<endl;
-    dfa->printMultiMap (t2);
+  if (s2.size() != t2->size()) {
+    cerr << "s2.size()=" << s2.size() << endl;
+    cerr << "t2.size()=" << t2->size() << endl;
+    dfa->printMultiMap(t2);
     assert(s2.size() == t2->size());
   }
 
@@ -105,12 +107,10 @@ bool DefUseAnalysisAbstract::checkElementsForChange(const multitype* t1, const m
     }
     if (identical==false)
       changed = true;
-  }  
+  }
   return changed;
   */
 }
-
-
 
 /**********************************************************
  * return the initializedName
@@ -118,31 +118,33 @@ bool DefUseAnalysisAbstract::checkElementsForChange(const multitype* t1, const m
  * side of an assignment. We want to know which variable it is.
  * The variable may be hiding down the hierarchy in e.g. an array
  *********************************************************/
-SgInitializedName* DefUseAnalysisAbstract::getInitName(SgNode* l_expr) {
-  SgInitializedName* retName = NULL;
+SgInitializedName *DefUseAnalysisAbstract::getInitName(SgNode *l_expr) {
+  SgInitializedName *retName = NULL;
   if (isSgPntrArrRefExp(l_expr)) {
-    SgPntrArrRefExp* varArrRefExp = isSgPntrArrRefExp(l_expr);
+    SgPntrArrRefExp *varArrRefExp = isSgPntrArrRefExp(l_expr);
     if (DEBUG_MODE)
       cout << " **********  BINARY OP : " << l_expr->class_name() << endl;
     ROSE_ASSERT(varArrRefExp);
-    SgExpression* l_expr = varArrRefExp->get_lhs_operand();
+    SgExpression *l_expr = varArrRefExp->get_lhs_operand();
     ROSE_ASSERT(l_expr);
     if (isSgVarRefExp(l_expr)) {
       retName = isSgVarRefExp(l_expr)->get_symbol()->get_declaration();
-    } 
+    }
   } else if (isSgPointerDerefExp(l_expr)) {
-    SgPointerDerefExp* ptr = isSgPointerDerefExp(l_expr);
+    SgPointerDerefExp *ptr = isSgPointerDerefExp(l_expr);
     if (DEBUG_MODE)
       cout << " **********  BINARY OP : " << l_expr->class_name() << endl;
     ROSE_ASSERT(ptr);
-    SgExpression* l_expr = ptr->get_operand();
+    SgExpression *l_expr = ptr->get_operand();
     ROSE_ASSERT(l_expr);
     if (isSgVarRefExp(l_expr)) {
       retName = isSgVarRefExp(l_expr)->get_symbol()->get_declaration();
-    } 
+    }
   } else {
     if (DEBUG_MODE)
-      cout << " DefUseAnalysisAbstract::getInitName() could not resolve initName from " << l_expr->class_name() << endl;
+      cout << " DefUseAnalysisAbstract::getInitName() could not resolve "
+              "initName from "
+           << l_expr->class_name() << endl;
   }
   return retName;
 }
@@ -150,9 +152,9 @@ SgInitializedName* DefUseAnalysisAbstract::getInitName(SgNode* l_expr) {
 /**********************************************************
  * Resolve a CAST
  *********************************************************/
-SgExpression* DefUseAnalysisAbstract::resolveCast(SgExpression* expr) {
-  SgCastExp* cast = isSgCastExp(expr);
-  SgExpression* retExpr = cast->get_operand();
+SgExpression *DefUseAnalysisAbstract::resolveCast(SgExpression *expr) {
+  SgCastExp *cast = isSgCastExp(expr);
+  SgExpression *retExpr = cast->get_operand();
   ROSE_ASSERT(retExpr);
   return retExpr;
 }

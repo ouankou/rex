@@ -6,19 +6,12 @@
 int synch[NUMBER_OF_THREADS];
 float work[NUMBER_OF_THREADS];
 float result[NUMBER_OF_THREADS];
-float fn1(int i)
-{
-  return i*2.0;
-}
+float fn1(int i) { return i * 2.0; }
 
-float fn2(float a, float b)
-{
-  return a + b;
-}
-int main()
-{
+float fn2(float a, float b) { return a + b; }
+int main() {
   int iam, neighbor;
-#pragma omp parallel private(iam,neighbor) shared(work,synch)
+#pragma omp parallel private(iam, neighbor) shared(work, synch)
   {
     iam = omp_get_thread_num();
     synch[iam] = 0;
@@ -29,7 +22,7 @@ int main()
      * ensures that my work is made visible before synch.
      * The second flush ensures that synch is made visible.
      */
-#pragma omp flush(work,synch)
+#pragma omp flush(work, synch)
     synch[iam] = 1;
 #pragma omp flush(synch)
     /* Wait for neighbor. The first flush ensures that synch is read
@@ -37,11 +30,11 @@ int main()
      * The second flush ensures that work is read from memory, and
      * is done so after the while loop exits.
      */
-    neighbor = (iam>0 ? iam : omp_get_num_threads()) - 1;
+    neighbor = (iam > 0 ? iam : omp_get_num_threads()) - 1;
     while (synch[neighbor] == 0) {
 #pragma omp flush(synch)
     }
-#pragma omp flush(work,synch)
+#pragma omp flush(work, synch)
     /* Read neighbor’s values of work array */
     result[iam] = fn2(work[neighbor], work[iam]);
   }

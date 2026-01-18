@@ -5,18 +5,23 @@
 #define ASTSUCCESSORSSELECTORS_H
 
 class ROSE_DLL_API AstSuccessorsSelectors {
- public:
-  typedef std::vector<SgNode*> SuccessorsContainer; // type is used in all AstProcessing classes
+public:
+  typedef std::vector<SgNode *>
+      SuccessorsContainer; // type is used in all AstProcessing classes
 
-  static void selectDefaultSuccessors(SgNode* node, SuccessorsContainer& succContainer);
-  static void selectReversePrefixSuccessors(SgNode* node, SuccessorsContainer& succContainer);
-  static void selectReverseBranchSuccessors(SgNode* node, SuccessorsContainer& succContainer);
- private:
-  static SgNode* leftSibling(SgNode* node);
+  static void selectDefaultSuccessors(SgNode *node,
+                                      SuccessorsContainer &succContainer);
+  static void selectReversePrefixSuccessors(SgNode *node,
+                                            SuccessorsContainer &succContainer);
+  static void selectReverseBranchSuccessors(SgNode *node,
+                                            SuccessorsContainer &succContainer);
+
+private:
+  static SgNode *leftSibling(SgNode *node);
 };
 
-//#ifdef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION 
-//  #include "AstSuccessorsSelectors.C" 
-//#endif 
+// #ifdef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
+//   #include "AstSuccessorsSelectors.C"
+// #endif
 
 #endif

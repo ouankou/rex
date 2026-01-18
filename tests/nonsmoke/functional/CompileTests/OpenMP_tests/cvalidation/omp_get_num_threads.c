@@ -1,11 +1,10 @@
-#include <stdio.h>
-#include "omp.h"
 #include "omp_testsuite.h"
 
+#include <omp.h>
 
-int
-check_omp_get_num_threads (FILE * logFile)
-{
+#include <stdio.h>
+
+int check_omp_get_num_threads(FILE *logFile) {
   /* checks that omp_get_num_threads is equal to the number of
      threads */
   int nthreads = 0;
@@ -18,15 +17,13 @@ check_omp_get_num_threads (FILE * logFile)
     }
 #pragma omp single
     {
-      nthreads_lib = omp_get_num_threads ();
+      nthreads_lib = omp_get_num_threads();
     }
-  }				/* end of parallel */
+  } /* end of parallel */
   return nthreads == nthreads_lib;
 }
 
-int
-crosscheck_omp_get_num_threads (FILE * logFile)
-{
+int crosscheck_omp_get_num_threads(FILE *logFile) {
   /* checks that omp_get_num_threads is equal to the number of
      threads */
   int nthreads = 0;
@@ -41,6 +38,6 @@ crosscheck_omp_get_num_threads (FILE * logFile)
     {
       /*nthreads_lib=omp_get_num_threads(); */
     }
-  }				/* end of parallel */
+  } /* end of parallel */
   return nthreads == nthreads_lib;
 }

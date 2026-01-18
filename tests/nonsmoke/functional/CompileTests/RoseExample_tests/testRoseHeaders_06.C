@@ -1,14 +1,16 @@
-/* rosePublicConfig.h has some of the same CPP symbol definitions as rose_config.h, except the names have been changed so as
- * to not pollute the global name space.  All the names start with "ROSE_". */
+/* rosePublicConfig.h has some of the same CPP symbol definitions as
+ * rose_config.h, except the names have been changed so as to not pollute the
+ * global name space.  All the names start with "ROSE_". */
+#include "rosedefs.h"
+
 #include "rosePublicConfig.h"
 
-#include "rosedefs.h"
 #include "sage3basic.hhh"
-
 // DQ (4/21/2009): This header file contains the definitions of the IR nodes.
-// tps : avoid detection" header files are scanned whether they include sage3basic.h for .h and .hh
+// tps : avoid detection" header files are scanned whether they include
+// sage3basic.h for .h and .hh
 
-//#include "sage3.h"
+// #include "sage3.h"
 
 // DQ (3/22/2009): This is already included in sage3.h"
 // #include "roseInternal.h"
@@ -21,26 +23,31 @@
 // DQ:7/29/2002, MS:12/11/2002
 // Place this at the end (since it is dependent upon ROSE classes.)
 // added here to avoid placing it in each header file using the AstProcessingLib
-#include <typeinfo>
-#include "AstProcessing.h"
-#include "AstReverseProcessing.h"
-#include "AstPDFGeneration.h"
 #include "AstDOTGeneration.h"
+
 #include "AstDiagnostics.h"
+
+#include "AstPDFGeneration.h"
+
+#include "AstProcessing.h"
+
+#include "AstReverseProcessing.h"
+
+#include <typeinfo>
 // #include "AstStatistics.h"
+
 #include "RoseAst.h"
 
 #include "wholeAST_API.h"
 
 // DQ (10/18/2003) Why is this commented out (what is it)
-//#include "AgProcessing.h"
+// #include "AgProcessing.h"
 
 // Not sure that we want this here since it uses the rewrite system
 // which has not defined yet (circular reference in the header files)
 // #include "AstRestructure.h"
 
-#include "rewrite.h"
-
+#include <rewrite.h>
 // this is a temporary fix (will become obsolete)
 #include "AstClearVisitFlags.h"
 
@@ -51,7 +58,8 @@
 // DQ (2/22/2006): Added Andreas' work to graph the AST.
 #include "astGraph.h"
 
-// DQ (6/23/2006): Added Andreas's work to support custom DOT graphs using persistant attributes.
+// DQ (6/23/2006): Added Andreas's work to support custom DOT graphs using
+// persistant attributes.
 #include "AstAttributeDOT.h"
 
 // DQ (3/11/2006): Jeremiah Willcock's inliner
@@ -64,12 +72,16 @@
 // Required to be run before PRE!
 #include "constantFolding.h"
 
-// DQ (5/8/2007): Added Robert Preissl's support for hidden type and declartion lists.
+// DQ (5/8/2007): Added Robert Preissl's support for hidden type and declartion
+// lists.
 #include "HiddenList.h"
-#include "HiddenList_Output.h"
+
 #include "HiddenList_Intersection.h"
 
-// DQ (4/20/2009): Added support to optionally get more information out about new delete operators.
+#include "HiddenList_Output.h"
+
+// DQ (4/20/2009): Added support to optionally get more information out about
+// new delete operators.
 #define COMPILE_DEBUG_STATEMENTS 1
 
 /******************************************************************************************************************************
@@ -100,7 +112,8 @@
  *(rosePublicConfig.h) files in tandem.
  ******************************************************************************************************************************/
 #ifdef CONFIG_ROSE
-#  error "rose_config.h included in public header by mistake. Use rosePublicConfig.h instead."
+#error                                                                         \
+    "rose_config.h included in public header by mistake. Use rosePublicConfig.h instead."
 #endif
 
 // DQ (1/31/2013): #endif for this attempt to make this test code smaller.

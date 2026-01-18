@@ -1,28 +1,31 @@
 #ifndef VECTOR_COMMAND_OPTIONS_H
 #define VECTOR_COMMAND_OPTIONS_H
-#include <stdlib.h>
-#include <string>
-#include <vector>
-#include <iostream>
 #include <cassert>
+
+#include <iostream>
+
+#include <stdlib.h>
+
+#include <string>
+
+#include <vector>
 
 #include "rosedll.h"
 
-class VectorCmdOptions
-{
-  std::vector<std::string>* cmd;
+class VectorCmdOptions {
+  std::vector<std::string> *cmd;
   static VectorCmdOptions *inst;
- public:
+
+public:
   VectorCmdOptions() : cmd(NULL) {}
-  void SetOptions  (std::vector<std::string>& options) {
-    cmd = &options;
-  }
-  const std::vector<std::string>& GetOptions() const {
-    assert (cmd);
+  void SetOptions(std::vector<std::string> &options) { cmd = &options; }
+  const std::vector<std::string> &GetOptions() const {
+    assert(cmd);
     return *cmd;
   }
-  size_t HasOption( const std::string& opt) const;  // Returns one-based index or zero for not found
-  ROSE_UTIL_API static VectorCmdOptions* GetInstance();
+  size_t HasOption(const std::string &opt)
+      const; // Returns one-based index or zero for not found
+  ROSE_UTIL_API static VectorCmdOptions *GetInstance();
 };
 
 #endif

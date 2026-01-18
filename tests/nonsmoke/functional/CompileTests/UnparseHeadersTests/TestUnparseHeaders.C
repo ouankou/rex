@@ -2,15 +2,14 @@
 
 #include "UnparseHeadersTransformVisitor.h"
 
-int main(int argc, char* argv[])
-   {
-     ROSE_ASSERT(argc > 1);
+int main(int argc, char *argv[]) {
+  ROSE_ASSERT(argc > 1);
 
-  // DQ (4/4/2020): Adding support for header file unparsing feature specific debug levels.
-  // SgProject::set_unparseHeaderFilesDebug(1);
+  // DQ (4/4/2020): Adding support for header file unparsing feature specific
+  // debug levels. SgProject::set_unparseHeaderFilesDebug(1);
   // SgProject::set_unparseHeaderFilesDebug(4);
 
-     SgProject* project = frontend(argc,argv);
+  SgProject *project = frontend(argc, argv);
 
 #if 0
      printf ("Exiting as a test! \n");
@@ -19,8 +18,8 @@ int main(int argc, char* argv[])
 
   // AstTests::runAllTests(project);
 
-     UnparseHeadersTransformVisitor transformVisitor;
-     transformVisitor.traverse(project, preorder);
+  UnparseHeadersTransformVisitor transformVisitor;
+  transformVisitor.traverse(project, preorder);
 
 #if 0
   // Output an optional graph of the AST (just the tree, when active)
@@ -48,6 +47,5 @@ int main(int argc, char* argv[])
      ROSE_ASSERT(false);
 #endif
 
-     return backend(project);
-   }
-
+  return backend(project);
+}

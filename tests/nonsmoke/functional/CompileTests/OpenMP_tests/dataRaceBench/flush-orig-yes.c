@@ -47,30 +47,29 @@ THE POSSIBILITY OF SUCH DAMAGE.
 /*
 This benchmark is extracted from flush_nolist.1c of OpenMP Application
 Programming Interface Examples Version 4.5.0 .
-We added one critical section to make it a test with only one pair of data races.
-The data race will not generate wrong result though. So the assertion always passes.
-Data race pair:  i@70:10 vs. i@71:11
+We added one critical section to make it a test with only one pair of data
+races. The data race will not generate wrong result though. So the assertion
+always passes. Data race pair:  i@70:10 vs. i@71:11
 */
-#include<stdio.h>
-#include<assert.h>
+#include <stdio.h>
 
-void f1(int *q)
-{
+#include <assert.h>
+
+void f1(int *q) {
 #pragma omp critical
   *q = 1;
 #pragma omp flush
 }
 
-int main()
-{ 
-  int i=0, sum=0; 
-  
-  #pragma omp parallel reduction(+:sum) num_threads(10) 
+int main() {
+  int i = 0, sum = 0;
+
+#pragma omp parallel reduction(+ : sum) num_threads(10)
   {
-     f1(&i);
-     sum+=i;
+    f1(&i);
+    sum += i;
   }
-  assert (sum==10);
+  assert(sum == 10);
   printf("sum=%d\n", sum);
-  return 0;   
+  return 0;
 }

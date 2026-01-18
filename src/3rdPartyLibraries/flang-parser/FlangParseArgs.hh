@@ -1,41 +1,64 @@
 #pragma once
 
-#include "flang/Parser/dump-parse-tree.h"
-#include "flang/Parser/message.h"
-#include "flang/Parser/parse-tree-visitor.h"
-#include "flang/Parser/parse-tree.h"
-#include "flang/Parser/parsing.h"
-#include "flang/Parser/provenance.h"
-#include "flang/Parser/unparse.h"
-#include "flang/Support/Fortran-features.h"
-#include "flang/Support/LangOptions.h"
-#include "flang/Support/default-kinds.h"
-#include "llvm/Support/Errno.h"
-#include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Program.h"
-#include "llvm/Support/raw_ostream.h"
-#include <cstdio>
 #include <cstring>
+
+#include <cstdio>
+
+#include <flang/Parser/dump-parse-tree.h>
+
+#include <flang/Parser/message.h>
+
+#include <flang/Parser/parse-tree-visitor.h>
+
+#include <flang/Parser/parse-tree.h>
+
+#include <flang/Parser/parsing.h>
+
+#include <flang/Parser/provenance.h>
+
+#include <flang/Parser/unparse.h>
+
+#include <flang/Support/Fortran-features.h>
+
+#include <flang/Support/LangOptions.h>
+
+#include <flang/Support/default-kinds.h>
+
+#include <llvm/Support/Errno.h>
+
+#include <llvm/Support/FileSystem.h>
+
+#include <llvm/Support/Program.h>
+
+#include <llvm/Support/raw_ostream.h>
+
 #include <fstream>
+
 #include <list>
+
 #include <memory>
+
 #include <optional>
+
 #include <stdlib.h>
+
 #include <string>
+
 #include <time.h>
+
 #include <vector>
 
 struct DriverOptions {
   DriverOptions() {}
-  bool verbose{false}; // -v
-  bool compileOnly{false}; // -c
-  std::string outputPath; // -o path
+  bool verbose{false};                              // -v
+  bool compileOnly{false};                          // -c
+  std::string outputPath;                           // -o path
   std::vector<std::string> searchDirectories{"."s}; // -I dir
   Fortran::common::LangOptions langOpts;
-  bool forcedForm{false}; // -Mfixed or -Mfree appeared
+  bool forcedForm{false};             // -Mfixed or -Mfree appeared
   bool warnOnNonstandardUsage{false}; // -Mstandard
-  bool warnOnSuspiciousUsage{false}; // -pedantic
-  bool warningsAreErrors{false}; // -Werror
+  bool warnOnSuspiciousUsage{false};  // -pedantic
+  bool warningsAreErrors{false};      // -Werror
   Fortran::parser::Encoding encoding{Fortran::parser::Encoding::LATIN_1};
   bool lineDirectives{true}; // -P disables
   bool syntaxOnly{false};
@@ -123,7 +146,8 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
     } else if (arg == "-Werror") {
       ctx.driver.warningsAreErrors = true;
     } else if (arg == "-ed") {
-      ctx.options.features.Enable(Fortran::common::LanguageFeature::OldDebugLines);
+      ctx.options.features.Enable(
+          Fortran::common::LanguageFeature::OldDebugLines);
     } else if (arg == "-E") {
       ctx.options.prescanAndReformat = true;
     } else if (arg == "-P") {
@@ -158,12 +182,12 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
       if (eq == std::string::npos) {
         ctx.options.predefinitions.emplace_back(arg.substr(2), "1");
       } else {
-        ctx.options.predefinitions.emplace_back(
-            arg.substr(2, eq - 2), arg.substr(eq + 1));
+        ctx.options.predefinitions.emplace_back(arg.substr(2, eq - 2),
+                                                arg.substr(eq + 1));
       }
     } else if (arg.substr(0, 2) == "-U") {
-      ctx.options.predefinitions.emplace_back(
-          arg.substr(2), std::optional<std::string>{});
+      ctx.options.predefinitions.emplace_back(arg.substr(2),
+                                              std::optional<std::string>{});
     } else if (arg == "-r8" || arg == "-fdefault-real-8") {
       defaultKinds.set_defaultRealKind(8);
     } else if (arg == "-i8" || arg == "-fdefault-integer-8") {

@@ -1,8 +1,8 @@
 // Bug reported by David Svoboda (at CERT)
 
 #include <stdio.h>
-#include <string.h>
 
+#include <string.h>
 const int MAX_USER = 8;
 const int MAX_PASS = 8;
 

@@ -1,15 +1,15 @@
-#include <sage3basic.h>
+#include "sage3basic.h"
 
-SgType*
-SgArrowExp::get_type() const
-   {
-  // DQ (1/14/2006): p_expression_type has been removed, we have to compute the appropriate type (IR specific code)
-  // For the SgArrowExp, the type is the type of the rhs operand (e.g. "Aptr->x" where "x" is the data member of the pointer to class "A").
-     ROSE_ASSERT(get_lhs_operand() != NULL);
-     ROSE_ASSERT(get_rhs_operand() != NULL);
+SgType *SgArrowExp::get_type() const {
+  // DQ (1/14/2006): p_expression_type has been removed, we have to compute the
+  // appropriate type (IR specific code) For the SgArrowExp, the type is the
+  // type of the rhs operand (e.g. "Aptr->x" where "x" is the data member of the
+  // pointer to class "A").
+  ROSE_ASSERT(get_lhs_operand() != NULL);
+  ROSE_ASSERT(get_rhs_operand() != NULL);
 
-     SgType* returnType = get_rhs_operand()->get_type();
-     ROSE_ASSERT(returnType != NULL);
+  SgType *returnType = get_rhs_operand()->get_type();
+  ROSE_ASSERT(returnType != NULL);
 
-     return returnType;
-   }
+  return returnType;
+}

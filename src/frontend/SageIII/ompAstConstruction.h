@@ -2,9 +2,10 @@
 #define _OMP_AST_CONSTRUCTION
 
 #include "AstSimpleProcessing.h"
-#include "OpenACCIR.h"
-#include "OpenMPIR.h"
 
+#include "OpenACCIR.h"
+
+#include "OpenMPIR.h"
 namespace OmpSupport {
 class SgVarRefExpVisitor : public AstSimpleProcessing {
 private:

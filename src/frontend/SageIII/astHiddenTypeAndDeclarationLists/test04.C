@@ -3,65 +3,72 @@ int x;
 typedef int MyInt;
 typedef double MyDouble;
 
-namespace Y { int x; int moo(); }
+namespace Y {
+int x;
+int moo();
+} // namespace Y
 
-namespace Z { using namespace Y; int z; }
+namespace Z {
+using namespace Y;
+int z;
+} // namespace Z
 
-class B { public: int b; private: int a;};
+class B {
+public:
+  int b;
+
+private:
+  int a;
+};
 
 class A : B {
 
-        public:
+public:
+  int a;
 
-                int a;
+  int foo() {
+    int x = a;
+    int y;
+    return x;
+  }
 
-                int foo() {
-                        int x = a;
-                        int y;
-                        return x;
-                }
+  int y;
 
-                int y;
+  int goo();
 
-                int goo();
-
-        private:
-
-                int b;
-
+private:
+  int b;
 };
 
 int A::goo() {
 
-        int a, b;
+  int a, b;
 
-        b = 1;
+  b = 1;
 
-        int wwwwwwwwwwwwww;
+  int wwwwwwwwwwwwww;
 
-        return 0;
-
+  return 0;
 }
 
 using namespace Y;
 
 int main() {
 
-        using Z::x;
+  using Z::x;
 
-        {
+  {
 
-                int x, y;
-                float moo;
-                double MyInt;
+    int x, y;
+    float moo;
+    double MyInt;
+  }
 
-        }
-
-        return 0;
-
+  return 0;
 }
 
-/* proofed output from HiddenList program on April 16, 2007 under ROSE Version: pre-release alpha version: 0.8.10a
+/* proofed output from HiddenList program on April 16, 2007 under ROSE Version:
+pre-release alpha version: 0.8.10a
 
 Inside of Sg_File_Info::display(file: debug)
      isTransformation                      = false
@@ -79,34 +86,40 @@ Inside of Sg_File_Info::display(file: debug)
      line     = 1  column   = 1
 Hidden List of Scope: ::Y
 NR. OF DIFFERENT HIDDEN SYMBOLS: 1
-Symbol: x with adress(es) : Hidden entry x; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d068
+Symbol: x with adress(es) : Hidden entry x; with SgSymbol-ClassName
+SgVariableSymbol with SgSymbol-Address: 0x9a4d068
  -> Number of entries in hidden list: 1
- 
+
 Hidden List of Scope: ::A
 NR. OF DIFFERENT HIDDEN SYMBOLS: 1
-Symbol: b with adress(es) : Hidden entry b; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d140
+Symbol: b with adress(es) : Hidden entry b; with SgSymbol-ClassName
+SgVariableSymbol with SgSymbol-Address: 0x9a4d140
  -> Number of entries in hidden list: 1
- 
+
 Hidden List of Scope:
 NR. OF DIFFERENT HIDDEN SYMBOLS: 2
-Symbol: x with adress(es) : Hidden entry x; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d068
-Symbol: y with adress(es) : Hidden entry y; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d128
+Symbol: x with adress(es) : Hidden entry x; with SgSymbol-ClassName
+SgVariableSymbol with SgSymbol-Address: 0x9a4d068 Symbol: y with adress(es) :
+Hidden entry y; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address:
+0x9a4d128
  -> Number of entries in hidden list: 2
- 
+
 Hidden List of Scope:
 NR. OF DIFFERENT HIDDEN SYMBOLS: 2
-Symbol: a with adress(es) : Hidden entry a; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d0e0
-Symbol: b with adress(es) : Hidden entry b; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d0b0
-Hidden entry b; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d140
+Symbol: a with adress(es) : Hidden entry a; with SgSymbol-ClassName
+SgVariableSymbol with SgSymbol-Address: 0x9a4d0e0 Symbol: b with adress(es) :
+Hidden entry b; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address:
+0x9a4d0b0 Hidden entry b; with SgSymbol-ClassName SgVariableSymbol with
+SgSymbol-Address: 0x9a4d140
  -> Number of entries in hidden list: 3
- 
+
 Hidden List of Scope:
 NR. OF DIFFERENT HIDDEN SYMBOLS: 3
-Symbol: moo with adress(es) : Hidden entry moo; with SgSymbol-ClassName SgFunctionSymbol with SgSymbol-Address: 0x99eab98
-Symbol: x with adress(es) : Hidden entry x; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d068
-Hidden entry x; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address: 0x9a4d080
-Symbol: MyInt with adress(es) : Hidden entry MyInt; with SgSymbol-ClassName SgTypedefSymbol with SgSymbol-Address: 0x99a1a10
+Symbol: moo with adress(es) : Hidden entry moo; with SgSymbol-ClassName
+SgFunctionSymbol with SgSymbol-Address: 0x99eab98 Symbol: x with adress(es) :
+Hidden entry x; with SgSymbol-ClassName SgVariableSymbol with SgSymbol-Address:
+0x9a4d068 Hidden entry x; with SgSymbol-ClassName SgVariableSymbol with
+SgSymbol-Address: 0x9a4d080 Symbol: MyInt with adress(es) : Hidden entry MyInt;
+with SgSymbol-ClassName SgTypedefSymbol with SgSymbol-Address: 0x99a1a10
  -> Number of entries in hidden list: 4
 */
-
-

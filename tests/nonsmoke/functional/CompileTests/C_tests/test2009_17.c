@@ -6,17 +6,17 @@
    legacy frontend 3.3/4.0's macro.c has been changed to support this.
  */
 #include <assert.h>
-#include <string.h>
+
 #include <stdio.h>
-int main()
-{
-  char * filename=__FILE__;
+
+#include <string.h>
+int main() {
+  char *filename = __FILE__;
 #ifdef __linux__
-  printf("Linux is found, assertion is enabled... \n");  
-  assert(strcmp(filename,"test2009_17.c")==0);
+  printf("Linux is found, assertion is enabled... \n");
+  assert(strcmp(filename, "test2009_17.c") == 0);
 #else
-  printf("Linux is not found, assertion is skipped. \n");  
-#endif  
+  printf("Linux is not found, assertion is skipped. \n");
+#endif
   return 0;
 }
-

@@ -2,36 +2,38 @@
 #ifndef __ANNOT_COLLECT_H
 #define __ANNOT_COLLECT_H
 
-#include "TypeAnnotation.h"
 #include "OperatorDescriptors.h"
 
+#include "TypeAnnotation.h"
+
 typedef AnnotCollectionBase<OperatorDeclaration> OperatorCollectionBase;
-typedef ReadAnnotCollection<OperatorDeclaration, '{', ';','}'> ReadOperatorCollection;
+typedef ReadAnnotCollection<OperatorDeclaration, '{', ';', '}'>
+    ReadOperatorCollection;
 
 //! An interface to read into type(class) and operator(function) annotations
-// Each type of 
+// Each type of
 class ReadAnnotation {
   ReadTypeCollection typeInfo;
   ReadOperatorCollection opInfo;
   ReadTypeCollection varInfo;
-  static ReadAnnotation* inst;
+  static ReadAnnotation *inst;
   ReadAnnotation() {}
- public:
-  void add_TypeCollection (TypeCollectionBase* c) 
-    { typeInfo.push_back(c); varInfo.push_back(c); }
-  void add_OperatorCollection (OperatorCollectionBase *c)
-    { opInfo.push_back(c); }
 
-  void read( std::istream& in);
+public:
+  void add_TypeCollection(TypeCollectionBase *c) {
+    typeInfo.push_back(c);
+    varInfo.push_back(c);
+  }
+  void add_OperatorCollection(OperatorCollectionBase *c) {
+    opInfo.push_back(c);
+  }
+
+  void read(std::istream &in);
   void read();
 
-  static ReadAnnotation* get_inst();
+  static ReadAnnotation *get_inst();
   static void release_inst();
-  static std::string OptionString()
-    {
-      return "-annot <filename> ";
-    }
+  static std::string OptionString() { return "-annot <filename> "; }
 };
-
 
 #endif

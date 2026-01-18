@@ -1,9 +1,9 @@
 #ifndef EXPRESSIONTREEEQUAL_H
 #define EXPRESSIONTREEEQUAL_H
 
+#include "Cxx_Grammar.h"
 //~ namespace legacy
 //~ {
-
 
 // DQ (3/21/2006): Added namespace to separate the
 // PRE specific work (and it's use of the type named
@@ -13,15 +13,14 @@
 // namespace PRE {
 
 //! Are two expressions equal (using a deep comparison)?
-bool expressionTreeEqual(SgExpression*, SgExpression*);
+bool expressionTreeEqual(SgExpression *, SgExpression *);
 
 //! Are corresponding expressions in two lists equal (using a deep comparison)?
-bool expressionTreeEqualStar(const SgExpressionPtrList&,
-                             const SgExpressionPtrList&);
+bool expressionTreeEqualStar(const SgExpressionPtrList &,
+                             const SgExpressionPtrList &);
 
 // closing scope of namespace: PRE
 // }
-
 
 //~ } // namespace legacy
 

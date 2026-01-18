@@ -1,7 +1,10 @@
-#include <stdio.h>
-#include <stddef.h>
-#include <wchar.h>
 #include <locale.h>
+
+#include <stddef.h>
+
+#include <wchar.h>
+
+#include <stdio.h>
 
 int main(void) {
   const wchar_t wc = L'\x3b1';
@@ -14,7 +17,6 @@ int main(void) {
   setlocale(LC_ALL, "en_US.UTF-8");
   wprintf(L"%lc\n", wc);
   wprintf(L"%ls\n", pu_umlaut);
- 
+
   return 0;
 }
-

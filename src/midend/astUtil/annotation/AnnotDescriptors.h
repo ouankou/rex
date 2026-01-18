@@ -3,12 +3,19 @@
 #define ANNOT_DESCRIPTORS_H
 
 #include "AnnotIO.h"
+
 #include <assert.h>
+
 #include <iostream>
+
 #include <map>
+
 #include <set>
+
 #include <sstream>
+
 #include <stdio.h>
+
 #include <string>
 //! Input interface of a container
 // 'Container' contains element of 'Member' type
@@ -161,8 +168,9 @@ public:
 //! A descriptor for an identifier
 class StringDescriptor {
   std::string name_;
+
 protected:
-  void set_name(const std::string& n) { name_ = n; }
+  void set_name(const std::string &n) { name_ = n; }
 
 public:
   StringDescriptor() : name_("") {}

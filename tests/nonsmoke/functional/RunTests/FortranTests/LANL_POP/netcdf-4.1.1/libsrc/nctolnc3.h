@@ -1,8 +1,8 @@
 #ifndef _NC3TOLNC3_CONV_
 #define _NC3TOLNC3_CONV_
 
-#include <stddef.h> /* size_t, ptrdiff_t */
 #include <errno.h>  /* netcdf functions sometimes return system errors */
+#include <stddef.h> /* size_t, ptrdiff_t */
 
 #if defined(__cplusplus)
 extern "C" {
@@ -46,7 +46,7 @@ extern "C" {
 #define nc_get_vara_float l3nc_get_vara_float
 #define nc_get_vara_double l3nc_get_vara_double
 
-/* End {get}_vara */
+/* End {get}_vara */
 /* Begin {get}_vars */
 
 #define nc_get_vars l3nc_get_vars

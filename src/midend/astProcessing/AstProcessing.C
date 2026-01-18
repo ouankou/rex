@@ -12,81 +12,63 @@
 // use much more efficient comparisons now available to us; it also never
 // causes visits to included files, something that happened from time to
 // time with the old version.
-bool 
-SgTreeTraversal_inFileToTraverse(SgNode* node, bool traversalConstraint, SgFile* fileToVisit)
-   {
-#if 0
-  // DQ (8/20/2018): Added debugging for support unparsing of header files.
-     printf ("In SgTreeTraversal_inFileToTraverse(): traversalConstraint = %s fileToVisit = %p filename = %s node = %p = %s \n",
-             traversalConstraint ? "true" : "false",fileToVisit,(traversalConstraint == true) ? fileToVisit->getFileName().c_str() : "null",
-             node,node != NULL ? node->class_name().c_str() : "null");
-#endif
+bool SgTreeTraversal_inFileToTraverse(SgNode *node, bool traversalConstraint,
+                                      SgFile *fileToVisit) {
 
   // If traversing without constraint, just continue.
   // if (!traversalConstraint)
-     if (traversalConstraint == false)
-        {
-          return true;
-        }
+  if (traversalConstraint == false) {
+    return true;
+  }
 
-        // DQ (1/21/2008): Some nodes do not have a SgFileInfo object.
-        // Of all the nodes to be traversed, only SgProject is allowed to have
-        // a NULL file info; go ahead and try to traverse it (even though this
-        // does not make sense since it is not within any file).
-        if (node->get_file_info() == NULL) {
-          // if (isSgProject(node) == NULL)
-          //      printf ("What node is this: node = %p = %s
-          //      \n",node,node->class_name().c_str()); //
-          //      SageInterface::get_name(node).c_str());
-          // ROSE_ASSERT(isSgProject(node) != NULL);
+  // DQ (1/21/2008): Some nodes do not have a SgFileInfo object.
+  // Of all the nodes to be traversed, only SgProject is allowed to have
+  // a NULL file info; go ahead and try to traverse it (even though this
+  // does not make sense since it is not within any file).
+  if (node->get_file_info() == NULL) {
+    // if (isSgProject(node) == NULL)
+    //      printf ("What node is this: node = %p = %s
+    //      \n",node,node->class_name().c_str()); //
+    //      SageInterface::get_name(node).c_str());
+    // ROSE_ASSERT(isSgProject(node) != NULL);
 
-          // if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL)
-          if (isSgProject(node) == NULL )
-             {
-               printf ("Error: SgTreeTraversal_inFileToTraverse() --- node->get_file_info() == NULL: node = %p = %s \n",node,node->class_name().c_str());
-               SageInterface::dumpInfo(node);
-             }
+    // if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL)
+    if (isSgProject(node) == NULL) {
+      printf("Error: SgTreeTraversal_inFileToTraverse() --- "
+             "node->get_file_info() == NULL: node = %p = %s \n",
+             node, node->class_name().c_str());
+      SageInterface::dumpInfo(node);
+    }
 
-#if 0
-       // DQ (11/19/2013): Allow this to pass while we are evaluating AST traversal behavior.
-       // ROSE_ASSERT(isSgProject(node) != NULL || isSgAsmNode(node) != NULL);
-       // if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL)
-          if (isSgProject(node) == NULL && isSgAsmNode(node) == NULL)
-             {
-               printf ("WARNING: isSgProject(node) == NULL && isSgAsmNode(node) == NULL: node = %p = %s \n",node,node->class_name().c_str());
-             }
-#endif
+    return true;
+  }
 
-          return true;
-        }
-
-        // Traverse compiler generated code and code generated from
-        // transformations, unless it is "frontend specific" like the stuff in
-        // rose_required_macros_and_functions.h.
-        bool isFrontendSpecific = node->get_file_info()->isFrontendSpecific();
-        bool isCompilerGeneratedOrPartOfTransformation;
-        if (isFrontendSpecific) {
-          isCompilerGeneratedOrPartOfTransformation = false;
-        } else {
-          // DQ (11/14/2008): Implicitly defined functions in Fortran are not
-          // marked as compiler generated (the function body is at least
-          // explicit in the source file), but the function declaration IR nodes
-          // is marked as coming from file == NULL_FILE and it is also marked as
-          // "outputInCodeGeneration" So it should be traversed so that we can
-          // see the function body and so that it can be a proper part of the
-          // definition of the AST. isCompilerGeneratedOrPartOfTransformation =
-          // node->get_file_info()->isCompilerGenerated() ||
-          // node->get_file_info()->isTransformation();
-          bool isOutputInCodeGeneration = node->get_file_info()->isOutputInCodeGeneration();
-          isCompilerGeneratedOrPartOfTransformation = node->get_file_info()->isCompilerGenerated() || node->get_file_info()->isTransformation() || isOutputInCodeGeneration;
-        }
+  // Traverse compiler generated code and code generated from
+  // transformations, unless it is "frontend specific" like the stuff in
+  // rose_required_macros_and_functions.h.
+  bool isFrontendSpecific = node->get_file_info()->isFrontendSpecific();
+  bool isCompilerGeneratedOrPartOfTransformation;
+  if (isFrontendSpecific) {
+    isCompilerGeneratedOrPartOfTransformation = false;
+  } else {
+    // DQ (11/14/2008): Implicitly defined functions in Fortran are not
+    // marked as compiler generated (the function body is at least
+    // explicit in the source file), but the function declaration IR nodes
+    // is marked as coming from file == NULL_FILE and it is also marked as
+    // "outputInCodeGeneration" So it should be traversed so that we can
+    // see the function body and so that it can be a proper part of the
+    // definition of the AST. isCompilerGeneratedOrPartOfTransformation =
+    // node->get_file_info()->isCompilerGenerated() ||
+    // node->get_file_info()->isTransformation();
+    bool isOutputInCodeGeneration =
+        node->get_file_info()->isOutputInCodeGeneration();
+    isCompilerGeneratedOrPartOfTransformation =
+        node->get_file_info()->isCompilerGenerated() ||
+        node->get_file_info()->isTransformation() || isOutputInCodeGeneration;
+  }
 
   // Traverse this node if it is in the file we want to visit.
-     bool isRightFile = node->get_file_info()->isSameFile(fileToVisit);
-
-#if 0
-     printf ("In SgTreeTraversal_inFileToTraverse(): node = %p = %s isRightFile = %s \n",node,node->class_name().c_str(),isRightFile ? "true" : "false");
-#endif
+  bool isRightFile = node->get_file_info()->isSameFile(fileToVisit);
 
   // This function is meant to traverse input files in the sense of not
   // visiting "header" files (a fuzzy concept). But not every #included file
@@ -97,27 +79,14 @@ SgTreeTraversal_inFileToTraverse(SgNode* node, bool traversalConstraint, SgFile*
   // global scope or from within a namespace definition, we guess that it is
   // a header and don't traverse it. Otherwise, we guess that it is "code"
   // and do traverse it.
-     bool isCode = node->get_parent() != NULL
-                   && !isSgGlobal(node->get_parent())
-                   && !isSgNamespaceDefinitionStatement(node->get_parent());
+  bool isCode = node->get_parent() != NULL && !isSgGlobal(node->get_parent()) &&
+                !isSgNamespaceDefinitionStatement(node->get_parent());
 
-     bool traverseNode;
-     if (isCompilerGeneratedOrPartOfTransformation || isRightFile || isCode)
-          traverseNode = true;
-       else
-          traverseNode = false;
+  bool traverseNode;
+  if (isCompilerGeneratedOrPartOfTransformation || isRightFile || isCode)
+    traverseNode = true;
+  else
+    traverseNode = false;
 
-
-#if 0
-  // DQ (8/17/2018): Need to stop here and debug this function tomorrow.
-     printf ("Exiting as a test! \n");
-     ROSE_ABORT();
-#endif
-
-#if 0
-  // DQ (8/20/2018): Added debugging for support unparsing of header files.
-     printf ("Leaving SgTreeTraversal_inFileToTraverse(): traverseNode = %s \n",traverseNode ? "true" : "false");
-#endif
-
-     return traverseNode;
-   }
+  return traverseNode;
+}

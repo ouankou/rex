@@ -797,9 +797,6 @@ SgLocatedNode::isTransformation () const
      const SgExpression* expression = isSgExpression(this);
      if (expression != NULL && expression->get_operatorPosition() != NULL)
         {
-#if 0
-          printf ("NOTE: this = %p = %s testing: result != expression->get_operatorPosition()->isTransformation() \n",this,this->class_name().c_str());
-#endif
           if (result != expression->get_operatorPosition()->isTransformation())
              {
                printf ("Warning: this = %p = %s result != expression->get_operatorPosition()->isTransformation() \n",this,this->class_name().c_str());
@@ -882,9 +879,6 @@ SgLocatedNode::isShared () const
      const SgExpression* expression = isSgExpression(this);
      if (expression != NULL && expression->get_operatorPosition() != NULL)
         {
-#if 0
-          printf ("NOTE: this = %p = %s testing: result != expression->get_operatorPosition()->isShared() \n",this,this->class_name().c_str());
-#endif
           if (result != expression->get_operatorPosition()->isShared())
              {
                printf ("Warning: this = %p = %s result != expression->get_operatorPosition()->isShared() \n",this,this->class_name().c_str());
@@ -961,9 +955,6 @@ SgLocatedNode::isFrontendSpecific () const
      const SgExpression* expression = isSgExpression(this);
      if (expression != NULL && expression->get_operatorPosition() != NULL)
         {
-#if 0
-          printf ("NOTE: this = %p = %s testing: result != expression->get_operatorPosition()->isFrontendSpecific() \n",this,this->class_name().c_str());
-#endif
           if (result != expression->get_operatorPosition()->isFrontendSpecific())
              {
                printf ("Warning: this = %p = %s result != expression->get_operatorPosition()->isFrontendSpecific() \n",this,this->class_name().c_str());

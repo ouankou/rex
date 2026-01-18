@@ -286,6 +286,3 @@ void $CLASSNAME::operator delete(void *Pointer, size_t Size)
 // runtime calls exactly one of them (whichever is defined). Futhermore, some serialization libraries assume that classes
 // don't provide both versions at once (doing so causes compile errors in headers that try to invoke the
 // destructor).  Therefore, I'm commenting out operator delete(void*). See [http://en.cppreference.com/w/cpp/language/delete].
-#if 0
-void $CLASSNAME::operator delete(void* pointer) { $CLASSNAME::operator delete (pointer, sizeof($CLASSNAME)); };
-#endif

@@ -7,15 +7,14 @@
 
 #include "FunctionNormalization.h"
 
-int
-main( int argc, char * argv[] ) {
-  SgProject* project = new SgProject(argc, argv);
+int main(int argc, char *argv[]) {
+  SgProject *project = new SgProject(argc, argv);
 
-  project = frontend( argc, argv );
+  project = frontend(argc, argv);
   FunctionCallNormalization traverse;
-  traverse.traverseInputFiles( project, postorder );
-  generateDOT( *project );
-  
+  traverse.traverseInputFiles(project, postorder);
+  generateDOT(*project);
+
   /*
   list<SgNode *> init = NodeQuery::querySubTree( project, V_SgInitializedName );
   for ( list<SgNode *>::iterator i = init.begin(); i != init.end(); i++ )
@@ -25,14 +24,14 @@ main( int argc, char * argv[] ) {
       cout << "Node: " << s << "\t";
       cout << s->get_name().str();
       if ( s->get_scope() )
-	cout << "\thas scope " << s->get_scope()
+        cout << "\thas scope " << s->get_scope()
              << "\t" << s->get_scope()->sage_class_name() << "\n";
       else
-	cout << "\tNO SCOPE SET\n";
+        cout << "\tNO SCOPE SET\n";
     }
   */
 
   AstTests::runAllTests(project);
-  
+
   return backend(project);
 }

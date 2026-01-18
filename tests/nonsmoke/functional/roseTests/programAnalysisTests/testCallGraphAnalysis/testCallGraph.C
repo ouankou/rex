@@ -10,12 +10,16 @@
 // modified from CG.C to generate tests more specific my own
 // requirements for testing.
 
+#include "CallGraph.h"
+
+#include "GraphAccess.h"
+
+#include "GraphUpdate.h"
+
 #include "rose.h"
-#include <CallGraph.h>
-#include <GraphAccess.h>
-#include <GraphUpdate.h>
 
 #include <filesystem>
+
 #include <system_error>
 
 using namespace std;

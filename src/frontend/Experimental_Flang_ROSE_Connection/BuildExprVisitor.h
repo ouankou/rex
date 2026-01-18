@@ -4,7 +4,7 @@ namespace Rose::builder {
 
 class BuildExprVisitor {
 public:
-  BuildExprVisitor(SgExpression* expr) : pre_{expr}, post_{nullptr} {}
+  BuildExprVisitor(SgExpression *expr) : pre_{expr}, post_{nullptr} {}
 
   // In nearly all cases, this code avoids defining Boolean-valued Pre()
   // callbacks for the parse tree walking framework in favor of two void
@@ -21,8 +21,7 @@ public:
       Build(x);
       Post(x);
       return false; // Walk() does not visit descendents
-    }
-    else {
+    } else {
       Before(x);
       return true; // there's no Build() defined here, Walk() the descendents
     }
@@ -31,15 +30,13 @@ public:
   template <typename T> void Post(T &) {}
 
   // Call back to the traversal framework.
-  template <typename T> void Walk(T &x) {
-    Fortran::parser::Walk(x, *this);
-  }
+  template <typename T> void Walk(T &x) { Fortran::parser::Walk(x, *this); }
 
   // Replace is hard for most types and needs testing (don't do it by default)
-  template <typename T> void Replace(T &, SgExpression*) { }
+  template <typename T> void Replace(T &, SgExpression *) {}
 
   template <typename T> void BuildReplace(T &x) {
-    SgExpression* sg{nullptr};
+    SgExpression *sg{nullptr};
     BuildImpl(x, sg);
     Replace(x, sg);
     this->set(sg);
@@ -83,38 +80,35 @@ public:
 
   void Build(Fortran::parser::CharBlock &x) {
     // For future use with token-based unparsing?
-#if 0
-    startSource_ = x.interval_.start_;
-    sizeSource_ = x.interval_.size_;
-#endif
   }
 
   void Done() const {}
 
   // Build expressions for binary operators
-  template <typename T> void BuildExpressions(T &x, SgExpression* &lhs, SgExpression* &rhs);
+  template <typename T>
+  void BuildExpressions(T &x, SgExpression *&lhs, SgExpression *&rhs);
 
   // Access functions for synthesized attributes
-  void get(SgExpression* &expr) {
+  void get(SgExpression *&expr) {
     expr = post_;
     post_ = nullptr;
   }
-  void set(SgExpression* expr) {
+  void set(SgExpression *expr) {
     ASSERT_not_null(expr);
     ASSERT_require(post_ == nullptr);
     post_ = expr;
   }
 
 private:
-  SgExpression* pre_; // expression attribute (probably not needed)
-  SgExpression* post_; // synthesized expression attribute
-  const char* startSource_; // start of Fortran::common::Interal expression source
+  SgExpression *pre_;  // expression attribute (probably not needed)
+  SgExpression *post_; // synthesized expression attribute
+  const char
+      *startSource_;  // start of Fortran::common::Interal expression source
   size_t sizeSource_; // size of Fortran::common::Interal expression source
 }; // BuildExprVisitor
 
 // Walk using BuildExprVisitor
-template <typename T>
-void WalkExpr(T &root, SgExpression* &expr) {
+template <typename T> void WalkExpr(T &root, SgExpression *&expr) {
   BuildExprVisitor visitor{expr};
   Walk(root, visitor);
   visitor.Done();

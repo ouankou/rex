@@ -21,30 +21,54 @@
 // scaffolding compiler driver that can test some semantic passes of the
 // F18 compiler under development.
 
-#include "flang/Parser/characters.h"
-#include "flang/Parser/dump-parse-tree.h"
-#include "flang/Parser/message.h"
-#include "flang/Parser/parse-tree-visitor.h"
-#include "flang/Parser/parse-tree.h"
-#include "flang/Parser/parsing.h"
-#include "flang/Parser/provenance.h"
-#include "flang/Parser/unparse.h"
-#include "flang/Support/Fortran-features.h"
-#include "flang/Support/LangOptions.h"
-#include "flang/Support/default-kinds.h"
-#include "llvm/Support/Errno.h"
-#include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Program.h"
-#include "llvm/Support/raw_ostream.h"
-#include <cstdio>
 #include <cstring>
+
+#include <cstdio>
+
+#include <flang/Parser/characters.h>
+
+#include <flang/Parser/dump-parse-tree.h>
+
+#include <flang/Parser/message.h>
+
+#include <flang/Parser/parse-tree-visitor.h>
+
+#include <flang/Parser/parse-tree.h>
+
+#include <flang/Parser/parsing.h>
+
+#include <flang/Parser/provenance.h>
+
+#include <flang/Parser/unparse.h>
+
+#include <flang/Support/Fortran-features.h>
+
+#include <flang/Support/LangOptions.h>
+
+#include <flang/Support/default-kinds.h>
+
+#include <llvm/Support/Errno.h>
+
+#include <llvm/Support/FileSystem.h>
+
+#include <llvm/Support/Program.h>
+
+#include <llvm/Support/raw_ostream.h>
+
 #include <fstream>
+
 #include <list>
+
 #include <memory>
+
 #include <optional>
+
 #include <stdlib.h>
+
 #include <string>
+
 #include <time.h>
+
 #include <vector>
 
 static std::list<std::string> argList(int argc, char *const argv[]) {
@@ -65,7 +89,7 @@ void CleanUpAtExit() {
   }
 }
 
-#if _POSIX_C_SOURCE >= 199309L && _POSIX_TIMERS > 0 && _POSIX_CPUTIME && \
+#if _POSIX_C_SOURCE >= 199309L && _POSIX_TIMERS > 0 && _POSIX_CPUTIME &&       \
     defined CLOCK_PROCESS_CPUTIME_ID
 static constexpr bool canTime{true};
 double CPUseconds() {
@@ -80,15 +104,15 @@ double CPUseconds() { return 0; }
 
 struct DriverOptions {
   DriverOptions() {}
-  bool verbose{false}; // -v
-  bool compileOnly{false}; // -c
-  std::string outputPath; // -o path
+  bool verbose{false};                              // -v
+  bool compileOnly{false};                          // -c
+  std::string outputPath;                           // -o path
   std::vector<std::string> searchDirectories{"."s}; // -I dir
   Fortran::common::LangOptions langOpts;
-  bool forcedForm{false}; // -Mfixed or -Mfree appeared
+  bool forcedForm{false};             // -Mfixed or -Mfree appeared
   bool warnOnNonstandardUsage{false}; // -Mstandard
-  bool warnOnSuspiciousUsage{false}; // -pedantic
-  bool warningsAreErrors{false}; // -Werror
+  bool warnOnSuspiciousUsage{false};  // -pedantic
+  bool warningsAreErrors{false};      // -Werror
   Fortran::parser::Encoding encoding{Fortran::parser::Encoding::LATIN_1};
   bool lineDirectives{true}; // -P disables
   bool syntaxOnly{false};
@@ -112,9 +136,8 @@ void Exec(std::vector<llvm::StringRef> &argv, bool verbose = false) {
   llvm::ErrorOr<std::string> Program = llvm::sys::findProgramByName(argv[0]);
   if (!Program)
     ErrMsg = Program.getError().message();
-  if (!Program ||
-      llvm::sys::ExecuteAndWait(
-          Program.get(), argv, std::nullopt, {}, 0, 0, &ErrMsg)) {
+  if (!Program || llvm::sys::ExecuteAndWait(Program.get(), argv, std::nullopt,
+                                            {}, 0, 0, &ErrMsg)) {
     llvm::errs() << "execvp(" << argv[0] << ") failed: " << ErrMsg << '\n';
     exit(EXIT_FAILURE);
   }
@@ -153,8 +176,8 @@ std::string RelocatableName(const DriverOptions &driver, std::string path) {
 
 int exitStatus{EXIT_SUCCESS};
 
-std::string CompileFortran(
-    std::string path, Fortran::parser::Options options, DriverOptions &driver) {
+std::string CompileFortran(std::string path, Fortran::parser::Options options,
+                           DriverOptions &driver) {
   if (!driver.forcedForm) {
     auto dot{path.rfind(".")};
     if (dot != std::string::npos) {
@@ -204,12 +227,13 @@ std::string CompileFortran(
   parsing.messages().Emit(llvm::errs(), parsing.allCooked());
   if (!parsing.consumedWholeFile()) {
     parsing.EmitMessage(llvm::errs(), parsing.finalRestingPlace(),
-        "parser FAIL (final position)", "error: ", llvm::raw_ostream::RED);
+                        "parser FAIL (final position)",
+                        "error: ", llvm::raw_ostream::RED);
     exitStatus = EXIT_FAILURE;
     return {};
   }
   if ((!parsing.messages().empty() &&
-          (driver.warningsAreErrors || parsing.messages().AnyFatalError())) ||
+       (driver.warningsAreErrors || parsing.messages().AnyFatalError())) ||
       !parsing.parseTree()) {
     llvm::errs() << driver.prefix << "could not parse " << path << '\n';
     exitStatus = EXIT_FAILURE;
@@ -222,9 +246,9 @@ std::string CompileFortran(
   }
   if (driver.dumpUnparse) {
     Unparse(llvm::outs(), parseTree, driver.langOpts, driver.encoding,
-        true /*capitalize*/,
-        options.features.IsEnabled(
-            Fortran::common::LanguageFeature::BackslashEscapes));
+            true /*capitalize*/,
+            options.features.IsEnabled(
+                Fortran::common::LanguageFeature::BackslashEscapes));
     return {};
   }
   if (driver.syntaxOnly) {
@@ -244,9 +268,9 @@ std::string CompileFortran(
     }
     llvm::raw_fd_ostream tmpSource(fd, /*shouldClose*/ true);
     Unparse(tmpSource, parseTree, driver.langOpts, driver.encoding,
-        true /*capitalize*/,
-        options.features.IsEnabled(
-            Fortran::common::LanguageFeature::BackslashEscapes));
+            true /*capitalize*/,
+            options.features.IsEnabled(
+                Fortran::common::LanguageFeature::BackslashEscapes));
   }
 
   RunOtherCompiler(driver, tmpSourcePath.data(), relo.data());
@@ -302,8 +326,8 @@ int main(int argc, char *const argv[]) {
   options.predefinitions.emplace_back("__F18_MINOR__", "1");
   options.predefinitions.emplace_back("__F18_PATCHLEVEL__", "1");
 
-  options.features.Enable(
-      Fortran::common::LanguageFeature::BackslashEscapes, true);
+  options.features.Enable(Fortran::common::LanguageFeature::BackslashEscapes,
+                          true);
 
   Fortran::common::IntrinsicTypeDefaultKinds defaultKinds;
 
@@ -399,12 +423,12 @@ int main(int argc, char *const argv[]) {
       if (eq == std::string::npos) {
         options.predefinitions.emplace_back(arg.substr(2), "1");
       } else {
-        options.predefinitions.emplace_back(
-            arg.substr(2, eq - 2), arg.substr(eq + 1));
+        options.predefinitions.emplace_back(arg.substr(2, eq - 2),
+                                            arg.substr(eq + 1));
       }
     } else if (arg.substr(0, 2) == "-U") {
-      options.predefinitions.emplace_back(
-          arg.substr(2), std::optional<std::string>{});
+      options.predefinitions.emplace_back(arg.substr(2),
+                                          std::optional<std::string>{});
     } else if (arg == "-r8" || arg == "-fdefault-real-8") {
       defaultKinds.set_defaultRealKind(8);
     } else if (arg == "-i8" || arg == "-fdefault-integer-8") {

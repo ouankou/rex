@@ -4,29 +4,32 @@ by Liao, 9/17/2008
 Last Modified: 9/19/2008
 */
 #include "rose.h"
+
 #include "RoseAst.h"
+
 #include <iostream>
+
 #include <string>
+
 #include "ompSupport.h"
 using namespace std;
 using namespace OmpSupport;
 
-int main(int argc, char * argv[])
-{
-  SgProject *project = frontend (argc, argv);
+int main(int argc, char *argv[]) {
+  SgProject *project = frontend(argc, argv);
 
   AstTests::runAllTests(project);
 
 //  visitorTraversal myvisitor;
 //  myvisitor.traverseInputFiles(project,preorder);
-#if 0  // used to trigger issue outliner-32
+#if 0 // used to trigger issue outliner-32
   SgGlobal * global =  SageInterface::getFirstGlobalScope(project);
   SgSourceFile* originalSourceFile = SageInterface::getEnclosingSourceFile(global);
   // check this first, before doing any ast post processing
   checkPhysicalSourcePosition(originalSourceFile);
 
   AstPostProcessing (originalSourceFile);
-#endif 
+#endif
 #if 0
   RoseAst ast(project);
   for(RoseAst::iterator i=ast.begin();i!=ast.end();++i) {
@@ -43,6 +46,6 @@ int main(int argc, char * argv[])
     }
 
   }
-#endif  
+#endif
   return backend(project);
 }

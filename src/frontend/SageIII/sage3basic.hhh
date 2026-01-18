@@ -2,4 +2,6 @@
 // We have a checker that prevents header files to include sage3.h but
 // for rose.h we have an exception since users should only include rose.h
 #include "sage3basic.h"
+
+
 #include "sage3.h"

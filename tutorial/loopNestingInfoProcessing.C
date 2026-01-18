@@ -20,14 +20,16 @@ typedef NestingDepth SynNestingDepth;
 */
 class NestingLevelAnnotation : public AstAttribute {
 public:
-  NestingLevelAnnotation(NestingLevel n,NestingDepth d)
-    : _nestingLevel(n),_nestingDepth(d) {}
+  NestingLevelAnnotation(NestingLevel n, NestingDepth d)
+      : _nestingLevel(n), _nestingDepth(d) {}
   NestingLevel getNestingLevel() { return _nestingLevel; }
   NestingDepth getNestingDepth() { return _nestingDepth; }
-  string toString() { 
-    ostringstream ss; ss<<_nestingLevel<<","<<_nestingDepth; 
-    return ss.str(); 
+  string toString() {
+    ostringstream ss;
+    ss << _nestingLevel << "," << _nestingDepth;
+    return ss.str();
   }
+
 private:
   NestingLevel _nestingLevel;
   NestingDepth _nestingDepth;
@@ -42,99 +44,107 @@ The maximum nesting level of the whole AST is computed as
 "accumulated" value in a member variable and can be accessed with
 getMaxNestingLevel().
 */
-class LoopLevelProcessing : public AstTopDownBottomUpProcessing<InhNestingLevel,SynNestingDepth> {
+class LoopLevelProcessing
+    : public AstTopDownBottomUpProcessing<InhNestingLevel, SynNestingDepth> {
 public:
-  LoopLevelProcessing():_maxNestingLevel(0) {}
+  LoopLevelProcessing() : _maxNestingLevel(0) {}
 
-  /*! Performs a traversal of the AST and computes loop-nesting information by using
-      inherited and synthesized attributes. The results are attached to the AST as
-      annotation.
+  /*! Performs a traversal of the AST and computes loop-nesting information by
+     using inherited and synthesized attributes. The results are attached to the
+     AST as annotation.
   */
-  void attachLoopNestingAnnotaton(SgProject* node) { traverseInputFiles(node,0); }
+  void attachLoopNestingAnnotaton(SgProject *node) {
+    traverseInputFiles(node, 0);
+  }
 
-  /*! Returns the maximum nesting level of the entire AST (of the input file). 
+  /*! Returns the maximum nesting level of the entire AST (of the input file).
       Requires attachLoopNestingAnnotation (to be called before)
   */
   NestingLevel getMaxNestingLevel() { return _maxNestingLevel; }
 
 protected:
   //! computes the nesting level
-  InhNestingLevel evaluateInheritedAttribute(SgNode*,InhNestingLevel);
+  InhNestingLevel evaluateInheritedAttribute(SgNode *, InhNestingLevel);
   //! computes the nesting depth
-  SynNestingDepth evaluateSynthesizedAttribute(SgNode*,InhNestingLevel,SynthesizedAttributesList);
+  SynNestingDepth evaluateSynthesizedAttribute(SgNode *, InhNestingLevel,
+                                               SynthesizedAttributesList);
   //! provides the default value 0 for the nesting depth
   SynNestingDepth defaultSynthesizedAttribute(InhNestingLevel inh);
+
 private:
   NestingLevel _maxNestingLevel;
 };
 
-
 NestingLevel
-LoopLevelProcessing::evaluateInheritedAttribute(SgNode* node, NestingLevel loopNestingLevel) {
+LoopLevelProcessing::evaluateInheritedAttribute(SgNode *node,
+                                                NestingLevel loopNestingLevel) {
 
-  //! compute maximum nesting level of entire program in accumulator (member variable)
-  if(loopNestingLevel>_maxNestingLevel)
-    _maxNestingLevel=loopNestingLevel;
+  //! compute maximum nesting level of entire program in accumulator (member
+  //! variable)
+  if (loopNestingLevel > _maxNestingLevel)
+    _maxNestingLevel = loopNestingLevel;
 
-  switch(node->variantT()) {
+  switch (node->variantT()) {
   case V_SgGotoStatement:
     cout << "WARNING: Goto statement found. We do not consider goto loops.\n";
- // DQ (11/17/2005): Added return statment to avoid g++ warning: control reaches end of non-void function
+    // DQ (11/17/2005): Added return statment to avoid g++ warning: control
+    // reaches end of non-void function
     return loopNestingLevel;
     break;
   case V_SgDoWhileStmt:
   case V_SgForStatement:
   case V_SgWhileStmt:
-    return loopNestingLevel+1;
+    return loopNestingLevel + 1;
   default:
     return loopNestingLevel;
   }
 }
 
-SynNestingDepth 
+SynNestingDepth
 LoopLevelProcessing::defaultSynthesizedAttribute(InhNestingLevel inh) {
   /*! we do not need the inherited attribute here
-      as default value for synthesized attribute we set 0, representing nesting depth 0.
+      as default value for synthesized attribute we set 0, representing nesting
+     depth 0.
   */
   return 0;
 }
 
-SynNestingDepth
-LoopLevelProcessing::evaluateSynthesizedAttribute(SgNode* node,InhNestingLevel nestingLevel,SynthesizedAttributesList l)
-   {
-     if (nestingLevel>_maxNestingLevel)
-          _maxNestingLevel=nestingLevel;
+SynNestingDepth LoopLevelProcessing::evaluateSynthesizedAttribute(
+    SgNode *node, InhNestingLevel nestingLevel, SynthesizedAttributesList l) {
+  if (nestingLevel > _maxNestingLevel)
+    _maxNestingLevel = nestingLevel;
 
-  // compute maximum nesting depth of synthesized attributes 
-     SynNestingDepth nestingDepth=0;
-     for(SynthesizedAttributesList::iterator i=l.begin();i!=l.end();i++)
-        {
-          if(*i>nestingDepth) nestingDepth=*i;
-        }
+  // compute maximum nesting depth of synthesized attributes
+  SynNestingDepth nestingDepth = 0;
+  for (SynthesizedAttributesList::iterator i = l.begin(); i != l.end(); i++) {
+    if (*i > nestingDepth)
+      nestingDepth = *i;
+  }
 
-     switch(node->variantT())
-        {
-          case V_SgDoWhileStmt:
-          case V_SgForStatement:
-          case V_SgWhileStmt:
-             {
-               nestingDepth++;
-               cout << "Nesting level:" << nestingLevel << ", nesting depth:" << nestingDepth << endl;
-               break;
-             }
+  switch (node->variantT()) {
+  case V_SgDoWhileStmt:
+  case V_SgForStatement:
+  case V_SgWhileStmt: {
+    nestingDepth++;
+    cout << "Nesting level:" << nestingLevel
+         << ", nesting depth:" << nestingDepth << endl;
+    break;
+  }
 
-          default:
-             {
-            // DQ (11/17/2005): Nothing to do here, but explicit default in switch avoids lots of warnings.
-             }
-        }
+  default: {
+    // DQ (11/17/2005): Nothing to do here, but explicit default in switch
+    // avoids lots of warnings.
+  }
+  }
 
-  // add loop nesting level as annotation to AST 
-     NestingLevelAnnotation* nla = new NestingLevelAnnotation(nestingLevel,nestingDepth);
-     ROSE_ASSERT(nla != NULL);
+  // add loop nesting level as annotation to AST
+  NestingLevelAnnotation *nla =
+      new NestingLevelAnnotation(nestingLevel, nestingDepth);
+  ROSE_ASSERT(nla != NULL);
 
   // DQ (1/2/2006): Added support for new attribute interface.
-  // printf ("LoopLevelProcessing::evaluateSynthesizedAttribute(): using new attribute interface \n");
+  // printf ("LoopLevelProcessing::evaluateSynthesizedAttribute(): using new
+  // attribute interface \n");
 #if 0
      if (node->get_attribute() == NULL)
         {
@@ -143,15 +153,15 @@ LoopLevelProcessing::evaluateSynthesizedAttribute(SgNode* node,InhNestingLevel n
           node->set_attribute(attributePtr);
         }
 #endif
-// node->attribute.add("loopNestingInfo",nla);
-// node->attribute().add("loopNestingInfo",nla);
-   node->addNewAttribute("loopNestingInfo",nla);
+  // node->attribute.add("loopNestingInfo",nla);
+  // node->attribute().add("loopNestingInfo",nla);
+  node->addNewAttribute("loopNestingInfo", nla);
 
   //! return the maximum nesting depth as synthesized attribute
   return nestingDepth;
 }
 
-int main ( int argc, char** argv) {
+int main(int argc, char **argv) {
   // command line parameters are passed to legacy frontend
   // non-legacy frontend parameters are passed (through) to ROSE (and the vendor
   // compiler)
@@ -171,11 +181,11 @@ int main ( int argc, char** argv) {
 
   // Generate a pdf file showing the AST
 #if ROSE_WITH_LIBHARU
-   AstPDFGeneration astpdfgen;
-   astpdfgen.generateInputFiles(root);
+  AstPDFGeneration astpdfgen;
+  astpdfgen.generateInputFiles(root);
 #else
-   cout << "Warning: libharu is not enabled" << endl;
+  cout << "Warning: libharu is not enabled" << endl;
 #endif
-   
-   return 0;
-}   
+
+  return 0;
+}

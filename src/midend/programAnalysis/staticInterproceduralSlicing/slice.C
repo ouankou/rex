@@ -1,36 +1,47 @@
+#include "AstInterface.h"
+
+#include "ReachingDefinition.h"
+
+#include "StmtInfoCollect.h"
+
 #include "rose.h"
-#include <AstInterface.h>
-#include <StmtInfoCollect.h>
-#include <ReachingDefinition.h>
-//#include <DefUseChain.h>
-#include <DirectedGraph.h>
-#include "DependenceGraph.h"
-#include "SlicingInfo.h"
-#include "CreateSlice.h"
+// #include <DefUseChain.h>
+
 #include "ControlFlowGraph.h"
-#include "DominatorTree.h"
+
+#include "CreateSlice.h"
+
 #include "CreateSliceSet.h"
 
-#include <list>
-#include <set>
+#include "DependenceGraph.h"
+
+#include "DirectedGraph.h"
+
+#include "DominatorTree.h"
+
+#include "SlicingInfo.h"
+
 #include <iostream>
+
+#include <list>
+
+#include <set>
 
 #define DEBUG 1
 using namespace DominatorTreesAndDominanceFrontiers;
 using namespace std;
 
-int main(int argc, char *argv[])
-{
-        SgProject *project = frontend(argc, argv);
-        SlicingInfo si=SlicingInfo();
-        si.traverse(project, preorder);
+int main(int argc, char *argv[]) {
+  SgProject *project = frontend(argc, argv);
+  SlicingInfo si = SlicingInfo();
+  si.traverse(project, preorder);
 
-        SystemDependenceGraph * sdg=new SystemDependenceGraph();
-        sdg->parseProject(project);
+  SystemDependenceGraph *sdg = new SystemDependenceGraph();
+  sdg->parseProject(project);
 
-        CreateSliceSet sliceSet(sdg,si.getSlicingTargets());
-        CreateSlice cs(sliceSet.computeSliceSet());
+  CreateSliceSet sliceSet(sdg, si.getSlicingTargets());
+  CreateSlice cs(sliceSet.computeSliceSet());
 
-        cs.traverse(project);
-        project->unparse();     
+  cs.traverse(project);
+  project->unparse();
 }

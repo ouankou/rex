@@ -3,12 +3,12 @@
 #ifndef ROSE_H
 #define ROSE_H
 
-/* rosePublicConfig.h has some of the same CPP symbol definitions as rose_config.h, except the names have been changed so as
- * to not pollute the global name space.  All the names start with "ROSE_". */
+/* rosePublicConfig.h has some of the same CPP symbol definitions as
+ * rose_config.h, except the names have been changed so as to not pollute the
+ * global name space.  All the names start with "ROSE_". */
 #include "rosePublicConfig.h"
 
-#include "sage3basic.hhh"
-// DQ (4/21/2009): Andreas needs to add a comment about what this is for...
+#include "sage3basic.hhh" // DQ (4/21/2009): Andreas needs to add a comment about what this is for...
 
 #include "rosedefs.h"
 
@@ -17,9 +17,10 @@
 #endif
 
 // DQ (4/21/2009): This header file contains the definitions of the IR nodes.
-// tps : avoid detection" header files are scanned whether they include sage3basic.h for .h and .hh
+// tps : avoid detection" header files are scanned whether they include
+// sage3basic.h for .h and .hh
 
-//#include "sage3.h"
+// #include "sage3.h"
 
 // DQ (3/22/2009): This is already included in sage3.h"
 // #include "roseInternal.h"
@@ -32,12 +33,17 @@
 // DQ:7/29/2002, MS:12/11/2002
 // Place this at the end (since it is dependent upon ROSE classes.)
 // added here to avoid placing it in each header file using the AstProcessingLib
-#include <typeinfo>
-#include "AstProcessing.h"
-#include "AstReverseProcessing.h"
-#include "AstPDFGeneration.h"
 #include "AstDOTGeneration.h"
+
 #include "AstDiagnostics.h"
+
+#include "AstPDFGeneration.h"
+
+#include "AstProcessing.h"
+
+#include "AstReverseProcessing.h"
+
+#include <typeinfo>
 // #include "AstStatistics.h"
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
@@ -46,7 +52,7 @@
 #endif
 
 // DQ (10/18/2003) Why is this commented out (what is it)
-//#include "AgProcessing.h"
+// #include "AgProcessing.h"
 
 // Not sure that we want this here since it uses the rewrite system
 // which has not defined yet (circular reference in the header files)
@@ -66,7 +72,8 @@
 #endif
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
-// DQ (6/23/2006): Added Andreas's work to support custom DOT graphs using persistant attributes.
+// DQ (6/23/2006): Added Andreas's work to support custom DOT graphs using
+// persistant attributes.
 #include "AstAttributeDOT.h"
 #endif
 
@@ -83,12 +90,13 @@
 // Required to be run before PRE!
 #include "constantFolding.h"
 
-// DQ (2/12/2013): This should be removed since it is now supported by the new name qualification.
-// It is also an error for ROSE compiling ROSE which perhaps shuld be invistigated further.
-// DQ (5/8/2007): Added Robert Preissl's support for hidden type and declartion lists.
-// #include "HiddenList.h"
-// #include "HiddenList_Output.h"
-// #include "HiddenList_Intersection.h"
+// DQ (2/12/2013): This should be removed since it is now supported by the new
+// name qualification. It is also an error for ROSE compiling ROSE which perhaps
+// shuld be invistigated further. DQ (5/8/2007): Added Robert Preissl's support
+// for hidden type and declartion lists. #include "HiddenList.h" #include
+// "HiddenList_Output.h"
+
+#include "HiddenList_Intersection.h"
 
 // DQ (1/25/2008): Added cfgToDot.h as suggested by Jeremiah
 #include "cfgToDot.h"
@@ -98,19 +106,23 @@
 
 // DQ (3/8/2009): Why is this here?
 // added .h file for error check transformations
-//#include "RuntimeInstrumentation.h"
+// #include "RuntimeInstrumentation.h"
 
-// King84 (2010.08.03) : Now that everything is defined we can include all the implementation files for templates.
+// King84 (2010.08.03) : Now that everything is defined we can include all the
+// implementation files for templates.
 #define TEMPLATE_IMPLEMENTATIONS
-// DQ (6/25/2011): Commented out so that I could debug name qualification without function definitions in header files.
+// DQ (6/25/2011): Commented out so that I could debug name qualification
+// without function definitions in header files.
 #include "AstDOTGenerationImpl.C"
+
 #include "utility_functionsImpl.C"
 #undef TEMPLATE_IMPLEMENTATIONS
 
 // ifndef for ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 #endif
 
-// DQ (4/20/2009): Added support to optionally get more information out about new delete operators.
+// DQ (4/20/2009): Added support to optionally get more information out about
+// new delete operators.
 #define COMPILE_DEBUG_STATEMENTS 1
 
 /******************************************************************************************************************************
@@ -141,8 +153,8 @@
  *(rosePublicConfig.h) files in tandem.
  ******************************************************************************************************************************/
 #ifdef CONFIG_ROSE
-#  error "rose_config.h included in public header by mistake. Use rosePublicConfig.h instead."
+#error                                                                         \
+    "rose_config.h included in public header by mistake. Use rosePublicConfig.h instead."
 #endif
-
 
 #endif /* !ROSE_H !*/

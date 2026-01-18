@@ -1,10 +1,15 @@
 #include "AstConsistencyTests.h"
+
 #include "nodeQuery.h"
+
 #include "sage3basic.h"
+
 #include "sageInterface.h"
 
 #include <algorithm>
+
 #include <string>
+
 #include <vector>
 
 namespace {

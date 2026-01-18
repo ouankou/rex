@@ -1,5 +1,7 @@
 #include "nodeQuery.h"
+
 #include "sage3basic.h"
+
 #include "sageInterface.h"
 
 int main(int argc, char **argv) {

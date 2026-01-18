@@ -8,19 +8,22 @@
  */
 #ifndef __fixupClassData
 #define __fixupClassData
-void fixupInClassDataInitialization( SgNode* node );
 
-/*! \brief Modified const double variable initialized in-class to be static const double with initializer.
+#include "AstProcessing.h"
 
-    \internal This is a non-standard feature which g++ supports different than g++.
+void fixupInClassDataInitialization(SgNode *node);
+
+/*! \brief Modified const double variable initialized in-class to be static
+   const double with initializer.
+
+    \internal This is a non-standard feature which g++ supports different than
+   g++.
 
  */
-class FixupInClassDataInitialization : public SgSimpleProcessing
-   {
-     public:
-      //! Required traversal function
-          void visit (SgNode* node);
-   };
+class FixupInClassDataInitialization : public SgSimpleProcessing {
+public:
+  //! Required traversal function
+  void visit(SgNode *node);
+};
 
 #endif
-

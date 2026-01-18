@@ -1,11 +1,17 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
-#include "sage3basic.h"
-#include "sageBuilder.h"
-#include "Outliner.hh"
 #include "omp_lowering.h"
+
+#include "Outliner.hh"
+
 #include "RoseAst.h"
-#include <sstream>
+
 #include "rex_llvm.h"
+
+#include "sage3basic.h"
+
+#include "sageBuilder.h"
+
+#include <sstream>
 
 using namespace std;
 using namespace Rose;
@@ -479,7 +485,7 @@ omp_construct_enum getDataSharingAttribute(SgSymbol *sym, SgNode *anchor_node) {
     // TODO Objects with dynamic storage duration are shared.
     // TODO Static data members are shared.
 
-  }    // end of has an OpenMP enclosing clause body statement
+  } // end of has an OpenMP enclosing clause body statement
   else // orphaned code segments
   {
     /*
@@ -1850,7 +1856,6 @@ void transOmpTargetLoop(SgNode *node) {
   SgVariableSymbol *dev_i_symbol = getFirstVarSym(dev_i_decl);
   ROSE_ASSERT(dev_i_symbol != NULL);
 
-#if 1 // test mysterious replace with _dev_i
   // replace reference to loop index with reference to device i variable
   ROSE_ASSERT(orig_index != NULL);
   SgSymbol *orig_symbol = orig_index->get_symbol_from_symbol_table();
@@ -1864,7 +1869,6 @@ void transOmpTargetLoop(SgNode *node) {
     if (vRef->get_symbol() == orig_symbol)
       vRef->set_symbol(dev_i_symbol);
   }
-#endif
 
   // Step 4. build the if () condition statement, move the loop body into the
   // true body Liao, 2/21/2013. We must be accurate about the range of
@@ -2400,7 +2404,10 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
  *
  *
 #include "libgomp_g.h"
-#include "omp.h"
+
+
+#include <omp.h>
+
 #include <stdio.h>
 
 //void main_omp_fn_0 (struct _omp_data_s_0* _omp_data_i);
@@ -3322,7 +3329,7 @@ static void generateMappedArrayMemoryHandling(
                 // appendStatement(dde_exit_stmt ,
                 // insertion_anchor_stmt->get_scope()); do nothing here or we
                 // will get multiple exit() for a single DDE.
-  } else { // or explicitly control copy back and deallocation
+  } else {      // or explicitly control copy back and deallocation
     // Step 6. copy back data from GPU to CPU, only for variable in
     // map(out:var_list) e.g. xomp_memcpyDeviceToHost ((void*)c, (const
     // void*)dev_m3, array_size); Note: insert this AFTER the target directive
@@ -4270,7 +4277,7 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
 
   SageInterface::fixStatement(outlined_driver_body, p_scope);
   //------------now remove omp parallel since everything within it has been
-  //outlined to a function
+  // outlined to a function
   replaceStatement(target, outlined_driver_body, true);
 
   target_outlined_function_list->push_back(isSgFunctionDeclaration(result));
@@ -4829,7 +4836,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   SageInterface::fixVariableReferences(num_blocks_decl->get_scope());
 
   //------------now remove omp parallel since everything within it has been
-  //outlined to a function
+  // outlined to a function
   replaceStatement(target, outlined_driver_body, true);
 
   target_outlined_function_list->push_back(isSgFunctionDeclaration(result));
@@ -5685,16 +5692,17 @@ void transOmpUnroll(SgNode *node) {
   SgForStatement *for_loop;
   if (isSgOmpBodyStatement(body)) {
     SgOmpBodyStatement *target2 = isSgOmpBodyStatement(body);
-    std::vector<SgNode *> loop_list = NodeQuery::querySubTree(target->get_body(), V_SgForStatement);
+    std::vector<SgNode *> loop_list =
+        NodeQuery::querySubTree(target->get_body(), V_SgForStatement);
     ROSE_ASSERT(loop_list.size() >= 1);
     for_loop = isSgForStatement(loop_list.front());
- } else {
+  } else {
     for_loop = isSgForStatement(body);
   }
-  
+
   ROSE_ASSERT(for_loop != NULL);
   SageInterface::forLoopNormalization(for_loop);
-  
+
   // Get the clause so we can figure out the unrolling factor
   SgOmpClause *clause = target->get_clauses().front();
   if (clause->variantT() == V_SgOmpFullClause) {
@@ -5719,7 +5727,7 @@ void transOmpUnroll(SgNode *node) {
   } else {
     puts("Unknown clause in OMP unroll.");
   }
-  
+
   if (isSgOmpBodyStatement(body)) {
     SgOmpBodyStatement *ompstmt = isSgOmpBodyStatement(body);
     ompstmt->set_body(for_loop);
@@ -5765,7 +5773,8 @@ void transOmpTile(SgNode *node) {
   SgForStatement *for_loop;
   if (isSgOmpBodyStatement(body)) {
     SgOmpBodyStatement *target2 = isSgOmpBodyStatement(body);
-    std::vector<SgNode *> loop_list = NodeQuery::querySubTree(target->get_body(), V_SgForStatement);
+    std::vector<SgNode *> loop_list =
+        NodeQuery::querySubTree(target->get_body(), V_SgForStatement);
     ROSE_ASSERT(loop_list.size() >= 1);
     for_loop = isSgForStatement(loop_list.front());
   } else {
@@ -5786,15 +5795,17 @@ void transOmpTile(SgNode *node) {
 
   // Get any sub loops
   transOmpTileSub(for_loop, list, 2);
-  
-  // Temporary workaround. It should be updated according to the SgInterface tiling API.
+
+  // Temporary workaround. It should be updated according to the SgInterface
+  // tiling API.
   SgBasicBlock *new_tile_body = isSgBasicBlock(target->get_body());
   SgForStatement *new_for_loop = deepCopy(for_loop);
   SgStatement *old_body = deepCopy(body);
   replaceStatement(for_loop, old_body, true);
   SgOmpBodyStatement *ompstmt = isSgOmpBodyStatement(old_body);
-  if (ompstmt) ompstmt->set_body(new_for_loop);
-  //ompstmt->set_body(new_for_loop);
+  if (ompstmt)
+    ompstmt->set_body(new_for_loop);
+  // ompstmt->set_body(new_for_loop);
   replaceStatement(target, new_tile_body, true);
   if (ompstmt)
     removeStatement(body);
@@ -6746,7 +6757,8 @@ void transOmpSingle(SgNode *node) {
 
   // target vs. if_stmt should not share a subtree of AST (the body)
   // We need to disconnect it from old statement (target)
-  // Later replaceStement has the logic to move dangling directives. repeated subtree will cause troubles.
+  // Later replaceStement has the logic to move dangling directives. repeated
+  // subtree will cause troubles.
   target->set_body(NULL);
 
   SgIfStmt *if_stmt = NULL;

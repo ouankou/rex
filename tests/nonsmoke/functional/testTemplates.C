@@ -16,46 +16,37 @@ bool isTemplateInstantiationNode(SgNode* node)
    }
 #endif
 
-void markNodeToBeUnparsed(SgNode* node) 
-   {
-     Sg_File_Info* fileInfo=node->get_file_info();
-     if (fileInfo != NULL) 
-        {
-          fileInfo->setTransformation();
-          fileInfo->setOutputInCodeGeneration();
+void markNodeToBeUnparsed(SgNode *node) {
+  Sg_File_Info *fileInfo = node->get_file_info();
+  if (fileInfo != NULL) {
+    fileInfo->setTransformation();
+    fileInfo->setOutputInCodeGeneration();
 
-          SgLocatedNode* locatedNode = isSgLocatedNode(node);
-          if (locatedNode != NULL)
-             {
-            // DQ (7/7/2015): Make the subtree as transformed.
-               locatedNode->setTransformation();
-               locatedNode->setOutputInCodeGeneration();
+    SgLocatedNode *locatedNode = isSgLocatedNode(node);
+    if (locatedNode != NULL) {
+      // DQ (7/7/2015): Make the subtree as transformed.
+      locatedNode->setTransformation();
+      locatedNode->setOutputInCodeGeneration();
 #if 0
                printf ("Note: calling node markTransformationsForOutput(): node = %p = %s \n",node,node->class_name().c_str());
 #endif
-               markTransformationsForOutput(node);
-             }
-            else
-             {
+      markTransformationsForOutput(node);
+    } else {
 #if 0
                printf ("Note: node is not a SgLocatedNode: node = %p = %s \n",node,node->class_name().c_str());
 #endif
-             }
-        }
-       else
-        {
+    }
+  } else {
 #if 0
           printf ("Note: no Sg_File_Info was found: node = %p = %s \n",node,node->class_name().c_str());
 #endif
-        }
-   }
+  }
+}
 
-int markAllTemplateInstantiationsToBeUnparsed(SgProject* root) 
-   {
-     RoseAst ast(root);
-     int n = 0;
-     for (RoseAst::iterator i=ast.begin();i!=ast.end();++i) 
-        {
+int markAllTemplateInstantiationsToBeUnparsed(SgProject *root) {
+  RoseAst ast(root);
+  int n = 0;
+  for (RoseAst::iterator i = ast.begin(); i != ast.end(); ++i) {
 #if 0
        // DQ (5/9/2017): Debugging code.
           if (isSgGlobal((*i)->get_parent()) != NULL)
@@ -63,19 +54,18 @@ int markAllTemplateInstantiationsToBeUnparsed(SgProject* root)
                printf ("In global scope: *i = %p = %s \n",*i,(*i)->class_name().c_str());
              }
 #endif
-       // if (isTemplateInstantiationNode(*i)) 
-          if (SageInterface::isTemplateInstantiationNode(*i)) 
-             {
+    // if (isTemplateInstantiationNode(*i))
+    if (SageInterface::isTemplateInstantiationNode(*i)) {
 #if 0
                printf ("Calling markNodeToBeUnparsed(): *i = %p = %s \n",*i,(*i)->class_name().c_str());
 #endif
-               markNodeToBeUnparsed(*i);
-               n++;
-             }
-       }
+      markNodeToBeUnparsed(*i);
+      n++;
+    }
+  }
 
-     return n;
-   }
+  return n;
+}
 
 #if 0
 // Moved to the SageInterface as general support for fixup of instantiated templates.
@@ -102,24 +92,24 @@ int wrapAllTemplateInstantiationsInAssociatedNamespaces(SgProject* root)
    }
 #endif
 
-
-int main( int argc, char * argv[] )
-   {
+int main(int argc, char *argv[]) {
 #if 0
   // Output the ROSE specific predefined macros.
      outputPredefinedMacros();
 #endif
 
   // Generate the ROSE AST.
-     SgProject* project = frontend(argc,argv);
+  SgProject *project = frontend(argc, argv);
 
-  // AST consistency tests (optional for users, but this enforces more of our tests)
-     AstTests::runAllTests(project);
+  // AST consistency tests (optional for users, but this enforces more of our
+  // tests)
+  AstTests::runAllTests(project);
 
-     markAllTemplateInstantiationsToBeUnparsed(project);
+  markAllTemplateInstantiationsToBeUnparsed(project);
 
-  // DQ (9/17/2015): Call fixup function for template instantiations so that they can be unparsed with the GNU g++ backend compiler.
-     SageInterface::wrapAllTemplateInstantiationsInAssociatedNamespaces(project);
+  // DQ (9/17/2015): Call fixup function for template instantiations so that
+  // they can be unparsed with the GNU g++ backend compiler.
+  SageInterface::wrapAllTemplateInstantiationsInAssociatedNamespaces(project);
 
 #if 0
   // DQ (5/11/2017): Adding support for detection of template specializations that will be output and building there forward 
@@ -146,7 +136,7 @@ int main( int argc, char * argv[] )
      SgNode::get_globalTypeTable()->print_typetable();
 #endif
 
-  // regenerate the source code and call the vendor 
+  // regenerate the source code and call the vendor
   // compiler, only backend error code is reported.
-     return backend(project);
-   }
+  return backend(project);
+}
