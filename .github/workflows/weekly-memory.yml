@@ -65,7 +65,7 @@ jobs:
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
+          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \
           -DENABLE-FORTRAN-OFP=ON \
@@ -150,7 +150,7 @@ jobs:
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
+          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \
           -DENABLE-FORTRAN-OFP=ON \
@@ -231,7 +231,7 @@ jobs:
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
+          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/rex_install \
           -DENABLE-C=ON \
           -DENABLE-FORTRAN=ON \
           -DENABLE-FORTRAN-OFP=ON \
