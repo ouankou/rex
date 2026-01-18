@@ -456,12 +456,23 @@ frontendExitStatus ( const SgProject* project )
         }
 
      const SgFilePtrList &files = project->get_fileList();
+     bool sawFile = false;
+     bool allNegative = true;
      for (SgFile *file : files)
         {
-          if (file != nullptr && file->get_negative_test())
+          if (file != nullptr)
              {
-               return 0;
+               sawFile = true;
+               if (!file->get_negative_test())
+                  {
+                    allNegative = false;
+                    break;
+                  }
              }
+        }
+     if (sawFile && allNegative)
+        {
+          return 0;
         }
 
      return status;
@@ -682,10 +693,6 @@ frontendShell (const std::vector<std::string> &argv)
      printf ("Leaving backend(SgProject*) (from utility_functions.C) \n");
 #endif
 
-  // Backend is a terminal phase; teardown releases AST resources and invalidates project.
-     if (SageInterface::isAstTeardownEnabled()) {
-       SageInterface::tearDownAst(project);
-     }
      return backendStatus;
    }
 
@@ -811,12 +818,7 @@ backendCompilesUsingOriginalInputFile ( SgProject* project, bool compile_with_US
             finalCombinedExitStatus = project->link(commandLineToGenerateObjectFile[0]);
         }
 
-     int backendStatus = finalCombinedExitStatus;
-  // Backend is a terminal phase; teardown releases AST resources and invalidates project.
-     if (SageInterface::isAstTeardownEnabled()) {
-       SageInterface::tearDownAst(project);
-     }
-     return backendStatus;
+     return finalCombinedExitStatus;
    }
 
 

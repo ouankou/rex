@@ -20947,12 +20947,6 @@ void llvmShutdownAtExit() {
   llvm::llvm_shutdown();
 }
 
-class AstTeardownRegistrar {
- public:
-  AstTeardownRegistrar() { SageInterface::registerAstTeardownAtExit(); }
-};
-
-AstTeardownRegistrar astTeardownRegistrar;
 }  // namespace
 
 bool SageInterface::isAstTeardownEnabled() {
