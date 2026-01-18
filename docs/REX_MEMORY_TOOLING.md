@@ -18,17 +18,17 @@ cmake --build build -j"$(nproc)"
 ```
 
 ### Sanitizer build
-Sanitizers require `libclang-cpp` (LLVM 20). If `ROSE_SANITIZERS` is empty, the build defaults to `address;leak`.
+Sanitizers require `libclang-cpp` (LLVM 20). Use `Debug` to keep `ROSE_ASSERT` active during memory checks. If `ROSE_SANITIZERS` is empty, the build defaults to `address;leak`.
 ```bash
-cmake -S . -B build-sanitizer -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+cmake -S . -B build-sanitizer -DCMAKE_BUILD_TYPE=Debug \
   -DENABLE-SANITIZER=ON -DROSE_SANITIZERS="address;leak;undefined"
 cmake --build build-sanitizer -j"$(nproc)"
 ```
 
 ### Valgrind/memcheck build
-Configure with Valgrind paths so CTest can drive memcheck.
+Configure with Valgrind paths so CTest can drive memcheck. Use `Debug` so assertions stay enabled.
 ```bash
-cmake -S . -B build-valgrind -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH-VALGRIND=/usr
+cmake -S . -B build-valgrind -DCMAKE_BUILD_TYPE=Debug -DWITH-VALGRIND=/usr
 cmake --build build-valgrind -j"$(nproc)"
 ```
 
