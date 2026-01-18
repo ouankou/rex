@@ -102,8 +102,6 @@ If “still reachable” comes from ROSE-owned structures, treat it as a real is
 
 ## Development guidelines for memory correctness
 
-- Keep ownership explicit and use RAII (`std::unique_ptr`, `std::vector`, `std::string`) for non-AST objects.
-- Avoid long-lived caches that survive AST teardown unless you also provide explicit cleanup.
 - Do not hide memory issues by “fixing” tests or weakening assertions.
 - Use sanitizers for rapid feedback during development and memcheck for leak triage.
 
@@ -111,9 +109,10 @@ If “still reachable” comes from ROSE-owned structures, treat it as a real is
 
 ### AST nodes (Sage/ROSE IR)
 - AST nodes are owned by the AST and its memory pools; do not `delete` them directly.
-- When replacing or detaching a subtree, use ownership-aware helpers:
-  - `SageInterface::replaceExpression`, `SageInterface::replaceStatement`, or `SageInterface::deepDelete/deleteAST` for detached nodes.
-  - Avoid raw `set_*` on child pointers unless you also delete the old subtree.
+- When replacing a subtree, use `SageInterface::replaceExpression` or `SageInterface::replaceStatement`.
+  The original node becomes detached, and you must delete it to avoid leaks.
+  To delete a detached subtree, use `SageInterface::deleteAST` (or its wrapper `SageInterface::deepDelete`).
+  Avoid raw `set_*` on child pointers unless you also delete the old subtree.
 - If you intentionally detach nodes (set pointers to `NULL`), you must delete the detached subtree or transfer ownership to a well-defined owner.
 - AST teardown is the final owner boundary; do not rely on process exit to clean ROSE-owned nodes.
 
