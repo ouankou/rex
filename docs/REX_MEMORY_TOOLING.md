@@ -112,6 +112,7 @@ If “still reachable” comes from ROSE-owned structures, treat it as a real is
 - When replacing a subtree, use `SageInterface::replaceExpression` or `SageInterface::replaceStatement`.
   The original node becomes detached, and you must delete it to avoid leaks.
   To delete a detached subtree, use `SageInterface::deleteAST` (or its wrapper `SageInterface::deepDelete`).
+  Note that this only deletes the AST nodes; you must handle any dangling symbols or types that result.
   Avoid raw `set_*` on child pointers unless you also delete the old subtree.
 - If you intentionally detach nodes (set pointers to `NULL`), you must delete the detached subtree or transfer ownership to a well-defined owner.
 - AST teardown is the final owner boundary; do not rely on process exit to clean ROSE-owned nodes.
@@ -119,7 +120,7 @@ If “still reachable” comes from ROSE-owned structures, treat it as a real is
 ### AstAttributeMechanism (attached attributes)
 - Always implement `AstAttribute::getOwnershipPolicy()` in custom attributes.
   - `CONTAINER_OWNERSHIP`: container owns and deletes on replace/clear.
-  - `NO_OWNERSHIP`: attribute is intentionally leaked; do not delete.
+  - `NO_OWNERSHIP`: attribute is leaked and its memory is reclaimed only on process exit. This policy is not recommended.
   - `CUSTOM_OWNERSHIP`: attribute class must manage its own cleanup.
 - Avoid `UNKNOWN_OWNERSHIP` (it is treated as a warning and often leaks).
 - Do not store raw owning pointers inside attributes without RAII or explicit cleanup.
