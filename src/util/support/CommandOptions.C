@@ -9,6 +9,11 @@ CmdOptions* CmdOptions::GetInstance()
   return inst;
 } 
 
+void CmdOptions::ReleaseInstance() {
+  delete inst;
+  inst = nullptr;
+}
+
 void CmdOptions::SetOptions  (const std::vector<std::string>& _opts)
    { opts=_opts; }
 
@@ -37,4 +42,3 @@ std::vector<std::string>::const_iterator CmdOptions:: GetOptionPosition( const s
   }
   return opts.end();
 }
-

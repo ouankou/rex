@@ -26,6 +26,7 @@ class ReadAnnotation {
   void read();
 
   static ReadAnnotation* get_inst();
+  static void release_inst();
   static std::string OptionString()
     {
       return "-annot <filename> ";

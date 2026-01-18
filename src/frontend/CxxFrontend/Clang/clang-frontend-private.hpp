@@ -8,6 +8,7 @@
 #include <iostream>
 #include <vector>
 #include <set>
+#include <memory>
 
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTContext.h"
@@ -355,6 +356,8 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         std::map<clang::Stmt *, SgNode *> p_stmt_translation_map;
         std::map<const clang::Type *, SgNode *> p_type_translation_map;
         std::map<clang::DeclContext *, SgScopeStatement *> p_decl_context_map;
+        std::map<SgFunctionDefinition *, const clang::Stmt *>
+            p_function_body_map;
         SgGlobal * p_global_scope;
 
         std::map<SgClassType *, bool> p_class_type_decl_first_see_in_type;
@@ -389,6 +392,9 @@ class ClangToSageTranslator : public clang::ASTConsumer {
         // symbol lookup) so we can repair scope attachments without duplicating
         // normal traversal insertions.
         std::set<clang::Decl *> p_decl_translation_on_demand;
+        // Track class definitions already populated to avoid duplicate member
+        // insertion during on-demand/re-entrant translation.
+        std::set<const SgClassDefinition *> p_record_definitions_populated;
 
         // Deferred translation queue for implicit function template
         // instantiations. These instantiations are discovered while traversing
@@ -400,7 +406,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             p_pending_implicit_function_instantiations_set;
 
         clang::CompilerInstance  * p_compiler_instance;
-        SagePreprocessorRecord   * p_sage_preprocessor_recorder;
+        std::unique_ptr<SagePreprocessorRecord> p_sage_preprocessor_recorder;
         SgSourceFile             * p_sage_source_file; // Parent file for connecting global scope
 
         Language language;
@@ -431,9 +437,14 @@ class ClangToSageTranslator : public clang::ASTConsumer {
 
         // Template helper methods
         // Helper: Get or create template class declaration
-        SgTemplateClassDeclaration* getOrCreateTemplateDeclaration(
-            const std::string& template_name,
-            const clang::TemplateSpecializationType* clang_type);
+        SgTemplateClassDeclaration *getOrCreateTemplateDeclaration(
+            const std::string &template_name,
+            const clang::TemplateSpecializationType *clang_type,
+            SgScopeStatement *scope_override = nullptr);
+
+        // Helper: Build a nonreal scope chain for a nested name qualifier.
+        SgScopeStatement *buildNonrealScopeFromNestedNameSpecifier(
+            clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope);
 
         // Helper: Get or create template instantiation
         SgTemplateInstantiationDecl* getOrCreateTemplateInstantiation(
@@ -467,7 +478,7 @@ class ClangToSageTranslator : public clang::ASTConsumer {
                                   bool explicitlySpecified = false);
 
         // Helper: Build template parameters (inferred from arguments)
-        SgTemplateParameterPtrList* buildTemplateParameters(
+        std::unique_ptr<SgTemplateParameterPtrList> buildTemplateParameters(
             const clang::TemplateSpecializationType* clang_type);
 
         // Helper: Get qualified name for a template declaration (e.g.,
@@ -492,9 +503,9 @@ class ClangToSageTranslator : public clang::ASTConsumer {
             SgDeclarationStatement* owning_template,
             unsigned position);
 
-        SgTemplateParameterPtrList* translateTemplateParameterList(
-            clang::TemplateParameterList* param_list,
-            SgDeclarationStatement* owning_template);
+        std::unique_ptr<SgTemplateParameterPtrList>
+        translateTemplateParameterList(clang::TemplateParameterList* param_list,
+                                       SgDeclarationStatement* owning_template);
 
         SgTemplateClassDeclaration *translateClassTemplateDecl(
             clang::ClassTemplateDecl *class_template_decl,
@@ -1045,6 +1056,8 @@ struct NextPreprocessorToInsert {
 class PreprocessorInserter : public AstTopDownProcessing<NextPreprocessorToInsert *> {
   public:
     NextPreprocessorToInsert * evaluateInheritedAttribute(SgNode * astNode, NextPreprocessorToInsert * inheritedValue);
+  private:
+    std::vector<std::unique_ptr<NextPreprocessorToInsert>> owned_inherited_;
 };
 
 #endif /* _CLANG_FRONTEND_PRIVATE_HPP_ */

@@ -221,6 +221,7 @@ class ROSE_DLL_API AstPerformance
           void generateReportFromObject() const;
           void generateReportToFile( SgProject* project ) const;
           static void generateReport();
+          static void cleanup();
 
        // virtual double performanceResolution();
           static double performanceResolution();

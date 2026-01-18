@@ -15,6 +15,17 @@ CompilerOutputReader::CompilerOutputReader(FILE* compilerOutput) {
     readNextLine();
 }
 
+CompilerOutputReader::~CompilerOutputReader() {
+    if (line != NULL) {
+        free(line);
+        line = NULL;
+    }
+    if (compilerOutput != NULL) {
+        fclose(compilerOutput);
+        compilerOutput = NULL;
+    }
+}
+
 void CompilerOutputReader::readNextLine() {
     ROSE_ASSERT(hasCurrentLine); //should not try to read the next string if there is no current string
     size_t line_alloc = 0;

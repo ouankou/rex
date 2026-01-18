@@ -2136,10 +2136,29 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
   // Symbols can be shared within a single file but are not yet shared across files in the AST merge
      if (symbol != NULL)
         {
+       // If the parent pointer is stale, clear it so we can repair below.
+          if (SgSymbolTable *parent_table =
+                  isSgSymbolTable(symbol->get_parent())) {
+            if (parent_table->exists(symbol) == false) {
+              symbol->set_parent(NULL);
+            }
+          }
        // Should point to the associated SgSymbolTable
           if (symbol->get_parent() == NULL)
              {
             // printf ("In ResetParentPointersInMemoryPool::visit(): symbol = %p = %s get_parent() == NULL \n",symbol,symbol->class_name().c_str());
+
+               auto ensure_symbol_parent = [](SgSymbol *sym,
+                                               SgScopeStatement *scope) {
+                 ROSE_ASSERT(sym != NULL);
+                 ROSE_ASSERT(scope != NULL);
+                 ROSE_ASSERT(scope->get_symbol_table() != NULL);
+                 if (scope->symbol_exists(sym) == false) {
+                   scope->insert_symbol(sym->get_name(), sym);
+                 } else if (sym->get_parent() != scope->get_symbol_table()) {
+                   sym->set_parent(scope->get_symbol_table());
+                 }
+               };
 
                switch(symbol->variantT())
                   {
@@ -2151,8 +2170,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                          ROSE_ASSERT(declaration != NULL);
                          SgScopeStatement* scope = declaration->get_scope();
                          ROSE_ASSERT(scope != NULL);
-                         ROSE_ASSERT(scope->get_symbol_table() != NULL);
-                         symbol->set_parent(scope->get_symbol_table());
+                         ensure_symbol_parent(symbol, scope);
                          break;
                        }
 
@@ -2164,8 +2182,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                          ROSE_ASSERT(declaration != NULL);
                          SgScopeStatement* scope = declaration->get_scope();
                          ROSE_ASSERT(scope != NULL);
-                         ROSE_ASSERT(scope->get_symbol_table() != NULL);
-                         symbol->set_parent(scope->get_symbol_table());
+                         ensure_symbol_parent(symbol, scope);
                          break;
                        }
 
@@ -2194,8 +2211,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                             }
 
                          ROSE_ASSERT(scope != NULL);
-                         ROSE_ASSERT(scope->get_symbol_table() != NULL);
-                         symbol->set_parent(scope->get_symbol_table());
+                         ensure_symbol_parent(symbol, scope);
                          break;
                        }
 
@@ -2207,8 +2223,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                          ROSE_ASSERT(declaration != NULL);
                          SgScopeStatement* scope = declaration->get_scope();
                          ROSE_ASSERT(scope != NULL);
-                         ROSE_ASSERT(scope->get_symbol_table() != NULL);
-                         symbol->set_parent(scope->get_symbol_table());
+                         ensure_symbol_parent(symbol, scope);
                          break;
                        }
 
@@ -2220,8 +2235,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                          ROSE_ASSERT(declaration != NULL);
                          SgScopeStatement* scope = declaration->get_scope();
                          ROSE_ASSERT(scope != NULL);
-                         ROSE_ASSERT(scope->get_symbol_table() != NULL);
-                         symbol->set_parent(scope->get_symbol_table());
+                         ensure_symbol_parent(symbol, scope);
                          break;
                        }
 
@@ -2237,8 +2251,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                             {
                               SgScopeStatement* scope = declaration->get_scope();
                               ROSE_ASSERT(scope != NULL);
-                              ROSE_ASSERT(scope->get_symbol_table() != NULL);
-                              symbol->set_parent(scope->get_symbol_table());
+                              ensure_symbol_parent(symbol, scope);
                             }
                            else
                             {
@@ -2258,8 +2271,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                          ROSE_ASSERT(declaration != NULL);
                          SgScopeStatement* scope = declaration->get_scope();
                          ROSE_ASSERT(scope != NULL);
-                         ROSE_ASSERT(scope->get_symbol_table() != NULL);
-                         symbol->set_parent(scope->get_symbol_table());
+                         ensure_symbol_parent(symbol, scope);
                          break;
                        }
 
@@ -2271,8 +2283,7 @@ ResetParentPointersInMemoryPool::visit(SgNode* node)
                          ROSE_ASSERT(declaration != NULL);
                          SgScopeStatement* scope = declaration->get_scope();
                          ROSE_ASSERT(scope != NULL);
-                         ROSE_ASSERT(scope->get_symbol_table() != NULL);
-                         symbol->set_parent(scope->get_symbol_table());
+                         ensure_symbol_parent(symbol, scope);
                          break;
                        }
 

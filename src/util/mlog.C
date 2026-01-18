@@ -4,6 +4,7 @@
  */
 #include <stdarg.h>
 #include <time.h>
+#include <array>
 #include<cstring>
 #include <stdio.h>
 #include "mlog.h"
@@ -32,16 +33,21 @@ const char * mlogLevelToString_C[] = {
  * return the Date/Time in the format of YYYY-MM-DD,HH:MM:SS, totally 16 characters
  */
 char * getDateTime() {
-	char *buffer;
+	static thread_local std::array<char, 22> buffer{};
 	time_t curtime;
-	struct tm *loctime;
+	struct tm timeinfo;
 
-	curtime = time(NULL );
-	loctime = localtime(&curtime);
-	buffer = (char*) malloc(sizeof(char) * 22);
+	curtime = time(NULL);
+#ifdef _WIN32
+	if (localtime_s(&timeinfo, &curtime) != 0) {
+#else
+	if (localtime_r(&curtime, &timeinfo) == nullptr) {
+#endif
+		return buffer.data();
+	}
 
-	strftime(buffer, 21, "%F,%H:%M:%S", loctime);
-	return buffer;
+	strftime(buffer.data(), buffer.size(), "%F,%H:%M:%S", &timeinfo);
+	return buffer.data();
 }
 
 std::string mlogLevelToString_CXX(MLOG_LEVEL_t level) {

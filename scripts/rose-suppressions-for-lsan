@@ -1,0 +1,6 @@
+# LeakSanitizer suppressions for external JVM/runtime allocations.
+# These are process-lifetime allocations inside HotSpot and its native helpers
+# that LSan cannot attribute correctly when embedding the JVM.
+leak:libjvm.so
+leak:libjava.so
+leak:libzip.so

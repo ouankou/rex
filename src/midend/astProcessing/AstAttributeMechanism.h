@@ -284,6 +284,9 @@ public:
      *  it had commented-out code to do so. */
     ~AstAttributeMechanism();
 
+    /** Clears all attributes from the container. */
+    void clearAttributes();
+
     /** Test for attribute existence.
      *
      *  Test whether this container holds an attribute with the specified name.  This predicate returns true only if the name

@@ -5,10 +5,10 @@
 # with the experimental Clang frontend enabled.
 #
 # Usage:
-#   ./build-rex.sh [install-prefix]
+#   ./build-rex.sh [install-prefix] [build-type]
 #
 # Example:
-#   ./build-rex.sh $HOME/rex-install
+#   ./build-rex.sh $HOME/rex-install RelWithDebInfo
 #
 
 set -e  # Exit on error
@@ -21,7 +21,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 INSTALL_PREFIX="${1:-$HOME/rex-install}"
-BUILD_TYPE="${2:-Release}"
+BUILD_TYPE="${2:-RelWithDebInfo}"
 BUILD_DIR="build"
 NUM_JOBS=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
 

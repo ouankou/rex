@@ -15,19 +15,35 @@ set_target_properties(variableTypeTest functionTypeTest typecounter PROPERTIES
   BUILD_RPATH "${CMAKE_BINARY_DIR}/lib"
 )
 
-add_test(
-  NAME typeEquivalence_variableTypeTest
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/runVariableTypeTest.sh
-    ${CMAKE_CURRENT_BINARY_DIR}
-)
+set(_type_equiv_tests "")
 
-add_test(
-  NAME typeEquivalence_functionTypeTest
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/runFunctionTypeTest.sh
-    ${CMAKE_CURRENT_BINARY_DIR}
-)
+file(GLOB _type_equiv_var_inputs
+  "${CMAKE_CURRENT_SOURCE_DIR}/inputFiles/types_*.cpp")
+list(SORT _type_equiv_var_inputs)
+foreach(_input IN LISTS _type_equiv_var_inputs)
+  get_filename_component(_stem "${_input}" NAME_WE)
+  set(_test_name "typeEquivalence_variableTypeTest_${_stem}")
+  add_test(
+    NAME ${_test_name}
+    COMMAND $<TARGET_FILE:variableTypeTest> "${_input}"
+  )
+  list(APPEND _type_equiv_tests "${_test_name}")
+endforeach()
+
+file(GLOB _type_equiv_func_inputs
+  "${CMAKE_CURRENT_SOURCE_DIR}/inputFiles/functions_*.cpp")
+list(SORT _type_equiv_func_inputs)
+foreach(_input IN LISTS _type_equiv_func_inputs)
+  get_filename_component(_stem "${_input}" NAME_WE)
+  set(_test_name "typeEquivalence_functionTypeTest_${_stem}")
+  add_test(
+    NAME ${_test_name}
+    COMMAND $<TARGET_FILE:functionTypeTest> "${_input}"
+  )
+  list(APPEND _type_equiv_tests "${_test_name}")
+endforeach()
+
+string(REPLACE ";" "\\;" _type_equiv_tests_arg "${_type_equiv_tests}")
 
 
 # Makefile check targets.
@@ -37,7 +53,7 @@ add_test(
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=typeEquivalence_functionTypeTest\;typeEquivalence_variableTypeTest
+    -DREX_CTEST_GROUP_TESTS=${_type_equiv_tests_arg}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_check-local PROPERTIES DEPENDS "typeEquivalence_functionTypeTest;typeEquivalence_variableTypeTest" )
+set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_typeEquivalenceTests_check-local PROPERTIES DEPENDS "${_type_equiv_tests}" )

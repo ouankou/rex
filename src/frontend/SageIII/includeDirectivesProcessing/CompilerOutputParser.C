@@ -37,16 +37,16 @@ FILE* CompilerOutputParser::getCompilerOutput(const vector<string>& argv, bool i
         abort();
     }
     if (pid == 0) { // Child
-        vector<const char*> argvC(argv.size() + 2);
-        argvC[0] = strdup(argv[0].c_str());
+        vector<char*> argvC(argv.size() + 2);
+        argvC[0] = const_cast<char*>(argv[0].c_str());
         //Is either verbose or outputs included files (i.e. either -v or -H option). Its ok to duplicate the option if it is already present.
         if (isVerbose) {
-            argvC[1] = "-v";
+            argvC[1] = const_cast<char*>("-v");
         } else {
-            argvC[1] = "-H";
+            argvC[1] = const_cast<char*>("-H");
         }
         for (size_t i = 1; i < argv.size(); ++i) {
-            argvC[i + 1] = strdup(argv[i].c_str());
+            argvC[i + 1] = const_cast<char*>(argv[i].c_str());
         }
         argvC.back() = NULL;
 
@@ -220,7 +220,8 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool isVerbose)
 
   // Collect include trees and search paths from compiler output (-H/-v).
      vector<string> compilerNameString = inputFile -> buildCompilerCommandLineOptions(argv, 0, compilerName);
-     compilerOutputReader = new CompilerOutputReader(getCompilerOutput(compilerNameString, isVerbose));
+     compilerOutputReader = std::make_unique<CompilerOutputReader>(
+         getCompilerOutput(compilerNameString, isVerbose));
      workingDirectory = inputFile -> getWorkingDirectory();
      if (isVerbose)
         {
@@ -240,6 +241,7 @@ void CompilerOutputParser::processFile(SgFile* inputFile, bool isVerbose)
   // Restore back original settings
      inputFile -> set_skip_unparse(originalSkipUnparse);
      inputFile -> set_unparse_output_filename(originalUnparseOutputFileName);
+     compilerOutputReader.reset();
   // inputFile -> compileOutput(0);
    }
 

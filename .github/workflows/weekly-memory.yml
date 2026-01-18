@@ -1,0 +1,258 @@
+name: Weekly Memory CI
+
+on:
+  schedule:
+    # Every Friday at 00:00 UTC
+    - cron: "0 0 * * 5"
+  workflow_dispatch:
+
+# Jobs run in parallel to stay within GitHub's 6-hour per-job limit.
+concurrency:
+  group: weekly-memory-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-tests:
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        persist-credentials: false
+
+    # NOTE: Ubuntu 24.04 ships antlr4 v4.9 but antlr4-cpp-runtime v4.10, which are API-incompatible; manually install the matching antlr4 v4.10.
+    - uses: StoneMoe/setup-antlr4@v4.10.1
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          bison \
+          build-essential \
+          cmake \
+          clang-20 \
+          curl \
+          flang-20 \
+          flex \
+          g++ \
+          gdb \
+          ghostscript \
+          git \
+          graphviz \
+          libantlr4-runtime-dev \
+          libclang-20-dev \
+          libhpdf-dev \
+          libtool \
+          llvm-20 \
+          llvm-20-dev \
+          openjdk-25-jdk \
+          pkg-config
+
+    - name: Configure (Debug)
+      env:
+        PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-20
+        LLVM_DIR: /usr/lib/llvm-20
+        CC: clang-20
+        CXX: clang++-20
+        FC: flang-20
+      run: |
+        cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
+          -DENABLE-C=ON \
+          -DENABLE-FORTRAN=ON \
+          -DENABLE-FORTRAN-OFP=ON \
+          -DREX_ENABLE_DISABLED_TESTS=ON \
+          -DCMAKE_CXX_STANDARD=17 \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Build
+      run: cmake --build build -j"$(nproc)"
+
+    - name: Run full tests
+      run: |
+        set +e
+        ctest --test-dir build -j"$(nproc)" --output-on-failure --output-junit ctest.junit.xml 2>&1 | tee ctest-full.log
+        ctest_status=${PIPESTATUS[0]}
+        echo "${ctest_status}" > ctest_exit_code.txt
+
+    - name: Upload full test log
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: full-tests-log
+        path: |
+          ctest-full.log
+          ctest.junit.xml
+        if-no-files-found: warn
+
+    - name: Fail if full tests failed
+      run: |
+        exit "$(cat ctest_exit_code.txt)"
+
+  memcheck:
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        persist-credentials: false
+
+    - uses: StoneMoe/setup-antlr4@v4.10.1
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          bison \
+          build-essential \
+          cmake \
+          clang-20 \
+          curl \
+          flang-20 \
+          flex \
+          g++ \
+          gdb \
+          ghostscript \
+          git \
+          graphviz \
+          libantlr4-runtime-dev \
+          libclang-20-dev \
+          libhpdf-dev \
+          libtool \
+          llvm-20 \
+          llvm-20-dev \
+          openjdk-25-jdk \
+          pkg-config \
+          valgrind
+
+    - name: Configure (Debug + Valgrind)
+      env:
+        PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-20
+        LLVM_DIR: /usr/lib/llvm-20
+        CC: clang-20
+        CXX: clang++-20
+        FC: flang-20
+      run: |
+        cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
+          -DENABLE-C=ON \
+          -DENABLE-FORTRAN=ON \
+          -DENABLE-FORTRAN-OFP=ON \
+          -DREX_ENABLE_DISABLED_TESTS=ON \
+          -DCMAKE_CXX_STANDARD=17 \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DWITH-VALGRIND=/usr
+
+    - name: Build
+      run: cmake --build build -j"$(nproc)"
+
+    - name: Run memcheck on CI selection
+      run: |
+        set -o pipefail
+        ctest --test-dir build -T memcheck -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --output-on-failure 2>&1 | tee ctest-memcheck.log
+
+    - name: Upload memcheck logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: memcheck-logs
+        path: |
+          ctest-memcheck.log
+          build/Testing/Temporary/MemoryChecker.*.log
+          build/Testing/Temporary/LastTest.log
+        if-no-files-found: warn
+
+  sanitizer:
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        persist-credentials: false
+
+    - uses: StoneMoe/setup-antlr4@v4.10.1
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          bison \
+          build-essential \
+          cmake \
+          clang-20 \
+          curl \
+          flang-20 \
+          flex \
+          g++ \
+          gdb \
+          ghostscript \
+          git \
+          graphviz \
+          libantlr4-runtime-dev \
+          libclang-20-dev \
+          libclang-cpp20-dev \
+          libhpdf-dev \
+          libtool \
+          llvm-20 \
+          llvm-20-dev \
+          openjdk-25-jdk \
+          pkg-config
+
+    - name: Configure (Debug + Sanitizers)
+      env:
+        PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-20
+        LLVM_DIR: /usr/lib/llvm-20
+        CC: clang-20
+        CXX: clang++-20
+        FC: flang-20
+      run: |
+        cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/../rex_install \
+          -DENABLE-C=ON \
+          -DENABLE-FORTRAN=ON \
+          -DENABLE-FORTRAN-OFP=ON \
+          -DREX_ENABLE_DISABLED_TESTS=ON \
+          -DCMAKE_CXX_STANDARD=17 \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DENABLE-SANITIZER=ON \
+          -DROSE_SANITIZERS="address;leak;undefined"
+
+    - name: Build
+      run: cmake --build build -j"$(nproc)"
+
+    - name: Run sanitizer on CI selection
+      run: |
+        set -o pipefail
+        ctest --test-dir build -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --output-on-failure 2>&1 | tee ctest-sanitizer.log
+
+    - name: Upload sanitizer log
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: sanitizer-log
+        path: ctest-sanitizer.log
+        if-no-files-found: warn

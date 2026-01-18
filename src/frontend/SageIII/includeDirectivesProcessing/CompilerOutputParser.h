@@ -1,5 +1,6 @@
-#include <map>
 #include <list>
+#include <map>
+#include <memory>
 
 #include "CompilerOutputReader.h"
 
@@ -20,7 +21,7 @@ private:
 
     //The following two members are needed for recursive parsing of the compiler output (with -H option)
     string workingDirectory;
-    CompilerOutputReader* compilerOutputReader;
+    std::unique_ptr<CompilerOutputReader> compilerOutputReader;
 
 
     FILE* getCompilerOutput(const vector<string>& argv, bool isVerbose);
@@ -34,4 +35,3 @@ public:
     map<string, set<string> > collectIncludedFilesMap();
     pair<list<string>, list<string> > collectIncludedFilesSearchPaths();
 };
-

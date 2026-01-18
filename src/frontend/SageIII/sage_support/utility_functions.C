@@ -10,6 +10,7 @@
 #include "AstDOTGeneration.h"
 #include "processSupport.h"
 #include "sageInterface/sageInterface.h"
+#include "keep_going.h"
 
 #include "wholeAST_API.h"
 
@@ -383,43 +384,98 @@ SgProject*
 frontend (const std::vector<std::string>& argv, bool frontendConstantFolding )
    {
   // DQ (6/14/2007): Added support for timing of high level frontend function.
-     TimingPerformance timer ("ROSE frontend():");
+     SgProject* project = nullptr;
+     bool skip_postprocessing = false;
+     {
+       TimingPerformance timer ("ROSE frontend():");
 
-  // Syncs C++ and C I/O subsystems!
-     ios::sync_with_stdio();
+       // Syncs C++ and C I/O subsystems!
+       ios::sync_with_stdio();
 
-  // We parse plugin related command line options before calling project();
-     std::vector<std::string> argv2 = argv; // workaround const argv
-     Rose::processPluginCommandLine(argv2);
+       // We parse plugin related command line options before calling project();
+       std::vector<std::string> argv2 = argv; // workaround const argv
+       Rose::processPluginCommandLine(argv2);
 
-     // Separate the creation of a new project with building the AST. The default constructor
-     // initializes the object and then parse is used to build the AST (in a separate step).
-     // The current constructors that conflate object creation with parsing should be deprecated.
-     // [Rasmussen, 2024.04.03]
-     SgProject* project = new SgProject;
-     ASSERT_not_null(project);
-     project->set_frontendConstantFolding(frontendConstantFolding);
+       // Separate the creation of a new project with building the AST. The default constructor
+       // initializes the object and then parse is used to build the AST (in a separate step).
+       // The current constructors that conflate object creation with parsing should be deprecated.
+       // [Rasmussen, 2024.04.03]
+       project = new SgProject;
+       ASSERT_not_null(project);
+       project->set_frontendConstantFolding(frontendConstantFolding);
+       SageInterface::registerAstTeardownProject(project);
 
-     // Create the AST by setting command-line options and then parsing all files from the command line
-     project->parse(argv2);
+       // Ensure teardown hooks are registered before parsing so early exits get cleanup.
+       SageInterface::registerAstTeardownAtExit();
 
-     // DQ (1/27/2017): Comment this out so that we can generate the dot graph
-     // to debug symbol with null basis.
-     unsetNodesMarkedAsModified(project);
+       // Create the AST by setting command-line options and then parsing all files from the command line
+       project->parse(argv2);
+       int frontend_status = project->get_frontendErrorCode();
+       if (!Rose::KeepGoing::g_keep_going && frontend_status != 0)
+          {
+            skip_postprocessing = true;
+          }
 
-  // Set the mode to be transformation, mostly for Fortran. Liao 8/1/2013
-     if (SageBuilder::SourcePositionClassificationMode == SageBuilder::e_sourcePositionFrontendConstruction) {
-       SageBuilder::setSourcePositionClassificationMode(SageBuilder::e_sourcePositionTransformation);
+       if (!skip_postprocessing)
+          {
+            // DQ (1/27/2017): Comment this out so that we can generate the dot graph
+            // to debug symbol with null basis.
+            unsetNodesMarkedAsModified(project);
+
+         // Set the mode to be transformation, mostly for Fortran. Liao 8/1/2013
+            if (SageBuilder::SourcePositionClassificationMode == SageBuilder::e_sourcePositionFrontendConstruction) {
+              SageBuilder::setSourcePositionClassificationMode(SageBuilder::e_sourcePositionTransformation);
+            }
+
+            //Rose::AST::cmdline::graphviz.frontend.exec(project);
+            //Rose::AST::cmdline::checker.frontend.exec(project);
+
+            // Connect to Ast Plugin Mechanism
+            Rose::obtainAndExecuteActions(project);
+
+            if (SageInterface::isAstTeardownEnabled()) {
+              SageInterface::ensureSymbolParentPointers(project);
+            }
+          }
      }
-
-     //Rose::AST::cmdline::graphviz.frontend.exec(project);
-     //Rose::AST::cmdline::checker.frontend.exec(project);
-
-     // Connect to Ast Plugin Mechanism
-     Rose::obtainAndExecuteActions(project);
-
-     SageInterface::ensureSymbolParentPointers(project);
      return project;
+   }
+
+int
+frontendExitStatus ( const SgProject* project )
+   {
+     if (project == nullptr)
+        {
+          return 1;
+        }
+
+     int status = project->get_frontendErrorCode();
+     if (status == 0)
+        {
+          return 0;
+        }
+
+     const SgFilePtrList &files = project->get_fileList();
+     bool sawFile = false;
+     bool allNegative = true;
+     for (SgFile *file : files)
+        {
+          if (file != nullptr)
+             {
+               sawFile = true;
+               if (!file->get_negative_test())
+                  {
+                    allNegative = false;
+                    break;
+                  }
+             }
+        }
+     if (sawFile && allNegative)
+        {
+          return 0;
+        }
+
+     return status;
    }
 
 /*! \brief Call to build SgProject with empty SgFiles.
@@ -631,12 +687,13 @@ frontendShell (const std::vector<std::string> &argv)
 
   // Set the final error code to be returned to the user.
      project->set_backendErrorCode(finalCombinedExitStatus);
+     int backendStatus = project->get_backendErrorCode();
 
 #if 0
      printf ("Leaving backend(SgProject*) (from utility_functions.C) \n");
 #endif
 
-     return project->get_backendErrorCode();
+     return backendStatus;
    }
 
 int
@@ -978,9 +1035,8 @@ void generateAstGraph ( const SgProject* project, int maxSize, std::string filen
        // Added support to handle options to control filtering of Whole AST graphs.
        // std::vector<std::string>  argvList (argv, argv+ argc);
           std::vector<std::string>  argvList = project->get_originalCommandLineArgumentList();
-          CustomMemoryPoolDOTGeneration::s_Filter_Flags* filter_flags = new CustomMemoryPoolDOTGeneration::s_Filter_Flags(argvList);
-
-          generateWholeGraphOfAST(filename,filter_flags);
+          CustomMemoryPoolDOTGeneration::s_Filter_Flags filter_flags(argvList);
+          generateWholeGraphOfAST(filename, &filter_flags);
         }
        else
         {

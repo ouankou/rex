@@ -113,6 +113,11 @@ ValueAnnotation* ValueAnnotation::get_inst()
   return inst;
 }
 
+void ValueAnnotation::release_inst() {
+  delete inst;
+  inst = nullptr;
+}
+
 void ValueAnnotation:: register_annot()
 {
    ReadAnnotation* op = ReadAnnotation::get_inst();

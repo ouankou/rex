@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <memory>
 
 #include "sage3basic.h"
 #include "clang-to-dot-private.hpp"
@@ -200,59 +201,49 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
     // FIXME should be handle by Clang ?
     define_list.push_back("__I__=_Complex_I");
 
-    unsigned cnt = define_list.size() + inc_dirs_list.size() + inc_list.size();
-    char ** args = new char*[cnt];
-    std::vector<std::string>::iterator it_str;
-    unsigned i = 0;
-    for (it_str = define_list.begin(); it_str != define_list.end(); it_str++) {
-        args[i] = new char[it_str->size() + 3];
-        args[i][0] = '-';
-        args[i][1] = 'D';
-        strcpy(&(args[i][2]), it_str->c_str());
-#if DEBUG_ARGS
-        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
-#endif
-        i++;
+    const size_t estimated_argc = define_list.size() + inc_dirs_list.size() + inc_list.size();
+    std::vector<std::string> args_storage;
+    args_storage.reserve(estimated_argc);
+    for (const auto &define : define_list) {
+        args_storage.push_back("-D" + define);
     }
-    for (it_str = inc_dirs_list.begin(); it_str != inc_dirs_list.end(); it_str++) {
-        args[i] = new char[it_str->size() + 3];
-        args[i][0] = '-';
-        args[i][1] = 'I';
-        strcpy(&(args[i][2]), it_str->c_str());
-#if DEBUG_ARGS
-        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
-#endif
-        i++;
+    for (const auto &inc_dir : inc_dirs_list) {
+        args_storage.push_back("-I" + inc_dir);
     }
-    for (it_str = inc_list.begin(); it_str != inc_list.end(); it_str++) {
-        args[i] = new char[it_str->size() + 9];
-        args[i][0] = '-'; args[i][1] = 'i'; args[i][2] = 'n'; args[i][3] = 'c';
-        args[i][4] = 'l'; args[i][5] = 'u'; args[i][6] = 'd'; args[i][7] = 'e';
-        strcpy(&(args[i][8]), it_str->c_str());
-#if DEBUG_ARGS
-        std::cerr << "args[" << i << "] = " << args[i] << std::endl;
-#endif
-        i++;
+    for (const auto &inc : inc_list) {
+        args_storage.push_back("-include" + inc);
     }
+
+    std::vector<const char *> args;
+    args.reserve(args_storage.size());
+    for (const auto &arg : args_storage) {
+        args.push_back(arg.c_str());
+    }
+#if DEBUG_ARGS
+    for (size_t index = 0; index < args.size(); ++index) {
+        std::cerr << "args[" << index << "] = " << args[index] << std::endl;
+    }
+#endif
 
 
   // 2 - Create a compiler instance
 
-    clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
+    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs = llvm::vfs::createPhysicalFileSystem();
+    llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_opts = llvm::makeIntrusiveRefCnt<clang::DiagnosticOptions>();
+    auto compiler_instance = std::make_unique<clang::CompilerInstance>();
 
-    // Create diagnostics with default real filesystem (before parsing args that might override it)
-    clang::DiagnosticOptions *DiagOpts = new clang::DiagnosticOptions();
-    clang::TextDiagnosticPrinter * diag_printer = new clang::TextDiagnosticPrinter(llvm::errs(), DiagOpts);
-
-    // LLVM 20+ API - requires VFS as first parameter
-    compiler_instance->createDiagnostics(*llvm::vfs::getRealFileSystem(), diag_printer, true);
+    // Create diagnostics with instance-specific filesystem (avoid global singleton lifetime issues).
+    auto diag_printer = std::make_unique<clang::TextDiagnosticPrinter>(llvm::errs(), diag_opts.get());
+    compiler_instance->createDiagnostics(*vfs, diag_printer.release(), true);
 
     // Parse command-line arguments to populate invocation (including FileSystemOptions like -working-directory, -sysroot)
-    llvm::ArrayRef<const char *> argsArrayRef(args, &(args[cnt]));
-    clang::CompilerInvocation::CreateFromArgs(compiler_instance->getInvocation(), argsArrayRef, compiler_instance->getDiagnostics());
+    llvm::ArrayRef<const char *> argsArrayRef(args.data(), args.size());
+    clang::CompilerInvocation::CreateFromArgs(compiler_instance->getInvocation(),
+                                              argsArrayRef,
+                                              compiler_instance->getDiagnostics());
 
     // Now create file manager with FileSystemOptions from the parsed invocation
-    compiler_instance->createFileManager();
+    compiler_instance->createFileManager(vfs);
 
     clang::LangOptions & lang_opts = compiler_instance->getLangOpts();
     const llvm::Triple target_triple(llvm::sys::getDefaultTargetTriple());
@@ -348,8 +339,9 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
 
     if (!compiler_instance->hasASTContext()) compiler_instance->createASTContext();
 
-    ClangToDotTranslator translator(compiler_instance, language);
-    compiler_instance->setASTConsumer(std::move(std::unique_ptr<clang::ASTConsumer>(&translator)));
+    auto translator = std::make_unique<ClangToDotTranslator>(compiler_instance.get(), language);
+    ClangToDotTranslator *translator_ptr = translator.get();
+    compiler_instance->setASTConsumer(std::move(translator));
 
     if (!compiler_instance->hasSema()) compiler_instance->createSema(clang::TU_Complete, NULL);
 
@@ -366,7 +358,7 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
  // printf ("\nCalling clang::ParseAST() (generate Dot file of Clang AST) \n");
 
     compiler_instance->getDiagnosticClient().BeginSourceFile(compiler_instance->getLangOpts(), &(compiler_instance->getPreprocessor()));
-    clang::ParseAST(compiler_instance->getPreprocessor(), &translator, compiler_instance->getASTContext());
+    clang::ParseAST(compiler_instance->getPreprocessor(), translator_ptr, compiler_instance->getASTContext());
     compiler_instance->getDiagnosticClient().EndSourceFile();
 
  // printf ("\nDONE: Calling clang::ParseAST() (generate Dot file of Clang AST) \n\n");
@@ -375,7 +367,7 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
 
   // printf ("Calling translator.toDot(out); to call the DOT graph generator \n");
 
-    translator.toDot(file);
+    translator_ptr->toDot(file);
 
  // printf ("DONE: Calling translator.toDot(out); to call the DOT graph generator \n");
 
@@ -441,7 +433,8 @@ ClangToDotTranslator::ClangToDotTranslator(clang::CompilerInstance * compiler_in
     p_type_translation_map(),
     p_node_desc(),
  // DQ (11/3/2020): Added data member.
-    p_sage_preprocessor_recorder(new ClangToDotPreprocessorRecord(&(p_compiler_instance->getSourceManager()))),
+    p_sage_preprocessor_recorder(std::make_unique<ClangToDotPreprocessorRecord>(
+        &(p_compiler_instance->getSourceManager()))),
     language(language_),
     ident_cnt(0)
 {}
@@ -514,7 +507,11 @@ ClangToDotNextPreprocessorToInsert * ClangToDotPreprocessorInserter::evaluateInh
 
     if (passed_cursor) {
         // TODO insert on inheritedValue->candidat
-        return inheritedValue->next();
+        ClangToDotNextPreprocessorToInsert * next_value = inheritedValue->next();
+        if (next_value != NULL) {
+            owned_inherited_.emplace_back(next_value);
+        }
+        return next_value;
     }
     return inheritedValue;
 }

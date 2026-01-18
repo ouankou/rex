@@ -80,7 +80,7 @@ mergeList ( NodeQuerySynthesizedAttributeType & nodeList, const Rose_STL_Contain
 
 
 // DQ (4/7/2004): Added to support more general lookup of data in the AST (vector of variants)
-void* querySolverGrammarElementFromVariantVector ( SgNode * astNode, VariantVector targetVariantVector,  NodeQuerySynthesizedAttributeType* returnNodeList )
+void* querySolverGrammarElementFromVariantVector ( SgNode * astNode, const VariantVector &targetVariantVector,  NodeQuerySynthesizedAttributeType* returnNodeList )
    {
   // This function extracts type nodes that would not be traversed so that they can
   // accumulated to a list.  The specific nodes collected into the list is controlled
@@ -227,4 +227,3 @@ void* querySolverGrammarElementFromVariantVector ( SgNode * astNode, VariantVect
    } /* End function querySolverUnionFields() */
 
 }//END NAMESPACE NODEQUERY
-

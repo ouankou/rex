@@ -2,6 +2,7 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 // #include "HiddenList.h"
+#include <cstdlib>
 #include <fstream>
 
 #if 1
@@ -223,6 +224,13 @@ bool TracingPerformance::trace_durations = true;
 AstPerformance::AstPerformance( std::string s , bool outputReport )
    : label(s), outputReportInDestructor(outputReport)
    {
+     static bool cleanup_registered = false;
+     if (!cleanup_registered)
+        {
+          std::atexit(&AstPerformance::cleanup);
+          cleanup_registered = true;
+        }
+
      ProcessingPhase* parentData = NULL;
   // check the stack for an existing performance monitor (it will be come the parent)
   // TOO1 (4/11/2013): TODO: -rose:keep_going tends to segfault here, so for now we
@@ -319,6 +327,16 @@ AstPerformance::~AstPerformance()
   // printf ("Leaving AstPerformance destructor ... \n");
    }
 
+void
+AstPerformance::cleanup()
+   {
+     for (ProcessingPhase* phase : data)
+        {
+          delete phase;
+        }
+     data.clear();
+   }
+
 ProcessingPhase::ProcessingPhase ()
    : name("default name"), performance(-1.0), resolution(-1.0), memoryUsage(), internalMemoryUsageData(0)
    {
@@ -354,6 +372,12 @@ ProcessingPhase::ProcessingPhase ( const std::string & s, double p, ProcessingPh
 
 ProcessingPhase::~ProcessingPhase()
    {
+     for (ProcessingPhase* child : childList)
+        {
+          delete child;
+        }
+     childList.clear();
+
   // DQ (7/21/2010): This is too late of a stage to set this value!
   // internalMemoryUsageData = memoryUsage.getMemoryUsageMegabytes();
    }

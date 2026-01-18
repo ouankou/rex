@@ -37,7 +37,9 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
       COMMAND ${CMAKE_COMMAND} -E rename lex.yy.c preproc-fortran.cc
       COMMAND ${FLEX_EXECUTABLE}
 	${CMAKE_CURRENT_SOURCE_DIR}/preproc-fortran-fixed.ll
-      COMMAND ${CMAKE_COMMAND} -E rename lex.yy.c preproc-fortran-fixed.cc)
+      COMMAND ${CMAKE_COMMAND} -E rename lex.yy.c preproc-fortran-fixed.cc
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/preproc-fortran.ll
+              ${CMAKE_CURRENT_SOURCE_DIR}/preproc-fortran-fixed.ll)
 
   set(libroseFortran_SOURCES
     fortran_support.C fortran_error_handler.C openFortranParser_main.C
@@ -49,7 +51,6 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   endif()
 
   add_library(roseFortran ${libroseFortran_SOURCES})
-  target_link_libraries(roseFortran ${JAVA_JVM_LIBRARY})
   if(JAVA_JVM_LIBRARY)
     get_filename_component(ROSE_JVM_LIBRARY_DIR "${JAVA_JVM_LIBRARY}" DIRECTORY)
     if(ROSE_JVM_LIBRARY_DIR)

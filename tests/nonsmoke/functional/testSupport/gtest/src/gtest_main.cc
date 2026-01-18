@@ -29,10 +29,25 @@
 
 #include <stdio.h>
 
+#include "rose_config.h"
 #include "gtest/gtest.h"
+
+#if defined(__has_include)
+#if __has_include(<valgrind/valgrind.h>)
+#include <valgrind/valgrind.h>
+#define ROSE_GTEST_HAS_VALGRIND 1
+#endif
+#endif
 
 GTEST_API_ int main(int argc, char **argv) {
   printf("Running main() from gtest_main.cc\n");
   testing::InitGoogleTest(&argc, argv);
+#if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
+  testing::GTEST_FLAG(death_test_style) = "threadsafe";
+#elif defined(ROSE_GTEST_HAS_VALGRIND)
+  if (RUNNING_ON_VALGRIND) {
+    testing::GTEST_FLAG(death_test_style) = "threadsafe";
+  }
+#endif
   return RUN_ALL_TESTS();
 }

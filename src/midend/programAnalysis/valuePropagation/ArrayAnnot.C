@@ -216,6 +216,11 @@ ArrayAnnotation* ArrayAnnotation::get_inst()
   return inst;
 }
 
+void ArrayAnnotation::release_inst() {
+  delete inst;
+  inst = nullptr;
+}
+
 void ArrayAnnotation:: register_annot()
 {
    OperatorSideEffectAnnotation::get_inst()->register_annot();

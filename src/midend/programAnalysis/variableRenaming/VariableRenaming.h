@@ -75,10 +75,15 @@ public:
         key.assign(other.key.begin(), other.key.end());
     }
 
-    VarUniqueName* copy() const
+    VarUniqueName* copy() const override
     {
         VarUniqueName* newName = new VarUniqueName(*this);
         return newName;
+    }
+
+    AstAttribute::OwnershipPolicy getOwnershipPolicy() const override
+    {
+        return CONTAINER_OWNERSHIP;
     }
 
     /** Get a constant reference to the name.

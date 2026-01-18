@@ -154,6 +154,7 @@ class FrontierDetectionForTokenStreamMapping : public SgTopDownBottomUpProcessin
           void outputFrontierNodes();
 
           FrontierDetectionForTokenStreamMapping( SgSourceFile* sourceFile);
+          ~FrontierDetectionForTokenStreamMapping();
 
        // virtual function must be defined
           FrontierDetectionForTokenStreamMapping_InheritedAttribute evaluateInheritedAttribute(SgNode* n, FrontierDetectionForTokenStreamMapping_InheritedAttribute inheritedAttribute);

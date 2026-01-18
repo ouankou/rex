@@ -49,13 +49,10 @@ const unsigned $CLASSNAME::pool_size = DEFAULT_CLASS_ALLOCATION_POOL_SIZE;
 #  define ROSE_ALLOC_MEMSET_OFFSET 1 // prevents erasing the vtable pointer when ROSE_ALLOC_MEMSET is set, cause to many issues when investigating bugs
 #endif
 
-#if !defined(SGNODE__ALL_POOLS)
-#define SGNODE__ALL_POOLS
-std::vector<std::tuple<unsigned char*, unsigned, VariantT>> SgNode::all_pools;
-#endif
-
-$CLASSNAME* $CLASSNAME::next_node = nullptr;
+$CLASSNAME::PoolFreeNode* $CLASSNAME::next_node = nullptr;
 std::vector<unsigned char*> $CLASSNAME::pools;
+std::vector<std::vector<$CLASSNAME::PoolFreeNode>> $CLASSNAME::pool_free_nodes;
+std::vector<std::vector<unsigned char>> $CLASSNAME::pool_live_flags;
 
 // This macro protects allocation functions by locking/unlocking a mutex. We have one mutex defined for each Sage class. The
 // HOW argument should be the word "lock" or "unlock".  Using a macro allows us to not have to use conditional compilation
@@ -113,7 +110,7 @@ void *$CLASSNAME::operator new ( size_t Size )
 #endif
 
     if ($CLASSNAME::next_node == nullptr) {
-        $CLASSNAME * alloc = ($CLASSNAME*) ROSE_MALLOC ( $CLASSNAME::pool_size * sizeof($CLASSNAME) );
+        unsigned char * alloc = (unsigned char*) ROSE_MALLOC ( $CLASSNAME::pool_size * sizeof($CLASSNAME) );
         ROSE_ASSERT(alloc != nullptr);
 
 #if ROSE_ALLOC_TRACE == 2
@@ -126,41 +123,63 @@ void *$CLASSNAME::operator new ( size_t Size )
 #elif ROSE_ALLOC_MEMSET == 3
         memset(alloc, 0xAA, $CLASSNAME::pool_size * sizeof($CLASSNAME));
 #endif
-        for (unsigned i=0; i < $CLASSNAME::pool_size-1; i++) {
-          alloc[i].p_freepointer = &(alloc[i+1]);
-        }
-        alloc[$CLASSNAME::pool_size-1].p_freepointer = nullptr;
-
         $CLASSNAME::pools.push_back ( (unsigned char *) alloc );
-        SgNode::all_pools.push_back (std::tuple<unsigned char *, unsigned, VariantT>( (unsigned char *) alloc, $CLASSNAME::pool_size * sizeof($CLASSNAME), V_$CLASSNAME ) );
-        $CLASSNAME::next_node = alloc;
+        $CLASSNAME::pool_free_nodes.emplace_back($CLASSNAME::pool_size);
+        $CLASSNAME::pool_live_flags.emplace_back($CLASSNAME::pool_size, 0);
+        {
+          auto &all_pools = SgNode::allPools();
+          SgNode::PoolEntry entry{(unsigned char *)alloc,
+                                  $CLASSNAME::pool_size * sizeof($CLASSNAME),
+                                  sizeof($CLASSNAME),
+                                  $CLASSNAME::pool_live_flags.back().data(),
+                                  V_$CLASSNAME,
+                                  &SgNode::PoolResetter<$CLASSNAME>::reset};
+          size_t insert_pos = 0;
+          while (insert_pos < all_pools.size() &&
+                 all_pools[insert_pos].base < entry.base) {
+            ++insert_pos;
+          }
+          all_pools.insert(all_pools.begin() + insert_pos, entry);
+        }
+        size_t pool_index = $CLASSNAME::pool_free_nodes.size() - 1;
+        $CLASSNAME::PoolFreeNode* old_head = $CLASSNAME::next_node;
+        std::vector<$CLASSNAME::PoolFreeNode>& free_nodes =
+            $CLASSNAME::pool_free_nodes.back();
+        for (unsigned i = 0; i < $CLASSNAME::pool_size; i++) {
+          free_nodes[i].pool_index = pool_index;
+          free_nodes[i].slot_index = i;
+          free_nodes[i].next = (i + 1 < $CLASSNAME::pool_size)
+                                   ? &free_nodes[i + 1]
+                                   : old_head;
+        }
+        $CLASSNAME::next_node = &free_nodes[0];
     }
     ROSE_ASSERT($CLASSNAME::next_node != nullptr);
 
-    $CLASSNAME * object = $CLASSNAME::next_node;
-    $CLASSNAME::next_node = ($CLASSNAME*)(object->p_freepointer);
+    $CLASSNAME::PoolFreeNode* free_node = $CLASSNAME::next_node;
+    $CLASSNAME::next_node = free_node->next;
+    size_t pool_index = free_node->pool_index;
+    size_t slot_index = free_node->slot_index;
+    unsigned char* object_bytes = $CLASSNAME::pools[pool_index] +
+                                  slot_index * sizeof($CLASSNAME);
+    $CLASSNAME* object = reinterpret_cast<$CLASSNAME*>(object_bytes);
+    $CLASSNAME::pool_live_flags[pool_index][slot_index] = 1;
 
 #if ROSE_ALLOC_TRACE == 2
-    printf("$CLASSNAME::new[%zi] %p %p %p %p\n", alloc_trace_cnt, object, object->p_freepointer, object->p_parent, $CLASSNAME::next_node);
+    printf("$CLASSNAME::new[%zi] %p %p\n", alloc_trace_cnt, object, $CLASSNAME::next_node);
 #endif
 
-    SgNode * fp = object->p_freepointer;
 #if ROSE_ALLOC_MEMSET == 1
 #elif ROSE_ALLOC_MEMSET == 2
-    memset(((char*)object) + ROSE_ALLOC_MEMSET_OFFSET, 0x00, sizeof($CLASSNAME) - ROSE_ALLOC_MEMSET_OFFSET * sizeof(char*));
+    memset(object_bytes + ROSE_ALLOC_MEMSET_OFFSET, 0x00, sizeof($CLASSNAME) - ROSE_ALLOC_MEMSET_OFFSET * sizeof(char*));
 #elif ROSE_ALLOC_MEMSET == 3
-    memset(((char*)object) + ROSE_ALLOC_MEMSET_OFFSET, 0xBB, sizeof($CLASSNAME) - ROSE_ALLOC_MEMSET_OFFSET * sizeof(char*));
+    memset(object_bytes + ROSE_ALLOC_MEMSET_OFFSET, 0xBB, sizeof($CLASSNAME) - ROSE_ALLOC_MEMSET_OFFSET * sizeof(char*));
 #endif
-    object->p_freepointer = fp;
-
 #if ROSE_ALLOC_TRACE == 2
-//    printf("$CLASSNAME::new[%zi] (OUT)\n  object = %p\n    ->freepointer = %p\n    ->parent = %p\n  current_link = %p\n", alloc_trace_cnt, object, object->p_freepointer, object->p_parent, $CLASSNAME::next_node);
     std::ostringstream oss; oss << "mempool-" << alloc_trace_cnt << ".csv";
     Rose::MemPool::snapshot(oss.str());
     alloc_trace_cnt++;
 #endif
-
-    object->p_freepointer = AST_FileIO::IS_VALID_POINTER();
 
     ALLOC_MUTEX($CLASSNAME, unlock);
 
@@ -194,43 +213,59 @@ void $CLASSNAME::operator delete(void *Pointer, size_t Size)
 #if ROSE_PEDANTIC_ALLOC
     ROSE_ASSERT(Size == sizeof($CLASSNAME));
 #else
-    if (Size != sizeof($CLASSNAME)) {
+#endif
+
+    unsigned char * object_bytes = (unsigned char*) Pointer;
+    ROSE_ASSERT(object_bytes != nullptr);
+
+#if ROSE_ALLOC_TRACE == 2
+//  printf("$CLASSNAME::delete[%zi] (IN)\n  object = %p  current_link = %p\n", alloc_trace_cnt, object_bytes, $CLASSNAME::next_node);
+    printf("$CLASSNAME::delete[%zi] %p %p\n", alloc_trace_cnt, object_bytes, $CLASSNAME::next_node);
+#endif
+
+    size_t pool_index = 0;
+    size_t slot_index = 0;
+    bool found_pool = false;
+    for (size_t i = 0; i < $CLASSNAME::pools.size(); ++i) {
+      unsigned char * base = $CLASSNAME::pools[i];
+      unsigned char * end = base + $CLASSNAME::pool_size * sizeof($CLASSNAME);
+      if (object_bytes >= base && object_bytes < end) {
+        pool_index = i;
+        slot_index = static_cast<size_t>(object_bytes - base) / sizeof($CLASSNAME);
+        found_pool = true;
+        break;
+      }
+    }
+    if (!found_pool) {
       ROSE_FREE(Pointer);
       ALLOC_MUTEX($CLASSNAME, unlock);
       return;
     }
-#endif
-
-    $CLASSNAME * object = ($CLASSNAME*) Pointer;
-    ROSE_ASSERT(object != nullptr);
-
-#if ROSE_ALLOC_TRACE == 2
-//  printf("$CLASSNAME::delete[%zi] (IN)\n  object = %p\n    ->freepointer = %p\n    ->parent = %p\n  current_link = %p\n", alloc_trace_cnt, object, object->p_freepointer, object->p_parent, $CLASSNAME::next_node);
-    printf("$CLASSNAME::delete[%zi] %p %p %p %p\n", alloc_trace_cnt, object, object->p_freepointer, object->p_parent, $CLASSNAME::next_node);
-#endif
-
 #if ROSE_PEDANTIC_ALLOC
-    ROSE_ASSERT(object->p_freepointer == AST_FileIO::IS_VALID_POINTER());
+    ROSE_ASSERT($CLASSNAME::pool_live_flags[pool_index][slot_index] == 1);
 #endif
+    $CLASSNAME::pool_live_flags[pool_index][slot_index] = 0;
 
 #if ROSE_ALLOC_MEMSET == 1
 #elif ROSE_ALLOC_MEMSET == 2
-    memset(((char*)object) + ROSE_ALLOC_MEMSET_OFFSET, 0x00, sizeof($CLASSNAME) - ROSE_ALLOC_MEMSET_OFFSET * sizeof(char*));
+    memset(object_bytes + ROSE_ALLOC_MEMSET_OFFSET, 0x00, sizeof($CLASSNAME) - ROSE_ALLOC_MEMSET_OFFSET * sizeof(char*));
 #elif ROSE_ALLOC_MEMSET == 3
-    memset(((char*)object) + ROSE_ALLOC_MEMSET_OFFSET, 0xDD, sizeof($CLASSNAME) - ROSE_ALLOC_MEMSET_OFFSET * sizeof(char*));
+    memset(object_bytes + ROSE_ALLOC_MEMSET_OFFSET, 0xDD, sizeof($CLASSNAME) - ROSE_ALLOC_MEMSET_OFFSET * sizeof(char*));
 #endif
 
 // Liao, 8/11/2014, to support IR mapping, we need unique IDs for AST nodes.
 // We provide a mode in which memory space will not be reused later so we can easily generate unique IDs based on memory addresses.
 #ifdef ROSE_USE_MEMORY_POOL_NO_REUSE
-    object->p_freepointer = nullptr;   // clear IS_VALID_POINTER flag, but not putting it back to the memory pool.
+    // no reuse: do not return storage to the free list
 #else
-    object->p_freepointer = $CLASSNAME::next_node;
-    $CLASSNAME::next_node = object;
+    $CLASSNAME::PoolFreeNode* free_node =
+        &$CLASSNAME::pool_free_nodes[pool_index][slot_index];
+    free_node->next = $CLASSNAME::next_node;
+    $CLASSNAME::next_node = free_node;
 #endif
 
 #if ROSE_ALLOC_TRACE == 2
-//  printf("$CLASSNAME::delete[%zi] (OUT)\n  object = %p\n    ->freepointer = %p\n    ->parent = %p\n  current_link = %p\n", alloc_trace_cnt, object, object->p_freepointer, object->p_parent, $CLASSNAME::next_node);
+//  printf("$CLASSNAME::delete[%zi] (OUT)\n  object = %p  current_link = %p\n", alloc_trace_cnt, object_bytes, $CLASSNAME::next_node);
     std::ostringstream oss; oss << "mempool-" << alloc_trace_cnt << ".csv";
     Rose::MemPool::snapshot(oss.str());
     alloc_trace_cnt++;

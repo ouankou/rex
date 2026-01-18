@@ -80,6 +80,7 @@ class ValueAnnotation
   ValueAnnotation() {}
  public:
   static ValueAnnotation* get_inst();
+  static void release_inst();
   void register_annot(); 
   void Dump() const;
   bool known_type( AstInterface& fa, const AstNodePtr& exp, HasValueDescriptor* d = 0);
@@ -94,4 +95,3 @@ class ValueAnnotation
 };
 
 #endif
-

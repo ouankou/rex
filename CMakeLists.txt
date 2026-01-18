@@ -469,6 +469,21 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
       "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_jvm_dir}(:|$)\")\n"
       "  set(ENV{LD_LIBRARY_PATH} \"${_rose_jvm_dir}:\$ENV{LD_LIBRARY_PATH}\")\n"
       "endif()\n")
+    if(ENABLE-SANITIZER)
+      list(FIND ROSE_SANITIZERS "leak" _rose_lsan_index)
+      set(_rose_lsan_suppressions
+          "${CMAKE_SOURCE_DIR}/scripts/rose-suppressions-for-lsan")
+      if(NOT _rose_lsan_index EQUAL -1 AND EXISTS "${_rose_lsan_suppressions}")
+        string(APPEND _rose_ctest_env_content
+          "if(\"\$ENV{LSAN_OPTIONS}\" STREQUAL \"\")\n"
+          "  set(ENV{LSAN_OPTIONS} \"suppressions=${_rose_lsan_suppressions}\")\n"
+          "elseif(NOT \"\$ENV{LSAN_OPTIONS}\" MATCHES \"suppressions=\")\n"
+          "  set(ENV{LSAN_OPTIONS} \"suppressions=${_rose_lsan_suppressions}:\$ENV{LSAN_OPTIONS}\")\n"
+          "endif()\n")
+      endif()
+      unset(_rose_lsan_index)
+      unset(_rose_lsan_suppressions)
+    endif()
     file(WRITE "${_rose_ctest_env}" "${_rose_ctest_env_content}")
     set_property(DIRECTORY PROPERTY TEST_INCLUDE_FILE "${_rose_ctest_env}")
   endif()
@@ -683,14 +698,61 @@ endif()
 set(_rose_clang_cpp_candidates
   clang-cpp
   clang-cpp${CLANG_VERSION_MAJOR}
+  clang-cpp${LLVM_PACKAGE_VERSION}
   clang-cpp20)
+set(_rose_clang_cpp_search_dirs
+  ${LLVM_LIBRARY_DIRS}
+  ${CLANG_LIBRARY_DIRS})
+if(LLVM_DIR)
+  set(_rose_llvm_prefix "")
+  if(EXISTS "${LLVM_DIR}/LLVMConfig.cmake")
+    get_filename_component(_rose_llvm_dir_name "${LLVM_DIR}" NAME)
+    if(_rose_llvm_dir_name STREQUAL "llvm")
+      get_filename_component(_rose_llvm_prefix "${LLVM_DIR}/../../.." ABSOLUTE)
+    elseif(_rose_llvm_dir_name STREQUAL "cmake")
+      get_filename_component(_rose_llvm_prefix "${LLVM_DIR}/.." ABSOLUTE)
+    else()
+      get_filename_component(_rose_llvm_prefix "${LLVM_DIR}/.." ABSOLUTE)
+    endif()
+  elseif(EXISTS "${LLVM_DIR}/lib/cmake/llvm/LLVMConfig.cmake")
+    set(_rose_llvm_prefix "${LLVM_DIR}")
+  else()
+    set(_rose_llvm_prefix "${LLVM_DIR}")
+  endif()
+  if(_rose_llvm_prefix)
+    list(APPEND _rose_clang_cpp_search_dirs
+      "${_rose_llvm_prefix}/lib"
+      "${_rose_llvm_prefix}/lib64")
+  endif()
+endif()
+if(CMAKE_LIBRARY_ARCHITECTURE)
+  foreach(_rose_libdir IN LISTS _rose_clang_cpp_search_dirs)
+    list(APPEND _rose_clang_cpp_search_dirs
+      "${_rose_libdir}/${CMAKE_LIBRARY_ARCHITECTURE}")
+  endforeach()
+endif()
+list(REMOVE_DUPLICATES _rose_clang_cpp_search_dirs)
+set(_rose_saved_library_suffixes "${CMAKE_FIND_LIBRARY_SUFFIXES}")
+if(UNIX AND NOT APPLE)
+  if(CLANG_VERSION_MAJOR)
+    list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".so.${CLANG_VERSION_MAJOR}")
+  endif()
+  if(DEFINED LLVM_VERSION_MAJOR)
+    list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".so.${LLVM_VERSION_MAJOR}")
+    if(DEFINED LLVM_VERSION_MINOR)
+      list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES
+        ".so.${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}")
+    endif()
+  endif()
+endif()
 find_library(CLANG_CPP_LIBRARY
   NAMES ${_rose_clang_cpp_candidates}
-  PATHS ${LLVM_LIBRARY_DIRS} ${CLANG_LIBRARY_DIRS}
+  PATHS ${_rose_clang_cpp_search_dirs}
   NO_DEFAULT_PATH)
 if(NOT CLANG_CPP_LIBRARY)
   find_library(CLANG_CPP_LIBRARY NAMES ${_rose_clang_cpp_candidates})
 endif()
+set(CMAKE_FIND_LIBRARY_SUFFIXES "${_rose_saved_library_suffixes}")
 if(CLANG_CPP_LIBRARY)
   if(ENABLE-SANITIZER)
     set(CLANG_LIBS ${CLANG_CPP_LIBRARY})
@@ -700,6 +762,10 @@ elseif(ENABLE-SANITIZER)
   message(FATAL_ERROR "ENABLE-SANITIZER requires libclang-cpp to avoid ODR mismatches with static Clang libraries. Install libclang-cpp or disable ENABLE-SANITIZER.")
 endif()
 unset(_rose_clang_cpp_candidates)
+unset(_rose_clang_cpp_search_dirs)
+unset(_rose_llvm_dir_name)
+unset(_rose_llvm_prefix)
+unset(_rose_saved_library_suffixes)
 
 endif() # ENABLE-C
 
@@ -929,23 +995,55 @@ if(VALGRIND_INCLUDE_PATH AND NOT EXISTS "${VALGRIND_INCLUDE_PATH}/valgrind/valgr
   message(FATAL_ERROR "valgrind.h is missing, can't compile with Valgrind")
 endif()
 
+set(_rose_memcheck_valgrind "")
+if(ROSE_VALGRIND_REQUESTED)
+  set(_rose_memcheck_valgrind "${VALGRIND_BINARY}")
+endif()
+if(NOT _rose_memcheck_valgrind)
+  find_program(_rose_memcheck_valgrind valgrind
+    PATHS ENV PATH /usr/bin /usr/local/bin
+    NO_CMAKE_FIND_ROOT_PATH)
+  if(_rose_memcheck_valgrind)
+    message(STATUS "Found Valgrind for CTest memcheck: ${_rose_memcheck_valgrind}")
+  endif()
+endif()
+if(NOT _rose_memcheck_valgrind AND UNIX)
+  execute_process(
+    COMMAND /bin/sh -c "command -v valgrind"
+    RESULT_VARIABLE _rose_valgrind_status
+    OUTPUT_VARIABLE _rose_memcheck_valgrind
+    ERROR_QUIET
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(_rose_valgrind_status EQUAL 0 AND _rose_memcheck_valgrind)
+    message(STATUS "Found Valgrind for CTest memcheck: ${_rose_memcheck_valgrind}")
+  else()
+    set(_rose_memcheck_valgrind "")
+  endif()
+  unset(_rose_valgrind_status)
+endif()
+
 set(ROSE_CTEST_MEMCHECK_COMMAND "")
 set(ROSE_CTEST_MEMCHECK_OPTIONS "")
 set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
-if(ROSE_USE_VALGRIND)
-  set(ROSE_CTEST_MEMCHECK_COMMAND "${VALGRIND_BINARY}")
+if(_rose_memcheck_valgrind)
+  set(ROSE_CTEST_MEMCHECK_COMMAND "${_rose_memcheck_valgrind}")
   set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "${CMAKE_SOURCE_DIR}/scripts/rose-suppressions-for-valgrind")
-  if(EXISTS "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
-    set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=all --error-exitcode=1")
-  else()
+  set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=all --error-exitcode=1 --max-stackframe=2047456 --num-callers=32 --trace-children=yes --trace-children-skip=/usr/bin/clang++-20,/usr/bin/clang-20,/usr/lib/llvm-20/bin/clang++-20,/usr/lib/llvm-20/bin/clang-20,/usr/lib/llvm-20/bin/flang-20,/usr/lib/llvm-20/bin/flang,/usr/lib/llvm-20/bin/flang-new,clang++-20,clang-20,flang-20,flang,flang-new,clang++,clang,g++,gcc,c++,cc,/usr/bin/grep,/bin/grep,grep,/usr/bin/cmp,/bin/cmp,cmp,/usr/bin/mktemp,/bin/mktemp,mktemp,/usr/bin/dash,/bin/dash,dash,/usr/bin/bash,/bin/bash,bash,egrep,fgrep,diff,sed,awk,tr,cut,sort,uniq,head,tail,cmake,ctest,make,ninja,sh,perl,python,python3,tar,gzip,bzip2,xz,zip,unzip,cp,mv,rm,install --trace-children-skip-by-arg=*gtest_internal_run_death_test*")
+  if(NOT EXISTS "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
     message(WARNING "Valgrind suppressions file not found: ${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
     set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
   endif()
 endif()
+unset(_rose_memcheck_valgrind)
 set(CTEST_MEMORYCHECK_COMMAND "${ROSE_CTEST_MEMCHECK_COMMAND}")
 set(CTEST_MEMORYCHECK_COMMAND_OPTIONS "${ROSE_CTEST_MEMCHECK_OPTIONS}")
 set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
+set(ROSE_CTEST_CUSTOM_ENVIRONMENT "")
 if(ROSE_USE_VALGRIND)
+  set(ROSE_CTEST_CUSTOM_ENVIRONMENT
+      "set(CTEST_CUSTOM_ENVIRONMENT \"ROSE_TEST_TIMEOUT_SCALE=2\")")
+endif()
+if(ROSE_CTEST_MEMCHECK_COMMAND)
   set(MEMORYCHECK_COMMAND "${ROSE_CTEST_MEMCHECK_COMMAND}" CACHE FILEPATH
       "Path to the memory checking command used by CTest" FORCE)
   set(MEMORYCHECK_COMMAND_OPTIONS "${ROSE_CTEST_MEMCHECK_OPTIONS}" CACHE STRING

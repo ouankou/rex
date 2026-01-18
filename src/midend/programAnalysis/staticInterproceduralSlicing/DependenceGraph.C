@@ -114,7 +114,7 @@ void DependenceGraph::deleteNode(DependenceNode * node)
         SgNode * identifyingNode = node->getSgNode();
         nodeTypeToDepNodeMapMap[type].erase(identifyingNode);
         removeNode(node);
-        free(node);
+        delete node;
 }
 
 DependenceNode *DependenceGraph::createNode(DependenceNode::NodeType type,SgNode * identifyingNode)
@@ -465,4 +465,3 @@ NodeQuerySynthesizedAttributeType queryIsImportantForSliceTypeWithCalls(SgNode *
                 retVal.push_back(astNode);
         return retVal;
 }
-

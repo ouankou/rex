@@ -1042,7 +1042,7 @@ ROSEAttributesList::ROSEAttributesList()
 
 ROSEAttributesList::~ROSEAttributesList()
    {
-  // Nothing to do here
+     deepClean();
    }
 
 #if 0
@@ -1211,7 +1211,11 @@ ROSEAttributesList::clean(void)
    {
      ASSERT_this();
 
-  // Nothing to do here?
+     for (PreprocessingInfo* info : attributeList)
+        {
+          delete info;
+        }
+     attributeList.clear();
    }
 
 void
@@ -1219,12 +1223,21 @@ ROSEAttributesList::deepClean(void)
    {
      ASSERT_this();
 
-  // Nothing to do here?
-  // DQ (9/6/2001) Bugfix: Implemented removal of all elements of the list (required for multi source file support)
-     vector<PreprocessingInfo*>::iterator head = attributeList.begin();
-     vector<PreprocessingInfo*>::iterator tail = attributeList.end();
-     attributeList.erase(head,tail);
-     ROSE_ASSERT (attributeList.size() == 0);
+     clean();
+
+     if (rawTokenStream != NULL)
+        {
+          for (stream_element* element : *rawTokenStream)
+             {
+               if (element != NULL)
+                  {
+                    delete element->p_tok_elem;
+                    delete element;
+                  }
+             }
+          delete rawTokenStream;
+          rawTokenStream = NULL;
+        }
    }
 
 PreprocessingInfo*
@@ -2403,7 +2416,11 @@ ROSEAttributesListContainer::ROSEAttributesListContainer()
 
 ROSEAttributesListContainer::~ROSEAttributesListContainer()
    {
-  // Nothing to do here?
+     for (auto & entry : attributeListMap)
+        {
+          delete entry.second;
+        }
+     attributeListMap.clear();
    }
 
 void
@@ -2608,7 +2625,13 @@ ROSEAttributesListContainer::deepClean(void)
   // Call deepClean for each list.
   //
 
-  // Nothing to do?
+     for (auto & entry : attributeListMap)
+        {
+          if (entry.second != NULL)
+             {
+               entry.second->deepClean();
+             }
+        }
    }
 
 void
@@ -2618,7 +2641,13 @@ ROSEAttributesListContainer::clean(void)
   // Call clean for each list.
   //
 
-  // Nothing to do?
+     for (auto & entry : attributeListMap)
+        {
+          if (entry.second != NULL)
+             {
+               entry.second->clean();
+             }
+        }
    }
 
 

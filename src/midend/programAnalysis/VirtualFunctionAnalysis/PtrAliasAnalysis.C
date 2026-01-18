@@ -3,6 +3,42 @@
 #include "sage3basic.h"
 #include <CallGraph.h>
 
+namespace {
+template <typename NodeT>
+void clearAttributeMechanism(NodeT* node) {
+    if (node == nullptr) {
+        return;
+    }
+    AstAttributeMechanism* attributes = node->get_attributeMechanism();
+    if (attributes != nullptr) {
+        delete attributes;
+        node->set_attributeMechanism(nullptr);
+    }
+}
+
+void deleteGraph(SgIncidenceDirectedGraph* graph) {
+    if (graph == nullptr) {
+        return;
+    }
+    std::set<SgGraphNode*> nodes = graph->computeNodeSet();
+    std::set<SgDirectedGraphEdge*> edges;
+    for (SgGraphNode* node: nodes) {
+        std::set<SgDirectedGraphEdge*> out_edges = graph->computeEdgeSetOut(node);
+        edges.insert(out_edges.begin(), out_edges.end());
+    }
+    for (SgDirectedGraphEdge* edge: edges) {
+        clearAttributeMechanism(edge);
+        delete edge;
+    }
+    for (SgGraphNode* node: nodes) {
+        clearAttributeMechanism(node);
+        delete node;
+    }
+    clearAttributeMechanism(graph);
+    delete graph;
+}
+}  // namespace
+
 struct FunctionFilter
 {
         bool operator()(SgFunctionDeclaration* funcDecl)
@@ -77,6 +113,13 @@ struct OnlyNonCompilerGenerated
         for (map::value_type it: intraAliases) {
                 delete ((IntraProcAliasAnalysis *)it.second);
         }
+        intraAliases.clear();
+        deleteGraph(callGraph);
+        callGraph = nullptr;
+        delete cgBuilder;
+        cgBuilder = nullptr;
+        delete classHierarchy;
+        classHierarchy = nullptr;
 }
  
  bool PtrAliasAnalysis::runAndCheckIntraProcAnalysis(SgFunctionDeclaration* funcDecl) {
@@ -234,7 +277,8 @@ void PtrAliasAnalysis::run()  {
             intraAliases[funcDecl] = intra;
 
         }
-        
+        deleteGraph(fullCallGraph.getGraph());
+
 #if 0
      printf ("In PtrAliasAnalysis::run(): after loop \n");
 #endif

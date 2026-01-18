@@ -843,22 +843,22 @@ NodeQuery::queryNodeList(Rose_STL_Container<SgNode*> nodeList, SgNode* targetNod
 }
 
 NodeQuerySynthesizedAttributeType
-NodeQuery::querySubTree(SgNode* subTree, VariantVector targetVariantVector, AstQueryNamespace::QueryDepth defineQueryType)
+NodeQuery::querySubTree(SgNode* subTree, const VariantVector &targetVariantVector, AstQueryNamespace::QueryDepth defineQueryType)
 {
   NodeQuerySynthesizedAttributeType returnList;
 
   AstQueryNamespace::querySubTree(subTree, std::bind(querySolverGrammarElementFromVariantVector,
-                                    std::placeholders::_1, targetVariantVector, &returnList), defineQueryType);
+                                    std::placeholders::_1, std::cref(targetVariantVector), &returnList), defineQueryType);
   return returnList;
 }
 
 NodeQuerySynthesizedAttributeType
-NodeQuery::queryNodeList(NodeQuerySynthesizedAttributeType nodeList, VariantVector targetVariantVector)
+NodeQuery::queryNodeList(NodeQuerySynthesizedAttributeType nodeList, const VariantVector &targetVariantVector)
 {
   NodeQuerySynthesizedAttributeType returnList;
 
   AstQueryNamespace::queryRange(nodeList.begin(), nodeList.end(), std::bind(querySolverGrammarElementFromVariantVector,
-                                    std::placeholders::_1, targetVariantVector, &returnList));
+                                    std::placeholders::_1, std::cref(targetVariantVector), &returnList));
   return returnList;
 }
 

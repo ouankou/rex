@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <memory>
 
 #include "sage3basic.h"
 #include "clang-frontend-private.hpp"
@@ -202,9 +203,10 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
             SgFilePtrList& file_list = project->get_fileList();
 
             // Normalize input_file to absolute path for comparison
-            char* abs_input = realpath(input_file.c_str(), NULL);
-            std::string normalized_input = abs_input ? std::string(abs_input) : input_file;
-            if (abs_input) free(abs_input);
+            std::unique_ptr<char, decltype(&free)> abs_input(
+                realpath(input_file.c_str(), NULL), &free);
+            std::string normalized_input =
+                abs_input ? std::string(abs_input.get()) : input_file;
 
             for (SgFilePtrList::iterator it = file_list.begin(); it != file_list.end(); ++it) {
                 SgSourceFile* existing_file = isSgSourceFile(*it);
@@ -212,9 +214,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                     std::string existing_filename = existing_file->get_sourceFileNameWithPath();
 
                     // Normalize existing filename to absolute path
-                    char* abs_existing = realpath(existing_filename.c_str(), NULL);
-                    std::string normalized_existing = abs_existing ? std::string(abs_existing) : existing_filename;
-                    if (abs_existing) free(abs_existing);
+                    std::unique_ptr<char, decltype(&free)> abs_existing(
+                        realpath(existing_filename.c_str(), NULL), &free);
+                    std::string normalized_existing =
+                        abs_existing ? std::string(abs_existing.get())
+                                     : existing_filename;
 
                     // Use exact path comparison only (no substring matching)
                     if (normalized_existing == normalized_input) {
@@ -386,7 +390,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   // 2 - Create a compiler instance
 
-    clang::CompilerInstance * compiler_instance = new clang::CompilerInstance();
+    auto compiler_instance = std::make_unique<clang::CompilerInstance>();
 
     // Create diagnostics with instance-specific physical filesystem (avoids global singleton double-free)
     // Use createPhysicalFileSystem() instead of getRealFileSystem() to avoid sharing the global singleton.
@@ -548,9 +552,10 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     RoseOpenMPPragmaCallback* omp_callback = nullptr;
     {
       clang::Preprocessor &PP = compiler_instance->getPreprocessor();
-      omp_callback = new RoseOpenMPPragmaCallback(
+      auto omp_callback_owner = std::make_unique<RoseOpenMPPragmaCallback>(
           compiler_instance->getSourceManager(), PP);
-      PP.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>(omp_callback));
+      omp_callback = omp_callback_owner.get();
+      PP.addPPCallbacks(std::move(omp_callback_owner));
     }
 
     if (!compiler_instance->hasASTContext()) compiler_instance->createASTContext();
@@ -558,7 +563,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     compiler_instance->getPreprocessor().getBuiltinInfo().initializeBuiltins(
         compiler_instance->getPreprocessor().getIdentifierTable(), lang_opts);
 
-    auto translator_ptr = std::make_unique<ClangToSageTranslator>(compiler_instance, language, &sageFile);
+    auto translator_ptr = std::make_unique<ClangToSageTranslator>(
+        compiler_instance.get(), language, &sageFile);
     ClangToSageTranslator* translator = translator_ptr.get();
 
     // Pass pragma callback to translator
@@ -619,7 +625,10 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // 4 - Attach to the file
 
     if (sageFile.get_globalScope() != NULL) {
-      SageInterface::deleteAST(sageFile.get_globalScope());
+      SgGlobal *old_global_scope = sageFile.get_globalScope();
+      sageFile.set_globalScope(nullptr);
+      old_global_scope->set_parent(nullptr);
+      SageInterface::deleteAST(old_global_scope);
       auto map_it = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(&sageFile);
       if (map_it != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() &&
           map_it->second != NULL) {
@@ -681,7 +690,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     // AST (global_scope, etc.) persists in sageFile and is NOT owned by the
     // translator, so it remains valid after cleanup.
 
-    delete compiler_instance;
 
     // REX: By default, treat Clang diagnostic errors as fatal.
     // Use -rex:clang:continue-on-error to allow backend to run with a partial AST.
@@ -729,16 +737,14 @@ void finishSageAST(ClangToSageTranslator & translator) {
  // 2 - Place Preprocessor informations
 
     if (translator.preprocessor_list_size() > 0) {
-        NextPreprocessorToInsert * npp = new NextPreprocessorToInsert(translator);
+        NextPreprocessorToInsert npp(translator);
         std::pair<Sg_File_Info *, PreprocessingInfo *> top = translator.preprocessor_top();
-        npp->cursor = top.first;
-        npp->next_to_insert = top.second;
-        npp->candidat = NULL;
+        npp.cursor = top.first;
+        npp.next_to_insert = top.second;
+        npp.candidat = NULL;
 
         PreprocessorInserter preprocessor_inserter;
-        preprocessor_inserter.traverse(global_scope, npp);
-
-        delete npp;
+        preprocessor_inserter.traverse(global_scope, &npp);
     }
 }
 
@@ -757,14 +763,14 @@ ClangToSageTranslator::ClangToSageTranslator(clang::CompilerInstance * compiler_
     p_class_type_decl_first_see_in_type(),
     p_enum_type_decl_first_see_in_type(),
     p_compiler_instance(compiler_instance),
-    p_sage_preprocessor_recorder(new SagePreprocessorRecord(&(p_compiler_instance->getSourceManager()))),
+    p_sage_preprocessor_recorder(std::make_unique<SagePreprocessorRecord>(
+        &(p_compiler_instance->getSourceManager()))),
     p_sage_source_file(sage_source_file),
     language(language_),
     p_openmp_pragma_callback(nullptr)
 {}
 
 ClangToSageTranslator::~ClangToSageTranslator() {
-    delete p_sage_preprocessor_recorder;
 }
 
 /* (protected) Helper methods */
@@ -1216,7 +1222,11 @@ NextPreprocessorToInsert * PreprocessorInserter::evaluateInheritedAttribute(SgNo
         if (inheritedValue->next_to_insert != NULL) {
             loc_node->addToAttachedPreprocessingInfo(inheritedValue->next_to_insert);
         }
-        return inheritedValue->next();
+        NextPreprocessorToInsert * next_value = inheritedValue->next();
+        if (next_value != NULL) {
+            owned_inherited_.emplace_back(next_value);
+        }
+        return next_value;
     }
 
     return inheritedValue;

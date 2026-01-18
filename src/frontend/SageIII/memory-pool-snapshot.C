@@ -64,22 +64,24 @@ struct DumpPoolInfo : CSVDump {
   template <typename N>
   void apply() {
 //  std::cout << N::static_variant << " " << N::pools.size() << " " << N::pool_size << std::endl;
-    N * n0 = N::pools.size() > 0 ? &(((N*)N::pools[0])[0]) : nullptr;
-    n0 = ( n0 && n0->get_freepointer() == AST_FileIO::IS_VALID_POINTER() ) ? n0 : nullptr;
+    const bool has_live_flags = N::pool_live_flags.size() == N::pools.size();
     for (size_t p = 0; p < N::pools.size(); p++) {
+      unsigned char* base = N::pools[p];
       for (size_t o = 0; o < N::pool_size; o++) {
-        N * n = &(((N*)N::pools[p])[o]);
-        void * freepointer = n->get_freepointer();
+        unsigned char* slot = base + o * sizeof(N);
+        const bool is_live = has_live_flags && N::pool_live_flags[p][o];
+        N* n = reinterpret_cast<N*>(slot);
+        void* freepointer = n->get_freepointer();
         out << std::dec << N::static_variant;
+        out << "," << std::dec << p << "," << std::dec << o << "," << std::hex
+            << slot << "," << std::hex << freepointer << ",";
 
-        out << "," << std::dec << p << "," << std::dec << o << "," << std::hex << n << "," << std::hex << freepointer << ",";
-
-        if ( freepointer == AST_FileIO::IS_VALID_POINTER()) {
+        if (is_live && freepointer == AST_FileIO::IS_VALID_POINTER()) {
           out << std::hex << n->get_parent();
         } else {
           out << "0";
         }
-          
+
         out << std::endl;
       }
     }

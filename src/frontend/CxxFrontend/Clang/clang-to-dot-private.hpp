@@ -4,6 +4,8 @@
 
 #include "clang-frontend.hpp"
 
+#include <memory>
+
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTConsumer.h"
@@ -192,7 +194,7 @@ class ClangToDotTranslator : public clang::ASTConsumer
         void VisitTemplateName(const clang::TemplateName & template_name, NodeDescriptor & node_desc, std::string prefix);
         void VisitNestedNameSpecifier(clang::NestedNameSpecifier * nested_name_specifier, NodeDescriptor & node_desc, std::string prefix);
 
-          ClangToDotPreprocessorRecord   * p_sage_preprocessor_recorder;
+          std::unique_ptr<ClangToDotPreprocessorRecord> p_sage_preprocessor_recorder;
 
     public:
      // ClangToDot(clang::CompilerInstance * compiler_instance, Language language_);
@@ -255,7 +257,7 @@ class ClangToDotTranslator : public clang::ASTConsumer
           std::map<SgEnumType *, bool>  p_enum_type_decl_first_see_in_type;
 
           clang::CompilerInstance  * p_compiler_instance;
-          ClangToDotPreprocessorRecord   * p_sage_preprocessor_recorder;
+          std::unique_ptr<ClangToDotPreprocessorRecord> p_sage_preprocessor_recorder;
 
           Language language;
 
@@ -713,6 +715,8 @@ class ClangToDotPreprocessorInserter : public AstTopDownProcessing<ClangToDotNex
    {
      public:
           ClangToDotNextPreprocessorToInsert * evaluateInheritedAttribute(SgNode * astNode, ClangToDotNextPreprocessorToInsert * inheritedValue);
+     private:
+          std::vector<std::unique_ptr<ClangToDotNextPreprocessorToInsert>> owned_inherited_;
    };
 
 #endif /* _CLANG_TO_DOT_FRONTEND_PRIVATE_HPP_ */

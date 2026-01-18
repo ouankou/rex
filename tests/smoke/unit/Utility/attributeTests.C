@@ -530,6 +530,9 @@ test_ast_attributes() {
     ASSERT_always_require(1 == attr1_n);
     ASSERT_always_require(1 == attr5_n);
 #endif
+
+    // Tear down the AST while Attr6 counters remain in scope.
+    SageInterface::tearDownAst(nullptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

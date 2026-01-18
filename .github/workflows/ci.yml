@@ -54,11 +54,12 @@ jobs:
           graphviz \
           libantlr4-runtime-dev \
           libclang-${{ matrix.llvm }}-dev \
+          libclang-cpp${{ matrix.llvm }}-dev \
           libhpdf-dev \
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
-          openjdk-17-jdk \
+          openjdk-25-jdk \
           pkg-config
 
     # Simplified build using build-rex.sh script
@@ -67,7 +68,7 @@ jobs:
         # Set up LLVM 20 paths so "clang" command resolves to clang-20.
         # Keep the JVM path available for the Fortran OFP frontend.
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
         CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
         LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
         CC: clang-${{ matrix.llvm }}
@@ -75,20 +76,20 @@ jobs:
         FC: flang-${{ matrix.llvm }}
       run: |
         cd $GITHUB_WORKSPACE
-        ./build-rex.sh $GITHUB_WORKSPACE/../rex_install Debug
+        ./build-rex.sh $GITHUB_WORKSPACE/rex_install Debug
 
     # Run frontend-related tests
     - name: Run astInterface, translator, and astQuery Tests
       env:
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-17-openjdk-amd64/lib/server
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
       run: |
         cd $GITHUB_WORKSPACE/build
         # astInterface exercises Clang frontend
-        ctest -R astInterface -V
+        ctest -R astInterface
         # translatorTests (excluding two known disabled cases in CTest)
-        # ctest -R "Translator_" -V
+        # ctest -R "Translator_"
         # astQuery exercises query helpers
-        ctest -R "testQuery" -V
+        ctest -R "testQuery"
         # Run all rex-prefixed regression tests
-        ctest -R rex -V
+        ctest -R rex

@@ -9,6 +9,8 @@
 #include "transformationTracking.h"
 #include "wholeAST.h"
 
+#include <memory>
+
 // **********************************************************
 // **********************************************************
 //       Source code which can be more later
@@ -2983,9 +2985,11 @@ generateWholeGraphOfAST( string filename, CustomMemoryPoolDOTGeneration::s_Filte
   // CustomMemoryPoolDOTGeneration::print_filter_flags();
 
   // Make this the default type of graph that we produce (filtering frontend specific IR nodes)
+     std::unique_ptr<CustomMemoryPoolDOTGeneration::s_Filter_Flags> owned_flags;
      if (flags == NULL )
         {
-          flags = new CustomMemoryPoolDOTGeneration::s_Filter_Flags();
+          owned_flags = std::make_unique<CustomMemoryPoolDOTGeneration::s_Filter_Flags>();
+          flags = owned_flags.get();
         }
 
 #if 0

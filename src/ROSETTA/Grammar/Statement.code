@@ -4835,11 +4835,11 @@ SgScopeStatement::insert_symbol ( const SgName& n, SgSymbol* s )
      const SgNamespaceDefinitionStatement * namespaceDefinitionStatement = isSgNamespaceDefinitionStatement(this);
      if (namespaceDefinitionStatement != NULL && !is_static_decl)
         {
-          SgAliasSymbol* aliasSymbol = new SgAliasSymbol(s);
-
           SgNamespaceDefinitionStatement * gnds = namespaceDefinitionStatement->get_global_definition();
           if (gnds != NULL && namespaceDefinitionStatement != gnds) {
+            SgAliasSymbol* aliasSymbol = new SgAliasSymbol(s);
             gnds->get_symbol_table()->insert(n,aliasSymbol);
+            aliasSymbol->set_parent(gnds->get_symbol_table());
           }
         }
 
@@ -4867,6 +4867,7 @@ SgScopeStatement::insert_symbol ( const SgName& n, SgSymbol* s )
              printf(" -- asym = %p (%s)\n", asym, asym->class_name().c_str());
 #endif
              globalScopeAcrossFiles->get_symbol_table()->insert(n, asym);
+             asym->set_parent(symtab);
            }
          } else {
            MLOG_WARN_C("ROSETTA", "Warning: In SgScopeStatement::insert_symbol(): global_scope == globalScopeAcrossFiles: skip insertion of redundant SgAliasSymbol \n");
@@ -4968,18 +4969,19 @@ SgScopeStatement::remove_symbol ( SgSymbol* s )
 
      const SgNamespaceDefinitionStatement* namespaceDefinitionStatement = isSgNamespaceDefinitionStatement(this);
      if (namespaceDefinitionStatement != NULL) {
-       ROSE_ASSERT(namespaceDefinitionStatement->get_global_definition() != NULL);
-       const SgNamespaceDefinitionStatement* globalNamespaceDefinitionStatement = namespaceDefinitionStatement->get_global_definition();
-       ROSE_ASSERT(globalNamespaceDefinitionStatement != NULL);
-       ROSE_ASSERT(namespaceDefinitionStatement != globalNamespaceDefinitionStatement);
+      ROSE_ASSERT(namespaceDefinitionStatement->get_global_definition() != NULL);
+      const SgNamespaceDefinitionStatement* globalNamespaceDefinitionStatement = namespaceDefinitionStatement->get_global_definition();
+      ROSE_ASSERT(globalNamespaceDefinitionStatement != NULL);
+      if (namespaceDefinitionStatement != globalNamespaceDefinitionStatement) {
+        SgName n = s->get_name();
 
-       SgName n = s->get_name();
-
-       SgSymbol* aliasSymbol = globalNamespaceDefinitionStatement->get_symbol_table()->find_aliased_symbol(n,s);
-       if (aliasSymbol != NULL) {
-         globalNamespaceDefinitionStatement->get_symbol_table()->remove(aliasSymbol);
-       }
-     }
+        SgSymbol* aliasSymbol = globalNamespaceDefinitionStatement->get_symbol_table()->find_aliased_symbol(n,s);
+        if (aliasSymbol != NULL) {
+          globalNamespaceDefinitionStatement->get_symbol_table()->remove(aliasSymbol);
+          delete aliasSymbol;
+        }
+      }
+    }
 
      const SgGlobal * global_scope = isSgGlobal(this);
      if (global_scope != NULL) {
@@ -4992,11 +4994,15 @@ SgScopeStatement::remove_symbol ( SgSymbol* s )
 
          SgSymbol * aliasSymbol = globalScopeAcrossFiles->get_symbol_table()->find_aliased_symbol(n,s);
          if (aliasSymbol != NULL)
-           globalScopeAcrossFiles->get_symbol_table()->remove(aliasSymbol);
+           {
+             globalScopeAcrossFiles->get_symbol_table()->remove(aliasSymbol);
+             delete aliasSymbol;
+           }
        }
      }
 
      p_symbol_table->remove(s);
+     s->set_parent(NULL);
    }
 
 int SgScopeStatement::lookup_symbol(const SgName& n, SgSymbol *s) const
@@ -5651,7 +5657,9 @@ SgSymbol * SgScopeStatement::find_symbol_from_declaration(const T* node) const {
   if (symbol == NULL && namespaceDefinitionStatement != NULL) {
     const SgNamespaceDefinitionStatement* globalNamespaceDefinitionStatement = namespaceDefinitionStatement->get_global_definition();
     ROSE_ASSERT(globalNamespaceDefinitionStatement != nullptr);
-    symbol = globalNamespaceDefinitionStatement->get_symbol_table()->find(node);
+    if (SgSymbolTable* table = globalNamespaceDefinitionStatement->get_symbol_table()) {
+      symbol = table->find(node);
+    }
   }
 
   const SgGlobal * global_scope = isSgGlobal(this);
@@ -5660,7 +5668,9 @@ SgSymbol * SgScopeStatement::find_symbol_from_declaration(const T* node) const {
     if (project != NULL) {
       SgGlobal * globalScopeAcrossFiles = project->get_globalScopeAcrossFiles();
       assert(globalScopeAcrossFiles != NULL);
-      symbol = globalScopeAcrossFiles->get_symbol_table()->find(node);
+      if (SgSymbolTable* table = globalScopeAcrossFiles->get_symbol_table()) {
+        symbol = table->find(node);
+      }
     }
   }
 
@@ -14169,6 +14179,7 @@ SgTemplateInstantiationFunctionDecl::SgTemplateInstantiationFunctionDecl ( SgNam
 
      p_templateArguments = templateArguments;
      p_nameResetFromMangledForm = false;
+     p_template_argument_list_is_explicit = false;
 
   // Test the variant virtual function
      assert(TEMPLATE_INST_FUNCTION_DECL_STMT == variant());
@@ -14274,6 +14285,7 @@ SgTemplateInstantiationMemberFunctionDecl::SgTemplateInstantiationMemberFunction
      p_templateDeclaration = NULL;
      p_templateArguments = templateArguments;
      p_nameResetFromMangledForm = false;
+     p_template_argument_list_is_explicit = false;
 
   // Test the variant virtual function
      assert(TEMPLATE_INST_MEMBER_FUNCTION_DECL_STMT == variant());
@@ -14389,6 +14401,9 @@ SgClassDefinition::post_construction_initialization()
    {
   // DQ (9/5/2006): I don't think that this is called, but if it is then packingAlignment initialization is required.
      p_packingAlignment = 0;
+     p_isSequence = false;
+     p_isPrivate = false;
+     p_isAbstract = false;
 
 #if 0
   // DQ (1/12/13): This is code that can be helpful in debubbing subtle problems in astCopy and astDelete.
@@ -14426,6 +14441,7 @@ SgClassDefinition::SgClassDefinition( Sg_File_Info *f, SgClassDeclaration *decl)
 
   // DQ (9/5/2006): Added initialization of packingAlignment (required to be explicit in this constructor)
      p_packingAlignment = 0;
+     post_construction_initialization();
    }
 
 SgClassDefinition::SgClassDefinition( SgClassDeclaration *decl)
@@ -14436,6 +14452,7 @@ SgClassDefinition::SgClassDefinition( SgClassDeclaration *decl)
 
   // DQ (9/5/2006): Added initialization of packingAlignment (required to be explicit in this constructor)
      p_packingAlignment = 0;
+     post_construction_initialization();
    }
 
 #if 0

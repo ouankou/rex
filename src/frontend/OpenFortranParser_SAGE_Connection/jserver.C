@@ -7,8 +7,11 @@
 
 #include <string.h>
 #include <string>
+#include <vector>
 #include <stdlib.h>
 #include <stdio.h>
+#include <filesystem>
+#include <dlfcn.h>
 
 #include "cmdline.h"
 #include "commandline_processing.h"
@@ -34,6 +37,120 @@ typedef struct {
 } JvmT;
 
 static JvmT je;
+namespace {
+using CreateJavaVmFn = jint (*)(JavaVM **, void **, void *);
+
+struct JvmLibrary {
+  void* handle = nullptr;
+  CreateJavaVmFn create_vm = nullptr;
+};
+
+JvmLibrary& getJvmLibrary() {
+  static JvmLibrary library;
+  return library;
+}
+
+void unloadJvmLibrary() {
+  JvmLibrary& lib = getJvmLibrary();
+  if (lib.handle == nullptr) {
+    return;
+  }
+  dlclose(lib.handle);
+  lib.handle = nullptr;
+  lib.create_vm = nullptr;
+}
+
+void* tryOpenJvmLibrary(const char* path) {
+  dlerror();
+  return dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+}
+
+std::vector<std::string> buildJvmCandidatePaths() {
+  namespace fs = std::filesystem;
+  std::vector<std::string> candidates;
+
+  auto add_dir = [&](const fs::path& dir) {
+    if (dir.empty()) {
+      return;
+    }
+    candidates.push_back((dir / "libjvm.so").string());
+  };
+
+  auto add_java_home = [&](const fs::path& java_home) {
+    if (java_home.empty()) {
+      return;
+    }
+    add_dir(java_home / "lib/server");
+    add_dir(java_home / "lib/amd64/server");
+    add_dir(java_home / "lib/jli");
+    add_dir(java_home / "lib");
+  };
+
+  std::string ofp_path = OFP_JVM_PATH;
+  if (!ofp_path.empty()) {
+    fs::path java_exe(ofp_path);
+    fs::path java_home = java_exe.parent_path().parent_path();
+    add_java_home(java_home);
+  }
+
+  if (const char* java_home_env = getenv("JAVA_HOME")) {
+    add_java_home(fs::path(java_home_env));
+  }
+  if (const char* jre_home_env = getenv("JRE_HOME")) {
+    add_java_home(fs::path(jre_home_env));
+  }
+
+  return candidates;
+}
+
+CreateJavaVmFn loadCreateJavaVm() {
+  JvmLibrary& lib = getJvmLibrary();
+  if (lib.create_vm != nullptr) {
+    return lib.create_vm;
+  }
+
+  lib.handle = tryOpenJvmLibrary("libjvm.so");
+  std::vector<std::string> candidates;
+  if (lib.handle == nullptr) {
+    candidates = buildJvmCandidatePaths();
+    for (const auto& candidate : candidates) {
+      lib.handle = tryOpenJvmLibrary(candidate.c_str());
+      if (lib.handle != nullptr) {
+        break;
+      }
+    }
+  }
+
+  if (lib.handle == nullptr) {
+    const char* error = dlerror();
+    fprintf(stderr, "Failed to load libjvm.so");
+    if (!candidates.empty()) {
+      fprintf(stderr, ". Tried:\n");
+      for (const auto& candidate : candidates) {
+        fprintf(stderr, "  %s\n", candidate.c_str());
+      }
+    }
+    if (error != nullptr) {
+      fprintf(stderr, "dlopen error: %s\n", error);
+    } else {
+      fprintf(stderr, "\n");
+    }
+    ROSE_ABORT();
+  }
+
+  dlerror();
+  void* symbol = dlsym(lib.handle, "JNI_CreateJavaVM");
+  const char* error = dlerror();
+  if (symbol == nullptr || error != nullptr) {
+    fprintf(stderr, "Failed to resolve JNI_CreateJavaVM: %s\n",
+            error ? error : "unknown error");
+    ROSE_ABORT();
+  }
+
+  lib.create_vm = reinterpret_cast<CreateJavaVmFn>(symbol);
+  return lib.create_vm;
+}
+} // namespace
 
 //Warning ! do not make these static as gdb cannot stop at a static function
 JNIEnv*  get_env();
@@ -152,23 +269,35 @@ jserver_start(JvmT* je)
   // Rasmussen (6/28/2017): Increasing stacksize fixes crashes on some rhel7 systems
   std::string stack_option = "-Xss2m";
   jvm_options.push_back(stack_option);
+  std::string interpreter_option = "-Xint";
+  jvm_options.push_back(interpreter_option);
+  jvm_options.push_back("-Xshare:off");
+  jvm_options.push_back("-XX:-UsePerfData");
+  jvm_options.push_back("-XX:+DisableAttachMechanism");
 
-  jvm_args.nOptions = jvm_options.size();
-  jvm_args.options = new JavaVMOption[jvm_args.nOptions];
-  for(int i=0; i < jvm_args.nOptions; ++i)
-  {
-      std::string jvm_option = jvm_options.front();
-
-      jvm_args.options[i].optionString =
-          strdup(jvm_option.c_str());
-
-      jvm_options.pop_front();
+  std::vector<std::string> option_storage;
+  option_storage.reserve(jvm_options.size());
+  for (const auto &option : jvm_options) {
+    option_storage.push_back(option);
   }
+
+  std::vector<JavaVMOption> options;
+  options.reserve(option_storage.size());
+  for (auto &option : option_storage) {
+    JavaVMOption jvm_option;
+    jvm_option.optionString = const_cast<char*>(option.data());
+    jvm_option.extraInfo = nullptr;
+    options.push_back(jvm_option);
+  }
+
+  jvm_args.nOptions = static_cast<jint>(options.size());
+  jvm_args.options = options.data();
 
   //----------------------------------------------------------------------------
   // Create and load the Java VM.
   //----------------------------------------------------------------------------
-  jint res = JNI_CreateJavaVM(&(je->jvm), (void **)&(je->env), &jvm_args);
+  CreateJavaVmFn create_vm = loadCreateJavaVm();
+  jint res = create_vm(&(je->jvm), (void **)&(je->env), &jvm_args);
 
   if (res != JNI_OK) {
       printf("Failed to create Java VM\n");
@@ -190,7 +319,29 @@ void
 jserver_destroy()
 {
     if( je.jvm != NULL  ){
+         if (je.env != NULL) {
+           jclass system_class = je.env->FindClass("java/lang/System");
+           if (system_class != NULL) {
+             jmethodID gc_method =
+                 je.env->GetStaticMethodID(system_class, "gc", "()V");
+             if (gc_method != NULL) {
+               je.env->CallStaticVoidMethod(system_class, gc_method);
+             }
+             jmethodID finalize_method =
+                 je.env->GetStaticMethodID(system_class, "runFinalization",
+                                            "()V");
+             if (finalize_method != NULL) {
+               je.env->CallStaticVoidMethod(system_class, finalize_method);
+             }
+             je.env->DeleteLocalRef(system_class);
+           } else {
+             je.env->ExceptionClear();
+           }
+         }
          je.jvm->DestroyJavaVM();
+         je.jvm = NULL;
+         je.env = NULL;
+         unloadJvmLibrary();
     }
 }
 
@@ -247,9 +398,13 @@ jserver_getJavaStringArray(int argc, char **argv)
          /* Put all args from argv, after the first (which is this program's
                  name) into the array of Strings for FortranMain.  The args array
                  for Java does not include the program name.  */
-         for(i = 1; i < argc; i++)
-           env->SetObjectArrayElement(argsStringArray, (jsize)i-1,
-                                                jserver_getJavaString(argv[i]));
+         for(i = 1; i < argc; i++) {
+           jstring arg_string = jserver_getJavaString(argv[i]);
+           env->SetObjectArrayElement(argsStringArray, (jsize)i-1, arg_string);
+           env->DeleteLocalRef(arg_string);
+         }
+
+         env->DeleteLocalRef(stringClass);
 
          return argsStringArray;
 }

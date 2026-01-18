@@ -4400,6 +4400,71 @@ checkThatNoTemplateInstantiationIsDeclaredInTemplateDefinitionScope ( SgDeclarat
 #if 0
           printf ("In buildNondefiningFunctionDeclaration_T(): Setting new function (func = %p) to have firstNondefiningDeclaration = %p definingDeclaration = %p \n",func,func->get_firstNondefiningDeclaration(),func->get_definingDeclaration());
 #endif
+       // Keep the function symbol associated with the first non-defining
+       // declaration so symbol-table lookups remain consistent.
+          if (function_symbol != NULL)
+             {
+               if (SgFunctionDeclaration* first_nondef =
+                       isSgFunctionDeclaration(nondefiningDeclaration))
+                  {
+                    if (function_symbol->get_declaration() != first_nondef)
+                       {
+                         function_symbol->set_declaration(first_nondef);
+                       }
+                  }
+             }
+
+       // Keep the symbol table membership aligned with the declaration scope.
+          auto rehome_symbol_to_scope = [](SgSymbol *symbol,
+                                           SgScopeStatement *target_scope) {
+            if (symbol == NULL || target_scope == NULL) {
+              return;
+            }
+            if (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
+              symbol = alias->get_alias();
+              if (symbol == NULL) {
+                return;
+              }
+            }
+
+            SgSymbolTable *target_table = target_scope->get_symbol_table();
+            if (target_table == NULL) {
+              return;
+            }
+            SgSymbolTable *parent_table = isSgSymbolTable(symbol->get_parent());
+            if (parent_table == target_table) {
+              return;
+            }
+
+            if (parent_table != NULL) {
+              if (SgScopeStatement *parent_scope =
+                      isSgScopeStatement(parent_table->get_parent())) {
+                if (parent_scope->symbol_exists(symbol)) {
+                  parent_scope->remove_symbol(symbol);
+                } else if (parent_table->exists(symbol)) {
+                  parent_table->remove(symbol);
+                  symbol->set_parent(NULL);
+                }
+              } else if (parent_table->exists(symbol)) {
+                parent_table->remove(symbol);
+                symbol->set_parent(NULL);
+              }
+            } else if (SgScopeStatement *parent_scope =
+                           isSgScopeStatement(symbol->get_parent())) {
+              if (parent_scope->symbol_exists(symbol)) {
+                parent_scope->remove_symbol(symbol);
+              }
+            }
+
+            if (!target_scope->symbol_exists(symbol)) {
+              target_scope->insert_symbol(symbol->get_name(), symbol);
+            } else if (symbol->get_parent() != target_table) {
+              symbol->set_parent(target_table);
+            }
+          };
+
+          rehome_symbol_to_scope(func_symbol, nondefiningDeclaration->get_scope());
+
        // DQ (3/8/2012): Added assertion.
           ROSE_ASSERT(nondefiningDeclaration->get_symbol_from_symbol_table() != NULL);
           ROSE_ASSERT(func->get_firstNondefiningDeclaration()->get_symbol_from_symbol_table() != NULL);
@@ -5838,7 +5903,7 @@ actualFunction *SageBuilder::buildDefiningFunctionDeclaration_T(
      ROSE_ASSERT(isMemberFunction == false);
 #endif
 
-     if (func_symbol == NULL)
+      if (func_symbol == NULL)
         {
           printf ("Could not find an existing symbol for this function! \n");
        // scope->get_symbol_table()->print("Could not find an existing symbol for this function!");

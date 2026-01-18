@@ -72,6 +72,11 @@ AstAttributeMechanism::operator=(const AstAttributeMechanism &other) {
 }
 
 AstAttributeMechanism::~AstAttributeMechanism() {
+    clearAttributes();
+}
+
+void
+AstAttributeMechanism::clearAttributes() {
     for (const auto &entry : attributes_) {
         deleteAttributeValue(entry.first, entry.second);
     }

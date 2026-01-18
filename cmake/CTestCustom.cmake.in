@@ -2,3 +2,5 @@ set(CTEST_CUSTOM_ERROR_EXCEPTION
   "previous definition is here"
   "unbalanced braces"
 )
+
+@ROSE_CTEST_CUSTOM_ENVIRONMENT@

@@ -28,6 +28,7 @@ set(SAGE3_SOURCES
   sage_support/sage_support.C
   sage_support/cmdline.C
   sage_support/keep_going.C
+  sage_support/ast_memory_cleanup.C
   sage_support/utility_functions.C
   fixupCopy_scopes.C
   fixupCopy_symbols.C
