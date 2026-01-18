@@ -107,6 +107,34 @@ If “still reachable” comes from ROSE-owned structures, treat it as a real is
 - Do not hide memory issues by “fixing” tests or weakening assertions.
 - Use sanitizers for rapid feedback during development and memcheck for leak triage.
 
+## Ownership boundaries (AST, attributes, non-AST)
+
+### AST nodes (Sage/ROSE IR)
+- AST nodes are owned by the AST and its memory pools; do not `delete` them directly.
+- When replacing or detaching a subtree, use ownership-aware helpers:
+  - `SageInterface::replaceExpression`, `SageInterface::replaceStatement`, or `SageInterface::deepDelete/deleteAST` for detached nodes.
+  - Avoid raw `set_*` on child pointers unless you also delete the old subtree.
+- If you intentionally detach nodes (set pointers to `NULL`), you must delete the detached subtree or transfer ownership to a well-defined owner.
+- AST teardown is the final owner boundary; do not rely on process exit to clean ROSE-owned nodes.
+
+### AstAttributeMechanism (attached attributes)
+- Always implement `AstAttribute::getOwnershipPolicy()` in custom attributes.
+  - `CONTAINER_OWNERSHIP`: container owns and deletes on replace/clear.
+  - `NO_OWNERSHIP`: caller owns; caller must delete.
+  - `CUSTOM_OWNERSHIP`: attribute class must manage its own cleanup.
+- Avoid `UNKNOWN_OWNERSHIP` (it is treated as a warning and often leaks).
+- Do not store raw owning pointers inside attributes without RAII or explicit cleanup.
+
+### Non-AST objects (utilities, frontends, tool glue)
+- Prefer RAII (`std::unique_ptr`, `std::vector`, `std::string`) for owned objects.
+- Raw pointers in APIs must be non-owning views; document who owns the lifetime.
+- For C interop, keep allocation pairs explicit and matched (`malloc/free` or `new/delete`), and isolate the boundary in a small helper/RAII wrapper.
+- Avoid global/process-lifetime caches unless you also provide explicit teardown.
+
+### CI policy
+- Sanitizer and memcheck runs are too heavy for per-commit gating; they run in weekly CI only.
+- Use Debug builds for sanitizer/memcheck to keep `ROSE_ASSERT` active during memory triage.
+
 ## Common pitfalls
 
 - Running memcheck in a non-Valgrind build does nothing (CTEST memorycheck is disabled).
