@@ -120,7 +120,7 @@ If “still reachable” comes from ROSE-owned structures, treat it as a real is
 ### AstAttributeMechanism (attached attributes)
 - Always implement `AstAttribute::getOwnershipPolicy()` in custom attributes.
   - `CONTAINER_OWNERSHIP`: container owns and deletes on replace/clear.
-  - `NO_OWNERSHIP`: caller owns; caller must delete.
+  - `NO_OWNERSHIP`: attribute is intentionally leaked; do not delete.
   - `CUSTOM_OWNERSHIP`: attribute class must manage its own cleanup.
 - Avoid `UNKNOWN_OWNERSHIP` (it is treated as a warning and often leaks).
 - Do not store raw owning pointers inside attributes without RAII or explicit cleanup.
