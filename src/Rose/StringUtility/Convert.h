@@ -174,7 +174,7 @@ ROSE_UTIL_API std::string removeAnsiEscapes(const std::string &);
 ROSE_UTIL_API std::string encode_base64(const std::vector<uint8_t> &data,
                                         bool do_pad = true);
 ROSE_UTIL_API std::string encode_base64(const uint8_t *data, size_t nbytes,
-                                        bool do_padd = true);
+                                        bool do_pad = true);
 /** @} */
 
 /** Convert base-64 to binary.

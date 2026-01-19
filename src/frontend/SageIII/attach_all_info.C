@@ -28,7 +28,7 @@ static const char *OPTION_INCLUDEDIRECTIVESFILENAME =
 // Read all the words in a file into an vector of strings
 std::vector<std::string> readWordsInFile(std::string filename) {
   // DQ (2/3/2009): Moved functionality to StringUtility namespace.
-  StringUtility::readWordsInFile(filename);
+  return StringUtility::readWordsInFile(filename);
 }
 
 //! Wrapper around the SLA string option processing routine.

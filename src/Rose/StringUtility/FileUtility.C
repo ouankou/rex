@@ -71,10 +71,7 @@ std::vector<std::string> readWordsInFile(std::string filename) {
   std::vector<std::string> variantsToUse;
   std::fstream file_op(filename.c_str());
   if (file_op.fail()) {
-    std::cout << "error: could not find file \"" << filename
-              << "\" which is meant to include the styles to enforce with "
-              << "the name checker." << std::endl;
-    exit(1); // abort program
+    throw std::string("File not found");
   }
 
   std::string current_word;

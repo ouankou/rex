@@ -4,11 +4,11 @@
 
 #include "Rose/StringUtility/StringToNumber.h"
 
+#include "ROSE_ASSERT.h"
+
 #include <cctype>
 
 #include <cstdio>
-
-#include <cassert>
 
 #include <cstring>
 
@@ -308,8 +308,12 @@ std::string unescapeString(const std::string &s) {
   for (size_t i = 0; i < s.length(); ++i) {
     // Body of this loop can change i
     if (s[i] == '\\') {
-      assert(i + 1 < s.length());
-      switch (s[i + 1]) {
+      ROSE_ASSERT(i + 1 < s.length());
+      if (i + 1 >= s.length()) {
+        break;
+      }
+      char escaped = s[++i];
+      switch (escaped) {
       case 'a':
         result += '\a';
         break;
@@ -334,26 +338,26 @@ std::string unescapeString(const std::string &s) {
       case '0':
       case '1':
       case '2':
-      case '3': {
-        ++i;
-        if (s[i] == '0' && i + 1 == s.length()) {
-          result += '\0';
-          break;
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7': {
+        unsigned value = static_cast<unsigned>(escaped - '0');
+        size_t digits = 1;
+        while (digits < 3 && i + 1 < s.length() && s[i + 1] >= '0' &&
+               s[i + 1] <= '7') {
+          value = (value << 3) + static_cast<unsigned>(s[i + 1] - '0');
+          ++i;
+          ++digits;
         }
-        assert(i + 2 < s.length());
-        ++i;
-        assert(s[i] >= '0' && s[i] <= '7');
-        ++i;
-        assert(s[i] >= '0' && s[i] <= '7');
+        result += static_cast<char>(value);
         break;
       }
       default:
-        ++i;
-        result += s[i];
+        result += escaped;
         break;
       }
-    } else if (s[i] == '"') {
-      return result;
     } else {
       result += s[i];
     }
