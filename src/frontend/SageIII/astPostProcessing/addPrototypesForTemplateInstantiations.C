@@ -13,14 +13,15 @@ SgDeclarationStatement *getCanonicalTemplateInstantiationDecl(
 
   if (SgSymbol *symbol = decl->get_symbol_from_symbol_table()) {
     if (SgFunctionSymbol *func_symbol = isSgFunctionSymbol(symbol)) {
-      if (func_symbol->get_declaration() != NULL) {
-        return func_symbol->get_declaration();
+      if (SgDeclarationStatement *func_decl = func_symbol->get_declaration()) {
+        return func_decl;
       }
     }
     if (SgTemplateFunctionSymbol *template_symbol =
             isSgTemplateFunctionSymbol(symbol)) {
-      if (template_symbol->get_declaration() != NULL) {
-        return template_symbol->get_declaration();
+      if (SgDeclarationStatement *template_decl =
+              template_symbol->get_declaration()) {
+        return template_decl;
       }
     }
   }
