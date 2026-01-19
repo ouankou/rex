@@ -14373,9 +14373,23 @@ void SageInterface::clearUnusedVariableSymbols(SgNode *root /*= NULL */) {
        i != symbolList.end(); ++i) {
     SgVariableSymbol *symbolToDelete = isSgVariableSymbol(*i);
     ROSE_ASSERT(symbolToDelete);
-    if (symbolToDelete->get_declaration()->get_type() !=
-        SgTypeUnknown::createType())
+    SgInitializedName *symbol_init_name = symbolToDelete->get_declaration();
+    if (symbol_init_name == NULL) {
       continue;
+    }
+    if (isSgTypeUnknown(symbol_init_name->get_type()) == NULL)
+      continue;
+    SgVariableDeclaration *symbol_decl =
+        isSgVariableDeclaration(symbol_init_name->get_parent());
+    Sg_File_Info *symbol_fi =
+        (symbol_decl != NULL) ? symbol_decl->get_file_info() : NULL;
+    if (symbol_fi == NULL) {
+      symbol_fi = symbol_init_name->get_file_info();
+    }
+    if (symbol_fi == NULL || !symbol_fi->isCompilerGenerated() ||
+        symbol_fi->isOutputInCodeGeneration()) {
+      continue;
+    }
     // symbol with a declaration of SgTypeUnknown will be deleted
     bool toDelete = true;
 
@@ -14395,6 +14409,14 @@ void SageInterface::clearUnusedVariableSymbols(SgNode *root /*= NULL */) {
     }
 
     if (toDelete) {
+      if (SgSymbolTable *symbolTable =
+              isSgSymbolTable(symbolToDelete->get_parent())) {
+        if (symbolTable->exists(symbolToDelete)) {
+          symbolTable->remove(symbolToDelete);
+          symbolToDelete->set_parent(NULL);
+        }
+      }
+
       SgInitializedName *initNameToDelete = symbolToDelete->get_declaration();
 
       // When the placeholder is built via
