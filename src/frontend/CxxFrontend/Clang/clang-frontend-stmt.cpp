@@ -4205,7 +4205,9 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
 
         SgFunctionCallExp *call =
             SageBuilder::buildFunctionCallExp_nfi(callee, param_list);
-        call->set_uses_operator_syntax(true);
+        // Use explicit call syntax for member operators once the implicit
+        // object is moved into the callee (dot/arrow form).
+        call->set_uses_operator_syntax(false);
         *node = call;
 
         return VisitExpr(cxx_operator_call_expr, node) && res;
@@ -4223,7 +4225,10 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
   if (*node != NULL && res) {
     SgFunctionCallExp *funcCall = isSgFunctionCallExp(*node);
     if (funcCall != NULL) {
-      funcCall->set_uses_operator_syntax(true);
+      SgExpression *callee = funcCall->get_function();
+      bool is_member_callee =
+          (isSgDotExp(callee) != NULL) || (isSgArrowExp(callee) != NULL);
+      funcCall->set_uses_operator_syntax(!is_member_callee);
     }
   }
 
@@ -4871,9 +4876,18 @@ bool ClangToSageTranslator::VisitCXXTemporaryObjectExpr(
 #endif
   bool res = true;
 
-  // TODO
+  res = VisitCXXConstructExpr(cxx_temporary_object_expr, node) && res;
+  if (res && node != nullptr) {
+    if (SgConstructorInitializer *ctor_init =
+            isSgConstructorInitializer(*node)) {
+      // Ensure temporaries print as `Type()` even with no args, since they can
+      // be used as implicit objects (e.g., conversion operators).
+      ctor_init->set_need_name(true);
+      ctor_init->set_need_parenthesis_after_name(true);
+    }
+  }
 
-  return VisitCXXConstructExpr(cxx_temporary_object_expr, node) && res;
+  return res;
 }
 
 bool ClangToSageTranslator::VisitCXXDefaultArgExpr(
