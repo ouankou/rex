@@ -4517,6 +4517,9 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
 
       case V_SgUsingDirectiveStatement:
       case V_SgPragmaDeclaration:
+      case V_SgClinkageDeclarationStatement:
+      case V_SgClinkageStartStatement:
+      case V_SgClinkageEndStatement:
       case V_SgTemplateInstantiationDirectiveStatement:
       case V_SgUsingDeclarationStatement: {
         // DQ (10/22/2005): Not sure if we have to worry about this

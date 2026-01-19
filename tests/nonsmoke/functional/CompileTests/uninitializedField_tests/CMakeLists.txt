@@ -49,16 +49,7 @@ set(_uninit_c99_dir
 set(_uninit_fortran_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests)
 
-function(rex_mark_uninit_disabled test_name)
-  if(NOT _uninit_disable_all)
-    return()
-  endif()
-  set_tests_properties(${test_name} PROPERTIES LABELS disabled)
-  if(NOT REX_ENABLE_DISABLED_TESTS)
-    set_tests_properties(${test_name} PROPERTIES DISABLED TRUE)
-  endif()
-endfunction()
-
+if(NOT _uninit_disable_all)
 foreach(testcode IN LISTS UNINIT_CXX_TEST_SOURCES)
   string(REPLACE "." "_" _uninit_name ${testcode})
   add_test(
@@ -75,7 +66,6 @@ foreach(testcode IN LISTS UNINIT_CXX_TEST_SOURCES)
     # Valgrind amplifies Clang frontend cost for heavy STL inputs; allow enough time.
     set_tests_properties(uninit_fields_cxx_${_uninit_name} PROPERTIES TIMEOUT 7200)
   endif()
-  rex_mark_uninit_disabled(uninit_fields_cxx_${_uninit_name})
 endforeach()
 
 foreach(testcode IN LISTS UNINIT_C_TEST_SOURCES)
@@ -86,7 +76,6 @@ foreach(testcode IN LISTS UNINIT_C_TEST_SOURCES)
     COMMAND ${BASH_EXECUTABLE} -c
       "cp ${_uninit_cxx_dir}/${testcode} ${testcode}.temp.c && $<TARGET_FILE:testUninitializedFields> ${_uninit_flags} -I${_uninit_cxx_dir} ${_uninit_includes} -c ${testcode}.temp.c"
   )
-  rex_mark_uninit_disabled(uninit_fields_c_${_uninit_name})
 endforeach()
 
 foreach(testcode IN LISTS UNINIT_C99_TEST_SOURCES)
@@ -97,7 +86,6 @@ foreach(testcode IN LISTS UNINIT_C99_TEST_SOURCES)
     COMMAND ${BASH_EXECUTABLE} -c
       "cp ${_uninit_c99_dir}/${testcode} ${testcode}.temp.c && $<TARGET_FILE:testUninitializedFields> ${_uninit_flags} -I${_uninit_c99_dir} ${_uninit_includes} -c ${testcode}.temp.c"
   )
-  rex_mark_uninit_disabled(uninit_fields_c99_${_uninit_name})
 endforeach()
 
 if(enable-fortran)
@@ -111,7 +99,6 @@ if(enable-fortran)
         -rose:f90
         -c ${_uninit_fortran_dir}/${testcode}
     )
-    rex_mark_uninit_disabled(uninit_fields_f90_${_uninit_name})
   endforeach()
 
   foreach(testcode IN LISTS UNINIT_F77_TEST_SOURCES)
@@ -124,7 +111,6 @@ if(enable-fortran)
         -rose:f77
         -c ${_uninit_fortran_dir}/${testcode}
     )
-    rex_mark_uninit_disabled(uninit_fields_f77_${_uninit_name})
   endforeach()
 
   foreach(testcode IN LISTS UNINIT_F03_TEST_SOURCES)
@@ -139,7 +125,6 @@ if(enable-fortran)
         -rose:f2003
         -c ${_uninit_fortran_dir}/${testcode}
     )
-    rex_mark_uninit_disabled(uninit_fields_f03_${_uninit_name})
   endforeach()
 endif()
 
@@ -196,10 +181,7 @@ function(rex_add_uninit_group group_name)
       -DREX_CTEST_GROUP_TESTS=${_group}
       -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
   )
-  set_tests_properties(${group_name} PROPERTIES LABELS disabled DEPENDS "${_tests}")
-  if(NOT REX_ENABLE_DISABLED_TESTS)
-    set_tests_properties(${group_name} PROPERTIES DISABLED TRUE)
-  endif()
+  set_tests_properties(${group_name} PROPERTIES DEPENDS "${_tests}")
 endfunction()
 
 rex_add_uninit_group(nonsmoke_functional_CompileTests_uninitializedField_tests_check-c ${_uninit_c_tests})
@@ -228,3 +210,4 @@ rex_add_uninit_group(
   nonsmoke_functional_CompileTests_uninitializedField_tests_check-local
   nonsmoke_functional_CompileTests_uninitializedField_tests_conditional-check-local
 )
+endif()

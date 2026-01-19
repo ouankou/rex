@@ -66,6 +66,10 @@ set(CXX_POINTER_ALIAS_SPECIMENS
   test_ptr5.C
 )
 
+set(CXX_CONSTPROP_SPECIMENS
+  test2001_29.C
+)
+
 set(FAILING_CXX_CONSTPROP_SPECIMENS
   X.C
   lexPhase2003_01.C
@@ -93,7 +97,6 @@ set(FAILING_CXX_CONSTPROP_SPECIMENS
   test2001_24.C
   test2001_25.C
   test2001_27.C
-  test2001_29.C
   test2002_01.C
   test2003_02.C
   test2003_03.C
@@ -1162,11 +1165,25 @@ foreach(specimen IN LISTS CXX_CONSTPROP_LOCAL_SPECIMENS)
     NAME gdf_constprop_local_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="./constantPropagationTest -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:constantPropagationTest> -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       cxxcpls_${specimen}.passed
   )
   set_tests_properties(gdf_constprop_local_${_name} PROPERTIES DISABLED TRUE)
+endforeach()
+
+#-------------------------------------------------------------------------------
+# C++ constant propagation tests from CXX test directory
+foreach(specimen IN LISTS CXX_CONSTPROP_SPECIMENS)
+  string(REPLACE "." "_" _name ${specimen})
+  add_test(
+    NAME gdf_cxx_constprop_${_name}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${_rth}
+      CMD="$<TARGET_FILE:constantPropagationTest> -I${_cxx_test_dir} -c ${_cxx_test_dir}/${specimen}"
+      ${_exit_status}
+      cxxcp_${specimen}.passed
+  )
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -1182,7 +1199,7 @@ foreach(specimen IN LISTS _cxx_constprop_disabled)
     NAME gdf_cxx_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="./constantPropagationTest -I${_cxx_test_dir} -c ${_cxx_test_dir}/${specimen}"
+      CMD="$<TARGET_FILE:constantPropagationTest> -I${_cxx_test_dir} -c ${_cxx_test_dir}/${specimen}"
       ${_exit_status}
       cxxcp_${specimen}.passed
   )
@@ -1221,7 +1238,7 @@ foreach(specimen IN LISTS _c99_constprop_disabled)
     NAME gdf_c99_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="./constantPropagationTest -I${_c99_test_dir} -c ${_c99_test_dir}/${specimen}"
+      CMD="$<TARGET_FILE:constantPropagationTest> -I${_c99_test_dir} -c ${_c99_test_dir}/${specimen}"
       ${_exit_status}
       c99cp_${specimen}.passed
   )
@@ -1237,7 +1254,7 @@ if(enable-fortran)
       NAME gdf_f77_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="./constantPropagationTest -rose:f77 -c ${_f77_test_dir}/${specimen}"
+        CMD="$<TARGET_FILE:constantPropagationTest> -rose:f77 -c ${_f77_test_dir}/${specimen}"
         ${_exit_status}
         f77cp_${specimen}.passed
     )
@@ -1249,7 +1266,7 @@ if(enable-fortran)
       NAME gdf_f77_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="./constantPropagationTest -rose:f77 -c ${_f77_test_dir}/${specimen}"
+        CMD="$<TARGET_FILE:constantPropagationTest> -rose:f77 -c ${_f77_test_dir}/${specimen}"
         ${_exit_status}
         f77cp_${specimen}.passed
     )
@@ -1262,7 +1279,7 @@ if(enable-fortran)
       NAME gdf_f03_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="./constantPropagationTest -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:f2003 -c ${_f03_test_dir}/${specimen}"
+        CMD="$<TARGET_FILE:constantPropagationTest> -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:f2003 -c ${_f03_test_dir}/${specimen}"
         ${_exit_status}
         f03cp_${specimen}.passed
     )
@@ -1274,7 +1291,7 @@ if(enable-fortran)
       NAME gdf_f03_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="./constantPropagationTest -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:f2003 -c ${_f03_test_dir}/${specimen}"
+        CMD="$<TARGET_FILE:constantPropagationTest> -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:f2003 -c ${_f03_test_dir}/${specimen}"
         ${_exit_status}
         f03cp_${specimen}.passed
     )
@@ -1290,7 +1307,7 @@ foreach(specimen IN LISTS CXX_LIVENESS_SPECIMENS)
     NAME gdf_liveness_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="./liveDeadVarAnalysisTest -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:liveDeadVarAnalysisTest> -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       cxxla_${specimen}.passed
   )
@@ -1305,7 +1322,7 @@ foreach(specimen IN LISTS CXX_POINTER_ALIAS_SPECIMENS)
     NAME gdf_pointer_alias_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="./pointerAliasAnalysisTest -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:pointerAliasAnalysisTest> -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       cxxpa_${specimen}.passed
   )
