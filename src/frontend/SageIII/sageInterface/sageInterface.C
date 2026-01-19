@@ -14417,8 +14417,8 @@ void SageInterface::clearUnusedVariableSymbols(SgNode *root /*= NULL */) {
             scope->remove_symbol(symbolToDelete);
           } else {
             symbolTable->remove(symbolToDelete);
-            symbolToDelete->set_parent(NULL);
           }
+          symbolToDelete->set_parent(NULL);
         }
       }
 
