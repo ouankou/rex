@@ -1,10 +1,20 @@
 #include "Rose/StringUtility/Escape.h"
 
-#include "Rose/StringUtility/Convert.h"
-
 #include "Rose/StringUtility/Replace.h"
 
 #include "Rose/StringUtility/StringToNumber.h"
+
+#include <cctype>
+
+#include <cstdio>
+
+#include <cassert>
+
+#include <cstring>
+
+#include <iomanip>
+
+#include <sstream>
 
 namespace Rose {
 namespace StringUtility {
@@ -196,7 +206,7 @@ std::string bourneEscape(const std::string &s) {
   // If the string contains any shell meta characters or white space that must
   // be quoted then single-quote the entire string and escape backslashes.
   for (char ch : s) {
-    if (!::isalnum(ch) && !strchr("_-+./=", ch))
+    if (!::isalnum(ch) && !strchr("_-+./", ch))
       return "'" + Rose::StringUtility::replaceAllCopy(s, "\\", "\\\\") + "'";
   }
 
@@ -239,3 +249,114 @@ std::string escapeNewlineAndDoubleQuoteCharacters(const std::string &X) {
 
 } // namespace StringUtility
 } // namespace Rose
+
+std::string escapeString(const std::string &s) {
+
+  // DQ (2/4/2014): Note that this function can not be used on the asm strings
+  // for the unparser.  When it can frequently work, the present of "\n" and
+  // "\t" substrings causes the transformation to "\\n" and \\t" which is a bug
+  // when used with the asmembler.  So a special version of this function that
+  // does not process "\n" to "\\n" is defined in the unparser.  Note that we
+  // still need to process '\n' to "\n" and this behavior is still preserved.
+  // Test codes demonstrating this are in test2014_83-87.c.
+
+  std::string result;
+  for (size_t i = 0; i < s.length(); ++i) {
+    switch (s[i]) {
+    case '\\':
+      result += "\\\\";
+      break;
+    case '"':
+      result += "\\\"";
+      break;
+    case '\a':
+      result += "\\a";
+      break;
+    case '\f':
+      result += "\\f";
+      break;
+    case '\n':
+      result += "\\n";
+      break;
+    case '\r':
+      result += "\\r";
+      break;
+    case '\t':
+      result += "\\t";
+      break;
+    case '\v':
+      result += "\\v";
+      break;
+    default:
+      if (isprint(s[i])) {
+        result.push_back(s[i]);
+      } else {
+        std::ostringstream stream;
+        stream << '\\';
+        stream << std::setw(3) << std::setfill('0') << std::oct
+               << (unsigned)(unsigned char)(s[i]);
+        result += stream.str();
+      }
+      break;
+    }
+  }
+  return result;
+}
+
+std::string unescapeString(const std::string &s) {
+  std::string result;
+  for (size_t i = 0; i < s.length(); ++i) {
+    // Body of this loop can change i
+    if (s[i] == '\\') {
+      assert(i + 1 < s.length());
+      switch (s[i + 1]) {
+      case 'a':
+        result += '\a';
+        break;
+      case 'e':
+        result += '\033';
+        break;
+      case 'f':
+        result += '\f';
+        break;
+      case 'n':
+        result += '\n';
+        break;
+      case 'r':
+        result += '\r';
+        break;
+      case 't':
+        result += '\t';
+        break;
+      case 'v':
+        result += '\v';
+        break;
+      case '0':
+      case '1':
+      case '2':
+      case '3': {
+        ++i;
+        if (s[i] == '0' && i + 1 == s.length()) {
+          result += '\0';
+          break;
+        }
+        assert(i + 2 < s.length());
+        ++i;
+        assert(s[i] >= '0' && s[i] <= '7');
+        ++i;
+        assert(s[i] >= '0' && s[i] <= '7');
+        break;
+      }
+      default:
+        ++i;
+        result += s[i];
+        break;
+      }
+    } else if (s[i] == '"') {
+      return result;
+    } else {
+      result += s[i];
+    }
+  }
+  return result;
+}

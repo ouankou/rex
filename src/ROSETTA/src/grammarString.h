@@ -1,7 +1,7 @@
 #ifndef __GRAMMARSTRING_H__
 #define __GRAMMARSTRING_H__
 
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
 #include "Rose/StringUtility.h"
 

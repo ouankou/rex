@@ -12,7 +12,7 @@
 
 #include "staticCFG.h"
 
-#include "Escape.h"
+#include "Rose/StringUtility/Escape.h"
 
 #include "Cxx_Grammar.h"
 

@@ -15,7 +15,7 @@
 
 // We need to separate the construction of the code for ROSE from the ROSE code
 // #include FSTREAM_HEADER_FILE
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
 #include <dirent.h>
 

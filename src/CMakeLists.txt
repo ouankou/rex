@@ -80,6 +80,9 @@ add_subdirectory(3rdPartyLibraries)
 
 add_definitions(-DROSE_DLL_EXPORTS)
 
+target_sources(roseUtil INTERFACE
+  $<TARGET_OBJECTS:rose_StringUtility>)
+
 add_subdirectory(frontend)
 add_subdirectory(midend)
 add_subdirectory(backend)
@@ -94,7 +97,7 @@ set(rose_LIB_SRCS
   ${ROSETTA_SRC}
   $<TARGET_OBJECTS:util_main>
   $<TARGET_OBJECTS:util_commandlineProcessing>
-  $<TARGET_OBJECTS:util_StringUtility>
+  $<TARGET_OBJECTS:rose_StringUtility>
   $<TARGET_OBJECTS:roseLogger>
   $<TARGET_OBJECTS:util_support>
   $<TARGET_OBJECTS:util_graphs>

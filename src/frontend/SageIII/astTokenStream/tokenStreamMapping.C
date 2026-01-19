@@ -50,7 +50,7 @@ generated
 
 #include "sage3basic.h"
 
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
 #include "general_token_defs.h"
 

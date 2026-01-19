@@ -9,9 +9,9 @@
  *---------------------------------------------------------------------------*/
 #include <filesystem>
 
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
-#include "Replace.h"
+#include "Rose/StringUtility/Replace.h"
 
 #include "cmdline.h"
 

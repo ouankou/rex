@@ -4,7 +4,7 @@
 
 #include "AstNodeClass.h"
 
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
 #include "Rose/StringUtility.h"
 

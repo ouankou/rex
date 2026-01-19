@@ -18,7 +18,7 @@
 
 // DQ (2/11/2010): Added so that we can detect what compiler is being used to
 // compile this file.
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
 #include "Rose/StringUtility.h"
 
