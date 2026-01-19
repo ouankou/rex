@@ -3,7 +3,7 @@
 
 #include "Rose/StringUtility.h"
 
-#include "StringUtility/StringToNumber.h"
+#include "Rose/StringUtility/StringToNumber.h"
 
 #include <algorithm>
 

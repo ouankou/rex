@@ -1,6 +1,6 @@
 // #include <rose.h>
 
-#include "Escape.h"
+#include "Rose/StringUtility/Escape.h"
 
 #include "filteredCFG.h"
 

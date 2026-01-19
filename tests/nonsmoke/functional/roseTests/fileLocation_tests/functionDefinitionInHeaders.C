@@ -3,7 +3,7 @@
 // or system (system includes system libaries).
 
 // The support for this work is in
-// ROSE/src/util/StringUtility/FileNameClassifier.C
+// ROSE/src/Rose/StringUtility/FileNameClassifier.C
 
 #include "rose.h"
 

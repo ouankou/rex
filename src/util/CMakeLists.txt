@@ -41,7 +41,6 @@ add_definitions(-DROSE_UTIL_EXPORTS)
 ######## build sub libraries ##########
 add_subdirectory(commandlineProcessing)
 add_subdirectory(graphs)
-add_subdirectory(StringUtility)
 add_subdirectory(support)
 
 ######## build main library ###########
@@ -62,7 +61,6 @@ add_library(roseUtil INTERFACE)
 target_sources(roseUtil INTERFACE
   $<TARGET_OBJECTS:util_main>
   $<TARGET_OBJECTS:util_commandlineProcessing>
-  $<TARGET_OBJECTS:util_StringUtility>
   $<TARGET_OBJECTS:util_support>
   $<TARGET_OBJECTS:util_graphs>)
 if(SQLITE3_FOUND_LIB)

@@ -1,7 +1,7 @@
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
 // Other ROSE includes
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
 #include "Rose/StringUtility.h"
 
@@ -24,6 +24,8 @@
 #include "rose_config.h"
 
 #include <sstream>
+
+#include <stdexcept>
 
 #include <dirent.h> /* readdir(), etc.                    */
 #include <libgen.h> /* basename(), dirame()               */
@@ -71,10 +73,7 @@ std::vector<std::string> readWordsInFile(std::string filename) {
   std::vector<std::string> variantsToUse;
   std::fstream file_op(filename.c_str());
   if (file_op.fail()) {
-    std::cout << "error: could not find file \"" << filename
-              << "\" which is meant to include the styles to enforce with "
-              << "the name checker." << std::endl;
-    exit(1); // abort program
+    throw std::runtime_error("File not found: " + filename);
   }
 
   std::string current_word;

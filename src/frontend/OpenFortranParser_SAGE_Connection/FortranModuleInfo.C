@@ -2,7 +2,7 @@
 
 #include "FortranModuleInfo.h"
 
-#include "Replace.h"
+#include "Rose/StringUtility/Replace.h"
 
 #include "sage3basic.h"
 

@@ -239,9 +239,9 @@ ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 #include "rose_attributes_list.h"
 
 // Include ROSE common utility function library
-#include "Escape.h"
+#include "Rose/StringUtility/Escape.h"
 
-#include "FileUtility.h"
+#include "Rose/StringUtility/FileUtility.h"
 
 #include "Rose/StringUtility.h"
 
