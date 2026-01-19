@@ -1368,10 +1368,12 @@ endif()
 # ROSE headers are scattered throughout the source tree.
 ########################################################################################################################
 
-set(ROSE_INCLUDES
+set(ROSE_BINARY_INCLUDES
   ${ROSE_TOP_BINARY_DIR}
   ${ROSE_TOP_BINARY_DIR}/src/util
-  ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/
+  ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/)
+
+set(ROSE_SOURCE_INCLUDES
   ${ROSE_TOP_SRC_DIR}
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/sage_support
@@ -1436,9 +1438,19 @@ set(ROSE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/finiteDifferencing
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/functionCallNormalization
   ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/constantFolding
-  ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration
+  ${ROSE_TOP_SRC_DIR}/src/midend/programTransformation/implicitCodeGeneration)
+
+set(ROSE_EXTERNAL_INCLUDES
   ${VALGRIND_INCLUDE_PATH}
   ${HPDF_INCLUDE_DIRS})
+
+set(ROSE_INCLUDES ${ROSE_BINARY_INCLUDES})
+foreach(include_dir IN LISTS ROSE_SOURCE_INCLUDES ROSE_EXTERNAL_INCLUDES)
+  if(include_dir AND EXISTS "${include_dir}")
+    list(APPEND ROSE_INCLUDES "${include_dir}")
+  endif()
+endforeach()
+list(REMOVE_DUPLICATES ROSE_INCLUDES)
 
 ########################################################################################################################
 # Set output directories
