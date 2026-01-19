@@ -1450,6 +1450,7 @@ foreach(include_dir IN LISTS ROSE_SOURCE_INCLUDES ROSE_EXTERNAL_INCLUDES)
     list(APPEND ROSE_INCLUDES "${include_dir}")
   endif()
 endforeach()
+list(REMOVE_DUPLICATES ROSE_INCLUDES)
 
 ########################################################################################################################
 # Set output directories
