@@ -4876,7 +4876,7 @@ bool ClangToSageTranslator::VisitCXXTemporaryObjectExpr(
   bool res = true;
 
   res = VisitCXXConstructExpr(cxx_temporary_object_expr, node) && res;
-  if (res && node != nullptr) {
+  if (res && *node != nullptr) {
     if (SgConstructorInitializer *ctor_init =
             isSgConstructorInitializer(*node)) {
       // Ensure temporaries print as `Type()` even with no args, since they can
