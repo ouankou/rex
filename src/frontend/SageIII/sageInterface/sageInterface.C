@@ -14377,7 +14377,7 @@ void SageInterface::clearUnusedVariableSymbols(SgNode *root /*= NULL */) {
     if (symbol_init_name == NULL) {
       continue;
     }
-    if (symbol_init_name->get_type() != SgTypeUnknown::createType())
+    if (isSgTypeUnknown(symbol_init_name->get_type()) == NULL)
       continue;
     SgVariableDeclaration *symbol_decl =
         isSgVariableDeclaration(symbol_init_name->get_parent());
