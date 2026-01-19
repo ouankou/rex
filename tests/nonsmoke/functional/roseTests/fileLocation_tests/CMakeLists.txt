@@ -573,6 +573,7 @@ set(_filelocation_tests_dir
 set(_filelocation_test_flags
   -w -rose:verbose 0
   -I${_filelocation_tests_dir})
+list(JOIN _filelocation_test_flags " " _filelocation_test_flags_str)
 
 foreach(specimen IN LISTS FILELOCATION_TEST_SOURCES)
   set(_filelocation_target fileLocation_${specimen}.passed)
@@ -581,7 +582,7 @@ foreach(specimen IN LISTS FILELOCATION_TEST_SOURCES)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="fileLocation ${specimen} [${_filelocation_target}]"
-      EXE="$<TARGET_FILE:fileLocation> ${_filelocation_test_flags}"
+      EXE="$<TARGET_FILE:fileLocation> ${_filelocation_test_flags_str}"
       INPUT=${_filelocation_tests_dir}/${specimen}
       ${_filelocation_conf}
       ${_filelocation_target}

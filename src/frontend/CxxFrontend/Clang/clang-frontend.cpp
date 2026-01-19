@@ -284,6 +284,13 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     ROSE_ABORT();
   }
 
+  if (exception_mode == ExceptionMode::Unspecified &&
+      (language == ClangToSageTranslator::CPLUSPLUS ||
+       language == ClangToSageTranslator::CUDA)) {
+    exception_mode = ExceptionMode::Enabled;
+    passthrough_args.push_back("-fexceptions");
+  }
+
   const char *cxx_config_include_dirs_array[] = CXX_INCLUDE_STRING;
   const char *c_config_include_dirs_array[] = C_INCLUDE_STRING;
 

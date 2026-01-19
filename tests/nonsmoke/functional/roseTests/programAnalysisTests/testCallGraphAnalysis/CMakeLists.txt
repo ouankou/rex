@@ -38,7 +38,7 @@ endif()
 
 set(_callgraph_test04_enabled FALSE)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
-   AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.0")
+   OR CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
   set(_callgraph_test04_enabled TRUE)
 endif()
 
@@ -69,6 +69,7 @@ foreach(n IN ITEMS 10 100)
     COMMAND ${_rth}
       N=${n}
       srcdir=${CMAKE_CURRENT_SOURCE_DIR}
+      TESTCG=$<TARGET_FILE:testCG>
       ${_test02_conf}
       test02_${n}.passed
   )
@@ -99,6 +100,7 @@ foreach(specimen IN LISTS _test03_specimens)
       INPUT=${specimen}
       OUTPUT=${_base}.o
       ANSWERS=${_test03_answers}
+      TESTCG=$<TARGET_FILE:testCG>
       srcdir=${CMAKE_CURRENT_SOURCE_DIR}
       top_srcdir=${CMAKE_SOURCE_DIR}
       ${_test03_conf}
@@ -124,6 +126,7 @@ foreach(answer_file IN LISTS _test04_answer_files)
       INPUT=${_specimen}
       OUTPUT=${_base}.o
       ANSWERS=${_test04_answers}
+      TESTCG=$<TARGET_FILE:testCG>
       srcdir=${CMAKE_CURRENT_SOURCE_DIR}
       top_srcdir=${CMAKE_SOURCE_DIR}
       ${_test04_conf}

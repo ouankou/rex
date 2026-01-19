@@ -3444,10 +3444,7 @@ foreach(file_to_test ${_unfolded_constants_tests})
       -I${CMAKE_CURRENT_SOURCE_DIR}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
-  set_tests_properties(${_unfolded_target} PROPERTIES LABELS "Cxx_tests;disabled")
-  if(NOT REX_ENABLE_DISABLED_TESTS)
-    set_tests_properties(${_unfolded_target} PROPERTIES DISABLED TRUE)
-  endif()
+  set_tests_properties(${_unfolded_target} PROPERTIES LABELS Cxx_tests)
   rex_lock_test_for_input(${_unfolded_target} ${file_to_test})
 endforeach()
 

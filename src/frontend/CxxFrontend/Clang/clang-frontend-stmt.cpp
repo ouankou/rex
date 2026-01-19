@@ -2343,7 +2343,25 @@ bool ClangToSageTranslator::VisitCXXTryStmt(clang::CXXTryStmt *cxx_try_stmt,
 
   SgNode *tmp_body = Traverse(cxx_try_stmt->getTryBlock());
   SgStatement *try_body = isSgStatement(tmp_body);
-  ROSE_ASSERT(try_body != NULL);
+  if (try_body == NULL) {
+    if (tmp_body != NULL) {
+      std::cerr << "Runtime error: try body translated to non-statement node: "
+                << tmp_body->class_name() << std::endl;
+    }
+    const bool clang_errors =
+        p_compiler_instance != nullptr &&
+        p_compiler_instance->getDiagnostics().hasErrorOccurred();
+    if (clang_errors) {
+      std::cerr << "Note: Clang reported errors; inserting empty try block to "
+                   "avoid abort."
+                << std::endl;
+      try_body = SageBuilder::buildBasicBlock_nfi();
+      setCompilerGeneratedFileInfo(try_body);
+      res = false;
+    } else {
+      ROSE_ASSERT(try_body != NULL);
+    }
+  }
 
   SgTryStmt *try_stmt = SageBuilder::buildTryStmt(try_body);
 

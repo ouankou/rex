@@ -17,6 +17,7 @@ set(_single_stmt_tests_dir
 set(_single_stmt_switches
   -w -rose:verbose 0
   -I${_single_stmt_tests_dir})
+list(JOIN _single_stmt_switches " " _single_stmt_switches_str)
 
 set(_single_stmt_disabled
   test2013_242.C
@@ -28,7 +29,7 @@ foreach(specimen IN LISTS SINGLE_STMT_BLOCK_TEST_SOURCES)
     NAME singleStatementToBlockNormalization_${specimen}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="./singleStatementToBlockNormalization ${_single_stmt_switches} -c ${_single_stmt_tests_dir}/${specimen}"
+      CMD="$<TARGET_FILE:singleStatementToBlockNormalization> ${_single_stmt_switches_str} -c ${_single_stmt_tests_dir}/${specimen}"
       ${_exit_status}
       ${_single_stmt_target}
   )

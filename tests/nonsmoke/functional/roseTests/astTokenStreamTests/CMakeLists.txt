@@ -1178,7 +1178,7 @@ foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
     NAME tokenStream_C_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="${translator} ${_rose_flags_str} -c ${_c_test_dir}/${file_to_test} && diff -u ${_c_test_dir}/${file_to_test} rose_${file_to_test}"
+      CMD="$<TARGET_FILE:${translator}> ${_rose_flags_str} -c ${_c_test_dir}/${file_to_test} && diff -u ${_c_test_dir}/${file_to_test} rose_${file_to_test}"
       ${_exit_status}
       ${_target}
   )
@@ -1191,7 +1191,7 @@ foreach(file_to_test IN LISTS TOKEN_C_FAILING_TESTCODES)
     NAME tokenStream_C_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="${translator} ${_rose_flags_str} -c ${_c_test_dir}/${file_to_test} && diff -u ${_c_test_dir}/${file_to_test} rose_${file_to_test}"
+      CMD="$<TARGET_FILE:${translator}> ${_rose_flags_str} -c ${_c_test_dir}/${file_to_test} && diff -u ${_c_test_dir}/${file_to_test} rose_${file_to_test}"
       ${_exit_status}
       ${_target}
   )
@@ -1207,11 +1207,10 @@ foreach(file_to_test IN LISTS TOKEN_CXX_TESTCODES_REQUIRED)
     NAME tokenStream_CXX_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="${translator} -rose:unparse_tokens -I${_cxx_test_dir} -c ${_cxx_test_dir}/${file_to_test} && diff -u ${_cxx_test_dir}/${file_to_test} rose_${file_to_test}"
+      CMD="$<TARGET_FILE:${translator}> -rose:unparse_tokens -I${_cxx_test_dir} -c ${_cxx_test_dir}/${file_to_test} && diff -u ${_cxx_test_dir}/${file_to_test} rose_${file_to_test}"
       ${_exit_status}
       ${_target}
   )
-  set_tests_properties(tokenStream_CXX_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 foreach(file_to_test IN LISTS TOKEN_CXX_FAILING_TESTCODES TOKEN_CXX_FAILING_GNU48_TESTCODES)
@@ -1221,7 +1220,7 @@ foreach(file_to_test IN LISTS TOKEN_CXX_FAILING_TESTCODES TOKEN_CXX_FAILING_GNU4
     NAME tokenStream_CXX_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="${translator} -rose:unparse_tokens -I${_cxx_test_dir} -c ${_cxx_test_dir}/${file_to_test} && diff -u ${_cxx_test_dir}/${file_to_test} rose_${file_to_test}"
+      CMD="$<TARGET_FILE:${translator}> -rose:unparse_tokens -I${_cxx_test_dir} -c ${_cxx_test_dir}/${file_to_test} && diff -u ${_cxx_test_dir}/${file_to_test} rose_${file_to_test}"
       ${_exit_status}
       ${_target}
   )
