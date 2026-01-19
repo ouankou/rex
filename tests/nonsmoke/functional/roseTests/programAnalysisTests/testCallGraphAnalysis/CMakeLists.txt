@@ -37,11 +37,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
 endif()
 
 set(_callgraph_test04_enabled FALSE)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  if(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.0")
-    set(_callgraph_test04_enabled TRUE)
-  endif()
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+   OR CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
   set(_callgraph_test04_enabled TRUE)
 endif()
 

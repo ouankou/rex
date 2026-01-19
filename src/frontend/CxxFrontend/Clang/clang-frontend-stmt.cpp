@@ -2352,10 +2352,10 @@ bool ClangToSageTranslator::VisitCXXTryStmt(clang::CXXTryStmt *cxx_try_stmt,
         p_compiler_instance != nullptr &&
         p_compiler_instance->getDiagnostics().hasErrorOccurred();
     if (clang_errors) {
-      std::cerr << "Note: Clang reported errors; inserting null try body to "
+      std::cerr << "Note: Clang reported errors; inserting empty try block to "
                    "avoid abort."
                 << std::endl;
-      try_body = SageBuilder::buildNullStatement_nfi();
+      try_body = SageBuilder::buildBasicBlock_nfi();
       setCompilerGeneratedFileInfo(try_body);
       res = false;
     } else {
