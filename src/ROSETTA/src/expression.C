@@ -3291,17 +3291,26 @@ void Grammar::setUpExpressions() {
                                         "../Grammar/Expression.code");
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  NEW_NONTERMINAL_MACRO(MemberAccessExp,
+                        ArrowExp | DotExp | DotStarOp | ArrowStarOp,
+                        "MemberAccessExp", "MEMBER_ACCESS_EXP", false);
+  MemberAccessExp.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  MemberAccessExp.editSubstitute("PRECEDENCE_VALUE", "16");
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_NONTERMINAL_MACRO(
       BinaryOp,
-      ArrowExp | DotExp | DotStarOp | ArrowStarOp | EqualityOp | LessThanOp |
-          GreaterThanOp | NotEqualOp | LessOrEqualOp | GreaterOrEqualOp |
-          AddOp | SubtractOp | MultiplyOp | DivideOp | IntegerDivideOp | ModOp |
-          AndOp | OrOp | BitXorOp | BitAndOp | BitOrOp | BitEqvOp | CommaOpExp |
-          LshiftOp | RshiftOp | PntrArrRefExp | ScopeOp | AssignOp |
-          ExponentiationOp | ConcatenationOp | PointerAssignOp |
-          UserDefinedBinaryOp | CompoundAssignOp | SpaceshipOp | SIMDBinaryOp |
-          SIMDLoad | SIMDBroadcast | SIMDStore | SIMDPartialStore |
-          SIMDScalarStore | SIMDGather | SIMDExplicitGather | SIMDScatter,
+      MemberAccessExp | EqualityOp | LessThanOp | GreaterThanOp | NotEqualOp |
+          LessOrEqualOp | GreaterOrEqualOp | AddOp | SubtractOp | MultiplyOp |
+          DivideOp | IntegerDivideOp | ModOp | AndOp | OrOp | BitXorOp |
+          BitAndOp | BitOrOp | BitEqvOp | CommaOpExp | LshiftOp | RshiftOp |
+          PntrArrRefExp | ScopeOp | AssignOp | ExponentiationOp |
+          ConcatenationOp | PointerAssignOp | UserDefinedBinaryOp |
+          CompoundAssignOp | SpaceshipOp | SIMDBinaryOp | SIMDLoad |
+          SIMDBroadcast | SIMDStore | SIMDPartialStore | SIMDScalarStore |
+          SIMDGather | SIMDExplicitGather | SIMDScatter,
       "BinaryOp", "BINARY_EXPRESSION", false);
   BinaryOp.setFunctionPrototype("HEADER_EXTRA_FUNCTIONS",
                                 "../Grammar/Expression.code");

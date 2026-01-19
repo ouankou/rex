@@ -4226,8 +4226,7 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
     SgFunctionCallExp *funcCall = isSgFunctionCallExp(*node);
     if (funcCall != NULL) {
       SgExpression *callee = funcCall->get_function();
-      bool is_member_callee =
-          (isSgDotExp(callee) != NULL) || (isSgArrowExp(callee) != NULL);
+      bool is_member_callee = (isSgMemberAccessExp(callee) != NULL);
       funcCall->set_uses_operator_syntax(!is_member_callee);
     }
   }

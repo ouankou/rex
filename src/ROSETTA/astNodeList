@@ -220,6 +220,7 @@ SgLongIntVal
 SgLongLongIntVal
 SgLshiftAssignOp
 SgLshiftOp
+SgMemberAccessExp
 SgMemberFunctionDeclaration
 SgMemberFunctionRefExp
 SgMemberFunctionSymbol
