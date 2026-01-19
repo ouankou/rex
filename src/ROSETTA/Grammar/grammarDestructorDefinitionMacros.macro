@@ -1,11 +1,11 @@
 
-/** 
+/**
 \brief Generated destructor
 
 This destructor is automatically generated (by ROSETTA). This destructor
-only frees memory of data members associated with the parts of the current IR node which 
+only frees memory of data members associated with the parts of the current IR node which
 are NOT traversed. Those data members that are part of a traversal can be freed using
-a traversal (calling this destructor on all children in a post-order traversal).  Such 
+a traversal (calling this destructor on all children in a post-order traversal).  Such
 a traversal which deletes a whole AST is provided by DeleteSgTree(SgNode*).
 
 \internal  All IR nodes with data members specified using setDataPrototype() within ROSETTA

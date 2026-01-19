@@ -407,7 +407,7 @@ if(enable-smaller-generated-files)
   if(VERBOSE)
     message(STATUS "CxxGrammarMetaProgram_SRCS = " ${CxxGrammarMetaProgram_SRCS})
   endif()
-  get_target_property(META_EXE_LOC CxxGrammarMetaProgram LOCATION) 
+  get_target_property(META_EXE_LOC CxxGrammarMetaProgram LOCATION)
 
   # define a custom command to call the code generator and generate source/header files
   # Generate the Sage III grammar using ROSETTA
@@ -415,11 +415,11 @@ if(enable-smaller-generated-files)
     OUTPUT ${libgeneratedIR_SRC}
     # depend on the code generator and input files
     DEPENDS  CxxGrammarMetaProgram ${GRAMMAR_SOURCE_FILES}
-    # We need to copy the input files  to the build tree since 
+    # We need to copy the input files  to the build tree since
     # the code generator will output the generated source files into the same directory as where the input files locate
     COMMAND ${CMAKE_COMMAND} -E make_directory ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/Grammar
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${ROSE_TOP_SRC_DIR}/src/ROSETTA/Grammar/ ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/Grammar/
-    # create this directory is needed since a few generated files will be put there        
+    # create this directory is needed since a few generated files will be put there
     COMMAND ${META_EXE_LOC}
     ARGS ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/)
 

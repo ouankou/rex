@@ -50,7 +50,7 @@ static token_element ROSE_Fortran_keyword_map[] = {
     {"continue",
      SgToken::FORTRAN_CONTINUE}, /*   GFORTRAN/G95 equivalent is ST_CONTINUE */
     {"cycle",
-     SgToken::FORTRAN_CYCLE},        /*   GFORTRAN/G95 equivalent is ST_CYCLE        */
+     SgToken::FORTRAN_CYCLE}, /*   GFORTRAN/G95 equivalent is ST_CYCLE        */
     {"case", SgToken::FORTRAN_CASE}, /*   GFORTRAN/G95 equivalent is ST_CASE */
     {"common",
      SgToken::FORTRAN_COMMON}, /*   GFORTRAN/G95 equivalent is ST_COMMON */
@@ -100,7 +100,7 @@ static token_element ROSE_Fortran_keyword_map[] = {
     {"extends", SgToken::FORTRAN_EXTENDS},
     {"file", SgToken::FORTRAN_FILE},
     {"final",
-     SgToken::FORTRAN_FINAL},      /*   GFORTRAN/G95 equivalent is ST_FORALL      */
+     SgToken::FORTRAN_FINAL}, /*   GFORTRAN/G95 equivalent is ST_FORALL      */
     {"fmt", SgToken::FORTRAN_FMT}, /*   GFORTRAN/G95 equivalent is ST_FORALL */
     {"forall",
      SgToken::FORTRAN_FORALL}, /*   GFORTRAN/G95 equivalent is ST_FORALL */
@@ -112,10 +112,10 @@ static token_element ROSE_Fortran_keyword_map[] = {
      SgToken::FORTRAN_FLUSH}, /*   GFORTRAN/G95 equivalent is ST_FLUSH */
     {"function", SgToken::FORTRAN_FUNCTION},
     {"generic",
-     SgToken::FORTRAN_GENERIC},      /*   GFORTRAN/G95 equivalent is ST_GOTO      */
+     SgToken::FORTRAN_GENERIC}, /*   GFORTRAN/G95 equivalent is ST_GOTO      */
     {"goto", SgToken::FORTRAN_GOTO}, /*   GFORTRAN/G95 equivalent is ST_GOTO */
-    {"id", SgToken::FORTRAN_ID},     /*   GFORTRAN/G95 equivalent is ST_IF,     */
-    {"if", SgToken::FORTRAN_IF},     /*   GFORTRAN/G95 equivalent is ST_IF,     */
+    {"id", SgToken::FORTRAN_ID}, /*   GFORTRAN/G95 equivalent is ST_IF,     */
+    {"if", SgToken::FORTRAN_IF}, /*   GFORTRAN/G95 equivalent is ST_IF,     */
     {"inquire",
      SgToken::FORTRAN_INQUIRE}, /*   GFORTRAN/G95 equivalent is ST_INQUIRE */
     {"integer",

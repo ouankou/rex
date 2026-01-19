@@ -15,9 +15,9 @@ else
     echo ""
     echo ""
     IFS=:
-    
+
     WEBGETTER=none
-    
+
     for p in $PATH
       do
 
@@ -35,7 +35,7 @@ else
               tar xzf antlr-2.7.7.tar.gz
               mv antlr-2.7.7/antlr.jar antlr_jars
               rm -rf antlr-2.7.7 antlr-2.7.7.tar.gz
-              
+
           fi
       fi
 
@@ -56,12 +56,12 @@ else
           fi
       fi
     done
-    
+
     if [ $WEBGETTER = "none" ]; then
 	echo "You need to manually download the files."
 	return 1
     fi
-    
+
 fi
 
 

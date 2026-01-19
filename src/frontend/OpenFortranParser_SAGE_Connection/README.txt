@@ -4,7 +4,7 @@
 They are inteteded only for internal use for the Fortran support
 within ROSE.  They are contantly being updated and changed and
 will not be always representing the same semantics from release
-to release of ROSE. 
+to release of ROSE.
 
 Functions to build the AST are a part of the SageBuilder namespace
 and are located in directory:
@@ -31,5 +31,5 @@ Needed from OFP:
   1) Source code filename and line number of include statement.
      See test2010_81.f90 and test2010_81.h for an example.
      Not clear what file to put the include directive, could
-     also be deeply nested.  Need to get the main function into 
+     also be deeply nested.  Need to get the main function into
      the correct file.

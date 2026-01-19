@@ -1,4 +1,4 @@
-README for Gary_Unparser by Gary Lee 08/03/99 
+README for Gary_Unparser by Gary Lee 08/03/99
 
 This document is to provide general information about the design and
 features of the unparser. For detailed explainations of the logic
@@ -19,7 +19,7 @@ options.h
 options.C
 
 The general flow control of the Unparser
----------------------------------------- 
+----------------------------------------
 The unparser is created by instantiating an object of Gary_Unparser.
 The unparser starts generating C++ source code once the run_unparser()
 function is called. This function first tries to unparse any
@@ -42,7 +42,7 @@ the whole statement is unparsed, we unparse the next statement until
 there are no more statements left to unparse. In this case, we exit
 the loop and unparse any final directives that may be at the end of
 the file. Then the run of the unparser is finished.
- 
+
 Gary_Unparser.{h,C}
 -------------------
 The header file (Gary_Unparser.h) contains the declarations for all
@@ -51,7 +51,7 @@ the class.  Gary_Unparser.C contains the implementation of the
 constructors, destructor, formatting functions, functions that unparse
 directives, and some auxiliary functions for formatting.
 
-Formatting 
+Formatting
 ----------
 There are two general functions for formatting. The format function
 uses the information provided by the File_Info object from each Sage
@@ -97,8 +97,8 @@ exited, TABINDENT is subtracted for the next statement to be
 unparsed. NOTE: Introduced comments as part of the transformation are
 not unparsed because of Sage's inability to recognize comments.
 
-Unparsing Directives 
--------------------- 
+Unparsing Directives
+--------------------
 The function unparseDirectives is called before each statement is
 unparsed. A directive is unparsed if its line number is less than the
 line number of the statement to be unparsed. As long as this is true,
@@ -118,7 +118,7 @@ insert. Determining how many spaces to indent is currently handled by
 exception handling, since the information of the directive's column
 number is not provided. A reasonable heuristic that I have implemented
 uses the column number of the previous statement or directive unparsed
-as the directive's own column number. 
+as the directive's own column number.
 
 Another case with exception handling is forward declarations. If the
 next statement to be unparsed is a forward declaration, then we cannot
@@ -135,9 +135,9 @@ previous statement unparsed. Once forward declarations can provide us
 with correct the line number, the exception handling will not be
 needed.
 
-The unparseFinalDirectives function is like the unparseDirectives 
-function except that it unparses directives only after all the 
-statements in the file have been unparsed. 
+The unparseFinalDirectives function is like the unparseDirectives
+function except that it unparses directives only after all the
+statements in the file have been unparsed.
 
 modified_sage.C
 ---------------
@@ -200,7 +200,7 @@ correctly. If the statement is not in the input source file, then the
 format_transformations function is called to format the statement in a
 design that I have specified. The check is as follows:
 
-if (!strcmp(getFileName(stmt), getFileName()) && 
+if (!strcmp(getFileName(stmt), getFileName()) &&
     !opt.get_forced_transformation_opt()) {
 
   format(stmt);
@@ -210,7 +210,7 @@ if (!strcmp(getFileName(stmt), getFileName()) &&
 else format_transformations(stmt, info);
 
 opt.get_forced_transformation_opt() will be explained under the
-description of the Options class. 
+description of the Options class.
 
 Once formatted, each function unparses the statement differently,
 depending on the type of statement. There are two added unparse
@@ -238,7 +238,7 @@ following check:
 if (strstr(mfuncdecl_stmt->get_file_info()->get_filename(), ".C") != NULL) {
   ...exception handling...
 }
- 
+
 The function strstr returns NULL if there is no instance of ".C" in
 the filename. Thus, only C files will use the exception handler to
 unparse forward declarations. Header files will not use exception
@@ -250,7 +250,7 @@ declarations of classes and functions, so correct file information is
 provided. The unparser depends on this notion to unparse the header
 files correctly. If the unparser is given a header file where
 definitions are declared outside the class declaration, then the
-unparser will fail to unparse correctly. 
+unparser will fail to unparse correctly.
 
 The general solution of the exception handler is to set the line
 number of the forward declaration one after the previous statement
@@ -258,7 +258,7 @@ number of the forward declaration one after the previous statement
 massive number of newlines being inserted or directives being unparsed
 before they should.
 
-Prevention of Line Wrapping 
+Prevention of Line Wrapping
 ---------------------------
 Exception Handling for bad file information in Sage expressions
 
@@ -301,9 +301,9 @@ unparsing a comma in an argument list.
 unparse_expr.C
 --------------
 This C++ file contains the unparse functions for all kinds of
-expressions. 
+expressions.
 
-Operator Overloading (revisted) 
+Operator Overloading (revisted)
 -------------------------------
 NOTE: The following section describes how operator overloaded functions
 are unparsed when the overload_opt is FALSE.
@@ -354,8 +354,8 @@ operands and y is the function argument. The printing of the "." and
 "operator" are suppressed when unparsing to produce "x = y". The same
 logic follows for unary operators and other binary operators.
 
-Printing of Parenthesis 
------------------------ 
+Printing of Parenthesis
+-----------------------
 With the option to suppress the printing of operator overloaded
 functions, many parenthesis that were once necessary are now not
 needed. As a result, many nested combinations of operator overloaded
@@ -393,8 +393,8 @@ around the individual arguments of a function call (when unparsing the
 function call's arguments in unparseFuncCall) and around an array
 reference (the RemovePareninExprList function).
 
-options.{C,h} 
-------------- 
+options.{C,h}
+-------------
 The Options class controls several aspects of the unparsing. An
 Options object is created either by the default constructor (which
 turns off (FALSE) all options), or by the constructor that allows one
@@ -406,7 +406,7 @@ Description of each option
 --------------------------
 1. auto_opt: TRUE- prints "auto" in front of variable declarations
              FALSE- suppresses "auto" in front of variable
-             declarations 
+             declarations
 
 2. linefile_opt: TRUE- prints line and file information (by
 		 Gary_Unparser::output) as pragmas after each statement
@@ -417,8 +417,8 @@ Description of each option
 		 prints out "operator+" instead of "+."
 		 FALSE- only prints the operator. For example, "++"
 		 instead of "operator++"
-	     
-4. boolnum_opt: TRUE- prints booleans as numbers (0 and 1) 
+
+4. boolnum_opt: TRUE- prints booleans as numbers (0 and 1)
 		FALSE- prints booleans as words ("FALSE" and "TRUE")
 
 5. this_opt: TRUE- prints "this" in front of data or function members
@@ -432,8 +432,8 @@ Description of each option
 7. forced_transformation_format:
 		TRUE- formats the unparsed code in a design that I have
 		specified (without the use of file information)
-		FALSE- formats the unparsed code by using the file 
-		information provided by each statement 
+		FALSE- formats the unparsed code by using the file
+		information provided by each statement
 
 RESTRICTION: Option 7 only works well without comments embedded in the
 source code. Because line numbers of statements are set as each
@@ -449,7 +449,7 @@ for statements. I set this option TRUE to purposely not use the file
 information provided and to aid me in implementing the
 format_transformations function for every kind of statement.
 
-Printing of Debugging Information 
+Printing of Debugging Information
 ---------------------------------
 Debugging information is printed to standard output by calling the
 function printdebugInfo. The function printDebugInfo takes either a

@@ -9,7 +9,7 @@ mpaBitvectorDataflow_includes=\
 	-I$(top_srcdir)/src/midend/astUtil \
 	-I$(top_srcdir)/src/midend/astUtil/astSupport \
 	-I$(top_srcdir)/src/midend/astUtil/astInterface \
-	-I$(top_srcdir)/src/util/support 
+	-I$(top_srcdir)/src/util/support
 
 
 # TODO: include in top-level?

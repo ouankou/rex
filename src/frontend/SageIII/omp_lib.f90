@@ -1,5 +1,5 @@
-! spec30.pdf P306. 
-! D.3 Example of a Fortran 90 Interface Declaration module 
+! spec30.pdf P306.
+! D.3 Example of a Fortran 90 Interface Declaration module
       module omp_lib_kinds
         implicit none
         integer, parameter :: omp_integer_kind = 4
@@ -176,7 +176,7 @@
             integer (omp_integer_kind) :: omp_get_thread_num
           end function omp_get_thread_num
         end interface
-! time 
+! time
         interface
           function omp_get_wtick ()
             double precision :: omp_get_wtick

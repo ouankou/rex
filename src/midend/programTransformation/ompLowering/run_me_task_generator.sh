@@ -26,7 +26,7 @@ do
     else
       echo "              void *);"
     fi
-  done  
+  done
   echo "  FUNC_P func;"
 #  echo "  func =(FUNC_P) (((void**)data)[0]);"
   echo "  int offset =0 ;"
@@ -39,11 +39,11 @@ do
   echo "  // Decode the remaining of void* data to be individual parameters one by one"
   echo "  for (i=0; i<$c; i++)"
   echo "  {"
-  echo "     // 1. Decode the pass-by-value flag" 
+  echo "     // 1. Decode the pass-by-value flag"
   echo "     bool bValue;"
   echo "     memcpy(&bValue, &(((char*)data)[offset]), sizeof(bool)); // we use 1 byte to store the by-value flag"
   echo "     offset+= sizeof(bool);"
-    
+
   echo "     // 2. Decode the size of the parameter"
   echo "     int v_size; "
   echo "     memcpy (&v_size, &(((char*)data)[offset]),sizeof(int)); // we use 4 byte to store the size "
@@ -80,7 +80,7 @@ do
       echo "              p[$e]);"
     fi
 
-  done  
+  done
   echo "}"
 
-done  
+done

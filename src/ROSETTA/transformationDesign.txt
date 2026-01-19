@@ -1,11 +1,11 @@
 // The Transformation Specification Grammar
 
-// This grammar is used to simplify the representation of the 
-// transformations.  So that they can be split apart and 
+// This grammar is used to simplify the representation of the
+// transformations.  So that they can be split apart and
 // configured by ROSE at compile time (preprocessing time).
 // This grammar defines a few language elements that are
-// represented in C++ (so no languge modifications are 
-// involved).  
+// represented in C++ (so no languge modifications are
+// involved).
 
 // Grammar elements include:
 //     Loop mechanisms  "Loop(numberOfIterations)"
@@ -14,9 +14,9 @@
 //          we can recongnize at preprocessing time.
 
 //
-//     Function call mechanism 
-//             The specification of the transformation from the transformation 
-//             grammar into the C grammar must be expressed using the functions 
+//     Function call mechanism
+//             The specification of the transformation from the transformation
+//             grammar into the C grammar must be expressed using the functions
 //             that the transformation defines.  Not clear what this will look like!!!
 //        FUNCTION_DEFINITION SUBSCRIPT_2D ( int i, int j )
 //           {
@@ -58,15 +58,15 @@
             const int stride_1D_0 = LHS_ARRAY.getStride(0);
             for (GLOBAL_INDEX_NAME = base_1D_0; GLOBAL_INDEX_NAME <= bound_1D_0; GLOBAL_INDEX_NAME++)
                {
-              // This code would be modified with the edited user inner loop statement 
+              // This code would be modified with the edited user inner loop statement
               // The first statement will be replaced within the transformation process
-                 
-              // LHS_ARRAY_DATA_POINTER[ROSE_SUBSCRIPT_COMPUTATION_1D(GLOBAL_INDEX_NAME,0,stride_1D_0)] = 
+
+              // LHS_ARRAY_DATA_POINTER[ROSE_SUBSCRIPT_COMPUTATION_1D(GLOBAL_INDEX_NAME,0,stride_1D_0)] =
               // RHS_ARRAY_DATA_POINTER[0];
 
-              // It is in the transformation of the statement (called by ROSE recursively on 
-              // the program tree associated with the highest level grammar) that specific 
-              // transformations are introduced).  Look at the specification of the transformations 
+              // It is in the transformation of the statement (called by ROSE recursively on
+              // the program tree associated with the highest level grammar) that specific
+              // transformations are introduced).  Look at the specification of the transformations
               // of the grammar elements (at all levels of the grammar higherarchy).
                  TRANSFORMED_STATEMENT();
                }
@@ -93,7 +93,7 @@ TransformSpecificationStatementBlock = SgStatementBlock;
 
 
 // Example of a transform member function
-// Code to put the program tree fragments (after they are recognized 
+// Code to put the program tree fragments (after they are recognized
 // using our transformation specification grammar)
 
 TransformationSpecificationStatementBlock transformSpecification;

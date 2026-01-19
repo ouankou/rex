@@ -20,7 +20,7 @@ unparser_la_sources=\
 	$(unparseCxxCodeGeneration_la_sources) \
 	$(unparseFormatSupport_la_sources) \
 	$(unparseFortran_la_sources) \
-	$(unparseLanguageIndependenceSupport_la_sources) 
+	$(unparseLanguageIndependenceSupport_la_sources)
 
 
 unparser_includeHeaders=\
@@ -36,7 +36,7 @@ unparser_extraDist=\
 	$(unparseCxxCodeGeneration_extraDist) \
 	$(unparseFormatSupport_extraDist) \
 	$(unparseFortran_extraDist) \
-	$(unparseLanguageIndependenceSupport_extraDist) 
+	$(unparseLanguageIndependenceSupport_extraDist)
 
 unparser_cleanLocal=\
 	$(unparseCxxCodeGeneration_cleanLocal) \
@@ -49,4 +49,4 @@ unparser_cleanLocal=\
 #		$(unparserPath)/Templates.DB \
 #		$(unparserPath)/ii_files \
 #		$(unparserPath)/ti_files \
-#		$(unparserPath)/core; 
+#		$(unparserPath)/core;

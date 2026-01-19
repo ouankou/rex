@@ -2,7 +2,7 @@ This file outlines some of the recent work to support Fortran.
 
 * Source file handling for Fortran was implemented so that ROSE based translators
   can seamlessly handle C/C++ as well as Fortran source codes as input.  All the
-  extensions (that I know of to be common for Fortran) were added. 
+  extensions (that I know of to be common for Fortran) were added.
 
 * Specific commandline options added to support fortran.  New options include:
      * specification of fixed format input: -qfixed, -fixed, -Mfixed, -ffixed-form
@@ -30,7 +30,7 @@ This file outlines some of the recent work to support Fortran.
     * Initial support for fixed and free format code generation from AST.
     * Initial Fixed and Free format token stream generation for advanced code generation
       (code generation from untransformated parts of the AST will be able to alternatively
-      use the token strean directly for more precise code generation (part of mechanism to 
+      use the token strean directly for more precise code generation (part of mechanism to
       generate transformations as diff generated patchs).
 
 * Support in ROSE for the LANL Open Fortran Parser (OFP) was added.
@@ -39,11 +39,11 @@ This file outlines some of the recent work to support Fortran.
       in this directory is the file: FortranParserActionROSE.C which
       implements the c_action_<Fortran Standard Grammar Rule>() functions.
       There are about 315 of these functions, they are called by the OFP
-      and the implementation of them builds the different AST pieces for each 
+      and the implementation of them builds the different AST pieces for each
       part of the AST (and connects them together as it goes).  The end result
       is an AST representing the inputFortran program.
     * All the support for calling the (Java-based) OFP from C++ and the calls
-      back from OFP to C code (c_action_ functions) is now implemented and working 
+      back from OFP to C code (c_action_ functions) is now implemented and working
       fine.
     * Very few c_actions have been implemented thus far (more to come).
 

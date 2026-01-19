@@ -25,7 +25,7 @@ transformations).
 
 4) Each transformation sees the whole program tree
 
-5) Each transformation is organized as follows: 
+5) Each transformation is organized as follows:
 *NOTE: The word
 "template" is used to refer to a stencil or cookie cutter approach to
 defining source code and certainly does not refer to the C++ use of
@@ -74,8 +74,8 @@ the pattern-mathing approach used previous to the development of grammars.
 the grammars (classes representing terminals and non-terminals of the grammar)
 are automatically generated.  The process uses a perl script and represents
 the best method currently "in use" within ROSE.  A better methods (which requires
-far less input) is to generate the grammar from the BNF notation plus 
-suplimentary code.  This later method is implemented in the ROSE/grammar 
+far less input) is to generate the grammar from the BNF notation plus
+suplimentary code.  This later method is implemented in the ROSE/grammar
 directory, and can be used to generate compilable versions of the array class
 grammar (but other grammars have not be 'fully' generated).
 

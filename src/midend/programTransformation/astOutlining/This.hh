@@ -14,13 +14,12 @@
 class SgThisExp;
 class SgStatement;
 
-namespace ASTtools
-{
-  //! Stores a list of 'this' expressions.
-  typedef std::set<const SgThisExp *> ThisExprSet_t;
+namespace ASTtools {
+//! Stores a list of 'this' expressions.
+typedef std::set<const SgThisExp *> ThisExprSet_t;
 
-  //! Collect 'this' expressions.
-  void collectThisExpressions (const SgStatement* root, ThisExprSet_t& exprs);
+//! Collect 'this' expressions.
+void collectThisExpressions(const SgStatement *root, ThisExprSet_t &exprs);
 
 } // namespace ASTtools
 

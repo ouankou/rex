@@ -7,7 +7,7 @@ defined. This only happens when both the forward declaration and the
 definition is in the same file. If the definition is not present in
 the same file, then the line information is correct. Exception: File
 information is correct if the definition follows the declaration in a
-class definition. 
+class definition.
 
 More information about forward declarations is provided in
 Unparser_README.txt.
@@ -53,11 +53,11 @@ sizeof(x) is unparsed as y = 4.
 specified in the original source. Although not wrong, we should try to
 fix this. Also, if the original source declared an int or function as
 extern, "extern" is not printed out.
-    
+
 12. /home/garylee/ROSE/mytests/test18.C produces a segmentation fault
 in Sage.
 
-13. Compiling errors: 
+13. Compiling errors:
 baseclasses.h
 line 258: error: only one member
           of a union may be specified in a constructor initializer list

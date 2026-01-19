@@ -2,7 +2,7 @@
 
 if ROSE_USE_GCC_OMP
 mpaVariableRenaming_includesOmp=\
-	-DROSE_GCC_OMP 
+	-DROSE_GCC_OMP
 endif
 
 mpaVariableRenaming_includes=\

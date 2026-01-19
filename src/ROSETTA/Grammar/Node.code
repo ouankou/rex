@@ -347,7 +347,7 @@ namespace rose_hash
    using std::unordered_multimap;
    using std::unordered_set;
    using std::hash;
-   
+
   // DQ (4/23/2009): These should be put into this namespace so that we don't contaminate the global scope.
   // DQ (8/19/2008): This is already defined in src/frontend/SageIII/astMerge/buildMangledNameMap.h
      struct eqstr_string

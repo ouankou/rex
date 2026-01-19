@@ -1,7 +1,7 @@
 
-! =================================================================================== 
-! <<Automatically generated for Rose Fortran Separate Compilation, DO NOT MODIFY IT>> 
-! =================================================================================== 
+! ===================================================================================
+! <<Automatically generated for Rose Fortran Separate Compilation, DO NOT MODIFY IT>>
+! ===================================================================================
 
 MODULE omp_lib_kinds
 IMPLICIT NONE

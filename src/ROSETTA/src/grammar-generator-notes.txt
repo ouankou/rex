@@ -37,7 +37,7 @@ TOPIC: Constructor generation:
               ->constructorLoopBody(...,node,...)
                 ->node.buildConstructorBodyForAllDataMembers();
 
-  FUNCTION: Grammar::isFilteredMemberVariable: 
+  FUNCTION: Grammar::isFilteredMemberVariable:
     function is shared in grammar generation and constructor generation. This enforces the matching of parameters.
 
   FUNCTION: Grammar::editSubstitution:

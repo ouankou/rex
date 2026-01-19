@@ -10,7 +10,7 @@ mAbstractLayer_la_sources=\
 
 mAbstractLayer_extraDist=\
 	$(mAbstractLayerPath)/CMakeLists.txt \
-	$(mAbstractLayerPath)/README 
+	$(mAbstractLayerPath)/README
 
 mAbstractLayer_cleanLocal=\
 	rm -rf \

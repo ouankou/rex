@@ -1,10 +1,10 @@
 void
 $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
    {
-  // This function traverses the memory pool for only a specific IR node 
-  // and calls the visit function of the input class execute a traversal 
+  // This function traverses the memory pool for only a specific IR node
+  // and calls the visit function of the input class execute a traversal
   // similar to the style of the attribute based traversals within ROSE.
-  // This traversal will visit ALL nodes of the AST where as the other 
+  // This traversal will visit ALL nodes of the AST where as the other
   // attribute based traversals visit only the embedded tree within the AST.
 
   // Initialize array to the address of the first element of the STL vector
@@ -14,7 +14,7 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
         {
           ROSE_ASSERT($CLASSNAME::pool_live_flags.size() == $CLASSNAME::pools.size());
           unsigned char** pool_bases = $CLASSNAME::pools.data();
-       // DQ (10/26/2016): To avoid operations in the visit functions that might change the list, 
+       // DQ (10/26/2016): To avoid operations in the visit functions that might change the list,
        // compute the list first and then call the visit function on each list element.
 
        // printf ("Inside of $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal) \n");
@@ -56,7 +56,7 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
              }
         }
 
-  // This should not be required since all previously static data members are 
+  // This should not be required since all previously static data members are
   // now static pointers and ALL IR nodes are allocated from the IR memory pools.
      $CLASS_SPECIFIC_STATIC_MEMBERS_USING_ROSE_VISIT
    }
@@ -100,7 +100,7 @@ $CLASSNAME::traverseMemoryPoolVisitorPattern ( ROSE_VisitorPattern & visitor )
              }
         }
 
-  // This should not be required since all previously static data members are 
+  // This should not be required since all previously static data members are
   // now static pointers and ALL IR nodes are allocated from the IR memory pools.
      $CLASS_SPECIFIC_STATIC_MEMBERS_USING_VISITOR_PATTERN
    }
@@ -109,7 +109,7 @@ void
 $CLASSNAME::visitRepresentativeNode(ROSE_VisitTraversal & traversal)
    {
   // This function visits only a single IR node of the memory pool.
-  // it is typically called once for each type of IR node within 
+  // it is typically called once for each type of IR node within
   // the automatically generated function: traverseRepresentativeNodes().
 
   // Initialize array to the address of the first element of the STL vector
@@ -155,7 +155,7 @@ size_t
 $CLASSNAME::numberOfNodes()
    {
   // This function traverses the memory pool for an IR node and
-  // counts the number of IR nodes of a particular Sage III IR 
+  // counts the number of IR nodes of a particular Sage III IR
   // nodes type.
 
      size_t count = 0;
@@ -185,7 +185,7 @@ size_t
 $CLASSNAME::memoryUsage()
    {
   // This function is required because we need the class name as a type when we call sizeof
-  // There might be another way to implement this if we have a traversal that only called a 
+  // There might be another way to implement this if we have a traversal that only called a
   // representative object (one call for each type of Sage IIIIR node).
      size_t memory = numberOfNodes() * sizeof($CLASSNAME);
 

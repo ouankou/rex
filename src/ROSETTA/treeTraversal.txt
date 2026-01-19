@@ -11,7 +11,7 @@ Nonterminal is derived from class AstNodeClass) contains three 2x2 arrays of
 lists of GrammarString objects, see grammar.h:
 
    // Header file class definition function prototypes (local and subtree definitions)
-   // Use an array of lists since every string has a local node/subtree 
+   // Use an array of lists since every string has a local node/subtree
    // representation and a local node/subtree exclude list
    List<GrammarString> memberFunctionPrototypeList[2][2];
 
@@ -125,7 +125,7 @@ The differences of the two mechanisms will be explained in the following.
 (A) Tree traversal based on virtual member functions
 ----------------------------------------------------
 The first mechanism is based on the generation of virtual member functions
-of the (automatically generated) classes representing the elements of the grammar. 
+of the (automatically generated) classes representing the elements of the grammar.
 This means that each class (e.g., SgWhileStmt, SgLocatedNode) implements a
 virtual member function traverseTree() which
 (a) in the case of a non-AST object (a nonterminal) issues an error message when
