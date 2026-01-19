@@ -23,6 +23,8 @@
 
 #include "sage_support.h"
 
+#include "rose_path_resolver.h"
+
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 #include "FortranModuleInfo.h"
 
@@ -536,154 +538,42 @@ void outputTypeOfFileAndExit(const string &name) {
 // Switches taking a second parameter need to be added to
 // CommandlineProcessing::isOptionTakingSecondParameter().
 
+static std::string resolveRoseSupportPath(const std::string &root,
+                                          const std::string &suffix) {
+  std::filesystem::path suffix_path(suffix);
+  if (suffix_path.is_absolute()) {
+    return suffix_path.string();
+  }
+  return (std::filesystem::path(root) / suffix_path).string();
+}
+
 string findRoseSupportPathFromSource(const string &sourceTreeLocation,
                                      const string &installTreeLocation) {
-  string installTreePath;
-  bool inInstallTree = roseInstallPrefix(installTreePath);
-  if (inInstallTree) {
-    return installTreePath + "/" + installTreeLocation;
-  } else {
-    return string(ROSE_SOURCE_TREE) + "/" + sourceTreeLocation;
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
+  if (roots.in_install_tree) {
+    return resolveRoseSupportPath(roots.install_prefix, installTreeLocation);
   }
+  return resolveRoseSupportPath(ROSE_SOURCE_TREE, sourceTreeLocation);
 }
 
 string findRoseSupportPathFromBuild(const string &buildTreeLocation,
                                     const string &installTreeLocation) {
-  string installTreePath;
-  bool inInstallTree = roseInstallPrefix(installTreePath);
-  if (inInstallTree) {
-    return installTreePath + "/" + installTreeLocation;
-  } else {
-    return string(ROSE_BUILD_TREE) + "/" + buildTreeLocation;
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
+  if (roots.in_install_tree) {
+    return resolveRoseSupportPath(roots.install_prefix, installTreeLocation);
   }
+  return resolveRoseSupportPath(roots.build_root, buildTreeLocation);
 }
-//! Check if we can get an installation prefix of rose based on the current
-//! running translator.
-// There are two ways
-//   1. if dladdr is supported: we resolve a rose function (roseInstallPrefix())
-//   to obtain the
-//      file (librose.so) defining this function
-//      Then we check the parent directory of librose.so
-//          if .libs or src --> in a build tree
-//          otherwise: librose.so is in an installation tree
-//   2. if dladdr is not supported or anything goes wrong, we check an
-//   environment variable
-//     ROSE_IN_BUILD_TREE to tell if the translator is started from a build tree
-//     or an installation tree Otherwise we return ROSE_INSTALL_PREFIX as the
-//     installation prefix
+
+//! Resolve the installation prefix if running from an install tree.
 bool roseInstallPrefix(std::string &result) {
-#ifdef HAVE_DLADDR
-  {
-    // This is built on the stack and initialized using the function: dladdr().
-    Dl_info info;
-
-    // DQ (4/8/2011): Initialize this before it is used as a argument to
-    // strdup() below. This is initialized by dladdr(), so this is likely
-    // redundant; but we can initialize it anyway. info.dli_fname = NULL;
-    info.dli_fname = "";
-
-    int retval = dladdr((void *)(&roseInstallPrefix), &info);
-    if (retval == 0)
-      goto default_check;
-
-    // DQ (4/9/2011): I think the issue here is that the pointer
-    // "info.dli_fname" pointer (char*) is pointing to a position inside a DLL
-    // and thus is a region of memory controled/monitored or allocated by
-    // Insure++. Thus Insure++ is marking this as an issue while it is not an
-    // issue. The reported issue by Insure++ is: "READ_WILD", implying that a
-    // pointer set to some wild area of memory is being read.
-#if __INSURE__
-    // Debugging information. Trying to understand this insure issue and the
-    // value of "info.dli_fname" data member. if (retval != 0)
-    //    fprintf(stderr, "      %08p file: %s\tfunction: %s\n",info.dli_saddr,
-    //    info.dli_fname ? info.dli_fname : "???", info.dli_sname ?
-    //    info.dli_sname : "???");
-
-    _Insure_checking_enable(0); // disable Insure++ checking
-#endif
-    // DQ (4/8/2011): Check for NULL pointer before handling it as a parameter
-    // to strdup(), but I think it is always non-NULL (added assertion and put
-    // back the original code). char* libroseName = (info.dli_fname == NULL) ?
-    // NULL : strdup(info.dli_fname);
-    ASSERT_not_null(info.dli_fname);
-    if (info.dli_fname[0] == '\0')
-      goto default_check;
-    auto free_cstr = [](char *ptr) { free(ptr); };
-    std::unique_ptr<char, decltype(free_cstr)> libroseName(
-        strdup(info.dli_fname), free_cstr);
-#if __INSURE__
-    _Insure_checking_enable(1); // re-enable Insure++ checking
-#endif
-    if (libroseName == nullptr)
-      goto default_check;
-    char *libdir = dirname(libroseName.get());
-    if (libdir == nullptr)
-      goto default_check;
-    std::unique_ptr<char, decltype(free_cstr)> libdirCopy1(strdup(libdir),
-                                                           free_cstr);
-    std::unique_ptr<char, decltype(free_cstr)> libdirCopy2(strdup(libdir),
-                                                           free_cstr);
-    if (libdirCopy1 == nullptr || libdirCopy2 == nullptr)
-      goto default_check;
-    char *libdirBasenameCS = basename(libdirCopy1.get());
-    if (libdirBasenameCS == nullptr)
-      goto default_check;
-    string libdirBasename = libdirBasenameCS;
-    char *prefixCS = dirname(libdirCopy2.get());
-    if (prefixCS == nullptr)
-      goto default_check;
-    string prefix = prefixCS;
-
-// Zack Galbreath, June 2013
-// Detect the build directory by searching for CMakeCache.txt in the
-// parent of librose. If this cannot be found, assume we are running
-// from within an install tree.
-#ifdef USE_CMAKE
-    std::string pathToCache = prefix;
-    pathToCache += "/CMakeCache.txt";
-    if (SgProject::get_verbose() > 1)
-      printf("Inside of roseInstallPrefix libdir = %s pathToCache = %s \n",
-             libdir, pathToCache.c_str());
-    if (std::filesystem::exists(pathToCache)) {
-      return false;
-    }
-#endif
-
-    // Check the librose parent directory name to tell if it is within a build
-    // or installation tree. With CMake, librose is created under build/src.
-    if (libdirBasename == "src") {
-      return false;
-    } else {
-      // the translator must locate in the installation_tree/lib
-      if (libdirBasename != "lib" && libdirBasename != "lib64") {
-        printf("Error: unexpected libdirBasename = %s (result = %s, prefix = "
-               "%s) \n",
-               libdirBasename.c_str(), result.c_str(), prefix.c_str());
-      }
-
-      // DQ (12/5/2009): Is this really what we need to assert?
-      // ROSE_ASSERT (libdirBasename == "lib");
-
-      result = prefix;
-      return true;
-    }
-  }
-#endif
-default_check:
-#ifdef HAVE_DLADDR
-  // Emit a warning that the hard-wired prefix is being used
-  cerr << "Warning: roseInstallPrefix() is using the hard-wired prefix and "
-          "ROSE_IN_BUILD_TREE even though it should be relocatable"
-       << endl;
-#endif
-  // dladdr is not supported, we check an environment variables to tell if the
-  // translator is running from a build tree or an installation tree
-  if (getenv("ROSE_IN_BUILD_TREE") != nullptr) {
-    return false;
-  } else {
-    result = ROSE_INSTALL_PREFIX;
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
+  if (roots.in_install_tree) {
+    result = roots.install_prefix;
     return true;
   }
+  result.clear();
+  return false;
 }
 
 /* This function suffers from the same problems as

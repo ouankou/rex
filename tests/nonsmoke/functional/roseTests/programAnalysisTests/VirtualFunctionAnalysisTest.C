@@ -10,9 +10,44 @@
 
 #include <iostream>
 
+#include <filesystem>
+
 #include <string>
 
+#include "rose_path_resolver.h"
+
 using namespace std;
+
+namespace {
+std::filesystem::path resolveDotOutputDir(const RosePathRoots &roots) {
+  std::filesystem::path output_dir;
+  std::error_code ec;
+  if (!roots.build_root.empty()) {
+    output_dir =
+        std::filesystem::path(roots.build_root) / "tests" / "dot-output";
+  } else {
+    output_dir = std::filesystem::temp_directory_path(ec);
+  }
+  if (ec) {
+    ec.clear();
+    output_dir = std::filesystem::current_path(ec);
+    if (ec) {
+      return std::filesystem::path(".");
+    }
+  }
+
+  ec.clear();
+  std::filesystem::create_directories(output_dir, ec);
+  if (ec) {
+    ec.clear();
+    output_dir = std::filesystem::current_path(ec);
+    if (ec) {
+      return std::filesystem::path(".");
+    }
+  }
+  return output_dir;
+}
+} // namespace
 
 void PrintUsage(char *name) {
   cerr << name << " <options> " << "<program name>" << "\n";
@@ -34,10 +69,14 @@ int main(int argc, char *argv[]) {
 
   printf("DONE: Build the call graph \n");
 
+  RosePathRoots roots = resolveRosePaths(argv[0]);
+  std::filesystem::path dot_output_dir = resolveDotOutputDir(roots);
+
   // Generate call graph in dot format
   AstDOTGeneration dotgen;
-  dotgen.writeIncidenceGraphToDOTFile(builder.getGraph(),
-                                      "full_call_graph.dot");
+  dotgen.writeIncidenceGraphToDOTFile(
+      builder.getGraph(),
+      (dot_output_dir / "full_call_graph.dot").string().c_str());
 
   printf("Calling SageInterface::changeAllBodiesToBlocks() \n");
 
@@ -67,7 +106,8 @@ int main(int argc, char *argv[]) {
   printf("Calling VirtualFunctionAnalysis(): writeIncidenceGraphToDOTFile \n");
 
   AstDOTGeneration dotgen2;
-  dotgen2.writeIncidenceGraphToDOTFile(builder.getGraph(), "call_graph.dot");
+  dotgen2.writeIncidenceGraphToDOTFile(
+      builder.getGraph(), (dot_output_dir / "call_graph.dot").string().c_str());
 
   printf("Calling VirtualFunctionAnalysis(): delete \n");
 

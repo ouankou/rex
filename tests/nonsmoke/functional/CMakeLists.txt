@@ -83,6 +83,42 @@ if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
     COMMAND ${BASH_EXECUTABLE} -c "${_rex_install_cfe_command}"
   )
   set_tests_properties(rex_install_tree_clang_headers PROPERTIES RESOURCE_LOCK ${_functional_lock})
+
+  set(_astquery_input
+    ${CMAKE_CURRENT_SOURCE_DIR}/roseTests/astQueryTests/input1.C)
+  string(CONCAT _rex_install_astquery_command
+    "set -e;"
+    " unset ROSE_HOME ROSE_IN_BUILD_TREE;"
+    " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
+    " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
+    " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"
+    " cd \"$run_dir\";"
+    " \"$install_dir/bin/testQuery\" -c \"${_astquery_input}\";"
+  )
+  add_test(
+    NAME rex_install_tree_astQuery
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${BASH_EXECUTABLE} -c "${_rex_install_astquery_command}"
+  )
+  set_tests_properties(rex_install_tree_astQuery PROPERTIES RESOURCE_LOCK ${_functional_lock})
+
+  set(_astinterface_input
+    ${CMAKE_CURRENT_SOURCE_DIR}/roseTests/astInterfaceTests/inputloopInterchange.C)
+  string(CONCAT _rex_install_astinterface_command
+    "set -e;"
+    " unset ROSE_HOME ROSE_IN_BUILD_TREE;"
+    " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
+    " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
+    " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"
+    " cd \"$run_dir\";"
+    " \"$install_dir/bin/loopInterchange\" -rose:loopInterchange:line 5 -rose:loopInterchange:depth 4 -rose:loopInterchange:order 1 -c \"${_astinterface_input}\";"
+  )
+  add_test(
+    NAME rex_install_tree_astInterface
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${BASH_EXECUTABLE} -c "${_rex_install_astinterface_command}"
+  )
+  set_tests_properties(rex_install_tree_astInterface PROPERTIES RESOURCE_LOCK ${_functional_lock})
 endif()
 
 set(_keep_going_cmd $<TARGET_FILE:KeepGoingTranslator>)

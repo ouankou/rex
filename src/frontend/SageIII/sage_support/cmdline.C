@@ -21,6 +21,8 @@
 
 #include "sage3basic.h"
 
+#include "rose_path_resolver.h"
+
 #include "Outliner.hh"
 
 using namespace Rose; // temporary, until this file lives in namespace Rose
@@ -47,12 +49,14 @@ void Rose::Cmdline::makeSysIncludeList(const Rose_STL_Container<string> &dirs,
                                        Rose_STL_Container<string> &result,
                                        bool using_nostdinc_option) {
 
-  string includeBase =
-      findRoseSupportPathFromBuild("include-staging", "include/clang");
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
+  std::filesystem::path include_base(roots.compiler_header_root);
   for (Rose_STL_Container<string>::const_iterator i = dirs.begin();
        i != dirs.end(); ++i) {
     ROSE_ASSERT(!i->empty());
-    string fullPath = (*i)[0] == '/' ? *i : (includeBase + "/" + *i);
+    std::filesystem::path full_path =
+        (*i)[0] == '/' ? std::filesystem::path(*i) : (include_base / *i);
+    string fullPath = full_path.string();
 
     // DQ (11/8/2011): We want to exclude the /usr/include directory since it
     // will be search automatically by legacy frontend. If we include it here it
