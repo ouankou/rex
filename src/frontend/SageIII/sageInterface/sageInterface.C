@@ -14412,12 +14412,7 @@ void SageInterface::clearUnusedVariableSymbols(SgNode *root /*= NULL */) {
       if (SgSymbolTable *symbolTable =
               isSgSymbolTable(symbolToDelete->get_parent())) {
         if (symbolTable->exists(symbolToDelete)) {
-          if (SgScopeStatement *scope =
-                  isSgScopeStatement(symbolTable->get_parent())) {
-            scope->remove_symbol(symbolToDelete);
-          } else {
-            symbolTable->remove(symbolToDelete);
-          }
+          symbolTable->remove(symbolToDelete);
           symbolToDelete->set_parent(NULL);
         }
       }
