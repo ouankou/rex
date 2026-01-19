@@ -16,6 +16,8 @@
 
 #include <sstream>
 
+#include <stdexcept>
+
 namespace Rose {
 namespace StringUtility {
 
@@ -310,7 +312,7 @@ std::string unescapeString(const std::string &s) {
     if (s[i] == '\\') {
       ROSE_ASSERT(i + 1 < s.length());
       if (i + 1 >= s.length()) {
-        break;
+        throw std::runtime_error("unescapeString: invalid trailing backslash");
       }
       char escaped = s[++i];
       switch (escaped) {

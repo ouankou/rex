@@ -34,6 +34,8 @@
 
 #include <map>
 
+#include <stdexcept>
+
 #include "rose_config.h"
 
 #include <sys/utsname.h>
@@ -231,7 +233,9 @@ Rose::StringUtility::OSType Rose::StringUtility::getOSType() {
 
 void Rose::StringUtility::homeDir(string &dir) {
   const char *home = getenv("HOME");
-  ROSE_ASSERT(home);
+  if (!home || *home == '\0') {
+    throw std::runtime_error("homeDir: HOME environment variable is not set");
+  }
   dir = home;
 }
 

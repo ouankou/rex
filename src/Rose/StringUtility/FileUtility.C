@@ -25,6 +25,8 @@
 
 #include <sstream>
 
+#include <stdexcept>
+
 #include <dirent.h> /* readdir(), etc.                    */
 #include <libgen.h> /* basename(), dirame()               */
 #include <sys/param.h> // AS added to support the function getAbsolutePathFromRelativePath
@@ -71,7 +73,7 @@ std::vector<std::string> readWordsInFile(std::string filename) {
   std::vector<std::string> variantsToUse;
   std::fstream file_op(filename.c_str());
   if (file_op.fail()) {
-    throw std::string("File not found");
+    throw std::runtime_error("File not found: " + filename);
   }
 
   std::string current_word;

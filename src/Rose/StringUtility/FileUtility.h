@@ -107,7 +107,8 @@ ROSE_UTIL_API FileWithLineNumbers readFileWithPos(const std::string &fileName);
 /** Name of the home directory.
  *
  *  Returns the value of the "HOME" environment variable by copying it into the
- * `dir` argument. ROSE_ASSERT triggers if this environment variable is not set.
+ * `dir` argument. Throws an std::runtime_error if this environment variable is
+ * not set.
  *
  * @param dir Receives the home directory path. */
 ROSE_UTIL_API void homeDir(std::string &dir);
@@ -362,8 +363,8 @@ ROSE_UTIL_API int directoryDistance(const std::string &left,
  *
  *  Opens the specified file for reading and reads all words from the file using
  * `std::istream` `operator>>` into `std::string`.  If the file cannot be opened
- * then an std::string error message is thrown. The message reads "File not
- * found" regardless of the actual error condition.
+ * then an std::runtime_error is thrown with a message that includes the file
+ * name.
  *
  * @param filename File to read.
  * @return List of words. */
