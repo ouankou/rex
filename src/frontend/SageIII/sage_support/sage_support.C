@@ -549,7 +549,7 @@ static std::string resolveRoseSupportPath(const std::string &root,
 
 string findRoseSupportPathFromSource(const string &sourceTreeLocation,
                                      const string &installTreeLocation) {
-  RosePathRoots roots = resolveRosePaths(nullptr);
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
   if (roots.in_install_tree) {
     return resolveRoseSupportPath(roots.install_prefix, installTreeLocation);
   }
@@ -558,7 +558,7 @@ string findRoseSupportPathFromSource(const string &sourceTreeLocation,
 
 string findRoseSupportPathFromBuild(const string &buildTreeLocation,
                                     const string &installTreeLocation) {
-  RosePathRoots roots = resolveRosePaths(nullptr);
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
   if (roots.in_install_tree) {
     return resolveRoseSupportPath(roots.install_prefix, installTreeLocation);
   }
@@ -567,7 +567,7 @@ string findRoseSupportPathFromBuild(const string &buildTreeLocation,
 
 //! Resolve the installation prefix if running from an install tree.
 bool roseInstallPrefix(std::string &result) {
-  RosePathRoots roots = resolveRosePaths(nullptr);
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
   if (roots.in_install_tree) {
     result = roots.install_prefix;
     return true;

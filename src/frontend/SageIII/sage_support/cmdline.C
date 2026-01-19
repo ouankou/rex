@@ -49,7 +49,7 @@ void Rose::Cmdline::makeSysIncludeList(const Rose_STL_Container<string> &dirs,
                                        Rose_STL_Container<string> &result,
                                        bool using_nostdinc_option) {
 
-  RosePathRoots roots = resolveRosePaths(nullptr);
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
   std::filesystem::path include_base(roots.compiler_header_root);
   for (Rose_STL_Container<string>::const_iterator i = dirs.begin();
        i != dirs.end(); ++i) {

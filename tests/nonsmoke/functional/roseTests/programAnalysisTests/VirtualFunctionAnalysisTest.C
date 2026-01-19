@@ -21,17 +21,29 @@ using namespace std;
 namespace {
 std::filesystem::path resolveDotOutputDir(const RosePathRoots &roots) {
   std::filesystem::path output_dir;
+  std::error_code ec;
   if (!roots.build_root.empty()) {
     output_dir =
         std::filesystem::path(roots.build_root) / "tests" / "dot-output";
   } else {
-    std::error_code ec;
     output_dir = std::filesystem::temp_directory_path(ec);
   }
-  std::error_code ec;
+  if (ec) {
+    ec.clear();
+    output_dir = std::filesystem::current_path(ec);
+    if (ec) {
+      return std::filesystem::path(".");
+    }
+  }
+
+  ec.clear();
   std::filesystem::create_directories(output_dir, ec);
   if (ec) {
+    ec.clear();
     output_dir = std::filesystem::current_path(ec);
+    if (ec) {
+      return std::filesystem::path(".");
+    }
   }
   return output_dir;
 }
