@@ -38,6 +38,8 @@
 
 #include "rose_config.h"
 
+#include "rose_path_resolver.h"
+
 #include <sys/utsname.h>
 
 using namespace std;
@@ -141,9 +143,11 @@ Rose::StringUtility::FileNameLibrary classifyLibrary(const string &fileName) {
   if (fileName.find("lib/gcc") != string::npos) {
     return Rose::StringUtility::FILENAME_LIBRARY_GCC;
   }
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
   if (fileName.find("rose.h") != string::npos ||
-      fileName.find("include-staging/g++_HEADERS") != string::npos ||
-      fileName.find("include-staging/gcc_HEADERS") != string::npos) {
+      rosePathIsWithinTree(roots.rose_include_root, fileName) ||
+      rosePathIsWithinTree(roots.compiler_header_root, fileName) ||
+      rosePathIsWithinTree(roots.builtin_header_root, fileName)) {
     return Rose::StringUtility::FILENAME_LIBRARY_ROSE;
   }
 

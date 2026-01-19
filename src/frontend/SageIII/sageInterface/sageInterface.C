@@ -16,6 +16,8 @@
 
 #include "rose_config.h"
 
+#include "rose_path_resolver.h"
+
 #include <cstdlib>
 
 #if ROSE_WITH_LIBHARU
@@ -23891,18 +23893,12 @@ bool SageInterface::insideSystemHeader(SgLocatedNode *node) {
   Sg_File_Info *finfo = node->get_file_info();
   if (finfo != NULL) {
     string fname = finfo->get_filenameString();
-    string buildtree_str1 = string("include-staging/gcc_HEADERS");
-    string buildtree_str2 = string("include-staging/g++_HEADERS");
-    string installtree_str1 = string("include/clang/gcc_HEADERS");
-    string installtree_str2 = string("include/clang/g++_HEADERS");
-    string system_headers = string("/usr/include");
-    // if the file name has a sys header path of either source or build tree
-    if ((fname.find(buildtree_str1, 0) != string::npos) ||
-        (fname.find(buildtree_str2, 0) != string::npos) ||
-        (fname.find(installtree_str1, 0) != string::npos) ||
-        (fname.find(installtree_str2, 0) != string::npos) ||
-        (fname.find(system_headers, 0) != string::npos))
+    static const RosePathRoots roots = resolveRosePaths(nullptr);
+    if (rosePathIsWithinTree(roots.compiler_header_root, fname) ||
+        rosePathIsWithinTree(roots.builtin_header_root, fname) ||
+        rosePathIsWithinTree("/usr/include", fname)) {
       rtval = true;
+    }
   }
   return rtval;
 }
