@@ -968,8 +968,6 @@ set(CXX11_DISABLED_TESTCODES
   test2019_280.C
   test2019_285.C
   test2019_286.C
-  test2019_287.C
-  test2019_288.C
   test2019_296.C
   test2019_297.C
   test2019_301.C
