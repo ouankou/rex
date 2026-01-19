@@ -227,10 +227,10 @@ bool is_within_tree(const path &root, const path &candidate) {
   std::error_code ec;
   path canonical_root = std::filesystem::weakly_canonical(root, ec);
   if (ec) {
-    std::fprintf(
-        stderr,
-        "ROSE warning: weakly_canonical failed for root path '%s': %s\n",
-        root.string().c_str(), ec.message().c_str());
+    std::fprintf(stderr,
+                 "ROSE fatal: weakly_canonical failed for root path '%s': %s\n",
+                 root.string().c_str(), ec.message().c_str());
+    ROSE_ASSERT(!ec);
     return false;
   }
   ec.clear();
@@ -238,8 +238,9 @@ bool is_within_tree(const path &root, const path &candidate) {
   if (ec) {
     std::fprintf(
         stderr,
-        "ROSE warning: weakly_canonical failed for candidate path '%s': %s\n",
+        "ROSE fatal: weakly_canonical failed for candidate path '%s': %s\n",
         candidate.string().c_str(), ec.message().c_str());
+    ROSE_ASSERT(!ec);
     return false;
   }
   auto root_it = canonical_root.begin();
@@ -262,16 +263,18 @@ bool is_same_path(const path &left, const path &right) {
   path canonical_left = std::filesystem::weakly_canonical(left, ec);
   if (ec) {
     std::fprintf(stderr,
-                 "ROSE warning: weakly_canonical failed for path '%s': %s\n",
+                 "ROSE fatal: weakly_canonical failed for path '%s': %s\n",
                  left.string().c_str(), ec.message().c_str());
+    ROSE_ASSERT(!ec);
     return false;
   }
   ec.clear();
   path canonical_right = std::filesystem::weakly_canonical(right, ec);
   if (ec) {
     std::fprintf(stderr,
-                 "ROSE warning: weakly_canonical failed for path '%s': %s\n",
+                 "ROSE fatal: weakly_canonical failed for path '%s': %s\n",
                  right.string().c_str(), ec.message().c_str());
+    ROSE_ASSERT(!ec);
     return false;
   }
   return canonical_left == canonical_right;
