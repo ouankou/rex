@@ -1,5 +1,5 @@
 Support for tracking transformation operations performed on AST.
-The tracked transformations can be used to map ASTs between transformations. 
+The tracked transformations can be used to map ASTs between transformations.
 
 This is particularly useful to relate high level AST to low level ones.
 

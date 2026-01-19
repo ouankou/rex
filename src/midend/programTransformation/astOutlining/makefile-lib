@@ -1,4 +1,4 @@
-all:liboutlining.a	
+all:liboutlining.a
 
 outlining_lib.o: outlining_lib.c
 	g++ -c $< -o $@

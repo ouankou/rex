@@ -5,7 +5,7 @@ January 2016:
       a. OFP (new version) currently handles free-form formated files
          and is tested on a NCAR CESM Fortran code. This code base includes POP.
          Available from: (get this from Craig)
-         Registered at NCAR CESM site: 
+         Registered at NCAR CESM site:
              user name: guestuser password: friendly
          We should include these codes into the ROSE regeression tests, but not released in ROSE.
       b. Craig will also add the ROSE fortran regression tests at some point.
@@ -28,5 +28,5 @@ December 2017:
        - set_dim_info(SgExprListExp*)
        - set_rank(int)  # should be size_t
        - set_is_variable_length_array(bool)
-       - set_base_type(SgType*) 
+       - set_base_type(SgType*)
    3) Experimental_General_Language_Support

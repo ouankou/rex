@@ -1,4 +1,4 @@
-This is a list of the problems that I'm having with the 
+This is a list of the problems that I'm having with the
 Sept 12 release (checked out morning of Sept 13th).
 
 Needed to update all the JNI files into ROSE:
@@ -10,7 +10,7 @@ cp /home/dquinlan/ROSE/OpenFortranParser/fortran-parser/src/parser/c/jni/c_actio
 
 
 1) R428 is incorrectly associated with char-literal-constant but should be R427.
- 
+
 
 2) At first sign of error, end parser with appropriate error code.  The following
 example shows that additional c_actions continue to be called even after an
@@ -86,6 +86,6 @@ So we should be able to set the LD_BIND_NOW environment variable to
 test strict resolution.
 
 Thanks,
--- Peter 
+-- Peter
 
 

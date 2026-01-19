@@ -19176,7 +19176,7 @@ SgTemplateArgument::display( const std::string & label) const
      ASSERT_this();
 
   // DQ (5/12/2024): Added debugging information.
-     printf ("In SgTemplateArgument::display(label = %s): get_argumentType() = %s \n",label.c_str(),this->template_argument_kind().c_str()); 
+     printf ("In SgTemplateArgument::display(label = %s): get_argumentType() = %s \n",label.c_str(),this->template_argument_kind().c_str());
 
      switch (get_argumentType())
         {

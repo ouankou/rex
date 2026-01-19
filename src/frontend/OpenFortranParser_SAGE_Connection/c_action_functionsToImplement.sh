@@ -1,6 +1,6 @@
 #! /bin/sh
 
-# This script generate the list of functions required to be implemented 
+# This script generate the list of functions required to be implemented
 # to support strict dynamic linking that requires even unexecuted functions
 # to be present as defined symbols.  This is a difference between the java
 # class loaders on our machines at LLNL and the stricter class loaders on

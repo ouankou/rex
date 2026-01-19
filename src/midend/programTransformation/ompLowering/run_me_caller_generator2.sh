@@ -17,8 +17,8 @@ echo " * To regenerate run_me_callers2.inc, type $0 > run_me_callers2.inc */"
 for ((c=1; c<=$MAX_PARAMETER_COUNT; c++))
 do
   echo "      case $c:"
-# Fortran OpenMP lowering uses array of pointers, no special copy function is needed. We pass 0 here directly  
+# Fortran OpenMP lowering uses array of pointers, no special copy function is needed. We pass 0 here directly
 #  echo "            XOMP_task(run_me_$c, (void*) g_parameter, 0, *arg_size, *arg_align, *if_clause, *untied);"
   echo "            XOMP_task(run_me_task_$c, (void*) pg_parameter, cpyfn, larg_size, larg_align, bif_clause, uuntied);"
   echo "            break; "
-done  
+done

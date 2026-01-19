@@ -42,5 +42,5 @@
     * SELECTED_CHAR_KIND intrinsic
     * The following intrinsics take an optional KIND= argument: ACHAR, COUNT, IACHAR, ICHAR, INDEX, LBOUND, LEN, LEN_TRIM, MAXLOC, MINLOC, SCAN, SHAPE, SIZE, UBOUND, VERIFY
     * ISO_C_BINDING intrinsic module
-    * ISO_FORTRAN_ENV intrinsic module 
+    * ISO_FORTRAN_ENV intrinsic module
 

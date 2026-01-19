@@ -1,7 +1,7 @@
 This directory implements the details of the SageIII IR used in ROSE.
 
 Documentation for lexical preprocessing step called by ROSE to collect
-list of comments, preprocessor directives, and recently the token 
+list of comments, preprocessor directives, and recently the token
 stream.
 
 preproc.lex:
@@ -15,9 +15,9 @@ a rewrite of the first version of the code (preproc.lex)
 
 preproc.lex.5-10-2007:
 Third version by Rama.  This version fixes comment handling,
-better matching construct handling, keyword handling (with 
+better matching construct handling, keyword handling (with
 techniques developed in Fortran preprocessor) and has a lot
-of C and C++ techniques which will provide for better 
+of C and C++ techniques which will provide for better
 lexical processing of C and C++.
 
 
@@ -36,7 +36,7 @@ Generated files include (complete list as of 5/27/2007):
       definitions.
 
    Cxx_GrammarTreeTraversalAccessEnums.h
-      Generation of enum values used in the synthesized attributes and in 
+      Generation of enum values used in the synthesized attributes and in
       tests against the variant (see get_variantT() function in documentation).
 
    Cxx_GrammarNewConstructors.C
@@ -60,8 +60,8 @@ Generated files include (complete list as of 5/27/2007):
       Generated new and delete operators (implements memory pools for each IR class).
 
    Cxx_GrammarCheckingIfDataMembersAreInMemoryPool.C
-      Generated functions for checking if data members are in the memory pool (since they 
-      could in theory be on the stack or in global scope etc. and we only support fast 
+      Generated functions for checking if data members are in the memory pool (since they
+      could in theory be on the stack or in global scope etc. and we only support fast
       file I/O for those in the heap).  In practice all IR nodes are in the heap, but it
       is possible for users to not do so and so this is the test to support these details
       in the AST file I/O.
@@ -82,7 +82,7 @@ Generated files include (complete list as of 5/27/2007):
       More generated functions supporting the AST file I/O.  These generate the functions
       to support computation of unique index values in to the global memory pool of all IR
       nodes.  These are called in a way that makes there semantics unclear.
- 
+
 **********************************************************************
 *                    Summaries of directories                        *
 **********************************************************************
@@ -101,7 +101,7 @@ Here we summarize the separate sub-directoies of this directory:
 
    astFixup
       This is the location of code which makes corrections to the AST after construction.
-      Most of these eventually make there way into the generation of the AST so that is 
+      Most of these eventually make there way into the generation of the AST so that is
       does not need to be fixed up afterward, but some are either implemented here or
       are placed here and fixed in the generation of the AST later.
 
@@ -141,43 +141,43 @@ Here we summarize the separate sub-directoies of this directory:
 
 Aterm support notes:
    1) Function declated in generated header ROSE IR files:
-static SgTemplateParameter* 
+static SgTemplateParameter*
 build_node_from_nonlist_children(
-   SgTemplateParameter::template_parameter_enum parameterType = parameter_undefined, 
-   SgType* type = NULL, 
-   SgType* defaultTypeParameter = NULL, 
-   SgExpression* expression = NULL, 
-   SgExpression* defaultExpressionParameter = NULL, 
-   SgDeclarationStatement* templateDeclaration = NULL, 
-   SgDeclarationStatement* defaultTemplateDeclarationParameter = NULL, 
-   SgInitializedName* initializedName = NULL); 
+   SgTemplateParameter::template_parameter_enum parameterType = parameter_undefined,
+   SgType* type = NULL,
+   SgType* defaultTypeParameter = NULL,
+   SgExpression* expression = NULL,
+   SgExpression* defaultExpressionParameter = NULL,
+   SgDeclarationStatement* templateDeclaration = NULL,
+   SgDeclarationStatement* defaultTemplateDeclarationParameter = NULL,
+   SgInitializedName* initializedName = NULL);
 
 // Function used in generated source file for aterm support:
-returnNode = 
+returnNode =
 SgTemplateParameter::build_node_from_nonlist_children(
-   local_expression, 
-   local_defaultExpressionParameter, 
-   local_templateDeclaration, 
-   local_defaultTemplateDeclarationParameter, 
-   local_initializedName); 
+   local_expression,
+   local_defaultExpressionParameter,
+   local_templateDeclaration,
+   local_defaultTemplateDeclarationParameter,
+   local_initializedName);
 
 
 The bug is that I am missing:
-   SgTemplateParameter::template_parameter_enum parameterType = parameter_undefined, 
-   SgType* type = NULL, 
-   SgType* defaultTypeParameter = NULL, 
+   SgTemplateParameter::template_parameter_enum parameterType = parameter_undefined,
+   SgType* type = NULL,
+   SgType* defaultTypeParameter = NULL,
 
 These are used in the SgTemplateParameter constructor in the legacy frontend/ROSE translation.
 There is no build function in the SageBuilder namespace.
 
-returnNode = 
+returnNode =
 SgTemplateParameter::build_node_from_nonlist_children(
-   local_type, 
-   local_defaultTypeParameterlocal_expression, 
-   local_defaultExpressionParameter, 
-   local_templateDeclaration, 
-   local_defaultTemplateDeclarationParameter, 
-   local_initializedName); 
+   local_type,
+   local_defaultTypeParameterlocal_expression,
+   local_defaultExpressionParameter,
+   local_templateDeclaration,
+   local_defaultTemplateDeclarationParameter,
+   local_initializedName);
 
    2) There is nothing to say what the elements are of an IR node that has a container.
       So this has to be handled via some specific function that will be case oriented.

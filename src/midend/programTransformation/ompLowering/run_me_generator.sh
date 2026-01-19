@@ -26,7 +26,7 @@ do
     else
       echo "              void *);"
     fi
-  done  
+  done
   echo "  FUNC_P func;"
   echo "  func =(FUNC_P) (((void**)data)[0]);"
 
@@ -39,7 +39,7 @@ do
       echo "              ((void**)data)[$e]);"
     fi
 
-  done  
+  done
   echo "}"
 
-done  
+done

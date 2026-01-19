@@ -1,7 +1,7 @@
 
-! =================================================================================== 
-! <<Automatically generated for Rose Fortran Separate Compilation, DO NOT MODIFY IT>> 
-! =================================================================================== 
+! ===================================================================================
+! <<Automatically generated for Rose Fortran Separate Compilation, DO NOT MODIFY IT>>
+! ===================================================================================
 
 MODULE openacc
 CONTAINS
@@ -9,7 +9,7 @@ CONTAINS
 LOGICAL :: acc_is_present
 REAL, DIMENSION(*) :: a
 INTEGER :: len
-END  FUNCTION 
+END  FUNCTION
 
 END MODULE openacc
 

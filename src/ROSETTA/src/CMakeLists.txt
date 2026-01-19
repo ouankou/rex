@@ -31,37 +31,37 @@ set(CxxGrammarMetaProgram_SRCS
 
 # input files to generate source files
 set(GRAMMAR_SOURCE_FILES
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Node.code 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Statement.code 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarClassDefinitionMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarVariantFunctionDefinitionMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Common.code 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Support.code 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarConstructorDefinitionMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/node.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Cxx_GlobalDeclarations.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Symbol.code 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarDestructorDefinitionMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/parserCode.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Cxx_Support_Header.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Type.code 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarIsClassNameFunctionDefinitionMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/parserPrototype.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Expression.code 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/copyMemberFunction.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarMainClassDeclatationMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/parserSourceCode.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/LocatedNode.code 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/dataMemberAccessFunctions.macro 
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Node.code
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Statement.code
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarClassDefinitionMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarVariantFunctionDefinitionMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Common.code
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Support.code
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarConstructorDefinitionMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/node.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Cxx_GlobalDeclarations.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Symbol.code
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarDestructorDefinitionMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/parserCode.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Cxx_Support_Header.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Type.code
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarIsClassNameFunctionDefinitionMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/parserPrototype.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/Expression.code
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/copyMemberFunction.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarMainClassDeclatationMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/parserSourceCode.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/LocatedNode.code
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/dataMemberAccessFunctions.macro
   ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarMainClassParseFunctionSourceCode.macro
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarClassDeclarationMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarMainClassSourceCodeMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarNewDeleteOperatorMacros.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarTraverseMemoryPool.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarCheckingIfDataMembersAreInMemoryPool.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarReturnDataMemberPointers.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarProcessDataMemberReferenceToPointers.macro 
-  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarGetChildIndex.macro 
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarClassDeclarationMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarMainClassSourceCodeMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarNewDeleteOperatorMacros.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarTraverseMemoryPool.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarCheckingIfDataMembersAreInMemoryPool.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarReturnDataMemberPointers.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarProcessDataMemberReferenceToPointers.macro
+  ${CMAKE_SOURCE_DIR}/src/ROSETTA/Grammar/grammarGetChildIndex.macro
   ../astNodeList)
 
 add_executable(CxxGrammarMetaProgram ${CxxGrammarMetaProgram_SRCS})
@@ -78,13 +78,13 @@ endif()
 # define a custom command to call the code generator and generate source/header files
 # Generate the Sage III grammar using ROSETTA
 add_custom_command(
-  OUTPUT ${ROSETTA_HEADERS} ${ROSETTA_SRC} 
+  OUTPUT ${ROSETTA_HEADERS} ${ROSETTA_SRC}
   # depend on the code generator and input files
-  DEPENDS CxxGrammarMetaProgram ${GRAMMAR_SOURCE_FILES} 
+  DEPENDS CxxGrammarMetaProgram ${GRAMMAR_SOURCE_FILES}
   # We need to copy the input files to the build tree since the code generator will output the generated source files
   # into the same directory as where the input files locate
   COMMAND ${CMAKE_COMMAND}  -E copy_directory  ${ROSE_TOP_SRC_DIR}/src/ROSETTA/Grammar ${ROSE_TOP_BINARY_DIR}/src/ROSETTA/Grammar
-  # create this directory is needed since a few generated files will be put there        
+  # create this directory is needed since a few generated files will be put there
   # COMMAND echo  "META_EXE_LOC =  ${META_EXE_LOC} ARGS ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/"
   # STRING(REGEX REPLACE "\\\\" "/" META_EXE_LOC ${META_EXE_LOC} )
   # COMMAND echo  "META_EXE_LOC =  ${META_EXE_LOC} ARGS ${ROSE_TOP_BINARY_DIR}/src/frontend/SageIII/"

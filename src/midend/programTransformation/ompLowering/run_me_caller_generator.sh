@@ -18,4 +18,4 @@ do
   echo "      case $c:"
   echo "            XOMP_parallel_start (run_me_$c, (void*) g_parameter, *ifClauseValue, *numThread, NULL, 0);"
   echo "            break; "
-done  
+done

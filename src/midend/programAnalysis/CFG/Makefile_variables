@@ -16,7 +16,7 @@ mpaCFG_includes=\
 
 # DQ (2/11/2010): ROSE currently fails to generate code for this CFG_OA.C file (it does however compile for analysis only).
 # Also it does not appear that ROSE requires this CFG_OA.C file, so I have removed it.
-# libCFGSources =  CFG_ROSE.C CFG_OA.C 
+# libCFGSources =  CFG_ROSE.C CFG_OA.C
 mpaCFG_la_sources=\
 	$(mpaCFGPath)/CFG_ROSE.C
 

@@ -14,7 +14,7 @@ Performance Ideas:
 
    6) Test at higher level of optimization
 
-Build a performance evaluation function that can be used to report the performance of the 
+Build a performance evaluation function that can be used to report the performance of the
 different parts of the hidden list computation.
 
 Things to time at a greater resolution:
@@ -23,8 +23,8 @@ Things to time at a greater resolution:
    3) NamespacesAndClassTraversal :: evaluateInheritedAttribute
    4) NamespacesAndClassTraversal :: evaluateInheritedAttribute (block at line 204)
               if( isSgVariableDeclaration(n) || isSgFunctionDeclaration(n) ||
-                  isSgTypedefDeclaration(n) || isSgClassDeclaration(n) || isSgEnumDeclaration(n) || 
-                  isSgNamespaceDeclarationStatement(n) || isSgTemplateDeclaration(n) || 
+                  isSgTypedefDeclaration(n) || isSgClassDeclaration(n) || isSgEnumDeclaration(n) ||
+                  isSgNamespaceDeclarationStatement(n) || isSgTemplateDeclaration(n) ||
                   isSgUsingDirectiveStatement(n) ||isSgUsingDeclarationStatement(n) ) {
 
    5) HiddenListComputationTraversal :: evaluateInheritedAttribute

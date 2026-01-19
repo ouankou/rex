@@ -13,7 +13,7 @@ if [ $numargs -le 2 ]; then
   exit
 fi
 i=0;
-for file in $allargs; do 
+for file in $allargs; do
   if [ $i -ge 2 ]; then
     if [ -e $file ]; then
 

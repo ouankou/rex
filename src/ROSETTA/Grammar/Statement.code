@@ -7842,7 +7842,7 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
 			                   }
 		                 }
 		               }
-	
+
 		               returnName = buildTemplateNameWithArguments(
 		                       returnName, *templateArgListPtr, parentScope, functionTemplateArguments);
 
@@ -9673,7 +9673,7 @@ SgFunctionDeclaration::get_mangled_name() const
 #if DEBUG_FUNCDECL_MANGLED_NAMES
           printf ("Inside of SgFunctionDeclaration::get_mangled_name(): mangledName = %s \n",mangledName.str());
 #endif
-// DQ (6/22/2022): Leave this call to SageInterface::addMangledNameToCache(), but remove 
+// DQ (6/22/2022): Leave this call to SageInterface::addMangledNameToCache(), but remove
 // the addition of the parameter list's mangled name as a suffix since it is redundant,
 // and the resetting of the updated mangled name in the globalMangledNameMap.
 // #if 1
@@ -14193,7 +14193,7 @@ SgTemplateClassDefinition::set_declaration(SgTemplateClassDeclaration* new_val)
    {
   // QY: 10-4-04 removed declaration pointer. use parent pointer instead
      ROSE_ASSERT(this != NULL);
-     
+
      // ISSUE-107 ROOT CAUSE FIX: When a definition sets its declaration pointer,
      // ensure the declaration has a valid firstNondefiningDeclaration.
      // This prevents the case where the unparser traverses via get_declaration()
@@ -14203,7 +14203,7 @@ SgTemplateClassDefinition::set_declaration(SgTemplateClassDeclaration* new_val)
              new_val->set_firstNondefiningDeclaration(new_val);
          }
      }
-     
+
      set_parent(new_val);
    }
 

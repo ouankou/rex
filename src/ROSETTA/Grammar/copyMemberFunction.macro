@@ -5,16 +5,16 @@ virtual $GRAMMAR_PREFIX_Node* $CLASSNAME::copy ( $GRAMMAR_PREFIX_CopyHelp& help)
 
   // printf ("Copy $CLASSNAME = %p = %s \n",this,SageInterface::get_name(this).c_str());
 
-  // Record the depth of the copy so that we build an clear internal state (new feature) 
+  // Record the depth of the copy so that we build an clear internal state (new feature)
   // used to associated old and new symbols in the original AST and the copy of the AST.
   // The default value of the depth is 0, so after this call the depth is 1!
      help.incrementDepth();
 
 
   // Copy data members from base classes
-$CONSTRUCT_ARG_COPY 
+$CONSTRUCT_ARG_COPY
 
-  // Build an empty copy of this object (will be filled in, but 
+  // Build an empty copy of this object (will be filled in, but
   // the parent can't be set and must be set by the caller)
      result = new $CLASSNAME( $CONSTRUCT_ARG_LIST );
      ROSE_ASSERT(result != NULL);
@@ -26,7 +26,7 @@ $POST_CONSTRUCT_COPY
   // DQ (10/5/2007): Add custom function to be called to fixup IR node specific details.
   // fixupCopy(result,help);
 
-  // DQ (10/16/2007): The semantics of copy should include setting the parents of all 
+  // DQ (10/16/2007): The semantics of copy should include setting the parents of all
   // the Sg_File_Info objects that are built for the new IR nodes.
      SgLocatedNode* locatedNode = isSgLocatedNode(result);
      if (locatedNode != NULL)
@@ -83,7 +83,7 @@ $POST_CONSTRUCT_COPY
 
   // printf ("End of copy $CLASSNAME = %p = %s \n",this,SageInterface::get_name(this).c_str());
 
-  // Record the depth of the copy so that we build an clear internal state (new feature) 
+  // Record the depth of the copy so that we build an clear internal state (new feature)
   // used to associated old and new symbols in the original AST and the copy of the AST.
      help.decrementDepth();
 

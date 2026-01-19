@@ -16,7 +16,7 @@ we permit user defined types and their expressions and statements to be
 treated as implicit keywords within an user's application.
 
 1.  Terminals and non-terminals can be easily added to the existing grammar
-by the specification of new terminals.  
+by the specification of new terminals.
 
      A. The inclusion of a new statement type
 for example adds an X statement to the existing grammar.
@@ -54,14 +54,14 @@ Example of adding a new type to a grammar (expansion):
 
      Grammar X_Grammar ("X_Grammar","XG_","ROSE_BaseGrammar",&sageGrammar);
 
-  // Build a new terminal as a copy of an existing terminal (this leverages the 
+  // Build a new terminal as a copy of an existing terminal (this leverages the
   // existing terminals implementation and can be sublemented with constraints).
   // Copy a terminal and give it a new name (with a new tag name).
-  // The copy is then a child of the copied terminal, parsing the parent triggers the 
-  // parsing of the children (constraints are tested and a child is built if a constraint 
+  // The copy is then a child of the copied terminal, parsing the parent triggers the
+  // parsing of the children (constraints are tested and a child is built if a constraint
   // test passes, else the parent is built).
   // In the tree heirarchy the new terminal is DERIVED from the parent (thus the doubleArrayType
-  // is derived from the ClassType.  This makes sense because the doubleArrayType is a 
+  // is derived from the ClassType.  This makes sense because the doubleArrayType is a
   // "specialization" of the X_ClassType terminal).
      AstNodeClass & doubleArrayType = X_Grammar.getTerminal("ClassType").copy("doubleArrayType","DOUBLE_ARRAY_TYPE_TAG");
 
@@ -69,7 +69,7 @@ Example of adding a new type to a grammar (expansion):
      char* constraintString = "isSgClassDeclaration() && isSgClassDeclaration()->getName() == \"doubleArray\"";
      doubleArrayType.addConstraint("declaration",constraintString);
 
-  // Adding a terminal to the grammar will automatically place the 
+  // Adding a terminal to the grammar will automatically place the
   // terminal in the correct location within the tree heirarchy
      X_Grammar.addNewTerminal(doubleArrayType);
 
@@ -106,12 +106,12 @@ as a special (e.g. "X" expression) within the program tree.
 
 
 Example of restriction (removal of elements from the grammar):
-    
+
      X_Grammar.removeType("doubleArray");
 
 3.  Addition and specification of explicit semantics:
 
-  // Here we endow the "X" class with predefined semantics 
+  // Here we endow the "X" class with predefined semantics
   // to simplify the specification of the transformations
      X.hasCollectionElementSemantics(TRUE);
      X.hasArraySemantics(TRUE);

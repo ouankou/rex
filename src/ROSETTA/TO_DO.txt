@@ -3,7 +3,7 @@ ROSE Work Plan:
 Task 1:      Defining grammars and the parsers that
              translate the program tree between them.
 
-Milestone 1: Implementation of ROSE that can build program 
+Milestone 1: Implementation of ROSE that can build program
              trees for each grammar (one per grammar). Sufficient
              for processing of array application code.
 
@@ -12,21 +12,21 @@ Task 2:      Specification of transformations
 Milestone 2: Implemetation of transformation mechanism sufficient for
              specification of the array assignment statement transformation.
 
-Task 3:      Define calling sequence of small transformations to generate 
+Task 3:      Define calling sequence of small transformations to generate
              array assignment transformation.
 
-Milestone 3: Demonstrate transformation mechanism together with program tree 
+Milestone 3: Demonstrate transformation mechanism together with program tree
              generation using different grammars.
 
-Task 4:      Define mechanism to read class header file to define expression 
+Task 4:      Define mechanism to read class header file to define expression
              terminals of grammar specific to class member functions (e.g. sin, cos, etc.)
 
-Milestone 4: Implementation of suplimentary mechanism to read class header files 
+Milestone 4: Implementation of suplimentary mechanism to read class header files
              and add expression terminals for class member functions.
 
 
 
-   Separate Projects: 
+   Separate Projects:
        1) Sage 3 Unparser
        2) Rosetta
        3) Sage 3 (C++ grammar)
@@ -38,7 +38,7 @@ Milestone 4: Implementation of suplimentary mechanism to read class header files
    *2) Get ROSE into shape so that we can use it for the array assignment transformation
        a) Fix a few bugs in SAGE3 as required (save many bugs fixes for later)
        b) Work on Rosetta
-          1. Automate generation of more of the code required to do the general 
+          1. Automate generation of more of the code required to do the general
              assignment transformation
              a. Parsers
              b. Transform functions (this is the hard part)
@@ -106,8 +106,8 @@ Bugs to fix in the grammar generation:
       construction through ussing the output of the operator|().
 
 Design Issues:
-   1)  We have to generate a LOT of different grammars (independent of the mechanism to 
-       define where transformations could be specified using program tree fragments and 
+   1)  We have to generate a LOT of different grammars (independent of the mechanism to
+       define where transformations could be specified using program tree fragments and
        user defined generalizers).
 
    2)  The hard part of ROSE seems to be in the design of Rosetta (the code generator
@@ -117,7 +117,7 @@ Design Issues:
 
    4)  Optimizations associated with loops (need something like ATLAS for array statements):
           1) Design a tool similar to ATLAS but specific to array operations
-             (could be made more general using loops parted in a user application and 
+             (could be made more general using loops parted in a user application and
               extracted using ROSE).
           2) Need to identify the independent parameters in the optimization of array statements:
              a) Serial
@@ -127,23 +127,23 @@ Design Issues:
                 4) statement fusion
                 5) arithmetic pipelining
                 6) register optimizations
-                7) temporary elimination (reuse of small blocks for the 
-                   division of large temporaries into a smaller block 
+                7) temporary elimination (reuse of small blocks for the
+                   division of large temporaries into a smaller block
                    (that fits in cache) that is reused).
              b) Parallel
                 1) Message passing aggregation
                 2) Message passing scheduling
-          
+
           3) For a particular architecture we need to search the parameter space to identify the
              best parameters to use within the optimization of array statements (or more generally
              called out application program loops).
-          4) Need a flexible mechanism for building code generators to gets the optimization 
-             parameter space for a user defined application program loop (or in the restricted 
+          4) Need a flexible mechanism for building code generators to gets the optimization
+             parameter space for a user defined application program loop (or in the restricted
              case an array statement).
 
    5) How to automatically generate the parsers for a higher level grammar (beyond the C++ grammar).
 
-      The design of ROSETTA makes it simple to implement terminal specific 
+      The design of ROSETTA makes it simple to implement terminal specific
       code (so this should guide the result).
 
           1) Single master function approach:
@@ -173,12 +173,12 @@ Design Issues:
                       else
                        {
 
-                      // Apply constraints to restrict grammar from C++ grammar 
+                      // Apply constraints to restrict grammar from C++ grammar
                       // (no constraints means it behaves just like the C++ grammar!)
-                      // Let the constraints be functions taking a SgNode (or root node 
+                      // Let the constraints be functions taking a SgNode (or root node
                       // of the lower level grammar) and returning a boolean value.
                          constraintList::iterator i;
-                         for (i = ROSE_StatementBlock::grammarContraintList.begin(); 
+                         for (i = ROSE_StatementBlock::grammarContraintList.begin();
                               i != ROSE_StatementBlock::grammarContraintList.end(); i++)
                             {
                               if ( !(*i)->*function(roseStatementBlock) )
@@ -210,10 +210,10 @@ Design Issues:
          d) Generate the grammar from the class declaration
             1. Statements in the grammar would be all valid C++ statements
                (perhaps using partial/complete modifiers)
-            2. Possible expressions can not be know from the C++ grammar's definition 
-               since defined member functionscontribute to the list of expressions 
+            2. Possible expressions can not be know from the C++ grammar's definition
+               since defined member functionscontribute to the list of expressions
                for which terminals in ther grammar must be defined.
-            3. Additional Types are just the names of the classes input to ROSE 
+            3. Additional Types are just the names of the classes input to ROSE
                (doubleArray,floatArray,intArray, etc.)
                a) Need a mechanism to specify hierarchies of types or we could expect
                   that they would be represented within the implementation fo the
@@ -236,24 +236,24 @@ Design Issues:
 
       5) Grammar Sequencing:
          Don't forget the sequence the parsing from one grammar into another, a Grammar always must have
-         had it's root grammar parser first (so we should be able to use this to automate the ordering of the 
+         had it's root grammar parser first (so we should be able to use this to automate the ordering of the
          parsing of the grammars!).
 
       6) We have to be able to build higher level grammars from lower level grammars.
-      We require a simple way to specify the construction of grammars using pieces 
+      We require a simple way to specify the construction of grammars using pieces
       of other grammars.  This together with a simple mechanism to define transformations
       would complete ROSE!
 
-      Question: If we have a mechanism to build any kind of grammar, what kind of 
+      Question: If we have a mechanism to build any kind of grammar, what kind of
                 grammar to we want to build?
-      Answer  : Either the ideal grammar tailored to our application or 
+      Answer  : Either the ideal grammar tailored to our application or
                 the grammar that is easiest to build.
-      Observation 1: The array grammar keeps growing is size to handle special 
+      Observation 1: The array grammar keeps growing is size to handle special
                      cases, its limit is the size of the C++ grammar (roughly).
-      Observation 2: The complexity of the program tree is what we want to simplify 
-                     and it is not dependent upon the complexity of the grammar 
-                     (but upon the occurance of arrays in the application and the 
-                     extent that we ignore non-array based terminals and non-terminals 
+      Observation 2: The complexity of the program tree is what we want to simplify
+                     and it is not dependent upon the complexity of the grammar
+                     (but upon the occurance of arrays in the application and the
+                     extent that we ignore non-array based terminals and non-terminals
                      of the grammar).
 
       Suggestion:
@@ -271,18 +271,18 @@ Design Issues:
           put permit many statements of specification to be used for more complex examples.
 
       Another Example:
-          In this example we derive a higher level grammar from a lower level 
+          In this example we derive a higher level grammar from a lower level
           one by copying the lower level grammar and adding a constraint.
           Root::Type::ClassType::declaration.name == "doubleArray"; // use deferred evaluation here?
           Grammar ArrayGrammar (Cxx_Grammar,constrainList);
 
-      Required: 
+      Required:
           Logical operators and syntax for using them
           Access functions to get internal properties out (for testing);
           This could be a C++ set of classes (generated when the grammar is defined)
           and which is then used to generate the higher level grammars.
 
-      Try to use BNF notation to present inclusions/exclusions on existing 
+      Try to use BNF notation to present inclusions/exclusions on existing
       grammars to define new grammars:
 
       doubleArrayType = (classType.name == "doubleArray");
@@ -295,8 +295,8 @@ Design Issues:
    // This is not sufficient since "doubleArray" would then be both doubleArrayType AND CxxType!
       AstNodeClass CxxType         = (classType.getName == "*");
 
-      The implementation uses the operator== to store the reference to the name in 
-      the classType and the string "Array".  These are then used internally within 
+      The implementation uses the operator== to store the reference to the name in
+      the classType and the string "Array".  These are then used internally within
       the implementation of the C++ like grammar specific to Array types.
       Thus the ArrayType is just another terminal in the grammar.
 
@@ -305,7 +305,7 @@ Design Issues:
    // Grammar ArrayGrammar = Cxx_Grammar, (!Type && ArrayAbstractionType) && (ArrayAbstractionType || Type);
 
 
-   // This forms the grammar which represents each type as either 
+   // This forms the grammar which represents each type as either
    // an ArrayAbstractionType or a NonArrayAbstractionType!
       Grammar ArrayGrammar = Cxx_Grammar, (!Type && ArrayAbstractionType);
 
@@ -334,12 +334,12 @@ OR
          }
 
 
-bool 
+bool
 RootOfHigherLevelGrammar::conformsToContraints()
    {
-  // Apply constraints to restrict grammar from C++ grammar 
+  // Apply constraints to restrict grammar from C++ grammar
   // (no constraints means it behaves just like the C++ grammar!)
-  // Let the constraints be functions taking a SgNode (or root node 
+  // Let the constraints be functions taking a SgNode (or root node
   // of the lower level grammar) and returning a boolean value.
 
      bool returnValue = TRUE;
@@ -358,8 +358,8 @@ RootOfHigherLevelGrammar::conformsToContraints()
      return returnValue;
    }
 
-     Every class within a grammar has a parse function (friend function might be easiest 
-     or let the parse function be a member function of the grammar).  The parse function 
+     Every class within a grammar has a parse function (friend function might be easiest
+     or let the parse function be a member function of the grammar).  The parse function
      might look like the following:
 
      ROOT_NODE* ArrayGrammar::parse ( ROOT_NODE* subTree )
@@ -379,16 +379,16 @@ RootOfHigherLevelGrammar::conformsToContraints()
                     ROSE_StatementBlock* roseStatementBlock = parse (basicBlock);
 	            ROSE_ASSERT (roseStatementBlock != NULL);
 
-                 // Constraints could be applied within the constructor if we wanted to make 
+                 // Constraints could be applied within the constructor if we wanted to make
                  // their return value control a runtime typing bolean value internally
                     if (!roseStatementBlock->conformsToContraints())
                        {
                       // We have detected a case which does not pass the contraint
-                      // tests that restrict the grammar.  So use a different type 
+                      // tests that restrict the grammar.  So use a different type
                       // of terminal/nonterminal to express this tree in thr grammar.
                       // This effectively truncates the program tree at this location
-                      // It is the equivalent of declarining this subtree to be a C++ 
-                      // subtree of no importance in a program tree using this grammar 
+                      // It is the equivalent of declarining this subtree to be a C++
+                      // subtree of no importance in a program tree using this grammar
                       // (a higher level grammar).
 
                          returnNode = new ROSE_NonConformingStatementBlock (roseStatementBlock);
@@ -404,7 +404,7 @@ RootOfHigherLevelGrammar::conformsToContraints()
                  // error recover mechanism
                     if (roseStatementBlock->error())
                        {
-                      // We have detected an error found in parsing the 
+                      // We have detected an error found in parsing the
                       // Sage tree to build the ROSE_ArrayParenthesisOperator
                          returnNode = NULL;
                        }
@@ -418,7 +418,7 @@ RootOfHigherLevelGrammar::conformsToContraints()
         }
 
 
-     If we only have a user defined type as input to build the grammar then let's make 
+     If we only have a user defined type as input to build the grammar then let's make
      an example of that case:
 
          Interface for building a new grammar:
@@ -434,7 +434,7 @@ RootOfHigherLevelGrammar::conformsToContraints()
               If only the type is specified then only the type can be used to generate all possible
               constraints upon the C++ grammar to define the new grammar (an array grammar in this case
               but since only the type is known it is not a very useful array grammar and we can expect that
-              our grammar will only be able to recognize the use of the array objects and none of the 
+              our grammar will only be able to recognize the use of the array objects and none of the
               operators using them).
 
               So we can expect to use the new grammar to recognize:
@@ -455,7 +455,7 @@ RootOfHigherLevelGrammar::conformsToContraints()
                  expressions:
                    operands within expressions
                    return values from functions returning arrays
-                   member function calls of the array class 
+                   member function calls of the array class
                         (these would only be identified as member function calls and not
                          as "operator=" etc, since the grammar defined only with a type
                          constraint and without seeing the class declaration could not
@@ -495,8 +495,8 @@ RootOfHigherLevelGrammar::conformsToContraints()
                 SgType     := CxxType | nonCxxType;
 
                 Note: there is no statement that we could ever find which is not a C++ statement
-                (unless it was the PragmaStatement).  The same is true for expressions and types within 
-                this C++ grammar.  The representation of these terminals in the C++ grammar is 
+                (unless it was the PragmaStatement).  The same is true for expressions and types within
+                this C++ grammar.  The representation of these terminals in the C++ grammar is
                 purely to provide a consistant implementaion of each grammar for all grammars
                 within a hierarchy of grammars.
 
@@ -526,7 +526,7 @@ RootOfHigherLevelGrammar::conformsToContraints()
 
               2. Names for terminals might have to be substituted through some mechanism (cpp?),
                  so that references to the types within the SAGE 3 implementation is as consistant.
-                 This might not be required since the intermediate class (CxxStatement, for example) 
+                 This might not be required since the intermediate class (CxxStatement, for example)
                  we introduce between the statement and <All the usual C++ statments specific to X>.
 
               3. Non_X_ nonterminals in the X_Grammar's internally store a reference to
@@ -537,7 +537,7 @@ RootOfHigherLevelGrammar::conformsToContraints()
 
     7) We want to specify constraints:
        Example:
-           Make CxxGrammar a STL list of lists of Node and include getName() as 
+           Make CxxGrammar a STL list of lists of Node and include getName() as
            as a member function of the Node class.
 
            vector< vector<SgNode> > CxxGrammar;
@@ -574,7 +574,7 @@ RootOfHigherLevelGrammar::conformsToContraints()
                       The declaration of object of a class type having task parallel semantics
                       implies that operations on objects of that class can execute in any order.
                       (for use in overlapping grid and AMR algorithms).
-                    * Array semantics 
+                    * Array semantics
                       specifies operator grammars imply array semantics for all operations.
                     * element semantics
                       Operations applied to the collections are applied directly to the elements
@@ -588,7 +588,7 @@ RootOfHigherLevelGrammar::conformsToContraints()
 ################################################################################################################
 ################################################################################################################
 
-   1)  There is a difference between the design of the grammar and the 
+   1)  There is a difference between the design of the grammar and the
        implementation of the grammar.  The implementation may require
        additional objects which are not a part of the definition of the
        grammar.  We can of course add classes to the implementation of the grammar
@@ -597,9 +597,9 @@ RootOfHigherLevelGrammar::conformsToContraints()
        the C++ grammar (SAGE) would seem to make this clear (since it is the largest grammar
        yet to be defined using our tools).
 
-   2)  Each grammar generated must reproduce the C++ control structures 
+   2)  Each grammar generated must reproduce the C++ control structures
        (if, for, while, do-while, switch, etc.), plus Statements and Statement Blocks.
-       What about Expressions and Types?  Should each grammar should have it's own 
+       What about Expressions and Types?  Should each grammar should have it's own
        symbol table?
 
    3)  The representation of a grammar's implementation within a flat file is problematic
@@ -608,14 +608,14 @@ RootOfHigherLevelGrammar::conformsToContraints()
    4)  Current implementation puts the editing using copyEdit("OLD","NEW") all over the place.
        This should be centalized into a single location to improved the design.
 
-   5)  Could we define a nested code generator (a generator built from smaller 
+   5)  Could we define a nested code generator (a generator built from smaller
        user defined code generators)?
 
    6) The transformation specification should include a mechanism to specify the architecture
       most appropriate for the specified transformation (see ATLAS project).
 
    7) Sage 2 has functions whose interface can both accept and output NULL pointers.
-      This should be fixed to facilitate a greater level of debugging within the 
+      This should be fixed to facilitate a greater level of debugging within the
       SAGE 3 implementation.  We can't do this until we get SAGE 3 back to working.
       For example, we woud like to use the following assert:
            assert (type->source_corresp.sg_symbol_ptr != NULL);
@@ -630,17 +630,17 @@ Code Generation Problems:
        requirements exist.  Try to minimize the amount of code that must be
        specified.
        Required Features:
-       a) lists of objects (these occure all over the place in SAGE and any real 
+       a) lists of objects (these occure all over the place in SAGE and any real
           grammar (STL is a big help here!))
        b) attributes (so users can attach things to nodes of a grammar)
-       c) pragmas (so applications can signal the preprocess, though I am philisophically 
+       c) pragmas (so applications can signal the preprocess, though I am philisophically
            apposed to this)
 
        d) do we really want to support all the get_next(int) type functions if we use STL?
           Maybe it is better to get the SLT list directly and iterate through it!
 
    2)  Automate generation of:
-       a) parser for lower level program tree into higher level program tree 
+       a) parser for lower level program tree into higher level program tree
           represented by specific grammar
        b) translation from elements in the current grammar to the lower level
           grammar
@@ -649,10 +649,10 @@ Code Generation Problems:
        d) No test suit associated with SAGE2 implementation
 
    3) We need to be able to use user defined destructors and set_DATA() member functions
-      OR we need to uniformally set the parent (call set_parent() member function) if the 
+      OR we need to uniformally set the parent (call set_parent() member function) if the
       data is a pointer to a class as is done in SAGE (this latter idea would be best).
 
-   4) Need to have a mechanism for handling misc code and classes that 
+   4) Need to have a mechanism for handling misc code and classes that
       don't have (and shouldn't have) a representation within the grammar.
 
    5) How is Rosetta different from the generator in SAGE 2 presently.
@@ -662,7 +662,7 @@ Code Generation Problems:
          2. We could shroud source to confuse things (optional)
          3. Full functions are specified (easier to fix bugs, in principle)
       c) Addresses the construction of hierarchies of grammars (MANY grammars working together)
-      d) The design of Rosete avoids the parsing of files (it's not a language in 
+      d) The design of Rosete avoids the parsing of files (it's not a language in
          the way that the SAGE2 seems to be)
 
    6) Statements, Expressions, Types, and Symbols are special and have special properties.
@@ -677,7 +677,7 @@ Code Generation Problems:
                 Name (a string object)
                 InitializedName (a name plus a reference to a type)
                 FileInfo (filename, location by line and column number)
-                File (to contain the filename and the root of the program 
+                File (to contain the filename and the root of the program
                      tree represented by souce code in that file)
                 Project (to contain all the files for a given application)
       a) project class would represent the different files at a high level and the associated
@@ -693,9 +693,9 @@ Code Generation Problems:
       end of the grammar's header file (a feature to implement late).  This feature would
       make since once we have a lot of grammar's implemented.
 
-  10) The handling of char* is poor currently, we need to do string copies in many 
-      places where we currently just steal the pointer to the string (char*).  This 
-      might cause some free memory reads (purify: FMR) though where we have found 
+  10) The handling of char* is poor currently, we need to do string copies in many
+      places where we currently just steal the pointer to the string (char*).  This
+      might cause some free memory reads (purify: FMR) though where we have found
       FMR they don't appear to be related to where the char* handiling is done poorly.
       (I'm still debugging these FRMs).
 

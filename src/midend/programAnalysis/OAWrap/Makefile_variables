@@ -13,7 +13,7 @@ mpaOAWrap_includes=\
 mpaOAWrap_la_sources=\
 	$(mpaOAWrapPath)/OAWrap.C \
 	$(mpaOAWrapPath)/SAGE2OA.C
-#libOAWrapSources = SAGE2OA.C 
+#libOAWrapSources = SAGE2OA.C
 #if !ROSE_USING_ROSE_CODE_GENERATION
 #   libOAWrapSources += OAWrap.C
 #endif

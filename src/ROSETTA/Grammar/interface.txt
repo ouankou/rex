@@ -26,10 +26,10 @@
        // DQ (1/30/2007): Added general remove functions for all SgSymbol IR nodes.
        // This function will remove all symbols with the specified name (even ones of
        // different typese, see rest of comment).
-       // This function is a bit dangerous except for function types since the only for the 
-       // function type table are the names unique.  For non-function type symbol 
+       // This function is a bit dangerous except for function types since the only for the
+       // function type table are the names unique.  For non-function type symbol
        // tables classes and typedefs can have the same name (e.g. "typedef struct X {} X;")
-       // so removing the name might have unexpected results! 
+       // so removing the name might have unexpected results!
           void remove ( const SgName & );
 
        // DQ (1/30/2007): Added remove functions for each sort of SgSymbol IR node

@@ -3,9 +3,9 @@ This directory contains sets of code required for ROSE
 but which may be specific to specific features in ROSE.
 
 
-support directory: Contains work required for Qing Yi's 
+support directory: Contains work required for Qing Yi's
     loop optimization work in ROSE.  External users should
-    not use these functions.  In some cases they are 
+    not use these functions.  In some cases they are
     redundant with ROSE mechansims that are documented
     and intended for external users.
 
@@ -19,7 +19,7 @@ commandlineProcessing: This is the support in ROSE for commandline
     handling.  This is documented in the ROSE Tutorial and is
     intended for external users to use in their ROSE based translators.
 
-graphs: This is a graph library from Qing Yi's work which is not 
+graphs: This is a graph library from Qing Yi's work which is not
     documented and many people have had trouble using.  Although
-    used in Qing's work it is not clear if it should be used by external 
+    used in Qing's work it is not clear if it should be used by external
     users.

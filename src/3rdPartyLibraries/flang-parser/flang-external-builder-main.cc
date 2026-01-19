@@ -32,7 +32,7 @@
 
 #include "FlangParseArgs.hh"
 
-#include <../../frontend/Experimental_Flang_ROSE_Connection/sage-build.h>
+#include "../../frontend/Experimental_Flang_ROSE_Connection/sage-build.h"
 
 std::vector<std::string> filesToDelete;
 

@@ -8,7 +8,7 @@ Location of OFP project files:
   https://github.com/OpenFortranProject/open-fortran-parser
 
 Files required for ROSE from the OFP source tree:
-  FortranParserAction.h 
+  FortranParserAction.h
   c_actions_jni.c
   token.c
   token.h
@@ -16,7 +16,7 @@ Files required for ROSE from the OFP source tree:
   jni_token_funcs.h
   jni_token_funcs.c
 These have been added to this directory and removed from src/frontend/OpenFortranParser_SAGE_Connection.
-These files are now automatically extracted from the jar file if they 
+These files are now automatically extracted from the jar file if they
 exist in the jar file.
 
 (9/22/2019): To get these files inserted into the jar file you need to configure open-fortran-parser with
