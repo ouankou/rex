@@ -26,6 +26,7 @@ ROSE_UTIL_API extern const std::string ROSE_SOURCE_TREE;
 ROSE_UTIL_API extern const std::string ROSE_BUILD_TREE;
 ROSE_UTIL_API extern const std::string ROSE_INSTALL_PREFIX;
 ROSE_UTIL_API extern const std::string ROSE_INSTALL_INCLUDE_DIR;
+ROSE_UTIL_API extern const std::string ROSE_INSTALL_LIB_DIR;
 ROSE_UTIL_API extern const std::string ROSE_INSTALL_CLANG_INCLUDE_DIR;
 ROSE_UTIL_API extern const std::string ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR;
 ROSE_UTIL_API extern const std::string ROSE_BUILD_LIB_DIR;

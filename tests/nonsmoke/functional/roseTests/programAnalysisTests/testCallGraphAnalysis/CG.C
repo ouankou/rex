@@ -25,6 +25,10 @@
 
 #include "rose.h"
 
+#include "rose_path_resolver.h"
+
+#include <filesystem>
+
 #include <fstream>
 
 #include <iostream>
@@ -150,9 +154,13 @@ struct OnlyCurrentDirectory {
   bool operator()(SgFunctionDeclaration *node) const {
     ROSE_ASSERT(node != NULL);
 
-    // build tree, ROSE_COMPILE_TREE_PATH is the output of  `pwd -P`, which
-    // means symbolic links are resolved already.
-    std::string stringToFilter = ROSE_COMPILE_TREE_PATH + std::string("/tests");
+    // build tree; use the resolved build root so symbolic links are normalized.
+    static const RosePathRoots roots = resolveRosePaths(nullptr);
+    std::string stringToFilter;
+    if (!roots.build_root.empty()) {
+      stringToFilter =
+          (std::filesystem::path(roots.build_root) / "tests").string();
+    }
     // Liao 6/20/2011, we have to use the same source path without symbolic
     // links to have the right match
     std::string srcDir =
@@ -177,6 +185,9 @@ struct OnlyCurrentDirectory {
       if (defdecl)
         sourceFilename = defdecl->get_file_info()->get_filename();
     }
+    if (sourceFilename.empty() || 0 == sourceFilename.compare("NULL_FILE")) {
+      return false;
+    }
 
     string sourceFilenameSubstring = sourceFilename.substr(
         0, stringToFilter.size()); // if the file is from the build tree?
@@ -194,7 +205,17 @@ struct OnlyCurrentDirectory {
 #endif
 
     bool retval = false;
-    if (sourceFilenameSubstring == stringToFilter) {
+    auto root_exists = [](const std::string &root_path) {
+      if (root_path.empty()) {
+        return false;
+      }
+      std::error_code ec;
+      bool exists = std::filesystem::exists(root_path, ec);
+      return exists && !ec;
+    };
+
+    if (root_exists(stringToFilter) &&
+        rosePathIsWithinTree(stringToFilter, sourceFilename)) {
       retval = true;
     } else {
 #if DEBUG_SELECTOR
@@ -203,7 +224,7 @@ struct OnlyCurrentDirectory {
              sourceFilenameSrcdirSubstring.c_str());
       printf("   --- srcDir = %s \n", srcDir.c_str());
 #endif
-      if (sourceFilenameSrcdirSubstring == srcDir) {
+      if (root_exists(srcDir) && rosePathIsWithinTree(srcDir, sourceFilename)) {
         retval = true;
       } else {
 #if DEBUG_SELECTOR
@@ -213,7 +234,8 @@ struct OnlyCurrentDirectory {
         printf("   --- secondaryTestSrcDir = %s \n",
                secondaryTestSrcDir.c_str());
 #endif
-        if (sourceFilenameSecondaryTestSrcdirSubstring == secondaryTestSrcDir) {
+        if (root_exists(secondaryTestSrcDir) &&
+            rosePathIsWithinTree(secondaryTestSrcDir, sourceFilename)) {
           retval = true;
         } else {
           // DQ (9/1/2016): Test if this is a template instantiation from a

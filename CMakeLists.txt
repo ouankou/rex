@@ -1172,18 +1172,6 @@ endif()
 find_library(M_LIB m REQUIRED)
 find_library(RT_LIB rt)
 
-# This is essential to find the right include path from either build or installation tree for a translator
-if(HAVE_DLFCN_H)
-  if(HAVE_DLADDR)
-    set(use_rose_in_build_tree_var TRUE)
-    # this following line won't work since it only set the environment variable for cmake's session not for ctest
-    # session. Still no good way to set it within cmake fortunately,
-    set($ENV{ROSE_IN_BUILD_TREE} ${ROSE_TOP_BINARY_DIR})
-  endif()
-else()
-  set(use_rose_in_build_tree_var, FALSE)
-endif()
-
 ########################################################################################################################
 # Back-end compilers
 ########################################################################################################################

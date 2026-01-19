@@ -6089,15 +6089,10 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     // and the path to libgomp.a/libgomp.so, which are located in
     // $GCC_GOMP_OPENMP_LIB_PATH
 
-    // Header should always be available
-    // the conditional compilation is necessary to pass make distcheck,
-    // where only a minimum configuration options are used and not all macros
-    // are defined.
-#ifdef ROSE_INSTALLATION_PATH
-    string include_path(ROSE_INSTALLATION_PATH);
-    include_path += "/include/rose";
-    compilerNameString.insert(iter_last_inc, "-I" + include_path);
-#endif
+    static const RosePathRoots roots = resolveRosePaths(nullptr);
+    if (roots.in_install_tree && !roots.rose_include_root.empty()) {
+      compilerNameString.insert(iter_last_inc, "-I" + roots.rose_include_root);
+    }
   }
 
   // DQ (4/20/2006): This allows the ROSE translator to be just a wrapper for

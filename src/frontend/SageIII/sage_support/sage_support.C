@@ -25,6 +25,8 @@
 
 #include "rose_path_resolver.h"
 
+#include "rose_paths.h"
+
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 #include "FortranModuleInfo.h"
 
@@ -4656,11 +4658,17 @@ int SgProject::link(const std::vector<std::string> &argv,
     ROSE_ABORT();
 #endif
 
-    // add libxomp.a , Liao 6/12/2010
-    string xomp_lib_path(ROSE_INSTALLATION_PATH);
-    ROSE_ASSERT(xomp_lib_path.size() != 0);
-    linkingCommand.push_back(xomp_lib_path +
-                             "/lib/libxomp.a"); // static linking for simplicity
+    static const RosePathRoots roots = resolveRosePaths(nullptr);
+    string xomp_lib_root;
+    if (roots.in_install_tree) {
+      xomp_lib_root =
+          resolveRoseSupportPath(roots.install_prefix, ROSE_INSTALL_LIB_DIR);
+    } else {
+      xomp_lib_root = ROSE_BUILD_LIB_DIR;
+    }
+    ROSE_ASSERT(!xomp_lib_root.empty());
+    linkingCommand.push_back(
+        (std::filesystem::path(xomp_lib_root) / "libxomp.a").string());
 
     // lib path is available if --with-gomp_omp_runtime_library=XXX is used
     string gomp_lib_path(GCC_GOMP_OPENMP_LIB_PATH);
@@ -4670,11 +4678,17 @@ int SgProject::link(const std::vector<std::string> &argv,
 #else
 // GOMP has higher priority when both GOMP and OMNI are specified (wrongfully)
 #ifdef OMNI_OPENMP_LIB_PATH
-    // a little redundant code to defer supporting 'ROSE_INSTALLATION_PATH' in
-    // cmake
-    string xomp_lib_path(ROSE_INSTALLATION_PATH);
-    ROSE_ASSERT(xomp_lib_path.size() != 0);
-    linkingCommand.push_back(xomp_lib_path + "/lib/libxomp.a");
+    static const RosePathRoots roots = resolveRosePaths(nullptr);
+    string xomp_lib_root;
+    if (roots.in_install_tree) {
+      xomp_lib_root =
+          resolveRoseSupportPath(roots.install_prefix, ROSE_INSTALL_LIB_DIR);
+    } else {
+      xomp_lib_root = ROSE_BUILD_LIB_DIR;
+    }
+    ROSE_ASSERT(!xomp_lib_root.empty());
+    linkingCommand.push_back(
+        (std::filesystem::path(xomp_lib_root) / "libxomp.a").string());
 
     string omni_lib_path(OMNI_OPENMP_LIB_PATH);
     ROSE_ASSERT(omni_lib_path.size() != 0);

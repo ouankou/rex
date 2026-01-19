@@ -70,7 +70,6 @@ endif()
 if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
   string(CONCAT _rex_install_cfe_command
     "set -e;"
-    " unset ROSE_HOME ROSE_IN_BUILD_TREE;"
     " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
     " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
     " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"
@@ -88,7 +87,6 @@ if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
     ${CMAKE_CURRENT_SOURCE_DIR}/roseTests/astQueryTests/input1.C)
   string(CONCAT _rex_install_astquery_command
     "set -e;"
-    " unset ROSE_HOME ROSE_IN_BUILD_TREE;"
     " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
     " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
     " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"
@@ -106,7 +104,6 @@ if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
     ${CMAKE_CURRENT_SOURCE_DIR}/roseTests/astInterfaceTests/inputloopInterchange.C)
   string(CONCAT _rex_install_astinterface_command
     "set -e;"
-    " unset ROSE_HOME ROSE_IN_BUILD_TREE;"
     " install_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-XXXXXX\");"
     " run_dir=$(mktemp -d \"${CMAKE_CURRENT_BINARY_DIR}/rex-install-run-XXXXXX\");"
     " cmake --install \"${CMAKE_BINARY_DIR}\" --prefix \"$install_dir\";"

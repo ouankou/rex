@@ -6,12 +6,13 @@
 // are:
 //     1. Run "cmake --build <build> --verbose" (or "make VERBOSE=1" for
 //     Makefile generators).
-//     2. Run "$ROSE_BUILD_TREE/src/rose-config cxx" where $ROSE_BUILD_TREE is
-//     the top of your build tree.
+//     2. Run "<build>/src/rose-config cxx" where <build> is the top of your
+//     build tree (or run "rose-config cxx" if ROSE is installed).
 
 #include <iostream>
 
-int
-main() {
-    std::cout <<"3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117068\n";
+int main() {
+  std::cout << "3."
+               "141592653589793238462643383279502884197169399375105820974944592"
+               "307816406286208998628034825342117068\n";
 }

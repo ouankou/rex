@@ -1,6 +1,6 @@
 // This fails in legacy frontend 6.0:
 // "/data1/ROSE_CompileTree/git-LINUX-64bit-6.1.0-FRONTEND60-LIB_1_60-dq-development-
-//          rc-cxx-only/include-staging/g++_HEADERS/hdrs5/system_error", line
+//          rc-cxx-only/compiler-headers/g++_HEADERS/hdrs5/system_error", line
 //          147: internal error: assertion failed at: "overload.cc", line 11162
 //          in cast_pointer_for_field_selection
 //

@@ -1,13 +1,13 @@
 # 1 "/home/dquinlan/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2014_76.C"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 284 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 284 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 323 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 323 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 353 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 353 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
 double      __builtin_copysign  (double __builtin__x, double __builtin__y);
 float       __builtin_copysignf (float __builtin__x, float __builtin__y);
@@ -104,7 +104,7 @@ long double __builtin_sinl   (long double __builtin__x);
 float       __builtin_sqrtf  (float       __builtin__x);
 long double __builtin_sqrtl  (long double __builtin__x);
 
-# 517 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 517 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 int __builtin_isgreater(double x, double y);
 int __builtin_isgreaterequal(double x, double y);
 int __builtin_isless(double x, double y);
@@ -128,7 +128,7 @@ void               __builtin_ia32_fxrstor64(void *__P);
 unsigned char      __builtin_ia32_addcarryx_u32(unsigned char __CF, unsigned int __X, unsigned int __Y, unsigned int *__P);
 unsigned char      __builtin_ia32_addcarryx_u64(unsigned char __CF, unsigned long __X, unsigned long __Y, unsigned long long *__P);
 
-# 603 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 603 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
 void * __builtin_return_address (unsigned int level);
 void * __builtin_frame_address (unsigned int level);
@@ -203,23 +203,23 @@ double      __builtin_powi (double __builtin__x, int __builtin__y);
 float       __builtin_powif (float __builtin__x, int __builtin__y);
 long double __builtin_powil (long double __builtin__x, int __builtin__y);
 
-# 767 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 767 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
 int __builtin_abs (int __builtin__x);
 
-# 862 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 862 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 936 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 936 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 1002 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 1002 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 1042 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 1042 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 1070 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 1070 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 1508 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 1508 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
-# 2173 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 2173 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
 void __builtin_ia32_emms();
 int __builtin_ia32_vec_init_v2si(int,int);
@@ -560,343 +560,31 @@ int __builtin_ia32_psrlqi(long long,int);
 
 int __builtin_bswap32(int x);
 
-# 2545 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/rose_required_macros_and_functions.h"
+# 2545 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/rose_required_macros_and_functions.h"
 
 # 1 "/home/dquinlan/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2014_76.C"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tr1/memory"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tr1/memory"
 
 #pragma GCC system_header
 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
 
 #pragma GCC system_header
 
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
 
-
-
-
-
- 
-
-
-
-
-
-
- 
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 # 1 "/usr/include/bits/wordsize.h"
- 
 
+# 4 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
+# 1672 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 1776 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 1789 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 1801 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
-
-
-
-
- 
-# 4 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-# 1672 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 1776 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-# 1789 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-
-
-
-# 1801 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
 namespace std
 {
   typedef unsigned long 	size_t;
@@ -907,139 +595,21 @@ namespace std
 
 }
 
+# 1910 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 1958 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 1978 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 1986 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 2029 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
-# 1910 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
+# 2055 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 2083 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
-
-# 1958 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-
-
-
-
-
-
-
-
-
-# 1978 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-# 1986 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 2029 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-# 2055 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 2083 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/os_defines.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/os_defines.h"
 
 # 1 "/usr/include/features.h"
 
@@ -1333,26 +903,7 @@ namespace std
  
 # 371 "/usr/include/features.h"
 
- 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs/sys/cdefs.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs/sys/cdefs.h"
 
 # 1 "/usr/include/sys/cdefs.h"
 
@@ -1628,14 +1179,7 @@ namespace std
 
 # 425 "/usr/include/sys/cdefs.h"
 
-# 21 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs/sys/cdefs.h"
-
- 
-
-
-
- 
-
+# 21 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs/sys/cdefs.h"
 
 # 376 "/usr/include/features.h"
 
@@ -1680,1370 +1224,22 @@ namespace std
 # 11 "/usr/include/gnu/stubs.h"
 # 400 "/usr/include/features.h"
 
+# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/os_defines.h"
 
-# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/os_defines.h"
+# 2098 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/cpu_defines.h"
 
+# 2101 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++config.h"
 
+# 60 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/functexcept.h"
 
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/exception_defines.h"
 
+# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/exception_defines.h"
 
-
-
-# 2098 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/cpu_defines.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-# 2101 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++config.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
- 
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
-
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
- 
-
- 
-
-
- 
- 
-
- 
-
-
- 
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
- 
- 
-
- 
-
-
- 
- 
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
- 
-
- 
- 
-
-
- 
-
-
-
-
- 
-
-
-
-
- 
-
-
-
- 
-
-
-
- 
-
-
-
- 
-
-
-
- 
-
-
-
- 
-
-
-
- 
-
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
- 
-
-
- 
-
-
- 
- 
-
- 
-
-
- 
- 
-
- 
- 
-
- 
-
-
- 
-
-
- 
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 60 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/functexcept.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/exception_defines.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/exception_defines.h"
-
-
-
-
-
-
-# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/functexcept.h"
+# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/functexcept.h"
 
 namespace std 
 {
@@ -3107,43 +1303,10 @@ namespace std
   __throw_bad_function_call() __attribute__((__noreturn__));
 
 
-} 
+}
 
-# 61 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/cpp_type_traits.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
+# 61 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/cpp_type_traits.h"
 
 #pragma GCC system_header
 
@@ -3532,40 +1695,10 @@ namespace std
 
 
 
-} 
+}
 
-# 62 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/type_traits.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 62 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/type_traits.h"
 
 #pragma GCC system_header
 
@@ -3746,40 +1879,10 @@ namespace __gnu_cxx
     };
 
 
-} 
+}
 
-# 63 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/numeric_traits.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 63 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/numeric_traits.h"
 
 #pragma GCC system_header
 
@@ -3880,162 +1983,20 @@ namespace __gnu_cxx
     { };
 
 
-} 
+}
 
+# 64 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_pair.h"
 
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/move.h"
 
-
-
-
-# 64 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_pair.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/move.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/concept_check.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/concept_check.h"
 
 #pragma GCC system_header
 
+# 79 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/concept_check.h"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 79 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/concept_check.h"
-
-# 35 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/move.h"
+# 35 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/move.h"
 
 namespace std 
 {
@@ -4055,39 +2016,9 @@ namespace std
     }
 
 
-} 
+}
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/type_traits"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/type_traits"
 
 #pragma GCC system_header
 
@@ -6095,20 +4026,10 @@ namespace std
       >::type
     { };
 
-  
-	
-  
+# 2068 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/type_traits"
+}
 
-
- 
-# 2068 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/type_traits"
-
-
-} 
-
-
-
-# 58 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/move.h"
+# 58 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/move.h"
 
 namespace std 
 {
@@ -6191,9 +4112,9 @@ namespace std
 
   
 
-} 
+}
 
-# 148 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/move.h"
+# 148 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/move.h"
 
 namespace std 
 {
@@ -6242,13 +4163,9 @@ namespace std
 
   
 
-} 
+}
 
-# 60 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_pair.h"
-
-
-
-
+# 60 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_pair.h"
 
 namespace std 
 {
@@ -6468,75 +4385,11 @@ namespace std
       typedef pair<__ds_type1, __ds_type2> 	      __pair_type;
       return __pair_type(std::forward<_T1>(__x), std::forward<_T2>(__y));
     }
-# 289 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_pair.h"
+# 289 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_pair.h"
+}
 
-  
-
-
-} 
-
-# 65 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator_base_types.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
- 
-
-
-
+# 65 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator_base_types.h"
 
 #pragma GCC system_header
 
@@ -6637,9 +4490,8 @@ template<typename _Tp> class __has_iterator_category_helper : __sfinae_types { t
   template<typename _Iterator>
     struct iterator_traits
     : public __iterator_traits<_Iterator> { };
-# 172 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator_base_types.h"
+# 172 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator_base_types.h"
 
-  
   template<typename _Tp>
     struct iterator_traits<_Tp*>
     {
@@ -6699,121 +4551,15 @@ template<typename _Tp> class __has_iterator_category_helper : __sfinae_types { t
 
 
 
-} 
+}
 
-
-
-# 66 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator_base_funcs.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
- 
-
-
-
+# 66 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator_base_funcs.h"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/debug/debug.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/debug/debug.h"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
- 
 namespace std
 { 
   namespace __debug { } 
@@ -6827,13 +4573,11 @@ namespace __gnu_debug
   using namespace std::__debug;
 }
 
+# 81 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/debug/debug.h"
 
+# 130 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/debug/debug.h"
 
-# 81 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/debug/debug.h"
-
-# 130 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/debug/debug.h"
-
-# 66 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator_base_funcs.h"
+# 66 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator_base_funcs.h"
 
 namespace std 
 {
@@ -6971,75 +4715,10 @@ namespace std
 
 
 
-} 
+}
 
-# 67 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 67 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
 
 namespace std 
 {
@@ -7390,18 +5069,7 @@ namespace std
       explicit
       back_insert_iterator(_Container& __x) : container(&__x) { }
 
-      
-
-
-
-
-
-
-
-
-
- 
-# 435 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
+# 435 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
       back_insert_iterator&
       operator=(const typename _Container::value_type& __value)
       {
@@ -7473,18 +5141,7 @@ namespace std
       
       explicit front_insert_iterator(_Container& __x) : container(&__x) { }
 
-      
-
-
-
-
-
-
-
-
-
- 
-# 525 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
+# 525 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
       front_insert_iterator&
       operator=(const typename _Container::value_type& __value)
       {
@@ -7565,30 +5222,7 @@ namespace std
       insert_iterator(_Container& __x, typename _Container::iterator __i)
       : container(&__x), iter(__i) {}
 
-      
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-# 637 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
+# 637 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
       insert_iterator&
       operator=(const typename _Container::value_type& __value)
       {
@@ -8090,45 +5724,23 @@ namespace std
   
 
 
-} 
+}
 
-# 1147 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
+# 1147 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_iterator.h"
 
-# 68 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-
-
-
+# 68 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
 
 namespace std 
 {
 
+# 106 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
 
-# 106 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+template <typename _ForwardIterator1, typename _ForwardIterator2>
+inline void iter_swap(_ForwardIterator1 __a, _ForwardIterator2 __b) {
 
-  
-
-
-
-
-
-
-
-
- 
-  template<typename _ForwardIterator1, typename _ForwardIterator2>
-    inline void
-    iter_swap(_ForwardIterator1 __a, _ForwardIterator2 __b)
-    {
-      
-      
-
-      
-
-
-# 147 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
-      swap(*__a, *__b);
-
-    }
+# 147 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_algobase.h"
+  swap(*__a, *__b);
+}
 
   
 
@@ -9194,256 +6806,32 @@ namespace std
     }
 
 
-} 
+}
 
+# 63 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/allocator.h"
 
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++allocator.h"
 
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/new_allocator.h"
 
-
-
-
-
-# 63 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/allocator.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++allocator.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/new_allocator.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/new"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/new"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/exception"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/exception"
 
 #pragma GCC system_header
 
 #pragma GCC visibility push(default)
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/atomic_lockfree_defines.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/atomic_lockfree_defines.h"
 
 #pragma GCC system_header
 
+# 60 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/atomic_lockfree_defines.h"
 
-
-
- 
-
-
-
-
-
-
-
- 
-
-# 60 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/atomic_lockfree_defines.h"
-
-
-
-# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/exception"
+# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/exception"
 
 extern "C++" {
 
@@ -9556,39 +6944,7 @@ namespace __gnu_cxx
 
 #pragma GCC visibility pop
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/exception_ptr.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/exception_ptr.h"
 
 #pragma GCC visibility push(default)
 
@@ -9659,8 +7015,7 @@ namespace std
       : _M_exception_object(__o._M_exception_object)
       { __o._M_exception_object = 0; }
 
-
-# 110 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/exception_ptr.h"
+# 110 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/exception_ptr.h"
 
       exception_ptr& 
       operator=(const exception_ptr&) noexcept;
@@ -9679,8 +7034,7 @@ namespace std
       void 
       swap(exception_ptr&) noexcept;
 
-# 136 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/exception_ptr.h"
-
+# 136 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/exception_ptr.h"
 
       explicit operator bool() const
       { return _M_exception_object; }
@@ -9742,39 +7096,8 @@ namespace std
 
 #pragma GCC visibility pop
 
-# 153 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/exception"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/nested_exception.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 153 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/exception"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/nested_exception.h"
 
 #pragma GCC visibility push(default)
 
@@ -9909,10 +7232,9 @@ namespace std
 
 #pragma GCC visibility pop
 
-# 154 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/exception"
+# 154 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/exception"
 
-
-# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/new"
+# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/new"
 
 #pragma GCC visibility push(default)
 
@@ -9994,12 +7316,7 @@ inline void operator delete[](void*, void*) noexcept { }
 
 #pragma GCC visibility pop
 
-# 34 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/new_allocator.h"
-
-
-
-
-
+# 34 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/new_allocator.h"
 
 namespace __gnu_cxx 
 {
@@ -10086,8 +7403,8 @@ namespace __gnu_cxx
       template<typename _Up>
         void 
         destroy(_Up* __p) { __p->~_Up(); }
-# 135 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/new_allocator.h"
-    };
+# 135 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/new_allocator.h"
+  };
 
   template<typename _Tp>
     inline bool
@@ -10100,10 +7417,9 @@ namespace __gnu_cxx
     { return false; }
 
 
-} 
+}
 
-# 34 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++allocator.h"
-
+# 34 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++allocator.h"
 
 namespace std
 {
@@ -10120,56 +7436,8 @@ namespace std
     using __allocator_base = __gnu_cxx::new_allocator<_Tp>;
 }
 
-
-
-
-
-# 47 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/allocator.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/memoryfwd.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
+# 47 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/allocator.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/memoryfwd.h"
 
 #pragma GCC system_header
 
@@ -10201,12 +7469,9 @@ namespace std
   
 
 
-} 
+}
 
-# 48 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/allocator.h"
-
-
-
+# 48 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/allocator.h"
 
 namespace std 
 {
@@ -10375,173 +7640,18 @@ namespace std
 
 
 
-} 
+}
 
-# 64 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_construct.h"
+# 64 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_construct.h"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/alloc_traits.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/alloc_traits.h"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/alloc_traits.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/alloc_traits.h"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/ptr_traits.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/ptr_traits.h"
 
 namespace std 
 {
@@ -10684,12 +7794,9 @@ template<typename _Tp> class __has_difference_type_helper : __sfinae_types { tem
     };
 
 
-} 
+}
 
-
-
-# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/alloc_traits.h"
-
+# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/alloc_traits.h"
 
 namespace std 
 {
@@ -10744,9 +7851,15 @@ namespace std
       
       typedef typename _Alloc::value_type value_type;
 
-# 99 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/alloc_traits.h"
+# 99 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/alloc_traits.h"
 
-private: template<typename _Tp> static typename _Tp::pointer _S_pointer_helper(_Tp*); static value_type* _S_pointer_helper(...); typedef decltype(_S_pointer_helper((_Alloc*)0)) __pointer; public:
+    private:
+      template <typename _Tp>
+      static typename _Tp::pointer _S_pointer_helper(_Tp *);
+      static value_type *_S_pointer_helper(...);
+      typedef decltype(_S_pointer_helper((_Alloc *)0)) __pointer;
+
+    public:
 
       
 
@@ -11209,12 +8322,9 @@ private: template<typename _Tp> static typename _Tp::propagate_on_container_swap
       = __allow_copy_cons<__is_copy_insertable<_Alloc>::value>;
 
 
-} 
+}
 
-# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/alloc_traits.h"
-
-
-
+# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/alloc_traits.h"
 
 namespace __gnu_cxx 
 {
@@ -11372,13 +8482,13 @@ template<typename _Alloc>
     template<typename _Tp>
       struct rebind
       { typedef typename _Base_type::template rebind_alloc<_Tp> other; };
-# 237 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/alloc_traits.h"
-  };
+# 237 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/alloc_traits.h"
+};
 
 
-} 
+}
 
-# 62 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_construct.h"
+# 62 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_construct.h"
 
 namespace std 
 {
@@ -11393,11 +8503,8 @@ namespace std
     inline void
     _Construct(_T1* __p, _Args&&... __args)
     { ::new(static_cast<void*>(__p)) _T1(std::forward<_Args>(__args)...); }
-# 86 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_construct.h"
+# 86 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_construct.h"
 
-  
-
- 
   template<typename _Tp>
     inline void
     _Destroy(_Tp* __pointer)
@@ -11463,69 +8570,10 @@ namespace std
     }
 
 
-} 
+}
 
-
-
-# 65 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_uninitialized.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
+# 65 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_uninitialized.h"
 
 namespace std 
 {
@@ -12122,70 +9170,10 @@ namespace std
 
 
 
-} 
+}
 
-# 66 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_tempbuf.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
-
-
-
+# 66 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_tempbuf.h"
 
 namespace std 
 {
@@ -12393,69 +9381,10 @@ namespace std
     }
 
 
-} 
+}
 
-
-
-# 67 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_raw_storage_iter.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
+# 67 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_raw_storage_iter.h"
 
 namespace std 
 {
@@ -12504,76 +9433,15 @@ namespace std
     };
 
 
-} 
+}
 
-# 68 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
+# 68 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/typeinfo"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/typeinfo"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/hash_bytes.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/hash_bytes.h"
 
 #pragma GCC system_header
 
@@ -12599,10 +9467,9 @@ namespace std
   _Fnv_hash_bytes(const void* __ptr, size_t __len, size_t __seed);
 
 
-} 
+}
 
-# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/typeinfo"
-
+# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/typeinfo"
 
 #pragma GCC visibility push(default)
 
@@ -12611,33 +9478,9 @@ extern "C++" {
 namespace __cxxabiv1
 {
   class __class_type_info;
-} 
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 79 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/typeinfo"
+# 79 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/typeinfo"
 
 namespace std
 {
@@ -12667,7 +9510,7 @@ namespace std
     
     bool before(const type_info& __arg) const noexcept;
     bool operator==(const type_info& __arg) const noexcept;
-# 136 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/typeinfo"
+# 136 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/typeinfo"
     bool operator!=(const type_info& __arg) const noexcept
     { return !operator==(__arg); }
 
@@ -12754,81 +9597,12 @@ namespace std
 
 #pragma GCC visibility pop
 
-# 72 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/iosfwd"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 72 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/iosfwd"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stringfwd.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stringfwd.h"
 
 #pragma GCC system_header
 
@@ -12880,87 +9654,14 @@ namespace std
    
 
 
-} 
+}
 
-# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/iosfwd"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/postypes.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
+# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/iosfwd"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/postypes.h"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 
 #pragma GCC system_header
 
@@ -14088,31 +10789,16 @@ extern size_t wcsftime_l (wchar_t * __s, size_t __maxsize,
 
 }
 
+# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 
-
-
-
-
- 
-# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
-
-
-
-
-
-
-
-# 61 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
+# 61 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 
 namespace std
 {
   using ::mbstate_t;
-} 
+}
 
-
-# 132 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
-
-
+# 132 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 
 namespace std 
 {
@@ -14189,9 +10875,7 @@ namespace std
   using ::wcsstr;
   using ::wmemchr;
 
-# 231 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
-
-
+# 231 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 } 
 
 
@@ -14208,7 +10892,7 @@ namespace __gnu_cxx
 
 
   using ::wcstold;
-# 257 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
+# 257 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
   using ::wcstoll;
   using ::wcstoull;
 
@@ -14249,18 +10933,11 @@ namespace std
   using std::wcstoll;
   using std::wcstoull;
 
-} 
+}
 
+# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/postypes.h"
 
-
-
-
-# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/postypes.h"
-
-
-
-
-# 67 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/postypes.h"
+# 67 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/postypes.h"
 
 namespace std 
 {
@@ -14283,9 +10960,8 @@ namespace std
    
 
   typedef long          streamoff;
-# 96 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/postypes.h"
+# 96 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/postypes.h"
 
-  
   typedef ptrdiff_t	streamsize; 
 
   
@@ -14428,9 +11104,9 @@ namespace std
 
 
 
-} 
+}
 
-# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/iosfwd"
+# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/iosfwd"
 
 namespace std 
 {
@@ -14598,212 +11274,18 @@ namespace std
    
 
 
-} 
+}
 
-# 73 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/atomicity.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 73 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/atomicity.h"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr.h"
- 
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr.h"
 
 #pragma GCC visibility push(default)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
- 
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
 # 1 "/usr/include/pthread.h"
 
@@ -17521,9 +14003,9 @@ __attribute__ ((__leaf__)) pthread_equal (pthread_t __thread1, pthread_t __threa
 
 }
 
-# 36 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
+# 36 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
-# 46 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
+# 46 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
 typedef pthread_t __gthread_t;
 typedef pthread_key_t __gthread_key_t;
@@ -17533,78 +14015,17 @@ typedef pthread_mutex_t __gthread_recursive_mutex_t;
 typedef pthread_cond_t __gthread_cond_t;
 typedef struct timespec __gthread_time_t;
 
+# 71 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
- 
+# 84 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
+# 97 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
-# 71 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
+# 155 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
-# 84 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
+# 257 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
-# 97 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 155 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
-
-# 257 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-# 297 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
+# 297 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
 static inline int
 __gthread_active_p (void)
@@ -17612,11 +14033,7 @@ __gthread_active_p (void)
   return 1;
 }
 
-
-
-
-
-# 657 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
+# 657 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
 static inline int
 __gthread_create (__gthread_t *__threadid, void *(*__func) (void*),
@@ -17743,7 +14160,7 @@ __gthread_mutex_unlock (__gthread_mutex_t *__mutex)
     return 0;
 }
 
-# 806 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
+# 806 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
 static inline int
 __gthread_recursive_mutex_lock (__gthread_recursive_mutex_t *__mutex)
@@ -17778,7 +14195,7 @@ __gthread_recursive_mutex_destroy (__gthread_recursive_mutex_t *__mutex)
   return __gthread_mutex_destroy (__mutex);
 }
 
-# 848 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr-default.h"
+# 848 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr-default.h"
 
 static inline int
 __gthread_cond_broadcast (__gthread_cond_t *__cond)
@@ -17818,89 +14235,33 @@ __gthread_cond_destroy (__gthread_cond_t* __cond)
   return pthread_cond_destroy (__cond);
 }
 
-
-
-# 149 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/gthr.h"
-
+# 149 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/gthr.h"
 
 #pragma GCC visibility pop
 
-
-# 36 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/atomicity.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/atomic_word.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 36 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/atomicity.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/atomic_word.h"
 
 typedef int _Atomic_word;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/atomicity.h"
+# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/atomicity.h"
 
 namespace __gnu_cxx 
 {
 
+# 55 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/atomicity.h"
+_Atomic_word __attribute__((__unused__))
+__exchange_and_add(volatile _Atomic_word *, int) throw();
 
-  
-  
-  
-  
-# 55 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/atomicity.h"
-  _Atomic_word
-  __attribute__ ((__unused__))
-  __exchange_and_add(volatile _Atomic_word*, int) throw ();
+void __attribute__((__unused__)) __atomic_add(volatile _Atomic_word *,
+                                              int) throw();
 
-  void
-  __attribute__ ((__unused__))
-  __atomic_add(volatile _Atomic_word*, int) throw ();
-
-
-  static inline _Atomic_word
-  __exchange_and_add_single(_Atomic_word* __mem, int __val)
-  {
-    _Atomic_word __result = *__mem;
-    *__mem += __val;
-    return __result;
-  }
+static inline _Atomic_word __exchange_and_add_single(_Atomic_word *__mem,
+                                                     int __val) {
+  _Atomic_word __result = *__mem;
+  *__mem += __val;
+  return __result;
+}
 
   static inline void
   __atomic_add_single(_Atomic_word* __mem, int __val)
@@ -17935,45 +14296,12 @@ namespace __gnu_cxx
   }
 
 
-} 
+}
 
+# 116 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/atomicity.h"
 
-
-
-# 116 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/atomicity.h"
-
-# 74 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/concurrence.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 74 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/concurrence.h"
 
 #pragma GCC system_header
 
@@ -18001,10 +14329,8 @@ namespace __gnu_cxx
 
 
   _S_atomic;
-# 64 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/concurrence.h"
+# 64 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/concurrence.h"
 
-  
-  
   class __concurrence_lock_error : public std::exception
   {
   public:
@@ -18077,7 +14403,7 @@ namespace __gnu_cxx
 
     }
 
-# 146 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/concurrence.h"
+# 146 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/concurrence.h"
 
     void lock()
     {
@@ -18126,7 +14452,7 @@ namespace __gnu_cxx
 
     }
 
-# 201 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/concurrence.h"
+# 201 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/concurrence.h"
 
     void lock()
     { 
@@ -18198,7 +14524,7 @@ namespace __gnu_cxx
 
     }
 
-# 279 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/concurrence.h"
+# 279 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/concurrence.h"
 
     void broadcast()
     {
@@ -18236,67 +14562,10 @@ namespace __gnu_cxx
 
 
 
-} 
+}
 
-# 75 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_function.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
+# 75 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_function.h"
 
 namespace std 
 {
@@ -18967,66 +15236,9 @@ namespace std
    
 
 
-} 
+}
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/backward/binders.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/backward/binders.h"
 
 namespace std 
 {
@@ -19143,45 +15355,12 @@ namespace std
    
 
 
-} 
+}
 
-# 732 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_function.h"
+# 732 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_function.h"
 
-
-# 77 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/uses_allocator.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# 77 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/uses_allocator.h"
 
 namespace std 
 {
@@ -19255,234 +15434,22 @@ template<typename _Tp> class __has_allocator_type_helper : __sfinae_types { temp
     }
 
 
-} 
+}
 
-# 78 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/functional"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
- 
-
-
-
+# 78 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/functional"
 
 #pragma GCC system_header
 
-
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tuple"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tuple"
 
 #pragma GCC system_header
 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/utility"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/utility"
 
 #pragma GCC system_header
 
-
-
-
-
-
-
- 
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_relops.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_relops.h"
 
 namespace std 
 {
@@ -19549,43 +15516,11 @@ namespace std
   
   } 
 
-} 
+}
 
-# 70 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/utility"
+# 70 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/utility"
 
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/initializer_list"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/initializer_list"
 
 #pragma GCC system_header
 
@@ -19659,9 +15594,7 @@ namespace std
 
 #pragma GCC visibility pop
 
-
-
-# 75 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/utility"
+# 75 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/utility"
 
 namespace std 
 {
@@ -19743,202 +15676,26 @@ namespace std
     { return __pair_get<_Int>::__const_get(__in); }
 
 
-} 
+}
 
-
-
-# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tuple"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/array"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tuple"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/array"
 
 #pragma GCC system_header
 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/stdexcept"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/stdexcept"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/string"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/string"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/char_traits.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/char_traits.h"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 
 #pragma GCC system_header
 
@@ -19969,12 +15726,9 @@ namespace std
 
 # 896 "/usr/include/wchar.h"
 
+# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 
- 
-# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
-
-
-# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/char_traits.h"
+# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/char_traits.h"
 
 namespace __gnu_cxx 
 {
@@ -20304,42 +16058,9 @@ namespace std
 
 
 
-} 
+}
 
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdint"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdint"
 
 #pragma GCC system_header
 
@@ -20595,10 +16316,7 @@ typedef unsigned long int	uintmax_t;
 
 
 # 10 "/usr/lib/gcc/x86_64-redhat-linux/4.8.3/include/stdint.h"
-# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdint"
-
-
-
+# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdint"
 
 namespace std
 {
@@ -20637,13 +16355,9 @@ namespace std
 
   using ::uintmax_t;
   using ::uintptr_t;
-} 
+}
 
-
-
-
-
-# 377 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/char_traits.h"
+# 377 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/char_traits.h"
 
 namespace std 
 {
@@ -20836,129 +16550,18 @@ namespace std
     };
 
 
-} 
+}
 
-
-
-# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/string"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/localefwd.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/string"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/localefwd.h"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++locale.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++locale.h"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/clocale"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/clocale"
 
 #pragma GCC system_header
 
@@ -21270,28 +16873,16 @@ extern __locale_t uselocale (__locale_t __dataset) throw ();
 
 }
 
-# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/clocale"
-
-
-
-
-
-
-
+# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/clocale"
 
 namespace std
 {
   using ::lconv;
   using ::setlocale;
   using ::localeconv;
-} 
+}
 
-# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++locale.h"
-
-
-
-
-
+# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++locale.h"
 
 namespace __gnu_cxx 
 {
@@ -21321,7 +16912,7 @@ namespace std
   {
 
     __c_locale __old = __gnu_cxx::__uselocale(__cloc);
-# 87 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++locale.h"
+# 87 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++locale.h"
 
     __builtin_va_list __args;
     __builtin_va_start(__args, __fmt);
@@ -21336,52 +16927,15 @@ namespace std
 
 
     __gnu_cxx::__uselocale(__old);
-# 108 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs7/bits/c++locale.h"
+# 108 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs7/bits/c++locale.h"
     return __ret;
   }
 
 
-} 
+}
 
-# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/localefwd.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cctype"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 41 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/localefwd.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cctype"
 
 #pragma GCC system_header
 
@@ -21599,13 +17153,9 @@ extern int toupper_l (int __c, __locale_t __l) throw ();
 
 }
 
-# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cctype"
+# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cctype"
 
-
-
-
-
-# 61 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cctype"
+# 61 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cctype"
 
 namespace std
 {
@@ -21633,13 +17183,9 @@ namespace std
 namespace std
 {
   using ::isblank;
-} 
+}
 
-
-
-
-
-# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/localefwd.h"
+# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/localefwd.h"
 
 namespace std 
 {
@@ -21785,77 +17331,14 @@ namespace std
     class messages_byname;
 
 
-} 
+}
 
-# 44 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/string"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/ostream_insert.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 44 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/string"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/ostream_insert.h"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/cxxabi_forced.h"
-
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/cxxabi_forced.h"
 
 #pragma GCC system_header
 
@@ -21883,7 +17366,7 @@ namespace __cxxabiv1
 
 #pragma GCC visibility pop
 
-# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/ostream_insert.h"
+# 37 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/ostream_insert.h"
 
 namespace std 
 {
@@ -21974,41 +17457,10 @@ namespace std
 
 
 
-} 
+}
 
-# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/string"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/range_access.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/string"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/range_access.h"
 
 #pragma GCC system_header
 
@@ -22078,47 +17530,10 @@ namespace std
     { return __arr + _Nm; }
 
 
-} 
+}
 
-
-
-# 52 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/string"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/basic_string.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
+# 52 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/string"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/basic_string.h"
 
 #pragma GCC system_header
 
@@ -24893,96 +20308,17 @@ namespace std
 
 
 
-} 
+}
 
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/string_conversions.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/string_conversions.h"
 
 #pragma GCC system_header
 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdlib"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdlib"
 
 #pragma GCC system_header
 
-
-
-
-
-
-# 71 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdlib"
+# 71 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdlib"
 
 # 1 "/usr/include/stdlib.h"
 
@@ -26947,10 +22283,9 @@ __attribute__ ((__leaf__)) atof (const char *__nptr) throw ()
 
 }
 
-# 73 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdlib"
+# 73 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdlib"
 
-
-# 113 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdlib"
+# 113 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdlib"
 
 namespace std 
 {
@@ -27021,11 +22356,9 @@ namespace std
 
 
 
-} 
+}
 
-
-
-# 195 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdlib"
+# 195 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdlib"
 
 namespace __gnu_cxx 
 {
@@ -27050,8 +22383,7 @@ namespace __gnu_cxx
 
   using ::lldiv;
 
-
-# 228 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdlib"
+# 228 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdlib"
   using ::atoll;
   using ::strtoll;
   using ::strtoull;
@@ -27078,51 +22410,10 @@ namespace std
   using ::__gnu_cxx::strtoll;
   using ::__gnu_cxx::strtoull;
   using ::__gnu_cxx::strtold;
-} 
+}
 
-
-
-
-
-# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/string_conversions.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/string_conversions.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 
 #pragma GCC system_header
 
@@ -27153,50 +22444,10 @@ namespace std
 
 # 896 "/usr/include/wchar.h"
 
+# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cwchar"
 
- 
-# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cwchar"
-
-
-# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/string_conversions.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdio"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/string_conversions.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdio"
 
 #pragma GCC system_header
 
@@ -28814,19 +24065,9 @@ __attribute__ ((__leaf__)) ferror_unlocked (FILE *__stream) throw ()
 
 }
 
+# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdio"
 
-
-# 43 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdio"
-
-
-
-
-
-
-
-
-
-# 93 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdio"
+# 93 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdio"
 
 namespace std
 {
@@ -28886,14 +24127,13 @@ namespace std
 
 namespace __gnu_cxx
 {
-# 166 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cstdio"
+# 166 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cstdio"
 
-
-  using ::snprintf;
-  using ::vfscanf;
-  using ::vscanf;
-  using ::vsnprintf;
-  using ::vsscanf;
+using ::snprintf;
+using ::vfscanf;
+using ::vscanf;
+using ::vsnprintf;
+using ::vsscanf;
 
 } 
 
@@ -28904,49 +24144,10 @@ namespace std
   using ::__gnu_cxx::vscanf;
   using ::__gnu_cxx::vsnprintf;
   using ::__gnu_cxx::vsscanf;
-} 
+}
 
-
-
-# 44 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/string_conversions.h"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cerrno"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
+# 44 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/string_conversions.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cerrno"
 
 #pragma GCC system_header
 
@@ -29107,17 +24308,9 @@ extern char *program_invocation_name, *program_invocation_short_name;
 
 
 typedef int error_t;
-# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/cerrno"
+# 42 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/cerrno"
 
-
-
-
-
-
-
-
-
-# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/ext/string_conversions.h"
+# 45 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/ext/string_conversions.h"
 
 namespace __gnu_cxx 
 {
@@ -29176,11 +24369,9 @@ namespace __gnu_cxx
     }
 
 
-} 
+}
 
-
-
-# 2816 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/basic_string.h"
+# 2816 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/basic_string.h"
 
 namespace std 
 {
@@ -29392,44 +24583,9 @@ namespace std
 
 
 
-} 
+}
 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/functional_hash.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/functional_hash.h"
 
 #pragma GCC system_header
 
@@ -29467,11 +24623,12 @@ namespace std
       { return reinterpret_cast<size_t>(__p); }
     };
 
-  
-# 78 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/functional_hash.h"
+# 78 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/functional_hash.h"
 
-  
-  template< > struct hash<bool> : public __hash_base<size_t, bool> { size_t operator()(bool __val) const noexcept { return static_cast<size_t>(__val); } };
+    template <> struct hash<bool> : public __hash_base<size_t, bool> {
+      size_t operator()(bool __val) const noexcept {
+        return static_cast<size_t>(__val);
+      } };
 
   
   template< > struct hash<char> : public __hash_base<size_t, char> { size_t operator()(char __val) const noexcept { return static_cast<size_t>(__val); } };
@@ -29601,9 +24758,9 @@ namespace std
     { };
 
 
-} 
+}
 
-# 3034 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/basic_string.h"
+# 3034 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/basic_string.h"
 
 namespace std 
 {
@@ -29677,50 +24834,10 @@ namespace std
 
 
 
-} 
+}
 
-
-
-# 53 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/string"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/basic_string.tcc"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
+# 53 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/string"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/basic_string.tcc"
 
 #pragma GCC system_header
 
@@ -30846,11 +25963,11 @@ namespace std
 
 
 
-} 
+}
 
-# 54 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/string"
+# 54 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/string"
 
-# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/stdexcept"
+# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/stdexcept"
 
 namespace std 
 {
@@ -30967,11 +26084,9 @@ namespace std
   
 
 
-} 
+}
 
-# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/array"
-
-
+# 39 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/array"
 
 namespace std 
 {
@@ -31252,20 +26367,9 @@ namespace std
     };
 
 
-} 
+}
 
-
-
-
-
-
-
-
-
-
-
-# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tuple"
-
+# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tuple"
 
 namespace std 
 {
@@ -32319,14 +27423,9 @@ namespace std
   
 
 
-} 
+}
 
-
-
-# 56 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/functional"
-
-
-
+# 56 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/functional"
 
 namespace std 
 {
@@ -34845,49 +29944,10 @@ template<typename _Tp> class __has_result_type_helper : __sfinae_types { templat
     { __x.swap(__y); }
 
 
-} 
+}
 
-
-
-# 80 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/unique_ptr.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
+# 80 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/unique_ptr.h"
 
 namespace std 
 {
@@ -35463,112 +30523,12 @@ namespace std
   
 
 
-} 
+}
 
-# 82 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/shared_ptr.h"
+# 82 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/shared_ptr.h"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/shared_ptr_base.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/shared_ptr_base.h"
 
 namespace std 
 {
@@ -36483,27 +31443,27 @@ namespace std
 	  _M_ptr = static_cast<_Tp*>(__p);
 	  __enable_shared_from_this_helper(_M_refcount, _M_ptr, _M_ptr);
 	}
-# 1004 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/shared_ptr_base.h"
+# 1004 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/shared_ptr_base.h"
 
-      template<typename _Tp1, _Lock_policy _Lp1, typename _Alloc,
-	       typename... _Args>
-	friend __shared_ptr<_Tp1, _Lp1>
-	__allocate_shared(const _Alloc& __a, _Args&&... __args);
+        template <typename _Tp1, _Lock_policy _Lp1, typename _Alloc,
+                  typename... _Args>
+        friend __shared_ptr<_Tp1, _Lp1> __allocate_shared(const _Alloc &__a,
+                                                          _Args &&...__args);
 
-    private:
-      void*
-      _M_get_deleter(const std::type_info& __ti) const noexcept
-      { return _M_refcount._M_get_deleter(__ti); }
+      private:
+        void *_M_get_deleter(const std::type_info &__ti) const noexcept {
+          return _M_refcount._M_get_deleter(__ti);
+        }
 
-      template<typename _Tp1, _Lock_policy _Lp1> friend class __shared_ptr;
-      template<typename _Tp1, _Lock_policy _Lp1> friend class __weak_ptr;
+        template <typename _Tp1, _Lock_policy _Lp1> friend class __shared_ptr;
+        template <typename _Tp1, _Lock_policy _Lp1> friend class __weak_ptr;
 
-      template<typename _Del, typename _Tp1, _Lock_policy _Lp1>
-	friend _Del* get_deleter(const __shared_ptr<_Tp1, _Lp1>&) noexcept;
+        template <typename _Del, typename _Tp1, _Lock_policy _Lp1>
+        friend _Del *get_deleter(const __shared_ptr<_Tp1, _Lp1> &) noexcept;
 
-      _Tp*	   	   _M_ptr;         
-      __shared_count<_Lp>  _M_refcount;    
-    };
+        _Tp *_M_ptr;
+        __shared_count<_Lp> _M_refcount;
+  };
 
 
   
@@ -36743,7 +31703,7 @@ namespace std
 	    return __shared_ptr<element_type, _Lp>();
 	  }
 
-# 1269 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/shared_ptr_base.h"
+# 1269 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/shared_ptr_base.h"
       } 
 
       long
@@ -36897,9 +31857,9 @@ namespace std
     };
 
 
-} 
+}
 
-# 53 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/shared_ptr.h"
+# 53 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/shared_ptr.h"
 
 namespace std 
 {
@@ -37477,44 +32437,10 @@ namespace std
   
 
 
-} 
+}
 
-# 83 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/backward/auto_ptr.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
+# 83 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/backward/auto_ptr.h"
 
 namespace std 
 {
@@ -37807,46 +32733,12 @@ namespace std
 
 
 
-} 
+}
 
-# 85 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/memory"
+# 85 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/memory"
 
-
-
-
-
-# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tr1/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tr1/type_traits"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 40 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tr1/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tr1/type_traits"
 
 #pragma GCC system_header
 
@@ -38503,58 +33395,8 @@ namespace tr1
 }
 }
 
-# 50 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tr1/memory"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tr1/shared_ptr.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
+# 50 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tr1/memory"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tr1/shared_ptr.h"
 
 namespace std 
 {
@@ -39379,8 +34221,8 @@ namespace tr1
 	    
 	    return __shared_ptr<element_type, _Lp>();
 	  }
-	
-# 882 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tr1/shared_ptr.h"
+
+# 882 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tr1/shared_ptr.h"
       } 
 
       long
@@ -39671,134 +34513,21 @@ namespace tr1
 }
 }
 
-# 51 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/tr1/memory"
+# 51 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/tr1/memory"
 
 # 2 "/home/dquinlan/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2014_76.C"
 
 namespace scallop {
 using std::tr1::shared_ptr;
-} 
+}
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/vector"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/vector"
 
 #pragma GCC system_header
 
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_vector.h"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_vector.h"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
-
-# 65 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_vector.h"
+# 65 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_vector.h"
 
 namespace std 
 {
@@ -40019,17 +34748,8 @@ namespace std
 	     const allocator_type& __a = allocator_type())
       : _Base(__n, __a)
       { _M_fill_initialize(__n, __value); }
-# 300 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_vector.h"
+# 300 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_vector.h"
 
-      
-
-
-
-
-
-
-
- 
       vector(const vector& __x)
       : _Base(__x.size(),
         _Alloc_traits::_S_select_on_copy(__x._M_get_Tp_allocator()))
@@ -40116,14 +34836,8 @@ namespace std
 	       const allocator_type& __a = allocator_type())
 	: _Base(__a)
         { _M_initialize_dispatch(__first, __last, __false_type()); }
-# 407 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_vector.h"
+# 407 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_vector.h"
 
-      
-
-
-
-
- 
       ~vector() noexcept
       { std::_Destroy(this->_M_impl._M_start, this->_M_impl._M_finish,
 		      _M_get_Tp_allocator()); }
@@ -40210,20 +34924,8 @@ namespace std
         void
         assign(_InputIterator __first, _InputIterator __last)
         { _M_assign_dispatch(__first, __last, __false_type()); }
-# 510 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_vector.h"
+# 510 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_vector.h"
 
-
-      
-
-
-
-
-
-
-
-
-
- 
       void
       assign(initializer_list<value_type> __l)
       { this->assign(__l.begin(), __l.end()); }
@@ -40392,10 +35094,8 @@ namespace std
 	else if (__new_size < size())
 	  _M_erase_at_end(this->_M_impl._M_start + __new_size);
       }
-# 712 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_vector.h"
+# 712 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_vector.h"
 
-
-       
       void
       shrink_to_fit()
       { _M_shrink_to_fit(); }
@@ -40728,23 +35428,8 @@ namespace std
         insert(iterator __position, _InputIterator __first,
 	       _InputIterator __last)
         { _M_insert_dispatch(__position, __first, __last, __false_type()); }
-# 1058 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_vector.h"
+# 1058 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_vector.h"
 
-      
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
       iterator
       erase(iterator __position);
 
@@ -41127,71 +35812,10 @@ namespace std
     { __x.swap(__y); }
 
 
-} 
+}
 
-# 65 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/vector"
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
-
-
-
-
+# 65 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/vector"
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
 
 namespace std 
 {
@@ -41701,7 +36325,7 @@ template<typename _Alloc>
       std::fill(this->_M_impl._M_start._M_p, this->_M_impl._M_end_of_storage, 
 		__value ? ~0 : 0);
     }
-# 582 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
+# 582 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
 
     vector(const vector& __x)
     : _Base(__x._M_get_Bit_allocator())
@@ -41730,7 +36354,7 @@ template<typename _Alloc>
 	     const allocator_type& __a = allocator_type())
       : _Base(__a)
       { _M_initialize_dispatch(__first, __last, __false_type()); }
-# 620 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
+# 620 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
 
     ~vector() noexcept { }
 
@@ -41782,8 +36406,7 @@ template<typename _Alloc>
       void
       assign(_InputIterator __first, _InputIterator __last)
       { _M_assign_dispatch(__first, __last, __false_type()); }
-# 680 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
-
+# 680 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
 
     void
     assign(initializer_list<bool> __l)
@@ -41979,7 +36602,7 @@ template<typename _Alloc>
       insert(iterator __position,
 	     _InputIterator __first, _InputIterator __last)
       { _M_insert_dispatch(__position, __first, __last, __false_type()); }
-# 886 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
+# 886 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/stl_bvector.h"
 
     void
     insert(iterator __position, size_type __n, const bool& __x)
@@ -42247,69 +36870,9 @@ namespace std
 
 }
 
+# 66 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/vector"
 
-
-# 66 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/vector"
-
-
-# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/vector.tcc"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
- 
-
-
-
+# 1 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/vector.tcc"
 
 namespace std 
 {
@@ -42562,15 +37125,13 @@ namespace std
 	return iterator(this->_M_impl._M_start + __n);
       }
 
-  template<typename _Tp, typename _Alloc>
-    template<typename... _Args>
-      void
-      vector<_Tp, _Alloc>::
-      _M_insert_aux(iterator __position, _Args&&... __args)
-# 321 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/bits/vector.tcc"
-    {
-      if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage)
-	{
+      template <typename _Tp, typename _Alloc>
+      template <typename... _Args>
+      void vector<_Tp, _Alloc>::_M_insert_aux(iterator __position,
+                                              _Args &&...__args)
+# 321 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/bits/vector.tcc"
+      {
+        if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage) {
 	  _Alloc_traits::construct(this->_M_impl, this->_M_impl._M_finish,
 			           std::move(*(this->_M_impl . _M_finish - 1)));
 
@@ -42640,8 +37201,7 @@ namespace std
 	  this->_M_impl._M_finish = __new_finish;
 	  this->_M_impl._M_end_of_storage = __new_start + __len;
 	}
-    }
-
+      }
 
   template<typename _Tp, typename _Alloc>
     template<typename... _Args>
@@ -43101,22 +37661,9 @@ namespace std
     }
 
 
-} 
+}
 
-
-
-# 70 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/include-staging/icpc_HEADERS/hdrs6/vector"
-
-
-
-
-
-
-
-
-
-
-
+# 70 "/home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-intel-v14--dq-development-rc/compiler-headers/icpc_HEADERS/hdrs6/vector"
 
 # 8 "/home/dquinlan/ROSE/git_rose_development/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2014_76.C"
 
