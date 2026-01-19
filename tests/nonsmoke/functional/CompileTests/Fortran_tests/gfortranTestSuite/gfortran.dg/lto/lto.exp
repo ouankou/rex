@@ -27,7 +27,7 @@ if $tracelevel then {
     strace $tracelevel
 }
 
-# Load procedures from common libraries. 
+# Load procedures from common libraries.
 load_lib standard.exp
 load_lib gfortran-dg.exp
 

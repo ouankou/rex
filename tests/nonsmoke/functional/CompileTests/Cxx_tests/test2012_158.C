@@ -17,10 +17,3 @@ void foo<int>()
 // general template instatiation directive
 // This will trigger an error if the specialization has not been put out!
 template void foo<long>();
-
-#if 0
-void foobar()
-{
-  foo<int>();
-}
-#endif

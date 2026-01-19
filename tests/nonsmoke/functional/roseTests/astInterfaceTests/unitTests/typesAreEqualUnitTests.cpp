@@ -261,24 +261,6 @@ TEST(SageInterfaceTypeEquivalence, CharArrayArrayIsEqual) {
   EXPECT_EQ(tcRef, true);
 }
 
-#if 0
-TEST(SageInterfaceTypeEquivalence, ConstVarIntLiteralArrayIsEqual){
-  ::SgGlobal *global = new SgGlobal();
-  // build assign-initializer, build variable declaration, build varrefexp
-  ::SgBasicBlock* bb = SageBuilder::buildBasicBlock();
-  bb->set_parent(global);
-  ::SgAssignInitializer* init = SageBuilder::buildAssignInitializer(SageBuilder::buildIntVal(42), SageBuilder::buildIntType());
-  ::SgVariableDeclaration* vDecl = isSgVariableDeclaration(SageBuilder::buildVariableDeclaration(SgName("refVar"), SageBuilder::buildConstType(SageBuilder::buildIntType()), init, bb));
-//  vDecl->get_declarationModifier().get_typeModifier().get_constVolatileModifier().setConst();
-  ::SgVarRefExp* vRef = SageBuilder::buildVarRefExp(vDecl);
-  ::SgArrayType* a_7 = SageBuilder::buildArrayType(SageBuilder::buildIntType(), vRef);
-  ::SgArrayType* a_8 = SageBuilder::buildArrayType(SageBuilder::buildIntType(), vRef);
-  bool tcRef = SageInterface::checkTypesAreEqual(a_7, a_8);
-  EXPECT_EQ(tcRef, true);
-  delete global;
-}
-#endif
-
 TEST(SageInterfaceTypeEquivalence, IntCharArrayTypesAreUnequal) {
   ::SgArrayType *a_1 = SageBuilder::buildArrayType(
       SageBuilder::buildCharType(), SageBuilder::buildIntVal(42));

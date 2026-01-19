@@ -9,14 +9,14 @@ program test
   integer, pointer :: ps => NULL(), pa(:) => NULL()
   integer, allocatable :: as, aa(:)
 
-  call scalar(ps) 
-  call scalar(as) 
-  call scalar() 
+  call scalar(ps)
+  call scalar(as)
+  call scalar()
   call scalar(NULL())
 
-  call assumed_size(pa) 
-  call assumed_size(aa) 
-  call assumed_size() 
+  call assumed_size(pa)
+  call assumed_size(aa)
+  call assumed_size()
   call assumed_size(NULL(pa))
 
   call assumed_shape(pa)

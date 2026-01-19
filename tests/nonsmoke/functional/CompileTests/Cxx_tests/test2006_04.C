@@ -1,18 +1,3 @@
-#if 0
-When compiling the code
-class X{
-public:
-void foo(){ ::operator new(1); }
-
-};
-ROSE gives the following error message:
-rose_test.C: In member function "void X::foo()":
-rose_test.C:8: error: expected identifier before ";" token
-
-The problem is that the unparser unparses "::operator new(1)" as ":: new(1)".
-
-Andreas
-#endif
 
 
 class X
@@ -23,7 +8,6 @@ class X
 
    };
 
-#if 1
 // This function shows how the two function calls to new are represented differently in the AST
 // The first time as a SgNewExp IR node and the second time as a function call.
 void
@@ -36,10 +20,8 @@ foobar()
   // While this has a call to a SgFunctionCallExp (since it is called with "operator new" syntax)
      ::operator new(1);
      ::operator delete(voidPointer);
-   }
-#endif
+}
 
-#if 1
 // See if this also happens for member functions called two different ways!
 class Y
    {
@@ -64,7 +46,4 @@ foobar2()
 
   // While this has a call to a SgFunctionCallExp using SgMemberFunctionRefExp (since it is called with "operator new" syntax)
      Y::operator new(1);
-   }
-#endif
-
-
+}

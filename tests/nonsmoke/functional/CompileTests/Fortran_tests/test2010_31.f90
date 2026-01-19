@@ -6,7 +6,7 @@
 
   ! Dimension routines
   public :: nf90_def_dim
-  
+
   ! Dimension routines   nf_inq_dim
   integer,              external :: nf_def_dim
 

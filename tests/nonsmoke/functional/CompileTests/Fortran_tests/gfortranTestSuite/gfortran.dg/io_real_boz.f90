@@ -35,7 +35,7 @@ program real_boz
   write(fmt,'(a,i0,a)') '(b',len_trim(str),')'
   read(str,fmt) r2
   if(r /= r2) call abort()
-  
+
   write(str,'(o0)') r
   write(fmt,'(a,i0,a)') '(o',len_trim(str),')'
   read(str,fmt) r2
@@ -63,4 +63,4 @@ program real_boz
   if(c /= c2) call abort()
 
 end program real_boz
-  
+

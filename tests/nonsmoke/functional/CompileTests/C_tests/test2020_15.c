@@ -6,10 +6,8 @@ void foobar()
         {
           case 40: 41;
             // #pragma XXX
-#if 1
-               __attribute__ ((__fallthrough__));
-#endif
-          int abc;
+            __attribute__((__fallthrough__));
+            int abc;
           case 42: 43;
         }
    }

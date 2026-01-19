@@ -68,7 +68,7 @@ int  *nxpix, *nypix, *ixloc, *iyloc;
 
 /* -----------------------------------------------------------------------
 
-   FixCeateDisplay creates and displays an X window.  It must be called 
+   FixCeateDisplay creates and displays an X window.  It must be called
    for each window generated.  It must be called before other Fix routines
    referring to the window are called.  FixCreateDisplay is an integer
    function that returns the current window number.
@@ -118,7 +118,7 @@ int  *nxpix, *nypix, *ixloc, *iyloc;
    unsigned int xhot, yhot, ckw, ckh, cbw, cdepth;
    int endflg = 0;
    XEvent events;
-  
+
    /* Create an X display and open a window of size nxpix x nypix. */
 
    if (nwindow == 0)
@@ -202,7 +202,7 @@ int  *nxpix, *nypix, *ixloc, *iyloc;
    classhints.res_class = "Fix";
 
    XSetWMProperties(display,window,&windowName,&iconName,NULL,0,&hints,
-                     &wmhints,&classhints); 
+                     &wmhints,&classhints);
 
    /* Set font, gc, forground and background colors. */
 
@@ -222,7 +222,7 @@ int  *nxpix, *nypix, *ixloc, *iyloc;
          current_font = nfonts;
         }
      }
-   else 
+   else
      {
       font_info = fonts_info[0];
      }
@@ -262,7 +262,7 @@ int  *nxpix, *nypix, *ixloc, *iyloc;
       x1 = 0; x2 = cwidth; y1 = y2 = cheight/2;
       XDrawLine(display,cmask,gcmask,x1,y1+1,x2,y2+1);
       XDrawLine(display,cmask,gcmask,x1,y1,x2,y2);
-      XDrawLine(display,cmask,gcmask,x1,y1-1,x2,y2-1);     
+      XDrawLine(display,cmask,gcmask,x1,y1-1,x2,y2-1);
       x1 = x2 = cwidth/2; y1 = 0; y2 = cheight;
       XDrawLine(display,cmask,gcmask,x1+1,y1,x2+1,y2);
       XDrawLine(display,cmask,gcmask,x1,y1,x2,y2);
@@ -277,7 +277,7 @@ int  *nxpix, *nypix, *ixloc, *iyloc;
 
       gcrb = XCreateGC(display,window,0,NULL);
     }
- 
+
    /* Make sure the window is exposed before drawing to it. */
    XSelectInput(display,window,ExposureMask);
    XMapWindow(display,window);
@@ -290,7 +290,7 @@ int  *nxpix, *nypix, *ixloc, *iyloc;
         {
          if (events.xexpose.count == 0) endflg = 1;
         }
-     }  
+     }
    XSelectInput(display,window, NoEventMask);
    XFlush(display);
    XFree( windowName.value );	/* --JSP */
@@ -319,7 +319,7 @@ float  red[], green[], blue[];
 
    FixSetColorMap sets a new color map for the current window.  The red,
    green, and blue arrays used to define the new color map must be a set
-   of real numbers between 0. and 1. 
+   of real numbers between 0. and 1.
 
    Usage:
      call FixSetColorMap(red,green,blue,nclrs)
@@ -346,7 +346,7 @@ int  *nclrs;
   unsigned int  foreground, background;
 
     /* Set colormap info. */
-    
+
     ncol = *nclrs;
     scrn = DefaultScreen(display);
     visual = DefaultVisual(display, scrn);
@@ -355,50 +355,50 @@ int  *nclrs;
     /* Set visual info. */
 
     vclass = PseudoColor;
-    vdepth = 8; 
-    if (ncol > 256) 
+    vdepth = 8;
+    if (ncol > 256)
     {
        vclass = DirectColor;
-       vdepth = 24; 
+       vdepth = 24;
     }
     vfound = 0;
     vlist = XGetVisualInfo(display,VisualNoMask,&vinfo_template,&nvis);
 
     for (v = vlist; v < vlist+nvis; v++)
     {
-       if (v->class == vclass && v->depth == vdepth) 
+       if (v->class == vclass && v->depth == vdepth)
        {
           vfound = 1;
           visual = v->visual;
           break;
        }
     }
-   
+
     if (vfound == 0)
     {
        printf(" FixSetColorMap error, server cannot process %d colors.\n",
               ncol);
        exit(1);
     }
-          
+
     /* Create new color map. */
 
     cmap = XCreateColormap(display,window,visual,AllocAll);
     cmaps[nwindow-1] = cmap;
 
-    /* Loop through nclrs, set colors and call XStoreColor.  Determine */ 
+    /* Loop through nclrs, set colors and call XStoreColor.  Determine */
     /* darkest color for background, lightest for foreground.          */
 
     colorcell_def.flags = DoRed | DoGreen | DoBlue;
 
     fcol = 0;  bcol = 65535 * 3;
 
-    for (i = 0; i < ncol; i++) 
+    for (i = 0; i < ncol; i++)
     {
        colorcell_def.pixel = (unsigned int) (i);
        colorcell_def.red = (unsigned short) (red[i] * 65535);
        colorcell_def.green = (unsigned short) (green[i] * 65535);
-       colorcell_def.blue = (unsigned short) (blue[i] * 65535); 
+       colorcell_def.blue = (unsigned short) (blue[i] * 65535);
 
        XStoreColor(display,cmap,&colorcell_def);
 
@@ -466,7 +466,7 @@ int *width, *height, *depth;
    int  x, y;
    unsigned int  wwidth, wheight, border_width, wdepth;
    int stat;
- 
+
    stat = XGetGeometry(display,window,&root,&x,&y,&wwidth,&wheight,
                        &border_width,&wdepth);
 
@@ -555,7 +555,7 @@ int idata[];
    int  i, j, k, bitmap_pad;
    unsigned int  width, height, depth;
    char  *image_data;
-   
+
    /* Allocate image data array and create x-image. */
 
    width = *nxpix;  height = *nypix;
@@ -565,7 +565,7 @@ int idata[];
       printf(" FixPutImage error, unable to allocate image array.\n");
       exit(1);
    }
-    
+
    depth = vdepth;
    bitmap_pad = vdepth;
 
@@ -639,11 +639,11 @@ char *string;
 {
    int  x, y, length, i;
    char cstring[81];
-   
+
    x = *xptr;
    y = *yptr;
    length = *lengthptr;
-   
+
    for (i = 0; i < length; ++i) cstring[i] = string[i];
    cstring[length] = '\0';
    XDrawString(display,window,gcon,x,y,cstring,length);
@@ -690,12 +690,12 @@ int *x1ptr, *y1ptr, *x2ptr, *y2ptr;
 
 {
    int  x1, y1, x2, y2;
-   
+
    x1 = *x1ptr;
    y1 = *y1ptr;
    x2 = *x2ptr;
    y2 = *y2ptr;
-   
+
    XDrawLine(display,window,gcon,x1,y1,x2,y2);
 
    return;
@@ -739,21 +739,21 @@ int xptr[], yptr[], *nlines;
 {
    int  npoints,i,indx;
    XPoint points[MAXPTS];
-   
+
    npoints = *nlines;
    indx = 0;
    for (i = 0; i < npoints; i++)
      {
-      points[indx].x = xptr[i]; 
+      points[indx].x = xptr[i];
       points[indx].y = yptr[i];
       indx++;
       if (indx == MAXPTS)
         {
          XDrawLines(display,window,gcon,points,indx,CoordModeOrigin);
          indx = 0;
-        }        
+        }
      }
-   
+
    if (indx > 0)
       XDrawLines(display,window,gcon,points,npoints,CoordModeOrigin);
 
@@ -795,10 +795,10 @@ int *xptr, *yptr;
 
 {
    int  x, y;
-   
+
    x = *xptr;
    y = *yptr;
-   
+
    XDrawPoint(display,window,gcon,x,y);
 
    return;
@@ -841,21 +841,21 @@ int xptr[], yptr[], *npts;
 {
    int  npoints,i,indx;
    XPoint points[MAXPTS];
-   
+
    npoints = *npts;
    indx = 0;
    for (i = 0; i < npoints; i++)
      {
-      points[indx].x = xptr[i]; 
+      points[indx].x = xptr[i];
       points[indx].y = yptr[i];
       indx++;
       if (indx == MAXPTS)
         {
          XDrawPoints(display,window,gcon,points,indx,CoordModeOrigin);
          indx = 0;
-        }        
+        }
     }
-   
+
    if (indx > 0)
       XDrawPoints(display,window,gcon,points,npoints,CoordModeOrigin);
 
@@ -928,7 +928,7 @@ int *icol;
      call FixSetForeground(icol)
 
    Agruments:
-     icol - Color index or pixel of the current color map to set as the 
+     icol - Color index or pixel of the current color map to set as the
             foreground.
 
    Data Types:
@@ -1061,7 +1061,7 @@ char  *fname;
 /* -----------------------------------------------------------------------
 
    FixSetWname sets the window name and icon name for the current window.
-   The name can be up to 80 characters int.  
+   The name can be up to 80 characters int.
 
    Usage:
      call FixSetWname(wname)
@@ -1080,7 +1080,7 @@ char  *fname;
    char  *tempname;
    char  tempchar[81];
 
-  
+
    /* Terminate fname with null character. */
 
    len = strlen(fname);
@@ -1108,7 +1108,7 @@ char  *fname;
    }
    XSetWMIconName(display,window,&iconName);
 
-   
+
 
    XFlush(display);
    XFree(windowName.value);	/* --JSP */
@@ -1136,7 +1136,7 @@ int xptr[], yptr[], *nverts, *ifill;
 /* -----------------------------------------------------------------------
 
    FixPolyConvex draws a filled or unfilled convex polygon in the current
-   window using the foreground color.  The polygon need not be closed. 
+   window using the foreground color.  The polygon need not be closed.
    Note - the window origin is at the upper left corner.
 
    Usage:
@@ -1156,7 +1156,7 @@ int xptr[], yptr[], *nverts, *ifill;
 {
    int  npoints,i,indx,fillflg,idist;
    XPoint points[MAXPTS];
-   
+
    npoints = *nverts;
 
    if (npoints > MAXPTS)
@@ -1168,12 +1168,12 @@ int xptr[], yptr[], *nverts, *ifill;
    indx = 0;
    for (i = 0; i < npoints; i++)
      {
-      points[indx].x = xptr[i]; 
+      points[indx].x = xptr[i];
       points[indx].y = yptr[i];
-      indx++;      
+      indx++;
      }
 
-   fillflg = *ifill;  
+   fillflg = *ifill;
    if (fillflg != 0)
       XFillPolygon(display,window,gcon,points,npoints,Convex,CoordModeOrigin);
 
@@ -1210,7 +1210,7 @@ int xptr[], yptr[], *nverts, *ifill;
 /* -----------------------------------------------------------------------
 
    FixPolyNonConvex draws a filled or unfilled non-convex polygon in the
-   current window using the foreground color.  The polygon need not be  
+   current window using the foreground color.  The polygon need not be
    closed.  Note - the window origin is at the upper left corner.
 
    Usage:
@@ -1230,7 +1230,7 @@ int xptr[], yptr[], *nverts, *ifill;
 {
    int  npoints,i,indx,fillflg,idist;
    XPoint points[MAXPTS];
-   
+
    npoints = *nverts;
 
    if (npoints > MAXPTS)
@@ -1242,12 +1242,12 @@ int xptr[], yptr[], *nverts, *ifill;
    indx = 0;
    for (i = 0; i < npoints; i++)
      {
-      points[indx].x = xptr[i]; 
+      points[indx].x = xptr[i];
       points[indx].y = yptr[i];
-      indx++;      
+      indx++;
      }
 
-   fillflg = *ifill;  
+   fillflg = *ifill;
    if (fillflg != 0)
       XFillPolygon(display,window,gcon,points,npoints,Nonconvex,
                    CoordModeOrigin);
@@ -1285,7 +1285,7 @@ int xptr[], yptr[], *nverts, *ifill;
 /* -----------------------------------------------------------------------
 
    FixPolyComplex draws a filled or unfilled complex polygon in the current
-   window using the foreground color.  The polygon need not be closed. 
+   window using the foreground color.  The polygon need not be closed.
    Note - the window origin is at the upper left corner.
 
    Usage:
@@ -1305,7 +1305,7 @@ int xptr[], yptr[], *nverts, *ifill;
 {
    int  npoints,i,indx,fillflg,idist;
    XPoint points[MAXPTS];
-   
+
    npoints = *nverts;
 
    if (npoints > MAXPTS)
@@ -1317,11 +1317,11 @@ int xptr[], yptr[], *nverts, *ifill;
    indx = 0;
    for (i = 0; i < npoints; i++)
      {
-      points[indx].x = xptr[i]; 
+      points[indx].x = xptr[i];
       points[indx].y = yptr[i];
-      indx++;      
+      indx++;
      }
-   
+
    fillflg = *ifill;
    if (fillflg != 0)
       XFillPolygon(display,window,gcon,points,npoints,Complex,
@@ -1380,7 +1380,7 @@ int *xptr, *yptr, *wptr, *hptr, *ifill;
 
 {
    int  x, y, width, height, fillflg;
-   
+
    x = *xptr;
    y = *yptr;
    width = *wptr;
@@ -1395,7 +1395,7 @@ int *xptr, *yptr, *wptr, *hptr, *ifill;
      }
    else
       XDrawRectangle(display,window,gcon,x,y,width,height);
-   
+
 
    return;
 
@@ -1420,7 +1420,7 @@ int dashdef[], *ndash;
 
    FixSetDashes sets a pattern of line dashes for subsequent dashed line
    drawings.
- 
+
    Usage:
      call FixSetDashes(dashdef, ndash)
 
@@ -1438,7 +1438,7 @@ int dashdef[], *ndash;
 {
    int  idash, n, i, dash_offset = 0;
    char dash_list[50];
-   
+
    n = *ndash;
 
    if (n > 50)
@@ -1477,7 +1477,7 @@ int *width, *dashflg;
 
    FixSetLineAttr sets the line attributes for width and dashed or solid
    lines for subsequent line drawings.
- 
+
    Usage:
      call FixSetLineAttr(width, dashflg)
 
@@ -1495,7 +1495,7 @@ int *width, *dashflg;
 {
    unsigned int line_width;
    int line_style;
-   
+
    line_width = *width;
    line_style = LineSolid;
    if (*dashflg == 1) line_style = LineOnOffDash;
@@ -1526,7 +1526,7 @@ int *xptr, *yptr;
 
    FixPickxy returns the pixel x,y location of the cursor in the current
    window when any mouse button is pressed.
- 
+
    Usage:
      call FixPickxy(x, y)
 
@@ -1543,7 +1543,7 @@ int *xptr, *yptr;
    int xloc, yloc;
    int endflg = 0;
    XEvent events;
-   
+
    XSelectInput(display,window, ButtonPressMask | ButtonReleaseMask |
                 OwnerGrabButtonMask);
    XMapRaised(display,window);
@@ -1565,7 +1565,7 @@ int *xptr, *yptr;
             endflg = 1;
             break;
         }
-     } 
+     }
 
    *xptr = xloc;
    *yptr = yloc;
@@ -1595,10 +1595,10 @@ int *maxpicks, xptr[], yptr[], *npicks;
 /* -----------------------------------------------------------------------
 
    FixPickxys returns the pixel x,y locations of the cursor in the current
-   window when the left mouse button is pressed.  Up to maxpix locations 
+   window when the left mouse button is pressed.  Up to maxpix locations
    can be returned.  The right mouse button can be used to stop the
    process. The number of location picks are returned in npicks.
- 
+
    Usage:
      call FixPickxys(maxpicks, xarray, yarray, npicks)
 
@@ -1621,7 +1621,7 @@ int *maxpicks, xptr[], yptr[], *npicks;
    unsigned int  rwidth, rheight;
    int  rxoff, ryoff;
    XImage  *save;
- 
+
    XMapRaised(display,window);
    XSync(display,True);
    DefineImageRectangle(&rxoff,&ryoff,&rwidth,&rheight);
@@ -1657,10 +1657,10 @@ int *maxpicks, xptr[], yptr[], *npicks;
             if (events.xbutton.button > 1) endflg = 1;
             break;
         }
-     } 
+     }
 
    *npicks = i;
-      
+
    XPutImage(display,window,gcon,save,0,0,rxoff,ryoff,rwidth,rheight);
    XUndefineCursor(display, window);
    XFlush(display);
@@ -1691,7 +1691,7 @@ int idata[];
 
 /* -----------------------------------------------------------------------
 
-   FixGetImage gets an X image array from the current window and places 
+   FixGetImage gets an X image array from the current window and places
    the image into a 2d integer array.
    Note - the window origin is at the upper left corner.
 
@@ -1731,7 +1731,7 @@ int idata[];
 
    XMapRaised(display,window);
    XSync(display,True);
-    
+
    depth = vdepth;
    bitmap_pad = vdepth;
 
@@ -1741,7 +1741,7 @@ int idata[];
       printf(" FixGetImage error, XCreateImage error.\n");
       exit(1);
    }
-  
+
    /* Fill the image array with the background color. */
 
    valuemask = GCForeground | GCBackground;
@@ -1761,7 +1761,7 @@ int idata[];
    /* Determine the parts of the window that lies within the screen. */
 
    DefineImageRectangle(&rxoff,&ryoff,&rwidth,&rheight);
- 
+
    /* Get subimage. */
 
    if ((image = XGetSubImage(display,window,rxoff,ryoff,rwidth,rheight,-1,
@@ -1770,7 +1770,7 @@ int idata[];
       printf(" FixGetImage error.\n");
       exit(1);
    }
-   
+
    /* Place image_data into fortran array. */
 
    k = 0;
@@ -1779,7 +1779,7 @@ int idata[];
       for (i = 0; i < width; i++)
         {
          idata[k] = image->data[k];
-         k++; 
+         k++;
         }
      }
 
@@ -1810,7 +1810,7 @@ char  *fname;
 /* -----------------------------------------------------------------------
 
    FixSetFont sets the font for the current window.  The font name can be
-   up to 80 characters int.  
+   up to 80 characters int.
 
    Usage:
      call FixSetFont(fname)
@@ -1829,7 +1829,7 @@ char  *fname;
    char  *tempname;
    char  tempchar[81];
 
-  
+
    /* Terminate fname with null character. */
 
    len = strlen(fname);
@@ -1843,7 +1843,7 @@ char  *fname;
 
    tempname = tempchar;
    ifound = -1;
-   if (nfonts > 0) 
+   if (nfonts > 0)
       for (i = 0; i < nfonts; i++)
           if (strcmp(tempname,fontnames[i]) == 0) ifound = i;
    if (ifound >= 0)
@@ -1898,7 +1898,7 @@ void fixmapraised_()
 /* -----------------------------------------------------------------------
 
    FixMapRaised raises and maps the current window.  When the FixGetImage
-   funtion will be used, this function sould be called before drawing to  
+   funtion will be used, this function sould be called before drawing to
    the window.
 
 
@@ -1916,7 +1916,7 @@ void fixmapraised_()
 {
    int endflg = 0;
    XEvent events;
-   
+
    /* Raise the window then wait for expose events. */
 
    XSelectInput(display,window,StructureNotifyMask);
@@ -1925,7 +1925,7 @@ void fixmapraised_()
      {
       XNextEvent(display, &events);
       if (events.type == ConfigureNotify) endflg = 1;
-     }  
+     }
    XSelectInput(display,window, NoEventMask);
 
 
@@ -1951,9 +1951,9 @@ float  red[], green[], blue[];
 
 /* -----------------------------------------------------------------------
 
-   Fix GetStandardColors gets the standard color map of the parent window.  
-   The red, green, and blue arrays containing real numbers between 0. and 
-   1 are returned. 
+   Fix GetStandardColors gets the standard color map of the parent window.
+   The red, green, and blue arrays containing real numbers between 0. and
+   1 are returned.
 
    Usage:
      call FixGetStandardColors(nclrs,red,green,blue)
@@ -1974,15 +1974,15 @@ float  red[], green[], blue[];
     int ncol, i;
     XColor colorcell_def;
 
-    /* Loop through nclrs, set red, green and blue arrays. */ 
+    /* Loop through nclrs, set red, green and blue arrays. */
 
     ncol = *nclrs;
 
-    for (i = 0; i < ncol; i++) 
+    for (i = 0; i < ncol; i++)
     {
        colorcell_def.pixel = (unsigned int) (i);
        XQueryColor(display,standard_cmap,&colorcell_def);
- 
+
        red[i] = (float) (colorcell_def.red)/65535.;
        green[i] = (float) (colorcell_def.green)/65535.;
        blue[i] = (float) (colorcell_def.blue)/65535.;
@@ -2010,12 +2010,12 @@ int *npts, xptr[], yptr[], *iptmoved;
 
 /* -----------------------------------------------------------------------
 
-   FixMovePt moves the point from the input arrays closest to the spot 
-   where a mouse button is pressed, then rubber bands the point until 
-   the button is released.  The point is changed to the location of the 
-   button when it was released and the changed point array location is 
+   FixMovePt moves the point from the input arrays closest to the spot
+   where a mouse button is pressed, then rubber bands the point until
+   the button is released.  The point is changed to the location of the
+   button when it was released and the changed point array location is
    returned.
- 
+
    Usage:
      call FixMovePt(npts, xarray, yarray, itpmoved)
 
@@ -2039,7 +2039,7 @@ int *npts, xptr[], yptr[], *iptmoved;
    Window  root;
    unsigned int valuemask;
    XGCValues values;
- 
+
    XGetGeometry(display,window,&root,&x,&y,&wwidth,&wheight,
                 &border_width,&wdepth);
    mindist = (float) (wwidth*wwidth + wheight*wheight);
@@ -2075,31 +2075,31 @@ int *npts, xptr[], yptr[], *iptmoved;
                   ipt = i;
                  }
               }
-            xo = xptr[ipt]; 
+            xo = xptr[ipt];
             yo = yptr[ipt];
-            XDrawLine(display,window,gcrb,xo,yo,x,y); 
+            XDrawLine(display,window,gcrb,xo,yo,x,y);
             break;
 
          case MotionNotify:
-            XDrawLine(display,window,gcrb,xo,yo,x,y); 
+            XDrawLine(display,window,gcrb,xo,yo,x,y);
             x = events.xbutton.x;
             y = events.xbutton.y;
-            XDrawLine(display,window,gcrb,xo,yo,x,y); 
+            XDrawLine(display,window,gcrb,xo,yo,x,y);
             break;
 
          case ButtonRelease:
-            XDrawLine(display,window,gcrb,xo,yo,x,y); 
+            XDrawLine(display,window,gcrb,xo,yo,x,y);
             x = events.xbutton.x;
             y = events.xbutton.y;
             endflg = 1;
             break;
         }
-     } 
+     }
 
    *iptmoved = ipt+1;
    xptr[ipt] = x;
    yptr[ipt] = y;
-      
+
    XUndefineCursor(display, window);
    XFlush(display);
    XSelectInput(display,window, NoEventMask);
@@ -2126,9 +2126,9 @@ char *string;
 
 /* -----------------------------------------------------------------------
 
-   FixGetStringSize gets the size information of a text string for the 
+   FixGetStringSize gets the size information of a text string for the
    current font.  The string width, height and the width of the rectangle
-   that encloses the string is retruned.  Up to 80 characters can be 
+   that encloses the string is retruned.  Up to 80 characters can be
    checked per call.
 
    Usage:
@@ -2153,14 +2153,14 @@ char *string;
    int  dir, ascent, descent;
    XCharStruct strinfo;
    XFontStruct  *font_info;
-   
+
    length = *lengthptr;
-   
+
    /* Get the font structure for the current window GC. */
- 
+
    font_info = fonts_info[current_font-1];
 
-   /* Set the string and get the font information. */ 
+   /* Set the string and get the font information. */
    for (i = 0; i < length; ++i) cstring[i] = string[i];
    cstring[length] = '\0';
    XTextExtents(font_info, cstring, length, &dir, &ascent, &descent,
@@ -2192,16 +2192,16 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
 
 /* -----------------------------------------------------------------------
 
-   FixMv2dMeshPts moves 2-D mesh points from the input arrays closest to 
+   FixMv2dMeshPts moves 2-D mesh points from the input arrays closest to
    the spot where a mouse button is pressed, then rubber bands from grid
-   neighbors until the button is released.  The point is changed to the 
-   location of the button when it was released and the changed point array 
-   location is flagged for return.  The original grid lines connecting the 
-   point to grid neighbors are redrawn in the background color to make it  
-   invisible, then new lines connecting the point to its neighbors are drawn 
-   in the color passed by iclrnew.  Pressing the right mouse button stops 
+   neighbors until the button is released.  The point is changed to the
+   location of the button when it was released and the changed point array
+   location is flagged for return.  The original grid lines connecting the
+   point to grid neighbors are redrawn in the background color to make it
+   invisible, then new lines connecting the point to its neighbors are drawn
+   in the color passed by iclrnew.  Pressing the right mouse button stops
    the process.
-  
+
    Usage:
      call FixMv2DMeshPts(iclrnew, nx, ny, xarray, yarray, itpsmoved)
 
@@ -2229,7 +2229,7 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
    Window  root;
    unsigned int valuemask, oldforeground, oldbackground, iclr;
    XGCValues values;
- 
+
    XGetGeometry(display,window,&root,&x,&y,&wwidth,&wheight,
                 &border_width,&wdepth);
    maxdist = (float) (wwidth*wwidth + wheight*wheight);
@@ -2254,7 +2254,7 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
    iclr = *iclrnew - 1;
 
    for (i = 0; i <nmax; i++) iptsmoved[i] = 0;
-   
+
    while (endflg == 0)
      {
       XNextEvent(display, &events);
@@ -2280,14 +2280,14 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
                  }
 
                /* Determine the location of grid neighbors. */
-               i1 = ((ipt % nix) == 0) ? ipt : ipt - 1; 
-               i2 = (((ipt+1) % nix) == 0) ? ipt : ipt + 1; 
-               i3 = (ipt < nix) ? ipt : ipt - nix; 
-               i4 = ((ipt+nix) >= nmax) ? ipt : ipt + nix; 
+               i1 = ((ipt % nix) == 0) ? ipt : ipt - 1;
+               i2 = (((ipt+1) % nix) == 0) ? ipt : ipt + 1;
+               i3 = (ipt < nix) ? ipt : ipt - nix;
+               i4 = ((ipt+nix) >= nmax) ? ipt : ipt + nix;
 
-               xo = xptr[ipt]; 
+               xo = xptr[ipt];
                yo = yptr[ipt];
-               
+
                /* Redraw the old grid lines in the background */
                /* to erase them then draw the the new lines.  */
                x1 = xptr[i1];  y1 = yptr[i1];
@@ -2295,18 +2295,18 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
                x3 = xptr[i3];  y3 = yptr[i3];
                x4 = xptr[i4];  y4 = yptr[i4];
                XSetForeground(display,gcon,oldbackground);
-               XDrawLine(display,window,gcon,xo,yo,x1,y1); 
-               XDrawLine(display,window,gcon,xo,yo,x2,y2); 
-               XDrawLine(display,window,gcon,xo,yo,x3,y3); 
+               XDrawLine(display,window,gcon,xo,yo,x1,y1);
+               XDrawLine(display,window,gcon,xo,yo,x2,y2);
+               XDrawLine(display,window,gcon,xo,yo,x3,y3);
                XDrawLine(display,window,gcon,xo,yo,x4,y4);
                if (i1 == ipt)  { x1 = x; y1 = y; }
                if (i2 == ipt)  { x2 = x; y2 = y; }
                if (i3 == ipt)  { x3 = x; y3 = y; }
                if (i4 == ipt)  { x4 = x; y4 = y; }
-               XDrawLine(display,window,gcrb,x,y,x1,y1); 
-               XDrawLine(display,window,gcrb,x,y,x2,y2); 
-               XDrawLine(display,window,gcrb,x,y,x3,y3); 
-               XDrawLine(display,window,gcrb,x,y,x4,y4); 
+               XDrawLine(display,window,gcrb,x,y,x1,y1);
+               XDrawLine(display,window,gcrb,x,y,x2,y2);
+               XDrawLine(display,window,gcrb,x,y,x3,y3);
+               XDrawLine(display,window,gcrb,x,y,x4,y4);
 /*               XDrawLine(display,window,gcrb,xo,yo,x,y); */
               }
             break;
@@ -2315,10 +2315,10 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
             if (events.xbutton.button == 1)
               {
 /*               XDrawLine(display,window,gcrb,xo,yo,x,y); */
-               XDrawLine(display,window,gcrb,x,y,x1,y1); 
-               XDrawLine(display,window,gcrb,x,y,x2,y2); 
-               XDrawLine(display,window,gcrb,x,y,x3,y3); 
-               XDrawLine(display,window,gcrb,x,y,x4,y4); 
+               XDrawLine(display,window,gcrb,x,y,x1,y1);
+               XDrawLine(display,window,gcrb,x,y,x2,y2);
+               XDrawLine(display,window,gcrb,x,y,x3,y3);
+               XDrawLine(display,window,gcrb,x,y,x4,y4);
                x = events.xbutton.x;
                y = events.xbutton.y;
                if (i1 == ipt)  { x1 = x; y1 = y; }
@@ -2326,10 +2326,10 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
                if (i3 == ipt)  { x3 = x; y3 = y; }
                if (i4 == ipt)  { x4 = x; y4 = y; }
 /*               XDrawLine(display,window,gcrb,xo,yo,x,y); */
-               XDrawLine(display,window,gcrb,x,y,x1,y1); 
-               XDrawLine(display,window,gcrb,x,y,x2,y2); 
-               XDrawLine(display,window,gcrb,x,y,x3,y3); 
-               XDrawLine(display,window,gcrb,x,y,x4,y4); 
+               XDrawLine(display,window,gcrb,x,y,x1,y1);
+               XDrawLine(display,window,gcrb,x,y,x2,y2);
+               XDrawLine(display,window,gcrb,x,y,x3,y3);
+               XDrawLine(display,window,gcrb,x,y,x4,y4);
               }
             break;
 
@@ -2337,10 +2337,10 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
             if (events.xbutton.button == 1)
               {
 /*               XDrawLine(display,window,gcrb,xo,yo,x,y); */
-               XDrawLine(display,window,gcrb,x,y,x1,y1); 
-               XDrawLine(display,window,gcrb,x,y,x2,y2); 
-               XDrawLine(display,window,gcrb,x,y,x3,y3); 
-               XDrawLine(display,window,gcrb,x,y,x4,y4); 
+               XDrawLine(display,window,gcrb,x,y,x1,y1);
+               XDrawLine(display,window,gcrb,x,y,x2,y2);
+               XDrawLine(display,window,gcrb,x,y,x3,y3);
+               XDrawLine(display,window,gcrb,x,y,x4,y4);
                x = events.xbutton.x;
                y = events.xbutton.y;
                if (i1 == ipt)  { x1 = x; y1 = y; }
@@ -2348,12 +2348,12 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
                if (i3 == ipt)  { x3 = x; y3 = y; }
                if (i4 == ipt)  { x4 = x; y4 = y; }
                XSetForeground(display,gcon,iclr);
-               XDrawLine(display,window,gcon,x,y,x1,y1); 
-               XDrawLine(display,window,gcon,x,y,x2,y2); 
-               XDrawLine(display,window,gcon,x,y,x3,y3); 
-               XDrawLine(display,window,gcon,x,y,x4,y4); 
+               XDrawLine(display,window,gcon,x,y,x1,y1);
+               XDrawLine(display,window,gcon,x,y,x2,y2);
+               XDrawLine(display,window,gcon,x,y,x3,y3);
+               XDrawLine(display,window,gcon,x,y,x4,y4);
                XSetForeground(display,gcon,oldforeground);
-               
+
                /* Set the return array data. */
                iptsmoved[ipt] = 1;
                xptr[ipt] = x;
@@ -2362,8 +2362,8 @@ int *iclrnew, *nx, *ny, xptr[], yptr[], iptsmoved[];
             if (events.xbutton.button > 1) endflg = 1;
             break;
         }
-     } 
-      
+     }
+
    XUndefineCursor(display, window);
    XFlush(display);
    XSelectInput(display,window, NoEventMask);
@@ -2389,7 +2389,7 @@ int *cmapid;
 
 /* -----------------------------------------------------------------------
 
-   FixGetColormapId gets the current window colormap id. 
+   FixGetColormapId gets the current window colormap id.
 
    Usage:
      call FixGetColormapId(cmapid)
@@ -2428,7 +2428,7 @@ int   *istrt, *iend;
 /* -----------------------------------------------------------------------
 
    FixStoreColors stores new colors for the color map of the current window.
-   The red, green, and blue arrays used to define the new color map must be 
+   The red, green, and blue arrays used to define the new color map must be
    a set of real numbers between 0. and 1.  The parameters istrt and iend
    define the range of pixels that will be changed.  Note, this function
    should only be used after FixSetColorMap has been called.
@@ -2454,22 +2454,22 @@ int   *istrt, *iend;
   int      ncols, ipix1, ipix2, i;
 
     /* Get parameter color info. */
-    
+
     ipix1 = *istrt - 1;
     ipix2 = *iend - 1;
     ncols = ipix2 - ipix1 + 1;
 
-    /* Loop through ncols, set colors and call XStoreColor. */ 
+    /* Loop through ncols, set colors and call XStoreColor. */
 
     colorcell_def.flags = DoRed | DoGreen | DoBlue;
 
-    for (i = 0; i < ncols; i++) 
+    for (i = 0; i < ncols; i++)
     {
        colorcell_def.pixel = (unsigned int) (i+ipix1);
        XQueryColor(display,cmap,&colorcell_def);
        colorcell_def.red = (unsigned short) (red[i] * 65535);
        colorcell_def.green = (unsigned short) (green[i] * 65535);
-       colorcell_def.blue = (unsigned short) (blue[i] * 65535); 
+       colorcell_def.blue = (unsigned short) (blue[i] * 65535);
        XStoreColor(display,cmap,&colorcell_def);
     }
 
@@ -2497,8 +2497,8 @@ int   *ipixel;
 
    FixStoreColor stores a new color for the color map of the current window.
    The red, green, and blue data used to define the new color must be a set
-   of real numbers between 0. and 1.  The parameter ipixel determines the 
-   pixel to change.  Note, this function should only be used after 
+   of real numbers between 0. and 1.  The parameter ipixel determines the
+   pixel to change.  Note, this function should only be used after
    FixSetColorMap has been called.
 
    Usage:
@@ -2521,17 +2521,17 @@ int   *ipixel;
   int      ipix;
 
     /* Get parameter color info. */
-    
+
     ipix = *ipixel - 1;
 
-    /* Set color and call XStoreColor. */ 
+    /* Set color and call XStoreColor. */
 
     colorcell_def.flags = DoRed | DoGreen | DoBlue;
     colorcell_def.pixel = (unsigned int) (ipix);
     XQueryColor(display,cmap,&colorcell_def);
     colorcell_def.red = (unsigned short) (red * 65535);
     colorcell_def.green = (unsigned short) (green * 65535);
-    colorcell_def.blue = (unsigned short) (blue * 65535); 
+    colorcell_def.blue = (unsigned short) (blue * 65535);
     XStoreColor(display,cmap,&colorcell_def);
 
     return;
@@ -2556,9 +2556,9 @@ int   *ncols;
 
 /* -----------------------------------------------------------------------
 
-   FixGetWindowColors gets the r,g,b colors for the color map of the 
-   current window.  The ncols red, green, and blue arrays returned are a 
-   set of real numbers between 0. and 1.  Note, this function should only 
+   FixGetWindowColors gets the r,g,b colors for the color map of the
+   current window.  The ncols red, green, and blue arrays returned are a
+   set of real numbers between 0. and 1.  Note, this function should only
    be used after FixSetColorMap has been called.
 
    Usage:
@@ -2581,14 +2581,14 @@ int   *ncols;
   int      ncolors, i;
 
     /* Get parameter color info. */
-    
+
     ncolors = *ncols;
 
-    /* Loop through ncolors, set call XQueryColor then set return. */ 
+    /* Loop through ncolors, set call XQueryColor then set return. */
 
     colorcell_def.flags = DoRed | DoGreen | DoBlue;
 
-    for (i = 0; i < ncolors; i++) 
+    for (i = 0; i < ncolors; i++)
     {
        colorcell_def.pixel = (unsigned int) (i);
        XQueryColor(display,cmap,&colorcell_def);
@@ -2656,7 +2656,7 @@ char  *fname;
 /* -----------------------------------------------------------------------
 
    FixFreeFont frees a previously set font.  Do not free a font if you
-   might use it again.  The font name can be up to 80 characters int.  
+   might use it again.  The font name can be up to 80 characters int.
 
    Usage:
      call FixFreeFont(fname)
@@ -2675,7 +2675,7 @@ char  *fname;
    char  *tempname;
    char  tempchar[81];
 
-  
+
    /* Terminate fname with null character. */
 
    len = strlen(fname);
@@ -2689,7 +2689,7 @@ char  *fname;
 
    tempname = tempchar;
    ifound = -1;
-   if (nfonts > 0) 
+   if (nfonts > 0)
       for (i = 0; i < nfonts; i++)
           if (strcmp(tempname,fontnames[i]) == 0) ifound = i;
    if (ifound >= 0) font_info = fonts_info[ifound];
@@ -2715,7 +2715,7 @@ char  *fname;
       font_info = fonts_info[0];
       XSetFont(display,gcon,font_info->fid);
      }
-      
+
 
 
    return;
@@ -2738,9 +2738,9 @@ void fixclosedisplay_()
 
 /* -----------------------------------------------------------------------
 
-   FixCloseDisplay closes the X connection destroys all windows and 
-   removes the current X resources (fonts, colormaps, etc.).  If 
-   FixCreateDisplay is called after FixCloseDisplay, a new X connection 
+   FixCloseDisplay closes the X connection destroys all windows and
+   removes the current X resources (fonts, colormaps, etc.).  If
+   FixCreateDisplay is called after FixCloseDisplay, a new X connection
    and display is created.
 
    Usage:
@@ -2754,14 +2754,14 @@ void fixclosedisplay_()
 {
  int i;
 
-   for (i = 0; i < nfonts; i++) 
+   for (i = 0; i < nfonts; i++)
      {
        free(fontnames[i]);
        XFreeFont( display, fonts_info[i] ); /* free Font info  --JSP */
      }
 
    /* Free GCs --JSP */
-   for (i = 0; i < nwindow; i++) 
+   for (i = 0; i < nwindow; i++)
      XFreeGC( display, gcons[i] );
    XFreeGC( display, gcrb );
    XCloseDisplay(display);	/* moved until after all the frees --JSP */
@@ -2794,7 +2794,7 @@ int  *lwidth, *ltype;
 
    FixGetLineAttr returns the width and type attributes of the current
    line settings.  The width is in pixels and the line type is one of
-   the following: 0 = Solid, 1 = Dashed. 
+   the following: 0 = Solid, 1 = Dashed.
 
    Usage:
      call FixGetLineAttr(lwidth,ltype)
@@ -2812,7 +2812,7 @@ int  *lwidth, *ltype;
    XGCValues  values;
    unsigned int  valuemask;
 
-  
+
    /* Get line width and style from the current GC. */
 
    valuemask = GCLineWidth | GCLineStyle;
@@ -2847,12 +2847,12 @@ int  *icol;
 
 /* -----------------------------------------------------------------------
 
-   FixAllocNamedColor returns the pixel value for the color name requested.  
-   The color name must match a color in the X predefined color-name data 
+   FixAllocNamedColor returns the pixel value for the color name requested.
+   The color name must match a color in the X predefined color-name data
    base.  If the color has not been previously allocated, a new color
    cell is allocated.  If icol returns -1 then the color name does not
-   exist or there are no more color cells to allocate. 
- 
+   exist or there are no more color cells to allocate.
+
    Note: FixAllocNamedColor should only be called when using the shared
          default color map.  Do NOT call FixAllocNamedColor after you
          set your own color map with FixSetColorMap.
@@ -2878,7 +2878,7 @@ int  *icol;
    char  *tempname;
    char  tempchar[31];
 
-  
+
    /* Terminate cname with null character. */
 
    len = strlen(cname);
@@ -2932,12 +2932,12 @@ int  *icol;
    FixAllocColor returns the pixel value for the rgb color set requested.
    The red, green and blue color values must be between 0. and 1.
    The pixel value returned will be the color in the colormap closest to
-   the rgb set requested.  If the color has not been previously allocated, 
-   a new color cell is allocated.  If icol returns -1 then the color does 
-   not exist or there are no more color cells to allocate. 
- 
-   Note: FixAllocColor should only be called when using the shared          
-         default color map.  Do NOT call FixAllocColor after you set 
+   the rgb set requested.  If the color has not been previously allocated,
+   a new color cell is allocated.  If icol returns -1 then the color does
+   not exist or there are no more color cells to allocate.
+
+   Note: FixAllocColor should only be called when using the shared
+         default color map.  Do NOT call FixAllocColor after you set
          your own color map with FixSetColorMap.
 
    Usage:
@@ -2961,7 +2961,7 @@ int  *icol;
    XColor incolor;
    Status ifound;
 
-  
+
    /* Set the rgb values. */
 
    incolor.red = (unsigned short) (*red * 65535.);
@@ -3004,9 +3004,9 @@ void fixsetdefaultcolormap_()
 
 /* -----------------------------------------------------------------------
 
-   FixSetDefaultColorMap sets the default color map for the current 
-   window and clears the window.  Use this fucntion to reset the default 
-   color map, if needed, after setting your own color map with 
+   FixSetDefaultColorMap sets the default color map for the current
+   window and clears the window.  Use this fucntion to reset the default
+   color map, if needed, after setting your own color map with
    FixSetColorMap.
 
    Usage:
@@ -3021,7 +3021,7 @@ void fixsetdefaultcolormap_()
   int scrn;
   unsigned int  foreground, background;
 
-          
+
     /* Reset default color map. */
 
     cmap = standard_cmap;
@@ -3060,8 +3060,8 @@ int  *ival;
 
 /* -----------------------------------------------------------------------
 
-   FixGetGCvalue returns selected GC value for foreground or background 
-   color.  
+   FixGetGCvalue returns selected GC value for foreground or background
+   color.
 
    Usage:
      call FixGetGCValue(gcname,ival)
@@ -3069,7 +3069,7 @@ int  *ival;
    Agruments:
      gcname - Character string for GC attribute to retrieve (forground
               or background).
-     ival - Returned GC value for the color name.  
+     ival - Returned GC value for the color name.
 
    Data Types:
      Character*30 gcname
@@ -3084,7 +3084,7 @@ int  *ival;
    char  *tempname;
    char  tempchar[31];
 
-  
+
    /* Terminate cname with null character. */
 
    len = strlen(gcname);
@@ -3144,9 +3144,9 @@ float red[], green[], blue[];
 
 /* -----------------------------------------------------------------------
 
-   FixGetColorTable generates color table values for a random, rainbow, 
-   contour or standard color table.  The red, green, and blue arrays 
-   containing real numbers between 0. and 1 are returned. 
+   FixGetColorTable generates color table values for a random, rainbow,
+   contour or standard color table.  The red, green, and blue arrays
+   containing real numbers between 0. and 1 are returned.
 
    Usage:
      call FixGetColorTable(type,nclrs,red,green,blue)
@@ -3174,7 +3174,7 @@ float red[], green[], blue[];
    char  *tempname;
    char  tempchar[9];
 
-  
+
    /* Terminate type with null character. */
 
    len = strlen(type);
@@ -3183,7 +3183,7 @@ float red[], green[], blue[];
    while (*(type+ --i) == ' ');
    for (j = 0; j < i+1; j++) tempchar[j] = type[j];
    tempchar[i+1] = '\0';
-  
+
    /* Check the color table request type. */
 
    tempname = tempchar;
@@ -3200,7 +3200,7 @@ float red[], green[], blue[];
       return;
      }
 
-  
+
    /* Set the random color table values. */
 
    if (itype == 1)
@@ -3209,28 +3209,28 @@ float red[], green[], blue[];
       maxcol = -99.;
       srand(j/4);
       for (i = 0; i < j; i++)
-         { 
+         {
           red[i] = (float) (rand());
           if (red[i] > maxcol) maxcol = red[i];
-         } 
+         }
       srand(j/3);
-      for (i = 0; i < j; i++) 
-         { 
+      for (i = 0; i < j; i++)
+         {
           green[i] = (float) (rand());
           if (green[i] > maxcol) maxcol = green[i];
-         } 
+         }
       srand(j);
-      for (i = 0; i < j; i++) 
-         { 
+      for (i = 0; i < j; i++)
+         {
           blue[i] = (float) (rand());
           if (blue[i] > maxcol) maxcol = blue[i];
-         } 
-      for (i = 0; i < j; i++) 
-         { 
+         }
+      for (i = 0; i < j; i++)
+         {
           red[i] = red[i] / maxcol;
           green[i] = green[i] / maxcol;
           blue[i] = blue[i] / maxcol;
-         } 
+         }
      }
 
    /* Set rainbow color table values.     */
@@ -3260,7 +3260,7 @@ float red[], green[], blue[];
          green[il+i] = 0.;
          blue[il+i] = 1.;
         }
-      
+
       /* Set the colors from blue to cyan. */
 
       il = il + nc[0];
@@ -3271,7 +3271,7 @@ float red[], green[], blue[];
          green[il+i] = dc * (i+1);
          blue[il+i] = 1.;
         }
-      
+
       /* Set the colors from cyan to green. */
 
       il = il + nc[1];
@@ -3282,7 +3282,7 @@ float red[], green[], blue[];
          green[il+i] = 1.;
          blue[il+i] = 1. - (dc * (i+1));
         }
-      
+
       /* Set the colors from green to yellow. */
 
       il = il + nc[2];
@@ -3293,7 +3293,7 @@ float red[], green[], blue[];
          green[il+i] = 1.;
          blue[il+i] = 0.;
         }
-      
+
       /* Set the colors from yellow to red. */
 
       il = il + nc[3];
@@ -3305,7 +3305,7 @@ float red[], green[], blue[];
          blue[il+i] = 0.;
         }
 
-     }  
+     }
 
 
    /* Set contour color table values. */
@@ -3335,7 +3335,7 @@ float red[], green[], blue[];
          green[il+i] = dc * (i+1);
          blue[il+i] = 1.;
         }
-      
+
       /* Set the colors from cyan to green. */
 
       il = il + nc[0];
@@ -3346,7 +3346,7 @@ float red[], green[], blue[];
          green[il+i] = 1.;
          blue[il+i] = 1. - (dc * (i+1));
         }
-      
+
       /* Set the colors from green to yellow. */
 
       il = il + nc[1];
@@ -3357,7 +3357,7 @@ float red[], green[], blue[];
          green[il+i] = 1.;
          blue[il+i] = 0.;
         }
-      
+
       /* Set the colors from yellow to red. */
 
       il = il + nc[2];
@@ -3369,7 +3369,7 @@ float red[], green[], blue[];
          blue[il+i] = 0.;
         }
 
-     }  
+     }
 
 
    /* Set standard color table values. */
@@ -3379,11 +3379,11 @@ float red[], green[], blue[];
 
       j = *ncols;
 
-      for (i = 0; i < j; i++) 
+      for (i = 0; i < j; i++)
         {
          colorcell_def.pixel = (unsigned int) (i);
          XQueryColor(display,standard_cmap,&colorcell_def);
- 
+
          red[i] = (float) (colorcell_def.red)/65535.;
          green[i] = (float) (colorcell_def.green)/65535.;
          blue[i] = (float) (colorcell_def.blue)/65535.;
@@ -3400,8 +3400,8 @@ float red[], green[], blue[];
 
 DefineImageRectangle(prxoff,pryoff,prwidth,prheight)
 
-/* This internal routine determines the offset (from the upper left corner 
-   of the window)  and the size of a rectangular "bounding box" for an X 
+/* This internal routine determines the offset (from the upper left corner
+   of the window)  and the size of a rectangular "bounding box" for an X
    Image. */
 
 int *prxoff,*pryoff,*prwidth,*prheight;
@@ -3420,7 +3420,7 @@ int *prxoff,*pryoff,*prwidth,*prheight;
    unsigned int its_width, its_height, its_border_width, its_depth;
    int its_xoff, its_yoff;
    int sumxoff,sumyoff;
- 
+
    scrn = DefaultScreen(display);
    dwidth=DisplayWidth(display,scrn);
    dheight=DisplayHeight(display,scrn);

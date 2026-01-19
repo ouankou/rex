@@ -1,8 +1,8 @@
 c { dg-do compile }
 c
-c This demonstrates a problem with g77 and pic on x86 where 
+c This demonstrates a problem with g77 and pic on x86 where
 c egcs 1.0.1 and earlier will generate bogus assembler output.
-c unfortunately, gas accepts the bogus acssembler output and 
+c unfortunately, gas accepts the bogus acssembler output and
 c generates code that almost works.
 c
 
@@ -13,13 +13,13 @@ C To: egcs-bugs@cygnus.com
 C Subject: egcs-1.0 f77 bug on OSR5
 C When trying to compile the Fortran file that I enclose bellow,
 C I got an assembler error:
-C 
+C
 C ./g77 -B./ -fpic -O -c scaleg.f
 C /usr/tmp/cca002D8.s:123:syntax error at (
-C 
-C ./g77 -B./ -fpic -O0 -c scaleg.f 
+C
+C ./g77 -B./ -fpic -O0 -c scaleg.f
 C /usr/tmp/cca002EW.s:246:invalid operand combination: leal
-C 
+C
 C Compiling without the -fpic flag runs OK.
 
       subroutine scaleg (n,ma,a,mb,b,low,igh,cscale,cperm,wk)

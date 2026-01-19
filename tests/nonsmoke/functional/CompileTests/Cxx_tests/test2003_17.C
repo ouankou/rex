@@ -1,25 +1,13 @@
 /* Example code from IRS */
 
-#if 1
-typedef enum { 
-  MINIMUM_A
-} HOW_T_A;
-#endif
+typedef enum { MINIMUM_A } HOW_T_A;
 
-#if 1
 typedef struct
    {
      int MINIMUM_B;
-   } HOW_T_B;
-#endif
+} HOW_T_B;
 
-#if 1
 /* Also an error (debug later) */
-enum { 
-  MINIMUM_C
-} value;
-#endif
+enum { MINIMUM_C } value;
 
-#if 1
-enum letters {a,b } Y;
-#endif
+enum letters { a, b } Y;

@@ -30,7 +30,7 @@ contains
 
     a % t % i = 31337
     b % i = 255
-    
+
     write(c,*) a
     if (trim(adjustl(c)) /= "31337") call abort
     write(c,*) b

@@ -14,7 +14,7 @@ C I get the following (on both i686-pc-linux-gnu and
 C alphaev56-unknown-linux-gnu):
 C
 Cfoo.f: In subroutine `foobar':
-Cfoo.f:11: 
+Cfoo.f:11:
 C         subroutine foobar(norb,nnorb)
 C                           ^
 CArray `norb' at (^) is too large to handle

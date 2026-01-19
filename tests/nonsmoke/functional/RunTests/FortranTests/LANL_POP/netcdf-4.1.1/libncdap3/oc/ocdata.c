@@ -153,46 +153,6 @@ int ocskipinstance(OCnode *node, XDR *xdrs) {
   int stat = OC_NOERR;
   unsigned int xdrcount;
 
-#if 0
-    unsigned int j,rank;
-
-    switch (node->octype) {
-	case OC_Dataset:
-        case OC_Grid:
-	    OCASSERT((node->array.rank == 0));
-	    stat = ocskip(node,xdrs);
-	    break;
-
-        case OC_Sequence: /* instance is essentially same a structure */
-        case OC_Structure:
-            if(node->dap.instancesize > 0) { /* do a direct skip*/
-                if(!xdr_skip(xdrs,node->dap.instancesize)) return xdrerror();
-            } else {
-                /* Non-uniform size, we have to skip field by field*/
-                /* Walk each structure/sequence field*/
-                for(j=0;j<oclistlength(node->subnodes);j++) {
-                    OCnode* field = (OCnode*)oclistget(node->subnodes,j);
-                    stat = ocskip(field,xdrs);
-                    if(stat != OC_NOERR) break;
-                }
-                if(stat != OC_NOERR) break;
-	    }
-	    break;
-	case OC_Primitive:
-	    if(node->etype == OC_String || node->etype == OC_URL) {
-                if(!xdr_u_int(xdrs,&xdrcount)) return xdrerror();
-		if(!xdr_skip(xdrs,xdrcount)) return xdrerror();
-	    } else {
-	        OCASSERT((node->dap.instancesize > 0));
-                if(!xdr_skip(xdrs,node->dap.instancesize)) return xdrerror();
-	    }
-	    break;
-
-        default:
-	    OCPANIC1("oc_move: encountered unexpected node type: %x",node->octype);
-	    break;
-    }
-#else
   if (node->dap.instancesize > 0) { /* do a direct skip*/
     if (!xdr_skip(xdrs, node->dap.instancesize))
       return xdrerror();
@@ -212,7 +172,6 @@ int ocskipinstance(OCnode *node, XDR *xdrs) {
         break;
     }
   }
-#endif
   return THROW(stat);
 }
 

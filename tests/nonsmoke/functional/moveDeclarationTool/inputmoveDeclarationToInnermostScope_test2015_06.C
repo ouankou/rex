@@ -12,7 +12,6 @@ namespace std {
 
    string grouping() { return ""; }
 
-#if 1
   void foo()
      {
        int x;
@@ -23,6 +22,3 @@ namespace std {
      }
 
 }  // closing brace for namespace statement
-
-#endif
-

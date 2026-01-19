@@ -4,7 +4,7 @@ $count =0;
 if ( @ARGV == 1 )
 {
 	$count=$ARGV[0];
-	
+
 }
 else
 {
@@ -45,8 +45,8 @@ foreach $function (@function_list)
 	print STRESSTEST "void $function(){\n";
 	# create a graph-dump-node
 	print STRESSTESTCMP "$function ->";
-	
-	
+
+
 	# make a complete cg by calling every other function but the main
 	foreach $call (@function_list)
 	{
@@ -55,7 +55,7 @@ foreach $function (@function_list)
 		print STRESSTESTCMP " $call";
 	}
 	#close the function
-	print STRESSTEST "}\n";	
+	print STRESSTEST "}\n";
 	print STRESSTESTCMP "\n";
 }
 # create the main and its graph-dump-representation

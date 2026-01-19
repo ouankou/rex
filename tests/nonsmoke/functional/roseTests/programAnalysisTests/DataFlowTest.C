@@ -121,12 +121,7 @@ int main(int argc, char *argv[]) {
       } else {
         string name =
             string(strrchr(sageFile->getFileName().c_str(), '/') + 1) + ".outx";
-#if 0 // Test harness uses stdout now rather than a temporary file [Robb P.
-      // Matzke 2013-02-25]
-             TestDUWrap_Text op(alias,name);
-#else
         TestDUWrap_Stdout op(alias);
-#endif
         op(fa, defn);
       }
     }

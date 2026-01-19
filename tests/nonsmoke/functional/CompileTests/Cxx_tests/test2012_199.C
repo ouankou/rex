@@ -14,12 +14,3 @@ template<template<class T, class U> class V> class B
 
 // Declaration using template type taking template template argument
 // B<A> c;
-
-#if 0
-int main()
-   {
-  // DQ: This does not work in legacy frontend, I don't know why!
-  // cout << typeid(c.i.x).name() << endl;
-  // cout << typeid(c.j.x).name() << endl;
-   }
-#endif

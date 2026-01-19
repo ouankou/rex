@@ -7,7 +7,6 @@ void foobar()
         {
         }
 
-#if 1
      for (;;)
      #pragma omp task 1
         {
@@ -21,9 +20,7 @@ void foobar()
      do
      #pragma omp task 3
        {
-       }
-     while (1);
-#endif
+     } while (1);
 
      if (1)
      #pragma omp task 5

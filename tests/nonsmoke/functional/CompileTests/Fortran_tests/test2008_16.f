@@ -37,7 +37,7 @@
 
 
 c---------------------------------------------------------------------
-c      NPB CG serial version      
+c      NPB CG serial version
 c---------------------------------------------------------------------
 
 c---------------------------------------------------------------------
@@ -62,8 +62,8 @@ c      include 'npbparams.h'
         integer            na, nonzer, niter
         double precision   shift, rcond
         parameter(  na=150000,
-     >        nonzer=15,  
-     >        niter=75,  
+     >        nonzer=15,
+     >        niter=75,
      >        shift=110.,
      >        rcond=1.0d-1 )
 
@@ -93,7 +93,7 @@ c      include 'npbparams.h'
         parameter (cs7='randi8')
 
 c---------------------------------------------------------------------
-c  Note: please observe that in the routine conj_grad three 
+c  Note: please observe that in the routine conj_grad three
 c  implementations of the sparse matrix-vector multiply have
 c  been supplied.  The default matrix-vector multiply is not
 c  loop unrolled.  The alternate implementations are unrolled
@@ -105,7 +105,7 @@ c---------------------------------------------------------------------
 
 
 c---------------------------------------------------------------------
-c  Class specific parameters: 
+c  Class specific parameters:
 c  It appears here for reference only.
 c  These are their values, however, this info is imported in the npbparams.h
 c  include file, which is written by the sys/setparams.c program.
@@ -114,41 +114,41 @@ c---------------------------------------------------------------------
 C----------
 C  Class S:
 C----------
-CC       parameter( na=1400, 
-CC      >           nonzer=7, 
-CC      >           shift=10., 
+CC       parameter( na=1400,
+CC      >           nonzer=7,
+CC      >           shift=10.,
 CC      >           niter=15,
 CC      >           rcond=1.0d-1 )
 C----------
 C  Class W:
 C----------
 CC       parameter( na=7000,
-CC      >           nonzer=8, 
-CC      >           shift=12., 
+CC      >           nonzer=8,
+CC      >           shift=12.,
 CC      >           niter=15,
 CC      >           rcond=1.0d-1 )
 C----------
 C  Class A:
 C----------
 CC       parameter( na=14000,
-CC      >           nonzer=11, 
-CC      >           shift=20., 
+CC      >           nonzer=11,
+CC      >           shift=20.,
 CC      >           niter=15,
 CC      >           rcond=1.0d-1 )
 C----------
 C  Class B:
 C----------
-CC       parameter( na=75000, 
-CC      >           nonzer=13, 
-CC      >           shift=60., 
+CC       parameter( na=75000,
+CC      >           nonzer=13,
+CC      >           shift=60.,
 CC      >           niter=75,
 CC      >           rcond=1.0d-1 )
 C----------
 C  Class C:
 C----------
-CC       parameter( na=150000, 
-CC      >           nonzer=15, 
-CC      >           shift=110., 
+CC       parameter( na=150000,
+CC      >           nonzer=15,
+CC      >           shift=110.,
 CC      >           niter=75,
 CC      >           rcond=1.0d-1 )
 
@@ -159,25 +159,25 @@ CC      >           rcond=1.0d-1 )
      >              + na*(nonzer+2) )
 
 
-			      	
-      common / partit_size  / 	 naa, nzz, 
-     >                        	 firstrow, 
-     >                           lastrow, 
-     >                           firstcol, 
+
+      common / partit_size  / 	 naa, nzz,
+     >                        	 firstrow,
+     >                           lastrow,
+     >                           firstcol,
      >                           lastcol
-      integer                 	 naa, nzz, 
-     >                        	 firstrow, 
-     >                           lastrow, 
-     >                           firstcol, 
+      integer                 	 naa, nzz,
+     >                        	 firstrow,
+     >                           lastrow,
+     >                           firstcol,
      >                           lastcol
-			      	
-			      	
+
+
       common / main_int_mem / 	 colidx,     rowstr,
      >                        	 iv,         arow,     acol
       integer                 	 colidx(nz), rowstr(na+1),
      >                        	 iv(2*na+1), arow(nz), acol(nz)
-			      	
-			      	
+
+
       common / main_flt_mem / 	 v,       aelt,     a,
      >                        	 x,
      >                        	 z,
@@ -192,8 +192,8 @@ CC      >           rcond=1.0d-1 )
      >                        	 q(na+2),
      >                        	 r(na+2),
      >                        	 w(na+2)
-			      	
-			      	
+
+
       common /urando/         	 amult, tran
       double precision           amult, tran
 
@@ -221,32 +221,32 @@ CC      >           rcond=1.0d-1 )
       lastcol  = na
 
 
-      if( na .eq. 1400 .and. 
-     &    nonzer .eq. 7 .and. 
+      if( na .eq. 1400 .and.
+     &    nonzer .eq. 7 .and.
      &    niter .eq. 15 .and.
      &    shift .eq. 10. ) then
          class = 'S'
          zeta_verify_value = 8.5971775078648d0
-      else if( na .eq. 7000 .and. 
-     &         nonzer .eq. 8 .and. 
+      else if( na .eq. 7000 .and.
+     &         nonzer .eq. 8 .and.
      &         niter .eq. 15 .and.
      &         shift .eq. 12. ) then
          class = 'W'
          zeta_verify_value = 10.362595087124d0
-      else if( na .eq. 14000 .and. 
-     &         nonzer .eq. 11 .and. 
+      else if( na .eq. 14000 .and.
+     &         nonzer .eq. 11 .and.
      &         niter .eq. 15 .and.
      &         shift .eq. 20. ) then
          class = 'A'
          zeta_verify_value = 17.130235054029d0
-      else if( na .eq. 75000 .and. 
-     &         nonzer .eq. 13 .and. 
+      else if( na .eq. 75000 .and.
+     &         nonzer .eq. 13 .and.
      &         niter .eq. 75 .and.
      &         shift .eq. 60. ) then
          class = 'B'
          zeta_verify_value = 22.712745482631d0
-      else if( na .eq. 150000 .and. 
-     &         nonzer .eq. 15 .and. 
+      else if( na .eq. 150000 .and.
+     &         nonzer .eq. 15 .and.
      &         niter .eq. 75 .and.
      &         shift .eq. 110. ) then
          class = 'C'
@@ -255,7 +255,7 @@ CC      >           rcond=1.0d-1 )
          class = 'U'
       endif
 
-      write( *,1000 ) 
+      write( *,1000 )
       write( *,1001 ) na
       write( *,1002 ) niter
  1000 format(//,' NAS Parallel Benchmarks 2.3-serial version',
@@ -277,10 +277,10 @@ c---------------------------------------------------------------------
       zeta    = randlc( tran, amult )
 
 c---------------------------------------------------------------------
-c  
+c
 c---------------------------------------------------------------------
       call makea(naa, nzz, a, colidx, rowstr, nonzer,
-     >           firstrow, lastrow, firstcol, lastcol, 
+     >           firstrow, lastrow, firstcol, lastcol,
      >           rcond, arow, acol, aelt, v, iv, shift)
 
 
@@ -290,7 +290,7 @@ c  Note: as a result of the above call to makea:
 c        values of j used in indexing rowstr go from 1 --> lastrow-firstrow+1
 c        values of colidx which are col indexes go from firstcol --> lastcol
 c        So:
-c        Shift the col index vals from actual (firstcol --> lastcol ) 
+c        Shift the col index vals from actual (firstcol --> lastcol )
 c        to local, i.e., (1 --> lastcol-firstcol+1)
 c---------------------------------------------------------------------
       do j=1,lastrow-firstrow+1
@@ -348,9 +348,9 @@ c---------------------------------------------------------------------
 c---------------------------------------------------------------------
 c  Normalize z to obtain x
 c---------------------------------------------------------------------
-         do j=1, lastcol-firstcol+1      
-            x(j) = norm_temp1(2)*z(j)    
-         enddo                           
+         do j=1, lastcol-firstcol+1
+            x(j) = norm_temp1(2)*z(j)
+         enddo
 
 
       enddo                              ! end of do one iteration untimed
@@ -360,7 +360,7 @@ c---------------------------------------------------------------------
 c  set starting vector to (1, 1, .... 1)
 c---------------------------------------------------------------------
 c
-c  
+c
 c
       do i = 1, na+1
          x(i) = 1.0D0
@@ -421,9 +421,9 @@ c---------------------------------------------------------------------
 c---------------------------------------------------------------------
 c  Normalize z to obtain x
 c---------------------------------------------------------------------
-         do j=1, lastcol-firstcol+1      
-            x(j) = norm_temp1(2)*z(j)    
-         enddo                           
+         do j=1, lastcol-firstcol+1
+            x(j) = norm_temp1(2)*z(j)
+         enddo
 
 
       enddo                              ! end of main iter inv pow meth
@@ -453,7 +453,7 @@ c---------------------------------------------------------------------
  202        format(' Error is   ', E20.12)
          else
             verified = .FALSE.
-            write(*, 300) 
+            write(*, 300)
             write(*, 301) zeta
             write(*, 302) zeta_verify_value
  300        format(' VERIFICATION FAILED')
@@ -481,7 +481,7 @@ c---------------------------------------------------------------------
 
          call print_results('CG', class, na, 0, 0,
      >                      niter, t,
-     >                      mflops, '          floating point', 
+     >                      mflops, '          floating point',
      >                      verified, npbversion, compiletime,
      >                      cs1, cs2, cs3, cs4, cs5, cs6, cs7)
 
@@ -512,25 +512,25 @@ c---------------------------------------------------------------------
 c---------------------------------------------------------------------
 
 c---------------------------------------------------------------------
-c  Floaging point arrays here are named as in NPB1 spec discussion of 
+c  Floaging point arrays here are named as in NPB1 spec discussion of
 c  CG algorithm
 c---------------------------------------------------------------------
- 
+
       implicit none
 
 
-			      	
-      common / partit_size  / 	 naa, nzz, 
-     >                        	 firstrow, 
-     >                           lastrow, 
-     >                           firstcol, 
+
+      common / partit_size  / 	 naa, nzz,
+     >                        	 firstrow,
+     >                           lastrow,
+     >                           firstcol,
      >                           lastcol
-      integer                 	 naa, nzz, 
-     >                        	 firstrow, 
-     >                           lastrow, 
-     >                           firstcol, 
+      integer                 	 naa, nzz,
+     >                        	 firstrow,
+     >                           lastrow,
+     >                           firstcol,
      >                           lastcol
-			      	
+
 
 
       double precision   x(*),
@@ -540,7 +540,7 @@ c---------------------------------------------------------------------
 
       double precision   p(*),
      >                   q(*),
-     >                   r(*),               
+     >                   r(*),
      >                   w(*)                ! used as work temporary
 
 
@@ -563,7 +563,7 @@ c---------------------------------------------------------------------
          z(j) = 0.0d0
          r(j) = x(j)
          p(j) = r(j)
-         w(j) = 0.0d0                 
+         w(j) = 0.0d0
       enddo
 
 
@@ -593,10 +593,10 @@ c  q = A.p
 c  The partition submatrix-vector multiply: use workspace w
 c---------------------------------------------------------------------
 C
-C  NOTE: this version of the multiply is actually (slightly: maybe %5) 
-C        faster on the sp2 on 16 nodes than is the unrolled-by-2 version 
+C  NOTE: this version of the multiply is actually (slightly: maybe %5)
+C        faster on the sp2 on 16 nodes than is the unrolled-by-2 version
 C        below.   On some legacy systems, the reverse is true, i.e., the
-C        unrolled-by-two version is some 10% faster.  
+C        unrolled-by-two version is some 10% faster.
 C        The unrolled-by-8 version below is significantly faster
 C        on those systems - overall speed of code is 1.5 times faster.
 C
@@ -609,7 +609,7 @@ C
          enddo
 
 CC          do j=1,lastrow-firstrow+1
-CC             i = rowstr(j) 
+CC             i = rowstr(j)
 CC             iresidue = mod( rowstr(j+1)-i, 2 )
 CC             sum1 = 0.d0
 CC             sum2 = 0.d0
@@ -623,7 +623,7 @@ CC             w(j) = sum1 + sum2
 CC          enddo
 
 CC          do j=1,lastrow-firstrow+1
-CC             i = rowstr(j) 
+CC             i = rowstr(j)
 CC             iresidue = mod( rowstr(j+1)-i, 8 )
 CC             sum = 0.d0
 CC             do k=i,i+iresidue-1
@@ -641,7 +641,7 @@ CC      &                   + a(k+7)*p(colidx(k+7))
 CC             enddo
 CC             w(j) = sum
 CC          enddo
-            
+
 
 
          do j=1,lastcol-firstcol+1
@@ -655,7 +655,7 @@ c---------------------------------------------------------------------
          do j=1, lastcol-firstcol+1
             w(j) = 0.0d0
          enddo
-         
+
 
 c---------------------------------------------------------------------
 c  Obtain p.q
@@ -686,7 +686,7 @@ c---------------------------------------------------------------------
             z(j) = z(j) + alpha*p(j)
             r(j) = r(j) - alpha*q(j)
          enddo
-            
+
 c---------------------------------------------------------------------
 c  rho = r.r
 c  Now, obtain the norm of r: First, sum squares of r elements locally...
@@ -740,10 +740,10 @@ c  At this point, r contains A.z
 c---------------------------------------------------------------------
          sum = 0.0d0
          do j=1, lastcol-firstcol+1
-            d   = x(j) - r(j)         
+            d   = x(j) - r(j)
             sum = sum + d*d
          enddo
-         
+
       d = sum
 
 

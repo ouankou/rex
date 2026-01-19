@@ -16,7 +16,7 @@
 
    use kinds_mod, only: int_kind, r8, log_kind
    use blocks, only: nx_block, ny_block, block, get_block
-!   use distribution, only: 
+!   use distribution, only:
    use domain, only: distrb_clinic, nblocks_clinic, bndy_clinic,            &
        blocks_clinic
    use constants, only: c2, field_loc_NEcorner, field_type_vector,          &
@@ -24,13 +24,13 @@
    use prognostic, only: max_blocks_clinic, mixtime, newtime,               &
        field_loc_center, km, curtime, UBTROP, VBTROP, UVEL, VVEL, RHO,      &
        TRACER, oldtime, PGUESS, GRADPX, GRADPY, PSURF, nt
-!   use solvers, only: 
-!   use broadcast, only: 
+!   use solvers, only:
+!   use broadcast, only:
    use boundary, only: update_ghost_cells
    use timers, only: get_timer, timer_start, timer_stop
    use grid, only: KMU, sfc_layer_type, sfc_layer_varthick, dz, hu,         &
        ugrid_to_tgrid
-!   use io, only: 
+!   use io, only:
    use diagnostics, only: diag_global_preupdate, diag_global_afterupdate,   &
        diag_print, diag_transport, diag_init_sums
    use state_mod, only: state
@@ -71,10 +71,10 @@
 ! !DESCRIPTION:
 !  This routine advances the simulation on timestep.
 !  It controls logic for leapfrog and/or Matsuno timesteps and performs
-!  time-averaging if necessary.  Prognostic variables are updated for 
+!  time-averaging if necessary.  Prognostic variables are updated for
 !  the next timestep near the end of the routine.
 !  On Matsuno steps, the time (n) velocity and tracer arrays
-!  UBTROP,VBTROP,UVEL,VVEL,TRACER contain the predicted new 
+!  UBTROP,VBTROP,UVEL,VVEL,TRACER contain the predicted new
 !  velocities from the 1st pass for use in the 2nd pass.
 !
 ! !REVISION HISTORY:
@@ -87,7 +87,7 @@
 !  local or common variables:
 !
 !-----------------------------------------------------------------------
- 
+
    integer (int_kind) :: &
       k,n,               &! loop indices
       tmptime,           &! temp space for time index swapping
@@ -249,7 +249,7 @@
 !-----------------------------------------------------------------------
 !
 !     Integrate baroclinic equations explicitly to find tracers and
-!     baroclinic velocities at new time.  Update ghost cells for 
+!     baroclinic velocities at new time.  Update ghost cells for
 !     forcing terms leading into the barotropic solver.
 !
 !-----------------------------------------------------------------------
@@ -355,7 +355,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  compute some global diagnostics 
+!  compute some global diagnostics
 !  before updating prognostic variables
 !
 !-----------------------------------------------------------------------
@@ -367,7 +367,7 @@
 !  update prognostic variables for next timestep:
 !     on normal timesteps
 !        (n) -> (n-1)
-!        (n+1) -> (n) 
+!        (n+1) -> (n)
 !     on averaging timesteps
 !        [(n) + (n-1)]/2 -> (n-1)
 !        [(n+1) + (n)]/2 -> (n)
@@ -379,11 +379,11 @@
       !$OMP PARALLEL DO PRIVATE(iblock, k, n, this_block)
 
       do iblock = 1,nblocks_clinic
-         this_block = get_block(blocks_clinic(iblock),iblock)  
+         this_block = get_block(blocks_clinic(iblock),iblock)
 
          !*** avg 2-d fields
 
-         UBTROP(:,:,oldtime,iblock) = p5*(UBTROP(:,:,oldtime,iblock) + & 
+         UBTROP(:,:,oldtime,iblock) = p5*(UBTROP(:,:,oldtime,iblock) + &
                                           UBTROP(:,:,curtime,iblock))
          VBTROP(:,:,oldtime,iblock) = p5*(VBTROP(:,:,oldtime,iblock) + &
                                           VBTROP(:,:,curtime,iblock))
@@ -430,12 +430,12 @@
                    p5*((dz(1) + PSURF(:,:,oldtime,iblock)/grav)*  &
                        TRACER(:,:,1,n,oldtime,iblock) +           &
                        (dz(1) + PSURF(:,:,curtime,iblock)/grav)*  &
-                       TRACER(:,:,1,n,curtime,iblock) ) 
+                       TRACER(:,:,1,n,curtime,iblock) )
                TRACER(:,:,1,n,curtime,iblock) =                   &
                    p5*((dz(1) + PSURF(:,:,curtime,iblock)/grav)*  &
                        TRACER(:,:,1,n,curtime,iblock) +           &
                        (dz(1) + PSURF(:,:,newtime,iblock)/grav)*  &
-                       TRACER(:,:,1,n,newtime,iblock) ) 
+                       TRACER(:,:,1,n,newtime,iblock) )
             end do ! nt
 
             PSURF(:,:,oldtime,iblock) = p5*(PSURF(:,:,oldtime,iblock) + &
@@ -480,17 +480,17 @@
                            TRACER(:,:,k,2,curtime,iblock), &
                            this_block,                     &
                          RHOOUT=RHO(:,:,k,curtime,iblock))
-         enddo 
+         enddo
 
          !*** correct after avg
-         PGUESS(:,:,iblock) = p5*(PGUESS(:,:,iblock) + & 
-                                   PSURF(:,:,newtime,iblock)) 
+         PGUESS(:,:,iblock) = p5*(PGUESS(:,:,iblock) + &
+                                   PSURF(:,:,newtime,iblock))
       end do ! block loop
       !$OMP END PARALLEL DO
 
 
    else  ! non-averaging step
-  
+
       !$OMP PARALLEL DO
       do iblock = 1,nblocks_clinic
 
@@ -532,12 +532,12 @@
 
 !-----------------------------------------------------------------------
 !
-!  display vertically integrated velocity and surface height in 
+!  display vertically integrated velocity and surface height in
 !  X window if requested (use DHU, DH as temp arrays to store these).
 !
 !-----------------------------------------------------------------------
 
-   if (lxdisplay .and. & 
+   if (lxdisplay .and. &
        time_to_do(freq_opt_nstep,nstep_xdisplay)) then
 
        do iblock = 1,nblocks_clinic

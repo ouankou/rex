@@ -42,21 +42,51 @@ handle_sub(int job, int fg)
     if (0) {
  struct process *p;
 
-#if 1
 // for (p = sj->procs; p; p = p->next)
  for (;;)
-     if ((((signed char) ((((__extension__ ({ union { __typeof(p->status) __in; int __i; } __u; __u.__in = (p->status); __u.__i; }))) & 0x7f) + 1) >> 1) > 0)) {
-#if 1
-  if (jn->gleader != 0 && jn->procs->next)
-      killpg(jn->gleader, (((__extension__ ({ union { __typeof(p->status) __in; int __i; } __u; __u.__in = (p->status); __u.__i; }))) & 0x7f));
-  else
-      kill(jn->procs->pid, (((__extension__ ({ union { __typeof(p->status) __in; int __i; } __u; __u.__in = (p->status); __u.__i; }))) & 0x7f));
-#endif
-//  kill(sj->other, 18);
-    kill(sj->other, (((__extension__ ({ union { __typeof(p->status) __in; int __i; } __u; __u.__in = (p->status); __u.__i; }))) & 0x7f));
-  break;
-     }
-#endif
+   if ((((signed char)((((__extension__({
+                          union {
+                            __typeof(p->status) __in;
+                            int __i;
+                          } __u;
+                          __u.__in = (p->status);
+                          __u.__i;
+                        }))) &
+                        0x7f) +
+                       1) >>
+         1) > 0)) {
+     if (jn->gleader != 0 && jn->procs->next)
+       killpg(jn->gleader, (((__extension__({
+                              union {
+                                __typeof(p->status) __in;
+                                int __i;
+                              } __u;
+                              __u.__in = (p->status);
+                              __u.__i;
+                            }))) &
+                            0x7f));
+     else
+       kill(jn->procs->pid, (((__extension__({
+                               union {
+                                 __typeof(p->status) __in;
+                                 int __i;
+                               } __u;
+                               __u.__in = (p->status);
+                               __u.__i;
+                             }))) &
+                             0x7f));
+     //  kill(sj->other, 18);
+     kill(sj->other, (((__extension__({
+                        union {
+                          __typeof(p->status) __in;
+                          int __i;
+                        } __u;
+                        __u.__in = (p->status);
+                        __u.__i;
+                      }))) &
+                      0x7f));
+     break;
+   }
  // curjob = jn - jobtab;
     } else if (sj->stat & (0x0002)) {
  struct process *p;

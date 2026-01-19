@@ -42,11 +42,7 @@ namespace std {
 //      element_type& operator*() const throw() { return *_M_ptr; }
 
 //      element_type* operator->() const throw() { return _M_ptr; }
-      
-#if 0
-      element_type* get() const throw() { return _M_ptr; }
-#endif
-      
+
       element_type* release() throw()
       {
         element_type* __tmp; // = _M_ptr;

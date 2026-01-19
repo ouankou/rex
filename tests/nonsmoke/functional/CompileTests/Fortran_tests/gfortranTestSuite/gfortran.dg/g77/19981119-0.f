@@ -6,22 +6,22 @@ c { dg-do run }
 * Subject: Bug report
 * MIME-Version: 1.0
 * Content-Type: TEXT/PLAIN; charset=US-ASCII
-* 
+*
 * There is a trouble with g77 on Alpha.
-* My configuration: 
+* My configuration:
 * Digital Personal Workstation 433au,
 * Digital Unix 4.0D,
 * GNU Fortran 0.5.23 and GNU C 2.8.1.
-* 
-* The following program treated successfully but crashed when running. 
-* 
+*
+* The following program treated successfully but crashed when running.
+*
 * C --- PROGRAM BEGIN -------
-* 
+*
       subroutine sub(N,u)
       integer N
       double precision u(-N:N,-N:N)
 
-C vvvv    CRASH HERE   vvvvv   
+C vvvv    CRASH HERE   vvvvv
       u(-N,N)=0d0
       return
       end
@@ -35,7 +35,7 @@ C vvvv    CRASH HERE   vvvvv
       call sub(N,a)
       if (a(-N,N) .ne. 0d0) call abort
       end
-* 
+*
 * C --- PROGRAM END -------
-* 
+*
 * Good luck!

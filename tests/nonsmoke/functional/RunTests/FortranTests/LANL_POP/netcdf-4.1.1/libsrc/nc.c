@@ -236,9 +236,6 @@ static int NC_begins(NC *ncp, size_t h_minfree, size_t v_align,
       /* skip record variables on this pass */
       continue;
     }
-#if 0
-fprintf(stderr, "    VAR %d %s: %ld\n", ii, (*vpp)->name->cp, (long)index);
-#endif
     if (sizeof_off_t == 4 && (index > X_OFF_MAX || index < 0)) {
       return NC_EVARSIZE;
     }
@@ -268,9 +265,6 @@ fprintf(stderr, "    VAR %d %s: %ld\n", ii, (*vpp)->name->cp, (long)index);
       continue;
     }
 
-#if 0
-fprintf(stderr, "    REC %d %s: %ld\n", ii, (*vpp)->name->cp, (long)index);
-#endif
     if (sizeof_off_t == 4 && (index > X_OFF_MAX || index < 0)) {
       return NC_EVARSIZE;
     }

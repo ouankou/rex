@@ -27,11 +27,11 @@ program test_interface
    input1 = (/0,1/)
    input2 = (/3,3/)
    mysum = input1 .myadd. input2
-   if (mysum(1) /= 3 .and. mysum(2) /= 4) call abort 
+   if (mysum(1) /= 3 .and. mysum(2) /= 4) call abort
 
    call test_sub(input1, input2)
 
-end program test_interface 
+end program test_interface
 
 subroutine test_sub(input1, input2)
 
@@ -47,7 +47,7 @@ subroutine test_sub(input1, input2)
    integer mysum(2)
 
    mysum = input1 .myadd. input2
-   if (mysum(1) /= 3 .and. mysum(2) /= 4) call abort 
+   if (mysum(1) /= 3 .and. mysum(2) /= 4) call abort
 
-end subroutine test_sub 
+end subroutine test_sub
 ! { dg-final { cleanup-modules "myoperator" } }

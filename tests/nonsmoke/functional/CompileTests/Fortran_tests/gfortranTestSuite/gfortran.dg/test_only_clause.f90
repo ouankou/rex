@@ -8,7 +8,7 @@ module testOnlyClause
       implicit none
       type(c_ptr), value :: cIntPtr
       integer(c_int), pointer :: f90IntPtr
-      
+
       call c_f_pointer(cIntPtr, f90IntPtr)
 
       ! f90IntPtr coming in has value of -11; this will make it -12

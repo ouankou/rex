@@ -14,11 +14,8 @@ public:
 // Template Instantiation Directive
 // template X<int>;
 
-#if 1
 int main()
    {
      SwigValueWrapper<int> b;
      b = 42;
-   }
-#endif
-
+}

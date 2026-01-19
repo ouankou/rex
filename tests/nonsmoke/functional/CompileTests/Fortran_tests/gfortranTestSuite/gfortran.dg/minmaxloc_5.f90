@@ -5,7 +5,7 @@ program GA4076
   dda = (/(J1,J1=1,100)/)
   IDS = MAXLOC(DDA,1)
   if (ids.ne.100) call abort  !expect 100
-  
+
   IDS = MAXLOC(DDA,1, (/(J1,J1=1,100)/) > 50)
   if (ids.ne.100) call abort  !expect 100
 

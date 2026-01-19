@@ -190,18 +190,3 @@ X2<  Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Zone *sp1;
 
 // Simple initial test
 X2<  Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Scalar *sp;
-
-
-#if 0
-// DQ (5/15/2011): Testing...
-
-// Target Example:
-// Geometry::Field< Geometry::MeshBase<Geometry::PolygonalMeshTypeInfo >,
-//                  X1<Geometry::MeshBase<Geometry::PolygonalMeshTypeInfo > >::Zone,
-//                  X2<Geometry::MeshBase<Geometry::PolygonalMeshTypeInfo > >::Scalar > *pointer;
-Geometry::Field <Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo >,
-                 X1<Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Zone,
-                 X2<Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Scalar > *sp2;
-#endif
-
-

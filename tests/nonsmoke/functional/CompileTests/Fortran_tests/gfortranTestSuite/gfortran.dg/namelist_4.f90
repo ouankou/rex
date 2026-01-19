@@ -23,7 +23,7 @@ CONTAINS
     G3=1
   END FUNCTION
 END module M1
- 
+
 program P1
 CONTAINS
 ! This has the additional wrinkle of a reference to the object.

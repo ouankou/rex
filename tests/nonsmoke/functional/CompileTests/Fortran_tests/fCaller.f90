@@ -32,7 +32,7 @@
 !#endif
 
 program fCaller
-  use iso_c_binding 
+  use iso_c_binding
   real(kind=C_FLOAT) :: r
   r=3.14
   call cCallee(r)

@@ -33,7 +33,7 @@ contains
     integer :: calls, foo
     calls = calls + 1
     foo = 2
-  end function foo 
+  end function foo
 
   integer function bar ()
     integer, save :: i = 1

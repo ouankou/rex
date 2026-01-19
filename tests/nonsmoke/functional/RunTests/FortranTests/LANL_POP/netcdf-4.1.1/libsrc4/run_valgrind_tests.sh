@@ -20,7 +20,7 @@ list='tst_h_dimscales tst_h_vl2 tst_h_files '\
 'tst_dims2 tst_dims3 tst_varms tst_unlim_vars '\
 'tst_endian_fill tst_compounds2'
 
-# These don't work yet: tst_h_vars3 
+# These don't work yet: tst_h_vars3
 # tst_h_strings tst_h_atts3 tst_h_vars2 tst_vars tst_fills tst_chunks
 # tst_coords tst_xplatform2
 

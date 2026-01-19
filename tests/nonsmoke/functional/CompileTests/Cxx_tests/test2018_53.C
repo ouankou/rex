@@ -15,11 +15,3 @@ static testcall alltests[] =
      {"start", check_omp_critical, check_omp_atomic},
      {"end", 0, 0}
    };
-
-#if 0
-void foo()
-   {
-     int i = 0;
-     while (alltests[i].pass);
-   }
-#endif

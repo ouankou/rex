@@ -24,8 +24,6 @@ struct a {
 // typedef struct b BDEF;
 typedef struct b { int i;  } BDEF;
 
-
-#if 1
 void foo()
    {
   // Variables of type "struct b"
@@ -35,5 +33,4 @@ void foo()
   // int j = (a1.bp)->i;
 
      b1.i = 0;
-   }
-#endif
+}

@@ -9,11 +9,9 @@ void fallbackSimpleSort ( int* fmap,
    if (lo == hi) return;
 
    if (hi - lo > 3) {
-      for ( i = hi-4; i >= lo; i-- ) {
-#if 1
-         tmp = fmap   [i];
-#endif
-      }
+     for (i = hi - 4; i >= lo; i--) {
+       tmp = fmap[i];
+     }
    }
 
 

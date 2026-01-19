@@ -4,7 +4,7 @@
 ! sequence type (4.4.1) if the component was not already defined.
 !
 ! Contributed by Chris Nelson <ccnelson@itacllc.com>
-! 
+!
 module data_types
   Integer, Parameter :: kindAry    = selected_int_kind(r=8)
   Integer, Parameter :: kindInt    = selected_int_kind(r=8)
@@ -18,12 +18,12 @@ module data_types
     Integer(kindAry)          :: loadMode
     Integer(kindAry)          :: normalDir
     Real(kindQ)               :: refS, refL, refX, refY, refZ
-    Real(kindQ)               :: forcex,   forcey,   forcez 
-    Real(kindQ)               :: forcexv,  forceyv,  forcezv 
-    Real(kindQ)               :: momx,     momy,     momz 
-    Real(kindQ)               :: momxv,    momyv,    momzv 
-    Real(kindQ)               :: flmassx,  flmassy,  flmassz 
-    Real(kindQ)               :: flmomtmx, flmomtmy, flmomtmz 
+    Real(kindQ)               :: forcex,   forcey,   forcez
+    Real(kindQ)               :: forcexv,  forceyv,  forcezv
+    Real(kindQ)               :: momx,     momy,     momz
+    Real(kindQ)               :: momxv,    momyv,    momzv
+    Real(kindQ)               :: flmassx,  flmassy,  flmassz
+    Real(kindQ)               :: flmomtmx, flmomtmy, flmomtmz
     Real(kindQ)               :: flheatN
   end type GroupLoadInfo
 
@@ -50,12 +50,12 @@ module data_types
     Real(kindXYZ), dimension(3) :: thetadot
     Real(kindXYZ), dimension(3) :: thetaddot
   end type PrescribedMotionData
-  
+
   type GroupDeformingMotion
     sequence
     Integer(kindAry) :: nmodes
   end type GroupDeformingMotion
-  
+
   type GroupLL
     sequence
     type(GroupLL)             , pointer :: next
@@ -66,8 +66,8 @@ module data_types
     type(GroupRigidMotion)    , pointer :: RigidMotion
     type(GroupDeformingMotion), pointer :: DeformingMotion
   end type GroupLL
-  
-  type GroupDefLL 
+
+  type GroupDefLL
     sequence
     type ( GroupDefLL ), pointer            :: next
     Integer(kindInt)                        :: zone

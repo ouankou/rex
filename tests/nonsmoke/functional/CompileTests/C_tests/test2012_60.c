@@ -1,5 +1,4 @@
 
-#if 1
 
 struct X
    {
@@ -16,6 +15,3 @@ void foobar()
      int z;
      z -= sizeof(struct X);
    }
-
-#endif
-

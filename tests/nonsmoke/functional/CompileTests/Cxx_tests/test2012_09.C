@@ -21,27 +21,5 @@ int main() {
 
   integerList.sort();
 
-#if 0
-     vector<int> integerVector;
-
-     integerVector.push_back(1);
-     int sumOverVector = 0;
-
-  // This generates very strange code:
-  // for (std::vector< int , std::allocator< int >  > ::iterator i = (integerVector.begin()); i__gnu_cxx::!=((integerVector.end())); i++)
-     for (vector<int>::iterator i = integerVector.begin(); i != integerVector.end(); i++)
-        {
-          sumOverVector += *i;
-        }
-
-  // Try to use a map to draw out error in compiling stl_map.h (error in processing Kull)
-     map<int,int> xmap;
-#endif
-
-#if 0
-  // This generates an error in processing ROSE generated code using backend (g++)
-     xmap.insert(1,1);
-#endif
-
   return 0;
 }

@@ -35,11 +35,9 @@ class B
              }
    };
 
-#if 1
 // Pointer to a function with a throw specification (not supported in ROSE)
 // void (*pf)(int) throw(std::string, int);
 void (*pf_0)(int) throw();
 void (*pf_1)(int) throw(int);
 void (*pf_2)(int) throw(int,long);
-void (*pf_3)(int) throw(int,long,bool);
-#endif
+void (*pf_3)(int) throw(int, long, bool);

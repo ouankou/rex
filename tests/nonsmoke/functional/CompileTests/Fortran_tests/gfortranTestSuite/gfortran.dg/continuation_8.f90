@@ -1,5 +1,5 @@
 ! { dg-do run }
-! PR31495 Is this continuation legal? 
+! PR31495 Is this continuation legal?
 program print_ascertain
 character (len=50) :: str
 str = "hello world &

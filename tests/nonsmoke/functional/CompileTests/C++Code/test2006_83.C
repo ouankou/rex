@@ -3,9 +3,6 @@
 // Comment with line continuation \
 // and the rest of the comment
 
-#if 1
 int x;
-#else
-#endif
 
 int a = x;

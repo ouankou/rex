@@ -1,4 +1,4 @@
-! Note that the name "test2008_48_assign_pointer_class" 
+! Note that the name "test2008_48_assign_pointer_class"
 ! is too long for gfortran error checking (32 characters).
 module test2008_48_assign_ptr_class
    type mytype

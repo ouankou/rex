@@ -10,7 +10,7 @@
 SHELL = /bin/sh
 #
 #  First clean out current list of suffixes, then define them
-.SUFFIXES: 
+.SUFFIXES:
 .SUFFIXES: .tex .dvi .eps .ps
 
 all: IOdesign.ps

@@ -20,7 +20,7 @@ ncvalues.cpp	interface for auxilliary classes of typed arrays needed by
 ncvalues.cpp	implementation of auxilliary classes of typed arrays needed by
 		netCDF interface
 
-README		this file   
+README		this file
 
 
 

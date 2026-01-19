@@ -1,33 +1,11 @@
 // To make the error happen there need to be two files:
 
-#if 0
-// file1.hxx:
-
-// Needed for error:
-#include <algorithm>
-
-#include <vector>
-class Class1 {
-public:
-    virtual std::vector<unsigned> method1() const = 0;
-};
-#endif
-
 // file2.cc:
 
 #include "test2018_12.h"
 
 Class1 parm1;
 std::vector<unsigned> local1 = parm1.method1();
-
-#if 0
-void proc1(const Class1& parm1)
-   {
-  // This is unparsed as:
-  // std::vector< std::char_traits< unsigned int > ::int_type  , class std::allocator< std::char_traits< unsigned int > ::int_type  >  > local1 = parm1 .  method1 ();
-     std::vector<unsigned> local1 = parm1.method1();
-   }
-#endif
 
 // The error will be:
 // rose_file2.cc(5): error: no suitable user-defined conversion from

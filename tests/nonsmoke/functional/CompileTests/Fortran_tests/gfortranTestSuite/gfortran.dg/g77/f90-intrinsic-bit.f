@@ -1,12 +1,12 @@
 c { dg-do run }
 c  f90-intrinsic-bit.f
 c
-c Test Fortran 90 
+c Test Fortran 90
 c  * intrinsic bit manipulation functions - Section 13.10.10
-c  * bitcopy subroutine - Section 13.9.3 
+c  * bitcopy subroutine - Section 13.9.3
 c David Billinghurst <David.Billinghurst@riotinto.com>
 c
-c Notes: 
+c Notes:
 c  * g77 only supports scalar arguments
 c  * third argument of ISHFTC is not optional in g77
 
@@ -20,11 +20,11 @@ c  * third argument of ISHFTC is not optional in g77
       fail = .false.
 
 c     BIT_SIZE - Section 13.13.16
-c     Determine BIT_SIZE by counting the bits 
+c     Determine BIT_SIZE by counting the bits
       ia = 0
       i = 0
       i = not(i)
-      do while ( (i.ne.0) .and. (ia.lt.127) ) 
+      do while ( (i.ne.0) .and. (ia.lt.127) )
          ia = ia + 1
          i = ishft(i,-1)
       end do
@@ -32,7 +32,7 @@ c     Determine BIT_SIZE by counting the bits
       ja = 0
       j = 0
       j = not(j)
-      do while  ( (j.ne.0) .and. (ja.lt.127) ) 
+      do while  ( (j.ne.0) .and. (ja.lt.127) )
          ja = ja + 1
          j = ishft(j,-1)
       end do
@@ -77,7 +77,7 @@ c     BTEST  - Section 13.13.17
       call c_l(BTEST(m,j2),.true.,'BTEST(integer(8),integer(2))')
       call c_l(BTEST(m,k2),.true.,'BTEST(integer(8),integer(1))')
       call c_l(BTEST(m,m2),.true.,'BTEST(integer(8),integer(8))')
- 
+
 c     IAND   - Section 13.13.40
       j  = 3
       j2 = 1

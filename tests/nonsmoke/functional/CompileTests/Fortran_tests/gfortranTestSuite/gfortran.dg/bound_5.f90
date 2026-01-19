@@ -19,7 +19,7 @@
 
        ida = ubound(a)
        if (any(ida /= (/5,8/))) call abort
-       
+
        ida = ubound(a%i)
        if (any(ida /= (/6,7/))) call abort
 

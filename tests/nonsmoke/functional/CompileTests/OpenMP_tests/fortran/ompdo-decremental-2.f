@@ -10,5 +10,5 @@
 !$omp parallel do
       do i = lower, upper, stride
         print *, "Iteration ", i
-      enddo  
+      enddo
       end

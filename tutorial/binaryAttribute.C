@@ -326,19 +326,6 @@ int method_2() {
   const std::string ANALYSIS_TIME_ATTR = "time taken for the analysis";
   //! [comparison declare 2]
 
-#if 0 // before being re-implemented in terms of Sawyer::Attribute
-    // Method 2: AstAttributeMechanism
-    if (obj_1.attributeMechanism.exists(APPROXIMATION_ATTR))
-        delete obj_1.attributeMechanism[APPROXIMATION_ATTR];
-    ApproximationAttribute_2 *approximationAttribute = new ApproximationAttribute_2;
-    approximationAttribute->approximation = UNDER_APPROXIMATED;
-    obj_1.attributeMechanism.set(APPROXIMATION_ATTR, approximationAttribute);
-    if (obj_1.attributeMechanism.exists(ANALYSIS_TIME_ATTR))
-        delete obj_1.attributeMechanism[ANALYSIS_TIME_ATTR];
-    AnalysisTimeAttribute_2 *analysisTimeAttribute = new AnalysisTimeAttribute_2;
-    analysisTimeAttribute->analysisTime = AnalysisTime(1.0, 2.0);
-    obj_1.attributeMechanism.set(ANALYSIS_TIME_ATTR, analysisTimeAttribute);
-#else // after begin implemented in terms of Sawyer::Attribute
   //! [comparison insert 2]
   // Method 2: AstAttributeMechanism
   obj_1.attributeMechanism.set(
@@ -346,28 +333,12 @@ int method_2() {
   obj_1.attributeMechanism.set(
       ANALYSIS_TIME_ATTR, new AnalysisTimeAttribute_2(AnalysisTime(1.0, 2.0)));
   //! [comparison insert 2]
-#endif
 
   ASSERT_always_require(obj_1.attributeMechanism.exists(APPROXIMATION_ATTR));
   ASSERT_always_require(obj_1.attributeMechanism.exists(ANALYSIS_TIME_ATTR));
   ASSERT_always_require(
       AllocationCounter<ApproximationAttribute_2>::nAllocated == 1);
 
-#if 0 // before being re-implemented in terms of Sawyer::Attribute
-    // Method 2: AstAttributeMechanism
-    Approximation approx_1 = UNKNOWN_APPROXIMATION;
-    if (obj_1.attributeMechanism.exists(APPROXIMATION_ATTR)) {
-        ApproximationAttribute_2 *tmp = dynamic_cast<ApproximationAttribute_2*>(obj_1.attributeMechanism[APPROXIMATION_ATTR]);
-        if (tmp != NULL)
-            approx_1 = tmp->approximation;
-    }
-    double cpuTime_1 = AnalysisTime().cpuTime;          // the default, assuming we don't want to hard-code it.
-    if (obj_1.attributeMechanism.exists(ANALYSIS_TIME_ATTR)) {
-        AnalysisTimeAttribute_2 *tmp = dynamic_cast<AnalysisTimeAttribute_2*>(obj_1.attributeMechanism[ANALYSIS_TIME_ATTR]);
-        if (tmp != NULL)
-            cpuTime_1 = tmp->analysisTime.cpuTime;
-    }
-#else // after begin implemented in terms of Sawyer::Attribute
   //! [comparison retrieve 2]
   // Method 2: AstAttributeMechanism
   Approximation approx_1 = UNKNOWN_APPROXIMATION;
@@ -381,7 +352,6 @@ int method_2() {
           obj_1.attributeMechanism[ANALYSIS_TIME_ATTR]))
     cpuTime_1 = tmp->analysisTime.cpuTime;
   //! [comparison retrieve 2]
-#endif
 
   ASSERT_always_require(approx_1 == UNDER_APPROXIMATED);
   ASSERT_always_require(cpuTime_1 == 1.0);
@@ -421,23 +391,11 @@ int method_2() {
   ASSERT_always_require(approx_1 == approx_2);
   ASSERT_always_require(cpuTime_1 == cpuTime_2);
 
-#if 0 // before being re-implemented in terms of Sawyer::Attribute
-    // Method 2: AstAttributeMechanism
-    if (obj_1.attributeMechanism.exists(APPROXIMATION_ATTR)) {
-        delete obj_1.attributeMechanism[APPROXIMATION_ATTR];
-        obj_1.attributeMechanism.remove(APPROXIMATION_ATTR);
-    }
-    if (obj_2.attributeMechanism.exists(ANALYSIS_TIME_ATTR)) {
-        delete obj_2.attributeMechanism[ANALYSIS_TIME_ATTR];
-        obj_2.attributeMechanism.remove(ANALYSIS_TIME_ATTR);
-    }
-#else // after begin implemented in terms of Sawyer::Attribute
   //! [comparison erase 2]
   // Method 2: AstAttributeMechanism
   obj_1.attributeMechanism.remove(APPROXIMATION_ATTR);
   obj_2.attributeMechanism.remove(ANALYSIS_TIME_ATTR);
   //! [comparison erase 2]
-#endif
 
   ASSERT_always_require(!obj_1.attributeMechanism.exists(APPROXIMATION_ATTR));
   ASSERT_always_require(
@@ -448,30 +406,11 @@ int method_2() {
 
   int retval = 0;
   try {
-#if 0 // before being re-implemented in terms of Sawyer::Attribute
-      // Method 2: AstAttributeMechanism: manual cleanup required if containng
-      // object would be destroyed by exception unwinding.
-        int x = 0;
-        try {
-            x = something_that_might_throw();
-        } catch (...) {
-            if (obj_1.attributeMechanism.exists(APPROXIMATION_ATTR))
-                delete obj_1.attributeMechanism[APPROXIMATION_ATTR];
-            if (obj_1.attributeMechanism.exists(ANALYSIS_TIME_ATTR))
-                delete obj_1.attributeMechanism[ANALYSIS_TIME_ATTR];
-            if (obj_2.attributeMechanism.exists(APPROXIMATION_ATTR))
-                delete obj_2.attributeMechanism[APPROXIMATION_ATTR];
-            if (obj_2.attributeMechanism.exists(ANALYSIS_TIME_ATTR))
-                delete obj_2.attributeMechanism[ANALYSIS_TIME_ATTR];
-            throw;
-        }
-#else // after begin implemented in terms of Sawyer::Attribute
-      //! [comparison cleanup 2]
-      // Method 2: AstAttributeMechanism: attributes automatically deleted
-      // if the containing object would be destroyed by exception unwinding.
+    //! [comparison cleanup 2]
+    // Method 2: AstAttributeMechanism: attributes automatically deleted
+    // if the containing object would be destroyed by exception unwinding.
     int x = something_that_might_throw();
     //! [comparison cleanup 2]
-#endif
     retval = x;
   } catch (...) {
   }
@@ -492,19 +431,6 @@ int method_3() {
   const std::string ANALYSIS_TIME_ATTR = "time taken for the analysis";
   //! [comparison declare 3]
 
-#if 0 // before being re-implemented in terms of Sawyer::Attribute
-    // Method 3: Attributes in IR nodes
-    if (obj_1->attributeExists(APPROXIMATION_ATTR))
-        delete obj_1->getAttribute(APPROXIMATION_ATTR);
-    ApproximationAttribute_3 *approximationAttribute = new ApproximationAttribute_3;
-    approximationAttribute->approximation = UNDER_APPROXIMATED;
-    obj_1->setAttribute(APPROXIMATION_ATTR, approximationAttribute);
-    if (obj_1->attributeExists(ANALYSIS_TIME_ATTR))
-        delete obj_1->getAttribute(ANALYSIS_TIME_ATTR);
-    AnalysisTimeAttribute_3 *analysisTimeAttribute = new AnalysisTimeAttribute_3;
-    analysisTimeAttribute->analysisTime = AnalysisTime(1.0, 2.0);
-    obj_1->setAttribute(ANALYSIS_TIME_ATTR, analysisTimeAttribute);
-#else // after begin implemented in terms of Sawyer::Attribute
   //! [comparison insert 3]
   // Method 3: Attributes in IR nodes
   obj_1->setAttribute(APPROXIMATION_ATTR,
@@ -512,26 +438,10 @@ int method_3() {
   obj_1->setAttribute(ANALYSIS_TIME_ATTR,
                       new AnalysisTimeAttribute_3(AnalysisTime(1.0, 2.0)));
   //! [comparison insert 3]
-#endif
 
   ASSERT_always_require(obj_1->attributeExists(APPROXIMATION_ATTR));
   ASSERT_always_require(obj_1->attributeExists(ANALYSIS_TIME_ATTR));
 
-#if 0 // before being re-implemented in terms of Sawyer::Attribute
-    // Method 3: Attributes in IR nodes
-    Approximation approx_1 = UNKNOWN_APPROXIMATION;
-    if (obj_1->attributeExists(APPROXIMATION_ATTR)) {
-        ApproximationAttribute_3 *tmp = dynamic_cast<ApproximationAttribute_3*>(obj_1->getAttribute(APPROXIMATION_ATTR));
-        if (tmp != NULL)
-            approx_1 = tmp->approximation;
-    }
-    double cpuTime_1 = AnalysisTime().cpuTime;          // the default, assuming we don't want to hard-code it.
-    if (obj_1->attributeExists(ANALYSIS_TIME_ATTR)) {
-        AnalysisTimeAttribute_3 *tmp = dynamic_cast<AnalysisTimeAttribute_3*>(obj_1->getAttribute(ANALYSIS_TIME_ATTR));
-        if (tmp != NULL)
-            cpuTime_1 = tmp->analysisTime.cpuTime;
-    }
-#else // after begin implemented in terms of Sawyer::Attribute
   //! [comparison retrieve 3]
   // Method 3: Attributes in IR nodes
   Approximation approx_1 = UNKNOWN_APPROXIMATION;
@@ -545,7 +455,6 @@ int method_3() {
           obj_1->getAttribute(ANALYSIS_TIME_ATTR)))
     cpuTime_1 = tmp->analysisTime.cpuTime;
   //! [comparison retrieve 3]
-#endif
 
   ASSERT_always_require(approx_1 == UNDER_APPROXIMATED);
   ASSERT_always_require(cpuTime_1 == 1.0);
@@ -560,50 +469,15 @@ int method_3() {
   //! [iterate 3]
 
   // Copy the containing object and its attributes.
-#if 0 // this version doesn't copy attributes
-    SgTreeCopy deep;
-    ObjectWithAttributes_3 *obj_2 = dynamic_cast<ObjectWithAttributes_3*>(obj_1->copy(deep));
-#else // Markus recommends this one instead, but it also doesn't copy attributes
   ObjectWithAttributes_3 *obj_2 = dynamic_cast<ObjectWithAttributes_3 *>(
       SageInterface::deepCopyNode(obj_1));
-#endif
   ASSERT_not_null(obj_2);
 
-#if 0 // [Robb Matzke 2015-11-09]: Does not pass. Copying the AST apparently
-      // does not copy attributes.
-    ASSERT_always_require(obj_2->attributeExists(APPROXIMATION_ATTR));
-    ASSERT_always_require(obj_2->attributeExists(ANALYSIS_TIME_ATTR));
-    ASSERT_always_not_null(obj_2->getAttribute(APPROXIMATION_ATTR));
-    ASSERT_always_not_null(obj_2->getAttribute(ANALYSIS_TIME_ATTR));
-    ASSERT_always_require(obj_1->getAttribute(APPROXIMATION_ATTR) !=
-                          obj_2->getAttribute(APPROXIMATION_ATTR));
-    ASSERT_always_require(obj_1->getAttribute(ANALYSIS_TIME_ATTR) !=
-                          obj_2->getAttribute(ANALYSIS_TIME_ATTR));
-    Approximation approx_2 =
-        dynamic_cast<ApproximationAttribute_3*>(obj_2->getAttribute(APPROXIMATION_ATTR))->approximation;
-    double cpuTime_2 =
-        dynamic_cast<AnalysisTimeAttribute_3*>(obj_2->getAttribute(ANALYSIS_TIME_ATTR))->analysisTime.cpuTime;
-    ASSERT_always_require(approx_1 == approx_2);
-    ASSERT_always_require(cpuTime_1 == cpuTime_2);
-#endif
-
-#if 0 // before being re-implemented in terms of Sawyer::Attribute
-    // Method 3: Attributes in IR nodes
-    if (obj_1->attributeExists(APPROXIMATION_ATTR)) {
-        obj_1->removeAttribute(APPROXIMATION_ATTR);
-        delete obj_1->getAttribute(APPROXIMATION_ATTR);
-    }
-    if (obj_2->attributeExists(ANALYSIS_TIME_ATTR)) {
-        obj_2->removeAttribute(ANALYSIS_TIME_ATTR);
-        delete obj_2->getAttribute(ANALYSIS_TIME_ATTR);
-    }
-#else // after begin implemented in terms of Sawyer::Attribute
   //! [comparison erase 3]
   // Method 3: Attributes in IR nodes
   obj_1->removeAttribute(APPROXIMATION_ATTR);
   obj_2->removeAttribute(ANALYSIS_TIME_ATTR);
   //! [comparison erase 3]
-#endif
 
   ASSERT_always_require(!obj_1->attributeExists(APPROXIMATION_ATTR));
   ASSERT_always_require(!obj_2->attributeExists(ANALYSIS_TIME_ATTR));

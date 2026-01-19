@@ -1,4 +1,3 @@
-#if 1
 class X_
 	{
 public:
@@ -6,5 +5,3 @@ public:
 	};
 int X_::count = 0;
 X_ f_(X_ x);
-#endif
-

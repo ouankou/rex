@@ -15,17 +15,9 @@ template <class T> class shared_ptr;
 
 typedef int some_type;
 
-#if 0
-template<typename Func>
-int LambdaTest(Func f) 
-   {
-     f(10,11);
-   }
-#else
 template <typename T1, typename Func> int LambdaTest(T1 x, T1 y, Func f) {
   f(x, y);
 }
-#endif
 
 void foobar() {
   vector<int> v, w;

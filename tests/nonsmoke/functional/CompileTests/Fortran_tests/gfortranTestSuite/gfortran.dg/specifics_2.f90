@@ -6,7 +6,7 @@
  dimag,dint,dlog,dlog10,dmod,dnint,dprod,dsign,dsin,dsinh,dsqrt,dtan,dtanh,&
  exp,iabs,idim,idnint,index,isign,len,mod,nint,sign,sin,sinh,sqrt,tan,&
  tanh,zabs,zcos,zexp,zlog,zsin,zsqrt
- 
+
   call foo(abs)
   call foo(acos)
   call foo(acosh)

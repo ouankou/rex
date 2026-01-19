@@ -39,7 +39,7 @@ program test
   real, pointer :: r
   complex(4), pointer :: c4
   complex(8), pointer :: c8
-  
+
   if (tt(l) /= 0) call abort()
   if (tt(i) /= 1) call abort()
   if (tt(r) /= 2) call abort()

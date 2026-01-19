@@ -19,34 +19,24 @@ class LayoutParser {
         {
           private:
             // typedef void (LayoutParser::*Handler)(LayoutDocEntry::Kind kind);
-               typedef void (LayoutParser::*Handler)(LayoutDocEntry::Kind kind);
-#if 1
-               void foobar_A() 
-                  {
-                    (m_parent->*m_handler)(m_kind);
-                  }
+            typedef void (LayoutParser::*Handler)(LayoutDocEntry::Kind kind);
+            void foobar_A() { (m_parent->*m_handler)(m_kind); }
 
-               LayoutParser *m_parent;
-               Handler m_handler;
-               LayoutDocEntry::Kind m_kind;
-#endif
+            LayoutParser *m_parent;
+            Handler m_handler;
+            LayoutDocEntry::Kind m_kind;
         };
 
      class StartElementHandlerNavEntry
         {
           private:
             // typedef void (LayoutParser::*Handler)(LayoutNavEntry::Kind kind);
-               typedef void (LayoutParser::*Handler)(LayoutNavEntry::Kind kind);
-#if 1
-               void foobar_B() 
-                  {
-                    (m_parent->*m_handler)(m_kind);
-                  }
+            typedef void (LayoutParser::*Handler)(LayoutNavEntry::Kind kind);
+            void foobar_B() { (m_parent->*m_handler)(m_kind); }
 
-               LayoutParser *m_parent;
-               Handler m_handler;
-               LayoutNavEntry::Kind m_kind;
-#endif
+            LayoutParser *m_parent;
+            Handler m_handler;
+            LayoutNavEntry::Kind m_kind;
         };
 
    };

@@ -31,7 +31,5 @@ class X
        // int _S_ios_base_init;
    };
 
-#if 1
 // DQ (1/7/2007): added initalization of static variable so test name qualification.
-int X::_S_ios_base_init = 0;
-#endif
+   int X::_S_ios_base_init = 0;

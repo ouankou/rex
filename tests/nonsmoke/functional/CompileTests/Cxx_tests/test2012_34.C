@@ -11,10 +11,8 @@ namespace std
 
 namespace std
    {
-     template <typename T> bool operator== (T,int);
-#if 1
-     using namespace B;
-#endif
+template <typename T> bool operator==(T, int);
+using namespace B;
    }
 
 namespace std
@@ -36,8 +34,6 @@ namespace std
 
 namespace std
    {
-     template <typename T> bool operator== (T,int);
-#if 1
-     using namespace B;
-#endif
+template <typename T> bool operator==(T, int);
+using namespace B;
    }

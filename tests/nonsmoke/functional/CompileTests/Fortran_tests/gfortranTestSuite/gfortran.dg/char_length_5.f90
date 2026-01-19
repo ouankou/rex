@@ -3,14 +3,14 @@
 ! of the character length of 'join' (ie. the length available in
 ! the caller) was wrong.
 !
-! Contributed by <beliavsky@aol.com> 
+! Contributed by <beliavsky@aol.com>
 !
 module util_mod
   implicit none
 contains
   function join (words, sep) result(str)
     character (len=*), intent(in)        :: words(:),sep
-    character (len = (size (words) - 1) * len_trim (sep) + & 
+    character (len = (size (words) - 1) * len_trim (sep) + &
                sum (len_trim (words)))   :: str
     integer                              :: i,nw
     nw  = size (words)

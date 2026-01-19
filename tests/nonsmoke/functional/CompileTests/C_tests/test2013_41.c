@@ -17,76 +17,23 @@ static void gradfun_filter_line_mmxext(uint8_t *dst, const uint8_t *src, const u
         width = x;
     }
     x = -width;
-    __asm__ volatile(
-        "movd          %4, %%mm5 \n"
-        "pxor       %%mm7, %%mm7 \n"
-        "pshufw $0, %%mm5, %%mm5 \n"
-        "movq          %6, %%mm6 \n"
-        "movq          (%5), %%mm3 \n"
-        "movq         8(%5), %%mm4 \n"
-        "1: \n"
-#if 0
-     // These will cause the gnu asmbler to fail to compile the generated code (not a ROSE issue).
-        "movd     (%2,%0), %%mm0 \n"
-        "movd     (%3,%0), %%mm1 \n"
-#endif
-        "punpcklbw  %%mm7, %%mm0 \n"
-        "punpcklwd  %%mm1, %%mm1 \n"
-        "psllw         $7, %%mm0 \n"
-#if 0
-     // These will cause the gnu asmbler to fail to compile the generated code (not a ROSE issue).
-        "pxor       %%mm2, %%mm2 \n"
-        "psubw      %%mm0, %%mm1 \n" // delta = dc - pix
-        "psubw      %%mm1, %%mm2 \n"
-        "pmaxsw     %%mm1, %%mm2 \n"
-        "pmulhuw    %%mm5, %%mm2 \n" // m = abs(delta) * thresh >> 16
-#endif
-#if 0
-     // These will cause the gnu asmbler to fail to compile the generated code (not a ROSE issue).
-        "psubw      %%mm6, %%mm2 \n"
-        "pminsw     %%mm7, %%mm2 \n" // m = -max(0, 127-m)
-        "pmullw     %%mm2, %%mm2 \n"
-        "paddw      %%mm3, %%mm0 \n" // pix += dither
-        "psllw         $2, %%mm1 \n" // m = m*m*delta >> 14
-        "pmulhw     %%mm2, %%mm1 \n"
-        "paddw      %%mm1, %%mm0 \n" // pix += m
-        "psraw         $7, %%mm0 \n"
-        "packuswb   %%mm0, %%mm0 \n"
-        "movd       %%mm0, (%1,%0) \n" // dst = clip(pix>>7)
-        "add           $4, %0 \n"
-        "jnl 2f \n"
-#endif
-#if 0
-     // These will cause the gnu asmbler to fail to compile the generated code (not a ROSE issue).
-        "movd     (%2,%0), %%mm0 \n"
-        "movd     (%3,%0), %%mm1 \n"
-        "punpcklbw  %%mm7, %%mm0 \n"
-        "punpcklwd  %%mm1, %%mm1 \n"
-        "psllw         $7, %%mm0 \n"
-        "pxor       %%mm2, %%mm2 \n"
-        "psubw      %%mm0, %%mm1 \n" // delta = dc - pix
-        "psubw      %%mm1, %%mm2 \n"
-        "pmaxsw     %%mm1, %%mm2 \n"
-        "pmulhuw    %%mm5, %%mm2 \n" // m = abs(delta) * thresh >> 16
-        "psubw      %%mm6, %%mm2 \n"
-        "pminsw     %%mm7, %%mm2 \n" // m = -max(0, 127-m)
-        "pmullw     %%mm2, %%mm2 \n"
-        "paddw      %%mm4, %%mm0 \n" // pix += dither
-        "psllw         $2, %%mm1 \n" // m = m*m*delta >> 14
-        "pmulhw     %%mm2, %%mm1 \n"
-        "paddw      %%mm1, %%mm0 \n" // pix += m
-        "psraw         $7, %%mm0 \n"
-        "packuswb   %%mm0, %%mm0 \n"
-        "movd       %%mm0, (%1,%0) \n" // dst = clip(pix>>7)
-#endif
-        "add           $4, %0 \n"
-        "jl 1b \n"
+    __asm__ volatile("movd          %4, %%mm5 \n"
+                     "pxor       %%mm7, %%mm7 \n"
+                     "pshufw $0, %%mm5, %%mm5 \n"
+                     "movq          %6, %%mm6 \n"
+                     "movq          (%5), %%mm3 \n"
+                     "movq         8(%5), %%mm4 \n"
+                     "1: \n"
+                     "punpcklbw  %%mm7, %%mm0 \n"
+                     "punpcklwd  %%mm1, %%mm1 \n"
+                     "psllw         $7, %%mm0 \n"
+                     "add           $4, %0 \n"
+                     "jl 1b \n"
 
-        "2: \n"
-        "emms \n"
-        :"+r"(x)
-        :"r"(dst+width), "r"(src+width), "r"(dc+width/2),
-         "rm"(thresh), "r"(dithers), "m"(*pw_7f)
-        :"memory"
-    );
+                     "2: \n"
+                     "emms \n"
+                     : "+r"(x)
+                     : "r"(dst + width), "r"(src + width), "r"(dc + width / 2),
+                       "rm"(thresh), "r"(dithers), "m"(*pw_7f)
+                     : "memory");
 }

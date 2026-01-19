@@ -2,21 +2,7 @@
 
 // segmentation fault!
 
-#if 1
-   #include <vector>
-#else
-namespace std
-   {
-     template <typename T>
-     class vector
-        {
-          T* basePointer;
-
-          public:
-               T & operator[](int n) { return *(basePointer + n); }
-        };
-   }
-#endif
+#include <vector>
 
 int z = 0;
 

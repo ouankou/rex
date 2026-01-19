@@ -50,9 +50,9 @@
 !         call lib_fft1r(f,t,isign,mixup,sct,saved_indx,nx,nxh)
          end subroutine fft1r
       end module fft1r_module
-	  
-	  
-	  
+
+
+
 
       program main
       use fft1r_module

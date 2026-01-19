@@ -23,17 +23,3 @@ struct a {
 
 typedef struct b BDEF;
 // typedef struct b { int i;  } BDEF;
-
-
-#if 0
-void foo()
-   {
-  // Variables of type "struct b"
-     struct b b1;
-
-  // struct a a1 = {&b1};
-  // int j = (a1.bp)->i;
-
-     b1.i = 0;
-   }
-#endif

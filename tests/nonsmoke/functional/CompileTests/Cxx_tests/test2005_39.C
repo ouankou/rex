@@ -1,18 +1,4 @@
-#if 0
-// Original Code:
-//      FaceMap.erase(insertion_result.first);
-// Generated Code:
-//      FaceMap.erase(std::_Rb_tree_iterator < Geometry::value_type , Geometry::reference , Geometry::pointer > (insertion_result.first));
 
-// Problem:  Geometry::value_type is undeclared in the namespace Geometry.
-//           Since this is part of an implicit cast it should not have been put out!
-#endif
-
-#if 0
-#include<string>
-// This code demonstrates the extrodinarily long template argument expansion which it would be nice to avoid in generated code!
-std::pair< std::string, bool > stringBoolPair;
-#endif
 
 #include<vector>
 void foo()

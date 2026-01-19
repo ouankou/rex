@@ -1,5 +1,5 @@
       subroutine foo ()
-      LP = index('fortran', 'r') 
+      LP = index('fortran', 'r')
       end
 
       subroutine bar ()

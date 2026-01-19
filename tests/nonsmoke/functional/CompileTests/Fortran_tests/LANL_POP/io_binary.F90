@@ -282,16 +282,16 @@
                call add_attrib_file(data_file, trim(att_name), &
                                                trim(work_line))
             case('log','LOG','logical','LOGICAL')
-               read(work_line,*) att_lval 
+               read(work_line,*) att_lval
                call add_attrib_file(data_file, trim(att_name), att_lval)
             case('int','INT','i4','I4')
-               read(work_line,*) att_ival 
+               read(work_line,*) att_ival
                call add_attrib_file(data_file, trim(att_name), att_ival)
             case('r4','R4','REAL','real','float','FLOAT')
-               read(work_line,*) att_rval 
+               read(work_line,*) att_rval
                call add_attrib_file(data_file, trim(att_name), att_rval)
             case('r8','R8','dbl','DBL','double','DOUBLE')
-               read(work_line,*) att_dval 
+               read(work_line,*) att_dval
                call add_attrib_file(data_file, trim(att_name), att_dval)
             end select
 
@@ -335,7 +335,7 @@
    character (255) :: path
 
    character (char_len) :: &
-      work_line  ! temp space for manipulating strings 
+      work_line  ! temp space for manipulating strings
 
    character (5), parameter :: &
       hdr_fmt = '(a80)'
@@ -755,9 +755,9 @@
                cindx1 = len_trim(io_field%add_attrib_cname(n))
                cindx2 = cindx1 + 7
                work_line(1:cindx1) = trim(io_field%add_attrib_cname(n))
-               work_line(cindx1+1:cindx1+1) = attrib_separator 
+               work_line(cindx1+1:cindx1+1) = attrib_separator
                work_line(cindx1+2:cindx2-2) = 'char'
-               work_line(cindx2-1:cindx2-1) = attrib_separator 
+               work_line(cindx2-1:cindx2-1) = attrib_separator
                cindx1 = cindx2 + len_trim(io_field%add_attrib_cval(n))
                work_line(cindx2:cindx2) = trim(io_field%add_attrib_cval(n))
                write(unit,'(a)') trim(work_line)
@@ -766,14 +766,14 @@
 
          if (associated(io_field%add_attrib_lval)) then
             do n=1,size(io_field%add_attrib_lval)
-   
+
                work_line = char_blank
                cindx1 = len_trim(io_field%add_attrib_lname(n))
                cindx2 = cindx1 + 6
                work_line(1:cindx1) = trim(io_field%add_attrib_lname(n))
-               work_line(cindx1+1:cindx1+1) = attrib_separator 
+               work_line(cindx1+1:cindx1+1) = attrib_separator
                work_line(cindx1+2:cindx2-2) = 'log'
-               work_line(cindx2-1:cindx2-1) = attrib_separator 
+               work_line(cindx2-1:cindx2-1) = attrib_separator
                write(work_line(cindx2:),*) io_field%add_attrib_lval(n)
                write(unit,'(a)') trim(work_line)
             end do
@@ -781,14 +781,14 @@
 
          if (associated(io_field%add_attrib_ival)) then
             do n=1,size(io_field%add_attrib_ival)
-   
+
                work_line = char_blank
                cindx1 = len_trim(io_field%add_attrib_iname(n))
                cindx2 = cindx1 + 6
                work_line(1:cindx1) = trim(io_field%add_attrib_iname(n))
-               work_line(cindx1+1:cindx1+1) = attrib_separator 
+               work_line(cindx1+1:cindx1+1) = attrib_separator
                work_line(cindx1+2:cindx2-2) = 'int'
-               work_line(cindx2-1:cindx2-1) = attrib_separator 
+               work_line(cindx2-1:cindx2-1) = attrib_separator
                write(work_line(cindx2:),*) io_field%add_attrib_ival(n)
                write(unit,'(a)') trim(work_line)
             end do
@@ -796,14 +796,14 @@
 
          if (associated(io_field%add_attrib_rval)) then
             do n=1,size(io_field%add_attrib_rval)
-   
+
                work_line = char_blank
                cindx1 = len_trim(io_field%add_attrib_rname(n))
                cindx2 = cindx1 + 5
                work_line(1:cindx1) = trim(io_field%add_attrib_rname(n))
-               work_line(cindx1+1:cindx1+1) = attrib_separator 
+               work_line(cindx1+1:cindx1+1) = attrib_separator
                work_line(cindx1+2:cindx2-2) = 'r4'
-               work_line(cindx2-1:cindx2-1) = attrib_separator 
+               work_line(cindx2-1:cindx2-1) = attrib_separator
                write(work_line(cindx2:),*) io_field%add_attrib_rval(n)
                write(unit,'(a)') trim(work_line)
             end do
@@ -811,14 +811,14 @@
 
          if (associated(io_field%add_attrib_dval)) then
             do n=1,size(io_field%add_attrib_dval)
-   
+
                work_line = char_blank
                cindx1 = len_trim(io_field%add_attrib_dname(n))
                cindx2 = cindx1 + 5
                work_line(1:cindx1) = trim(io_field%add_attrib_dname(n))
-               work_line(cindx1+1:cindx1+1) = attrib_separator 
+               work_line(cindx1+1:cindx1+1) = attrib_separator
                work_line(cindx1+2:cindx2-2) = 'r8'
-               work_line(cindx2-1:cindx2-1) = attrib_separator 
+               work_line(cindx2-1:cindx2-1) = attrib_separator
                write(work_line(cindx2:),*) io_field%add_attrib_dval(n)
                write(unit,'(a)') work_line
                write(unit,'(a)') trim(work_line)
@@ -840,7 +840,7 @@
    else ! this is an input file
 
       unit = data_file%id(2)
-      if (unit <= 0) then  ! no header file, assume fields are defined 
+      if (unit <= 0) then  ! no header file, assume fields are defined
                            ! in the order they exist in input file
                            ! set id as current record and increment
 
@@ -866,9 +866,9 @@
              'define: No known binary field descriptor associated')
          end if
 
-         
+
       else  ! header exists: read all attributes from header file
-         
+
          if (my_task == master_task) then
             hdr_error = 0
             rewind (unit)

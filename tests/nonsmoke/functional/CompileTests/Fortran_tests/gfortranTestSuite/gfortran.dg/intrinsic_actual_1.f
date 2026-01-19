@@ -3,12 +3,12 @@
 ! to abs would not be recognised as being to an intrinsic
 ! procedure and would produce junk in the assembler.
 !
-! Contributed by Francois-Xavier Coudert <fxcoudert@gcc.gnu.org> 
+! Contributed by Francois-Xavier Coudert <fxcoudert@gcc.gnu.org>
 !
       subroutine foo (proc, z)
         external proc
         real proc, z
-        if ((proc(z) .ne. abs (z)) .and. 
+        if ((proc(z) .ne. abs (z)) .and.
      &      (proc(z) .ne. alog10 (abs(z)))) call abort ()
         return
       end

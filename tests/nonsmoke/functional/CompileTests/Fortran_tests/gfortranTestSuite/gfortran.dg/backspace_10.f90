@@ -15,7 +15,7 @@ program gfcbug69b
   close (iunit)
 ! Note: Failure occurred only when ACTION="read" was specified
   open (iunit, action="read", status="old")
-  
+
   read (iunit,'(a)',iostat=ios) line
   if (ios /= 0) call abort
   read (iunit,'(a)',iostat=ios) line

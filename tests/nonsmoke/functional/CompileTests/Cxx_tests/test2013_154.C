@@ -16,12 +16,10 @@ uint32 ghtonl(uint32 x)
           uint8 result_array[4];
         };
 
-#if 1
      result_array[0] = static_cast<uint8>(x >> 24);
      result_array[1] = static_cast<uint8>((x >> 16) & 0xFF);
      result_array[2] = static_cast<uint8>((x >> 8) & 0xFF);
      result_array[3] = static_cast<uint8>(x & 0xFF);
-#endif
 
      return result;
    }

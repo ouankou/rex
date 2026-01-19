@@ -52,20 +52,20 @@
                       global_sum_scalar_dbl,       &
                       global_sum_scalar_real,      &
                       global_sum_scalar_int
-   end interface 
+   end interface
 
    interface global_sum_prod
      module procedure global_sum_prod_dbl,         &
                       global_sum_prod_real,        &
                       global_sum_prod_int
-   end interface 
+   end interface
 
    interface global_count
      module procedure global_count_dbl,            &
                       global_count_real,           &
                       global_count_int,            &
                       global_count_log
-   end interface 
+   end interface
 
    interface global_maxval
      module procedure global_maxval_dbl,           &
@@ -74,7 +74,7 @@
                       global_maxval_scalar_dbl,    &
                       global_maxval_scalar_real,   &
                       global_maxval_scalar_int
-   end interface 
+   end interface
 
    interface global_minval
      module procedure global_minval_dbl,           &
@@ -83,13 +83,13 @@
                       global_minval_scalar_dbl,    &
                       global_minval_scalar_real,   &
                       global_minval_scalar_int
-   end interface 
+   end interface
 
    interface global_maxloc
      module procedure global_maxloc_dbl,           &
                       global_maxloc_real,          &
                       global_maxloc_int
-   end interface 
+   end interface
 
 !-----------------------------------------------------------------------
 !
@@ -887,9 +887,9 @@
 !  same as module
 !
 ! !REMARKS:
-!  This is actually the specific interface for the generic 
+!  This is actually the specific interface for the generic
 !  global_sum_prod function corresponding to double precision arrays.
-!  The generic interface is identical but will handle real and integer 
+!  The generic interface is identical but will handle real and integer
 !  2-d slabs.
 
 ! !USES:
@@ -930,7 +930,7 @@
 !     local_block_sum,  &! sum of each block
 !     global_block_sum   ! global sum each block
 
-   real (r8) ::         & 
+   real (r8) ::         &
      local_sum           ! sum of each block
 
    integer (int_kind) :: &
@@ -1520,9 +1520,9 @@
 !  same as module
 !
 ! !REMARKS:
-!  This is actually the specific interface for the generic 
+!  This is actually the specific interface for the generic
 !  global_count function corresponding to double precision arrays.
-!  The generic interface is identical but will handle real and integer 
+!  The generic interface is identical but will handle real and integer
 !  and logical arrays.
 
 ! !USES:
@@ -2726,7 +2726,7 @@
 
    allocate (global_val(0:(3*dist%nprocs)-1))
 
-   if (dist%nprocs > 1) then 
+   if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLGATHER(local_val , 3, mpi_dbl, &
                             global_val, 3, mpi_dbl, &
@@ -2830,7 +2830,7 @@
 
    allocate (global_val(0:(3*dist%nprocs)-1))
 
-   if (dist%nprocs > 1) then 
+   if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLGATHER(local_val , 3, mpi_real, &
                             global_val, 3, mpi_real, &
@@ -2934,7 +2934,7 @@
 
    allocate (global_val(0:(3*dist%nprocs)-1))
 
-   if (dist%nprocs > 1) then 
+   if (dist%nprocs > 1) then
       if (my_task < dist%nprocs) then
          call MPI_ALLGATHER(local_val , 3, mpi_integer, &
                             global_val, 3, mpi_integer, &

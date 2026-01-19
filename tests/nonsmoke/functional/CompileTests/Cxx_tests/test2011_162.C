@@ -17,7 +17,6 @@ T DEF<T>::foo ()
 
 // Note that the template class specialization should be unparsed as: template<> class DEF <int>
 
-#if 1
 int main()
    {
      DEF<int> object2;
@@ -25,6 +24,4 @@ int main()
   // object2.xyz = object2.foo();
 
      return 0;
-   }
-#endif
-
+}

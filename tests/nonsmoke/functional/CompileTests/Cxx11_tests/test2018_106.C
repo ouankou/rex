@@ -63,11 +63,3 @@ public:
 namespace namespace_1 {
 typedef unordered_map<int>::const_iterator typedef_1;
 }
-
-#if 0
-Error:
-identityTranslator[76145] 3.68418s Rose[FATAL]: assertion failed:
-identityTranslator[76145] 3.69972s Rose[FATAL]:   /g/g17/charles/code/ROSE/rose-dquinlan/src/frontend/CxxFrontend/legacy frontend/frontend_bridge/frontend_bridge.C:63045
-identityTranslator[76145] 3.69982s Rose[FATAL]:   SgDeclarationStatement* Frontend_Translation::parse_using_declaration(SourceSequenceList&)
-identityTranslator[76145] 3.69993s Rose[FATAL]:   required: first_nondefining_declarations_for_functions.find(frontend_routine) != first_nondefining_declarations_for_functions.end()
-#endif

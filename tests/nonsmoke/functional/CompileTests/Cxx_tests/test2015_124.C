@@ -16,13 +16,3 @@ class X
 // template<> inline void foo(class X< int  > &i) {}
 // template<typename T> inline void foo(class X< int  > &i) {}
 void foo(class X< int  > &i) {}
-
-#if 0
-void foobar()
-   {
-     X<int> x;
-
-  // Error if this is output as: "::foo(x);"
-     foo(x);
-   }
-#endif

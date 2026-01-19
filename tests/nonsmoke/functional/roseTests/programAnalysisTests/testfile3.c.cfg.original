@@ -1,4 +1,4 @@
-edge 
+edge
 edge SgVariableDeclaration:float a;SgExprStatement:a = 5.00000000000;SgVariableDeclaration:float b =(6.00000000000);SgVariableDeclaration:float c =(5.00000000000);SgVariableDeclaration:int i;SgVariableDeclaration:int j;SgExprStatement:i = 1;SgExprStatement:j = 0;SgExprStatement:b = 3.00000000000;SgVariableDeclaration:float x =(0.00000000000);SgExprStatement:j = i; SgLessThanOp:j < a always
 edge SgReturnStmt:return 0;  always
 edge SgExprStatement:b--;SgExprStatement:c--;SgVariableDeclaration:int k =(2); SgLessThanOp:k < j always

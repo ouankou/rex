@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! PR43265 Followup patch for miscellaneous EOF conditions.
-! Eaxamples from Tobius Burnus 
+! Eaxamples from Tobius Burnus
   use iso_fortran_env
   character(len=2) :: str, str2(2)
   integer :: a, b, c, ios
@@ -10,7 +10,7 @@
   open(99,file='test.dat',access='stream',form='unformatted', status='replace')
   write(99) ' '
   close(99)
- 
+
   open(99,file='test.dat')
   read(99, '(T7,i2)') i
   close(99, status="delete")

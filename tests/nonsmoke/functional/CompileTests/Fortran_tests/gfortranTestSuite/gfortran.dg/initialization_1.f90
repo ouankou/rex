@@ -33,7 +33,7 @@ contains
 ! This does not depend on non-constant properties.
     real(8) :: big = huge (x)
 
-  end subroutine foo  
+  end subroutine foo
 end module const
 
 ! { dg-final { cleanup-modules "const" } }

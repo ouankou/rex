@@ -40,7 +40,7 @@ inquire(unit=19, direct=drct, opened=opn, access=acc, formatted=frmt)
 if (drct.ne."NO" .and. .not.opn .and. acc.ne."SEQUENTIAL") call abort
 if (frmt.ne."NO")  call abort
 close(19)
-       
+
 open(unit=19,file=fname,status='replace',err=170,form="formatted")
 
 inquire(unit=19, direct=drct, opened=opn, access=acc, unformatted=frmt)
@@ -63,7 +63,7 @@ inquire(unit=19, direct=drct, opened=opn, access=acc,unformatted=frmt)
 if (drct.ne."NO" .and. .not.opn .and. acc.ne."SEQUENTIAL") call abort
 if (frmt.ne."YES")  call abort
 close(19)
-      
+
 open(unit=19,file=fname,status='replace',err=170)
 
 inquire(unit=19, direct=drct, opened=opn, access=acc)

@@ -38,11 +38,11 @@
    !*** values for theparameters below.  A value higher than
    !*** necessary will not cause the code to fail, but will
    !*** allocate more memory than is necessary.  A value that
-   !*** is too low will cause the code to exit.  
+   !*** is too low will cause the code to exit.
    !*** A good initial guess is found using
    !*** max=(nx_global/block_size_x)*(ny_global/block_size_y)/
    !***         num_procs
- 
+
    integer (int_kind), parameter, public :: &
       max_blocks_clinic = 23,  &! max number of blocks per processor
       max_blocks_tropic = 24    !   in each distribution

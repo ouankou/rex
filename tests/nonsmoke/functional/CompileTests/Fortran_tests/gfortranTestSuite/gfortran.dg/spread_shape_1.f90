@@ -7,7 +7,7 @@
   real,dimension(2, 2) :: u
 
   u = reshape((/0.25, 0.5, 0.75, 1.00/),(/2,2/))
-  
+
   allocate (ptr(2,2))
 
 ! Original PR

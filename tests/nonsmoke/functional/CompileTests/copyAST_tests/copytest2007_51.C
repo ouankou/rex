@@ -167,11 +167,10 @@ class Y {};
 
 void foo()
    {
-     int i = 0;
-#if 1
-// DQ (8/27/2005): temporarily commented out 
+  int i = 0;
+  // DQ (8/27/2005): temporarily commented out
 
-     std::vector< SwigValueWrapper<X> > result;
+  std::vector<SwigValueWrapper<X>> result;
 
   // Attempt ot demonstrate error that appears in Swig generated KULL file (but everything works).
   // SP<X> spObj ( *(new X (((std::vector<X> &)result)[i])) );
@@ -179,7 +178,6 @@ void foo()
 
      SP< Y<X> > spObjy ( new Y<X> (((std::vector< Y<X> > &)result)[i]) );
 
-     SP< Y< Y<X> > > spObjyy ( new Y< Y<X> > (((std::vector< Y< Y<X> > > &)result)[i]) );
-#endif
+     SP<Y<Y<X>>> spObjyy(new Y<Y<X>>(((std::vector<Y<Y<X>>> &)result)[i]));
    }
 

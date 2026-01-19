@@ -49,12 +49,8 @@ void RoseIRnodeVisitor::visit ( SgNode* node)
           IR_NODE_VISIT_CASE(SgTemplateSymbol)
           IR_NODE_VISIT_CASE(SgMemberFunctionSymbol)
 
-          default:
-             {
-#if 0
-               printf ("Case not handled: %s \n",node->class_name().c_str());
-#endif
-             }
+     default: {
+     }
         }
    }
 
@@ -71,11 +67,9 @@ main ( int argc, char* argv[] )
      visitor.traverseRepresentativeIRnodes();
      printf ("Number of types of IR nodes (after building AST) = %d \n",visitor.counter);
 
-#if 1
   // IR nodes statistics
      if (project->get_verbose() > 1)
-          cout << AstNodeStatistics::IRnodeUsageStatistics();
-#endif
+       cout << AstNodeStatistics::IRnodeUsageStatistics();
 
      int errorCode = 0;
      errorCode = backend(project);

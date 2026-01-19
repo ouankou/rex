@@ -1,4 +1,4 @@
-! { dg-do run { target fd_truncate } } 
+! { dg-do run { target fd_truncate } }
 ! PR31099 Runtime error on legal code using RECL
 program test
   integer(kind=4) :: a, b

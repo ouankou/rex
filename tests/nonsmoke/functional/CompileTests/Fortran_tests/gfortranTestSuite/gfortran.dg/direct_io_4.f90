@@ -16,7 +16,7 @@ program main
   if (ios == 0) call abort
 
   read(10, rec=1, iostat=ios) b
-  if (ios /= 0) call abort 
+  if (ios /= 0) call abort
   if (a /= b) call abort
 
 end program main

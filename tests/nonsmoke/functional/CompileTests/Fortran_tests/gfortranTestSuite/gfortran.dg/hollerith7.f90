@@ -24,7 +24,7 @@ end subroutine
   a = 4HXXXX
   a(2,2) = 4H (8I
   a(1,3) = 2H4)
-  a(2,3) = 1H 
+  a(2,3) = 1H
   call foo (a(2:2,:))
 end
 

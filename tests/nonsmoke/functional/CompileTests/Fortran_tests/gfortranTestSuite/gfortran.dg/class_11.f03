@@ -7,16 +7,16 @@
 
   type ,abstract :: object
   contains
-    procedure(assign_interface) ,deferred :: assign   
+    procedure(assign_interface) ,deferred :: assign
     generic  :: assignment(=) => assign
-  end type 
+  end type
 
   abstract interface
-    subroutine assign_interface(lhs,rhs) 
-      import :: object 
+    subroutine assign_interface(lhs,rhs)
+      import :: object
       class(object) ,intent(inout) :: lhs
       class(object) ,intent(in)    :: rhs
-    end subroutine 
+    end subroutine
   end interface
 
 ! PR 41937

@@ -76,10 +76,8 @@ class GroupGraphNode : public GraphNode
              { 
                PtrSetWrap<GraphNode>::Iterator iter;
 
-#if 1
             // This line causes an error
                iter.Current();
-#endif
              }
    };
 

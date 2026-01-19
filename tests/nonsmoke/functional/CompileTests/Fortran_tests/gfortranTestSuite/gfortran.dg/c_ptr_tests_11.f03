@@ -38,5 +38,5 @@ contains
     type(t), intent(out) :: a
   end subroutine func
 end module m
-! { dg-final { cleanup-modules "fgsl m" } } 
+! { dg-final { cleanup-modules "fgsl m" } }
 

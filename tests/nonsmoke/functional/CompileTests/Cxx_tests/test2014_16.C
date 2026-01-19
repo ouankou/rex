@@ -69,31 +69,7 @@ public:
 	: sc_lv_base( W )
 	{ /* sc_lv_base::operator = ( a ); */ }
 
-    sc_lv( const bool* a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-#if 0
-    sc_lv( const sc_logic* a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-#endif
-#if 0
-    sc_lv( const sc_unsigned& a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-
-    sc_lv( const sc_signed& a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-
-    sc_lv( const sc_uint_base& a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-
-    sc_lv( const sc_int_base& a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-#endif
+    sc_lv(const bool *a) : sc_lv_base(W) { /* sc_lv_base::operator = ( a ); */ }
 
     sc_lv( unsigned long a )
 	: sc_lv_base( W )
@@ -111,34 +87,11 @@ public:
 	: sc_lv_base( W )
 	{ /* sc_lv_base::operator = ( a ); */ }
 
-#if 0
-    sc_lv( uint64 a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-
-    sc_lv( int64 a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-#endif
-
-#if 0
-    template <class X>
-    sc_lv( const sc_proxy<X>& a )
-	: sc_lv_base( W )
-	{ /* sc_lv_base::operator = ( a ); */ }
-#endif
-
     sc_lv( const sc_lv<W>& a )
 	: sc_lv_base( a )
 	{}
 
-
     // assignment operators
-#if 0
-    template <class X>
-    sc_lv<W>& operator = ( const sc_proxy<X>& a )
-	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-#endif
 
     sc_lv<W>& operator = ( const sc_lv<W>& a )
 	{ /* sc_lv_base::operator = ( a ); */ return *this; }
@@ -148,23 +101,6 @@ public:
 
     sc_lv<W>& operator = ( const bool* a )
 	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-
-#if 0
-    sc_lv<W>& operator = ( const sc_logic* a )
-	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-
-    sc_lv<W>& operator = ( const sc_unsigned& a )
-	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-
-    sc_lv<W>& operator = ( const sc_signed& a )
-	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-
-    sc_lv<W>& operator = ( const sc_uint_base& a )
-	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-
-    sc_lv<W>& operator = ( const sc_int_base& a )
-	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-#endif
 
     sc_lv<W>& operator = ( unsigned long a )
 	{ /* sc_lv_base::operator = ( a ); */ return *this; }
@@ -177,15 +113,6 @@ public:
 
     sc_lv<W>& operator = ( int a )
 	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-
-#if 0
-    sc_lv<W>& operator = ( uint64 a )
-	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-
-    sc_lv<W>& operator = ( int64 a )
-	{ /* sc_lv_base::operator = ( a ); */ return *this; }
-#endif
-
 };
    
 

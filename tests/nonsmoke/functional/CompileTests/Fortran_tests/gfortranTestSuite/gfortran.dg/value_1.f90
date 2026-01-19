@@ -3,7 +3,7 @@
 ! Tests the functionality of the patch for PR29642, which requested the
 ! implementation of the F2003 VALUE attribute for gfortran.
 !
-! Contributed by Paul Thomas  <pault@gcc.gnu.org> 
+! Contributed by Paul Thomas  <pault@gcc.gnu.org>
 !
 module global
   type :: mytype

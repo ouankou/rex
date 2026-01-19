@@ -5,7 +5,7 @@
 ! same time.
 !
 ! Contributed by Paul Thomas   <pault@gcc.gnu.org>
-! based on testcase from Harald Anlauf  <anlauf@gmx.de>  
+! based on testcase from Harald Anlauf  <anlauf@gmx.de>
 !
   real, parameter :: x(4,4) = reshape((/(i, i = 1, 16)/), (/4,4/))
   real, parameter :: y(4) = (/ x(1:2, 2), x(3:4, 4)/)
@@ -17,7 +17,7 @@
   integer, parameter :: ii = 4
 
   character(4), parameter :: chr(4) = (/"abcd", "efgh", "ijkl", "mnop"/)
-  character(4), parameter :: chrs = chr(ii)(2:3)//chr(2)(ii-3:ii-2) 
+  character(4), parameter :: chrs = chr(ii)(2:3)//chr(2)(ii-3:ii-2)
   character(4), parameter :: chrt(2) = (/chr(2:2)(2:3), chr(ii-1)(3:ii)/)
   character(2), parameter :: chrx(2) = (/(chr(i)(i:i+1), i=2,3)/)
 

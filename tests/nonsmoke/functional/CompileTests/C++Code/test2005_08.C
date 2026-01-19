@@ -12,20 +12,18 @@ class X
 
 int foo()
    {
-      X x;
-#if 1
-   // All three of these statements are identical (different syntax for the same function calls) 
-   // They generate an error "error: parse error before `+' token"
-      x->operator+(x);
-      (*(x.operator->())).operator+(x);
-      (*(x.operator->())) + (x);
-#endif
+  X x;
+  // All three of these statements are identical (different syntax for the same
+  // function calls) They generate an error "error: parse error before `+'
+  // token"
+  x->operator+(x);
+  (*(x.operator->())).operator+(x);
+  (*(x.operator->())) + (x);
 
-   // This is similar to just saying "x;" but with a function call to accomplish it!
-      (*x.operator->());  // This works properly
-#if 1
-      x.operator->();
-   // x->;  // note that this is not allowed in C++!
-#endif
+  // This is similar to just saying "x;" but with a function call to accomplish
+  // it!
+  (*x.operator->()); // This works properly
+  x.operator->();
+  // x->;  // note that this is not allowed in C++!
    }
 

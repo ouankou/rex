@@ -18,13 +18,13 @@ contains
 
     integer, intent(out)               :: info
     Type(foo_type), save :: f_a
-    
-    if (allocated(f_a%mv)) then 
+
+    if (allocated(f_a%mv)) then
       info = size(f_a%mv)
     else
       allocate(f_a%mv(10),stat=info)
-      if (info /= 0) then 
-        info = -1 
+      if (info /= 0) then
+        info = -1
       endif
     end if
   end subroutine bar_foo_ab
@@ -36,12 +36,12 @@ program tsave
   use bar_mod
 
   integer :: info
-  
-  call bar_foo_ab(info) 
+
+  call bar_foo_ab(info)
   if (info .ne. 0) call abort ()
-  call bar_foo_ab(info) 
+  call bar_foo_ab(info)
   if (info .ne. 10) call abort ()
-  
+
 end program tsave
 
 ! { dg-final { cleanup-modules "bar_mod" } }

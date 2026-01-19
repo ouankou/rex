@@ -11,10 +11,4 @@ class X
    };
 // #endif
 
-#if 1
-template <typename T>
-bool operator== (T a,int b)
-   {
-     return false;
-   }
-#endif
+   template <typename T> bool operator==(T a, int b) { return false; }

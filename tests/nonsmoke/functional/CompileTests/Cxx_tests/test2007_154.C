@@ -62,27 +62,6 @@ Thanks,
 #include <stdio.h>
 void bar(va_list *args) {
   int *val;
-#if 1
   val = va_arg(*args, int *);
-#endif
   printf("val = %d\n", *val);
 }
-
-#if 0
-void foo(int n, ...) {
-    va_list args;
-
-    va_start(args, n);
-
-    bar(&args);
-
-    va_end(args);
-}
-#endif
-#if 0
-int main(char argc, char *argv[]) {
-    int val = 123;
-
-    foo(1, &val);
-}
-#endif

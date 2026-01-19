@@ -14,11 +14,11 @@ contains
    subroutine foo(m)
       integer:: m,i
       integer:: z(m,m)
-    
+
       z = 0
 
       call foo1(m,z)
-    
+
       ! Check it worked.
       if (any (z .ne. reshape ((/1, 2, 3, 4, 5, 6, 7, 8, 9/), (/3, 3/)))) &
         call abort
@@ -27,7 +27,7 @@ contains
     subroutine foo1(n,x)
        integer:: n,i,j
        integer:: x(n,n)
-    
+
        ! Assign values to x.
        do i=1,n
           do j=1,n
@@ -35,4 +35,4 @@ contains
           enddo
        enddo
     end subroutine foo1
-end program    
+end program

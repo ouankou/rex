@@ -75,13 +75,6 @@ int main(int argc, char *argv[]) {
   //  int GPU_N = 0;
   // Transformation point: obtain the number of devices to be used by default
   int GPU_N = xomp_get_num_devices();
-#if 0
-  cudaGetDeviceCount(&GPU_N);
-  if (GPU_N > MAX_GPU_COUNT)
-  {
-    GPU_N = MAX_GPU_COUNT;
-  }
-#endif
   printf("CUDA-capable device count: %i\n", GPU_N);
 
   // preparation for multiple GPUs
@@ -94,18 +87,6 @@ int main(int argc, char *argv[]) {
     xomp_set_default_device(tid);
 
     long size, offset;
-#if 0    
-    int size = n / GPU_N;
-    int offset = size * tid;
-    if(tid < n%GPU_N)
-    {
-      size++; 
-    }
-    if(tid >= n%GPU_N)
-      offset += n%GPU_N;
-    else
-      offset += tid;
-#endif
     XOMP_static_even_divide(0, n, GPU_N, tid, &offset, &size);
     printf("thread %d working on GPU devices %d with size %ld copying data "
            "from y_ompacc with offset %ld\n",

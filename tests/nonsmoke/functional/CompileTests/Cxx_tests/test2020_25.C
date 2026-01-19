@@ -1,35 +1,12 @@
 namespace X
    {
      int i = 43;
-     namespace N
-        {
-#if 0
-          int i = 44;
-          struct X
-             {
-               static void f();
-             };
-          struct N
-             {
-               static void f();
-             };
-          void X::f()
-             {
-               using namespace X;
-               i = 42;
-             }
-          void N::f()
-             {
-               using namespace ::X::N;
-               i = 42;
-             }
-#endif
-          void f()
-             {
-               using namespace X;
-               i = 42;
-             }
-        }
+     namespace N {
+     void f() {
+       using namespace X;
+       i = 42;
+     }
+     } // namespace N
    }
 
 

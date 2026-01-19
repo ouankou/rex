@@ -25,19 +25,13 @@ class X2
          typedef int Zone;
    };
 
-namespace Geometry
-   {
-#if 1
-  // Now we define the class Zone defined within Geometry::PolyMesh
-     template <class CoordinateSystem>
-     class PolyMesh<CoordinateSystem>::Zone
-        {
-          public:
-               typedef PolyMesh<CoordinateSystem> MeshType;
-        };
-#endif
-   }
-
+   namespace Geometry {
+   // Now we define the class Zone defined within Geometry::PolyMesh
+   template <class CoordinateSystem> class PolyMesh<CoordinateSystem>::Zone {
+   public:
+     typedef PolyMesh<CoordinateSystem> MeshType;
+   };
+   } // namespace Geometry
 
 // X2<  Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Scalar *sp;
 // X2<  Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Scalar sp_0;

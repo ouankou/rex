@@ -20,17 +20,6 @@ template<class T, class U, int I> struct X<T, U*, I>
   { void f() { cout << "Partial specialization 4" << endl;
   } };
 
-#if 0
-// Added classes...
-template<int I, int J> class X { };
-
-// Invalid partial specialization
-template<int I> class X <I * 4, I + 3> { };
-
-// Valid partial specialization
-template <int I> class X <I, I> { }; 
-#endif
-
 int main() {
    X<int, int, 10> a;
    X<int, int*, 5> b;

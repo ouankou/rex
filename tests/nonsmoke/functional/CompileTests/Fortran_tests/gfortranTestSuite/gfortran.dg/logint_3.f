@@ -40,4 +40,4 @@ c { dg-options "-O2" }
        l4 = i4      ! { dg-warning "Extension: Conversion" }
 
        END
- 
+

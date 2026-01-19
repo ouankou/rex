@@ -6,7 +6,7 @@
 PROGRAM main
   IMPLICIT NONE
 
-  BLOCK 
+  BLOCK
   END BLOCK wrongname ! { dg-error "Syntax error" }
 
   myname: BLOCK

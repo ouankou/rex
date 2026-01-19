@@ -33,10 +33,10 @@ subroutine test (s1, s4, i, i1, i2, i3, i4)
 
   if (iachar (s1) /= i) call abort
   if (iachar (s4) /= i) call abort
-  
+
   if (ichar (s1) /= i) call abort
   if (ichar (s4) /= i) call abort
-  
+
   if (achar(i, kind=1) /= s1) call abort
   if (achar(i, kind=4) /= s4) call abort
 

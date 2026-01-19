@@ -18,7 +18,7 @@
 program p
 
    type :: t1
-      integer :: c                   
+      integer :: c
       type (t2), pointer, dimension(:)  :: f
    end type
 
@@ -26,8 +26,8 @@ program p
       integer :: c
       integer :: d
    end type
- 
-   type (t1) :: v   
+
+   type (t1) :: v
 
    v % f(1) % d = 0
    v % f(1) % c  = 0    ! assertion failure: expression stack not empty

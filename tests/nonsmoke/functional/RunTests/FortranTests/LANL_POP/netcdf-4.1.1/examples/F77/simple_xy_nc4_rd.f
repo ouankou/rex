@@ -1,15 +1,15 @@
 C     This is part of the netCDF package.
 C     Copyright 2006 University Corporation for Atmospheric Research/Unidata.
 C     See COPYRIGHT file for conditions of use.
-      
+
 C     This is a simple example which reads a small dummy array, from a
 C     netCDF data file created by the companion program simple_xy_wr.f.
-      
+
 C     This is intended to illustrate the use of the netCDF fortran 77
 C     API. This example program is part of the netCDF tutorial, which can
 C     be found at:
 C     http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-tutorial
-      
+
 C     Full documentation of the netCDF Fortran 77 API can be found at:
 C     http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f77
 
@@ -19,11 +19,11 @@ C     $Id: simple_xy_nc4_rd.f,v 1.1 2007/05/04 13:33:20 ed Exp $
       implicit none
       include 'netcdf.inc'
 
-C     This is the name of the data file we will read. 
+C     This is the name of the data file we will read.
       character*(*) FILE_NAME
       parameter (FILE_NAME='simple_xy_nc4.nc')
 
-C     We are reading 2D data, a 12 x 6 grid. 
+C     We are reading 2D data, a 12 x 6 grid.
       integer NX, NY
       parameter (NX = 60, NY = 120)
       integer data_in(NY, NX)

@@ -59,7 +59,7 @@ d=-1
 #  	    exit 1;
 #  	fi
 # 	h=
-	
+
 # 	# Switch to the next input file of three.
 # 	let file_num=$file_num+1
 # 	test $file_num -eq $num_in_files && file_num=0

@@ -21,4 +21,4 @@ contains
     p => x(2)
     point = c_loc(p)
   end function point
-end program test2 
+end program test2

@@ -1,7 +1,7 @@
 ! { dg-do compile }
 ! Test the fix for PR25097, in which subobjects of the optional dummy argument
 ! could appear as argument A of the PRESENT intrinsic.
-! 
+!
 ! Contributed by Joost VandeVondele <jv244@cam.ac.uk>
 !
  MODULE M1

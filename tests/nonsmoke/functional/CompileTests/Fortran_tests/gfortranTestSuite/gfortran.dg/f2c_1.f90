@@ -33,7 +33,7 @@ subroutine test_with_interface()
        double precision::e,f
      end function d
   end interface
-  
+
   double precision z, w
 
   x = 8.625

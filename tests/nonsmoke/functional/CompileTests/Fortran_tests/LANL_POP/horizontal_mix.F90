@@ -17,7 +17,7 @@
 
    use kinds_mod, only: int_kind, r8, char_len
    use blocks, only: nx_block, ny_block, block
-   use distribution, only: 
+   use distribution, only:
    use domain, only: nblocks_clinic, distrb_clinic
    use constants, only: c0, blank_fmt, delim_fmt
    use communicate, only: my_task, master_task
@@ -216,7 +216,7 @@
                                   nblocks_clinic, distrb_clinic%nprocs)
 
    case(hmix_momentum_type_anis)
-      call init_aniso 
+      call init_aniso
       call get_timer(timer_hdiffu,'HMIX_MOMENTUM_ANISO', &
                                   nblocks_clinic, distrb_clinic%nprocs)
    end select

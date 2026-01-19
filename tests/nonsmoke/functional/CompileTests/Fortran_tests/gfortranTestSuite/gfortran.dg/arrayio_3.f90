@@ -6,8 +6,8 @@
       implicit none
       integer        :: i(6),j,ierr
       character(12)  :: r(4,2) = '0123456789AB'
- 
-! Write using a format string that defines a record greater than 
+
+! Write using a format string that defines a record greater than
 ! the length of an element in the character array.
 
       i = (/(j,j=1,6)/)

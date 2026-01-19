@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! PR fortran/32738 
+! PR fortran/32738
 !
 ! A regression that mysteriously appeared and disappeared again.
 ! Added to the testsuite "just in case".

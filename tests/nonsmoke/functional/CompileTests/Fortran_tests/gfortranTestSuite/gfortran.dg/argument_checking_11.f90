@@ -145,9 +145,9 @@ SUBROUTINE test2(a,b,c,d,e)
  call cas_size(b(1)) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
  call cas_size(c(1)) ! OK in F95
  call cas_size(d(1)) ! OK in F95
- call cas_size((a(1)//"a")) ! { dg-error "Fortran 2003: Scalar CHARACTER" } 
+ call cas_size((a(1)//"a")) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
  call cas_size((b(1)//"a")) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
- call cas_size((c(1)//"a")) ! { dg-error "Fortran 2003: Scalar CHARACTER" } 
+ call cas_size((c(1)//"a")) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
  call cas_size((d(1)//"a")) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
  call cas_size(a(1:2))
  call cas_size(b(1:2))
@@ -171,10 +171,10 @@ SUBROUTINE test2(a,b,c,d,e)
  call cas_size((b(1:2)(1:3)//"a"))
  call cas_size((c(1:2)(1:3)//"a"))
  call cas_size((d(1:2)(1:3)//"a"))
- call cas_size(e(1:3)) ! { dg-error "Fortran 2003: Scalar CHARACTER" } 
- call cas_size("abcd"(1:3)) ! { dg-error "Fortran 2003: Scalar CHARACTER" } 
- call cas_size((e(1:3))) ! { dg-error "Fortran 2003: Scalar CHARACTER" } 
- call cas_size(("abcd"(1:3)//"a")) ! { dg-error "Fortran 2003: Scalar CHARACTER" } 
+ call cas_size(e(1:3)) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
+ call cas_size("abcd"(1:3)) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
+ call cas_size((e(1:3))) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
+ call cas_size(("abcd"(1:3)//"a")) ! { dg-error "Fortran 2003: Scalar CHARACTER" }
 
  call cas_shape(a)
  call cas_shape(b)

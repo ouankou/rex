@@ -16,7 +16,7 @@ program test
   if (ishftc (16, -bar()) /= 1) call abort
 
 contains
-  
+
   integer function foo ()
     integer, save :: i = 0
     i = i + 1

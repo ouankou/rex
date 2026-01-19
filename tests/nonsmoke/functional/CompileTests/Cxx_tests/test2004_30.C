@@ -14,7 +14,6 @@
 #define TEST_CONST_MEMBERS  1
 #define TEST_STATIC_MEMBERS 1
 
-#if 1
 // working
 const float* RESTRICT constRestrictIntegerPointer = 0;
 float* RESTRICT restrictIntegerPointer;
@@ -42,42 +41,32 @@ static void staticFunctionWithStaticLocalVariable()
 const void constVoidFunctionThrow() throw() { }
 
 void functionRegisterIntegerParameter ( int j );
-void functionRegisterIntegerParameter ( register int i ) {};
-#endif
+void functionRegisterIntegerParameter(register int i) {};
 
-#if 1
-EXPORT template < class T > void templateFunction () {};
-#endif
+EXPORT template <class T> void templateFunction() {};
 
-#if 1
 class classType
    {
-     public:
-#if 1
-          double publicDoubleValue;
-#endif
+public:
+  double publicDoubleValue;
 #if TEST_STATIC_MEMBERS
           static double publicStaticDoubleValue;
 #endif
 #if TEST_CONST_MEMBERS
           const double publicConstDoubleValue;
 #endif
-#if 1
           volatile double publicVolatileDoubleValue;
           mutable double publicMutableDoubleValue;
-#endif
-#if 1
-       // Error: "inline" only placed on function declaration appearing in the class 
-       // and not to the function declaration that appears with the member function 
-       // definition.  I think this is an error. Also, non explicitly inlined member 
-       // functions declared in the class are output with explicit inlining by the 
-       // unparser.  It could be that the modifiers are not copied (possible copy 
-       // constructor bug?).
+          // Error: "inline" only placed on function declaration appearing in
+          // the class and not to the function declaration that appears with the
+          // member function definition.  I think this is an error. Also, non
+          // explicitly inlined member functions declared in the class are
+          // output with explicit inlining by the unparser.  It could be that
+          // the modifiers are not copied (possible copy constructor bug?).
           void publicMemberFunction () {};
           void publicMemberFunctionConst () const {};
           void publicMemberFunctionVolatile () volatile {};
-          void publicMemberFunctionThrow () throw() {};
-#endif
+          void publicMemberFunctionThrow() throw() {};
 
 #if TEST_INLINING
           void noninlinePublicMemberFunctionWithDefinition () {};
@@ -90,7 +79,6 @@ class classType
           inline void inlinePublicMemberFunction () {};
 #endif
 
-#if 1
        // void publicMemberFunctionIntegerParameter ( register int i ) {};
        // classType ( register int* i ) {};
 #if TEST_CONST_MEMBERS
@@ -100,8 +88,6 @@ class classType
               : publicConstDoubleValue(42), protectedConstDoubleValue(43),
                 privateConstDoubleValue(44) {};
 #endif
-#endif
-
 
 #if TEST_CONST_MEMBERS
           explicit classType(register int integerValueParameter)
@@ -111,7 +97,6 @@ class classType
                 privateConstDoubleValue(3) {};
 #endif
 
-#if 1
           void publicMemberFunctionIntegerPointerParamter ( int* integerPointerParameter ) {};
           void publicMemberFunctionIntegerRestrictPointerParameter 
                ( int* RESTRICT integerRestrictPointerParameter ) {};
@@ -126,20 +111,15 @@ class classType
           virtual void publicVirtualMemberFunction () {};
           virtual void publicPureVirtualMemberFunction () = 0;
           friend  void publicFriendMemberFunction () {};
-          friend  inline void publicFriendInlineMemberFunction () {};
-#endif
+          friend inline void publicFriendInlineMemberFunction() {};
 
-#if 1
-       // Error: Templated member functions are unparsed outside of their class
-          EXPORT template < class T > void publicTemplateMemberFunction () {};
-#endif
-#if 1
-          typedef long* longPointer;
-#endif
-      protected:
-#if 1
+          // Error: Templated member functions are unparsed outside of their
+          // class
+          EXPORT template <class T> void publicTemplateMemberFunction() {};
+          typedef long *longPointer;
+
+        protected:
           double protectedDoubleValue;
-#endif
 #if TEST_CONST_MEMBERS
           const double protectedConstDoubleValue;
 #endif
@@ -147,16 +127,12 @@ class classType
           static double protectedStaticDoubleValue;
 #endif
 
-#if 1
           void protectedMemberFunction () {};
           void protectedMemberFunctionConst () const {};
-          void protectedMemberFunctionVolatile () volatile {};
-#endif
+          void protectedMemberFunctionVolatile() volatile {};
 
-      private:
-#if 1
+        private:
           double privateDoubleValue;
-#endif
 #if TEST_CONST_MEMBERS
           const double privateConstDoubleValue;
 #endif
@@ -164,11 +140,9 @@ class classType
           static double privateStaticDoubleValue;
 #endif
 
-#if 1
           void privateMemberFunction () {};
           void privateMemberFunctionConst () const {};
-          void privateMemberFunctionVolatile () volatile {};         
-#endif
+          void privateMemberFunctionVolatile() volatile {};
    };
 
 #if TEST_INLINING
@@ -191,9 +165,7 @@ double classType::publicStaticDoubleValue    = 0;
 double classType::protectedStaticDoubleValue = 0;
 double classType::privateStaticDoubleValue   = 0;
 #endif
-#endif
 
-#if 1
 class classTypeWithPureVirtualMember
    {
      public:
@@ -251,19 +223,14 @@ class classTypeWithMultipleVirtualBaseClasses : virtual public    classTypeWitho
    {
      public:
           int a;
-   };
-#endif
+};
 
-#if 1
 template < class T >
 class templateClassType
    {
      typename T::X x;
-   };
-#endif
+};
 
-
-#if 1
 extern int externVariable;
 extern const int externConstVariable;
 const int externConstVariableWithInitializer = 42;
@@ -284,19 +251,7 @@ extern "C"
 extern "C++"
    {
      int externCppscopeVariable;
-   }
-#endif
+     }
 
-#if 1
 // Make this a valid linkable program
-int main()
-   {
-     return 0;
-   }
-#endif
-
-
-
-
-
-
+     int main() { return 0; }

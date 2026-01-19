@@ -20,14 +20,8 @@ typedef Job *JobPtr;
 
 class UserQueues {
 public:
-#if 0
-          explicit UserQueues();
-          UserQueues(const UserQueues&) = delete;
-          UserQueues& operator=(const UserQueues&) = delete;
-          ~UserQueues() = default;
-#else
   UserQueues();
-#endif
+
 public:
   typedef std::unique_ptr<Job> JobPtr;
   typedef std::deque<JobPtr> JobDeque;

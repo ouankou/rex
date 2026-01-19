@@ -6,9 +6,9 @@ void foo ()
   // Once this was fixed the problem was that both true and false branches had to have seperate declarations.
   // a SgBasicBlock was inserted to support such declarations having seperate scopes.
      if (true)
-          class A {} x3;
-#if 1
+       class A {
+       } x3;
        else
-          class A {} x3;
-#endif
+         class A {
+         } x3;
    }

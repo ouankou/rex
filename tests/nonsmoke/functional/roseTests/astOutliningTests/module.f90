@@ -1,7 +1,7 @@
 ! MODULE can be reused
     MODULE stack
     IMPLICIT NONE
-! data 
+! data
     INTEGER, PARAMETER :: stack_size = 100
     INTEGER, SAVE :: store(stack_size), pos=0
 
@@ -27,7 +27,7 @@
        STOP
       END IF
     END SUBROUTINE push
-! pop 
+! pop
     SUBROUTINE pop(i)
      INTEGER, INTENT(OUT) :: i
       IF (pos > 0) THEN
@@ -39,15 +39,15 @@
    END MODULE stack
 
 ! use of module
-! the types, data structure, and subprograms are exposed 
+! the types, data structure, and subprograms are exposed
      PROGRAM StackUser
       USE stack
       IMPLICIT NONE
       INTEGER :: i, j
 
-      CALL Push(1); 
+      CALL Push(1);
       CALL Push(2);
-      CALL Pop(i); 
+      CALL Pop(i);
       CALL Pop(j)
       PRINT *, i,j
 

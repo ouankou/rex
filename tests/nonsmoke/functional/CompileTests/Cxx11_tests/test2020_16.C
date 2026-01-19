@@ -24,14 +24,3 @@ void foobar()
 
      X<short> *ps = g(si);
    }
-
-#if 0
-// Same error for all three: error: specializing member ‘::g<short int>’ requires ‘template<>’ syntax
-
-// Also, the error is that the template instantiations are output.
-class X< short  > *g< short  > (class X< short  > r)
-{
-  return new class X< short  > ((r . i + 1),(r . j + 1));
-}
-
-#endif

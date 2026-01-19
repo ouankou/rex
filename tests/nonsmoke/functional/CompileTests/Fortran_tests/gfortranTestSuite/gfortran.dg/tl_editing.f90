@@ -1,11 +1,11 @@
-! { dg-do run }     
+! { dg-do run }
 ! { dg-options "-std=legacy" }
 !
 ! Test of fix to bug triggered by NIST fm908.for.
 ! Left tabbing, followed by X or T-tabbing to the right would
 ! cause spaces to be overwritten on output data.
 ! Contributed by Paul Thomas  <pault@gcc.gnu.org>
-! PR25349 Revised by Jerry DeLisle <jvdelisle@gcc.gnu.org> 
+! PR25349 Revised by Jerry DeLisle <jvdelisle@gcc.gnu.org>
 program tl_editting
   character*10           ::  line, many(5), s
   character*10           ::  aline = "abcdefxyij"
@@ -30,6 +30,6 @@ program tl_editting
   read(10, '(a)') s
   if (s.ne.cline) call abort
   close(10, status='delete')
-  
+
 end program tl_editting
 

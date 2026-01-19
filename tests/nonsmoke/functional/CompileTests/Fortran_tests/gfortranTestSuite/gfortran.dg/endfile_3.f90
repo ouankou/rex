@@ -1,5 +1,5 @@
 ! { dg-do run }
-! pr44477 READ/WRITE not allowed after ENDFILE 
+! pr44477 READ/WRITE not allowed after ENDFILE
 !-------------------------------------------
   open(10, form='formatted', &
     action='write', position='rewind', status="scratch")

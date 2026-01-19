@@ -2663,45 +2663,5 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
 
   extern template class allocator<char>;
   extern template class allocator<wchar_t>;
-
-
-
-
-
-#if 0
-  template<typename _Alloc, bool = __is_empty(_Alloc)>
-    struct __alloc_swap
-    { static void _S_do_it(_Alloc&, _Alloc&) { } };
-
-  template<typename _Alloc>
-    struct __alloc_swap<_Alloc, false>
-    {
-      static void
-      _S_do_it(_Alloc& __one, _Alloc& __two)
-      {
-
- if (__one != __two)
-   swap(__one, __two);
-      }
-    };
-
-
-  template<typename _Alloc, bool = __is_empty(_Alloc)>
-    struct __alloc_neq
-    {
-      static bool
-      _S_do_it(const _Alloc&, const _Alloc&)
-      { return false; }
-    };
-
-  template<typename _Alloc>
-    struct __alloc_neq<_Alloc, false>
-    {
-      static bool
-      _S_do_it(const _Alloc& __one, const _Alloc& __two)
-      { return __one != __two; }
-    };
-#endif
-
 }
 

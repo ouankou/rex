@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! Program to test the initialisation range of enumerators 
+! Program to test the initialisation range of enumerators
 ! and kind values check
 
 program main

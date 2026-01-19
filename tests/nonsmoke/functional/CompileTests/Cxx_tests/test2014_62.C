@@ -5,13 +5,9 @@ class PtrSetWrap
      public:
           class Iterator
              {
-               public:
-#if 0
-                    Iterator();
-#else
-                    Iterator() {}
-#endif
-//                  T* Current() const;
+          public:
+            Iterator() {}
+            //                  T* Current() const;
              };
 
       // This causes an error!
@@ -28,7 +24,6 @@ class GraphNode
 //        virtual ~GraphNode();
    };
 
-#if 1
 // class GroupGraphNode : public GraphNode
 class GroupGraphNode
    {
@@ -38,26 +33,11 @@ class GroupGraphNode
        // PtrSetWrap <GraphNode> nodeSet;
 
        // PtrSetWrap<GraphNode>::Iterator iter;
-#if 0
-               PtrSetWrap<GraphNode>::Iterator iter;
-#endif
-#if 1
        // void ToString() const
-          void ToString()
-             {
-                int x;
-                x++;
-#if 1
-               PtrSetWrap<GraphNode>::Iterator iter;
-#endif
-                x++;
-             }
-#endif
-   };
-#else
-
-#if 0
-               PtrSetWrap<GraphNode>::Iterator iter;
-#endif
-
-#endif
+       void ToString() {
+         int x;
+         x++;
+         PtrSetWrap<GraphNode>::Iterator iter;
+         x++;
+       }
+};

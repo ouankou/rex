@@ -9,13 +9,11 @@ template <typename _CharT> struct my_char_traits {
 
 template <class _CharT> struct char_traits : public my_char_traits<_CharT> {};
 
-#if 1
 // Specialization allows GNU to to compile test code, but failes for legacy
 // frontend.
 template <> struct char_traits<unsigned int> {
   typedef unsigned int int_type;
 };
-#endif
 
 #include <cstdint>
 
@@ -26,7 +24,6 @@ template <> struct char_traits<unsigned int> {
 // typedef unsigned char32_t;
 // typedef unsigned uint_least32_t;
 
-#if 1
 // #ifdef _GLIBCXX_USE_WCHAR_T
 /// 21.1.3.2  char_traits specializations
 template <> struct char_traits<wchar_t> {
@@ -34,14 +31,11 @@ template <> struct char_traits<wchar_t> {
   typedef unsigned int int_type;
 };
 // #endif
-#endif
 
-#if 1
 template <> struct char_traits<char32_t> {
   // typedef uint_least32_t int_type;
   typedef unsigned int int_type;
 };
-#endif
 
 template <typename _Tp> class my_vector {};
 

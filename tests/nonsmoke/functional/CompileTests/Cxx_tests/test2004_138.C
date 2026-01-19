@@ -1,36 +1,6 @@
 // This test code demonstrates a bug for the g++ 3.4.3 compiler
 // the generated code from ROSE works fine with g++ 3.3.2.
 
-
-#if 0
-// Attempt to reproduce case where va_list is C++ header files is found to be
-// in std namespace, but the std namespace had not been seen yet!
-typedef void* va_list;
-
-namespace std
-   {
-     using ::va_list;
-   }
-#endif
-
-#if 0
-namespace std
-   {
-     int x;
-   }
-
-namespace std
-   {
-     int y = x;
-   }
-
-namespace X
-   {
-     int x;
-     int y = x;
-   }
-#endif
-
 namespace A
    {
       template <typename T> class X

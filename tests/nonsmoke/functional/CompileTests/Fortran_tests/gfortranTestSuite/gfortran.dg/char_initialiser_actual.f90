@@ -3,7 +3,7 @@
 !
 ! Tests passing of character array initialiser as actual argument.
 ! Fixes PR18109.
-! Contributed by Paul Thomas pault@gcc.gnu.org  
+! Contributed by Paul Thomas pault@gcc.gnu.org
 program char_initialiser
   character*5, dimension(3) :: x
   character*5, dimension(:), pointer :: y

@@ -99,7 +99,7 @@ C     have some real data to write, for example, model output.
          end do
       end do
 
-C     Create the file. 
+C     Create the file.
       retval = nf_create(FILE_NAME, nf_clobber, ncid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
@@ -121,18 +121,18 @@ C     an array of dimension IDs for each variable's dimensions, but
 C     since coordinate variables only have one dimension, we can
 C     simply provide the address of that dimension ID (lat_dimid) and
 C     similarly for (lon_dimid).
-      retval = nf_def_var(ncid, LAT_NAME, NF_REAL, 1, lat_dimid, 
+      retval = nf_def_var(ncid, LAT_NAME, NF_REAL, 1, lat_dimid,
      +     lat_varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
-      retval = nf_def_var(ncid, LON_NAME, NF_REAL, 1, lon_dimid, 
+      retval = nf_def_var(ncid, LON_NAME, NF_REAL, 1, lon_dimid,
      +     lon_varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
 C     Assign units attributes to coordinate variables.
-      retval = nf_put_att_text(ncid, lat_varid, UNITS, len(LAT_UNITS), 
+      retval = nf_put_att_text(ncid, lat_varid, UNITS, len(LAT_UNITS),
      +     LAT_UNITS)
       if (retval .ne. nf_noerr) call handle_err(retval)
-      retval = nf_put_att_text(ncid, lon_varid, UNITS, len(LON_UNITS), 
+      retval = nf_put_att_text(ncid, lon_varid, UNITS, len(LON_UNITS),
      +     LON_UNITS)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
@@ -146,18 +146,18 @@ C     dimension must come last on the list of dimids.
       dimids(4) = rec_dimid
 
 C     Define the netCDF variables for the pressure and temperature data.
-      retval = nf_def_var(ncid, PRES_NAME, NF_REAL, NDIMS, dimids, 
+      retval = nf_def_var(ncid, PRES_NAME, NF_REAL, NDIMS, dimids,
      +     pres_varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
-      retval = nf_def_var(ncid, TEMP_NAME, NF_REAL, NDIMS, dimids, 
+      retval = nf_def_var(ncid, TEMP_NAME, NF_REAL, NDIMS, dimids,
      +     temp_varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
 C     Assign units attributes to the netCDF variables.
-      retval = nf_put_att_text(ncid, pres_varid, UNITS, len(PRES_UNITS), 
+      retval = nf_put_att_text(ncid, pres_varid, UNITS, len(PRES_UNITS),
      +     PRES_UNITS)
       if (retval .ne. nf_noerr) call handle_err(retval)
-      retval = nf_put_att_text(ncid, temp_varid, UNITS, len(TEMP_UNITS), 
+      retval = nf_put_att_text(ncid, temp_varid, UNITS, len(TEMP_UNITS),
      +     TEMP_UNITS)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
@@ -189,7 +189,7 @@ C     of data. We will just rewrite the same data for each timestep. In
 C     a real application, the data would change between timesteps.
       do rec = 1, NRECS
          start(4) = rec
-         retval = nf_put_vara_real(ncid, pres_varid, start, count, 
+         retval = nf_put_vara_real(ncid, pres_varid, start, count,
      +        pres_out)
          if (retval .ne. nf_noerr) call handle_err(retval)
          retval = nf_put_vara_real(ncid, temp_varid, start, count,
@@ -201,7 +201,7 @@ C     Close the file. This causes netCDF to flush all buffers and make
 C     sure your data are really written to disk.
       retval = nf_close(ncid)
       if (retval .ne. nf_noerr) call handle_err(retval)
-   
+
       print *,'*** SUCCESS writing example file', FILE_NAME, '!'
       end
 

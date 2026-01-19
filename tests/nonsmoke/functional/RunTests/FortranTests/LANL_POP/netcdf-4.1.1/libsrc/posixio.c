@@ -53,11 +53,7 @@
 #define X_INT_MAX 2147483647
 #endif
 
-#if 0 /* !defined(NDEBUG) && !defined(X_ALIGN) */
-#define X_ALIGN 4
-#else
 #undef X_ALIGN
-#endif
 
 /* These may be missing on some platforms; define them if needed. */
 #ifndef S_IRGRP
@@ -1000,80 +996,6 @@ static int ncio_spx_get(ncio *const nciop, off_t offset, size_t extent,
   return ENOERR;
 }
 
-#if 0
-/*ARGSUSED*/
-static int
-strategy(ncio *const nciop, off_t to, off_t offset,
-			size_t extent, int rflags)
-{
-	static ncio_spx pxp[1];
-	int status = ENOERR;
-#ifdef X_ALIGN
-	size_t rem;
-#endif
-	
-	assert(extent != 0);
-	assert(extent < X_INT_MAX); /* sanity check */
-#if INSTRUMENT
-fprintf(stderr, "strategy %ld at %ld to %ld\n",
-	 (long)extent, (long)offset, (long)to);
-#endif
-
-#ifdef X_ALIGN
-	rem = (size_t)(offset % X_ALIGN);
-	if(rem != 0)
-	{
-		offset -= rem;
-		extent += rem;
-	}
-
-	{
-		const size_t rndup = extent % X_ALIGN;
-		if(rndup != 0)
-			extent += X_ALIGN - rndup;
-	}
-
-	assert(offset % X_ALIGN == 0);
-	assert(extent % X_ALIGN == 0);
-#endif
-
-	if(pxp->bf_extent < extent)
-	{
-		if(pxp->bf_base != NULL)
-		{
-			free(pxp->bf_base);
-			pxp->bf_base = NULL;
-			pxp->bf_extent = 0;
-		}
-		assert(pxp->bf_extent == 0);
-		pxp->bf_base = malloc(extent);
-		if(pxp->bf_base == NULL)
-			return ENOMEM;
-		pxp->bf_extent = extent;
-	}
-
-	status = px_pgin(nciop, offset,
-		 extent,
-		 pxp->bf_base,
-		 &pxp->bf_cnt, &pxp->pos);
-	if(status != ENOERR)
-		return status;
-
-	pxp->bf_offset = to; /* TODO: XALIGN */
-	
-	if(pxp->bf_cnt < extent)
-		pxp->bf_cnt = extent;
-
-	status = px_pgout(nciop, pxp->bf_offset,
-		pxp->bf_cnt,
-		pxp->bf_base, &pxp->pos);
-	/* if error, invalidate buffer anyway */
-	pxp->bf_offset = OFF_NONE;
-	pxp->bf_cnt = 0;
-	return status;
-}
-#endif
-
 /* Copy one region to another without making anything available to
    higher layers. May be just implemented in terms of get() and rel(),
    or may be tricky to be efficient.  Only used in by nc_enddef()
@@ -1312,10 +1234,6 @@ int ncio_create(const char *path, int ioflags, size_t initialsz, off_t igeto,
 #endif
   /* Should we mess with the mode based on NC_SHARE ?? */
   fd = open(path, oflags, NC_DEFAULT_CREAT_MODE);
-#if 0
-	(void) fprintf(stderr, "ncio_create(): path=\"%s\"\n", path);
-	(void) fprintf(stderr, "ncio_create(): oflags=0x%x\n", oflags);
-#endif
   if (fd < 0) {
     status = errno;
     goto unwind_new;

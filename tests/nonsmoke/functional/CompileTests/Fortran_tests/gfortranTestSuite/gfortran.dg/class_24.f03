@@ -5,7 +5,7 @@
 ! Contributed by Satish.BD <bdsatish@gmail.com>
 
   type :: test_case
-  end type 
+  end type
 
   type :: test_suite
     type(test_case) :: list

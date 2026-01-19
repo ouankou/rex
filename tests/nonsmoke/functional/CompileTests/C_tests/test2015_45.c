@@ -1,11 +1,4 @@
-#if 0
-struct numeric_resolv
-   {
-     int rc;
-   };
-#else
 struct numeric_resolv;
-#endif
 
 static void numeric_step ( struct numeric_resolv *numeric ) { }
 

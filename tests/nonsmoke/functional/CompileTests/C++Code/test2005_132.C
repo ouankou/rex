@@ -10,13 +10,7 @@ class X
              {
                 int nz = data.size();
                 {}
-                
-//             int x;
-#if 0
-            // for (z = 0; z < nz; z++)
-                  {
-                     // data[z] = 0.0;
-                  }
-#endif
+
+                //             int x;
              }
    };

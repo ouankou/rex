@@ -19,7 +19,7 @@
  x = func (x) ;\
  y = func (y) ;\
  if (abs((y - x) / y) > eps) call abort
-  
+
 #define CTEST_FUNCTION(func,valc) \
  z = valc ;\
  w = z ;\
@@ -56,7 +56,7 @@
  x1 = val2 ; \
  y1 = x1; \
  if (abs((x**x1 - y**y1)/(y**y1)) > eps) call abort
- 
+
 #define CTEST_POWER(val1,val2) \
  z = val1 ; \
  w = z ; \
@@ -101,5 +101,5 @@
  CTEST_POWER ((-10.78,123.213),(-14.123,-13279.5))
  CTEST_POWER ((10.78,-123.213),(-14.123,-13279.5))
  CTEST_POWER ((-10.78,-123.213),(-14.123,-13279.5))
- 
+
 end

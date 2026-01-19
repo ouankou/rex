@@ -1,5 +1,5 @@
 ! { dg-do run }
-! 
+!
 ! PR fortran/43551
 !
 ! Writes a 672000 byte file with buffering. The writing failed because

@@ -15,11 +15,8 @@ struct struct_and_class_4< Class_1<t_t_parm_8, t_t_parm_9>, struct_1>
        // class Class_2 {};
    };
 
-
-#if 1
-template< typename t_t_parm_10, typename t_t_parm_11>
-class struct_and_class_4< Class_1<t_t_parm_10, t_t_parm_11>, struct_1>::Class_2
-   : public struct_and_class_4< Class_1<t_t_parm_10, t_t_parm_11>, struct_1>::NoSuchClass
-   {
-   };
-#endif
+   template <typename t_t_parm_10, typename t_t_parm_11>
+   class struct_and_class_4<Class_1<t_t_parm_10, t_t_parm_11>,
+                            struct_1>::Class_2
+       : public struct_and_class_4<Class_1<t_t_parm_10, t_t_parm_11>,
+                                   struct_1>::NoSuchClass {};

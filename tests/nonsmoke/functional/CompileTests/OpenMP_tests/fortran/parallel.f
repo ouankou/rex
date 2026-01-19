@@ -6,6 +6,6 @@ C***************************************************
       PROGRAM HELLO
 !$OMP PARALLEL
       PRINT *, 'Hello World!'
-c$omp end parallel 
+c$omp end parallel
       PRINT *, 'the end'
       END

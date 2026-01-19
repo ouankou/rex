@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! 
+!
 ! PR 36426
 !
 ! Contributed by Tobias Burnus <burnus@gcc.gnu.org>

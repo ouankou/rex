@@ -7,7 +7,7 @@ program emptyif
    if (c) then
       c = .true.
    end if
-   
+
    if (c) then
    else
       c = .true.

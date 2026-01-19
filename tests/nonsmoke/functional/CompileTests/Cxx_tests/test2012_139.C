@@ -111,13 +111,7 @@ int main(int argc, char *argv[]) {
   IndexSet_forall(0, array_length, ref_op);
 
 #if defined(USE_ICC)
-#if 0 // use lambda
-   auto test_op = [&] (int idx) { __assume_aligned(parent, 32) ;
-                                  __assume_aligned(child, 32) ;
-                                  child[idx] = parent[idx] * parent[idx]; };
-#else // use functor
   TestOp test_op(parent, child);
-#endif
 #endif
 
 #if defined(USE_XLC) // if using IBM compiler (xlcxx)
@@ -127,12 +121,6 @@ int main(int argc, char *argv[]) {
   // Execute half array traversal and check result...
   IndexSet_forall(0, array_length / 2, test_op);
   ResultCheck("half array ", child_ref, child, array_length / 2);
-
-#if 0
-   for (int ic = 0; ic < 320; ++ic) {
-      std::cout << "child[" << ic << "] = " << child[ic] << std::endl; ;
-   }
-#endif
 
   free(parent);
   free(child);

@@ -30,4 +30,4 @@ program testdirect
     endif
   enddo
   close(unit=15, status="delete")
-end program testdirect  
+end program testdirect

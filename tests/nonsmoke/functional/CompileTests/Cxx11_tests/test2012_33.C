@@ -1,20 +1,6 @@
 // Example C++ 11 features:
 //    Translate "auto x = vec.iterator();" into "std::vector<Foo>::iterator x = vec.iterator();"
 
-#if 0
-#include<vector>
-
-class Foo {};
-
-std::vector<Foo> vec;
-
-// Translate:
-auto x = vec.iterator();
-// to:
-std::vector<Foo>::iterator x = vec.iterator();
-#endif
-
-
 // advance example
 #include <iostream>     // std::cout
 #include <iterator>     // std::distance

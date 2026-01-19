@@ -2,7 +2,7 @@
   interface nf90_def_var
     module procedure nf90_def_var_Scalar, nf90_def_var_oneDim, nf90_def_var_ManyDims
   end interface ! nf90_def_var
-  
+
   ! Overloaded attribute functions
   interface nf90_put_att
     module procedure nf90_put_att_text,                                      &

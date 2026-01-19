@@ -19,4 +19,4 @@ modref:   k x ;  readref:  k j k x x i ;  killref:   k x
 x += x * i;
 modref:  x ;  readref:  x x i ;  killref:  x
 return 0;
-modref:  ;  readref:  ;  killref: 
+modref:  ;  readref:  ;  killref:

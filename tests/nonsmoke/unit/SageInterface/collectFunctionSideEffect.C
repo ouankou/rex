@@ -34,81 +34,6 @@ using namespace std;
 ofstream ofile;
 bool b_sort = false; // sort variables for correctness checking using diff??
 
-#if 0
-//testing a new version with better conversion, obtain the current level granularity, not always converting to top level objects!!
-SgInitializedName* convertRefToInitializedName2(SgNode* current)
-{
-  SgInitializedName* name = NULL;
-  ROSE_ASSERT(current != NULL);
-  if (isSgInitializedName(current))
-  {
-    name = isSgInitializedName(current);
-  }
-  else if (isSgPntrArrRefExp(current)) // arrays: convert to parent level
-  {
-    bool suc=false;
-    SgExpression* nameExp = NULL;
-    suc= SageInterface::isArrayReference(isSgExpression(current),&nameExp);
-    ROSE_ASSERT(suc == true);
-     // has to resolve this recursively
-    return convertRefToInitializedName2(nameExp);
-  }
-  else if (isSgVarRefExp(current)) // variable reference expression: direct convert to initName
-  {
-#if 0
-    SgNode* parent = current->get_parent();
-    if (isSgDotExp(parent))
-    {
-       if (isSgDotExp(parent)->get_rhs_operand() == current)
-        return convertRefToInitializedName2(parent);
-    }
-    else if(isSgArrowExp(parent))
-    {
-      if (isSgArrowExp(parent)->get_rhs_operand() == current)
-        return convertRefToInitializedName2(parent);
-    }
-#endif
-    name = isSgVarRefExp(current)->get_symbol()->get_declaration();
-  }
-  else if (isSgDotExp(current)) // obtain the rhs
-  {
-    SgExpression* rhs = isSgDotExp(current)->get_rhs_operand();
-    ROSE_ASSERT(rhs);
-     // has to resolve this recursively
-    return convertRefToInitializedName2(rhs);
-  }
-   else if (isSgArrowExp(current)) // obtain the rhs
-  {
-    SgExpression* rhs = isSgArrowExp(current)->get_rhs_operand();
-    ROSE_ASSERT(rhs);
-     // has to resolve this recursively
-    return convertRefToInitializedName2(rhs);
-  } // The following expression types are usually introduced by left hand operands of DotExp, ArrowExp
-#if 0
-  else if (isSgPointerDerefExp(current)) // *p access is different from p: how to differentiate them??
-  {
-    return convertRefToInitializedName2(isSgPointerDerefExp(current)->get_operand());
-  }
-#endif
-  else if (isSgCastExp(current))
-  {
-    return convertRefToInitializedName2(isSgCastExp(current)->get_operand());
-  }
-  else if (isSgThisExp(current)) // this pointer cannot be converted to  SgInitializedName 
-  {
-    return NULL; 
-  }
-  else
-  {
-    cerr<<"In convertRefToInitializedName2(): unhandled reference type:"<<current->class_name()<<endl;
-    ROSE_ASSERT(false);
-  }
-  ROSE_ASSERT(name != NULL);
-  return name;
-}
-
-#endif
-
 void dumpVectorNodes(vector<SgNode *> &Refs, const string &header,
                      ofstream &ofile) {
   // The side effect analysis internally uses a std::map with AST node's memory
@@ -222,21 +147,6 @@ int main(int argc, char *argv[]) {
 
     dumpSetNames(readNames, "Read var names:", ofile);
     dumpSetNames(writeNames, "Write var names:", ofile);
-
-#if 0
-    // read only variables  
-    set<SgInitializedName*> readOnlyVars;
-    SageInterface::collectReadOnlyVariables(func,readOnlyVars);
-    for (iter=readOnlyVars.begin();iter!=readOnlyVars.end();iter++)
-    {
-      if (iter== readNames.begin())
-        cout<<"read-only variable:"<<endl; 
-      if (*iter)
-        cout<<(*iter)->get_qualified_name()<<endl;
-      else  
-        cout<<"NULL"<<endl;
-    }
-#endif
   }
 
   // loop level side effect results

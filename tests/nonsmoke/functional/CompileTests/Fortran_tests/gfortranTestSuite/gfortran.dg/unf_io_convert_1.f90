@@ -9,7 +9,7 @@ program main
   implicit none
   integer size
   parameter(size=100)
-  logical debug 
+  logical debug
   data debug /.FALSE./
 ! set debug to true for help in debugging failures.
   integer m(2)
@@ -38,7 +38,7 @@ program main
   m(2) = 0
   n = 0
   str = ' '
-  
+
   rewind(9)
   read(9) m
   read(9) n
@@ -53,7 +53,7 @@ program main
         call abort
      endif
   endif
-  
+
   if (m(2).ne.Z'55667788') then
      if (debug) then
         print '(A,Z8)','m(2) incorrect.  m(2) = ',m(2)
@@ -61,7 +61,7 @@ program main
         call abort
      endif
   endif
-  
+
   if (n.ne.Z'77AABBCC') then
      if (debug) then
         print '(A,Z8)','n incorrect.  n = ',n
@@ -69,7 +69,7 @@ program main
         call abort
      endif
   endif
-  
+
   do i = 1,size
      if (int(r(i)).ne.i) then
         if (debug) then

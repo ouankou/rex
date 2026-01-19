@@ -21,26 +21,3 @@ void transpose(intArray &X)
 {
   intArray &Result = X; // *(new intArray());
 }
-
-#if 0
-// This case works fine.  The code above demonstrates 
-// the bug (synthesized from a large source code base)
-typedef unsigned int size_t;
-
-class A
-   { 
-     public: 
-          A(int) {};
-          void *operator new (size_t Size) {};
-   };
-
-// A & x = *(new A(i));
-
-void foo ()
-   {
-     A & Result = *(new A (1));
-
-  // int j;
-
-   }
-#endif

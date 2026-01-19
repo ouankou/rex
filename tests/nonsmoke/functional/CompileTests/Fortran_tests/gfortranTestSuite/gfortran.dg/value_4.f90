@@ -7,7 +7,7 @@
 ! external C functions by value and by reference.  This is effectively
 ! identical to c_by_val_1.f, which does the same for %VAL.
 !
-! Contributed by Paul Thomas  <pault@gcc.gnu.org> 
+! Contributed by Paul Thomas  <pault@gcc.gnu.org>
 !
 module global
   interface delta
@@ -32,7 +32,7 @@ contains
     logical :: c
     c = ((abs (real (a-b)) > epsi).or.(abs (aimag (a-b)) > epsi))
   end function deltac
-end module global  
+end module global
 
 program value_4
   use global

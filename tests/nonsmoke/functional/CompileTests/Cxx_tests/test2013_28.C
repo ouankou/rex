@@ -6,16 +6,10 @@ foobar( const int & x )
       return (int &) x;
    }
 
-#if 1
 class X
    {
      public:
           void foo();
    };
 
-void foobar ( const X & x )
-   {
-     return ((X &) x).foo();
-   }
-#endif
-
+   void foobar(const X &x) { return ((X &)x).foo(); }

@@ -60,4 +60,4 @@ program testd15
 end program testd15
 
 ! { dg-final { cleanup-modules "foo_mod foo2_mod" } }
- 
+

@@ -6,12 +6,9 @@ enum A
 
 void foobar()
    {
-     A x;
-#if 1
-     switch(x)
-       {
-         case ENUM_A:
-           {}
-       }
-#endif
+  A x;
+  switch (x) {
+  case ENUM_A: {
+  }
+  }
    }

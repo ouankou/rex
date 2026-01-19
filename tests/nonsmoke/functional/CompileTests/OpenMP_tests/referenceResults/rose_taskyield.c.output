@@ -1,1 +1,1 @@
-#pragma omp taskyield 
+#pragma omp taskyield

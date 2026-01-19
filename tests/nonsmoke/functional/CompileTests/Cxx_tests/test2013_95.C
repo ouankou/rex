@@ -9,21 +9,15 @@ class A
 class B
    {
      public:
-         typedef int x_enum;
-#if 0
-         void x_enum();
-#endif
+       typedef int x_enum;
    };
 
 class X
    {
-     public:
-#if 1
-          struct x_enum 
-             {
-               int x;
-             };
-#endif
+public:
+  struct x_enum {
+    int x;
+  };
           struct Y
              {
             // This is output as: "class A<B::x_enum> a;" and should be "class A<enum B::x_enum> a;".

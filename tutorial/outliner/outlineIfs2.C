@@ -40,7 +40,6 @@ int main(int argc, char *argv[]) {
   SgProject *proj = frontend(argc, argv);
   ROSE_ASSERT(proj);
 
-#if 1
   // Build a set of outlineable if statements.
   CollectOutlineableIfs::IfList_t ifs;
   CollectOutlineableIfs::collect(proj, ifs);
@@ -54,10 +53,6 @@ int main(int argc, char *argv[]) {
   for (CollectOutlineableIfs::IfList_t::reverse_iterator i = ifs.rbegin();
        i != ifs.rend(); ++i)
     Outliner::outline(*i);
-#else
-  printf("Skipping outlining due to recent move from std::list to std::vector "
-         "in ROSE \n");
-#endif
 
   // Unparse
   return backend(proj);

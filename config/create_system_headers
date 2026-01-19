@@ -86,7 +86,7 @@ process_headers()
        rm "$targetName" # In case targetName is a link to something in the base include directory
        case "`basename $srcName`" in
 # DQ (4/29/2016): I think this case is no longer required.  If it is then we should revisit it anyway.
-# At the very least this fix for the problem is not the correc fix for C++11 code which has a macro 
+# At the very least this fix for the problem is not the correc fix for C++11 code which has a macro
 # before the function name.
 #        "complex" )
 #          echo "Processing complex header file (commenting out private constructor) at $targetName"
@@ -144,7 +144,7 @@ EOF
 
 ######################################################################################
 # start of main
-# check for correct number of arguments and 
+# check for correct number of arguments and
 # whether a source directory has been specified
 # if [ $# -eq 3 ]; then
 if [ $# -ge 6 ] && [ $# -le 7 ]; then
@@ -182,7 +182,7 @@ if [ -n "$VERBOSE" ]; then
     echo "compilerMinorVersion = $compilerMinorVersion"
 fi
 
-# DQ (2/2/2016): We don't compiler ROSE using ROSE as the backend (this was from when we had 
+# DQ (2/2/2016): We don't compiler ROSE using ROSE as the backend (this was from when we had
 # to support ROSE compiling ROSE, but this should not require specialized support now).
 # DQ (8/24/2009): Allow either "roseTranslator" or "roseAnalysis"
 # if [ "$compilerName" == "roseTranslator" ]
@@ -271,7 +271,7 @@ if [ "x$language" = "xc" -o "x$language" = "xc++" ]; then
 
      # DQ (12/13/2016): Added edits specific to Intel defines for floating point values that legacy frontend reports and not in range.
      # This is thus far not reproducable except on non RZ systems using the Intel v16 compiler. We are editing:
-     #    #define __DBL_DENORM_MIN__ 4.9406564584124654e-324 
+     #    #define __DBL_DENORM_MIN__ 4.9406564584124654e-324
      # to be:
      #    #define __DBL_DENORM_MIN__ 4.9406564584124654e-324L
      # and
@@ -367,7 +367,7 @@ sh "$roseHome/config/get_compiler_header_dirs" "$1" "$language" "$compilerVendor
         iDir=`expr "$iDir" + 1 `
         [ -n "$VERBOSE" ] && echo "processing header file compiler name = $1 directory = $dirName to be mapped to $mainTargetDir/hdrs${iDir} roseHome = $roseHome compilerVendorName = $compilerVendorName"
 
-      # DQ (1/14/2007): Added "&" so that this would happen in parallel (to improve performance of configure on multi-core machines). 
+      # DQ (1/14/2007): Added "&" so that this would happen in parallel (to improve performance of configure on multi-core machines).
       # JJW (7/18/2008): Commented it out because the process does not take too
       # long and these commands mess up configure output and cause trouble if
       # you try Ctrl-C when configure is running

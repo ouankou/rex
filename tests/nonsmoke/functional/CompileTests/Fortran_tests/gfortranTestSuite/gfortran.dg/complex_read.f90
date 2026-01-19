@@ -22,7 +22,7 @@ program complex_read
   read (10,*) a
   if (a.ne.(99.0, 999.0)) call abort ()
 
-! Test a new record before the.comma 
+! Test a new record before the.comma
 
   rewind (10)
   write (10, *) " ( 0.99  "
@@ -31,7 +31,7 @@ program complex_read
   read (10,*) a
   if (a.ne.(0.99, 9.90)) call abort ()
 
-! Test a new records before and after the.comma 
+! Test a new records before and after the.comma
 
   rewind (10)
   write (10, *) " ( 99.0   "
@@ -41,7 +41,7 @@ program complex_read
   read (10,*) a
   if (a.ne.(99.0, 999.0)) call abort ()
 
-! Test a new records and blank records before and after the.comma 
+! Test a new records and blank records before and after the.comma
 
   rewind (10)
   write (10, *) " ( 0.99   "

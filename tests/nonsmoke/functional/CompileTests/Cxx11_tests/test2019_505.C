@@ -59,9 +59,3 @@ void func_3(int &parm_3)
      function<void()> func_1 = [&]() { };
      local_1->func_4();
    }
-
-#if 0
-gets the error
-identityTranslator: Cxx_Grammar.C:69689: static SgModifierType *SgModifierType::insertModifierTypeIntoTypeTable(SgModifierType *): Assertion t->stripType() == result->stripType() failed.
-#endif
-

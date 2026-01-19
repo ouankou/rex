@@ -12,17 +12,13 @@ class Test
 
 void foobar()
    {
-     Test ref;
-#if 1
+  Test ref;
   // This is two function calls.
-     ref->getFormat();
-#endif
+  ref->getFormat();
 
   // This is one function call.
   // (ref += ref);
 
-#if 1
-     (ref += ref).getFormat();
-#endif
+  (ref += ref).getFormat();
    }
 

@@ -15,7 +15,7 @@ module m
   interface assignment (=)
     module procedure i_to_t, i_to_ti
   end interface
-contains 
+contains
   elemental subroutine i_to_ti (p, q)
     type(ti), intent(out) :: p
     integer, intent(in)  :: q

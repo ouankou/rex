@@ -10,13 +10,4 @@ class X
           X(int tXXX) {};
    };
 
-int main()
-   {
-#if 0
-     X<int> a(1);
-     X<int> b(1.0);
-#endif
-
-     X<int> c(42);
-   }
-
+   int main() { X<int> c(42); }

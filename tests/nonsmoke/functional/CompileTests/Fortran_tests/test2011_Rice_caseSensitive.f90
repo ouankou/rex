@@ -1,7 +1,7 @@
 ! ROSE does not desensitise the case for derived type name
 program caseSensitiveBug
 
-   type Mytype 
+   type Mytype
      integer i
    end type
 
@@ -9,5 +9,5 @@ program caseSensitiveBug
    type (mytype) :: X
 
    X%i = 5
-  
-end 
+
+end

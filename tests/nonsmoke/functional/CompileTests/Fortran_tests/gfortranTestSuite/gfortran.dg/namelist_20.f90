@@ -32,4 +32,4 @@ program namelist_20
     if (x(i) /= i) call abort ()
   end do
 
-end program namelist_20 
+end program namelist_20

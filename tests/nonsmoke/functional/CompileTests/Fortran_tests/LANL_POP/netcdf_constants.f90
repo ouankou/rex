@@ -14,7 +14,7 @@
     nf90_real4  = nf90_float,   &
     nf90_double = 6,            &
     nf90_real8  = nf90_double
-                        
+
   !
   ! default fill values:
   !
@@ -48,11 +48,11 @@
     nf90_nofill    = 256,       &
     nf90_64bit_offset    = 512,       &
     nf90_lock      = 1024,      &
-    nf90_share     = 2048 
-  
+    nf90_share     = 2048
+
   integer, parameter, public ::  &
-    nf90_sizehint_default = 0,   & 
-    nf90_align_chunk      = -1 
+    nf90_sizehint_default = 0,   &
+    nf90_align_chunk      = -1
 
   !
   ! size argument for defining an unlimited dimension:
@@ -73,7 +73,7 @@
     nf90_max_vars     = 8192,   &
     nf90_max_name     = 256,    &
     nf90_max_var_dims = nf90_max_dims
-  
+
   !
   ! error codes:
   !

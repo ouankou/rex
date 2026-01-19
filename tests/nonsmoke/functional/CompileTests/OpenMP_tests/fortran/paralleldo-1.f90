@@ -7,4 +7,4 @@ subroutine a1(a,b,n)
   enddo
 !$omp end parallel do
   print *,'end'
-end subroutine a1  
+end subroutine a1

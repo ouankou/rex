@@ -1,18 +1,3 @@
-#if 0
-// Test code for default parameter specification in templated functions!
-template<typename T>
-class Y
-   {
-     public:
-          Y(T i = 1);
-   };
-
-// Definition of member function outside of class is fine (works)!
-template<typename T>
-Y<T>::Y<T>( T i)
-   {
-   }
-#endif
 
 
 // Test use of default parameters in template member function declarations

@@ -495,7 +495,7 @@ contains
 
             dst_block = get_block(k,k)  ! block info for this block
 
-            iblock_dst = dst_block%iblock  ! i,j block index in 
+            iblock_dst = dst_block%iblock  ! i,j block index in
             jblock_dst = dst_block%jblock  ! Cartesian block decomposition
 
             dst_block_loc = dist%local_block(k)  ! local block location
@@ -520,7 +520,7 @@ contains
                   newbndy%local_ew_dst_add(2,iloc_ew) = 1
                else
                   !*** source block is all land so treat as local copy
-                  !*** with source block zero to fill ghost cells with 
+                  !*** with source block zero to fill ghost cells with
                   !*** zeroes
                   iloc_ew = iloc_ew + 1
                   newbndy%local_ew_src_block(iloc_ew) = 0
@@ -600,7 +600,7 @@ contains
                      !*** located on domain boundary
                      newbndy%local_ns_dst_add(1,iloc_ns) = &
                                           dst_block%i_glob(nghost+1)
-                     newbndy%local_ns_dst_add(2,iloc_ns) = & 
+                     newbndy%local_ns_dst_add(2,iloc_ns) = &
                                           dst_block%je
                   endif
                else

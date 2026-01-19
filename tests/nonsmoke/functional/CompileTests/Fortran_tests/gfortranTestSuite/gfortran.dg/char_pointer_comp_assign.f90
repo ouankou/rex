@@ -10,7 +10,7 @@ program char_pointer_comp_assign
      character (len=4), pointer :: scalar
      character (len=4), pointer :: array(:)
   end type dt
-  type (dt) :: a 
+  type (dt) :: a
   character (len=4), target :: scalar_t ="abcd"
   character (len=4), target :: array_t(2) = (/"abcd","efgh"/)
 

@@ -4,14 +4,14 @@
 ! extended by Thomas Koenig.
       program try_gf1048
 
-      call       gf1048a(  10,  8,  7,  1,  0,  .true.) 
-      call       gf1048b(  10,  8,  7,  1,  0,  .true.) 
-      call       gf1048c(  10,  8,  7,  1,  0,  .true.) 
-      call       gf1048d(  10,  8,  7,  1,  0,  .true.) 
-      call       P_inta (  10,  8,  7,  1,  0,  .true.)    
-      call       P_intb (  10,  8,  7,  1,  0,  .true.)    
-      call       P_intc (  10,  8,  7,  1,  0,  .true.)    
-      call       P_intd (  10,  8,  7,  1,  0,  .true.)    
+      call       gf1048a(  10,  8,  7,  1,  0,  .true.)
+      call       gf1048b(  10,  8,  7,  1,  0,  .true.)
+      call       gf1048c(  10,  8,  7,  1,  0,  .true.)
+      call       gf1048d(  10,  8,  7,  1,  0,  .true.)
+      call       P_inta (  10,  8,  7,  1,  0,  .true.)
+      call       P_intb (  10,  8,  7,  1,  0,  .true.)
+      call       P_intc (  10,  8,  7,  1,  0,  .true.)
+      call       P_intd (  10,  8,  7,  1,  0,  .true.)
       end program
 
       SUBROUTINE GF1048a(nf10,nf8,nf7,nf1,nf0,nf_true)

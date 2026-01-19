@@ -392,10 +392,6 @@ int ncx_get_short_float(const void *xp, float *ip) {
   ix_short xx;
   get_ix_short(xp, &xx);
   *ip = xx;
-#if 0 /* TODO: determine when necessary */
-	if(xx > FLT_MAX || xx < (-FLT_MAX))
-		return NC_ERANGE;
-#endif
   return ENOERR;
 }
 
@@ -597,10 +593,6 @@ int ncx_get_int_float(const void *xp, float *ip) {
   ix_int xx;
   get_ix_int(xp, &xx);
   *ip = xx;
-#if 0 /* TODO: determine when necessary */
-	if(xx > FLT_MAX || xx < (-FLT_MAX))
-		return NC_ERANGE;
-#endif
   return ENOERR;
 }
 
@@ -795,30 +787,22 @@ int ncx_put_float_uchar(void *xp, const uchar *ip) {
 int ncx_put_float_short(void *xp, const short *ip) {
   float xx = (float)*ip;
   put_ix_float(xp, &xx);
-#if 0 /* TODO: figure this out */
-	if((float)(*ip) > X_FLOAT_MAX || (float)(*ip) < X_FLOAT_MIN)
-		return NC_ERANGE;
-#endif
   return ENOERR;
 }
 
 int ncx_put_float_int(void *xp, const int *ip) {
   float xx = (float)*ip;
   put_ix_float(xp, &xx);
-#if 1 /* TODO: figure this out */
   if ((float)(*ip) > X_FLOAT_MAX || (float)(*ip) < X_FLOAT_MIN)
     return NC_ERANGE;
-#endif
   return ENOERR;
 }
 
 int ncx_put_float_long(void *xp, const long *ip) {
   float xx = (float)*ip;
   put_ix_float(xp, &xx);
-#if 1 /* TODO: figure this out */
   if ((float)(*ip) > X_FLOAT_MAX || (float)(*ip) < X_FLOAT_MIN)
     return NC_ERANGE;
-#endif
   return ENOERR;
 }
 
@@ -944,40 +928,28 @@ int ncx_put_double_uchar(void *xp, const uchar *ip) {
 int ncx_put_double_short(void *xp, const short *ip) {
   double xx = (double)*ip;
   put_ix_double(xp, &xx);
-#if 0 /* TODO: figure this out */
-	if((double)(*ip) > X_DOUBLE_MAX || (double)(*ip) < X_DOUBLE_MIN)
-		return NC_ERANGE;
-#endif
   return ENOERR;
 }
 
 int ncx_put_double_int(void *xp, const int *ip) {
   double xx = (double)*ip;
   put_ix_double(xp, &xx);
-#if 0 /* TODO: figure this out */
-	if((double)(*ip) > X_DOUBLE_MAX || (double)(*ip) < X_DOUBLE_MIN)
-		return NC_ERANGE;
-#endif
   return ENOERR;
 }
 
 int ncx_put_double_long(void *xp, const long *ip) {
   double xx = (double)*ip;
   put_ix_double(xp, &xx);
-#if 1 /* TODO: figure this out */
   if ((double)(*ip) > X_DOUBLE_MAX || (double)(*ip) < X_DOUBLE_MIN)
     return NC_ERANGE;
-#endif
   return ENOERR;
 }
 
 int ncx_put_double_float(void *xp, const float *ip) {
   double xx = (double)*ip;
   put_ix_double(xp, &xx);
-#if 1 /* TODO: figure this out */
   if ((double)(*ip) > X_DOUBLE_MAX || (double)(*ip) < X_DOUBLE_MIN)
     return NC_ERANGE;
-#endif
   return ENOERR;
 }
 

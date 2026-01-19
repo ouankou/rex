@@ -24,7 +24,7 @@ C
       ILA2 = UBOUND(LLA)
 C     CORRECT FOR THE ZERO DIMENSIONED TERM TO ALLOW AN EASIER VERIFY
       ILA1(4) = ILA1(4) - 2    !   1 - 2 = -1
-      ILA2(4) = ILA2(4) + 6    !   0 + 6 = 6     
+      ILA2(4) = ILA2(4) + 6    !   0 + 6 = 6
 
       DO J1 = 1,7
       IVAL = 3-J1
@@ -37,4 +37,3 @@ C     CORRECT FOR THE ZERO DIMENSIONED TERM TO ALLOW AN EASIER VERIFY
   101 ENDDO
 
       END SUBROUTINE
-      

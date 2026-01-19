@@ -1,6 +1,6 @@
 ! { dg-do compile }
 ! { dg-options "-std=f95" }
-! PR35754 -std=f95: Reject "1P2E12.4" w/o a comma after the "P" 
+! PR35754 -std=f95: Reject "1P2E12.4" w/o a comma after the "P"
 ! PR
 ! Test case provided by Jerry DeLisle  <jvdelisle@gcc.gnu.org>
       character(40) :: fmt_string

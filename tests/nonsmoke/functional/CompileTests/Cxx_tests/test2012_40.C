@@ -1,9 +1,7 @@
 class X
    {
-     public:
-#if 1
-          X () {}
-#endif
+public:
+  X() {}
    };
 
 

@@ -25,16 +25,7 @@ void visitorTraversal::visit(SgNode* n)
                printf ("hash tabel entry: i->first = %s \n",i->first.str());
                i++;
              }
-        }
-#if 0
-     SgScopeStatement* scope = isSgScopeStatement(n);
-     if (scope != NULL)
-        {
-          printf ("Looking for \"x\" in the global symbol table ... \n");
-          SgSymbol* symbol = globalScope->lookup_var_symbol("x");
-          ROSE_ASSERT(symbol != NULL);
-        }
-#endif
+     }
    }
 
 int

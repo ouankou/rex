@@ -3,17 +3,6 @@
 // fundamental types such as: int and size_t.
 
 // This problem is demonstrated in the support for Valgrind.
-#if 0
-// We need a defintion of "size_t" to compile this file.
-#ifdef ROSE_M32BIT
-#include<stdint.h>
-// Build a 32-bit version of "size_t"
-typedef int32_t size_t;
-#else
-// Build a 64-bit version of "size_t" by reading the system file where it is defined.
-#include<stddef.h>
-#endif
-#endif
 
 #include<stddef.h>
 
@@ -42,9 +31,4 @@ void foo()
      {
        int a : sizeof(size_t);
      };
-     
-#if 0
-     int x = sizeof(int32_t);
-     int y = sizeof(int64_t);
-#endif
    }

@@ -45,5 +45,5 @@ contains
     integer     ,intent(in)    :: r
   end subroutine assign_to_atm
 end module mod2
- 
+
 ! { dg-final { cleanup-modules "mod1 mod2" } }

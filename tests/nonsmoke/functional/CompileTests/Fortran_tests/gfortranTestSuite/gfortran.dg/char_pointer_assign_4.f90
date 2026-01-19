@@ -14,7 +14,7 @@ program ptr
   character(len=5), pointer :: p1
   integer, volatile :: i
   i = 8
-  p1 => s1(1:i) 
+  p1 => s1(1:i)
 end program ptr
 
 ! { dg-output "Unequal character lengths \\(5/8\\)" }

@@ -7,7 +7,7 @@
 !     data debug /.TRUE./
       character*20 chr
       chr=''
-!  not connected 
+!  not connected
       inquire(7,pad=chr)
 !     if (debug) print*,chr
       if (chr.ne.'UNDEFINED') call abort

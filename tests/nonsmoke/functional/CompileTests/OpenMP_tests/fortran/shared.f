@@ -13,6 +13,6 @@ C***************************************************
 !$OMP PARALLEL PRIVATE(TID)
       TID = OMP_GET_THREAD_NUM()
       PRINT *, 'Hello World by thread ', TID, ' shared variables ', S, K
-c$omp end parallel 
+c$omp end parallel
       PRINT *, 'the end'
       END

@@ -5,7 +5,7 @@
 !BOP
 ! !MODULE: movie
 ! !DESCRIPTION:
-!  This module contains fields and routines necessary for writing 
+!  This module contains fields and routines necessary for writing
 !  movie file output.
 !
 ! !REVISION HISTORY:
@@ -134,7 +134,7 @@
       movie_file_desc        ! I/O file descriptor
 
    character (char_len) :: &
-      file_suffix,         &! suffix to append to root filename 
+      file_suffix,         &! suffix to append to root filename
       hist_string           ! string defining history of file
 
    logical (log_kind) :: &
@@ -198,7 +198,7 @@
 
       call date_and_time(date=date_created, time=time_created)
       hist_string = char_blank
-      write(hist_string,'(a24,a8,1x,a10)') & 
+      write(hist_string,'(a24,a8,1x,a10)') &
          'POP MOVIE file created: ',date_created,time_created
 
       movie_file_desc = construct_file(movie_fmt,                      &
@@ -240,12 +240,12 @@
 !     in this first phase, we define all the fields to be written
 !
 !-----------------------------------------------------------------------
- 
+
       allocate(movie_fields(num_avail_movie_fields))
 
       do nfield = 1,num_avail_movie_fields  ! check all available fields
 
-         if (avail_movie_fields(nfield)%requested) then 
+         if (avail_movie_fields(nfield)%requested) then
 
             !*** construct io_field descriptors for each field
 
@@ -281,21 +281,21 @@
 
 !-----------------------------------------------------------------------
 !
-!     write fields to file 
+!     write fields to file
 !     in this second phase, we actually write the data
 !
 !-----------------------------------------------------------------------
- 
+
       do nfield = 1,num_avail_movie_fields  ! check all available fields
 
-         if (avail_movie_fields(nfield)%requested) then 
+         if (avail_movie_fields(nfield)%requested) then
 
             !$OMP PARALLEL DO &
             !$OMP   PRIVATE(iblock, k, this_block, WORK)
             do iblock=1,nblocks_clinic
-               this_block = get_block(blocks_clinic(iblock),iblock)  
+               this_block = get_block(blocks_clinic(iblock),iblock)
 
-               if (nfield == movie_id_shgt) then 
+               if (nfield == movie_id_shgt) then
                   !*** surface height
                   WORK2D(:,:,iblock) = PSURF(:,:,curtime,iblock)/grav
 
@@ -316,13 +316,13 @@
                else if (nfield == movie_id_temp1_2) then
                   !*** surface temperature
                   WORK2D(:,:,iblock) = p5* &
-                                    (TRACER(:,:,1,1,curtime,iblock) + & 
+                                    (TRACER(:,:,1,1,curtime,iblock) + &
                                      TRACER(:,:,2,1,curtime,iblock))
 
                else if (nfield == movie_id_salt1_2) then
                   !*** surface salinity
                   WORK2D(:,:,iblock) = p5* &
-                                    (TRACER(:,:,1,2,curtime,iblock) + & 
+                                    (TRACER(:,:,1,2,curtime,iblock) + &
                                      TRACER(:,:,2,2,curtime,iblock))
 
                else if (nfield == movie_id_temp6) then
@@ -581,7 +581,7 @@
 
          char_temp = adjustl(char_temp)
          n = index(char_temp,' ') - 1
-   
+
          call request_movie_field(char_temp(1:n))
       end do
 
@@ -653,7 +653,7 @@
       call exit_POP(sigAbort, &
                     'movie: defined movie fields > max allowed')
    endif
- 
+
    id = num_avail_movie_fields
 
 !-----------------------------------------------------------------------
@@ -774,8 +774,8 @@
 
 ! !DESCRIPTION:
 !  This function determines whether an available (defined) movie field
-!  has been requested by a user (through the input contents file) and 
-!  returns true if it has.  Note that if movie has been turned off, 
+!  has been requested by a user (through the input contents file) and
+!  returns true if it has.  Note that if movie has been turned off,
 !  the function will always return false.
 !
 ! !REVISION HISTORY:
@@ -899,7 +899,7 @@
 
    case default
    end select
- 
+
 !-----------------------------------------------------------------------
 !EOC
 

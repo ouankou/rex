@@ -51,7 +51,7 @@ CONTAINS
       INTEGER :: myLevel
       myLevel = level
     END FUNCTION myLevel
-    
+
   END SUBROUTINE test
 
 END MODULE m

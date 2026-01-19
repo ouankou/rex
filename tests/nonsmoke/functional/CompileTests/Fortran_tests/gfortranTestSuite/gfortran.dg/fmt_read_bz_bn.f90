@@ -5,7 +5,7 @@
 ! Portions inspired by NIST F77 testsuite FM711.f
 ! Contributed by jvdelisle@verizon.net
 program test_bn
-        
+
 integer I1(2,2), I2(2,2,2)
 real A1(5)
 real(kind=8) A2(0:3)

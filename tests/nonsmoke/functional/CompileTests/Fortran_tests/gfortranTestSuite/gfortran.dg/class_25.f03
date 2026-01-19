@@ -8,7 +8,7 @@ module m
 
   implicit none
 
-  type foo 
+  type foo
   end type
 
   type ,extends(foo) :: bar
@@ -18,11 +18,11 @@ contains
 
   function new_bar()
     class(foo) ,pointer :: new_bar
-    allocate(bar :: new_bar) 
+    allocate(bar :: new_bar)
   end function
 
 end module
 
-end 
+end
 
 ! { dg-final { cleanup-modules "m" } }

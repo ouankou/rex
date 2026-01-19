@@ -7,18 +7,7 @@ namespace std {
 
 template <typename _CharT> class numpunct {
 public:
-#if 1
-  string grouping() const
-#if 0
-       { string s; return s; }
-#else
-  {
-    return "";
-  }
-#endif
-#else
-  string grouping() const;
-#endif
+  string grouping() const { return ""; }
 };
 
 } // namespace std

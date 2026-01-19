@@ -5,10 +5,10 @@
 !BOP
 ! !MODULE: blocks
 !
-! !DESCRIPTION: 
+! !DESCRIPTION:
 !  This module contains data types and tools for decomposing a global
-!  horizontal domain into a set of blocks.  It contains a data type 
-!  for describing each block and contains routines for creating and 
+!  horizontal domain into a set of blocks.  It contains a data type
+!  for describing each block and contains routines for creating and
 !  querying the block decomposition for a global domain.
 !
 ! !REVISION HISTORY:
@@ -52,7 +52,7 @@
 
    integer (int_kind), parameter, public :: &! size of block domain in
       nx_block = block_size_x + 2*nghost,   &!  x,y dir including ghost
-      ny_block = block_size_y + 2*nghost     !  cells 
+      ny_block = block_size_y + 2*nghost     !  cells
 
 ! !PUBLIC DATA MEMBERS:
 
@@ -93,7 +93,7 @@ contains
 !  This subroutine decomposes the global domain into blocks and
 !  fills the data structures with all the necessary block information.
 !
-! !REVISION HISTORY: 
+! !REVISION HISTORY:
 !  same as module
 !
 ! !INPUT PARAMETERS:

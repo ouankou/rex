@@ -64,13 +64,6 @@ namespace std __attribute__ ((__visibility__ ("default")))
     : public true_type
     { };
 
-#if 0
-  // This is allowed in GNU 4.9.2 (but not in legacy frontend).
-  template<typename _B1>
-    struct __and_<_B1>
-    : public _B1
-    { };
-#else
   template<typename _B1>
     struct __and_<_B1>
    // : public _B1
@@ -79,8 +72,7 @@ namespace std __attribute__ ((__visibility__ ("default")))
         public: 
            static const bool value = true; 
         // typedef int type;
-     };
-#endif
+  };
 
   template<typename _B1, typename _B2>
     struct __and_<_B1, _B2>
@@ -1254,12 +1246,8 @@ namespace std __attribute__ ((__visibility__ ("default")))
     struct enable_if<true, _Tp>
     { typedef _Tp type; };
 
-#if 0
-  template<typename... _Cond>
-    using _Require = typename enable_if<__and_<_Cond...>::value>::type;
-#else
-    template<typename _Cond> using _Require = typename enable_if<__and_<_Cond>::value>::type;
-#endif
+  template <typename _Cond>
+  using _Require = typename enable_if<__and_<_Cond>::value>::type;
 
   template<bool _Cond, typename _Iftrue, typename _Iffalse>
     struct conditional
@@ -2068,8 +2056,6 @@ private: template<typename _Tp> static typename _Tp::propagate_on_container_swap
    using type = decltype(__test<_Alloc>(0));
  };
 
-
-#if 1
       template<typename _Alloc2>
  using __has_allocate = typename __allocate_helper<_Alloc2>::type;
 
@@ -2078,226 +2064,20 @@ private: template<typename _Tp> static typename _Tp::propagate_on_container_swap
       static pointer
 	_S_allocate(_Alloc2& __a, size_type __n, const_void_pointer __hint);
       // { return __a.allocate(__n, __hint); }
-      template<typename _Alloc2, typename _UnusedHint,
-        typename = _Require<__not_<__has_allocate<_Alloc2>>>>
-#endif
+      template <typename _Alloc2, typename _UnusedHint,
+                typename = _Require<__not_<__has_allocate<_Alloc2>>>>
 
-#if 1
- static pointer
-	_S_allocate(_Alloc2& __a, size_type __n, _UnusedHint);
+      static pointer _S_allocate(_Alloc2 &__a, size_type __n, _UnusedHint);
       // { return __a.allocate(__n); }
-#endif
 
-      template<typename _Tp, typename... _Args>
- struct __construct_helper
- {
-#if 0
-   template<typename _Alloc2,
-     typename = decltype(std::declval<_Alloc2*>()->construct(
-    std::declval<_Tp*>(), std::declval<_Args>()...))>
-     static true_type __test(int);
-   template<typename>
-     static false_type __test(...);
-   using type = decltype(__test<_Alloc>(0));
-#endif
- };
+      template <typename _Tp, typename... _Args> struct __construct_helper {};
       template<typename _Tp, typename... _Args>
  using __has_construct
    = typename __construct_helper<_Tp, _Args...>::type;
 
-#if 1
       template<typename _Tp, typename... _Args>
     static _Require<__has_construct<_Tp, _Args...>>
     _S_construct(_Alloc& __a, _Tp* __p, _Args&&... __args);
       // { __a.construct(__p, std::forward<_Args>(__args)...); }
-#endif
-#if 0
-    template<typename _Tp, typename... _Args>
-    static  _Require<__and_<__not_<__has_construct<_Tp, _Args...>>,
-            is_constructible<_Tp, _Args...>>>
-            _S_construct(_Alloc&, _Tp* __p, _Args&&... __args);
-      // { ::new((void*)__p) _Tp(std::forward<_Args>(__args)...); }
-#endif
-#if 0
-      template<typename _Tp>
- struct __destroy_helper
- {
-   template<typename _Alloc2,
-     typename = decltype(std::declval<_Alloc2*>()->destroy(
-    std::declval<_Tp*>()))>
-     static true_type __test(int);
-   template<typename>
-     static false_type __test(...);
-   using type = decltype(__test<_Alloc>(0));
- };
-      template<typename _Tp>
- using __has_destroy = typename __destroy_helper<_Tp>::type;
-      template<typename _Tp>
- static _Require<__has_destroy<_Tp>>
- _S_destroy(_Alloc& __a, _Tp* __p)
- { __a.destroy(__p); }
-      template<typename _Tp>
- static _Require<__not_<__has_destroy<_Tp>>>
- _S_destroy(_Alloc&, _Tp* __p)
- { __p->~_Tp(); }
-      template<typename _Alloc2>
- struct __maxsize_helper
- {
-   template<typename _Alloc3,
-     typename = decltype(std::declval<_Alloc3*>()->max_size())>
-     static true_type __test(int);
-   template<typename>
-     static false_type __test(...);
-   using type = decltype(__test<_Alloc2>(0));
- };
-#endif
-#if 0
-      template<typename _Alloc2>
- using __has_max_size = typename __maxsize_helper<_Alloc2>::type;
-      template<typename _Alloc2,
-        typename = _Require<__has_max_size<_Alloc2>>>
- static size_type
- _S_max_size(_Alloc2& __a, int)
- { return __a.max_size(); }
-      template<typename _Alloc2,
-        typename = _Require<__not_<__has_max_size<_Alloc2>>>>
- static size_type
- _S_max_size(_Alloc2&, ...)
- { return __gnu_cxx::__numeric_traits<size_type>::__max; }
-      template<typename _Alloc2>
- struct __select_helper
- {
-   template<typename _Alloc3, typename
-     = decltype(std::declval<_Alloc3*>()
-  ->select_on_container_copy_construction())>
-     static true_type __test(int);
-   template<typename>
-     static false_type __test(...);
-   using type = decltype(__test<_Alloc2>(0));
- };
-#endif
-
-#if 0
-      template<typename _Alloc2>
- using __has_soccc = typename __select_helper<_Alloc2>::type;
-      template<typename _Alloc2,
-        typename = _Require<__has_soccc<_Alloc2>>>
- static _Alloc2
- _S_select(_Alloc2& __a, int)
- { return __a.select_on_container_copy_construction(); }
-      template<typename _Alloc2,
-        typename = _Require<__not_<__has_soccc<_Alloc2>>>>
- static _Alloc2
- _S_select(_Alloc2& __a, ...)
- { return __a; }
-
-#endif
-#if 0
-    public:
-      static pointer
-      allocate(_Alloc& __a, size_type __n)
-      { return __a.allocate(__n); }
-      static pointer
-      allocate(_Alloc& __a, size_type __n, const_void_pointer __hint)
-      { return _S_allocate(__a, __n, __hint); }
-      static void deallocate(_Alloc& __a, pointer __p, size_type __n)
-      { __a.deallocate(__p, __n); }
-      template<typename _Tp, typename... _Args>
- static auto construct(_Alloc& __a, _Tp* __p, _Args&&... __args)
- -> decltype(_S_construct(__a, __p, std::forward<_Args>(__args)...))
- { _S_construct(__a, __p, std::forward<_Args>(__args)...); }
-      template <class _Tp>
- static void destroy(_Alloc& __a, _Tp* __p)
- { _S_destroy(__a, __p); }
-      static size_type max_size(const _Alloc& __a) noexcept
-      { return _S_max_size(__a, 0); }
-      static _Alloc
-      select_on_container_copy_construction(const _Alloc& __rhs)
-      { return _S_select(__rhs, 0); }
-#endif
     };
-
-#if 0
-  template<typename _Alloc>
-    inline void
-    __do_alloc_on_copy(_Alloc& __one, const _Alloc& __two, true_type)
-    { __one = __two; }
-  template<typename _Alloc>
-    inline void
-    __do_alloc_on_copy(_Alloc&, const _Alloc&, false_type)
-    { }
-  template<typename _Alloc>
-    inline void __alloc_on_copy(_Alloc& __one, const _Alloc& __two)
-    {
-      typedef allocator_traits<_Alloc> __traits;
-      typedef typename __traits::propagate_on_container_copy_assignment __pocca;
-      __do_alloc_on_copy(__one, __two, __pocca());
-    }
-  template<typename _Alloc>
-    inline _Alloc __alloc_on_copy(const _Alloc& __a)
-    {
-      typedef allocator_traits<_Alloc> __traits;
-      return __traits::select_on_container_copy_construction(__a);
-    }
-  template<typename _Alloc>
-    inline void __do_alloc_on_move(_Alloc& __one, _Alloc& __two, true_type)
-    { __one = std::move(__two); }
-  template<typename _Alloc>
-    inline void __do_alloc_on_move(_Alloc&, _Alloc&, false_type)
-    { }
-  template<typename _Alloc>
-    inline void __alloc_on_move(_Alloc& __one, _Alloc& __two)
-    {
-      typedef allocator_traits<_Alloc> __traits;
-      typedef typename __traits::propagate_on_container_move_assignment __pocma;
-      __do_alloc_on_move(__one, __two, __pocma());
-    }
-  template<typename _Alloc>
-    inline void __do_alloc_on_swap(_Alloc& __one, _Alloc& __two, true_type)
-    {
-      using std::swap;
-      swap(__one, __two);
-    }
-  template<typename _Alloc>
-    inline void __do_alloc_on_swap(_Alloc&, _Alloc&, false_type)
-    { }
-  template<typename _Alloc>
-    inline void __alloc_on_swap(_Alloc& __one, _Alloc& __two)
-    {
-      typedef allocator_traits<_Alloc> __traits;
-      typedef typename __traits::propagate_on_container_swap __pocs;
-      __do_alloc_on_swap(__one, __two, __pocs());
-    }
-#endif
-
-#if 0
-  template<typename _Alloc>
-    class __is_copy_insertable_impl
-    {
-      typedef allocator_traits<_Alloc> _Traits;
-      template<typename _Up, typename
-        = decltype(_Traits::construct(std::declval<_Alloc&>(),
-          std::declval<_Up*>(),
-          std::declval<const _Up&>()))>
- static true_type
- _M_select(int);
-      template<typename _Up>
- static false_type
- _M_select(...);
-    public:
-      typedef decltype(_M_select<typename _Alloc::value_type>(0)) type;
-    };
-#endif
-
-#if 0
-  template<typename _Alloc>
-    struct __is_copy_insertable
-    : __is_copy_insertable_impl<_Alloc>::type
-    { };
-  template<typename _Tp>
-    struct __is_copy_insertable<allocator<_Tp>>
-    : is_copy_constructible<_Tp>
-    { };
-#endif
-
 }

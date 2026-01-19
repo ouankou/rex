@@ -8,12 +8,12 @@
 ! Bugs submitted by Walt Brainerd
       integer i,j
       logical l
-      
+
       i = -1
 ! gfortran created a 'fort.-1' file and wrote "Hello" in it
       write (unit=i, fmt=*, iostat=j) "Hello"
       if (j <= 0) call abort
-      
+
       i = -11
       open (unit=i, file="xxx", iostat=j)
       if (j <= 0) call abort

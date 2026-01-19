@@ -11,7 +11,7 @@ module s_foo_mod
   end type s_foo_type
   interface foobar
     subroutine s_foobar(x)
-      import 
+      import
       type(s_foo_type), intent (inout) :: x
     end subroutine s_foobar
   end interface
@@ -23,7 +23,7 @@ module d_foo_mod
   end type d_foo_type
   interface foobar
     subroutine d_foobar(x)
-      import  
+      import
       type(d_foo_type), intent (inout) :: x
     end subroutine d_foobar
   end interface
@@ -34,7 +34,7 @@ module foo_mod
   use d_foo_mod
 end module foo_mod
 
-subroutine s_foobar(x)  
+subroutine s_foobar(x)
   use foo_mod
 end subroutine s_foobar
 ! { dg-final { cleanup-modules "s_foo_mod d_foo_mod foo_mod" } }

@@ -11,14 +11,14 @@ module mod1
   contains
     procedure, nopass :: get => my_get
   end type
-contains 
+contains
   integer function my_get()
     my_get = 1
   end function
 end module
 
 module mod2
-contains 
+contains
   integer function my_get()   ! must have the same name as the function in mod1
     my_get = 2
   end function

@@ -5,7 +5,7 @@ module cutils
 
     implicit none
     private
-   
+
     type t
         integer :: k = 25
         integer :: kk(3) = (/30, 40, 50 /)
@@ -28,60 +28,60 @@ contains
 
         get_k = tt%k
     end function get_k
- 
+
     function IntToChar1(integerValue) result(a)
         integer, intent(in) :: integerValue
         character(len=m1)  :: a
- 
+
         write(a, *) integerValue
     end function IntToChar1
- 
+
     function IntToChar2(integerValue) result(a)
         integer, intent(in) :: integerValue
         character(len=m2+n1)  :: a
- 
+
         write(a, *) integerValue
     end function IntToChar2
- 
+
     function IntToChar3(integerValue) result(a)
         integer, intent(in) :: integerValue
         character(len=iachar(s(n2:n3)))  :: a
- 
+
         write(a, *) integerValue
     end function IntToChar3
- 
+
     function IntToChar4(integerValue) result(a)
         integer, intent(in) :: integerValue
         character(len=tt1(n4)%k)  :: a
- 
+
         write(a, *) integerValue
     end function IntToChar4
- 
+
     function IntToChar5(integerValue) result(a)
         integer, intent(in) :: integerValue
         character(len=maxval((/m3, n5/)))  :: a
- 
+
         write(a, *) integerValue
     end function IntToChar5
- 
+
     function IntToChar6(integerValue) result(a)
         integer, intent(in) :: integerValue
         character(len=x(n6))  :: a
- 
+
         write(a, *) integerValue
     end function IntToChar6
- 
+
     function IntToChar7(integerValue) result(a)
         integer, intent(in) :: integerValue
         character(len=tt2(min(m4, n7, 2))%kk(n8))  :: a
-     
+
         write(a, *) integerValue
     end function IntToChar7
- 
+
     function IntToChar8(integerValue) result(a)
         integer, intent(in) :: integerValue
         character(len=get_k(t(m5, (/31, n9, 53/))))  :: a
- 
+
         write(a, *) integerValue
     end function IntToChar8
 
@@ -94,7 +94,7 @@ program test
 
     implicit none
     character(25) :: str
-    
+
     str = IntToChar1(3)
     print *, str
     str = IntToChar2(3)

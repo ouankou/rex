@@ -21,26 +21,8 @@ int main(int argc, char* argv[])
 		}
 		else
 			std::cout << " is not ";
-		std::cout << "protected." << std::endl;
-#if 0
-		if (name->get_qualified_name().getString() == "val")
-		{
-			if (!SageInterface::isConstType(name->get_type()))
-			{
-				std::cerr << "Error, parameter 'val' is not const." << std::endl;
-				return 1;
-			}
-		}
-		else if (name->get_qualified_name().getString() == "age")
-		{
-			if (!SageInterface::isConstType(name->get_type()))
-			{
-				std::cerr << "Error, parameter 'age' is not const." << std::endl;
-				return 1;
-			}
-		}
-#endif
-	}
+                std::cout << "protected." << std::endl;
+        }
 
 	std::vector<SgAssignOp*> assigns = SageInterface::querySubTree<SgAssignOp>(project);
 	for(SgAssignOp* op: assigns)

@@ -1,5 +1,5 @@
 ! This is part of Unidata's netCDF package. Copyright 2009.
-! This is a test program for the nc-config utility. 
+! This is a test program for the nc-config utility.
 
 program test_prog
   use typeSizes
@@ -7,6 +7,6 @@ program test_prog
   implicit none
 
   print *, 'NetCDF version: ', nf90_inq_libvers()
-  print *, '*** SUCCESS!'        
+  print *, '*** SUCCESS!'
 end program test_prog
 

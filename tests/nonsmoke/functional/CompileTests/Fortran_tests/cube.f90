@@ -1,6 +1,6 @@
 ! This is a small test program used by Laksono Adhianto at Rice
     ! -----------------------------------------------------
-    !    This program display the cubes of INTEGERs and 
+    !    This program display the cubes of INTEGERs and
     ! REALs.  The cubes are computed with two functions:
     ! intCube() and realCube().
     ! -----------------------------------------------------

@@ -11,20 +11,6 @@
 
 #include <exception>
 
-#if 0
-namespace std 
-   {
-     class bad_alloc: public exception {};
-
-  // Note that the presence of "throw" does not show up in the name mangling!
-     struct nothrow_t {};
-     extern const nothrow_t nothrow;  // indicator for allocation that does not throw exceptions
-
-     typedef void (*new_handler)();
-     new_handler set_new_handler(new_handler new_p) throw();
-   }
-#endif
-
 template <typename T> class templateFoo {
 public:
   templateFoo() {}

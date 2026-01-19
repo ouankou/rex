@@ -24,20 +24,20 @@ end module foo_base_mod
 module bar_prt
   use foo_base_mod, only : foo_dmt, foo_zmt, foo_cdt
   type bar_dbprt
-    type(foo_dmt), allocatable :: av(:) 
-    real(kind(1.d0)), allocatable      :: d(:)  
-    type(foo_cdt)                :: cd 
+    type(foo_dmt), allocatable :: av(:)
+    real(kind(1.d0)), allocatable      :: d(:)
+    type(foo_cdt)                :: cd
   end type bar_dbprt
   type bar_dprt
-    type(bar_dbprt), allocatable  :: bpv(:) 
+    type(bar_dbprt), allocatable  :: bpv(:)
   end type bar_dprt
   type bar_zbprt
-    type(foo_zmt), allocatable :: av(:) 
-    complex(kind(1.d0)), allocatable   :: d(:)  
-    type(foo_cdt)                :: cd 
+    type(foo_zmt), allocatable :: av(:)
+    complex(kind(1.d0)), allocatable   :: d(:)
+    type(foo_cdt)                :: cd
   end type bar_zbprt
   type bar_zprt
-    type(bar_zbprt), allocatable  :: bpv(:) 
+    type(bar_zbprt), allocatable  :: bpv(:)
   end type bar_zprt
 end module bar_prt
 
@@ -72,7 +72,7 @@ module foo_pr_mod
        & foo_dbprt  => bar_dbprt,&
        & foo_zbprt  => bar_zbprt,&
        & foo_dprt   => bar_dprt,&
-       & foo_zprt   => bar_zprt 
+       & foo_zprt   => bar_zprt
   use bar_pr_mod, &
        & foo_pwrk  => bar_pwrk
 end module foo_pr_mod
@@ -81,9 +81,9 @@ Subroutine foo_sub(a,pr,b,x,eps,cd,info)
   use foo_base_mod
   use foo_pr_mod
   Implicit None
-!!$  parameters 
+!!$  parameters
   Type(foo_dmt), Intent(in)  :: a
-  Type(foo_dprt), Intent(in)   :: pr 
+  Type(foo_dprt), Intent(in)   :: pr
   Type(foo_cdt), Intent(in)    :: cd
   Real(Kind(1.d0)), Intent(in)       :: b(:)
   Real(Kind(1.d0)), Intent(inout)    :: x(:)

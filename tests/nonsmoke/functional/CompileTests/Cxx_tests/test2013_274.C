@@ -1,11 +1,4 @@
-#if 1
 #include <string>
-#else
-namespace std
-   {
-     class string {};
-   }
-#endif
 
 template <class T> void linearIn(T& a_outputT, const void* const inBuf);
 // template <class T> void linearIn(T& a_outputT);
@@ -13,7 +6,6 @@ template <class T> void linearIn(T& a_outputT, const void* const inBuf);
 template <> void linearIn(std::string& a_outputT, const void* const a_inBuf);
 // template <> void linearIn(std::string& a_outputT);
 
-#if 1
 template <>
 void linearIn<std::string>(std::string& a_outputT, const void* const a_inBuf)
    {
@@ -25,5 +17,4 @@ void linearIn<std::string>(std::string& a_outputT, const void* const a_inBuf)
        // a_outputT.assign(charBuffer, length);
         }
        else a_outputT = "";
-   }
-#endif
+}

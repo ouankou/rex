@@ -1,6 +1,6 @@
 !{ dg-do run }
 !{ dg-options -std=gnu }
-! Tests namelist read when more data is provided then specified by 
+! Tests namelist read when more data is provided then specified by
 ! array qualifier in list.
 ! Contributed by Jerry DeLisle  <jvdelisle@gcc.gnu.org>.
       program pr24459

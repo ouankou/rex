@@ -17,4 +17,4 @@ common /com/ proc,r
 common s
 call s()  ! { dg-error "PROCEDURE attribute conflicts with COMMON attribute" }
 
-end 
+end

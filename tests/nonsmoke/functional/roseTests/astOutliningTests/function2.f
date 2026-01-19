@@ -9,7 +9,7 @@ c definition of function
       REAL FUNCTION AREA3(A,B,C)
       REAL A,B,C
       S = (A+B+C)/2.0
-c return value is assigned to a variable named as the function name   
+c return value is assigned to a variable named as the function name
       AREA3 = SQRT (S*(S-A)*(S-B)*(S-C))
       END
 

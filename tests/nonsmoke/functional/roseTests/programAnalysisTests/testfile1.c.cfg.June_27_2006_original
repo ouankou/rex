@@ -1,4 +1,4 @@
-edge 
+edge
 edge SgVariableDeclaration:int i = 5;SgVariableDeclaration:int j = 100; SgExprStatement:i < j; always
 edge SgExprStatement:printf("***i < 2j***");SgExprStatement:i++; SgExprStatement:i > 300; always
 edge SgExprStatement:printf("*** i < j ***");SgExprStatement:i++; SgExprStatement:i < j; always
@@ -28,7 +28,7 @@ edge SgIntVal:99 SgIntVal:2 false
 edge SgIntVal:200 SgExprStatement:printf("init");SgBreakStmt:break; true
 edge SgIntVal:200 SgIntVal:99 false
 edge SgExprStatement:printf("init");SgBreakStmt:break;  always
-edge 
+edge
 edge SgIntVal:2 SgExprStatement:printf(" error");SgReturnStmt:return ; true
 edge SgIntVal:2 SgIntVal:120 false
 edge SgExprStatement:printf(" tmp"); SgIntVal:2 always

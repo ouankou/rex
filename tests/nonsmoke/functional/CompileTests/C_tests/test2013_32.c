@@ -7,11 +7,8 @@ typedef union
    {
      struct A* __sockaddr__;
 } __SOCKADDR_ARG
-#if 1
     // This is required to process through legacy frontend and GNU (backend).
-    __attribute__((__transparent_union__))
-#endif
-    ;
+    __attribute__((__transparent_union__));
 
 extern int getsockname (int __fd, __SOCKADDR_ARG __addr);
 

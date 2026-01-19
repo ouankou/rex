@@ -25,10 +25,10 @@ program pr24794
    rewind (12)
    read (12, nml=ccsopr, iostat=ier)
    if (ier.ne.0) call abort()
-   
+
    rewind (12)
    write(12,nml=ccsopr)
-   
+
    rewind (12)
    read (12, nml=ccsopr, iostat=ier)
    if (ier.ne.0) call abort()
@@ -38,6 +38,6 @@ program pr24794
    if (nameb(1).ne."spi01h  ") call abort()
    if (nameb(6).ne."        ") call abort()
    if (nameb(15).ne."        ") call abort()
-   
+
    close (12)
 end program pr24794

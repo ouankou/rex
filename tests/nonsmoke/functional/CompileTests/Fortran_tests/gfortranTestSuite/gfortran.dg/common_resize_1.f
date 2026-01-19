@@ -5,7 +5,7 @@ c Tests the fix for PR32302, in which the resizing of 'aux32' would cause
 c misalignment for double precision types and a wrong result would be obtained
 c at any level of optimization except none.
 c
-c Contributed by Dale Ranta <dir@lanl.gov> 
+c Contributed by Dale Ranta <dir@lanl.gov>
 c
       subroutine unpki(ixp,nwcon,nmel)
       parameter(lnv=32)

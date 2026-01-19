@@ -72,7 +72,7 @@ array_indices: /* appends indices to state->segment */
 	;
 
 /* %type NCslice* */
-array_index: 
+array_index:
 	'[' range ']' {$$=$2;}
 	;
 

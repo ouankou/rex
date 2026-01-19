@@ -14,7 +14,7 @@ module mod
   end interface gen
 contains
   subroutine test(a) bind(c, name="myFunc")
-    integer(c_int), intent(out) :: a 
+    integer(c_int), intent(out) :: a
     a = 17
   end subroutine test
 end module mod

@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! Tests fix for PR20840 - would ICE with vector subscript in 
+! Tests fix for PR20840 - would ICE with vector subscript in
 ! internal unit.
 !
 ! Contributed by Paul Thomas  <pault@gcc.gnu.org>

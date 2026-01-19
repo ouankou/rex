@@ -1,4 +1,4 @@
-! This appears to be a F2003 specific construct, so gfortran will 
+! This appears to be a F2003 specific construct, so gfortran will
 ! not handle it properly UNLESS using F2003 mode (-std=f2003).
 ! and given the correct .f03 filename suffix.
 PROGRAM ASSOCIATE_EXAMPLE

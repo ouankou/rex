@@ -77,17 +77,6 @@ namespace protobuf {
 namespace compiler {
 namespace java {
 
-#if 0
-const FieldGenerator& FieldGeneratorMap::get(const FieldDescriptor* field) const 
-   {
-     GOOGLE_CHECK_EQ(field->containing_type(), descriptor_);
-
-  // error: invalid initialization of reference of type 'const google::protobuf::compiler::java::FieldGenerator&' from expression of type 'google::protobuf::internal::scoped_ptr<google::protobuf::compiler::java::FieldGenerator>'
-  // return (this) -> field_generators_[(field ->  index ())];
-     return *field_generators_[field->index()];
-   }
-#endif
-
 const FieldGenerator& FieldGeneratorMap::get_extension(int index) const 
    {
   // error: invalid initialization of reference of type 'const google::protobuf::compiler::java::FieldGenerator&' from expression of type 'google::protobuf::internal::scoped_ptr<google::protobuf::compiler::java::FieldGenerator>'

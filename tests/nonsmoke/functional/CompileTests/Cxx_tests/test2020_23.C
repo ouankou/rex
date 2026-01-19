@@ -7,13 +7,11 @@ namespace X
           struct X
              {
                static void f();
-             };
-#if 1
+          };
           struct N
              {
                static void f();
-             };
-#endif
+          };
           void N::f()
              {
                using namespace ::X::N;

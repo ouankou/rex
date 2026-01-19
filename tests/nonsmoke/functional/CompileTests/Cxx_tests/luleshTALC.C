@@ -110,18 +110,7 @@ struct Domain {
   /* Elem-centered */
 
   Index_t *matElemlist; /* material indexset */
-#if 1
-  Index_t *nodelist; /* elemToNode connectivity */
-#else
-  Index_t *nodelist0; /* elemToNode connectivity */
-  Index_t *nodelist1;
-  Index_t *nodelist2;
-  Index_t *nodelist3;
-  Index_t *nodelist4;
-  Index_t *nodelist5;
-  Index_t *nodelist6;
-  Index_t *nodelist7;
-#endif
+  Index_t *nodelist;    /* elemToNode connectivity */
 
   Index_t *lxim; /* elem connectivity through face */
   Index_t *lxip;

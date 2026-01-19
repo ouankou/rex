@@ -143,33 +143,6 @@ void MergeAst(AstStorage *storage, int n = 2) {
   }
 }
 
-#if 0
-void MergeAst1(AstStorage* storage, int n = 2)
-{
-    // note that the last file is the output
-    vector<string> filenames = storage->GetFiles(n);
-    if (!filenames.empty())
-    {
-        string arg = "../../../tests/nonsmoke/functional/testAstFileRead ";
-
-        for (int i = 0; i < filenames.size(); ++i)
-        {
-            arg += filenames[i] + " ";
-        }
-
-        printf (">>>>>>>>>>>>>>>>>>>>commandline to run process = %s \n",arg.c_str());
-        if (::system(arg.c_str()) != 0)
-        {
-            //storage->Clear();
-            //throw std::exception(); //string("Calling AST Merge Application Failed at\n") + arg);
-        }
-
-        storage->PushFile(filenames.back());
-    }
-    cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
-}
-#endif
-
 void MergeAstFiles(const vector<string> &astFiles, const string &output,
                    int nthread) {
   AstStorage storage(astFiles);
@@ -209,12 +182,6 @@ int main(int argc, char *argv[]) {
 
   int numFiles = argc - 1;
   std::vector<std::string> fileNames(argv + 1, argv + argc - 1);
-#if 0
-    for (int i= 0; i < numFiles; ++i)
-    {
-        fileNames.push_back(argv[i+1]);
-    }
-#endif
 
   // string output = "output.txt";
   string output = argv[argc - 1];

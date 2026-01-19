@@ -1,7 +1,7 @@
 ! { dg-do compile }
 !
 ! PR fortran/36463
-! Gfortran used to fail on this testcase with: 
+! Gfortran used to fail on this testcase with:
 ! gfc_get_default_type(): Bad symbol '@0'
 !
 ! Original program by James Van Buskirk

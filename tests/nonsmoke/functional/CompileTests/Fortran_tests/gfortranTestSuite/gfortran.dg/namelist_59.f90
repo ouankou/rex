@@ -1,5 +1,5 @@
 ! { dg-do run }
-! PR41192 NAMELIST input with just a comment ("&NAME ! comment \") error 
+! PR41192 NAMELIST input with just a comment ("&NAME ! comment \") error
 program cmdline
 ! comment by itself causes error in gfortran
    call process(' ')

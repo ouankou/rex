@@ -1,9 +1,9 @@
 ! { dg-do compile }
-! 
+!
 ! PR fortran/34760
 ! The problem with implict typing is that it is unclear
 ! whether an existing symbol is a variable or a function.
-! Thus it remains long FL_UNKNOWN, which causes extra 
+! Thus it remains long FL_UNKNOWN, which causes extra
 ! problems; it was failing here since ISTAT was not
 ! FL_VARIABLE but still FL_UNKNOWN.
 !

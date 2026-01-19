@@ -12,11 +12,9 @@ void foo( T & j )
    {
    }
 
-#if 1
 void foobar()
    {
      X<int> x;
 
      foo(x);
-   }
-#endif
+}

@@ -19,7 +19,7 @@
 contains
   integer function test(s)
     character(len=*) :: s
-  
+
     select case (s)
       case ("":"foo")
         test = 1
@@ -34,7 +34,7 @@ contains
 
   integer function test4(s)
     character(kind=4,len=*) :: s
-  
+
     select case (s)
       case (4_"":4_"foo")
         test4 = 1

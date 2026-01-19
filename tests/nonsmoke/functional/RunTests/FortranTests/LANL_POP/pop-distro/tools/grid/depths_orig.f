@@ -19,7 +19,7 @@
       do k = 1,100
 
         call zeroin(z(k-1),dz(k))
- 
+
         z(k) = z(k-1) + dz(k)
         if(k.eq.1)then
           zz=z(k)*0.5
@@ -79,7 +79,7 @@ c     ...newton search
       enddo
 
       return
-      end 
+      end
 
 
       function fz(z)

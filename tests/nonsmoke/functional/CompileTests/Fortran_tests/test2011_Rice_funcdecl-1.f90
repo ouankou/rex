@@ -36,7 +36,7 @@ contains
 !-------------------------------------------------------------------------------
   function number_of_bits3(i) result(num)
     implicit none
-    integer :: i, itmp, num 
+    integer :: i, itmp, num
     num = 0
     itmp = i
     do while (itmp .gt. 0)
@@ -48,7 +48,7 @@ contains
 !-------------------------------------------------------------------------------
 ! result type in function declaration
 !-------------------------------------------------------------------------------
-  integer function number_of_bits4(i) 
+  integer function number_of_bits4(i)
   implicit none
   integer :: i, itmp
     number_of_bits4 = 0
@@ -63,7 +63,7 @@ contains
 !-------------------------------------------------------------------------------
 ! result type in type declaration
 !-------------------------------------------------------------------------------
-  function number_of_bits5(i) 
+  function number_of_bits5(i)
   implicit none
   integer :: i, itmp, number_of_bits5
     number_of_bits5 = 0

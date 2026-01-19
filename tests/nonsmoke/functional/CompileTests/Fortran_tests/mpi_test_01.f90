@@ -3,7 +3,7 @@ program mpi_example
 
 ! MPI initialize
   call mpi_init(ierror)
- 
+
 ! MPI finalize
   call mpi_finalize(ierror)
 end
@@ -18,7 +18,7 @@ subroutine timer(t0,dt,t0wc,dtwc)
    real t0,dt,t0wc,dtwc
    real time
 
-! Get wall clock time 
+! Get wall clock time
   time=MPI_WTIME()
 
 end subroutine timer

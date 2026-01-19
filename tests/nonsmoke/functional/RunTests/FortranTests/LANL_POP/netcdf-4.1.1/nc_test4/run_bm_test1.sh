@@ -21,7 +21,7 @@ do
 	test $i = 4 && chunksizes="17:17:17:17" && s="-s 1"
 	test $i = 5 && chunksizes="10:10:10:10:10" && s="-s 1"
 	test $i = 6 && chunksizes="6:6:6:6:6:6" && s="-s 1"
-	./bm_file -d ${header} ${s} -f 4 -o ${type_name}2_${i}D_3.nc -c 0:0:0:${chunksizes} tst_${type_name}2_${i}D.nc 
+	./bm_file -d ${header} ${s} -f 4 -o ${type_name}2_${i}D_3.nc -c 0:0:0:${chunksizes} tst_${type_name}2_${i}D.nc
 	../ncdump/ncdump tst_${type_name}2_${i}D.nc > tst_${type_name}2_${i}D.cdl
 	../ncdump/ncdump -n tst_${type_name}2_${i}D ${type_name}2_${i}D_3.nc > ${type_name}2_${i}D.cdl
 	diff tst_${type_name}2_${i}D.cdl ${type_name}2_${i}D.cdl

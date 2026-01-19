@@ -53,7 +53,7 @@ CONTAINS
     IMPLICIT NONE
     TYPE(mytype), INTENT(IN) :: el(:)
   END SUBROUTINE finalize_vector_2
-  
+
   SUBROUTINE finalize_matrix (el)
     IMPLICIT NONE
     TYPE(mytype) :: el(:, :)

@@ -9,7 +9,7 @@ module x
 contains
   subroutine bar() bind(c,name="foo") ! { dg-warning "PRIVATE but has been given the binding label" }
   end subroutine bar
-  
+
   subroutine my_private_sub() bind(c, name="")
   end subroutine my_private_sub
 

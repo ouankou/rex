@@ -5,9 +5,9 @@
 ! f , e and i edit reads are terminated separately by read_real.c
 !
 ! PThomas                                                   Jan 2005
-! BDavis        
+! BDavis
       program list_read_4
-      integer i(10),l(10),k,j 
+      integer i(10),l(10),k,j
       real x(10),y(10)
 ! expected results
       data y / 1.0,2.0,3.0,-1.0,-1.0,-1.0,4.0,4.0,99.0,99.0 /
@@ -44,7 +44,7 @@
 ! integer
       do k = 1,10
         i(k) = -1
-      end do 
+      end do
       READ(10,*,iostat=ier) (i(j),j=1,10)
       if (ier.ne.0) call abort
       do k = 1,10

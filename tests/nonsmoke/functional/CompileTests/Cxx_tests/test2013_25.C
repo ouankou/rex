@@ -1,10 +1,7 @@
-class A
-   {
-#if 1
+class A {
   // Note that this member function is required to deomnstrate the bug.
-     public: 
-          void biz() {} 
-#endif
+     public:
+       void biz() {}
 };
 
 // The bug is that this is unparsed as "extern" instead of "extern "C""

@@ -559,7 +559,6 @@ typedef enum memory_order
 // #error Testing _GNUC_VER >= 407
 
 // #if _GNUC_VER >= 407
-#if 1
 
 namespace __gcc_atomic {
 template <typename _Tp>
@@ -818,7 +817,6 @@ static inline _Tp __c11_atomic_fetch_xor(_Atomic(_Tp)* __a, _Tp __pattern,
   return __atomic_fetch_xor(&__a->__a_value, __pattern,
                             __gcc_atomic::__to_gcc_order(__order));
 }
-#endif // _GNUC_VER >= 407
 
 template <class _Tp>
 inline _LIBCPP_INLINE_VISIBILITY

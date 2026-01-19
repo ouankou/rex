@@ -1,7 +1,7 @@
 subroutine print_incremented(x,y)
   integer, intent(in) :: x
   integer, intent(out) :: y
-  
+
   print *, x + 1
   y = x * 2
 

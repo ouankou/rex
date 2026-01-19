@@ -34,7 +34,7 @@ PROGRAM TestInfinite
   r = transfer(bit_pattern_PosInf_i8,r)
   if (r /= 1.0_r8_/0.0_r8_) call abort()
   i = transfer(r,i)
-  if (bit_pattern_PosInf_i8 /= i) call abort()  
+  if (bit_pattern_PosInf_i8 /= i) call abort()
 
   r = transfer(bit_pattern_NegInf_i8,r)
   if (r /= -1.0_r8_/0.0_r8_) call abort()

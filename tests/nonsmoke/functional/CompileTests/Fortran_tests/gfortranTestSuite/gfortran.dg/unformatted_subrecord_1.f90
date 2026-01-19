@@ -20,7 +20,7 @@ program main
   open (10, file="f10.dat", form="unformatted", access="stream")
   read (10) m
   if (any(m .ne. (/ -16, 1, 4, 9, 16, 16, -16, 25, 36, 49, 64, &
-       -16, -16, 81, 100, 121, 144, -16, -16, 169, 196, 225, & 
+       -16, -16, 81, 100, 121, 144, -16, -16, 169, 196, 225, &
        256, -16, 16, 289, 324, 361, 400, -16 /))) call abort
   close (10)
   open (10, file="f10.dat", form="unformatted", &

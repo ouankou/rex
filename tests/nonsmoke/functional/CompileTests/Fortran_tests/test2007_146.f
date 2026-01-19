@@ -1,13 +1,13 @@
 C Example of Fortran II program:
-C This program has one data card input, with simple zero-data edit check. 
-C If one of the input values is zero, then the program will end with an 
-C error code of "STOP 1" in the job control card listing following the 
-C execution of the program. Normal output will be one line printed with 
-C A, B, C, and AREA on the "report" page following the compilation with 
-C no specific units are stated; and with a normal "STOP" in the job card 
+C This program has one data card input, with simple zero-data edit check.
+C If one of the input values is zero, then the program will end with an
+C error code of "STOP 1" in the job control card listing following the
+C execution of the program. Normal output will be one line printed with
+C A, B, C, and AREA on the "report" page following the compilation with
+C no specific units are stated; and with a normal "STOP" in the job card
 C listing.
 
-C AREA OF A TRIANGLE WITH A STANDARD SQUARE ROOT FUNCTION 
+C AREA OF A TRIANGLE WITH A STANDARD SQUARE ROOT FUNCTION
 C INPUT - CARD READER UNIT 5, INTEGER INPUT
 C OUTPUT - LINE PRINTER UNIT 6, REAL OUTPUT
 C INPUT ERROR DISPAY ERROR OUTPUT CODE 1 IN JOB CONTROL LISTING

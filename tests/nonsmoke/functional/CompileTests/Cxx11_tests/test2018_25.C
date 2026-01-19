@@ -16,14 +16,6 @@ struct char_traits
      typedef unsigned long   int_type;
    };
 
-#if 0
-// Specialization allows GNU to to compile test code, but fails for legacy frontend.
-template<> struct char_traits <unsigned int>
-   {
-     typedef unsigned int int_type;
-   };
-#endif
-
 #ifdef _GLIBCXX_USE_C99_STDINT_TR1
 // To GNU g++ "char32_t" is not the same as "unsigned int"
 template<>

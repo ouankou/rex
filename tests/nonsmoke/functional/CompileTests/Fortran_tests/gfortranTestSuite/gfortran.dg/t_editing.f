@@ -1,4 +1,4 @@
-! { dg-do run }     
+! { dg-do run }
 ! PR25349 Check T editing. Test case from PR submitted by Thomas Koenig
 ! Contributed by Jerry DeLisle <jvdelisle@gcc.gnu.org>
       program main

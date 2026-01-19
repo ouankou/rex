@@ -4,9 +4,7 @@ class Base1
      public:
           Base1();
           int foo();
-#if 1
           int foo(int i);
-#endif
    };
 
 struct D : public Base1 { };

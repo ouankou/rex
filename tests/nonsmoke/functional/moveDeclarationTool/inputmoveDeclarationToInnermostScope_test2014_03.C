@@ -31,34 +31,16 @@ void foo(int cond, int* blockx, int loSt)
       blockx --;
    }
 
-#if 1
 // static variable should not be moved
   static int stmp ;
 
   if (cond) 
-  { stmp = 6; printf("%d", stmp) ; }
-  else 
-  { stmp = 7 ; printf("%d", stmp) ; }  
-#endif
+  { stmp = 6; printf("%d", stmp) ;
+  } else {
+    stmp = 7;
+    printf("%d", stmp);
+  }
 }
 
-// A tricky case of if-stmt, 
+// A tricky case of if-stmt,
 // move to two bodies, trigger another round of moving: iterative moving
-#if 0
-void bar (bool allow)
-{
-  int i ;
-  for (i=0; i<10; ++i) {
-
-  }
-  if (allow) {
-    for (i=0; i<4; ++i) {
-    }
-  }
-  else {
-    for (i=0; i<4; ++i) {
-    }
-  }
-}
-#endif
-

@@ -7,7 +7,7 @@
          complex(kind=8) FOO, KANGA
          common /bar/ FOO, KANGA
        contains
-         subroutine eyeore ()    
+         subroutine eyeore ()
            FOO = FOO + (1.0d0, 0.0d0)
            KANGA = KANGA - (1.0d0, 0.0d0)
          end subroutine eyeore

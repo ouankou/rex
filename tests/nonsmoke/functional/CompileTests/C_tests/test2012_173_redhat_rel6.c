@@ -1,7 +1,6 @@
 // DQ (2/14/2014): Required for access to uint32_t and u_char on Rhel5 systems.
 // #include <linux/types.h>
 
-#if 1
 // DQ (2/22/2014): These are required for RedHat 6, but are redundant for RedHat
 // 5 and cause an error. The solution has been to build a special RedHat 6
 // version of this test and to use a test list conditional to include one or the
@@ -15,7 +14,6 @@
 
 // DQ (2/14/2014): Required for access to u_char on Rhel6 systems.
 #include <sys/types.h>
-#endif
 
 // This is at least what one would expect to be required!
 #include <stdio.h>

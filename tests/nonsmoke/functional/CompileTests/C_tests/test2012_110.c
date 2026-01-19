@@ -13,22 +13,39 @@ handle_sub(int job, int fg)
         {
           struct process *p;
 
-#if 1
           for (;;)
-               if (0)
-                  {
-#if 1
-                    if (0)
-                         kill(0, (((__extension__ ({ union { __typeof(p->status) __in; int __i; } __u; __u.__in = (p->status); __u.__i; }))) & 0x7f));
-#if 1
-                      else
-                         kill(0, (((__extension__ ({ union { __typeof(p->status) __in; int __i; } __u; __u.__in = (p->status); __u.__i; }))) & 0x7f));
-#endif
-#endif
-                    kill(0, (((__extension__ ({ union { __typeof(p->status) __in; int __i; } __u; __u.__in = (p->status); __u.__i; }))) & 0x7f));
-                    break;
-                  }
-#endif
+            if (0) {
+              if (0)
+                kill(0, (((__extension__({
+                           union {
+                             __typeof(p->status) __in;
+                             int __i;
+                           } __u;
+                           __u.__in = (p->status);
+                           __u.__i;
+                         }))) &
+                         0x7f));
+              else
+                kill(0, (((__extension__({
+                           union {
+                             __typeof(p->status) __in;
+                             int __i;
+                           } __u;
+                           __u.__in = (p->status);
+                           __u.__i;
+                         }))) &
+                         0x7f));
+              kill(0, (((__extension__({
+                         union {
+                           __typeof(p->status) __in;
+                           int __i;
+                         } __u;
+                         __u.__in = (p->status);
+                         __u.__i;
+                       }))) &
+                       0x7f));
+              break;
+            }
         }
 
      return 0;

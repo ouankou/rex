@@ -35,9 +35,6 @@
 #if !defined(NDEBUG) && !defined(X_INT_MAX)
 #define X_INT_MAX 2147483647
 #endif
-#if 0 /* !defined(NDEBUG) && !defined(X_ALIGN) */
-#define X_ALIGN 4
-#endif
 
 #define ALWAYS_NC_SHARE 0 /* DEBUG */
 

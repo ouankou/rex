@@ -10,16 +10,16 @@
 
       implicit none
 
-      integer, parameter :: 
+      integer, parameter ::
      &  km = 20             ! number of vertical levels
 
       real, parameter ::
      &  zmax    = 5500.0,   ! max depth in meters
      &  dz_sfc  =   25.0,   ! thickness of surface layer
      &  dz_deep =  400.0,   ! thickness of deep ocean layers
-     &  eps     = 1.e-6     ! convergence criterion 
+     &  eps     = 1.e-6     ! convergence criterion
 
-      real, dimension(km) :: 
+      real, dimension(km) ::
      &  z,                  ! depth at bottom of layer
      &  dz                  ! layer thickness of each layer
 
@@ -122,7 +122,7 @@
 
 !-----------------------------------------------------------------------
 !
-!     computes a thickness profile and total depth given the 
+!     computes a thickness profile and total depth given the
 !     parameters for the thickness function
 !
 !-----------------------------------------------------------------------
@@ -146,7 +146,7 @@
 !
 !-----------------------------------------------------------------------
 
-      real, dimension(km), intent(out) :: 
+      real, dimension(km), intent(out) ::
      &  dz                  ! layer thickness of each layer
 
       real, intent(out) ::

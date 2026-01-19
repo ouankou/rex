@@ -5,25 +5,20 @@
 
 #include<string>
 
-void foo()
-   {
-#if 1
+void foo() {
   // std::string arg2 = (std::string) (std::string)std::string("") ;
      std::string arg2 = "";
      std::string arg3 = std::string("");
      std::string arg4 = (std::string)std::string("");
-#endif
 
      std::string arg5 = (std::string) (std::string)std::string("");
 
-#if 1
      std::string arg6 = std::string (std::string(""));
      std::string arg7 = std::string( std::string (std::string("")));
      std::string arg8(std::string(""));
-  // std::string arg9(std::string (std::string("")));
-  // std::string arg10(std::string( std::string (std::string(""))));
-#endif
-   }
+     // std::string arg9(std::string (std::string("")));
+     // std::string arg10(std::string( std::string (std::string(""))));
+}
 
 class X
    {

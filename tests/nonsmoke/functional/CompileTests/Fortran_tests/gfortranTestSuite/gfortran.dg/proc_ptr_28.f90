@@ -34,6 +34,6 @@ CONTAINS
    CALL f(2)
  END SUBROUTINE use_sub
 
-END MODULE m 
+END MODULE m
 
 ! { dg-final { cleanup-modules "m" } }

@@ -8,31 +8,20 @@ typedef bool (A::*g)(int);
 
 class A 
    {
-     public:
-#if 0
-       // This test code works fine if the member function has already been seen.
-          bool f2 (int i)
-             {}
-#endif
-          g f1(char c)
-             {
-            // Unless seen previously (see commented out block above), this is the first reference to this function.
-               return &A::f2;
-             }
-#if 1
+public:
+  g f1(char c) {
+    // Unless seen previously (see commented out block above), this is the first
+    // reference to this function.
+    return &A::f2;
+  }
        // This is the first definition of the function that was previously referenced.
-          bool f2 (int i)
-             {}
-#endif
-#if 1
-          void f3()
-             {
-               bool b;
-               char c;
-               int i;
-               (this->*f1(c))(i);
-             }
-#endif
+       bool f2(int i) {}
+       void f3() {
+         bool b;
+         char c;
+         int i;
+         (this->*f1(c))(i);
+       }
        // bool (A::*pf)(int);
    };
 

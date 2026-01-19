@@ -3,12 +3,10 @@ namespace Geometry
    {
   // class PolygonalMeshTypeInfo {};
 
-#if 1
      template <typename MeshTypeInfo> class MeshBase
         {
        // MeshTypeInfo x;
-        };
-#endif
+     };
 
      template <class CoordinateSystem>
      class PolyMesh
@@ -28,29 +26,11 @@ class X2
          typedef int Zone_typedef;
    };
 
-#if 1
-#if 0
-namespace Geometry
-   {
-#if 1
-  // Now we define the class Zone defined within Geometry::PolyMesh
-  // This causes the symbol for Zone class to be placed into global scope (a mistake/bug).
-     template <class CoordinateSystem>
-     class PolyMesh<CoordinateSystem>::Zone
-        {
-          public:
-//             typedef PolyMesh<CoordinateSystem> MeshType;
-        };
-#endif
-   }
-#else
 template <class CoordinateSystem>
 class Geometry::PolyMesh<CoordinateSystem>::Zone
    {
      public:
-   };
-#endif
-#endif
+};
 
 // X2<  Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Scalar *sp;
 // X2<  Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Scalar sp_0;

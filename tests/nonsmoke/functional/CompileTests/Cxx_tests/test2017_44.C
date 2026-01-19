@@ -18,16 +18,5 @@ namespace std {
   {
     int x;
   };
-
-#if 0
-  template<typename _Res>
-  class _Mem_fn;
-
-  template<typename _Res, int _Class>
-  class _Mem_fn<_Res[_Class]>
-  {
-    int x;
-  };
-#endif
 }
 

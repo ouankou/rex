@@ -9,15 +9,9 @@ class A
           enum values { zero, nonzero };
    };
 
-#if 1
-template <typename T>
-class X 
-   {
-   };
-#endif
+   template <typename T> class X {};
 
-void foo()
-   {
+   void foo() {
      X<values> x1;
      X<A::values> x2;
      X<A> x3;

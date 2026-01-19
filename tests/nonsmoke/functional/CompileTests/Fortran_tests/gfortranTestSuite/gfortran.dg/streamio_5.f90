@@ -6,20 +6,20 @@ program streamtest5
   character(1)   :: lf = char(10)
   character(1)   :: tchar
   integer        :: i,j,k
-   
+
   open(10, file="teststream", access="stream", form="unformatted")
-  
+
   do i=1,1229
     do j=0,9
       write(10) j
     end do
     write(10) lf
   end do
-  
+
   close(10)
-  
+
   open(10, file="teststream", access="stream", form="unformatted")
-  
+
   do i=1,1229
     do j=0,9
       read(10) k

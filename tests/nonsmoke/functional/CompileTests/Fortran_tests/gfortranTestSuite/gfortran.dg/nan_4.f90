@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! { dg-options "-std=gnu" } 
+! { dg-options "-std=gnu" }
 ! { dg-add-options ieee }
 ! { dg-skip-if "NaN not supported" { spu-*-* } { "*" } { "" } }
 !

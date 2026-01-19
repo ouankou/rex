@@ -27,10 +27,10 @@ program p
       integer :: c
       integer :: d
    end type
- 
-   type (t1) :: v   
 
-!   v % f(1) % c = 0    
+   type (t1) :: v
+
+!   v % f(1) % c = 0
 !   v % f(1) % d = 0 ! data reference becomes 'v % f % (d(1))'
 
 end program

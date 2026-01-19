@@ -79,7 +79,6 @@ private:
 
 }
 
-#if 1
 namespace loopsuite {
 class PdVWorkBaseLoopAlgorithm : public LoopAlgorithm
 {
@@ -146,8 +145,7 @@ private:
   PdVWorkRajaAPI& operator=(const PdVWorkRajaAPI& );
 };
 
-}
-#endif
+} // namespace loopsuite
 
 // Liao cassert begin
 
@@ -220,7 +218,6 @@ private:
 }
 typedef loopsuite::StructuredDomain Domain_t;
 
-#if 1
 namespace RAJA
 {
 
@@ -237,19 +234,13 @@ typedef int Index_type;
 
 const int UndefinedValue = -9999999;
 
-}
-#endif
-
+} // namespace RAJA
 
 // Liao cfloat start
 
-
-
-#if 1
 namespace RAJA {
     namespace Iterators {
 
-#if 1
 template<typename Type,
          typename DifferenceType = std::ptrdiff_t,
          typename PointerType = Type *>
@@ -273,9 +264,7 @@ public:
 protected:
     Type val;
 };
-#endif
 
-#if 1
 template<typename Type = Index_type,
          typename DifferenceType = Index_type,
          typename PointerType = Type *>
@@ -289,21 +278,16 @@ public:
     constexpr numeric_iterator(const Type& rhs) : base(rhs) {}
     constexpr numeric_iterator(const numeric_iterator& rhs) : base(rhs.val) {}
 
-#if 1
     inline difference_type operator+(const numeric_iterator& rhs) const {return static_cast<difference_type>(base::val)+static_cast<difference_type>(rhs.val);}
     inline difference_type operator-(const numeric_iterator& rhs) const {return static_cast<difference_type>(base::val)-static_cast<difference_type>(rhs.val);}
     inline numeric_iterator operator+(const difference_type& rhs) const {return numeric_iterator(base::val+rhs);}
-    inline numeric_iterator operator-(const difference_type& rhs) const {return numeric_iterator(base::val-rhs);}
-#endif
+    inline numeric_iterator operator-(const difference_type &rhs) const {
+      return numeric_iterator(base::val - rhs);
+    }
     constexpr Type operator[](difference_type rhs) const {return base::val + rhs;}
 };
-#endif
-
-
 }
-}
-#endif
-
+} // namespace RAJA
 
 namespace RAJA {
 
@@ -311,9 +295,6 @@ struct PolicyBase { };
 
 }
 
-
-
-#if 1
 namespace RAJA
 {
 class BaseSegment
@@ -327,20 +308,13 @@ public:
 
 };
 
-}
-#endif
+} // namespace RAJA
 
-
-
-
-#if 1
 namespace RAJA
 {
   class RangeSegment : public BaseSegment
 {
 public:
-
-#if 1
   RangeSegment()
       : BaseSegment(_RangeSeg_), m_begin(UndefinedValue), m_end(UndefinedValue)
   {
@@ -419,55 +393,32 @@ public:
 private:
   Index_type m_begin;
   Index_type m_end;
-#endif
-
 };
 
-}
-#endif
+} // namespace RAJA
 
-
-
-
-#if 1
-namespace RAJA
-{
-#if 1
+namespace RAJA {
 template <typename EXEC_POLICY_T, typename Container, typename LOOP_BODY>
 inline __attribute__((always_inline)) void forall(Container&& c, LOOP_BODY loop_body)
 {
   forall(EXEC_POLICY_T(), std::forward<Container>(c), loop_body);
 }
-#endif
 
-#if 1
 template <typename EXEC_POLICY_T, typename LOOP_BODY>
 inline __attribute__((always_inline)) void forall(Index_type begin, Index_type end, LOOP_BODY loop_body)
 {
   forall<EXEC_POLICY_T>(RangeSegment(begin, end), loop_body);
 }
-#endif
 
-}
-#endif
+} // namespace RAJA
 
-
-
-
-
-
-
-
-#if 1
 namespace RAJA
 {
 struct seq_exec : public PolicyBase {
 };
 
-}
-#endif
+} // namespace RAJA
 
-#if 1
 namespace RAJA
 {
 
@@ -477,18 +428,11 @@ struct omp_parallel_exec {
 struct omp_for_exec {
 };
 
-#if 1
-struct omp_parallel_for_exec : public omp_parallel_exec<omp_for_exec> {
-};
-#endif
+struct omp_parallel_for_exec : public omp_parallel_exec<omp_for_exec> {};
 
-}
-#endif
+} // namespace RAJA
 
-#if 1
-namespace RAJA
-{
-#if 1
+namespace RAJA {
 // Liao debug here
 template <typename Iterable, typename InnerPolicy, typename Func>
 inline __attribute__((always_inline)) void forall(const omp_parallel_exec<InnerPolicy>&,
@@ -499,16 +443,11 @@ inline __attribute__((always_inline)) void forall(const omp_parallel_exec<InnerP
 #pragma omp parallel
 
   {
-#if 1
     typename std::remove_reference<decltype(loop_body)>::type body = loop_body;
-    forall<InnerPolicy>(std::forward<Iterable>(iter),
-                        std::forward<Func>(body));
-#endif
+    forall<InnerPolicy>(std::forward<Iterable>(iter), std::forward<Func>(body));
   }
 }
-#endif
 
-#if 1
 template <typename Iterable, typename Func>
 inline __attribute__((always_inline)) void forall(const omp_for_exec&, Iterable&& iter, Func&& loop_body)
 {
@@ -518,22 +457,16 @@ inline __attribute__((always_inline)) void forall(const omp_for_exec&, Iterable&
 
   loop_body(begin[42]);
 }
-#endif
 
-}
-#endif
+} // namespace RAJA
 
-#if 1
 namespace loopsuite {
 namespace execution_policy {
 
-#if 1
 // struct serial {};
 struct parallel {};
-#endif
 }
 
-#if 1
 template < typename policy >
 struct policy_traits {
     typedef RAJA::seq_exec raja_policy;
@@ -541,9 +474,7 @@ struct policy_traits {
   // typedef RAJA::IndexSet::ExecPolicy<RAJA::seq_segit,RAJA::seq_exec> raja_indexset_policy;
   // static const bool valid = false;
 };
-#endif
 
-#if 1
 template < >
 struct policy_traits< execution_policy::parallel > {
 
@@ -552,9 +483,7 @@ struct policy_traits< execution_policy::parallel > {
 
  // static const bool valid = true;
 };
-#endif
 
-#if 1
 namespace loop_over {
 
 // struct node_index_only {};
@@ -568,64 +497,43 @@ struct zone_and_slot_index {};
 // struct ij {};
 // struct ijk {};
 
-}
-#endif
+} // namespace loop_over
 
-}
-#endif
+} // namespace loopsuite
 
-#if 1
 namespace loopsuite {
 
 namespace core {
 
-#if 1
-template < typename policy, typename kernel_type >
-inline void for_all_mixed_slots( loop_over::zone_and_slot_index,
-                                 Domain_t* domain,
-                                 int ir,
-                                 kernel_type kernel )
-{
-#if 1
+template <typename policy, typename kernel_type>
+inline void for_all_mixed_slots(loop_over::zone_and_slot_index,
+                                Domain_t *domain, int ir, kernel_type kernel) {
   const int* rgrdmix = domain->m_rgrdmix[ ir ];
   const int* rndxmix = domain->m_rndxmix[ ir ];
   const int rlenmix = domain->m_rlenmix[ ir ];
-  RAJA::forall<typename policy_traits< policy >::raja_policy >(0,rlenmix,[=](int i){
-   // kernel( rgrdmix[ i ], rndxmix[ i ] );
-      43;
-  });
-#endif
+  RAJA::forall<typename policy_traits<policy>::raja_policy>(0, rlenmix,
+                                                            [=](int i) {
+                                                              // kernel(
+                                                              // rgrdmix[ i ],
+                                                              // rndxmix[ i ] );
+                                                              43;
+                                                            });
 }
-#endif
-
 }
 
-}
-#endif
+} // namespace loopsuite
 
-#if 1
 namespace loopsuite {
 
-#if 1
-template < typename policy,
-           typename loop_type=loop_over::slot_index_only,
-           typename kernel_type >
-inline void for_all_mixed_slots( Domain_t* domain, int ir, kernel_type kernel)
-{
-#if 1
-  core::for_all_mixed_slots< policy, kernel_type >(
-          loop_type(),
-          domain,
-          ir,
-          kernel );
-#endif
+template <typename policy, typename loop_type = loop_over::slot_index_only,
+          typename kernel_type>
+inline void for_all_mixed_slots(Domain_t *domain, int ir, kernel_type kernel) {
+  core::for_all_mixed_slots<policy, kernel_type>(loop_type(), domain, ir,
+                                                 kernel);
 }
-#endif
 
-}
-#endif
+} // namespace loopsuite
 
-#if 1
 namespace loopsuite {
 
 PdVWorkRajaAPI::PdVWorkRajaAPI( const StructuredDomain* domain,
@@ -639,7 +547,6 @@ PdVWorkRajaAPI::~PdVWorkRajaAPI()
   this->tearDown();
 }
 
-#if 1
 void PdVWorkRajaAPI::loopExecute()
 {
 
@@ -650,17 +557,10 @@ void PdVWorkRajaAPI::loopExecute()
   typedef loop_over::zone_and_slot_index loop_type;
 
   StructuredDomain* domain = const_cast< StructuredDomain* >( m_Domain );
-  for ( int ir=1; ir <= nreg; ++ir ) {
-#if 1
-     for_all_mixed_slots< exec_policy, loop_type >(
-            domain, ir, [=](int zoneIdx, int slotIdx) {
-         42;
-     });
-#endif
+  for (int ir = 1; ir <= nreg; ++ir) {
+    for_all_mixed_slots<exec_policy, loop_type>(
+        domain, ir, [=](int zoneIdx, int slotIdx) { 42; });
   }
-
 }
-#endif
 
-}
-#endif
+} // namespace loopsuite

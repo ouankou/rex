@@ -116,21 +116,7 @@ SimpleInstrumentation::visit ( SgNode* astNode )
           SgExprStatement* new_stmt = new SgExprStatement(TRANSFORMATION_FILE_INFO,pp_expression);
           new_stmt->set_endOfConstruct(TRANSFORMATION_FILE_INFO);
           new_stmt->get_endOfConstruct()->set_parent(new_stmt);
-			   
-#if 0
-       // DQ (9/8/2007): This is no longer required, SgExpressionRoot is not longer used in the ROSE IR.
-       // create an expression type
-          SgTypeInt* expr_type = new SgTypeInt();
 
-       // create an expression root
-          SgExpressionRoot * expr_root = new SgExpressionRoot(TRANSFORMATION_FILE_INFO,pp_expression,expr_type);
-          expr_root->set_parent(new_stmt);
-
-       // DQ (11/8/2006): Modified to reflect use of SgExpression instead of SgExpressionRoot
-          new_stmt->set_expression(expr_root);
-
-          pp_expression->set_parent(new_stmt->get_expression());
-#endif
           pp_expression->set_parent(new_stmt);
 
        // insert a statement into the function body

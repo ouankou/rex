@@ -4,7 +4,6 @@
 
                                                            /* SUM8 7 flops */
 
-#if 1
 #define MACRO_B(aa,bb,cc,k1,dd,ee,ff,k2,gg,hh,ii,k3,jj,kk,ll,k4) \
         dx1 = aa[k1] + dd[k2] - gg[k3] - jj[k4] ;  \
         dy1 = bb[k1] + ee[k2] - hh[k3] - kk[k4] ;  \
@@ -19,24 +18,6 @@
         ay  = dz1*dx2 - dx1*dz2 ; \
         az  = dx1*dy2 - dy1*dx2 ; \
         va += ax*dx3 + ay*dy3 + az*dz3 ;            /* VOLPYRAMID 45 flops */
-
-#else
-#define MACRO_B(aa,bb,cc,k1,dd,ee,ff,k2,gg,hh,ii,k3,jj,kk,ll,k4) \
-        double dx1 = aa[k1] + dd[k2] - gg[k3] - jj[k4] ;  \
-        double dy1 = bb[k1] + ee[k2] - hh[k3] - kk[k4] ;  \
-        double dz1 = cc[k1] + ff[k2] - ii[k3] - ll[k4] ;  \
-        double dx2 = dd[k2] + gg[k3] - jj[k4] - aa[k1] ;  \
-        double dy2 = ee[k2] + hh[k3] - kk[k4] - bb[k1] ;  \
-        double dz2 = ff[k2] + ii[k3] - ll[k4] - cc[k1] ;  \
-        double dx3 = x4c - (aa[k1] + dd[k2] + gg[k3] + jj[k4]) ; \
-        double dy3 = y4c - (bb[k1] + ee[k2] + hh[k3] + kk[k4]) ; \
-        double dz3 = z4c - (cc[k1] + ff[k2] + ii[k3] + ll[k4]) ; \
-        double ax  = dy1*dz2 - dz1*dy2 ; \
-        double ay  = dz1*dx2 - dx1*dz2 ; \
-        double az  = dx1*dy2 - dy1*dx2 ; \
-        va += ax*dx3 + ay*dy3 + az*dz3 ;            /* VOLPYRAMID 45 flops */
-
-#endif
 
 #define NPNL 2
 

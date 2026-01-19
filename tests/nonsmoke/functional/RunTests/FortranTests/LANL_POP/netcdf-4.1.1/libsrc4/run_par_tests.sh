@@ -5,7 +5,7 @@
 # $Id: run_par_tests.sh,v 1.2 2007/12/20 16:25:26 ed Exp $
 
 # Even for successful runs, mpiexec seems to set a non-zero return
-# code!  
+# code!
 #set -e
 echo ""
 echo "Testing parallel I/O with HDF5..."

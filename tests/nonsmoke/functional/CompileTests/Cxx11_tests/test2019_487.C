@@ -38,20 +38,3 @@ B::B()
   // This is the current statement.
      getValue(A::VALUE);
    }
-
-
-#if 0
-
-namespace ABC
-   {
-     class type {};
-   }
-
-// Need to compute "X::"
-type x;
-
-
-// We can't see "type" from the declaration of "x",
-// so we backup one and look for "ABC" from the location of the declaration of "x".  
-// We can see "ABC" from the declaration of "x", so we know that the name qualification is length 1.
-#endif

@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! tests basic block data functionality
 ! we didn't allow multiple block data program units
-block data 
+block data
  common /a/ y(3)
  data y /3*1./
 end

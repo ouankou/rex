@@ -8,7 +8,7 @@
       DIMENSION FIELD(IFMAX) , KEYWD(IKN) , RUNST(ISTRG)
       LOGICAL :: DFAULT , CONC , DEPOS , DDEP , WDEP , RURAL , URBAN ,  &
      &        GRDRIS , NOSTD , NOBID , CLMPRO , MSGPRO , PERIOD ,       &
-     &            OLM=.FALSE.    
+     &            OLM=.FALSE.
       INTEGER :: NSRC , NREC , NGRP , NQF,                              &
      &           NARC , NOLM
       CHARACTER NETID*8 , NETIDT*8 , PNETID*8 , NTID*8 , NTTYP*8 ,      &

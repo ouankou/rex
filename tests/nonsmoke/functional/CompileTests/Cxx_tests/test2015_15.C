@@ -48,27 +48,6 @@ class BoxLayout
                Point incr = getOnes()*(BLOCKSIZE);
                Point hc   = lc + incr;
                return Box(lc,hc);
-             };
-#if 0
-          int getPatchIndex(const Point& a_point) const;
-          int getPatchIndexFromBitpoint(const Point& a_point) const;
-          Point getCornerFromBitpoint(const Point& a_point);
-          bool neighborExists(const Point& a_p, const int a_dir, const int a_face);
-          vector<Point>& getPatchLocs() const;
-          int size(){return m_getPatches->size();};
-          Point getNeighbor(const Point& a_p, const Point& a_dir);
-       // there has to be a better way of doing this
-          Point getCorner(const int index);
-          Box shift(const Box& a_bx,const Point& a_pt);
-
-     private:
-       // BoxLayout* m_boxLayoutPtr;
-          Box m_domain;
-          Box m_bitbox;
-
-          shared_ptr<RectMDArray<bool>> m_bitmap;
-          shared_ptr<vector<Point>> m_patchlocs;
-          shared_ptr<map<Point, int >> m_getPatches;
-#endif
+          };
    };
 

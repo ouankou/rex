@@ -113,27 +113,8 @@ static inline void write_byte(Bit16u seg, Bit16u off, Bit8u val)
 	*addr = val;
 }
 
-#define X(idx, ret, fn, args...) ret fn (args);
-#if 1
+#define X(idx, ret, fn, args...) ret fn(args);
 #include "test2015_88.h"
-#else
-X(0,  Bit32u, TCGInterruptHandler,
-  pushad_regs_t *regs, Bit32u esds, Bit32u flags_ptr)
-X(1,  void,   tcpa_acpi_init, void)
-X(2,  Bit32u, tcpa_extend_acpi_log, Bit32u entry_ptr)
-X(3,  void,   tcpa_calling_int19h,void)
-X(4,  void,   tcpa_returned_int19h, void)
-X(5,  void,   tcpa_add_event_separators, void)
-X(6,  void,   tcpa_wake_event, void)
-X(7,  void,   tcpa_add_bootdevice, Bit32u bootcd, Bit32u bootdrv)
-X(8,  void,   tcpa_start_option_rom_scan, void)
-X(9,  void,   tcpa_option_rom, Bit32u seg)
-X(10, void,   tcpa_ipl, Bit32u bootcd, Bit32u seg, Bit32u off, Bit32u count)
-X(11, void,   tcpa_measure_post, Bit32u from, Bit32u to)
-X(12, Bit32u, tcpa_initialize_tpm, Bit32u physpres)
-X(13, Bit32u, get_s3_waking_vector, void)
-X(14, Bit32u, pmm, void *argp)
-#endif
 #undef X
 
 /* The bug here is that the expansion of the macro happens in the
@@ -149,26 +130,7 @@ asm (
     "     jmp *jumptable(,%eax,4)    \n"
     "    .data                       \n"
     "jumptable:                      \n"
-#define X(idx, ret, fn, args...) " .long "#fn"\n"
-#if 1
+#define X(idx, ret, fn, args...) " .long " #fn "\n"
 #include "test2015_88.h"
-#else
-X(0,  Bit32u, TCGInterruptHandler,
-  pushad_regs_t *regs, Bit32u esds, Bit32u flags_ptr)
-X(1,  void,   tcpa_acpi_init, void)
-X(2,  Bit32u, tcpa_extend_acpi_log, Bit32u entry_ptr)
-X(3,  void,   tcpa_calling_int19h,void)
-X(4,  void,   tcpa_returned_int19h, void)
-X(5,  void,   tcpa_add_event_separators, void)
-X(6,  void,   tcpa_wake_event, void)
-X(7,  void,   tcpa_add_bootdevice, Bit32u bootcd, Bit32u bootdrv)
-X(8,  void,   tcpa_start_option_rom_scan, void)
-X(9,  void,   tcpa_option_rom, Bit32u seg)
-X(10, void,   tcpa_ipl, Bit32u bootcd, Bit32u seg, Bit32u off, Bit32u count)
-X(11, void,   tcpa_measure_post, Bit32u from, Bit32u to)
-X(12, Bit32u, tcpa_initialize_tpm, Bit32u physpres)
-X(13, Bit32u, get_s3_waking_vector, void)
-X(14, Bit32u, pmm, void *argp)
-#endif
 #undef X
     );

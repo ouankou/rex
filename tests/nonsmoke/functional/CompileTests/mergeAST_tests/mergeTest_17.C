@@ -1,7 +1,3 @@
-#if 0
-// Just a thought, but does this unparse correctly?
-const float const* foobar_in_header (float* var_x);
-#endif
 
 
 struct X {};

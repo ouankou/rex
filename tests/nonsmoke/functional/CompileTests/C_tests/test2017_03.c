@@ -16827,12 +16827,6 @@ uchar *key_cache_read(KEY_CACHE *keycache,
                                                                          ;
     }
   }
-
-
-
-#if 0
-
-#endif
 }
 
 

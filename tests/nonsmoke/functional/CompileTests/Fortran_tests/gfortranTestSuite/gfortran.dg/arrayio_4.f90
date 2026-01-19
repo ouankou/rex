@@ -6,7 +6,7 @@ program arrayio_4
   implicit none
   integer        :: ierr
   character(12)  :: r(2,3,4) = '0123456789AB'
-   
+
   write(r(::2,:,::1),'(i5)', iostat=ierr) 1,2,3,4,5
   if (ierr.ne.0) call abort()
 

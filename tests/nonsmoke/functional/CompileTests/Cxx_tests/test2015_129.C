@@ -1,5 +1,4 @@
 
-#if 1
 namespace std
 {
   typedef long unsigned int 	size_t;
@@ -11,11 +10,6 @@ typedef long int ptrdiff_t;
 
 typedef long unsigned int size_t;
 
-#endif
-
-
-#if 1
-
 namespace boost{
    __extension__ typedef long long long_long_type;
    __extension__ typedef unsigned long long ulong_long_type;
@@ -26,20 +20,13 @@ namespace boost{
    __extension__ typedef unsigned __int128 uint128_type;
 }
 
-
-#endif
-
-
-#if 1
-
 namespace std 
 {
   struct input_iterator_tag { };
 // struct output_iterator_tag { };
   struct forward_iterator_tag : public input_iterator_tag { };
   struct bidirectional_iterator_tag : public forward_iterator_tag { };
-  struct random_access_iterator_tag : public bidirectional_iterator_tag { };
-#if 1
+  struct random_access_iterator_tag : public bidirectional_iterator_tag {};
   template<typename _Iterator>
     struct iterator_traits
     {
@@ -48,9 +35,7 @@ namespace std
       typedef typename _Iterator::difference_type   difference_type;
       typedef typename _Iterator::pointer           pointer;
       typedef typename _Iterator::reference         reference;
-    };
-#endif
-#if 1
+  };
   template<typename _Tp>
     struct iterator_traits<_Tp*>
     {
@@ -59,14 +44,8 @@ namespace std
       typedef ptrdiff_t                   difference_type;
       typedef _Tp*                        pointer;
       typedef _Tp&                        reference;
-    };
-#endif
-} 
-#endif
-
-
-
-#if 1
+  };
+  } // namespace std
 
 namespace mpl_ { namespace aux {} }
 namespace boost { namespace mpl { using namespace mpl_; 
@@ -219,16 +198,13 @@ struct ice_not
     static const bool value = true;
 };
 } 
-} 
+}
 
-
-#if 1
 namespace boost {
 namespace detail {
 template <typename T> struct cv_traits_imp {};
-} 
-} 
-#endif
+}
+} // namespace boost
 
 namespace boost {
 namespace detail{
@@ -263,10 +239,6 @@ namespace mpl_ {
 template< bool C > struct integral_c<bool, C> {};
 }
 
-#endif
-
-#if 1
-
 namespace boost{
 
 template <class T, T val>
@@ -286,10 +258,7 @@ template<> struct integral_constant<bool,false> : public mpl::false_
 
 typedef integral_constant<bool,true> true_type;
 typedef integral_constant<bool,false> false_type;
-}
-#endif
-
-
+} // namespace boost
 
 namespace boost {
 namespace detail {

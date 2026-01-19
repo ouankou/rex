@@ -4,7 +4,7 @@
 ! being done before the array offset and lower bound were
 ! available.
 !
-! Contributed by Harald Anlauf <anlauf@gmx.de> 
+! Contributed by Harald Anlauf <anlauf@gmx.de>
 !
 module gfcbug72
   implicit none

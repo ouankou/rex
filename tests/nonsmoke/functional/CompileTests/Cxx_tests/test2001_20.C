@@ -38,21 +38,3 @@ class C
      public:
         void Execute();
    };
-
-#if 0
-// Comment out until we fix this
-void
-C::Execute ()
-   {
-  // unparsed as:       *(this -> X).pointerToObject .* this -> memberFunctionPointer(); 
-  // corrected version: ((*X.pointerToObject).*memberFunctionPointer)(); 
-  // better modified version: (*(this->X).pointerToObject.*(this->memberFunctionPointer)) ();
-     (X.pointerToObject->*memberFunctionPointer)();
-   }
-#endif
-
-
-
-
-
-

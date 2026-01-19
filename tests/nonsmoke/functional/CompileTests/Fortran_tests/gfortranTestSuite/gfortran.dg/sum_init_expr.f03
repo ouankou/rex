@@ -3,7 +3,7 @@
 !
 ! SUM as initialization expression.
 !
-! This test compares results of simplifier of SUM 
+! This test compares results of simplifier of SUM
 ! with the corresponding inlined or library routine(s).
 !
 

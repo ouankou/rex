@@ -22,7 +22,7 @@
     return
 40  i = -1
   end subroutine check_if
-  
+
   subroutine check_select(i)
     goto 10  ! { dg-warning "Label at ... is not in the same block" }
     select case (i)
@@ -47,7 +47,7 @@
        end select
        goto 999
 30  end select
-    return    
+    return
 999 i = -1
   end subroutine check_select
 

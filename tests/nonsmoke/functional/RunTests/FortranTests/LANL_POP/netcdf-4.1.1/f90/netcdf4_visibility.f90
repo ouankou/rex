@@ -1,7 +1,7 @@
 ! This is part of the netCDF-4 fortran 90 API.
 ! Copyright 2006, UCAR
 ! $Id: netcdf4_visibility.f90,v 1.15 2009/09/28 17:53:00 ed Exp $
-  
+
 public :: nf90_create_par, nf90_open_par, nf90_var_par_access, &
      nf90_inq_ncid, nf90_inq_grps, nf90_inq_grp_ncid, nf90_inq_grp_full_ncid, nf90_inq_grpname, &
      nf90_inq_grpname_full, nf90_inq_grpname_len, nf90_inq_varids, nf90_inq_grp_parent, &
@@ -19,5 +19,5 @@ public :: nf90_create_par, nf90_open_par, nf90_var_par_access, &
      nf90_def_var_fill, nf90_inq_var_fill, &
      nf90_def_var_endian, nf90_inq_var_endian, nf90_inq_user_type, &
      nf90_put_att_any, nf90_get_att_any, nf90_get_var_any, nf90_put_var_any
-     
-  
+
+

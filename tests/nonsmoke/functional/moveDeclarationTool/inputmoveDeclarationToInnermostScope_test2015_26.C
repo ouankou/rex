@@ -6,8 +6,3 @@ void foo()
           x = 4;
         }
    }
-
-#if 0
-void foo(){}
-#endif
-

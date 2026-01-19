@@ -18,7 +18,7 @@
 program pres_temp_4D_rd
   use netcdf
   implicit none
-  
+
   ! This is the name of the data file we will read.
   character (len = *), parameter :: FILE_NAME = "pres_temp_4D.nc"
   integer :: ncid
@@ -74,7 +74,7 @@ program pres_temp_4D_rd
   allocate(pres_in(NLONS, NLATS, NLVLS))
   allocate(temp_in(NLONS, NLATS, NLVLS))
 
-  ! Open the file. 
+  ! Open the file.
   call check( nf90_open(FILE_NAME, nf90_nowrite, ncid) )
 
   ! Get the varids of the latitude and longitude coordinate variables.
@@ -84,7 +84,7 @@ program pres_temp_4D_rd
   ! Read the latitude and longitude data.
   call check( nf90_get_var(ncid, lat_varid, lats) )
   call check( nf90_get_var(ncid, lon_varid, lons) )
-  
+
   ! Check to make sure we got what we expected.
   do lat = 1, NLATS
      if (lats(lat) /= START_LAT + (lat - 1) * 5.0) stop 2
@@ -97,7 +97,7 @@ program pres_temp_4D_rd
   call check( nf90_inq_varid(ncid, PRES_NAME, pres_varid) )
   call check( nf90_inq_varid(ncid, TEMP_NAME, temp_varid) )
 
-  ! Read 1 record of NLONS*NLATS*NLVLS values, starting at the beginning 
+  ! Read 1 record of NLONS*NLATS*NLVLS values, starting at the beginning
   ! of the record (the (1, 1, 1, rec) element in the netCDF file).
   count = (/ NLONS, NLATS, NLVLS, 1 /)
   start = (/ 1, 1, 1, 1 /)
@@ -109,7 +109,7 @@ program pres_temp_4D_rd
      call check( nf90_get_var(ncid, pres_varid, pres_in, start = start, &
                               count = count) )
      call check( nf90_get_var(ncid, temp_varid, temp_in, start, count) )
-     
+
      i = 0
      do lvl = 1, NLVLS
         do lat = 1, NLATS
@@ -122,22 +122,22 @@ program pres_temp_4D_rd
      end do
      ! next record
   end do
-         
+
   ! Close the file. This frees up any internal netCDF resources
   ! associated with the file.
   call check( nf90_close(ncid) )
 
-  ! If we got this far, everything worked as expected. Yipee! 
+  ! If we got this far, everything worked as expected. Yipee!
   print *,"*** SUCCESS reading example file ", FILE_NAME, "!"
 
 contains
   subroutine check(status)
     integer, intent ( in) :: status
-    
-    if(status /= nf90_noerr) then 
+
+    if(status /= nf90_noerr) then
       print *, trim(nf90_strerror(status))
       stop 2
     end if
-  end subroutine check  
+  end subroutine check
 end program pres_temp_4D_rd
 

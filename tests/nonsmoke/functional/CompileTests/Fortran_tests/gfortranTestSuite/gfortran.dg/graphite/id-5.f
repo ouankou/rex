@@ -1,5 +1,5 @@
       subroutine shell(Re,Pr,nx,ny,nz,
-     $nuim,nuex2,nuex4,cfl,scheme,conf,ni,maxit) 
+     $nuim,nuex2,nuex4,cfl,scheme,conf,ni,maxit)
       real*8 q(5,nx,ny,nz),dq(5,nx,ny,nz),rhs(5,nx,ny,nz),e(5,nx,ny,nz),
      1     f(5,nx,ny,nz),g(5,nx,ny,nz),ev(5,nx,ny,nz),fv(5,nx,ny,nz),
      2     gv(5,nx,ny,nz),diss(5,nx,ny,nz)

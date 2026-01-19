@@ -32,7 +32,7 @@ end module m3
 module m4
   use m3!, only: t
   implicit none
-  private 
+  private
   private :: t
   type(t), public :: one
   type(t), public, parameter :: two = t(2)

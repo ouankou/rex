@@ -11,13 +11,10 @@
 #define X86G_CC_OP_INCL   7
 #define X86G_CC_OP_DECL   8
 
-__attribute__((regparm(3)))
-UInt x86g_calculate_eflags_c ( UInt cc_op,
-                               UInt cc_dep1,
-                               UInt cc_dep2,
-                               UInt cc_ndep )
-{
-#if 1
+__attribute__((regparm(3))) UInt x86g_calculate_eflags_c(UInt cc_op,
+                                                         UInt cc_dep1,
+                                                         UInt cc_dep2,
+                                                         UInt cc_ndep) {
 # 605 "priv/guest_x86_helpers.c"
    switch (cc_op) {
       case X86G_CC_OP_LOGICL:
@@ -39,7 +36,4 @@ UInt x86g_calculate_eflags_c ( UInt cc_op,
 
 // return x86g_calculate_eflags_all_WRK(cc_op,cc_dep1,cc_dep2,cc_ndep) & (1 << 0);
    return 0;
-#else
-   return 0;
-#endif
 }

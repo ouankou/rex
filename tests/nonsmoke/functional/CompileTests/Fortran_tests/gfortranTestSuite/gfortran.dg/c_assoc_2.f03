@@ -7,11 +7,11 @@ contains
     type(c_ptr), value :: my_c_ptr
     type(c_ptr), pointer :: my_c_ptr_2
     integer :: my_integer
-    
+
     if(.not. c_associated(my_c_ptr)) then
        call abort()
     end if
-    
+
     if(.not. c_associated(my_c_ptr, my_c_ptr)) then
        call abort()
     end if

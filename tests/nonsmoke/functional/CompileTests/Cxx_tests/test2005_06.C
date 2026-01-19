@@ -56,7 +56,6 @@ int main()
   // Error used to be unparses as: "x = (+< X< int > > (y,z));"
   // x = y + z;
 
-#if 1
   // Both of the following statements normalize to the following: xPtr -> foo();
      xPtr->foo();
      (*xPtr).foo();
@@ -64,43 +63,30 @@ int main()
   // Both of these normalize to the following: (*(*xPtrPtr)).foo();
      (*xPtrPtr)->foo();
      (**xPtrPtr).foo();
-#endif
 
-#if 1
-  // This is unparsed as: "x = -xptr;"
-  // x = xptr->operator-();
+     // This is unparsed as: "x = -xptr;"
+     // x = xptr->operator-();
      x = (*xPtr).operator-();
-#endif
-#if 1
-  // Postfix operators
+     // Postfix operators
      x = (*xPtr)++;
      x = (*xPtr).operator++(1);
-#endif
-#if 1
-  // Prefix operators (error same as for "x = (*xPtr).operator-();")
+     // Prefix operators (error same as for "x = (*xPtr).operator-();")
      x = ++(*xPtr);
      x = (*xPtr).operator++();
      x = xPtr->operator++();
-#endif
 
      int separatorDeclaration;
 
-#if 1
   // Postfix operator using a non-SgVerRefExp 
      x = (*(foobar()))++;
      x = (*(foobar())).operator++(1);
-#endif
-#if 1
-  // Prefix operator using a non-SgVerRefExp 
+     // Prefix operator using a non-SgVerRefExp 
      x = ++(*(foobar()));
      x = (*(foobar())).operator++();
      x = foobar()->operator++();
-#endif
-#if 1
      x = y.operator-();
 
      x = y + z;
-#endif
 
      return 0;
    }

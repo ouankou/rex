@@ -17,5 +17,5 @@ c Based on example provided by fuyuki@ccsr.u-tokyo.ac.jp
         read (10,nm,end=190)
         if (i.ne.ctr) call abort ()
       enddo
- 190  continue 
+ 190  continue
       end

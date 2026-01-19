@@ -5988,45 +5988,6 @@ __attribute__ ((__nothrow__)) mknodat (int __fd, __const char *__path, __mode_t 
   return __xmknodat (0, __fd, __path, __mode, &__dev);
 }
 
-
-
-
-#if 0
-// DQ (10/19/2012): these had to be removed from the "gcc -E" processed file.
-extern __inline int
-__attribute__ ((__nothrow__)) stat64 (__const char *__path, struct stat64 *__statbuf)
-{
-  return __xstat64 (1, __path, __statbuf);
-}
-
-
-extern __inline int
-__attribute__ ((__nothrow__)) lstat64 (__const char *__path, struct stat64 *__statbuf)
-{
-  return __lxstat64 (1, __path, __statbuf);
-}
-
-
-extern __inline int
-__attribute__ ((__nothrow__)) fstat64 (int __fd, struct stat64 *__statbuf)
-{
-  return __fxstat64 (1, __fd, __statbuf);
-}
-
-
-extern __inline int
-__attribute__ ((__nothrow__)) fstatat64 (int __fd, __const char *__filename, struct stat64 *__statbuf, int __flag)
-
-{
-  return __fxstatat64 (1, __fd, __filename, __statbuf, __flag);
-}
-#endif
-
-
-
-
-
-
 // # 36 "src/os/unix/ngx_linux_config.h" 2
 // # 1 "/usr/include/fcntl.h" 1 3 4
 // # 30 "/usr/include/fcntl.h" 3 4

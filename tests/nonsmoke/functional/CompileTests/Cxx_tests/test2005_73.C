@@ -20,8 +20,6 @@ class A
             int x22;
    };
 
-#if 1
-
 // Template instantiation directive (for a class)
 // #if (__GNUC__ == 3)
 #if ( defined(__clang__) == 0 && __GNUC__ == 3 )
@@ -34,11 +32,6 @@ template A<int>;
 #else
 // DQ (2/20/2010): this is a error for g++ 4.x compilers (at least g++ 4.2).
 // template<> A<int>;
-#endif
-
-#else
-// Template instantiation directive (for a function)
-template inline void A<int>::f(int x);
 #endif
 
 // #if (__GNUC__ == 4) && (__GNUC_MINOR__ <= 4)

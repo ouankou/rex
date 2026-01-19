@@ -2018,11 +2018,6 @@ struct options
 {
   int verbose;
 
-#if 0
-// DQ (10/20/2012): This results in constant adress with offset of 8 (moved to different location in data structure for testing).
-  char **accepts;
-#endif
-
   _Bool quiet;
   int ntry;
   _Bool retry_connrefused;
@@ -2056,10 +2051,8 @@ struct options
 
   _Bool spider;
 
-#if 1
 // DQ (10/20/2012): This results in constant adress with offset of 104 (this original position).
   char **accepts;
-#endif
 
   char **rejects;
   char **excludes;

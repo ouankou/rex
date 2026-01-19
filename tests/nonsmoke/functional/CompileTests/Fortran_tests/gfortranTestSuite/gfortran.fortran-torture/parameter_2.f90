@@ -9,7 +9,7 @@ program parameter_2
     integer :: N
     type (SS), dimension(2) :: o
   end type
-  
+
   type (SS), parameter :: s =  SS (1, 2)
   type (TT), parameter :: t = TT(42, (/ SS(3, 4), SS(8, 9) /))
 

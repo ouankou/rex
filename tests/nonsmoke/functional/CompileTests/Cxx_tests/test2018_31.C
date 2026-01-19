@@ -7,7 +7,6 @@ template<class T> struct X {
 	};
 };
 
-#if 1
 class W {
      // template<class T> friend struct X<T>::Y;
         template<class T> friend int X<T>::f(const W&);
@@ -15,5 +14,3 @@ class W {
 public:
         W (int i) : member(i) { }
 };
-#endif
-

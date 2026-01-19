@@ -36,15 +36,7 @@ extern void fb_()
 	{
 	extern const char * Filename;
 	const char * oldFilename = Filename;
-	Filename = __FILE__;
-#if 0
-	ieq(sa_::stat, 251);
-	ieq(objb_.get25b(), 252);
-	ieq(objc_.i, 0);
-	ieq(objd_.i, 0);
-	ieq(obje_.i, 0);
-	ieq(objf_.i, 256);
-#endif
-	Filename = oldFilename;
+        Filename = __FILE__;
+        Filename = oldFilename;
 	}
 

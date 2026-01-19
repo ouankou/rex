@@ -42,7 +42,7 @@ subroutine i_am_ok
   USE f77_blas_generic
   character(6) :: chr
   chr = ""
-  if (chr /= "recopy") call abort ()  
+  if (chr /= "recopy") call abort ()
 end subroutine i_am_ok
 
 program main
@@ -51,6 +51,6 @@ program main
   character(6) :: chr
   chr = ""
   call bl_copy(1.0, chr)
-  if (chr /= "recopy") call abort ()  
+  if (chr /= "recopy") call abort ()
 end program main
 ! { dg-final { cleanup-modules "f77_blas_generic f77_blas_extra" } }

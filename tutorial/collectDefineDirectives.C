@@ -63,18 +63,12 @@ visitorTraversal::evaluateSynthesizedAttribute ( SgNode* n, SynthesizedAttribute
                for (i = commentsAndDirectives->rbegin(); i != commentsAndDirectives->rend(); i++)
                   {
                  // The different classifications of comments and directives are in ROSE/src/frontend/SageIII/rose_attributes_list.h
-                    if ((*i)->getTypeOfDirective() == PreprocessingInfo::CpreprocessorDefineDeclaration)
-                       {
-#if 0
-                         printf ("          Attached Comment #%d in file %s (relativePosition=%s): classification %s :\n%s\n",
-                            counter++,(*i)->get_file_info()->get_filenameString().c_str(),
-                            ((*i)->getRelativePosition() == PreprocessingInfo::before) ? "before" : "after",
-                            PreprocessingInfo::directiveTypeName((*i)->getTypeOfDirective()).c_str(),
-                            (*i)->getString().c_str());
-#endif
-                      // use push_front() to end up with source ordering of final list of directives
-                         localResult.accumulatedList.push_front(*i);
-                       }
+                 if ((*i)->getTypeOfDirective() ==
+                     PreprocessingInfo::CpreprocessorDefineDeclaration) {
+                   // use push_front() to end up with source ordering of final
+                   // list of directives
+                   localResult.accumulatedList.push_front(*i);
+                 }
                   }
              }
         }

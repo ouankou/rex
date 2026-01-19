@@ -891,56 +891,6 @@ OCerror oc_attach_das(OCconnection conn, OCobject dasroot, OCobject ddsroot) {
   return ocddsdasmerge(state, das, dds);
 }
 
-#if 0
-/*
-I suppressed this operation because I realized that it
-appears to be impossible to implement correctly in general.
-It also exposes a flaw in the protocol.
-If I have a dds with two identical Grids, G1 and G2,
-and I ask for the projection ?G1.temp,G2.temp,
-then I get back a DATADDS with duplicated temp fields,
-which means the DATADDS is illegal.  The problem is that
-the protocol throws away important scoping information
-about the fact that each temp field is part of a different
-grid.
-*/
-/* Connect a specified DATADDS tree to a specified DDS tree */
-OCerror
-oc_attach_datadds(OCconnection conn, OCobject dataddsroot, OCobject ddsroot)
-{
-    OCstate* state;
-    OCnode* dxd;
-    OCnode* dds;
-    OCVERIFY(OCstate*,state,conn);
-    OCDEREF(OCstate*,state,conn);
-    OCVERIFY(OCnode*,dxd,dataddsroot);
-    OCDEREF(OCnode*,dxd,dataddsroot);
-    OCVERIFY(OCnode*,dds,ddsroot);
-    OCDEREF(OCnode*,dds,ddsroot);
-
-    /* get the true roots */
-    dds = dds->root;
-    dxd = dxd->root;
-    if(dds == NULL || dxd == NULL) return OC_EBADID;    
-    /* correlate the DATADDS to the DDS */
-    return occorrelate(dxd,dds);
-}
-
-/* Return the attached DATADDS object for a given DDS object */
-OCerror oc_inq_datadds(OCconnection conn, OCobject dds0, OCobject* dataddsp)
-{
-    OCstate* state;
-    OCnode* dds;
-    OCVERIFY(OCstate*,state,conn);
-    OCDEREF(OCstate*,state,conn);
-    OCVERIFY(OCnode*,dds,dds0);
-    OCDEREF(OCnode*,dds,dds0);
-
-    if(dataddsp) *dataddsp = (OCobject)dds->datadds;
-    return OC_NOERR;
-}
-#endif
-
 /**************************************************/
 
 OCerror oc_svcerrordata(OCconnection conn, char **codep, char **msgp,

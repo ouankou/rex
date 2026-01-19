@@ -17,7 +17,7 @@ integer, parameter, public :: &
      nf90_enum = 15, &
      nf90_compound = 16
 
-                        
+
 ! extra default fill values:
 integer (kind =  TwoByteInt),  parameter, public :: &
      nf90_fill_ubyte  = 255,                        &
@@ -36,7 +36,7 @@ integer, parameter, public :: &
 
 ! Flags for parallel access.
 integer, parameter, public :: nf90_independent = 0, nf90_collective = 1
-  
+
 ! Extra variable flags.
 integer, parameter, public :: &
      nf90_chunk_seq = 0, &
@@ -57,29 +57,29 @@ integer, parameter, public :: &
 
 ! Extra error codes.
 integer, parameter, public :: &
-     nf90_ehdferr = -101, & ! Error at HDF5 layer. 
-     nf90_ecantread = -102, & ! Can't read. 
-     nf90_ecantwrite = -103, & ! Can't write. 
-     nf90_ecantcreate = -104, & ! Can't create. 
-     nf90_efilemeta = -105, & ! Problem with file metadata. 
-     nf90_edimmeta = -106, & ! Problem with dimension metadata. 
-     nf90_eattmeta = -107, & ! Problem with attribute metadata. 
-     nf90_evarmeta = -108, & ! Problem with variable metadata. 
-     nf90_enocompound = -109, & ! Not a compound type. 
-     nf90_eattexists = -110, & ! Attribute already exists. 
-     nf90_enotnc4 = -111, & ! Attempting netcdf-4 operation on netcdf-3 file.   
-     nf90_estrictnc3 = -112, & ! Attempting netcdf-4 operation on strict nc3 netcdf-4 file.   
-     nf90_enotnc3 = -113, & ! Attempting netcdf-3 operation on netcdf-4 file.   
-     nf90_enopar = -114, & ! Parallel operation on file opened for non-parallel access.   
-     nf90_eparinit = -115, & ! Error initializing for parallel access.   
-     nf90_ebadgrpid = -116, & ! Bad group ID.   
-     nf90_ebadtypid = -117, & ! Bad type ID.   
-     nf90_etypdefined = -118, & ! Type has already been defined and may not be edited. 
-     nf90_ebadfield = -119, & ! Bad field ID.   
-     nf90_ebadclass = -120, & ! Bad class.   
-     nf90_emaptype = -121, & ! Mapped access for atomic types only.   
-     nf90_elatefill = -122, & ! Attempt to define fill value when data already exists. 
-     nf90_elatedef = -122 ! Attempt to define var properties, like deflate, after enddef. 
+     nf90_ehdferr = -101, & ! Error at HDF5 layer.
+     nf90_ecantread = -102, & ! Can't read.
+     nf90_ecantwrite = -103, & ! Can't write.
+     nf90_ecantcreate = -104, & ! Can't create.
+     nf90_efilemeta = -105, & ! Problem with file metadata.
+     nf90_edimmeta = -106, & ! Problem with dimension metadata.
+     nf90_eattmeta = -107, & ! Problem with attribute metadata.
+     nf90_evarmeta = -108, & ! Problem with variable metadata.
+     nf90_enocompound = -109, & ! Not a compound type.
+     nf90_eattexists = -110, & ! Attribute already exists.
+     nf90_enotnc4 = -111, & ! Attempting netcdf-4 operation on netcdf-3 file.
+     nf90_estrictnc3 = -112, & ! Attempting netcdf-4 operation on strict nc3 netcdf-4 file.
+     nf90_enotnc3 = -113, & ! Attempting netcdf-3 operation on netcdf-4 file.
+     nf90_enopar = -114, & ! Parallel operation on file opened for non-parallel access.
+     nf90_eparinit = -115, & ! Error initializing for parallel access.
+     nf90_ebadgrpid = -116, & ! Bad group ID.
+     nf90_ebadtypid = -117, & ! Bad type ID.
+     nf90_etypdefined = -118, & ! Type has already been defined and may not be edited.
+     nf90_ebadfield = -119, & ! Bad field ID.
+     nf90_ebadclass = -120, & ! Bad class.
+     nf90_emaptype = -121, & ! Mapped access for atomic types only.
+     nf90_elatefill = -122, & ! Attempt to define fill value when data already exists.
+     nf90_elatedef = -122 ! Attempt to define var properties, like deflate, after enddef.
 
 ! This is the position of NC_NETCDF4 in cmode, counting from the
 ! right, starting (uncharacteristically for fortran) at 0. It's needed

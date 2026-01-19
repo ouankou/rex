@@ -122,7 +122,7 @@
 
 ! !DESCRIPTION:
 !  This routine defines an io field for a netCDF file.
-!  When reading a file, the define routine will attempt to fill an 
+!  When reading a file, the define routine will attempt to fill an
 !  io field structure with meta-data information from the netCDF file.
 !  When writing a file, it calls the appropriate netCDF routines
 !  to define all the field attributes and assign a field id.
@@ -182,18 +182,10 @@
       define_error       ! error flag
 
 
-#if 0
-! DQ ((9/12/2010): Comment this out as a test.
-            iostat = NF90_INQ_DIMID(ncid=ncid,                         &
-                                 name=trim(io_field%field_dim(n)%name),&
-                                 dimid=dimid)
-#endif
 
-#if 1
 ! DQ ((9/12/2010): Comment this out as a test.
             iostat = NF90_INQ_DIMID(ncid,att_name,dimid)
             iostat = NF90_INQ_DIMID(ncid,io_field%field_dim(n)%name,dimid)
-#endif
 
 !-----------------------------------------------------------------------
 !
@@ -230,21 +222,8 @@
             dimid = 0
 
             !*** check to see whether already defined
-#if 0
-! DQ ((9/12/2010): Comment this out as a test.
-            iostat = NF90_INQ_DIMID(ncid=ncid,                         &
-                                 name=trim(io_field%field_dim(n)%name),&
-                                 dimid=dimid)
-#endif
 
             if (iostat /= NF90_NOERR) then ! dimension not yet defined
-#if 0
-! DQ (9/12/2010): Comment this out as a test.
-               iostat = NF90_DEF_DIM (ncid=ncid,                    &
-                             name=trim(io_field%field_dim(n)%name), &
-                             len=io_field%field_dim(n)%length,      &
-                             dimid=io_field%field_dim(n)%id)
-#endif
             else
                io_field%field_dim(n)%id = dimid
             end if
@@ -264,34 +243,10 @@
 
             if (associated (io_field%field_r_2d).or. &
                 associated (io_field%field_r_3d)) then
-#if 0
-! DQ ((9/12/2010): Comment this out as a test.
-!               iostat = NF90_DEF_VAR (ncid=ncid,                       &
-!                                      name=trim(io_field%short_name),  &
-!                                      xtype=NF90_FLOAT,                &
-!                    dimids=(/ (io_field%field_dim(n)%id, n=1,ndims) /),&
-!                                      varid=io_field%id)
-#endif
             else if (associated (io_field%field_d_2d).or. &
                      associated (io_field%field_d_3d)) then
-#if 0
-! DQ ((9/12/2010): Comment this out as a test.
-!               iostat = NF90_DEF_VAR (ncid=ncid,                      &
-!                                      name=trim(io_field%short_name), &
-!                                      xtype=NF90_DOUBLE,              &
-!                   dimids=(/ (io_field%field_dim(n)%id, n=1,ndims) /),&
-!                                      varid=io_field%id)
-#endif
             else if (associated (io_field%field_i_2d).or. &
                      associated (io_field%field_i_3d)) then
-#if 0
-! DQ ((9/12/2010): Comment this out as a test.
-!               iostat = NF90_DEF_VAR (ncid=ncid,                      &
-!                                      name=trim(io_field%short_name), &
-!                                      xtype=NF90_INT,                 &
-!                   dimids=(/ (io_field%field_dim(n)%id, n=1,ndims) /),&
-!                                      varid=io_field%id)
-#endif
             else
                define_error = .true.
             end if

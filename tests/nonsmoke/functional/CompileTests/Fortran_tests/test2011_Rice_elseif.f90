@@ -3,7 +3,7 @@
 program fused_else_if
  if (.true.) then
    n = 1
- else 
+ else
    if (.false.) n = 0 ! incorrectly combined with the else in the translation
  endif
 end program

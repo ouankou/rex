@@ -8,13 +8,13 @@ c { dg-do compile }
 * Date: Mon, 31 May 1999 11:46:52 +0200 (CET)
 * Content-Type: text/plain; charset=US-ASCII
 * X-UIDL: 9a00095a5fe4d774b7223de071157374
-* 
+*
 * Hi,
-* 
+*
 * I ./configure --prefix=/opt and bootstrapped egcs g77 snapshot 19990524
 * on an i686-pc-linux-gnu. The program below gives an internal compiler error.
-* 
-* 
+*
+*
 * Script started on Mon May 31 11:30:01 1999
 * lx{g010}:/tmp>/opt/bin/g77 -v -O3 -malign-double -c e3.f
 * g77 version gcc-2.95 19990524 (prerelease) (from FSF-g77 version 0.5.24-19990515)
@@ -46,20 +46,20 @@ c { dg-do compile }
          IF( OFF.EQ.0 ) THEN
             RETURN
          ELSE
-            XINF =0.0D0 
+            XINF =0.0D0
          END IF
       ELSE IF( N.EQ.2 ) THEN
       END IF
       CALL DLASQ3(ICONV)
       END
 * lx{g010}:/tmp>exit
-* 
+*
 * Script done on Mon May 31 11:30:23 1999
-* 
+*
 * Best regards,
-* 
+*
 * Norbert.
-* -- 
+* --
 * Norbert Conrad                             phone: ++49 641 9913021
 * Hochschulrechenzentrum                     email: conrad@hrz.uni-giessen.de
 * Heinrich-Buff-Ring 44

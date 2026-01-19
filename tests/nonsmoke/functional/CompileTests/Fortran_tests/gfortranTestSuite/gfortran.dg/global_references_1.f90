@@ -19,7 +19,7 @@ function g(x)       ! Global entity
   g = x
 
 ! PR25710==========================================================
-! Lahey -2607-S: "SOURCE.F90", line 26: 
+! Lahey -2607-S: "SOURCE.F90", line 26:
 ! Function 'f' cannot be referenced as a subroutine. The previous
 ! definition is in 'line 12'.
 
@@ -34,7 +34,7 @@ end function h
 SUBROUTINE TT()
   CHARACTER(LEN=10), EXTERNAL :: j ! { dg-warning "Return type mismatch" }
   CHARACTER(LEN=10)          :: T
-! PR20881=========================================================== 
+! PR20881===========================================================
 ! Error only appears once but testsuite associates with both lines.
   T = j (1.0) ! { dg-error "is already being used as a SUBROUTINE" }
   print *, T
@@ -74,7 +74,7 @@ contains
   end SUBROUTINE f
 end
 
-! PR20881=========================================================== 
+! PR20881===========================================================
 ! Lahey - 2636-S: "SOURCE.F90", line 81:
 ! Subroutine 'j' is previously referenced as a function in 'line 39'.
 

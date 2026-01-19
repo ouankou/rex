@@ -16,7 +16,7 @@ class default
 end select
 9999 continue
 
-! 2nd example: jumping out of BLOCK (valid) 
+! 2nd example: jumping out of BLOCK (valid)
 block
   goto 88
 end block

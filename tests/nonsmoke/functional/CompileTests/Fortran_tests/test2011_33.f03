@@ -1,5 +1,5 @@
 ! I think this is using F03 syntax for procedure pointers.
-! So this might really be a FFortran 2003 test code 
+! So this might really be a FFortran 2003 test code
 ! (syntax fails for gfortran, but is part of the gfortran test suite).
 
 PROGRAM test_prog
@@ -24,6 +24,6 @@ CONTAINS
     add = a+b
 
   END FUNCTION add
- 
+
 END PROGRAM test_prog
 

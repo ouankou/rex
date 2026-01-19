@@ -1,4 +1,4 @@
-      SUBROUTINE DGEMM ( M, N, K, A, LDA, B, LDB, 
+      SUBROUTINE DGEMM ( M, N, K, A, LDA, B, LDB,
      & C, LDC )
 !     .. Scalar Arguments ..
       INTEGER            M, N, K, LDA, LDB, LDC

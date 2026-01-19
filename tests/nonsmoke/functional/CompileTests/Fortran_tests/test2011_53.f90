@@ -10,7 +10,7 @@ module b_11_53
   interface bFoo
      module procedure foo
   end interface
-contains 
+contains
   subroutine foo()
     s=s+1
   end subroutine foo
@@ -34,9 +34,9 @@ program multRename
   use c_11_53
   longName=1
   call cBar()
-  if (longName==3) then 
+  if (longName==3) then
      print *, 'OK'
-  else 
+  else
      print *, 'FAILED'
   end if
 end program multRename

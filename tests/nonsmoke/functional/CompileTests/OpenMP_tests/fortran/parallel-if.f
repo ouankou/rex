@@ -9,7 +9,7 @@ C***************************************************
       i = 0
 !$OMP PARALLEL if( i .eq. 0)
       PRINT *, 'Hello World!'
-c$omp end parallel 
+c$omp end parallel
 
 !$OMP PARALLEL if( i .ne. 0)
       PRINT *, 'Hello World 2!'
@@ -19,6 +19,6 @@ c$omp end parallel
       if (tcount .ne. 1 ) call abort
 !$omp end single
 
-c$omp end parallel 
+c$omp end parallel
       PRINT *, 'the end'
       END

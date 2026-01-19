@@ -8,10 +8,7 @@ namespace A
 
 A::int_temp<A::B>* var1;
 
-#if 1
 namespace A
    {
      int_temp<B>* var2;
-   };
-#endif
-
+     };

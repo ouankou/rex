@@ -5,14 +5,14 @@
 program reduction_mask
   implicit none
   logical :: equal(3)
-  
+
   integer, parameter :: res(4*9) = (/ 3, 3, 3, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, &
        1, 1, 1, 1, 1, 6, 6, 6, 2, 2, 2, 2, 2, 2, 6, 6, 6, 3, 3, 3, 3, 3, 3 /)
   integer :: val(4*9)
   complex :: cval(2*9), cin(3)
-  
+
   equal = (/ .true., .true., .false. /)
-  
+
   ! use all combinations of the dim and mask arguments for the
   ! reduction intrinsics
   val( 1) = maxval((/ 1, 2, 3 /))
@@ -24,7 +24,7 @@ program reduction_mask
   val( 7) = maxval((/ 1, 2, 3 /), 1, mask=equal)
   val( 8) = maxval((/ 1, 2, 3 /), dim=1, mask=equal)
   val( 9) = maxval((/ 1, 2, 3 /), mask=equal, dim=1)
-       
+
   val(10) = minval((/ 1, 2, 3 /))
   val(11) = minval((/ 1, 2, 3 /), 1)
   val(12) = minval((/ 1, 2, 3 /), dim=1)
@@ -34,7 +34,7 @@ program reduction_mask
   val(16) = minval((/ 1, 2, 3 /), 1, mask=equal)
   val(17) = minval((/ 1, 2, 3 /), dim=1, mask=equal)
   val(18) = minval((/ 1, 2, 3 /), mask=equal, dim=1)
-       
+
   val(19) = product((/ 1, 2, 3 /))
   val(20) = product((/ 1, 2, 3 /), 1)
   val(21) = product((/ 1, 2, 3 /), dim=1)
@@ -44,7 +44,7 @@ program reduction_mask
   val(25) = product((/ 1, 2, 3 /), 1, mask=equal)
   val(26) = product((/ 1, 2, 3 /), dim=1, mask=equal)
   val(27) = product((/ 1, 2, 3 /), mask=equal, dim=1)
-       
+
   val(28) = sum((/ 1, 2, 3 /))
   val(29) = sum((/ 1, 2, 3 /), 1)
   val(30) = sum((/ 1, 2, 3 /), dim=1)
@@ -54,7 +54,7 @@ program reduction_mask
   val(34) = sum((/ 1, 2, 3 /), 1, mask=equal)
   val(35) = sum((/ 1, 2, 3 /), dim=1, mask=equal)
   val(36) = sum((/ 1, 2, 3 /), mask=equal, dim=1)
-  
+
   if (any (val /= res)) call abort
 
   ! Tests for complex arguments. These were broken by the original fix.
@@ -70,7 +70,7 @@ program reduction_mask
   cval(7) = product(cin, 1, mask=equal)
   cval(8) = product(cin, dim=1, mask=equal)
   cval(9) = product(cin, mask=equal, dim=1)
-       
+
   cval(10) = sum(cin)
   cval(11) = sum(cin, 1)
   cval(12) = sum(cin, dim=1)

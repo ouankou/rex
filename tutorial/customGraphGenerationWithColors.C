@@ -194,17 +194,10 @@ class ConstantFoldingColoringTraversal
 // list<SgNode*> ConstantFoldingColoringTraversal::listOfTraversedTypes;
 
 // Functions required by the tree traversal mechanism
-ConstantFoldingColoringInheritedAttribute
-ConstantFoldingColoringTraversal::evaluateInheritedAttribute (
-     SgNode* astNode,
-     ConstantFoldingColoringInheritedAttribute inheritedAttribute )
-   {
-#if 0
-     printf ("!!!!! In evaluateInheritedAttribute() \n");
-     printf ("     (traversalNodeCounter=%d) astNode->sage_class_name() = %s \n",
-          traversalNodeCounter,astNode->sage_class_name());
-     printf ("     astNode->unparseToString() = %s \n",astNode->unparseToString().c_str());
-#endif
+   ConstantFoldingColoringInheritedAttribute
+   ConstantFoldingColoringTraversal::evaluateInheritedAttribute(
+       SgNode *astNode,
+       ConstantFoldingColoringInheritedAttribute inheritedAttribute) {
 
      if (inheritedAttribute.isConstantFoldedValue == true)
         {
@@ -252,14 +245,6 @@ ConstantFoldingColoringTraversal::evaluateSynthesizedAttribute (
                labelWithSourceCode = string("\\n  ") + currentStatement->unparseToString() + "  ";
           NodeType graphNode(currentStatement,labelWithSourceCode,additionalNodeOptions);
           listOfNodes.push_back(graphNode);
-#if 0
-       // And an edge back to the scope
-          if (isSgGlobal(currentStatement) == NULL)
-             {
-               EdgeType edge(currentStatement,currentStatement->get_scope(),additionalEdgeOptions);
-               listOfEdges.push_back(edge);
-             }
-#endif
         }
 
      SgExpression* currentExpression = isSgExpression(astNode);
@@ -268,26 +253,7 @@ ConstantFoldingColoringTraversal::evaluateSynthesizedAttribute (
           string additionalNodeOptions;
        // Make this expression different in the generated dot graph
           string labelWithSourceCode;
-#if 0
-          SgValueExp* valueExpression = isSgValueExp(currentExpression);
-       // Check for constant folded value
-          if (valueExpression != NULL && valueExpression->get_valueExpressionTree() != NULL)
-             {
-            // This is a constant folded value (the extression tree from the original expression is obtained by get_valueExpressionTree()
-               additionalNodeOptions = "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at \\N\",sides=3,peripheries=1,color=\"Blue\",fillcolor=yellow1,fontname=\"7x13bold\",fontcolor=black,style=filled";
-               SgUnparse_Info* inputUnparseInfoPointer = new SgUnparse_Info();
-               inputUnparseInfoPointer->set_SkipConstantFoldedExpressions(); // generate folded values instead of the original expression trees
-               labelWithSourceCode = string("\\n  ") + valueExpression->unparseToString(inputUnparseInfoPointer) + "  ";
-               delete inputUnparseInfoPointer;
-               inputUnparseInfoPointer = NULL;
-             }
-            else
-             {
-               labelWithSourceCode = string("\\n  ") + currentExpression->unparseToString() + "  ";
-               additionalNodeOptions = "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at \\N\",sides=6,peripheries=1,color=\"Blue\",fillcolor=red,fontname=\"7x13bold\",fontcolor=black,style=filled";
-             }
-#else
-       // See if this is part of constant folding within the AST
+          // See if this is part of constant folding within the AST
           if ( (inheritedAttribute.isConstantFoldedValue == true) || (inheritedAttribute.isPartOfFoldedExpression == true) )
              {
             // Check what part of constant folding this is (folded value)
@@ -315,7 +281,6 @@ ConstantFoldingColoringTraversal::evaluateSynthesizedAttribute (
                labelWithSourceCode = string("\\n  ") + currentExpression->unparseToString() + "  ";
                additionalNodeOptions = "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at \\N\",sides=6,peripheries=1,color=\"Blue\",fillcolor=red,fontname=\"7x13bold\",fontcolor=black,style=filled";
              }
-#endif
           NodeType graphNode(currentExpression,labelWithSourceCode,additionalNodeOptions);
           listOfNodes.push_back(graphNode);
         }
@@ -349,38 +314,23 @@ main ( int argc, char* argv[] )
   // printf ("Generate the pdf output of the SAGE III AST \n");
   // generatePDF ( project );
 
-#if 1
      ConstantFoldingColoringTraversal treeTraversal;
      ConstantFoldingColoringInheritedAttribute inheritedAttribute;
 
   // Ignore the return value since we don't need it
-     treeTraversal.traverseInputFiles(project,inheritedAttribute);
-#endif
+     treeTraversal.traverseInputFiles(project, inheritedAttribute);
 
-#if 0
-     printf ("Generate the DOT output of the SAGE III AST \n");
-     generateDOT ( *project );
-#endif
-
-#if 1
-  // myAstDOTGeneration graphics;
+     // myAstDOTGeneration graphics;
      myAstDOTGeneration graphics(treeTraversal.listOfNodes,treeTraversal.listOfEdges);
 
      graphics.generate("customGraphGenerationWithColors",project);
-  // graphics.generate("overloadedTest",project,treeTraversal.listOfNodes,treeTraversal.listOfEdges);
-  // graphics.generateInputFiles(project);
-  // graphics.generateInputFiles(project);
-  // graphics.addEdges(treeTraversal.listOfEdges);
-#endif
+     // graphics.generate("overloadedTest",project,treeTraversal.listOfNodes,treeTraversal.listOfEdges);
+     // graphics.generateInputFiles(project);
+     // graphics.generateInputFiles(project);
+     // graphics.addEdges(treeTraversal.listOfEdges);
 
-#if 0
-     AstDOTGeneration astdotgen;
-  // SgProject & nonconstProject = (SgProject &) project;
-     astdotgen.generateInputFiles(project);
-#endif
-
-  // return backend(project);
-  // return backend(frontend(argc,argv));
+     // return backend(project);
+     // return backend(frontend(argc,argv));
      return 0;
    }
 

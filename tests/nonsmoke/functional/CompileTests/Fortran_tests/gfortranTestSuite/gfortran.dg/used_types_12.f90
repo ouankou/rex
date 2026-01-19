@@ -7,7 +7,7 @@
 ! that resulted in the compiler going into an infinite loop.
 !
 ! Contributed by Harald Anlauf  <anlauf@gmx.de>
-! and originally by Francois-Xavier Coudert  <fxcoudert@gcc.gnu.org> 
+! and originally by Francois-Xavier Coudert  <fxcoudert@gcc.gnu.org>
 !
 MODULE M
   TYPE T0

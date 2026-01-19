@@ -17,11 +17,11 @@ p = p+1
 if (p.ne.2) call abort()
 if (p.ne.s) call abort()
 
-!!$! verify that we also dereference correctly the result of a function 
+!!$! verify that we also dereference correctly the result of a function
 !!$! which returns its result by reference
 !!$c = "Hallo"
 !!$d => e
-!!$d = g() !  dg-warning "POINTER valued function" "" 
+!!$d = g() !  dg-warning "POINTER valued function" ""
 !!$if (d.ne."Hallo") call abort()
 
 contains

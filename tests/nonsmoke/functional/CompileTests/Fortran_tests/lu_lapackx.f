@@ -8,7 +8,7 @@
 
       LDA=2048
       N=2048
-        
+
       DO I = 1,N
         Do J = 1,N
           L(I,J)=0.0
@@ -46,7 +46,7 @@
       character ( len = 10 ) time
       integer I
 
-      
+
       DO I = 1,4
       write (*,*) 'Hello world'
       END DO

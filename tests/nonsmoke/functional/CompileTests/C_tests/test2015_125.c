@@ -16,15 +16,6 @@ struct keyhandler {
 
 static void dump_irqs(unsigned char key);
 
-#if 0
-// Example using "dot" syntax
-static struct keyhandler dump_irqs_keyhandler = {
-    .diagnostic = 1,
-    .u.fn = dump_irqs,
-    .desc = "dump interrupt bindings"
-};
-#endif
-
 // Example using alternative " = { }" syntax
 static struct keyhandler temp_dump_irqs_keyhandler = {
     .diagnostic = 1,

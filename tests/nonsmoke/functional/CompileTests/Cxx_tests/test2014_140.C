@@ -8,13 +8,8 @@ namespace XXX
           const unsigned ArraySize = 3;
         }
 
-     void foobar(const int def[Y::ArraySize])
-#if 1
-        {
-       // Y::AAA abc;
-       // abc.isPeriodic = false;
+        void foobar(const int def[Y::ArraySize]) {
+          // Y::AAA abc;
+          // abc.isPeriodic = false;
         }
-#else
-        ;
-#endif
    } // namespace XXX

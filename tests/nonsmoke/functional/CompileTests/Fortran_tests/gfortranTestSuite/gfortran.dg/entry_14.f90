@@ -1,5 +1,5 @@
 ! { dg-do run }
-! 
+!
 ! PR fortran/34137
 !
 ! Entry was previously not possible in a module.

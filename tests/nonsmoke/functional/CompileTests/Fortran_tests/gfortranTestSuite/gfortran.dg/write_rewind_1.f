@@ -13,12 +13,12 @@
  1000 continue
       rewind 11
       write(11)idata
-      close(11,status='keep')        
+      close(11,status='keep')
       open(unit=11,form='unformatted')
       rewind 11
       read(11)idata
       read(11, end=250)idata
       call abort()
  250  continue
-      close(11,status='delete')  
+      close(11,status='delete')
       end

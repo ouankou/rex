@@ -9,8 +9,6 @@ int iGetMax (int a, int b) {
   return result;
 }
 
-
-#if 1
 template<typename T> // better choice
 //template <class T>
 T GetMax (T a, T b) {
@@ -30,4 +28,3 @@ int main () {
   cout << n << endl;
   return 0;
 }
-#endif

@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! PR15966, PR18781 & PR16531
 implicit none
-complex(kind=8) x(2) 
+complex(kind=8) x(2)
 complex a(2,2)
 character(4) z
 character z1(4)
@@ -21,7 +21,7 @@ data z2/4h(i7),'xxxx','xxxx','xxxx'/
 z2 (1,2) = 4h(i8)
 i = 4hHell
 j = 4Ho wo
-r = 4Hrld! 
+r = 4Hrld!
 write (line, '(3A4)') i, j, r
 if (line .ne. 'Hello world!') call abort
 i = 2Hab

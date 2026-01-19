@@ -17,7 +17,6 @@
 
 #include <complex.h>
 int main(void) {
-#if 1
   // Older GNU systax for declaration of complex variables (specification of
   // complex types)
   __complex__ long double z_old_syntax = 3.0;
@@ -40,7 +39,6 @@ int main(void) {
   // note that the parenthesis are required.
   _Complex float x_with_real_and_imaginary_parts = (1.0, -1.0);
 
-#if 1
   _Complex float an_i_new_syntax2 = __I__;
 
   __I__;
@@ -59,9 +57,6 @@ int main(void) {
   // fine?????
   if (x1 != y1) // complex inequality operator
     x1 = x1;
-#endif
 
   return 0;
 }
-
-#endif

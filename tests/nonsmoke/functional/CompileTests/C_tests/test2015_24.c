@@ -11337,32 +11337,6 @@ zfargstring(char *cmd, char **args)
     return line;
 }
 
-
-
-
-
-#if 0
-
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 static int zfread_eof;
 
 // # 1462 "zftp.c"

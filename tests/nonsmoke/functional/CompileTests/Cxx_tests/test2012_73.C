@@ -21,22 +21,8 @@ template < typename T > class ISpace
 #endif
 	};
 
-#if 1
-theiterator begin() const
-	{
-		return theiterator( );
-	}
-#endif
+        theiterator begin() const { return theiterator(); }
 };
-
-#if 0
-#ifndef INDEFINITION
-template < typename T > ISpace<T>::theiterator::theiterator( )
-{
-	_max = 10;
-}
-#endif
-#endif
 
 void foo_main()
 {

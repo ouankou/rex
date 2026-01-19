@@ -20,11 +20,9 @@ void foo()
   // if ( (typename std::set<test<V> >::iterator i3=s.begin() ) != s.end()) {}
    }
 
-#if 1
 template<template<class> class T, class V>
 void foobar()
    {
      std::set<T<V> > XXX;
      typename std::set<T<V> >::iterator i = XXX.begin();
-   }
-#endif
+}

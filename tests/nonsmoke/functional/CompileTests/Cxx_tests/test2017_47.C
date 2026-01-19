@@ -11,30 +11,3 @@ class _Mem_fn;
 // member function declarations.
 template<typename _Res, typename _Class, typename... _ArgTypes>
 class _Mem_fn<_Res (_Class::*)(_ArgTypes...)>;
-
-
-#if 0
-// Typical function prototype:
-void foobar (int n);
-
-// C99 example of similar issue:
-void foobar (int n, int array[n]);
-
-! Fortran example of similar issue:
-module example
-
-interface named_interface
-
-subroutine foobar(n,A,B)
-  integer :: n
-  real(8) :: A(:), B(n,*)
-end subroutine
-
-end interface
-
-end module
-
-
-
-#endif
-

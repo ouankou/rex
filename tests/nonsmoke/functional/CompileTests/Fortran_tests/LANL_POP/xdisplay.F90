@@ -6,20 +6,20 @@
 ! !MODULE: xdisplay
 !
 ! !DESCRIPTION:
-!  This is a dummy version of an unsupported module containing 
-!  routines for opening an xdisplay and viewing a field while 
+!  This is a dummy version of an unsupported module containing
+!  routines for opening an xdisplay and viewing a field while
 !  the simulation is running.  The actual sort-of-working version
-!  relies on an unsupported library called fix (fortran interface 
+!  relies on an unsupported library called fix (fortran interface
 !  to X).
 !
-!  The purpose of this dummy version is to allow the makefiles 
-!  to be portable to systems which may not have X11.  If 
-!  you have X11 on your system and you want to try this, 
-!  then overwrite this file, xdisplay.F, with 
+!  The purpose of this dummy version is to allow the makefiles
+!  to be portable to systems which may not have X11.  If
+!  you have X11 on your system and you want to try this,
+!  then overwrite this file, xdisplay.F, with
 !
 !    cp ../input_templates/xdisplay.F90.unsupported ./xdisplay.F90
 !
-!  and do 
+!  and do
 !
 !    cp ../input_templates/fix_64.C.unsupported ./fix_64.C
 !
@@ -38,7 +38,7 @@
    use io_types, only: nml_in, nml_filename, stdin, stdout
    use broadcast, only: broadcast_scalar
    use prognostic, only: max_blocks_clinic
-   use grid, only: 
+   use grid, only:
    use exit_mod, only: sigAbort, exit_pop
 
    implicit none
@@ -89,7 +89,7 @@
 
    namelist /xdisplay_nml/lxdisplay, nstep_xdisplay
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       nml_error            ! namelist i/o error flag
 
 !-----------------------------------------------------------------------
@@ -185,7 +185,7 @@
 
 ! !DESCRIPTION:
 !  Computes image from two input fields and sends it to the
-!  FIX routine for display. 
+!  FIX routine for display.
 !
 ! !REVISION HISTORY:
 !  same as module

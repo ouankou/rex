@@ -60,7 +60,7 @@ contains
     end interface
     if (p () .ne. "chr_proc") call abort
   end subroutine
-end program 
+end program
 
 function proc_ext (arg, chr)
   integer, dimension(10) :: proc_ext

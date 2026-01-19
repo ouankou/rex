@@ -43,7 +43,7 @@
       call link ('foo', 'bar')
 
       call perror (c)
-      
+
       call rename ('foo', 'bar', status = i8)
       call rename ('foo', 'bar', status = i4)
       call rename ('foo', 'bar', status = i)

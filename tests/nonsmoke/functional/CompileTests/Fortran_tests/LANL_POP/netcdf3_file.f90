@@ -20,9 +20,9 @@
     integer, optional,   intent(in   ) :: initialsize
     integer, optional,   intent(inout) :: chunksize
     integer                            :: nf90_create
-    
+
     integer :: fileSize, chunk
-    
+
     if(.not. (present(initialsize) .or. present(chunksize)) ) then
       nf90_create = nf_create(path, cmode, ncid)
     else

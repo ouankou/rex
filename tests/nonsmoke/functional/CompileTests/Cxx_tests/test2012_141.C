@@ -6,7 +6,6 @@ typedef struct
      void S();
 } S,T;
 
-#if 1
 // In this case we have to output a generated name so that the "var_T"
 // can be declared in a seperate declaration.  Later we will fix this
 // to use a single declaration for all of the variables in such declaration
@@ -14,6 +13,4 @@ typedef struct
 struct 
    {
      void S();
-   } var_S, var_T;
-#endif
-
+} var_S, var_T;

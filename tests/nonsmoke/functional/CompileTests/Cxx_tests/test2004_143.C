@@ -160,21 +160,4 @@ class X
 template <typename T>
 class Y {};
 
-void foo()
-   {
-     int i = 0;
-#if 0
-// DQ (8/27/2005): temporarily commented out 
-// JJW 5-22-2008 Commented this out again because it fails on some platforms
-
-     std::vector< SwigValueWrapper<X> > result;
-
-  // Attempt ot demonstrate error that appears in Swig generated KULL file (but everything works).
-  // SP<X> spObj ( *(new X (((std::vector<X> &)result)[i])) );
-     SP<X> spObjx ( new X (((std::vector<X> &)result)[i]) );
-
-     SP< Y<X> > spObjy ( new Y<X> (((std::vector< Y<X> > &)result)[i]) );
-
-     SP< Y< Y<X> > > spObjyy ( new Y< Y<X> > (((std::vector< Y< Y<X> > > &)result)[i]) );
-#endif
-   }
+void foo() { int i = 0; }

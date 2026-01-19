@@ -4,5 +4,5 @@
 
 program p
   real :: a(0) = (/ /)  ! "no viable alternative"
-! real :: b(0) = [ ]    ! ditto, although square brackets are F08 
+! real :: b(0) = [ ]    ! ditto, although square brackets are F08
 end program

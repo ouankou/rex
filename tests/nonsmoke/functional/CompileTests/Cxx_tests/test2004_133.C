@@ -89,25 +89,13 @@ class D
 
         // DQ (11/18/2004): Note that g++ allows this but legacy frontend does
         // not!  I think that legacy frontend is correct here!
-#if 0
-  // Definition of F with parent which is a class declaration (designed this test to trip up unparser 
-  // which will in this specific case detect that the parent is a class definition and only use the 
-  // unqualified name; "F" instead of "E::F").
-
-  // This is illegal C++ (but accepted by g++)
-     class E::F {};
-   };
-#else
    };
 // This is what I think is the correct C++ construction
-class D::E::F {};
-#endif
+   class D::E::F {};
 
-namespace G
-   {
-     namespace H
-        {
-           class I;
+   namespace G {
+   namespace H {
+   class I;
         }
    }
 
@@ -122,17 +110,6 @@ namespace GG = G;
 // this is fortunately not allowed (defining an alias in another scope is not allowed)
 // namespace G::HH = G::H;
 
-#if 0
-// It does not appear that namespaces can be referenced from other scopes using qualified names (at least not in g++ 3.3.2)
-// this make life simpler, so I'm all for it, but I'm not clear what the standard says about this detail.  But it means
-// that namespaces don't have to have an explicit scope representation (since it would be redundant with the parent pointer).
-namespace G::H
-   {
-     class J;
-   }
-
-// class H::J {};
-#else
 namespace G
    {
      namespace H
@@ -141,13 +118,11 @@ namespace G
         }
    }
 
-class G::H::J {};
-#endif
+   class G::H::J {};
 
-namespace K
-   {
-     class L;
-     typedef L M;
+   namespace K {
+   class L;
+   typedef L M;
    }
 
 // A reasonable typedef of a type in namespace K to build an alias in global scope

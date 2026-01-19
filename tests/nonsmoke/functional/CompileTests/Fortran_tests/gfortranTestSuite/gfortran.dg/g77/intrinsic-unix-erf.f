@@ -1,7 +1,7 @@
 c { dg-do run }
 c  intrinsic-unix-erf.f
 c
-c Test Bessel function intrinsics.  
+c Test Bessel function intrinsics.
 c These functions are only available if provided by system
 c
 c     David Billinghurst <David.Billinghurst@riotinto.com>
@@ -13,7 +13,7 @@ c
       fail = .false.
 
       x = 0.6
-      dx = x 
+      dx = x
 c     ERF  - error function
       a = 0.6038561
       da = a

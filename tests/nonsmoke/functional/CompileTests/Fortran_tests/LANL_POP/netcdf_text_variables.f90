@@ -5,12 +5,12 @@
      integer                                      :: nf90_put_var_text
 
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride
- 
+
      ! Set local arguments to default values
      localStart (:)  = 1
      localCount (1)  = len(values); localCount (2:) = 1
      localStride(:)  = 1
-          
+
      if(present(start))  localStart (:size(start) ) = start(:)
      if(present(count))  localCount (:size(count) ) = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -23,16 +23,16 @@
      character (len = *),             intent(out) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_get_var_text
- 
+
      integer, dimension(nf90_max_var_dims) :: localIndex, textDimIDs
-     integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride 
+     integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride
      integer                               :: counter, stringLength
- 
+
      ! Set local arguments to default values
      localStart (:)  = 1
      localCount (1)  = len(values); localCount (2:) = 1
      localStride(:)  = 1
-     
+
      if(present(start))  localStart (:size(start) ) = start(:)
      if(present(count))  localCount (:size(count) ) = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -47,11 +47,11 @@
                                       intent( in) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_put_var_1D_text
- 
+
      integer, parameter                    :: numDims = 1
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                               :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount ( :numDims+1) = (/ len(values(1)), shape(values) /)
@@ -60,7 +60,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -81,11 +81,11 @@
                                       intent( in) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_put_var_2D_text
- 
+
      integer, parameter                    :: numDims = 2
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                               :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount ( :numDims+1) = (/ len(values(1, 1)), shape(values) /)
@@ -94,7 +94,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -115,11 +115,11 @@
                                       intent( in) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_put_var_3D_text
- 
+
      integer, parameter                    :: numDims = 3
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                               :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount ( :numDims+1) = (/ len(values(1, 1, 1)), shape(values) /)
@@ -128,7 +128,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -149,11 +149,11 @@
                                       intent( in) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_put_var_4D_text
- 
+
      integer, parameter                    :: numDims = 4
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                               :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount ( :numDims+1) = (/ len(values(1, 1, 1, 1)), shape(values) /)
@@ -162,7 +162,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -183,11 +183,11 @@
                                       intent( in) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_put_var_5D_text
- 
+
      integer, parameter                    :: numDims = 5
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                               :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount ( :numDims+1) = (/ len(values(1, 1, 1, 1, 1)), shape(values) /)
@@ -196,7 +196,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -217,7 +217,7 @@
                                       intent( in) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_put_var_6D_text
- 
+
      integer, parameter                    :: numDims = 6
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                               :: counter
@@ -230,7 +230,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -251,11 +251,11 @@
                                       intent( in) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_put_var_7D_text
- 
+
      integer, parameter                  :: numDims = 7
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                             :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount ( :numDims+1) = (/ len(values(1, 1, 1, 1, 1, 1, 1)), shape(values) /)
@@ -264,7 +264,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -285,18 +285,18 @@
                                       intent(out) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_get_var_1D_text
- 
+
      integer, parameter                  :: numDims = 1
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                             :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount (:numDims+1) = (/ len(values(1)), shape(values) /)
      localCount (numDims+2:) = 0
      localStride(:         ) = 1
      localMap   (:numDims  ) = (/ 1/)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -317,11 +317,11 @@
                                       intent(out) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_get_var_2D_text
- 
+
      integer, parameter                  :: numDims = 2
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                             :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount (:numDims+1) = (/ len(values(1, 1)), shape(values) /)
@@ -330,7 +330,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -351,11 +351,11 @@
                                       intent(out) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_get_var_3D_text
- 
+
      integer, parameter                  :: numDims = 3
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                             :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount (:numDims+1) = (/ len(values(1, 1, 1)), shape(values) /)
@@ -364,7 +364,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -385,11 +385,11 @@
                                       intent(out) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_get_var_4D_text
- 
+
      integer, parameter                  :: numDims = 4
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                             :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount (:numDims+1) = (/ len(values(1, 1, 1, 1)), shape(values) /)
@@ -398,7 +398,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -419,11 +419,11 @@
                                       intent(out) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_get_var_5D_text
- 
+
      integer, parameter                  :: numDims = 5
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                             :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount (:numDims+1) = (/ len(values(1, 1, 1, 1, 1)), shape(values) /)
@@ -432,7 +432,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -453,11 +453,11 @@
                                       intent(out) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_get_var_6D_text
- 
+
      integer, parameter                  :: numDims = 6
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                             :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount (:numDims+1) = (/ len(values(1, 1, 1, 1, 1, 1)), shape(values) /)
@@ -466,7 +466,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)
@@ -487,11 +487,11 @@
                                       intent(out) :: values
      integer, dimension(:), optional, intent( in) :: start, count, stride, map
      integer                                      :: nf90_get_var_7D_text
- 
+
      integer, parameter                  :: numDims = 7
      integer, dimension(nf90_max_var_dims) :: localStart, localCount, localStride, localMap
      integer                             :: counter
- 
+
      ! Set local arguments to default values
      localStart (:         ) = 1
      localCount (:numDims+1) = (/ len(values(1, 1, 1, 1, 1, 1, 1)), shape(values) /)
@@ -500,7 +500,7 @@
 
 ! DQ (9/11/2010): I don't understand this code well enough, so comment out for now!
 !    localMap   (:numDims  ) = (/ 1, (product(localCount(:counter)), counter = 1, numDims - 1) /)
- 
+
      if(present(start))  localStart (:size(start))  = start(:)
      if(present(count))  localCount (:size(count))  = count(:)
      if(present(stride)) localStride(:size(stride)) = stride(:)

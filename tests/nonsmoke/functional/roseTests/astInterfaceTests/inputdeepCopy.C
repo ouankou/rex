@@ -79,20 +79,6 @@ p=foo(k);
 int r = (p+2) *globalVar;
 }
 
-
-#if 0
-//test template
-template <class T>
-class Template_class{
-       T a;
-       T get(){return a;}
-};
-
-Template_class<int> clss;
-#endif
-
-
-
 //main function
 int main()
 {

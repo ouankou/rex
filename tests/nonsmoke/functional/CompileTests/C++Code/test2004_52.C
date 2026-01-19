@@ -9,22 +9,7 @@ int globalTest() {}
 class X
    {
      public:
-
-          int test()
-             { 
-#if 1
-               return globalTest(); 
-#else
-               return 0;
-#endif
-             }
-
-#if 0
-       // Note that the order of the function declarations does not make any difference!
-          void foo();
-
-          void foobar() { foo(); }
-#endif
+       int test() { return globalTest(); }
    };
 
 

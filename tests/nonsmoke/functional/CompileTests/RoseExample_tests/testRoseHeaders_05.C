@@ -101,23 +101,10 @@
 // processing of the Sage III AST. It is now called within the AstFixup.C.
 #define USE_RESET_TEMPLATE_NAME false
 
-#if 0
-// DQ (5/22/2005):
-// This is often turned of during development because it is annoying (until we can actually 
-// remove numerous functions where they are declared).  Also not clear what versions of GNU 
-// support it.
-
-// Use the new GNU attribute mechanism to add more information to the source code
-// By specifying funcations and variables as depreicated we can start the remove
-// some functions and data members from Sage III.
-#define ROSE_DEPRECATED_FUNCTION __attribute__((deprecated))
-#define ROSE_DEPRECATED_VARIABLE __attribute__((deprecated))
-#else
 // DQ (9/8/2004): Allow these to get turned of to simplify debugging while we
 // have not yet removed their use.
 #define ROSE_DEPRECATED_FUNCTION
 #define ROSE_DEPRECATED_VARIABLE
-#endif
 
 // DQ (12/22/2007): Name of implicit Fortran "main" when building the program
 // function.
@@ -267,67 +254,6 @@ class ElfFileHeader;
 #ifdef ROSE_USE_SMALLER_GENERATED_FILES
 // #warning "ROSE_USE_SMALLER_GENERATED_FILES is defined"
 #define ROSE_USING_SMALL_GENERATED_HEADER_FILES 1
-#endif
-
-#if 0
-// DQ (1/30/2013): Make this a smaller file
-
-// DQ (9/21/2005): This is the simplest way to include this here
-// This is the definition of the Sage III IR classes (generated header).
-#include "Cxx_Grammar.h"
-
-// Disable CC++ extensions (we want to support only the C++ Standard)
-#undef CCPP_EXTENSIONS_ALLOWED
-
-// This should be a simple include (without dependence upon ROSE_META_PROGRAM
-#include "utility_functions.h"
-
-// Markus Schordan: temporary fixes for Ast flaws (modified by DQ)
-#include <typeinfo>
-
-// DQ (12/9/2004): The name of this file has been changed to be the new location
-// of many future Sage III AST manipulation functions in the future.  A namespace
-// (SageInterface) is defined in sageInterface.h.
-#include "sageInterface.h"
-
-
-// DQ (3/29/2006): Moved Rich's support for better name mangling to a 
-// separate file (out of the code generation via ROSETTA).
-#include "manglingSupport.h"
-
-// Markus Kowarschik: we use the new mechanism of handling preprocessing info;
-// i.e., we output the preprocessing info attached to the AST nodes.
-// See the detailed explanation of the mechanisms in the beginning of file
-// attachPreprocessingInfo.C
-#define USE_OLD_MECHANISM_OF_HANDLING_PREPROCESSING_INFO 0
-
-// DQ (9/1/2006): It is currently an error to normalize the source file names stored 
-// in the SgProject IR node to be absolute paths if they didn't originally appear 
-// that way on the commandline.  We have partial support for this but it is a bug
-// at the moment to use this.  However, we do now (work by Andreas) normalize the
-// source file name when input to legacy frontend so that all Sg_File_Info objects store an
-// absolute path (unless modified using a #line directive, see test2004_60.C as an 
-// example).  The current work is an incremental solution.
-#define USE_ABSOLUTE_PATHS_IN_SOURCE_FILE_LIST 0
-
-// DQ (7/6/2005): Added to support performance analysis of ROSE.
-// This is located in ROSE/src/midend/astDiagnostics
-#include "AstPerformance.h"
-
-
-// DQ (4/10/2010): Moved Dwarf and Intel Pin headers to here from rose.h.
-// DQ (11/7/2008): Added Dwarf support to ROSE AST (applies only to binary executables generated with dwarf debugging information).
-#ifdef ROSE_HAVE_LIBDWARF
-#include <dwarfSupport.h>
-#endif
-
-// DQ (3/8/2009): Added support for Intel Pin (Dynamic binary Instrumentation)
-#ifdef USE_ROSE_INTEL_PIN_SUPPORT
-// Note that pin.H (in it's header files) will define "TRUE" and "FALSE" as macros.
-#include <IntelPinSupport.h>
-#endif
-
-// DQ (1/30/2013): Make this a smaller file.
 #endif
 
 #endif

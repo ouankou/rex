@@ -10,13 +10,13 @@ module poisson_functions_m
   implicit none
 
 contains
- 
+
   function func ( nr, x )
     integer, intent(in) :: nr
     real, intent(in), dimension(:) :: x
     real :: func
 
-    real :: pi 
+    real :: pi
 
     pi = 4 * atan(1.)
 
@@ -32,21 +32,21 @@ contains
         stop
     end select
 
-  end function func 
+  end function func
 
 end module poisson_functions_m
- 
+
 module element_defs_m
 
   implicit none
 
-  abstract interface 
+  abstract interface
     function dummyfunc ( nr, x )
       integer, intent(in) :: nr
       real, intent(in), dimension(:) :: x
       real :: dummyfunc
     end function dummyfunc
-  end interface 
+  end interface
 
   type function_p
     procedure(dummyfunc), nopass, pointer :: p => null()

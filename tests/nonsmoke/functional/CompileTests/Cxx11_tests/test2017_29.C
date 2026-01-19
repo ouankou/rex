@@ -1,12 +1,5 @@
 // ----------input ---------------------
 
-#if 0
-class baseWork{
-  protected:
-    double * m_nvol;
-};
-#endif
-
 // with inheritance: unparser will generate: ()->m_nvol[0] ...
 // without inheritance: unparser will generate: ->m_nvol[0] ...
 class PdVWorkRaja // : public baseWork 

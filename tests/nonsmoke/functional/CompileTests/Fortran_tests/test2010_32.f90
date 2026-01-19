@@ -1,4 +1,4 @@
-! We can't have a global variable in Fortran (structurally) so a 
+! We can't have a global variable in Fortran (structurally) so a
 ! call to a function can't be amgibuous with a variable reference.
 
 !    integer :: foobar = 0
@@ -18,7 +18,7 @@ module communicate
    contains
 
      subroutine foo
-        ! Call to function not yet declared (function declaration defined in initially in 
+        ! Call to function not yet declared (function declaration defined in initially in
         ! global scope and converted to module function if it is found to be declared there).
           call foobar
      end subroutine foo

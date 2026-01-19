@@ -8,6 +8,6 @@ C***************************************************
       print *, 'Running on ', omp_get_num_threads(), 'threads'
 !$omp END SINGLE
       PRINT *, 'Hello World!'
-c$omp end parallel 
+c$omp end parallel
       PRINT *, 'the end'
       END

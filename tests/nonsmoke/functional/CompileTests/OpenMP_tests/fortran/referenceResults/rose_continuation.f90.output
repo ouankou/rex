@@ -1,6 +1,6 @@
-!         & \n !$omp .... 
+!         & \n !$omp ....
 !         & \n !$omp & ....
 !$omp parallel  shared(aa,b,n) private(i)
-!$omp do 
+!$omp do
 !$omp end do  nowait
-!$omp end parallel 
+!$omp end parallel

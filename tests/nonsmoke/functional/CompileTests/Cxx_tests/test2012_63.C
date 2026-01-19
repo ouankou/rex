@@ -4,9 +4,4 @@ class A
           A();
    };
 
-#if 1
-A::A()
-   {
-   }
-#endif
-
+   A::A() {}

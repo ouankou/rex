@@ -8,7 +8,7 @@
 !
 module foo_mod
   type foo
-    integer :: i 
+    integer :: i
   contains
     procedure, pass(a) :: doit
     procedure, pass(a) :: getit
@@ -16,9 +16,9 @@ module foo_mod
 
   private doit,getit
 contains
-  subroutine  doit(a) 
+  subroutine  doit(a)
     class(foo) :: a
-    
+
     a%i = 1
 !    write(*,*) 'FOO%DOIT base version'
   end subroutine doit
@@ -39,14 +39,14 @@ module foo2_mod
     procedure, pass(a) :: doit  => doit2
     procedure, pass(a) :: getit => getit2
   end type foo2
-  
+
   private doit2, getit2
 
 contains
 
-  subroutine  doit2(a) 
+  subroutine  doit2(a)
     class(foo2) :: a
-    
+
     a%i = 2
     a%j = 3
 !    write(*,*) 'FOO2%DOIT derived version'
@@ -57,23 +57,23 @@ contains
 
     res = a%j
   end function getit2
-    
+
 end module foo2_mod
 
-module bar_mod 
+module bar_mod
   use foo_mod
-  type bar 
+  type bar
     class(foo), allocatable :: a
-  contains 
+  contains
     procedure, pass(a) :: doit
     procedure, pass(a) :: getit
   end type bar
   private doit,getit
-  
+
 contains
   subroutine doit(a)
     class(bar) :: a
-    
+
     call a%a%doit()
   end subroutine doit
   function getit(a) result(res)
@@ -89,7 +89,7 @@ program testd10
   use foo_mod
   use foo2_mod
   use bar_mod
-  
+
   type(bar) :: a
 
   allocate(foo :: a%a)

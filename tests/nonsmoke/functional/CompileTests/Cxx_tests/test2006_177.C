@@ -1,11 +1,3 @@
-#if 0
-// comment for main
-int
-main()
-   {
-     return 0;
-   }
-#endif
 
 class A
    {
@@ -31,11 +23,8 @@ myBaseClass;
 }
 */
 
-int 
-main()
-   {
-#if 1
-  // Build object so that we can call the constructor
+   int main() {
+     // Build object so that we can call the constructor
      B objectB;
      const B & objectBref = objectB;
 
@@ -43,10 +32,8 @@ main()
 
   // will be unparsed as:  
   // x = ((((class B &)(objectBref)).myBaseClass).intValue);
-     x = ((B&)objectBref).myBaseClass.intValue;
-#endif
+     x = ((B &)objectBref).myBaseClass.intValue;
 
-  // printf ("Program Terminated Normally! \n");
+     // printf ("Program Terminated Normally! \n");
      return 0;
    }
-

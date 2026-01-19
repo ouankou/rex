@@ -12,8 +12,6 @@ namespace std
      typedef basic_string<char> string;
    }
 
-#if 1
-
 namespace std __attribute__ ((__visibility__ ("default"))) {
 // # 110 "/nfs/apps/gcc/4.2.4/lib/gcc/x86_64-unknown-linux-gnu/4.2.4/../../../../include/c++/4.2.4/bits/basic_string.h" 3
 // template<typename _CharT, typename _Traits, typename _Alloc>
@@ -21,25 +19,8 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
     class basic_string
     {
 //    typedef typename _Alloc::template rebind<_CharT>::other _CharT_alloc_type;
-
-#if 0
-    public:
-      typedef _Traits traits_type;
-      typedef typename _Traits::char_type value_type;
-      typedef _Alloc allocator_type;
-      typedef typename _CharT_alloc_type::size_type size_type;
-      typedef typename _CharT_alloc_type::difference_type difference_type;
-      typedef typename _CharT_alloc_type::reference reference;
-      typedef typename _CharT_alloc_type::const_reference const_reference;
-      typedef typename _CharT_alloc_type::pointer pointer;
-      typedef typename _CharT_alloc_type::const_pointer const_pointer;
-#endif
-    
     };
 }
-
-#endif
-
 
 namespace std 
    {

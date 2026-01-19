@@ -1,21 +1,9 @@
 template <typename T>
 class X
    {
-     public:
-#if 0
-         static void free(X* ptr);
-#else
-         static void free(X * ptr) 
-             {
-               delete ptr;
-             }
-#endif
+public:
+  static void free(X *ptr) { delete ptr; }
    };
-
-#if 0
-template < typename T >
-void X<T>::free ( X * ptr ) { delete ptr; }
-#endif
 
 void foo()
    {

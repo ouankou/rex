@@ -33,18 +33,14 @@ main (int argc, char *argv[])
           SgFunctionDeclaration* functionDelcaration = isSgFunctionDeclaration(*i);
           SgName functionName = functionDelcaration->get_name();
 
-#if 1
           if (functionName == "removeThisFunctionToTestAttachedInfoBeforeStatement")
              {
                SageInterface::removeStatement(functionDelcaration);
-             }
-#endif
-#if 1
+          }
              if (functionName ==
                  "removeThisFunctionToTestAttachedInfoAfterStatement") {
                SageInterface::removeStatement(functionDelcaration);
              }
-#endif
 
           i++;
         }

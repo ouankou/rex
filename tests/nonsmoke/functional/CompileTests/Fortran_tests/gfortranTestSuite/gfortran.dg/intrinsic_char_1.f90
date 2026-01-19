@@ -14,4 +14,4 @@ program FA0005
   if (transfer (CDA1, CDA10) /= "abcdefghij") call abort ()
   CDA1 = CHAR (  IDA  )               !worked
   if (transfer (CDA1, CDA10) /= "abcdefghij") call abort ()
-END 
+END

@@ -491,15 +491,7 @@ visitorTraversal::visit(SgNode* n)
             // printf ("Found attached comments (to IR node at %p of type: %s): \n",statement,statement->class_name().c_str());
             // int counter = 0;
                AttachedPreprocessingInfoType::iterator i;
-               for (i = comments->begin(); i != comments->end(); i++)
-                  {
-#if 0
-                    printf ("          Attached Comment #%d in file %s (relativePosition=%s): classification %s :\n%s\n",
-                         counter++,(*i)->get_file_info()->get_filenameString().c_str(),
-                         ((*i)->getRelativePosition() == PreprocessingInfo::before) ? "before" : "after",
-                         PreprocessingInfo::directiveTypeName((*i)->getTypeOfDirective()).c_str(),
-                         (*i)->getString().c_str());
-#endif
+               for (i = comments->begin(); i != comments->end(); i++) {
 
                  // Mark comments and CPP directives a few different colors.
                     int startingLineNumber   = (*i)->get_file_info()->get_line();
@@ -509,12 +501,10 @@ visitorTraversal::visit(SgNode* n)
                     int endingLineNumber = startingLineNumber + ((*i)->getNumberOfLines() - 1);
                     int endingColumnNumber = (*i)->getColumnNumberOfEndOfString();
 
-                    string color = directiveTypeColor((*i)->getTypeOfDirective());
-#if 0
-                    printf ("%d,%d,%s,%d,%d\n",startingLineNumber,startingColumnNumber,color.c_str(),endingLineNumber,endingColumnNumber);
-#endif
+                    string color =
+                        directiveTypeColor((*i)->getTypeOfDirective());
                     dataFile << startingLineNumber << "," << startingColumnNumber << "," << color << "," << endingLineNumber << "," << endingColumnNumber << endl;
-                  }
+               }
              }
             else
              {
@@ -537,18 +527,8 @@ visitorTraversal::visit(SgNode* n)
              {
                endingLineNumber   = startingLineNumber;
                endingColumnNumber = startingColumnNumber;
-             }
-#if 0
-       // Mark all statements blue
-          string color = "blue";
-          if (isSgScopeStatement(statement) != NULL)
-             color = "red";
-#else
+          }
           string color = nodeColor(statement);
-#endif
-#if 0
-          printf ("%d,%d,%s,%d,%d  %s = %p \n",startingLineNumber,startingColumnNumber,color.c_str(),endingLineNumber,endingColumnNumber,statement->class_name().c_str(),statement);
-#endif
           dataFile << startingLineNumber << "," << startingColumnNumber << "," << color << "," << endingLineNumber << "," << endingColumnNumber << endl;
 
         }
@@ -593,11 +573,10 @@ visitorTraversal::visit(SgNode* n)
                endingColumnNumber = startingColumnNumber;
              }
 
-          string color = nodeColor(expression);
-#if 0
-          printf ("%d,%d,%s,%d,%d  %s = %p \n",startingLineNumber,startingColumnNumber,color.c_str(),endingLineNumber,endingColumnNumber,expression->class_name().c_str(),expression);
-#endif
-          dataFile << startingLineNumber << "," << startingColumnNumber << "," << color << "," << endingLineNumber << "," << endingColumnNumber << endl;
+             string color = nodeColor(expression);
+             dataFile << startingLineNumber << "," << startingColumnNumber
+                      << "," << color << "," << endingLineNumber << ","
+                      << endingColumnNumber << endl;
 
         }
 
@@ -617,15 +596,8 @@ visitorTraversal::visit(SgNode* n)
 
           ROSE_ASSERT(initializedName->get_startOfConstruct() != NULL);
           int startingLineNumber   = initializedName->get_startOfConstruct()->get_line();
-          int startingColumnNumber = initializedName->get_startOfConstruct()->get_col();
-#if 0
-       // For SgInitializedName I would like to be a bit more tollerant of a few mistakes.
-          if (initializedName->get_endOfConstruct() == NULL)
-             {
-               printf ("Note: initializedName->get_endOfConstruct() == NULL is OK (initializedName = %p = %s) \n",initializedName,initializedName->class_name().c_str());
-             }
-       // ROSE_ASSERT(initializedName->get_endOfConstruct() != NULL);
-#endif
+          int startingColumnNumber =
+              initializedName->get_startOfConstruct()->get_col();
           int endingLineNumber     = startingLineNumber;
           int endingColumnNumber   = startingColumnNumber;
           if (initializedName->get_endOfConstruct() != NULL)
@@ -641,12 +613,10 @@ visitorTraversal::visit(SgNode* n)
                endingColumnNumber = startingColumnNumber;
              }
 
-          string color = nodeColor(initializedName);
-#if 0
-       // This is redundant I/O for debugging.
-          printf ("%d,%d,%s,%d,%d  %s = %p \n",startingLineNumber,startingColumnNumber,color.c_str(),endingLineNumber,endingColumnNumber,initializedName->class_name().c_str(),initializedName);
-#endif
-          dataFile << startingLineNumber << "," << startingColumnNumber << "," << color << "," << endingLineNumber << "," << endingColumnNumber << endl;
+             string color = nodeColor(initializedName);
+             dataFile << startingLineNumber << "," << startingColumnNumber
+                      << "," << color << "," << endingLineNumber << ","
+                      << endingColumnNumber << endl;
 
         }
    }
@@ -694,23 +664,6 @@ int main( int argc, char * argv[] )
    {
   // Build the AST used by ROSE
      SgProject* project = frontend(argc,argv);
-
-#if 0
-  // This fails for test2005_63.C but Rich has fixed this
-  // by updating the pdf library we are using within ROSE.
-     printf ("Generate the pdf output of the SAGE III AST \n");
-     generatePDF ( *project );
-#endif
-
-#if 0
-     printf ("In main(): Generate the dot output of the SAGE III AST \n");
-  // generateDOT ( *project );
-
-     AstDOTGeneration astdotgen;
-  // SgProject & nonconstProject = (SgProject &) project;
-     astdotgen.generateInputFiles(project);
-  // astdotgen.generate(project);
-#endif
 
      outputStatementPositionInformation(project);
 

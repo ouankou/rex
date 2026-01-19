@@ -19,7 +19,7 @@ program bug20
   type is (d_base_sparse_mat)
     write(0,*) 'NV = ',size(aa%v)
     if (size(aa%v) /= 10) call abort ()
-  class default 
+  class default
     write(0,*) 'Not implemented yet '
   end select
 

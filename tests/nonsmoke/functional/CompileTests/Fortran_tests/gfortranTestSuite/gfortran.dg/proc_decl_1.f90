@@ -56,7 +56,7 @@ program prog
   procedure(f) :: q  ! { dg-error "may not be a statement function" }
   procedure(oo) :: p  ! { dg-error "must be explicit" }
 
-  procedure ( ) :: r 
+  procedure ( ) :: r
   procedure ( up ) :: s  ! { dg-error "must be explicit" }
 
   procedure(t) :: t  ! { dg-error "may not be used as its own interface" }
@@ -72,6 +72,6 @@ contains
     end interface
     procedure(b), bind(c,name="hjj") :: a  ! { dg-error "may not have BIND.C. attribute with NAME" }
     procedure(b),intent(in):: c
-  end subroutine foo 
+  end subroutine foo
 
 end program

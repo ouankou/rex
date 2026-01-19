@@ -1,10 +1,4 @@
 
-#if 0
-// void foobar() {
-extern "C" {
-  int x;
-}
-#endif
 
 void foo()
    {

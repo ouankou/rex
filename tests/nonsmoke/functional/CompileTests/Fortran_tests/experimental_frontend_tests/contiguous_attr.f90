@@ -1,5 +1,5 @@
 !! R502 attr-spec
-!                 is  access-spec 
+!                 is  access-spec
 !                 or  CONTIGUOUS
 !                 or  ...
 

@@ -22,21 +22,7 @@ void foobar ()
 
             f = 42.0; // xs[i2] - x[i2] ;
             g = array[i2];
-            h =  array[i1];
-#if 0
-            m =  array[i1];
-
-            a1  = h + g + f + m ;
-
-            f =  array[i1];
-            g =  array[i1] ;
-            h = array[i2];
-            m = array[i2];
-
-            a2  = h + g + f + m ;
-
-            a[i1] = b + ( a1 + a2 ) ;
-#endif
+            h = array[i1];
          }
 
       }

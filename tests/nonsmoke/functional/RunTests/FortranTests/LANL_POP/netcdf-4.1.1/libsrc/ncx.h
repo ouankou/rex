@@ -56,9 +56,6 @@ typedef unsigned char uchar;
 #define X_SIZEOF_CHAR 1
 #define X_SIZEOF_SHORT 2
 #define X_SIZEOF_INT 4 /* xdr_int */
-#if 0
-#define X_SIZEOF_LONG 8 * / /* xdr_long_long */
-#endif
 #define X_SIZEOF_FLOAT 4
 #define X_SIZEOF_DOUBLE 8
 
@@ -183,38 +180,6 @@ typedef signed char schar;
  * Note that loss of precision may occur silently.
  *
  */
-
-#if 0
-extern int
-ncx_get_schar_schar(const void *xp, schar *ip);
-extern int
-ncx_get_schar_uchar(const void *xp, uchar *ip);
-extern int
-ncx_get_schar_short(const void *xp, short *ip);
-extern int
-ncx_get_schar_int(const void *xp, int *ip);
-extern int
-ncx_get_schar_long(const void *xp, long *ip);
-extern int
-ncx_get_schar_float(const void *xp, float *ip);
-extern int
-ncx_get_schar_double(const void *xp, double *ip);
-
-extern int
-ncx_put_schar_schar(void *xp, const schar *ip);
-extern int
-ncx_put_schar_uchar(void *xp, const uchar *ip);
-extern int
-ncx_put_schar_short(void *xp, const short *ip);
-extern int
-ncx_put_schar_int(void *xp, const int *ip);
-extern int
-ncx_put_schar_long(void *xp, const long *ip);
-extern int
-ncx_put_schar_float(void *xp, const float *ip);
-extern int
-ncx_put_schar_double(void *xp, const double *ip);
-#endif
 
 extern int ncx_get_short_schar(const void *xp, schar *ip);
 extern int ncx_get_short_uchar(const void *xp, uchar *ip);

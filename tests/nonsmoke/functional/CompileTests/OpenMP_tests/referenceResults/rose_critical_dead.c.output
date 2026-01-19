@@ -1,1 +1,1 @@
-#pragma omp critical 
+#pragma omp critical

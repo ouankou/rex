@@ -4,7 +4,7 @@
 !
 function all_res()
   implicit none
-  real, pointer :: gain 
+  real, pointer :: gain
   integer :: all_res
   allocate (gain,STAT=all_res)
   deallocate(gain)
@@ -19,7 +19,7 @@ end function all_res
 
 function func()
   implicit none
-  real, pointer :: gain 
+  real, pointer :: gain
   integer :: all_res2, func
   func = 0
 entry all_res2
@@ -36,7 +36,7 @@ end function func
 
 function func2() result(res)
   implicit none
-  real, pointer :: gain 
+  real, pointer :: gain
   integer :: res
   allocate (gain,STAT=func2) ! { dg-error "is not a variable" }
   deallocate(gain)
@@ -49,7 +49,7 @@ subroutine sub()
     integer function func2()
     end function
   end interface
-  real, pointer :: gain 
+  real, pointer :: gain
   integer, parameter :: res = 2
   allocate (gain,STAT=func2) ! { dg-error "is not a variable" }
   deallocate(gain)

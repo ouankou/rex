@@ -9,7 +9,7 @@
 
 PROGRAM main
   IMPLICIT NONE
-  
+
   EXIT ! { dg-error "is not within a construct" }
   EXIT foobar ! { dg-error "is unknown" }
   EXIT main ! { dg-error "is not a construct name" }

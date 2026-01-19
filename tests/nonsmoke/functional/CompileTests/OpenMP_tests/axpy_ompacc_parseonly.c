@@ -12,17 +12,6 @@
 #include <omp.h>
 
 #include <string.h>
-#if 0
-double time_stamp()
-{
- struct timeval t;
- double time;
- gettimeofday(&t, NULL);
- time = t.tv_sec + 1.0e-6*t.tv_usec;
- return time;
-}
-
-#endif
 
 /* in second */
 #define read_timer() omp_get_wtime()

@@ -1,23 +1,8 @@
 class function_base;
 
-#if 0
-bool operator==(function_base & f, int)
-{
-  return true;
-}
-#else
-bool operator==(function_base & f, int);
-#endif
+bool operator==(function_base &f, int);
 
-#if 0
-template<typename Functor>
-bool operator==(function_base & f, Functor g)
-  {
-    return true;
-  }
-#else
-template<typename Functor> bool operator==(function_base & f, Functor g);
-#endif
+template <typename Functor> bool operator==(function_base &f, Functor g);
 
 template <class Key, class T, class Hash, class Pred, class Alloc>
 class unordered_map

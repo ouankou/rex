@@ -23,14 +23,11 @@ int main() {
     std::cout << i << ' ';
   std::cout << '\n';
 
-#if 1
   // This demonstrates that we we should use the initializer directly, instead
   // of looking deeper into the initializer for the parts the we need.
   for (int n : {0, 1, 2, 3, 4, 5}) // the initializer may be a braced-init-list
     std::cout << n << ' ';
   std::cout << '\n';
-#endif
-#if 1
   int a[] = {0, 1, 2, 3, 4, 5};
   for (int n : a) // the initializer may be an array
     std::cout << n << ' ';
@@ -39,5 +36,4 @@ int main() {
   for (int n : a)
     std::cout << 1 << ' '; // the loop variable need not be used
   std::cout << '\n';
-#endif
 }

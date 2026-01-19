@@ -118,7 +118,7 @@ Coding:
 @item ut_error_message_handler@tab ut_set_error_message_handler(ut_error_message_handler @var{handler});
 @item int @tab ut_write_to_stderr(const char* @var{fmt}, va_list @var{args});
 @item int @tab ut_ignore(const char* @var{fmt}, va_list @var{args});
-@item 
+@item
 @item float @tab cv_convert_float(const cv_converter* @var{converter}, float @var{value});
 @item double @tab cv_convert_double(const cv_converter* @var{converter}, double @var{value});
 @item float* @tab cv_convert_floats(const cv_converter* @var{converter}, const float* @var{in}, size_t @var{count}, float* @var{out});
@@ -161,7 +161,7 @@ There are three ways to do this:
 @item
 @ref{Extracting,Get the unit} from a @ref{unit-system}.
 This requires that
-you know the unit's name or symbol and that the unit is in a unit-system.  
+you know the unit's name or symbol and that the unit is in a unit-system.
 @item
 @ref{Parsing,Parse a string representation of the unit into its binary
 representation}.
@@ -174,7 +174,7 @@ using unit operations}.
 @ref{Formatting,Convert a binary representation of a unit into a string} ---
 enabling the printing and storing of units in a human-readable form.
 @end enumerate
-While the above might seem to be trivial activities, their 
+While the above might seem to be trivial activities, their
 general availability at the time might have helped prevent
 the @uref{http://en.wikipedia.org/wiki/Mars_Climate_Orbiter,
 Mars Climate Orbiter} fiasco.
@@ -329,7 +329,7 @@ Returns the unit to which @var{name} maps from the unit-system referenced by
 @var{system} or @code{NULL} if no such unit exists.
 Name comparisons are case-insensitive.
 If this function returns @code{NULL}, then
-@code{@ref{ut_get_status()}} will return 
+@code{@ref{ut_get_status()}} will return
 one of the following:
 
 @table @code
@@ -348,7 +348,7 @@ Returns the unit to which @var{symbol} maps from the unit-system referenced by
 @var{system} or @code{NULL} if no such unit exists.
 Symbol comparisons are case-sensitive.
 If this function returns @code{NULL}, then
-@code{@ref{ut_get_status()}} will return 
+@code{@ref{ut_get_status()}} will return
 one of the following:
 
 @table @code
@@ -365,7 +365,7 @@ Returns the dimensionless unit one of the unit-system referenced by
 @var{system}.
 While not necessary, the returned pointer may be passed to @code{ut_free()}
 when you no longer need the unit.
-If @var{system} is @code{NULL}, then this function writes an error-message 
+If @var{system} is @code{NULL}, then this function writes an error-message
 using @code{@ref{ut_handle_error_message()}}
 and returns @code{NULL}.
 Also, @code{@ref{ut_get_status()}} will return @code{UT_BAD_ARG}.
@@ -713,7 +713,7 @@ dividing
 @item Prefixed @tab kilometer @tab km
 @item Offset @tab kelvin from 273.15 @tab K @@ 273.15 @tab lower
 precedence than multiplying or dividing
-@item Logarithmic @tab lg(re milliwatt) @tab lg(re mW) @tab "lg" is base 10, 
+@item Logarithmic @tab lg(re milliwatt) @tab lg(re mW) @tab "lg" is base 10,
 "ln" is base e, and "lb" is base 2
 @item Grouped @tab (5 meter)/(30 second) @tab (5 m)/(30 s)
 @end multitable
@@ -724,7 +724,7 @@ The above may be combined, e.g., "0.1 lg(re m/(5 s)^2) @@ 50".
 You may also look at the @code{<def>} elements in @ref{Database,the
 units database} to see examples of string unit specifications.
 
-You may use the @code{@ref{Top, , udunits2, udunits2prog}} utility 
+You may use the @code{@ref{Top, , udunits2, udunits2prog}} utility
 to experiment with string unit specifications.
 
 @node Grammar, , Examples, Syntax
@@ -934,7 +934,7 @@ On failure, this function returns @code{-1} and @ref{ut_get_status()} will retur
 
 @table @code
 @item UT_BAD_ARG
-@var{unit} or @var{buf} is @code{NULL}, or 
+@var{unit} or @var{buf} is @code{NULL}, or
 @var{opts} contains the bit patterns of both @code{UT_LATIN1} and
 @code{UT_UTF8}.
 @item UT_CANT_FORMAT
@@ -1052,7 +1052,7 @@ Please be careful about using timestamp-units.
 @anchor{ut_invert()}
 @deftypefun @code{ut_unit*} ut_invert @code{(const ut_unit* @var{unit})}
 Returns the inverse (i.e., reciprocal) of the unit @var{unit}.
-This convenience function is equal to 
+This convenience function is equal to
 @code{@ref{ut_raise(),ut_raise(@var{unit}@comma{}-1)}}.
 You should pass the returned pointer to @code{@ref{ut_free()}} when you
 no longer need the unit.
@@ -1254,27 +1254,27 @@ It contains the following pointers to functions that implement your
 unit-visitor:
 
 @table @code
-@item @ref{ut_status} (*visit_basic)(const ut_unit* @var{unit}, void* @var{arg}); 
+@item @ref{ut_status} (*visit_basic)(const ut_unit* @var{unit}, void* @var{arg});
 Visits the basic-unit @var{unit}.  A basic-unit is a base unit like
 ``meter'' or a non-dimensional but named unit like ``radian''.
 This function returns @code{@ref{ut_status,UT_SUCCESS}} on and only on success.
-@item @ref{ut_status} (*visit_product)(const ut_unit* @var{unit}, int @var{count}, const ut_unit* const* @var{basicUnits}, const int* @var{powers}, void* @var{arg}); 
+@item @ref{ut_status} (*visit_product)(const ut_unit* @var{unit}, int @var{count}, const ut_unit* const* @var{basicUnits}, const int* @var{powers}, void* @var{arg});
 Visits the product-unit @var{unit}.
 The product-unit is a product of the @var{count}
 basic-units referenced by @var{basicUnits}, each raised to their respective,
 non-zero power in @var{powers}.
 This function returns @code{@ref{ut_status,UT_SUCCESS}} on and only on success.
-@item @ref{ut_status} (*visit_galilean)(const ut_unit* @var{unit}, double @var{scale}, const ut_unit* @var{underlyingUnit}, double @var{origin}, void* arg); 
+@item @ref{ut_status} (*visit_galilean)(const ut_unit* @var{unit}, double @var{scale}, const ut_unit* @var{underlyingUnit}, double @var{origin}, void* arg);
 Visits the Galilean-unit @var{unit}.
 The Galilean-unit has the underlying unit @var{underlyingUnit} and either the
 non-unity scale factor @var{scale} or the non-zero origin @var{origin}, or both.
 This function returns @code{@ref{ut_status,UT_SUCCESS}} on and only on success.
-@item @ref{ut_status} (*visit_timestamp)(const ut_unit* @var{unit}, const ut_unit* @var{timeUnit}, double @var{origin}, void* @var{arg}); 
+@item @ref{ut_status} (*visit_timestamp)(const ut_unit* @var{unit}, const ut_unit* @var{timeUnit}, double @var{origin}, void* @var{arg});
 Visits the timestamp-unit @var{unit}.
 The timestamp-unit has the underlying unit of time @var{timeUnit}
 and the @code{@ref{ut_encode_time()}}-encoded time-origin @var{origin}.
 This function returns @code{@ref{ut_status,UT_SUCCESS}} on and only on success.
-@item @ref{ut_status} (*visit_logarithmic)(const ut_unit* @var{unit}, double @var{base}, const ut_unit* @var{reference}, void* @var{arg}); 
+@item @ref{ut_status} (*visit_logarithmic)(const ut_unit* @var{unit}, double @var{base}, const ut_unit* @var{reference}, void* @var{arg});
 Visits the logarithmic-unit @var{unit}.
 The logarithmic-unit has the logarithmic base @var{base} and
 the reference-level is specified by the unit @var{reference}.
@@ -1311,7 +1311,7 @@ Operating-system error. See @var{errno} for the reason.
 @deftypefun @code{ut_unit*} ut_divide @code{(const ut_unit* @var{numer}, const ut_unit* @var{denom})}
 Returns the result of dividing unit @var{numer} by unit @var{denom}.
 You should pass the pointer to @ref{ut_free()} when you no longer need the unit
-On failure, this function returns @code{NULL} and @ref{ut_get_status()} 
+On failure, this function returns @code{NULL} and @ref{ut_get_status()}
 will return one of the following:
 
 @table @code
@@ -1661,7 +1661,7 @@ error-message; otherwise, this function returns @code{-1}.
 Does nothing.
 In particular, it ignores the variadic error-message
 corresponding to formatting-string @var{fmt} and arguments @var{args}.
-Pass this function to @code{@ref{ut_set_error_message_handler()}} 
+Pass this function to @code{@ref{ut_set_error_message_handler()}}
 when you don't want the unit module to print any error-messages.
 @end deftypefun
 

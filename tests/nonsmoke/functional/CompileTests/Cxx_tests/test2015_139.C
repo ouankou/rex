@@ -13,10 +13,8 @@ class B
 
 class C : public A, B
    {
-     public:
-#if 1
-          int x;
-#endif
+public:
+  int x;
    };
 
 void foobar()

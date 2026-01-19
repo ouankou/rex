@@ -76,11 +76,11 @@
 /
 
 &restart_nml
-   restart_freq_opt = 'nyear' 
+   restart_freq_opt = 'nyear'
    restart_freq     = 1
    restart_outfile  = 'd'
    restart_fmt      = 'bin'
-   leven_odd_on     = .true. 
+   leven_odd_on     = .true.
    even_odd_freq    = 500
    pressure_correction = .false.
 /
@@ -168,26 +168,26 @@
 /
 
 &hmix_del2u_nml
-   lauto_hmix           = .false. 
-   lvariable_hmix       = .false. 
+   lauto_hmix           = .false.
+   lvariable_hmix       = .false.
    am                   = 3.e9
 /
 
 &hmix_del2t_nml
-   lauto_hmix           = .false. 
-   lvariable_hmix       = .false. 
+   lauto_hmix           = .false.
+   lvariable_hmix       = .false.
    ah                   = 2.e7
 /
 
 &hmix_del4u_nml
-   lauto_hmix           = .false. 
-   lvariable_hmix       = .false. 
+   lauto_hmix           = .false.
+   lvariable_hmix       = .false.
    am                   = -0.6e20
 /
 
 &hmix_del4t_nml
-   lauto_hmix           = .false. 
-   lvariable_hmix       = .false. 
+   lauto_hmix           = .false.
+   lvariable_hmix       = .false.
    ah                   = -0.2e20
 /
 
@@ -233,7 +233,7 @@
    state_choice = 'mwjf'
    state_file = 'dncoef.da'
    state_range_opt = 'ignore'
-   state_range_freq = 100000   
+   state_range_freq = 100000
 /
 
 &baroclinic_nml

@@ -17,10 +17,7 @@ class X
 
 int X::isparallel = -1;
 
-void foobar()
-   {
-#if 1
-     int a = X::isparallel;
-     X::isparallel;
-#endif
-   }
+void foobar() {
+  int a = X::isparallel;
+  X::isparallel;
+}

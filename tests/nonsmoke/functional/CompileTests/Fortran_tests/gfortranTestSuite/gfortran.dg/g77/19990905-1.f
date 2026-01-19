@@ -2,7 +2,7 @@ c { dg-do compile }
 c
 c  g77 gave error
 c  19990905-1.f: In subroutine `x':
-c  19990905-1.f:15: 
+c  19990905-1.f:15:
 c           common /foo/n
 c                   1
 c  19990905-1.f:18: (continued):

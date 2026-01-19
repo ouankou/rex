@@ -49,16 +49,10 @@ int main(int argc, char *argv[]) {
       buildVariableDeclaration(SgName("i"), buildIntType());
   ((varDecl->get_declarationModifier()).get_storageModifier()).setExtern();
   appendStatement(varDecl);
-// two ways to build a same declaration
-// int i;
-#if 1
+  // two ways to build a same declaration
+  // int i;
   SgVariableDeclaration *varDecl2 =
       buildVariableDeclaration(SgName("i"), buildIntType());
-#else
-  // this one does not yet working,maybe related to copy mechanism
-  SgVariableDeclaration *varDecl2 = isSgVariableDeclaration(deepCopy(varDecl));
-  ((varDecl->get_declarationModifier()).get_storageModifier()).setDefault();
-#endif
 
   appendStatement(varDecl2);
   insertStatementAfter(varDecl2, varDecl0);

@@ -110,36 +110,13 @@ void foo (int x)
     }
   while (x == 5);
 
-#if 1
   for (A_T<bool> x2; x2.foo (false);)
-    for (class A0 {public: int foo (int x) {return x;}} x2; x2.foo (0); x)
-#if 0
-      for (; A x2 = 0;)
-        while (A x2 = 0)
-          if (A x2 = 0)
-            class A { public: int foo (int x) { return x; } } x3;
-          else if (B::b)
-            class A { public: int foo (int x) { return x; } } x3; 
-          else
-            class A { public: int foo (int x) { return x; } } x3;
-#else
-  {
-  }
-#endif
-#endif
-
-#if 0
-  for (A_T<bool> x2; x2.foo (false);)
-    for (class A0 {public: int foo (int x) {return x;}} x2; x2.foo (0); x)
-      for (; A x2 = 0;)
-        while (A x2 = 0)
-          if (A x2 = 0)
-            class A { public: int foo (int x) { return x; } } x3;
-          else if (B::b)
-            class A { public: int foo (int x) { return x; } } x3; 
-          else
-            class A { public: int foo (int x) { return x; } } x3;
-#endif
+    for (class A0 {
+         public:
+           int foo(int x) { return x; }
+         } x2;
+         x2.foo(0); x) {
+    }
 }
 
 // eof

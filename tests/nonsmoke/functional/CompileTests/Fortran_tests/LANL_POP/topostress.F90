@@ -38,7 +38,7 @@
    logical (log_kind), public :: &
      ltopostress         ! true if topographic stress desired
 
-   real (r8), dimension(:,:,:), allocatable, public :: & 
+   real (r8), dimension(:,:,:), allocatable, public :: &
      TSU, TSV            ! topographic stress velocities
 
 !EOP
@@ -133,7 +133,7 @@
 !-----------------------------------------------------------------------
 
    if (ltopostress) then
-      allocate (TSU(nx_block,ny_block,nblocks_clinic), & 
+      allocate (TSU(nx_block,ny_block,nblocks_clinic), &
                 TSV(nx_block,ny_block,nblocks_clinic))
 
       call topo_stress(nsmooth_topo)
@@ -179,16 +179,16 @@
    integer (int_kind) ::   &
       i,j,iter,iblock       ! local iteration counters
 
-   real (r8), dimension(nx_block,ny_block) :: & 
+   real (r8), dimension(nx_block,ny_block) :: &
       TSP,                 &! topo stress streamfunction
       SCALE,               &! scale length
-      HTOLD                 ! old topography 
+      HTOLD                 ! old topography
 
    real (r8), dimension(nx_block,ny_block,nblocks_clinic) :: &
       HTNEW                 ! smoothed topography
 
-   real (r8), parameter :: & 
-      tslse = 12.0e5_r8,   &! 
+   real (r8), parameter :: &
+      tslse = 12.0e5_r8,   &!
       tslsp = 3.0e5_r8      !
 
    type (block) ::         &
@@ -207,7 +207,7 @@
    do iter = 1, nsmooth_topo
 
       do iblock = 1,nblocks_clinic
-         this_block = get_block(blocks_clinic(iblock),iblock)  
+         this_block = get_block(blocks_clinic(iblock),iblock)
 
          HTOLD = HTNEW(:,:,iblock)
 
@@ -225,7 +225,7 @@
 !-----------------------------------------------------------------------
 
    do iblock = 1,nblocks_clinic
-      this_block = get_block(blocks_clinic(iblock),iblock)  
+      this_block = get_block(blocks_clinic(iblock),iblock)
 
       SCALE = tslsp + (tslse - tslsp)* &
                       (p5 + p5*cos(c2*TLAT(:,:,iblock)))
@@ -242,7 +242,7 @@
 !     compute gradient with 4 point stencil
 !
 !-----------------------------------------------------------------------
-      
+
       TSU(:,:,iblock) = c0
       TSV(:,:,iblock) = c0
 
@@ -261,7 +261,7 @@
          TSV(:,:,iblock) = c0    ! zero at land points
          TSU(:,:,iblock) = c0
       endwhere
-      
+
       !  apply only in 'deep' water
       ! where (KMU(:,:,iblock) <= 3)
       !   TSU(:,:,iblock) = c0
@@ -301,7 +301,7 @@
 !  \end{equation}
 !  Land points are not included in the smoothing, and the
 !  stencil is modified to include only ocean points in the
-!  averaging.  This routine is nearly identical to the smooth 
+!  averaging.  This routine is nearly identical to the smooth
 !  topography routine in the grid module.
 !
 ! !REVISION HISTORY:
@@ -309,7 +309,7 @@
 
 ! !INPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(in) :: &
       HTOLD               ! old HT field to be smoothed
 
    type (block), intent(in) :: &
@@ -336,7 +336,7 @@
       NB,                 &! array to compute number of ocean neighbors
       IWORK                ! local work space
 
-   real (r8), dimension(nx_block,ny_block) :: & 
+   real (r8), dimension(nx_block,ny_block) :: &
       WORK                 ! local work space
 
 !-----------------------------------------------------------------------
@@ -347,7 +347,7 @@
 
    bid = this_block%local_id
 
-   where (KMT(:,:,bid) > 0) 
+   where (KMT(:,:,bid) > 0)
       IWORK = 1
       HTNEW = HTOLD
    elsewhere
@@ -358,7 +358,7 @@
    do j=this_block%jb,this_block%je
    do i=this_block%ib,this_block%ie
 
-      WORK(i,j) = c4*HTNEW(i,j) +                          & 
+      WORK(i,j) = c4*HTNEW(i,j) +                          &
                   c2*HTNEW(i+1,j  ) + c2*HTNEW(i-1,j  ) +  &
                   c2*HTNEW(i  ,j+1) + c2*HTNEW(i  ,j-1) +  &
                      HTNEW(i+1,j+1) +    HTNEW(i+1,j-1) +  &
@@ -379,7 +379,7 @@
 !
 !-----------------------------------------------------------------------
 
-   where ((KMT(:,:,bid) /= 0) .and. (NB /= 0)) 
+   where ((KMT(:,:,bid) /= 0) .and. (NB /= 0))
       HTNEW = WORK/real(NB)
    elsewhere
       HTNEW = c0

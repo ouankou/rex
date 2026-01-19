@@ -59265,40 +59265,7 @@ struct raw_converter
 
 struct UseInternalRangeChecker {} ;
 
-} } 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#if 1
-
+} }
 
 namespace boost { namespace numeric { namespace boundsdetail
 {
@@ -64575,85 +64542,7 @@ template< typename T > struct remove_reference<T& > { public: typedef T type; };
 
 
 
-} 
-
-#endif
-
-#if 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}
 
 #   pragma GCC system_header
 
@@ -64750,13 +64639,11 @@ struct operator_returns_Ret < Lhs, Rhs, Ret, true > {
 template < typename Lhs, typename Rhs, typename Ret >
 struct operator_returns_Ret < Lhs, Rhs, Ret, false > {
    static ::boost::type_traits::yes_type is_convertible_to_Ret(Ret); 
-   static ::boost::type_traits::no_type is_convertible_to_Ret(...); 
+   static ::boost::type_traits::no_type is_convertible_to_Ret(...);
 
-#if 1
-   static const bool value = (sizeof(is_convertible_to_Ret(make<Lhs>() << make<Rhs>()))==sizeof(::boost::type_traits::yes_type));
-#else
-   static const bool value = false;
-#endif
+   static const bool value =
+       (sizeof(is_convertible_to_Ret(make<Lhs>() << make<Rhs>())) ==
+        sizeof(::boost::type_traits::yes_type));
 };
 
 
@@ -64772,13 +64659,11 @@ no_operator operator,(no_operator, has_operator);
 template < typename Lhs, typename Rhs >
 struct operator_exists {
    static ::boost::type_traits::yes_type check(has_operator); 
-   static ::boost::type_traits::no_type check(no_operator); 
+   static ::boost::type_traits::no_type check(no_operator);
 
-#if 1
-   static const bool value = (sizeof(check(((make<Lhs>() << make<Rhs>()),make<has_operator>())))==sizeof(::boost::type_traits::yes_type));
-#else
-   static const bool value = false;
-#endif
+   static const bool value =
+       (sizeof(check(((make<Lhs>() << make<Rhs>()), make<has_operator>()))) ==
+        sizeof(::boost::type_traits::yes_type));
 };
 
 
@@ -64797,15 +64682,15 @@ struct trait_impl1 < Lhs, Rhs, Ret, true > {
    static const bool value = false;
 };
 
-template < typename Lhs, typename Rhs, typename Ret >
-struct trait_impl1 < Lhs, Rhs, Ret, false > {
-#if 1
-   static const bool value = ( ::boost::type_traits::ice_and< operator_exists < Lhs, Rhs > ::value, operator_returns_Ret < Lhs, Rhs, Ret, operator_returns_void < Lhs, Rhs > ::value > ::value > ::value );
-#else
-   static const bool value = false;
-#endif
+template <typename Lhs, typename Rhs, typename Ret>
+struct trait_impl1<Lhs, Rhs, Ret, false> {
+  static const bool value =
+      (::boost::type_traits::ice_and<
+          operator_exists<Lhs, Rhs>::value,
+          operator_returns_Ret<Lhs, Rhs, Ret,
+                               operator_returns_void<Lhs, Rhs>::value>::value>::
+           value);
 };
-
 
 template < typename Rhs, typename Ret >
 struct trait_impl1 < void, Rhs, Ret, false > {
@@ -64830,22 +64715,44 @@ struct trait_impl {
    typedef typename ::boost::remove_cv<Lhs_noref>::type Lhs_nocv;
    typedef typename ::boost::remove_cv<Rhs_noref>::type Rhs_nocv;
    typedef typename ::boost::remove_cv< typename ::boost::remove_reference< typename ::boost::remove_pointer<Lhs_noref>::type >::type >::type Lhs_noptr;
-   typedef typename ::boost::remove_cv< typename ::boost::remove_reference< typename ::boost::remove_pointer<Rhs_noref>::type >::type >::type Rhs_noptr;
-#if 1
-   static const bool value = (trait_impl1 < Lhs_noref, Rhs_noref, Ret, ::boost::type_traits::ice_or< ::boost::type_traits::ice_and< ::boost::is_fundamental< Lhs_nocv > ::value, ::boost::is_fundamental< Rhs_nocv > ::value, ::boost::type_traits::ice_or< ::boost::type_traits::ice_not< ::boost::is_integral< Lhs_noref > ::value > ::value, ::boost::type_traits::ice_not< ::boost::is_integral< Rhs_noref > ::value > ::value > ::value > ::value, ::boost::type_traits::ice_and< ::boost::is_fundamental< Lhs_nocv > ::value, ::boost::is_pointer< Rhs_noref > ::value > ::value, ::boost::type_traits::ice_and< ::boost::is_fundamental< Rhs_nocv > ::value, ::boost::is_pointer< Lhs_noref > ::value > ::value, ::boost::type_traits::ice_and< ::boost::is_pointer< Lhs_noref > ::value, ::boost::is_pointer< Rhs_noref > ::value > ::value > ::value > ::value);
-#else
-  static const bool value = false;
-#endif
+   typedef typename ::boost::remove_cv<typename ::boost::remove_reference<
+       typename ::boost::remove_pointer<Rhs_noref>::type>::type>::type
+       Rhs_noptr;
+   static const bool value =
+       (trait_impl1<
+           Lhs_noref, Rhs_noref, Ret,
+           ::boost::type_traits::ice_or<
+               ::boost::type_traits::ice_and<
+                   ::boost::is_fundamental<Lhs_nocv>::value,
+                   ::boost::is_fundamental<Rhs_nocv>::value,
+                   ::boost::type_traits::ice_or<
+                       ::boost::type_traits::ice_not<
+                           ::boost::is_integral<Lhs_noref>::value>::value,
+                       ::boost::type_traits::ice_not<::boost::is_integral<
+                           Rhs_noref>::value>::value>::value>::value,
+               ::boost::type_traits::ice_and<
+                   ::boost::is_fundamental<Lhs_nocv>::value,
+                   ::boost::is_pointer<Rhs_noref>::value>::value,
+               ::boost::type_traits::ice_and<
+                   ::boost::is_fundamental<Rhs_nocv>::value,
+                   ::boost::is_pointer<Lhs_noref>::value>::value,
+               ::boost::type_traits::ice_and<
+                   ::boost::is_pointer<Lhs_noref>::value,
+                   ::boost::is_pointer<Rhs_noref>::value>::value>::value>::
+            value);
 };
 
 } 
-} 
+}
 
-#if 1
-    template< typename Lhs, typename Rhs=Lhs, typename Ret= ::boost::detail::has_left_shift_impl::dont_care > struct has_left_shift : public ::boost::integral_constant<bool,(::boost::detail::has_left_shift_impl::trait_impl < Lhs, Rhs, Ret > ::value)> { public:   }; 
-#else
-    template< typename Lhs, typename Rhs=Lhs > struct has_left_shift { public: static const bool value = false;  }; 
-#endif
+template <typename Lhs, typename Rhs = Lhs,
+          typename Ret = ::boost::detail::has_left_shift_impl::dont_care>
+struct has_left_shift
+    : public ::boost::integral_constant<
+          bool, (::boost::detail::has_left_shift_impl::trait_impl<
+                    Lhs, Rhs, Ret>::value)> {
+public:
+};
 } 
 
 
@@ -64996,11 +64903,7 @@ struct operator_returns_void {
    
    static ::boost::type_traits::yes_type returns_void(returns_void_t);
    static ::boost::type_traits::no_type returns_void(int);
-#if 0
-   static const bool value = (sizeof(::boost::type_traits::yes_type)==sizeof(returns_void((make<Lhs>() >> make<Rhs>(),returns_void_t()))));
-#else
    static const bool value = false;
-#endif
 };
 
 
@@ -65043,13 +64946,9 @@ struct operator_returns_Ret < Lhs, Rhs, Ret, true > {
 template < typename Lhs, typename Rhs, typename Ret >
 struct operator_returns_Ret < Lhs, Rhs, Ret, false > {
    static ::boost::type_traits::yes_type is_convertible_to_Ret(Ret); 
-   static ::boost::type_traits::no_type is_convertible_to_Ret(...); 
+   static ::boost::type_traits::no_type is_convertible_to_Ret(...);
 
-#if 0
-   static const bool value = (sizeof(is_convertible_to_Ret(make<Lhs>() >> make<Rhs>()))==sizeof(::boost::type_traits::yes_type));
-#else
    static const bool value = false;
-#endif
 };
 
 
@@ -65065,13 +64964,9 @@ no_operator operator,(no_operator, has_operator);
 template < typename Lhs, typename Rhs >
 struct operator_exists {
    static ::boost::type_traits::yes_type check(has_operator); 
-   static ::boost::type_traits::no_type check(no_operator); 
+   static ::boost::type_traits::no_type check(no_operator);
 
-#if 0
-   static const bool value = (sizeof(check(((make<Lhs>() >> make<Rhs>()),make<has_operator>())))==sizeof(::boost::type_traits::yes_type));
-#else
    static const bool value = false;
-#endif
 };
 
 
@@ -65090,15 +64985,10 @@ struct trait_impl1 < Lhs, Rhs, Ret, true > {
    static const bool value = false;
 };
 
-template < typename Lhs, typename Rhs, typename Ret >
-struct trait_impl1 < Lhs, Rhs, Ret, false > {
-#if 0
-     static const bool value = ( ::boost::type_traits::ice_and< operator_exists < Lhs, Rhs > ::value, operator_returns_Ret < Lhs, Rhs, Ret, operator_returns_void < Lhs, Rhs > ::value > ::value > ::value );
-#else
-     static const bool value = false;
-#endif
+template <typename Lhs, typename Rhs, typename Ret>
+struct trait_impl1<Lhs, Rhs, Ret, false> {
+  static const bool value = false;
 };
-
 
 template < typename Rhs, typename Ret >
 struct trait_impl1 < void, Rhs, Ret, false > {
@@ -65123,30 +65013,21 @@ struct trait_impl {
    typedef typename ::boost::remove_cv<Lhs_noref>::type Lhs_nocv;
    typedef typename ::boost::remove_cv<Rhs_noref>::type Rhs_nocv;
    typedef typename ::boost::remove_cv< typename ::boost::remove_reference< typename ::boost::remove_pointer<Lhs_noref>::type >::type >::type Lhs_noptr;
-   typedef typename ::boost::remove_cv< typename ::boost::remove_reference< typename ::boost::remove_pointer<Rhs_noref>::type >::type >::type Rhs_noptr;
-#if 0
-   static const bool value = (trait_impl1 < Lhs_noref, Rhs_noref, Ret, ::boost::type_traits::ice_or< ::boost::type_traits::ice_and< ::boost::is_fundamental< Lhs_nocv > ::value, ::boost::is_fundamental< Rhs_nocv > ::value, ::boost::type_traits::ice_or< ::boost::type_traits::ice_not< ::boost::is_integral< Lhs_noref > ::value > ::value, ::boost::type_traits::ice_not< ::boost::is_integral< Rhs_noref > ::value > ::value > ::value > ::value, ::boost::type_traits::ice_and< ::boost::is_fundamental< Lhs_nocv > ::value, ::boost::is_pointer< Rhs_noref > ::value > ::value, ::boost::type_traits::ice_and< ::boost::is_fundamental< Rhs_nocv > ::value, ::boost::is_pointer< Lhs_noref > ::value > ::value, ::boost::type_traits::ice_and< ::boost::is_pointer< Lhs_noref > ::value, ::boost::is_pointer< Rhs_noref > ::value > ::value > ::value > ::value);
-#else
-  static const bool value = false;
-#endif
+   typedef typename ::boost::remove_cv<typename ::boost::remove_reference<
+       typename ::boost::remove_pointer<Rhs_noref>::type>::type>::type
+       Rhs_noptr;
+   static const bool value = false;
 };
 
 } 
-} 
+}
 
-#if 0
-   template< typename Lhs, typename Rhs=Lhs, typename Ret= ::boost::detail::has_right_shift_impl::dont_care > struct has_right_shift : public ::boost::integral_constant<bool,(::boost::detail::has_right_shift_impl::trait_impl < Lhs, Rhs, Ret > ::value)> { public:   }; 
-#else
-   template< typename Lhs, typename Rhs=Lhs > struct has_right_shift { public: static const bool value = false;  }; 
-#endif
-} 
+template <typename Lhs, typename Rhs = Lhs> struct has_right_shift {
+public:
+  static const bool value = false;
+};
+}
 
-
-#endif
-
-
-
-#if 1
 namespace boost
 {
   //    namespace iterator_range_detail { }
@@ -65155,12 +65036,7 @@ namespace boost
         class iterator_range
         {
         };
-} 
-
-#endif
-
-
-#if 1
+}
 
 namespace boost {
 namespace container {
@@ -65171,15 +65047,11 @@ template <class CharT
          ,class Allocator  = std::allocator<CharT> >
 class basic_string;
 
-}}  
-#endif
-
-
-
+}
+} // namespace boost
 
 namespace boost {
 
-#if 1
     namespace detail 
     {
         
@@ -65196,10 +65068,8 @@ namespace boost {
          // static const bool value = (result_type::value);
           static const bool value = false;
         };
-    }
-#endif
+        } // namespace detail
 
-#if 1
     namespace detail 
     {
         
@@ -65220,19 +65090,15 @@ namespace boost {
         {
             typedef char type;
         };
-    }
-#endif
+        } // namespace detail
 
-#if 1
     namespace detail 
     {
         
         
         template < class T > struct deduce_character_type_later {};
-    }
-#endif
+        } // namespace detail
 
-#if 1
     namespace detail 
     {
         
@@ -65299,13 +65165,8 @@ namespace boost {
             boost::detail::deduce_character_type_later< boost::array< const Char, N > >
         > {};
 
+        } // namespace detail
 
-
-    }
-#endif
-
-
-#if 1
     namespace detail 
     {
         
@@ -65330,10 +65191,8 @@ namespace boost {
 
           // typedef ::boost::static_assert_test< sizeof(::boost::STATIC_ASSERTION_FAILURE< (((result_t::value || boost::has_left_shift< std::basic_ostream< type >, T > ::value)) == 0 ? false : true) >)> boost_static_assert_typedef_361 __attribute__((unused));
         };
-    }
-#endif
+        } // namespace detail
 
-#if 1
     namespace detail  
     {
         
@@ -65358,10 +65217,8 @@ namespace boost {
             
          // typedef ::boost::static_assert_test< sizeof(::boost::STATIC_ASSERTION_FAILURE< (((result_t::value || boost::has_right_shift<std::basic_istream<wchar_t>, T > ::value)) == 0 ? false : true) >)> boost_static_assert_typedef_394 __attribute__((unused));
         };
-    } 
-#endif
+        } // namespace detail
 
-#if 1
     namespace detail  
     {
         
@@ -65382,10 +65239,8 @@ namespace boost {
 
             typedef stage2_type type;
         };
-    }
-#endif
+        } // namespace detail
 
-#if 1
     namespace detail 
     {
         
@@ -65467,10 +65322,8 @@ namespace boost {
         {
             typedef Traits type;
         };
-    }
-#endif
+        } // namespace detail
 
-#if 1
     namespace detail 
     {
         template<class T>
@@ -65484,11 +65337,8 @@ namespace boost {
         {
             typedef const T * type;
         };
-    }
-#endif
+        } // namespace detail
 
-
-#if 1
     namespace detail 
     {
         
@@ -65507,10 +65357,8 @@ namespace boost {
 
             static const bool value = (result_type::value);
         };
-    }
-#endif
+        } // namespace detail
 
-#if 1    
     namespace detail 
     {
         
@@ -65568,11 +65416,8 @@ namespace boost {
             static void check_coverage() {}
         };
 
-    }
-#endif
+        } // namespace detail
 
-
-#if 1
     namespace detail 
     {
         template <class Source, class Target>
@@ -65616,9 +65461,7 @@ namespace boost {
             
             typedef boost::detail::lcast_src_length<no_cv_src> len_t;
         };
-    }
-#endif
-
+        } // namespace detail
 
     namespace detail 
     {
@@ -65627,12 +65470,10 @@ namespace boost {
         };
     }
 
-#if 1
     namespace detail
     {
         struct do_not_construct_out_stream_t{};
-    }
-#endif
+        } // namespace detail
 
     namespace detail 
     {
@@ -65797,24 +65638,6 @@ namespace boost {
             }
         };
 
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#if 1
- 
         template <typename Target, typename Source>
         struct lexical_cast_dynamic_num
         {
@@ -65841,7 +65664,6 @@ namespace boost {
                 return caster_type::lexical_cast_impl(arg);
             }
         };
-#endif
     }
 
 

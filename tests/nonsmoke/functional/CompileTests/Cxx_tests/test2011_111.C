@@ -23,7 +23,6 @@ namespace pov
 {
 // using namespace std;
 
-#if 1
 /*****************************************************************************
 * Local preprocessor defines
 ******************************************************************************/
@@ -66,6 +65,4 @@ static long maxfinitecount = 0;
 // GLOBAL VARIABLE
 
 BBOX_TREE *Root_Object;
-#endif
-
 }

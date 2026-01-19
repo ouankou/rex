@@ -12,12 +12,8 @@ int foobar()
                                x = 0;
                              } );
              }
-        }
-#if 1
-       else
-        {
-        }
-#endif
+     } else {
+     }
 
      return 0;
    }

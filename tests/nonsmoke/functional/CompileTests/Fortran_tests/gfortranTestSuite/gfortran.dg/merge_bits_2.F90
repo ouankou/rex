@@ -18,5 +18,5 @@ contains
   function run_merge (i, j, k) result(res)
     integer(kind=16) :: i, j, k, res
     res = merge_bits(i,j,k)
-  end function 
+  end function
 end

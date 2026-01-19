@@ -1,8 +1,3 @@
-#if 0
-int x;
-int y;
-int z;
-#endif
 
 typedef union sigval
   {
@@ -16,7 +11,6 @@ typedef struct siginfo
      int si_errno;
      int si_code;
 
-#if 1
      union
         {
           int _pad[((128 / sizeof (int)) - 4)];
@@ -25,22 +19,12 @@ typedef struct siginfo
                void *si_addr;
              } _sigfault;
 
-#if 1
           struct
              {
                long int si_band;
                int si_fd;
-             } _sigpoll;
-#endif
-        } _sifields;
-#endif
+          } _sigpoll;
+     } _sifields;
    } siginfo_t;
 
-struct X
-  {
-#if 0
-int x;
-int y;
-int z;
-#endif
-  };
+   struct X {};

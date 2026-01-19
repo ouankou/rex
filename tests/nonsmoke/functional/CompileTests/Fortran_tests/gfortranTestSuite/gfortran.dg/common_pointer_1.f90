@@ -15,7 +15,7 @@ program common_pointer_1
   real, target :: a(2), b
   real, pointer :: x(:), y
   common /block/ x, y
-  
+
   a = (/1.0, 2.0/)
   b = 42.0
   x=>a

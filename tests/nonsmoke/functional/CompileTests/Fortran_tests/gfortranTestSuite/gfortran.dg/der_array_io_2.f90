@@ -6,15 +6,15 @@ program main
 
   character *1000 buf1, buf2
 
-  type :: foo_type                                             
+  type :: foo_type
      integer x(3)
      integer y(4)
      integer z(5)
      character*11 a(3)
   end type foo_type
-                                                                        
+
   type (foo_type) :: foo(2)
-  
+
   foo(1)%x = 3
   foo(1)%y = 4
   foo(1)%z = 5

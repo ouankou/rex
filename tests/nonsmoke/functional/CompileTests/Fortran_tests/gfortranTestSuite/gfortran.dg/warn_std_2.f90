@@ -1,7 +1,7 @@
 ! { dg-do compile }
 ! { dg-options "-std=f95 -Wintrinsics-std" }
 !
-! PR fortran/32778 - pedantic warning: intrinsics that 
+! PR fortran/32778 - pedantic warning: intrinsics that
 !                    are GNU extensions not part of -std=gnu
 !
 ! (2/3) Check for GNU extensions and intrinsics from F2003 if -std=f95.

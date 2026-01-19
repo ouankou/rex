@@ -7,14 +7,12 @@ namespace X
           struct X
              {
                static void f();
-             };
-#if 1
+          };
        // This is required for this bug.
           struct N
              {
             // static void f();
-             };
-#endif
+          };
           void X::f()
              {
                using namespace X;

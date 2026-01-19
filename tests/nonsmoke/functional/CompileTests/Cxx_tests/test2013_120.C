@@ -7,21 +7,8 @@ void foo()
    int x;
 }
 
-
-#if 0
-void DotNode::write( FTextStream &t,
-                   GraphType gt,
-                   GraphOutputFormat format,
-                    bool topDown,
-                    bool toChildren,
-                    bool backArrows,
-                    bool reNumber
-                   )
-#else
-void NEW_write()
-#endif
-{
-   int x;
-   int y;
-   int z;
+void NEW_write() {
+  int x;
+  int y;
+  int z;
 }

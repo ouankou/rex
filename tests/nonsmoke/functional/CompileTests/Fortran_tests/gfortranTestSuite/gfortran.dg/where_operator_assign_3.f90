@@ -50,7 +50,7 @@ contains
     type(a), intent(in) :: m
     foo%b = 0
     foo%c = m%c
-  end function foo  
+  end function foo
 end module global
 !******************************************************************************
 program test
@@ -76,6 +76,6 @@ contains
       y = a (99, "non-null")
     endwhere
   end subroutine test_where_char2
-end program test 
+end program test
 ! { dg-final { cleanup-modules "global" } }
 

@@ -26,16 +26,12 @@ class D
           double getY() const;
    };
 
-#if 0
-#include "test2022_01.h"
-#else
 // Header file (test2022_01.h) includes code:
 namespace E
    {
      extern const double VALUE;
      typedef A<VALUE> typeZ;
-   };
-#endif
+     }; // namespace E
 
 class F
    {

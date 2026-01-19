@@ -20,12 +20,3 @@ class myClass
 void foo2a (myClass::Domain X);
 // void foo2b (myClass::Domain X);
 // void foo3 (myNamespace::Domain X);
-
-#if 0
-void foo (myClass::Domain & X);
-
-class Domain {};
-
-void foo (Domain X);
-void foo (Domain & X);
-#endif

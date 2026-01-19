@@ -2,7 +2,7 @@
 ! Tests the fix for PR25091 and PR25092 in which mismatched array
 ! specifications between entries of the same procedure were not diagnosed.
 
-! Contributed by Joost VandeVondele  <jv244@cam.ac.uk> 
+! Contributed by Joost VandeVondele  <jv244@cam.ac.uk>
 
 ! This was PR25091 - no diagnostic given on error
  FUNCTION F1() RESULT(RES_F1) ! { dg-error "mismatched array specifications" }

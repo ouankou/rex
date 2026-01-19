@@ -1,29 +1,3 @@
-#if 0
- define bug. Remove or replace (void)fprintf(stderr,"can't set stdout's
-mode to binary\n"); and everything works fine.
-
-The code:
-when compiled output:
-
-int main(int argc,char **argv)
-{
-  char *ptr;
-  int stat;
-#ifdef OS2
-//ptr=getenv("XFILES");
-#endif /* OS2_OR_MSDOS */
-  if (1) {
-  }
-  else {
-  }
-  return stat;
-}
-
-seems like wrong #endif is matched to #ifdef.
-
-Thanks,
-Andreas
-#endif
 
 int main(int argc,char** argv)
    {

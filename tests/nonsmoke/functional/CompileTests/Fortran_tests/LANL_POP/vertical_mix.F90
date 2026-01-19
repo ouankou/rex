@@ -5,9 +5,9 @@
 !BOP
 ! !MODULE: vertical_mix
 ! !DESCRIPTION:
-!  This module contains the routines for computing vertical mixing 
-!  tendencies, implicit vertical mixing and convection.  Routines for 
-!  computing the diffusion coefficients themselves are in separate 
+!  This module contains the routines for computing vertical mixing
+!  tendencies, implicit vertical mixing and convection.  Routines for
+!  computing the diffusion coefficients themselves are in separate
 !  modules for the specific parameterizations.
 !  Currently, the options for vertical mixing include:
 !  \begin{itemize}
@@ -110,7 +110,7 @@
    real (r8) ::          &
       aidif               ! time-centering parameter for implicit vmix
 
-   real (r8), dimension(:), allocatable :: & 
+   real (r8), dimension(:), allocatable :: &
       afac_u, afac_t
 
 !-----------------------------------------------------------------------
@@ -120,10 +120,10 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension(nx_block,ny_block,nt,max_blocks_clinic) :: & 
+   real (r8), dimension(nx_block,ny_block,nt,max_blocks_clinic) :: &
       VTF        ! vertical tracer flux at top of T-box
- 
-   real (r8), dimension(nx_block,ny_block,max_blocks_clinic) :: & 
+
+   real (r8), dimension(nx_block,ny_block,max_blocks_clinic) :: &
       VUF,VVF    ! vertical momentum fluxes at top of box
 
 !-----------------------------------------------------------------------
@@ -235,7 +235,7 @@
    call broadcast_scalar(nml_error, master_task)
    if (nml_error /= 0) then
       call exit_POP(sigAbort, &
-                    'ERROR reading vertical_mix_nml') 
+                    'ERROR reading vertical_mix_nml')
    endif
 
    if (my_task == master_task) then
@@ -349,7 +349,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  allocate VDC, VVC arrays and define options for chosen 
+!  allocate VDC, VVC arrays and define options for chosen
 !  parameterization
 !
 !-----------------------------------------------------------------------
@@ -572,7 +572,7 @@
       endif
 
    end select
-     
+
    call timer_stop(timer_vmix_coeffs, block_id=bid)
 
 !-----------------------------------------------------------------------
@@ -627,7 +627,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block,nt), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block,nt), intent(out) :: &
       VDTK                ! returns VDIFF(Tracer(:,:,k,n))
 
 !EOP
@@ -664,11 +664,11 @@
       kp1 = km
    endif
 
-   kvdc = min(k,size(VDC,DIM=3))  !*** reduce to 1 if VDC 2-d array 
+   kvdc = min(k,size(VDC,DIM=3))  !*** reduce to 1 if VDC 2-d array
 
 !-----------------------------------------------------------------------
 !
-!  start loop over tracers 
+!  start loop over tracers
 !  set mt2 to be either 1 (if VDC same for all tracers) or n
 !    if coefficients are different for tracers
 !
@@ -732,10 +732,10 @@
 !
 !-----------------------------------------------------------------------
 
-      VTF(:,:,n,bid) = VTFB  
+      VTF(:,:,n,bid) = VTFB
 
    enddo
-      
+
    call timer_stop(timer_vdifft, block_id=bid)
 
 !-----------------------------------------------------------------------
@@ -781,7 +781,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(out) :: &
        VDUK,             &! returns Vdiff(U)
        VDVK               ! returns Vdiff(V)
 
@@ -798,7 +798,7 @@
       kp1,               &! k+1
       kvvc                ! index into viscosity array
 
-   real (r8), dimension(nx_block,ny_block) :: & 
+   real (r8), dimension(nx_block,ny_block) :: &
       VUFB,VVFB,        &! vertical momentum fluxes at bottom of box
       WORK               ! local work array for bottom drag
 
@@ -818,7 +818,7 @@
       kp1 = km
    endif
 
-   kvvc = min(k,size(VVC,DIM=3))  !*** reduce to 1 if VVC 2-d array 
+   kvvc = min(k,size(VVC,DIM=3))  !*** reduce to 1 if VVC 2-d array
 
 !-----------------------------------------------------------------------
 !
@@ -862,7 +862,7 @@
 !
 !-----------------------------------------------------------------------
 
-   where (k == KMU(:,:,bid)) 
+   where (k == KMU(:,:,bid))
       WORK = bottom_drag*sqrt(UOLD(:,:,k)**2 + VOLD(:,:,k)**2)
       VUFB = WORK*UOLD(:,:,k)
       VVFB = WORK*VOLD(:,:,k)
@@ -892,8 +892,8 @@
 !
 !-----------------------------------------------------------------------
 
-   VUF(:,:,bid) = VUFB  
-   VVF(:,:,bid) = VVFB  
+   VUF(:,:,bid) = VUFB
+   VVF(:,:,bid) = VVFB
 
    call timer_stop(timer_vdiffu, block_id=bid)
 
@@ -948,7 +948,7 @@
       PSFC         ! surface pressure for use in determining
                    ! variable thickness surface layer
 
-   integer (int_kind), intent(in) :: & 
+   integer (int_kind), intent(in) :: &
       nfirst, nlast        ! only update tracers from nfirst to nlast
 
    type (block), intent(in) :: &
@@ -970,7 +970,7 @@
    real (r8) ::          &
       a,b,c,d             ! various temporaries
 
-   real (r8), dimension(km) :: & 
+   real (r8), dimension(km) :: &
       e,f,               &! various work arrays
       hfac_t
 
@@ -1059,8 +1059,8 @@
 
 !-----------------------------------------------------------------------
 !
-!        The solution of the system (UZ) is DeltaTracer -- it has 
-!        already been multiplied by dtt so we can advance the tracers 
+!        The solution of the system (UZ) is DeltaTracer -- it has
+!        already been multiplied by dtt so we can advance the tracers
 !        directly
 !
 !-----------------------------------------------------------------------
@@ -1119,7 +1119,7 @@
    real (r8), dimension(nx_block,ny_block,nt), intent(in) :: &
       RHS          ! right hand side of linear system
 
-   integer (int_kind), intent(in) :: & 
+   integer (int_kind), intent(in) :: &
       nfirst, nlast        ! only update tracers from nfirst to nlast
 
    type (block), intent(in) :: &
@@ -1229,8 +1229,8 @@
 
 !-----------------------------------------------------------------------
 !
-!        The solution of the system (UZ) is DeltaTracer -- it has 
-!        already been multiplied by dtt so we can advance the tracers 
+!        The solution of the system (UZ) is DeltaTracer -- it has
+!        already been multiplied by dtt so we can advance the tracers
 !        directly
 !
 !-----------------------------------------------------------------------
@@ -1266,9 +1266,9 @@
 ! !DESCRIPTION:
 !  Computes the implicit vertical mixing of momentum
 !  using a tridiagonal solver.
-!  Since the top boundary condition (given wind stress) does not 
-!  depend on the velocity, its influence is accounted for in the 
-!  explicit part (subroutine vdiffu).  On the other hand, the bottom 
+!  Since the top boundary condition (given wind stress) does not
+!  depend on the velocity, its influence is accounted for in the
+!  explicit part (subroutine vdiffu).  On the other hand, the bottom
 !  b.c. does depend on velocity ($\tau = c|{\bf\rm u}|(u,v)$).,
 !  but both the speed and velocity in this term are evaluated
 !  at the old time, so the bottom drag is also accounted for
@@ -1302,7 +1302,7 @@
    real (r8) ::          &
       a,b,c,d             ! various temp variables
 
-   real (r8), dimension(km) :: & 
+   real (r8), dimension(km) :: &
       e,f1,f2,           &! various work arrays
       hfac_u
 
@@ -1467,7 +1467,7 @@
                                this_block, RHOOUT=RHOK )
             call state(k+1,k+1,TNEW(:,:,k+1,1), TNEW(:,:,k+1,2), &
                                this_block, RHOOUT=RHOKP)
-              
+
             if (partial_bottom_cells) then
                do n = 1,nt
                   where ((RHOK > RHOKP) .and. (k < KMT(:,:,bid)))

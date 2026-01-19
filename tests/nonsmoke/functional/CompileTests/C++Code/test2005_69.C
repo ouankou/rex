@@ -1,23 +1,3 @@
-#if 0
-// forward declaration of class
-class B;
-
-// Can't build forward declaration of member function of class (not yet seen)
-// void B::f(int y);
-
-class B
-   {
-         int x;
-     public:
-         void f(int y)
-            {
-              x=x+y;            
-            }
-   };
-
-// error: member function "B::f" may not be redeclared outside its class
-// void B::f(int y);
-#endif
 
 // forward declaration of templated class (this is legal C++)
 // template<class U> class A;
@@ -34,28 +14,19 @@ class A
      public:
          static U myVar;
          static float myFloatVar;
-         
-     public:
-#if 0
-      // templates defined in the class are preserved in the output template declaration
-         template<class T> void g(int y, T u) 
-            {
-              y = y+u;
-              x+=u;
-              
-            }
-#endif
-       // non-template member functions are not represented in the templated
-       // class (even though we have specified
-       // FRIEND_AND_MEMBER_DEFINITIONS_MAY_BE_MOVED_OUT_OF_CLASS to be FALSE in
-       // legacy frontend).
-       void f(int y)
+
+       public:
+         // non-template member functions are not represented in the templated
+         // class (even though we have specified
+         // FRIEND_AND_MEMBER_DEFINITIONS_MAY_BE_MOVED_OUT_OF_CLASS to be FALSE
+         // in legacy frontend).
+         void f(int y)
 #ifdef DEFINE_FUNCTION_IN_CLASS
-       {
+         {
               x=x+y;
        }
 #else
-           ;
+             ;
 #endif
    };
 
@@ -84,7 +55,6 @@ template<> class A<float>
    {
    };
 
-#if 1
 // define the following specialization
 inline void A < int > ::f(int y)
 {
@@ -99,7 +69,6 @@ inline void A < double > ::f(int y)
   myFloatVar = 3.14;
   (this) -> x = (this) -> x + y;
 }
-#endif
 
 // explicit template instantiation directive
 // template void A<int>::g<int>(int y, int u);

@@ -11,12 +11,12 @@
   CHARACTER(LEN=3), DIMENSION(10) :: Z
   call test_eoshift
 contains
-  subroutine test_eoshift 
+  subroutine test_eoshift
     CHARACTER(LEN=1), DIMENSION(10) :: chk
     chk(1:8) = "5"
     chk(9:10) = " "
     Z(:)="456"
-    if (any (EOSHIFT(Z(:)(2:2),2) .ne. chk)) call abort 
+    if (any (EOSHIFT(Z(:)(2:2),2) .ne. chk)) call abort
   END subroutine
 END
 

@@ -7,14 +7,6 @@ void foobar()
              {
                x = 76;
                break;
-             }
-#if 0
-          case 1:
-          case 2:
-             {
-               x = 76;
-               break;
-             }
-#endif
+          }
         }
    }

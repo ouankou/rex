@@ -10,16 +10,8 @@
 // #line 1 "rose_test2007_167.C"
 // #line 1 "test2007_167.h"
 
-#if 0
-typedef struct
-   {
-     int rm_so;
-     int rm_eo;
-   } regmatch_t;
-#else
 // Test with this in a header file
 #include "test2007_167.h"
-#endif
 
 // Also test with this in the current file
 typedef struct

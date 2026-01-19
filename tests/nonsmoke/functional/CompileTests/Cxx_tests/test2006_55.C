@@ -24,13 +24,10 @@ void foo (number n)
      enum {X, Y} val = X;
    }
 #else
-void foo (enum number n)
-   {
-#if 1
-     foo(none);
-#endif
-     enum {X, Y} val = X;
-   }
+void foo(enum number n) {
+  foo(none);
+  enum { X, Y } val = X;
+}
 #endif
 
 #if __cplusplus

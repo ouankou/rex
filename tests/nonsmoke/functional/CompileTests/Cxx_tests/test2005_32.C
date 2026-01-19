@@ -37,44 +37,24 @@ class X
 // This is the only way to initialize a static const data member which is non-integer based
 const double X::pi = 3.14;
 
-
-#if 0
-#ifndef USE_ROSE
-#define STORAGE static
-#else
-#define STORAGE
-#endif
-#endif
-
 // #if SWIG
-#if 0
-#ifndef __GNUC__
-#define STORAGE static
-#else
-#define STORAGE
-#endif
-
-namespace Y 
-   {
-#else
 #define STORAGE
 class Y
    {
-     public:
-#endif
-       // This is allowed by GNU but not by legacy frontend
-       // static const double pi = 3.141592653589793238462643383279; // Pi to 30
-       // places
+public:
+  // This is allowed by GNU but not by legacy frontend
+  // static const double pi = 3.141592653589793238462643383279; // Pi to 30
+  // places
 
-       // This is allowed by legacy frontend, but not by g++ (g++ needs constant
-       // to be static) const double pi = 3.141592653589793238462643383279; //
-       // Pi to 30 places
+  // This is allowed by legacy frontend, but not by g++ (g++ needs constant
+  // to be static) const double pi = 3.141592653589793238462643383279; //
+  // Pi to 30 places
 
-       // Code that will compile with legacy frontend
-       // const double pi = 3.141592653589793238462643383279; // Pi to 30 places
-       // Code that we should generate so that we can compile with g++
-       // static const double pi = 3.141592653589793238462643383279; // Pi to 30
-       // places
+  // Code that will compile with legacy frontend
+  // const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+  // Code that we should generate so that we can compile with g++
+  // static const double pi = 3.141592653589793238462643383279; // Pi to 30
+  // places
 #ifdef USE_ROSE
        // DQ (3/23/2014): When ROSE is using legacy frontend 4.7 we can specify
        // const double pi = 3.141... but when we use legacy frontend 4.8, we

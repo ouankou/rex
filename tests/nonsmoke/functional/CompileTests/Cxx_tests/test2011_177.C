@@ -6,12 +6,3 @@ namespace std
    {
 //   int var_A;
    }
-
-#if 0
-namespace std
-   {
-     int var_B = var_A;
-   }
-#endif
-
-

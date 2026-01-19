@@ -17,9 +17,9 @@
 ! !USES:
 
    use kinds_mod, only: char_len
-!   use domain, only: 
-!   use constants, only: 
-!   use time_management, only: 
+!   use domain, only:
+!   use constants, only:
+!   use time_management, only:
    use restart, only: write_restart, init_restart
    use history, only: write_history, init_history
    use movie, only: write_movie, init_movie
@@ -69,7 +69,7 @@
 !-----------------------------------------------------------------------
 !
 !  write history, movie files - the decision when to write
-!  is internal to each routine  
+!  is internal to each routine
 !  write these first so that if I/O fails, no restart is written
 !
 !-----------------------------------------------------------------------
@@ -88,7 +88,7 @@
 !-----------------------------------------------------------------------
 !
 !  write tavg - the decision when to write
-!  is internal to routine except for notifying tavg that a 
+!  is internal to routine except for notifying tavg that a
 !  restart must be written
 !
 !-----------------------------------------------------------------------

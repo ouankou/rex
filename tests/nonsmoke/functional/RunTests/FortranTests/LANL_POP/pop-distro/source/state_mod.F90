@@ -6,16 +6,16 @@
 ! !MODULE: state_mod
 !
 ! !DESCRIPTION:
-!  This module contains routines necessary for computing the density 
+!  This module contains routines necessary for computing the density
 !  from model temperature and salinity using an equation of state.
 !
 !  The module supports four forms of EOS:
 !  \begin{enumerate}
-!     \item The UNESCO equation of state computed using the 
-!           potential-temperature-based bulk modulus from Jackett and 
+!     \item The UNESCO equation of state computed using the
+!           potential-temperature-based bulk modulus from Jackett and
 !           McDougall, JTECH, Vol.12, pp 381-389, April, 1995.
 !     \item The faster and more accurate alternative to the UNESCO eos
-!           of McDougall, Wright, Jackett and Feistel (hereafter 
+!           of McDougall, Wright, Jackett and Feistel (hereafter
 !           MWJF, 2001 submission to JTECH).
 !     \item a polynomial fit to the full UNESCO EOS
 !     \item a simple linear EOS based on constant expansion coeffs
@@ -56,7 +56,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension(km) :: & 
+   real (r8), dimension(km) :: &
       tmin, tmax,        &! valid temperature range for level k
       smin, smax,        &! valid salinity    range for level k
       pressz              ! ref pressure (bars) at each level
@@ -138,13 +138,13 @@
       bup1s0t0 =  3.186519_r8   ,       &
       bup1s0t1 =  2.212276e-2_r8,       &
       bup1s0t2 = -2.984642e-4_r8,       &
-      bup1s0t3 =  1.956415e-6_r8 
+      bup1s0t3 =  1.956415e-6_r8
 
    real (r8), parameter ::              &
       bup1s1t0 =  6.704388e-3_r8,       &
       bup1s1t1 = -1.847318e-4_r8,       &
       bup1s1t2 =  2.059331e-7_r8,       &
-      bup1sqt0 =  1.480266e-4_r8 
+      bup1sqt0 =  1.480266e-4_r8
 
    real (r8), parameter ::              &
       bup2s0t0 =  2.102898e-4_r8,       &
@@ -214,7 +214,7 @@
       so,                &! reference salinity    for level k
       sigo                ! reference density     for level k
 
-   real (r8), dimension(:,:), allocatable :: & 
+   real (r8), dimension(:,:), allocatable :: &
       state_coeffs        ! coefficients for polynomial eos
 
 !-----------------------------------------------------------------------
@@ -223,7 +223,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), parameter ::        & 
+   real (r8), parameter ::        &
       T_leos_ref = 19.0_r8,       &! reference T for linear eos (deg C)
       S_leos_ref = 0.035_r8,      &! reference S for linear eos (msu)
       rho_leos_ref = 1.025022_r8, &! ref dens (g/cm3) at ref T,S and 0 bar
@@ -267,10 +267,10 @@
 
    integer (int_kind), intent(in) :: &
       k,                    &! depth level index
-      kk                     ! level to which water is adiabatically 
+      kk                     ! level to which water is adiabatically
                             ! displaced
 
-   real (r8), dimension(nx_block,ny_block), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(in) :: &
       TEMPK,             &! temperature at level k
       SALTK               ! salinity    at level k
 
@@ -279,7 +279,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), optional, intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block), optional, intent(out) :: &
       RHOOUT,  &! perturbation density of water
       RHOFULL, &! full density of water
       DRHODT,  &! derivative of density with respect to temperature
@@ -397,7 +397,7 @@
       !***
 
       mwjfnums0t0 = mwjfnp0s0t0 + p*(mwjfnp1s0t0 + p*mwjfnp2s0t0)
-      mwjfnums0t1 = mwjfnp0s0t1 
+      mwjfnums0t1 = mwjfnp0s0t1
       mwjfnums0t2 = mwjfnp0s0t2 + p*(mwjfnp1s0t2 + p*mwjfnp2s0t2)
       mwjfnums0t3 = mwjfnp0s0t3
       mwjfnums1t0 = mwjfnp0s1t0 + p*mwjfnp1s1t0
@@ -483,7 +483,7 @@
       !*** first calculate surface (p=0) values from UNESCO eqns.
       !***
 
-      WORK1 = uns1t0 + uns1t1*TQ + & 
+      WORK1 = uns1t0 + uns1t1*TQ + &
              (uns1t2 + uns1t3*TQ + uns1t4*T2)*T2
       WORK2 = SQR*(unsqt0 + unsqt1*TQ + unsqt2*T2)
 
@@ -492,7 +492,7 @@
 
 
       !***
-      !*** now calculate bulk modulus at pressure p from 
+      !*** now calculate bulk modulus at pressure p from
       !*** Jackett and McDougall formula
       !***
 
@@ -556,7 +556,7 @@
                          c0, KMT(:,:,bid) >= k)
 
       endif
- 
+
 !-----------------------------------------------------------------------
 !
 !  polynomial EOS
@@ -620,7 +620,7 @@
                       c3*state_coeffs(9,kk)*SQ)*SQ,  &
                   c0, KMT(:,:,bid) >= k)
       endif
- 
+
 !-----------------------------------------------------------------------
 !
 !  linear EOS
@@ -631,7 +631,7 @@
 
       if (present(RHOOUT )) RHOOUT  = bet*(SALTK - S_leos_ref) - &
                                       alf*(TEMPK - T_leos_ref)
-      if (present(RHOFULL)) RHOFULL = rho_leos_ref + & 
+      if (present(RHOFULL)) RHOFULL = rho_leos_ref + &
                                       bet*(SALTK - S_leos_ref) - &
                                       alf*(TEMPK - T_leos_ref)
       if (present(DRHODT )) DRHODT  = -alf
@@ -706,7 +706,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) ::  & 
+   integer (int_kind) ::  &
       k,                  &! vertical loop index
       nu,                 &! unit number for coeff input file
       m,                  &! dummy loop index
@@ -718,7 +718,7 @@
       state_file,          &! file containing polynomial eos coeffs
       state_range_opt       ! option for checking valid T,S range
 
-   namelist /state_nml/ state_choice, state_file,         & 
+   namelist /state_nml/ state_choice, state_file,         &
                         state_range_opt, state_range_freq
 
 !-----------------------------------------------------------------------
@@ -821,7 +821,7 @@
 
       if (state_itype == state_type_polynomial) then
          if (state_file == 'internal') then
-            write(stdout,'(a39)') & 
+            write(stdout,'(a39)') &
               'Calculating EOS coefficients internally'
          else
             write(stdout,*) &
@@ -871,9 +871,9 @@
    case (state_type_jmcd)
 
       tmin = -2.0_r8  ! valid pot. temp. range for level k
-      tmax = 40.0_r8 
+      tmax = 40.0_r8
       smin =  0.0_r8  ! valid salinity   range for level k
-      smax = 0.042_r8 
+      smax = 0.042_r8
 
 !-----------------------------------------------------------------------
 !
@@ -942,9 +942,9 @@
    case (state_type_linear)
 
       tmin = -2.0_r8  ! valid pot. temp. range for level k
-      tmax = 40.0_r8 
+      tmax = 40.0_r8
       smin =  0.0_r8  ! valid salinity   range for level k
-      smax = 0.042_r8 
+      smax = 0.042_r8
 
    end select
 
@@ -961,29 +961,29 @@
  subroutine init_state_coeffs
 
 ! !DESCRIPTION:
-!  This routine calculates coefficients for the polynomial equation of 
+!  This routine calculates coefficients for the polynomial equation of
 !  state option.  This routine calculates the 9 coefficients of a third
-!  order (in temperature and salinity) polynomial approximation to the 
+!  order (in temperature and salinity) polynomial approximation to the
 !  equation of state for sea water.  The coefficients are calculated by
-!  first sampling a range of temperature and salinity at each depth.  
-!  The density is then computed at each of the sampled points using the 
-!  full UNESCO equation of state.  A least squares method is used to 
-!  fit the coefficients of the polynomial to the sampled points.  More 
-!  specifically, the densities calculated from the polynomial 
+!  first sampling a range of temperature and salinity at each depth.
+!  The density is then computed at each of the sampled points using the
+!  full UNESCO equation of state.  A least squares method is used to
+!  fit the coefficients of the polynomial to the sampled points.  More
+!  specifically, the densities calculated from the polynomial
 !  formula are in the form of sigma anomalies.  The method is
-!  taken from that described by Bryan and Cox (1972).  
+!  taken from that described by Bryan and Cox (1972).
 !  By default, the program uses the equation of state set by the
 !  Joint Panel on Oceanographic Tables and Standards (UNESCO, 1981)
 !  an described by Gill (1982).
 !
-!  This was originall adopted from the GFDL MOM model and extensively 
+!  This was originall adopted from the GFDL MOM model and extensively
 !  modified to improve readability (February (1999).
 !
 !  Additionally, improvements to the accuracy of the EOS have been
-!  added (March 1999).  There are two improvements: (a) A more 
-!  accurate depth-to-pressure conversion based on the Levitus 1994 
-!  climatology, and (b) Use of a more recent formula for the 
-!  computation of potential temperature (Bryden, 1973) in place of an 
+!  added (March 1999).  There are two improvements: (a) A more
+!  accurate depth-to-pressure conversion based on the Levitus 1994
+!  climatology, and (b) Use of a more recent formula for the
+!  computation of potential temperature (Bryden, 1973) in place of an
 !  older algorithm (Fofonoff, 1962). See Dukowicz (2000).
 !
 !  References:
@@ -1026,7 +1026,7 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind), parameter ::  &
-      nsample_salt = 5,              &! number of pts to sample in S 
+      nsample_salt = 5,              &! number of pts to sample in S
       nsample_temp = 2*nsample_salt, &! number of pts in sample in T
       nsample_all  = nsample_salt*nsample_temp  ! total sample points
 
@@ -1049,7 +1049,7 @@
       avg_theta       ! average of sample pot. temps for level k
 
    real (r8), dimension(nsample_all) :: &
-      tsamp,         &! temperature     at each sample point 
+      tsamp,         &! temperature     at each sample point
       ssamp,         &! salinity        at each sample point
       thsamp,        &! potential temp  at each sample point
       sigma,         &! density         at each sample point
@@ -1062,12 +1062,12 @@
       lsqcoeffs       ! polynomial coeffs returned by lsq routine
 
    !***
-   !*** bounds for polynomial fit using a reference model of 
+   !*** bounds for polynomial fit using a reference model of
    !*** 33 levels from surface to 8000m at z=(k-1)*250 meters
-   !*** The user should review the appropriateness of the 
-   !*** reference values set below, and modify them if the 
-   !*** intended modelling application could be expected to yield 
-   !*** temperature and salinity values outside of the ranges set 
+   !*** The user should review the appropriateness of the
+   !*** reference values set below, and modify them if the
+   !*** intended modelling application could be expected to yield
+   !*** temperature and salinity values outside of the ranges set
    !*** by default.
    !***
 
@@ -1234,7 +1234,7 @@
 
 !-----------------------------------------------------------------------
 !
-!     recompute average (reference) density based on level average 
+!     recompute average (reference) density based on level average
 !     values of T, S, and pressure.
 !     use average potential temperature in place of average temp
 !
@@ -1304,7 +1304,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  rescale some of the coefficients and reference values for correct 
+!  rescale some of the coefficients and reference values for correct
 !  units
 !
 !-----------------------------------------------------------------------
@@ -1446,7 +1446,7 @@
 !-----------------------------------------------------------------------
 
    real (r8) :: rw, rsto, xkw, xksto, xkstp, &
-                tem2, tem3, tem4, tem5, slt2, st15, pbar2 
+                tem2, tem3, tem4, tem5, slt2, st15, pbar2
 
 !-----------------------------------------------------------------------
 !
@@ -1459,7 +1459,7 @@
    tem4 = temp**4
    tem5 = temp**5
    slt2 = salt**2
-   st15 = salt**(1.5_r8) 
+   st15 = salt**(1.5_r8)
    pbar2 = pbars**2
 
 !-----------------------------------------------------------------------
@@ -1468,7 +1468,7 @@
 !
 !-----------------------------------------------------------------------
 
-   rw = unt0 + unt1*temp + unt2*tem2 + unt3*tem3 + & 
+   rw = unt0 + unt1*temp + unt2*tem2 + unt3*tem3 + &
                            unt4*tem4 + unt5*tem5
 
    rsto = rw +                                       &
@@ -1513,18 +1513,18 @@
 
 ! !DESCRIPTION:
 !  This function computes pressure in bars from depth in meters
-!  using a mean density derived from depth-dependent global 
-!  average temperatures and salinities from Levitus 1994, and 
+!  using a mean density derived from depth-dependent global
+!  average temperatures and salinities from Levitus 1994, and
 !  integrating using hydrostatic balance.
 !
 !  References:
 !
-!     Levitus, S., R. Burgett, and T.P. Boyer, World Ocean Atlas 
-!          1994, Volume 3: Salinity, NOAA Atlas NESDIS 3, US Dept. of 
+!     Levitus, S., R. Burgett, and T.P. Boyer, World Ocean Atlas
+!          1994, Volume 3: Salinity, NOAA Atlas NESDIS 3, US Dept. of
 !          Commerce, 1994.
 !
-!     Levitus, S. and T.P. Boyer, World Ocean Atlas 1994, 
-!          Volume 4: Temperature, NOAA Atlas NESDIS 4, US Dept. of 
+!     Levitus, S. and T.P. Boyer, World Ocean Atlas 1994,
+!          Volume 4: Temperature, NOAA Atlas NESDIS 4, US Dept. of
 !          Commerce, 1994.
 !
 !     Dukowicz, J. K., 2000: Reduction of Pressure and Pressure
@@ -1577,7 +1577,7 @@
 ! !INPUT/OUTPUT PARAMETERS:
 
    real (r8), dimension(:,:), intent(inout) :: &
-     a                   ! input matrix A with the value of each of 
+     a                   ! input matrix A with the value of each of
                          ! the fitting functions at each sample point
 
 ! !INPUT PARAMETERS:
@@ -1797,7 +1797,7 @@
            end do
            sj = sj + up*a(ip,j)
            sj = bp*sj  !*** sj=yj now
- 
+
            do i=ip+1,k
              a(i,j) = a(i,j) - a(i,ip)*sj
            end do

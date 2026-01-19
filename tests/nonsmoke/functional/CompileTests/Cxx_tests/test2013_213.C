@@ -129,11 +129,10 @@ int FileDescriptor::DebugString() const
      std::set<const Descriptor*> groups;
 
      int i;
-#if 1
-  // This appears to be important code in demonstrating the bug:
-  // it is unparsed as: groups . insert((this) ->  extension (i) ->  message_type ());
+     // This appears to be important code in demonstrating the bug:
+     // it is unparsed as: groups . insert((this) ->  extension (i) ->
+     // message_type ());
      groups.insert(extension(i)->message_type());
-#endif
 
      return 0;
    }

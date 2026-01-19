@@ -23,46 +23,6 @@ Solutions:
 
  */
 
-#if 0
-extern "C" int a;
-int b;
-
-extern "C"   
-   {
-#include "test2001_15.h"
-
-// This is legal code to place an extern "C" (with braces) inside of another extern "C" with braces.
-extern "C" { /* test parser */ int c1; }
-
-#define TEST_ONE_LINE_EXTERN_C_WITH_BRACES
-extern "C" { int c2; }
-
-#define TEST_MULTI_LINE_EXTERN_C_WITH_BRACES
-extern "C" {  
-     int d; 
-   }
-extern "C" int e;
-int f;
-   }
-
-#define TEST_ONE_LINE_EXTERN_C_WITH_BRACES
-extern "C" { int z; }
-
-
-#undef USING_Cxx_COMPILER
-#ifndef USING_Cxx_COMPILER
-extern "C"
-   {
-#endif
-
-   int g;
-
-#ifndef USING_Cxx_COMPILER
-   }
-#endif
-
-#endif
-
 // This should unparse correctly (many other case will not)
 extern "C"   
    {

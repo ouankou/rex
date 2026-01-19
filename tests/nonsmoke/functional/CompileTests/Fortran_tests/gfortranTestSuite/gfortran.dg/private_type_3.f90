@@ -4,7 +4,7 @@
 ! with the fix for PR21986. In two cases, use associated
 ! public symbols were taking on the default private access
 ! attribute of the local namespace. In the third, a private
-! symbol was not available to a namelist in contained 
+! symbol was not available to a namelist in contained
 ! procedure in the same module.
 !
 ! Based on the example in PR24207.

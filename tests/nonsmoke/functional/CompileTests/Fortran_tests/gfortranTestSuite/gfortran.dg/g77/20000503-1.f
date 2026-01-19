@@ -4,10 +4,10 @@ c { dg-do run }
 *
 *  David Billinghurst, (David.Billinghurst@riotinto.com.au)
 *  23 February 2000
-* 
+*
       INTEGER N, I, SLASQX
       N = 20
-      I = SLASQX( N ) 
+      I = SLASQX( N )
       IF ( I .NE. 2*N ) THEN
          WRITE(6,*) 'I = ', I, ' but should be ', 2*N
          CALL ABORT()

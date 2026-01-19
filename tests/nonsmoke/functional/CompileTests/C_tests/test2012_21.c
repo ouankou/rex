@@ -1,26 +1,6 @@
 
 typedef struct builtin *Builtin;
 
-
-
-#if 0
-typedef struct hashnode *HashNode;
-struct hashnode {
-    HashNode next;
-    char *nam;
-    int flags;
-};
-#endif
-
-#if 0
-typedef struct options *Options;
-struct options {
-    unsigned char ind[128];
-    char **args;
-    int argscount, argsalloc;
-};
-#endif
-
 // typedef int (*HandlerFunc) (char *, char **, Options, int);
 typedef int (*HandlerFunc)();
 

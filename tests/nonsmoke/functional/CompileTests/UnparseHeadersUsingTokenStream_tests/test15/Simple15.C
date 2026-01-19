@@ -7,21 +7,6 @@ int abc_var_xyz;
 int y1;
 int y2;
 
-
-#if 0
-class A 
-   {
-     private:
-          int member_x1;
-          int member_x2;
-          int abc_var_y;
-          int abc_var_z;
-          int member_y1;
-          int member_y2;
-   };
-#endif
-
-
 void foobar()
    {
      int x1;

@@ -5,5 +5,5 @@ program m
     do while (.true.)
        read(*, *, end = 1) i
     end do
-1   continue 
+1   continue
 end program m

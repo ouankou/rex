@@ -6,8 +6,4 @@ class X
           friend void foobar();
    };
 
-#if 1
-void foobar()
-   {
-   }
-#endif
+   void foobar() {}

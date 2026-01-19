@@ -14,5 +14,5 @@ module ice_module
   type,extends(b_type) :: c_type
   end type c_type
 end module ice_module
- 
+
 ! { dg-final { cleanup-modules "ice_module" } }

@@ -11,16 +11,3 @@ class A
   // This has to be a forward declaration! (current bug is that "public:" is not output in code generation)
      public: int c();
    };
-
-#if 0
-class B : public A
-   {
-     public: int d() { a(); }
-   };
-
-void foo()
-   {
-     B x;
-     x.d();
-   }
-#endif

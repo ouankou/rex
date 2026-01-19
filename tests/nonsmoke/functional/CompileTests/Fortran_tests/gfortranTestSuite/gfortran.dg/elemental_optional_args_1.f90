@@ -1,9 +1,9 @@
 ! { dg-do compile }
 ! { dg-options "-pedantic" }
-! Check the fix for PR20893, in which actual arguments could violate: 
+! Check the fix for PR20893, in which actual arguments could violate:
 ! "(5) If it is an array, it shall not be supplied as an actual argument to
 ! an elemental procedure unless an array of the same rank is supplied as an
-! actual argument corresponding to a nonoptional dummy argument of that 
+! actual argument corresponding to a nonoptional dummy argument of that
 ! elemental procedure." (12.4.1.5)
 !
 ! Contributed by Joost VandeVondele <jv244@cam.ac.uk>

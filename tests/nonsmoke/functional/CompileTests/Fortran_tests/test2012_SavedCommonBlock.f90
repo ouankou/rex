@@ -5,16 +5,16 @@ save /block/
 integer :: blocki=0,i,j
 blocki=blocki+i
 j=blocki
-end subroutine 
+end subroutine
 
 
-program p 
+program p
 integer j
 call foo(2,j)
 call foo(2,j)
-if (j == 4) then 
+if (j == 4) then
 print *, 'OK'
-else 
+else
 print *,j
 end if
 end program

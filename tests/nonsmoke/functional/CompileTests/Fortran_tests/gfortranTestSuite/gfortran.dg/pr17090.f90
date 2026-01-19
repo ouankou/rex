@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! pr 17090 Runtime I/O error
-! bdavis9659@comcast.net 
+! bdavis9659@comcast.net
 ! 9/12/2004
 ! list directed read with spaces between the last data item and the
 ! eoln cause missed data items.

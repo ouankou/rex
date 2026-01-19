@@ -1,9 +1,9 @@
 #
 # File:  linux_alpha.gnu
 #
-# The commenting in this file is intended for occasional maintainers who 
-# have better uses for their time than learning "make", "awk", etc.  There 
-# will someday be a file which is a cookbook in Q&A style: "How do I do X?" 
+# The commenting in this file is intended for occasional maintainers who
+# have better uses for their time than learning "make", "awk", etc.  There
+# will someday be a file which is a cookbook in Q&A style: "How do I do X?"
 # is followed by something like "Go to file Y and add Z to line NNN."
 #
 FC = mpif90
@@ -12,9 +12,9 @@ CC = cc
 Cp = /bin/cp
 Cpp = /lib/cpp -P
 AWK = /usr/bin/gawk
-ABI = 
+ABI =
 COMMDIR = mpi
- 
+
 #  Enable MPI library for parallel code, yes/no.
 
 MPI = yes
@@ -39,62 +39,62 @@ Cpp_opts =   \
       $(DCOUPL)
 
 Cpp_opts := $(Cpp_opts) -DPOSIX $(NETCDFINC)
- 
+
 #----------------------------------------------------------------------------
 #
 #                           C Flags
 #
 #----------------------------------------------------------------------------
- 
-CFLAGS = 
+
+CFLAGS =
 
 ifeq ($(OPTIMIZE),yes)
-  CFLAGS := $(CFLAGS) 
+  CFLAGS := $(CFLAGS)
 else
-  CFLAGS := $(CFLAGS) 
+  CFLAGS := $(CFLAGS)
 endif
- 
+
 #----------------------------------------------------------------------------
 #
 #                           FORTRAN Flags
 #
 #----------------------------------------------------------------------------
- 
+
 FBASE = $(ABI) $(NETCDFINC) -I$(ObjDepDir)
 
 ifeq ($(TRAP_FPE),yes)
-  FBASE := $(FBASE) 
+  FBASE := $(FBASE)
 endif
 
 ifeq ($(OPTIMIZE),yes)
   FFLAGS = $(FBASE) -O -tune ev6 -arch ev6
 else
-  FFLAGS = $(FBASE) -g 
+  FFLAGS = $(FBASE) -g
 endif
- 
+
 #----------------------------------------------------------------------------
 #
 #                           Loader Flags and Libraries
 #
 #----------------------------------------------------------------------------
- 
+
 LDFLAGS = $(ABI) -v
- 
+
 83,84c81,82
 #LIBS = -L /usr/X11R6/lib $(NETCDFLIB) -lnetcdf -lX11
 LIBS = $(NETCDFLIB) -lnetcdf
- 
+
 ifeq ($(MPI),yes)
-  LIBS := $(LIBS) 
+  LIBS := $(LIBS)
 endif
 
 ifeq ($(TRAP_FPE),yes)
-  LIBS := $(LIBS) 
+  LIBS := $(LIBS)
 endif
- 
+
 #LDLIBS = $(TARGETLIB) $(LIBRARIES) $(LIBS)
 LDLIBS = $(LIBS)
- 
+
 #----------------------------------------------------------------------------
 #
 #                           Explicit Rules for Compilation Problems
@@ -106,7 +106,7 @@ LDLIBS = $(LIBS)
 #                           Implicit Rules for Compilation
 #
 #----------------------------------------------------------------------------
- 
+
 # Cancel the implicit gmake rules for compiling
 %.o : %.f
 %.o : %.f90
@@ -116,12 +116,12 @@ LDLIBS = $(LIBS)
 	@echo LINUX_ALPHA Compiling with implicit rule $<
 	@$(FC) $(FFLAGS) -c $<
 	@if test -f *.mod; then mv -f *.mod $(ObjDepDir); fi
- 
+
 %.o: %.f90
 	@echo LINUX_ALPHA Compiling with implicit rule $<
 	@$(FC) $(FFLAGS) -c $<
 	@if test -f *.mod; then mv -f *.mod $(ObjDepDir); fi
- 
+
 %.o: %.c
 	@echo LINUX_ALPHA Compiling with implicit rule $<
 	@$(CC) $(Cpp_opts) $(CFLAGS) -c $<
@@ -131,7 +131,7 @@ LDLIBS = $(LIBS)
 #                           Implicit Rules for Dependencies
 #
 #----------------------------------------------------------------------------
- 
+
 ifeq ($(OPTIMIZE),yes)
   DEPSUF = .do
 else
@@ -187,12 +187,12 @@ $(ObjDepDir)/%$(DEPSUF): %.f90
 	@echo 'LINUX_ALPHA Making depends for compiling' $<
 	@$(AWK) -f $(TOP)/fdepends.awk -v NAME=$(basename $<) -v ObjDepDir=$(ObjDepDir) -v SUF=$(suffix $<) -v DEPSUF=$(DEPSUF) $< > $(ObjDepDir)/$(@F)
 
-# Compiling dependencies are also generated for all .c files, but 
-# locally included .h files are not treated.  None exist at this 
-# time.  The two .c files include only system .h files with names 
-# delimited by angle brackets, "<...>"; these are not, and should 
-# not, be analyzed.  If the c programming associated with this code 
-# gets complicated enough to warrant it, the file "cdepends.awk" 
+# Compiling dependencies are also generated for all .c files, but
+# locally included .h files are not treated.  None exist at this
+# time.  The two .c files include only system .h files with names
+# delimited by angle brackets, "<...>"; these are not, and should
+# not, be analyzed.  If the c programming associated with this code
+# gets complicated enough to warrant it, the file "cdepends.awk"
 # will need to test for includes delimited by quotes.
 $(ObjDepDir)/%$(DEPSUF): %.c
 	@if test -f $(TOP)/compile/$*.c;  \

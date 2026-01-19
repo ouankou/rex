@@ -18,4 +18,4 @@
   close (10,status="delete")
 
   end
-! { dg-output ".*Extension.*Extension" } 
+! { dg-output ".*Extension.*Extension" }

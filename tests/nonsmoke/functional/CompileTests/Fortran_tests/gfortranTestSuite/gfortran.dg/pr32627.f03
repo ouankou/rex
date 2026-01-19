@@ -29,4 +29,4 @@ program main
   print *, 'strptr is: ', strptr
 end program main
 
-  
+

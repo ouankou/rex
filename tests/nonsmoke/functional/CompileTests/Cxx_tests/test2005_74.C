@@ -10,7 +10,6 @@ int main()
    {
      foo(1,2);
 
-#if 1
      foo<int>(1,2);
 
      foo(1,3.14);
@@ -19,8 +18,7 @@ int main()
      foo(1,longX);
 
      float floatX;
-     foo<float>(1,3.14);
-#endif
+     foo<float>(1, 3.14);
 
      return 0;
    }

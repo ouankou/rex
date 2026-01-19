@@ -37,7 +37,6 @@ void visitorTraversal::visit(SgNode *n) {
              n->class_name().c_str());
 
       FileNameClassification classification;
-#if 1
       // string sourceDir =
       // "/home/dquinlan/ROSE/roseCompileTree-g++4.2.2/developersScratchSpace/Dan/fileLocation_tests";
 
@@ -48,11 +47,6 @@ void visitorTraversal::visit(SgNode *n) {
       // string sourceDir = "/home/dquinlan/ROSE";
 
       classification = classifyFileName(filename, sourceDir);
-#else
-      string home = "/home/dquinlan/";
-      string sourceDir = home + "ROSE/svn-rose/";
-      classification = classifyFileName("/usr/include/stdio.h", sourceDir);
-#endif
 
       FileNameLocation fileTypeClassification = classification.getLocation();
       FileNameLibrary libraryClassification = classification.getLibrary();

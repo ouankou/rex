@@ -11,7 +11,7 @@ end function myfunc
 program pr28439
 
    integer myfunc
-      
+
    if (myfunc(0)) 10, 20, 30  ! Should go to 30
 10 call abort
 20 call abort

@@ -16,7 +16,7 @@
 
    use kinds_mod, only: int_kind, r8
    use communicate, only: my_task, master_task
-!   use constants, only: 
+!   use constants, only:
    use domain, only: distrb_clinic
    use timers, only: timer_print_all, get_timer, timer_start, timer_stop
    use time_management, only: init_time_flag, check_time_flag, sigAbort,    &
@@ -26,14 +26,13 @@
    use xdisplay, only: lxdisplay, clear_display
    use diagnostics, only: check_KE
    use output, only: output_driver
-!   use exit_mod, only: 
+!   use exit_mod, only:
    use solvers, only: solv_sum_iters
-!   use io, only: 
+!   use io, only:
 
    implicit none
 
 ! Turn off all but the module handling using the use statement for testing
-#if 1
 
 !EOP
 !BOC
@@ -62,10 +61,10 @@
 !-----------------------------------------------------------------------
 !
 !     call system routine to catch kill signals and route them to the
-!     routine set_term to be processed 
+!     routine set_term to be processed
 !     signal 15 is terminate
 !     signal 24 is almost out of cpu time
-!     this implementation is system dependent so not guaranteed to 
+!     this implementation is system dependent so not guaranteed to
 !      work on any machine
 !
 !-----------------------------------------------------------------------
@@ -131,18 +130,18 @@
 
 !-----------------------------------------------------------------------
 !
-!  write an end restart if we are through the stepping loop 
+!  write an end restart if we are through the stepping loop
 !  without an error
 !
 !-----------------------------------------------------------------------
 
    nscan = nscan/nsteps_run
-   if (my_task == master_task) & 
+   if (my_task == master_task) &
       write(stdout,*) ' average # scans =', nscan
 
 !-----------------------------------------------------------------------
 !
-!  print timing information and clean up various environments if 
+!  print timing information and clean up various environments if
 !  they have been used
 !
 !-----------------------------------------------------------------------
@@ -156,7 +155,6 @@
 !-----------------------------------------------------------------------
 !EOC
 
-#endif
 
  end program POP
 
@@ -187,10 +185,10 @@
 !SIGCATCH   use io
 !SIGCATCH
 !SIGCATCH   implicit none
-!SIGCATCH 
-!SIGCATCH! !INPUT PARAMETERS: 
-!SIGCATCH 
-!SIGCATCH   integer (int_kind), intent(in) :: & 
+!SIGCATCH
+!SIGCATCH! !INPUT PARAMETERS:
+!SIGCATCH
+!SIGCATCH   integer (int_kind), intent(in) :: &
 !SIGCATCH      theSignal   ! signal caught by system routine
 !SIGCATCH
 !SIGCATCH!EOP
@@ -203,13 +201,13 @@
 !SIGCATCH      call set_time_flag(stop_now,.true.)
 !SIGCATCH      write (stdout,*)  'CAUGHT SIGNAL 15 (KILL) FROM SYSTEM'
 !SIGCATCH      write (stdout,*)  '  TASK = ',my_task
-!SIGCATCH 
+!SIGCATCH
 !SIGCATCH   case(24)   ! out of CPU time (system dependent)
 !SIGCATCH
 !SIGCATCH      call set_time_flag(stop_now,.true.)
 !SIGCATCH      write (stdout,*)  'CAUGHT SIGNAL 24 (SIGXCPU) FROM SYSTEM'
 !SIGCATCH      write (stdout,*)  '  TASK = ',my_task
-!SIGCATCH 
+!SIGCATCH
 !SIGCATCH   end select
 !SIGCATCH
 !SIGCATCH!----------------------------------------------------------------------

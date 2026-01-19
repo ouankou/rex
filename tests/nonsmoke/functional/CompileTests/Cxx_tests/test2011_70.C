@@ -2,17 +2,13 @@
 
 class X
    {
-     public:
-#if 1
-          static 
-          bool _S_initialized()
-             { 
-            // A variable declaration will be created for the first occurance of 
-            // _S_ios_base_init but it will not be connected to the AST!
-               return _S_ios_base_init;
-            // return true;
-             }
-#endif
+public:
+  static bool _S_initialized() {
+    // A variable declaration will be created for the first occurance of
+    // _S_ios_base_init but it will not be connected to the AST!
+    return _S_ios_base_init;
+    // return true;
+  }
 
      private:
        // We need to have the previously used variable declaration be used here instead 
@@ -22,8 +18,5 @@ class X
        // int _S_ios_base_init;
    };
 
-#if 1
 // DQ (1/7/2007): added initalization of static variable so test name qualification.
-int X::_S_ios_base_init = 0;
-#endif
-
+   int X::_S_ios_base_init = 0;

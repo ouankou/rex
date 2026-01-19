@@ -20,7 +20,7 @@ MODULE privmod
   END TYPE ispriv_t
 
 CONTAINS
-  
+
   SUBROUTINE testfunc ()
     IMPLICIT NONE
     TYPE(haspriv_t) :: struct1

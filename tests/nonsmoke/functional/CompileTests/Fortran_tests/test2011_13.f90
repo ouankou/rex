@@ -38,7 +38,7 @@ module distribution
          local_block         ! block position in local array on proc
    end type
 
-contains 
+contains
 
 subroutine create_boundary(newbndy, dist, &
                             ns_bndy_type, ew_bndy_type, &

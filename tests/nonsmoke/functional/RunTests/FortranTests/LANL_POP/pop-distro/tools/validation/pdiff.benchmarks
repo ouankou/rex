@@ -86,10 +86,10 @@ while($a = <FILE1>) {
                 $y = shift(@line_b);
 #
 #
-#               If $x or $y is a non-numeric string, its numeric value 
-#               in Perl is zero.  If the string $x is eq to the string 
-#               $y, we're done.  If $x or $y is a numeric string, we 
-#               can calculate a meaningful delta and compare it to 
+#               If $x or $y is a non-numeric string, its numeric value
+#               in Perl is zero.  If the string $x is eq to the string
+#               $y, we're done.  If $x or $y is a numeric string, we
+#               can calculate a meaningful delta and compare it to
 #               epsilon.
 #
                 $i = $i + 1;
@@ -109,8 +109,8 @@ while($a = <FILE1>) {
                 } else {
 #
 #
-#                   If we get here, it means the strings are not 
-#                   equal, yet both evaluate to zero.  Therefore, 
+#                   If we get here, it means the strings are not
+#                   equal, yet both evaluate to zero.  Therefore,
 #                   at least one is a non-numeric string.
 #
                     $delta = $epsilon + 1.0;

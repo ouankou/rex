@@ -10,8 +10,8 @@ test2.C demonstrates a bug when the printf() function is marked as a slice targe
 
 Problems:
    1) The function arguments to a function call marked as a target slice are not marked.
-      
 
-   2) Quotes around literals need to be escaped in the dot output to avoid generation of 
+
+   2) Quotes around literals need to be escaped in the dot output to avoid generation of
       qhost nodes in the visualization of the dependence graphs.
 

@@ -18,7 +18,7 @@
        nf90_open = NF90_EINVAL;
        return
     end if
-    
+
     ! If the user specified chuck cache parameters, use them. But user
     ! may have specified one, two, or three settings. Leave the others
     ! unchanged.
@@ -46,7 +46,7 @@
        end if
        nf90_open = nf_set_chunk_cache(size_out, nelems_out, preemption_out)
        if (nf90_open .ne. nf90_noerr) return
-    end if 
+    end if
 
     ! Do the open.
     if(present(chunksize)) then
@@ -105,7 +105,7 @@
        nf90_create = NF90_EINVAL;
        return
     end if
-    
+
     ! If the user specified chuck cache parameters, use them. But user
     ! may have specified one, two, or three settings. Leave the others
     ! unchanged.
@@ -130,7 +130,7 @@
        end if
        nf90_create = nf_set_chunk_cache(size_out, nelems_out, preemption_out)
        if (nf90_create .ne. nf90_noerr) return
-    end if 
+    end if
 
     ! Do the file create.
     if(.not. (present(initialsize) .or. present(chunksize)) ) then

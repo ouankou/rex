@@ -46,10 +46,5 @@ int main()
 
     const FibonacciArray<size> fib_arr;
 
-#if 0
-    for (int i = 0; i < size; ++i)
-        printf("%d\n", fib_arr[i]), fflush(stdout);
-#endif
-
     return 0;
 }

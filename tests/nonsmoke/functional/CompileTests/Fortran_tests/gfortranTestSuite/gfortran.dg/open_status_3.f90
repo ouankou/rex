@@ -6,6 +6,6 @@
        close(8)
        open(8)
        open(8, status = 'old')
-       close(8, status="delete")       
+       close(8, status="delete")
        end
 

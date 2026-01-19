@@ -40,4 +40,4 @@ c { dg-options "-O2 -std=legacy" }
        l4 = i4
 
        END
- 
+

@@ -28,13 +28,11 @@ class X
 // This would fail if the specialization is not output properly
 // template X<int>;
 
-#if 1
 int main()
    {
      X<int> b;
      b.foo();
-   }
-#endif
+}
 
 #else
 #warning "error: specialization of 'X<T>::X() [with T = int]' after instantiation"

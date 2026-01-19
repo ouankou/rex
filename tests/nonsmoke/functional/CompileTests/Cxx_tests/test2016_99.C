@@ -9182,12 +9182,10 @@ namespace std
       operator=(vector&& __x) noexcept(_Alloc_traits::_S_nothrow_move())
       {
         constexpr bool __move_storage =
-          _Alloc_traits::_S_propagate_on_move_assign()
-          || _Alloc_traits::_S_always_equal();
-#if 1
+            _Alloc_traits::_S_propagate_on_move_assign() ||
+            _Alloc_traits::_S_always_equal();
         _M_move_assign(std::move(__x), __bool_constant<__move_storage>());
-#endif
-	return *this;
+        return *this;
       }
 
 

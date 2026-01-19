@@ -50,9 +50,5 @@ int foobar(int i) {
 void func1() {
   // _mm_set_ps((float)0.0, (float)0.0, (float)0.0, (float)0.0);
   // foobar(0.0F, 0.0F, 0.0F, 0.0F);
-#if 0
-     foobar(0);
-#else
   _mm_set_ps(0.0, 0.0, 0.0, 0.0);
-#endif
 }

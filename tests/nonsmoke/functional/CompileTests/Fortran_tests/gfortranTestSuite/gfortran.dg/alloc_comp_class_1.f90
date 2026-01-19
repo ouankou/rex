@@ -14,7 +14,7 @@ module d_mat_mod
   end type d_base_sparse_mat
 
   type :: d_sparse_mat
-    class(d_base_sparse_mat), allocatable  :: a 
+    class(d_base_sparse_mat), allocatable  :: a
   end type d_sparse_mat
 end module d_mat_mod
 

@@ -7,18 +7,11 @@
 
 class Disassembler
    {
-     public:
-#if 1
-          void set_partitioner(class Partitioner *p)
-#else
-          void set_partitioner()
-#endif
-             {
-               p_partitioner;
-             }
+public:
+  void set_partitioner(class Partitioner *p) { p_partitioner; }
 
-     protected:
-          class Partitioner *p_partitioner;
+protected:
+  class Partitioner *p_partitioner;
    };
 
 

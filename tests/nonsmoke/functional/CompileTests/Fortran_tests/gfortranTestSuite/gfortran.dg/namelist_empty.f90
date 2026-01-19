@@ -2,8 +2,8 @@
 ! { dg-options "-std=legacy" }
 !
 ! pr24584, segfault on namelist reading an empty string
-! Contributed by Jerry DeLisle  <jvdelisle@verizon.net> 
-      implicit none 
+! Contributed by Jerry DeLisle  <jvdelisle@verizon.net>
+      implicit none
       character*20   temp
       character(len=10) var
       namelist /input/ var

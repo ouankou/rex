@@ -4,7 +4,7 @@
 !
 ! Tests the fix for PR31668, in which %VAL was rejected for
 ! module and internal procedures.
-! 
+!
 
 subroutine bmp_write(nx)
   implicit none

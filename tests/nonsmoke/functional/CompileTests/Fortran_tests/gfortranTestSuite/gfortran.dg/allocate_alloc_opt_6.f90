@@ -7,7 +7,7 @@ program a
     real ::  r
     integer :: i
   end type mytype
-  
+
   integer n
   integer, allocatable :: i(:)
   real z

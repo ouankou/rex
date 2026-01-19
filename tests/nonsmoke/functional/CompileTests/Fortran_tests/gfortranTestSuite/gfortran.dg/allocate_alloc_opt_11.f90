@@ -16,7 +16,7 @@ program oh_my
    integer j
    type(a) :: c
    c%err = 'ok'
-   allocate(c%d(1)) 
+   allocate(c%d(1))
    allocate(c%b(2), errmsg=c%err, stat=c%d(1)) ! OK
    deallocate(c%b, errmsg=c%err, stat=c%d(1))  ! OK
    allocate(c%b(2), errmsg=c%err, stat=c%b(1)) ! { dg-error "the same ALLOCATE statement" }

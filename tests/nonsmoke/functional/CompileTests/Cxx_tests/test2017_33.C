@@ -1,12 +1,4 @@
 
-#if 0
-// For GNU 5.1 ROSE is not configured to be in C++11 mode by default.
-#if __cplusplus >= 201103L
-#error "Testing in C++11 mode."
-#else
-#error "NOT Testing in C++11 mode."
-#endif
-#endif
 
 #include <fenv.h>
 

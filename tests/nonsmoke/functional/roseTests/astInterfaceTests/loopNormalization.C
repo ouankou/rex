@@ -43,21 +43,6 @@ int main(int argc, char *argv[])
   TransformationTracking::registerAstSubtreeIds(project);
   astdotgen.generate(project, AstDOTGeneration::TOPDOWNBOTTOMUP, "v2");
 
-#if 0 // it works!
-  // test File info retrieval 
-  // iterate all node ids 
-  for (size_t i =1; i<TransformationTracking::getNextId(); i++)
-  {
-    std::pair<Sg_File_Info*, Sg_File_Info*> info_pair = TransformationTracking::getFileInfo(i);
-    Sg_File_Info* start_info = info_pair.first;
-    Sg_File_Info* end_info = info_pair.second;
-    cout<<"====>>Node :"<<i<<endl;
-    if (start_info != NULL)
-      {start_info->display();}
-    if (end_info != NULL)
-      {end_info->display();}
-  }
-#endif
   // Generate source code from AST and call the vendor's compiler
   return backend(project);
 }

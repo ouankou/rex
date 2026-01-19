@@ -1,25 +1,7 @@
 
-#if 1
 #include <initializer_list>
 
 #include <set>
-#else
-namespace std {
-template <class _E> class rose_initializer_list {
-public:
-  typedef const _E *const_iterator;
-
-private:
-  rose_initializer_list(const_iterator __a, int __l) {}
-};
-
-template <typename _Key> class set {
-public:
-  set(_Key __l, _Key y) {}
-  set(rose_initializer_list<_Key> __l) {}
-};
-} // namespace std
-#endif
 
 class Class1 {
 public:

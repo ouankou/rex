@@ -1,7 +1,7 @@
 c { dg-do run }
 c  f90-intrinsic-numeric.f
 c
-c Test Fortran 90 intrinsic numeric functions - Section 13.10.2 and 13.13 
+c Test Fortran 90 intrinsic numeric functions - Section 13.10.2 and 13.13
 c     David Billinghurst <David.Billinghurst@riotinto.com>
 c
 c Notes:
@@ -45,7 +45,7 @@ c     ANINT - Section 13.13.10
       call c_r(ANINT(2.783),3.0,'ANINT(real) 1')
       call c_r(ANINT(-2.783),-3.0,'ANINT(real) 2')
       call c_d(ANINT(2.783d0),3.0d0,'ANINT(double precision) 1')
-      call c_d(ANINT(-2.783d0),-3.0d0,'ANINT(double precision) 2')  
+      call c_d(ANINT(-2.783d0),-3.0d0,'ANINT(double precision) 2')
 c     Note:  g77 does not support optional argument KIND
 
 c     CEILING - Section 13.13.18
@@ -68,7 +68,7 @@ c     CMPLX - Section 13.13.20
       call c_c(CMPLX(1.,2.),(1.,2.),'CMPLX(complex)')
       call c_c(CMPLX(1.d0,2.d0),(1.,2.),'CMPLX(complex(kind=8))')
 c     NOTE: g77 does not support optional argument KIND
-   
+
 c     CONJG - Section 13.13.21
       call c_c(CONJG((2.,-7.)),(2.,7.),'CONJG(complex)')
       call c_z(CONJG((2.d0,-7.d0)),(2.d0,7.d0),'CONJG(complex(kind=8))')
@@ -96,10 +96,10 @@ c     DIM - Section 13.13.29
       call c_i1(DIM(k,k2),ka,'DIM(integer(1)')
       call c_r(DIM(-8.,-3.),0.,'DIM(real,real)')
       call c_d(DIM(-8.d0,-3.d0),0.d0,'DIM(double,double)')
- 
+
 c     DPROD - Section 13.13.31
       call c_d(DPROD(-8.,-3.),24.d0,'DPROD(real,real)')
-     
+
 c     FLOOR - Section 13.13.36
 c     Not implemented
 
@@ -199,7 +199,7 @@ c     SIGN - Section 13.13.96
       call c_i1(SIGN(k,k2),ka,'SIGN(integer(1))')
       call c_r(SIGN(-3.0,2.),3.,'SIGN(real,real)')
       call c_d(SIGN(-3.d0,2.d0),3.d0,'SIGN(double,double)')
- 
+
       if ( fail ) call abort()
       end
 

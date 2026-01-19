@@ -100,7 +100,7 @@ contains
     character(kind=4, len=*), intent(in) :: s4
     character(kind=4, len=len(s4)) :: t4
     integer, intent(in) :: i
-    
+
     if (sizeof (s1) /= i) call abort
     if (sizeof (s4) / sizeof (4_" ") /= i) call abort
     if (sizeof (t4) / sizeof (4_" ") /= i) call abort

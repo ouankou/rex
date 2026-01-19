@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! { dg-options "-std=legacy" }
 !
-! PR 15129: we used to share the character length between A and B in the 
+! PR 15129: we used to share the character length between A and B in the
 ! subroutine.
 CHARACTER*10 A
 CHARACTER*8 B

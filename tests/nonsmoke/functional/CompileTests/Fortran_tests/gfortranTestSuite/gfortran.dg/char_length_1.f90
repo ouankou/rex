@@ -4,7 +4,7 @@
 ! or errors were not emitted when the length of character
 ! constants was changed silently.
 !
-! Contributed by Tobias Burnus <tobias.burnus@physik.fu-berlin.de> 
+! Contributed by Tobias Burnus <tobias.burnus@physik.fu-berlin.de>
 !
 program test
   implicit none

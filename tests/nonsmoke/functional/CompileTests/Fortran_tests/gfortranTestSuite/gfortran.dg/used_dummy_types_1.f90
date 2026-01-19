@@ -1,8 +1,8 @@
 ! { dg-do run }
 ! This checks the fix for PR20244 in which USE association
 ! of derived types would cause an ICE, if the derived type
-! was also available by host association. This occurred 
-! because the backend declarations were different. 
+! was also available by host association. This occurred
+! because the backend declarations were different.
 !
 ! Contributed by Paul Thomas  <pault@gcc.gnu.org>
 !==============
@@ -33,6 +33,6 @@ end module atest
   call init ()
   call test (res)
   if (res%a.ne.42) call abort
-end  
+end
 
 ! { dg-final { cleanup-modules "mtyp atest" } }

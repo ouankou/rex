@@ -13,7 +13,7 @@ end module ints
 
       SUBROUTINE NOZZLE()
       END SUBROUTINE NOZZLE
-      program CORTESA 
+      program CORTESA
       USE INTS
       CALL NOZZLE ()
       END program CORTESA

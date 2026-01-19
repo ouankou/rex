@@ -22,10 +22,5 @@ void foo()
    {
      int a,b;
 
-#if 0
-  // DQ (8/12/2013): These template functions can be defined but not called (because they can't be disambiguated based on different integer kinds).
-     template_const<true>(a,b)
-     template_const<123>(a,b)
-#endif
    }
 

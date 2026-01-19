@@ -183,7 +183,7 @@
     character(len = *),                         intent( in) :: name
     integer (kind = FourByteInt), dimension(:), intent(out) :: values
     integer                                                 :: nf90_get_att_FourByteInt
-    
+
     integer, dimension(size(values)) :: defaultInteger
 
     nf90_get_att_FourByteInt = nf_get_att_int(ncid, varid, name, defaultInteger)
@@ -227,7 +227,7 @@
     character(len = *),                          intent( in) :: name
     integer (kind = EightByteInt), dimension(:), intent(out) :: values
     integer                                                 :: nf90_get_att_EightByteInt
-    
+
     integer, dimension(size(values)) :: defaultInteger
 
     nf90_get_att_EightByteInt = nf_get_att_int(ncid, varid, name, defaultInteger)

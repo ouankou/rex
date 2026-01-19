@@ -61,7 +61,7 @@
  subroutine init_vmix_const(VDC,VVC)
 
 ! !DESCRIPTION:
-!  In this routine the diffusivity (VDC) and viscosity (VVC) are 
+!  In this routine the diffusivity (VDC) and viscosity (VVC) are
 !  initialized to input values and remain constant throughout the
 !  simulation.
 !
@@ -96,7 +96,7 @@
 
    const_vvc = p25
    const_vdc = p25
-      
+
    if (my_task == master_task) then
       open (nml_in, file=nml_filename, status='old',iostat=nml_error)
       if (nml_error /= 0) then
@@ -185,7 +185,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       kp1,               &! vertical level index
       bid                 ! local block address
 
@@ -197,7 +197,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  if using diffusion to simulate convection, enhance the vertical 
+!  if using diffusion to simulate convection, enhance the vertical
 !  mixing coefficients if gravitationally unstable
 !
 !-----------------------------------------------------------------------

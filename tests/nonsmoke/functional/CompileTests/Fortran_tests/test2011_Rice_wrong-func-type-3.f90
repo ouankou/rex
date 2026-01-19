@@ -3,12 +3,12 @@
 program wrong_func_type_3
     logical :: x
     x = func()
-    
+
 contains
 
   function func()     ! return type is incorrectly generated as REAL.
-   logical :: func    
+   logical :: func
    func = .true.
   end function
-  
+
 end program

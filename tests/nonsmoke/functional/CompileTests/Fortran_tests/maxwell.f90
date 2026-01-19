@@ -3,7 +3,7 @@ program Maxwell_3D
    integer, parameter :: NX = 256
    integer, parameter :: NY = 256
    integer, parameter :: NZ = 256
- 
+
    real, parameter :: C2 = 2.997924562d8 * 2.997924562d8
    real, parameter :: PI = 3.14159265358979323846
    real, parameter :: MU = 4.000d-7 * PI

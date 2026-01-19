@@ -1,4 +1,4 @@
 program attrs_dimension
-  integer n 
+  integer n
   dimension n(4)
 end program

@@ -39,6 +39,6 @@ if (vec(2)/=3) call abort()
 dp3 = 4
 if (u%i/=4) call abort()
 
-end 
+end
 
 ! { dg-final { cleanup-modules "m" } }

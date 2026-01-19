@@ -23,15 +23,6 @@ int main() {
                              [] (float f) {std::cout << std::setprecision(3) << f;});
 }
 
-#if 0
-template <typename T, typename... Ts>
-struct Overloader : T, Overloader<Ts...> {
-    using T::operator();
-    using Overloader<Ts...>::operator();
-    // […]
-};
-#endif
-
 template <typename T> struct Overloader<T> : T {
     using T::operator();
 };

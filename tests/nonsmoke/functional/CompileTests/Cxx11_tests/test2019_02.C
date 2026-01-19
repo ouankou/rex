@@ -15,11 +15,10 @@
 template<typename TI, typename BODY>
 void forallN(TI const &is_i, BODY const &body)
    {
-  // Issue: the comment and CPP directive will be unparsed before the template declaration.
-#if 1
-     int x;
-     int y;
-     int z;
-#endif
+  // Issue: the comment and CPP directive will be unparsed before the template
+  // declaration.
+  int x;
+  int y;
+  int z;
    }
 

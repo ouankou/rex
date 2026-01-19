@@ -16,36 +16,6 @@
 // #define __flexarr	[1]
 // #define __flexarr
 
-#if 0
-// This code appears in /usr/include/cdef.h and resets the
-// value of "__flexarr" to be "[]", since __GNUC_PREREQ (2,97)
-// is true (as part of g++ support in ROSE via legacy frontend).  We can't
-// control the use of the /usr/include/cdef.h header file since
-// it is not a part of the gnu header files that we copy and 
-// modify slightly to make work with legacy frontend as part of ROSE.
-
-/* Support for flexible arrays. */
-#if __GNUC_PREREQ (2,97)
-/* GCC 2.97 supports C99 flexible array members.  */
-#warning __GNUC_PREREQ (2,97) is TRUE
-# define __flexarr	[]
-#else
-#warning __GNUC_PREREQ (2,97) is FALSE
-# ifdef __GNUC__
-#  define __flexarr	[0]
-# else
-#  if defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
-#   define __flexarr	[]
-#  else
-/* Some other non-C99 compiler.  Approximate with [1].  */
-#   define __flexarr	[1]
-#  endif
-# endif
-#endif
-
-#endif
-
-
 class XX { int x; };
 
 struct Atag

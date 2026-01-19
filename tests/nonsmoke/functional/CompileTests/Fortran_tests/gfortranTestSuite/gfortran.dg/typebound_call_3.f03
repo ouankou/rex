@@ -21,7 +21,7 @@ CONTAINS
     IF (.NOT. me1%val .OR. me2%val) THEN
       CALL abort ()
     END IF
-    
+
     me1%val = .FALSE.
     me2%val = .TRUE.
   END SUBROUTINE swap

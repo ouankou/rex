@@ -102,36 +102,3 @@ bool bug1(globalID globalZone)
    else
       return true;
 }
-
-#if 0
-// these are enabled separately in the next three test codes
-
-/* Frightening order-of-operations change */
-void bug2(int *locDom, globalID div, int mod)
-{
-   globalID startElem = locDom[0]*div + ((locDom[0] < mod) ? locDom[0] : mod) ;
-}
-
-void bug3(globalID len) {
-   for (globalID i=globalID(0); i<len; ++i) {
-   }
-}
-
-struct inner
-{
-   globalID valA ;
-   int valB ;
-} ;
-
-struct outer
-{
-   struct inner g;
-} ;
-
-void bug4(struct outer *ptr)
-{
-   if (ptr->g.valB <= 16 && ptr->g.valA < globalID(200000)) {
-     /* stuff */ ;
-   }
-}
-#endif

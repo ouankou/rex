@@ -27,21 +27,9 @@ class AAA
 
 // extern template class XXX::allocator<int>;
 
-// The compilation using the testTemplates translator forces
-// the output of all instantiations.  In this case the output
-// of the template class specialization for rebind is done without
-// the correct name qualification.
-#if 0
-template<> class AAA< int  , class XXX::allocator< int  >  > ;
-template<> struct rebind< int  > 
-{
-typedef class new_allocator< int  > other;
-};
-template<> class AAA< int  , class XXX::allocator< int  >  > 
-{
-};
-extern template<> class AAA< int  , class XXX::allocator< int  >  > ;
-#endif
+   // The compilation using the testTemplates translator forces
+   // the output of all instantiations.  In this case the output
+   // of the template class specialization for rebind is done without
+   // the correct name qualification.
 
-extern template class AAA< int, XXX::allocator<int> >;
-
+   extern template class AAA<int, XXX::allocator<int>>;

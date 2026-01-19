@@ -15,7 +15,7 @@ c Provided by Paul Thomas - pault@gcc.gnu.org
       integer ier
       character*10 ch , check
       namelist /mynml/ x, xx, ch
- 
+
 c set debug = 0 or 1 in the namelist! (line 33)
 
       do i = 1 , 10

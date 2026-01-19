@@ -3,9 +3,3 @@
 int foo asm ("myfoo") = 2;
 
 extern int func () asm ("FUNC");
-
-#if 0
-// This is not C++
-func (x, y)
-   int x, y;
-#endif

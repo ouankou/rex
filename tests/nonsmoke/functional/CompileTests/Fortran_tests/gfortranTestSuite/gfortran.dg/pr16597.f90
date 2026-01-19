@@ -12,7 +12,7 @@
       integer      strlen
       parameter    (strlen = 4)
 
-      integer      iunit 
+      integer      iunit
       character    string *4
 
       iunit = 99

@@ -6,9 +6,5 @@ main()
      int a;
      if ( true );
 
-#if 0
-        {
-        }
-#endif
      return 0;
    }

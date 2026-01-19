@@ -1,7 +1,4 @@
 
-class A
-   {
-#if 1
-     int x;
-#endif
-   };
+class A {
+  int x;
+};

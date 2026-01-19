@@ -11,10 +11,3 @@ inline int X::foo1()
    {
      return 0;
    }
-
-#if 0
-void X::foobar()
-   {
-     int a = foo1();
-   }
-#endif

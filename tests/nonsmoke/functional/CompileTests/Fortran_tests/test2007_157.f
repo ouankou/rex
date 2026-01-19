@@ -183,7 +183,7 @@ C///////////////////////////////////////////////////////////////////////
        NOTB  = LSAME( TRANSB, 'N' )
 *
 
-* Missing code 
+* Missing code
 
 *
       RETURN

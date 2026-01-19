@@ -39,11 +39,6 @@ int main(int argc, char *argv[]) {
       buildIfStmt(cond_stmt, buildBasicBlock(), buildBasicBlock());
   SgGotoStatement *gt_stmt =
       buildGotoStatement(label_stmt_1->get_numeric_label()->get_symbol());
-#if 0  
-  SgLabelRefExp* l_exp = buildLabelRefExp(label_stmt_1->get_numeric_label()->get_symbol());
-  l_exp->set_parent(gt_stmt);
-  gt_stmt->set_label_expression(l_exp);
-#endif
   appendStatement(gt_stmt, isSgScopeStatement(if_stmt->get_true_body()));
 
   appendStatement(if_stmt, body);

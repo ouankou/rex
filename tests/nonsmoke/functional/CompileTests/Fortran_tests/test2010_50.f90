@@ -5,8 +5,8 @@
 ! Leo
 !
 ! Error: name stack is empty when handling variable:block_size
-! roseCompiler: ../../../../sourcetree/src/frontend/OpenFortranParser_SAGE_Connection/fortran_support.C:1836: 
-!    SgVariableSymbol* trace_back_through_parent_scopes_lookup_variable_symbol(const SgName&, SgScopeStatement*): 
+! roseCompiler: ../../../../sourcetree/src/frontend/OpenFortranParser_SAGE_Connection/fortran_support.C:1836:
+!    SgVariableSymbol* trace_back_through_parent_scopes_lookup_variable_symbol(const SgName&, SgScopeStatement*):
 !    Assertion (*(FortranParserState::getCurrentNameStack())).empty() == false failed.
 ! Aborted
 !

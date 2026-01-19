@@ -1,16 +1,4 @@
 
-#if 0
-// #include<stdlib.h>
-
-struct A
-   {
-     static const void* a;
-   };
-
-const void* A::a = 0L;
-
-const void* X = A::a;
-#endif
 
 class Car
    {

@@ -1,6 +1,6 @@
- 
-   DOUBLE PRECISION EPOCH 
-   LOGICAL OPENED 
+
+   DOUBLE PRECISION EPOCH
+   LOGICAL OPENED
 
  ! This should be a string, even fails after fix to unparser unparseArrayType()
    CHARACTER INFILE*20

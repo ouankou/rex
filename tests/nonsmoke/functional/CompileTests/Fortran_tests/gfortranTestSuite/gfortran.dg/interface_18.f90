@@ -16,6 +16,6 @@
      subroutine mytype_test( mytype )
        type(mytype_type), intent(in out) :: mytype
      end subroutine mytype_test
-   end module mytype_application 
+   end module mytype_application
 
 ! { dg-final { cleanup-modules "mytype_application" } }

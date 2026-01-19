@@ -8,7 +8,7 @@
 ! !DESCRIPTION:
 !  This module contains routines for initializing and computing
 !  vertical mixing coefficients for the KPP parameterization
-!  (see Large, McWilliams and Doney, Reviews of Geophysics, 32, 363 
+!  (see Large, McWilliams and Doney, Reviews of Geophysics, 32, 363
 !  November 1994).
 !
 ! !REVISION HISTORY:
@@ -41,7 +41,7 @@
 
 ! !PUBLIC DATA MEMBERS:
 
-   real (r8), dimension(:,:,:), allocatable, public :: & 
+   real (r8), dimension(:,:,:), allocatable, public :: &
       HMXL,               &! mixed layer depth
       KPP_HBLT             ! boundary layer depth
 
@@ -66,7 +66,7 @@
       lshort_wave,  &! flag for computing short-wave forcing
       lcheckekmo     ! check Ekman, Monin-Obhukov depth limit
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       num_v_smooth_Ri     ! num of times to vertically smooth Ri
 
    real (r8), parameter :: &
@@ -78,14 +78,14 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension(:,:,:,:,:), allocatable :: & 
+   real (r8), dimension(:,:,:,:,:), allocatable :: &
       KPP_SRC              ! non-local mixing (treated as source term)
 
 !-----------------------------------------------------------------------
 !
-!  parameters for subroutine bldepth: computes bndy layer depth 
+!  parameters for subroutine bldepth: computes bndy layer depth
 !
-!  concv   = ratio of interior buoyancy frequency to 
+!  concv   = ratio of interior buoyancy frequency to
 !            buoyancy frequency at entrainment depth
 !
 !-----------------------------------------------------------------------
@@ -143,7 +143,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), parameter ::   & 
+   real (r8), parameter ::   &
       zeta_m = -0.2_r8,      &
       zeta_s = -1.0_r8,      &
       c_m    =  8.38_r8,     &
@@ -157,7 +157,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension(:), allocatable :: & 
+   real (r8), dimension(:), allocatable :: &
       zgrid,               &! depth at cell interfaces
       hwide                 ! layer thickness at interfaces
 
@@ -195,7 +195,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) ::  & 
+   integer (int_kind) ::  &
       k,                  &! local dummy index for vertical lvl
       nml_error            ! namelist i/o error flag
 
@@ -285,7 +285,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  define some non-dimensional constants 
+!  define some non-dimensional constants
 !
 !-----------------------------------------------------------------------
 
@@ -295,7 +295,7 @@
 !-----------------------------------------------------------------------
 !
 !  define vertical grid coordinates and cell widths
-!  compute vertical profile of background (internal wave) 
+!  compute vertical profile of background (internal wave)
 !  diffusivity and viscosity
 !
 !  the vertical profile has the functional form
@@ -382,8 +382,8 @@
 
 ! !DESCRIPTION:
 !  This is the main driver routine which calculates the vertical
-!  mixing coefficients for the KPP mixing scheme as outlined in 
-!  Large, McWilliams and Doney, Reviews of Geophysics, 32, 363 
+!  mixing coefficients for the KPP mixing scheme as outlined in
+!  Large, McWilliams and Doney, Reviews of Geophysics, 32, 363
 !  (November 1994).  The non-local mixing is also computed here, but
 !  is treated as a source term in baroclinic.
 !
@@ -434,7 +434,7 @@
 !-----------------------------------------------------------------------
 
    integer (int_kind) :: &
-      k,                 &! vertical level index 
+      k,                 &! vertical level index
       n,                 &! tracer index
       mt2,               &! index for separating temp from other trcrs
       bid                 ! local block address for this block
@@ -446,7 +446,7 @@
       USTAR,      &! surface friction velocity
       BFSFC,      &! surface buoyancy forcing
       STABLE       ! = 1 for stable forcing; = 0 for unstable forcing
- 
+
    real (r8), dimension(nx_block,ny_block,km) :: &
       DBLOC,      &! buoyancy difference between adjacent levels
       DBSFC,      &! buoyancy difference between level and surface
@@ -501,11 +501,11 @@
 
    if (present(SMFT)) then
       call bldepth (DBLOC, DBSFC, TRCR, UUU, VVV, STF, SHF_QSW,   &
-                    KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, KBL, & 
+                    KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, KBL, &
                     this_block, SMFT=SMFT)
    else
       call bldepth (DBLOC, DBSFC, TRCR, UUU, VVV, STF, SHF_QSW,   &
-                    KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, KBL, & 
+                    KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, KBL, &
                     this_block, SMF=SMF)
    endif
 
@@ -516,7 +516,7 @@
 !-----------------------------------------------------------------------
 
    call blmix(VISC, VDC, KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, &
-              KBL, GHAT, this_block) 
+              KBL, GHAT, this_block)
 
 !-----------------------------------------------------------------------
 !
@@ -525,7 +525,7 @@
 !
 !-----------------------------------------------------------------------
 
-   do k=1,km-1           
+   do k=1,km-1
 
       call tgrid_to_ugrid(USTAR,VISC(:,:,k),bid)
 
@@ -542,7 +542,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  add ghatp term from previous computation to right-hand-side 
+!  add ghatp term from previous computation to right-hand-side
 !  source term on current row
 !
 !-----------------------------------------------------------------------
@@ -568,7 +568,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  compute diagnostic mixed layer depth (cm) using a max buoyancy 
+!  compute diagnostic mixed layer depth (cm) using a max buoyancy
 !  gradient criterion.  Use USTAR and BFSFC as temps.
 !
 !-----------------------------------------------------------------------
@@ -657,7 +657,7 @@
    real (r8), dimension(nx_block,ny_block,km), intent(in) :: &
       UUU               ! U velocities at current time
 
-   real (r8), dimension(nx_block,ny_block,km), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block,km), intent(in) :: &
       VVV,             &! V velocities at current time
       DBLOC             ! buoyancy difference between adjacent levels
 
@@ -670,12 +670,12 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block,0:km+1,2), intent(inout) :: & 
+   real (r8), dimension(nx_block,ny_block,0:km+1,2), intent(inout) :: &
       VDC        ! diffusivity for tracer diffusion
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block,0:km+1), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block,0:km+1), intent(out) :: &
       VISC              ! viscosity
 
 !EOP
@@ -693,7 +693,7 @@
 
    real (r8), dimension(nx_block,ny_block) :: &
       VSHEAR,            &! (local velocity shear)^2
-      RI_LOC,            &! local Richardson number 
+      RI_LOC,            &! local Richardson number
       FRI,               &! function of Ri for shear
       FCON                ! function of Ri for convection
 
@@ -756,7 +756,7 @@
       end if
 
       VISC(:,:,k)   = merge(RI_LOC, VISC(:,:,k-1), k <= KMT(:,:,bid))
- 
+
    enddo
 
 !-----------------------------------------------------------------------
@@ -766,12 +766,12 @@
 !  as temps
 !
 !-----------------------------------------------------------------------
- 
+
    do n = 1,num_v_smooth_Ri
- 
+
       FRI            =  p25 * VISC(:,:,1)
       VISC(:,:,km+1) =        VISC(:,:,km)
- 
+
       do k=1,km
          RI_LOC      = VISC(:,:,k)
          where (KMT(:,:,bid) >= 3)
@@ -865,8 +865,8 @@
 
       where ( k >= KMT(:,:,bid) )
          VISC(:,:,k  ) = c0
-         VDC (:,:,k,1) = c0 
-         VDC (:,:,k,2) = c0 
+         VDC (:,:,k,1) = c0
+         VDC (:,:,k,2) = c0
       endwhere
 
 !-----------------------------------------------------------------------
@@ -885,12 +885,12 @@
 
    VISC(:,:,0  ) = c0
    VDC (:,:,0,:) = c0
-   VISC(:,:,km+1  ) = c0 
-   VDC (:,:,km+1,:) = c0 
+   VISC(:,:,km+1  ) = c0
+   VDC (:,:,km+1,:) = c0
 
 !-----------------------------------------------------------------------
 !EOC
- 
+
  end subroutine ri_iwmix
 
 !***********************************************************************
@@ -907,15 +907,15 @@
 !  the shallowest depth where the bulk Richardson number is equal to
 !  a critical value, Ricr.
 !
-!  NOTE: bulk richardson numbers are evaluated by computing 
+!  NOTE: bulk richardson numbers are evaluated by computing
 !        differences between values at zgrid(kl) $< 0$ and surface
-!        reference values. currently, the reference values are equal 
-!        to the values in the surface layer.  when using higher 
-!        vertical grid resolution, these reference values should be 
-!        computed as the vertical averages from the surface down to 
+!        reference values. currently, the reference values are equal
+!        to the values in the surface layer.  when using higher
+!        vertical grid resolution, these reference values should be
+!        computed as the vertical averages from the surface down to
 !        epssfc*zgrid(kl).
 !
-!  This routine also computes where surface forcing is stable 
+!  This routine also computes where surface forcing is stable
 !  or unstable (STABLE)
 !
 ! !REVISION HISTORY:
@@ -1039,10 +1039,10 @@
 !  max values when Ricr never satisfied are KBL = KMT and
 !  HBLT = -zgrid(KMT)
 !
-!  NOTE: the reference depth is -epssfc/2.*zgrid(i,k), but the 
-!        reference u,v,t,s values are simply the surface layer 
+!  NOTE: the reference depth is -epssfc/2.*zgrid(i,k), but the
+!        reference u,v,t,s values are simply the surface layer
 !        values and not the averaged values from 0 to 2*ref.depth,
-!        which is necessary for very fine grids(top layer < 2m 
+!        which is necessary for very fine grids(top layer < 2m
 !        thickness)
 !
 !
@@ -1053,17 +1053,17 @@
    kup = 1
    kdn = 2
 
-   RI_BULK(:,:,kup) = c0 
+   RI_BULK(:,:,kup) = c0
    KBL = merge(KMT(:,:,bid), 1, (KMT(:,:,bid) > 1))
 
    if (partial_bottom_cells) then
       do kl=2,km
-         where (kl == KBL) HBLT = -zgrid(kl-1) + & 
+         where (kl == KBL) HBLT = -zgrid(kl-1) + &
                                   p5*(DZT(:,:,kl  ,bid) + &
                                       DZT(:,:,kl-1,bid))
       enddo
       where (1 == KBL) HBLT = -zgrid(1)
-   else   
+   else
       do kl=1,km
          where (kl == KBL) HBLT = -zgrid(kl)
       enddo
@@ -1076,12 +1076,12 @@
 !-----------------------------------------------------------------------
 
    do kl = 2,km
- 
+
       WORK = (UUU(:,:,1)-UUU(:,:,kl))**2 + &
              (VVV(:,:,1)-VVV(:,:,kl))**2
 
       if (partial_bottom_cells) then
-         WORK = WORK/(-zgrid(kl-1) + & 
+         WORK = WORK/(-zgrid(kl-1) + &
                       p5*(DZU(:,:,kl  ,bid) + &
                           DZU(:,:,kl-1,bid) - &
                           DZU(:,:,1   ,bid)))**2
@@ -1104,7 +1104,7 @@
                                    p5*(DZT(i,j,kl  ,bid) +  &
                                        DZT(i,j,kl-1,bid)),  &
                                    absorb_frac)
-               BFSFC(i,j) = BO(i,j) + BOSOL(i,j)*(c1 - absorb_frac) 
+               BFSFC(i,j) = BO(i,j) + BOSOL(i,j)*(c1 - absorb_frac)
             enddo
             enddo
          else
@@ -1162,7 +1162,7 @@
       endif
 
 !-----------------------------------------------------------------------
-! 
+!
 !     compute bulk Richardson number at new level, dunder
 !     note: Ritop needs to be zero on land and ocean bottom
 !           points so that the following if statement gets triggered
@@ -1176,7 +1176,7 @@
          WORK = merge( DBSFC(:,:,kl)/(-zgrid(kl-1)+            &
                                       p5*(DZT(:,:,kl-1,bid) +  &
                                           DZT(:,:,kl  ,bid) -  &
-                                          DZT(:,:,1   ,bid))), & 
+                                          DZT(:,:,1   ,bid))), &
                        c0, KMT(:,:,bid) >= kl)
          WM = WM/(-zgrid(kl-1) +          &
                   p5*(DZT(:,:,kl-1,bid) + &
@@ -1237,7 +1237,7 @@
       do j = 1,ny_block
       do i = 1,nx_block
          call sw_absorb_frac(HBLT(i,j),absorb_frac)
-         BFSFC(i,j)  = BO(i,j) + BOSOL(i,j)*(c1 - absorb_frac) 
+         BFSFC(i,j)  = BO(i,j) + BOSOL(i,j)*(c1 - absorb_frac)
       enddo
       enddo
    endif
@@ -1288,7 +1288,7 @@
          do j = 1,ny_block
          do i = 1,nx_block
             call sw_absorb_frac(HBLT(i,j),absorb_frac)
-            BFSFC(i,j)  = BO(i,j) + BOSOL(i,j)*(c1 - absorb_frac) 
+            BFSFC(i,j)  = BO(i,j) + BOSOL(i,j)*(c1 - absorb_frac)
          enddo
          enddo
 
@@ -1308,16 +1308,16 @@
 ! !INTERFACE:
 
  subroutine blmix(VISC, VDC, HBLT, USTAR, BFSFC, STABLE, &
-                  KBL, GHAT, this_block) 
+                  KBL, GHAT, this_block)
 
 ! !DESCRIPTION:
-!  This routine computes mixing coefficients within boundary layer 
-!  which depend on surface forcing and the magnitude and gradient 
+!  This routine computes mixing coefficients within boundary layer
+!  which depend on surface forcing and the magnitude and gradient
 !  of interior mixing below the boundary layer (matching).  These
 !  quantities have been computed in other routines.
 !
 !  Caution: if mixing bottoms out at hbl = -zgrid(km) then
-!  fictitious layer at km+1 is needed with small but finite width 
+!  fictitious layer at km+1 is needed with small but finite width
 !  hwide(km+1).
 !
 ! !REVISION HISTORY:
@@ -1325,7 +1325,7 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block,0:km+1), intent(inout) :: & 
+   real (r8), dimension(nx_block,ny_block,0:km+1), intent(inout) :: &
       VISC               ! interior mixing coeff on input
                          ! combined interior/bndy layer coeff output
 
@@ -1371,12 +1371,12 @@
 
    real (r8), dimension(3,nx_block,ny_block) :: &
       GAT1,              &! shape function at sigma=1
-      DAT1,              &! derivative of shape function 
+      DAT1,              &! derivative of shape function
       DKM1                ! bndy layer difs at kbl-1 lvl
 
    real (r8), dimension(nx_block,ny_block) :: &
       WM,WS,             &! turbulent velocity scales
-      CASEA,             &! =1 in case A, =0 in case B     
+      CASEA,             &! =1 in case A, =0 in case B
       SIGMA,             &! normalized depth (d/hbl)
       VISCH,             &! viscosity at hbl
       DIFTH,             &! temp diffusivity at hbl
@@ -1426,9 +1426,9 @@
 
 !-----------------------------------------------------------------------
 !
-!  find the interior viscosities and derivatives at hbl by 
+!  find the interior viscosities and derivatives at hbl by
 !  interpolating derivative values at vertical interfaces.  compute
-!  matching conditions for shape function.  
+!  matching conditions for shape function.
 !
 !-----------------------------------------------------------------------
 
@@ -1440,7 +1440,7 @@
 
          if (k == 1) then
             WORK1 = c0
-         else            
+         else
             WORK1 = DZT(:,:,k-1,bid)
          end if
          if (k == km) then
@@ -1451,7 +1451,7 @@
 
          where (k == KN)
 
-            DELHAT = - zgrid(k-1) + DZT(:,:,k,bid) + p5*WORK1 - HBLT  
+            DELHAT = - zgrid(k-1) + DZT(:,:,k,bid) + p5*WORK1 - HBLT
             R      = c1 - DELHAT /DZT(:,:,k,bid)
             DVDZUP = (VISC(:,:,k-1) - VISC(:,:,k  ))/DZT(:,:,k  ,bid)
             DVDZDN = (VISC(:,:,k  ) - VISC(:,:,k+1))/WORK2
@@ -1485,7 +1485,7 @@
 
          where (k == KN)
 
-            DELHAT = p5*hwide(k) - zgrid(k) - HBLT        
+            DELHAT = p5*hwide(k) - zgrid(k) - HBLT
             R      = c1 - DELHAT / hwide(k)
             DVDZUP = (VISC(:,:,k-1) - VISC(:,:,k  ))/hwide(k)
             DVDZDN = (VISC(:,:,k  ) - VISC(:,:,k+1))/hwide(k+1)
@@ -1499,7 +1499,7 @@
             DVDZDN = (VDC(:,:,k  ,1) - VDC(:,:,k+1,1))/hwide(k+1)
             DIFTP  = p5*( (c1-R)*(DVDZUP + abs(DVDZUP)) + &
                               R *(DVDZDN + abs(DVDZDN)) )
-   
+
             VISCH = VISC(:,:,k)  + VISCP*DELHAT
             DIFSH = VDC(:,:,k,2) + DIFSP*DELHAT
             DIFTH = VDC(:,:,k,1) + DIFTP*DELHAT
@@ -1529,27 +1529,27 @@
 !
 !-----------------------------------------------------------------------
 
-   do k = 1,km       
+   do k = 1,km
 
       if (partial_bottom_cells) then
          if (k > 1) then
             SIGMA = (-zgrid(k-1) + p5*DZT(:,:,k-1,bid) +  &
-                     DZT(:,:,k,bid)) / HBLT 
+                     DZT(:,:,k,bid)) / HBLT
          else
-            SIGMA = (-zgrid(k) + p5*hwide(k)) / HBLT     
+            SIGMA = (-zgrid(k) + p5*hwide(k)) / HBLT
          end if
       else
-         SIGMA = (-zgrid(k) + p5*hwide(k)) / HBLT     
+         SIGMA = (-zgrid(k) + p5*hwide(k)) / HBLT
       endif
       F1    = STABLE*SIGMA + (c1-STABLE)*min(SIGMA,epssfc)
 
       call wscale(F1, HBLT, USTAR, BFSFC, 3, WM, WS)
 
       BLMC(1,:,:,k) = HBLT*WM*SIGMA*(c1 + SIGMA*((SIGMA-c2)+ &
-          (c3-c2*SIGMA)*GAT1(1,:,:)+(SIGMA-c1)*DAT1(1,:,:))) 
+          (c3-c2*SIGMA)*GAT1(1,:,:)+(SIGMA-c1)*DAT1(1,:,:)))
       BLMC(2,:,:,k) = HBLT*WS*SIGMA*(c1 + SIGMA*((SIGMA-c2)+ &
           (c3-c2*SIGMA)*GAT1(2,:,:)+(SIGMA-c1)*DAT1(2,:,:)))
-      BLMC(3,:,:,k) = HBLT*WS*SIGMA*(c1 + SIGMA*((SIGMA-c2)+ &    
+      BLMC(3,:,:,k) = HBLT*WS*SIGMA*(c1 + SIGMA*((SIGMA-c2)+ &
           (c3-c2*SIGMA)*GAT1(3,:,:)+(SIGMA-c1)*DAT1(3,:,:)))
 
       GHAT(:,:,k) = (c1-STABLE)* cg/(WS*HBLT +eps)
@@ -1564,18 +1564,18 @@
 
    do k=1,km
       where (k == KBL-1)
-         SIGMA = -zgrid(k)/HBLT          
+         SIGMA = -zgrid(k)/HBLT
       endwhere
    enddo
 
-   F1 = STABLE*SIGMA + (c1-STABLE)*min(SIGMA,epssfc)        
+   F1 = STABLE*SIGMA + (c1-STABLE)*min(SIGMA,epssfc)
    call wscale(F1, HBLT, USTAR, BFSFC, 3, WM, WS)
 
    DKM1(1,:,:) = HBLT*WM*SIGMA*(c1+SIGMA*((SIGMA-c2) &
             +(c3-c2*SIGMA)*GAT1(1,:,:)+(SIGMA-c1)*DAT1(1,:,:)))
    DKM1(2,:,:) = HBLT*WS*SIGMA*(c1+SIGMA*((SIGMA-c2) &
             +(c3-c2*SIGMA)*GAT1(2,:,:)+(SIGMA-c1)*DAT1(2,:,:)))
-   DKM1(3,:,:) = HBLT*WS*SIGMA*(c1+SIGMA*((SIGMA-c2) &       
+   DKM1(3,:,:) = HBLT*WS*SIGMA*(c1+SIGMA*((SIGMA-c2) &
             +(c3-c2*SIGMA)*GAT1(3,:,:)+(SIGMA-c1)*DAT1(3,:,:)))
 
 !-----------------------------------------------------------------------
@@ -1587,7 +1587,7 @@
    do k=1,km-1
 
       if (partial_bottom_cells) then
-         if (k == 1) then 
+         if (k == 1) then
             WORK1 = -p5*DZT(:,:,k,bid)
          else
             WORK1 = zgrid(k-1) - p5*(DZT(:,:,k-1,bid) + &
@@ -1630,7 +1630,7 @@
 !-----------------------------------------------------------------------
 
    do k=1,km
-      where (k < KBL) 
+      where (k < KBL)
          VISC(:,:,k)  = BLMC(1,:,:,k)
          VDC(:,:,k,2) = BLMC(2,:,:,k)
          VDC(:,:,k,1) = BLMC(3,:,:,k)
@@ -1654,19 +1654,19 @@
 ! !DESCRIPTION:
 !  Computes turbulent velocity scales.
 !
-!  For $\zeta \geq 0, 
+!  For $\zeta \geq 0,
 !    w_m = w_s = \kappa U^\star/(1+5\zeta)$
 !
-!  For $\zeta_m \leq \zeta < 0, 
+!  For $\zeta_m \leq \zeta < 0,
 !    w_m = \kappa U^\star (1-16\zeta)^{1\over 4}$
 !
-!  For $\zeta_s \leq \zeta < 0, 
+!  For $\zeta_s \leq \zeta < 0,
 !    w_s = \kappa U^\star (1-16\zeta)^{1\over 2}$
 !
-!  For $\zeta < \zeta_m, 
+!  For $\zeta < \zeta_m,
 !    w_m = \kappa U^\star (a_m - c_m\zeta)^{1\over 3}$
 !
-!  For $\zeta < \zeta_s, 
+!  For $\zeta < \zeta_s,
 !    w_s = \kappa U^\star (a_s - c_s\zeta)^{1\over 3}$
 !
 !  where $\kappa$ is the von Karman constant.
@@ -1849,7 +1849,7 @@
          ALPHADT = c0
          BETADS  = c0
 
-      endif       
+      endif
 
 !-----------------------------------------------------------------------
 !
@@ -1918,7 +1918,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block,km), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block,km), intent(out) :: &
       DBLOC,         &! buoyancy difference between adjacent levels
       DBSFC           ! buoyancy difference between level and surface
 
@@ -2010,7 +2010,7 @@
  subroutine add_kpp_sources(SRCARRAY, k, this_block)
 
 ! !DESCRIPTION:
-!  This routine adds KPP non local mixing term to the tracer source 
+!  This routine adds KPP non local mixing term to the tracer source
 !  tendencies.
 !
 ! !REVISION HISTORY:

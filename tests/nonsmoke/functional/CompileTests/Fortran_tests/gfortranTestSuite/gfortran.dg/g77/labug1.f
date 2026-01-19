@@ -10,16 +10,16 @@ c { dg-do run }
 *
 *  David Billinghurst, (David.Billinghurst@riotinto.com.au)
 *  25 November 1998
-* 
+*
 *     .. Parameters ..
       INTEGER   LDA, LDE
       PARAMETER ( LDA = 2500, LDE = 50  )
-      COMPLEX   CZERO 
+      COMPLEX   CZERO
       PARAMETER ( CZERO = ( 0.0E+0, 0.0E+0 ) )
 
       INTEGER   I, J, M, N
       REAL      V
-      COMPLEX   A(LDA),B(LDA),C(LDA),E(LDE,LDE),F(LDE,LDE)  
+      COMPLEX   A(LDA),B(LDA),C(LDA),E(LDE,LDE),F(LDE,LDE)
       COMPLEX   Z
 
       N=2
@@ -37,7 +37,7 @@ c { dg-do run }
             V =  ABS( E(I,J) - F(I,J) )
          END DO
       END DO
- 
+
       CALL SUB2(M,Z)
 
       END

@@ -4,12 +4,12 @@
 ! parent namespace for a matching specific subroutine. This, in fact, was
 ! a regression due to the fix for PR28201.
 !
-! Contributed by Drew McCormack  <drewmccormack@mac.com> 
+! Contributed by Drew McCormack  <drewmccormack@mac.com>
 !
 module A
-  private 
+  private
   interface create
-    module procedure create1 
+    module procedure create1
   end interface
   public :: create
 contains
@@ -19,9 +19,9 @@ contains
 end module
 
 module B
-  private 
+  private
   interface create
-    module procedure create1 
+    module procedure create1
   end interface
   public :: create
 contains

@@ -12336,86 +12336,15 @@ ngx_signal_t signals[] = {
 static void
 ngx_process_get_status(void)
 {
-    int status;
-#if 0
-    char *process;
-    ngx_pid_t pid;
-    ngx_err_t err;
-    ngx_int_t i;
-    ngx_uint_t one;
+  int status;
 
-    one = 0;
-#endif
-
-    if ((((__extension__ (((union { __typeof(status) __in; int __i; }) { .__in = (status) }).__i))) & 0x7f))
-       {
-       }
-         
-
-#if 0
-    for ( ;; ) {
-
-#if 0
-        pid = waitpid(-1, &status, 1);
-
-        if (pid == 0) {
-            return;
-        }
-
-        if (pid == -1) {
-            err = (*__errno_location ());
-
-            if (err == 4) {
-                continue;
-            }
-
-            if (err == 10 && one) {
-                return;
-            }
-// # 496 "src/os/unix/ngx_process.c"
-            if ((ngx_cycle->log)->log_level >= 2) ngx_log_error_core(2, ngx_cycle->log, err, "waitpid() failed")
-                                             ;
-            return;
-        }
-
-
-        one = 1;
-        process = "unknown process";
-
-        for (i = 0; i < ngx_last_process; i++) {
-            if (ngx_processes[i].pid == pid) {
-                ngx_processes[i].status = status;
-                ngx_processes[i].exited = 1;
-                process = ngx_processes[i].name;
-                break;
-            }
-        }
-#endif
-
-         if ((((__extension__ (((union { __typeof(status) __in; int __i; }) { .__in = (status) }).__i))) & 0x7f)) {
-#if 0
-            if ((ngx_cycle->log)->log_level >= 2) ngx_log_error_core(2, ngx_cycle->log, 0, "%s %P exited on signal %d%s", process, pid, (((__extension__ (((union { __typeof(status) __in; int __i; }) { .__in = (status) }).__i))) & 0x7f), (((__extension__ (((union { __typeof(status) __in; int __i; }) { .__in = (status) }).__i))) & 0x80) ? " (core dumped)" : "");
-#endif
-        } 
-#if 0
-else {
-            if ((ngx_cycle->log)->log_level >= 6) ngx_log_error_core(6, ngx_cycle->log, 0, "%s %P exited with code %d", process, pid, ((((__extension__ (((union { __typeof(status) __in; int __i; }) { .__in = (status) }).__i))) & 0xff00) >> 8))
-
-                                                            ;
-        }
-#endif
-#if 0
-        if (((((__extension__ (((union { __typeof(status) __in; int __i; }) { .__in = (status) }).__i))) & 0xff00) >> 8) == 2 && ngx_processes[i].respawn) {
-            if ((ngx_cycle->log)->log_level >= 2) ngx_log_error_core(2, ngx_cycle->log, 0, "%s %P exited with fatal code %d " "and cannot be respawned", process, pid, ((((__extension__ (((union { __typeof(status) __in; int __i; }) { .__in = (status) }).__i))) & 0xff00) >> 8))
-
-
-                                                            ;
-            ngx_processes[i].respawn = 0;
-        }
-#endif
-        ngx_unlock_mutexes(pid);
-    }
-#endif
+  if ((((__extension__(((union {
+                         __typeof(status) __in;
+                         int __i;
+                       }){.__in = (status)})
+                           .__i))) &
+       0x7f)) {
+  }
 }
 
 

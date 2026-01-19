@@ -1,16 +1,4 @@
 // This test code does NOT compile wth GNU 6.1
-#if 0
-template<class...Ty> // _VARIADIC_TEMPLATE
-int f_(Ty...a) 
-   {
-     auto d = [&, a...]() mutable ATTR -> int 
-        {  
-       // empty attr no effect
-          return sizeof...(a); 
-        };
-     return d();
-   }
-#endif
 
 template<class...Ty> 
 int f_(Ty...a) 

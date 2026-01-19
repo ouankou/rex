@@ -12,7 +12,6 @@ double vec_norm1(double* v, int x) {
   return sum;
 }
 
-#if 1
 double mat_norm1(double* v, int m, int n) {
   double norm = -1./0;
   for (int i = 0; i < n; ++i) {
@@ -30,4 +29,3 @@ int main(int, char**) {
       a[i][j] = (i == j ? 1. : 0.);
   return (!(mat_norm1(&a[0][0], 10, 10) == 1.));
 }
-#endif

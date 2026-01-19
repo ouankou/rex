@@ -60,13 +60,6 @@ int mmm() {
   //  GPU_N = xomp_get_num_devices();
   GPU_N = 1;
   printf("CUDA-capable device count: %i\n", GPU_N);
-#if 0
-    if (GPU_N > MAX_GPU_COUNT)
-    {
-        GPU_N = MAX_GPU_COUNT;
-    }
-  assert (GPU_N>0 && GPU_N<=MAX_GPU_COUNT);
-#endif
   omp_set_num_threads(GPU_N);
 #pragma omp parallel shared(GPU_N, a, b, c, n) private(idev)
   //  for (idev = 0; idev < GPU_N; idev++)
@@ -76,18 +69,6 @@ int mmm() {
     xomp_set_default_device(tid);
     long size;
     long offset;
-#if 0
-    int size = n / GPU_N;
-    int offset = size * tid;
-    if(tid < n%GPU_N)
-    {
-      size++;
-    }
-    if(tid >= n%GPU_N)
-      offset += n%GPU_N;
-    else
-      offset += tid;
-#endif
     XOMP_static_even_divide(0, n, GPU_N, tid, &offset, &size);
     printf("thread %d working on GPU devices %d with size %ld copying data "
            "from y_ompacc with offset %ld\n",

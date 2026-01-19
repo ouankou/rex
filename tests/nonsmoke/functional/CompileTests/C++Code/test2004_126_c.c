@@ -22,30 +22,6 @@ f4 ( enum boolean3 {FALSE3, TRUE3} b )
      return FALSE3;
    }
 
-#if 0
-// This is an error!
-enum boolean3 {FALSE_fail, TRUE_fail}
-f5 ( boolean3 b )
-   {
-     return FALSE_fail;
-   }
-#endif
-
 void foo8 ( struct { int x; } s )
    {
    }
-
-#if 0
-struct { int x; } foo6 ( );
-struct { int x; } foo7 ( struct { int x; } s );
-struct Atag { int x; } foo8 ( struct { int x; } s )
-   {
-  // return struct { int x; } A;
-  // struct { int x; } A;
-     Atag* A;
-     return *A;
-   }
-#endif
-
-
-

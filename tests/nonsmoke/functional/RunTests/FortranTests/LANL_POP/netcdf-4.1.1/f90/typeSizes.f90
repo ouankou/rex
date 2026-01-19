@@ -1,11 +1,11 @@
 ! Description:
-!   Provide named kind parameters for use in declarations of real and integer 
+!   Provide named kind parameters for use in declarations of real and integer
 !    variables with specific byte sizes (i.e. one, two, four, and eight byte
 !    integers; four and eight byte reals). The parameters can then be used
 !    in (KIND = XX) modifiers in declarations.
-!   A single function (byteSizesOK()) is provided to ensure that the selected 
+!   A single function (byteSizesOK()) is provided to ensure that the selected
 !    kind parameters are correct.
-!  
+!
 ! Input Parameters:
 !   None.
 !
@@ -19,13 +19,13 @@
 !    Robert Pincus
 !    Cooperative Institue for Meteorological Satellite Studies
 !    University of Wisconsin - Madison
-!    1225 W. Dayton St. 
+!    1225 W. Dayton St.
 !    Madison, Wisconsin 53706
 !    Robert.Pincus@ssec.wisc.edu
 !
 ! Design Notes:
 !   Fortran 90 doesn't allow one to check the number of bytes in a real variable;
-!     we check only that four byte and eight byte reals have different kind parameters. 
+!     we check only that four byte and eight byte reals have different kind parameters.
 !
 module typeSizes
   implicit none
@@ -40,12 +40,12 @@ module typeSizes
                        EightByteReal = selected_real_kind(P = 13, R = 307)
 contains
   logical function byteSizesOK()
-  ! Users may call this function once to ensure that the kind parameters 
-  !   the module defines are available with the current compiler. 
-  ! We can't ensure that the two REAL kinds are actually four and 
-  !   eight bytes long, but we can ensure that they are distinct. 
-  ! Early Fortran 90 compilers would sometimes report incorrect results for 
-  !   the bit_size intrinsic, but I haven't seen this in a long time. 
+  ! Users may call this function once to ensure that the kind parameters
+  !   the module defines are available with the current compiler.
+  ! We can't ensure that the two REAL kinds are actually four and
+  !   eight bytes long, but we can ensure that they are distinct.
+  ! Early Fortran 90 compilers would sometimes report incorrect results for
+  !   the bit_size intrinsic, but I haven't seen this in a long time.
 
     ! Local variables
     integer (kind =  OneByteInt) :: One

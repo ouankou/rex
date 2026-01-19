@@ -31,7 +31,7 @@ end subroutine value_test
 subroutine mySub(myDouble)
   use, intrinsic :: iso_c_binding
   real(c_double), value :: myDouble
-  
+
   myDouble = 11.0d0
 end subroutine mySub
-  
+

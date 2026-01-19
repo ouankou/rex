@@ -2,7 +2,7 @@
 ! Checks the fix for PR34672, in which generic interfaces were not
 ! being written correctly, when renamed.
 !
-! Contributed by Jos de Kloe <kloedej@knmi.nl> 
+! Contributed by Jos de Kloe <kloedej@knmi.nl>
 !
 MODULE MyMod1
   integer, parameter :: i2_ = Selected_Int_Kind(4)

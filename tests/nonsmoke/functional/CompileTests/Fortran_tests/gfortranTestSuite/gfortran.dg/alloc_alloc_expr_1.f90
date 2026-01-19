@@ -2,7 +2,7 @@
 program fc011
 ! Tests fix for PR20779 and PR20891.
 ! Submitted by Walt Brainerd, The Fortran Company
-! and by Joost VandeVondele  <jv244@cam.ac.uk> 
+! and by Joost VandeVondele  <jv244@cam.ac.uk>
 
 ! This program violates requirements of 6.3.1 of the F95 standard.
 

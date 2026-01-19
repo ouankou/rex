@@ -19,19 +19,11 @@ namespace N0000
         };
    }
 
-// namespace N1111 
-//  {
-#if 0
-     void foobar()
-        {
-          N0::A<N0::I>();
-        }
-#else
-     struct BBBB : public N0000::AAAA<N0000::IIII> 
-        {
-          BBBB() {}
-        };
-#endif
+   // namespace N1111
+   //  {
+   struct BBBB : public N0000::AAAA<N0000::IIII> {
+     BBBB() {}
+   };
 // }
 
 

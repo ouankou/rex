@@ -4,7 +4,7 @@
 ! Contributed by Harald Anlauf <anlauf@gmx.de>
 !
 ! This is the original bug - the frontend tried to fix the flavor of
-! 'PRINT' too early so that the compile failed on the subroutine 
+! 'PRINT' too early so that the compile failed on the subroutine
 ! declaration.
 !
 module gfcbug68
@@ -32,7 +32,7 @@ contains
   end subroutine volatile
 end module
 
-! This was a problem with the resolution of the STAT parameter in 
+! This was a problem with the resolution of the STAT parameter in
 ! ALLOCATE and DEALLOCATE that was exposed in comment #25.
 !
 module n

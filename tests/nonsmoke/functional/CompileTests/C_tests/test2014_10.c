@@ -4,17 +4,9 @@ void foo()
    {
      int x;
 
-#if 0
-  // Alternative fix for this in the source code.
-     enum { CWD_LINK, EXE_LINK };
-#endif
-
-     switch (x)
-        {
-#if 1
+     switch (x) {
        // Note enum type declaration at top of switch before first case statement.
-          enum { CWD_LINK, EXE_LINK };
-#endif
+       enum { CWD_LINK, EXE_LINK };
           case CWD_LINK:
                break;
 
@@ -23,5 +15,5 @@ void foo()
 
           default:
                break;
-        }
+          }
    }

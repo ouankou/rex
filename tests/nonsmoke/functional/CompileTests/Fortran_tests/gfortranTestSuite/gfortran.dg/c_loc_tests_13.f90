@@ -1,6 +1,6 @@
 ! { dg-do compile }
 !
-! PR fortran/38536  
+! PR fortran/38536
 ! Consecutive array and substring references rejected as C_LOC argument
 !
 ! contributed by Scot Breitenfield <brtnfld@hdfgroup.org>

@@ -103,13 +103,6 @@ void testOneFunction(
               cout << "... ...  Matched one " << hit << "/" << results.size()
                    << " - (" << name << "," << resNr << ")" << endl;
           }
-#if 0          
-          else
-          {
-	    cout << " ... defNr: " << resNr << "  inTable: " << tableNr <<  endl; 
-            cerr<<"... ... variable:"<< name <<" ID: " << tableNr <<" is not found within the reference results."<<endl;
-          }
-#endif
         }
       } // end for each analysis results
 
@@ -161,11 +154,6 @@ void testOneFunction(
         for (; k != useresults.end(); ++k) {
           string resName = k->first;
           int resNr = k->second;
-#if 0          
-	  if (name==resName)
-	    if (debug)
-	      cout << " ... defNr: " << resNr << "  inTable: " << tableNr <<  endl;
-#endif
           if (name == resName && tableNr == resNr) {
             hit++;
             if (debug)

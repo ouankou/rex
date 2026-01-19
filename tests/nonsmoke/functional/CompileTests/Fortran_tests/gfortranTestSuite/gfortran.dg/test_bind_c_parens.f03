@@ -4,4 +4,4 @@ module test_bind_c_parens
      subroutine sub bind(c) ! { dg-error "Missing required parentheses" }
      end subroutine sub ! { dg-error "Expecting END INTERFACE" }
   end interface
-end module test_bind_c_parens 
+end module test_bind_c_parens

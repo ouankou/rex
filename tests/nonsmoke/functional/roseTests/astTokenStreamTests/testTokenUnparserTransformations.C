@@ -23,9 +23,6 @@ const size_t TransformVisitor::matchEndingSize = matchEnding.size();
 const string TransformVisitor::renameEnding = "_renamed";
 
 void TransformVisitor::visit(SgNode *node) {
-#if 0
-     printf ("In TransformVisitor::visit(): node = %p = %s \n",node,node->class_name().c_str());
-#endif
 
   // Use a pointer to a constant SgVariableDeclaration to be able to call the
   // constant getter variableDeclaration -> get_variables(), which does not mark
@@ -40,10 +37,6 @@ void TransformVisitor::visit(SgNode *node) {
          nameListIterator != nameList.end(); nameListIterator++) {
       string originalName = ((*nameListIterator)->get_name()).getString();
 
-#if 0
-               printf ("variable: originalName = %s \n",originalName.c_str());
-#endif
-
       // Rename any variable, whose name ends with matchEnding.
       if (originalName.size() >= matchEndingSize &&
           originalName.compare(originalName.size() - matchEndingSize,
@@ -53,22 +46,11 @@ void TransformVisitor::visit(SgNode *node) {
         // SageInterface::set_name(*nameListIterator, originalName +
         // renameEnding);
         SageInterface::set_name(*nameListIterator, new_name);
-#if 1
         printf("variable: new_name = %s \n", new_name.c_str());
-#endif
-#if 0
-                    printf ("Exiting as a test! \n");
-                    ROSE_ASSERT(false);
-#endif
       }
     }
-#if 0
-               printf ("Exiting as a test! \n");
-               ROSE_ASSERT(false);
-#endif
   }
 
-#if 1
   // DQ (2/4/2021): Adding support to rename enum values in SgEnumDeclaration.
   const SgEnumDeclaration *enumDeclaration = isSgEnumDeclaration(node);
   if (enumDeclaration != NULL) {
@@ -78,9 +60,6 @@ void TransformVisitor::visit(SgNode *node) {
              enumerators.begin();
          nameListIterator != enumerators.end(); nameListIterator++) {
       string originalName = ((*nameListIterator)->get_name()).getString();
-#if 0
-               printf ("enumerator: originalName = %s \n",originalName.c_str());
-#endif
       // Rename any variable, whose name ends with matchEnding.
       if (originalName.size() >= matchEndingSize &&
           originalName.compare(originalName.size() - matchEndingSize,
@@ -90,17 +69,10 @@ void TransformVisitor::visit(SgNode *node) {
         // SageInterface::set_name(*nameListIterator, originalName +
         // renameEnding);
         SageInterface::set_name(*nameListIterator, new_name);
-#if 1
         printf("enumerator: new_name = %s \n", new_name.c_str());
-#endif
-#if 0
-                    printf ("Exiting as a test! \n");
-                    ROSE_ASSERT(false);
-#endif
       }
     }
   }
-#endif
 
   // DQ (2/4/2021): Adding support to rename enum values in SgEnumDeclaration.
   SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(node);
@@ -113,9 +85,6 @@ void TransformVisitor::visit(SgNode *node) {
 
     string matchEnding = "_make_prototype";
     size_t matchEndingSize = matchEnding.size();
-#if 0
-          printf ("functionDeclaration: originalName = %s \n",originalName.c_str());
-#endif
     // Rename any variable, whose name ends with matchEnding.
     if (originalName.size() >= matchEndingSize &&
         originalName.compare(originalName.size() - matchEndingSize,
@@ -135,16 +104,7 @@ void TransformVisitor::visit(SgNode *node) {
              "replaceDefiningFunctionDeclarationWithFunctionPrototype(): "
              "functionDeclaration = %p functionPrototype = %p \n",
              functionDeclaration, functionPrototype);
-#if 0
-               printf ("Exiting as a test! \n");
-               ROSE_ASSERT(false);
-#endif
     }
-
-#if 0
-          printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
-#endif
   }
 
   // DQ (9/20/2018): If we are using the token based unparsing, then any change
@@ -160,13 +120,6 @@ void TransformVisitor::visit(SgNode *node) {
     SgVariableSymbol *variableSymbol = varRefExp->get_symbol();
     ROSE_ASSERT(variableSymbol != NULL);
     string originalName = variableSymbol->get_name().str();
-#if 0
-          printf ("varRefExp: originalName = %s \n",originalName.c_str());
-#endif
-#if 0
-          printf ("Exiting as a test! \n");
-          ROSE_ASSERT(false);
-#endif
   }
 }
 
@@ -177,28 +130,8 @@ int main(int argc, char *argv[]) {
 
   // AstTests::runAllTests(project);
 
-#if 1
   TransformVisitor transformation;
   transformation.traverse(project, preorder);
-#endif
-
-#if 0
-  // Output an optional graph of the AST (just the tree, when active)
-     printf ("Generating a dot file... (ROSE Release Note: turn off output of dot files before committing code) \n");
-  // generateDOT ( *project );
-     generateDOT_withIncludes ( *project );
-#endif
-
-#if 0
-  // Output an optional graph of the AST (the whole graph, of bounded complexity, when active)
-     const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 8000;
-     generateAstGraph(project,MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH);
-#endif
-
-#if 0
-     printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
-#endif
 
   return backend(project);
 }

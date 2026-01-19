@@ -24,6 +24,6 @@ program test
   if (astr(1:5) /= "3*%SY") call abort
   do i=6,10
     if (astr(i:i) /= achar(0)) call abort
-  end do    
+  end do
 end program test
 ! { dg-final { cleanup-modules "cyclic" } }

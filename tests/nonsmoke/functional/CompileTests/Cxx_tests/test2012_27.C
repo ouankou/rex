@@ -1,52 +1,18 @@
-#if 1
-namespace A
-   {
-#if 1
-     template <typename T>
-     bool operator== (T,T);
-#endif
-   }
-#endif
+namespace A {
+template <typename T> bool operator==(T, T);
+}
 
-namespace A
-   {
-#if 1
-     template <typename T>
-     bool operator== (T,int);
-#endif
+namespace A {
+template <typename T> bool operator==(T, int);
 
-     class X
-        {
-          public:
-               template <typename T>
-               friend bool operator== (T,T);
-        };
-#if 1
+class X {
+public:
+  template <typename T> friend bool operator==(T, T);
+};
 //   }
 // namespace A
 //   {
-     template <typename T>
-     bool operator== (T,T)
-        {
-          return false;
-        }
-#endif
-#if 0
-     template <typename T>
-     bool operator== (T,T)
-        {
-          return false;
-        }
-#endif
-   }
+template <typename T> bool operator==(T, T) { return false; }
+} // namespace A
 
-
-#if 1
-namespace A
-   {
-#if 0
-     template <typename T>
-     bool operator== (T,T);
-#endif
-   }
-#endif
+namespace A {}

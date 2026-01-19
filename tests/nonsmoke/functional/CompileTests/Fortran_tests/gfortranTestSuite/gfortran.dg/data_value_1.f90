@@ -8,7 +8,7 @@
 ! Contributed by Philippe Marguinaud <philippe.marguinaud@meteo.fr>
 !
       TYPE POINT
-        REAL :: X 
+        REAL :: X
       ENDTYPE
       TYPE(POINT) :: P
       DATA P / POINT(1.+X) / ! { dg-error "non-constant initialization" }

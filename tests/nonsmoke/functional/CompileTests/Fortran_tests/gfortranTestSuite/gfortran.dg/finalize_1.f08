@@ -13,7 +13,7 @@ MODULE final_type
   END TYPE mytype
 
 CONTAINS
-  
+
   SUBROUTINE bar
     TYPE :: t
     CONTAINS ! This is ok

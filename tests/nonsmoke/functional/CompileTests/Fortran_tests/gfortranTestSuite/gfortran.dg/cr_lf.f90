@@ -15,7 +15,7 @@ program main
    close(10, status="keep")
 
    open(unit=10, file="crlftest", form="formatted", status="old")
-   
+
    read( unit=10, fmt='(64A)', advance='NO', iostat=iostat,          &
          size=n_chars_read ) buffer
    if (n_chars_read.ne.1) call abort
@@ -53,7 +53,7 @@ program main
      read(10,'(a80)',end=101,err=100) u
      !print *,k,' : ',u(1:len_trim(u))
    enddo
-   
+
 100 continue
    close(10, status="delete")
    call abort

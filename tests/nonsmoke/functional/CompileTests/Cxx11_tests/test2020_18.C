@@ -12,13 +12,6 @@ template<class T> void foo(X<T> r)
    {
    }
 
-#if 0
-template<>
-void foo< short  > (class X< short  > r)
-{
-}
-#endif
-
 void foobar()
    {
      X<short> si;

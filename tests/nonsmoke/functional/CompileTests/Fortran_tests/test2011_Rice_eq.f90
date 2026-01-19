@@ -3,5 +3,5 @@ PROGRAM test_eq
     n = 0
   END IF
   if (1 .eq. 2) stop
-END PROGRAM 
+END PROGRAM
 

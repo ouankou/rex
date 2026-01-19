@@ -8,32 +8,10 @@ using namespace Rose;
 // DQ (9/9/2005): Don't include the database by default
 // TPS (01Dec2008): Enabled mysql and this fails.
 // seems like it is not supposed to be included
-#if 0
-//#ifdef HAVE_MYSQL
-#include <GlobalDatabaseConnectionMYSQL.h>
-#endif
 
 int main(int argc, char *argv[]) {
-// TPS (01Dec2008): Enabled mysql and this fails.
-// seems like it is not supposed to be included
-#if 0
-     //#ifdef HAVE_MYSQL
-  // Build the Data base
-     GlobalDatabaseConnection *gDB;
-     gDB = new GlobalDatabaseConnection( "functionNameDataBase" );
-     gDB->initialize();
-     string command = "";
-     command = command + "CREATE TABLE Functions ( name TEXT, counter );";
-
-     Query *q = gDB->getQuery();
-     q->set( command );
-     q->execute();
-
-     if ( q->success() != 0 )
-          cout << "Error creating schema: " << q->error() << "\n";
-  // Alternative syntax, but does not permit access to error messages and exit codes
-  // gDB->execute(command.c_str());
-#endif
+  // TPS (01Dec2008): Enabled mysql and this fails.
+  // seems like it is not supposed to be included
 
   // Build the AST used by ROSE
   SgProject *project = frontend(argc, argv);
@@ -65,53 +43,14 @@ int main(int argc, char *argv[]) {
 
     string functionName = functionDeclaration->get_qualified_name().str();
 
-// TPS (01Dec2008): Enabled mysql and this fails.
-// seems like it is not supposed to be included
-#if 0
-	  //#ifdef HAVE_MYSQL
-          command = "INSERT INTO Functions values(\"" + functionName + "\"," + 
-                  StringUtility::numberToString(counter) + ");";
-       // Alternative interface
-       // q->set( command );
-       // cout << "Executing: " << q->preview() << "\n";
-       // q->execute();
-          gDB->execute(command.c_str());
-#endif
+    // TPS (01Dec2008): Enabled mysql and this fails.
+    // seems like it is not supposed to be included
   }
 
-// TPS (01Dec2008): Enabled mysql and this fails.
-// seems like it is not supposed to be included
-#if 0
-     //#ifdef HAVE_MYSQL
-     command = "SELECT * from Functions;";
-
-  // Alternative Interface (using query objects)
-  // q << command;
-     q->set(command);
-     cout << "Executing: " << q->preview() << "\n";
-
-  // execute and return result (alternative usage: "gDB->select()")
-     Result *res = q->store();
-     if ( q->success() != 0 )
-          cout << "Error reading values: " << q->error() << "\n";
-     else
-      {
-     // Read the table returned from the query
-     // res->showResult();
-        for ( Result::iterator i = res->begin(); i != res->end(); i++ )
-           {
-          // Alternative syntax is possible: "Row r = *i;"
-             string functionName = (*i)[0].get_string();
-             int counter = (*i)[1];
-             printf ("functionName = %s counter = %d \n",functionName.c_str(),counter);
-           }
-      }
-
-     gDB->shutdown();
-#else
+  // TPS (01Dec2008): Enabled mysql and this fails.
+  // seems like it is not supposed to be included
   printf("Program compiled without data base connection support (add using "
          "ROSE configure option) \n");
-#endif
 
   return 0;
 }

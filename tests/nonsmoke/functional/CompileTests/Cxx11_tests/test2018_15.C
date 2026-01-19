@@ -1,14 +1,5 @@
 // To make the error happen there need to be two files:
 
-#if 0
-// Needed for error:
-#include <algorithm>
-
-#include <vector>
-
-std::vector<unsigned> method1();
-#endif
-
 #include "test2018_15.h"
 
 // Error:

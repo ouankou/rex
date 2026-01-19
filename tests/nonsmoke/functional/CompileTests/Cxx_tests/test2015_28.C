@@ -15,20 +15,8 @@ namespace X
    {
      const int const_size = 5;
 
-#if 1
   // Type syntax not yet supported for variabel declarations.
      Y<Z[const_size]> a;
-#endif
    }
-
-#if 0
-  // Type syntax not yet supported for variabel declarations.
-int array[X::const_size];
-
-// This should unparse as: "Y<Z[X::const_size]> a;"
-Y<Z[X::const_size]> b;
-
-Z c[X::const_size];
-#endif
 
 void foobar (int array[X::const_size]);

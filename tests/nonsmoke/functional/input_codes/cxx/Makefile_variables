@@ -1336,4 +1336,4 @@ ROSE__CXX_TESTS = \
 	test2005_08.C \
 	test2012_57.C \
 	test2012_59.C \
-        test2013_milind_01.C 
+        test2013_milind_01.C

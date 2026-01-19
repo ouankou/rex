@@ -20,7 +20,7 @@ end module protmod
 program main
   use protmod
   implicit none
-  integer   :: j 
+  integer   :: j
   logical   :: asgnd
   protected :: j ! { dg-error "only allowed in specification part of a module" }
   a = 43       ! { dg-error "Assigning to PROTECTED variable" }
@@ -41,7 +41,7 @@ contains
   end subroutine increment
   subroutine pointer_assignments(p)
     integer, pointer,intent(out) :: p
-    p => null()           
+    p => null()
   end subroutine pointer_assignments
   function pointer_check(p)
     integer, pointer,intent(in) :: p

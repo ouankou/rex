@@ -6,14 +6,6 @@ int main() {
   return 0;
 }
 
-#if 0
-// B.c:
-typedef struct b_class
-{
-} B_CLASS;
-
-#endif
-
 /*
 Good.sh:
 rose-cc B.c A.c

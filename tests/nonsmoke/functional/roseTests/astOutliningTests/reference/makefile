@@ -1,7 +1,7 @@
 all: jacobi.out
 
 #.c.so:
-#	gcc -fpic -shared -lc $< 
+#	gcc -fpic -shared -lc $<
 
 SO_Files = rose_jacobi_lib.so
 

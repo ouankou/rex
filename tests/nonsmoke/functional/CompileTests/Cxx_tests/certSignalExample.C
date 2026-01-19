@@ -1,12 +1,3 @@
-#if 0
-#include <signal.h>
-
-#include <stdio.h>
-
-#include <stdlib.h>
-
-#include <string.h>
-#else
 // Alternative program to reduce the size and complexity of the whole program
 // graph
 typedef void (*functionType)(int x);
@@ -16,7 +7,6 @@ void strcpy(char *s1, char *s2);
 const int SIGINT = 42;
 const void *NULL = 0L;
 void *malloc(int size);
-#endif
 
 char *err_msg;
 volatile sig_atomic_t e_flag = 0;

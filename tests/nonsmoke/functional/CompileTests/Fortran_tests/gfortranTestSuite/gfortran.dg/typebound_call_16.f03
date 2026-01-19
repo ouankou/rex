@@ -7,14 +7,14 @@
 module base_mat_mod
 
   type  :: base_sparse_mat
-  contains 
+  contains
     procedure, pass(a) :: get_nrows
   end type base_sparse_mat
-  
+
 contains
 
   integer function get_nrows(a)
-    implicit none 
+    implicit none
     class(base_sparse_mat), intent(in) :: a
   end function get_nrows
 

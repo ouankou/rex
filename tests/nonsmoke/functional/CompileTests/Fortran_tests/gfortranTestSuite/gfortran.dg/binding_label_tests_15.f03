@@ -6,7 +6,7 @@ module m
   implicit none
   integer(c_int), bind(C, name="") :: a,b ! { dg-error "Multiple identifiers" }
   integer(c_int), bind(C, name="bob") :: c,d ! { dg-error "Multiple identifiers" }
-  integer(c_int) :: e,f 
+  integer(c_int) :: e,f
   bind(c, name="foo") :: e,f ! { dg-error "Multiple identifiers" }
 end module m
 

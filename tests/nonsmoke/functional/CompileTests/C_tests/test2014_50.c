@@ -5,10 +5,3 @@ HTConverter HTThroughLine;
 
 // Original code: HTConverter HTBlackHoleConverter;
 HTConverter HTBlackHoleConverter;
-
-#if 0
-void foo()
-   {
-     HTBlackHoleConverter(42);
-   }
-#endif

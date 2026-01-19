@@ -4,7 +4,7 @@
 ! a having a rank == 1.
 !
 ! Contributed by Harald Anlauf  <anlauf@gmx.de>
-!   
+!
 program gfcbug40
   implicit none
 

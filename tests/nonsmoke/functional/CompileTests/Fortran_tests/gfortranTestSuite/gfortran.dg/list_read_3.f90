@@ -40,7 +40,7 @@ program fg
   if (debug) then
     print*,buff
     print*,a, b, c, d
-  end if 
+  end if
 
   a = 0
   b = 0
@@ -48,25 +48,25 @@ program fg
   d = 0
   write (buff,'(a)') '10.0,20.0,30.0,40.0'
   read(buff,*) a, b, c, d
-                                                                                
+
   if (abs(10. - a) > 1e-5) call abort
   if (abs(20. - b) > 1e-5) call abort
   if (abs(30. - c) > 1e-5) call abort
   if (abs(40. - d) > 1e-5) call abort
 
-  if (debug) then 
+  if (debug) then
     print*,buff
     print*,a, b, c, d
   end if
-                                                                              
+
 
   a = 0
-  b = -99 
+  b = -99
   c = 0
   d = 0
   write (buff,'(a)') '10.0,,30.0,40.0'
   read(buff,*) a, b, c, d
-                                                                                
+
   if (abs(10. - a) > 1e-5) call abort
   if (abs(-99. - b) > 1e-5) call abort
   if (abs(30. - c) > 1e-5) call abort
@@ -76,7 +76,7 @@ program fg
     print*,buff
     print*,a, b, c, d
   end if
-                                                                                
+
 
    call abc
 

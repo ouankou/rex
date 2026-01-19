@@ -60,11 +60,6 @@ visitorTraversalSetAttribute<Traversal>::visit (SgNode * n)
           z->set_fontcolor("black");
 
           z->set_keep(true);
-#if 0
-          std::cout << "The edge string is: " << y.get_dot_options_string() << std::endl;
-          std::cout << "The node string is: " << z->get_dot_options_string() << std::endl;
-          std::cout << "Attaching new attribute" << std::endl; 
-#endif
           n->setAttribute(std::string("MyNodeAttribute"),z);
         }
    }

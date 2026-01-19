@@ -29,7 +29,7 @@ end module person_education
   end type person_record
 
   type(person_record), pointer :: recruit, supervisor
-  
+
 ! Check that F2K constructor with missing entries works
   allocate (supervisor)
   supervisor%service = service (NAME = "Joe Honcho", SS= 123455)

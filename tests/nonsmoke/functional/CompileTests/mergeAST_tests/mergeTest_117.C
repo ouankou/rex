@@ -9,12 +9,9 @@ namespace std
 
 namespace std
    {
-     struct _Bit_iterator_base : public iterator<bool>
-        {
-#if 1
-          unsigned int _M_offset;
-          void _M_bump_up() { _M_offset++; }
-#endif
-        };
+struct _Bit_iterator_base : public iterator<bool> {
+  unsigned int _M_offset;
+  void _M_bump_up() { _M_offset++; }
+};
    }
 

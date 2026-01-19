@@ -1,4 +1,4 @@
-!$omp parallel 
-!$omp do 
-!$omp end do 
-!$omp end parallel 
+!$omp parallel
+!$omp do
+!$omp end do
+!$omp end parallel

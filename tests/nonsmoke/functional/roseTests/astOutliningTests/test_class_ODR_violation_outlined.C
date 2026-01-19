@@ -19,24 +19,15 @@ namespace N
           friend void ::OUT__1__7421__(void **__out_argv);
 
        // public or private does not make a difference.
-          public:
-#if 1
-            // This will compile and link just fine.
-               int foo() const { return 0; };
-#else
-            // This is an error at link time since "foo()" is not defined.
-               int foo() const;
-#endif
-#if 1
-            // This will compile and link just fine.
-               int bar() const { return 0; };
-#else
-            // This is an error at link time since "bar()" is not defined.
-               int bar() const;
-#endif
-          public:
-            // I don't know why "biz()" need not be defined!
-               int biz () const; // { return 0; };
+        public:
+          // This will compile and link just fine.
+          int foo() const { return 0; };
+          // This will compile and link just fine.
+          int bar() const { return 0; };
+
+        public:
+          // I don't know why "biz()" need not be defined!
+          int biz() const; // { return 0; };
         };
    }
 

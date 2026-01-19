@@ -46,7 +46,5 @@ void foo(int cond,int *blockx,int loSt)
     printf("%d",stmp);
   }
 }
-// A tricky case of if-stmt, 
+// A tricky case of if-stmt,
 // move to two bodies, trigger another round of moving: iterative moving
-#if 0
-#endif

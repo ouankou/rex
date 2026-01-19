@@ -14,12 +14,3 @@ T & operator+( T & i, T & j)
    {
      return i;
    }
-
-#if 0
-void foobar()
-   {
-     X<int> x,y,z;
-
-     x = y + z;
-   }
-#endif

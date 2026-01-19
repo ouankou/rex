@@ -10,19 +10,19 @@ subroutine where_example
 
     logical(1) :: should_set_cell(5,6,7)
     logical(1) :: should_set_upwind(5,6,7), should_set_downwind(5,6,7), should_set_donor_volume(5,6,7)
-    
+
     real(4) :: donor_variability(5,6,7), donor_mass(5,6,7), donor_volume(5,6,7)
     real(4) :: epsilon1(5,6,7), epsilon2(5,6,7), epsilon3(5,6,7), epsilon4(5,6,7)
     real(4) :: temperature1(5,6,7), temperature2(5,6,7), temperature3(5,6,7), temperature4(5,6,7)
     real(4) :: donor(5,6,7), upwind(5,6,7), downwind(5,6,7)
-    
+
     where(should_set_upwind)
         upwind = donor - upwind
       ! where (upwind < zero_epsilon) upwind = zero
     elsewhere
         upwind = zero
     end where
-    
+
     where(should_set_downwind)
         downwind = downwind - donor
 
@@ -31,16 +31,16 @@ subroutine where_example
     elsewhere
         downwind = zero
     end where
-    
+
     donor_variability = zero
   ! where statement not implemented in ROSE
   ! where (upwind*downwind > zero) donor_variability = epsilon2
-    
+
     upwind = sign(donor_variability,downwind) * &
         min(abs(upwind), abs(downwind), epsilon3*abs(upwind) + epsilon4*abs(downwind))
-    
+
     donor_variability = donor_mass*(donor + upwind)
-    
+
   ! temperature4 = global_eoshift(donor_variability, SHIFT=1, BOUNDARY=zero, DIM=id)
     temperature4 = eoshift(donor_variability, SHIFT=1, BOUNDARY=zero, DIM=id)
 

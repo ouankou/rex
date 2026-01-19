@@ -10,11 +10,9 @@ class B
              {
                if (true)
                   {
-                 // Throw expression taking a constructor for a class which 
+                 // Throw expression taking a constructor for a class which
                  // does not implement an explicit default constructor.
-#if 1
-                    throw ErrorWithOutExplicitConstructor();
-#endif
+                 throw ErrorWithOutExplicitConstructor();
                   }
              }
    };

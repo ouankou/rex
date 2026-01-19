@@ -6,7 +6,7 @@ program main
   b = fun(size(b))
   if (b(1) /= 1 .or. b(2) /= 2) call abort()
 contains
-  pure function fun(n) 
+  pure function fun(n)
     integer, intent(in) :: n
     integer :: fun(n)
     integer :: i

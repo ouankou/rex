@@ -2,4 +2,4 @@ foo < double >  ->
 foo < float >  ->
 foo < int >  ->
 foo < long >  ->
-main -> foo < double >  foo < float >  foo < int >  foo < long > 
+main -> foo < double >  foo < float >  foo < int >  foo < long >

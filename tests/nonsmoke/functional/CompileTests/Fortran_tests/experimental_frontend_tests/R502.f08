@@ -1,5 +1,5 @@
 !! R502 attr-spec
-!                 is  access-spec 
+!                 is  access-spec
 !                 or  ALLOCATABLE
 !                 or  ASYNCHRONOUS
 !                 or  CODIMENSION [ coarray-spec ]
@@ -17,20 +17,20 @@
 !                 or  TARGET
 !                 or  VALUE
 !                 or  VOLATILE
-! 
-! Tested separately are: R507 (access-spec), R509 (dimension-spec), 
+!
+! Tested separately are: R507 (access-spec), R509 (dimension-spec),
 ! R523 (intent-spec), and R508 (language-binding-spec).
 !
 
-integer, private :: a       
-integer, allocatable :: b   
-integer, asynchronous :: c  
+integer, private :: a
+integer, allocatable :: b
+integer, asynchronous :: c
 integer, codimension[*] :: co
 integer, CONTIGUOUS :: cont
-integer, dimension(:) :: d  
-integer, external :: e      
-integer, intent(in) :: f    
-integer, intrinsic :: g     
+integer, dimension(:) :: d
+integer, external :: e
+integer, intent(in) :: f
+integer, intrinsic :: g
 integer, bind(c) :: h
 integer, optional :: i
 integer, parameter :: j

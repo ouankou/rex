@@ -38,5 +38,5 @@ CONTAINS
     if (.not.allocated(vocab_swap(1)%chars)) call abort ()
     if (allocated(vocab_swap(10)%chars)) call abort ()
   ENDSUBROUTINE extend_lists2
-  
+
 ENDPROGRAM vocabulary_word_count

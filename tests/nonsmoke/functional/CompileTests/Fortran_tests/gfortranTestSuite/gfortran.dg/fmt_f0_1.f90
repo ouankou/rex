@@ -14,4 +14,4 @@
  if (str.ne."0.000") call abort
  write (str,'(f0.4)') x
  if (str.ne."0.0000") call abort
- END  
+ END

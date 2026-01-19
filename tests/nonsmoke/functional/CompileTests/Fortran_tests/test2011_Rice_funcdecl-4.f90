@@ -9,7 +9,7 @@ contains
 !-------------------------------------------------------------------------------
   function number_of_bits8(i) result(num)
     implicit none
-    integer :: i, itmp, num 
+    integer :: i, itmp, num
     num = 0
     itmp = i
     do while (itmp .gt. 0)

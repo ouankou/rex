@@ -14,16 +14,3 @@ void foo(int dimensions)
       printf("hi\n") ;
    }
 }
-
-
-#if 0
-void foo2(int dimensions)
-{
-   for (int itr, Initialize_Iterator(&itr) ; // illegal code here
-        Check_Iterator(&itr) ;
-        Advance_Iterator(&itr))
-   {
-      printf("hi\n") ;
-   }
-}
-#endif 

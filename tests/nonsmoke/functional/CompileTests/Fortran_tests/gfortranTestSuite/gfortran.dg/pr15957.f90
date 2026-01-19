@@ -23,5 +23,5 @@ n = reshape ((/1,2,3,4,5,6/), (/2,3/))
 if (any(n /= k)) call abort()
 o = reshape ((/1,2,3,4,5,6/), (/2,4/), (/0,0/), (/2,1/))
 if (any(o /= m)) call abort()
-end 
+end
 

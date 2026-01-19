@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! Test fix for regression caused by 
+! Test fix for regression caused by
 ! 2006-06-23  Steven G. Kargl  <kargls@comcast.net>
 !    PR fortran/27981
 !    * match.c (gfc_match_if):  Handle errors in assignment in simple if.

@@ -20,18 +20,10 @@ class A
             int x22;
    };
 
-#if 1
 // Template instantiation directive (for a class)
-template A<int>;
-#else
-// Template instantiation directive (for a function)
-template inline void A<int>::f(int x);
-#endif
+   template A<int>;
 
-// Template instantiation directives (for a function)
-template inline void A<int>::g<int>(int y,int u);
+   // Template instantiation directives (for a function)
+   template inline void A<int>::g<int>(int y, int u);
 
-int foo()
-   {
-     return 0;
-   }
+   int foo() { return 0; }

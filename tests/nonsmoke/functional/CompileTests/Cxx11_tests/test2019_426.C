@@ -13,10 +13,7 @@ template < typename T = A < Y::type_B > > class I;
 // This does not unparse properly ("A<type_B> N;", lacks qualified name for type "type_B")
 A<Y::type_B> N;
 
-#if 1
 namespace Y
    {
      A<type_B> N2;
-   }
-#endif
-
+     }

@@ -5,16 +5,7 @@ class DependenceGraph // : public SimpleDirectedGraph
  public:
   DependenceGraph() {debugme=false;}
   virtual ~DependenceGraph(){};
-  void debugCoutNodeList()
-  {
-#if 0
-    std::set<SimpleDirectedGraphNode *>::iterator i;
-    for (i=_nodes.begin();i!=_nodes.end();i++)
-      {
-        std::cout<<"\t\t"<<(*i)<<"\n";
-      }
-#endif
-  }
+  void debugCoutNodeList() {}
 
   /* ! \brief This enum marks what type of edge connects two DependenceNodes
 

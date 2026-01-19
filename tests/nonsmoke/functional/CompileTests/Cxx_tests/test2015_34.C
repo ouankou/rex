@@ -34,23 +34,8 @@ namespace std {
                int foo();
         };
 
-#if 0
-// This will compile for GNU g++ 4.4, however the ROSE generated code does not compile with 
-// GNU g++ 4.4 (because the class template specialization is output, I think), might be 
-// related to why Markus suggested it will fail for GNU g++ 4.8.
-
-// The declaration contained in this forward declaration of 
-// the specialization is shared with the "foo()" in the class.
-   template<> int basic_filebuf<char,char>::foo();
-#endif
-
-#if 1
 // This will compile with GNU g++ 4.4.
-   template<> int basic_filebuf<char,char>::foo() 
-      {
-        return 0;
-      }
-#endif
+        template <> int basic_filebuf<char, char>::foo() { return 0; }
 }
 
 

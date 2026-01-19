@@ -99,13 +99,11 @@ int main(int argc, char *argv[]) {
   // printf ("Generate the pdf output of the SAGE III AST \n");
   // generatePDF ( project );
 
-#if 1
   dqTraversal treeTraversal;
   dqInheritedAttribute inheritedAttribute;
 
   // Ignore the return value since we don't need it
   treeTraversal.traverseInputFiles(project, inheritedAttribute);
-#endif
 
   return backend(project);
   // return backend(frontend(argc,argv));

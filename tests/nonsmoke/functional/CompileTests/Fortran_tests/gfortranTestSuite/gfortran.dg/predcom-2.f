@@ -1,4 +1,4 @@
-! PR 32220, ICE when the loop is not unrolled enough to eliminate all 
+! PR 32220, ICE when the loop is not unrolled enough to eliminate all
 !   register copies
 ! { dg-do compile }
 ! { dg-options "-O3" }

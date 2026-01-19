@@ -28,7 +28,7 @@ program test
   call foo(i%ptr)
   call foo(i[1]%ptr) ! { dg-error "Coindexed actual argument at .1. to pointer dummy" }
   call bar(i%ptr)
-  call bar(i[1]%ptr) ! OK, value of ptr target 
+  call bar(i[1]%ptr) ! OK, value of ptr target
   call bar(i[1]%alloc(1)) ! OK
   call typeDummy(i) ! OK
   call typeDummy(i[1]) ! { dg-error "with ultimate pointer component" }

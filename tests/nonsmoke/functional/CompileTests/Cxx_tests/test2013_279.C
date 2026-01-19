@@ -39,8 +39,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
 template<typename _Tp> class allocator;
 
-#if 1
-template<typename _Tp> class allocator : public __glibcxx_base_allocator<_Tp> {};
-#endif
+template <typename _Tp>
+class allocator : public __glibcxx_base_allocator<_Tp> {};
 
 _GLIBCXX_END_NAMESPACE

@@ -1,6 +1,6 @@
 ! { dg-do compile }
 ! { dg-options "-fcoarray=single" }
-! 
+!
 ! Coarray support
 ! PR fortran/18918
 
@@ -19,7 +19,7 @@ sync images (*, stat=1.0) ! { dg-error "Syntax error in SYNC IMAGES" }
 sync images (-1) ! { dg-error "must between 1 and num_images" }
 sync images (1)
 sync images ( [ 1 ])
-sync images ( m(1:0) ) 
+sync images ( m(1:0) )
 sync images ( reshape([1],[1,1])) ! { dg-error "must be a scalar or rank-1" }
 end
 
@@ -29,7 +29,7 @@ critical
   sync all     ! { dg-error "Image control statement SYNC" }
   return 1     ! { dg-error "Image control statement RETURN" }
   critical     ! { dg-error "Nested CRITICAL block" }
-  end critical 
+  end critical
 end critical   ! { dg-error "Expecting END SUBROUTINE" }
 end
 

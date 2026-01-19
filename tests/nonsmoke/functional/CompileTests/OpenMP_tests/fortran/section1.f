@@ -3,13 +3,13 @@
 !$omp single
       PRINT *, 'Hello World from single'
 !$omp end single
-!$omp sections 
+!$omp sections
 !$omp section
       PRINT *, 'Hello World from section 1'
 !$omp section
       PRINT *, 'Hello World from section 2'
 !$omp end sections nowait
-c$omp end parallel 
+c$omp end parallel
       PRINT *, 'the end'
       END
 

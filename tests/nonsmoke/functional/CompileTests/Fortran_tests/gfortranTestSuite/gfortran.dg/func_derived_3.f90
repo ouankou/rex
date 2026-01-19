@@ -5,7 +5,7 @@
 ! original problem but throughly tests derived types in modules,
 ! module interfaces and compound derived types.
 !
-! Original by Martin Reinecke  martin@mpa-garching.mpg.de  
+! Original by Martin Reinecke  martin@mpa-garching.mpg.de
 ! Submitted by Paul Thomas  pault@gcc.gnu.org
 ! Slightly modified by Tobias Schlüter
 module func_derived_3
@@ -86,14 +86,14 @@ contains
     oa=>ob%oa
   end function getOa
 
-! without a result clause 
+! without a result clause
   function getOa2 (ob)
     type (objB),target :: ob
     type (objA), pointer :: getOa2
 
     getOa2=>ob%oa
   end function getOa2
-    
+
 end module func_derived_3a
 
   use func_derived_3
@@ -111,7 +111,7 @@ end module func_derived_3a
   call print (ob)
   call print (getOa (ob))
   call print (getOa2 (ob))
-  
+
   rewind (10)
   read (10, '(80a)') line
   if (trim (line).ne."derived =     2") call abort ()

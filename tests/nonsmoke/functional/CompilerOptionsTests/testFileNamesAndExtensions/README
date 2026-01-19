@@ -18,11 +18,11 @@ The general rules seem to be the following:
 #######################################################
 GNU
 ------------------------------------------------------
-In GNU, the code that checks and enforces these is in the 
+In GNU, the code that checks and enforces these is in the
 file cppspec.c in data structure known_suffixes
  ".c",  ".C", ".cc", ".cxx", ".cpp", ".cp",  ".c++",
 #######################################################
-legacy frontend 
+legacy frontend
 ------------------------------------------------------
 file host_environ.h
 c:C:cpp:CPP:cxx:CXX:cc
@@ -41,13 +41,13 @@ TEST DIRECTORY CASE_SENSITIVE_SYSTEMS
 ------------------------------------------------------
 The test codes are in the three directories.
 
-CASE_SENSITIVE_SYSTEMS: compiles and tests each of the files 
+CASE_SENSITIVE_SYSTEMS: compiles and tests each of the files
 with gcc, g++ , legacy frontend and identityTranslator
 ------------------------------------------------------
-CASE_INSENSITIVE_SYSTEMS: compiles and tests each of the files 
+CASE_INSENSITIVE_SYSTEMS: compiles and tests each of the files
 with gcc, g++ , legacy frontend and identityTranslator. Note that "redundant"
 suffixes have been removed.
 ------------------------------------------------------
 WIERD: compiles and tests each of the files  with wierd suffixes
-with gcc, g++ , legacy frontend and identityTranslator. For now, they probably 
+with gcc, g++ , legacy frontend and identityTranslator. For now, they probably
 donot serve much purpose except for a future reference.

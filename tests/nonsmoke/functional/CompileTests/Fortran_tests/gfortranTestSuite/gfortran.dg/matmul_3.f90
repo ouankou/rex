@@ -5,7 +5,7 @@
 !
 ! Based on the original testcase contributed by
 ! Tobias Burnus  <tobias.burnus@physik.fu-berlin.de>
-!   
+!
    implicit none
    integer, parameter         ::  nmax = 3
    integer                    ::  i, n = 2

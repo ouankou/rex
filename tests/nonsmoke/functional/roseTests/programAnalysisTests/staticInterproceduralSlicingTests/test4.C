@@ -13,17 +13,10 @@ int main(void)
 {
   int i,j;
   int a[100];
-#if 0  
-  for(i=0;i< 100;i++) 
-  {  
-    a[i]=i;
-  }   
-#else
   for(i=50;i< 100;i++) 
   {  
     a[i]=a[i-50]+i;
-  }   
-#endif
+  }
 //  printf("sum=%d\n",sum);
   return 0;
 }

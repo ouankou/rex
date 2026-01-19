@@ -24,7 +24,7 @@ C     Try an OpenMP comment!
       PARAMETER        ( ONE = 1.0D+0, ZERO = 0.0D+0 )
 *
 *
-*     Make sure that no comment is allowed to seperate 
+*     Make sure that no comment is allowed to seperate
 *     the conditional and the return statement
 *
       IF( ( M.EQ.0 ).OR.( N.EQ.0 ).OR.

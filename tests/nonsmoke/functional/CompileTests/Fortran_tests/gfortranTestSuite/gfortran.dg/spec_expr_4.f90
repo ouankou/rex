@@ -18,9 +18,9 @@ module global_numbering
   implicit none
 contains
   function element_local_coords(element) result (coords)
-    type(element_type), intent(in) :: element    
+    type(element_type), intent(in) :: element
     real, dimension(size(element%numbering%number2count, 1)) :: coords
-    coords=0.0 
+    coords=0.0
   end function element_local_coords
 end module global_numbering
 

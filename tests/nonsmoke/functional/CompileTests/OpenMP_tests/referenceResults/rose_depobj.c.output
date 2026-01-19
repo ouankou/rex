@@ -2,6 +2,6 @@
 #pragma omp depobj (obj) update(in)
 #pragma omp depobj (obj) destroy
 #pragma omp parallel  num_threads(2)
-#pragma omp single 
+#pragma omp single
 #pragma omp task  depend(depobj : obj)
 #pragma omp task  depend(in : a[0:n])

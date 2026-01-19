@@ -47,7 +47,7 @@ contains
     end type b
 
     type c
-      type(b), allocatable :: b(:) 
+      type(b), allocatable :: b(:)
     end type c
 
     type(c)    :: p

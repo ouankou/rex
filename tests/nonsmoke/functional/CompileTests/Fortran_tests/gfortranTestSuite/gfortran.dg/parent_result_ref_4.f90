@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! Tests the fix for PR19546 in which an ICE would result from
-! setting the parent result in a contained procedure. 
+! setting the parent result in a contained procedure.
 ! Check that parent function results can be referenced in modules.
 !
 module m

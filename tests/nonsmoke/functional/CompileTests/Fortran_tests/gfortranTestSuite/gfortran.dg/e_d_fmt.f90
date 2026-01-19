@@ -2,7 +2,7 @@
 ! { dg-options "-std=legacy" }
 !
 ! Verify that the D format uses 'D' as the exponent character.
-!   "     "    "  E   "     "   'E' "   "     "         " 
+!   "     "    "  E   "     "   'E' "   "     "         "
 CHARACTER*10 c1, c2
 REAL(kind=8) r
 r = 1.0

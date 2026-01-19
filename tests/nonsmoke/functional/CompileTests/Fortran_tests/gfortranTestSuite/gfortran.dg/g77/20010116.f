@@ -10,7 +10,7 @@ c
 *  14 January 2001
 *  Rewritten by Toon Moene (toon@moene.indiv.nluug.nl)
 *  15 January 2001
-* 
+*
       COMPLEX A(5,5)
       DATA A/25*(0.0,0.0)/
       A(4,3) = (0.05,0.2)/3.0E-7

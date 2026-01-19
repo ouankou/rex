@@ -49,13 +49,6 @@ main ( int argc, char* argv[] )
      printf ("Number of scopes (SgScopeStatement) = %d \n",(int)SgScopeStatement::numberOfNodes());
      printf ("Number of scopes (SgBasicBlock)     = %d \n",(int)SgBasicBlock::numberOfNodes());
 
-#if 0
-     printf ("\n\n");
-     printf ("Now output all the symbols in each symbol table \n");
-     SageInterface::outputLocalSymbolTables(project);
-     printf ("\n\n");
-#endif
-
      return 0;
    }
 

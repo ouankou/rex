@@ -1,4 +1,3 @@
-#if 1
 
 void foo(int len,int condition)
 {
@@ -9,10 +8,8 @@ void foo(int len,int condition)
     }
   }
 }
-#endif
-// A tricky case of if-stmt, 
+// A tricky case of if-stmt,
 // move to two bodies, trigger another round of moving: iterative moving
-#if 1
 
 void bar(bool allow)
 {
@@ -27,10 +24,8 @@ void bar(bool allow)
     }
   }
 }
-#endif
 // if statement issue
 // move to two bodies, trigger another round of moving
-#if 1
 
 void foo2(bool allow,int update,int update2)
 {
@@ -57,7 +52,6 @@ void foo2(bool allow,int update,int update2)
     }
   }
 }
-#endif 
 
 class foo 
 {

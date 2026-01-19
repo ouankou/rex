@@ -45,7 +45,7 @@ MODULE testmod
   END TYPE t4
 
 CONTAINS
-  
+
   SUBROUTINE proc1 (me)
     IMPLICIT NONE
     CLASS(t1) :: me

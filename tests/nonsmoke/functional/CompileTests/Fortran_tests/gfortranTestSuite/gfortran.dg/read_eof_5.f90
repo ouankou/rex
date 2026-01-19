@@ -7,6 +7,6 @@ program main
   line = 'ab'
   read (line,'(A)',END=99) a
   call abort
-  99 continue 
+  99 continue
   if (any(a /= ['a','x','x'])) call abort
 end program main

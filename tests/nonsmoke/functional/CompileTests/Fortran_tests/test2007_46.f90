@@ -11,12 +11,12 @@ include 'test2007_46_b.h'
 subroutine foobar()
    common /globals/ x
 
-   integer :: y 
+   integer :: y
 end subroutine foobar
 
 #line 10 "foobar_header_file"
 subroutine foobar_cpp_include()
-   integer :: z 
+   integer :: z
 end subroutine foobar_cpp_include
 
 

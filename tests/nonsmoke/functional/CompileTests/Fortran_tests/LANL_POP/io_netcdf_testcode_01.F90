@@ -24,10 +24,8 @@
    use gather_scatter
    use exit_mod
 
-#if 1
    use io_types
    use netcdf
-#endif
 
    implicit none
    private
@@ -41,50 +39,6 @@
              define_field_netcdf, &
              read_field_netcdf,   &
              write_field_netcdf
-#if 0
-   public :: nf90_inq_dimid
-
-   type, public :: io_field_desc
-      character(char_len)                         :: short_name
-      character(char_len)                         :: long_name
-      character(char_len)                         :: units
-      character(4)                                :: grid_loc
-      real(r4)                                    :: missing_value
-      real(r4), dimension(2)                      :: valid_range
-      integer(i4)                                 :: id
-      integer(i4)                                 :: nfield_dims
-      integer(i4)                                 :: field_loc
-      integer(i4)                                 :: field_type
-      type (io_dim), dimension(:), pointer        :: field_dim
-      character(char_len), dimension(:), pointer  :: add_attrib_cname
-      character(char_len), dimension(:), pointer  :: add_attrib_cval
-      character(char_len), dimension(:), pointer  :: add_attrib_lname
-      logical  (log_kind), dimension(:), pointer  :: add_attrib_lval
-      character(char_len), dimension(:), pointer  :: add_attrib_iname
-      integer  (i4),       dimension(:), pointer  :: add_attrib_ival
-      character(char_len), dimension(:), pointer  :: add_attrib_rname
-      real     (r4),       dimension(:), pointer  :: add_attrib_rval
-      character(char_len), dimension(:), pointer  :: add_attrib_dname
-      real     (r8),       dimension(:), pointer  :: add_attrib_dval
-      !   Only one of these next nine pointers can be associated.
-      !   The others must be nullified.  For convenience in
-      !   initialization, these declarations are the last listed
-      !   in this type.
-      integer(i4), dimension(:,:,:), pointer      :: field_i_2d
-      integer(i4), dimension(:,:,:,:), pointer    :: field_i_3d
-      real(r4), dimension(:,:,:), pointer         :: field_r_2d
-      real(r4), dimension(:,:,:,:), pointer       :: field_r_3d
-      real(r8), dimension(:,:,:), pointer         :: field_d_2d
-      real(r8), dimension(:,:,:,:), pointer       :: field_d_3d
-   end type
-
-   type, public :: io_dim
-      integer(i4) ::  id
-      integer(i4) :: length  ! 1 to n, but 0 means unlimited
-      integer(i4) :: start, stop, stride  ! For slicing and dicing
-      character(char_len)        :: name
-   end type
-#endif
 
 !EOP
 !BOC
@@ -109,16 +63,6 @@
  subroutine close_netcdf()
  end subroutine close_netcdf
 
-#if 0
-  function nf90_inq_dimid(ncid, name, dimid)
-    integer,             intent( in) :: ncid
-    character (len = *), intent( in) :: name
-    integer,             intent(out) :: dimid
-    integer                          :: nf90_inq_dimid
-
-    nf90_inq_dimid = 0
-  end function nf90_inq_dimid
-#endif
 
 !***********************************************************************
 !BOP
@@ -130,7 +74,7 @@
 
 ! !DESCRIPTION:
 !  This routine defines an io field for a netCDF file.
-!  When reading a file, the define routine will attempt to fill an 
+!  When reading a file, the define routine will attempt to fill an
 !  io field structure with meta-data information from the netCDF file.
 !  When writing a file, it calls the appropriate netCDF routines
 !  to define all the field attributes and assign a field id.
@@ -190,18 +134,10 @@
 
    integer :: nf90_noerr
 
-#if 0
-! DQ ((9/12/2010): Comment this out as a test.
-            iostat = NF90_INQ_DIMID(ncid=ncid,                         &
-                                 name=trim(io_field%field_dim(n)%name),&
-                                 dimid=dimid)
-#endif
 
-#if 1
 ! DQ ((9/12/2010): Comment this out as a test.
             iostat = NF90_INQ_DIMID(ncid,att_name,dimid)
             iostat = NF90_INQ_DIMID(ncid,io_field%field_dim(n)%name,dimid)
-#endif
 
 !-----------------------------------------------------------------------
 !

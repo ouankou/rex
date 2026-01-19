@@ -24,19 +24,8 @@ auto switch_to_new_thread(std::jthread &out) {
   return awaitable{&out};
 }
 
-#if 1
 // DQ (7/26/2020): "task<>" is not yet supported.
 void resuming_on_new_thread(std::jthread &out) {};
-#else
-task<> resuming_on_new_thread(std::jthread &out) {
-  std::cout << "Coroutine started on thread: " << std::this_thread::get_id()
-            << "\n";
-  co_await switch_to_new_thread(out);
-  // awaiter destroyed here
-  std::cout << "Coroutine resumed on thread: " << std::this_thread::get_id()
-            << "\n";
-}
-#endif
 
 int main() {
   std::jthread out;

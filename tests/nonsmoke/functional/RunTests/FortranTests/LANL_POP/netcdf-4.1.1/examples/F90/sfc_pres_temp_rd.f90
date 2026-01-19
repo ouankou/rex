@@ -33,7 +33,7 @@ program sfc_pres_temp_rd
   real :: lats(NLATS), lons(NLONS)
   integer :: lat_varid, lon_varid
 
-  ! We will read surface temperature and pressure fields. 
+  ! We will read surface temperature and pressure fields.
   character (len = *), parameter :: PRES_NAME = "pressure"
   character (len = *), parameter :: TEMP_NAME = "temperature"
   integer :: pres_varid, temp_varid
@@ -69,7 +69,7 @@ program sfc_pres_temp_rd
   allocate(pres_in(NLONS, NLATS))
   allocate(temp_in(NLONS, NLATS))
 
-  ! Open the file. 
+  ! Open the file.
   call check( nf90_open(FILE_NAME, nf90_nowrite, ncid) )
 
   ! There are a number of inquiry functions in netCDF which can be
@@ -142,17 +142,17 @@ program sfc_pres_temp_rd
   ! associated with the file.
   call check( nf90_close(ncid) )
 
-  ! If we got this far, everything worked as expected. Yipee! 
+  ! If we got this far, everything worked as expected. Yipee!
   print *,"*** SUCCESS reading example file sfc_pres_temp.nc!"
 
 contains
   subroutine check(status)
     integer, intent ( in) :: status
-    
-    if(status /= nf90_noerr) then 
+
+    if(status /= nf90_noerr) then
       print *, trim(nf90_strerror(status))
       stop 2
     end if
-  end subroutine check  
+  end subroutine check
 end program sfc_pres_temp_rd
 

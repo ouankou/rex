@@ -1,5 +1,5 @@
 program aint_anint_1
-    
+
   implicit none
 
   real(4) :: r = 42.7, r1, r2

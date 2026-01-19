@@ -2,7 +2,7 @@ module trans
   implicit none
   integer,parameter :: max_size = 16*1024
 contains
-  
+
   subroutine sub_orig(N)
     integer N
 
@@ -44,9 +44,9 @@ contains
     endif
 
 !$acc end data
-    
+
   end subroutine sub_orig
-  
+
   subroutine sub1_orig(N)
     integer N
 
@@ -151,9 +151,9 @@ contains
     endif
 
 !$acc end data
-    
+
   end subroutine sub_inline
-    
+
   subroutine sub_inline_fused(N)
     integer N
 
@@ -196,12 +196,12 @@ contains
         c4(i)=c6(i)+t3(i)
         c5(i)=c7(i)+t1(i)*t4(i)
       endif
-    
+
     enddo
 !$acc end data
 
   end subroutine sub_inline_fused
-    
+
   subroutine sub_inline_fused_scalarized(N)
     integer N
 
@@ -244,13 +244,13 @@ contains
         c4(i)=c6(i)+t3
         c5(i)=c7(i)+t1*t4
       endif
-    
+
     enddo
 
 !$acc end data
 
   end subroutine sub_inline_fused_scalarized
-    
+
   subroutine sub_fused(N)
     integer N
 
@@ -272,7 +272,7 @@ contains
     enddo
 
     call sub1_fused(N)
-    
+
     do i=1,N
       if (f1) then
         c4(i)=t1(i)-t2(i)
@@ -282,9 +282,9 @@ contains
         c5(i)=c7(i)+t1(i)*t4(i)
       endif
     enddo
-    
+
   end subroutine sub_fused
-  
+
   subroutine sub1_fused(N)
     integer N
 
@@ -331,7 +331,7 @@ contains
     enddo
 
     call sub1_fused_scalarized(N)
-    
+
     do i=1,N
       if (f1) then
         c4(i)=t1(i)-t2(i)
@@ -341,9 +341,9 @@ contains
         c5(i)=c7(i)+t1(i)*t4(i)
       endif
     enddo
-    
+
   end subroutine sub_fused_scalarized
-  
+
   subroutine sub1_fused_scalarized(N)
     integer N
 
@@ -372,16 +372,16 @@ contains
 end module trans
 
 program test
-  
+
   use trans
   implicit none
-    
+
   common /arrays/c1,c2,c3,c4,c5,c6,c7,c8
   real,dimension(max_size) :: c1,c2,c3,c4,c5,c6,c7,c8
-  
+
   common /flags/ f1,f2
   logical f1,f2
-  
+
   integer i
 
 

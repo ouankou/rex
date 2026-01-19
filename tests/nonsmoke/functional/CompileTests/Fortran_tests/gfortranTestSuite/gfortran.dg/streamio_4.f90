@@ -8,17 +8,17 @@ program streamtest
   character(1)   :: tchar
   integer        :: i,j,k
   integer, parameter :: lines = 5231
-   
+
   open(10, file="teststream", access="stream", form="formatted")
-  
+
   do i=1,lines
     do j=0,9
       write(10,"(i5)") j
     end do
   end do
-  
+
   close(10)
-  
+
   open(10, file="teststream", access="stream",&
   &form="formatted", position="append")
   do i=1,lines

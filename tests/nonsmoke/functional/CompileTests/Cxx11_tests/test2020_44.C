@@ -20,11 +20,3 @@ void foobar()
      A a;
      foo(x, a);
    }
-
-#if 0
-// The remaining bug is that the template instantiation is being output.
-template<> int foo< int  > (int *t,struct A a)
-{
-  return a . x + 44;
-}
-#endif

@@ -1,4 +1,4 @@
-rose/config/rose_required_macros_and_functions.h.in: 
+rose/config/rose_required_macros_and_functions.h.in:
 
 All (or a subset of) builtins in missing-builtin-functions.txt must be
 made available as constexpr functions. This requires to provide two

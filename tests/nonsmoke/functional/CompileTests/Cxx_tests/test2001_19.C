@@ -17,19 +17,7 @@ typedef void (A::*PointerToMemberFunctionType)();
 int
 main ()
    {
-#if 0
-  // bug 1
-     A* a = new A(globalfoo);
 
-     (*(a->globalFunctionPointer))();
-#endif
-
-#if 0
-  // bug 2
-     A* a = new A();
-     PointerToMemberFunctionType memberFunctionPointer = &A::foo;
-     (a->*memberFunctionPointer)();
-#endif
 
      return 0;
    }

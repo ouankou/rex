@@ -6,7 +6,7 @@
 ! !MODULE: ice
 !
 ! !DESCRIPTION:
-!  This module currently contains routines for computing ice 
+!  This module currently contains routines for computing ice
 !  formation and the heat flux associated with ice formation.
 !  This heat flux is sent to the ice model via the flux coupler.
 !  In the future, this module could contain the driver for a
@@ -21,7 +21,7 @@
    use kinds_mod, only: int_kind, log_kind, char_len, r8
    use blocks, only: nx_block, ny_block, block
 !   use distribution, only:
-!   use domain, only: 
+!   use domain, only:
    use constants, only: cp_sw, latent_heat_fusion, delim_fmt, blank_fmt,     &
        sea_ice_salinity, ppt_to_salt, ocn_ref_salinity, c0, p5, hflux_factor
    use broadcast, only: broadcast_scalar
@@ -32,7 +32,7 @@
        freq_opt_nhour, freq_opt_nsecond, freq_opt_nstep, init_time_flag,     &
        max_blocks_clinic, km, nt, avg_ts, back_to_back, dtt, check_time_flag,&
        partial_bottom_cells, KMT, DZT, DZ, freq_opt_nmonth
-!   use grid, only: 
+!   use grid, only:
    use exit_mod, only: sigAbort, exit_pop
 
    implicit none
@@ -68,7 +68,7 @@
    integer (int_kind) :: &
       ice_flag,          &! time flag id for ice formation
       ice_cpl_flag,      &! time flag id for coupled timestep
-      kmxice              ! lowest level from which to integrate 
+      kmxice              ! lowest level from which to integrate
                           ! ice formation
 
    real (r8) ::          &
@@ -160,7 +160,7 @@
       !***
       !*** define salice and salref in msu
       !***
- 
+
       salice = sea_ice_salinity*ppt_to_salt
       salref = ocn_ref_salinity*ppt_to_salt
 
@@ -231,7 +231,7 @@
       call broadcast_scalar(kmxice,   master_task)
       call broadcast_scalar(salice,   master_task)
       call broadcast_scalar(salref,   master_task)
- 
+
       !***
       !*** set up time flag
       !***
@@ -252,7 +252,7 @@
       !*** allocate and initialize ice flux arrays
       !***
 
-      allocate( QICE(nx_block,ny_block,max_blocks_clinic), & 
+      allocate( QICE(nx_block,ny_block,max_blocks_clinic), &
                AQICE(nx_block,ny_block,max_blocks_clinic))
 
       QICE  = c0
@@ -277,14 +277,14 @@
 !  It forms the ice in the ocean whenever the temperature falls below
 !  the freezing temperature and forms a quantity of ice equivalent
 !  to the heat content corresponding to that temperature difference.
-!  Once ice is formed the potential temperature and salinity fields 
+!  Once ice is formed the potential temperature and salinity fields
 !  are adjusted accordingly and the amount of heat used is accumulated
 !  for sending to an ice model. Additionally, if the temperature
 !  rises above the freezing temperature, this routine will use that
 !  heat to melt previously formed ice and will accumulate this heat
-!  flux to send to an ice model as a melt potential. The logic of this 
+!  flux to send to an ice model as a melt potential. The logic of this
 !  subroutine is based on a 1-d model by William Large and an
-!  implementation of this model written by Ghokan Danabasoglu. 
+!  implementation of this model written by Ghokan Danabasoglu.
 !
 ! !REVISION HISTORY:
 !  same as module
@@ -341,27 +341,27 @@
 !     initialize flux to zero
 !
 !-----------------------------------------------------------------------
- 
+
       QICE(:,:,bid) = c0
       POTICE = c0
- 
+
 !-----------------------------------------------------------------------
 !
 !     compute frazil ice formation for sub-surface layers.  if ice
 !     forms in lower layers but layers above are warm - the heat is
 !     used to melt the ice.  total ice heat flux is accumulated.
-!     WARNING: unless a monotone advection scheme is in place, 
+!     WARNING: unless a monotone advection scheme is in place,
 !     advective errors could lead to temps that are far below freezing
 !     in some locations and this scheme will form lots of ice.
 !     ice formation should be limited to the top layer (kmxice=1)
 !     if the advection scheme is not monotone.
 !
 !-----------------------------------------------------------------------
- 
+
       do k=kmxice,1,-1
 
          !***
-         !*** potice is the potential amount of ice formation 
+         !*** potice is the potential amount of ice formation
          !*** (potice>0) or melting (potice<0) in layer k
          !***
 
@@ -387,11 +387,11 @@
          !***
 
          if (partial_bottom_cells) then
-            TNEW(:,:,k,1) = TNEW(:,:,k,1) + POTICE/DZT(:,:,k,bid)  
-            TNEW(:,:,k,2) = TNEW(:,:,k,2) + cp_over_lhfusion* & 
+            TNEW(:,:,k,1) = TNEW(:,:,k,1) + POTICE/DZT(:,:,k,bid)
+            TNEW(:,:,k,2) = TNEW(:,:,k,2) + cp_over_lhfusion* &
                             (salref - salice)*POTICE/DZT(:,:,k,bid)
          else
-            TNEW(:,:,k,1) = TNEW(:,:,k,1) + POTICE/dz(k)  
+            TNEW(:,:,k,1) = TNEW(:,:,k,1) + POTICE/dz(k)
             TNEW(:,:,k,2) = TNEW(:,:,k,2) + cp_over_lhfusion* &
                             (salref - salice)*POTICE/dz(k)
          endif
@@ -403,18 +403,18 @@
 
 !-----------------------------------------------------------------------
 !
-!     let any residual heat in the upper layer melt previously 
+!     let any residual heat in the upper layer melt previously
 !     formed ice
 !
 !-----------------------------------------------------------------------
- 
+
       k = 1
       AQICE(:,:,bid) = AQICE(:,:,bid) + QICE(:,:,bid)
 
 !-----------------------------------------------------------------------
 !
 !     recalculate freezing potential based on adjusted T,S
-!     only interested in melt potential now (POTICE < 0) - use this 
+!     only interested in melt potential now (POTICE < 0) - use this
 !     melt to offset any accumulated freezing (AQICE < 0) and
 !     adjust T,S to reflect this melting
 !
@@ -445,20 +445,20 @@
 
 !-----------------------------------------------------------------------
 !
-!     compute the heat flux for input to the sea-ice model. 
+!     compute the heat flux for input to the sea-ice model.
 !     note that either:
 !       aqice<0 and TSFC=TFRZ => qflux=-aqice>0 (net ice made), or
 !       aqice=0 and TSFC>TFRZ => qflux=TFRZ-TNEW(:,:,1,1)<0
 !                                         (melt potential).
 !
-!     REMARK: qflux is needed only if it is time to communicate 
-!             with the flux coupler. however, in order to isolate 
+!     REMARK: qflux is needed only if it is time to communicate
+!             with the flux coupler. however, in order to isolate
 !             this subroutine from any coupling details, qflux is
-!             computed at every ocean time step. note that qflux 
+!             computed at every ocean time step. note that qflux
 !             will be converted to W/m^2 later in sflx.F.
 !
 !-----------------------------------------------------------------------
- 
+
       call tfreez(TFRZ,TNEW(:,:,k,2))
       if (partial_bottom_cells) then
          where (k <= KMT(:,:,bid)) &
@@ -469,7 +469,7 @@
       endif
 
       QICE(:,:,bid) = POTICE - AQICE(:,:,bid)
- 
+
    endif ! time to do ice
 
 !-----------------------------------------------------------------------

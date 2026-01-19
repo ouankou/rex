@@ -12,17 +12,17 @@ c
 * Content-Type: text/plain; charset=iso-8859-1
 * X-Mime-Autoconverted: from 8bit to quoted-printable by mescaline.gnu.org id KAA09085
 * X-UIDL: 72293bf7f9fac8378ec7feca2bccbce2
-* 
+*
 * Hi,
-* 
+*
 * I'm about to compile a very old, very ugly Fortran program.
 * For one part I got:
-* 
+*
 * f77: Internal compiler error: program f771 got fatal signal 6
-* 
+*
 * instead of any detailed error message. I was able to break down the
 * problem to the following source fragment:
-* 
+*
 * -------------------------------------------
         PROGRAM WAP
 
@@ -35,13 +35,13 @@ c
 
       END
 * -------------------------------------------
-* 
+*
 * The problem seems to be caused by the "integer(kind=2) ios" declaration.
 * So far I solved it by simply using a plain integer instead.
-* 
+*
 * I'm running gcc on a Linux system compiled/installed
 * with no special options:
-* 
+*
 * -> g77 -v
 * g77 version 0.5.23
 * Driving: g77 -v -c -xf77-version /dev/null -xnone
@@ -82,10 +82,10 @@ c
 * @(#) LIBI77 VERSION pjw,dmg-mods 19980405
 * __G77_LIBU77_VERSION__: 0.5.23
 * @(#) LIBU77 VERSION 19970919
-* 
-* 
+*
+*
 * Regards, Dieter.
-* -- 
+* --
 * Dieter Stüken, con terra GmbH, Münster
 *     stueken@conterra.de         stueken@qgp.uni-muenster.de
 *     http://www.conterra.de/     http://qgp.uni-muenster.de/~stueken

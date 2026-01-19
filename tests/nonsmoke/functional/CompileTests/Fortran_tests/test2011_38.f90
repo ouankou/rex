@@ -4,6 +4,6 @@
 !    MODULE PROCEDURE c1
 ! END INTERFACE
 
-interface countarray 
-   module procedure c1, c2, cn                                                   
-end interface          
+interface countarray
+   module procedure c1, c2, cn
+end interface

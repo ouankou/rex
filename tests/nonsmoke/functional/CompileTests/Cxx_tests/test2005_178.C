@@ -18,43 +18,6 @@ include <vector>
 using namespace std;
 */
 
-#if 0
-class Base
-{
-     private: virtual inline void dummy()
-{  }
-};
-
-class Derived : public Base {};
-
-void visitWithAstNodePointersList(class std::vector< Base * ,
-std::allocator< Base * >  > l)
-{
-  for (std::vector < Base * , std::allocator< Base * > > ::iterator i =
-l.begin(); i!=(l.end()); i++) {
-    if (class Derived *dotNode = dynamic_cast < class Derived * > /* part
-of cast */ ((*i));) {
-    }
-    else {
-    }
-  }
-}
-#endif
-
-#if 0
-#include <vector>
-using namespace std;
-class Base { virtual void dummy(){}; };
-class Derived : public Base { };
-void
-visitWithAstNodePointersList ( vector<Base*> l )
-   {
-     for (vector<Base*>::iterator i=l.begin(); i!=l.end(); i++)
-          if (Derived* dotNode=dynamic_cast<Derived*>(*i))
-             {}
-   }
-#endif
-
 // This is the simpler case of the bug:
 void foo()
    {

@@ -2,7 +2,7 @@
 
 ! !DESCRIPTION:
 !  This routine extracts a global file attribute from an io file
-!  descriptor based on the attribute name.  This particular 
+!  descriptor based on the attribute name.  This particular
 !  instantiation extracts a character attribute, but is aliased
 !  to the generic routine name extract\_attrib\_file.
 !

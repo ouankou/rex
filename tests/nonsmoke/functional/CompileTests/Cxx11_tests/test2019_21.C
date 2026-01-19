@@ -1,10 +1,8 @@
 
-#if 1
 template <class... Args>
 int f (const int x, const int y, Args&&... args) {
   // Do something
 }
-#endif
 
 template <typename T> void foo(T&& ) { }
 

@@ -37,7 +37,7 @@ C     For the lat lon coordinate netCDF variables.
       real lats(NLATS), lons(NLONS)
       integer lat_varid, lon_varid
 
-C     We will read surface temperature and pressure fields. 
+C     We will read surface temperature and pressure fields.
       character*(*) PRES_NAME, TEMP_NAME
       parameter (PRES_NAME='pressure')
       parameter (TEMP_NAME='temperature')
@@ -78,7 +78,7 @@ C     Loop indices
 C     Error handling
       integer retval
 
-C     Open the file. 
+C     Open the file.
       retval = nf_open(FILE_NAME, nf_nowrite, ncid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
@@ -87,13 +87,13 @@ C     used to learn about an unknown netCDF file. NF_INQ tells how many
 C     netCDF variables, dimensions, and global attributes are in the
 C     file; also the dimension id of the unlimited dimension, if there
 C     is one.
-      retval = nf_inq(ncid, ndims_in, nvars_in, ngatts_in, 
+      retval = nf_inq(ncid, ndims_in, nvars_in, ngatts_in,
      +     unlimdimid_in)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
 C     In this case we know that there are 2 netCDF dimensions, 4 netCDF
 C     variables, no global attributes, and no unlimited dimension.
-      if (ndims_in .ne. 2 .or. nvars_in .ne. 4 .or. ngatts_in .ne. 0 
+      if (ndims_in .ne. 2 .or. nvars_in .ne. 4 .or. ngatts_in .ne. 0
      +     .or. unlimdimid_in .ne. -1) stop 2
 
 C     Get the varids of the latitude and longitude coordinate variables.
@@ -148,7 +148,7 @@ C     them and check them.
       retval = nf_inq_attlen(ncid, lat_varid, UNITS, att_len)
       if (retval .ne. nf_noerr) call handle_err(retval)
       if (lat_units_in(1:att_len) .ne. LAT_UNITS) stop 2
- 
+
       retval = nf_get_att_text(ncid, lon_varid, UNITS, lon_units_in)
       if (retval .ne. nf_noerr) call handle_err(retval)
       retval = nf_inq_attlen(ncid, lon_varid, UNITS, att_len)

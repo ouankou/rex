@@ -4,8 +4,8 @@
 
        program try_gf1003
 
-      call       gf1003a(  9,  8,  6)   
-      call       gf1003b(  9,  8,  6)   
+      call       gf1003a(  9,  8,  6)
+      call       gf1003b(  9,  8,  6)
       call       gf1003c(  9,  8,  6)   !fails
       call       gf1003d(  9,  8,  6)   !fails
       end program

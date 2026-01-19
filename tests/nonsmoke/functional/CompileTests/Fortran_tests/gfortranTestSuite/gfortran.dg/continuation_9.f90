@@ -1,6 +1,6 @@
 ! { dg-do compile }
 ! { dg-options "-std=f95" }
-  &  
+  &
 &
  &
 end

@@ -11,7 +11,7 @@ program gen_interf
          integer a
       end subroutine
    end interface
-         
+
    integer i
 
    call gsub (i)

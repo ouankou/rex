@@ -1,6 +1,6 @@
 ! { dg-do compile }
 ! { dg-options "-Wline-truncation -ffree-line-length-80" }
-! PR39229 No warning of truncated lines if a continuation line follows 
+! PR39229 No warning of truncated lines if a continuation line follows
   implicit none
   call foo([11, 22, 33, 44, 55, 66, 770, 9900, 1100, 1100, 120],11,'hello') !no warn
 

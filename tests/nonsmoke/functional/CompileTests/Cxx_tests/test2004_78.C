@@ -81,18 +81,7 @@ namespace A
        // void A::B::foobar2();
 
           class X {};
-#if 1
-          void foobar2()
-             {
-#if 0
-               foo();
-               foo_A();
-               A::foo();
-               B::foo();
-               foo_C();
-#endif
-             }
-#endif
+          void foobar2() {}
         }
   // void A::B::foobar2();
   // class B::X;
@@ -109,9 +98,6 @@ int main()
      using namespace A;
 //   using namespace A::B;
      foobar1();
-#if 0
-     foobar2();
-#endif
 
      return 0;
   }

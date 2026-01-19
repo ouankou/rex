@@ -112,7 +112,7 @@ contains
   subroutine test2(x,y)
     integer, asynchronous :: x(:)
     integer, volatile :: y(:)
-  end subroutine test2 
+  end subroutine test2
   subroutine test3(x,y)
     integer, pointer, asynchronous :: x(:)
     integer, pointer, volatile :: y(:)

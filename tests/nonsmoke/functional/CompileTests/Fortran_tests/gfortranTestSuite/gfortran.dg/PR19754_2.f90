@@ -13,7 +13,7 @@ program PR19754_2
    if (any(real(j)/=d)) call abort ()
    c = i
    if (any(real(i)/=c)) call abort ()
-   c = i + b                     ! this caused an ICE 
+   c = i + b                     ! this caused an ICE
    d = real(i) + b
    if (any(c/=d)) call abort ()
    j = i + aint (a)

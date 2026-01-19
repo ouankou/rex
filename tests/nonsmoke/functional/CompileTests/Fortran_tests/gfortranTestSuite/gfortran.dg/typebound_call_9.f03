@@ -8,9 +8,9 @@
 ! Contributed by Salvatore Filippone <sfilippone@uniroma2.it>
 
 module foo_mod
-  implicit none 
+  implicit none
 
-  type base_foo_type 
+  type base_foo_type
     integer           :: nr,nc
     integer, allocatable :: iv1(:), iv2(:)
 

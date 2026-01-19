@@ -6,12 +6,11 @@ namespace XXX {
 template <typename T>
 class HistVarSet 
    {
-     public:
-#if 1
-          void packVars( HistVarSet<T*> const & hist_list, HistVarSet<bool> const &log_flags, int index );
-#endif
+public:
+  void packVars(HistVarSet<T *> const &hist_list,
+                HistVarSet<bool> const &log_flags, int index);
 
-          std::vector<T>  elas;
+  std::vector<T> elas;
    };
 
   }  // closing brace for Materials namespace statement

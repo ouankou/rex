@@ -9,4 +9,4 @@
   if (line(1) .ne. "&STUFF") call abort
   if (line(2) .ne. " N=        123,") call abort
   if (line(3) .ne. " /") call abort
-  end 
+  end

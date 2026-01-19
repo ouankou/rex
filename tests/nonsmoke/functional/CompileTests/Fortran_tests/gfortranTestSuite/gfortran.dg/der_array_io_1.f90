@@ -14,7 +14,7 @@ program main
   do i=1,ubound(foo,1)
      foo(i)%x = 100*i
      do j=1,3
-        foo(i)%y(j) = 100*i + 10*j 
+        foo(i)%y(j) = 100*i + 10*j
      enddo
      foo(i)%z = 100*i+40
   enddo

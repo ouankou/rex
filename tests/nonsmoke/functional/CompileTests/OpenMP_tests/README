@@ -1,4 +1,4 @@
-This is a project to 
+This is a project to
 * use Flex/Bison to parse OpenMP pragmas based on Markus's contributions
 * support the latest OpenMP 3.0 syntax
 
@@ -9,7 +9,7 @@ File List:
 
   Moved to src/frontend/SageIII/ompparser
 
-* test parser:    parseOmp.C 
+* test parser:    parseOmp.C
 
 Please avoid to use file names which differ from each other only by suffix.
 

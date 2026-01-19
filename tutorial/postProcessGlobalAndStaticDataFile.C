@@ -48,14 +48,6 @@ int main(int argc, char *argv[]) {
     string s = buffer;
     if (inputFile.eof() == false) {
       printf("count = %4d  s = %s \n", count, s.c_str());
-#if 0
-            // Remove the path to where we store the ROSE headers
-               string targetString ="/usr/casc/overture/dquinlan/";
-               if (s.find(targetString) != string::npos)
-                  {
-                    s.replace(s.find(targetString),targetString.size(),"");
-                  }
-#endif
       stringList.push_front(s);
       count++;
     }

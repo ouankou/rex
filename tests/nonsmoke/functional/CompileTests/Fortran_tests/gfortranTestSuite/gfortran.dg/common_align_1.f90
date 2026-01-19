@@ -16,7 +16,7 @@ end subroutine one
 program test
 integer :: i
 real(8) :: r8
-common i, r8 
+common i, r8
 i = 5
 call one()
 end program test

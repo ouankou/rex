@@ -1,17 +1,6 @@
 // number #33
 
-#if 0
-class myNumberType
-   {
-     public:
-         void foobar();
-   };
-
-typedef ::myNumberType myNumberType;
-typedef myNumberType numberType;
-#else
 typedef float numberType;
-#endif
 
 class Y
    {

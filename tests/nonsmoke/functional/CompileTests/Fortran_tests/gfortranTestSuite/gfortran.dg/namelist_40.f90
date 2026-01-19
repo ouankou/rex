@@ -15,7 +15,7 @@ end module global
 program namelist_40
   use global
   type(bt)         ::  x(2)
-  character(40)    ::  teststring 
+  character(40)    ::  teststring
   namelist /mynml/ x
 
   teststring = " x(2)%m%ch(:)(2:2) = 'z','z',"
@@ -26,7 +26,7 @@ program namelist_40
   call writenml (teststring)
   teststring = " x(2)%m(2)%ch(1:2)(k:) = 'z','z',"
   call writenml (teststring)
-  
+
 contains
 
 subroutine writenml (astring)

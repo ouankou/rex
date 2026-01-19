@@ -3,15 +3,15 @@
 
 program Rice_wrong_func_type
 
-  type t  
+  type t
     integer :: c
   end type t
-    
+
 contains
 
   function func()     ! return type unparsed as 'real'
-    type(t) :: func    
+    type(t) :: func
     func%c = 0
   end function
-  
+
 end program

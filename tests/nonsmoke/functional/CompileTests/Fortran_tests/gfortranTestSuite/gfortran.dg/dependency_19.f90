@@ -15,7 +15,7 @@ module gfcbug49
   type rc_t
     integer               :: n
     type(spot_t), pointer :: spots(:) => NULL()
-  end type rc_t  
+  end type rc_t
 
 contains
 

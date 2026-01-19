@@ -12,12 +12,10 @@ void* operator new[](std::size_t) throw ();
 void operator delete(void*) throw();
 void operator delete[](void*) throw();
 
-#if 1
 void* operator new(std::size_t, const std::nothrow_t&) throw();
 void* operator new[](std::size_t, const std::nothrow_t&) throw();
 void operator delete(void*, const std::nothrow_t&) throw();
-void operator delete[](void*, const std::nothrow_t&) throw();
-#endif
+void operator delete[](void *, const std::nothrow_t &) throw();
 
 // Default placement versions of operator new.
 inline void* operator new(std::size_t, void* __p) throw() { return __p; }
@@ -26,15 +24,6 @@ inline void* operator new[](std::size_t, void* __p) throw() { return __p; }
 // Default placement versions of operator delete.
 inline void  operator delete  (void*, void*) throw() { }
 inline void  operator delete[](void*, void*) throw() { }
-
-
-#if 0
-// void* operator new (void* placement, size_t s)
-void* operator new (size_t s, void* placement)
-   {
-     return 0L;
-   }
-#endif
 
 namespace std {
 

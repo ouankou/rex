@@ -5,7 +5,7 @@
 program p
 
   type(t2) :: y  ! illegal forward reference
- 
+
   type :: t2
     real ::  x
   end type

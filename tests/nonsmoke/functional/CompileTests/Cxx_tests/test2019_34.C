@@ -59,26 +59,14 @@ struct U : T { using T::i; };
 void func()
    {
   // These cases work fine
-#if 1
-     for (; ;);
-#endif
-#if 1
-     for (int a = 0,b = 1,c = 2; ;);
-#endif
+  for (;;)
+    ;
+  for (int a = 0, b = 1, c = 2;;)
+    ;
 
   // Not sure how to handle this, but perhaps a null expression concept would be 
   // helpful (unparsed as: "for (int b = (1); ; ) {}", which is OK)
   // for (; int b = 1; );
-
-#if 0
-  // Examples taking a "conditional" concept (which seem like they should work)
-     if (int i = 0;);
-     while (int i = 0;);
-     for (; int b = 1; );
-
-     do ; while (0);  // this should work (and does)
-     do ; while (int i = 0; );  // this should fail (it does fail in the front-end)
-#endif
 
      if (int i = 0);
      for (; int b = 1; );
@@ -89,23 +77,11 @@ void func()
      switch(int y = 1) { default: ; }    
      switch(0) { int y; default: y = 0; }
 
-#if 0
-     switch(0) default: ;
-
-     switch(int y = 1) { default: ; }    
-     switch(0) { int y; default: y = 0; }
-  
-     do {} while (1);  /* traversal: while-expr (intentionally ?) gets traversed before the block */
-#endif
-
-#if 1
   // Test for loop using declaration for test condition
   // for (; int b = 1; );
-     for (; int b = 1; );
-#endif
+     for (; int b = 1;)
+       ;
 
-#if 1
-  // Test of declaration in conditional of switch statement
-     switch(int y = 1) { default: ; }    
-#endif
+     // Test of declaration in conditional of switch statement
+     switch (int y = 1) { default:; }
    }

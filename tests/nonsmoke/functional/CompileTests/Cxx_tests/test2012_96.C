@@ -13,22 +13,8 @@ class GraphNode
    {
    };
 
-#if 1
 class GroupGraphNode
    {
-     public:
-#if 0
-          PtrSetWrap<GraphNode>::Iterator iter;
-#endif
-#if 1
-          void ToString()
-             {
-               PtrSetWrap<GraphNode>::Iterator iter;
-             }
-#endif
+public:
+  void ToString() { PtrSetWrap<GraphNode>::Iterator iter; }
    };
-
-
-#endif
-
-

@@ -15,7 +15,7 @@ contains
   function returnMat( a, b ) result( mat )
     integer:: a, b, i
     double precision, dimension(a,b):: mat
-    mat = dble (reshape ([(i, i = 1, a * b)],[a,b])) 
+    mat = dble (reshape ([(i, i = 1, a * b)],[a,b]))
     return
   end function returnMat
 end module bugTestMod

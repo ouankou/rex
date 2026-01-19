@@ -15,10 +15,10 @@
 !     temperature and salinity at each depth.  The density is then
 !     computed at each of the sampled points using a full equation
 !     of state.  A least squares method is used to fit a polynomial
-!     (cubic in temp and salinity) to the sampled points.  More 
-!     specifically, the densities calculated from the polynomial 
+!     (cubic in temp and salinity) to the sampled points.  More
+!     specifically, the densities calculated from the polynomial
 !     formula are in the form of sigma anomalies.  The method is
-!     taken from that described by Bryan & Cox (1972).  
+!     taken from that described by Bryan & Cox (1972).
 !       By default, the program uses the equation of state set by the
 !     Joint Panel on Oceanographic Tables & Standards (UNESCO, 1981)
 !     an described by Gill (1982).
@@ -32,7 +32,7 @@
 !
 !       There are two improvements: (a)  An more accurate depth-
 !     to-pressure conversion based on the Levitus_94 climatology,
-!     and (b) Use of a more recent formula for the computation of 
+!     and (b) Use of a more recent formula for the computation of
 !     potential temperature (Bryden, 1973) in place of an older
 !     algorithm (Fofonoff, 1962).
 !
@@ -74,11 +74,11 @@
      &  dzt             ! model layer thicknesses (in cm)
 
       integer, parameter ::
-     &  nsample_salt = 5,              ! number of pts to sample in S 
+     &  nsample_salt = 5,              ! number of pts to sample in S
      &  nsample_temp = 2*nsample_salt, ! number of pts in sample in T
      &  nsample_all  = nsample_salt*nsample_temp, ! total sample points
      &  itmax = 4,                     ! max iters for least squares
-     &  sbdim = nsample_all+72,        ! array dims for work arrays 
+     &  sbdim = nsample_all+72,        ! array dims for work arrays
      &  rdim = nsample_all+36          !  in lsq routine
 
       double precision, parameter ::
@@ -112,7 +112,7 @@
      &  avg_sigma       ! average of sample densities  for level k
 
       double precision, dimension(nsample_all) ::
-     &  tsamp,          ! temperature     at each sample point 
+     &  tsamp,          ! temperature     at each sample point
      &  ssamp,          ! salinity        at each sample point
      &  thsamp,         ! potential temp  at each sample point
      &  sigma,          ! density         at each sample point
@@ -135,51 +135,51 @@
       double precision, dimension(9,km) ::
      &   all_coeffs     ! polynomial coeffs for all levels
 
-      character (60) :: 
+      character (60) ::
      &   depths_file    ! input file with model layer thicknesses
 
       !***
-      !*** bounds for polynomial fit using a reference model of 
+      !*** bounds for polynomial fit using a reference model of
       !*** 33 levels from surface to 8000m at z=(k-1)*250 meters
-      !*** The user should review the appropriateness of the 
-      !*** reference values set below, and modify them if the 
-      !*** intended modelling application could be expected to yield 
-      !*** temperature and salinity values outside of the ranges set 
+      !*** The user should review the appropriateness of the
+      !*** reference values set below, and modify them if the
+      !*** intended modelling application could be expected to yield
+      !*** temperature and salinity values outside of the ranges set
       !*** by default.
       !***
 
       double precision, dimension(33) ::
      &  trefmin = ( / -2.0, -2.0, -2.0, -2.0, -1.0, -1.0,
-     &                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 
-     &                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 
-     &                -1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  
-     &                 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  
+     &                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,
+     &                -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,
+     &                -1.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+     &                 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
      &                 0.0,  0.0,  0.0 / ),
-     &  trefmax = ( / 29.0, 19.0, 14.0, 11.0,  9.0,  7.0, 
-     &                 7.0,  7.0,  7.0,  7.0,  7.0,  7.0, 
-     &                 7.0,  7.0,  7.0,  7.0,  7.0,  7.0, 
-     &                 7.0,  7.0,  7.0,  7.0,  7.0,  7.0, 
-     &                 7.0,  7.0,  7.0,  7.0,  7.0,  7.0, 
+     &  trefmax = ( / 29.0, 19.0, 14.0, 11.0,  9.0,  7.0,
+     &                 7.0,  7.0,  7.0,  7.0,  7.0,  7.0,
+     &                 7.0,  7.0,  7.0,  7.0,  7.0,  7.0,
+     &                 7.0,  7.0,  7.0,  7.0,  7.0,  7.0,
+     &                 7.0,  7.0,  7.0,  7.0,  7.0,  7.0,
      &                 7.0,  7.0,  7.0 / ),
      &  srefmin = ( / 28.5, 33.7, 34.0, 34.1, 34.2, 34.4,
-     &                34.5, 34.5, 34.6, 34.6, 34.6, 34.6, 
-     &                34.6, 34.6, 34.6, 34.6, 34.6, 34.6, 
-     &                34.6, 34.6, 34.6, 34.6, 34.6, 34.7, 
-     &                34.7, 34.7, 34.7, 34.7, 34.7, 34.7, 
+     &                34.5, 34.5, 34.6, 34.6, 34.6, 34.6,
+     &                34.6, 34.6, 34.6, 34.6, 34.6, 34.6,
+     &                34.6, 34.6, 34.6, 34.6, 34.6, 34.7,
+     &                34.7, 34.7, 34.7, 34.7, 34.7, 34.7,
      &                34.7, 34.7, 34.7 / ),
-     &  srefmax = ( / 37.0, 36.6, 35.8, 35.7, 35.3, 35.1, 
-     &                35.1, 35.0, 35.0, 35.0, 35.0, 35.0, 
-     &                35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 
-     &                35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 
-     &                35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 
+     &  srefmax = ( / 37.0, 36.6, 35.8, 35.7, 35.3, 35.1,
+     &                35.1, 35.0, 35.0, 35.0, 35.0, 35.0,
+     &                35.0, 35.0, 35.0, 35.0, 35.0, 35.0,
+     &                35.0, 35.0, 35.0, 35.0, 35.0, 35.0,
+     &                35.0, 35.0, 35.0, 35.0, 35.0, 35.0,
      &                35.0, 35.0, 35.0 / )
 
 !-----------------------------------------------------------------------
 !
-!     read in depth profile 
+!     read in depth profile
 !
 !-----------------------------------------------------------------------
- 
+
       write(6,*) 'Input file for model layer thicknesses:'
       read(5,1000) depths_file
  1000 format(a60)
@@ -192,7 +192,7 @@
 
 !-----------------------------------------------------------------------
 !
-!     calculate depths of level midpoints from dzt (converting dzt 
+!     calculate depths of level midpoints from dzt (converting dzt
 !     to meters) - the maximum allowable depth is 8000 meters
 !
 !-----------------------------------------------------------------------
@@ -311,7 +311,7 @@
 
 !-----------------------------------------------------------------------
 !
-!       recompute average (reference) density based on level average 
+!       recompute average (reference) density based on level average
 !       values of T, S, and pressure (depth).
 !       use average potential temperature in place of average temp
 !
@@ -365,8 +365,8 @@
         it = 0
         ieq = 2
 
-        call lsqsl2 (nsample_all, lsqarray, nsample_all, 9, sigman, 
-     &               lsqcoeffs, irank, 1, itmax, 0, 2, enorm, 1.0d-7, 
+        call lsqsl2 (nsample_all, lsqarray, nsample_all, 9, sigman,
+     &               lsqcoeffs, irank, 1, itmax, 0, 2, enorm, 1.0d-7,
      &               9, homog, lsqc, lsqr, lsqsb)
 
 !-----------------------------------------------------------------------
@@ -801,7 +801,7 @@
               end do
               sj = sj + up*a(ip,j)
               sj = bp*sj  !*** sj=yj now
-  
+
               do i=ip+1,k
                 a(i,j) = a(i,j) - a(i,ip)*sj
               end do
@@ -1284,7 +1284,7 @@ c
 
 !-----------------------------------------------------------------------
 !
-!     set up constant and convert depth to pressure in decibars 
+!     set up constant and convert depth to pressure in decibars
 !     and then to pressure in bars
 !     compute powers of several variables
 !
@@ -1302,11 +1302,11 @@ c
 !
 !-----------------------------------------------------------------------
 
-      potmp = pbars*(3.6504d-4 + temp*(8.3198d-5 + 
-     &        temp*(-5.4065d-7 + temp*4.0274d-9))) - 
+      potmp = pbars*(3.6504d-4 + temp*(8.3198d-5 +
+     &        temp*(-5.4065d-7 + temp*4.0274d-9))) -
      &        pbars*(salt - 35.0d0)*(1.7439d-5 -
-     &        temp*2.9778d-7) - prss2*(8.9309d-7 + 
-     &        temp*(-3.1628d-8 + temp*2.1987d-10)) + 
+     &        temp*2.9778d-7) - prss2*(8.9309d-7 +
+     &        temp*(-3.1628d-8 + temp*2.1987d-10)) +
      &        4.1057d-9*prss2*(salt - 35.0d0) -
      &        prss3*(-1.6056d-10 + temp*5.0484d-12)
 
@@ -1363,12 +1363,12 @@ c
 !-----------------------------------------------------------------------
 
       double precision :: rw, rsto, xkw, xksto, xkstp, pbars,
-     &                    tem2, tem3, tem4, tem5, slt2, st15, pbar2, 
+     &                    tem2, tem3, tem4, tem5, slt2, st15, pbar2,
      &  press           ! pressure [decibars]
 
 !-----------------------------------------------------------------------
 !
-!     set up constant and convert depth to pressure in decibars 
+!     set up constant and convert depth to pressure in decibars
 !     and then to pressure in bars
 !     compute powers of several variables
 !
@@ -1382,7 +1382,7 @@ c
       tem4 = temp**4
       tem5 = temp**5
       slt2 = salt**2
-      st15 = salt**(1.5d0) 
+      st15 = salt**(1.5d0)
       pbar2 = pbars**2
 
 !-----------------------------------------------------------------------
@@ -1391,36 +1391,36 @@ c
 !
 !-----------------------------------------------------------------------
 
-      rw =     9.99842594d+2 + 6.793952d-2*temp - 
-     &         9.095290d-3*tem2 + 1.001685d-4*tem3 - 
+      rw =     9.99842594d+2 + 6.793952d-2*temp -
+     &         9.095290d-3*tem2 + 1.001685d-4*tem3 -
      &         1.120083d-6*tem4 + 6.536332d-9*tem5
 
-      rsto =   rw + 
-     &         (8.24493d-1 - 
+      rsto =   rw +
+     &         (8.24493d-1 -
      &          4.0899d-3*temp + 7.6438d-5*tem2
      &        - 8.2467d-7*tem3 + 5.3875d-9*tem4)*salt
-     &      + (-5.72466d-3 + 1.0227d-4*temp - 
+     &      + (-5.72466d-3 + 1.0227d-4*temp -
      &          1.6546d-6*tem2)*st15 + 4.8314d-4*slt2
 
-      xkw =    1.965221d+4 + 
+      xkw =    1.965221d+4 +
      &         1.484206d+2*temp - 2.327105d+0*tem2 +
      &         1.360477d-2*tem3 - 5.155288d-5*tem4
 
-      xksto =  xkw + 
-     &    (5.46746d+1      - 6.03459d-1*temp + 
+      xksto =  xkw +
+     &    (5.46746d+1      - 6.03459d-1*temp +
      &     1.09987d-2*tem2 - 6.1670d-5*tem3)*salt
-     &  + (7.944d-2  + 
+     &  + (7.944d-2  +
      &     1.6483d-2*temp - 5.3009d-4*tem2)*st15
 
-      xkstp =  xksto + 
-     &   (3.239908d+0     + 1.43713d-3*temp + 
+      xkstp =  xksto +
+     &   (3.239908d+0     + 1.43713d-3*temp +
      &    1.16092d-4*tem2 - 5.77905d-7*tem3)*pbars
-     & + (2.2838d-3       - 1.0981d-5*temp - 
+     & + (2.2838d-3       - 1.0981d-5*temp -
      &    1.6078d-6 *tem2)*pbars*salt
      & + 1.91075d-4       *pbars*st15
-     & + (8.50935d-5      - 6.12293d-6*temp + 
+     & + (8.50935d-5      - 6.12293d-6*temp +
      &                      5.2787d-8 *tem2)*pbar2
-     & + (-9.9348d-7      + 2.0816d-8 *temp + 
+     & + (-9.9348d-7      + 2.0816d-8 *temp +
      &    9.1697d-10*tem2)*pbar2*salt
 
       rho =   rsto / (1.d0 - pbars/xkstp)
@@ -1436,16 +1436,16 @@ c
 !-----------------------------------------------------------------------
 !
 !     this subroutine converts depth in meters to pressure in decibars
-!     by using a mean density derived from depth-dependent global 
-!     average temperatures and salinities from Levitus_94, and 
+!     by using a mean density derived from depth-dependent global
+!     average temperatures and salinities from Levitus_94, and
 !     integrating using hydrostatic balance.
 !
 !     references:
-!        Levitus, S., R. Burgett, and T.P. Boyer, World Ocean Atlas 
-!          1994, Volume 3: Salinity, NOAA Atlas NESDIS 3, US Dept. of 
+!        Levitus, S., R. Burgett, and T.P. Boyer, World Ocean Atlas
+!          1994, Volume 3: Salinity, NOAA Atlas NESDIS 3, US Dept. of
 !          Commerce, 1994.
-!        Levitus, S. and T.P. Boyer, World Ocean Atlas 1994, 
-!          Volume 4: Temperature, NOAA Atlas NESDIS 4, US Dept. of 
+!        Levitus, S. and T.P. Boyer, World Ocean Atlas 1994,
+!          Volume 4: Temperature, NOAA Atlas NESDIS 4, US Dept. of
 !          Commerce, 1994.
 !
 !-----------------------------------------------------------------------
@@ -1474,7 +1474,7 @@ c
 !
 !-----------------------------------------------------------------------
 
-      press = 0.9806d0*(1.3211526d0*(exp(-0.0025d0*depth) - 1.d0) 
+      press = 0.9806d0*(1.3211526d0*(exp(-0.0025d0*depth) - 1.d0)
      &        + (1.02818d0 + 2.24586d-6*depth)*depth)
 
 !-----------------------------------------------------------------------

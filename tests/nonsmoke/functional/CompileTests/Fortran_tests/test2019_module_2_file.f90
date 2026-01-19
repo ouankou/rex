@@ -10,7 +10,7 @@
           call outerproduct()
 
         return
-        
+
       end subroutine  shape_function_weight
 
 
@@ -19,14 +19,14 @@
       subroutine shape_function_weightm()
 
         use testmod ! use types and functions defined in this module
- 
+
         implicit none
-        real output  
-        
-        output = outerproduct(0.) 
+        real output
+
+        output = outerproduct(0.)
 
         return
-        
+
       end subroutine  shape_function_weightm
 
 

@@ -1,10 +1,8 @@
 template <typename T>
 class X
    {
-     public:
-#if 1
-          template <typename S> void foobar(S t){};
-#endif
+public:
+  template <typename S> void foobar(S t) {};
    };
 
 void foo()

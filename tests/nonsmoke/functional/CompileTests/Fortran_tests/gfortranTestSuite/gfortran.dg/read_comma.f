@@ -18,7 +18,7 @@
       if(i2.ne.2) call abort()
       if(i3.ne.35) call abort()
       rewind(10)
-!     Make sure commas are read in character strings.      
+!     Make sure commas are read in character strings.
       write(10,'(a)') "1234,6789,"
       rewind(10)
       read(10,'(a10)') a1

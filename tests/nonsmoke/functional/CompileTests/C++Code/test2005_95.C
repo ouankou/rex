@@ -4,28 +4,19 @@
 
 // enum numbers;
 
-#if 1
 // Initial defining declaration of enum
 enum numbers {};
 // redundent declaration (not output by ROSE)
 enum numbers;
-#endif
 
-#if 1
 enum letters { a,b,c };
-void foo (letters l);
-#endif
+void foo(letters l);
 
-#if 1
 // enum numbersEnum Numbers;
 // enum numbersEnum { one,two } Numbers;
 enum numbersEnum { } Numbers;
 enum numbersEnum;
-enum lettersEnum { x,y,z } Letters;
-#endif
+enum lettersEnum { x, y, z } Letters;
 
-#if 1
 void foo (numbersEnum x);
-void foo (enum numbersEnum x);
-#endif
-
+void foo(enum numbersEnum x);

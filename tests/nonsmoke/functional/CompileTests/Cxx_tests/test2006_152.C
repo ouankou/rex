@@ -27,14 +27,6 @@ struct __gconv_step_data
   /* Flag whether this is an internal use of the module (in the mb*towc*
      and wc*tomb* functions) or regular with iconv(3).  */
   int __internal_use;
-#if 0
-  __mbstate_t *__statep;
-  __mbstate_t __state;	/* This element must not be used directly by
-                           any module; always use STATEP!  */
-
-  /* Transliteration information.  */
-  struct __gconv_trans_data *__trans;
-#endif
 };
 
 

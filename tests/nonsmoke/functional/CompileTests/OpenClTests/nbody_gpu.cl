@@ -1,8 +1,8 @@
 //
 // File:       nbody_gpu.cl
 //
-// Abstract:   This example performs an NBody simulation which calculates a gravity field 
-//             and corresponding velocity and acceleration contributions accumulated 
+// Abstract:   This example performs an NBody simulation which calculates a gravity field
+//             and corresponding velocity and acceleration contributions accumulated
 //             by each body in the system from every other body.  This example
 //             also shows how to mitigate computation between all available devices
 //             including CPU and GPU devices, as well as a hybrid combination of both,
@@ -56,9 +56,9 @@
 
 float4
 ComputeForce(
-    float4 force, 
-    float4 position_a, 
-    float4 position_b, 
+    float4 force,
+    float4 position_a,
+    float4 position_b,
     float softening_squared)
 {
     float4 r;
@@ -66,7 +66,7 @@ ComputeForce(
     r.y = position_a.y - position_b.y;
     r.z = position_a.z - position_b.z;
     r.w = 1.0f;
-    
+
     float distance_squared = mad( r.x, r.x, mad( r.y, r.y, r.z*r.z) );
     distance_squared += softening_squared;
 
@@ -102,7 +102,7 @@ IntegrateSystem(
     int tile = 0;
     index += start_index;
 
-    float4 position = input_position[index]; 
+    float4 position = input_position[index];
     float softening_squared = softening * softening;
 
     float4 force = (float4)(0.0f, 0.0f, 0.0f, 0.0f);

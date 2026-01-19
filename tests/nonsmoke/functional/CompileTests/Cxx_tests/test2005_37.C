@@ -39,22 +39,3 @@ int main()
   // Generates warning: "Warning: compiler generated cast not explicit in Sage translation (skipped)"
      x.foo (x.array [0]);
    }
-
-#if 0
-void foobar()
-   {
-     int *a;
-     int x[3];
-
-  // legacy frontend presents the case "(int *[3])&x" and that 
-  // it would be nice if this becomes "x", not "&x".
-  // the legacy frontend/Sage III translation appears to track this case 
-  // "is_array_decay_cast(expr)" but I can't seem to generate
-  // source code that will demonstrate it.  The example below 
-  // is close to what we want and is translated to multiple casts 
-  // (SgCastExp objects) as one might expect (non-normalized form)
-  // The unparser then outputs each cast operator as expected.
-  // The unparsed codes appears as: "a = ((int *)(&x));"
-     a = (int *)&x;
-   }
-#endif

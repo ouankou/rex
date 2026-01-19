@@ -7,8 +7,7 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
   using ::ptrdiff_t;
   using ::size_t;
 }
-       
-#if 1
+
 namespace std __attribute__ ((__visibility__ ("default"))) {
   template<typename _Alloc>
     class allocator;
@@ -21,10 +20,8 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
   typedef basic_string<char> string;
   template<> struct char_traits<wchar_t>;
   typedef basic_string<wchar_t> wstring;
-}
-#endif
+} // namespace std
 
-#if 1
 // #pragma GCC visibility pop
 namespace __gnu_cxx __attribute__ ((__visibility__ ("default"))) {
   using std::size_t;
@@ -78,8 +75,6 @@ namespace __gnu_cxx __attribute__ ((__visibility__ ("default"))) {
     operator!=(const new_allocator<_Tp>&, const new_allocator<_Tp>&)
     { return false; }
 }
-
-#endif
 
 namespace std __attribute__ ((__visibility__ ("default"))) {
   template<typename _Tp>

@@ -9,7 +9,7 @@ MODULE myint
    TYPE NUM
       INTEGER :: R = 0
    END TYPE NUM
-   CONTAINS 
+   CONTAINS
       FUNCTION FUNC(A,B) RESULT(E)
       IMPLICIT NONE
       TYPE(NUM)  A,B,E

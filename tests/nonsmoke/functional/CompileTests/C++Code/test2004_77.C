@@ -46,10 +46,5 @@ int main() {
   // processing Kull)
   map<int, int> xmap;
 
-#if 0
-  // This generates an error in processing ROSE generated code using backend (g++)
-     xmap.insert(1,1);
-#endif
-
   return 0;
 }

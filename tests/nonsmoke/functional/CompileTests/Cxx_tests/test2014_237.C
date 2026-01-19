@@ -34323,17 +34323,10 @@ T& move(T& x, typename copy_sink<T>::type = 0) { return x; }
 }
 }
 
-#if 1
-namespace boost
-{
-#if 1
-    template <class Key, class T, class Hash, class Pred, class Alloc>
-    class unordered_map
-    {
-#if 1
-        friend bool operator==<Key, T, Hash, Pred, Alloc>( unordered_map const&, unordered_map const& );
-#endif
-    };
-#endif
-}
-#endif
+namespace boost {
+template <class Key, class T, class Hash, class Pred, class Alloc>
+class unordered_map {
+  friend bool operator==
+      <Key, T, Hash, Pred, Alloc>(unordered_map const &, unordered_map const &);
+};
+} // namespace boost

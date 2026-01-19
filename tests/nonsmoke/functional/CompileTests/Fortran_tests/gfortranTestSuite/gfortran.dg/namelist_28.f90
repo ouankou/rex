@@ -18,7 +18,7 @@ program gfcbug61
   call position_nml (nmlunit, 'MISSING', stat)
   rewind (nmlunit)
   call read_report (nmlunit, stat)              ! gfortran fails here
-  
+
 contains
 
   subroutine position_nml (unit, name, status)

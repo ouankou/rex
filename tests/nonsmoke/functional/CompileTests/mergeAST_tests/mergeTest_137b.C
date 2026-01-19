@@ -49,87 +49,61 @@
 _GLIBCXX_BEGIN_NAMESPACE(std)
 
 // Commented out as test.
-#if 0
-
-  template<typename _Type>
-    inline bool
-    __is_null_pointer(_Type* __ptr)
-    { return __ptr == 0; }
 
 // Commented out as test.
-#endif
+
+template <typename _Type> inline bool __is_null_pointer(_Type) { return false; }
 
 // Commented out as test.
-#if 1
-
-  template<typename _Type>
-    inline bool
-    __is_null_pointer(_Type)
-    { return false; }
 
 // Commented out as test.
-#endif
+
+template <typename _CharT, typename _Traits, typename _Alloc>
+const typename basic_string<_CharT, _Traits, _Alloc>::size_type
+    basic_string<_CharT, _Traits, _Alloc>::_Rep::_S_max_size =
+        (((npos - sizeof(_Rep_base)) / sizeof(_CharT)) - 1) / 4;
 
 // Commented out as test.
-#if 1
-
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    const typename basic_string<_CharT, _Traits, _Alloc>::size_type
-    basic_string<_CharT, _Traits, _Alloc>::
-    _Rep::_S_max_size = (((npos - sizeof(_Rep_base))/sizeof(_CharT)) - 1) / 4;
 
 // Commented out as test.
-#endif
+
+template <typename _CharT, typename _Traits, typename _Alloc>
+const _CharT basic_string<_CharT, _Traits, _Alloc>::_Rep::_S_terminal =
+    _CharT();
 
 // Commented out as test.
-#if 1
-
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    const _CharT
-    basic_string<_CharT, _Traits, _Alloc>::
-    _Rep::_S_terminal = _CharT();
 
 // Commented out as test.
-#endif
 
-// Commented out as test.
-#if 1
-
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    const typename basic_string<_CharT, _Traits, _Alloc>::size_type
+template <typename _CharT, typename _Traits, typename _Alloc>
+const typename basic_string<_CharT, _Traits, _Alloc>::size_type
     basic_string<_CharT, _Traits, _Alloc>::npos;
 
 // Commented out as test.
-#endif
 
 // Commented out as test.
-#if 1
 
-  // Linker sets _S_empty_rep_storage to all 0s (one reference, empty string)
-  // at static init time (before static ctors are run).
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    typename basic_string<_CharT, _Traits, _Alloc>::size_type
-    basic_string<_CharT, _Traits, _Alloc>::_Rep::_S_empty_rep_storage[
-    (sizeof(_Rep_base) + sizeof(_CharT) + sizeof(size_type) - 1) /
-      sizeof(size_type)];
-
-// Commented out as test.
-#endif
+// Linker sets _S_empty_rep_storage to all 0s (one reference, empty string)
+// at static init time (before static ctors are run).
+template <typename _CharT, typename _Traits, typename _Alloc>
+typename basic_string<_CharT, _Traits, _Alloc>::size_type
+    basic_string<_CharT, _Traits, _Alloc>::_Rep::_S_empty_rep_storage
+        [(sizeof(_Rep_base) + sizeof(_CharT) + sizeof(size_type) - 1) /
+         sizeof(size_type)];
 
 // Commented out as test.
-#if 1
 
-  // NB: This is the special case for Input Iterators, used in
-  // istreambuf_iterators, etc.
-  // Input Iterators have a cost structure very different from
-  // pointers, calling for a different coding style.
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    template<typename _InIterator>
-      _CharT*
-      basic_string<_CharT, _Traits, _Alloc>::
-      _S_construct(_InIterator __beg, _InIterator __end, const _Alloc& __a,
-                   input_iterator_tag)
-      {
+// Commented out as test.
+
+// NB: This is the special case for Input Iterators, used in
+// istreambuf_iterators, etc.
+// Input Iterators have a cost structure very different from
+// pointers, calling for a different coding style.
+template <typename _CharT, typename _Traits, typename _Alloc>
+template <typename _InIterator>
+_CharT *basic_string<_CharT, _Traits, _Alloc>::_S_construct(
+    _InIterator __beg, _InIterator __end, const _Alloc &__a,
+    input_iterator_tag) {
 #ifndef _GLIBCXX_FULLY_DYNAMIC_STRING
 	if (__beg == __end && __a == _Alloc())
 	  return _S_empty_rep()._M_refdata();
@@ -169,19 +143,15 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	return __r->_M_refdata();
       }
 
-// Commented out as test.
-#endif
+      // Commented out as test.
 
-// Commented out as test.
-#if 1
+      // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    template <typename _InIterator>
-      _CharT*
-      basic_string<_CharT, _Traits, _Alloc>::
-      _S_construct(_InIterator __beg, _InIterator __end, const _Alloc& __a,
-                   forward_iterator_tag)
-      {
+      template <typename _CharT, typename _Traits, typename _Alloc>
+      template <typename _InIterator>
+      _CharT *basic_string<_CharT, _Traits, _Alloc>::_S_construct(
+          _InIterator __beg, _InIterator __end, const _Alloc &__a,
+          forward_iterator_tag) {
 #ifndef _GLIBCXX_FULLY_DYNAMIC_STRING
 	if (__beg == __end && __a == _Alloc())
 	  return _S_empty_rep()._M_refdata();
@@ -369,17 +339,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       return *this;
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    basic_string<_CharT, _Traits, _Alloc>&
-    basic_string<_CharT, _Traits, _Alloc>::
-    append(const basic_string& __str)
-    {
+    template <typename _CharT, typename _Traits, typename _Alloc>
+    basic_string<_CharT, _Traits, _Alloc> &
+    basic_string<_CharT, _Traits, _Alloc>::append(const basic_string &__str) {
       const size_type __size = __str.size();
       if (__size)
 	{
@@ -472,21 +438,17 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	 }
      }
 
-// Commented out as test.
-#endif
+     // Commented out as test.
 
-// Commented out as test.
-#if 1
+     // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    void
-    basic_string<_CharT, _Traits, _Alloc>::_Rep::
-    _M_destroy(const _Alloc& __a) throw ()
-    {
-      const size_type __size = sizeof(_Rep_base) +
-                               (this->_M_capacity + 1) * sizeof(_CharT);
-      _Raw_bytes_alloc(__a).deallocate(reinterpret_cast<char*>(this), __size);
-    }
+     template <typename _CharT, typename _Traits, typename _Alloc>
+     void basic_string<_CharT, _Traits, _Alloc>::_Rep::_M_destroy(
+         const _Alloc &__a) throw() {
+       const size_type __size =
+           sizeof(_Rep_base) + (this->_M_capacity + 1) * sizeof(_CharT);
+       _Raw_bytes_alloc(__a).deallocate(reinterpret_cast<char *>(this), __size);
+     }
 
   template<typename _CharT, typename _Traits, typename _Alloc>
     void
@@ -579,18 +541,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	}
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    typename basic_string<_CharT, _Traits, _Alloc>::_Rep*
-    basic_string<_CharT, _Traits, _Alloc>::_Rep::
-    _S_create(size_type __capacity, size_type __old_capacity,
-	      const _Alloc& __alloc)
-    {
+    template <typename _CharT, typename _Traits, typename _Alloc>
+    typename basic_string<_CharT, _Traits, _Alloc>::_Rep *
+    basic_string<_CharT, _Traits, _Alloc>::_Rep::_S_create(
+        size_type __capacity, size_type __old_capacity, const _Alloc &__alloc) {
       // _GLIBCXX_RESOLVE_LIB_DEFECTS
       // 83.  String::npos vs. string::max_size()
       if (__capacity > _S_max_size)
@@ -679,17 +637,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       return __r->_M_refdata();
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    void
-    basic_string<_CharT, _Traits, _Alloc>::
-    resize(size_type __n, _CharT __c)
-    {
+    template <typename _CharT, typename _Traits, typename _Alloc>
+    void basic_string<_CharT, _Traits, _Alloc>::resize(size_type __n,
+                                                       _CharT __c) {
       const size_type __size = this->size();
       _M_check_length(__size, __n, "basic_string::resize");
       if (__size < __n)
@@ -699,25 +653,22 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       // else nothing (in particular, avoid calling _M_mutate() unnecessarily.)
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    template<typename _InputIterator>
-      basic_string<_CharT, _Traits, _Alloc>&
-      basic_string<_CharT, _Traits, _Alloc>::
-      _M_replace_dispatch(iterator __i1, iterator __i2, _InputIterator __k1,
-			  _InputIterator __k2, __false_type)
-      {
-	const basic_string __s(__k1, __k2);
-	const size_type __n1 = __i2 - __i1;
-	_M_check_length(__n1, __s.size(), "basic_string::_M_replace_dispatch");
-	return _M_replace_safe(__i1 - _M_ibegin(), __n1, __s._M_data(),
-                               __s.size());
-      }
+    template <typename _CharT, typename _Traits, typename _Alloc>
+    template <typename _InputIterator>
+    basic_string<_CharT, _Traits, _Alloc> &
+    basic_string<_CharT, _Traits, _Alloc>::_M_replace_dispatch(
+        iterator __i1, iterator __i2, _InputIterator __k1, _InputIterator __k2,
+        __false_type) {
+      const basic_string __s(__k1, __k2);
+      const size_type __n1 = __i2 - __i1;
+      _M_check_length(__n1, __s.size(), "basic_string::_M_replace_dispatch");
+      return _M_replace_safe(__i1 - _M_ibegin(), __n1, __s._M_data(),
+                             __s.size());
+    }
 
   template<typename _CharT, typename _Traits, typename _Alloc>
     basic_string<_CharT, _Traits, _Alloc>&
@@ -732,35 +683,30 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       return *this;
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    basic_string<_CharT, _Traits, _Alloc>&
-    basic_string<_CharT, _Traits, _Alloc>::
-    _M_replace_safe(size_type __pos1, size_type __n1, const _CharT* __s,
-		    size_type __n2)
-    {
+    template <typename _CharT, typename _Traits, typename _Alloc>
+    basic_string<_CharT, _Traits, _Alloc> &
+    basic_string<_CharT, _Traits, _Alloc>::_M_replace_safe(size_type __pos1,
+                                                           size_type __n1,
+                                                           const _CharT *__s,
+                                                           size_type __n2) {
       _M_mutate(__pos1, __n1, __n2);
       if (__n2)
 	_M_copy(_M_data() + __pos1, __s, __n2);
       return *this;
     }
-   
-// Commented out as test.
-#endif
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
+    // Commented out as test.
+
+    template <typename _CharT, typename _Traits, typename _Alloc>
     basic_string<_CharT, _Traits, _Alloc>
-    operator+(const _CharT* __lhs,
-	      const basic_string<_CharT, _Traits, _Alloc>& __rhs)
-    {
+    operator+(const _CharT *__lhs,
+              const basic_string<_CharT, _Traits, _Alloc> &__rhs) {
       __glibcxx_requires_string(__lhs);
       typedef basic_string<_CharT, _Traits, _Alloc> __string_type;
       typedef typename __string_type::size_type	  __size_type;
@@ -772,16 +718,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       return __str;
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
+    template <typename _CharT, typename _Traits, typename _Alloc>
     basic_string<_CharT, _Traits, _Alloc>
-    operator+(_CharT __lhs, const basic_string<_CharT, _Traits, _Alloc>& __rhs)
-    {
+    operator+(_CharT __lhs,
+              const basic_string<_CharT, _Traits, _Alloc> &__rhs) {
       typedef basic_string<_CharT, _Traits, _Alloc> __string_type;
       typedef typename __string_type::size_type	  __size_type;
       __string_type __str;
@@ -792,17 +736,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       return __str;
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
+    template <typename _CharT, typename _Traits, typename _Alloc>
     typename basic_string<_CharT, _Traits, _Alloc>::size_type
-    basic_string<_CharT, _Traits, _Alloc>::
-    copy(_CharT* __s, size_type __n, size_type __pos) const
-    {
+    basic_string<_CharT, _Traits, _Alloc>::copy(_CharT *__s, size_type __n,
+                                                size_type __pos) const {
       _M_check(__pos, "basic_string::copy");
       __n = _M_limit(__pos, __n);
       __glibcxx_requires_string_len(__s, __n);
@@ -812,56 +753,32 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       return __n;
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-// Commented out as test.
-#if 1
+    // Commented out as test.
 
-  template<typename _CharT, typename _Traits, typename _Alloc>
+    template <typename _CharT, typename _Traits, typename _Alloc>
     typename basic_string<_CharT, _Traits, _Alloc>::size_type
-    basic_string<_CharT, _Traits, _Alloc>::
-    find(const _CharT* __s, size_type __pos, size_type __n) const
-    {
-#if 1
+    basic_string<_CharT, _Traits, _Alloc>::find(const _CharT *__s,
+                                                size_type __pos,
+                                                size_type __n) const {
       __glibcxx_requires_string_len(__s, __n);
       const size_type __size = this->size();
       const _CharT* __data = _M_data();
 
-      if (__n == 0)
-      {
-#if 0
-	return __pos <= __size ? __pos : npos;
-#endif
+      if (__n == 0) {
       }
-#endif
-#if 1
-      if (__n <= __size)
-	{
-#if 1
-      for (; __pos <= __size - __n; ++__pos)
-      {
-#if 1
-	    if (traits_type::eq(__data[__pos], __s[0]) && traits_type::compare(__data + __pos + 1,__s + 1, __n - 1) == 0)
-      {
-#if 0
-          return __pos;
-#endif
+      if (__n <= __size) {
+        for (; __pos <= __size - __n; ++__pos) {
+          if (traits_type::eq(__data[__pos], __s[0]) &&
+              traits_type::compare(__data + __pos + 1, __s + 1, __n - 1) == 0) {
+          }
+        }
       }
-#endif
-      }
-#endif
-	}
-#endif
-#if 0
-      return npos;
-#endif
     }
 
-// Commented out as test.
-#endif
+    // Commented out as test.
 
-
-_GLIBCXX_END_NAMESPACE
+    _GLIBCXX_END_NAMESPACE
 
 #endif

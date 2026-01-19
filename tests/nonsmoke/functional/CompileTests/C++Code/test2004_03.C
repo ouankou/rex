@@ -3,33 +3,26 @@
 // source seq poitner is no longer conditionally incremented (which allows it to
 // be NULL in some cases).
 
-#if 1
 // this works fine
 struct foo_A
    {
      int x;
    } varA1;
 
-typedef struct foo_A varA2;
-#endif
+   typedef struct foo_A varA2;
 
-#if 1
-// this works fine
-struct foo_B{ int x; };
-typedef struct foo_B varB;
-#endif
+   // this works fine
+   struct foo_B {
+     int x;
+   };
+   typedef struct foo_B varB;
 
-#if 1
-int
-function_A () {
-  typedef int myint;
+   int function_A() {
+     typedef int myint;
 
-  return 0;
-}
-#endif
+     return 0;
+   }
 
-
-#if 1
 // Causes a assertion failure in legacy frontend/SAGE connection
 struct foo_C
    {
@@ -40,7 +33,4 @@ int function_B (int argc, char* argv[])
    {
      typedef struct foo_C varC2;
      return 0;
-   }
-#endif
-
-
+}

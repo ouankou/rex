@@ -370,7 +370,7 @@
 
    real (r8) ::         &
       angle_0, angle_w, &! temporaries for computing angle at T points
-      angle_s, angle_sw 
+      angle_s, angle_sw
 
 !-----------------------------------------------------------------------
 !
@@ -510,7 +510,7 @@
    !*** compute ANGLE on T-grid
    !***
 
-   !$OMP PARALLEL DO PRIVATE (i,j,angle_0,angle_w,angle_s,angle_sw, & 
+   !$OMP PARALLEL DO PRIVATE (i,j,angle_0,angle_w,angle_s,angle_sw, &
    !$OMP                      this_block)
 
    do n=1,nblocks_clinic
@@ -526,11 +526,11 @@
 
             if ( angle_0 < c0 ) then
                if ( abs(angle_w -angle_0) > pi ) &
-                  angle_w  = angle_w  - pi2 
+                  angle_w  = angle_w  - pi2
                if ( abs(angle_s -angle_0) > pi ) &
-                  angle_s  = angle_s  - pi2 
+                  angle_s  = angle_s  - pi2
                if ( abs(angle_sw-angle_0) > pi ) &
-                  angle_sw = angle_sw - pi2 
+                  angle_sw = angle_sw - pi2
             endif
 
             ANGLET(i,j,n) =  angle_0 *AT0 (i,j,n) + &
@@ -541,7 +541,7 @@
          enddo
 
          !***
-         !*** set ANGLET to zero for all of (global) j=1 row 
+         !*** set ANGLET to zero for all of (global) j=1 row
          !*** (bottom row of ANGLET is not used, but is written to file)
          !***
 
@@ -947,7 +947,7 @@
 !-----------------------------------------------------------------------
 !
 !  calculate grid spacings and other quantities
-!  compute here to avoid bad ghost cell values due to dropped land 
+!  compute here to avoid bad ghost cell values due to dropped land
 !  blocks
 !
 !-----------------------------------------------------------------------
@@ -2258,7 +2258,7 @@
          !wtsw = ATSW(i,j,n)
 
          !***
-         !*** convert neighbor U-cell coordinates to 3-d Cartesian coordinates 
+         !*** convert neighbor U-cell coordinates to 3-d Cartesian coordinates
          !*** to prevent problems with averaging near the pole
          !***
 
@@ -2303,7 +2303,7 @@
          else
             TLON(i,j,n) = c0
          endif
-           
+
       end do
       end do
 

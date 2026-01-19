@@ -10,13 +10,9 @@ class X
    {
      class StartElementHandlerSection
         {
-          private:
-#if 0
-              typedef void (X::*Handler)(LayoutDocEntry::Kind kind);
-#else
-              typedef void (*Handler)(LayoutDocEntry::Kind kind);
-#endif
-            // LayoutDocEntry::Kind m_kind;
+     private:
+       typedef void (*Handler)(LayoutDocEntry::Kind kind);
+       // LayoutDocEntry::Kind m_kind;
         };
    };
 

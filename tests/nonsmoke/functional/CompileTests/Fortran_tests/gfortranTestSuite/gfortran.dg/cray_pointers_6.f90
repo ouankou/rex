@@ -1,9 +1,9 @@
 ! { dg-do compile }
 ! { dg-options "-fcray-pointer" }
-! PR fortran/25358 
+! PR fortran/25358
 subroutine adw_set
    implicit none
-   real*8    Adw_xabcd_8(*)  
+   real*8    Adw_xabcd_8(*)
    pointer(Adw_xabcd_8_ , Adw_xabcd_8)
    common/ Adw / Adw_xabcd_8_
    integer n

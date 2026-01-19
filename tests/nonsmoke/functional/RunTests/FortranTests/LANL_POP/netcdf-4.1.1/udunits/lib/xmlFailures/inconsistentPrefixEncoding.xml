@@ -6,7 +6,7 @@
 	<prefix>
 	    <value>1e-6</value>
 	    <name>micro</name>
-	    <symbol encoding="ascii"></symbol>	
-	    <symbol>µ</symbol>	
+	    <symbol encoding="ascii"></symbol>
+	    <symbol>µ</symbol>
 	</prefix>
 </unit-system>

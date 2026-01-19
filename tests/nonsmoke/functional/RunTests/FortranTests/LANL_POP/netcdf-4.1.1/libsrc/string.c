@@ -236,10 +236,6 @@ NC_string *new_NC_string(size_t slen, const char *str) {
   NC_string *ncstrp;
   size_t sz = M_RNDUP(sizeof(NC_string)) + slen + 1;
 
-#if 0
-	sz = _RNDUP(sz, X_ALIGN);
-#endif
-
   ncstrp = (NC_string *)malloc(sz);
   if (ncstrp == NULL)
     return NULL;

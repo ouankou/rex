@@ -10,7 +10,7 @@
      &'a string with too many characters properly broken into the next
      &line but too long to fit the variable',
      &                                                                '
-     &a string that started just at the end of the last line -- some 
+     &a string that started just at the end of the last line -- some
      &may not be helped'/
 
       ! { dg-warning "truncated" "" { target *-*-* } 10 }

@@ -1,5 +1,5 @@
 ! { dg-do run }
-! Program to test ENUM parsing 
+! Program to test ENUM parsing
 
 program main
   implicit none

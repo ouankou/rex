@@ -14,7 +14,7 @@ C***************************************************
       print *, tcount
       if (tcount .ne. 3 ) call abort
 !$omp end single
-c$omp end parallel 
+c$omp end parallel
 
 !$OMP PARALLEL if( i .ne. 0) num_threads(3)
       PRINT *, 'Hello World 2!'
@@ -24,6 +24,6 @@ c$omp end parallel
       if (tcount .ne. 1 ) call abort
 !$omp end single
 
-c$omp end parallel 
+c$omp end parallel
       PRINT *, 'the end'
       END

@@ -7,7 +7,7 @@
 ! specification had a lower bound other than unity.
 !
 ! Contributed by Paul Thomas  <pault@gcc.gnu.org>
-! Based on original test case from Samir Nordin  <snordin_ng@yahoo.fr> 
+! Based on original test case from Samir Nordin  <snordin_ng@yahoo.fr>
 !
   integer, dimension(3), parameter :: a=(/1,2,3/)
   integer, dimension(3), parameter :: b=(/a(:)/)
@@ -22,8 +22,8 @@
 ! PR28496
 !
   if (any (b .ne. (/1,2,3/))) call abort ()
-  if (any (reshape(d,(/6/)) .ne. (/3, 2, 6, 5, 9, 8/))) call abort () 
-  if (any (reshape(f,(/6/)) .ne. (/2, 1, 5, 4, 8, 7/))) call abort () 
+  if (any (reshape(d,(/6/)) .ne. (/3, 2, 6, 5, 9, 8/))) call abort ()
+  if (any (reshape(f,(/6/)) .ne. (/2, 1, 5, 4, 8, 7/))) call abort ()
 !
 ! PR29975
 !

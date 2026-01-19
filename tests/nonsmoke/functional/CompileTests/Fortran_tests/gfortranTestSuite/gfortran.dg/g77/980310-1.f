@@ -5,7 +5,7 @@ C Subject: backend case range problem/fix
 C From: Dave Love <d.love@dl.ac.uk>
 C Date: 02 Dec 1997 18:11:35 +0000
 C Message-ID: <rzqpvnfboo8.fsf@djlvig.dl.ac.uk>
-C 
+C
 C The following Fortran test case aborts the compiler because
 C tree_int_cst_lt dereferences a null tree; this is a regression from
 C gcc 2.7.

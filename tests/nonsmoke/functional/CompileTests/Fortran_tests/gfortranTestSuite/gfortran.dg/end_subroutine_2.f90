@@ -4,9 +4,9 @@
 program main
 interface
   subroutine foo()
-  end 
+  end
   integer function bar()
-  end 
+  end
 end interface
 contains
   subroutine test()

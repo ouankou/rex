@@ -12,11 +12,7 @@ template<> struct char_traits<char>
   // might be unavailable for the instantiated template member function.
 
   // static void assign() { };
-#if 1
-     void assign() {};
-#else
-     void assign();
-#endif
+  void assign() {};
    };
 
 

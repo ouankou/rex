@@ -10,7 +10,7 @@ program namelist_17
   open (10, status = "scratch")
   write (10, '(A)') "&mynml l = F T /"
   rewind (10)
-  
+
   read (10, mynml, iostat = ier)
   if (ier .ne. 0) call abort ()
   close (10)
@@ -27,4 +27,4 @@ program namelist_17
 
   if (l(1) .or. (.not.l(2))) call abort ()
 
-end program namelist_17 
+end program namelist_17

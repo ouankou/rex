@@ -659,7 +659,7 @@ contains
 
             dst_block = get_block(k,k)  ! block info for this block
 
-            iblock_dst = dst_block%iblock  ! i,j block index in 
+            iblock_dst = dst_block%iblock  ! i,j block index in
             jblock_dst = dst_block%jblock  ! Cartesian block decomposition
 
             dst_block_loc = dist%local_block(k)  ! local block location
@@ -685,7 +685,7 @@ contains
                   newbndy%local_ew_dst_add(2,iloc_ew) = 1
                else if (src_proc == 0 .and. dst_proc == my_task+1) then
                   !*** source block is all land so treat as local copy
-                  !*** with source block zero to fill ghost cells with 
+                  !*** with source block zero to fill ghost cells with
                   !*** zeroes
                   iloc_ew = iloc_ew + 1
                   newbndy%local_ew_src_block(iloc_ew) = 0
@@ -815,7 +815,7 @@ contains
                      !*** located on domain boundary
                      newbndy%local_ns_dst_add(1,iloc_ns) = &
                                           dst_block%i_glob(nghost+1)
-                     newbndy%local_ns_dst_add(2,iloc_ns) = & 
+                     newbndy%local_ns_dst_add(2,iloc_ns) = &
                                           dst_block%je
                   endif
                else if (src_proc == 0 .and. dst_proc == my_task+1) then
@@ -866,7 +866,7 @@ contains
                   newbndy%nblocks_ns_rcv(imsg) + 1
                   if (iblock_north < 0) then !*** tripole
                      newbndy%ns_dst_block(iblk,imsg) = -dst_block_loc
-                     !*** upon receiving message, store in global 
+                     !*** upon receiving message, store in global
                      !*** tripole buffer for src, then copy out of
                      !*** ghost cell buffer once global buffer filled
                      !*** i address for storing in global buffer
@@ -3032,7 +3032,7 @@ end subroutine boundary_4d_int
 !BOC
 !-----------------------------------------------------------------------
 !
-!  if destination all land (proc = 0), then no send is necessary, 
+!  if destination all land (proc = 0), then no send is necessary,
 !  so do the rest only for proc /= 0
 !
 !-----------------------------------------------------------------------
@@ -3050,7 +3050,7 @@ end subroutine boundary_4d_int
 
       if (dst_proc == my_task + 1) then
 
-         if (src_proc /= 0) then  
+         if (src_proc /= 0) then
             !*** the source block has ocean points so
             !*** increment the number of messages from
             !*** the source process

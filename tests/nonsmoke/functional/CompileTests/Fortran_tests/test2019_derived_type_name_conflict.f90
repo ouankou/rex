@@ -19,7 +19,7 @@
    type assembly_T
    type(part_T), dimension(:),pointer,contiguous :: part => Null()
    end type assembly_T
-!  
+!
    type(assembly_T),save,target :: assembly
    integer(singI) :: lc_num
      type(part_T), pointer :: part

@@ -11,7 +11,7 @@ program t
   a = -1; b = -1; c = -1; d = -1;
   read(10,*) a,b,c,d
   if (d.ne.-1) call abort()
-  
+
   ! This worked as expected
   rewind(10)
   write(10,*) '1 2 3 /'

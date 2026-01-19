@@ -21,12 +21,3 @@ int main() {
     auto o = make_overloader([] (auto const& a) {std::cout << a;},
                              [] (float f) {std::cout << std::setprecision(3) << f;});
 }
-
-#if 0
-template <typename... Ts>
-struct Overloader : Ts... {
-    using Ts::operator()...;
-    // […]
-};
-#endif
-

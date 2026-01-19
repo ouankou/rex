@@ -21,7 +21,7 @@ program read_logical
    read (10, nml=mynml, err = 1000)
    if (.not.all(truely(1:3))) call abort()
    if (.not.all(truely_a_very_long_variable_name(1:3).eq.4)) call abort()
-   
+
    truely = .false.
    truely_a_very_long_variable_name = 0
 

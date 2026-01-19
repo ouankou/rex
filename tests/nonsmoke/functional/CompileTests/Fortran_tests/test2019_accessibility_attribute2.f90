@@ -17,5 +17,5 @@ module test2019_accessibility_attribute3
   implicit none
   private
   save
-  type(distrb) :: dist 
+  type(distrb) :: dist
 end module

@@ -1,4 +1,4 @@
-#!/bin/sh 
+#!/bin/sh
 set -e
 
 #river_regrid
@@ -27,7 +27,7 @@ set -e
 # $tooldir/make_solo_mosaic --num_tiles 1 --dir $PWD --mosaic N45_mosaic --tile_file N45_grid.nc --periodx 360
 
 # #make_hgrid and make_solo_mosaic 2-degree tripolar
-# $tooldir/make_hgrid --grid_type tripolar_grid --nxbnd 2 --nybnd 2 --xbnd -280,80 --ybnd -90,90 --nlon 360 --nlat 180 --grid_name tripolar_grid 
+# $tooldir/make_hgrid --grid_type tripolar_grid --nxbnd 2 --nybnd 2 --xbnd -280,80 --ybnd -90,90 --nlon 360 --nlat 180 --grid_name tripolar_grid
 
 # $tooldir/make_solo_mosaic --num_tiles 1 --dir $PWD --mosaic tripolar_mosaic --tile_file tripolar_grid --periodx 360
 
@@ -35,11 +35,11 @@ set -e
 # $tooldir/make_topog --mosaic  $outdir/tripolar_mosaic.nc --topog_file $indir/OCCAM_p5degree.nc --topog_field TOPO --scale_factor -1 --output tripolar_topog.nc
 
 # #make_coupler_mosaic
-# $tooldir/make_coupler_mosaic --atmos_mosaic  $outdir/C48_mosaic.nc --land_mosaic  $outdir/N45_mosaic.nc --ocean_mosaic  $outdir/tripolar_mosaic.nc --ocean_topog  $outdir/tripolar_topog.nc 
+# $tooldir/make_coupler_mosaic --atmos_mosaic  $outdir/C48_mosaic.nc --land_mosaic  $outdir/N45_mosaic.nc --ocean_mosaic  $outdir/tripolar_mosaic.nc --ocean_topog  $outdir/tripolar_topog.nc
 
 # mpirun -np 10 $tooldir/make_topog_parallel --mosaic $outdir/tripolar_mosaic.nc --topog_file $indir/OCCAM_p5degree.nc --topog_field TOPO --scale_factor -1 --output tripolar_topog.nc
 
-# mpirun -np 10 $tooldir/make_coupler_mosaic_parallel --atmos_mosaic $outdir/C48_mosaic.nc --land_mosaic $outdir/N45_mosaic.nc --ocean_mosaic $outdir/tripolar_mosaic.nc --ocean_topog $outdir/tripolar_topog.nc 
+# mpirun -np 10 $tooldir/make_coupler_mosaic_parallel --atmos_mosaic $outdir/C48_mosaic.nc --land_mosaic $outdir/N45_mosaic.nc --ocean_mosaic $outdir/tripolar_mosaic.nc --ocean_topog $outdir/tripolar_topog.nc
 
 # #compare data
 # foreach ncfile (`ls *.nc`)

@@ -257,8 +257,7 @@
      c "2" // ! 12
      c "3" // ! 13
      c "4" // ! 14
-     c "5" // ! 255 
+     c "5" // ! 255
      c "6"    ! { dg-warning "Limit of 255 continuations exceeded" }
-     
+
        end
-       

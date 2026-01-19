@@ -11,4 +11,4 @@ implicit none
 integer(kind=4) :: n
 real(kind=8) :: p
 common /foo/ n,p   ! { dg-bogus "padding" }
-end  
+end

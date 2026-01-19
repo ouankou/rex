@@ -108,18 +108,6 @@
 	operator()(_UniformRandomNumberGenerator& __urng)
         { return this->operator()(__urng, _M_param); }
 
-#if 0
-      template<typename _UniformRandomNumberGenerator>
-	result_type
-	operator()(_UniformRandomNumberGenerator& __urng,
-		   const param_type& __p)
-	{
-	  __detail::_Adaptor<_UniformRandomNumberGenerator, result_type>
-	    __aurng(__urng);
-	  return (__aurng() * (__p.b() - __p.a())) + __p.a();
-	}
-#endif
-
       template<typename _ForwardIterator,
 	       typename _UniformRandomNumberGenerator>
 	void

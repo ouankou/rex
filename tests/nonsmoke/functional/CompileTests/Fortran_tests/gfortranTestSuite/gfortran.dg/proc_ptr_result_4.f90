@@ -1,6 +1,6 @@
 ! { dg-do compile }
 !
-! PR 40451: [F03] procedure pointer assignment rejected 
+! PR 40451: [F03] procedure pointer assignment rejected
 !
 ! Contributed by Tobias Burnus <burnus@gcc.gnu.org>
 

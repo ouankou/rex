@@ -10,7 +10,7 @@ c Based on example provided by jean-pierre.flament@univ-lille1.fr
       ispher = 0
       nosym = 0
       runflg = 0
-      noprop = 0 
+      noprop = 0
       open (10, status = "scratch")
       write (10, '(A)') " $FILE"
       write (10, '(A)') "   pseu  dir/file"

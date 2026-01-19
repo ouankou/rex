@@ -1,17 +1,5 @@
 #include <string>
 namespace std {
-#if 0
-template<typename _CharT>
-struct char_traits
-   {
-   };
-
-template<>
-struct char_traits<unsigned int>
-   {
-     typedef unsigned int int_type;
-   };
-#endif
 
 template <typename _Tp> class X_vector {};
 } // namespace std

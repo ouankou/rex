@@ -15,9 +15,9 @@ program equiv
          0.54202764, 0.00000000, 0.07803490, 0.06299166, 0.29563548, 0.58554794&
          , 0.66869856, 0.38712636, 0.00000000/
 
-       if (gjp(3,3) == gjw(3,3) ) then 
+       if (gjp(3,3) == gjw(3,3) ) then
           print *, 'OK'
-       else 
+       else
           print *,'FAILED'
-       end if 
+       end if
 end program equiv

@@ -5,7 +5,7 @@
       program testit
 c
       assign 12 to i
-      write(*, i) 
+      write(*, i)
  0012 format (" **** ASSIGN FORMAT NUMBER TO INTEGER VARIABLE ****" )
       end
 

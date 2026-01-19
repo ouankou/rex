@@ -8,15 +8,6 @@ min(const _Tp & __a, const _Tp & __b)
    }
 }
 
-#if 0
-template<>
-inline const int &
-min<int>(const int & __a, const int & __b)
-   {
-     if (__b < __a) return __b; return __a;
-   }
-#endif
-
 // using namespace X;
 void foo()
    {

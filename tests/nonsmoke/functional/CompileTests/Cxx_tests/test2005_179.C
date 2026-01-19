@@ -16,34 +16,6 @@ rose_test.C:16: error: candidates are: void foo::prod(const foo&, foo&) const
 the cause of the error can be found in the output from ROSE on line 17
 where you can see that '::' has been removed from '::prod(...)':
 */
-#if 0
-
-
-class foo
-{
-  public: void prod(const class foo &x,class foo &y) const;
-}
-
-;
-
-inline void prod(class foo &y,const class foo &A,const class foo &x)
-{
-  A.prod(x,y);
-}
-
-
-void foo::prod(const class foo &x,class foo &y) const
-{
-  prod(y,x,y);
-}
-
-
-int main()
-{
-  return 0;
-}
-#endif
-
 
 class foo
    {
@@ -73,11 +45,7 @@ void foo::prod ()
   // Again, this does not associate the scope with "void prod(int)"
      void prod (int x);
 
-  // Error: global scope name qualification is dropped in generated code!
-  // global qualification here is required!
-#if 0
-     ::prod (0);
-#else
-     prod (0);
-#endif
+     // Error: global scope name qualification is dropped in generated code!
+     // global qualification here is required!
+     prod(0);
    }

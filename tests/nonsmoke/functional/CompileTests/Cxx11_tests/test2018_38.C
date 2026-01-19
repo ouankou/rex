@@ -23,12 +23,10 @@ typedef std::string L8STRING;
 using std::map;
 typedef map<functionType_t, L8STRING> genericNamesMap_t;
 
-#if 1
 // BELOW NEEDED FOR ERROR
 const genericNamesMap_t::value_type genericNamesData[] = {
     // IF STRINGS ARE NULL BELOW, FAILS DIFFERENTLY:
     genericNamesMap_t::value_type(FT_Bcv, "curve name: Phase_Curve"),
 };
-#endif
 
 } // namespace LEOS

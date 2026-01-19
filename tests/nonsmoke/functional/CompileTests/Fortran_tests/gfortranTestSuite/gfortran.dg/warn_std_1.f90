@@ -1,7 +1,7 @@
 ! { dg-do compile }
 ! { dg-options "-std=gnu" }
 !
-! PR fortran/32778 - pedantic warning: intrinsics that 
+! PR fortran/32778 - pedantic warning: intrinsics that
 !                    are GNU extensions not part of -std=gnu
 !
 ! (1/3) Check for excess errors if -std=gnu.

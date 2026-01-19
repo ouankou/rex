@@ -31,17 +31,6 @@ class ArtificialViscosityList : public DereferenceVector< ArtificialViscosity<Me
 // Template Forward declaration
 template<class MeshType> class ArtificialViscosity;
 
-#if 0
-// Template specialization
-template <> 
-class ArtificialViscosity<PolygonalMesh>
-   {
-     public:
-       // member functions
-          void computeZonalLengthScale();
-   };
-#endif
-
 template<class MeshType>
 void
 ArtificialViscosity<MeshType>::computeZonalLengthScale()

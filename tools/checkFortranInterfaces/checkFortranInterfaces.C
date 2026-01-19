@@ -47,40 +47,9 @@ SgType* InterfaceChecker::fortran_to_c_type(SgType* f_type, SgExpression* kind_t
                c_type = SageBuilder::buildLongType();
             }
 
-#if 0
-            else if (kind_name == "c_int8_t") {
-            }
-            else if (kind_name == "c_int16_t") {
-            }
-            else if (kind_name == "c_int32_t") {
-            }
-            else if (kind_name == "c_int64_t") {
-            }
-            else if (kind_name == "c_int_lease8_t") {
-            }
-            else if (kind_name == "c_int_lease16_t") {
-            }
-            else if (kind_name == "c_int_lease32_t") {
-            }
-            else if (kind_name == "c_int_lease64_t") {
-            }
-            else if (kind_name == "c_int_fast8_t") {
-            }
-            else if (kind_name == "c_int_fast16_t") {
-            }
-            else if (kind_name == "c_int_fast32_t") {
-            }
-            else if (kind_name == "c_int_fast64_t") {
-            }
-            else if (kind_name == "c_intmax_t") {
-            }
-            else if (kind_name == "c_intptr_t") {
-            }
-            else if (kind_name == "c_ptrdiff_t") {
-            }
-#endif
             else {
-               std::cout << "Type " << kind_name << " is not implemented" << std::endl;
+              std::cout << "Type " << kind_name << " is not implemented"
+                        << std::endl;
             }
 
             break;
@@ -105,17 +74,9 @@ SgType* InterfaceChecker::fortran_to_c_type(SgType* f_type, SgExpression* kind_t
          {
             if (isDefaultKind) {
                c_type = SageBuilder::buildComplexType();
-            }
-#if 0
-            else if (kind_name == "c_float_complex") {
-            }
-            else if (kind_name == "c_double_complex") {
-            }
-            else if (kind_name == "c_long_double_complex") {
-            }
-#endif
-            else {
-               std::cout << "Type " << kind_name << " is not implemented" << std::endl;
+            } else {
+              std::cout << "Type " << kind_name << " is not implemented"
+                        << std::endl;
             }
             break;
          }

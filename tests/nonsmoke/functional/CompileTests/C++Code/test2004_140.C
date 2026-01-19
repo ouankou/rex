@@ -1,33 +1,4 @@
 
-#if 0
-// Original generated template specialization code (by ROSE):
-template<> inline SwigValueWrapper< Geometry::Field< Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Mesh , Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Face , Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Vector >  > ::SwigValueWrapper< Geometry::Field< Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Mesh , Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Face , Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Vector >  > () : tt((class Geometry::Field< Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Mesh , Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Face , Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Vector >  *)0)
-{
-}
-
-
-// Reformatted generated template specialization code (by ROSE):
-template<> inline 
-SwigValueWrapper< Geometry::Field< Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Mesh , 
-                                   Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Face , 
-                                   Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Vector >  > 
-               ::SwigValueWrapper< Geometry::Field< Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Mesh , 
-                                                    Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Face , 
-                                                    Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Vector >  > () 
-     : tt((class Geometry::Field< Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Mesh , 
-                                  Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Face , 
-                                  Hydro< Geometry::MeshBase< Geometry::PolygonalMeshTypeInfo > > ::Vector >  *)0)
-   {
-   }
-
-
-// Simplified generated template specialization code (by ROSE):
-template<> inline 
-SwigValueWrapper< Geometry::Field<x,y,z> >::SwigValueWrapper< Geometry::Field<x,y,z>  > () 
-     : tt((class Geometry::Field<x,y,z> *)0)
-   {
-   }
-#endif
 
 // Test mixing of declarations within a variable declaration!  This is a good reason
 // for the normalization of variable declarations. So that function declarations can't 

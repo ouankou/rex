@@ -4,7 +4,6 @@
 
 // #include <vector>
 
-#if 1
 namespace std
    {
      template<typename _Tp> class allocator {};
@@ -16,8 +15,7 @@ namespace std
                vector(){}
                void push_back(_Tp x){}
         };
-   }
-#endif
+        } // namespace std
 
 namespace XXX {
 

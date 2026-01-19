@@ -13,7 +13,7 @@ program test
   if (trailz (foo()) /= 1) call abort
 
 contains
-  
+
   integer function foo ()
     integer, save :: i = 0
     i = i + 1

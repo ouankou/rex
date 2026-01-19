@@ -10,10 +10,8 @@ void foobar()
    {
      X< > a;
 
-#if 1
      class X{};
      X b;
-#endif
 
      ::X< > c;
    }

@@ -4,10 +4,10 @@
 ! Contributed by Salvatore Filippone <sfilippone@uniroma2.it>
 !
 module base_mod
-  
+
   type  :: base_mat
     integer, private     :: m, n
-  contains 
+  contains
     procedure, pass(a) :: transp1 => base_transp1
     generic, public    :: transp => transp1
     procedure, pass(a) :: transc1 => base_transc1
@@ -17,8 +17,8 @@ module base_mod
 contains
 
   subroutine base_transp1(a)
-    implicit none 
-    
+    implicit none
+
     class(base_mat), intent(inout) :: a
     integer :: itmp
     itmp        = a%m
@@ -26,11 +26,11 @@ contains
     a%n         = itmp
   end subroutine base_transp1
   subroutine base_transc1(a)
-    implicit none 
+    implicit none
     class(base_mat), intent(inout) :: a
-    
-    call a%transp() 
-!!$    call a%transp1() 
+
+    call a%transp()
+!!$    call a%transp1()
   end subroutine base_transc1
 
 

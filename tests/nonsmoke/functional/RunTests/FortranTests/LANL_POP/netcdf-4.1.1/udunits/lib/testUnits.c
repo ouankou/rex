@@ -1953,12 +1953,6 @@ test_xml(void)
     CU_ASSERT_PTR_NOT_NULL(unit2);
     CU_ASSERT_EQUAL(ut_compare(unit1, unit2), 0);
     ut_free(unit2);
-#if 0
-    unit2 = ut_parse(xmlSystem, "\xC5ngstr\xF6m", UT_LATIN1);/* capital A with ring */
-    CU_ASSERT_PTR_NOT_NULL(unit2);
-    CU_ASSERT_EQUAL(ut_compare(unit1, unit2), 0);
-    ut_free(unit2);
-#endif
     ut_free(unit1);
 
     ut_free_system(xmlSystem);

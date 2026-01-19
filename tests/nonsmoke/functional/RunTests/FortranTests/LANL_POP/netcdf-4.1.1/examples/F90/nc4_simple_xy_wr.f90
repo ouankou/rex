@@ -9,7 +9,7 @@
 !     This example demonstrates the netCDF Fortran 90 API. This is part
 !     of the netCDF tutorial, which can be found at:
 !     http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-tutorial
-      
+
 !     Full documentation of the netCDF Fortran 90 API can be found at:
 !     http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90
 
@@ -22,7 +22,7 @@ program nc4_simple_xy_wr
   ! This is the name of the data file we will create.
   character (len = *), parameter :: FILE_NAME = "nc4_simple_xy.nc"
 
-  ! We are writing 2D data, a 12 x 6 grid. 
+  ! We are writing 2D data, a 12 x 6 grid.
   integer, parameter :: NDIMS = 2
   integer, parameter :: NX = 6, NY = 12
 
@@ -30,7 +30,7 @@ program nc4_simple_xy_wr
   ! an ID for each one.
   integer :: ncid, varid, dimids(NDIMS)
   integer :: x_dimid, y_dimid
-  
+
   ! This is the data array we will write. It will just be filled with
   ! a progression of integers for this example.
   integer, dimension(:,:), allocatable :: data_out
@@ -58,7 +58,7 @@ program nc4_simple_xy_wr
   ! overwrite this file, if it already exists.
   call check( nf90_create(FILE_NAME, NF90_CLOBBER, ncid) )
 
-  ! Define the dimensions. NetCDF will hand back an ID for each. 
+  ! Define the dimensions. NetCDF will hand back an ID for each.
   call check( nf90_def_dim(ncid, "x", NX, x_dimid) )
   call check( nf90_def_dim(ncid, "y", NY, y_dimid) )
 
@@ -88,10 +88,10 @@ program nc4_simple_xy_wr
 contains
   subroutine check(status)
     integer, intent ( in) :: status
-    
-    if(status /= nf90_noerr) then 
+
+    if(status /= nf90_noerr) then
       print *, trim(nf90_strerror(status))
       stop 2
     end if
-  end subroutine check  
+  end subroutine check
 end program nc4_simple_xy_wr

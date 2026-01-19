@@ -1,8 +1,8 @@
 ! { dg-do run }
 ! { dg-options "-std=gnu" }
-! This test is pretty simple but is here just to make sure that the changes 
-! done to c_ptr and c_funptr (translating them to void *) works in the case 
-! where a component of a type is of type c_ptr or c_funptr.  
+! This test is pretty simple but is here just to make sure that the changes
+! done to c_ptr and c_funptr (translating them to void *) works in the case
+! where a component of a type is of type c_ptr or c_funptr.
 module c_ptr_tests_9
   use, intrinsic :: iso_c_binding, only: c_ptr, c_null_ptr
 

@@ -1,4 +1,4 @@
-! { dg-do run { target fd_truncate } } 
+! { dg-do run { target fd_truncate } }
 ! pr18364 endfile does not truncate file.
 !   write out 20 records
 !   rewind
@@ -6,7 +6,7 @@
 !   endfile
 !   close file
 !   open file
-!   detect file has only 10 records  
+!   detect file has only 10 records
       implicit none
       integer i,j
       open(unit=10,file='test.dat',access='sequential',status='replace')
@@ -20,12 +20,12 @@
       endfile(10)
       close(10)
       open(unit=10,file='test.dat',access='sequential',status='old')
-      do i=1,20 
-        read (10,'(I4)',end=99) j 
+      do i=1,20
+        read (10,'(I4)',end=99) j
       end do
       ! should never get here
       call abort
   99  continue ! end of file
-      if (j.ne.10) call abort   
+      if (j.ne.10) call abort
       close(10,status='delete')
       end

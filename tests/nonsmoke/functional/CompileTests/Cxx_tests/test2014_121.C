@@ -7,10 +7,9 @@ template <typename T>
 class HistVarSet 
    {
      public:
-          HistVarSet (MS_Matmodel* msModel) {}
-#if 1
-          void packVars( HistVarSet<T*> const & hist_list, HistVarSet<bool> const &log_flags, int index );
-#endif
+       HistVarSet(MS_Matmodel *msModel) {}
+       void packVars(HistVarSet<T *> const &hist_list,
+                     HistVarSet<bool> const &log_flags, int index);
    };
 
   }  // closing brace for Materials namespace statement

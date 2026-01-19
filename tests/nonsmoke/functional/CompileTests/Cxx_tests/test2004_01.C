@@ -12,13 +12,3 @@ class X
    };
 
 // void X::foobar (int i){ }
-
-#if 0
-int main()
-   {
-     x = 42;
-     X y;
-     y.foobar(x);
-     return 0;
-   }
-#endif

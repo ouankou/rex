@@ -24,18 +24,3 @@ class B
        // void foobar(BB<> *b) {}
           void foobar(BB<int> *b) {}
    };
-
-#if 0
-int main()
-   {
-  // B<int> b;
-
-  // This unparses to:
-  // b.foobar(((class B < int > ::BB< B < int > ::privateType  > *)0));
-  // but this is an error since "B<int>::privateType" is private!
-  // b.foobar(0);
-
-     return 0;
-   }
-#endif
-

@@ -19,7 +19,6 @@ int main(int argc, char *argv[]) {
   // string is not allowed), it also appears that the language specification for
   // the file is taken from the suffix of the input file. This can be fixed
   // later.
-#if 1
   string source_suffix = ".C";
   string newFilename_output = "new_source_file";
   string newFilename_input = "temp_dummy_file_" + newFilename_output;
@@ -32,20 +31,10 @@ int main(int argc, char *argv[]) {
   ROSE_ASSERT(file != NULL);
 
   SgSourceFile *sourceFile = isSgSourceFile(file);
-#else
-  // New API function to simplify new file construction, this hides the defails
-  // of the input filename handling.
-  SgSourceFile *sourceFile = buildSourceFile("my_header_out.C", project);
-#endif
   ROSE_ASSERT(sourceFile != NULL);
 
   // There should now be 2 SgFile objects in the SgProject.
   ROSE_ASSERT(project->get_fileList().size() == 2);
-
-#if 0
-  // This will also call display for each SgFile in the project.
-     project->display("project");
-#endif
 
   // Find the pointer to the global scope.
   SgGlobal *globalScopeOfNewFile = sourceFile->get_globalScope();
@@ -69,11 +58,6 @@ int main(int argc, char *argv[]) {
 
   // Add the function declearation to the target scope (global scope).
   SageInterface::appendStatement(functionDeclaration, globalScopeOfNewFile);
-
-#if 0
-  // This function is specified as a transformation, so it will be unparsed.
-     functionDeclaration->get_file_info()->display("function declaration");
-#endif
 
   // Find the associated nondefining declaration to unparse seperately as a
   // function prototype in a header file.
@@ -99,7 +83,6 @@ int main(int argc, char *argv[]) {
   // Run all diabnostics tests on the generated AST.
   AstTests::runAllTests(project);
 
-#if 1
   // Output an optional graph of the AST (just the tree, when active)
   generateDOT(*project);
 
@@ -108,7 +91,6 @@ int main(int argc, char *argv[]) {
   const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 10000;
   generateAstGraph(project, MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH,
                    "");
-#endif
 
   // Outout the unparsed code from the input AST.
   project->unparse();

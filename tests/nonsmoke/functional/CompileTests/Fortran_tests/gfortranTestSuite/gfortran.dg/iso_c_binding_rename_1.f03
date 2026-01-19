@@ -7,10 +7,10 @@ end module iso_c_binding_rename_0
 
 
 module iso_c_binding_rename_1
-  ! rename a couple of the symbols from iso_c_binding.  the compiler 
+  ! rename a couple of the symbols from iso_c_binding.  the compiler
   ! needs to be able to recognize the derived types with names different
   ! from the one in iso_c_binding because it will look up the derived types
-  ! to define the args and return values of some of the procedures in 
+  ! to define the args and return values of some of the procedures in
   ! iso_c_binding.  this should verify that this functionality works.
   use, intrinsic :: iso_c_binding, my_c_int => c_int, my_c_ptr => c_ptr, &
        my_c_associated => c_associated, my_c_f_pointer => c_f_pointer
@@ -74,7 +74,7 @@ contains
     if(.not. my_c_associated_2(cptr1)) then
        call abort()
     end if
-    
+
     if(.not. my_c_associated_2(cptr2)) then
        call abort()
     end if

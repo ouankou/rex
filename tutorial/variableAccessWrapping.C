@@ -1,26 +1,3 @@
-#if 0
-// IBM using gcc 3.2.2 (so this is what we will require for ROSE)
-
-// The point of this program is to transform code to call functions
-// before and after all variable references (SgVarRefExp).
-// Examples include:
-//    x = 0;  ->  (b(),x) = 0, a(), x;
-//    x = y + z;  -> ((b(),x) = ((b(),y) + ((b(),z), az(), z), ay(), y), ax(), x);
-
-// It appears the instrumentation "after" a read or write can not be done well 
-// (not done immediately after the read or write and before any other operations 
-// and without forcing multiple reads of the variable).  So we restrict the 
-// instrumentation to "before" variable reads and writes.  In this case
-// we transform "x;" to "br("x"),x; and "x = 0;" to "(bw("x"),x) = 0;", because
-// of the precedence of the operator, is the lowest possilbe, we have to introduce
-// "()" everywhere we use the comma operator. 
-
-//  A problem is that the user could have defined a comma operator for a class
-// (it can not be defined for primative types directly), for example:
-// "someType operator, (void,someType);".  In this case we can use ROSE to
-// detect the existence of such a function (in global scope or a namespace).
-// An AST Query could be use to check this (or a visit function over the whole AST).
-#endif
 
 // ROSE is a tool for building preprocessors, this file is an example preprocessor built with ROSE.
 // Specifically it shows the design of a transformation to instrument source code, placing source code

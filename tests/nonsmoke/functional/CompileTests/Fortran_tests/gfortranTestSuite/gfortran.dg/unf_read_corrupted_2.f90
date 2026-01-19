@@ -4,7 +4,7 @@
       program r3
 
       integer(kind=4) :: a(1025),b(1025),c(1025),d(2048),e(1022)
-      
+
       a = 5
       b = 6
       c = 7

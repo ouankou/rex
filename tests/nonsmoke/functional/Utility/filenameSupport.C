@@ -35,22 +35,6 @@ int main(int argc, char *argv[]) {
   printf("currentExecutable = %s \n", currentExecutable.c_str());
   stringTest(currentExecutable);
 
-#if 0
-     stringTest ("foo.h");
-     stringTest ("/foo.h");
-     stringTest ("//foo.h");
-     stringTest ("///foo.h");
-     stringTest ("////foo.h");
-     stringTest ("./foo.h");
-     stringTest ("../foo.h");
-     stringTest ("//foo.h");
-     stringTest ("path/foo.h");
-     stringTest ("/path/foo.h");
-     stringTest ("/pathA/pathB/foo.h");
-     stringTest ("foo");
-     stringTest ("/path/foo");
-#endif
-
   printf("Program Terminated Normally! \n");
   return 0;
 }

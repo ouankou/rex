@@ -7,5 +7,5 @@ program c_cant_assert_keyword_nonnull
 contains
   subroutine g(k)
     integer :: k
-  end subroutine	
+  end subroutine
 end program

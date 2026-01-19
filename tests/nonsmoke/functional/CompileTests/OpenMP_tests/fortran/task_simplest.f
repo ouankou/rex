@@ -1,5 +1,5 @@
-******************************************      
-* Simplest OMP task example, no variables 
+******************************************
+* Simplest OMP task example, no variables
 * Liao 1/25/2010
 ******************************************
       program main
@@ -8,12 +8,12 @@
 
 !$omp parallel
 !$omp single
-      print *, 'using ', omp_get_num_threads(), ' threads' 
+      print *, 'using ', omp_get_num_threads(), ' threads'
       do i = 1, 10
-!$omp task 
+!$omp task
       print *, 'Executed by thread ', omp_get_thread_num()
 !$omp end task
-      enddo  
+      enddo
 !$omp end single
 !$omp end parallel
-      end 
+      end

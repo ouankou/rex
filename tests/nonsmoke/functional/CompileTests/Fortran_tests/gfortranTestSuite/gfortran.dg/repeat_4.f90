@@ -3,7 +3,7 @@
 ! { dg-do compile }
 program test
   implicit none
-  character(len=0), parameter :: s0 = "" 
+  character(len=0), parameter :: s0 = ""
   character(len=1), parameter :: s1 = "a"
   character(len=2), parameter :: s2 = "ab"
   character(len=0) :: t0

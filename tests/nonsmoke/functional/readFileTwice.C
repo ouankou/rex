@@ -50,11 +50,6 @@ getLibSourceFile(SgSourceFile* target)
 
      printf ("filenameWithoutExtension = %s \n",filenameWithoutExtension.c_str());
 
-#if 0
-     printf ("Exit as a test! \n");
-     ROSE_ASSERT(false);
-#endif
-
  // Get the actual filename extension.
  // std::string filenameExtension = ".C";
      std::string filenameExtension = getFileExt(filenameWithoutPath);
@@ -68,11 +63,6 @@ getLibSourceFile(SgSourceFile* target)
   // new_file_name = filenamePath + "/" + new_file_name;
 
      printf ("filename with path: new_file_name    = %s \n",new_file_name.c_str());
-
-#if 0
-     printf ("Exit as a test! \n");
-     ROSE_ASSERT(false);
-#endif
 
   // Search if the lib file already exists. 
      SgFilePtrList file_list = project->get_files();
@@ -108,16 +98,6 @@ getLibSourceFile(SgSourceFile* target)
        // buildFile() will set filename to be input file name by default. 
        // we have to rename the input file to be output file name. This is used to avoid duplicated creation later on
           new_file->get_file_info()->set_filenameString(new_file_name);
-
-#if 0
-       // DQ (3/28/2019): The conversion of functions with definitions to function prrototypes must preserve the 
-       // associated comments and CPP directives (else the #includes will be missing and types will not be defined.
-       // This is an issue with the astOutliner test code jacobi.c.
-       // DQ (3/20/2019): Need to eliminate possible undefined symbols in this file when it will be compiled into 
-       // a dynamic shared library.  Any undefined symbols will cause an error when loading the library using dlopen().
-       // convertFunctionDefinitionsToFunctionPrototypes(new_file);
-          SageInterface::convertFunctionDefinitionsToFunctionPrototypes(new_file);
-#endif
         }
 
   // new_file = isSgSourceFile(buildFile(new_file_name, new_file_name));
@@ -139,36 +119,17 @@ int main( int argc, char * argv[] )
   // AST consistency tests (optional for users, but this enforces more of our tests)
      AstTests::runAllTests(project);
 
-#if 0
-  // DQ (9/8/2017): Debugging ROSE_ASSERT.
-     printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
-#endif
-
-#if 1
   // Output an optional graph of the AST (just the tree, when active)
      printf ("Generating a dot file... (ROSE Release Note: turn off output of dot files before committing code) \n");
      generateDOT ( *project );
      // generateAstGraph(project, 2000);
-#endif
 
-#if 1
-  // Output an optional graph of the AST (the whole graph, of bounded complexity, when active)
+     // Output an optional graph of the AST (the whole graph, of bounded
+     // complexity, when active)
      const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 10000;
-     generateAstGraph(project,MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH);
-#endif
+     generateAstGraph(project, MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH);
 
-#if 0
-     SgNode::get_globalTypeTable()->print_typetable();
-#endif
-
-#if 0
-  // DQ (9/8/2017): Debugging ROSE_ASSERT.
-     printf ("Exiting as a test! \n");
-     ROSE_ASSERT(false);
-#endif
-
-  // regenerate the source code and call the vendor 
-  // compiler, only backend error code is reported.
+     // regenerate the source code and call the vendor
+     // compiler, only backend error code is reported.
      return backend(project);
    }

@@ -33,7 +33,7 @@ c  function subprograms
 
 c  a four-way average of rhobar
       do 260  k=0,N
-        yzin1(k) = 0.25 * 
+        yzin1(k) = 0.25 *
      &       ( z(2,2,k) + z(1,2,k) +
      &         z(2,1,k) + z(1,1,k) )
   260       continue
@@ -44,7 +44,7 @@ c  another four-way average of rhobar
          rtmp2 = z(1,2,k)
          rtmp3 = z(2,1,k)
          rtmp4 = z(1,1,k)
-         yzin2(k) = 0.25 * 
+         yzin2(k) = 0.25 *
      &       ( rtmp1 + rtmp2 + rtmp3 + rtmp4 )
   270       continue
 

@@ -1,15 +1,15 @@
 ! This is part of the netCDF package.
 ! Copyright 2006 University Corporation for Atmospheric Research/Unidata.
 ! See COPYRIGHT file for conditions of use.
-      
+
 ! This is a simple example which reads a small dummy array, from a
 ! netCDF data file created by the companion program simple_xy_wr.f90.
-      
+
 ! This is intended to illustrate the use of the netCDF fortran 77
 ! API. This example program is part of the netCDF tutorial, which can
 ! be found at:
 ! http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-tutorial
-      
+
 ! Full documentation of the netCDF Fortran 90 API can be found at:
 ! http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90
 
@@ -23,7 +23,7 @@ program simple_xy_rd
   character (len = *), parameter :: FILE_NAME = "simple_xy_nc4.nc"
   character (len = *), parameter :: VAR_NAME = "data"
 
-  ! We are reading 2D data, a 12 x 6 grid. 
+  ! We are reading 2D data, a 12 x 6 grid.
   integer, parameter :: NX = 6, NY = 12, MAX_DIMS = 2
   integer :: data_in(NY, NX)
 
@@ -80,10 +80,10 @@ program simple_xy_rd
 contains
   subroutine check(status)
     integer, intent ( in) :: status
-    
-    if(status /= nf90_noerr) then 
+
+    if(status /= nf90_noerr) then
       print *, trim(nf90_strerror(status))
       stop 2
     end if
-  end subroutine check  
+  end subroutine check
 end program simple_xy_rd

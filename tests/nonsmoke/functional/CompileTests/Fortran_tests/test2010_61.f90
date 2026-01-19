@@ -1,4 +1,4 @@
-! This testcode demonstrates case change issues that 
+! This testcode demonstrates case change issues that
 ! were at least at some point a problem for ROSE or OFP.
 subroutine Foo
 end subroutine foo

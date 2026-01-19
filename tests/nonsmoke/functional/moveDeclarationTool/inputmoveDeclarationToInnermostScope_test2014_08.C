@@ -1,6 +1,5 @@
 // #include <stdio.h>
 
-#if 1
 void foo(int loSt)
    {
      int blockx;
@@ -8,6 +7,4 @@ void foo(int loSt)
         {
           blockx ++;
         }
-   }
-#endif
-
+}

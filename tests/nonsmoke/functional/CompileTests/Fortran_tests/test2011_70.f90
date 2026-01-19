@@ -9,9 +9,9 @@ module m_test2011_70
 
    namelist /passive_tracers_on_nml/  &
       iage_on, dye_on
-end module 
+end module
 
-program p 
+program p
   use m_test2011_70
   print *,'OK' ! parser test for namelist only
 end program

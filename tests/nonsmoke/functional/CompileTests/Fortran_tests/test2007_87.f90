@@ -1,4 +1,4 @@
-! Example of failing code demonstrating an inconsistancy in the block 
+! Example of failing code demonstrating an inconsistancy in the block
 ! where label (it can be a string label, but not a numeric label).
 subroutine example
     logical :: a(9)

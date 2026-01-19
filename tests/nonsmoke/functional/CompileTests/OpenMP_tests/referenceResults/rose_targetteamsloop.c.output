@@ -1,1 +1,1 @@
-#pragma omp target teams loop 
+#pragma omp target teams loop

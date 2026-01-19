@@ -57,15 +57,8 @@ Ba_B C::getList() const
      Ba_A data;
      Ba_B list;
 
-#if 1
      {
     // Demonstrate error in Cxx_Grammar.C:36494
        data = m.baGetValue(getValue(42));
      }
-#endif
-
-#if 0
-    // Demonstrate error in sageInterface.C:19475
-       data = m.baGetValue(getValue(42));
-#endif
    }

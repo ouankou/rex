@@ -1,6 +1,6 @@
 ! { dg-do compile }
 !
-! PR fortran/37445, in which the first version of the fix regressed on the 
+! PR fortran/37445, in which the first version of the fix regressed on the
 ! calls to GetBasicElementData; picking up the local GetBasicElementData instead.
 !
 ! Contributed by Norman S Clerman < clerman@fuse.net>

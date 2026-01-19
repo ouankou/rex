@@ -1,21 +1,21 @@
 #!/usr/bin/perl
 
 # DQ (8/27/2004):
-# This script is part of the support for the use of newer 3.x gnu header 
+# This script is part of the support for the use of newer 3.x gnu header
 # files within ROSE when using the gnu g++ version 3.x backend compiler.
 # This is an improvement over the previous work which processed the gnu
-# 2.96 header files for use with ROSE when using the g++ version 3.x 
+# 2.96 header files for use with ROSE when using the g++ version 3.x
 # compilers. And of course it is finally done in Perl which I always
 # thought might be the best way to do it.
 
-# This Perl script processes a gnu 3.x header file and comments out a 
-# collection of macros which can span several lines. The macros 
+# This Perl script processes a gnu 3.x header file and comments out a
+# collection of macros which can span several lines. The macros
 # follow a C(( macro syntax not supported by any C++ compiler
 # or any older (non-c99) C compiler.  The specific macros are
 # __glibcpp_function_requires and __glibcpp_class_requires
 # and implements a "concepts" mechanism which provides
 # type properties information to the compiler ans which
-# will be likely supported in future versions of C++.  
+# will be likely supported in future versions of C++.
 # For more info on C++ "Concepts" consult some of Bjarne's
 # technical papers.
 
@@ -30,7 +30,7 @@ while ($lineNumber <= $#lineArray)
    {
      $line = $lineArray[$lineNumber];
 
-   # Flag set to false and reset if line matches and is output 
+   # Flag set to false and reset if line matches and is output
    # by one of the rules below.
      $lineHasBeenOutput = 0;
 
@@ -69,7 +69,7 @@ while ($lineNumber <= $#lineArray)
         }
    }
 
-   # If not previously output by the above rules then output the unmodified line 
+   # If not previously output by the above rules then output the unmodified line
    # from the processed file.
      if (!$lineHasBeenOutput)
         {

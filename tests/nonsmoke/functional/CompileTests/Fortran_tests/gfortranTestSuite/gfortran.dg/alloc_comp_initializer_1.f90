@@ -23,7 +23,7 @@ module p_type_mod
 end module p_type_mod
 
 program foo
- 
+
  use p_type_mod
   implicit none
 
@@ -33,7 +33,7 @@ program foo
 
   call test_ab8 ()
 
-  a = m_type ((/101,102/))  
+  a = m_type ((/101,102/))
 
   call p_bld (a, pre)
 
@@ -41,7 +41,7 @@ program foo
   wee%ap => a
   if (.not.associated (wee%ap) .or. allocated (wee%av)) call abort ()
   wee = basep_type ((/m_type ((/201, 202, 203/))/), null (), 99)
-  if (.not.allocated (wee%av) .or. associated (wee%ap) .or. (wee%i .ne. 99)) call abort () 
+  if (.not.allocated (wee%av) .or. associated (wee%ap) .or. (wee%i .ne. 99)) call abort ()
 
 contains
 
@@ -49,8 +49,8 @@ contains
   subroutine test_ab8 ()
     type(p_type)    :: p
     integer :: ierr
-  
-    if (.not.allocated(p%basepv)) then 
+
+    if (.not.allocated(p%basepv)) then
       allocate(p%basepv(1),stat=ierr)
     endif
     if (allocated (p%basepv) .neqv. .true.) call abort ()

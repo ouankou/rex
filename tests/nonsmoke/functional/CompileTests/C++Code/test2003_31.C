@@ -29,16 +29,6 @@ DQ: Verified problem
 
 */
 
-#if 0
-/*********START CODE**********/
-int foo(int x){
-
-        x = !foo(1);
-}
-/**********END CODE**********/
-
-#else
-
 const int y = 0;
 const int x = !0;
 
@@ -47,5 +37,3 @@ int foo(int x, int y)
    {
      x = !y;
    }
-
-#endif

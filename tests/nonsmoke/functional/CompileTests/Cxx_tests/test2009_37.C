@@ -18,11 +18,7 @@ namespace std
         {
           return __os;
        // return endl(__os);
-        }
-#if 0
-  // If this is uncommented then this test code will compile.
-     extern template ostream & endl (ostream&);
-#endif
+     }
    }
 
 class TestClass

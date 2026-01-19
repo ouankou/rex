@@ -1,1 +1,1 @@
-#pragma omp target parallel loop 
+#pragma omp target parallel loop

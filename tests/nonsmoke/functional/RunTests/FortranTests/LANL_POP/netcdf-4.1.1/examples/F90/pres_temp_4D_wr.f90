@@ -92,9 +92,9 @@ program pres_temp_4D_wr
      end do
   end do
 
-  ! Create the file. 
+  ! Create the file.
   call check( nf90_create(FILE_NAME, nf90_clobber, ncid) )
-  
+
   ! Define the dimensions. The record dimension is defined to have
   ! unlimited length - it can grow as needed. In this example it is
   ! the time dimension.
@@ -129,15 +129,15 @@ program pres_temp_4D_wr
   ! Assign units attributes to the netCDF variables.
   call check( nf90_put_att(ncid, pres_varid, UNITS, PRES_UNITS) )
   call check( nf90_put_att(ncid, temp_varid, UNITS, TEMP_UNITS) )
-  
+
   ! End define mode.
   call check( nf90_enddef(ncid) )
-  
+
   ! Write the coordinate variable data. This will put the latitudes
   ! and longitudes of our data grid into the netCDF file.
   call check( nf90_put_var(ncid, lat_varid, lats) )
   call check( nf90_put_var(ncid, lon_varid, lons) )
-  
+
   ! These settings tell netcdf to write one timestep of data. (The
   ! setting of start(4) inside the loop below tells netCDF which
   ! timestep to write.)
@@ -155,21 +155,21 @@ program pres_temp_4D_wr
      call check( nf90_put_var(ncid, temp_varid, temp_out, start = start, &
                               count = count) )
   end do
-  
+
   ! Close the file. This causes netCDF to flush all buffers and make
   ! sure your data are really written to disk.
   call check( nf90_close(ncid) )
-  
+
   print *,"*** SUCCESS writing example file ", FILE_NAME, "!"
 
 contains
   subroutine check(status)
     integer, intent ( in) :: status
-    
-    if(status /= nf90_noerr) then 
+
+    if(status /= nf90_noerr) then
       print *, trim(nf90_strerror(status))
       stop 2
     end if
-  end subroutine check  
+  end subroutine check
 end program pres_temp_4D_wr
 

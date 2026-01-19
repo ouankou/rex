@@ -1,11 +1,9 @@
-#if 1
 namespace M_ {
 	struct X {
 		int i;
 		X() : i(0) { }
 	};
-}
-#endif
+        } // namespace M_
 
 namespace N_ {
 	struct X {
@@ -15,15 +13,13 @@ namespace N_ {
 }
 int N_::X::*pdn = &N_::X::i;
 
-#if 1
 int M_::X::*pdm = &M_::X::i;
 namespace N_ {
 	int f_(int N_::X::*) { return 12; }
 }
 namespace M_ {
 	int g_(int M_::X::*) { return 1013; }
-}
-#endif
+        } // namespace M_
 
 void foobar()
    {

@@ -1,6 +1,1 @@
-#if 1
-int foobar()
-   {
-     class X;
-   }
-#endif
+int foobar() { class X; }

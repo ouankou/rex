@@ -3192,7 +3192,6 @@ forall(IndexSet::ExecPolicy<omp_taskgraph_segit, SEG_EXEC_POLICY_T>,
 
 } // namespace RAJA
 
-#if 1
 namespace RAJA {
 template <typename T> class ReduceMin<omp_reduce, T> {
   using my_type = ReduceMin<omp_reduce, T>;
@@ -3815,30 +3814,6 @@ void inclusive_inplace(const ::RAJA::omp_parallel_for_exec &, Iter begin,
   using Value = typename ::std::iterator_traits<Iter>::value_type;
   const int n = end - begin;
   const int p = omp_get_max_threads();
-
-#if 0
-  ::std::vector<Value> sums(p, Value());
-
-#pragma omp parallel
-
-  {
-    const int pid = omp_get_thread_num();
-    const int i0 = firstIndex(n, p, pid);
-    const int i1 = firstIndex(n, p, pid + 1);
-    inclusive_inplace(::RAJA::seq_exec{}, begin + i0, begin + i1, f);
-    sums[pid] = *(begin + i1 - 1);
-
-#pragma omp barrier
-
-#pragma omp single
-
-    exclusive_inplace(
-        ::RAJA::seq_exec{}, sums.data(), sums.data() + p, f, BinFn::identity);
-    for (int i = i0; i < i1; ++i) {
-      *(begin + i) = f(*(begin + i), sums[pid]);
-    }
-  }
-#endif
 }
 
 template <typename Iter, typename BinFn, typename ValueT>
@@ -3847,34 +3822,6 @@ void exclusive_inplace(const ::RAJA::omp_parallel_for_exec &, Iter begin,
   using Value = typename ::std::iterator_traits<Iter>::value_type;
   const int n = end - begin;
   const int p = omp_get_max_threads();
-
-#if 0
-  ::std::vector<Value> sums(p, v);
-
-#pragma omp parallel
-
-  {
-    const int pid = omp_get_thread_num();
-    const int i0 = firstIndex(n, p, pid);
-    const int i1 = firstIndex(n, p, pid + 1);
-    const Value init = ((pid == 0) ? v : *(begin + i0 - 1));
-
-#pragma omp barrier
-
-    exclusive_inplace(seq_exec{}, begin + i0, begin + i1, f, init);
-    sums[pid] = *(begin + i1 - 1);
-
-#pragma omp barrier
-
-#pragma omp single
-
-    exclusive_inplace(
-        seq_exec{}, sums.data(), sums.data() + p, f, BinFn::identity);
-    for (int i = i0; i < i1; ++i) {
-      *(begin + i) = f(*(begin + i), sums[pid]);
-    }
-  }
-#endif
 }
 
 template <typename Iter, typename OutIter, typename BinFn>
@@ -4478,4 +4425,3 @@ void PdVWorkRajaAPI::loopExecute() {
 }
 
 } // namespace loopsuite
-#endif

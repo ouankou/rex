@@ -35,14 +35,3 @@ main( int argc, char * argv[] )
      return 0;
    }
 /// end rose.C
-
-#if 0
-//////////////////////////////
-///
-//sample input
-
-#include <math.h>
-int i;
-
-////////////////////////////////
-#endif

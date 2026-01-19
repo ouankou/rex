@@ -7,7 +7,7 @@
 
 module mod_A
   type :: t1
-  contains 
+  contains
     procedure,nopass :: fun
   end type
 contains
@@ -21,14 +21,14 @@ module mod_B
   contains
     procedure :: sub1
   end type
-contains 
+contains
   subroutine sub1(a)
     class(t2) :: a
   end subroutine
 end module
 
 module mod_C
-contains 
+contains
   subroutine sub2(b)
     use mod_B
     type(t2) :: b

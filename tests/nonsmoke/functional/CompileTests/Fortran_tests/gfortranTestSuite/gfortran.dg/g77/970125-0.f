@@ -6,7 +6,7 @@ c
 C JCB comments:
 C g77 doesn't accept the added line "integer(kind=7) ..." --
 C it crashes!
-C 
+C
 C It's questionable that g77 DTRT with regarding to passing
 C %LOC() as an argument (thus by reference) and the new global
 C analysis.  I need to look into that further; my feeling is that
@@ -15,7 +15,7 @@ C INTEGER(KIND=7) by reference, and no more specially than that
 C (and that INTEGER(KIND=7) should be permitted as equivalent to
 C INTEGER(KIND=1), INTEGER(KIND=2), or whatever, depending on the
 C system's pointer size).
-C 
+C
 C The back end *still* has a bug here, which should be fixed,
 C because, currently, what g77 is passing to it is, IMO, correct.
 

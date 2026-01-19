@@ -57,7 +57,7 @@ C     column-major format.
       dimids(2) = x_dimid
       dimids(1) = y_dimid
 
-C     Define the variable. 
+C     Define the variable.
       retval = nf_def_var(ncid, "data", NF_INT, NDIMS, dimids, varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 

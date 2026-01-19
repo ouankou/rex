@@ -1,11 +1,6 @@
-namespace Y
-   {
-#if 0
-     typedef struct type_B typedefType_B;
-#else
-     struct type_B *Bptr;
-#endif
-   }
+namespace Y {
+struct type_B *Bptr;
+}
 
 template < typename T > class A {};
 

@@ -5868,8 +5868,6 @@ rsvp_intserv_print(const u_char *tptr, u_short obj_tlen) {
     return (parameter_length+4);
 }
 
-
-#if 1
 static int
 rsvp_obj_print (const u_char *pptr
 
@@ -5950,903 +5948,117 @@ rsvp_obj_print (const u_char *pptr
             return -1;
         hexdump=0;
 
-        switch(rsvp_obj_header->class_num) {
-#if 0
-        case 1:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 8)
+        switch (rsvp_obj_header->class_num) {
+
+        case 229:
+          switch (rsvp_obj_ctype) {
+            int subobj_type, af, subobj_len, total_subobj_len;
+
+          case 1:
+
+            if (obj_tlen < 4)
+              return -1;
+
+            total_subobj_len = obj_tlen;
+            while (total_subobj_len > 0) {
+              subobj_len = ((u_int16_t)ntohs(
+                  ((const unaligned_u_int16_t *)(obj_tptr))->val));
+              subobj_type =
+                  (((u_int16_t)ntohs(
+                      ((const unaligned_u_int16_t *)(obj_tptr + 2))->val))) >>
+                  8;
+              af = (((u_int16_t)ntohs(
+                       ((const unaligned_u_int16_t *)(obj_tptr + 2))->val))) &
+                   0x00FF;
+
+              printf("%s  Subobject Type: %s (%u), AF: %s (%u), length: %u",
+                     ident,
+                     tok2str(rsvp_obj_generalized_uni_values, "Unknown",
+                             subobj_type),
+                     subobj_type, tok2str(af_values, "Unknown", af), af,
+                     subobj_len);
+
+              switch (subobj_type) {
+              case 1:
+              case 2:
+
+                switch (af) {
+                case 1:
+                  if (subobj_len < 8)
                     return -1;
-                printf("%s  IPv4 DestAddress: %s, Protocol ID: 0x%02x",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       *(obj_tptr+sizeof(struct in_addr)));
-                printf("%s  Flags: [0x%02x], DestPort %u",
-                       ident,
-                       *(obj_tptr+5),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)));
-                obj_tlen-=8;
-                obj_tptr+=8;
-                break;
-// # 775 "./print-rsvp.c"
-            case 13:
-                if (obj_tlen < 12)
-                    return -1;
-                printf("%s  IPv4 P2MP LSP ID: %s, Tunnel ID: 0x%04x, Extended Tunnel ID: %s",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)),
-                       getname((const u_char *)(obj_tptr+8)));
-                obj_tlen-=12;
-                obj_tptr+=12;
-                break;
-            case 7:
-            case 11:
-                if (obj_tlen < 12)
-                    return -1;
-                printf("%s  IPv4 Tunnel EndPoint: %s, Tunnel ID: 0x%04x, Extended Tunnel ID: %s",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)),
-                       getname((const u_char *)(obj_tptr+8)));
-                obj_tlen-=12;
-                obj_tptr+=12;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 15:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < sizeof(struct in_addr))
-                    return -1;
-                printf("%s  IPv4 Receiver Address: %s",
-                       ident,
-                       getname((const u_char *)(obj_tptr)));
-                obj_tlen-=sizeof(struct in_addr);
-                obj_tptr+=sizeof(struct in_addr);
-                break;
-// # 825 "./print-rsvp.c"
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 195:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < sizeof(struct in_addr))
-                    return -1;
-                printf("%s  IPv4 Notify Node Address: %s",
-                       ident,
-                       getname((const u_char *)(obj_tptr)));
-                obj_tlen-=sizeof(struct in_addr);
-                obj_tptr+=sizeof(struct in_addr);
-                break;
-// # 852 "./print-rsvp.c"
-            default:
-                hexdump=1;
-            }
-            break;
-#endif
-#if 0
-        case 129:
-        case 35:
-        case 34:
-        case 16:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                while(obj_tlen >= 4 ) {
-                    printf("%s  Label: %u", ident, ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)));
-                    obj_tlen-=4;
-                    obj_tptr+=4;
-                }
-                break;
-            case 2:
-                if (obj_tlen < 4)
-                    return-1;
-                printf("%s  Generalized Label: %u",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)));
-                obj_tlen-=4;
-                obj_tptr+=4;
-                break;
-            case 3:
-                if (obj_tlen < 12)
-                    return-1;
-                printf("%s  Waveband ID: %u%s  Start Label: %u, Stop Label: %u",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)),
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+8))->val)));
-                obj_tlen-=12;
-                obj_tptr+=12;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-#endif
-
-#if 0
-        case 8:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 4)
-                    return-1;
-                printf("%s  Reservation Style: %s, Flags: [0x%02x]",
-                       ident,
-                       tok2str(rsvp_resstyle_values,
-                               "Unknown",
-                               ((u_int32_t)((u_int32_t)*((const u_int8_t *)(obj_tptr+1) + 0) << 16 | (u_int32_t)*((const u_int8_t *)(obj_tptr+1) + 1) << 8 | (u_int32_t)*((const u_int8_t *)(obj_tptr+1) + 2)))),
-                       *(obj_tptr));
-                obj_tlen-=4;
-                obj_tptr+=4;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 11:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 8)
-                    return-1;
-                printf("%s  Source Address: %s, Source Port: %u",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)));
-                obj_tlen-=8;
-                obj_tptr+=8;
-                break;
-// # 952 "./print-rsvp.c"
-            case 7:
-                if (obj_tlen < 8)
-                    return-1;
-                printf("%s  IPv4 Tunnel Sender Address: %s, LSP-ID: 0x%04x",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)));
-                obj_tlen-=8;
-                obj_tptr+=8;
-                break;
-            case 12:
-                if (obj_tlen < 16)
-                    return-1;
-                printf("%s  IPv4 Tunnel Sender Address: %s, LSP ID: 0x%04x"
-                       "%s  Sub-Group Originator ID: %s, Sub-Group ID: 0x%04x",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)),
-                       ident,
-                       getname((const u_char *)(obj_tptr+8)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+12))->val)));
-                obj_tlen-=16;
-                obj_tptr+=16;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-#endif
-#if 0
-        case 19:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                while(obj_tlen >= 4 ) {
-                    printf("%s  L3 Protocol ID: %s",
-                           ident,
-                           tok2str(ethertype_values,
-                                   "Unknown Protocol (0x%04x)",
-                                   ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val))));
-                    obj_tlen-=4;
-                    obj_tptr+=4;
-                }
-                break;
-            case 2:
-                if (obj_tlen < 12)
-                    return-1;
-                printf("%s  L3 Protocol ID: %s",
-                       ident,
-                       tok2str(ethertype_values,
-                               "Unknown Protocol (0x%04x)",
-                               ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val))));
-                printf(",%s merge capability",((*(obj_tptr+4))&0x80) ? "no" : "" );
-                printf("%s  Minimum VPI/VCI: %u/%u",
-                       ident,
-                       (((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+4))->val)))&0xfff,
-                       (((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)))&0xfff);
-                printf("%s  Maximum VPI/VCI: %u/%u",
-                       ident,
-                       (((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+8))->val)))&0xfff,
-                       (((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+10))->val)))&0xfff);
-                obj_tlen-=12;
-                obj_tptr+=12;
-                break;
-            case 3:
-                if (obj_tlen < 12)
-                    return-1;
-                printf("%s  L3 Protocol ID: %s",
-                       ident,
-                       tok2str(ethertype_values,
-                               "Unknown Protocol (0x%04x)",
-                               ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val))));
-                printf("%s  Minimum/Maximum DLCI: %u/%u, %s%s bit DLCI",
-                       ident,
-                       (((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)))&0x7fffff,
-                       (((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+8))->val)))&0x7fffff,
-                       (((((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+4))->val))>>7)&3) == 0 ) ? "10" : "",
-                       (((((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+4))->val))>>7)&3) == 2 ) ? "23" : "");
-                obj_tlen-=12;
-                obj_tptr+=12;
-                break;
-            case 4:
-                if (obj_tlen < 4)
-                    return-1;
-                printf("%s  LSP Encoding Type: %s (%u)",
-                       ident,
-                       tok2str(gmpls_encoding_values,
-                               "Unknown",
-                               *obj_tptr),
-         *obj_tptr);
-                printf("%s  Switching Type: %s (%u), Payload ID: %s (0x%04x)",
-                       ident,
-                       tok2str(gmpls_switch_cap_values,
-                               "Unknown",
-                               *(obj_tptr+1)),
-         *(obj_tptr+1),
-                       tok2str(gmpls_payload_values,
-                               "Unknown",
-                               ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val))),
-         ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val)));
-                obj_tlen-=4;
-                obj_tptr+=4;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-#endif
-#if 0
-        case 21:
-        case 20:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                while(obj_tlen >= 4 ) {
-                    printf("%s  Subobject Type: %s, length %u",
-                           ident,
-                           tok2str(rsvp_obj_xro_values,
-                                   "Unknown %u",
-                                   ((*obj_tptr)&0x7f)),
-                           *(obj_tptr+1));
-
-                    if (*(obj_tptr+1) == 0) {
-                        printf("%s  ERROR: zero length ERO subtype",ident);
-                        break;
-                    }
-
-                    switch(((*obj_tptr)&0x7f)) {
-                    case 1:
-                        printf(", %s, %s/%u, Flags: [%s]",
-                               ((*obj_tptr)&0x80) ? "Loose" : "Strict",
-                               getname((const u_char *)(obj_tptr+2)),
-                               *(obj_tptr+6),
-                               bittok2str(rsvp_obj_rro_flag_values,
-                                   "none",
-                                   *(obj_tptr+7)));
-                    break;
-                    case 3:
-                        printf(", Flags: [%s] (%#x), Class-Type: %s (%u), %u",
-                               bittok2str(rsvp_obj_rro_label_flag_values,
-                                   "none",
-                                   *(obj_tptr+2)),
-                               *(obj_tptr+2),
-                               tok2str(rsvp_ctype_values,
-                                       "Unknown",
-                                       *(obj_tptr+3) + 256*21),
-                               *(obj_tptr+3),
-                               ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)));
-                    }
-                    obj_tlen-=*(obj_tptr+1);
-                    obj_tptr+=*(obj_tptr+1);
-                }
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 22:
-            switch(rsvp_obj_ctype) {
-            case 1:
-            case 2:
-                if (obj_tlen < 8)
-                    return-1;
-                printf("%s  Source Instance: 0x%08x, Destination Instance: 0x%08x",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)));
-                obj_tlen-=8;
-                obj_tptr+=8;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 131:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 8)
-                    return-1;
-                printf("%s  Restart  Time: %ums, Recovery Time: %ums",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)));
-                obj_tlen-=8;
-                obj_tptr+=8;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 207:
-            switch(rsvp_obj_ctype) {
-            case 7:
-                if (obj_tlen < 4)
-                    return-1;
-                namelen = *(obj_tptr+3);
-                if (obj_tlen < 4+namelen)
-                    return-1;
-                printf("%s  Session Name: ", ident);
-                for (i = 0; i < namelen; i++)
-                    safeputchar(*(obj_tptr+4+i));
-                printf("%s  Setup Priority: %u, Holding Priority: %u, Flags: [%s] (%#x)",
-                       ident,
-                       (int)*obj_tptr,
-                       (int)*(obj_tptr+1),
-                       bittok2str(rsvp_session_attribute_flag_values,
-                                  "none",
-                                  *(obj_tptr+2)),
-                       *(obj_tptr+2));
-                obj_tlen-=4+*(obj_tptr+3);
-                obj_tptr+=4+*(obj_tptr+3);
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-#endif
-
-#if 1
- case 229:
-            switch(rsvp_obj_ctype) {
-  int subobj_type,af,subobj_len,total_subobj_len;
-
-            case 1:
-
-                if (obj_tlen < 4)
-                    return-1;
-
-
-  total_subobj_len = obj_tlen;
-                while(total_subobj_len > 0) {
-                    subobj_len = ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr))->val));
-                    subobj_type = (((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val)))>>8;
-                    af = (((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val)))&0x00FF;
-
-                    printf("%s  Subobject Type: %s (%u), AF: %s (%u), length: %u",
-                           ident,
-                           tok2str(rsvp_obj_generalized_uni_values, "Unknown", subobj_type),
-                           subobj_type,
-                           tok2str(af_values, "Unknown", af), af,
-                           subobj_len);
-
-                    switch(subobj_type) {
-                    case 1:
-                    case 2:
-
-                        switch(af) {
-                        case 1:
-                            if (subobj_len < 8)
-                                return -1;
-                            printf("%s    UNI IPv4 TNA address: %s",
-                                   ident, getname((const u_char *)(obj_tptr+4)));
-                            break;
-// # 1210 "./print-rsvp.c"
-                        case 3:
-                            if (subobj_len) {
-
-                                hexdump=1;
-                            }
-                            break;
-                        }
-                        break;
-
-                    case 3:
-                        if (subobj_len) {
-
-                            hexdump=1;
-                        }
-                        break;
-
-                    case 4:
-                        if (subobj_len < 16) {
-                            return -1;
-                        }
-
-                        printf("%s    U-bit: %x, Label type: %u, Logical port id: %u, Label: %u",
-                               ident,
-                               ((((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)))>>31),
-                               ((((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)))&0xFF),
-                               ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+8))->val)),
-                               ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+12))->val)));
-                        break;
-
-                    case 5:
-                        if (subobj_len < 8) {
-                            return -1;
-                        }
-
-                        printf("%s    Service level: %u",
-                               ident, (((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)))>>24);
-                        break;
-
-                    default:
-                        hexdump=1;
-                        break;
-                    }
-                    total_subobj_len-=subobj_len;
-                    obj_tptr+=subobj_len;
-                    obj_tlen+=subobj_len;
-  }
-
-                if (total_subobj_len) {
-
-                    hexdump=1;
-                }
-                break;
-
-            default:
-                hexdump=1;
-            }
-            break;
-#endif
-
-#if 0
-        case 3:
-            switch(rsvp_obj_ctype) {
-            case 3:
-            case 1:
-                if (obj_tlen < 8)
-                    return-1;
-                printf("%s  Previous/Next Interface: %s, Logical Interface Handle: 0x%08x",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)));
-                obj_tlen-=8;
-                obj_tptr+=8;
-                if (obj_tlen)
-                    hexdump=1;
-                break;
-// # 1297 "./print-rsvp.c"
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 5:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 4)
-                    return-1;
-                printf("%s  Refresh Period: %ums",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)));
-                obj_tlen-=4;
-                obj_tptr+=4;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-
-        case 12:
-        case 13:
-        case 9:
-            switch(rsvp_obj_ctype) {
-            case 2:
-                if (obj_tlen < 4)
-                    return-1;
-                printf("%s  Msg-Version: %u, length: %u",
-                       ident,
-                       (*obj_tptr & 0xf0) >> 4,
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val))<<2);
-                obj_tptr+=4;
-                obj_tlen-=4;
-
-                while (obj_tlen >= 4) {
-                    intserv_serv_tlen=((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val))<<2;
-                    printf("%s  Service Type: %s (%u), break bit %s set, Service length: %u",
-                           ident,
-                           tok2str(rsvp_intserv_service_type_values,"unknown",*(obj_tptr)),
-                           *(obj_tptr),
-                           (*(obj_tptr+1)&0x80) ? "" : "not",
-                           intserv_serv_tlen);
-
-                    obj_tptr+=4;
-                    obj_tlen-=4;
-
-                    while (intserv_serv_tlen>=4) {
-                        processed = rsvp_intserv_print(obj_tptr, obj_tlen);
-                        if (processed == 0)
-                            break;
-                        obj_tlen-=processed;
-                        intserv_serv_tlen-=processed;
-                        obj_tptr+=processed;
-                    }
-                }
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 10:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 8)
-                    return-1;
-                printf("%s  Source Address: %s, Source Port: %u",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)));
-                obj_tlen-=8;
-                obj_tptr+=8;
-                break;
-// # 1418 "./print-rsvp.c"
-            case 7:
-                if (obj_tlen < 8)
-                    return-1;
-                printf("%s  Source Address: %s, LSP-ID: 0x%04x",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)));
-                obj_tlen-=8;
-                obj_tptr+=8;
-                break;
-            case 12:
-                if (obj_tlen < 16)
-                    return-1;
-                printf("%s  IPv4 Tunnel Sender Address: %s, LSP ID: 0x%04x"
-                       "%s  Sub-Group Originator ID: %s, Sub-Group ID: 0x%04x",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val)),
-                       ident,
-                       getname((const u_char *)(obj_tptr+8)),
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+12))->val)));
-                obj_tlen-=16;
-                obj_tptr+=16;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 205:
-
-            obj_ptr.rsvp_obj_frr = (const struct rsvp_obj_frr_t *)obj_tptr;
-            bw.i = ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_frr->bandwidth))->val));
-
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < sizeof(struct rsvp_obj_frr_t))
-                    return-1;
-                printf("%s  Setup Priority: %u, Holding Priority: %u, Hop-limit: %u, Bandwidth: %.10g Mbps",
-                       ident,
-                       (int)obj_ptr.rsvp_obj_frr->setup_prio,
-                       (int)obj_ptr.rsvp_obj_frr->hold_prio,
-                       (int)obj_ptr.rsvp_obj_frr->hop_limit,
-                        bw.f*8/1000000);
-                printf("%s  Include-any: 0x%08x, Exclude-any: 0x%08x, Include-all: 0x%08x",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_frr->include_any))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_frr->exclude_any))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_frr->include_all))->val)));
-                obj_tlen-=sizeof(struct rsvp_obj_frr_t);
-                obj_tptr+=sizeof(struct rsvp_obj_frr_t);
-                break;
-
-            case 7:
-                if (obj_tlen < 16)
-                    return-1;
-                printf("%s  Setup Priority: %u, Holding Priority: %u, Hop-limit: %u, Bandwidth: %.10g Mbps",
-                       ident,
-                       (int)obj_ptr.rsvp_obj_frr->setup_prio,
-                       (int)obj_ptr.rsvp_obj_frr->hold_prio,
-                       (int)obj_ptr.rsvp_obj_frr->hop_limit,
-                        bw.f*8/1000000);
-                printf("%s  Include Colors: 0x%08x, Exclude Colors: 0x%08x",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_frr->include_any))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_frr->exclude_any))->val)));
-                obj_tlen-=16;
-                obj_tptr+=16;
-                break;
-
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 63:
-            switch(rsvp_obj_ctype) {
-            case 7:
-                while(obj_tlen >= 8) {
-                    printf("%s  PLR-ID: %s, Avoid-Node-ID: %s",
-                           ident,
-                           getname((const u_char *)(obj_tptr)),
-                           getname((const u_char *)(obj_tptr+4)));
-                    obj_tlen-=8;
-                    obj_tptr+=8;
-                }
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 66:
-        case 125:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                printf("%s  CT: %u",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val))&0x7);
-                obj_tlen-=4;
-                obj_tptr+=4;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 6:
-            switch(rsvp_obj_ctype) {
-            case 3:
-            case 1:
-                if (obj_tlen < 8)
-                    return-1;
-                error_code=*(obj_tptr+5);
-                error_value=((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+6))->val));
-                printf("%s  Error Node Address: %s, Flags: [0x%02x]%s  Error Code: %s (%u)",
-                       ident,
-                       getname((const u_char *)(obj_tptr)),
-                       *(obj_tptr+4),
-                       ident,
-                       tok2str(rsvp_obj_error_code_values,"unknown",error_code),
-                       error_code);
-                switch (error_code) {
-                case 24:
-                    printf(", Error Value: %s (%u)",
-                           tok2str(rsvp_obj_error_code_routing_values,"unknown",error_value),
-                           error_value);
-                    break;
-                case 28:
-                case 125:
-                    printf(", Error Value: %s (%u)",
-                           tok2str(rsvp_obj_error_code_diffserv_te_values,"unknown",error_value),
-                           error_value);
-                    break;
-                default:
-                    printf(", Unknown Error Value (%u)", error_value);
-                    break;
-                }
-                obj_tlen-=8;
-                obj_tptr+=8;
-                break;
-// # 1587 "./print-rsvp.c"
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 204:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 4)
-                    return-1;
-                padbytes = ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr+2))->val));
-                printf("%s  TLV count: %u, padding bytes: %u",
-                       ident,
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr))->val)),
-                       padbytes);
-                obj_tlen-=4;
-                obj_tptr+=4;
-
-                while(obj_tlen >= 2 + padbytes) {
-                    printf("%s    %s TLV (0x%02x), length: %u",
-                           ident,
-                           tok2str(rsvp_obj_prop_tlv_values,"unknown",*obj_tptr),
-                           *obj_tptr,
-                           *(obj_tptr+1));
-                    if (obj_tlen < *(obj_tptr+1))
-                        return-1;
-                    if (*(obj_tptr+1) < 2)
-                        return -1;
-                    print_unknown_data(obj_tptr+2,"\n\t\t",*(obj_tptr+1)-2);
-                    obj_tlen-=*(obj_tptr+1);
-                    obj_tptr+=*(obj_tptr+1);
-                }
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 23:
-        case 24:
-        case 25:
-            switch(rsvp_obj_ctype) {
-            case 1:
-            case 2:
-                if (obj_tlen < 8)
-                    return-1;
-                printf("%s  Flags [0x%02x], epoch: %u",
-                       ident,
-                       *obj_tptr,
-                       ((u_int32_t)((u_int32_t)*((const u_int8_t *)(obj_tptr+1) + 0) << 16 | (u_int32_t)*((const u_int8_t *)(obj_tptr+1) + 1) << 8 | (u_int32_t)*((const u_int8_t *)(obj_tptr+1) + 2))));
-                obj_tlen-=4;
-                obj_tptr+=4;
-
-                while(obj_tlen >= 4) {
-                    printf("%s    Message-ID 0x%08x (%u)",
-                           ident,
-                           ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)),
-                           ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)));
-                    obj_tlen-=4;
-                    obj_tptr+=4;
-                }
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 4:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < sizeof(struct rsvp_obj_integrity_t))
-                    return-1;
-                obj_ptr.rsvp_obj_integrity = (const struct rsvp_obj_integrity_t *)obj_tptr;
-                printf("%s  Key-ID 0x%04x%08x, Sequence 0x%08x%08x, Flags [%s]",
-                       ident,
-                       ((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_ptr.rsvp_obj_integrity->key_id))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_integrity->key_id+2))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_integrity->sequence))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_integrity->sequence+4))->val)),
-                       bittok2str(rsvp_obj_integrity_flag_values,
-                                  "none",
-                                  obj_ptr.rsvp_obj_integrity->flags));
-                printf("%s  MD5-sum 0x%08x%08x%08x%08x ",
-                       ident,
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_integrity->digest))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_integrity->digest+4))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_integrity->digest+8))->val)),
-                       ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_ptr.rsvp_obj_integrity->digest+12))->val)));
-
-
-                sigcheck = signature_verify(pptr, plen, (unsigned char *)obj_ptr. rsvp_obj_integrity->digest);
-
-
-
-
-                printf(" (%s)", tok2str(signature_check_values, "Unknown", sigcheck));
-
-                obj_tlen+=sizeof(struct rsvp_obj_integrity_t);
-                obj_tptr+=sizeof(struct rsvp_obj_integrity_t);
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 196:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 4)
-                    return-1;
-                printf("%s  Flags [%s]", ident,
-                       bittok2str(rsvp_obj_admin_status_flag_values, "none",
-                                  ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val))));
-                obj_tlen-=4;
-                obj_tptr+=4;
-                break;
-            default:
-                hexdump=1;
-            }
-            break;
-
-        case 36:
-            switch(rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 4)
-                    return-1;
-                action = (((u_int16_t)ntohs(((const unaligned_u_int16_t *)(obj_tptr))->val))>>8);
-
-                printf("%s  Action: %s (%u), Label type: %u", ident,
-                       tok2str(rsvp_obj_label_set_action_values, "Unknown", action),
-                       action, ((((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)) & 0x7F)));
-
-                switch (action) {
-                case 2:
+                  printf("%s    UNI IPv4 TNA address: %s", ident,
+                         getname((const u_char *)(obj_tptr + 4)));
+                  break;
+                  // # 1210 "./print-rsvp.c"
                 case 3:
+                  if (subobj_len) {
 
-
-      if (obj_tlen < 12)
-   return -1;
-      printf("%s  Start range: %u, End range: %u", ident,
-                           ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+4))->val)),
-                           ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr+8))->val)));
-      obj_tlen-=12;
-      obj_tptr+=12;
-                    break;
-
-                default:
-                    obj_tlen-=4;
-                    obj_tptr+=4;
-                    subchannel = 1;
-                    while(obj_tlen >= 4 ) {
-                        printf("%s  Subchannel #%u: %u", ident, subchannel,
-                               ((u_int32_t)ntohl(((const unaligned_u_int32_t *)(obj_tptr))->val)));
-                        obj_tptr+=4;
-                        obj_tlen-=4;
-                        subchannel++;
-                    }
-                    break;
+                    hexdump = 1;
+                  }
+                  break;
                 }
                 break;
-            default:
-                hexdump=1;
-            }
 
-        case 50:
-            switch (rsvp_obj_ctype) {
-            case 1:
-                if (obj_tlen < 4)
-                    return-1;
-                printf("%s  Sub-LSP destination address: %s",
-                       ident, getname((const u_char *)(obj_tptr)));
+              case 3:
+                if (subobj_len) {
 
-                obj_tlen-=4;
-                obj_tptr+=4;
+                  hexdump = 1;
+                }
                 break;
-// # 1773 "./print-rsvp.c"
-            default:
-                hexdump=1;
+
+              case 4:
+                if (subobj_len < 16) {
+                  return -1;
+                }
+
+                printf(
+                    "%s    U-bit: %x, Label type: %u, Logical port id: %u, "
+                    "Label: %u",
+                    ident,
+                    ((((u_int32_t)ntohl(
+                         ((const unaligned_u_int32_t *)(obj_tptr + 4))
+                             ->val))) >>
+                     31),
+                    ((((u_int32_t)ntohl(
+                         ((const unaligned_u_int32_t *)(obj_tptr + 4))->val))) &
+                     0xFF),
+                    ((u_int32_t)ntohl(
+                        ((const unaligned_u_int32_t *)(obj_tptr + 8))->val)),
+                    ((u_int32_t)ntohl(
+                        ((const unaligned_u_int32_t *)(obj_tptr + 12))->val)));
+                break;
+
+              case 5:
+                if (subobj_len < 8) {
+                  return -1;
+                }
+
+                printf(
+                    "%s    Service level: %u", ident,
+                    (((u_int32_t)ntohl(
+                        ((const unaligned_u_int32_t *)(obj_tptr + 4))->val))) >>
+                        24);
+                break;
+
+              default:
+                hexdump = 1;
+                break;
+              }
+              total_subobj_len -= subobj_len;
+              obj_tptr += subobj_len;
+              obj_tlen += subobj_len;
             }
 
+            if (total_subobj_len) {
 
-
-
-
-
-        case 7:
-        case 14:
-        case 130:
-        case 37:
-        default:
-            if (gndo->ndo_vflag <= 1)
-                print_unknown_data(obj_tptr,"\n\t    ",obj_tlen);
+              hexdump = 1;
+            }
             break;
-#endif
+
+          default:
+            hexdump = 1;
+          }
+          break;
         }
 
         if (gndo->ndo_vflag > 1 || hexdump==1)
@@ -6861,5 +6073,3 @@ trunc:
     printf("\n\t\t packet exceeded snapshot");
     return -1;
 }
-#endif
-

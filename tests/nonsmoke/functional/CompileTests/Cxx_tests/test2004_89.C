@@ -12,15 +12,10 @@
 
 class use_count_is_zero // : public std::exception
    {
-     public:
-#if 0
-       // Defining the default constructor causes the program to compile properly
-          use_count_is_zero() {}
-#endif
-          virtual char const * what()
-             {
-               return ""; // boost::use_count_is_zero";
-             }
+public:
+  virtual char const *what() {
+    return ""; // boost::use_count_is_zero";
+  }
    };
 
 class counted_base

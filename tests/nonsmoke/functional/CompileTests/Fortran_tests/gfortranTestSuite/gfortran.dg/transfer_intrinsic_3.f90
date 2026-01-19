@@ -17,7 +17,7 @@ contains
     integer, intent(in) :: n
     if ((n .lt. 2) .and. (len (uri) .ne. 0)) then
       call abort
-    else IF ((n .ge. 2) .and. (len (uri) .ne. n - 1)) then 
+    else IF ((n .ge. 2) .and. (len (uri) .ne. n - 1)) then
       call abort
     end if
   end subroutine

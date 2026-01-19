@@ -90,7 +90,7 @@ foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
   rex_lock_test_for_input(testInterproceduralCFG_Cxx_${file_to_test} ${file_to_test})
 
   set_tests_properties(testInterproceduralCFG_Cxx_${file_to_test} PROPERTIES DEPENDS testStaticCFG_Cxx_${file_to_test} LABELS STATICCFGTEST)
- 
+
 
 endforeach()
 
@@ -151,7 +151,7 @@ foreach(input_file ${EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS})
       -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
 
   set_tests_properties(testStaticCFG_C_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_C_${file_to_test} LABELS STATICCFGTEST)
- 
+
 
 endforeach()
 

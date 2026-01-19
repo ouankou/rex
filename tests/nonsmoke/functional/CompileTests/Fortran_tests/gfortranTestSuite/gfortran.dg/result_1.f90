@@ -6,7 +6,7 @@
 
 function f() result(r)
 real, parameter :: r = 5.0    ! { dg-error "attribute conflicts" }
-end function 
+end function
 
 function g() result(s)
 real :: a,b,c

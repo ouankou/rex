@@ -1,10 +1,3 @@
-#if 0
-class X
-   {
-     public:
-          int x;
-   };
-#endif
 
 namespace X
    {

@@ -169,7 +169,7 @@ program test_int
    i8 = int(z'0011', ik8)
    if (i1 /= 17_ik1 .or. i2 /= 17_ik2) call abort
    if (i4 /= 17_ik4 .or. i8 /= 17_ik8) call abort
-   
+
 end program test_int
 
 ! { dg-final { cleanup-modules "mykinds" } }

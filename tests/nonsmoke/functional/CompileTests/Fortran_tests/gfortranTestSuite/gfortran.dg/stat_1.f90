@@ -3,7 +3,7 @@
 ! { dg-options "-std=gnu" }
   character(len=*), parameter :: f = "testfile"
   integer :: s1(13), r1, s2(13), r2, s3(13), r3, d(13), rd
-  
+
   open (10,file=f)
   write (10,"(A)") "foo"
   close (10,status="keep")

@@ -43,5 +43,5 @@ subroutine complex_test
   complex c1
   complex c2(20,20)
   if (c1 .eq. c1) call abort
-  if (c2(1,1) .eq. c2(1,1)) call abort 
+  if (c2(1,1) .eq. c2(1,1)) call abort
 end subroutine complex_test

@@ -1,49 +1,3 @@
-#if 0
-For the original interface block
-
-          interface
-countarray                                                             
-             module procedure c1, c2,
-cn                                                   
-          end interface          
-
-The unparsed output  has only
-
-INTERFACE countarray
-MODULE PROCEDURE c1
-END INTERFACE
-
-
-when running the attached example like this:
-
---
-/disks/utke/Apps/rose_inst/bin/testTranslator -rose:Fortran
--rose:skipfinalCompileStep -rose:output carray.r2f.f95 carray.f95
-procedure_name = c1
-Fixup functionName = c1 in interfaceName = countarray
-Found symbol for function = c1 in interfaceName = countarray
-Found symbol for function = c2 in interfaceName = countarray
-Found symbol for function = cn in interfaceName = countarray
-SgAggregateInitializer::get_type(): default case
-SgAggregateInitializer::get_type(): default case
-Warning: encountered a case where an array type did not decay to a
-pointer type
-  parentExpr = 0x2aaaacdb8940 = SgAssignOp, expression = 0x2aaaac8fe3b0
-= SgVarRefExp, parentType = 0x2aaaaca77ac0 = SgArrayType, type =
-0x2aaaaca77ac0 = SgArrayType
-SgAggregateInitializer::get_type(): default case
-Warning: encountered a case where an array type did not decay to a
-pointer type
-  parentExpr = 0x2aaaacdb89a8 = SgAssignOp, expression = 0x2aaaac8fe408
-= SgVarRefExp, parentType = 0x2aaaaca77b30 = SgArrayType, type =
-0x2aaaaca77b30 = SgArrayType
-SgAggregateInitializer::get_type(): default case
-SgAggregateInitializer::get_type(): default case
---
-
-jean
-
-#endif
 
 
         module carray
@@ -90,6 +44,6 @@ jean
          else
            print *, "failed"
          end if
-        end program mc  
+        end program mc
 
 

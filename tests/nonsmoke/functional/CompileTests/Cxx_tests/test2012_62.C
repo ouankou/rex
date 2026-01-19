@@ -5,7 +5,6 @@ class A
           A ();
    };
 
-#if 1
 // A foo();
 
 A foo ()
@@ -14,8 +13,4 @@ A foo ()
   // int data2;
   // return A ( data1, data2 );
      return A();
-   }
-#endif
-
-
-
+}

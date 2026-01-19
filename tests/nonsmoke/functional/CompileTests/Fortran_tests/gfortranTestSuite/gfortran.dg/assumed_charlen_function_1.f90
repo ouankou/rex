@@ -29,7 +29,7 @@ END MODULE
 ! 5.1.1.5 of the Standard: A function name declared with an asterisk
 ! char-len-param shall not be array-valued, pointer-valued, recursive
 ! or pure
-! 
+!
 ! PR20852
 RECURSIVE FUNCTION TEST() ! { dg-error "cannot be recursive" }
  CHARACTER(LEN=*) :: TEST

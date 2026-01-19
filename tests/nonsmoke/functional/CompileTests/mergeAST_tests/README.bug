@@ -1,10 +1,10 @@
-DQ (11/6/2016): There is a bug that is unique to the mergeAST_tests 
-regression tests.  The problm is a memory error caused by some 
+DQ (11/6/2016): There is a bug that is unique to the mergeAST_tests
+regression tests.  The problm is a memory error caused by some
 error in the way that some IR nodes (likely SgStringType) are
 deleted within the mergeAST mechanism.
 
-The temporary fix is to no call SgStringVal::get_type() function after 
-the astMerge.  So this is suppressed where it occurse in the AST consistancy 
+The temporary fix is to no call SgStringVal::get_type() function after
+the astMerge.  So this is suppressed where it occurse in the AST consistancy
 tests (see the TestExpressionTypes::visit() function in ASTConsistancyTests.C).
 
 The problem can be demonstrated by setting the memory pool size to "1"

@@ -86,12 +86,6 @@ int extract_credentials(const char *url, char **name, char **pw,
     strncpy(*result_url, url, pos - url);
     strncpy(*result_url + (pos - url), end + 1, url_len - (pos - url));
 
-#if 0
-		fprintf(stderr, "URL without username and password: %s:%d\n", sURL, url_len );
-		fprintf(stderr, "URL username and password: %s:%d\n", sUP, up_len);
-		fprintf(stderr, "URL username: %s:%d\n", sUser, mid_len);
-		fprintf(stderr, "URL password: %s:%d\n", sPassword, midpas_len);
-#endif
     (*result_url)[url_len] = '\0';
 
     return OC_NOERR;
@@ -216,25 +210,6 @@ int read_dodsrc(char *in_file_name) {
 
           pstructProxy->port = 80;
         }
-#if 0
-				pstructProxy->host[v_len] = '\0';
-
-				pstructProxy->port = atoi(v);
-
-				s_len = strlen(v);
-				pstructProxy->user = malloc(sizeof(char) * s_len + 1);
-				if (!pstructProxy->user)
-					return OC_ENOMEM;
-				strncpy(pstructProxy->user, v, s_len);
-				pstructProxy->user[s_len] = '\0';
-
-				p_len = strlen(v);
-				pstructProxy->password = malloc(sizeof(char) * p_len + 1);
-				if (!pstructProxy->password)
-					return OC_ENOMEM;
-				strncpy(pstructProxy->password, v, p_len);
-				pstructProxy->password[p_len] = '\0';
-#endif
         if (ocdebug > 1) {
           oc_log(LOGNOTE, "host name: %s", pstructProxy->host);
           oc_log(LOGNOTE, "user name: %s", pstructProxy->user);

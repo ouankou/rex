@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! Test the fix for comment #8 of PR41478, in which copying
 ! allocatable scalar components caused a segfault.
-! 
+!
 ! Contributed by Tobias Burnus <burnus@gcc.gnu.org>
 !
 program main

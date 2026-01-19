@@ -16,18 +16,6 @@
 #ifndef _STL_ALGOBASE_H
 #define _STL_ALGOBASE_H 1
 
-#if 0
-#include <bits/c++config.h>
-
-#include <bits/functexcept.h>
-
-#include <bits/cpp_type_traits.h>
-
-#include <ext/type_traits.h>
-
-#include <ext/numeric_traits.h>
-#endif
-
 // #include <bits/stl_pair.h>
 
 #ifndef _STL_PAIR_H
@@ -49,23 +37,6 @@
 // #include <debug/debug.h>
 // #include <bits/move.h> // For std::swap and _GLIBCXX_MOVE
 
-#endif
-
-#if 0
-#include <ext/atomicity.h>
-
-#include <iosfwd> // std::basic_ostream
-
-#include <ext/concurrence.h>
-
-#include <bits/functexcept.h>
-
-#include <bits/stl_function.h> // std::less
-#include <debug/debug.h>
-
-#include <tr1/type_traits>
-
-#include <tr1/shared_ptr.h>
 #endif
 
 #endif // _GLIBCXX_TR1_MEMORY

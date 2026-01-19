@@ -19,8 +19,6 @@ const char *
 test_dir_matches_p()
    {
 
-#error "DEAD CODE!"
-
      struct {
           char *dirlist[3];
           char *dir;

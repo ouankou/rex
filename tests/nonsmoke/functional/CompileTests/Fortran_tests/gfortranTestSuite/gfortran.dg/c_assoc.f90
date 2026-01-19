@@ -36,7 +36,7 @@ contains
     type(c_ptr), value :: my_c_ptr_1
     type(c_ptr), value :: my_c_ptr_2
     integer(c_int), value :: num_ptrs
-    
+
     if(num_ptrs .eq. 1) then
        if(c_associated(my_c_ptr_1)) then
           test_c_assoc_2 = 1
@@ -64,7 +64,7 @@ contains
        call abort()
     endif
   end subroutine verify_assoc
-  
+
 end module c_assoc
 
 ! { dg-final { cleanup-modules "c_assoc" } }

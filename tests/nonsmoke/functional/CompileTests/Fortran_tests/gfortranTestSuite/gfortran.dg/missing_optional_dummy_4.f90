@@ -2,7 +2,7 @@
 ! { dg-options "-fdump-tree-original" }
 !
 ! PR fortran/34848
-! 
+!
 ! The "0" for the string size of the absent optional
 ! argument was missing.
 !
@@ -18,7 +18,7 @@ contains
    implicit none
    character, optional  :: genloc
    real :: tm_doit
-   tm_doit = 42.0 
+   tm_doit = 42.0
  end function tm_doit
 end module krmod
 

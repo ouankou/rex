@@ -31,7 +31,7 @@ mergeTest_121.C
 )
 
 if(NOT ROSE_USING_GCC_VERSION_LATER_6_1 EQUAL 1)
-set(TESTCODES ${TESTCODES} 
+set(TESTCODES ${TESTCODES}
 mergeTest_111.C
 )
 endif()

@@ -83,11 +83,5 @@ int main()
       dthydroLoc.min(t);
       });
 
-#if 0
-  double sum =0.0; 
-  forallN<seq_exec>(is, [=,&sum] (int i) {
-      sum = a[i] + i + 0.1;
-      });
-#endif
   return 0;
 }

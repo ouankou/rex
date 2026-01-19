@@ -23,7 +23,7 @@ contains
   complex function MY_CMPLX (re, im)
     real, intent(in) :: re
     real, intent(in), optional :: im
-    if (present (im)) then 
+    if (present (im)) then
       MY_CMPLX = cmplx (re, im)
     else
       MY_CMPLX = cmplx (re, 0.0)

@@ -13,5 +13,5 @@ integer(kind=(int_t)) function test4() ! This failed before patch
   test4 = 345
 end function test4
 
- 
+
 end program test

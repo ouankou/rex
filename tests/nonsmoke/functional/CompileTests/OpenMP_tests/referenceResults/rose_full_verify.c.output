@@ -1,5 +1,5 @@
-#pragma omp parallel 
+#pragma omp parallel
 #pragma omp for  private(i,k)
-#pragma omp parallel 
+#pragma omp parallel
 #pragma omp for  private(i) reduction(+ : j)
-#pragma omp parallel 
+#pragma omp parallel

@@ -5,9 +5,9 @@
 !BOP
 ! !MODULE: xdisplay
 ! !DESCRIPTION:
-!  This module contains routines for opening an xdisplay and 
+!  This module contains routines for opening an xdisplay and
 !  viewing a field while the simulation is running.  this version
-!  relies on an unsupported library called fix (fortran interface 
+!  relies on an unsupported library called fix (fortran interface
 !  to X).
 !
 ! !REVISION HISTORY:
@@ -29,7 +29,7 @@
    use global_reductions, only: global_minval, global_maxval
    use gather_scatter, only: gather_global
    use prognostic, only: max_blocks_clinic
-   use grid, only: KMT, KMU, CALCT, CALCU 
+   use grid, only: KMT, KMU, CALCT, CALCU
    use exit_mod, only: sigAbort, exit_pop
 
    implicit none
@@ -96,16 +96,16 @@
      nwsclrs = 41,                  &
      ncmclrs = nclrs - nwsclrs
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
      i,j,ii,             &! dummy loop counters
      nml_error            ! namelist i/o error flag
 
-   real (r4), dimension(nclrs) :: & 
+   real (r4), dimension(nclrs) :: &
      red, green, blue,            &! colormap values
      r1,g1,b1,                    &
      r2,g2,b2
 
-   integer (int_kind), dimension(:,:), allocatable :: IMAGEC 
+   integer (int_kind), dimension(:,:), allocatable :: IMAGEC
 
    integer (int_kind) fixcreatedisplay
    external fixcreatedisplay
@@ -288,7 +288,7 @@
 
 ! !DESCRIPTION:
 !  Computes image from two input fields and sends it to the
-!  FIX routine for display. 
+!  FIX routine for display.
 !
 ! !REVISION HISTORY:
 !  same as module
@@ -313,11 +313,11 @@
 
    integer (int_kind), dimension(size(FIELD1,dim=1),    &
                                  size(FIELD1,dim=2),    &
-                                 size(FIELD1,dim=3)) :: & 
-     IMAGE              ! integer array holding distributed image  
+                                 size(FIELD1,dim=3)) :: &
+     IMAGE              ! integer array holding distributed image
 
-   integer (int_kind), dimension(:,:), allocatable :: & 
-     GIMAGE             ! integer array holding global image  
+   integer (int_kind), dimension(:,:), allocatable :: &
+     GIMAGE             ! integer array holding global image
 
    integer (int_kind), dimension(:,:), allocatable :: &
      IMAGEC             ! array holding zoomed stack of 2 images

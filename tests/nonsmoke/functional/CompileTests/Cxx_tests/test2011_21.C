@@ -21,14 +21,11 @@ class GenericHashTable
 
 class GenericSpecialization : public GenericHashTable
    {
-     public:
-#if 1
-       // Name qualification is required for since Iterator is not visible (which is different than being hidden).
-       // This requires 1 name qualification.
-         class MyIterator : public Inner_GenericHashTable::Iterator
-             {
-               public:
-                    MyIterator() {}
-             };
-#endif
+public:
+  // Name qualification is required for since Iterator is not visible (which is
+  // different than being hidden). This requires 1 name qualification.
+  class MyIterator : public Inner_GenericHashTable::Iterator {
+  public:
+    MyIterator() {}
+  };
    };

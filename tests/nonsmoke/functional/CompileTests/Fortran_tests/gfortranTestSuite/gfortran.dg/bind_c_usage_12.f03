@@ -10,7 +10,7 @@ subroutine dummy1(a,b)
   interface
     function b() bind(c,name="jakl") ! { dg-error "no binding name is allowed" }
 !     use iso_c_binding
-!     integer(c_int) :: b       
+!     integer(c_int) :: b
     end function b ! { dg-error "Expecting END INTERFACE" }
   end interface
   interface
@@ -59,5 +59,5 @@ contains
   subroutine int1() bind(c, name="mm") ! { dg-error "No binding name is allowed" }
   end subroutine int1 ! { dg-error "Expecting END PROGRAM statement" }
   integer(c_int) function int2() bind(c, name="mmm") ! { dg-error "No binding name is allowed" }
-  end function int2 ! { dg-error "Expecting END PROGRAM statement" } 
+  end function int2 ! { dg-error "Expecting END PROGRAM statement" }
 end program

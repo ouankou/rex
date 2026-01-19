@@ -18,7 +18,7 @@ END SUBROUTINE proc
 PROGRAM main
   IMPLICIT NONE
 
-  BLOCK 
+  BLOCK
     IMPLICIT INTEGER(a-z) ! { dg-error "not allowed inside of BLOCK" }
     INTEGER :: a, b, c, d
     INTEGER :: stfunc

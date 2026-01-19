@@ -8,11 +8,7 @@ typedef int __gthread_mutex_t;
 
 class __mutex 
    {
-     private:
-#if 1
-          __gthread_mutex_t _M_mutex = __GTHREAD_MUTEX_INIT;
-#else
-          __gthread_mutex_t _M_mutex;
-#endif
+private:
+  __gthread_mutex_t _M_mutex = __GTHREAD_MUTEX_INIT;
   };
 

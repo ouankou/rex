@@ -9,18 +9,15 @@ void XXX_bin_print()
           case 400:
                if (1) 42;
 //        break;
-     case 401:
-#if 1
-//   case 402:
-         43; // break;
-         44; // break;
-#endif
+          case 401:
+            //   case 402:
+            43; // break;
+            44; // break;
 
-//   default:
-// Added this but it is not relevant to the faulure..
-//        break;
-
-        }
+            //   default:
+            // Added this but it is not relevant to the faulure..
+            //        break;
+          }
    }
 
 

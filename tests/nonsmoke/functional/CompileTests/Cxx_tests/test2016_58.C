@@ -1090,23 +1090,7 @@ struct add_pointer_impl
 } 
 
 template< typename T > struct add_pointer { public: typedef typename boost::detail::add_pointer_impl<T> ::type type;  }; 
-} 
-
-
-#if 0
-
-namespace boost { namespace mpl { namespace aux {
-
-template< typename T > struct value_type_wknd
-{
-    typedef typename T::value_type type;
-};
-
-
-}}}
-
-#endif
-
+}
 
 namespace mpl_ {
 
@@ -1222,12 +1206,6 @@ template< > struct eval_if<  na , na , na > { template<  typename T1 , typename 
 
 }}
 
-
-
-
-#if 1
-
-
 namespace boost { namespace mpl {
 
 template<
@@ -1249,13 +1227,10 @@ struct make_identity
 };
 
 template< > struct identity<  na > { template<  typename T1 , typename T2 =na  , typename T3 =na  , typename T4 =na  , typename T5 =na  > struct apply : identity<  T1 > { }; }; template< typename Tag > struct lambda< identity<  na > , Tag  > { typedef false_ is_le; typedef identity<  na > result_; typedef identity<  na > type; };  
-template< > struct make_identity<  na > { template<  typename T1 , typename T2 =na  , typename T3 =na  , typename T4 =na  , typename T5 =na  > struct apply : make_identity<  T1 > { }; }; template< typename Tag > struct lambda< make_identity<  na > , Tag  > { typedef false_ is_le; typedef make_identity<  na > result_; typedef make_identity<  na > type; };  
+template< > struct make_identity<  na > { template<  typename T1 , typename T2 =na  , typename T3 =na  , typename T4 =na  , typename T5 =na  > struct apply : make_identity<  T1 > { }; }; template< typename Tag > struct lambda< make_identity<  na > , Tag  > { typedef false_ is_le; typedef make_identity<  na > result_; typedef make_identity<  na > type; };
 
-}}
-#endif
-
-
-#if 1
+} // namespace mpl
+} // namespace boost
 
 namespace boost 
 {
@@ -1277,11 +1252,7 @@ namespace boost
         >::type type;
     };
     
-} 
-
-#endif
-
-
+}
 
 namespace boost {
 namespace detail{
@@ -1494,11 +1465,7 @@ inline bool operator == (const TypeInfo& lhs, const type_index_facade<Derived, T
     return Derived(lhs) == rhs;
 }
 
-}} 
-
-
-#if 1
-
+}}
 
 # pragma once
 
@@ -1516,42 +1483,13 @@ public:
 private:
     const type_info_t* data_;
 
-public:
-#if 0
-    inline stl_type_index() 
-        : data_(&typeid(void))
-    {}
-#endif
-
-#if 1
-    inline stl_type_index(const type_info_t& data) 
-        : data_(&data)
-    {}
-#endif
+  public:
+    inline stl_type_index(const type_info_t &data) : data_(&data) {}
 
     inline const type_info_t&  type_info() const ;
 
-#if 0
-    inline const char*  raw_name() const ;
-    inline const char*  name() const ;
-    inline std::string  pretty_name() const;
-
-    inline std::size_t  hash_code() const ;
-    inline bool         equal(const stl_type_index& rhs) const ;
-    inline bool         before(const stl_type_index& rhs) const ;
-#endif
-
     template <class T>
     inline static stl_type_index type_id() ;
-
-#if 0
-    template <class T>
-    inline static stl_type_index type_id_with_cvr() ;
-
-    template <class T>
-    inline static stl_type_index type_id_runtime(const T& value) ;
-#endif
-
 };
 
 
@@ -1568,10 +1506,6 @@ inline stl_type_index stl_type_index::type_id()  {
 }
 
 }}
-
-#endif
-
-
 
 namespace boost { namespace typeindex {
 
@@ -1626,32 +1560,21 @@ namespace boost
             //              : held(value)
               {}
 
-        public: 
-
-            virtual const boost::typeindex::type_info& type() const { return boost::typeindex::type_id<ValueType>().type_info(); }
-#if 1
-            virtual placeholder * clone() const; // { return new holder(held); }
-#endif
+        public:
+          virtual const boost::typeindex::type_info &type() const {
+            return boost::typeindex::type_id<ValueType>().type_info();
+          }
+          virtual placeholder *clone() const; // { return new holder(held); }
         public: 
 
             ValueType held;
-
-#if 0
-        private: 
-            holder & operator=(const holder &);
-#endif
-
         };
 
-
-    private: 
-#if 1
+      private:
         template<typename ValueType>
         friend ValueType * any_cast(any *);
 
-        template<typename ValueType>
-        friend ValueType * unsafe_any_cast(any *);
-#endif
+        template <typename ValueType> friend ValueType *unsafe_any_cast(any *);
         placeholder * content;
 
     };
@@ -2105,29 +2028,20 @@ public:
  
 class  Switch {
 public:
-
-#if 1
     template<typename T>
     Switch& intrinsicValue(const T &value, T &storage) {
         return *this;
     }
-#endif
 
-#if 1
     Switch& intrinsicValue(const char *value, std::string &storage) {
         ParsedValue(std::string(value), NOWHERE, value, TypedSaver<std::string>::instance(storage));
         return *this;
     }
-#endif     
 };
 
 
 } 
-} 
-
-
-#if 1
-
+}
 
 namespace Sawyer {
 namespace Container { 
@@ -2141,43 +2055,14 @@ template<class T> struct RemoveConst<const T> { typedef T Base; };
 struct LowToHigh {};
 struct HighToLow {};
 
-
-#if 1
- 
 template<class Word>
 void fromDecimal(Word *vec, const std::string &input) 
    {
      boost::uint64_t v = 0;
 
-#if 1
      if (bool _foreach_is_rvalue1401 = false) {} else if (boost::foreach_detail_::auto_any_t _foreach_col1401 = boost::foreach_detail_::contain( (true ? boost::foreach_detail_::make_probe((input), _foreach_is_rvalue1401) : (input)) , (boost::foreach_detail_::should_copy_impl( true ? 0 : boost::foreach_detail_::or_( boost::foreach_detail_::is_array_(input) , boost_foreach_is_noncopyable( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value) , boost::foreach_detail_::not_(boost::foreach_detail_::is_const_(input))) , true ? 0 : boost::foreach_detail_::and_( boost::foreach_detail_::not_(boost_foreach_is_noncopyable( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value)) , boost_foreach_is_lightweight_proxy( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value)) , &_foreach_is_rvalue1401)))) {} else if (boost::foreach_detail_::auto_any_t _foreach_cur1401 = boost::foreach_detail_::begin( _foreach_col1401 , (true ? 0 : boost::foreach_detail_::encode_type(input, boost::foreach_detail_::is_const_(input))) , (boost::foreach_detail_::should_copy_impl( true ? 0 : boost::foreach_detail_::or_( boost::foreach_detail_::is_array_(input) , boost_foreach_is_noncopyable( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value) , boost::foreach_detail_::not_(boost::foreach_detail_::is_const_(input))) , true ? 0 : boost::foreach_detail_::and_( boost::foreach_detail_::not_(boost_foreach_is_noncopyable( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value)) , boost_foreach_is_lightweight_proxy( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value)) , &_foreach_is_rvalue1401)))) {} else if (boost::foreach_detail_::auto_any_t _foreach_end1401 = boost::foreach_detail_::end( _foreach_col1401 , (true ? 0 : boost::foreach_detail_::encode_type(input, boost::foreach_detail_::is_const_(input))) , (boost::foreach_detail_::should_copy_impl( true ? 0 : boost::foreach_detail_::or_( boost::foreach_detail_::is_array_(input) , boost_foreach_is_noncopyable( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value) , boost::foreach_detail_::not_(boost::foreach_detail_::is_const_(input))) , true ? 0 : boost::foreach_detail_::and_( boost::foreach_detail_::not_(boost_foreach_is_noncopyable( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value)) , boost_foreach_is_lightweight_proxy( boost::foreach_detail_::to_ptr(input) , boost_foreach_argument_dependent_lookup_hack_value)) , &_foreach_is_rvalue1401)))) {} else for (bool _foreach_continue1401 = true; _foreach_continue1401 && !boost::foreach_detail_::done( _foreach_cur1401 , _foreach_end1401 , (true ? 0 : boost::foreach_detail_::encode_type(input, boost::foreach_detail_::is_const_(input)))); _foreach_continue1401 ? boost::foreach_detail_::next( _foreach_cur1401 , (true ? 0 : boost::foreach_detail_::encode_type(input, boost::foreach_detail_::is_const_(input)))) : (void)0) if (boost::foreach_detail_::set_false(_foreach_continue1401)) {} else for (char ch = boost::foreach_detail_::deref( _foreach_cur1401 , (true ? 0 : boost::foreach_detail_::encode_type(input, boost::foreach_detail_::is_const_(input)))); !_foreach_continue1401; _foreach_continue1401 = true) {
-
-    }
-#endif
-
+           }
 }
-
-#endif
-
-
 } 
 } 
-} 
-
-
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}

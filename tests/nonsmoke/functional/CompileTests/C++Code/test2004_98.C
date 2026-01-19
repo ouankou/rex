@@ -39,9 +39,6 @@ template<> class X<long> {};
 X<char> X_char;
 X<long> X_long;
 
-
-#if 1
 X<float> X_float;
 X<double> X_double;
 X<short> X_short;
-#endif

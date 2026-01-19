@@ -1,6 +1,3 @@
-#if 0
-#include <string>
-#else
 // int x;
 namespace std 
    {
@@ -15,5 +12,4 @@ namespace std
      template<> struct char_traits<char>;
 
      typedef basic_string<char> string;
-   }
-#endif
+     } // namespace std

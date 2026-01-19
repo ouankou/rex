@@ -31,13 +31,6 @@ class Y
           template<typename T2, typename T3> void foo() {}
    };
 
-#if 0
-template<typename T2>
-void Y::foo()
-   {
-   }
-#endif
-
 template<typename T1>
 class Z
    {
@@ -49,13 +42,6 @@ class Z
        // template<typename T2>
           void foo() {}
    };
-
-#if 0
-template<typename T1, typename T2>
-void Z<T1>::foo(T2 t)
-   {
-   }
-#endif
 
 template<typename T1>
 class A

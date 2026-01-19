@@ -8,7 +8,7 @@ contains
     integer(c_int), dimension(:) :: assumed_array
   end subroutine sub0
 
-  subroutine sub1(deferred_array) bind(c) ! { dg-error "cannot" } 
+  subroutine sub1(deferred_array) bind(c) ! { dg-error "cannot" }
     integer(c_int), pointer :: deferred_array(:)
   end subroutine sub1
 end module bind_c_array_params

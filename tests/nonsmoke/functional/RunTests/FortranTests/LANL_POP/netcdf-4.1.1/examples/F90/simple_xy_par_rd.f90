@@ -1,16 +1,16 @@
 ! This is part of the netCDF package.
 ! Copyright 2008 University Corporation for Atmospheric Research/Unidata.
 ! See COPYRIGHT file for conditions of use.
-      
+
 ! This is a simple example which reads a small dummy array, from a
 ! netCDF data file created by the companion program
 ! simple_xy_par_wr.f90. The data are read using parallel I/O.
-      
+
 ! This is intended to illustrate the use of the netCDF fortran 90
 ! API. This example program is part of the netCDF tutorial, which can
 ! be found at:
 ! http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-tutorial
-      
+
 ! Full documentation of the netCDF Fortran 90 API can be found at:
 ! http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90
 
@@ -21,14 +21,14 @@ program simple_xy_par_rd
   implicit none
   include 'mpif.h'
 
-  ! This is the name of the data file we will read. 
+  ! This is the name of the data file we will read.
   character (len = *), parameter :: FILE_NAME = "simple_xy_par.nc"
 
   ! These will tell where in the data file this processor should
   ! write.
   integer, parameter :: NDIMS = 2
   integer :: start(NDIMS), count(NDIMS)
-  
+
   ! We will read data into this array.
   integer, allocatable :: data_in(:)
 
@@ -87,10 +87,10 @@ program simple_xy_par_rd
 contains
   subroutine check(status)
     integer, intent ( in) :: status
-    
-    if(status /= nf90_noerr) then 
+
+    if(status /= nf90_noerr) then
       print *, trim(nf90_strerror(status))
       stop 2
     end if
-  end subroutine check  
+  end subroutine check
 end program simple_xy_par_rd

@@ -1,9 +1,3 @@
-#if 0
-class Box
-   {
-     friend void minBox (Box & a, Box & b);
-   };
-#endif
 
 void minBox (int a);
 

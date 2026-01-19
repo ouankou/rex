@@ -10,13 +10,13 @@ module bind_c_vars
   integer(c_int) :: c3
   integer(c_int) :: c4
   bind(c, name="myVariable") :: c2
-  bind(c) c3, c4 
+  bind(c) c3, c4
 
   integer(c_int), bind(c, name="myF90Array3D") :: A(18, 3:7, 10)
   integer(c_int), bind(c, name="myF90Array2D") :: B(3, 2)
 
 contains
-  
+
   subroutine changeF90Globals() bind(c, name='changeF90Globals')
     implicit none
     ! should make it 2

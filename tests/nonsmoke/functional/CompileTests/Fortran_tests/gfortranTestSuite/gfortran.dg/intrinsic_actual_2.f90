@@ -5,11 +5,11 @@
 ! Contributed by Francois-Xavier Coudert  <fxcoudert@gcc.gnu.org>
 !
   integer  :: ans
-  TYPE T1 
-    INTEGER, POINTER :: I=>NULL() 
+  TYPE T1
+    INTEGER, POINTER :: I=>NULL()
   END TYPE T1
   type(T1), pointer :: tar(:)
- 
+
   character(20) res
 
   j = 10
@@ -23,22 +23,22 @@
 
 CONTAINS
 
-  FUNCTION SUB(I)  
+  FUNCTION SUB(I)
     CHARACTER(LEN=I) :: SUB(1)
     ans = LEN(SUB(1))
     SUB = ""
   END FUNCTION
 
-  FUNCTION BAR(I)  
+  FUNCTION BAR(I)
     CHARACTER(LEN=I*10) :: BAR(1)
     ans = LEN(BAR)
     BAR = ""
   END FUNCTION
 
-  FUNCTION F1(I) RESULT(R) 
-   TYPE(T1), DIMENSION(:), POINTER :: R 
-   INTEGER :: I 
+  FUNCTION F1(I) RESULT(R)
+   TYPE(T1), DIMENSION(:), POINTER :: R
+   INTEGER :: I
    ALLOCATE(tar(I))
-   R => tar 
+   R => tar
   END FUNCTION F1
-END 
+END

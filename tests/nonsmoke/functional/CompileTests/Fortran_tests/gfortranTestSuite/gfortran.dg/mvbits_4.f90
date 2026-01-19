@@ -30,4 +30,4 @@
   write (*,'(10(I3))') ila3
   if (any (ila3 /= SHOULD_BE)) call abort ()
 
-  end 
+  end

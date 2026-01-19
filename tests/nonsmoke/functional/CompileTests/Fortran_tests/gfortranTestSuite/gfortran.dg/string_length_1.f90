@@ -54,7 +54,7 @@ contains
   function bar(i)
     integer, intent(in) :: i
     character(len=i) :: bar
-  
+
     bar = ""
   end function bar
 

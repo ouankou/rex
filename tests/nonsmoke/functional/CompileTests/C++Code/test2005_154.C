@@ -23,11 +23,7 @@ class X
 // of its declaration (case: DEMONSTRATE_BUG == 1)
 int X::isparallel = -1;
 
-void foo()
-   {
-#if 1
-     int a = X::isparallel;
-     X::isparallel;
-#endif
-   }
-
+void foo() {
+  int a = X::isparallel;
+  X::isparallel;
+}

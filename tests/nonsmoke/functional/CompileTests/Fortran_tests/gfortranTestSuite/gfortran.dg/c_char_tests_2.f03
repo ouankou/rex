@@ -1,5 +1,5 @@
 ! { dg-do run }
-! Verify that the changes made to character dummy arguments for bind(c) 
+! Verify that the changes made to character dummy arguments for bind(c)
 ! procedures doesn't break non-bind(c) routines.
 ! PR fortran/32732
 subroutine bar(a)

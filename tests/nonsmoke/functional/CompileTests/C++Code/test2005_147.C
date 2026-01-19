@@ -27,11 +27,8 @@ class X
 // This would fail if the specialization is not output properly
 // template X<int>;
 
-#if 1
 int main()
    {
      X<int> b;
      b.foo();
-   }
-#endif
-
+}

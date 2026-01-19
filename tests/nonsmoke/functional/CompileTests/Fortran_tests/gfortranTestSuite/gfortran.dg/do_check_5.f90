@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! 
+!
 ! PR/fortran 38432
 ! DO-loop compile-time checks
 !

@@ -1,5 +1,5 @@
-! DQ (1/30/2010): This is an OFP bug, I think that ROSE will handle 
-! it fine once it is fixed in OFP. Until then it is still considered 
+! DQ (1/30/2010): This is an OFP bug, I think that ROSE will handle
+! it fine once it is fixed in OFP. Until then it is still considered
 ! a failing test.
 
 ! S03-continuation-spits-token.f

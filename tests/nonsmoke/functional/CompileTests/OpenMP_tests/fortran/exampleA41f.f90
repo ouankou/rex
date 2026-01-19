@@ -13,7 +13,7 @@
 !     Inner: max_act_lev= 8 , num_thds= 3 , max_thds= 4
 !     Inner: max_act_lev= 8 , num_thds= 3 , max_thds= 4
       print *, ("Inner: max_act_lev=", omp_get_max_active_levels(), &
-            ", num_thds=", omp_get_num_threads(), & 
+            ", num_thds=", omp_get_num_threads(), &
             ", max_thds=", omp_get_max_threads())
 !$omp end single
 !$omp end parallel
@@ -22,7 +22,7 @@
 !     The following should print:
 !     Outer: max_act_lev= 8 , num_thds= 2 , max_thds= 3
       print *, ("Outer: max_act_lev=", omp_get_max_active_levels(),  &
-       ", num_thds=", omp_get_num_threads(),     & 
+       ", num_thds=", omp_get_num_threads(),     &
        ", max_thds=", omp_get_max_threads())
 !$omp end single
 !$omp end parallel

@@ -8,7 +8,7 @@
 
 module communication_tools
 
-contains   
+contains
 !*******************************************************************************
 function overlap_1(u,lbound_u,ubound_u)
 !*******************************************************************************
@@ -42,7 +42,7 @@ ubound(overlap_1(vorticityMag,lbound(vorticityMag),ubound(vorticityMag)),2),&
 lbound(overlap_1(vorticityMag,lbound(vorticityMag),ubound(vorticityMag)),3):&
 ubound(overlap_1(vorticityMag,lbound(vorticityMag),ubound(vorticityMag)),3)))
 
-return 
+return
 end subroutine write_out_particles
 
 ! { dg-final { cleanup-modules "communication_tools" } }
