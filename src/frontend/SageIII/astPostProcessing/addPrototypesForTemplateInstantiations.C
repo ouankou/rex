@@ -2,6 +2,41 @@
 
 #include "sage3basic.h"
 
+namespace {
+// Use a canonical declaration for template instantiations so reopened
+// namespaces don't introduce duplicate entries for the same instantiation.
+SgDeclarationStatement *getCanonicalTemplateInstantiationDecl(
+    SgTemplateInstantiationFunctionDecl *decl) {
+  if (decl == NULL) {
+    return NULL;
+  }
+
+  if (SgSymbol *symbol = decl->get_symbol_from_symbol_table()) {
+    if (SgFunctionSymbol *func_symbol = isSgFunctionSymbol(symbol)) {
+      if (SgDeclarationStatement *func_decl = func_symbol->get_declaration()) {
+        return func_decl;
+      }
+    }
+    if (SgTemplateFunctionSymbol *template_symbol =
+            isSgTemplateFunctionSymbol(symbol)) {
+      if (SgDeclarationStatement *template_decl =
+              template_symbol->get_declaration()) {
+        return template_decl;
+      }
+    }
+  }
+
+  if (SgDeclarationStatement *first = decl->get_firstNondefiningDeclaration()) {
+    return first;
+  }
+  if (SgDeclarationStatement *defining = decl->get_definingDeclaration()) {
+    return defining;
+  }
+
+  return decl;
+}
+} // namespace
+
 void addPrototypesForTemplateInstantiations(SgNode *node) {
   // This function must operate on the SgFile or SgProject, becauae based on the
   // existence of a template instantation being marked as output, we have to
@@ -60,10 +95,14 @@ void CollectTemplateInstantiationsMarkedForOutput::visit(SgNode *node) {
         isSgTemplateInstantiationFunctionDecl(
             functionDeclaration->get_definingDeclaration());
     if (functionDeclaration == definingFunctionDeclaration) {
-      // Add function declaration for defining template instantitation.
+      // Add the canonical declaration for defining template instantiation.
       // Declarations can be reachable multiple times (e.g., re-entrant
-      // namespaces). The set handles de-duplication.
-      definingTemplateInstantiationSet.insert(definingFunctionDeclaration);
+      // namespaces), so normalize before insertion.
+      SgDeclarationStatement *canonical =
+          getCanonicalTemplateInstantiationDecl(definingFunctionDeclaration);
+      if (canonical != NULL) {
+        definingTemplateInstantiationSet.insert(canonical);
+      }
     }
   }
 }
@@ -116,21 +155,29 @@ AddPrototypesForTemplateInstantiations::evaluateInheritedAttribute(
     SgFunctionDeclaration *definingFunctionDeclaration =
         isSgFunctionDeclaration(functionDeclaration->get_definingDeclaration());
     if (definingFunctionDeclaration != NULL) {
-      if (definingTemplateInstantiationSet.find(definingFunctionDeclaration) !=
-          definingTemplateInstantiationSet.end()) {
-        if (usedTemplateInstantiationSet.find(functionRefExp) ==
-            usedTemplateInstantiationSet.end()) {
-          usedTemplateInstantiationSet.insert(functionRefExp);
+      SgTemplateInstantiationFunctionDecl *definingTemplateInstantiation =
+          isSgTemplateInstantiationFunctionDecl(definingFunctionDeclaration);
+      if (definingTemplateInstantiation != NULL) {
+        SgDeclarationStatement *canonical =
+            getCanonicalTemplateInstantiationDecl(
+                definingTemplateInstantiation);
+        if (canonical != NULL &&
+            definingTemplateInstantiationSet.find(canonical) !=
+                definingTemplateInstantiationSet.end()) {
+          if (usedTemplateInstantiationSet.find(functionRefExp) ==
+              usedTemplateInstantiationSet.end()) {
+            usedTemplateInstantiationSet.insert(functionRefExp);
 
-          SgFunctionDeclaration *firstNondefiningFunctionDeclaration =
-              isSgFunctionDeclaration(
-                  functionDeclaration->get_firstNondefiningDeclaration());
-          ROSE_ASSERT(firstNondefiningFunctionDeclaration != NULL);
+            SgFunctionDeclaration *firstNondefiningFunctionDeclaration =
+                isSgFunctionDeclaration(
+                    functionDeclaration->get_firstNondefiningDeclaration());
+            ROSE_ASSERT(firstNondefiningFunctionDeclaration != NULL);
 
-          if (prototypeTemplateInstantiationSet.find(
-                  firstNondefiningFunctionDeclaration) !=
-              prototypeTemplateInstantiationSet.end()) {
-          } else {
+            if (prototypeTemplateInstantiationSet.find(
+                    firstNondefiningFunctionDeclaration) !=
+                prototypeTemplateInstantiationSet.end()) {
+            } else {
+            }
           }
         }
       }
