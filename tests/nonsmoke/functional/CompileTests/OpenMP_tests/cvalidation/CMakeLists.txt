@@ -21,7 +21,7 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     omp_pragma_example2.c)
 endif()
 
-set(ROSE_FLAGS -rose:C_only  -w -rose:verbose 0 
+set(ROSE_FLAGS -rose:C_only  -w -rose:verbose 0
                -rose:openmp -rose:openmp:ast_only)
 
 set(_omp_cvalidation_disabled

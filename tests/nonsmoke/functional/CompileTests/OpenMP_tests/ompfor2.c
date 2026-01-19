@@ -46,7 +46,6 @@ void foo(int lower, int upper, int stride) {
            omp_get_thread_num());
   }
 
-#if 1
 #pragma omp single
   printf("---------(guided) schedule--------------\n");
 #pragma omp for schedule(guided)
@@ -55,7 +54,6 @@ void foo(int lower, int upper, int stride) {
     printf("Iteration %2d is carried out by thread %2d\n", i,
            omp_get_thread_num());
   }
-#endif
 #pragma omp single
   printf("---------(runtime) ordered schedule--------------\n");
 #pragma omp for schedule(runtime) ordered

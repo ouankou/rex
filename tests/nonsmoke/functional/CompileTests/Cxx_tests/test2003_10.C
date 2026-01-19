@@ -2,18 +2,6 @@
 
 int x;
 
-#if 0
-typedef struct Ctag
-   {
-     struct Ctag* next;
-   } C;
-
-// This fails
-Ctag array[1];
-// This works
-C array[1];
-#endif
-
 typedef struct Ctag
    {
      struct Ctag* next;
@@ -26,25 +14,3 @@ typedef struct Ctag
 #else
    C array[1] = { (struct Ctag*) 0 };
 #endif
-
-#if 0
-typedef struct Ctag
-   {
-     struct Ctag* next;
-   } C;
-
-Ctag array[1] = { { (Ctag*)0 } };
-
-#endif
-
-
-
-
-
-
-
-
-
-
-
-

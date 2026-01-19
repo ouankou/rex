@@ -10,8 +10,8 @@ module class_vector
   implicit none
 
   private ! Default
-  public :: vector                                  
-  public :: vector_ 
+  public :: vector
+  public :: vector_
 
   type vector
      private
@@ -102,11 +102,11 @@ end module tools_math
 module class_motion
 
   use class_vector
- 
+
   implicit none
-  
-  private 
-  public :: motion 
+
+  private
+  public :: motion
   public :: get_displacement, get_velocity
 
   type motion
@@ -115,8 +115,8 @@ module class_motion
      integer :: vertex_motion
      !
      integer :: iml
-     real(kind(1.d0)), allocatable :: law_x(:) 
-     type(vector), allocatable :: law_y(:)  
+     real(kind(1.d0)), allocatable :: law_x(:)
+     type(vector), allocatable :: law_y(:)
   end type motion
 
 contains
@@ -134,7 +134,7 @@ contains
     type(vector) :: i_trap_1, i_trap_2, i_trap_3
 
     get_displacement = vector_(0.d0,0.d0,0.d0)
-    
+
   end function get_displacement
 
 
@@ -146,32 +146,32 @@ contains
     real(kind(1.d0)), intent(in) :: x
     !
     type(vector) :: v
-    
+
     get_velocity = vector_(0.d0,0.d0,0.d0)
-    
+
   end function get_velocity
-  
-  
+
+
 
 end module class_motion
 
 module class_bc_math
-  
+
   implicit none
 
-  private 
-  public :: bc_math                           
+  private
+  public :: bc_math
 
   type bc_math
      private
      integer :: id
      integer :: nbf
-     real(kind(1.d0)), allocatable :: a(:) 
-     real(kind(1.d0)), allocatable :: b(:) 
-     real(kind(1.d0)), allocatable :: c(:) 
+     real(kind(1.d0)), allocatable :: a(:)
+     real(kind(1.d0)), allocatable :: b(:)
+     real(kind(1.d0)), allocatable :: c(:)
   end type bc_math
 
-  
+
 end module class_bc_math
 
 module class_bc
@@ -181,10 +181,10 @@ module class_bc
 
   implicit none
 
-  private 
-  public :: bc_poly                          
+  private
+  public :: bc_poly
   public :: get_abc, &
-       &    get_displacement, get_velocity  
+       &    get_displacement, get_velocity
 
   type bc_poly
      private
@@ -205,21 +205,21 @@ module class_bc
   interface get_abc
      module procedure get_abc_s, get_abc_v
   end interface
-  
+
 contains
 
 
   subroutine get_abc_s(bc,dim,id,a,b,c)
     use class_dimensions
-    
+
     type(bc_poly), intent(in) :: bc
     type(dimensions), intent(in) :: dim
     integer, intent(out) :: id
     real(kind(1.d0)), intent(inout) :: a(:)
     real(kind(1.d0)), intent(inout) :: b(:)
     real(kind(1.d0)), intent(inout) :: c(:)
-    
-    
+
+
   end subroutine get_abc_s
 
 
@@ -234,7 +234,7 @@ contains
     real(kind(1.d0)), intent(inout) :: b(:)
     type(vector),     intent(inout) :: c(:)
 
-    
+
   end subroutine get_abc_v
 
 
@@ -244,7 +244,7 @@ contains
     type(vector) :: res
     type(bc_poly), intent(in) :: bc
     real(kind(1.d0)), intent(in) :: x1, x2
-    
+
     res = get_displacement(bc%mot,x1,x2)
 
   end function get_bc_motion_displacement
@@ -264,9 +264,9 @@ contains
 end module class_bc
 
 module tools_mesh_basics
-  
+
   implicit none
-  
+
   interface
      function geom_tet_center(v1,v2,v3,v4)
        use class_vector

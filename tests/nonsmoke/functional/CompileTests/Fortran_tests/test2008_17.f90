@@ -1,10 +1,10 @@
-! This appears to be a bug in OFP, the rule for the ":" operator 
+! This appears to be a bug in OFP, the rule for the ":" operator
 ! is not generated for an array that is in a type. Or is the point
-! that it is communicated to be a 2D array and since it is a 
+! that it is communicated to be a 2D array and since it is a
 ! pointer to an array the dimensions are required to be undefined?
 ! If this is true then the behavior between arrays declared in and
 ! out of a type are significantly different (and this inconsistance
-! is a complicating factor in the use of OFP (but I think I can make 
+! is a complicating factor in the use of OFP (but I think I can make
 ! it work).
 
 subroutine foo

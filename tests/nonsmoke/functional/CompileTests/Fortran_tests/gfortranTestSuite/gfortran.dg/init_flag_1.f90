@@ -42,7 +42,7 @@ subroutine complex_test
   complex c1
   complex c2(20,20)
   if (c1 /= (0.0,0.0)) call abort
-  if (c2(1,1) /= (0.0,0.0)) call abort 
+  if (c2(1,1) /= (0.0,0.0)) call abort
 end subroutine complex_test
 
 subroutine char_test

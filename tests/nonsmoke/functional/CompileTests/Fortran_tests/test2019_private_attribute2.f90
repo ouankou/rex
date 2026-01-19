@@ -6,6 +6,6 @@ contains
 !$acc routine seq
     real :: dot_product3
     real :: a,b
-     
+
   end function dot_product3
   end module test2019_private_attribute2

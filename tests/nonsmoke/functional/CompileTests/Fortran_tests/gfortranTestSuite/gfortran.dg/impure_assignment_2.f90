@@ -3,7 +3,7 @@
 ! application of constraints associated with "impure" variables in PURE
 ! procedures.
 !
-! resolve.c (gfc_impure_variable) detects the following: 
+! resolve.c (gfc_impure_variable) detects the following:
 ! 12.6 Constraint: In a pure subprogram any variable which is in common or
 ! accessed by host or use association, is a dummy argument to a pure function,
 ! is a dummy argument with INTENT (IN) to a pure subroutine, or an object that

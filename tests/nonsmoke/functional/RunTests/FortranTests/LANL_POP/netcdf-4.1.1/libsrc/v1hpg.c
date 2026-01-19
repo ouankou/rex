@@ -110,12 +110,6 @@ static int fault_v1hs(v1hs *gsp, size_t extent) {
  */
 static int check_v1hs(v1hs *gsp, size_t nextread) {
 
-#if 0 /* DEBUG */
-fprintf(stderr, "nextread %lu, remaining %lu\n",
-	(unsigned long)nextread,
-	(unsigned long)((char *)gsp->end - (char *)gsp->pos));
-#endif
-
   if ((char *)gsp->pos + nextread <= (char *)gsp->end)
     return ENOERR;
   return fault_v1hs(gsp, nextread);
@@ -219,12 +213,7 @@ static size_t ncx_len_NC_string(const NC_string *ncstrp) {
   assert(ncstrp != NULL);
 
   if (ncstrp->nchars != 0) {
-#if 0
-		assert(ncstrp->nchars % X_ALIGN == 0);
-		sz += ncstrp->nchars;
-#else
     sz += _RNDUP(ncstrp->nchars, X_ALIGN);
-#endif
   }
   return sz;
 }
@@ -232,10 +221,6 @@ static size_t ncx_len_NC_string(const NC_string *ncstrp) {
 /* Write a NC_string to the header */
 static int v1h_put_NC_string(v1hs *psp, const NC_string *ncstrp) {
   int status;
-
-#if 0
-	assert(ncstrp->nchars % X_ALIGN == 0);
-#endif
 
   status = v1h_put_size_t(psp, &ncstrp->nchars);
   if (status != ENOERR)
@@ -265,14 +250,7 @@ static int v1h_get_NC_string(v1hs *gsp, NC_string **ncstrpp) {
     return NC_ENOMEM;
   }
 
-#if 0
-/* assert(ncstrp->nchars == nchars || ncstrp->nchars - nchars < X_ALIGN); */
-	assert(ncstrp->nchars % X_ALIGN == 0);
-	status = check_v1hs(gsp, ncstrp->nchars);
-#else
-
   status = check_v1hs(gsp, _RNDUP(ncstrp->nchars, X_ALIGN));
-#endif
   if (status != ENOERR)
     goto unwind_alloc;
 
@@ -378,15 +356,12 @@ static int v1h_put_NC_dimarray(v1hs *psp, const NC_dimarray *ncap) {
   assert(psp != NULL);
 
   if (ncap == NULL
-#if 1
       /* Backward:
        * This clause is for 'byte for byte'
        * backward compatibility.
        * Strickly speaking, it is 'bug for bug'.
        */
-      || ncap->nelems == 0
-#endif
-  ) {
+      || ncap->nelems == 0) {
     /*
      * Handle empty netcdf
      */
@@ -639,15 +614,12 @@ static int v1h_put_NC_attrarray(v1hs *psp, const NC_attrarray *ncap) {
   assert(psp != NULL);
 
   if (ncap == NULL
-#if 1
       /* Backward:
        * This clause is for 'byte for byte'
        * backward compatibility.
        * Strickly speaking, it is 'bug for bug'.
        */
-      || ncap->nelems == 0
-#endif
-  ) {
+      || ncap->nelems == 0) {
     /*
      * Handle empty netcdf
      */
@@ -876,15 +848,12 @@ static int v1h_put_NC_vararray(v1hs *psp, const NC_vararray *ncap) {
   assert(psp != NULL);
 
   if (ncap == NULL
-#if 1
       /* Backward:
        * This clause is for 'byte for byte'
        * backward compatibility.
        * Strickly speaking, it is 'bug for bug'.
        */
-      || ncap->nelems == 0
-#endif
-  ) {
+      || ncap->nelems == 0) {
     /*
      * Handle empty netcdf
      */
@@ -1211,11 +1180,6 @@ int nc_get_NC(NC *ncp) {
       gs.version = 2;
       fSet(ncp->flags, NC_64BIT_OFFSET);
       /* Now we support version 2 file access on non-LFS systems -- rkr */
-#if 0
-		  if (sizeof(off_t) != 8) {
-		    fprintf(stderr, "NETCDF WARNING: Version 2 file on 32-bit system.\n");
-		  }
-#endif
     } else {
       status = NC_ENOTNC;
       goto unwind_get;

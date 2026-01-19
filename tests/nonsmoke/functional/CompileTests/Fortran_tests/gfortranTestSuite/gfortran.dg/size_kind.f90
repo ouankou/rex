@@ -2,7 +2,7 @@
 !
 ! PR fortran/36153
 ! Contributed by Jonathan Hogg
-! 
+!
 program test_64
    implicit none
 

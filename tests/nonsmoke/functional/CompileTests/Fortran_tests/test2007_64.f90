@@ -4,7 +4,7 @@ subroutine where_example
     integer :: upwind,donor
 
   ! upwind = donor
-    
+
 end subroutine where_example
 
 

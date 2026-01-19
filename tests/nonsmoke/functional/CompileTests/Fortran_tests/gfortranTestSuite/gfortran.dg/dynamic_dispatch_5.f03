@@ -10,19 +10,19 @@ module const_mod
   integer, parameter  :: spk_ = kind(1.e0)
 end module const_mod
 
-module base_mat_mod  
-  use const_mod 
+module base_mat_mod
+  use const_mod
   type  :: base_sparse_mat
     integer, private     :: m, n
-    integer, private     :: state, duplicate 
+    integer, private     :: state, duplicate
     logical, private     :: triangle, unitd, upper, sorted
-  contains 
+  contains
     procedure, pass(a) :: get_nzeros
   end type base_sparse_mat
   private ::  get_nzeros
 contains
   function get_nzeros(a) result(res)
-    implicit none 
+    implicit none
     class(base_sparse_mat), intent(in) :: a
     integer :: res
     integer :: err_act
@@ -38,12 +38,12 @@ module s_base_mat_mod
   contains
     procedure, pass(a) :: s_scals
     procedure, pass(a) :: s_scal
-    generic, public    :: scal => s_scals, s_scal 
+    generic, public    :: scal => s_scals, s_scal
   end type s_base_sparse_mat
   private :: s_scals, s_scal
 
   type, extends(s_base_sparse_mat) :: s_coo_sparse_mat
-    
+
     integer              :: nnz
     integer, allocatable :: ia(:), ja(:)
     real(spk_), allocatable :: val(:)
@@ -53,9 +53,9 @@ module s_base_mat_mod
     procedure, pass(a) :: s_scal => s_coo_scal
   end type s_coo_sparse_mat
   private :: s_coo_scals, s_coo_scal, s_coo_get_nzeros
-contains 
-  subroutine s_scals(d,a,info) 
-    implicit none 
+contains
+  subroutine s_scals(d,a,info)
+    implicit none
     class(s_base_sparse_mat), intent(in) :: a
     real(spk_), intent(in)      :: d
     integer, intent(out)            :: info
@@ -71,8 +71,8 @@ contains
   end subroutine s_scals
 
 
-  subroutine s_scal(d,a,info) 
-    implicit none 
+  subroutine s_scal(d,a,info)
+    implicit none
     class(s_base_sparse_mat), intent(in) :: a
     real(spk_), intent(in)      :: d(:)
     integer, intent(out)            :: info
@@ -88,16 +88,16 @@ contains
   end subroutine s_scal
 
   function s_coo_get_nzeros(a) result(res)
-    implicit none 
+    implicit none
     class(s_coo_sparse_mat), intent(in) :: a
     integer :: res
     res  = a%nnz
   end function s_coo_get_nzeros
 
 
-  subroutine s_coo_scal(d,a,info) 
+  subroutine s_coo_scal(d,a,info)
     use const_mod
-    implicit none 
+    implicit none
     class(s_coo_sparse_mat), intent(inout) :: a
     real(spk_), intent(in)      :: d(:)
     integer, intent(out)            :: info
@@ -112,9 +112,9 @@ contains
     enddo
   end subroutine s_coo_scal
 
-  subroutine s_coo_scals(d,a,info) 
+  subroutine s_coo_scals(d,a,info)
     use const_mod
-    implicit none 
+    implicit none
     class(s_coo_sparse_mat), intent(inout) :: a
     real(spk_), intent(in)      :: d
     integer, intent(out)            :: info
@@ -137,15 +137,15 @@ module s_mat_mod
   contains
     procedure, pass(a) :: s_scals
     procedure, pass(a) :: s_scal
-    generic, public    :: scal => s_scals, s_scal 
+    generic, public    :: scal => s_scals, s_scal
   end type s_sparse_mat
   interface scal
     module procedure s_scals, s_scal
   end interface
-contains 
+contains
   subroutine s_scal(d,a,info)
     use const_mod
-    implicit none 
+    implicit none
     class(s_sparse_mat), intent(inout) :: a
     real(spk_), intent(in)              :: d(:)
     integer, intent(out)                    :: info
@@ -159,7 +159,7 @@ contains
 
   subroutine s_scals(d,a,info)
     use const_mod
-    implicit none 
+    implicit none
     class(s_sparse_mat), intent(inout) :: a
     real(spk_), intent(in)              :: d
     integer, intent(out)                    :: info

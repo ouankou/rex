@@ -9,7 +9,7 @@
 !
  PROGRAM TEST
   IMPLICIT NONE
-  real , DIMENSION(11) ::foo 
+  real , DIMENSION(11) ::foo
   integer :: infinity
   NAMELIST /nl/ foo
   NAMELIST /nl/ infinity

@@ -4,20 +4,11 @@
 
 class X;
 
-#if 1
-class X
-#endif
-   {
-   };
-
+class X {};
 
 void foobar();
 
-#if 1
-void foobar()
-#endif
-   {
-   }
+void foobar() {}
 
 #define DEFINE_AS_FRIEND_FUNCTION 1
 

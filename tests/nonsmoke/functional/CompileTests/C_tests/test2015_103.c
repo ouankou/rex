@@ -9,11 +9,7 @@ FILE_LICENCE ( BSD2 );
 
 int abc;
 
-#if 1
 #include "test2015_103.h"
-#else
-typedef unsigned char		uint8_t;
-#endif
 
 typedef uint8_t u8;
 

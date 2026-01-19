@@ -1,14 +1,4 @@
 
-#if 0
-namespace M
-   {
-     class ABC
-        {
-          public:
-               ABC(int ii);
-        };
-   }
-#endif
 
 // namespace N 
 //  {

@@ -9,7 +9,7 @@ module derived_type_mod
   type foo_dtype
     integer, pointer :: v1(:)=>null()
   end type foo_dtype
-  
+
 
 end module derived_type_mod
 
@@ -41,7 +41,7 @@ subroutine foo_bar(a,p,info)
   info=0
 
   call inner_sub(info)
-    
+
 
   return
 
@@ -50,17 +50,17 @@ contains
 
   subroutine inner_sub(info)
     use tools
-    implicit none 
+    implicit none
 
     integer, intent(out)   :: info
 
     integer :: i, nt,iv(10)
-    
+
     i  = 0
     nt = 1
-    
+
     call foo_d_sub(nt,iv,i,p,info,flag=1)
-    
+
     return
 
 

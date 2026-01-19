@@ -42,15 +42,17 @@ void SimpleInstrumentation::visit(SgNode* astNode)
 
        // SgScopeStatement *scope = getGlobalScope(classdef);
           SgScopeStatement *scope = classdef;
-#if 1
-       // SgClassDeclaration* buildClassDeclaration_nfi(const SgName& name, SgClassDeclaration::class_types kind, SgScopeStatement* scope, SgClassDeclaration* nonDefiningDecl, bool buildTemplateInstantiation, SgTemplateArgumentPtrList* templateArgumentsList);
-       // SgClassDeclaration *class_defn = buildDefiningClassDeclaration(SgName("testClass"),scope);
+          // SgClassDeclaration* buildClassDeclaration_nfi(const SgName& name,
+          // SgClassDeclaration::class_types kind, SgScopeStatement* scope,
+          // SgClassDeclaration* nonDefiningDecl, bool
+          // buildTemplateInstantiation, SgTemplateArgumentPtrList*
+          // templateArgumentsList); SgClassDeclaration *class_defn =
+          // buildDefiningClassDeclaration(SgName("testClass"),scope);
           SgName new_class_name = "rebind";
           SgClassDeclaration *class_decl = buildClassDeclaration_nfi(new_class_name,SgClassDeclaration::e_class,scope,NULL,false,NULL);
 
        // prependStatement(class_decl, scope);
           appendStatement(class_decl, scope);
-#endif
           done = true;
         }
    }

@@ -3,9 +3,10 @@
 #pragma message("rex_token_stream")
 
 // leading comment
-#if 1
+#define REX_TOKEN_STREAM_ALPHA
+#if defined(REX_TOKEN_STREAM_ALPHA)
 int alpha = 1;
-#elif 0
+#elif defined(REX_TOKEN_STREAM_BETA)
 int alpha = 2;
 #else
 int alpha = 3;

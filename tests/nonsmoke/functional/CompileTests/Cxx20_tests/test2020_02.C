@@ -56,18 +56,7 @@ struct CompilerFeature {
 
 static CompilerFeature cxx[] = {COMPILER_FEATURE_ENTRY(__cplusplus)
                                     COMPILER_FEATURE_ENTRY(__cpp_exceptions)
-                                        COMPILER_FEATURE_ENTRY(__cpp_rtti)
-#if 0
-COMPILER_FEATURE_ENTRY(__GNUC__)
-COMPILER_FEATURE_ENTRY(__GNUC_MINOR__)
-COMPILER_FEATURE_ENTRY(__GNUC_PATCHLEVEL__)
-COMPILER_FEATURE_ENTRY(__GNUG__)
-COMPILER_FEATURE_ENTRY(__clang__)
-COMPILER_FEATURE_ENTRY(__clang_major__)
-COMPILER_FEATURE_ENTRY(__clang_minor__)
-COMPILER_FEATURE_ENTRY(__clang_patchlevel__)
-#endif
-};
+                                        COMPILER_FEATURE_ENTRY(__cpp_rtti)};
 static CompilerFeature cxx11[] = {
     COMPILER_FEATURE_ENTRY(__cpp_alias_templates) COMPILER_FEATURE_ENTRY(
         __cpp_attributes) COMPILER_FEATURE_ENTRY(__cpp_constexpr)

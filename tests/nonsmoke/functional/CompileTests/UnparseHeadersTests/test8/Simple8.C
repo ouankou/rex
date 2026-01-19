@@ -8,17 +8,7 @@
 // So it finds the test8/Inner_test8.h
 #include "Simple2.h"
 
-#if 0
-Simple::Simple(){
-  v1 = 15;
-}
-#endif
-
-#if 1
-Simple2::Simple2(){
-  v2_rename_me = 155;
-}
-#endif
+Simple2::Simple2() { v2_rename_me = 155; }
 
 int main(int argc, char* argv[]) {
 

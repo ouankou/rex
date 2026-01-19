@@ -30,13 +30,13 @@
     y(k)%at(j)%i(i) =  j*4-i+k
   end forall
   if (any ((/(((y(k)%at(i)%i(j), j = 1,4), i = 1,2), k = 1,2)/) .ne. &
-         (/4,3,2,1,11,12,6,5,11,12,3,2,9,8,7,6/))) call abort () 
+         (/4,3,2,1,11,12,6,5,11,12,3,2,9,8,7,6/))) call abort ()
 
 ! Now simple assignments in WHERE.
 
   where (y(1)%at(1)%i > 2) y(1)%at(1)%i = 0
   if (any( (/(((y(k)%at(i)%i(j), j = 1,4), i = 1,2), k = 1,2)/) .ne. &
-         (/0,0,2,1,11,12,6,5,11,12,3,2,9,8,7,6/))) call abort () 
+         (/0,0,2,1,11,12,6,5,11,12,3,2,9,8,7,6/))) call abort ()
 
 ! Check that temporaries and full array  alloctable component assignments
 ! are correctly handled in FORALL.

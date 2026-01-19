@@ -18,7 +18,7 @@ program pr28914
     summation = SUM(a)
   enddo
   summation = abs(summation - 11303932.9138271_8)
-  
+
   if (summation.gt.0.00001)   call abort()
 end program pr28914
 

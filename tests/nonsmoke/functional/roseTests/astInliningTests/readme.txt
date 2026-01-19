@@ -21,10 +21,10 @@ specimen11_3.C  // nested function calls as arguments
 specimen12_3.C  // multiple levels of calls
 specimen13_1.C  // three operand expression: op1?op2:op3
 specimen14_1.C  // stdlib function exit(1) , system function
-specimen15_1.C  // logic expression, similar to above 
+specimen15_1.C  // logic expression, similar to above
 
 specimen16_4.C  // mat and vec norm calculation
-* correct_pass16.C // output sample for vec and mat norm calculation, 
+* correct_pass16.C // output sample for vec and mat norm calculation,
 specimen17_10.C  // factorial calculation: recursive calls
 specimen18_1.C  // foo(), call by reference typed argument
 specimen19_1.C  // foo() call by value
@@ -32,7 +32,7 @@ specimen20_1.C // w() call with return value, used inside initializer of a decla
 specimen21_1.C // w() again,
 specimen22_1.C  // foo() accessing both global and parameter-list scope variables
 
-//----- C++ features 
+//----- C++ features
 fail1.C     // C++ constructor, a function return value of object
 fail2.C      // C++ constructor , a function returning reference of object
 

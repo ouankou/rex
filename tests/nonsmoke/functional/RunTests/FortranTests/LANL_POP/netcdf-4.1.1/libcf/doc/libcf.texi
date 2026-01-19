@@ -2,7 +2,7 @@
 @comment $Id: libcf.texi,v 1.1.1.1 2009/07/06 15:06:30 ed Exp $
 @c %**start of header
 @setfilename libcf.info
-@settitle The CF Library Users Guide 
+@settitle The CF Library Users Guide
 @setcontentsaftertitlepage
 @c Combine the variable, concept, and function indices.
 @synindex vr cp
@@ -43,13 +43,13 @@ applies to libcf version @value{VERSION}, and was last updated on
 @end ifnottex
 
 @menu
-* Summary::                     
-* Installation::                
-* cfcheck::                     
-* Files::                       
-* Variables::                   
-* Coordinates::                 
-* Combined Index::              
+* Summary::
+* Installation::
+* cfcheck::
+* Files::
+* Variables::
+* Coordinates::
+* Combined Index::
 @end menu
 
 @node Summary, Installation, Top, Top
@@ -107,7 +107,7 @@ Unpack the tarball, and run:
 
 Where /my/netcdf is the root install directory of the netCDF library
 you want to use, and /my/libcf is the root directory where you want
-libcf installed. (They may be the same directory.) 
+libcf installed. (They may be the same directory.)
 
 If you wish to use netCDF-4, you must also have HDF5 and libz, the
 compression library, installed. In this case, configure libcf like
@@ -133,11 +133,11 @@ metadata. Messages about the file are printed to stdout.
 @chapter Files
 
 @menu
-* nccf_def_convention::         
-* nccf_inq_convention::         
-* nccf_def_file::               
-* nccf_inq_file::               
-* nccf_add_history::            
+* nccf_def_convention::
+* nccf_inq_convention::
+* nccf_def_file::
+* nccf_inq_file::
+* nccf_add_history::
 @end menu
 
 @node nccf_def_convention, nccf_inq_convention, Files, Files
@@ -148,7 +148,7 @@ Mark the file as following CF-1.0 conventions.
 This functions is called automatically by nccf_def_file, so need not
 be called by the user if nccf_def_file is being called.
 
-@heading Usage 
+@heading Usage
 
 @example
    int nccf_def_convention(int ncid);
@@ -166,11 +166,11 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_convention, nccf_def_file, nccf_def_convention, Files
 @section Determine if a File Claims to Conform to CF Conventions
 
@@ -179,7 +179,7 @@ function only checks the global ``Conventions'' attribute. It does not
 look at file metadata to ensure that this is a well-formed CF file. It
 only tells whether the file claims to be a CF file.
 
-@heading Usage 
+@heading Usage
 
 @example
    int nccf_inq_convention(int ncid, int *cf_convention);
@@ -201,21 +201,21 @@ file claims to follow CF 1.0 conventions, a 0 otherwise.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_file, nccf_inq_file, nccf_inq_convention, Files
 @section Add description to the data with nccf_def_file
 
 Add some or all of the CF recommended text attributes to a file. Any
 parameters which are set to NULL will be ignored.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_file(int ncid, char *title, char *history, char *institution, 
+int nccf_def_file(int ncid, char *title, char *history, char *institution,
                   char *source, char *comment, char *references);
 @end example
 
@@ -256,11 +256,11 @@ If non-NULL, this text string will be written as the CF-recommended
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_file, nccf_add_history, nccf_def_file, Files
 @section Read the description of the data with nccf_inq_file
 
@@ -276,13 +276,13 @@ The CF version is guaranteed to be less than NC_MAX_NAME.
 Any of these pointer arguments may be NULL, in which case it will be
 ignored.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_file(int ncid, size_t *title_lenp, char *title, 
-                  size_t *history_lenp, char *history, 
-                  size_t *institution_lenp, char *institution, 
-                  size_t *source_lenp, char *source, 
+int nccf_inq_file(int ncid, size_t *title_lenp, char *title,
+                  size_t *history_lenp, char *history,
+                  size_t *institution_lenp, char *institution,
+                  size_t *source_lenp, char *source,
                   size_t *comment_lenp, char *comment,
                   size_t *references_lenp, char *references);
 @end example
@@ -354,18 +354,18 @@ this function with a NULL for this parameter to get the size first.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_add_history,  , nccf_inq_file, Files
 @section Append to a History Attribute
 
 This function appends a time-stamped history string to the history
 attribute, creating the attribute if it doesn't already exist.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_add_history(int ncid, const char *history);
@@ -377,7 +377,7 @@ int nccf_add_history(int ncid, const char *history);
 The ncid of the file.
 
 @item history
-The string to append to the history attribute. 
+The string to append to the history attribute.
 
 @end table
 
@@ -386,58 +386,58 @@ The string to append to the history attribute.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node Variables, Coordinates, Files, Top
 @chapter Variables
 
 @menu
-* nccf_def_var::                
-* nccf_inq_var::                
-* nccf_def_var_missing::        
-* nccf_inq_var_missing::        
-* nccf_def_notes::              
-* nccf_inq_notes::              
-* nccf_def_latitude::           
-* nccf_inq_latitude::           
-* nccf_def_longitude::          
-* nccf_inq_longitude::          
-* nccf_def_lvl::                
-* nccf_inq_lvl::                
-* nccf_def_lvl_vert::           
-* nccf_inq_lvl_vert::           
-* nccf_def_time::               
-* nccf_inq_time::               
-* nccf_def_ft_sigma::           
-* nccf_inq_lvl_sigma::          
-* nccf_def_ft_hybrid_sigma::    
-* nccf_inq_lvl_hybrid_sigma::   
-* nccf_def_ft_hybrid_height::   
-* nccf_inq_lvl_hybrid_height::  
-* nccf_def_ft_sleve::           
-* nccf_inq_lvl_sleve::          
-* nccf_def_ft_ocean_sigma::     
-* nccf_inq_lvl_ocean_sigma::    
-* nccf_def_ft_ocean_s::         
-* nccf_inq_lvl_ocean_s::        
-* nccf_def_ft_ocean_sigma_z::   
-* nccf_inq_lvl_ocean_sigma_z::  
-* nccf_def_ft_ocean_dbl_sigma::  
-* nccf_inq_lvl_ocean_dbl_sigma::  
-* nccf_get_vara::               
+* nccf_def_var::
+* nccf_inq_var::
+* nccf_def_var_missing::
+* nccf_inq_var_missing::
+* nccf_def_notes::
+* nccf_inq_notes::
+* nccf_def_latitude::
+* nccf_inq_latitude::
+* nccf_def_longitude::
+* nccf_inq_longitude::
+* nccf_def_lvl::
+* nccf_inq_lvl::
+* nccf_def_lvl_vert::
+* nccf_inq_lvl_vert::
+* nccf_def_time::
+* nccf_inq_time::
+* nccf_def_ft_sigma::
+* nccf_inq_lvl_sigma::
+* nccf_def_ft_hybrid_sigma::
+* nccf_inq_lvl_hybrid_sigma::
+* nccf_def_ft_hybrid_height::
+* nccf_inq_lvl_hybrid_height::
+* nccf_def_ft_sleve::
+* nccf_inq_lvl_sleve::
+* nccf_def_ft_ocean_sigma::
+* nccf_inq_lvl_ocean_sigma::
+* nccf_def_ft_ocean_s::
+* nccf_inq_lvl_ocean_s::
+* nccf_def_ft_ocean_sigma_z::
+* nccf_inq_lvl_ocean_sigma_z::
+* nccf_def_ft_ocean_dbl_sigma::
+* nccf_inq_lvl_ocean_dbl_sigma::
+* nccf_get_vara::
 @end menu
 
 @node nccf_def_var, nccf_inq_var, Variables, Variables
 @section Add description to a variable with nccf_def_var
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_var(int ncid, int varid, const char *units, 
-                    const char *long_name, const char *standard_name, 
+int nccf_def_var(int ncid, int varid, const char *units,
+                    const char *long_name, const char *standard_name,
                     int ncoord_vars, int *coord_varids);
 @end example
 
@@ -474,21 +474,21 @@ The variable IDs of the coordinate variables for this variable.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_var, nccf_def_var_missing, nccf_def_var, Variables
 @section Read variable description with nccf_inq_var
 
-Read any existing CF recommended text attributes from a variable. 
+Read any existing CF recommended text attributes from a variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_var(int ncid, int varid, size_t *units_lenp, char *units, 
-                 size_t *long_name_lenp, char *long_name, 
+int nccf_inq_var(int ncid, int varid, size_t *units_lenp, char *units,
+                 size_t *long_name_lenp, char *long_name,
                  size_t *standard_name_lenp, char *standard_name,
                  int *ncoord_vars, int *coord_varids);
 
@@ -545,11 +545,11 @@ attribute.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_var_missing, nccf_inq_var_missing, nccf_inq_var, Variables
 @section Define missing data values for a variable with nccf_def_var_missing
 nccf_def_notes
@@ -557,10 +557,10 @@ nccf_def_notes
 This function sets the ``fill_value'', ``valid_min'', and
 ``valid_max'' attributes.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_var_missing(int ncid, int varid, const void *fill_valuep, 
+int nccf_def_var_missing(int ncid, int varid, const void *fill_valuep,
                             const void *valid_minp, const void *valid_maxp);
 @end example
 
@@ -570,7 +570,7 @@ int nccf_def_var_missing(int ncid, int varid, const void *fill_valuep,
 The ncid of the file.
 
 @item varid
-The varid of the netCDF variable being described. 
+The varid of the netCDF variable being described.
 
 @item fill_valuep
 If non-NULL, this will point to a value of the same type as this
@@ -593,11 +593,11 @@ parameter is non-NULL, valid_min must also be provided.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_var_missing, nccf_def_notes, nccf_def_var_missing, Variables
 @section Learn about missing data settings with nccf_inq_var_missing
 
@@ -605,10 +605,10 @@ Get attributes which define missing data information. If the
 attributes are not there, then provide the valid data anyway, based on
 netCDF defaults.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_var_missing(int ncid, int varid, void *fill_valuep, 
+int nccf_inq_var_missing(int ncid, int varid, void *fill_valuep,
                             void *valid_minp, void *valid_maxp);
 @end example
 
@@ -642,11 +642,11 @@ be used.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_notes, nccf_inq_notes, nccf_inq_var_missing, Variables
 @section Add CF-Recommended Metadata to a File or Variable with
 nccf_def_notes
@@ -656,11 +656,11 @@ variable, or an entire file. These text attributes, ``institution,''
 ``source,'' ``comment,'' and ``references'' are recommended by the CF
 Metadata Convention.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_notes(int ncid, int varid, char *units, char *long_name, 
-                   char *standard_name, char *institution, 
+int nccf_def_notes(int ncid, int varid, char *units, char *long_name,
+                   char *standard_name, char *institution,
                    char *source, char *comment, char *references);
 @end example
 
@@ -696,23 +696,23 @@ If non-NULL, this text string will be written as the CF-recommended
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_notes, nccf_def_latitude, nccf_def_notes, Variables
 @section Read variable description with nccf_inq_notes
 
-Read any existing CF recommended text attributes from a variable. 
+Read any existing CF recommended text attributes from a variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_notes(int ncid, int varid, 
-                   size_t *institution_lenp, char *institution, 
-                   size_t *source_lenp, char *source, 
-                   size_t *comment_lenp, char *comment, 
+int nccf_inq_notes(int ncid, int varid,
+                   size_t *institution_lenp, char *institution,
+                   size_t *source_lenp, char *source,
+                   size_t *comment_lenp, char *comment,
                    size_t *references_lenp, char *references);
 @end example
 
@@ -767,22 +767,22 @@ this function with a NULL for this parameter to get the size first.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_latitude, nccf_inq_latitude, nccf_inq_notes, Variables
 @section Define a coordinate variable and dimension for latitude with nccf_def_latitude
 
 Define a coordinate variable and dimension with all the CF
 recommended attribute accessories for latitude.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_latitude(int ncid, size_t len, nc_type xtype, 
-                         const char *formula_terms, int *lat_dimidp, 
+int nccf_def_latitude(int ncid, size_t len, nc_type xtype,
+                         const char *formula_terms, int *lat_dimidp,
                          int *lat_varidp);
 @end example
 
@@ -816,22 +816,22 @@ netCDF coordinate variable for the latitude here.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_latitude, nccf_def_longitude, nccf_def_latitude, Variables
 @section Learn about a latitude coordinate variable and dimension with
 nccf_inq_latitude
 
-Inquire about a latitude dimension and coordinate variable. 
+Inquire about a latitude dimension and coordinate variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_latitude(int ncid, size_t *lenp, nc_type *xtypep, 
-                         size_t *ft_lenp, char *formula_terms, 
+int nccf_inq_latitude(int ncid, size_t *lenp, nc_type *xtypep,
+                         size_t *ft_lenp, char *formula_terms,
                          int *lat_dimidp, int *lat_varidp);
 @end example
 
@@ -865,22 +865,22 @@ written here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_longitude, nccf_inq_longitude, nccf_inq_latitude, Variables
 @section Define a coordinate variable and dimension for longitude with nccf_def_longitude
 
 Define a coordinate variable and dimension with all the CF
 recommended attribute accessories for longitude.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_longitude(int ncid, size_t len, nc_type xtype, 
-                         const char *formula_terms, int *lon_dimidp, 
+int nccf_def_longitude(int ncid, size_t len, nc_type xtype,
+                         const char *formula_terms, int *lon_dimidp,
                          int *lon_varidp);
 @end example
 
@@ -914,22 +914,22 @@ netCDF coordinate variable for the longitude here.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_longitude, nccf_def_lvl, nccf_def_longitude, Variables
 @section Learn about a longitude coordinate variable and dimension with
 nccf_inq_longitude
 
-Inquire about a longitude dimension and coordinate variable. 
+Inquire about a longitude dimension and coordinate variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_longitude(int ncid, size_t *lenp, nc_type *xtypep, 
-                         size_t *ft_lenp, char *formula_terms, 
+int nccf_inq_longitude(int ncid, size_t *lenp, nc_type *xtypep,
+                         size_t *ft_lenp, char *formula_terms,
                          int *lon_dimidp, int *lon_varidp);
 @end example
 
@@ -963,23 +963,23 @@ written here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_lvl, nccf_inq_lvl, nccf_inq_longitude, Variables
 @section Define a coordinate variable and dimension for level with nccf_def_lvl
 
 Define a coordinate variable and dimension with all the CF
 recommended attribute accessories for a vertical level.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_lvl(int ncid, const char *name, size_t len, nc_type xtype, 
-                 const char *units, int positive_up, const char *standard_name, 
-                 const char *long_name, const char *formula_terms, 
+int nccf_def_lvl(int ncid, const char *name, size_t len, nc_type xtype,
+                 const char *units, int positive_up, const char *standard_name,
+                 const char *long_name, const char *formula_terms,
                  int *lvl_dimidp, int *lvl_varidp);
 @end example
 
@@ -1028,22 +1028,22 @@ netCDF coordinate variable for the level here.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl, nccf_def_lvl_vert, nccf_def_lvl, Variables
 @section Learn about a level coordinate variable and dimension with
 nccf_inq_lvl
 
-Inquire about a level dimension and coordinate variable. 
+Inquire about a level dimension and coordinate variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_lvl(int ncid, char *name, size_t *lenp, nc_type *xtypep, 
-                 size_t *ft_lenp, char *formula_terms, int *positive_upp, 
+int nccf_inq_lvl(int ncid, char *name, size_t *lenp, nc_type *xtypep,
+                 size_t *ft_lenp, char *formula_terms, int *positive_upp,
                  int *lvl_dimidp, int *lvl_varidp);
 @end example
 
@@ -1086,11 +1086,11 @@ written here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_lvl_vert, nccf_inq_lvl_vert, nccf_inq_lvl, Variables
 @section Define a coordinate variable and dimension for level with nccf_def_lvl
 
@@ -1098,10 +1098,10 @@ Define a unitless vertical coordinate variable and dimension from
 Apendix D of the CF Convention, with all the CF recommended attribute
 accessories for a vertical level.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_lvl_vert(int ncid, int lvl_type, const char *name, nc_type xtype, 
+int nccf_def_lvl_vert(int ncid, int lvl_type, const char *name, nc_type xtype,
                       size_t len, int *lvl_dimidp, int *lvl_varidp);
 @end example
 
@@ -1139,21 +1139,21 @@ netCDF coordinate variable for the level here.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_vert, nccf_def_time, nccf_def_lvl_vert, Variables
 @section Learn about a level coordinate variable and dimension with
 nccf_inq_lvl
 
-Inquire about a level dimension and coordinate variable. 
+Inquire about a level dimension and coordinate variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_lvl_vert(int ncid, char *name, nc_type *xtypep, size_t *lenp, 
+int nccf_inq_lvl_vert(int ncid, char *name, nc_type *xtypep, size_t *lenp,
                       int *lvl_typep, int *lvl_dimidp, int *lvl_varidp);
 @end example
 
@@ -1192,22 +1192,22 @@ written here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_time, nccf_inq_time, nccf_inq_lvl_vert, Variables
 @section Define a coordinate variable and dimension for time with nccf_def_time
 
 Define a coordinate variable and dimension with all the CF
 recommended attribute accessories for time.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_time(int ncid, const char *name, size_t len, nc_type xtype, 
-                     const char *units, const char *standard_name, const char *long_name, 
+int nccf_def_time(int ncid, const char *name, size_t len, nc_type xtype,
+                     const char *units, const char *standard_name, const char *long_name,
                      const char *formula_terms, int *time_dimidp, int *time_varidp);
 @end example
 
@@ -1241,21 +1241,21 @@ netCDF coordinate variable for the time here.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_time, nccf_def_ft_sigma, nccf_def_time, Variables
 @section Learn about a time coordinate variable and dimension with
 nccf_inq_time
 
-Inquire about a time dimension and coordinate variable. 
+Inquire about a time dimension and coordinate variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_time(int ncid, size_t *lenp, nc_type *xtypep, size_t *ft_lenp, 
+int nccf_inq_time(int ncid, size_t *lenp, nc_type *xtypep, size_t *ft_lenp,
                      char *formula_terms, int *time_dimidp, int *time_varidp);
 @end example
 
@@ -1293,17 +1293,17 @@ written here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_ft_sigma, nccf_inq_lvl_sigma, nccf_inq_time, Variables
 @section Define atmosphere sigma coordinate.
 
 Define formula terms attribute for atmosphere sigma coordinate variable.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_def_ft_sigma(int ncid, int varid, int ps_varid, int ptop_varid);
@@ -1315,7 +1315,7 @@ int nccf_def_ft_sigma(int ncid, int varid, int ps_varid, int ptop_varid);
 @item ncid
 The ncid of the file.
 
-@item varid 
+@item varid
 The varid of the vertical coordinate variable.
 
 @item ps_varid
@@ -1331,22 +1331,22 @@ The variable ID of the ptop variable.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_sigma, nccf_def_ft_hybrid_sigma, nccf_def_ft_sigma, Variables
 @section Inquire about atmosphere sigma coordinate.
 nccf_inq_time
 
 Inquire about atmosphere sigma coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_lvl_sigma(int ncid, char *name, nc_type *xtypep, size_t *lenp, 
-                       int *ps_varidp, int *ptop_varidp, int *lvl_dimidp, 
+int nccf_inq_lvl_sigma(int ncid, char *name, nc_type *xtypep, size_t *lenp,
+                       int *ps_varidp, int *ptop_varidp, int *lvl_dimidp,
                        int *lvl_varidp);
 @end example
 
@@ -1357,7 +1357,7 @@ The ncid of the file.
 
 @item name
 If non-NULL, this pointer gets the name of the coordinate variable and
-dimension.     
+dimension.
 
 @item xtypep
 If non-NULL, the type of the coordinate variable will be written here.
@@ -1387,21 +1387,21 @@ here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_ft_hybrid_sigma, nccf_inq_lvl_hybrid_sigma, nccf_inq_lvl_sigma, Variables
 @section Define atmosphere sigma coordinate.
 
 Define formula terms attribute for atmosphere hybrid sigma coordinate
 variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_ft_hybrid_sigma(int ncid, int varid, int a_varid, int b_varid, 
+int nccf_def_ft_hybrid_sigma(int ncid, int varid, int a_varid, int b_varid,
                              int ps_varid, int p0_varid);
 @end example
 
@@ -1410,7 +1410,7 @@ int nccf_def_ft_hybrid_sigma(int ncid, int varid, int a_varid, int b_varid,
 @item ncid
 The ncid of the file.
 
-@item varid 
+@item varid
 The varid of the vertical coordinate variable.
 
 @item a_varid
@@ -1432,22 +1432,22 @@ The variable ID of the ptop variable.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_hybrid_sigma, nccf_def_ft_hybrid_height, nccf_def_ft_hybrid_sigma, Variables
 @section Inquire about atmosphere sigma coordinate.
 
 Inquire about atmosphere hybrid sigma coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_inq_lvl_hybrid_sigma(int ncid, char *name, nc_type *xtypep, 
-                              size_t *lenp, int *a_varidp, int *b_varidp, 
-                              int *ps_varidp, int *p0_varidp, int *lvl_dimidp, 
+int nccf_inq_lvl_hybrid_sigma(int ncid, char *name, nc_type *xtypep,
+                              size_t *lenp, int *a_varidp, int *b_varidp,
+                              int *ps_varidp, int *p0_varidp, int *lvl_dimidp,
                               int *lvl_varidp);
 @end example
 
@@ -1458,7 +1458,7 @@ The ncid of the file.
 
 @item name
 If non-NULL, this pointer gets the name of the coordinate variable and
-dimension.     
+dimension.
 
 @item xtypep
 If non-NULL, the type of the coordinate variable will be written here.
@@ -1496,21 +1496,21 @@ here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_ft_hybrid_height, nccf_inq_lvl_hybrid_height, nccf_inq_lvl_hybrid_sigma, Variables
 @section The formula_terms attribute for atmosphere hybrid height
 
 Define formula terms attribute for atmosphere hybrid height
 coordinate variable
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_ft_hybrid_height(int ncid, int varid, int a_varid, int b_varid, 
+int nccf_def_ft_hybrid_height(int ncid, int varid, int a_varid, int b_varid,
                               int orog_varid);
 @end example
 
@@ -1519,7 +1519,7 @@ int nccf_def_ft_hybrid_height(int ncid, int varid, int a_varid, int b_varid,
 @item ncid
 The ncid of the file.
 
-@item varid 
+@item varid
 The varid of the vertical coordinate variable.
 
 @item a_varid
@@ -1538,17 +1538,17 @@ The variable ID of the orog variable.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_hybrid_height, nccf_def_ft_sleve, nccf_def_ft_hybrid_height, Variables
 @section Inquire about hybrid height coordinate.
 
 Inquire about the hybrid height coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_inq_lvl_hybrid_height(int ncid, char *name, nc_type *xtypep, size_t *lenp,
@@ -1563,7 +1563,7 @@ The ncid of the file.
 
 @item name
 If non-NULL, this pointer gets the name of the coordinate variable and
-dimension.     
+dimension.
 
 @item xtypep
 If non-NULL, the type of the coordinate variable will be written here.
@@ -1597,22 +1597,22 @@ here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_ft_sleve, nccf_inq_lvl_sleve, nccf_inq_lvl_hybrid_height, Variables
 @section Define atmosphere sleve coordinate.
 
 Define formula terms attribute for the atmosphere sleve coordinate
 variable.
 
-@heading Usage 
+@heading Usage
 
 @example
-int nccf_def_ft_sleve(int ncid, int varid, int a_varid, int b1_varid, 
-                      int b2_varid, int ztop_varid, int zsurf1_varid, 
+int nccf_def_ft_sleve(int ncid, int varid, int a_varid, int b1_varid,
+                      int b2_varid, int ztop_varid, int zsurf1_varid,
                       int zsurf2_varid);
 @end example
 
@@ -1621,7 +1621,7 @@ int nccf_def_ft_sleve(int ncid, int varid, int a_varid, int b1_varid,
 @item ncid
 The ncid of the file.
 
-@item varid 
+@item varid
 The varid of the vertical coordinate variable.
 
 @item a_varid
@@ -1649,17 +1649,17 @@ The variable ID of the zsurf2 variable.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_sleve, nccf_def_ft_ocean_sigma, nccf_def_ft_sleve, Variables
 @section Inquire About Sleve Coordinate.
 
 Inquire about the sleve coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_inq_lvl_sleve(int ncid, char *name, nc_type *xtypep, size_t *lenp,
@@ -1675,7 +1675,7 @@ The ncid of the file.
 
 @item name
 If non-NULL, this pointer gets the name of the coordinate variable and
-dimension.     
+dimension.
 
 @item xtypep
 If non-NULL, the type of the coordinate variable will be written here.
@@ -1721,17 +1721,17 @@ here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_ft_ocean_sigma, nccf_inq_lvl_ocean_sigma, nccf_inq_lvl_sleve, Variables
 @section Define Ocean Sigma Coordinate.
 
 Define the formula terms attribute for the ocean sigma coordinate variable.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_def_ft_ocean_sigma(int ncid, int varid, int eta_varid, int depth_varid);
@@ -1742,7 +1742,7 @@ int nccf_def_ft_ocean_sigma(int ncid, int varid, int eta_varid, int depth_varid)
 @item ncid
 The ncid of the file.
 
-@item varid 
+@item varid
 The varid of the vertical coordinate variable.
 
 @item eta_varid
@@ -1758,17 +1758,17 @@ The variable ID of the depth variable.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_ocean_sigma, nccf_def_ft_ocean_s, nccf_def_ft_ocean_sigma, Variables
 @section Inquire About Ocean Sigma Coordinate.
 
 Inquire about the ocean sigma coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_inq_lvl_ocean_sigma(int ncid, char *name, nc_type *xtypep, size_t *lenp,
@@ -1783,7 +1783,7 @@ The ncid of the file.
 
 @item name
 If non-NULL, this pointer gets the name of the coordinate variable and
-dimension.     
+dimension.
 
 @item xtypep
 If non-NULL, the type of the coordinate variable will be written here.
@@ -1809,17 +1809,17 @@ here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_ft_ocean_s, nccf_inq_lvl_ocean_s, nccf_inq_lvl_ocean_sigma, Variables
 @section Define Ocean S Coordinate.
 
 Define ocean s coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_def_ft_ocean_s(int ncid, const char *name, nc_type xtype, size_t len,
@@ -1832,7 +1832,7 @@ int nccf_def_ft_ocean_s(int ncid, const char *name, nc_type xtype, size_t len,
 @item ncid
 The ncid of the file.
 
-@item varid 
+@item varid
 The varid of the vertical coordinate variable.
 
 @item xtype
@@ -1871,18 +1871,18 @@ written here.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_ocean_s, nccf_def_ft_ocean_sigma_z, nccf_def_ft_ocean_s, Variables
 @section Inquire About Ocean S Coordinate.
 nccf_inq_time
 
 Inquire about the ocean s coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_inq_lvl_ocean_s(int ncid, char *name, nc_type *xtypep, size_t *lenp,
@@ -1897,7 +1897,7 @@ The ncid of the file.
 
 @item name
 If non-NULL, this pointer gets the name of the coordinate variable and
-dimension.     
+dimension.
 
 @item xtypep
 If non-NULL, the type of the coordinate variable will be written here.
@@ -1939,17 +1939,17 @@ here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_ft_ocean_sigma_z, nccf_inq_lvl_ocean_sigma_z, nccf_inq_lvl_ocean_s, Variables
 @section Define Ocean Sigma Z Coordinate.
 
 Define ocean sigma z coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_def_ft_ocean_sigma_z(int ncid, const char *name, nc_type xtype,
@@ -1963,7 +1963,7 @@ int nccf_def_ft_ocean_sigma_z(int ncid, const char *name, nc_type xtype,
 @item ncid
 The ncid of the file.
 
-@item varid 
+@item varid
 The varid of the vertical coordinate variable.
 
 @item xtype
@@ -2002,17 +2002,17 @@ written here.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_ocean_sigma_z, nccf_def_ft_ocean_dbl_sigma, nccf_def_ft_ocean_sigma_z, Variables
 @section Inquire About Ocean Sigma Z Coordinate.
 
 Inquire about the ocean sigma z coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_inq_lvl_ocean_sigma_z(int ncid, char *name, nc_type *xtypep, size_t *lenp,
@@ -2028,7 +2028,7 @@ The ncid of the file.
 
 @item name
 If non-NULL, this pointer gets the name of the coordinate variable and
-dimension.     
+dimension.
 
 @item xtypep
 If non-NULL, the type of the coordinate variable will be written here.
@@ -2070,17 +2070,17 @@ here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_def_ft_ocean_dbl_sigma, nccf_inq_lvl_ocean_dbl_sigma, nccf_inq_lvl_ocean_sigma_z, Variables
 @section Define Ocean Double Sigma Coordinate.
 
 Define ocean double sigma coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_def_ft_ocean_dbl_sigma(int ncid, const char *name, nc_type xtype, size_t len,
@@ -2094,7 +2094,7 @@ int nccf_def_ft_ocean_dbl_sigma(int ncid, const char *name, nc_type xtype, size_
 @item ncid
 The ncid of the file.
 
-@item varid 
+@item varid
 The varid of the vertical coordinate variable.
 
 @item xtype
@@ -2136,17 +2136,17 @@ written here.
 This function returns zero for success, or an error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_inq_lvl_ocean_dbl_sigma, nccf_get_vara, nccf_def_ft_ocean_dbl_sigma, Variables
 @section Inquire About Ocean Double Sigma Coordinate.
 
 Inquire about the ocean double sigma coordinate.
 
-@heading Usage 
+@heading Usage
 
 @example
 int nccf_inq_lvl_ocean_dbl_sigma(int ncid, char *name, nc_type *xtypep, size_t *lenp,
@@ -2162,7 +2162,7 @@ The ncid of the file.
 
 @item name
 If non-NULL, this pointer gets the name of the coordinate variable and
-dimension.     
+dimension.
 
 @item xtypep
 If non-NULL, the type of the coordinate variable will be written here.
@@ -2208,20 +2208,20 @@ here.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf_get_vara,  , nccf_inq_lvl_ocean_dbl_sigma, Variables
 @section Get a geographic subset of the data.
 
 Get a geographic subset of the data.
 
-@heading Usage 
+@heading Usage
 
 @example
-   int nccf_get_vara(int ncid, int varid, float *lat_bounds, int *nlat, float *lon_bounds, 
+   int nccf_get_vara(int ncid, int varid, float *lat_bounds, int *nlat, float *lon_bounds,
 		     int *nlon, int *lvl_index, int *nlvl, int rec, void *data);
 @end example
 
@@ -2267,29 +2267,29 @@ allocated (and deallocated) by the user.
 
 This function returns zero for success, or an error code for failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node Coordinates, Combined Index, Variables, Top
 @chapter Coordinate Systems
 
 @menu
-* nccf-def-axis-type::          
-* nccf-inq-axis-type::          
-* nccf-def-coord-system::       
-* nccf-inq-coord-system::       
-* nccf-assign-coord-system::    
-* nccf-def-transform::          
-* nccf-inq-transform::          
-* nccf-assign-transform::       
+* nccf-def-axis-type::
+* nccf-inq-axis-type::
+* nccf-def-coord-system::
+* nccf-inq-coord-system::
+* nccf-assign-coord-system::
+* nccf-def-transform::
+* nccf-inq-transform::
+* nccf-assign-transform::
 @end menu
 
 @node nccf-def-axis-type, nccf-inq-axis-type, Coordinates, Coordinates
 @section Label the axis type of a coordinate var with nccf_def_axis_type
 
-@heading Usage 
+@heading Usage
 
 @example
 int
@@ -2308,15 +2308,15 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf-inq-axis-type, nccf-def-coord-system, nccf-def-axis-type, Coordinates
 @section Find out the axis type of a coordinate var with nccf_inq_axis_type
 
-@heading Usage 
+@heading Usage
 
 @example
 int
@@ -2336,19 +2336,19 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf-def-coord-system, nccf-inq-coord-system, nccf-inq-axis-type, Coordinates
 @section Define a coordinate system with nccf_def_coord_system
 
-@heading Usage 
+@heading Usage
 
 @example
 int
-nccf_def_coord_system(int ncid, const char *name, int naxes, int *axis_varids, 
+nccf_def_coord_system(int ncid, const char *name, int naxes, int *axis_varids,
                     int *system_varid);
 @end example
 
@@ -2370,19 +2370,19 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf-inq-coord-system, nccf-assign-coord-system, nccf-def-coord-system, Coordinates
 @section Find out about a coordinate system with nccf_inq_coord_system
 
-@heading Usage 
+@heading Usage
 
 @example
 int
-nccf_inq_coord_system(int ncid, int system_varid, char *name, 
+nccf_inq_coord_system(int ncid, int system_varid, char *name,
                     int *naxes, int *axis_varids);
 @end example
 
@@ -2402,15 +2402,15 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf-assign-coord-system, nccf-def-transform, nccf-inq-coord-system, Coordinates
 @section Assign a coordinate system to a var with nccf_assign_coord_system
 
-@heading Usage 
+@heading Usage
 
 @example
 int
@@ -2433,19 +2433,19 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf-def-transform, nccf-inq-transform, nccf-assign-coord-system, Coordinates
 @section Define a coordinate transform with nccf_def_transform
 
-@heading Usage 
+@heading Usage
 
 @example
 int
-nccf_def_transform(int ncid, const char *name, const char *transform_type, 
+nccf_def_transform(int ncid, const char *name, const char *transform_type,
                  const char *transform_name, int *transform_varid);
 @end example
 
@@ -2466,19 +2466,19 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf-inq-transform, nccf-assign-transform, nccf-def-transform, Coordinates
 @section Find out about a coordinate transform with nccf_inq_transform
 
-@heading Usage 
+@heading Usage
 
 @example
 int
-nccf_inq_transform(int ncid, int transform_varid, char *name, size_t *type_len, 
+nccf_inq_transform(int ncid, int transform_varid, char *name, size_t *type_len,
                  char *transform_type, size_t *name_len, char *transform_name);
 @end example
 
@@ -2500,15 +2500,15 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node nccf-assign-transform,  , nccf-inq-transform, Coordinates
 @section Assign a coordinate transform to a coordinate system with nccf_assign_transform
 
-@heading Usage 
+@heading Usage
 
 @example
 int
@@ -2532,11 +2532,11 @@ The ncid of the file.
 This function returns zero for success, or a netCDF error code for
 failure.
 
-@heading Example 
+@heading Example
 
 @example
 @end example
- 
+
 @node Combined Index,  , Coordinates, Top
 @unnumbered Index
 

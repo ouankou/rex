@@ -54,24 +54,3 @@ class t_Class1
 // and the generated code appears as:
 // t_struct5< t_Class2< t_Class1< char > ::typedef2 ,t_Class1< char > ::typedef4 > ::typedef1  , bool  > local2;
 t_struct5< t_Class1< char >::typedef6, bool > local2;
-
-
-#if 0
-    Produces this error:
-
-    rose_ROSE-1142_reproducer.cc:59:5: error: "typedef t_struct3<t_Class4<t_Class3<const char> > >::t_struct2<t_Class3<const char> >::typedef7 t_Class1<char>::typedef4" is private
-
-         typedef4;
-
-         ^
-
-    rose_ROSE-1142_reproducer.cc:66:1: error: within this context
-
-     t_struct5< t_Class2< t_Class1< char > ::typedef2 ,t_Class1< char > ::typedef4 > ::typedef1  , bool  > local2;
-
-     ^
-
-#endif
- 
-
- 

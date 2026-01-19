@@ -4,7 +4,7 @@
       integer, pointer :: p
       integer q
       q = 1
-!$OMP FLUSH (X,P,Q) 
+!$OMP FLUSH (X,P,Q)
       ! X, P and Q are flushed
       ! because they are shared and accessible
       q = 1

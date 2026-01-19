@@ -16,9 +16,9 @@ module gfortran2
         real :: a
         type(tp1) :: t
     end type tp2
-    
+
 contains
-    
+
     subroutine test()
         type(tp1) :: x
         type(tp2) :: y

@@ -4,7 +4,7 @@
 ! correctly, leading to a segfault.
 program prog
   character(len=2), target :: c(4)
-  type pseudo_upf 
+  type pseudo_upf
      character(len=2), pointer :: els(:)
   end type pseudo_upf
   type (pseudo_upf) :: p
@@ -20,12 +20,12 @@ program prog
   v%s(1) = "hello"
   v%s(2) = "world"
   call test (v%s)
-contains 
+contains
 
-  subroutine n (upf) 
-    type (pseudo_upf), intent(inout) :: upf 
+  subroutine n (upf)
+    type (pseudo_upf), intent(inout) :: upf
     upf%els => c
-    return 
+    return
   end subroutine n
 
   subroutine test(s)
@@ -33,5 +33,5 @@ contains
     if ((len (s) .ne. 5) .or. (any (s .ne. (/"hello", "world"/)))) call abort
   end subroutine
 end program
-  
+
 

@@ -32,7 +32,7 @@ Laksono has sent email with three bugs in ROSE.
 Zung has provided ROSE bugs on my USB stick.
 Craig will send some ROSE bugs in a tarball via email (much later in the year)).
 
-Types will be changed to include a Fortran specific data member in 
+Types will be changed to include a Fortran specific data member in
 SgType to hold the kind parameter when it is specified (NULL is not).
 This data member will be a SgExpression*
 

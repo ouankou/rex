@@ -57,12 +57,12 @@ program ichar_1
 
    if (ichar(c(3:3)) /= 97) call abort
    i = ichar(c)      ! { dg-error "must be of length one" "" }
-   
+
    i = ichar(dt%addr(1:1))
    i = ichar(dt%addr) ! { dg-error "must be of length one" "" }
    i = ichar(dt%addr(1:2)) ! { dg-error "must be of length one" "" }
    i = ichar(dt%addr(1:)) ! { dg-error "must be of length one" "" }
-   
+
    i = ichar(dt1%addr(1:1))
    i = ichar(dt1%addr)
 

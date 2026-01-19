@@ -6,7 +6,7 @@
 ! Modified by Janus Weil <janus@gcc.gnu.org>
 
   type grid
-  end type 
+  end type
 
 contains
 

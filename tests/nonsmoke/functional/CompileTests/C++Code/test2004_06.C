@@ -12,7 +12,6 @@
       code is generated).
  */
 
-#if 1
 // typedef of forward declaration of type
 // typedef struct _IO_FILE _IO_FILE;
 typedef struct _IO_FILE __FILE;
@@ -25,25 +24,3 @@ typedef struct _IO_FILE
 typedef struct _IO_FILE __FILE;
 typedef struct _IO_FILE _IO_FILE;
 typedef struct _IO_FILE _IO_FILE;
-
-#else
-
-typedef struct _IO_FILE
-   {
-     int _flags;
-   } __FILE;
-
-// Test of redundent typedefs
-typedef struct _IO_FILE _IO_FILE;
-typedef struct _IO_FILE _IO_FILE;
-
-// typedef struct _IO_FILE _IO_FILE;
-
-#endif
-
-#if 0
-typedef struct X
-   {
-     int x;
-   } X;
-#endif

@@ -34,12 +34,10 @@ void FileDescriptor::DebugString() const
    {
      set<const Descriptor*> groups;
 
-#if 1
   // This appears to be important code in demonstrating the bug:
   // it is unparsed as: groups . insert((this) ->  extension (i) ->  message_type ());
   // groups.insert(extension(i)->message_type());
      groups.insert();
-#endif
    }
 
 class DescriptorBuilder 

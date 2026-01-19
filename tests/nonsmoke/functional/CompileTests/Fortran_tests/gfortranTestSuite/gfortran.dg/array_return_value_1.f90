@@ -2,7 +2,7 @@
 ! Tests the fix for PR27124 in which the unpacking of argument
 ! temporaries and of array result temporaries occurred in the
 ! incorrect order.
-! 
+!
 ! Test is based on the original example, provided by
 ! Philippe Schaffnit <P.Schaffnit@access.rwth-aachen.de>
 !

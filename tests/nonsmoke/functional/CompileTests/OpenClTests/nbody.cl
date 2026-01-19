@@ -1,8 +1,8 @@
 //
 // File:       nbody.cl
 //
-// Abstract:   This example performs an NBody simulation which calculates a gravity field 
-//             and corresponding velocity and acceleration contributions accumulated 
+// Abstract:   This example performs an NBody simulation which calculates a gravity field
+//             and corresponding velocity and acceleration contributions accumulated
 //             by each body in the system from every other body.  This example
 //             also shows how to mitigate computation between all available devices
 //             including CPU and GPU devices, as well as a hybrid combination of both,

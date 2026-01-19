@@ -9,26 +9,11 @@ namespace XXX
      namespace Y 
         {
 
-          const unsigned size = 3;
-#if 0
-          struct AAA
-             {
-               bool isPeriodic;
-             };
-#endif
+     const unsigned size = 3;
         } // unnamed namespace, back to XXX
 
-#if 0
-     void foobar(const int def[3])
-#else
-     void foobar(const int def[Y::size])
-#endif
-#if 1
-        {
-       // Y::AAA abc;
-       // abc.isPeriodic = false;
+        void foobar(const int def[Y::size]) {
+          // Y::AAA abc;
+          // abc.isPeriodic = false;
         }
-#else
-        ;
-#endif
    } // namespace XXX

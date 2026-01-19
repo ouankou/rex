@@ -8,14 +8,3 @@ class OtherType;
 // template <typename Second> using TypedefName = SomeType<OtherType, Second, 5>;
 template <typename Second>
 using TypedefName = SomeType<OtherType, Second, 5>;
-
-#if 0
-void foo(TypedefName<int> x )
-   {
-   }
-
-// This is not allowed becasue it is a redefinition.
-void foo(SomeType<OtherType, int, 5> x )
-   {
-   }
-#endif

@@ -1,10 +1,3 @@
-#if 0
-#include<map>
-
-using namespace std;
-
-map<int,int> xmap;
-#endif
 
 
 

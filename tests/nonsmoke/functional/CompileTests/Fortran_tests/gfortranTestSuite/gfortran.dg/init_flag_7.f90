@@ -3,7 +3,7 @@
 
 program init_flag_7
   call save_test1 (.true.)
-  call save_test1 (.false.) 
+  call save_test1 (.false.)
   call save_test2 (.true.)
   call save_test2 (.false.)
 end program init_flag_7
@@ -29,7 +29,7 @@ subroutine save_test1 (first)
   i2 = 1002
   i3 = 1003
 end subroutine save_test1
-        
+
 subroutine save_test2 (first)
   logical first
   integer :: i1 = -100

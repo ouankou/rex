@@ -6,7 +6,7 @@ ctrl: 1->2 always
 ctrl: 2->3 always
 ctrl: 3->4 always
 
- Mapping 
+ Mapping
 SgBasicBlock:{head = end = 0;}:2->4
 SgExprStatement:head = end = 0;:2->4
 SgAssignOp:head = end = 0:4v:buildList-1-head
@@ -15,7 +15,7 @@ SgAssignOp:end = 0:4v:buildList-1-end
 SgVarRefExp:end:3v:buildList-1-end
 SgCastExp:0:3v:buildList-1-end
 SgIntVal:0:3c:0
-END Mapping 
+END Mapping
 
 5:func v:appendList(v:appendList-3-head,v:appendList-3-end,v:appendList-3-val) => (v:appendList-0,v:appendList-3-head,v:appendList-3-end);
 6:v:appendList-3-5=op(c:0 );
@@ -42,7 +42,7 @@ ctrl: 13->14 always
 ctrl: 14->15 always
 ctrl: 15->16 always
 
- Mapping 
+ Mapping
 SgBasicBlock:{if(end == 0) {head = end =(new List());}else {end -> next =(new List());end = end -> next;}end -> val = val;end -> next = 0;}:6->16
 SgIfStmt:if(end == 0) {head = end =(new List());}else {end -> next =(new List());end = end -> next;}:6->13
 SgExprStatement:end == 0;:6->7
@@ -75,7 +75,7 @@ SgAssignOp:end -> next = 0:16v:appendList-3-end->next
 SgArrowExp:end -> next:16v:appendList-3-end->next
 SgCastExp:0:16v:appendList-3-end->next
 SgIntVal:0:16c:0
-END Mapping 
+END Mapping
 
 17:func v:lookupList(v:lookupList-9-head,v:lookupList-9-val) => (v:lookupList-0);
 18:v:lookupList-9-p=v:lookupList-9-head;
@@ -96,7 +96,7 @@ ctrl: 22->23 true
 25:return-v:lookupList;
 ctrl: 24->25 always
 
- Mapping 
+ Mapping
 SgBasicBlock:{struct List *p = head;for(;p != 0;p = p -> next) {if(p -> val == val) {break;}else {}}return p;}:18->24
 SgVariableDeclaration:struct List *p = head;:18->18
 SgInitializedName:p:18v:lookupList-9-p
@@ -120,7 +120,7 @@ SgArrowExp:p -> val:22v:lookupList-9-p->val
 SgVarRefExp:val:22v:lookupList-9-val
 SgReturnStmt:return p;:23->24
 SgVarRefExp:p:23v:lookupList-9-p
-END Mapping 
+END Mapping
 
 26:func v:main() => (v:main-0);
 27:(,v:main-13-head,v:main-13-end) =v:buildList(v:main-13-head,v:main-13-end);
@@ -141,7 +141,7 @@ ctrl: 30->29 always
 ctrl: 33->34 always
 ctrl: 29->33 false
 
- Mapping 
+ Mapping
 SgBasicBlock:{struct List *head;struct List *end;buildList(head,end);for(int i = 0;i < 10;++i) {appendList(head,end,2 * i);}struct List *p = lookupList(head,6);}:27->34
 SgExprStatement:buildList(head,end);:27->27
 SgFunctionRefExp:buildList:27v:buildList
@@ -171,5 +171,5 @@ SgInitializedName:p:34v:main-13-p
 SgFunctionRefExp:lookupList:34v:lookupList
 SgVarRefExp:head:34v:main-13-head
 SgIntVal:6:34c:6
-END Mapping 
+END Mapping
 

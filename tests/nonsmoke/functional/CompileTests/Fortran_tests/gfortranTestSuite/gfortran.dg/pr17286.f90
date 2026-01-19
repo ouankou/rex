@@ -4,7 +4,7 @@
 ! This is a libgfortran bug
 ! Derived from testcase provided by Paul Thomas <paulthomas2@wanadoo.fr>
        program bug3
-       integer num1 , num2 , num3 , num4 
+       integer num1 , num2 , num3 , num4
        data num3  / 42 /
        data num4  / 56 /
        namelist /mynml1/ num1,num2

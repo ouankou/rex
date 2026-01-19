@@ -7,6 +7,6 @@ program char_type_len
      character (len = 75) :: gee (n)
   end type foo_t
   type(foo_t) :: foo
-  
+
   if (len(foo%bar) /= 80 .or. len(foo%gee) /= 75) call abort
 end program char_type_len

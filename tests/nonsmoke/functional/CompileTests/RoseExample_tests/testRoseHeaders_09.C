@@ -211,9 +211,6 @@
 // #else
 
 // #endif
-#if 1
 
 // tps (01/22/2010) :refactored
 #include "rosedefs.h"
-
-#endif

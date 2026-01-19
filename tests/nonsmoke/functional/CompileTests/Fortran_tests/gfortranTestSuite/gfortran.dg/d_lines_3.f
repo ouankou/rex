@@ -7,4 +7,4 @@ d    1  + 1 ! this should be a continuation line
       goto 2345
 d23450continue ! statement labels are correctly identified
       end
-      
+

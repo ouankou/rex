@@ -2,7 +2,7 @@ PROGRAM ASSOCIATE_EXAMPLE
 
 ! Conventional Fortran DO loop
 DO I = 1, 100, 2
-! DO 
+! DO
    J = 7
 ENDDO
 

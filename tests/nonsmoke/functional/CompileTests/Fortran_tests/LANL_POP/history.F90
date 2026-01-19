@@ -5,7 +5,7 @@
 !BOP
 ! !MODULE: history
 ! !DESCRIPTION:
-!  This module contains fields and routines necessary for writing 
+!  This module contains fields and routines necessary for writing
 !  snapshot history file output.
 !
 ! !REVISION HISTORY:
@@ -137,7 +137,7 @@
       hist_file_desc        ! I/O file descriptor
 
    character (char_len) :: &
-      file_suffix,         &! suffix to append to root filename 
+      file_suffix,         &! suffix to append to root filename
       hist_string           ! string defining history of file
 
    logical (log_kind) :: &
@@ -198,7 +198,7 @@
 
       call date_and_time(date=date_created, time=time_created)
       hist_string = char_blank
-      write(hist_string,'(a23,a8,1x,a10)') & 
+      write(hist_string,'(a23,a8,1x,a10)') &
          'POP HIST file created: ',date_created,time_created
 
       hist_file_desc = construct_file(history_fmt,                     &
@@ -240,12 +240,12 @@
 !     in this first phase, we define all the fields to be written
 !
 !-----------------------------------------------------------------------
- 
+
       allocate(hist_fields(num_avail_hist_fields))
 
       do nfield = 1,num_avail_hist_fields  ! check all available fields
 
-         if (avail_hist_fields(nfield)%requested) then 
+         if (avail_hist_fields(nfield)%requested) then
 
             !*** construct io_field descriptors for each field
 
@@ -281,14 +281,14 @@
 
 !-----------------------------------------------------------------------
 !
-!     write fields to file 
+!     write fields to file
 !     in this second phase, we actually write the data
 !
 !-----------------------------------------------------------------------
- 
+
       do nfield = 1,num_avail_hist_fields  ! check all available fields
 
-         if (avail_hist_fields(nfield)%requested) then 
+         if (avail_hist_fields(nfield)%requested) then
 
             !$OMP PARALLEL DO
             do iblock=1,nblocks_clinic
@@ -309,13 +309,13 @@
                   !*** convert to W/m2
                   WORK2D(:,:,iblock) = SHF_QSW(:,:,iblock)/hflux_factor
                else if (nfield == hist_id_uvel) then
-                  WORK3D(:,:,:,iblock) = UVEL(:,:,:,curtime,iblock) 
+                  WORK3D(:,:,:,iblock) = UVEL(:,:,:,curtime,iblock)
                else if (nfield == hist_id_vvel) then
-                  WORK3D(:,:,:,iblock) = VVEL(:,:,:,curtime,iblock) 
+                  WORK3D(:,:,:,iblock) = VVEL(:,:,:,curtime,iblock)
                else if (nfield == hist_id_temp) then
-                  WORK3D(:,:,:,iblock) = TRACER(:,:,:,1,curtime,iblock) 
+                  WORK3D(:,:,:,iblock) = TRACER(:,:,:,1,curtime,iblock)
                else if (nfield == hist_id_salt) then
-                  WORK3D(:,:,:,iblock) = TRACER(:,:,:,2,curtime,iblock) 
+                  WORK3D(:,:,:,iblock) = TRACER(:,:,:,2,curtime,iblock)
                else if (nfield == hist_id_ubtrop) then
                   WORK2D(:,:,iblock) = UBTROP(:,:,curtime,iblock)
                else if (nfield == hist_id_vbtrop) then
@@ -583,7 +583,7 @@
 
          char_temp = adjustl(char_temp)
          n = index(char_temp,' ') - 1
-   
+
          call request_hist_field(char_temp(1:n))
       end do
 
@@ -653,7 +653,7 @@
    if (num_avail_hist_fields > max_avail_hist_fields) then
       call exit_POP(sigAbort,'hist: defined hist fields > max allowed')
    endif
- 
+
    id = num_avail_hist_fields
 
 !-----------------------------------------------------------------------
@@ -774,8 +774,8 @@
 
 ! !DESCRIPTION:
 !  This function determines whether an available (defined) hist field
-!  has been requested by a user (through the input contents file) and 
-!  returns true if it has.  Note that if hist has been turned off, 
+!  has been requested by a user (through the input contents file) and
+!  returns true if it has.  Note that if hist has been turned off,
 !  the function will always return false.
 !
 ! !REVISION HISTORY:
@@ -899,7 +899,7 @@
 
    case default
    end select
- 
+
 !-----------------------------------------------------------------------
 !EOC
 

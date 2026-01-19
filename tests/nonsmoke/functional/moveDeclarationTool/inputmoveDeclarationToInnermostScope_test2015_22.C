@@ -1,7 +1,5 @@
 #include "inputmoveDeclarationToInnermostScope_test2015_22.h"
 
-#if 1
-
 namespace XXX {
 void foo()
    {
@@ -11,5 +9,4 @@ void foo()
           x = 4;
         }
    }
-}
-#endif
+   } // namespace XXX

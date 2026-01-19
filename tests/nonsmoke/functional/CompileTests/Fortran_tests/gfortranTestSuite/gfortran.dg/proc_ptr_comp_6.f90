@@ -58,7 +58,7 @@ program main
 
     if (calls/=2) call abort
 
-end program main 
+end program main
 
 ! { dg-final { cleanup-modules "proc_component_example" } }
 

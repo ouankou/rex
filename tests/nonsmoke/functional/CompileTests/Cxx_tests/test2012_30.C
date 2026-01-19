@@ -6,12 +6,8 @@ namespace A
 
    }
 
-
-namespace A
-   {
-#if 1
-     using namespace B;
-#endif
+   namespace A {
+   using namespace B;
    }
 
 namespace A

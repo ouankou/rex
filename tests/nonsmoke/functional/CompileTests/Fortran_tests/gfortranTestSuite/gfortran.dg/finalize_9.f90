@@ -4,7 +4,7 @@
 !
 ! Contributed by Janus Weil <janus@gcc.gnu.org>
 
-implicit none         
+implicit none
 type particle
   integer :: ID
 end type

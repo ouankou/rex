@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# DQ (2/2/2016): This script currently takes the name of the backend 
+# DQ (2/2/2016): This script currently takes the name of the backend
 # compiler, but what we want to do instead is hand it the vendor name.
 
 if test $# -ne 3; then

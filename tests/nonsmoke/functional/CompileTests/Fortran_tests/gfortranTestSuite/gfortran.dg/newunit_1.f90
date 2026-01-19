@@ -1,5 +1,5 @@
 ! { dg-do run }
-! PR40008 F2008: Add NEWUNIT= for OPEN statement 
+! PR40008 F2008: Add NEWUNIT= for OPEN statement
 ! Contributed by Jerry DeLisle <jvdelisle@gcc.gnu.org>
 program newunit_1
   character(len=25) :: str

@@ -18,14 +18,6 @@ class A
          
    };
 
-#if 0
-// define the following specialization (else this code demonstrates an error within ROSE)
-inline void A < int > ::f(int y)
-{
-  (this) -> x = (this) -> x + y;
-}
-#endif
-
 // explicit template instantiation directive
 // template void A<int>::g<int>(int y, int u);
 // template void A<int>::f(int y);

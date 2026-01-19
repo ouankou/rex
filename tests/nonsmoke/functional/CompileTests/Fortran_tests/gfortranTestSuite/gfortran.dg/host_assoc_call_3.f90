@@ -27,7 +27,7 @@ CONTAINS
     if (check .ne. 1) call abort
     CALL putaline("xx")
     if (check .ne. 2) call abort
-!  CALL putaline(1.0) ! => this now causes an error, as it should 
+!  CALL putaline(1.0) ! => this now causes an error, as it should
   CONTAINS
     SUBROUTINE putaline(x)
       character, optional :: x

@@ -24,7 +24,7 @@ contains
  subroutine test()
    ! All procedures/variables below refer to the ones in module "m"
    ! and not to the siblings in this module "m2".
-   use m 
+   use m
    if (fun() /= 42) call abort()
    if (var /= 43) call abort()
    call fun2()

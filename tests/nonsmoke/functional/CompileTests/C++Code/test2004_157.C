@@ -60,11 +60,5 @@ void foo()
 
       foobar( &((*(bptr->Bptrptr))->operator[](1) ), 42 );
       B<int> b2( &((*(bptr->Bptrptr))->operator[](1) ), 42 );
-
-#if 0
-  // Unparses to be:
-  //  class A expr (&(*self -> object)->[*a0_0.bp()],((short )0));
-  //        A expr (&(((*(self->object))->operator[]((*(a0_0.bp()))))),0);
-#endif
    }
 

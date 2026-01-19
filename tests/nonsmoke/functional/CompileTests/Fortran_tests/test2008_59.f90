@@ -22,14 +22,14 @@ subroutine bambino(A,B,C,D,E,F)
     real :: B(0:)
 
     ! ArraySpecElement_expr_colon_expr (702): explicit shape with bounds 0:10
-    real :: C(0:12)    
+    real :: C(0:12)
 
     ! ArraySpecElement_expr_colon_asterisk (703): assumed size with lower bounds of 0
-!    real :: D(0:*)    
+!    real :: D(0:*)
 
     ! ArraySpecElement_asterisk (704): assumed size
-    real :: E(*)    
+    real :: E(*)
 
     ! ArraySpecElement_colon (705): assumed shape
-    real :: F(:)    
+    real :: F(:)
 end subroutine bambino

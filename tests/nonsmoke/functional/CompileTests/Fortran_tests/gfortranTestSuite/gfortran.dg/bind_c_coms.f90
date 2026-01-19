@@ -8,8 +8,8 @@ module bind_c_coms
 
   common /COM/ R, S
   real(c_double) :: r
-  real(c_double) :: t 
-  real(c_double) :: s 
+  real(c_double) :: t
+  real(c_double) :: s
   bind(c) :: /COM/, /SINGLE/, /MYCOM/
   common /SINGLE/ T
   common /MYCOM/ LONG_INTS

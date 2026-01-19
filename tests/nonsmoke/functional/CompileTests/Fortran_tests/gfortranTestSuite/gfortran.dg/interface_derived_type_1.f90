@@ -3,7 +3,7 @@
 ! interface bodies.
 !
 ! Contributed by Joost VandeVondele <jv244@cam.ac.uk>
-! 
+!
 module test
   implicit none
   type fcnparms

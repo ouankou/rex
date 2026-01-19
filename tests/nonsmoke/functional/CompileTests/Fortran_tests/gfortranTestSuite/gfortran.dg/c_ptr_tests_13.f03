@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! Ensure that the user cannot call the structure constructor for one of 
+! Ensure that the user cannot call the structure constructor for one of
 ! the iso_c_binding derived types.
 !
 ! PR fortran/33760
@@ -11,5 +11,5 @@ program main
    type(C_PTR) cptr
    p = 0
    cptr = C_PTR(p+1) ! { dg-error "Components of structure constructor" }
-   cptr = C_PTR(1) ! { dg-error "Components of structure constructor" } 
+   cptr = C_PTR(1) ! { dg-error "Components of structure constructor" }
 end program main

@@ -1,14 +1,14 @@
-program main 
+program main
      implicit none
 
-   ! Call to function that has not yet been seen (current bug). 
+   ! Call to function that has not yet been seen (current bug).
      call driver()
 
      stop
-end 
+end
 
-subroutine driver() 
-     implicit none 
+subroutine driver()
+     implicit none
 
-     return 
-end 
+     return
+end

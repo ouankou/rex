@@ -11,11 +11,8 @@ struct S {
 void foo(struct S *s){
 "\
 ";
-          if (1)
-            {
-#if 0
-#endif
-            }
+if (1) {
+}
           s->sm = 0;
 }
 

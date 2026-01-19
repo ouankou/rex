@@ -11,7 +11,7 @@ program power
 
   real(s),    parameter :: ris = 2.e0_s**2
   real(d),    parameter :: rid = 2.e0_d**2
-  real(e),    parameter :: rie = 2.e0_e**2 
+  real(e),    parameter :: rie = 2.e0_e**2
   complex(s), parameter :: cis = (2.e0_s,1.e0_s)**2
   complex(d), parameter :: cid = (2.e0_d,1.e0_d)**2
   complex(e), parameter :: cie = (2.e0_e,1.e0_e)**2

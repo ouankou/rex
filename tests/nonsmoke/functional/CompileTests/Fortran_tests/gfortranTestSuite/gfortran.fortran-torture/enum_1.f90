@@ -2,7 +2,7 @@
 
 program main
   implicit none
-  interface 
+  interface
     subroutine sub1
     end subroutine sub1
   end interface
@@ -15,7 +15,7 @@ program main
 
   call sub
   call sub1
-  i = fun() 
+  i = fun()
 
 contains
 
@@ -30,7 +30,7 @@ contains
   integer :: fun
   enum, bind (c)
     enumerator :: red, yellow = 23
-    enumerator :: blue 
+    enumerator :: blue
     enumerator :: green
   end enum
   fun = 1
@@ -39,7 +39,7 @@ end program main
 
 subroutine sub1
   implicit none
-  enum, bind(c)  
+  enum, bind(c)
     enumerator x , y
     enumerator :: z = 100
   end enum

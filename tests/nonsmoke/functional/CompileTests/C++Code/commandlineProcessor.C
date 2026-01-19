@@ -24,7 +24,6 @@ int main(int argc, char *argv[]) {
   // This is an example of a preprocessor that can be built with ROSE
   // This example can be used to test the ROSE infrastructure
 
-#if 1
   list<string> l =
       CommandlineProcessing::generateArgListFromArgcArgv(argc, argv);
   printf("Preprocessor (before): argv = \n%s \n",
@@ -38,43 +37,6 @@ int main(int argc, char *argv[]) {
 
   // printf ("Exiting in main! \n");
   // ROSE_ASSERT(1 == 2);
-#endif
-
-#if 0
-     if ( CommandlineProcessing::isOption(argc,argv,"-rose:","(h|help)",true) ||
-          CommandlineProcessing::isOption(argc,argv,"-", "(h|help)",true) ||
-          CommandlineProcessing::isOption(argc,argv,"--","(h|help)",true) )
-        {
-          printf ("\nROSE (pre-release alpha version: %s) \n",VERSION);
-          Rose::usage();
-          exit(0);
-        }
-
-     l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
-     printf ("Preprocessor (after): argv = \n%s \n",StringUtility::listToString(l).c_str());
-
-     printf ("Exiting after initial command line processing \n");
-     ROSE_ABORT();
-#endif
-
-#if 0
-     string stringParameter;
-     if ( CommandlineProcessing::isOptionWithParameter(argc,argv,"-rose:","(o|output)",stringParameter,true) )
-        {
-          printf ("-rose:output %s \n",stringParameter.c_str());
-       // Make our own copy of the filename string
-          int length = stringParameter.length();
-          char* p_unparse_output_filename = (char*) new char[length+1];
-          ROSE_ASSERT (p_unparse_output_filename != NULL);
-          stringParameter.copy(p_unparse_output_filename,length,0);
-          p_unparse_output_filename[length] = '\0';
-          printf ("p_unparse_output_filename = %s \n",p_unparse_output_filename);
-        }
-       else
-        {
-          printf ("-rose:output not set! \n");
-        }
-#endif
 
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != NULL);

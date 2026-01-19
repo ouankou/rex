@@ -8,7 +8,7 @@ program main
   integer(kind=4), dimension(2) :: pad1 = (/ 0, 0/)
   character(len=200) :: l1, l2
   integer :: i1, i2
-  
+
   l1 = "2 2"
   read(unit=l1,fmt=*) i1, i2
   write (unit=l2,fmt=*) reshape(source1, shape1, pad1, (/i1, i2/)) ! Invalid

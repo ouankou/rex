@@ -9,7 +9,7 @@ program main
 
   open(10, status="scratch", delim="quote")
   a = 'a"a'
-  write(10,foo) 
+  write(10,foo)
   rewind 10
   a = ""
   read (10,foo) ! This gave a runtime error before the patch.
@@ -18,7 +18,7 @@ program main
 
   open(10, status="scratch", delim="apostrophe")
   a = "a'a"
-  write(10,foo) 
+  write(10,foo)
   rewind 10
   a = ""
   read (10,foo)
@@ -27,7 +27,7 @@ program main
 
   open(10, status="scratch", delim="none")
   a = "a'a"
-  write(10,foo) 
+  write(10,foo)
   rewind 10
   a = ""
   read (10,foo)

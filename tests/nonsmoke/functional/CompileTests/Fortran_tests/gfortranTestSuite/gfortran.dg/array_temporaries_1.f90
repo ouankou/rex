@@ -14,6 +14,6 @@ program main
   i = 2
   a(i:i+1) = a(1:2) ! { dg-warning "Creating array temporary" }
   a = cshift(a,1) ! { dg-warning "Creating array temporary" }
-  b = cshift(a,1) 
+  b = cshift(a,1)
   call bar(a(1:3:2)) ! { dg-warning "Creating array temporary" }
 end program main

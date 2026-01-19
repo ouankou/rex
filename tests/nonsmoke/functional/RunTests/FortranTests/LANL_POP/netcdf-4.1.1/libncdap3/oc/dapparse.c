@@ -166,15 +166,6 @@ isglobalname(char* name)
     return 1;
 }
 
-#if 0
-static int
-isnumber(const char* text)
-{
-    for(;*text;text++) {if(!isdigit(*text)) return 0;}
-    return 1;
-}
-#endif
-
 static void
 dimension(OCnode* node, OClist* dimensions)
 {
@@ -185,13 +176,7 @@ dimension(OCnode* node, OClist* dimensions)
     for(i=0;i<rank;i++) {
         OCnode* dim = (OCnode*)oclistget(node->array.dimensions,i);
         dim->dim.array = node;
-	dim->dim.arrayindex = i;
-#if 0
-	if(dim->name == NULL) {
-	    dim->dim.anonymous = 1;
-	    dim->name = dimnameanon(node->name,i);
-	}
-#endif
+        dim->dim.arrayindex = i;
     }
 }
 

@@ -24,12 +24,9 @@ class GenericSpecialization : public GenericHashTable
 {
   public:
          class Iterator;
-  friend class Iterator;
-#if 1
-  class Iterator : public GenericHashTable::Iterator
-  {
-    public:
-       Iterator() {}
-  } ;
-#endif
+         friend class Iterator;
+         class Iterator : public GenericHashTable::Iterator {
+         public:
+           Iterator() {}
+         };
 } ;

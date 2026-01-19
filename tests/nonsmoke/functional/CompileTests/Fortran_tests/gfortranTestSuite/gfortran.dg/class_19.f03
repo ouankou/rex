@@ -18,13 +18,13 @@ subroutine foo_checkit()
   type(foo_outer)    :: try
   type(foo_outer),allocatable :: try2
   class(foo_outer), allocatable :: try3
-  
+
   if (allocated(try%int)) call abort()
   allocate(foo_outer :: try3)
   if (allocated(try3%int)) call abort()
   allocate(try2)
   if (allocated(try2%int)) call abort()
- 
+
 end subroutine foo_checkit
 end module foo_mod
 
@@ -33,7 +33,7 @@ program main
 
   use foo_mod
   implicit none
-  
+
   call foo_checkit()
 
 end program main

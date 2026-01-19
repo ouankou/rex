@@ -14,13 +14,6 @@ status_code foo()
           case Bad: 
                throw BadFoo(s.message());
         }
-
-#if 0
-     if (status_code c = bar(); c != SUCCESS)
-        {
-          return c;
-        }
-#endif
    }
 
 

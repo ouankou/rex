@@ -78,7 +78,7 @@ subroutine test_reshape
   tempn = 'b'
   tempm = -42
   allocate(foo(3,0),bar(-2:-4,7:9),x(3,0),y(-2:-4,7:9))
-  
+
   if (size(reshape(tempn(-7:-8,:),(/3,3/),pad=(/'a'/))) /= 9 .or. &
       any(reshape(tempn(-7:-8,:),(/3,3/),pad=(/'a'/)) /= 'a')) call abort
   if (size(reshape(tempn(-7:-8,:),(/3,3,3/),pad=(/'a'/))) /= 27 .or. &
@@ -123,7 +123,7 @@ end
 subroutine test_pack
   integer :: tempn(1,5)
   integer,allocatable :: foo(:,:)
-  tempn = 2 
+  tempn = 2
   allocate(foo(0,1:7))
   if (size(pack(foo,foo/=0)) /= 0 .or. any(pack(foo,foo/=0) /= -42)) call abort
   if (size(pack(foo,foo/=0,(/1,3,4,5,1,0,7,9/))) /= 8 .or. &
@@ -148,7 +148,7 @@ subroutine test_unpack
   integer :: tempn(1,5), tempv(5)
   integer,allocatable :: foo(:,:), bar(:)
   integer :: zero
-  tempn = 2 
+  tempn = 2
   tempv = 5
   zero = 0
   allocate(foo(0,1:7),bar(0:-1))
@@ -165,7 +165,7 @@ end
 subroutine test_spread
   real :: tempn(1)
   real,allocatable :: foo(:)
-  tempn = 2.0 
+  tempn = 2.0
   allocate(foo(0))
   if (any(spread(1,dim=1,ncopies=0) /= -17.0) .or. &
       size(spread(1,dim=1,ncopies=0)) /= 0) call abort

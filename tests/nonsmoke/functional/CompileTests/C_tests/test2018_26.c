@@ -1,14 +1,4 @@
 
-#if 0
-double __builtin_nan(const char);
-double __builtin_nan_XXX(const char);
-
-const char xxx;
-
-char* a;
-
-const char* b;
-#endif
 
 typedef double __v4df __attribute__ ((__vector_size__ (32)));
 

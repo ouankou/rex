@@ -3,7 +3,7 @@
 !
 ! { dg-do compile }
 ! { dg-options "-ffree-form" }
-      GO TO 3 
+      GO TO 3
       GOTO 3
  3    CONTINUE
       GOTO = 55

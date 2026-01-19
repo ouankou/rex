@@ -40,7 +40,7 @@ contains
     function whatever(x)
         integer, allocatable :: x(:)
         integer :: whatever(size(x))
-        
+
         whatever = x
     end function whatever
 

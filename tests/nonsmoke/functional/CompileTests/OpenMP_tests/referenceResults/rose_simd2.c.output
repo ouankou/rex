@@ -1,4 +1,4 @@
-#pragma omp simd 
+#pragma omp simd
 #pragma omp simd  safelen(16)
 #pragma omp simd  simdlen(16)
 #pragma omp simd  linear(j,k)

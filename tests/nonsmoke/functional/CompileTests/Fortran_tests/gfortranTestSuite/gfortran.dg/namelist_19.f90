@@ -6,23 +6,23 @@
 
 program namelist_19
   character*80 wrong, right
-  
+
 ! "=" before any object name
   wrong = "&z = i = 1,2 /"
   right = "&z i = 1,2 /"
   call test_err(wrong, right)
-  
-! &* instead of &end for termination 
+
+! &* instead of &end for termination
   wrong = "&z i = 1,2 &xxx"
   right = "&z i = 1,2 &end"
   call test_err(wrong, right)
-  
-! bad data 
+
+! bad data
   wrong = "&z i = 1,q /"
   right = "&z i = 1,2 /"
   call test_err(wrong, right)
-  
-! object name not matched 
+
+! object name not matched
   wrong = "&z j = 1,2 /"
   right = "&z i = 1,2 /"
   call test_err(wrong, right)
@@ -37,27 +37,27 @@ program namelist_19
   right = "&z ch(1:2) = 'ab' /"
   call test_err(wrong, right)
 
-! qualifier for scalar 
+! qualifier for scalar
   wrong = "&z k(2) = 1 /"
   right = "&z k    = 1 /"
   call test_err(wrong, right)
 
-! no '=' after object name 
+! no '=' after object name
   wrong = "&z i   1,2 /"
   right = "&z i = 1,2 /"
   call test_err(wrong, right)
 
-! repeat count too large 
+! repeat count too large
   wrong = "&z i = 3*2 /"
   right = "&z i = 2*2 /"
   call test_err(wrong, right)
 
-! too much data 
+! too much data
   wrong = "&z i = 1 2 3 /"
   right = "&z i = 1 2 /"
   call test_err(wrong, right)
 
-! no '=' after object name 
+! no '=' after object name
   wrong = "&z i   1,2 /"
   right = "&z i = 1,2 /"
   call test_err(wrong, right)
@@ -67,32 +67,32 @@ program namelist_19
   right = "&z i(1)   = 1 /"
   call test_err(wrong, right)
 
-! bad character in index field 
+! bad character in index field
   wrong = "&z i(x) = 1 /"
   right = "&z i(1) = 1 /"
   call test_err(wrong, right)
 
-! null index field 
+! null index field
   wrong = "&z i( ) = 1 /"
   right = "&z i(1) = 1 /"
   call test_err(wrong, right)
 
-! null index field 
+! null index field
   wrong = "&z i(1::)   = 1 2/"
   right = "&z i(1:2:1) = 1 2 /"
   call test_err(wrong, right)
 
-! null index field 
+! null index field
   wrong = "&z i(1:2:)  = 1 2/"
   right = "&z i(1:2:1) = 1 2 /"
   call test_err(wrong, right)
 
-! index out of range 
+! index out of range
   wrong = "&z i(10) = 1 /"
   right = "&z i(1)  = 1 /"
   call test_err(wrong, right)
 
-! index out of range 
+! index out of range
   wrong = "&z i(0:1) = 1 /"
   right = "&z i(1:1) = 1 /"
   call test_err(wrong, right)
@@ -133,5 +133,5 @@ contains
     close(10)
     if (ier /= 0) call abort ()
   end subroutine test_err
-  
+
 end program namelist_19

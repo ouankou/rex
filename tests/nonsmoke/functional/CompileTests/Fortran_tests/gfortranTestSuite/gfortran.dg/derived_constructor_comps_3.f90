@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! 
+!
 ! gfortran was ICEing for the constructor of
 ! componentfree types.
 !

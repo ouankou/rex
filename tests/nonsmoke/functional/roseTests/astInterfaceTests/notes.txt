@@ -1,15 +1,15 @@
                               Notes from DQ (7/8/2019)
 
 Relative to a failing test in the abiStuff.C testing:
-I have fixed the handling of un-named unions in ROSE, and now they are output in C language 
-support. I think that they previously worked fine for C++ language support.  As a result the 
+I have fixed the handling of un-named unions in ROSE, and now they are output in C language
+support. I think that they previously worked fine for C++ language support.  As a result the
 following code in the abiStuff.C test generates floating point exceoption when run in testing.
 I have changed the code as outlined below (to name the variable that is using the un-named
 union type.  This was after some discussion with Robb as to what the semantics of these
 un-named unions were with respect to data layouts.
 
 Looking into this at a later point mihgt be helpful, but since the code was incorrect
-before, but passing the abi testing, and now the code is correct, but failing the abi testing 
+before, but passing the abi testing, and now the code is correct, but failing the abi testing
 (unless the fix to the code below is done) I will prefer the corrected version and let this
 stand (at least for now).
 

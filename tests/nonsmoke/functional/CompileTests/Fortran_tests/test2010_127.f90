@@ -9,7 +9,7 @@
  ! Illegal syntax (and caught as such by the semantic analysis)
  ! integer   fname1*30
 
- ! These will represent the same type internally (SgTypeString, both are correct) 
+ ! These will represent the same type internally (SgTypeString, both are correct)
    character*30 fname2
 
  ! Error in internal representation of fname1*30 (should be a string not an array of characters)

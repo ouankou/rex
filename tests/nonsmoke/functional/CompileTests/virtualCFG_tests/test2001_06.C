@@ -15,12 +15,10 @@ unparsed correctly).
  */
 
 // Use and modify the following code to reproduce the above bug
-#if 1
 // #include<stdlib.h>
 
 #include <stdio.h>
 // #include<assert.h>
-#endif
 
 // const void* NULL = 0;
 
@@ -47,7 +45,6 @@ myBaseClass;
 */
 
 int main() {
-#if 1
   // Build object so that we can call the constructor
   B objectB;
   const B &objectBref = objectB;
@@ -57,7 +54,6 @@ int main() {
   // will be unparsed as:
   // x = ((((class B &)(objectBref)).myBaseClass).intValue);
   x = ((B &)objectBref).myBaseClass.intValue;
-#endif
 
   // printf ("Program Terminated Normally! \n");
   return 0;

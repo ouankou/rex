@@ -23,10 +23,10 @@ program proc_pointer_test
   if(ptr() /= 42) call abort()
 
   ptr => f55
-  if(ptr() /= 55) call abort()  
+  if(ptr() /= 55) call abort()
 
   call foo(ptr)
-  if(ptr() /= 65) call abort()  
+  if(ptr() /= 65) call abort()
 
 contains
 

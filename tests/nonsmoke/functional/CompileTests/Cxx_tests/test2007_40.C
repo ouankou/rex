@@ -11,8 +11,6 @@ Thanks,
 -Jeff
 */
 
-#if 1
-
 class View {
 public:
    View() {}
@@ -66,29 +64,3 @@ void StressRotate(Field sxx, Field syy,
       newTxz = txz + deltaTime*( wyy*( -syy - 2.*sxx ) + wxx*txy - wzz*tyz ) ;
    }
 }
-
-#endif
-
-
-#if 0
-class Field {};
-
-Field operator+(Field x, Field y);
-Field operator-(Field x);
-
-void StressRotate(
-   Field sxx,
-   Field txy,
-   Field wzz,
-   Field newSzz )
-   {
-     newSzz = - sxx + (txy + wzz); // Error: make: *** [test2007_40.o] Segmentation fault
-   }
-#endif
-
-
-
-
-
-
-

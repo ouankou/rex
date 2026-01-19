@@ -59,12 +59,6 @@ int main() {
   ifstream PARAMETER;
   int i, iter, N = 10;
 
-#if 0
-  PARAMETER.open("para.dat",ios :: in);
-  PARAMETER >> N >> iter;
-  PARAMETER.close();
-#endif
-
   Vec A_(N, 0.);
   Vec B_(N, 3.);
   Vec C_(N, 5.);
@@ -85,36 +79,7 @@ marke:
       A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ +
       A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ +
       A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ +
-      A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-#if 0
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-#endif
-  );
+      A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_);
   i++;
   if (i < iter)
     goto marke;

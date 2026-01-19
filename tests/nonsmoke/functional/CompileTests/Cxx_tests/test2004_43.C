@@ -1,14 +1,5 @@
 // Test code for case of eok_lvalue_dot_static: calling sage_gen_lvalue()
 
-#if 0
-class A
-   {
-     public:
-          void foo();
-          int x;
-   };
-#endif
-
 class B
    {
      public:

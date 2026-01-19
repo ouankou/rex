@@ -264,22 +264,6 @@ int main(int argc, char **argv) {
   SgProject *project = frontend(argvList);
   ROSE_ASSERT(project != NULL);
 
-#if 0
-     AstDOTGeneration astdotgen;
-  // SgProject & nonconstProject = (SgProject &) project;
-     std::string filenamePostfix;
-  // astdotgen.generateInputFiles(project,DOTGeneration<SgNode*>::TOPDOWNBOTTOMUP,filenamePostfix);
-     SgFile* file = project->get_files()[0];
-     ROSE_ASSERT(file != NULL);
-     astdotgen.generateWithinFile(file,DOTGeneration<SgNode*>::TOPDOWNBOTTOMUP,filenamePostfix);
-#endif
-
-#if 0
-  // DEBUGGING: Output an optional graph of the AST (the whole graph, of bounded complexity, when active)
-     const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 10000;
-     generateAstGraph(project,MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH,"");
-#endif
-
   // Build the callgraph
   CallGraphBuilder cgb(project);
   OnlyCurrentDirectory selector;

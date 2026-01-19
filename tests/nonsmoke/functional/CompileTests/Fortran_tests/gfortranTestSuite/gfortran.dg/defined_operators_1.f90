@@ -2,7 +2,7 @@
 ! { dg-options "-std=legacy" }
 ! Tests the fix for PR27122, in which the requirements of 12.3.2.1.1
 ! for defined operators were not enforced.
-! 
+!
 ! Based on PR test by Thomas Koenig  <tkoenig@gcc.gnu.org>
 !
 module mymod

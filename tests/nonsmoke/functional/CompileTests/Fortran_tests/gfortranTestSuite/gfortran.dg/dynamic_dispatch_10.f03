@@ -33,7 +33,7 @@ module BaseStrategy
        class (Strategy), target, intent(in) :: this
      end subroutine strategy_post_update
   end interface
-     
+
 end module BaseStrategy
 
 !==============================================================================
@@ -62,16 +62,16 @@ contains
 
   subroutine preUpdate( this )
     class (LaxWendroff), target, intent(in) :: this
-    
+
     print *, 'Calling LaxWendroff preUpdate'
   end subroutine preUpdate
 
   subroutine postUpdate( this )
     class (LaxWendroff), target, intent(in) :: this
-    
+
     print *, 'Calling LaxWendroff postUpdate'
   end subroutine postUpdate
-  
+
 end module LaxWendroffStrategy
 
 !==============================================================================
@@ -91,7 +91,7 @@ module KEStrategy
        procedure, pass( this ) :: preUpdate
        procedure, pass( this ) :: postUpdate
   end type KE
-  
+
 contains
 
   subroutine init( this, other )
@@ -113,7 +113,7 @@ contains
 
  subroutine preUpdate( this )
     class (KE), target, intent(in) :: this
-    
+
     if ( associated( this % child ) ) then
        call this % child % preUpdate()
     end if
@@ -127,10 +127,10 @@ contains
     if ( associated( this % child ) ) then
        call this % child % postUpdate()
     end if
-    
+
     print *, 'Calling KE postUpdate'
   end subroutine postUpdate
-  
+
 end module KEStrategy
 
 !==============================================================================
@@ -148,7 +148,7 @@ program main
   type (KE), target :: ke_strat
 
   type (StratSeq), allocatable, dimension( : ) :: seq
-  
+
   allocate( seq(10) )
 
   call init( ke_strat, lw_strat )

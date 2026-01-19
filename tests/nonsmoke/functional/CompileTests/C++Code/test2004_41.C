@@ -109,15 +109,6 @@ template <class _Tp, class _Ref, class _Ptr> struct _List_iterator {
 
 #ifndef __STL_CLASS_PARTIAL_SPECIALIZATION
 
-#if 0
-template <class _Tp, class _Ref, class _Ptr>
-inline bidirectional_iterator_tag
-iterator_category(const _List_iterator<_Tp, _Ref, _Ptr>&)
-{
-  return bidirectional_iterator_tag();
-}
-#endif
-
 template <class _Tp, class _Ref, class _Ptr>
 inline _Tp *value_type(const _List_iterator<_Tp, _Ref, _Ptr> &) {
   return 0;
@@ -170,13 +161,6 @@ public:
   _List_alloc_base(const allocator_type &) {}
 
 protected:
-#if 0
-  typedef typename _Alloc_traits<_List_node<_Tp>, _Allocator>::_Alloc_type
-          _Alloc_type;
-  _List_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
-  void _M_put_node(_List_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); }
-#endif
-
 protected:
   _List_node<_Tp> *_M_node;
 };
@@ -211,29 +195,12 @@ public:
   typedef _Alloc allocator_type;
   allocator_type get_allocator() const { return allocator_type(); }
 
-  _List_base(const allocator_type &) {
-#if 0
-    _M_node = _M_get_node();
-    _M_node->_M_next = _M_node;
-    _M_node->_M_prev = _M_node;
-#endif
-  }
-  ~_List_base() {
-    clear();
-#if 0
-    _M_put_node(_M_node);
-#endif
-  }
+  _List_base(const allocator_type &) {}
+  ~_List_base() { clear(); }
 
   void clear();
 
 protected:
-#if 0
-  typedef simple_alloc<_List_node<_Tp>, _Alloc> _Alloc_type;
-  _List_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
-  void _M_put_node(_List_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); }
-#endif
-
 protected:
   _List_node<_Tp> *_M_node;
 };

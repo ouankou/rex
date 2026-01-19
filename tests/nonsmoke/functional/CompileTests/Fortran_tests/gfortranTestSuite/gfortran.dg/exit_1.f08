@@ -9,7 +9,7 @@
 PROGRAM main
   IMPLICIT NONE
   INTEGER :: i
-  
+
   ! Simple exit without loop name.
   DO
     BLOCK

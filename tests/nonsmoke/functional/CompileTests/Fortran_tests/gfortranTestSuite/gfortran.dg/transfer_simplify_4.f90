@@ -10,7 +10,7 @@
   logical :: b
 
   if (ip2 .ne. ip1) call abort ()
-  
+
   i = transfer(transfer(ip1, .true.), 0)
   if (i .ne. ip1) call abort ()
 

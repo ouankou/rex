@@ -39,10 +39,5 @@ int main(int argc, char *argv[]) {
     // AstDOTGeneration::TOPDOWNBOTTOMUP);
   }
 
-#if 0
-  // simple DOT graph
-  AstDOTGeneration astdotgen;
-  astdotgen.generateInputFiles(sageProject);
-#endif
   return backend(sageProject); // only backend error code is reported
 }

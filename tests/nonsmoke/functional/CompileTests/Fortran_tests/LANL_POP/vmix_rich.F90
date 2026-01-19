@@ -98,7 +98,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       k,                  &! vertical level index
       nml_error            ! namelist i/o error flag
 
@@ -113,7 +113,7 @@
    bckgrnd_vvc = 1.0
    bckgrnd_vdc = 0.1
    rich_mix    = 50.0
-      
+
    if (my_task == master_task) then
       open (nml_in, file=nml_filename, status='old',iostat=nml_error)
       if (nml_error /= 0) then
@@ -229,7 +229,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       kp1,       &! k+1 for k < km, km otherwise
       kdc,       &! k index into VDC array (to handle 2-d or 3-d cases)
       kvc,       &! k index into VVC array (to handle 2-d or 3-d cases)
@@ -238,7 +238,7 @@
    real (r8) ::          &
       critnu              ! minimum diffusion based on local stability
 
-   real (r8), dimension(nx_block,ny_block) :: & 
+   real (r8), dimension(nx_block,ny_block) :: &
       UTKP,VTKP,         &! avg velocities at T point at k+1 level
       RHOK,              &! level k density after adiab displ to k+1
       RICH,RICHU          ! richardson number at T,U points
@@ -278,7 +278,7 @@
       if (k == 1) then
          call ugrid_to_tgrid(UTK(:,:,bid),UMIX(:,:,k),bid)
          call ugrid_to_tgrid(VTK(:,:,bid),VMIX(:,:,k),bid)
-      endif 
+      endif
 
       call ugrid_to_tgrid(UTKP,UMIX(:,:,kp1),bid)
       call ugrid_to_tgrid(VTKP,VMIX(:,:,kp1),bid)
@@ -299,7 +299,7 @@
 !-----------------------------------------------------------------------
 !
 !  richardson number and vertical diffusivity at bottom of
-!  T box, level k 
+!  T box, level k
 !
 !-----------------------------------------------------------------------
 
@@ -349,8 +349,8 @@
 
 !-----------------------------------------------------------------------
 !
-!  richardson number at bottom of U box, level k 
-!  (average of richardson number at surrounding T points) 
+!  richardson number at bottom of U box, level k
+!  (average of richardson number at surrounding T points)
 !
 !-----------------------------------------------------------------------
 
@@ -358,10 +358,10 @@
 
 !-----------------------------------------------------------------------
 !
-!  vertical viscosity at bottom of U box, level k 
+!  vertical viscosity at bottom of U box, level k
 !
 !-----------------------------------------------------------------------
-        
+
    if (present(convect_visc)) critnu = convect_visc
 
    where (k < KMU(:,:,bid))
@@ -386,7 +386,7 @@
 
    if (.not. partial_bottom_cells) then
       UTK(:,:,bid) = UTKP
-      VTK(:,:,bid) = VTKP 
+      VTK(:,:,bid) = VTKP
    endif
 
 !-----------------------------------------------------------------------

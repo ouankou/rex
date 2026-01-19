@@ -4,29 +4,29 @@ c { dg-do compile }
 * Organization: GX Technology France
 * To: egcs-bugs@cygnus.com
 * Subject: identified bug in g77 on Alpha
-* 
+*
 * Dear Sir,
-* 
+*
 * You will find below the assembly code of a simple Fortran routine which
-* crashes with segmentation fault when storing the first element 
+* crashes with segmentation fault when storing the first element
 *       in( jT_f-hd_T     ) = Xsp
 * whereas everything is fine when commenting this line.
-* 
-* The assembly code (generated with 
+*
+* The assembly code (generated with
 * -ffast-math -fexpensive-optimizations -fomit-frame-pointer -fno-inline
 * or with -O5)
 * uses a zapnot instruction to copy an address.
 * BUT the zapnot parameter is 15 (copuing 4 bytes) instead of 255 (to copy
-* 8 bytes). 
-* 
+* 8 bytes).
+*
 * I guess this is typically a 64 bit issue. As, from my understanding,
 * zapnots are used a lot to copy registers, this may create problems
 * elsewhere.
-* 
+*
 * Thanks for your help
-* 
+*
 * Jean-Paul Jeannot
-* 
+*
       subroutine simul_trace( in, Xsp, Ysp, Xrcv, Yrcv )
 
 c   Next declaration added on transfer to gfortran testsuite
@@ -45,7 +45,7 @@ c   Next declaration added on transfer to gfortran testsuite
       real in( jT_f-hd_T : jT_l )
 
       in( jT_f-hd_T     ) = Xsp
-      in( jT_f-hd_T + 1 ) = Ysp 
+      in( jT_f-hd_T + 1 ) = Ysp
       in( jT_f-hd_T + 2 ) = Xrcv
       in( jT_f-hd_T + 3 ) = Yrcv
       end

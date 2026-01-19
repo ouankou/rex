@@ -58,16 +58,6 @@ void RoseVisitor::visit(SgNode *node) {
     }
   }
 
-#if 0 // TODO: Assertion `init_stmt != __null' failed.
-  if (SgForStatement* fs = isSgForStatement(node))
-  {
-    SgVariableSymbol* vs=NULL;
-    SgExpression* lb = NULL; 
-    SgExpression* up = NULL; 
-    SgExpression* st= NULL; 
-    getForLoopInformations (fs, vs, lb, up, st);
-  }
-#endif
   if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(node)) {
     getFirstVariable(*var_decl);
   }
@@ -86,14 +76,6 @@ void RoseVisitor::visit(SgNode *node) {
     // TODO: bugging function to fix
     //    changeBreakStatementsToGotos(sw);
   }
-
-#if 0
-  if (SgWhileStmt* sw = isSgWhileStmt(node))
-  {
-    // Internal function, called by specialized SageInterface helpers only.
-    //    ensureBasicBlock_aux (sw, &SgWhileStmt::get_body, &SgWhileStmt::set_body);
-  }
-#endif
 
   // TODO: not sure when SgToken show up in AST
   if (SgToken *stk = isSgToken(node)) {
@@ -192,13 +174,6 @@ void RoseVisitor::visit(SgNode *node) {
 
     isPostfixOperator(exp);
     isIndexOperator(exp);
-#if 0
-    if (SgBinaryOp* bop = isSgBinaryOp (exp))
-    {
-      //TODO: assertion failure
-      splitExpressionIntoBasicBlock(bop);
-    }
-#endif
     if (isSgCharVal(exp) || isSgUnsignedCharVal(exp) || isSgShortVal(exp) ||
         isSgUnsignedShortVal(exp) || isSgUnsignedIntVal(exp) ||
         isSgLongIntVal(exp) || isSgUnsignedLongVal(exp) ||

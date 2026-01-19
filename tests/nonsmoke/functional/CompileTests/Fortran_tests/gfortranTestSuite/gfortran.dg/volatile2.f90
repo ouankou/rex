@@ -10,5 +10,5 @@ program volatile_test
   real :: l
   volatile :: l         ! { dg-error "VOLATILE statement" }
   l   = 4.0
-  foo = 3.0             ! { dg-error "no IMPLICIT type" }   
+  foo = 3.0             ! { dg-error "no IMPLICIT type" }
 end program volatile_test

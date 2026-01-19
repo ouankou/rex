@@ -34,7 +34,7 @@ c Line 3 has x editing finished off by a 1h*
        if (a(60:60).ne."*") call abort ()
        rewind (10)
 
-c Check that sequences of t- and x-editing generate the correct 
+c Check that sequences of t- and x-editing generate the correct
 c number of spaces.
 c Line 1 we ignore.
 c Line 2 has tabs to the right of present position.
@@ -112,7 +112,7 @@ c http://gcc.gnu.org/ml/fortran/2005-07/msg00395.html).
   205  format (i10,a1)
        if ((ier.eq.0).or.(ichar(b).ne.0)) call abort ()
 
-c That's all for now, folks! 
+c That's all for now, folks!
 
        end
 

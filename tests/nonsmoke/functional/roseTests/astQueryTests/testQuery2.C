@@ -4,8 +4,7 @@
 
 using namespace std;
 
-#if 1
-	void
+        void
 printNodeList ( const NodeQuerySynthesizedAttributeType & localList )
    {
   // Supporting function for querySolverGrammarElementFromVariantVector
@@ -29,9 +28,7 @@ printNodeList ( const list<string> & localList )
 	  printf ("   list element #%d = %s \n",counter,(*i).c_str());
 	  counter++;
 	}
-   }
-#endif
-
+        }
 
 /*****************************************************************************
   * The functional

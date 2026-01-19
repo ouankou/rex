@@ -7,7 +7,7 @@
       character(12)  :: r(4,4,4) = '0123456789AB'
       character(12)  :: s(64)
       equivalence(r,s)
- 
+
       i = (/(j,j=1,3)/)
       write(r(1:4:2,2:4:1,3:4:2),'(3(2x,i4/)/3(3x,i6/))') i
 
@@ -22,10 +22,10 @@
       if (s(44).ne.'0123456789AB') call abort()
       if (s(45).ne.'            ') call abort()
       if (s(46).ne.'0123456789AB') call abort()
- 
+
       k = i
       i = 0
       read(r(1:4:2,2:4:1,3:4:2),'(3(2x,i4/)/3(3x,i6/))') i
       if (any(i.ne.k)) call abort()
-      
+
       end program arrayio_6

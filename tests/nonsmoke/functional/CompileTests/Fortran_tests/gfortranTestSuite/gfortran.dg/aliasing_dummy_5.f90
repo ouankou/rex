@@ -1,5 +1,5 @@
 ! { dg-do run }
-! 
+!
 ! PR fortran/45019
 !
 ! Check that the compiler knows that

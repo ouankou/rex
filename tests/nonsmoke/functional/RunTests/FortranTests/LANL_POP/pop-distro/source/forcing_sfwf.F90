@@ -1297,7 +1297,7 @@
                         k <= KMT(:,:,iblock) .and.               &
                         MASK_SR(:,:,iblock) > 0)
             else
-               WORK1(:,:,iblock) =                               & 
+               WORK1(:,:,iblock) =                               &
                   merge(TRACER(:,:,k,2,curtime,iblock)*          &
                         TAREA(:,:,iblock)*dz(k), c0,             &
                         k <= KMT(:,:,iblock) .and.               &

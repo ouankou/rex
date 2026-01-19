@@ -18,7 +18,7 @@ MODULE run_example_fortran03
   END TYPE
 
   TYPE, EXTENDS(epoch) :: time
-     REAL(DP) :: t = 0.0_DP   
+     REAL(DP) :: t = 0.0_DP
   END TYPE
 END MODULE
 
@@ -32,5 +32,5 @@ END MODULE
   WRITE(*,*) e4%i, e4%f
 
 END
- 
+
 ! { dg-final { cleanup-modules "run_example_fortran03" } }

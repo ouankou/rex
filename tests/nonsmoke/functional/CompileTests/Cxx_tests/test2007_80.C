@@ -50,19 +50,12 @@ namespace std
    { return true; }
 }
 
-
-#if 1
-class CFGEdge {
-};
-#endif
+class CFGEdge {};
 
 class CFGPath {
  std::vector<CFGEdge> edges;
  public:
-
-#if 1
-      bool operator==(const CFGPath& o) const {return edges == edges;}
-#endif
+   bool operator==(const CFGPath &o) const { return edges == edges; }
 };
 
 

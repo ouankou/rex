@@ -1,7 +1,3 @@
-#if 0
-extern int *pcre_compile(const char *, int, const char **, int *,
-                  const unsigned char *);
-#endif
 
 // int pcre_compile(const char *, int, const char **, int *,const unsigned char *);
 

@@ -1,4 +1,4 @@
-! { dg-do compile } 
+! { dg-do compile }
 
 SUBROUTINE check_dnucint_ana (dcore)
   IMPLICIT NONE
@@ -25,4 +25,4 @@ SUBROUTINE check_dnucint_ana (dcore)
   END IF
 END SUBROUTINE check_dnucint_ana
 
-! { dg-final { cleanup-tree-dump "vect" } } 
+! { dg-final { cleanup-tree-dump "vect" } }

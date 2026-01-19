@@ -12,12 +12,5 @@ void foobar()
      int j;
 
      j = X->start;
-
-#if 0
-     for (int i=0; i<=42; i++) 
-        {
-          j = X->start;
-        }
-#endif
    }
 

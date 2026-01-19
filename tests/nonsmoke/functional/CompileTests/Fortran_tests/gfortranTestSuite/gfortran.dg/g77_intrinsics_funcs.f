@@ -36,11 +36,11 @@
       i8 = rename ('foo', 'bar')
       i4 = rename ('foo', 'bar')
       i = rename ('foo', 'bar')
-      
+
       i8 = symlnk ('foo', 'bar')
       i4 = symlnk ('foo', 'bar')
       i = symlnk ('foo', 'bar')
-      
+
 ! Cleaning our mess
       call unlink ('bar')
 

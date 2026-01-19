@@ -14,16 +14,16 @@ end module fit_functions
 
 subroutine mrqcof( x, y, sig, ndata, a, ia, ma )
   use fit_functions
-  
+
   implicit none
   double precision, intent(in)   :: x(:), y(:), sig(:)
   integer,   intent(in)          :: ndata
   double precision, intent(in)   :: a(:)
   integer,   intent(in)          :: ia(:), ma
-  
+
   integer                           i
   double precision                  yan, dyda(ma)
-  
+
   do i = 1, ndata
      call gauss( x(i), a, yan, dyda, ma )
   end do

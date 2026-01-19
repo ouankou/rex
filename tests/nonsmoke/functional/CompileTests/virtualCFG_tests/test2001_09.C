@@ -26,12 +26,8 @@ Unparsed code:
 void
 foo ( char* c )
    {
-     myAssert (c != NULL);
-#if 0
-     char* x = c;
-#else
-     char* y = c;
-#endif
+  myAssert(c != NULL);
+  char *y = c;
    }
 
 
@@ -39,16 +35,12 @@ int
 main()
    {
      int X = 42;
-     foo ("a");
-#if 1
-#if 1
+     foo("a");
      myAssert (X == 0);
      if (1)
-          X = 1;
-#endif
+       X = 1;
 
-  // comment
-#endif
+     // comment
    }
 
 

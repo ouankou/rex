@@ -89,7 +89,6 @@ void foo(int lower, int upper, int stride) {
     }
     XOMP_loop_end();
   }
-#if 1
   if (XOMP_single()) {
     printf("---------(guided) schedule--------------\n");
   }
@@ -112,7 +111,6 @@ void foo(int lower, int upper, int stride) {
     }
     XOMP_loop_end();
   }
-#endif
   if (XOMP_single()) {
     printf("---------(runtime) ordered schedule--------------\n");
   }

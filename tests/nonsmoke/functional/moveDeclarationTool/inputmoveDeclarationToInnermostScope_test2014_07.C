@@ -46,9 +46,8 @@ void foo(int cond, int* blockx, int loSt)
 
 }
 
-// A tricky case of if-stmt, 
+// A tricky case of if-stmt,
 // move to two bodies, trigger another round of moving: iterative moving
-#if 1
 void bar (bool allow)
 {
   int i ;
@@ -64,5 +63,3 @@ void bar (bool allow)
     }
   }
 }
-#endif
-

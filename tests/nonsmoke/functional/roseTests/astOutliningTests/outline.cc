@@ -54,29 +54,14 @@ int main(int argc, char *argv[]) {
 
     // Rerun the test on the AST with the outlined code
     // AstTests::runAllTests(project);
-
-#if 0
-          if (make_pdfs)
-               makePDF (project, "outlined-");
-#endif
   }
 
-#if 0
-     printf ("Generate the dot output of the SAGE III AST \n");
-  // generateDOT ( *project );
-     generateDOTforMultipleFile ( *project );
-     printf ("DONE: Generate the dot output of the SAGE III AST \n");
-#endif
-
-#if 1
   const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 3000;
   // printf ("Generate whole AST graph if small enough (size = %d)
   // \n",numberOfNodes());
   generateAstGraph(project, MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH);
   // printf ("DONE: Generate whole AST graph if small enough \n");
-#endif
 
-#if 1
   if (numberOfNodes() < 4000) {
     std::string filename =
         SageInterface::generateProjectName(project) + "_copy_graph";
@@ -90,12 +75,9 @@ int main(int argc, char *argv[]) {
 
     graphNodesAfterCopy(originalSourceFileNodes, filename);
   }
-#endif
 
-#if 1
   // Rerun the test on the AST with the outlined code
   AstTests::runAllTests(project);
-#endif
 
   return backend(project);
 }

@@ -1,25 +1,13 @@
-#if 1
 // read: a
 // write: b
-void bar (int a, int& b)
-{
-  b = a; 
-}
-#endif
+void bar(int a, int &b) { b = a; }
 
-
-#if 1
 double gx;
 
 // read: empty
 // write: gx
-void globalX()
-{
-  gx=0.0; 
-}
-#endif
+void globalX() { gx = 0.0; }
 
-#if 1
 class VectorXY
 {
   public:
@@ -29,23 +17,10 @@ class VectorXY
     double x;
     double y;
 };
-#endif
 
-#if 1
 void foo()
 {
   VectorXY * bcVelocity;
   for (int i = 0; i < 4; i ++)
-    bcVelocity[i] = VectorXY(0xdeadbeef, 0xdeadbeef);   // VectorXY::VectorXY () side effect unknown, even the source code is available. 
+    bcVelocity[i] = VectorXY(0xdeadbeef, 0xdeadbeef);   // VectorXY::VectorXY () side effect unknown, even the source code is available.
 }
-#endif
-
-#if 0
-void foo2()
-{
-  VectorXY * bcVelocity;
-  double d1=0xdeadbeef, d2=0xdeadbeef; 
-  for (int i = 0; i < 4; i ++)
-    bcVelocity[i] = VectorXY(d1, d2);   // VectorXY::VectorXY () side effect unknown, even the source code is available. 
-}
-#endif

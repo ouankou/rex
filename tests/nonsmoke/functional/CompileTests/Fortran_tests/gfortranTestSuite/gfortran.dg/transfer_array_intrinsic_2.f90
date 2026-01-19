@@ -49,7 +49,7 @@ contains
      if (bigend) then
        y = (/(i + 3 + ishft (i + 2, 8) + ishft (i + 1, 16) &
                 + ishft (i, 24), i = 65, 80 , 4)/)
-     else 
+     else
        y = (/(i + ishft (i + 1, 8) + ishft (i + 2, 16) &
                 + ishft (i + 3, 24), i = 65, 80 , 4)/)
      end if

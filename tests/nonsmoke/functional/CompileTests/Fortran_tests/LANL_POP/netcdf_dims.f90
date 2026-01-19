@@ -8,7 +8,7 @@
     integer,             intent( in) :: len
     integer,             intent(out) :: dimid
     integer                          :: nf90_def_dim
-  
+
     nf90_def_dim = nf_def_dim(ncid, name, len, dimid)
   end function nf90_def_dim
   ! -----------
@@ -17,7 +17,7 @@
     character (len = *), intent( in) :: name
     integer,             intent(out) :: dimid
     integer                          :: nf90_inq_dimid
-    
+
     nf90_inq_dimid = nf_inq_dimid(ncid, name, dimid)
   end function nf90_inq_dimid
   ! -----------
@@ -35,10 +35,10 @@
     character (len = *), optional, intent(out) :: name
     integer,             optional, intent(out) :: len
     integer                                    :: nf90_inquire_dimension
-    
+
     character (len = nf90_max_name) :: dimName
     integer                         :: length
-    
+
     nf90_inquire_dimension = nf_inq_dim(ncid, dimid, dimName, length)
     if(present(name)) name = trim(dimName)
     if(present(len )) len  = length

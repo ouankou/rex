@@ -78,11 +78,3 @@ void foo_input()
 
 //  free(a);
 }
-
-#if 0
-int main()
-{
-  foo_input();
-  return 0;
-}
-#endif

@@ -17,14 +17,9 @@ struct AAA
 
 } // unnamed namespace, back to XXX
 
-#if 0
-   void foobar(const int def[3])
-#else
-   void foobar(const int def[Y::size])
-#endif
-   {
-     Y::AAA abc;
+void foobar(const int def[Y::size]) {
+  Y::AAA abc;
   // abc.isPeriodic = false;
-   }
+}
 
 } // namespace XXX

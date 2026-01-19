@@ -1,4 +1,4 @@
-   ! This test code demonstrates that we don't get the "I" and "J" 
+   ! This test code demonstrates that we don't get the "I" and "J"
    ! implicit loop index names (and they are required).
      integer I,J
 
@@ -16,5 +16,5 @@
 
    ! DATA (array(I), array2(I),I=1,10,2)/ 10 * 42 /
    ! DATA (array3(I,J),J=1,2),I=1,2) / 4 * 7 /
-   ! DATA ((P(I,L),L=1,8),I=31,37) 
+   ! DATA ((P(I,L),L=1,8),I=31,37)
 END

@@ -6,5 +6,5 @@ program p
   type :: t
   contains
     generic :: operator(+) => plus  ! assertion failure: 'name stack not empty'
-  end type 
+  end type
 end program

@@ -115,10 +115,10 @@ In order to update ``ghost cells'' and implement
 proper boundary conditions, some boundary information
 for the global domain is required.  The parameter
 {\tt ew\_boundary\_type} determines the type of
-boundary for the logical east-west direction 
+boundary for the logical east-west direction
 (i direction).  Acceptable values are currently
 {\tt 'cyclic'} and {\tt 'closed'} for periodic
-and closed boundaries, respectively.  The 
+and closed boundaries, respectively.  The
 parameter for the logical north-south direction
 (j direction) is {\tt ns\_boundary\_type} and
 accepts {\tt 'cyclic','closed'} and {\tt 'tripole'},
@@ -512,7 +512,7 @@ of the actual bottom topography.  For this option, an array
 containing the thickness of each bottom cell (in cm) must be
 read from a bottom cell input file.
 
-At present, POP does not support in-flow/out-flow boundary 
+At present, POP does not support in-flow/out-flow boundary
 conditions for regional grids.  For such regional simulations,
 closed boudaries are used with buffer zones whose
 thermohaline properties are maintained by
@@ -702,15 +702,15 @@ restart capability without needing to keep many named restart files
 present in the file system.  The model writes alternately to each
 of two such files so that if an error occurs while writing one
 restart file, the other restart file will still (presumably) be
-all right.   
+all right. 
 
 Restart files contain only the minimum information
 required to restart the model exactly, so that the results are
 the same after a restart as would have been the case had no
 restart been done. This means that two time-levels (n-1 and n)
 of the prognostic variables (PT, S, U, V and H) must be saved
-in 64-bit precision.  The restart format is governed by the 
-{\tt restart\_fmt} option.  Note that using netCDF for restarts 
+in 64-bit precision.  The restart format is governed by the
+{\tt restart\_fmt} option.  Note that using netCDF for restarts
 on machines that do not use the IEEE binary format standard
 will result in restart files that are not exact due to internal
 conversion by the netCDF library.  This will prevent exact
@@ -1522,19 +1522,19 @@ which ensures positive-definite energy dissipation, provided
 \hline
   smag\_lat\_gauss &
   98.0             &
-  width (degrees squared) of Gaussian function for reducing Smagorinsky 
+  width (degrees squared) of Gaussian function for reducing Smagorinsky
   coefficients \\
 \hline
 \end{tabular}
 \end{table}
 
-Parallel and perpendicular viscosities can vary in space by 
-setting the flag {\tt lvariable\_hmix\_aniso} to true.  The 
-spatially-varying viscosities in the parallel and perpendicular 
+Parallel and perpendicular viscosities can vary in space by
+setting the flag {\tt lvariable\_hmix\_aniso} to true.  The
+spatially-varying viscosities in the parallel and perpendicular
 directions are read from a file ({\tt var\_viscosity\_infile}).
-A specific form of the viscosities useful for CCSM coupled 
-simulations can be internally computed if the input filename is 
-'ccsm-internal'. In such a case, the six viscosity parameters 
+A specific form of the viscosities useful for CCSM coupled
+simulations can be internally computed if the input filename is
+'ccsm-internal'. In such a case, the six viscosity parameters
 for the form must also be supplied.
 
 The viscosities may optionally ({\tt lsmag\_aniso} = .true.)
@@ -1569,8 +1569,8 @@ form of this function is governed by the three
 
 Four options for computing the density from salinity and
 potential temperature are available.  The first is an equation
-of state introduced by McDougall, Wright, Jackett and Feistel 
-(MWJF \cite{MWJF01}) which is a faster and more accurate 
+of state introduced by McDougall, Wright, Jackett and Feistel
+(MWJF \cite{MWJF01}) which is a faster and more accurate
 alternative to the UNESCO equation of state. The second is a UNESCO
 equation of state based on potential temperature from
 Jackett and McDougall (JMCD \cite{JMcD95}).  The third is a polynomial
@@ -1595,7 +1595,7 @@ approximation is appropriate.
 \hline
   state\_choice                   &
   ['mwjf'], `jmcd', `polynomial', `linear' &
-  McDougall et al. eos OR Jackett and McDougall eos OR 
+  McDougall et al. eos OR Jackett and McDougall eos OR
   polynomial fit to UNESCO eos OR linear eos \\
 \hline
   state\_file            &

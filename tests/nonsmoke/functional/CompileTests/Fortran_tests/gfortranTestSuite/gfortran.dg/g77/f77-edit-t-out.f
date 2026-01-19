@@ -1,4 +1,4 @@
-C Test Fortran 77 T edit descriptor 
+C Test Fortran 77 T edit descriptor
 C      (ANSI X3.9-1978 Section 13.5.3.2)
 C
 C Origin: David Billinghurst <David.Billinghurst@riotinto.com>

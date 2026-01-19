@@ -1,85 +1,19 @@
 // This code attempts to use every modifier in C++
-#if 0
-   #define RESTRICT __restrict__
-   #define EXPORT 
-#else
-   #define RESTRICT restrict
-   #define EXPORT export
-#endif
+#define RESTRICT restrict
+#define EXPORT export
 
 #define TEST_INLINING       0
 #define TEST_CONST_MEMBERS  0
 #define TEST_STATIC_MEMBERS 0
 
-#if 0
-// working
-const float* RESTRICT constRestrictIntegerPointer = 0;
-float* RESTRICT restrictIntegerPointer;
-volatile int volatileIntegerValue = 0;
-int integerValue = 0;
-static int staticIntegerValue;
-extern int externIntegerValue;
-
-void voidFunction() {}
-inline void voidInlineFunction() {}
-const void constVoidFunction() {}
-static void staticFunctionEmptyBody() {}
-
-void functionWithRegisterLocalVariable()
-   {
-     register int registerIntegerValue;
-   }
-
-static void staticFunctionWithStaticLocalVariable()
-   {
-     static double x = 0;
-     register int registerIntegerValue;
-   }
-
-const void constVoidFunctionThrow() throw() { }
-
-
-void functionWithRegisterLocalVariable()
-   {
-     register int registerIntegerValue;
-   }
-
-void functionRegisterIntegerParameter ( int j );
-void functionRegisterIntegerParameter ( register int i ) {};
-#endif
-
-#if 0
-EXPORT template < class T > void templateFunction () {};
-#endif
-
-#if 1
 class classType
    {
-     public:
-#if 0
-          double publicDoubleValue;
-#endif
+public:
 #if TEST_STATIC_MEMBERS
           static double publicStaticDoubleValue;
 #endif
 #if TEST_CONST_MEMBERS
           const double publicConstDoubleValue;
-#endif
-#if 0
-          volatile double publicVolatileDoubleValue;
-          mutable double publicMutableDoubleValue;
-#endif
-#if 0
-       // Error: "inline" only placed on function declaration appearing in the class 
-       // and not to the function declaration that appears with the member function 
-       // definition.  I think this is an error. Also, non explicitly inlined member 
-       // functions declared in the class are output with explicit inlining by the 
-       // unparser.  It could be that the modifiers are not copied (possible copy 
-       // constructor bug?).
-          void publicMemberFunction () {};
-          void publicMemberFunctionConst () const {};
-          void publicMemberFunctionVolatile () volatile {};
-          void publicMemberFunctionThrow () throw() {};
 #endif
 
 #if TEST_INLINING
@@ -93,7 +27,6 @@ class classType
           inline void inlinePublicMemberFunction () {};
 #endif
 
-#if 1
        // void publicMemberFunctionIntegerParameter ( register int i ) {};
        // classType ( register int* i ) {};
 #if TEST_CONST_MEMBERS
@@ -103,8 +36,6 @@ class classType
               : publicConstDoubleValue(42), protectedConstDoubleValue(43),
                 privateConstDoubleValue(44) {};
 #endif
-#endif
-
 
 #if TEST_CONST_MEMBERS
           explicit classType(register int integerValueParameter)
@@ -114,36 +45,7 @@ class classType
                 privateConstDoubleValue(3) {};
 #endif
 
-#if 0
-          void publicMemberFunctionIntegerPointerParamter ( int* integerPointerParameter ) {};
-          void publicMemberFunctionIntegerRestrictPointerParameter 
-               ( int* RESTRICT integerRestrictPointerParameter ) {};
-
-       // Note that the storage specifier is only represented in the function 
-       // definition and will be dropped from the function declaration
-          void publicMemberFunctionIntegerRegisterPointerParamter ( register int* integerPointerParameter ) {};
-          void publicMemberFunctionIntegerReferenceParameter ( int & referenceIntegerValueParameter ) {};
-          void publicMemberFunctionIntegerConstReferenceParameter 
-               ( const int & constReferenceIntegerValueParameter ) {};
-          void publicMemberFunctionIntegerConstParameter  ( const int constIntegerValueParameter ) {};
-          virtual void publicVirtualMemberFunction () {};
-          virtual void publicPureVirtualMemberFunction () = 0;
-          friend  void publicFriendMemberFunction () {};
-          friend  inline void publicFriendInlineMemberFunction () {};
-#endif
-
-#if 0
-       // Error: Templated member functions are unparsed outside of their class
-       // legacy frontend BUG: legacy frontend IR does not record use of export keyword on template member functions
-          EXPORT template < class T > void publicTemplateMemberFunction () {};
-#endif
-#if 0
-          typedef long* longPointer;
-#endif
-      protected:
-#if 0
-          double protectedDoubleValue;
-#endif
+        protected:
 #if TEST_CONST_MEMBERS
           const double protectedConstDoubleValue;
 #endif
@@ -151,27 +53,12 @@ class classType
           static double protectedStaticDoubleValue;
 #endif
 
-#if 0
-          void protectedMemberFunction () {};
-          void protectedMemberFunctionConst () const {};
-          void protectedMemberFunctionVolatile () volatile {};
-#endif
-
-      private:
-#if 0
-          double privateDoubleValue;
-#endif
+        private:
 #if TEST_CONST_MEMBERS
           const double privateConstDoubleValue;
 #endif
 #if TEST_STATIC_MEMBERS
           static double privateStaticDoubleValue;
-#endif
-
-#if 0
-          void privateMemberFunction () {};
-          void privateMemberFunctionConst () const {};
-          void privateMemberFunctionVolatile () volatile {};         
 #endif
    };
 
@@ -194,115 +81,4 @@ inline void classType::inlinePublicMemberFunctionWithoutDefinition () {}
 double classType::publicStaticDoubleValue    = 0;
 double classType::protectedStaticDoubleValue = 0;
 double classType::privateStaticDoubleValue   = 0;
-#endif
-#endif
-
-#if 0
-class classTypeWithPureVirtualMember
-   {
-     public:
-          virtual void publicPureVirtualMemberFunction () = 0;
-   };
-
-class classTypeWithoutBaseClass
-   {
-     public:
-          int x;
-   };
-
-class classTypeWithPublicBaseClass : public classTypeWithoutBaseClass
-   {
-     public:
-          int y;
-   };
-
-class classTypeWithProtectedBaseClass : protected classTypeWithoutBaseClass
-   {
-     public:
-          int y;
-   };
-
-class classTypeWithPrivateBaseClass : private classTypeWithoutBaseClass
-   {
-     public:
-          int y;
-   };
-
-class classTypeWithVirtualPublicBaseClass : virtual public classTypeWithoutBaseClass
-   {
-     public:
-          int y;
-   };
-
-class classTypeWithVirtualProtectedBaseClass : virtual protected classTypeWithoutBaseClass
-   {
-     public:
-          int y;
-   };
-
-class classTypeWithVirtualPrivateBaseClass : virtual private classTypeWithoutBaseClass
-   {
-     public:
-          int y;
-   };
-
-class classTypeWithoutBaseClassA { public: int x; };
-class classTypeWithoutBaseClassB { public: int y; };
-class classTypeWithoutBaseClassC { public: int z; };
-class classTypeWithMultipleVirtualBaseClasses : virtual public    classTypeWithoutBaseClassA,
-                                                virtual protected classTypeWithoutBaseClassB,
-                                                virtual private   classTypeWithoutBaseClassC
-   {
-     public:
-          int a;
-   };
-#endif
-
-#if 0
-template < class T >
-class templateClassType
-   {
-     typename T::X x;
-   };
-#endif
-
-
-#if 0
-extern int externVariable;
-extern const int externConstVariable;
-const int externConstVariableWithInitializer = 42;
-#endif
-
-#if 0
-// No other string recognized in g++, that I could discover
-extern "C"   int externCvariable;
-
-// This is equivalent to extern, the "C++" is redundent
-extern "C++" int externCppvariable;
-#endif
-
-#if 0
-extern "C"   void externCfunction () {}
-extern "C++" void externCppfunction () {}
-#endif
-
-#if 0
-// Not permited without string
-extern "C"
-   {
-     int externCscopeVariable;
-   }
-
-extern "C++"
-   {
-     int externCppscopeVariable;
-   }
-#endif
-
-#if 0
-// Make this a valid linkable program
-int main()
-   {
-     return 0;
-   }
 #endif

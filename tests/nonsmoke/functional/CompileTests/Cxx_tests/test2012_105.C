@@ -19,12 +19,4 @@ void foo (int x)
             // class A { public: int foo (int x) { return x; } } x3; 
              }
         }
-
-#if 0
-       // else if (B::b)
-          else if (x)
-            class A { public: int foo (int x) { return x; } } x3; 
-          else
-            class A { public: int foo (int x) { return x; } } x3;
-#endif
    }

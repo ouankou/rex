@@ -39,17 +39,17 @@ contains
   function run_merge_1 (i, j, k) result(res)
     integer(kind=1) :: i, j, k, res
     res = merge_bits(i,j,k)
-  end function 
+  end function
   function run_merge_2 (i, j, k) result(res)
     integer(kind=2) :: i, j, k, res
     res = merge_bits(i,j,k)
-  end function 
+  end function
   function run_merge_4 (i, j, k) result(res)
     integer(kind=4) :: i, j, k, res
     res = merge_bits(i,j,k)
-  end function 
+  end function
   function run_merge_8 (i, j, k) result(res)
     integer(kind=8) :: i, j, k, res
     res = merge_bits(i,j,k)
-  end function 
+  end function
 end

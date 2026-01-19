@@ -1,7 +1,7 @@
 
-! The arbitrary function is 
+! The arbitrary function is
 ! product(localCount(:j))
-! which is computing the product of the first j values in the array localCount, where "j" is "counter". 
+! which is computing the product of the first j values in the array localCount, where "j" is "counter".
 
 program foo
    integer, parameter :: numdims = 4

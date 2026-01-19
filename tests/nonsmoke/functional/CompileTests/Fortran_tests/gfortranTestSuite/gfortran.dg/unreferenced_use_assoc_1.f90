@@ -4,7 +4,7 @@
 module InternalCompilerError
 
    type Byte
-      private 
+      private
       character(len=1)     :: singleByte
    end type
 
@@ -16,10 +16,10 @@ module InternalCompilerError
 
 contains
 
-   function UserTypeToBytes(user) result (bytes) 
-      type(UserType) :: user 
+   function UserTypeToBytes(user) result (bytes)
+      type(UserType) :: user
       type(Byte)     :: bytes(size(transfer(user, BytesPrototype)))
-      bytes = transfer(user, BytesPrototype) 
+      bytes = transfer(user, BytesPrototype)
    end function
 
    subroutine DoSomethingWithBytes(bytes)
@@ -31,10 +31,10 @@ end module
 
 program main
    use InternalCompilerError
-   type (UserType) :: user 
+   type (UserType) :: user
 
-   ! The following line caused the ICE 
+   ! The following line caused the ICE
    call DoSomethingWithBytes( UserTypeToBytes(user) )
 
-end program 
+end program
 ! { dg-final { cleanup-modules "InternalCompilerError" } }

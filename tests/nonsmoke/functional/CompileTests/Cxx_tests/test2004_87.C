@@ -14,7 +14,6 @@
              not copy constructor  T(arg1, arg2, ...)
 */
 
-#if 1
 // Demonstrates "not copy constructor", but not a reproduction of the case that failes in Kull!
 // DQ (9/18/2004): I believe that the purpose of recognizing initialization by constructor 
 // is to optimize away the redundand calls to the constructors (allowed by C++ standard).
@@ -29,27 +28,4 @@ void foo()
    {
      int n = 1;
      X e(1);
-   }
-#endif
-
-#if 0
-template <class T>
-class X
-   {
-     public:
-          X( int y);
-          X( const T & x );
-   };
-
-template <class T>
-void foo(T t)
-   {
-     int n = 1;
-     X<X> e(1);
-   }
-
-int main()
-   {
-     foo(5);
-   }
-#endif
+}

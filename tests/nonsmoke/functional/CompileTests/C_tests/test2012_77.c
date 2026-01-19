@@ -6,16 +6,13 @@
 // typedef unsigned long uint32_t;
 typedef unsigned long size_t;
 
-void foobar(const void *buffer)
-   {
-#if 1
+void foobar(const void *buffer) {
 // # define UNALIGNED_P(p) ((uintptr_t) (p) % alignof (uint32_t) != 0)
 #define UNALIGNED_P(p) ((unsigned long) (p) % alignof (unsigned int) != 0)
       if (UNALIGNED_P(buffer))
          {
-         }
-#endif
+      }
       if ((unsigned long) (buffer) % alignof (unsigned int) != 0)
          {
          }
-   }
+}

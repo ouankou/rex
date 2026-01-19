@@ -63,32 +63,8 @@ list<SgNode *> dqTraversal::listOfTraversedTypes;
 // Functions required by the tree traversal mechanism
 dqInheritedAttribute dqTraversal::evaluateInheritedAttribute(
     SgNode *astNode, dqInheritedAttribute inheritedAttribute) {
-#if 0
-     printf ("!!!!! In evaluateInheritedAttribute() \n");
-     printf ("     (traversalNodeCounter=%d) astNode->sage_class_name() = %s \n",
-          traversalNodeCounter,astNode->sage_class_name());
-     printf ("     astNode->unparseToString() = %s \n",astNode->unparseToString().c_str());
-#endif
-
-#if 0
-     vector<string> successorNames = astNode->get_traversalSuccessorNamesContainer();
-     printf ("     #of successors = %zu successorNames = ",successorNames.size());
-     for (vector<string>::iterator s = successorNames.begin(); s != successorNames.end(); s++)
-        {
-           printf ("%s ",(*s).c_str());
-        }
-     printf ("\n");
-#endif
 
   traversalNodeCounter++;
-
-#if 0
-     SgStatement* currentStatement = isSgStatement(astNode);
-     if (currentStatement != NULL)
-        {
-          printf ("currentStatement = %s currentStatement = %s \n",currentStatement->sage_class_name(),currentStatement->unparseToString().c_str());
-        }
-#endif
 
   switch (astNode->variantT()) {
   case V_SgTypedefDeclaration: {
@@ -140,12 +116,6 @@ dqInheritedAttribute dqTraversal::evaluateInheritedAttribute(
         // Add to list of traversed types
         //                       listOfTraversedTypes.push_back(baseType);
       }
-#if 0
-                      else
-                       {
-                         printf ("Skip traversal of the base type \n");
-                       }
-#endif
     }
 
     break;
@@ -205,21 +175,6 @@ int main(int argc, char *argv[]) {
 
   printf("In preprocessor.C: main() \n");
 
-#if 0
-     list<string> l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
-     printf ("Preprocessor (before): argv = \n%s \n",StringUtility::listToString(l).c_str());
-
-  // testing removeArgs
-
-     printf ("argc = %d \n",argc);
-     l = CommandlineProcessing::generateArgListFromArgcArgv (argc,argv);
-     printf ("l.size() = %zu \n",l.size());
-     printf ("Preprocessor (after): argv = \n%s \n",StringUtility::listToString(l).c_str());
-
-     printf ("Exiting in main! \n");
-     ROSE_ASSERT(1 == 2);
-#endif
-
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != NULL);
 
@@ -232,39 +187,6 @@ int main(int argc, char *argv[]) {
   printf("Generate the DOT output of the SAGE III AST \n");
   generateDOT(*project);
   printf("DONE: Generate the DOT output of the SAGE III AST \n");
-
-#if 0
-     dqTraversal treeTraversal;
-     dqInheritedAttribute inheritedAttribute;
-
-  // Ignore the return value since we don't need it
-     treeTraversal.traverseInputFiles(project,inheritedAttribute);
-#endif
-
-#if 0
-     printf ("\n\n");
-     printf ("############################################# \n");
-     printf ("############################################# \n");
-     list<SgNode*> nodeList;
-  // nodeList = NodeQuery::querySubTree (project,V_SgTypeInt,NodeQuery::ExtractTypes);
-     nodeList = NodeQuery::querySubTree (project,V_SgType,NodeQuery::ExtractTypes);
-     printf ("\nnodeList.size() = %zu \n",nodeList.size());
-
-     list<SgNode*>::iterator i = nodeList.begin();
-     while (i != nodeList.end())
-        {
-       // printf ("Query node = %p = %s \n",*i,(*i)->sage_class_name());
-       // printf ("Query node = %s \n",(*i)->unparseToString().c_str());
-          printf ("Query node = %p = %s = %s \n",*i,(*i)->sage_class_name(),(*i)->unparseToString().c_str());
-          i++;
-        }
-     printf ("############################################# \n");
-     printf ("############################################# \n");
-     printf ("\n\n");
-
-     printf ("Exiting ... \n");
-     ROSE_ASSERT (false);
-#endif
 
   printf("Calling the backend() \n");
 

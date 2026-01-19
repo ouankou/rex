@@ -15,12 +15,8 @@ void foobar(int x, ...) {
   va_list ap;
   va_start(ap, x);
 
-#if 1
   // value = x_.*__builtin_va_arg(ap, int X_::*);
   value = x_.*((decltype(int X_::*))(sizeof(int X_::*)));
-#else
-  value = x_.*test__builtin_va_arg(ap, int X_::*);
-#endif
 
   va_end(ap);
 }

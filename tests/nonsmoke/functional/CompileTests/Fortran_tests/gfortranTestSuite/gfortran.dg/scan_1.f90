@@ -26,6 +26,6 @@ program b
    if (w /= 0) call abort
 
 end program b
-   
 
-   
+
+

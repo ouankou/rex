@@ -23,7 +23,7 @@ if(ENABLE-TUTORIAL-DIRECTORY)
     bin_example buildCallGraph buildVFA livenessAnalysis CharmSupport
     debuggingIRnodeToString debuggingSourceCodePositionInformation
     commandlineProcessing interveneAtVariables changeFunction classHierarchyGraph
-    dataBaseUsage 
+    dataBaseUsage
     loopNestingInfoProcessing tauInstrumenter typeTransformation
     generatingUniqueNamesFromDeclaration
     symbolTableHandling scopeInformation customGraphGeneration inlineTransformations

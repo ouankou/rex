@@ -32,28 +32,6 @@ using namespace std;
 
 #include "printAnalysisStates.h"
 
-#if 0
-#include "analysis.h"
-
-#include "analysisCommon.h"
-
-#include "cfgUtils.h"
-
-#include "common.h"
-
-#include "dataflow.h"
-
-#include "functionState.h"
-
-#include "latticeFull.h"
-
-#include "liveDeadVarAnalysis.h"
-
-#include "saveDotAnalysis.h"
-
-#include "variables.h"
-#endif
-
 // Include the header file specific to our analysis.
 #include "taintedFlowAnalysis.h"
 

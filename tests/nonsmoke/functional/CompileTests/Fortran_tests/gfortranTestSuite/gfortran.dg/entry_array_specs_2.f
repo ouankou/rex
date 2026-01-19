@@ -13,7 +13,7 @@
       call y(a,10)
       if (j .ne. 2) call abort ()
       stop
-      end 
+      end
       subroutine x
       common // j
       real a(n)

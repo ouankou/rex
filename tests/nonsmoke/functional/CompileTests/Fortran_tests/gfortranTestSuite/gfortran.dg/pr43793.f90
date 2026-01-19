@@ -3,7 +3,7 @@
 ! PR fortran/30073
 ! PR fortran/43793
 !
-! Original code by Joost VandeVondele 
+! Original code by Joost VandeVondele
 ! Reduced and corrected code by Steven G. Kargl
 !
 module fft_tools

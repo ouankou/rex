@@ -1,5 +1,5 @@
    implicit none
- ! Separating the declarations will work fine in ROSE. 
+ ! Separating the declarations will work fine in ROSE.
  ! integer, parameter :: x = 42
  ! integer, parameter :: y = x
 

@@ -76,10 +76,10 @@ void foobar()
                  else
                   {
                     struct tz_t *tz;
-                    x = sizeof (struct tz_t);
-#if 1
-                    tz = bsearch (0L, TimeZones, sizeof TimeZones/sizeof (struct tz_t),sizeof (struct tz_t) );
-#endif
+                    x = sizeof(struct tz_t);
+                    tz = bsearch(0L, TimeZones,
+                                 sizeof TimeZones / sizeof(struct tz_t),
+                                 sizeof(struct tz_t));
                     tz = bsearch (0L, TimeZones, sizeof (struct tz_t),sizeof (struct tz_t) );
                     tz = bsearch (0L, TimeZones, 42,sizeof (struct tz_t) );
                   }

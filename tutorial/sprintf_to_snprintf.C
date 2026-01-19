@@ -8,17 +8,12 @@ main( int argc, char* argv[] )
      SgProject* project = frontend(argc,argv);
      AstTests::runAllTests(project);
 
-#if 0
-  // Output the graph so that we can see the whole AST graph, for debugging.
-     generateAstGraph(project, 4000);
-#endif
-#if 1
      printf ("Generate the dot output of the SAGE III AST \n");
      generateDOT ( *project );
-     printf ("DONE: Generate the dot output of the SAGE III AST \n");
-#endif
+     printf("DONE: Generate the dot output of the SAGE III AST \n");
 
-  // There are lots of way to write this, this is one simple approach; get all the function calls.
+     // There are lots of way to write this, this is one simple approach; get
+     // all the function calls.
      std::vector<SgNode*> functionCalls = NodeQuery::querySubTree (project,V_SgFunctionCallExp);
 
   // Find the SgFunctionSymbol for snprintf so that we can reset references to "sprintf" to "snprintf" instead.

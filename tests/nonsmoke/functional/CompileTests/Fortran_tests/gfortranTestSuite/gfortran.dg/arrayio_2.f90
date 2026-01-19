@@ -25,4 +25,4 @@
           r(3,2).ne.'0123456789ab' .or. &
           r(4,2).ne.'0123456789ab') call abort()
 
-     end program arrayio_2 
+     end program arrayio_2

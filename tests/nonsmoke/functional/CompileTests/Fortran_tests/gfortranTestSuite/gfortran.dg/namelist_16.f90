@@ -26,4 +26,4 @@ program namelist_16
 
   if ((z(1) .ne. (5.0,6.0)) .or. (z(2) .ne. (7.0,8.0))) call abort ()
 
-end program namelist_16 
+end program namelist_16

@@ -13,10 +13,10 @@ c { dg-do compile }
 !
 ! The command was : g77 -c <prog.f>
 !
-! The OS is Red Hat 6, and the output from uname -a is 
+! The OS is Red Hat 6, and the output from uname -a is
 !   Linux grfw1452.gns.cri.nz 2.2.5-15 #1 Mon Apr 19 23:00:46 EDT 1999 i686 unknown
 !
-! The configure script I used was 
+! The configure script I used was
 !   /usr/src/egcs/gcc/gcc-2.95.1/configure --enable-languages=f77 i585-unknown-linux
 !
 ! I was installing 2.95 because under EGCS 2.1.1 none of my code was working

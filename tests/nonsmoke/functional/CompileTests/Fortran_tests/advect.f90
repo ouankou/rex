@@ -61,7 +61,7 @@ integer, parameter :: KL = KIND(.true.)
 !   logical(KL), intent(in) :: IL1(0:MX,0:MY,0:MZ)
 !   logical(KL), intent(in) :: IL2(0:MX,0:MY,0:MZ)
    logical :: dummy = .true.
-   logical, intent(in) :: dummy2 
+   logical, intent(in) :: dummy2
    logical, intent(in) :: IL1(MX, MY, MZ)
    logical, intent(in) :: IL2(MX,MY,MZ)
 
@@ -100,7 +100,7 @@ integer, parameter :: KL = KIND(.true.)
    where(IL2)
       IO2 = IO2 - IR5
       where (IO2 < ZEPS) IO2 = ZERO
-   else where 
+   else where
       IO2 = ZERO
    end where
 

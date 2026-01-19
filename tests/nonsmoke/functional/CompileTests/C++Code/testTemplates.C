@@ -21,20 +21,12 @@ class ABC<int>
           int foo();
    };
 
-#if 1
-int ABC<int>::foo ()
-   {
-     return xyz;
-   }
-#endif
+   int ABC<int>::foo() { return xyz; }
 
-int main()
-   {
+   int main() {
      class ABC<int> object1;
      object1.xyz = 7;
-#if 1
      object1.xyz = object1.foo();
-#endif
      return 0;
    }
 

@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! Tests the fix for PR25072, in which mask expressions
-! that start with an internal or intrinsic function 
+! that start with an internal or intrinsic function
 ! reference would give a syntax error.
 !
 ! The fix for PR28119 is tested as well; here, the forall

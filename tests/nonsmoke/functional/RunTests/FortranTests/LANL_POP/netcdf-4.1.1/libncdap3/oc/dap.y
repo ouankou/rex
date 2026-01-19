@@ -11,7 +11,7 @@
 
 /*DO NOT DELETE THIS LINE*/
 
-%token SCAN_ALIAS 
+%token SCAN_ALIAS
 %token SCAN_ARRAY
 %token SCAN_ATTR
 %token SCAN_BYTE
@@ -24,14 +24,14 @@
 %token SCAN_GRID
 %token SCAN_INT16
 %token SCAN_INT32
-%token SCAN_MAPS 
+%token SCAN_MAPS
 %token SCAN_MESSAGE
 %token SCAN_SEQUENCE
 %token SCAN_STRING
 %token SCAN_STRUCTURE
 %token SCAN_UINT16
 %token SCAN_UINT32
-%token SCAN_URL 
+%token SCAN_URL
 %token SCAN_WORD
 /* For errorbody */
 %token SCAN_PTYPE
@@ -71,10 +71,10 @@ declaration:
 	| SCAN_GRID '{' SCAN_ARRAY ':' declaration SCAN_MAPS ':'
           declarations '}' var_name ';'
 	    {if(($$ = makegrid(parsestate,$10,$5,$8))==null) {YYABORT;}}
-        | error 
+        | error
             {daperror(parsestate,"Unrecognized type"); YYABORT;}
 	;
- 
+
 
 base_type:
 	  SCAN_BYTE {$$=(Object)SCAN_BYTE;}
@@ -122,7 +122,7 @@ attr_list:
 	;
 
 attribute:
-	  alias ';' {$$=null;} /* ignored */ 
+	  alias ';' {$$=null;} /* ignored */
         | SCAN_BYTE name bytes ';'
 	    {$$=attribute(parsestate,$2,$3,(Object)SCAN_BYTE);}
 	| SCAN_INT16 name int16 ';'
@@ -142,7 +142,7 @@ attribute:
 	| SCAN_URL name urls ';'
 	    {$$=attribute(parsestate,$2,$3,(Object)SCAN_URL);}
 	| name '{' attr_list '}' {$$=attrset(parsestate,$1,$3);}
-	| error 
+	| error
             {daperror(parsestate,"Illegal attribute"); YYABORT;}
 	;
 

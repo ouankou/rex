@@ -1,27 +1,23 @@
 
 namespace third_party {
 
-#if 1
   namespace detail {
     namespace function {
       struct useless_clear_type {};
     }
-  }
-#endif
+    } // namespace detail
 
 class function_base
 {
 // public: bool empty() const { return true; }
 };
 
-#if 1
 // inline bool operator==(const function_base& f, detail::function::useless_clear_type*)
 inline bool operator==(const function_base& f, detail::function::useless_clear_type*)
 {
 // return f.empty();
   return true;
 }
-#endif
 
 template<typename Functor>
   bool operator==(const function_base& f, Functor g)

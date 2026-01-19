@@ -6,7 +6,7 @@ program ret_array_1
 
   allocate (a(2, 3))
   a = reshape ((/1, 2, 3, 4, 5, 6/), (/2, 3/))
-  
+
   ! Using the return value as an actual argument
   b = 0;
   b = sum (transpose (a), 1);

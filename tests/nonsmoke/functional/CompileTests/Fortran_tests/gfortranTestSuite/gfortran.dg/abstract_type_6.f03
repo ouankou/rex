@@ -48,6 +48,6 @@ SUBROUTINE bottom_c(obj)
    CLASS(Bottom) :: obj
    CALL top_c(obj)
    ! other stuff
-END SUBROUTINE bottom_c 
+END SUBROUTINE bottom_c
 end module
 ! { dg-final { cleanup-modules "m" } }

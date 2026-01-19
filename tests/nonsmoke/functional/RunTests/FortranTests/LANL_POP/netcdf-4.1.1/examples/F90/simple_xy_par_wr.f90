@@ -11,7 +11,7 @@
 !     This example demonstrates the netCDF Fortran 90 API. This is part
 !     of the netCDF tutorial, which can be found at:
 !     http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-tutorial
-      
+
 !     Full documentation of the netCDF Fortran 90 API can be found at:
 !     http://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90
 
@@ -36,7 +36,7 @@ program simple_xy_par_wr
   ! These will tell where in the data file this processor should
   ! write.
   integer :: start(NDIMS), count(NDIMS)
-  
+
   ! This is the data array we will write. It will just be filled with
   ! the rank of this processor.
   integer, allocatable :: data_out(:)
@@ -106,10 +106,10 @@ program simple_xy_par_wr
 contains
   subroutine check(status)
     integer, intent ( in) :: status
-    
-    if(status /= nf90_noerr) then 
+
+    if(status /= nf90_noerr) then
       print *, trim(nf90_strerror(status))
       stop 2
     end if
-  end subroutine check  
+  end subroutine check
 end program simple_xy_par_wr

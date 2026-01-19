@@ -5,8 +5,8 @@
 !
 ! Contributed by Alexei Matveev <alexei.matveev+gcc@gmail.com>
 
-module p                           
-  implicit none                                                                 
+module p
+  implicit none
 
   contains
 

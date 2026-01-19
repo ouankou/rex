@@ -8,10 +8,10 @@
   character(10), dimension (2) :: source
   source = "abcdefghij"
   explicit_result = join_1(source)
-  if (any (explicit_result .ne. source)) call abort () 
+  if (any (explicit_result .ne. source)) call abort ()
 
   implicit_result = reallocate_hnv (source, size(source, 1), LEN (source))
-  if (any (implicit_result .ne. source)) call abort () 
+  if (any (implicit_result .ne. source)) call abort ()
 
 contains
 
@@ -33,4 +33,4 @@ contains
 
 end
 
- 
+

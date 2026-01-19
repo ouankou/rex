@@ -25,7 +25,7 @@ c
       write ( *, '(a)' ) '  FORTRAN77 version'
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '  Test FORTRAN77 intrinsic routines.'
- 
+
       call test_abs
       call test_acos
       call test_aimag
@@ -96,7 +96,7 @@ cc TEST_ABS tests ABS.
 c
 c  Discussion:
 c
-c    The FORTRAN77 function ABS returns the absolute value of a 
+c    The FORTRAN77 function ABS returns the absolute value of a
 c    number.  For complex numbers, this is the magnitude.
 c
 c  Modified:
@@ -124,16 +124,16 @@ c
       write ( *, '(a)' ) '  ABS is a FORTRAN77 function which returns'
       write ( *, '(a)' ) '  the absolute value of a numeric quantity'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' )    
+      write ( *, '(a)' )
      & '      Type                  VALUE                ABS(VALUE)'
       write ( *, '(a)' ) ' '
-      write ( *, '(a,i12,12x,i12)' )    
+      write ( *, '(a,i12,12x,i12)' )
      &     '  integer              ', i4, abs ( i4 )
-      write ( *, '(a,f12.4,12x,f12.4)' )    
+      write ( *, '(a,f12.4,12x,f12.4)' )
      & '  Real                 ', r4, abs ( r4 )
-      write ( *, '(a,f12.4,12x,f12.4)' )    
+      write ( *, '(a,f12.4,12x,f12.4)' )
      & '  Double precision     ', r8, abs ( r8 )
-      write ( *, '(a,2f12.4,f12.4)' )    
+      write ( *, '(a,2f12.4,f12.4)' )
      &  '  Complex              ', c4, abs ( c4 )
 
       return
@@ -175,10 +175,10 @@ c
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_ACOS'
       write ( *, '(a)' ) '  ACOS is a FORTRAN77 function which returns'
-      write ( *, '(a)' )     
+      write ( *, '(a)' )
      &  '  the inverse cosine of a value between -1 and 1'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '      X               ACOS(X)     COS(ACOS(X))'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -221,11 +221,11 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_AIMAG'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  AIMAG is a FORTRAN77 function which returns the'
       write ( *, '(a)' ) '  imaginary part of a complex number.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '                  X                      AIMAG(X)'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -271,9 +271,9 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_AINT'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  AINT is a FORTRAN77 function which returns the'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  value of a real number rounded towards zero.'
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '       X              AINT(X)'
@@ -294,7 +294,7 @@ cc TEST_ANINT tests ANINT.
 c
 c  Discussion:
 c
-c    The FORTRAN77 function ANINT returns, as a real value, the nearest 
+c    The FORTRAN77 function ANINT returns, as a real value, the nearest
 c    integer to a given real value.
 c
 c  Modified:
@@ -321,7 +321,7 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_ANINT'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  ANINT is a FORTRAN77 function which returns,'
       write ( *, '(a)' ) '  as a real value, the nearest integer to a '
       write ( *, '(a)' ) '  given real number.'
@@ -372,11 +372,11 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_ASIN'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  ASIN is a FORTRAN77 function which returns the'
       write ( *, '(a)' ) '  inverse sine of a value between -1 and 1'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '      X               ASIN(X)     SIN(ASIN(X))'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -423,11 +423,11 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_ATAN'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  ATAN is a FORTRAN77 function which returns the'
       write ( *, '(a)' ) '  inverse tangent of a value'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '      X               ATAN(X)     TAN(ATAN(X))'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -475,11 +475,11 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_ATAN2'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  ATAN2 is a FORTRAN77 function which returns the'
       write ( *, '(a)' ) '  inverse tangent of a value'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '       X               Y           ATAN2(Y,X)  TAN(ATAN2(Y,X))'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -522,11 +522,11 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_BTEST'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  BTEST(I,POS) is a FORTRAN77 function which is TRUE'
       write ( *, '(a)' ) '  if bit POS of I is 1.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  Here, we are only going to check the lowest 32 bits.'
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '         I       POS    BTEST(I,POS)'
@@ -550,9 +550,9 @@ c
       end do
 
       write ( *, '(a)' ) ' '
-      write ( *, '(a,i12,a)' ) 
+      write ( *, '(a,i12,a)' )
      &  '  The binary representation of ', i1, ' is:'
-      write ( *, '(a)' ) '  "' // s //'".' 
+      write ( *, '(a)' ) '  "' // s //'".'
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '         I       POS    BTEST(I,POS)'
@@ -575,9 +575,9 @@ c
       end do
 
       write ( *, '(a)' ) ' '
-      write ( *, '(a,i12,a)' ) 
+      write ( *, '(a,i12,a)' )
      &  '  The binary representation of ', i1, ' is:'
-      write ( *, '(a)' ) '  "' // s //'".' 
+      write ( *, '(a)' ) '  "' // s //'".'
 
       return
       end
@@ -608,7 +608,7 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_CHAR'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  CHAR is a FORTRAN77 function which returns the'
       write ( *, '(a)' ) '  character of given character index.'
       write ( *, '(a)' ) ' '
@@ -650,17 +650,17 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_CMPLX'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  CMPLX is a FORTRAN77 function which returns the'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  complex number formed by real and imaginary parts.'
       write ( *, '(a)' ) ' '
       write ( *, '(a,f14.6,f14.6)' ) '  CMPLX(1)        ', cmplx ( 1 )
-      write ( *, '(a,f14.6,f14.6)' ) 
+      write ( *, '(a,f14.6,f14.6)' )
      &  '  CMPLX(2,3)      ', cmplx ( 2, 3 )
-      write ( *, '(a,f14.6,f14.6)' ) 
+      write ( *, '(a,f14.6,f14.6)' )
      &  '  CMPLX(4.5)      ', cmplx ( 4.5 )
-      write ( *, '(a,f14.6,f14.6)' ) 
+      write ( *, '(a,f14.6,f14.6)' )
      &  '  CMPLX(6.7, 8.9 )', cmplx ( 6.7, 8.9 )
 
       return
@@ -700,7 +700,7 @@ c
       write ( *, '(a)' ) ' '
       write ( *, '(a,a)' ) '                  X ',
      &  '                            CONJG(X)'
-      write ( *, '(a,a)' ) 
+      write ( *, '(a,a)' )
      &  '     --------------------------      ',
      &  '----------------------------'
       write ( *, '(a)' ) ' '
@@ -749,8 +749,8 @@ c
       write ( *, '(a)' ) ' '
       write ( *, '(a,a)' ) '              X',
      &  '                          COS(X)'
-      write ( *, '(a,a)' ) 
-     &  '    --------------------------  ', 
+      write ( *, '(a,a)' )
+     &  '    --------------------------  ',
      &  '----------------------------'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -890,20 +890,20 @@ c
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_DBLE'
       write ( *, '(a)' ) '  DBLE is a FORTRAN77 function which converts'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  a complex, integer or real value to double precision'
       write ( *, '(a)' ) '  real'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  Type                   X             DBLE(X)'
       write ( *, '(a)' ) ' '
       write ( *, '(a,f6.4,2x,f6.4,2x,f6.4)' ) '  complex           ',
      & x_c4, dble ( x_c4 )
-      write ( *, '(a,i6,10x,f6.4)'          ) '  integer           ', 
+      write ( *, '(a,i6,10x,f6.4)'          ) '  integer           ',
      & x_i4, dble ( x_i4 )
-      write ( *, '(a,f6.4,10x,f6.4)'        ) '  real              ', 
+      write ( *, '(a,f6.4,10x,f6.4)'        ) '  real              ',
      & x_r4, dble ( x_r4 )
-      write ( *, '(a,f6.4,10x,f6.4)'        ) '  double precision  ', 
+      write ( *, '(a,f6.4,10x,f6.4)'        ) '  double precision  ',
      & x_r8, dble ( x_r8 )
 
       return
@@ -1006,7 +1006,7 @@ c
       do i = 1, 5
         x_r4 = 100.0E+00 * r4_uniform_01 ( seed )
         y_r4 = 100.0E+00 * r4_uniform_01 ( seed )
-        write ( *, '(2x,f12.6,2x,f12.6,2x,f12.6)' ) 
+        write ( *, '(2x,f12.6,2x,f12.6,2x,f12.6)' )
      &    x_r4, y_r4, dprod ( x_r4, y_r4 )
       end do
 
@@ -1046,7 +1046,7 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_EXP'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  EXP is a FORTRAN77 function which returns the'
       write ( *, '(a)' ) '  exponential of a real number.'
       write ( *, '(a)' ) ' '
@@ -1068,7 +1068,7 @@ cc TEST_IAND_I4 tests IAND on integer arguments.
 c
 c  Discussion:
 c
-c    The FORTRAN77 function IAND returns the bitwise AND 
+c    The FORTRAN77 function IAND returns the bitwise AND
 c    of two integers.
 c
 c  Modified:
@@ -1092,7 +1092,7 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_IAND_I4'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  IAND is a FORTRAN77 function which returns the'
       write ( *, '(a)' ) '  bitwise AND of two integers.'
       write ( *, '(a)' ) ' '
@@ -1143,7 +1143,7 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_IBCLR'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  IBCLR is a FORTRAN77 function which sets a given'
       write ( *, '(a)' ) '  bit to zero in an integer word.'
       write ( *, '(a)' ) ' '
@@ -1189,11 +1189,11 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_IBITS'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  IBITS is a FORTRAN77 function which extracts'
       write ( *, '(a)' ) '  LEN bits from word I start at position POS.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '         I       POS    LEN    IBITS(I,POS,LEN)'
       write ( *, '(a)' ) ' '
       len = 3
@@ -1211,7 +1211,7 @@ c
       end do
 
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  Use IBITS to extract the 4 bytes that make up'
       write ( *, '(a)' ) '  an integer word.'
       write ( *, '(a)' ) ' '
@@ -1224,10 +1224,10 @@ c  1: 11010010 = 210
 c
 c  0: 00001111 =  15
 c
-      i4 = 2**29 + 2**28 + 2**27 + 2**26 + 2**25 
-     &   + 2**18 
-     &   + 2**15 + 2**14 + 2**12 + 2**9 
-     &   + 2**3 + 2**2 + 2**1 + 2**0 
+      i4 = 2**29 + 2**28 + 2**27 + 2**26 + 2**25
+     &   + 2**18
+     &   + 2**15 + 2**14 + 2**12 + 2**9
+     &   + 2**3 + 2**2 + 2**1 + 2**0
 
       write ( *, '(a,i12)' ) '  I4 = ', i4
       write ( *, '(a)' ) ' '
@@ -1268,7 +1268,7 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_IBSET'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  IBSET is a FORTRAN77 function which sets a given'
       write ( *, '(a)' ) '  bit to one in an integer word.'
       write ( *, '(a)' ) ' '
@@ -1290,7 +1290,7 @@ cc TEST_ICHAR tests ICHAR
 c
 c  Discussion:
 c
-c    The FORTRAN77 function ICHAR returns the character index (between 0 
+c    The FORTRAN77 function ICHAR returns the character index (between 0
 c    and 255) of a character.
 c
 c  Modified:
@@ -1313,7 +1313,7 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_ICHAR'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  ICHAR is a FORTRAN77 function which returns the'
       write ( *, '(a)' ) '  character index of a given character'
       write ( *, '(a)' ) ' '
@@ -1342,7 +1342,7 @@ cc TEST_IEOR_I4 tests IEOR on integer arguments.
 c
 c  Discussion:
 c
-c    The FORTRAN77 function IEOR returns the bitwise exclusive OR 
+c    The FORTRAN77 function IEOR returns the bitwise exclusive OR
 c    of two integers.
 c
 c  Modified:
@@ -1408,15 +1408,15 @@ c
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_INDEX'
       write ( *, '(a)' ) '  INDEX(S,SUB) is a FORTRAN77 function which'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  returns the location of the first occurrence'
       write ( *, '(a)' ) '  of substring SUB in string S.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a,i8)' ) 
-     &  '  index ( ''THE CATATONIC CAT'', ''CAT'' )', 
+      write ( *, '(a,i8)' )
+     &  '  index ( ''THE CATATONIC CAT'', ''CAT'' )',
      &  index ( 'THE CATATONIC CAT', 'CAT' )
-      write ( *, '(a,i8)' ) 
-     &  '  index ( ''THE CATATONIC CAT'', ''cat'' )', 
+      write ( *, '(a,i8)' )
+     &  '  index ( ''THE CATATONIC CAT'', ''cat'' )',
      &  index ( 'THE CATATONIC CAT', 'cat' )
 
       return
@@ -1454,18 +1454,18 @@ c
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_INT'
       write ( *, '(a)' ) '  INT is a FORTRAN77 function which converts'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  a complex, integer or real value to integer.'
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '  Type                   X             INT(X)'
       write ( *, '(a)' ) ' '
-      write ( *, '(a,f6.4,2x,f6.4,2x,i6)' ) '  complex             ', 
+      write ( *, '(a,f6.4,2x,f6.4,2x,i6)' ) '  complex             ',
      &  x_c4, int ( x_c4 )
-      write ( *, '(a,i6,10x,i6)'          ) '  integer             ', 
+      write ( *, '(a,i6,10x,i6)'          ) '  integer             ',
      &  x_i4, int ( x_i4 )
-      write ( *, '(a,f6.4,10x,i6)'        ) '  real                ', 
+      write ( *, '(a,f6.4,10x,i6)'        ) '  real                ',
      &  x_r4, int ( x_r4 )
-      write ( *, '(a,f6.4,10x,i6)'        ) '  double precision    ', 
+      write ( *, '(a,f6.4,10x,i6)'        ) '  double precision    ',
      &  x_r8, int ( x_r8 )
 
       return
@@ -1478,7 +1478,7 @@ cc TEST_IOR_I4 tests IOR on integer arguments.
 c
 c  Discussion:
 c
-c    The FORTRAN77 function IOR returns the bitwise inclusive OR 
+c    The FORTRAN77 function IOR returns the bitwise inclusive OR
 c    of two integers.
 c
 c  Modified:
@@ -1590,10 +1590,10 @@ c
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_ISHFTC'
       write ( *, '(a)' ) '  ISHFTC is a FORTRAN77 function which'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  circular-shifts the bits in an integer word.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '         I       SHIFT    ISHFTC(I,SHIFT,SIZE)'
       write ( *, '(a)' ) ' '
       do shift = -5, 5
@@ -1632,9 +1632,9 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_LEN'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  LEN is a FORTRAN77 function which returns the'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  declared length of a string variable, or the length of'
       write ( *, '(a)' ) '  a string constant'
       write ( *, '(a)' ) ' '
@@ -1646,7 +1646,7 @@ c
       write ( *, '(a,i8)' ) '  character*4            ', len ( s4 )
       write ( *, '(a,i8)' ) '  character*8            ', len ( s8 )
       write ( *, '(a,i8)' ) '  character*16           ', len ( s16 )
-      write ( *, '(a,i8)' ) 
+      write ( *, '(a,i8)' )
      &  ' "A STRING"              ', len ( 'A STRING' )
 
       return
@@ -1676,9 +1676,9 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_LEN_TRIM'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  LEN_TRIM is a FORTRAN77 function which returns the'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  "used" length of a string variable up to the last'
       write ( *, '(a)' ) '  nonblank.'
       write ( *, '(a)' ) ' '
@@ -1725,7 +1725,7 @@ c
       character*3 s7
       character*3 s8
 
-      s4 = 'boy' 
+      s4 = 'boy'
       s5 = 'cat'
       s6 = 'cats'
       s7 = 'dog'
@@ -1733,24 +1733,24 @@ c
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_LGE'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  LGE is a FORTRAN77 function which returns the value'
       write ( *, '(a)' ) '  of "S1 >= S2" where S1 and S2 are strings.'
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '    S1    S2   LGE(S1,S2)'
       write ( *, '(a)' ) '   ---   ---   ----------'
       write ( *, '(a)' ) ' '
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s4 // '"  "' // s4 // '"  ', lge ( s4, s4 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s4 // '"  "' // s5 // '"  ', lge ( s4, s5 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s4 // '"  ', lge ( s5, s4 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s7 // '"  ', lge ( s5, s7 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s8 // '"  ', lge ( s5, s8 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s6 //  '" ', lge ( s5, s6 )
 
       return
@@ -1782,31 +1782,31 @@ c
       character*3 s7
       character*3 s8
 
-      s4 = 'boy' 
+      s4 = 'boy'
       s5 = 'cat'
       s6 = 'cats'
       s7 = 'dog'
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_LGT'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  LGT is a FORTRAN77 function which returns the value'
       write ( *, '(a)' ) '  of "S1 > S2" where S1 and S2 are strings.'
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '    S1    S2   LGT(S1,S2)'
       write ( *, '(a)' ) '   ---   ---   ----------'
       write ( *, '(a)' ) ' '
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s4 // '"  "' // s4 // '"  ', lgt ( s4, s4 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s4 // '"  "' // s5 // '"  ', lgt ( s4, s5 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s4 // '"  ', lgt ( s5, s4 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s7 // '"  ', lgt ( s5, s7 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s8 // '"  ', lgt ( s5, s8 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s6 //  '" ', lgt ( s5, s6 )
 
       return
@@ -1838,31 +1838,31 @@ c
       character*3 s7
       character*3 s8
 
-      s4 = 'boy' 
+      s4 = 'boy'
       s5 = 'cat'
       s6 = 'cats'
       s7 = 'dog'
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_LLE'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  LLE is a FORTRAN77 function which returns the value'
       write ( *, '(a)' ) '  of "S1 <= S2" where S1 and S2 are strings.'
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '    S1    S2   LLE(S1,S2)'
       write ( *, '(a)' ) '   ---   ---   ----------'
       write ( *, '(a)' ) ' '
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s4 // '"  "' // s4 // '"  ', lle ( s4, s4 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s4 // '"  "' // s5 // '"  ', lle ( s4, s5 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s4 // '"  ', lle ( s5, s4 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s7 // '"  ', lle ( s5, s7 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s8 // '"  ', lle ( s5, s8 )
-      write ( *, '(a,8x,l1)' ) 
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s6 //  '" ', lle ( s5, s6 )
 
       return
@@ -1894,32 +1894,32 @@ c
       character*3 s7
       character*3 s8
 
-      s4 = 'boy' 
+      s4 = 'boy'
       s5 = 'cat'
       s6 = 'cats'
       s7 = 'dog'
 
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) 'TEST_LGT'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  LLT is a FORTRAN77 function which returns the'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '  value of "S1 < S2" where S1 and S2 are strings.'
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '    S1    S2   LLT(S1,S2)'
       write ( *, '(a)' ) '   ---   ---   ----------'
       write ( *, '(a)' ) ' '
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s4 // '"  "' // s4 // '"  ', llt ( s4, s4 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s4 // '"  "' // s5 // '"  ', llt ( s4, s5 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s4 // '"  ', llt ( s5, s4 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s7 // '"  ', llt ( s5, s7 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s8 // '"  ', llt ( s5, s8 )
-      write ( *, '(a,8x,l1)' )  
+      write ( *, '(a,8x,l1)' )
      &  '  "' // s5 // '"  "' // s6 //  '" ', llt ( s5, s6 )
 
       return
@@ -1981,7 +1981,7 @@ cc TEST_LOG10 tests LOG10.
 c
 c  Discussion:
 c
-c    The FORTRAN77 function LOG10 returns the base 10 logarithm of a 
+c    The FORTRAN77 function LOG10 returns the base 10 logarithm of a
 c    real number.
 c
 c  Modified:
@@ -2013,7 +2013,7 @@ c
       write ( *, '(a)' ) '  returns the base 10 logarithm '
       write ( *, '(a)' ) '  of a real number.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '       X              LOG10(X)     10**(LOG(X))'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -2054,11 +2054,11 @@ c
       write ( *, '(a,i8)' ) '  max(1,3,2) =   ', max ( 1, 3, 2 )
       write ( *, '(a,i8)' ) '  max(3,2,4,1) = ', max ( 3, 2, 4, 1 )
       write ( *, '(a)' ) ' '
-      write ( *, '(a,f4.1)' ) 
+      write ( *, '(a,f4.1)' )
      &  '  max(2.1, 1.2) =           ', max ( 2.1, 1.2 )
-      write ( *, '(a,f4.1)' ) 
+      write ( *, '(a,f4.1)' )
      &  '  max(1.1, 3.2, 2.3) =      ', max ( 1.1, 3.2, 2.3 )
-      write ( *, '(a,f4.1)' ) 
+      write ( *, '(a,f4.1)' )
      &  '  max(3.1, 2.2, 4.3, 1.4) = ', max ( 3.1, 2.2, 4.3, 1.4 )
 
       return
@@ -2093,11 +2093,11 @@ c
       write ( *, '(a,i8)' ) '  min(2, 3, 1, 4) = ', min ( 2, 3, 1, 4 )
 
       write ( *, '(a)' ) ' '
-      write ( *, '(a,f4.1)' ) 
+      write ( *, '(a,f4.1)' )
      &  '  min(3.1, 4.2) =           ', min ( 3.1, 4.2 )
-      write ( *, '(a,f4.1)' ) 
+      write ( *, '(a,f4.1)' )
      &  '  min(4.1. 2.2, 3.3) =      ', min ( 4.1, 2.2, 3.3 )
-      write ( *, '(a,f4.1)' ) 
+      write ( *, '(a,f4.1)' )
      &  '  min(2.1, 3.2, 1.3, 4.4) = ', min ( 2.1, 3.2, 1.3, 4.4 )
 
       return
@@ -2200,7 +2200,7 @@ c
       write ( *, '(a)' ) ' '
       write ( *, '(a)' ) '  Here, the arguments are reals.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '          X               Y              MOD(X,Y)'
       write ( *, '(a)' ) ' '
       do test = 1, 10
@@ -2275,7 +2275,7 @@ cc TEST_NINT tests NINT.
 c
 c  Discussion:
 c
-c    The FORTRAN77 function NINT returns, as an integer, the nearest 
+c    The FORTRAN77 function NINT returns, as an integer, the nearest
 c    integer to a given real value.
 c
 c  Modified:
@@ -2396,9 +2396,9 @@ c
       write ( *, '(a)' ) '  REAL is a FORTRAN77 function which returns'
       write ( *, '(a)' ) '  the real part of a complex number.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '                  X                         REAL(X)'
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '       ------------------------    ----------------'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -2593,7 +2593,7 @@ c
       write ( *, '(a)' ) '  SQRT is a FORTRAN77 function which returns'
       write ( *, '(a)' ) '  the square root of a real number.'
       write ( *, '(a)' ) ' '
-      write ( *, '(a)' ) 
+      write ( *, '(a)' )
      &  '       X              SQRT(X)        (SQRT(X))**2'
       write ( *, '(a)' ) ' '
       do i = 1, 10
@@ -2660,7 +2660,7 @@ cc TEST_TANH tests TANH.
 c
 c  Discussion:
 c
-c    The FORTRAN77 function TANH returns the hyperbolic tangent of a 
+c    The FORTRAN77 function TANH returns the hyperbolic tangent of a
 c    real number.
 c
 c  Modified:
@@ -2766,7 +2766,7 @@ c
         seed = seed + i4_huge ( )
       end if
 
-      theta = 2.0E+00 * pi 
+      theta = 2.0E+00 * pi
      &  * real ( dble ( seed ) * 4.656612875D-10 )
 
       c4_uniform_01 = r * cmplx ( cos ( theta ), sin ( theta ) )
@@ -2993,7 +2993,7 @@ c
 c  Although SEED can be represented exactly as a 32 bit integer,
 c  it generally cannot be represented exactly as a 32 bit real number!
 c
-      r4_uniform = a + ( b - a ) 
+      r4_uniform = a + ( b - a )
      &  * real ( dble ( seed ) * 4.656612875D-10 )
 
       return
@@ -3285,8 +3285,8 @@ c
       save month
 
       data month /
-     &  'January  ', 'February ', 'March    ', 'April    ', 
-     &  'May      ', 'June     ', 'July     ', 'August   ', 
+     &  'January  ', 'February ', 'March    ', 'April    ',
+     &  'May      ', 'June     ', 'July     ', 'August   ',
      &  'September', 'October  ', 'November ', 'December ' /
 
       call date_and_time ( date, time )
@@ -3315,8 +3315,8 @@ c
         end if
       end if
 
-      write ( *, 
-     &  '(i2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3,1x,a)' ) 
+      write ( *,
+     &  '(i2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3,1x,a)' )
      &  d, month(m), y, h, ':', n, ':', s, '.', mm, ampm
 
       return

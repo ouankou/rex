@@ -21,7 +21,7 @@ contains
 
     subroutine kill(x)
         integer, allocatable, intent(in) :: x(:)
-        
+
         deallocate(x) ! { dg-error "Cannot deallocate" }
     end subroutine kill
 

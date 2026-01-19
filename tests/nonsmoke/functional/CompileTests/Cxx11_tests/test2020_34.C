@@ -20,12 +20,5 @@ void foobar()
 
   // Precedence of assignment is 2 and for plus is 12 (so no parentheses are required).
      int c = x + 1;
-
-#if 0
-     int b = 0;
-     b = (x , 1);
-
-     int y = (4,5);
-#endif
    }
 

@@ -3,9 +3,9 @@ module nonF03ComBlock
   common /NONF03COM/ r, s
   real :: r
   real :: s
-  
+
   contains
-    
+
     subroutine hello(myArray)
       integer, dimension(:) :: myArray
 
@@ -21,9 +21,9 @@ program testComBlock
   call hello(myArray)
 
   ! these are set in the call to hello() above
-  ! r and s are reals (default size) in com block, set to 
+  ! r and s are reals (default size) in com block, set to
   ! 1.0 and 2.0, respectively, in hello()
-  if(r .ne. 1.0) then 
+  if(r .ne. 1.0) then
      call abort()
   endif
   if(s .ne. 2.0) then

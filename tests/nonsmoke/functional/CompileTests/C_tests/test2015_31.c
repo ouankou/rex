@@ -1,11 +1,9 @@
 typedef unsigned char uint8_t;
 
-#if 1
 struct hvm_intack {
     uint8_t source;
     uint8_t vector;
 };
-#endif
 
 enum hvm_intsrc {
     hvm_intsrc_none,

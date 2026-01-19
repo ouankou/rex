@@ -22,7 +22,7 @@ end function ext1
 module simple
     implicit none
 contains
-    integer function foo () 
+    integer function foo ()
          foo = 10            ! OK - function result
          call foobar ()
     contains
@@ -43,7 +43,7 @@ end module simple
 module simpler
     implicit none
 contains
-    integer function foo_er () 
+    integer function foo_er ()
          foo_er = 10         ! OK - function result
     end function foo_er
 end module simpler
@@ -58,7 +58,7 @@ end module simpler
            integer ext2, arg
         end function ext2
     end interface
-    stmt_fcn (w) = sin (w)     
+    stmt_fcn (w) = sin (w)
     call x (y ())
     x = 10                   ! { dg-error "is not a variable" }
     y = 20                   ! { dg-error "is not a variable" }

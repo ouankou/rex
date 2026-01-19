@@ -52,7 +52,7 @@ contains
     real, intent(inout) :: a, b
     b = 2.0 * a
   end subroutine sub
-  
+
   SUBROUTINE DHSEQR( WORK )
     REAL WORK( * )
     EXTERNAL           DLARFX

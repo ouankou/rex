@@ -4,8 +4,8 @@
 ! InitRECFAST because the formal namespace derived types references
 ! were not being reassociated to the module.
 !
-! Contributed by Martin Reinecke  <martin@mpa-garching.mpg.de>  
-! 
+! Contributed by Martin Reinecke  <martin@mpa-garching.mpg.de>
+!
 module Precision
   integer, parameter :: dl = KIND(1.d0)
 end module Precision

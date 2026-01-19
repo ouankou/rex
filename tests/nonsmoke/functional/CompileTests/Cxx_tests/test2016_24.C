@@ -22704,10 +22704,7 @@ inline __attribute__ ((__always_inline__))  void ignore_unused()
 {}
 
 
-} 
-
-
-#if 1
+}
 
 namespace std 
 {
@@ -83890,8 +83887,4 @@ pool<UserAllocator>::find_POD(void * const chunk) const
 }
 
 
-} 
-
-#endif
-
-
+}

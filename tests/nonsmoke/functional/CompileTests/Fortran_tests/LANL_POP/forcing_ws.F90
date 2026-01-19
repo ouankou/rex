@@ -276,10 +276,10 @@
          SMF (:,:,1,iblock) = c1 - c2*cos(ULAT(:,:,iblock))**2
          SMFT(:,:,1,iblock) = c1 - c2*cos(TLAT(:,:,iblock))**2
 
-         ! Zero the zonal windstress at points within 1/100th degree 
+         ! Zero the zonal windstress at points within 1/100th degree
          ! of the true North Pole.
          ! NOTE this is needed because in tripole grids the
-         ! true North Pole lies exactly on a U-point, and at 
+         ! true North Pole lies exactly on a U-point, and at
          ! that point ANGLE is not defined.
          ! In principle, this could also occur in a dipole grid
          ! if a U-point or T-point is near or very near the North Pole.

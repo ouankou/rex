@@ -16,51 +16,6 @@ Note: KCC translates
 Use of typedef does not even get to the unparser phase.
 */
 
-#if 0
-// typedef
-struct
- structName
-   {
-     int x;
-#if 1
-   } xStruct;
-
-// struct structName { int x; } yStruct;
-// typedef
-// structName yStruct;
-#else
-   };
-
-typedef
-structName xStruct;
-#endif
-#endif
-
-#if 0
-// Different ways of specifing enums (similar problems as presented for structs (above))
-enum { a, b, c };
-enum capitalLetters { A, B, C };
-enum { aa, bb, cc } doubleLowerCaseLetters;
-enum capitalDoubleLetters { AA, BB, CC } doubleLetters;
-
-capitalLetters moreLetters;
-capitalDoubleLetters moreDoubleLetters;
-#endif
-
-#if 0
-class A
-   {
-     public:
-          int x;
-// This #if controls if the {...} is unparsed or not (the existance of a tag?)
-#if 1
-   };
-#else
-   } B;
-#endif
-#endif
-
-#if 1
 int
 main ()
    {
@@ -79,7 +34,4 @@ main ()
   // return X.x;
 
      return 0;
-   }
-#endif
-
-
+}

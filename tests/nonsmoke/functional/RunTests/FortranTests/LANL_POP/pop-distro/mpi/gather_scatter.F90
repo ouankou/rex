@@ -32,7 +32,7 @@
 ! !PUBLIC MEMBER FUNCTIONS:
 
    public :: gather_global,      &
-             scatter_global,     & 
+             scatter_global,     &
              redistribute_blocks
 
 !EOP
@@ -47,19 +47,19 @@
      module procedure gather_global_dbl,  &
                       gather_global_real, &
                       gather_global_int
-   end interface 
+   end interface
 
    interface scatter_global
      module procedure scatter_global_dbl,  &
                       scatter_global_real, &
                       scatter_global_int
-   end interface 
+   end interface
 
    interface redistribute_blocks
      module procedure redistribute_blocks_dbl,  &
                       redistribute_blocks_real, &
                       redistribute_blocks_int
-   end interface 
+   end interface
 
 !-----------------------------------------------------------------------
 !
@@ -87,7 +87,7 @@
 !  same as module
 !
 ! !REMARKS:
-!  This is the specific inteface for double precision arrays 
+!  This is the specific inteface for double precision arrays
 !  corresponding to the generic interface gather_global.  It is shown
 !  to provide information on the generic interface (the generic
 !  interface is identical, but chooses a specific inteface based
@@ -145,7 +145,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  if this task is the dst_task, copy local blocks into the global 
+!  if this task is the dst_task, copy local blocks into the global
 !  array and post receives for non-local blocks.
 !
 !-----------------------------------------------------------------------
@@ -308,7 +308,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  if this task is the dst_task, copy local blocks into the global 
+!  if this task is the dst_task, copy local blocks into the global
 !  array and post receives for non-local blocks.
 !
 !-----------------------------------------------------------------------
@@ -471,7 +471,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  if this task is the dst_task, copy local blocks into the global 
+!  if this task is the dst_task, copy local blocks into the global
 !  array and post receives for non-local blocks.
 !
 !-----------------------------------------------------------------------
@@ -590,7 +590,7 @@
 !  same as module
 !
 ! !REMARKS:
-!  This is the specific interface for double precision arrays 
+!  This is the specific interface for double precision arrays
 !  corresponding to the generic interface scatter_global.  It is shown
 !  to provide information on the generic interface (the generic
 !  interface is identical, but chooses a specific interface based
@@ -694,7 +694,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  if this task is the src_task, copy blocks of global array into 
+!  if this task is the src_task, copy blocks of global array into
 !  message buffer and send to other processors. also copy local blocks
 !
 !-----------------------------------------------------------------------
@@ -1009,7 +1009,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  if this task is the src_task, copy blocks of global array into 
+!  if this task is the src_task, copy blocks of global array into
 !  message buffer and send to other processors. also copy local blocks
 !
 !-----------------------------------------------------------------------
@@ -1324,7 +1324,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  if this task is the src_task, copy blocks of global array into 
+!  if this task is the src_task, copy blocks of global array into
 !  message buffer and send to other processors. also copy local blocks
 !
 !-----------------------------------------------------------------------
@@ -1542,7 +1542,7 @@
 !  same as module
 !
 ! !REMARKS:
-!  This is the specific interface for double precision arrays 
+!  This is the specific interface for double precision arrays
 !  corresponding to the generic interface scatter_global.  It is shown
 !  to provide information on the generic interface (the generic
 !  interface is identical, but chooses a specific interface based

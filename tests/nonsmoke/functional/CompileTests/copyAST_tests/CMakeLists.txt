@@ -107,7 +107,7 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     test2005_207.C test2005_208.C test2005_209.C test2006_01.C test2006_02.C
     test2006_03.C test2006_04.C test2006_05.C test2006_06.C test2006_07.C
     test2006_08.C test2006_10.C test2006_12.C test2006_13.C test2006_14.C
-    test2006_16.C test2006_17.C test2006_18.C test2006_19.C 
+    test2006_16.C test2006_17.C test2006_18.C test2006_19.C
     test2006_22.C test2006_23.C test2006_25.C test2006_26.C test2006_28.C
     test2006_34.C test2006_37.C test2006_38.C test2006_40.C test2006_41.C
     test2006_42.C test2006_46.C test2006_47.C test2006_50.C test2006_52.C
@@ -168,7 +168,7 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     test2006_141.C
   )
 
-set(GNU_6_1_PROBLEM_FILE 
+set(GNU_6_1_PROBLEM_FILE
    test2004_149.C   test2005_28.C   test2005_45.C   test2005_93.C
    test2005_98.C   test2005_181.C   test2006_20.C   test2006_79.C    test2006_92.C
 )

@@ -1,4 +1,3 @@
-#if 1
 #include <sys/socket.h>
 
 
@@ -15,8 +14,6 @@ typedef struct len_and_sockaddr {
 #endif
 	} u;
 } len_and_sockaddr;
-#endif
-
 
 enum {
 	LSA_LEN_SIZE = 0, // offsetof(len_and_sockaddr, u),

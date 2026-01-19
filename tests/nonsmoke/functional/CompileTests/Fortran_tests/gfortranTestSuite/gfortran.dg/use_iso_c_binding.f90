@@ -1,17 +1,17 @@
 ! { dg-do compile }
-! this is to simply test that the various ways the use statement can 
-! appear are handled by the compiler, since i did a special treatment 
-! of the intrinsic iso_c_binding module.  note: if the user doesn't 
-! provide the 'intrinsic' keyword, the compiler will check for a user 
-! provided module by the name of iso_c_binding before using the 
+! this is to simply test that the various ways the use statement can
+! appear are handled by the compiler, since i did a special treatment
+! of the intrinsic iso_c_binding module.  note: if the user doesn't
+! provide the 'intrinsic' keyword, the compiler will check for a user
+! provided module by the name of iso_c_binding before using the
 ! intrinsic one.  --Rickett, 09.26.06
 module use_stmt_0
-  ! this is an error because c_ptr_2 does not exist 
+  ! this is an error because c_ptr_2 does not exist
   use, intrinsic :: iso_c_binding, only: c_ptr_2 ! { dg-error "Symbol 'c_ptr_2' referenced at \\(1\\) not found" }
 end module use_stmt_0
 
 module use_stmt_1
-  ! this is an error because c_ptr_2 does not exist 
+  ! this is an error because c_ptr_2 does not exist
   use iso_c_binding, only: c_ptr_2 ! { dg-error "Symbol 'c_ptr_2' referenced at \\(1\\) not found" }
 end module use_stmt_1
 

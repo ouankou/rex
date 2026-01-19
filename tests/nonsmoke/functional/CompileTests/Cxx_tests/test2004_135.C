@@ -15,7 +15,5 @@ namespace G
 // namespace aliasing can only build an alias in the scope of the namespace alias declaration
 namespace GG = G;
 
-  // DQ (11/19/2004): Temporarily commented out since this is a demonstrated bug now that we qualify everything!
-#if 0
-namespace GH = G::H;
-#endif
+// DQ (11/19/2004): Temporarily commented out since this is a demonstrated bug
+// now that we qualify everything!

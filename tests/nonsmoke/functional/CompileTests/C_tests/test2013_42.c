@@ -24,38 +24,15 @@ static int sad_hpel_motion_search( // MpegEncContext * s,
 
     ((void)0);
 
-#if 0
-    if(c->skip){
-        *mx_ptr = 0;
-        *my_ptr = 0;
-        return dmin;
-    }
-
-    pix = c->src[src_index][0];
-
-    mx = *mx_ptr;
-    my = *my_ptr;
-    ptr = c->ref[ref_index][0] + (my * stride) + mx;
-
-    dminh = dmin;
-#endif
-
     if (mx > xmin && mx < xmax &&
         my > ymin && my < ymax) {
         int dx=0, dy=0;
         int d, pen_x, pen_y;
-        const int index= (my<<3) + mx;
-#if 0
-        const int t= score_map[(index-(1<<3))&(64 -1)];
-        const int l= score_map[(index- 1 )&(64 -1)];
-        const int r= score_map[(index+ 1 )&(64 -1)];
-        const int b= score_map[(index+(1<<3))&(64 -1)];
-#else
+        const int index = (my << 3) + mx;
         const int t; // = score_map[(index-(1<<3))&(64 -1)];
         const int l; // = score_map[(index- 1 )&(64 -1)];
         const int r; // = score_map[(index+ 1 )&(64 -1)];
         const int b; // = score_map[(index+(1<<3))&(64 -1)];
-#endif
         mx <<= 1;
         my <<= 1;
 
@@ -78,15 +55,6 @@ static int sad_hpel_motion_search( // MpegEncContext * s,
               d += (mv_penalty[pen_x + 0] + mv_penalty[pen_y + -1])*penalty_factor; 
               asm ( "cmpl  %0, %3       \n\t" "cmovl %3, %0       \n\t" "cmovl %4, %1       \n\t" "cmovl %5, %2       \n\t" : "+&r" (dminh), "+&r" (dx), "+r" (dy) : "r" (d), "r" (0), "r" (-1));
             }
-#if 0
-            { 
-              const int hx= 2*(mx)+(0); 
-              const int hy= 2*(my-1)+(1); 
-           // d= cmp_hpel(s, mx, my-1, 0, 1, size, h, ref_index, src_index, cmp_sub, chroma_cmp_sub, flags); 
-              d += (mv_penalty[hx - pred_x] + mv_penalty[hy - pred_y])*penalty_factor; 
-              __asm__ volatile( "cmpl  %0, %3       \n\t" "cmovl %3, %0       \n\t" "cmovl %4, %1       \n\t" "cmovl %5, %2       \n\t" : "+&r" (dmin), "+&r" (bx), "+r" (by) : "r" (d), "r" (hx), "r" (hy));
-            }
-#endif
         }
     }
 }

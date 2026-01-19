@@ -1,4 +1,4 @@
-! One dimensional array as shared variable       
+! One dimensional array as shared variable
       subroutine initialize (n,u)
       implicit none
 
@@ -6,7 +6,7 @@
       double precision u(n)
       integer i
 
-!$omp parallel do 
+!$omp parallel do
       do i = 1,n
          u(i) = 0.0
       enddo

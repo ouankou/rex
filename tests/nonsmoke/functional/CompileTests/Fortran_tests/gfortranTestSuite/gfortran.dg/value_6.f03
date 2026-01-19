@@ -1,6 +1,6 @@
 ! { dg-do run }
-! Verify by-value passing of character arguments w/in Fortran to a bind(c) 
-! procedure.  
+! Verify by-value passing of character arguments w/in Fortran to a bind(c)
+! procedure.
 ! PR fortran/32732
 module pr32732
   use, intrinsic :: iso_c_binding, only: c_char

@@ -8,7 +8,7 @@ program test
  call f(.false.)
  call f(.false.)
 contains
-  subroutine f(rec) 
+  subroutine f(rec)
     logical :: rec
     if(rec) then
       call g()

@@ -9,16 +9,6 @@ class A
           void foo1(int x) { int a; };
    };
 
-#if 0
-namespace B {
-class A
-   {
-     public:
-          void foo2(double x) { double a; };
-   };
-}
-#endif
-
 void foobar()
    {
   // Declaration of a local class (legal C++ but unusual construction)
@@ -32,15 +22,5 @@ void foobar()
   // Use of global class A is not unparsed properly (unparsed code is missing "::" scope operator)
      ::A global_a;
      global_a.foo1(1);
-
-#if 0
-  // Use of namespace class A is not unparsed properly (unparsed code is missing "B::" scope operator)
-     B::A namespace_a;
-     namespace_a.foo2(1.0);
-
-  // Use of local class A just fine
-     A local_a;
-     local_a.foo3();
-#endif
    }
 

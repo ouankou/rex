@@ -24,6 +24,6 @@ contains
     print *,this%get_something()
   end subroutine do_something
 
-end module ice6 
+end module ice6
 
 ! { dg-final { cleanup-modules "ice6" } }

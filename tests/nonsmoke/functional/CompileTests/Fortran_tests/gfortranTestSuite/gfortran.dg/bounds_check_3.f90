@@ -33,7 +33,7 @@
 
   print *, a(10:-8:-9) ! { dg-warning "is out of bounds" }
   print *, a(10:-7:-9) ! don't warn
-  
+
   print *, a(0:0:-1) ! { dg-warning "is out of bounds" }
   print *, a(0:0:1) ! { dg-warning "is out of bounds" }
   print *, a(0:0) ! { dg-warning "is out of bounds" }

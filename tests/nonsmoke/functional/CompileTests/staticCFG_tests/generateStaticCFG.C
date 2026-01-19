@@ -31,17 +31,6 @@ int main(int argc, char *argv[])
     StaticCFG::CFG cfg(proc);
     cfg.buildFullCFG();
     cfg.cfgToDot(proc, full_output);
-
-
-#if 0 // not ready
-    string simple_output = file_func_name +"_simple_vcfg.dot";
-    std::ofstream simplegraph(simple_output.c_str());
-    // Simplified CFG suitable for most analyses
-    // This will cause assertion failure
-    //StaticCFG::cfgToDot(simplegraph, proc->get_declaration()->get_name(), StaticCFG::makeInterestingCfg(proc)); 
-    // This will generate identical graph as cfgToDotForDebugging ()
-    StaticCFG::cfgToDot(simplegraph, proc->get_declaration()->get_name(), proc->cfgForBeginning());
-#endif    
   }
   return 0;
 }

@@ -16,7 +16,6 @@ class Xt
           Xt ( V v, U u );
    };
 
-#if 1
 // Example of code that should be generated for the specialization of Xt template using default parameter
 template <>
 class Xt<int,int>
@@ -34,8 +33,7 @@ class Xt<int,int>
 
           template <typename V>
           Xt ( V v, U u );
-   };
-#endif
+};
 
 // main() forces use of Yt<int> which forces use of Xt<T>
 int

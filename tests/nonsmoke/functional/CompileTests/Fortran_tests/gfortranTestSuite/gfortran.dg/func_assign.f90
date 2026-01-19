@@ -12,7 +12,7 @@ contains
     bar = 4
   end function bar
 
-  subroutine a() 
+  subroutine a()
    implicit none
    real :: fun
    external fun

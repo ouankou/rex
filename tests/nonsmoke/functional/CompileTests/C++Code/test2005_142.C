@@ -39,28 +39,4 @@ void foo() {
   myVector &b = *(a + 1);
 
   int offset;
-
-#if 0
-     vector<int> x;
-
-  // using iterators
-  // int & value_x = *(x.begin() + 1);
-     int & value_x = *(x.begin() + offset);
-
-     int & value_x2 = *(getIterator(x) + offset);
-#endif
-
-#if 0
-     list<int> y;
-
-  // using iterators
-  // int & value_y = *(y.begin() + offset);
-     int & value_y = *(y.begin());
-
-     map<int,string> z;
-
-  // using iterators
-  // pair<int,string> & value_z = *(z.begin() + offset);
-     const pair<int,string> & value_z = *(z.begin());
-#endif
 }

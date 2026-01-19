@@ -1,4 +1,4 @@
-******************************************      
+******************************************
 * Simplest OMP task example
 * Liao 1/21/2010
 ******************************************
@@ -9,19 +9,19 @@
       external process
       do i = 1, 10
         item(i) = 11-i
-      enddo  
+      enddo
 
 !$omp parallel
 !$omp single
-      print *, 'using ', omp_get_num_threads(), ' threads' 
+      print *, 'using ', omp_get_num_threads(), ' threads'
       do i = 1, 10
-!$omp task 
+!$omp task
       call process(i,item)
 !$omp end task
-      enddo  
+      enddo
 !$omp end single
 !$omp end parallel
-      end 
+      end
 
 ******************************************
       subroutine process(input,item)

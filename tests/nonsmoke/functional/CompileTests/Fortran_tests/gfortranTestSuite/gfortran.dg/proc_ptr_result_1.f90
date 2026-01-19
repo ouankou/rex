@@ -175,7 +175,7 @@ contains
     integer :: i
     l => iabs
     if (l(-11)/=11) call abort()
-  end function 
+  end function
 
 end
 

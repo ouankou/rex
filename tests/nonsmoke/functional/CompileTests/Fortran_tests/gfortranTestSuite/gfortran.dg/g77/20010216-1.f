@@ -15,9 +15,9 @@ C { dg-options "-ffast-math -march=pentiumpro" }
                  c = max(a, b)
                  d = min(a, b)
                  foo = 1 - d/c
-             else       
+             else
                  foo = 1
-             end if  
+             end if
          else
              foo = 0
          end if

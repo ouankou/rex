@@ -41,15 +41,10 @@ namespace K
 
 void K::foo() {};
 
-#if 0
-// No prototype permited for qualified function name (interesting)
-// void K::foo();
-#else
 namespace K
    {
      void foo();
-   };
-#endif
+     };
 
 void foobar( int x )
    {

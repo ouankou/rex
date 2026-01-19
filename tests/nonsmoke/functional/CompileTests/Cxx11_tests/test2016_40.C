@@ -2795,16 +2795,6 @@ template <typename T> inline void Release(T **ptr) {
   }
 }
 
-#if 0
-template <typename T>
-inline void Release(T * __restrict__ *ptr)
-{
-   if (*ptr != __null) {
-      free(*ptr) ;
-      *ptr = __null ;
-   }
-}
-#endif
 namespace RAJA {
 
 template <typename VARTYPE> struct MemoryPool {
@@ -2852,24 +2842,6 @@ public:
     }
     return success;
   }
-
-#if 0
-        bool release(VARTYPE * __restrict__ *oldPtr) {
-          int i ;
-          bool success = true ;
-          for (i=0; i<32; ++i) {
-            if (ptr[i] == *oldPtr) {
-              lenType[i] = -lenType[i] ;
-              *oldPtr = 0 ;
-              break ;
-            }
-          }
-          if (i == 32) {
-            success = false ;
-          }
-          return success ;
-        }
-#endif
 
   VARTYPE *ptr[32];
   int lenType[32];
@@ -4918,29 +4890,6 @@ void CalcCourantConstraintForElems(RAJA::IndexSet *matElemList, Real_p ss,
 
   return;
 }
-#if 0
-void CalcHydroConstraintForElems(RAJA::IndexSet *matElemList, Real_p vdov,
-    Real_t dvovmax, Real_t *dthydro)
-{
-  RAJA::ReduceMin<reduce_policy, Real_t> dthydroLoc(Real_t(1.0e+20)) ;
-
-  RAJA::forall<mat_exec_policy>( *matElemList, [=] (int indx) {
-
-      Real_t dtvov_cmp = (vdov[indx] != Real_t(0.))
-      ? (dvovmax / (FABS(vdov[indx])+Real_t(1.e-20)))
-      : Real_t(1.0e+10) ;
-
-      dthydroLoc.min(dtvov_cmp) ;
-      } ) ;
-
-  Real_t result = Real_t(dthydroLoc);
-  if (result < Real_t(1.0e+20)) {
-    *dthydro = result ;
-  }
-
-  return ;
-}
-#endif
 void CalcTimeConstraintsForElems(Domain *domain) {
 
   CalcCourantConstraintForElems(domain->matElemList, domain->ss, domain->vdov,

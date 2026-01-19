@@ -15,12 +15,10 @@ struct T3
     T3() { } // user-provided default constructor
 };
 
-#if 1
 struct T4
 {
   T4(T3 x); // user-provided default constructor
 };
-#endif
 
 void foobar(T3 x); // user-provided default constructor
 

@@ -1,4 +1,3 @@
-#if 1
 template<typename _Tp>
 class allocator
    {
@@ -10,19 +9,12 @@ class allocator
            allocator() { }
    };
 
-struct _List_node_base
-   {
-   };
-#endif
+   struct _List_node_base {};
 
-#if 1
-template<typename _Tp>
-class _List_base
-   {
+   template <typename _Tp> class _List_base {
      typedef typename allocator<_Tp>::template rebind<_List_node_base >::other _Node_alloc_type;
   // typedef int _Node_alloc_type;
    };
-#endif
 
 namespace Namespace_And_Class_1 
    {
@@ -34,25 +26,20 @@ namespace Namespace_And_Class_1
      void func_1(Type_1 parm_1);
      class Class_1 
         {
-          virtual void func_2();
-#if 1
-          struct Struct_1 
-             {
-               Struct_1();
-             };
-#endif
+       virtual void func_2();
+       struct Struct_1 {
+         Struct_1();
+       };
         };
    }
 
 using namespace Namespace_And_Class_1;
 
-#if 1
 Class_1::Struct_1::Struct_1()
    {
 //NEEDED:  
      _List_base<int> var_1;
-   }
-#endif
+}
 
 void Class_1::func_2()
    {

@@ -41,7 +41,7 @@
 ! !PUBLIC DATA MEMBERS:
 
    real (r8), dimension (nx_block,ny_block,max_blocks_clinic), &
-      public :: & 
+      public :: &
       AC,                &! time-independent part of center 9pt weight
       A0_CLINIC           ! time-dependent center weight of 9pt operator
                           !   in baroclinic block distribution
@@ -60,11 +60,11 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension (nx_block,ny_block,max_blocks_tropic) :: & 
+   real (r8), dimension (nx_block,ny_block,max_blocks_tropic) :: &
       A0,AN,AE,ANE,         &! barotropic (9pt) operator coefficients
-      RCALCT_B               ! land mask in barotropic distribution 
+      RCALCT_B               ! land mask in barotropic distribution
 
-   real (r8), dimension (:,:,:), allocatable :: & 
+   real (r8), dimension (:,:,:), allocatable :: &
       PCC,PCN,PCS,PCE,PCW,  &! preconditioner coefficients
       PCNE,PCSE,PCNW,PCSW
 
@@ -201,7 +201,7 @@
  subroutine init_solvers
 
 ! !DESCRIPTION:
-!  This routine initializes choice of solver, calculates the 
+!  This routine initializes choice of solver, calculates the
 !  coefficients of the 9-point stencils for the barotropic operator and
 !  reads in a preconditioner if requested.
 !
@@ -214,7 +214,7 @@
 !
 !  local variables:
 !
-!       {X,Y}{NE,SE,NW,SW} = contribution to {ne,se,nw,sw} coefficients 
+!       {X,Y}{NE,SE,NW,SW} = contribution to {ne,se,nw,sw} coefficients
 !         from {x,y} components of divergence
 !       HU = depth at U points
 !
@@ -355,7 +355,7 @@
             RCALC_TMP(nx_block,ny_block,nblocks_clinic))
 
    do iblock = 1,nblocks_clinic
-      this_block = get_block(blocks_clinic(iblock),iblock)  
+      this_block = get_block(blocks_clinic(iblock),iblock)
 
       WORK0    (:,:,iblock) = c0
       WORKC    (:,:,iblock) = c0
@@ -389,7 +389,7 @@
          ase                = xse + yse
          anw                = xnw + ynw
          asw                = xsw + ysw
- 
+
          WORKE(i,j,iblock)  = xne + xse - yne - yse
          WORKN(i,j,iblock)  = yne + ynw - xne - xnw
 
@@ -488,7 +488,7 @@
 !
 !     do iblock = 1,nblocks_clinic
 !
-!       this_block = get_block(blocks_clinic(iblock),iblock)  
+!       this_block = get_block(blocks_clinic(iblock),iblock)
 !
 !       icheck(iblock) = 0
 !
@@ -515,7 +515,7 @@
 !
 !         if (mlandsw .and. WORKSW(i,j,iblock) /= c0)  &
 !                           icheck(iblock) = icheck(iblock) + 1
-!      
+!
 !         if (mlandne .and. mlandnw .and. (WORKN(i,j,iblock) /= c0)) &
 !                           icheck(iblock) = icheck(iblock) + 1
 !         if (mlandne .and. mlandse .and. (WORKE(i,j,iblock) /= c0)) &
@@ -615,7 +615,7 @@
       S,                 &! conjugate direction vector
       Q,WORK0,WORK1       ! various cg intermediate results
 
-   character (char_len) :: & 
+   character (char_len) :: &
       noconvrg           ! error message for no convergence
 
    type (block) ::      &
@@ -630,7 +630,7 @@
    !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
    do iblock=1,nblocks_tropic
-      this_block = get_block(blocks_tropic(iblock),iblock)  
+      this_block = get_block(blocks_tropic(iblock),iblock)
 
       call btrop_operator(S,X,this_block,iblock)
       R(:,:,iblock) = B(:,:,iblock) - S(:,:,iblock)
@@ -647,9 +647,9 @@
 
    call update_ghost_cells(R, bndy_tropic, field_loc_center, &
                                            field_type_scalar)
-   eta0 =c1 
+   eta0 =c1
    solv_sum_iters = solv_max_iters
- 
+
 !-----------------------------------------------------------------------
 !
 !  iterate
@@ -660,7 +660,7 @@
 
 !-----------------------------------------------------------------------
 !
-!     calculate (PC)r 
+!     calculate (PC)r
 !     diagonal preconditioner if preconditioner not specified
 !
 !-----------------------------------------------------------------------
@@ -668,7 +668,7 @@
       !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
       do iblock=1,nblocks_tropic
-         this_block = get_block(blocks_tropic(iblock),iblock)  
+         this_block = get_block(blocks_tropic(iblock),iblock)
 
          if (lprecond) then
             call preconditioner(WORK1,R,this_block,iblock)
@@ -700,9 +700,9 @@
       !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
       do iblock=1,nblocks_tropic
-         this_block = get_block(blocks_tropic(iblock),iblock)  
+         this_block = get_block(blocks_tropic(iblock),iblock)
 
-         S(:,:,iblock) = WORK1(:,:,iblock) + S(:,:,iblock)*(eta1/eta0) 
+         S(:,:,iblock) = WORK1(:,:,iblock) + S(:,:,iblock)*(eta1/eta0)
 
 !-----------------------------------------------------------------------
 !
@@ -733,7 +733,7 @@
       !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
       do iblock=1,nblocks_tropic
-         this_block = get_block(blocks_tropic(iblock),iblock)  
+         this_block = get_block(blocks_tropic(iblock),iblock)
 
          X(:,:,iblock) = X(:,:,iblock) + eta1*S(:,:,iblock)
          R(:,:,iblock) = R(:,:,iblock) - eta1*Q(:,:,iblock)
@@ -775,7 +775,7 @@
 
    if (solv_sum_iters == solv_max_iters) then
       if (solv_convrg /= c0) then
-         write(noconvrg,'(a45,i11)') & 
+         write(noconvrg,'(a45,i11)') &
            'Barotropic solver not converged at time step ', nsteps_total
          call exit_POP(sigAbort,noconvrg)
       endif
@@ -824,7 +824,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) ::   & 
+   integer (int_kind) ::   &
       m,                   &! local iteration counter
       iblock                ! local block     counter
 
@@ -839,7 +839,7 @@
       AR,                  &! Ar (operator acting on residual)
       WORK                  ! various cg intermediate results
 
-   character (char_len) ::  & 
+   character (char_len) ::  &
       noconvrg              ! error message for no convergence
 
    type (block) ::          &
@@ -854,7 +854,7 @@
    !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
    do iblock=1,nblocks_tropic
-      this_block = get_block(blocks_tropic(iblock),iblock)  
+      this_block = get_block(blocks_tropic(iblock),iblock)
 
       call btrop_operator(S,X,this_block,iblock)
       R(:,:,iblock) = B(:,:,iblock) - S(:,:,iblock)
@@ -870,16 +870,16 @@
    ! initial (r,r)
    rr = global_sum(WORK, distrb_tropic, field_loc_center, RCALCT_B)
    rrold = rr
- 
+
 !-----------------------------------------------------------------------
 !
 !  initialize scalars
 !
 !-----------------------------------------------------------------------
 
-   eps1 = c1 
+   eps1 = c1
    solv_sum_iters = solv_max_iters
- 
+
 !-----------------------------------------------------------------------
 !
 !  iterate
@@ -897,7 +897,7 @@
       !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
       do iblock=1,nblocks_tropic
-         this_block = get_block(blocks_tropic(iblock),iblock)  
+         this_block = get_block(blocks_tropic(iblock),iblock)
 
          call btrop_operator(AR,R,this_block,iblock)
          WORK(:,:,iblock) = R(:,:,iblock)*AR(:,:,iblock)
@@ -920,10 +920,10 @@
       !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
       do iblock=1,nblocks_tropic
-         this_block = get_block(blocks_tropic(iblock),iblock)  
+         this_block = get_block(blocks_tropic(iblock),iblock)
 
-         S(:,:,iblock) =  R(:,:,iblock) +  eta1*S(:,:,iblock) 
-         Q(:,:,iblock) = AR(:,:,iblock) +  eta1*Q(:,:,iblock) 
+         S(:,:,iblock) =  R(:,:,iblock) +  eta1*S(:,:,iblock)
+         Q(:,:,iblock) = AR(:,:,iblock) +  eta1*Q(:,:,iblock)
          WORK(:,:,iblock) = Q(:,:,iblock)*Q(:,:,iblock)
       end do ! block loop
 
@@ -943,7 +943,7 @@
       !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
       do iblock=1,nblocks_tropic
-         this_block = get_block(blocks_tropic(iblock),iblock)  
+         this_block = get_block(blocks_tropic(iblock),iblock)
 
          X(:,:,iblock) = X(:,:,iblock) + eta0*S(:,:,iblock)
 
@@ -964,7 +964,7 @@
 !     every ncheck steps the residual norm is recalculated as
 !     r = b - Ax to avoid roundoff error in the accumulated
 !     residual (r,r) = old (r,r) - eta0*q.  if the recalculated
-!     (r,r) is not less than its previously calculated value, 
+!     (r,r) is not less than its previously calculated value,
 !     then the solution is not converging due to machine roundoff
 !     error, and the routine is exited.
 !
@@ -997,7 +997,7 @@
 
    if (solv_sum_iters == solv_max_iters) then
       if (solv_convrg /= c0) then
-        write(noconvrg,'(a45,i11)') & 
+        write(noconvrg,'(a45,i11)') &
            'Barotropic solver not converged at time step ', nsteps_total
         call exit_POP(sigAbort,noconvrg)
       endif
@@ -1046,7 +1046,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) ::  & 
+   integer (int_kind) ::  &
       m,                  &! local iteration counter
       iblock               ! local block     counter
 
@@ -1057,7 +1057,7 @@
       R,                  &! residual (b-Ax)
       WORK0,WORK1          ! various intermediate results
 
-   character (char_len) :: & 
+   character (char_len) :: &
       noconvrg             ! error message for no convergence
 
    type (block) ::         &
@@ -1082,7 +1082,7 @@
       !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
       do iblock=1,nblocks_tropic
-         this_block = get_block(blocks_tropic(iblock),iblock)  
+         this_block = get_block(blocks_tropic(iblock),iblock)
 
          call btrop_operator(WORK0,X,this_block,iblock)
          R(:,:,iblock) = B(:,:,iblock) - WORK0(:,:,iblock)
@@ -1095,14 +1095,14 @@
 
 !-----------------------------------------------------------------------
 !
-!     calculate (PC)r 
+!     calculate (PC)r
 !
 !-----------------------------------------------------------------------
 
       !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
       do iblock=1,nblocks_tropic
-         this_block = get_block(blocks_tropic(iblock),iblock)  
+         this_block = get_block(blocks_tropic(iblock),iblock)
 
          if (lprecond) then
             call preconditioner(WORK1,R,this_block,iblock)
@@ -1140,7 +1140,7 @@
          WORK0 = R*R
          ! (r,r)
          rr = global_sum(WORK0, distrb_tropic, field_loc_center, RCALCT_B)
-          
+
          if (rr < solv_convrg) then
             solv_sum_iters = m
             exit iter_loop
@@ -1154,7 +1154,7 @@
 
    if (solv_sum_iters == solv_max_iters) then
       if (solv_convrg /= c0) then
-         write(noconvrg,'(a45,i11)') & 
+         write(noconvrg,'(a45,i11)') &
            'Barotropic solver not converged at time step ', nsteps_total
          call exit_POP(sigAbort,noconvrg)
       endif
@@ -1182,8 +1182,8 @@
 ! !INPUT PARAMETERS:
 
    real (r8), dimension(nx_block,ny_block,max_blocks_tropic), &
-      intent(in) :: & 
-      X                     ! array to be operated on 
+      intent(in) :: &
+      X                     ! array to be operated on
 
    type (block), intent(in) :: &
       this_block             ! block info for this block
@@ -1240,7 +1240,7 @@
 
 ! !DESCRIPTION:
 !  This routine applies the nine-point stencil operator for the
-!  barotropic solver.  It takes advantage of some 9pt weights being 
+!  barotropic solver.  It takes advantage of some 9pt weights being
 !  shifted versions of others.
 !
 ! !REVISION HISTORY:
@@ -1249,8 +1249,8 @@
 ! !INPUT PARAMETERS:
 
    real (r8), dimension(nx_block,ny_block,max_blocks_tropic), &
-      intent(in) :: & 
-      X                  ! array to be operated on 
+      intent(in) :: &
+      X                  ! array to be operated on
 
    type (block), intent(in) :: &
       this_block             ! block info for this block

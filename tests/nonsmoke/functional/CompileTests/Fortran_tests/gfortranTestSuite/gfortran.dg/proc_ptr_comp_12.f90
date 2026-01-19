@@ -13,7 +13,7 @@ module bugTestMod
 contains
   function returnMat( a, b ) result( mat )
     integer:: a, b
-    double precision, dimension(a,b):: mat 
+    double precision, dimension(a,b):: mat
     mat = 1d0
   end function returnMat
 end module bugTestMod

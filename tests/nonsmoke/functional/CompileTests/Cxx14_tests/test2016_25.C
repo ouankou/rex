@@ -9,13 +9,11 @@
 
 // C++14 also removes the C++11 rule that constexpr member functions are implicitly const.
 
-#if 1
 // C++11 example:
 constexpr int my_charcmp( char c1, char c2 ) 
    {
      return (c1 == c2) ? 0 : (c1 < c2) ? -1 : 1;
-   }
-#endif
+}
 
 // C++14 example:
 constexpr int my_strcmp( const char* str1, const char* str2 ) 

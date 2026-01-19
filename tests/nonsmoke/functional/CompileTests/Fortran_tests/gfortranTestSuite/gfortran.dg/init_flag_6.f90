@@ -17,4 +17,4 @@ subroutine char_test
   if (c3(5) /= '        ') call abort
   if (c4(5) /= ' ') call abort
 end subroutine char_test
-        
+

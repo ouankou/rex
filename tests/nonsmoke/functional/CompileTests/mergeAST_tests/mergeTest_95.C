@@ -20,12 +20,3 @@ class Y : public X<T>
    };
 
 Y<int> y;
-
-#if 0
-inline
-void
-X<char>::do_toupper(const char & c) const
-   {
-   }
-#endif
-

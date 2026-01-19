@@ -52,14 +52,14 @@
       GRADPX,   &! surface-pressure gradient for all blocks at
       GRADPY,   &!   3 time levels
       UBTROP,   &! barotropic velocities for all blocks at
-      VBTROP     !   3 time levels 
+      VBTROP     !   3 time levels
 
    real (r8), dimension(nx_block,ny_block,max_blocks_clinic), &
       target :: &
       PGUESS     ! next guess for surface pressure
 
    integer (int_kind) :: &! time indices for prognostic arrays
-      curtime,           &! current time level  (n) 
+      curtime,           &! current time level  (n)
       newtime,           &! next time level     (n+1)
       oldtime,           &! previous time level (n-1)
       mixtime             ! set to oldtime on leafrog steps

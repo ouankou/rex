@@ -18,37 +18,3 @@ template <class _Tp> struct _Is_integer {
 template<> struct _Is_integer<bool> {
   typedef __true_type _Integral;
 };
-
-
-
-#if 0
-template<> struct _Is_integer<char> {
-  typedef __true_type _Integral;
-};
-
-template<> struct _Is_integer<signed char> {
-  typedef __true_type _Integral;
-};
-
-template<> struct _Is_integer<unsigned char> {
-  typedef __true_type _Integral;
-};
-
-template<> struct _Is_integer<wchar_t> {
-  typedef __true_type _Integral;
-};
-
-template<> struct _Is_integer<short> {
-  typedef __true_type _Integral;
-};
-
-template<> struct _Is_integer<unsigned short> {
-  typedef __true_type _Integral;
-};
-
-template<> struct _Is_integer<int> {
-  typedef __true_type _Integral;
-};
-
-#endif
-

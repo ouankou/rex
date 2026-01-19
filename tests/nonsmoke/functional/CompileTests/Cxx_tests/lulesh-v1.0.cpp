@@ -860,17 +860,6 @@ static inline void IntegrateStressForElems(Index_t numElem, Real_t *sigxx,
     SumElemStressesToNodeForces(B, sigxx[k], sigyy[k], sigzz[k],
                                 &fx_elem[k * 8], &fy_elem[k * 8],
                                 &fz_elem[k * 8]);
-
-#if 0
-    // copy nodal force contributions to global force arrray.
-    for( Index_t lnode=0 ; lnode<8 ; ++lnode )
-    {
-      Index_t gnode = elemNodes[lnode];
-      domain.fx(gnode) += fx_local[lnode];
-      domain.fy(gnode) += fy_local[lnode];
-      domain.fz(gnode) += fz_local[lnode];
-    }
-#endif
   }
 
   {
@@ -1334,40 +1323,6 @@ static inline void CalcFBHourglassForceForElems(Real_t *determ, Real_t *x8n,
     fz_local[5] = hgfz[5];
     fz_local[6] = hgfz[6];
     fz_local[7] = hgfz[7];
-
-#if 0
-      domain.fx(n0si2) += hgfx[0];
-      domain.fy(n0si2) += hgfy[0];
-      domain.fz(n0si2) += hgfz[0];
-
-      domain.fx(n1si2) += hgfx[1];
-      domain.fy(n1si2) += hgfy[1];
-      domain.fz(n1si2) += hgfz[1];
-
-      domain.fx(n2si2) += hgfx[2];
-      domain.fy(n2si2) += hgfy[2];
-      domain.fz(n2si2) += hgfz[2];
-
-      domain.fx(n3si2) += hgfx[3];
-      domain.fy(n3si2) += hgfy[3];
-      domain.fz(n3si2) += hgfz[3];
-
-      domain.fx(n4si2) += hgfx[4];
-      domain.fy(n4si2) += hgfy[4];
-      domain.fz(n4si2) += hgfz[4];
-
-      domain.fx(n5si2) += hgfx[5];
-      domain.fy(n5si2) += hgfy[5];
-      domain.fz(n5si2) += hgfz[5];
-
-      domain.fx(n6si2) += hgfx[6];
-      domain.fy(n6si2) += hgfy[6];
-      domain.fz(n6si2) += hgfz[6];
-
-      domain.fx(n7si2) += hgfx[7];
-      domain.fy(n7si2) += hgfy[7];
-      domain.fz(n7si2) += hgfz[7];
-#endif
   }
 
   {

@@ -27,10 +27,5 @@ void foobar()
      Argument *a;
      if (hasDocs && (a=ali.current()))
         {
-        }
-#if 0
-     if (hasDocs && a=ali.current())
-        {
-        }
-#endif
+     }
    }

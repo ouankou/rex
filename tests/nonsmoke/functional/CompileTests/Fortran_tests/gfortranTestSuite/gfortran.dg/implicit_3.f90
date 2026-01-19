@@ -5,7 +5,7 @@ implicit complex (i-k)
 
 interface
    function f(k,l)
-     ! k should be default INTEGER 
+     ! k should be default INTEGER
      dimension l(k)
    end function f
 end interface

@@ -10,6 +10,3 @@ void foo(int dimensions)
     printf("hi\n");
   }
 }
-#if 0
-// illegal code here
-#endif 

@@ -7,7 +7,7 @@ program main
   b = fun(a)
   if (.not.all(b == 'ok')) call abort()
 contains
-  elemental function fun(a) 
+  elemental function fun(a)
     character(*), intent(in) :: a
     character(len(a)) :: fun
     fun = a

@@ -6,7 +6,7 @@
 
  type :: t1
   integer :: i
- end type 
+ end type
 
  type :: ts
   sequence

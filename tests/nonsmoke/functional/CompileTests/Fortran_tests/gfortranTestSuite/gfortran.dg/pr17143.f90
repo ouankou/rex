@@ -14,6 +14,6 @@
 !                ^
 !         the space is required before a number
           call abort
-       endif 
+       endif
        end
 

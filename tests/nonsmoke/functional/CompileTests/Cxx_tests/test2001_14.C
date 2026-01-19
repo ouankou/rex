@@ -19,60 +19,22 @@ main()
 
      switch (x)
         {
-          case 0: 
-#if 1
-             {
-               myAssert;
-               int y = x;
-             }
-#else
-             {
-               int y = x;
-             }
-#endif
-          break;
-#if 1
-          case 1: 
-#if 1
-             {
-               myAssert;
-               int y = x;
-             }
-#else
-             {
-               int y = x;
-             }
-#endif
-          break;
-#endif
-#if 1
-          case 2: 
-#if 1
-             {
-               myAssert;
-               int y = x;
-             }
-#else
-             {
-               int y = x;
-             }
-#endif
-          break;
-#endif
-#if 1
-          case 3: 
-#if 1
-             {
-               myAssert;
-               int y = x;
-             }
-#else
-             {
-               int y = x;
-             }
-#endif
-          break;
-#endif
+     case 0: {
+       myAssert;
+       int y = x;
+     } break;
+     case 1: {
+       myAssert;
+       int y = x;
+     } break;
+     case 2: {
+       myAssert;
+       int y = x;
+     } break;
+     case 3: {
+       myAssert;
+       int y = x;
+     } break;
         }
 
   // printf ("Program Terminated Normally! \n");

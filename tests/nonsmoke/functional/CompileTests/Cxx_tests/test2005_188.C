@@ -14,65 +14,36 @@ class Array
 class ArrayB
    {
      public:
-
-       // Error: This becomes a SgEnumDeclaration in the AST 
+       // Error: This becomes a SgEnumDeclaration in the AST
        // Is this a typedef which has no name?
-#if 1
        // Within this scope ::enumType1 is hidden (should be in legacy
        // frontend's list of hidden names)
        typedef enum enumType1 { zeroA = 0, oneA, twoA };
-#endif
    };
 
-       // Error: This becomes a SgEnumDeclaration in the AST 
-       // Is this a typedef which has no name?
-#if 1
-          typedef enum enumType1
-             {
-               zeroA = 0,
-               oneA,
-               twoA
-             };
-#endif
-          enum enumType4
-             {
-               zeroD = 0,
-               oneD,
-               twoD
-             };
-#if 1
-       // Correct: This becomes a proper SgTypedefDeclaration in the AST
-          typedef enum enumType2
-             {
-               zeroB = 0,
-               oneB,
-               twoB
-             } UsingThisTypeCausesAnError;
+   // Error: This becomes a SgEnumDeclaration in the AST
+   // Is this a typedef which has no name?
+   typedef enum enumType1 { zeroA = 0, oneA, twoA };
+   enum enumType4 { zeroD = 0, oneD, twoD };
+   // Correct: This becomes a proper SgTypedefDeclaration in the AST
+   typedef enum enumType2 { zeroB = 0, oneB, twoB } UsingThisTypeCausesAnError;
 
-       // Correct: This becomes a proper SgTypedefDeclaration in the AST
-          typedef enum enumType3
-             {
-               zeroC = 0,
-               oneC,
-               twoC
-             } enumType3;
+   // Correct: This becomes a proper SgTypedefDeclaration in the AST
+   typedef enum enumType3 { zeroC = 0, oneC, twoC } enumType3;
 
-          Array(enumType1 x);
-          Array(enumType2 x);  // same as Array(UsingThisTypeCausesAnError x); (can't declare both)
-          Array(ArrayB::enumType1 x);
-          Array(::enumType1 x);
-#endif
-#if 1
-          enumType1 & foo(enumType1 x);
-          enumType2 & foo(enumType2 x);
-          ::enumType1 & foo(::enumType1 x = ::zeroA);
+   Array(enumType1 x);
+   Array(enumType2 x); // same as Array(UsingThisTypeCausesAnError x); (can't
+                       // declare both)
+   Array(ArrayB::enumType1 x);
+   Array(::enumType1 x);
+   enumType1 &foo(enumType1 x);
+   enumType2 &foo(enumType2 x);
+   ::enumType1 &foo(::enumType1 x = ::zeroA);
 
-       // This causes the same error as enumType2
-       // Array(UsingThisTypeCausesAnError x);
-#endif
+   // This causes the same error as enumType2
+   // Array(UsingThisTypeCausesAnError x);
    };
 
-#if 1
 void foo()
    {
      Array x(Array::zeroA);
@@ -87,5 +58,4 @@ void foo()
 
   // DQ (6/10/2007): This is a bug in the hidden list computations at present
      int c = x.foo(::zeroA);
-   }
-#endif
+}

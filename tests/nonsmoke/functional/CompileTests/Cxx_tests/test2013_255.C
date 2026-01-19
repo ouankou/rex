@@ -1,16 +1,4 @@
-#if 0
-namespace XMLURL
-   {
-     enum Protocols
-        {
-          File, HTTP, FTP, HTTPS
-        };
-
-      const int Protocols_Count = 4;
-   }
-#else
-   #include "test2013_255.h"
-#endif
+#include "test2013_255.h"
 
 enum XMLCh
    {

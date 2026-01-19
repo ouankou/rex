@@ -5,7 +5,7 @@ module m
   type t
      integer :: i
   end type t
-  
+
   interface operator (==)
      module procedure teq
   end interface
@@ -21,7 +21,7 @@ module m
   interface operator (>=)
      module procedure tge
   end interface
-  
+
   interface operator (<)
      module procedure tlt
   end interface
@@ -33,7 +33,7 @@ module m
   type u
      integer :: i
   end type u
-  
+
   interface operator (.eq.)
      module procedure ueq
   end interface
@@ -49,7 +49,7 @@ module m
   interface operator (.ge.)
      module procedure uge
   end interface
-  
+
   interface operator (.lt.)
      module procedure ult
   end interface
@@ -150,7 +150,7 @@ program main
   call checku
 
 contains
-  
+
   subroutine checkt
     use m
 

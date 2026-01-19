@@ -68,16 +68,10 @@ firstNondefiningDeclaration->get_scope() failed.
 /home/saebjornsen1/ROSE-October/gcc3.4.3/exampleTranslators/documentedExamples/simpleTranslatorExamples/identityTranslator
 */
 
-
-
-#if 1
 // #4 BUG MESSAGE GONE WHEN: remove the following line
 // This causes the scope of subsequent declarations to reference this scope
 // instead of the scope of the firstDefiningDeclaration.
-namespace Geometry
-   {
-   } // end namespace Geometry
-#endif
+namespace Geometry {} // end namespace Geometry
 
 namespace Geometry
    {
@@ -110,15 +104,6 @@ namespace Geometry
      MeshBase<PolyMesh >::MeshBase(const char* meshFile);
 
    } // end namespace Geometry
-
-#if 0
-// #4 BUG MESSAGE GONE WHEN: remove the following line
-// This causes the scope of subsequent declarations to reference this scope
-// instead of the scope of the firstDefiningDeclaration.
-namespace Geometry
-   {
-   } // end namespace Geometry
-#endif
 
 using namespace Geometry;
 

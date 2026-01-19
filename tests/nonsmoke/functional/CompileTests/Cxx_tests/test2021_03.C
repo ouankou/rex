@@ -1,8 +1,3 @@
 void baGetValue();
 
-void getList()
-   {
-#if 1
-     baGetValue();
-#endif
-   }
+void getList() { baGetValue(); }

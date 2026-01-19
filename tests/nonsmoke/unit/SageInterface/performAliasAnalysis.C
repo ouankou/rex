@@ -86,23 +86,10 @@ int main(int argc, char *argv[]) {
 
     SgFunctionDefinition *defn = func->get_definition();
 
-#if 0
-    //TODO ignore functions in system headers, Can keep them to test robustness
-    if (defn->get_file_info()->get_filename()!= sageFile->get_file_info()->get_filename())
-    {
-      continue;
-    }
-#endif
-
     SgBasicBlock *body = defn->get_body();
     AstInterfaceImpl faImpl_1(body);
     AstInterface fa(&faImpl_1);
     CPPAstInterface fa_body(&faImpl_1);
-#if 0
-    // X. Replace operators with their equivalent counterparts defined 
-    // in "inline" annotations
-    OperatorInlineRewrite()( fa_body, AstNodePtrImpl(body));
-#endif
 
     // Pass annotations to arrayInterface and use them to collect
     // alias info. function info etc.

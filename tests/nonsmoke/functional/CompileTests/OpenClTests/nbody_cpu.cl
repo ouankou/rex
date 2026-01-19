@@ -1,8 +1,8 @@
 //
 // File:       nbody_cpu.cl
 //
-// Abstract:   This example performs an NBody simulation which calculates a gravity field 
-//             and corresponding velocity and acceleration contributions accumulated 
+// Abstract:   This example performs an NBody simulation which calculates a gravity field
+//             and corresponding velocity and acceleration contributions accumulated
 //             by each body in the system from every other body.  This example
 //             also shows how to mitigate computation between all available devices
 //             including CPU and GPU devices, as well as a hybrid combination of both,
@@ -54,25 +54,25 @@
 
 __kernel void
 IntegrateSystemNonVectorized(
-    __global float *output_position_x, 
+    __global float *output_position_x,
     __global float *output_position_y,
     __global float *output_position_z,
     __global float *mass,
-    __global float *output_velocity_x, 
-    __global float *output_velocity_y, 
+    __global float *output_velocity_x,
+    __global float *output_velocity_y,
     __global float *output_velocity_z,
-    __global float *input_position_x, 
-    __global float *input_position_y, 
+    __global float *input_position_x,
+    __global float *input_position_y,
     __global float *input_position_z,
-    __global float *input_velocity_x, 
-    __global float *input_velocity_y, 
+    __global float *input_velocity_x,
+    __global float *input_velocity_y,
     __global float *input_velocity_z,
-    float time_delta, 
-    float damping, 
-    float softening, 
-    int body_count, 
+    float time_delta,
+    float damping,
+    float softening,
+    int body_count,
     int body_count_per_group,
-    __global float4 *output_position, 
+    __global float4 *output_position,
     int start_index )
 {
     int index = get_global_id(0);
@@ -100,7 +100,7 @@ IntegrateSystemNonVectorized(
         position_y = input_position_y[k];
         position_z = input_position_z[k];
         m = mass[k];
-        
+
         float final_ax = zero;
         float final_ay = zero;
         float final_az = zero;
@@ -126,7 +126,7 @@ IntegrateSystemNonVectorized(
             float distance_squared = dx * dx + dy * dy + dz * dz;
             distance_squared += softening_squared;
 
-            float inverse_distance = native_rsqrt(distance_squared); 
+            float inverse_distance = native_rsqrt(distance_squared);
             float s = (mi * inverse_distance) * (inverse_distance * inverse_distance);
 
             acceleration_x1 += dx * s;
@@ -171,25 +171,25 @@ IntegrateSystemNonVectorized(
 
 __kernel void
 IntegrateSystemVectorized(
-    __global float4 *output_position_x, 
-    __global float4 *output_position_y, 
-    __global float4 *output_position_z, 
+    __global float4 *output_position_x,
+    __global float4 *output_position_y,
+    __global float4 *output_position_z,
     __global float4 *mass,
-    __global float4 *output_velocity_x, 
-    __global float4 *output_velocity_y, 
+    __global float4 *output_velocity_x,
+    __global float4 *output_velocity_y,
     __global float4 *output_velocity_z,
-    __global float4 *input_position_x, 
-    __global float4 *input_position_y, 
+    __global float4 *input_position_x,
+    __global float4 *input_position_y,
     __global float4 *input_position_z,
-    __global float4 *input_velocity_x, 
-    __global float4 *input_velocity_y, 
+    __global float4 *input_velocity_x,
+    __global float4 *input_velocity_y,
     __global float4 *input_velocity_z,
-    float time_delta, 
-    float damping, 
-    float softening, 
-    int body_count, 
+    float time_delta,
+    float damping,
+    float softening,
+    int body_count,
     int body_count_per_group,
-    __global float4 *output_position, 
+    __global float4 *output_position,
     int start_index )
 {
     int index = get_global_id(0);
@@ -216,7 +216,7 @@ IntegrateSystemVectorized(
         position_y = input_position_y[k];
         position_z = input_position_z[k];
         m = mass[k];
-        
+
         float4 final_ax = zero;
         float4 final_ay = zero;
         float4 final_az = zero;
@@ -234,7 +234,7 @@ IntegrateSystemVectorized(
         float4 acceleration_x1 = zero;
         float4 acceleration_y1 = zero;
         float4 acceleration_z1 = zero;
-        
+
         float4 acceleration_x2 = zero;
         float4 acceleration_y2 = zero;
         float4 acceleration_z2 = zero;
@@ -251,7 +251,7 @@ IntegrateSystemVectorized(
             float4 distance_squared = dx * dx + dy * dy + dz * dz;
             distance_squared += softening_squared;
 
-            float4 inverse_distance = native_rsqrt(distance_squared); 
+            float4 inverse_distance = native_rsqrt(distance_squared);
             float4 s = (mi * inverse_distance) * (inverse_distance * inverse_distance);
 
             acceleration_x1 += dx * s;
@@ -266,7 +266,7 @@ IntegrateSystemVectorized(
             distance_squared += softening_squared;
 
             inverse_distance = native_rsqrt(distance_squared);
-            
+
             s = (mi * inverse_distance) * (inverse_distance * inverse_distance);
 
             acceleration_x2 += dx * s;
@@ -286,7 +286,7 @@ IntegrateSystemVectorized(
         current_y1 = position_y.zzzz;
         current_z1 = position_z.zzzz;
         current_mass1 = m.zzzz;
-        
+
         current_x2 = position_x.wwww;
         current_y2 = position_y.wwww;
         current_z2 = position_z.wwww;
@@ -295,7 +295,7 @@ IntegrateSystemVectorized(
         acceleration_x1 = zero;
         acceleration_y1 = zero;
         acceleration_z1 = zero;
-        
+
         acceleration_x2 = zero;
         acceleration_y2 = zero;
         acceleration_z2 = zero;
@@ -349,7 +349,7 @@ IntegrateSystemVectorized(
         velocity_x += final_ax * time_delta;
         velocity_y += final_ay * time_delta;
         velocity_z += final_az * time_delta;
-        
+
         velocity_x *= damping;
         velocity_y *= damping;
         velocity_z *= damping;

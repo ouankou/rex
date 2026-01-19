@@ -1,9 +1,6 @@
 struct _IO_FILE {
   int _flags;
 
-
-
-#if 1
   char* _IO_read_ptr;
   char* _IO_read_end;
   char* _IO_read_base;
@@ -20,9 +17,7 @@ struct _IO_FILE {
   struct _IO_marker *_markers;
 
   struct _IO_FILE *_chain;
-#endif
 
-#if 1
   int _fileno;
 
 
@@ -36,8 +31,5 @@ struct _IO_FILE {
   unsigned short _cur_column;
   signed char _vtable_offset;
   char _shortbuf[1];
-#endif
-
-
 };
 

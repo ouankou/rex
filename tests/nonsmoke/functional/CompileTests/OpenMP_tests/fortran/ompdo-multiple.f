@@ -1,4 +1,4 @@
-! multiple omp do loops      
+! multiple omp do loops
       program  main
       implicit none
 
@@ -12,14 +12,14 @@
       do i = 1, 10
         j = omp_get_thread_num();
         print *, "Iteration ", i, " by thread:", j
-      enddo  
+      enddo
 
 !$omp do private(j) schedule(dynamic,3)
       do i = 1, 10
         j = omp_get_thread_num();
         print *, "Iteration ", i, " by thread:", j
-      enddo  
+      enddo
 
-!$omp end parallel 
+!$omp end parallel
 
       end

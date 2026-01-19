@@ -7,7 +7,7 @@ program main
   integer, dimension (3) :: sh, bo
   character(len=80) line1, line2
   integer :: i
-  
+
   allocate (a(3,3))
   a = reshape((/(i,i=1,9)/),shape(a))
   sh = (/ 2, -1, -2 /)

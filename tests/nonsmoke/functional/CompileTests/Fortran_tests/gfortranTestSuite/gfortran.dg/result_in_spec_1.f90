@@ -1,5 +1,5 @@
 ! { dg-do run }
-! Tests the check for PR31215, in which actual/formal interface 
+! Tests the check for PR31215, in which actual/formal interface
 ! was not being correctly handled for the size of 'r' because
 ! it is a result.
 !

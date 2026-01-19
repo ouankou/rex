@@ -61,7 +61,7 @@ CONTAINS
     INTEGER, INTENT(IN) :: a
     INTEGER, INTENT(INOUT) :: s
     INTEGER :: accumulate
-    
+
     s = s + a
     accumulate = s
   END FUNCTION accumulate

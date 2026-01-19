@@ -16,7 +16,7 @@ The form of the generated programs is:
 
 #include <HEADER>
 
-int main() { 
+int main() {
   return 0;
 }
 
@@ -54,13 +54,13 @@ that support c++11 (for example starting with gcc 4.8).
 If any of the passing tests fail, the script will stop and report an
 exit code of 1. In this case the make file will also terminate and
 "make check" fails. In case of an error all generated test files
-remain in the directory for further investigation of the error. 
+remain in the directory for further investigation of the error.
 
 The script performs three tests, each of them listed in a separate
 column. The result of the test is either PASS or FAIL. An example for
 a passing test is:
 
-TESTING: algorithm        :   6964 LOC : PASS PASS PASS : 100.00% 
+TESTING: algorithm        :   6964 LOC : PASS PASS PASS : 100.00%
 
 The three columns show results for three different kinds of tests:
 

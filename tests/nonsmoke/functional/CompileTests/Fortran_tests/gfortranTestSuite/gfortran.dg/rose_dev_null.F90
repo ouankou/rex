@@ -8,10 +8,10 @@
 ! pr19478 read from /dev/null
 ! Thomas.Koenig@online.de
 CHARACTER(len=20) :: foo
-OPEN (UNIT=10, FILE="/dev/null") 
+OPEN (UNIT=10, FILE="/dev/null")
 WRITE (UNIT=10, FMT='(A)') "Hello"
-REWIND (UNIT=10) 
+REWIND (UNIT=10)
 READ (UNIT=10, FMT='(A)', END=100) foo
 CALL abort()
 100 CONTINUE
-END 
+END

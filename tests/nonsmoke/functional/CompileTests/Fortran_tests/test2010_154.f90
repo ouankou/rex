@@ -8,7 +8,7 @@
 !     a component of t2 by indexing t1's component f.
 
 program p
-  
+
    type :: t1
       integer ::  i
    end type
@@ -20,5 +20,5 @@ program p
    type (t2) :: v
 
    v % f(1) = t1(1)  ! assertion failure: declaration != null.
-   
+
 end program

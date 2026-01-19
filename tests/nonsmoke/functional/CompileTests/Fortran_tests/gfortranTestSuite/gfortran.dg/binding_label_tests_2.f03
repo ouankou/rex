@@ -4,7 +4,7 @@ module binding_label_tests_2
 contains
   ! this is just here so at least one of the subroutines will be accepted so
   ! gfortran doesn't give an Extension warning when using -pedantic-errors
-  subroutine ok() 
+  subroutine ok()
   end subroutine ok
 
   subroutine sub0() bind(c, name="   1") ! { dg-error "Invalid C name" }
@@ -30,6 +30,6 @@ contains
 
   subroutine sub8() bind(c, name) ! { dg-error "Syntax error" }
   end subroutine sub8 ! { dg-error "Expecting END MODULE" }
-end module binding_label_tests_2 
+end module binding_label_tests_2
 
 ! { dg-final { cleanup-modules "binding_label_tests_2" } }

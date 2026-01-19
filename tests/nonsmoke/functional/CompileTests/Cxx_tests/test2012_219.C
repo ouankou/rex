@@ -3,11 +3,7 @@ namespace B
    {
    }
 
-#if 1
-namespace B
-   {
-   }
-#endif
+namespace B {}
 
 // class B::X;
 namespace B

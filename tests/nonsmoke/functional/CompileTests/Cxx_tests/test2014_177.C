@@ -46,14 +46,10 @@ const int FindRegisteredExtension(int number)
 // bool google::protobuf::GeneratedExtensionFinder::Find(int number) 
 bool GeneratedExtensionFinder::Find(int number) 
    {
-  // const ExtensionInfo* extension = FindRegisteredExtension(containing_type_, number);
-  // const ExtensionInfo* extension = FindRegisteredExtension(number);
-#if 0
-     const int extension = FindRegisteredExtension(number);
-#else
-     const int extension = internal::FindRegisteredExtension(number);
-#endif
-     return false;
+  // const ExtensionInfo* extension = FindRegisteredExtension(containing_type_,
+  // number); const ExtensionInfo* extension = FindRegisteredExtension(number);
+  const int extension = internal::FindRegisteredExtension(number);
+  return false;
    }
 
 }  // namespace internal

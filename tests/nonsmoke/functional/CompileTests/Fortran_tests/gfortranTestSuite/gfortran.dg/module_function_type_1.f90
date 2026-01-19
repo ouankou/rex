@@ -1,7 +1,7 @@
 ! { dg-do compile }
 ! This checks the fix for PR33295 in which the A_type in initA was
 ! not promoted to module level and so not recognised as being the
-! same as that emanating directly from module a. 
+! same as that emanating directly from module a.
 !
 ! Contributed by Janus Weil <jaydub66@gmail.com>
 !

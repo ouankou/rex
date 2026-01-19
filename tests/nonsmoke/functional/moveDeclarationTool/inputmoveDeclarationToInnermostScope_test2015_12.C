@@ -1,6 +1,3 @@
-#if 0
-#include <string>
-#else
 // int x;
 namespace std 
    {
@@ -15,27 +12,18 @@ namespace std
      template<> struct char_traits<char>;
 
      typedef basic_string<char> string;
-   }
-#endif
+     } // namespace std
 
 namespace std {
 
   template<typename _CharT>
     class numpunct 
     {
-    public:
-#if 1
-      string
-      grouping() const
-#if 1
-       { string s; return s; }
-#else
-       { return ""; }
-#endif
-#else
-      string
-      grouping() const;
-#endif
+  public:
+    string grouping() const {
+      string s;
+      return s;
+    }
     };
 
 }

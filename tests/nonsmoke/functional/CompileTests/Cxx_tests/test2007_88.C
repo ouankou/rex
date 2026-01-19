@@ -19,17 +19,8 @@ class X
              }
    };
 
-#if 0
-template <typename T>
-T & operator+( T & ii, T & jj)
-   {
-     return ii;
-   }
-#endif
-
 // template X<int> & operator+( X<int> & ii, X<int> & jj);
 
-#if 1
 int main()
    {
      X<int> y,z;
@@ -38,5 +29,4 @@ int main()
      y + z;
 
      return 0;
-   }
-#endif
+}

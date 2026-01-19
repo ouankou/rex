@@ -22,14 +22,14 @@
    use constants, only: c0, p5, p125, p25, blank_fmt, delim_fmt, c2
    use blocks, only: nx_block, ny_block, block, get_block
    use communicate, only: my_task, master_task
-   use distribution, only: 
+   use distribution, only:
    use grid, only: dz, DXT, DYT, HUW, HUS, c2dz, KMT, HTE, UAREA_R, DZT,    &
        partial_bottom_cells, DYU, DZU, DXU, DZR, DZ2R, KMU, TAREA_R, HTN,   &
        sfc_layer_type, sfc_layer_type, sfc_layer_varthick, FCORT, KMTE,     &
        KMTW, KMTEE, KMTN, KMTS, KMTNN, ugrid_to_tgrid
    use domain, only: nblocks_clinic, blocks_clinic, distrb_clinic
    use broadcast, only: broadcast_scalar
-!   use boundary, only: 
+!   use boundary, only:
    use diagnostics, only: cfl_advect
    use state_mod, only: state
    use operators, only: zcurl
@@ -75,7 +75,7 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension (nx_block,ny_block,max_blocks_clinic) :: & 
+   real (r8), dimension (nx_block,ny_block,max_blocks_clinic) :: &
       KXU,KYU
 
 !-----------------------------------------------------------------------
@@ -118,7 +118,7 @@
       tavg_ADVT,         &! vertical average of advective tendency
       tavg_PV,           &! potential vorticity
       tavg_Q,            &! z-derivative of pot density
-      tavg_PD,           &! potential density 
+      tavg_PD,           &! potential density
       tavg_RHOU,         &! pot density times U velocity
       tavg_RHOV,         &! pot density times V velocity
       tavg_PVWM,         &! pot vorticity flux through bottom
@@ -151,7 +151,7 @@
 ! !IROUTINE: init_advection
 ! !INTERFACE:
 
- subroutine init_advection 
+ subroutine init_advection
 
 ! !DESCRIPTION:
 !  This subroutine initializes variables associated with advection
@@ -179,7 +179,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       i,j,k,             &! dummy loop indices
       iblock,            &! local block number
       nattempts,         &! num of attempts to read namelist input
@@ -187,9 +187,9 @@
 
    real (r8) ::            &
       dxc,dxcw,dxce,dxce2, &
-      dyc,dycs,dycn,dycn2          
+      dyc,dycs,dycn,dycn2
 
-   real (r8), dimension(:), allocatable :: & 
+   real (r8), dimension(:), allocatable :: &
       dzc
 
    type (block) ::        &
@@ -221,7 +221,7 @@
    if (nml_error /= 0) then
       call exit_POP(sigAbort,'ERROR reading advection namelist')
    endif
-     
+
    if (my_task == master_task) then
       write(stdout,delim_fmt)
       write(stdout,blank_fmt)
@@ -237,7 +237,7 @@
                        'Using centered leapfrog advection for tracers.'
       case ('upwind')
          tadvect_itype = tadvect_upwind3
-         write(stdout,'(a45)') & 
+         write(stdout,'(a45)') &
                        'Using 3rd-order upwind advection for tracers.'
       case default
          tadvect_itype = -1000
@@ -258,9 +258,9 @@
 
    do iblock = 1,nblocks_clinic
 
-      this_block = get_block(blocks_clinic(iblock),iblock)  
+      this_block = get_block(blocks_clinic(iblock),iblock)
 
-      KXU(:,:,iblock) = (eoshift(HUW(:,:,iblock),dim=1,shift=1) - & 
+      KXU(:,:,iblock) = (eoshift(HUW(:,:,iblock),dim=1,shift=1) - &
                                  HUW(:,:,iblock))*UAREA_R(:,:,iblock)
       KYU(:,:,iblock) = (eoshift(HUS(:,:,iblock),dim=2,shift=1) - &
                                  HUS(:,:,iblock))*UAREA_R(:,:,iblock)
@@ -321,7 +321,7 @@
       allocate (dzc(0:km+1))
 
       !***
-      !*** vertical grid coefficients     
+      !*** vertical grid coefficients
       !***
 
       dzc(0)    = dz(1)
@@ -340,13 +340,13 @@
          tgamzp(k) =  -(dz(k)*dz(k+1))/ &
                       ((dz(k)+dzc(k-1))*           &
                       (dz(k+1)+dzc(k-1)+c2*dz(k)))
-      enddo 
+      enddo
       tbetzp(1) = tbetzp(1) + tgamzp(1)
       tgamzp(1) = c0
       talfzp(km) = c0
       tbetzp(km) = c0
       tgamzp(km) = c0
- 
+
       do k=1,km-1
          talfzm(k) =  dz(k)*(c2*dz(k+1)+dzc(k+2))/ &
                       ((dz(k)+dz(k+1))*            &
@@ -357,7 +357,7 @@
          tdelzm(k) =  -(dz(k)*dz(k+1))/ &
                       ((dz(k+1)+dzc(k+2))*         &
                       (dz(k)+dzc(k+2)+c2*dz(k+1)))
-      enddo    
+      enddo
       talfzm(km-1) = talfzm(km-1) + tdelzm(km-1)
       tdelzm(km-1) = c0
       talfzm(km) = c0
@@ -372,10 +372,10 @@
 
       do iblock = 1,nblocks_clinic
 
-         this_block = get_block(blocks_clinic(iblock),iblock)  
+         this_block = get_block(blocks_clinic(iblock),iblock)
 
          !***
-         !*** zonal grid coefficients     
+         !*** zonal grid coefficients
          !***
 
          do j=this_block%jb,this_block%je
@@ -404,7 +404,7 @@
          end do
 
          !***
-         !*** poloidal grid coefficients     
+         !*** poloidal grid coefficients
          !***
 
          do j=this_block%jb-1,this_block%je
@@ -421,7 +421,7 @@
                                  ((dyc+dycn)*(dycs+   dyc     ))
             TGAMYP(i,j,iblock) =     -(   dyc*dycn)/ &
                                  ((dyc+dycs)*(dycs+c2*dyc+dycn))
- 
+
             TALFYM(i,j,iblock) = dyc *(c2*dycn+dycn2)/ &
                                  ((dyc+dycn)*(       dycn+dycn2))
             TBETYM(i,j,iblock) = dycn*(c2*dycn+dycn2)/ &
@@ -473,7 +473,7 @@
 
    call get_timer(timer_advu,'ADVECTION_MOMENTUM', nblocks_clinic, &
                                                    distrb_clinic%nprocs)
- 
+
    select case (tadvect_itype)
    case(tadvect_centered)
       call get_timer(timer_advt,'ADVECTION_TRACER_CENTERED', &
@@ -600,7 +600,7 @@
 !-----------------------------------------------------------------------
 !EOC
 
- end subroutine init_advection 
+ end subroutine init_advection
 
 !***********************************************************************
 !BOP
@@ -610,7 +610,7 @@
  subroutine advu(k,LUK,LVK,WUK,UUU,VVV,this_block)
 
 ! !DESCRIPTION:
-!  This routine computes the $x,y$ components of the advection of 
+!  This routine computes the $x,y$ components of the advection of
 !  momentum and metric terms given by:
 !  \begin{equation}
 !    L_U(u_x) + u_x u_y k_y - u_y^2 k_x
@@ -623,11 +623,11 @@
 !     L_U(\alpha) = {1\over{\Delta_y}}
 !                \delta_x\left[
 !                 \overline{\left(\overline{\Delta_y u_x}^y\right)}^{xy}
-!                 \overline{\alpha}^x\right] + 
+!                 \overline{\alpha}^x\right] +
 !                {1\over{\Delta_x}}
 !                \delta_y\left[
 !                 \overline{\left(\overline{\Delta_x u_y}^x\right)}^{xy}
-!                 \overline{\alpha}^y\right] 
+!                 \overline{\alpha}^y\right]
 !           + \delta_z(w^U\overline{\alpha}^z),
 !  \end{equation}
 !  \begin{equation}
@@ -642,14 +642,14 @@
 !   \begin{itemize}
 !     \item this routine must be called successively with k = 1,2,3,...
 !
-!     \item the vertical velocity $w^U$ in U columns is determined by 
+!     \item the vertical velocity $w^U$ in U columns is determined by
 !     integrating the continuity equation $L(1) = 0$ from the surface
 !     down to level k.  In the rigid-lid formulation, the integration
-!     starts with $w^U = 0$ at the surface.  In the free-surface 
+!     starts with $w^U = 0$ at the surface.  In the free-surface
 !     formulation, the integration starts with $w^U =$ the area-weighted
 !     average of $\partial\eta/\partial t$ at surrounding T points
-!     ($\partial\eta/\partial t$ is the time change of the surface 
-!     height, and satisfies the barotropic continuity equation 
+!     ($\partial\eta/\partial t$ is the time change of the surface
+!     height, and satisfies the barotropic continuity equation
 !     $\partial\eta/\partial t + \nabla\cdot H {\rm\bf U}=q_w$
 !     where ${\rm\bf U}$ is the barotropic velocity and $q_w$
 !     is the surface fresh water flux.)
@@ -662,8 +662,8 @@
 
    integer (int_kind), intent(in) :: k ! depth level index
 
-   real (r8), dimension(nx_block,ny_block,km), intent(in) :: & 
-      UUU,VVV             ! U,V velocity for this block 
+   real (r8), dimension(nx_block,ny_block,km), intent(in) :: &
+      UUU,VVV             ! U,V velocity for this block
                           ! at the current time
 
    type (block), intent(in) :: &
@@ -671,13 +671,13 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), intent(inout) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(inout) :: &
       WUK             ! on  input: flux velocity at top    of U box
                       ! on output: flux velocity at bottom of U box
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(out) :: &
       LUK,               &! advection of U-momentum
       LVK                 ! advection of V-momentum
 
@@ -755,7 +755,7 @@
                                          DZU(i+1,j+1,k,bid) + &
                           UUU(i  ,j+1,k)*DYU(i  ,j+1  ,bid)*  &
                                          DZU(i  ,j+1,k,bid))
-   
+
          VUS(i,j) = p25* (VVV(i  ,j  ,k)*DXU(i  ,j    ,bid)*  &
                                          DZU(i  ,j  ,k,bid) + &
                           VVV(i  ,j-1,k)*DXU(i  ,j-1  ,bid)*  &
@@ -941,7 +941,7 @@
 !
 !-----------------------------------------------------------------------
 
-   if (k < km) then  
+   if (k < km) then
       if (partial_bottom_cells) then
          LUK = LUK - p5/DZU(:,:,k,bid)*WUKB*(UUU(:,:,k) + &
                                                     UUU(:,:,k+1))
@@ -1101,13 +1101,13 @@
 
 ! !INPUT/OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), intent(inout) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(inout) :: &
       WTK            ! on  input flux velocity at top    of T box
                      ! on output flux velocity at bottom of T box
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block,nt), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block,nt), intent(out) :: &
       LTK             ! returned as L(T) for nth tracer at level k
 
 !EOP
@@ -1122,7 +1122,7 @@
      i,j,n,              &! dummy loop indices
      bid                  ! local block address
 
-   real (r8), dimension(nx_block,ny_block) :: & 
+   real (r8), dimension(nx_block,ny_block) :: &
      UTE,UTW,VTN,VTS,  &! tracer flux velocities across E,W,N,S faces
      FC,               &! local temp space
      FVN,FUE,          &! north and east advective stencil weights
@@ -1222,13 +1222,13 @@
 
          call advt_upwind3(k,LTK,TRCR,WTK,WTKB,UTE,UTW,VTN,VTS, &
                              this_block)
- 
+
       else
          !***
          !*** add isopycnal velocities to advective velocities
          !***
 
-         
+
          FUE   = c0
          FVN   = c0
          WORK1 = c0
@@ -1266,7 +1266,7 @@
 
          call advt_upwind3(k,LTK,TRCR,WTK,WORK3,FUE,WORK1,FVN,WORK2, &
                              this_block)
- 
+
       end if
 
    case(tadvect_centered)
@@ -1287,7 +1287,7 @@
             do i=this_block%ib-1,this_block%ie+1
                FUE(i,j)  = UTE(i,j) + U_ISOP(i,j,bid)*HTE(i,j,bid) &
                                   *min(DZT(i,j,k,bid),DZT(i+1,j,k,bid))
-               FVN(i,j)  = VTN(i,j) + V_ISOP(i,j,bid)*HTN(i,j,bid) & 
+               FVN(i,j)  = VTN(i,j) + V_ISOP(i,j,bid)*HTN(i,j,bid) &
                                   *min(DZT(i,j,k,bid),DZT(i,j+1,k,bid))
                WORK1(i,j) = WTK (i,j) + WTOP_ISOP(i,j,bid)
                WORK2(i,j) = WTKB(i,j) + WBOT_ISOP(i,j,bid)
@@ -1386,7 +1386,7 @@
       endif
 
       !***
-      !*** potential density referenced to k=1 needed for a variety of 
+      !*** potential density referenced to k=1 needed for a variety of
       !*** tavg fields
       !***
 
@@ -1476,13 +1476,13 @@
 
             where (k /= KMT(:,:,bid))
                WORK4 = p5*(WORK4 + WORK)
-            elsewhere 
+            elsewhere
                WORK4 = WORK
             end where
          endif
 
          WORK1 = merge((WORK3 - WORK4)*dzr(k), &
-                       c0,k <= KMT(:,:,bid))  ! drho/dz 
+                       c0,k <= KMT(:,:,bid))  ! drho/dz
 
          call zcurl(k,WORK3,UUU(:,:,k),VVV(:,:,k),this_block)
          WORK2 = WORK1*(WORK3*TAREA_R(:,:,bid) + &
@@ -1560,11 +1560,11 @@
 !     L_T(\phi) = {1\over{\Delta_y}}
 !                  \delta_x\left[
 !                   \overline{\left(\overline{\Delta_y u_x}^y\right)}^{xy}
-!                   \overline{\phi}^x\right] + 
+!                   \overline{\phi}^x\right] +
 !                  {1\over{\Delta_x}}
 !                  \delta_y\left[
 !                   \overline{\left(\overline{\Delta_x u_y}^x\right)}^{xy}
-!                   \overline{\phi}^y\right] 
+!                   \overline{\phi}^y\right]
 !             + \delta_z(w\overline{\phi}^z),
 !  \end{equation}
 !  where $\phi$ is the tracer concentration.
@@ -1573,14 +1573,14 @@
 !   \begin{itemize}
 !     \item this routine must be called successively with k = 1,2,3,...
 !
-!     \item the vertical velocity $w$ in T columns is determined by 
+!     \item the vertical velocity $w$ in T columns is determined by
 !     integrating the continuity equation $L(1) = 0$ from the surface
 !     down to level k.  In the rigid-lid formulation, the integration
-!     starts with $w = 0$ at the surface.  In the free-surface 
-!     formulation, the integration starts with 
-!     $w = \partial\eta/\partial t$ 
-!     ($\partial\eta/\partial t$ is the time change of the surface 
-!     height, and satisfies the barotropic continuity equation 
+!     starts with $w = 0$ at the surface.  In the free-surface
+!     formulation, the integration starts with
+!     $w = \partial\eta/\partial t$
+!     ($\partial\eta/\partial t$ is the time change of the surface
+!     height, and satisfies the barotropic continuity equation
 !     $\partial\eta/\partial t + \nabla\cdot H {\rm\bf U}=q_w$
 !     where ${\rm\bf U}$ is the barotropic velocity and $q_w$
 !     is the surface fresh water flux.)
@@ -1596,7 +1596,7 @@
    real (r8), dimension(nx_block,ny_block,km,nt), intent(in) :: &
       TRCR                ! tracers for this block at current time
 
-   real (r8), dimension(nx_block,ny_block), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(in) :: &
       UTE,VTN,         &! tracer flux velocities across E,N faces
       WTK,             &! vert velocity at top    of level k T box
       WTKB              ! vert velocity at bottom of level k T box
@@ -1633,7 +1633,7 @@
 
 !-----------------------------------------------------------------------
 
-   if (partial_bottom_cells) then 
+   if (partial_bottom_cells) then
 
       do n=1,nt
       do j=this_block%jb,this_block%je
@@ -1722,7 +1722,7 @@
  subroutine advt_upwind3(k,LTK,TRCR,WTK,WTKB,UTE,UTW,VTN,VTS,this_block)
 
 ! !DESCRIPTION:
-!  This routine computes the advection of tracers using a 3rd-order 
+!  This routine computes the advection of tracers using a 3rd-order
 !  upwinding defined by the QUICKEST scheme in
 !  Leonard, B.P. 1979, {\em Comp. Meth. Applied Math. and Engineering},
 !        {\bf 19}, 59-98.
@@ -1758,7 +1758,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       n,                 &! tracer loop index
       bid                 ! local block address for this block
 
@@ -1810,7 +1810,7 @@
    do n = 1,nt
 
       if ( k < km-1 .and. k > 1) then
-         TPLUS  = talfzp(k)*TRCR(:,:,k+1,n)  & 
+         TPLUS  = talfzp(k)*TRCR(:,:,k+1,n)  &
                 + tbetzp(k)*TRCR(:,:,k  ,n)  &
                 + tgamzp(k)*TRCR(:,:,k-1,n)
          TMINUS = AZMINUS  *TRCR(:,:,k+1,n)  &
@@ -1889,10 +1889,10 @@
       k,                 &! vertical level index
       bid                 ! local block address for this block
 
-   real (r8), dimension(nx_block,ny_block,km,nt), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block,km,nt), intent(in) :: &
       X                   ! input tracer array
 
-   real (r8), dimension(nx_block,ny_block), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(in) :: &
       CN,CS,CE,CW           ! stencil weights based on flux velocities
 
    type (block), intent(in) :: &
@@ -1976,7 +1976,7 @@
       bmm1 = TBETXM(i-1,j,bid)
 
       do n=1,nt
-         tplus    = ap  *X(i+1,j,k,n) + bp  *X(i,j,k,n) +   & 
+         tplus    = ap  *X(i+1,j,k,n) + bp  *X(i,j,k,n) +   &
                     gp  *X(i-1,j,k,n)
          tplusm1  = apm1*X(i  ,j,k,n) + bpm1*X(i-1,j,k,n) + &
                     gpm1*X(i-2,j,k,n)
@@ -2046,7 +2046,7 @@
       bmm1 = TBETYM(i,j-1,bid)
 
       do n=1,nt
-         tplus    = ap  *X(i,j+1,k,n) + bp  *X(i,j,k,n) +     & 
+         tplus    = ap  *X(i,j+1,k,n) + bp  *X(i,j,k,n) +     &
                     gp  *X(i,j-1,k,n)
          tplusm1  = apm1*X(i,j  ,k,n) + bpm1*X(i,j-1,k,n) +   &
                     gpm1*X(i,j-2,k,n)
@@ -2068,7 +2068,7 @@
 !-----------------------------------------------------------------------
 !EOC
 
- end subroutine hupw3 
+ end subroutine hupw3
 
 !***********************************************************************
 

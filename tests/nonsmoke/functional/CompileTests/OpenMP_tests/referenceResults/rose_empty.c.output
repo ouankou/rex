@@ -1,1 +1,1 @@
-#pragma omp parallel 
+#pragma omp parallel

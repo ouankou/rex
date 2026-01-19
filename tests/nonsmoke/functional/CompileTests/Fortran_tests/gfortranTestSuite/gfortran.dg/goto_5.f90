@@ -39,6 +39,6 @@ case(1)
    40 continue  ! { dg-warning "is not in the same block" }
    60 continue    ! { dg-warning "is not in the same block" }
 50 end select   ! { dg-warning "is not in the same block" }
-continue 
+continue
 
 end

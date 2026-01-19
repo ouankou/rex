@@ -33,7 +33,7 @@ PROGRAM P
    external bar
    CALL FOO(10)
    CALL FOO(10.)
-   call bar (foo) 
+   call bar (foo)
 END PROGRAM P
 
 SUBROUTINE bar (arg)

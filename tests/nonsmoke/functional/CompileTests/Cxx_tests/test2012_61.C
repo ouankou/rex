@@ -14,7 +14,6 @@ class DEF
 
    template <class T> T DEF<T>::foo() { return xyz; }
 
-#if 1
    int main() {
      DEF<int> object2;
   // object2.xyz = 8;
@@ -22,4 +21,3 @@ class DEF
 
      return 0;
    }
-#endif

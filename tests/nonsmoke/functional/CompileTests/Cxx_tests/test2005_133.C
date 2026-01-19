@@ -20,12 +20,10 @@ class X
 #if WORK_AROUND
                   }
 #endif
-#if 1
-               int abc;
-               int xyz;
-#endif
-            // for (int i = 0; i != groupBottoms.size(); i++) { }
-             }
+                  int abc;
+                  int xyz;
+                  // for (int i = 0; i != groupBottoms.size(); i++) { }
+         }
    };
 
 

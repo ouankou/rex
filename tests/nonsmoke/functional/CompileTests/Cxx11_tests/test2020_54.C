@@ -1,10 +1,4 @@
 
-#if 0
-namespace clang
-   {
-     const int reinitializes = 0;
-   }
-#endif
 
 #define clang:: 
 

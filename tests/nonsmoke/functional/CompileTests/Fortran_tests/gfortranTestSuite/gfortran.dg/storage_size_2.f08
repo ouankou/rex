@@ -6,7 +6,7 @@
 
 use iso_c_binding, only: c_int
 
-type, bind(c) :: t 
+type, bind(c) :: t
   integer(c_int) :: j
 end type
 

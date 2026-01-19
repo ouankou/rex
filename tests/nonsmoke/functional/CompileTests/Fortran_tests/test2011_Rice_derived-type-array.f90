@@ -14,5 +14,5 @@ program derived_type_array
 
   q(1) % c = (/ 5, 7 /)  ! data reference becomes 'q % c(1)'
   q(1) % d = 0        ! ok
-  
-end program 
+
+end program

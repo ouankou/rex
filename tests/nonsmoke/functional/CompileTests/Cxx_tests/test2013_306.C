@@ -17,7 +17,6 @@ template <void (foo::*M)()> class A {};
 // This is the template class for member data.
 template <int foo::*M> class B {};
 
-#if 1
 int main()
    {
   // Unparses as: "B< &bar_variable > ();" when specified as: "B<&foo::bar_variable>();" (which is an SgConstructorInitializer).
@@ -27,7 +26,4 @@ int main()
   // Unparses as: "A< &bar_function > ();" when specified as: "A<&foo::bar_function>();" (which is an SgConstructorInitializer).
   // If specified as: "A<&foo::bar_function> a();" then it will work well (since it is a function declaration).
      A<&foo::bar_function>();
-   }
-#endif
-
-
+}

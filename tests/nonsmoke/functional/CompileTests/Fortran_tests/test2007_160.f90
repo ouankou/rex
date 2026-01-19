@@ -1,6 +1,6 @@
 ! Example showing use of "external" statement with "block data"
 
-! Here is the recommended approach to modifying a program 
+! Here is the recommended approach to modifying a program
 ! containing a program unit such as the following:
 
 BLOCK DATA FOO
@@ -8,9 +8,9 @@ BLOCK DATA FOO
   DATA X, Y, Z / 3., 4., 5. /
 END
 
-! If the above program unit might be placed in a library module, 
-! then ensure that every program unit in every program that 
-! references that particular COMMON area uses the EXTERNAL 
+! If the above program unit might be placed in a library module,
+! then ensure that every program unit in every program that
+! references that particular COMMON area uses the EXTERNAL
 ! statement to force the area to be initialized.
 
 ! For example, change a program unit that starts with

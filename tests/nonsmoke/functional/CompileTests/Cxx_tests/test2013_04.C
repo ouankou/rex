@@ -13,16 +13,9 @@
 // template <typename T>
 class X
    {
-     public:
-#if 1
-       // friend X<T> & operator+( X<T> & i, X<T> & j)
-          friend X & operator+( X & i, X & j)
-#else
-          X<T> & operator+( X<T> & i)
-#endif
-             {
-               return i;
-             }
+public:
+  // friend X<T> & operator+( X<T> & i, X<T> & j)
+  friend X &operator+(X &i, X &j) { return i; }
    };
 
 int main()
@@ -30,9 +23,7 @@ int main()
   // X<int> y,z;
      X y,z;
 
-#if 1
      y + z;
-#endif
 
      return 0;
    }

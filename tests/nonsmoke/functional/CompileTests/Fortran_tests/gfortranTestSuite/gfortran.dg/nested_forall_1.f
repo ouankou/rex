@@ -1,9 +1,9 @@
 ! { dg-do compile }
 !
 ! PR fortran/35820
-! 
+!
 ! Memory leak(s) while resolving forall constructs.
-! 
+!
 ! Contributed by Dick Hendrickson <dick.hendrickson@gmail.com>
 
       MODULE TESTS

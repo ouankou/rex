@@ -10,10 +10,4 @@ pair<_Tp*> foo()
      return pair<_Tp*>();
    }
 
-#if 1
-template<typename _Tp>
-pair<_Tp*> foobar()
-   { 
-     return pair<_Tp*>();
-   }
-#endif
+template <typename _Tp> pair<_Tp *> foobar() { return pair<_Tp *>(); }

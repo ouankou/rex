@@ -62,14 +62,6 @@ static void add_hash_entry(const char *function_name, funcPointerT fpt) {
     assert(0);
   }
 
-#if 0
-  if ((s->func_name=malloc(strlen(function_name)+1)) == NULL)
-  {
-    printf("Fatal error: add_hash_entry() malloc() for s->func_name failed!\n");
-    assert(0);
-  }
-  else
-#endif
   {
     strcpy(s->func_name, function_name);
     s->fp = fpt;
@@ -107,7 +99,6 @@ funcPointerT findFunctionUsingDlopen(char *function_name, char *lib_name) {
   return result;
 }
 
-#if 1
 int closeLibHandle() {
   int rc;
   rc = dlclose(functionLib);
@@ -117,4 +108,3 @@ int closeLibHandle() {
     exit(1);
   return 0;
 }
-#endif

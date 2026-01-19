@@ -26,19 +26,6 @@ void foobar ()
             m =  array[i1];
 
             a1  = h + g + f + m ;
-
-#if 0
-         // Commenting this out causes this to be all transfromations in the SgBasicBlock.
-         // So we can't identify representative formatting to use.
-            f =  array[i1];
-            g =  array[i1] ;
-            h = array[i2];
-            m = array[i2];
-
-            a2  = h + g + f + m ;
-
-            a[i1] = b + ( a1 + a2 ) ;
-#endif
          }
 
       }

@@ -15,7 +15,7 @@ program eieio_stat
   close(10)
 
   open(10,file="eieio")
-  
+
   buffer = 'abcdefg'
   read (unit,"(a)",advance="no",iostat=ios1, pad="yes") buffer
   if (ios1 /= iostat_eor .and. buffer /= "Line-1") call abort
@@ -23,7 +23,7 @@ program eieio_stat
   buffer = '<'
   read (unit,"(a)",advance="no",iostat=ios2,pad="yes") buffer
   if (ios2 /= iostat_eor .and. buffer /= "Line-2") call abort
-  
+
   buffer = '5678'
   read (unit,"(a)",advance="no",iostat=ios3, iomsg=themessage) buffer
   if (ios3 /= iostat_end .and. buffer /= "5678") call abort
@@ -41,6 +41,6 @@ program eieio_stat
   buffer = '1234'
   read (unit,"(a)",advance="no",iostat=ios3, iomsg=themessage) buffer
   if (ios3 <= 0 .and. buffer /= "1234") call abort
-  
+
   close(unit, status="delete")
-end program eieio_stat 
+end program eieio_stat

@@ -23,9 +23,3 @@ int main()
 
 int x = MY_VALUE;
 int y = 42;
-#if 0
-// Things hidden at the end of the global scope are not unparsed because 
-// we omit the trailing token sequence after the last statement...
-// I will fix this next (in the morning).
-void foobar_commentedout_function_hidden_in_macro...();
-#endif

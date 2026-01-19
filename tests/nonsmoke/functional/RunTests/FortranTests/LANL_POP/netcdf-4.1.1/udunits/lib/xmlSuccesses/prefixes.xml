@@ -44,8 +44,8 @@
 	<prefix>
 	    <value>1e-6</value>
 	    <name>micro</name>
-	    <symbol encoding="ascii">u</symbol>	
-	    <symbol>µ</symbol>	
+	    <symbol encoding="ascii">u</symbol>
+	    <symbol>µ</symbol>
 	</prefix>
 	<prefix>
 	    <value>1e-9</value> <name>nano</name>	<symbol>n</symbol>

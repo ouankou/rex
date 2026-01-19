@@ -1,7 +1,7 @@
 README for ROSE/TESTS/C++Code:
 
    This directory contains tests that are used to verify correctness of
-the internal ROSE infrastructure.  Most tests were previous bug which have 
+the internal ROSE infrastructure.  Most tests were previous bug which have
 been fixed.
 
 
@@ -11,6 +11,6 @@ ability to read the file, build the internal AST format,
 unparse to output C++ code, and compile the resulting C++ output.
 
 What is not tested:
-   No transformations are done in these tests, and the internal AST (essentially 
+   No transformations are done in these tests, and the internal AST (essentially
 the SAGE representation) is NOT parsed using the higher level grammars.  These
 test would currently fail because of unimplemented features of the array grammars.

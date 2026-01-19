@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! { dg-options "-fcheck=pointer" }
 ! { dg-shouldfail "Unassociated/unallocated actual argument" }
-! 
+!
 ! { dg-output ".*At line 46 .*Pointer actual argument 'getptr' is not associated" }
 !
 ! PR fortran/40580

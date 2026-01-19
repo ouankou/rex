@@ -7,4 +7,4 @@ subroutine foo(a,n)
   print *,maxval(a,dim=n) ! { dg-error "must not be OPTIONAL" }
   print *,maxval(a,dim=4) ! { dg-error "is not a valid dimension index" }
 end subroutine foo
-  
+

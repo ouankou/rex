@@ -55,4 +55,4 @@ MODULE rational_numbers
     END FUNCTION
 END
 
-! { dg-final { cleanup-modules "rational_numbers" } } 
+! { dg-final { cleanup-modules "rational_numbers" } }

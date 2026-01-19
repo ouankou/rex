@@ -17,8 +17,8 @@
  x = func (x) ;\
  y = func (y) ;\
  if (abs((y - x) / y) > eps) call abort
-  
+
  TEST_FUNCTION(erf,1.45123231)
  TEST_FUNCTION(erfc,-0.123789)
- 
+
 end

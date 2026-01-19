@@ -1,4 +1,4 @@
-!$omp parallel 
-!$omp do 
+!$omp parallel
+!$omp do
 !$omp end do  nowait
-!$omp end parallel 
+!$omp end parallel

@@ -8,7 +8,7 @@
 module gfcbug45
   implicit none
 contains
-  subroutine foo 
+  subroutine foo
     real, external :: mysum
     integer :: i
     real    :: a

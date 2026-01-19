@@ -4,21 +4,6 @@
 
 #include <vector>
 
-#if 0
-namespace std
-   {
-     template<typename _Tp> class allocator {};
-
-     template<typename _Tp, typename _Alloc = std::allocator<_Tp> >
-     class vector
-        {
-          public:
-               vector(){}
-               void push_back(_Tp x){}
-        };
-   }
-#endif
-
 namespace XXX {
 
 class BndMapping 

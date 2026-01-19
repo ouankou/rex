@@ -40,4 +40,4 @@ c { dg-options "-O2 -std=f95" }
        l4 = i4      ! { dg-error "convert" }
 
        END
- 
+

@@ -1,13 +1,4 @@
-#if 0
-enum Protocols
-   {
-     File
-   };
-
-const int Protocols_Count = 1;
-#else
-   #include "test2013_256.h"
-#endif
+#include "test2013_256.h"
 
 struct ProtoEntry
    {

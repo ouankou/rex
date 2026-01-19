@@ -8,33 +8,33 @@
 ! Contributed by Ian Harvey <ian_harvey@bigpond.com>
 !
 MODULE SomeOptions
-  IMPLICIT NONE  
+  IMPLICIT NONE
   INTERFACE ElemSpec
     MODULE PROCEDURE ElemProc
     MODULE PROCEDURE SpecProc
-  END INTERFACE ElemSpec  
+  END INTERFACE ElemSpec
   INTERFACE SpecElem
     MODULE PROCEDURE SpecProc
     MODULE PROCEDURE ElemProc
   END INTERFACE SpecElem
 CONTAINS
-  ELEMENTAL SUBROUTINE ElemProc(a)  
+  ELEMENTAL SUBROUTINE ElemProc(a)
     CHARACTER, INTENT(OUT) :: a
     !****
-    a = 'E'            
+    a = 'E'
   END SUBROUTINE ElemProc
 
-  SUBROUTINE SpecProc(a)  
+  SUBROUTINE SpecProc(a)
     CHARACTER, INTENT(OUT) :: a(:)
-    !****    
-    a = 'S'    
+    !****
+    a = 'S'
   END SUBROUTINE SpecProc
 END MODULE SomeOptions
 
 PROGRAM MakeAChoice
-  USE SomeOptions  
+  USE SomeOptions
   IMPLICIT NONE
-  CHARACTER scalar, array(2)    
+  CHARACTER scalar, array(2)
   !****
   CALL ElemSpec(scalar) ! Should choose the elemental (and does)
   WRITE (*, 100) scalar
@@ -44,7 +44,7 @@ PROGRAM MakeAChoice
   CALL SpecElem(scalar) ! Should choose the elemental (and does)
   WRITE (*, 100) scalar
   CALL SpecElem(array)  ! Should choose the specific (but didn't)
-  WRITE (*, 100) array  
+  WRITE (*, 100) array
   !----
   100 FORMAT(A,:,', ',A)
 END PROGRAM MakeAChoice

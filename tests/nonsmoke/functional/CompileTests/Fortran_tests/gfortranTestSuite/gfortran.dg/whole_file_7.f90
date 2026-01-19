@@ -8,17 +8,17 @@
 ! try repeatedly to resolve the function because of the self
 ! reference.
 RECURSIVE FUNCTION eval_args(q)  result (r)
-  INTEGER NNODE 
-  PARAMETER (NNODE  = 10) 
-  TYPE NODE 
-    SEQUENCE 
-    INTEGER car 
-    INTEGER cdr 
-  END TYPE NODE 
-  TYPE(NODE) heap(NNODE) 
-  INTEGER r, q 
-  r = eval_args(heap(q)%cdr) 
-END FUNCTION eval_args 
+  INTEGER NNODE
+  PARAMETER (NNODE  = 10)
+  TYPE NODE
+    SEQUENCE
+    INTEGER car
+    INTEGER cdr
+  END TYPE NODE
+  TYPE(NODE) heap(NNODE)
+  INTEGER r, q
+  r = eval_args(heap(q)%cdr)
+END FUNCTION eval_args
 
 function test(n)
   real, dimension(2) :: test

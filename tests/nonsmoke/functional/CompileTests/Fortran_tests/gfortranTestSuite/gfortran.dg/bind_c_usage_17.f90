@@ -3,7 +3,7 @@
 !
 ! PR fortran/37201
 !
-! 
+!
 !
 MODULE mod
   INTERFACE

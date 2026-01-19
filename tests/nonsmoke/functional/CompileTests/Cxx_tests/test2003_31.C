@@ -33,16 +33,6 @@ DQ: Verified problem
  * converting something to a bool is just testing whether it is not equal
  * to 0, and then the ! is translated as itself. */
 
-#if 0
-/*********START CODE**********/
-int foo(int x){
-
-        x = !foo(1);
-}
-/**********END CODE**********/
-
-#else
-
 const int y = 0;
 const int x = !0;
 
@@ -51,5 +41,3 @@ int foo(int x, int y)
    {
      x = !y;
    }
-
-#endif

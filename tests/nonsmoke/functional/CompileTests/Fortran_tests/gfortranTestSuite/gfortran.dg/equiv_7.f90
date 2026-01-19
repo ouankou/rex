@@ -32,7 +32,7 @@ end block data
   else
     if (d1mach_big (1) .ne. transfer ((/1048576_4, 0_4/), 1d0)) call abort ()
     if (d1mach_big (2) .ne. transfer ((/2146435071_4,-1_4/), 1d0)) call abort ()
-  end if 
+  end if
 !
 contains
   subroutine int4_int4
@@ -78,7 +78,7 @@ contains
     equivalence ( dmach(2), large(1) )
     data small(1),small(2) / 0,   1048576/
     data large(1),large(2) /-1,2146435071/
-    d1mach = dmach(i) 
+    d1mach = dmach(i)
   end function d1mach_little
   function d1mach_big(i) result(d1mach)
     implicit none
@@ -89,7 +89,7 @@ contains
     equivalence ( dmach(2), large(1) )
     data small(1),small(2) /1048576,    0/
     data large(1),large(2) /2146435071,-1/
-    d1mach = dmach(i) 
+    d1mach = dmach(i)
   end function d1mach_big
     subroutine derived_types
       TYPE T1

@@ -12,11 +12,8 @@ void foo (enum number n)
      foo(none);
    }
 #else
-void foo (enum number n)
-   {
-#if 1
-     foo(none);
-     none;
-#endif
-   }
+void foo(enum number n) {
+  foo(none);
+  none;
+}
 #endif

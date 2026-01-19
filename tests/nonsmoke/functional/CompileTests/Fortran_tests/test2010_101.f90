@@ -3,7 +3,7 @@
 
 module m101
   type  :: t
-  contains 
+  contains
     generic :: p => q  ! assertion failure: name stack not empty
   end type
 end module

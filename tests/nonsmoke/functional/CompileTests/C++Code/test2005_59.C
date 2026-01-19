@@ -13,7 +13,6 @@ void foobar();
 
 void foobar() {}
 
-#if 1
 void foobar();
 
 template <typename T>
@@ -29,5 +28,4 @@ template <> void foobar<int> (int t);
 
 template <> void foobar<int> (int t) {};
 
-template <> void foobar<int> (int t);
-#endif
+template <> void foobar<int>(int t);

@@ -14,7 +14,7 @@ c      WRITE(*,*) 'AREA is ', AREA3(10,8,9)
 c definition of function
       FUNCTION AREA3(A,B,C)
       S = (A+B+C)/2.0
-c return value is assigned to a variable named as the function name   
+c return value is assigned to a variable named as the function name
       AREA3 = SQRT (S*(S-A)*(S-B)*(S-C))
       END
 

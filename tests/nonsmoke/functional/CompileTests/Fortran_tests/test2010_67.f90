@@ -13,10 +13,10 @@ program testptr
 	allocate(d(1:10))
 	do i = 1, 10
 	  d(i) = i
-	end do 
-	
+	end do
+
 ! p(1)%a is incorrectly transformed into p%a(1)
 	p(1)%a => d
-	
+
 	print *, p(1)%a(1:10)
-end program 
+end program

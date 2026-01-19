@@ -1,16 +1,12 @@
 
-void foobar()
-   {
-#if 1
-     while (1)
-     #pragma omp task 0
-        {
-        }
-#endif
+void foobar() {
+  while (1)
+#pragma omp task 0
+  {
+  }
 
-     if (1)
-     #pragma omp task 5
-        {
-        }
-   }
-
+  if (1)
+#pragma omp task 5
+  {
+  }
+}

@@ -79,10 +79,10 @@ CONTAINS
           IF ( l2 > 0 ) s(1,1,l) = s(1,1,l) + f2*REAL(ni,dp)*s(1,1,l2)
         END DO
         DO l = 1, ncoset(lc_max)
-          IF ( lx > 0 ) THEN 
+          IF ( lx > 0 ) THEN
             lx1 = coset(lx-1,ly,lz)
           END IF
-          IF ( ly > 0 ) THEN 
+          IF ( ly > 0 ) THEN
             ly1 = coset(lx,ly-1,lz)
           END IF
           IF (la_max > 0) THEN
@@ -104,7 +104,7 @@ CONTAINS
               DO ax=2,la
                 DO ay=0,la-ax
                   s(coset(ax,ay,az),1,l) = rap(1)*s(coset(ax-1,ay,az),1,l) +&
-                                          f3*s(coset(ax-2,ay,az),1,l) 
+                                          f3*s(coset(ax-2,ay,az),1,l)
                   IF ( lx1 > 0 ) s(coset(ax,ay,az),1,l) = s(coset(ax,ay,az),1,l) + &
                                  f2x*s(coset(ax-1,ay,az),1,lx1)
                 END DO

@@ -17,7 +17,7 @@ program try_je0031
       TARGET DDA
     END SUBROUTINE
   end interface
-  integer :: array1(nx,ny), array2(nx,ny) 
+  integer :: array1(nx,ny), array2(nx,ny)
   data array2 / 1,2,3,4, 10,20,30,40, 100,200,300,400 /
   array1 = array2
   call PR38852(IDA,DDA,2,5,-2)
@@ -31,7 +31,7 @@ contains
       if (any (array1(:,j) .ne. array2(:,4-j))) call abort
     end do
   end subroutine
-end 
+end
 
 SUBROUTINE PR38852(IDA,DDA,nf2,nf5,mf2)
   INTEGER IDA(4)

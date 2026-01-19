@@ -335,7 +335,7 @@
 
    if ( gm_bolus .and. partial_bottom_cells) then
      call exit_POP(sigAbort, &
-       'gm_bolus currently incompatible with partial bottom cells') 
+       'gm_bolus currently incompatible with partial bottom cells')
    endif
 
 !-----------------------------------------------------------------------
@@ -644,7 +644,7 @@
       kp1 = k+1
    else
       kp1 = km
-   endif 
+   endif
 
    if (gm_bolus) WTOP_ISOP(:,:,bid) = WBOT_ISOP(:,:,bid)
 
@@ -919,7 +919,7 @@
             !*** only within the boundary layer
 
             if ( vmix_itype == vmix_type_kpp ) then
-	       TAPER1 = merge(TAPER1, c1, & 
+	       TAPER1 = merge(TAPER1, c1, &
                               dz_top <= KPP_HBLT(:,:,bid))
             endif
 
@@ -1220,7 +1220,7 @@
       WORK1 = KAPPA(:,:,ktp,bid)
       WORK2 = KAPPA(:,:,kbt,bid)
       KPTMP1 = p25*KAPPA(:,:,kbt ,bid)
-      KPTMP2 = p25*KAPPA(:,:,kbt2,bid)  
+      KPTMP2 = p25*KAPPA(:,:,kbt2,bid)
    else
       KPTMP1 = p5*KAPPA(:,:,kbt ,bid)
       KPTMP2 = p5*KAPPA(:,:,kbt2,bid)
@@ -1438,7 +1438,7 @@
              + eoshift(KAPPA_B(:,:,kbt2,bid)*SLX(:,:,iwest,kbt2,bid), &
                        dim=1, shift=1) )                              &
                *p25*HYX(:,:,bid)*p5*(DZT(:,:,k,bid)+DZT(:,:,kp1,bid))
-     
+
          WORK2 = (     KAPPA_B(:,:,kbt ,bid)*SLY(:,:,jnorth,kbt ,bid)  &
              +         KAPPA_B(:,:,kbt2,bid)*SLY(:,:,jnorth,kbt2,bid)  &
              + eoshift(KAPPA_B(:,:,kbt ,bid)*SLY(:,:,jsouth,kbt ,bid), &
@@ -1454,7 +1454,7 @@
              + eoshift(KAPPA_B(:,:,kbt2,bid)*SLX(:,:,iwest,kbt2,bid), &
                        dim=1, shift=1) )                              &
                *p25*HYX(:,:,bid)*dzw(k)
-     
+
          WORK2 = (     KAPPA_B(:,:,kbt ,bid)*SLY(:,:,jnorth,kbt ,bid)  &
              +         KAPPA_B(:,:,kbt2,bid)*SLY(:,:,jnorth,kbt2,bid)  &
              + eoshift(KAPPA_B(:,:,kbt ,bid)*SLY(:,:,jsouth,kbt ,bid), &
@@ -1463,10 +1463,10 @@
                        dim=2, shift=1) )                               &
                *p25*HXY(:,:,bid)*dzw(k)
       endif
-     
+
       UIB = merge( WORK1, c0, k < KMT(:,:,bid) .and. k < KMTE(:,:,bid) )
       VIB = merge( WORK2, c0, k < KMT(:,:,bid) .and. k < KMTN(:,:,bid) )
-     
+
       WORK1 = merge(UIT(:,:,bid) - UIB, c0, k <= KMT (:,:,bid) .and. &
                                             k <= KMTE(:,:,bid) )
       WORK2 = merge(VIT(:,:,bid) - VIB, c0, k <= KMT (:,:,bid) .and. &
@@ -1479,7 +1479,7 @@
          U_ISOP(:,:,bid) = WORK1 * dzr(k) / HTE(:,:,bid)
          V_ISOP(:,:,bid) = WORK2 * dzr(k) / HTN(:,:,bid)
       endif
-     
+
       where (k <= KMT(:,:,bid))
          WBOT_ISOP(:,:,bid) = WTOP_ISOP(:,:,bid) + TAREA_R(:,:,bid)*   &
                               (WORK1 - eoshift(WORK1,dim=1,shift=-1) + &
@@ -1487,7 +1487,7 @@
       elsewhere
          WBOT_ISOP(:,:,bid) = c0
       end where
-     
+
    endif
 
 !-----------------------------------------------------------------------
@@ -1606,7 +1606,7 @@
    real (r8), dimension(nx_block,ny_block) :: &
       UKT,VKT,                                &
       UKPT, VKPT, RNUM,                       &
-      TK, TKP,                                & 
+      TK, TKP,                                &
       WORK1, WORK2, WORK3, WORK4,             &
       RHOT,RHOS,                              &
       GRATE, LSC

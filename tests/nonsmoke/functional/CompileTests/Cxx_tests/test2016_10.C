@@ -10,10 +10,3 @@ class C
 
 
 // C<int> c;
-
-#if 0
-int main() 
-   {
-     C<int> c;
-   } 
-#endif

@@ -14,7 +14,7 @@ MODULE m1
 contains
   subroutine test1()
           REAL,POINTER :: p(:,:),q(:)
-          CALL s(p,q) 
+          CALL s(p,q)
           p = q
   end subroutine test1
 end module m1

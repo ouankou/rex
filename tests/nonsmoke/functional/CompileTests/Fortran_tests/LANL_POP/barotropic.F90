@@ -6,7 +6,7 @@
 ! !MODULE: barotropic
 !
 ! !DESCRIPTION:
-!  This module contains the routine for solving the barotropic 
+!  This module contains the routine for solving the barotropic
 !  equations.
 !
 ! !REVISION HISTORY:
@@ -17,7 +17,7 @@
 
    use kinds_mod, only: int_kind, i4, r8
    use blocks, only: nx_block, ny_block, block, get_block
-!   use distribution, only: 
+!   use distribution, only:
    use domain, only: distrb_clinic, blocks_clinic, nblocks_clinic,            &
        bndy_clinic
    use constants, only: field_type_vector, field_type_scalar,                 &
@@ -78,9 +78,9 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (i4), dimension (:,:,:), allocatable :: &  
+   integer (i4), dimension (:,:,:), allocatable :: &
       CHECKER,  &! checkerboard nullspace field
-      CONSTNT    ! constant     nullspace field 
+      CONSTNT    ! constant     nullspace field
 
    real (r8) :: &
       rcheck, rconst  ! scalar constants for checkboard removal
@@ -115,13 +115,13 @@
    integer (int_kind) :: &
       i,j,n,             &! loop indices
       iblock,            &! local block index
-      sum_check,         &! global sum of checkboard field 
+      sum_check,         &! global sum of checkboard field
       sum_const           ! global sum of constant   field
 
-   real (r8) :: & 
+   real (r8) :: &
       acheck    ! sum(CHECKER*TAREA)/sum(CONSTNT*TAREA)
 
-   real (r8), dimension(:,:,:), allocatable :: & 
+   real (r8), dimension(:,:,:), allocatable :: &
       CHECK_AREA,    &! TAREA*CHEKER
       CONST_AREA      ! TAREA*CONSTNT
 
@@ -158,7 +158,7 @@
       !$OMP PARALLEL DO PRIVATE(iblock, this_block, i, j, n)
 
       do iblock = 1,nblocks_clinic
-         this_block = get_block(blocks_clinic(iblock),iblock)  
+         this_block = get_block(blocks_clinic(iblock),iblock)
 
          do j = 1,ny_block
          do i = 1,nx_block
@@ -173,7 +173,7 @@
 
          if (allocated(REGION_MASK)) then
             where(KMT(:,:,iblock) > 0 .and. &
-                  REGION_MASK(:,:,iblock) > 0) 
+                  REGION_MASK(:,:,iblock) > 0)
                CONSTNT(:,:,iblock) = 1
                CONST_AREA(:,:,iblock) = TAREA(:,:,iblock)
             elsewhere
@@ -183,7 +183,7 @@
                CONST_AREA(:,:,iblock) = 0
             endwhere
          else
-            where(KMT(:,:,iblock) > 0) 
+            where(KMT(:,:,iblock) > 0)
                CONSTNT(:,:,iblock) = 1
                CONST_AREA(:,:,iblock) = TAREA(:,:,iblock)
             elsewhere
@@ -222,18 +222,18 @@
  subroutine barotropic_driver(ZX,ZY)
 
 ! !DESCRIPTION:
-!  This routine solves the barotropic equations for the surface 
-!  pressure and barotropic velocity field using the implicit 
+!  This routine solves the barotropic equations for the surface
+!  pressure and barotropic velocity field using the implicit
 !  free-surface formulation.
 !
-!  For leapfrog steps, the momentum equations for the auxiliary 
+!  For leapfrog steps, the momentum equations for the auxiliary
 !  velocity $(u',v')$ are
 !  \begin{eqnarray}
-!     (u' - u^{n-1}) - 2 \Delta t \alpha f(v' - v^{n-1}) 
-!         &=& 2 \Delta t [F_x - \gamma \nabla_x p - 
-!                            (1-\gamma)\nabla_x p^{n-1}] \\ 
-!     (v' - v^{n-1}) + 2 \Delta t \alpha f(u' - u^{n-1}) 
-!         &=& 2 \Delta t [F_y - \gamma \nabla_y p - 
+!     (u' - u^{n-1}) - 2 \Delta t \alpha f(v' - v^{n-1})
+!         &=& 2 \Delta t [F_x - \gamma \nabla_x p -
+!                            (1-\gamma)\nabla_x p^{n-1}] \\
+!     (v' - v^{n-1}) + 2 \Delta t \alpha f(u' - u^{n-1})
+!         &=& 2 \Delta t [F_y - \gamma \nabla_y p -
 !                            (1-\gamma)\nabla_y p^{n-1}].
 !  \end{eqnarray}
 !  The elliptic equation for new pressure $p^{n+1}$ is
@@ -257,7 +257,7 @@
 !  \end{eqnarray}
 !  the elliptic equation for new pressure is
 !  \begin{equation}
-!         \nabla\cdot(H\nabla({p`}^{n+1}) - 
+!         \nabla\cdot(H\nabla({p`}^{n+1}) -
 !         {p`}^{n+1}/(\theta\Delta t^2 g)
 !           = \nabla\cdot(H[(u',v')/(\theta\Delta t) + \nabla p^n])
 !              - p^n/(\theta*\Delta t^2 g) - F_w/(\theta\Delta t),
@@ -271,10 +271,10 @@
 !  On the second pass of Matsuno steps, the auxiliary velocity is
 !  \begin{eqnarray}
 !         (u' - u^n) - \Delta t \theta f(v' - v^n)
-!           &=& \Delta t (F_x' - \theta\nabla_x {p'}^{n+1} - 
+!           &=& \Delta t (F_x' - \theta\nabla_x {p'}^{n+1} -
 !                             (1-\theta)\nabla_x p^n) \\
 !         (v' - v^n) + \Delta t \theta f(u' - u^n)
-!           &=& \Delta t (F_y' - \theta\nabla_y {p'}^{n+1} - 
+!           &=& \Delta t (F_y' - \theta\nabla_y {p'}^{n+1} -
 !                             (1-\theta)\nabla_y p^n),
 !  \end{eqnarray}
 !  the elliptic equation for new pressure is
@@ -291,7 +291,7 @@
 !
 !  The above equations are written for the case of implicit treatment
 !  of the coriolis terms.  The parameters $\alpha$ and $\gamma$ are
-!  used to vary the time-centering of the coriolis terms and surface 
+!  used to vary the time-centering of the coriolis terms and surface
 !  pressure gradients, which enter the equations centered in time
 !  as follows:
 !  \begin{eqnarray}
@@ -299,15 +299,15 @@
 !                   {\rm (leapfrog\ timesteps)} \\
 !     \theta Q^{n+1} + (1-\theta)Q^n & & {\rm (matsuno\ timesteps)}
 !  \end{eqnarray}
-!  where Q is the coriolis term or surface-pressure gradient. 
+!  where Q is the coriolis term or surface-pressure gradient.
 !  The force terms $(F_x,F_y)$ contain r.h.s. coriolis terms which
 !  vary depending on the type of timestep (see comments in clinic).
-!  If the coriolis terms are treated explicitly, then they are 
+!  If the coriolis terms are treated explicitly, then they are
 !  simply evaluated at time (n), and appear only in the force terms.
 !
 !  In the 2nd pass of a matsuno timestep, the force terms
 !  $(F_x',F_y')$ are constructed in baroclinic using the predicted
-!  prognostic fields $({U'}^{n+1},{V'}^{n+1}),T^{n+1}$ from the first 
+!  prognostic fields $({U'}^{n+1},{V'}^{n+1}),T^{n+1}$ from the first
 !  pass.
 !
 !  The auxiliary velocities $(u',v')$ are solutions of the momentum
@@ -336,7 +336,7 @@
 !  local variables
 !
 !-----------------------------------------------------------------------
- 
+
    integer (int_kind) :: iblock
 
    real (r8) ::          &
@@ -364,24 +364,24 @@
    !$OMP                     WORK1, WORK2, WORK3, WORK4)
 
    do iblock = 1,nblocks_clinic
-      this_block = get_block(blocks_clinic(iblock),iblock)  
+      this_block = get_block(blocks_clinic(iblock),iblock)
 
       if (leapfrogts) then               ! leapfrog
 
          WORK3 = c2dtp*(ZX(:,:,iblock) -                          &
-                              gamma *GRADPX(:,:,curtime,iblock) - & 
+                              gamma *GRADPX(:,:,curtime,iblock) - &
                         (c1 - gamma)*GRADPX(:,:,oldtime,iblock))
          WORK4 = c2dtp*(ZY(:,:,iblock) -                          &
                               gamma *GRADPY(:,:,curtime,iblock) - &
                         (c1 - gamma)*GRADPY(:,:,oldtime,iblock))
 
       elseif (mix_pass == 1 .or. f_euler_ts) then   ! matsuno 1st pass
- 
+
          WORK3 = c2dtp*(ZX(:,:,iblock) - GRADPX(:,:,curtime,iblock))
          WORK4 = c2dtp*(ZY(:,:,iblock) - GRADPY(:,:,curtime,iblock))
- 
+
       else ! (mix_pass == 2)                ! matsuno 2nd pass
- 
+
          WORK3 = c2dtp*(ZX(:,:,iblock) -                          &
                               theta *GRADPX(:,:,newtime,iblock) - &
                         (c1 - theta)*GRADPX(:,:,curtime,iblock))
@@ -408,7 +408,7 @@
 
 !-----------------------------------------------------------------------
 !
-!     solve for auxiliary velocities ([Uh],[Vh]) 
+!     solve for auxiliary velocities ([Uh],[Vh])
 !
 !-----------------------------------------------------------------------
 
@@ -416,7 +416,7 @@
 
          WORK1 = c2dtp*beta*FCOR(:,:,iblock)
          WORK2 = c1/(c1 + WORK1**2)
-         UH(:,:,iblock) = WORK2*(WORK3 + WORK1*WORK4) + & 
+         UH(:,:,iblock) = WORK2*(WORK3 + WORK1*WORK4) + &
                           UBTROP(:,:,oldtime,iblock)
          VH(:,:,iblock) = WORK2*(WORK4 - WORK1*WORK3) + &
                           VBTROP(:,:,oldtime,iblock)
@@ -435,26 +435,26 @@
 !-----------------------------------------------------------------------
 
       if (leapfrogts) then               ! leapfrog
- 
+
          WORK3 = HU(:,:,iblock)*(UH(:,:,iblock) + &
                                  beta*c2dtp*GRADPX(:,:,oldtime,iblock))
          WORK4 = HU(:,:,iblock)*(VH(:,:,iblock) + &
                                  beta*c2dtp*GRADPY(:,:,oldtime,iblock))
 
       elseif (mix_pass == 1 .or. f_euler_ts) then   ! matsuno 1st pass
- 
+
          WORK3 = HU(:,:,iblock)*(UH(:,:,iblock) + &
                                  beta*c2dtp*GRADPX(:,:,curtime,iblock))
          WORK4 = HU(:,:,iblock)*(VH(:,:,iblock) + &
                                  beta*c2dtp*GRADPY(:,:,curtime,iblock))
- 
+
       else ! (mix_pass == 2)                ! matsuno 2nd pass
- 
+
          WORK3 = HU(:,:,iblock)*(UH(:,:,iblock) + &
                                  beta*c2dtp*GRADPX(:,:,newtime,iblock))
-         WORK4 = HU(:,:,iblock)*(VH(:,:,iblock) + & 
+         WORK4 = HU(:,:,iblock)*(VH(:,:,iblock) + &
                                  beta*c2dtp*GRADPY(:,:,newtime,iblock))
- 
+
       endif
 
       !*** div returns T-cell area * divergence
@@ -463,7 +463,7 @@
 
 !-----------------------------------------------------------------------
 !
-!     add diagonal term to central coefficient in implicit free-surface 
+!     add diagonal term to central coefficient in implicit free-surface
 !     formulation, and add correction to r.h.s.
 !
 !-----------------------------------------------------------------------
@@ -471,7 +471,7 @@
       select case (sfc_layer_type)
 
       case(sfc_layer_varthick)
-         A0_CLINIC(:,:,iblock) =                                       & 
+         A0_CLINIC(:,:,iblock) =                                       &
                         merge(TAREA(:,:,iblock)/(beta*c2dtp*dtp*grav), &
                               c0,CALCT(:,:,iblock))
          RHS(:,:,iblock) = RHS(:,:,iblock) -                           &
@@ -501,7 +501,7 @@
 !-----------------------------------------------------------------------
 
       PSURF(:,:,newtime,iblock) = PGUESS(:,:,iblock)
- 
+
       if (mix_pass == 2) then
          WORKX(:,:,iblock) = GRADPX(:,:,newtime,iblock)
          WORKY(:,:,iblock) = GRADPY(:,:,newtime,iblock)
@@ -543,7 +543,7 @@
    !$OMP PARALLEL DO PRIVATE(iblock,this_block)
 
    do iblock = 1,nblocks_clinic
-      this_block = get_block(blocks_clinic(iblock),iblock)  
+      this_block = get_block(blocks_clinic(iblock),iblock)
 
 !-----------------------------------------------------------------------
 !
@@ -574,32 +574,32 @@
 !-----------------------------------------------------------------------
 
       if (leapfrogts) then               ! leapfrog
- 
+
          UBTROP(:,:,newtime,iblock) = UH(:,:,iblock) -                &
-                             beta*c2dtp*(GRADPX(:,:,newtime,iblock) - & 
+                             beta*c2dtp*(GRADPX(:,:,newtime,iblock) - &
                                          GRADPX(:,:,oldtime,iblock))
          VBTROP(:,:,newtime,iblock) = VH(:,:,iblock) -                &
                              beta*c2dtp*(GRADPY(:,:,newtime,iblock) - &
                                          GRADPY(:,:,oldtime,iblock))
- 
+
       elseif (mix_pass == 1 .or. f_euler_ts) then  ! matsuno 1st pass
- 
+
          UBTROP(:,:,newtime,iblock) = UH(:,:,iblock) -                &
                              beta*c2dtp*(GRADPX(:,:,newtime,iblock) - &
                                          GRADPX(:,:,curtime,iblock))
          VBTROP(:,:,newtime,iblock) = VH(:,:,iblock) -                &
                              beta*c2dtp*(GRADPY(:,:,newtime,iblock) - &
                                          GRADPY(:,:,curtime,iblock))
- 
+
       else ! (mix_pass == 2)                ! matsuno 2nd pass
- 
+
          UBTROP(:,:,newtime,iblock) = UH(:,:,iblock) -                &
                              beta*c2dtp*(GRADPX(:,:,newtime,iblock) - &
                                          WORKX(:,:,iblock))
          VBTROP(:,:,newtime,iblock) = VH(:,:,iblock) -                &
                              beta*c2dtp*(GRADPY(:,:,newtime,iblock) - &
                                          WORKY(:,:,iblock))
- 
+
       endif
 
 !-----------------------------------------------------------------------

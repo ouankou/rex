@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! 
+!
 ! Test for PR 35150, reduced testcases by Tobias Burnus
 !
 module test1

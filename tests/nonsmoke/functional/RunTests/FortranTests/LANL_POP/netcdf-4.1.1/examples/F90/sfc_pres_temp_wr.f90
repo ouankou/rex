@@ -40,7 +40,7 @@ program sfc_pres_temp_wr
   integer :: lat_varid, lon_varid
   real, parameter :: START_LAT = 25.0, START_LON = -125.0
 
-  ! We will write surface temperature and pressure fields. 
+  ! We will write surface temperature and pressure fields.
   character (len = *), parameter :: PRES_NAME="pressure"
   character (len = *), parameter :: TEMP_NAME="temperature"
   integer :: pres_varid, temp_varid
@@ -81,7 +81,7 @@ program sfc_pres_temp_wr
      end do
   end do
 
-  ! Create the file. 
+  ! Create the file.
   call check( nf90_create(FILE_NAME, nf90_clobber, ncid) )
 
   ! Define the dimensions.
@@ -127,18 +127,18 @@ program sfc_pres_temp_wr
 
   ! Close the file.
   call check( nf90_close(ncid) )
-   
-  ! If we got this far, everything worked as expected. Yipee! 
+
+  ! If we got this far, everything worked as expected. Yipee!
   print *,"*** SUCCESS writing example file sfc_pres_temp.nc!"
 
 contains
   subroutine check(status)
     integer, intent ( in) :: status
-    
-    if(status /= nf90_noerr) then 
+
+    if(status /= nf90_noerr) then
       print *, trim(nf90_strerror(status))
       stop 2
     end if
-  end subroutine check  
+  end subroutine check
 end program sfc_pres_temp_wr
 

@@ -2,7 +2,7 @@
       SUBROUTINE foo(N)
       integer N
       double precision array(N)
-!$rose_outline      
+!$rose_outline
 c$rose_outline
 *$rose_outline
       DO 15 I=1,5

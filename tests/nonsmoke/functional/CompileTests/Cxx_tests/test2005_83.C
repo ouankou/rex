@@ -30,20 +30,6 @@ Y<T>::Y<T>( T i)
    {
    }
 
-#if 0
-// This is tested separately in test2005_87.C
-// Test use of default parameters in template member function declarations
-template<typename T>
-class Z
-   {
-     public:
-          Z(T i = 1) {};
-   };
-
-// Use of templated class using constructor specificed with default argument
-Z<int> z;
-#endif
-
 void foo2(int i = foo());
 
 // This demonstrase an error since the declaration of the 

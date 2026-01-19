@@ -22,7 +22,7 @@
    use prognostic, only: UBTROP, VBTROP, PSURF, GRADPX, GRADPY, UVEL, VVEL, &
        PGUESS, TRACER, nt, nx_global, ny_global, km, curtime, oldtime,      &
        tracer_d
-   use broadcast, only: broadcast_scalar 
+   use broadcast, only: broadcast_scalar
    use boundary, only: update_ghost_cells
    use communicate, only: my_task, master_task
    use operators, only: div

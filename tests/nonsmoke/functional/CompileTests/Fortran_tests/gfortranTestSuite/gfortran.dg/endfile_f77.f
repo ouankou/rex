@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! PR25550 file data corrupted after reading end of file.
 ! Derived from example given in PR from Dale Ranta.
-! Contributed by Jerry DeLisle  <jvdelisle@gcc.gnu.org> 
+! Contributed by Jerry DeLisle  <jvdelisle@gcc.gnu.org>
       integer data
       data=-1
       open(unit=11,status='scratch',form='unformatted')

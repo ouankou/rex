@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! PR 25806: Functions returning pointers to arrays
-program a 
+program a
     integer, target :: storage(5)
     integer :: s(3)
 
@@ -30,7 +30,7 @@ contains
         integer, intent(in) :: a(:)
 
         ssum = sum(a)
-        
+
     end function ssum
 
 end program a

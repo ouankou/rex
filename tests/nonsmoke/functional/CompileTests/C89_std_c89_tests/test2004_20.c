@@ -7,11 +7,9 @@ work in ROSE.
 we need to use a file with *.c (and not *.C).
 */
 
-#if 1
 /* int foo1 (int x); */
 /* int foo1 (int x, float y, int z); */
-int foo1 (int x);
-#endif
+int foo1(int x);
 
 int foo1(x)
    int x;
@@ -19,32 +17,3 @@ int foo1(x)
      x = 42;
      return x;
    }
-
-#if 0
-int foo2 (int x);
-
-int foo2(int x)
-   {
-     x = 42;
-     return x;
-   }
-
-int foo3();
-
-int foo3(int x)
-   {
-     x = 42;
-     return x;
-   }
-
-int foo4();
-
-int foo4(x)
-   int x;
-   {
-     x = 42;
-     return x;
-   }
-#endif
-
-

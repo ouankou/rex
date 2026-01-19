@@ -11,11 +11,11 @@ contains
   subroutine sub1(a)
     character(len=13), VALUE :: a
     a = trim(a)//" rules"
-    call sub2(a)        
+    call sub2(a)
   end subroutine sub1
   subroutine sub2(a)
     character(len=13), VALUE :: a
-    print *, a          
+    print *, a
     if(a /= 'Fortran rules') call abort()
   end subroutine sub2
 end program test

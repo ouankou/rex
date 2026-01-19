@@ -24,7 +24,7 @@ program namelist_use
   read (10,nml=nml1,iostat=i)
   if ((i.ne.0).or.(aa.ne."lmno").or.(ii.ne.1).or.(rr.ne.2.5)) call abort ()
 
-  read (10,nml=nml2,iostat=i) 
+  read (10,nml=nml2,iostat=i)
   if ((i.ne.0).or.(aa.ne."pqrs").or.(ii.ne.2).or.(rrr.ne.3.5)) call abort ()
 
   close (10)

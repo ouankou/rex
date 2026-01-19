@@ -23,10 +23,8 @@ namespace std
         {
           public:
                typedef _CharT 					char_type;
-               typedef _Traits 					traits_type;
- #if 1
-               typedef typename traits_type::int_type 		int_type;
-#endif
+               typedef _Traits traits_type;
+               typedef typename traits_type::int_type int_type;
 
                friend streamsize __copy_streambufs_eof<>(basic_streambuf*, basic_streambuf*, bool&);
 

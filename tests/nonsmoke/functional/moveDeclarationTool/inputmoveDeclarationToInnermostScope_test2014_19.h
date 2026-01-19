@@ -4770,8 +4770,7 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
       return binder2nd<_Operation>(__fn, _Arg2_type(__x));
     }
 }
-       
-#if 1
+
 namespace std __attribute__ ((__visibility__ ("default"))) {
   template<typename _CharT, typename _Traits, typename _Alloc>
     class basic_string
@@ -5643,25 +5642,15 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
     basic_istream<wchar_t>&
     getline(basic_istream<wchar_t>& __in, basic_string<wchar_t>& __str,
      wchar_t __delim);
-}
-#endif
-
-
+} // namespace std
 
 namespace std __attribute__ ((__visibility__ ("default"))) {
 
   template<typename _CharT>
     class numpunct 
     {
-    public:
-#if 1
-      string
-      grouping() const
-       { return ""; }
-#else
-      string
-      grouping() const;
-#endif
+  public:
+    string grouping() const { return ""; }
     };
 
 }

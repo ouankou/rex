@@ -1,25 +1,14 @@
-class A
-   {
-#if 0
-     public:
-          int x;
-#endif
-   };
+class A {};
 
-class B
-   {
-#if 1
-     public:
-          int x;
-#endif
-   };
+class B {
+public:
+  int x;
+};
 
 class C : public A, public B
    {
-     public:
-#if 1
-          int x;
-#endif
+public:
+  int x;
    };
 
 void foobar()

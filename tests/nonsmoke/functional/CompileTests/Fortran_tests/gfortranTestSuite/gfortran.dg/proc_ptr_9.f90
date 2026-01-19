@@ -13,6 +13,6 @@ contains
 subroutine bar(x)
   procedure(), intent(in) :: x
   pointer :: x
-end subroutine bar 
+end subroutine bar
 
 end

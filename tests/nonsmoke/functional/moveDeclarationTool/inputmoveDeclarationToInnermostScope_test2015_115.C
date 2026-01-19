@@ -7,10 +7,6 @@ void foobar()
 
      { i = 42; }
 
-#if 0
-     int ABC;
-#endif
-
      MY_MACRO(x1,y1);
    }
 

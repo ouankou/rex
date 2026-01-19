@@ -28,7 +28,6 @@ class GraphNode
           virtual ~GraphNode();
    };
 
-#if 1
 // class GroupGraphNode : public GraphNode
 class GroupGraphNode
    {
@@ -47,14 +46,3 @@ class GroupGraphNode
 #endif
              }
    };
-
-
-#endif
-
-#if 0
-void ToString()
-   {
-     PtrSetWrap<GraphNode>::Iterator iter;
-   }
-#endif
-

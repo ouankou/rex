@@ -9,9 +9,6 @@ public:
 };
 
 void TransformVariableDeclarationTraversal::visit(SgNode *node) {
-#if 0
-     printf ("astNode = %p = %s \n",astNode,astNode->class_name().c_str());
-#endif
 
   if (SgVariableDeclaration *vardecl = isSgVariableDeclaration(node)) {
     SgInitializedNamePtrList &vars = vardecl->get_variables();
@@ -19,7 +16,6 @@ void TransformVariableDeclarationTraversal::visit(SgNode *node) {
     for (var = vars.begin(); var != vars.end(); ++var) {
       SgInitializedName *initName = *var;
       if (initName->get_initializer() == NULL) {
-#if 1
         if (!vardecl->get_declarationModifier()
                  .get_storageModifier()
                  .isExtern() &&
@@ -46,12 +42,9 @@ void TransformVariableDeclarationTraversal::visit(SgNode *node) {
             printf("   --- --- file = %s \n", filename.c_str());
             printf("   --- --- line = %d column = %d \n", lineNumber,
                    columnNumber);
-#if 1
             initName->set_initializer(NULL);
-#endif
           }
         }
-#endif
       }
     }
   }
@@ -68,16 +61,4 @@ int main(int argc, char *argv[]) {
 
   // Only output code if there was a transformation that was done.
   return backend(project);
-
-#if 0
-     if (treeTraversal.transformed == true)
-        {
-         return backend(project);
-        } 
-       else
-        {
-          printf ("No changes were made, so no results were generated \n");
-          return 0;
-        }
-#endif
 }

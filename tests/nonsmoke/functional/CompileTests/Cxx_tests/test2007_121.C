@@ -1,6 +1,5 @@
 // #include<vector>
 
-#if 1
 // typedef int integer;
    typedef int integer;
 
@@ -17,6 +16,4 @@ class XYZ
              };
    };
 
-
-XYZ::iterator<int> i;
-#endif
+   XYZ::iterator<int> i;

@@ -7,7 +7,7 @@
 !
 program main
   implicit none
-  real, parameter :: r1 = real(33)    ! { dg-error "Fortran 2003: Function 'real' as initialization expression" } 
+  real, parameter :: r1 = real(33)    ! { dg-error "Fortran 2003: Function 'real' as initialization expression" }
   real, parameter :: r2 = dble(33)    ! { dg-error "Fortran 2003: Function 'dble' as initialization expression" }
   complex, parameter :: z = cmplx(33,33)! { dg-error "Fortran 2003: Function 'cmplx' as initialization expression" }
   real, parameter :: r4 = sngl(3.d0)  ! { dg-error "Fortran 2003: Function 'sngl' as initialization expression" }

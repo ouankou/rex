@@ -10,7 +10,7 @@ subroutine valid
 end subroutine
 
 subroutine warnings
-  ! the follow three are ok in general, but ANY 
+  ! the follow three are ok in general, but ANY
   ! type is ignored, even the correct one
   real, intrinsic :: sin           ! { dg-warning "is ignored" }
 

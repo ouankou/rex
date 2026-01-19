@@ -6977,9 +6977,6 @@ init_eprotoarray(void)
  }
 }
 
-
-#if 1
-
 static const struct protoidlist {
  const u_char protoid[5];
  const char *name;
@@ -7355,5 +7352,3 @@ newhnamemem(void)
  p = ptr++;
  return (p);
 }
-
-#endif

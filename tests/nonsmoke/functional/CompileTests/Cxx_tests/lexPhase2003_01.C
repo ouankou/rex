@@ -4,25 +4,8 @@
 // declarations. Thus the bug can be recreated with this construct, and example is shown in 
 // the test code lexPhase2003_02.C
 
-class X
-   {
-#if 0
-     int z;
-   };
-#else
-     int a;
-   };
-#endif
-
-void foo ()
-   {
-#if 0
-     int z;
+class X {
+  int a;
 };
 
-#else
-     int a;
-};
-
-#endif
-
+void foo() { int a; };

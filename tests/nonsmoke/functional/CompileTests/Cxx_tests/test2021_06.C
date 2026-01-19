@@ -1,12 +1,6 @@
 
-void foo()
-   {
-#if 1
-     if (int x = 42)
-        {
-        }
-       else
-        {
-        }
-#endif
-   }
+void foo() {
+  if (int x = 42) {
+  } else {
+  }
+}

@@ -39,13 +39,7 @@ void foo0()
   // As of GCC version 3.1, one may write [name] instead of the operand number for a matching constraint. For example:
 
   // DQ (7/23/2006): Note that this will be unparsed as: register int *result;
-     register int *result asm ("cx");
-#if 0
-  // legacy frontend does not appear to support this ("[name]" syntax), though it should be allowed in anything compatable with gnu past version 3.1.
-     asm ("cmoveq %1,%2,%[result]"
-          : [result] "=r"(result)
-          : "r" (test), "r"(new), "[result]"(old));
-#endif
+  register int *result asm("cx");
    }
 
 void foo1()
@@ -96,13 +90,8 @@ void foo3()
 
 void foo4()
    {
-  // Alternative example asm declarations (how to use the 68881's fsinx instruction):
-#if 0
-  // legacy frontend does not appear to support this ("[name]" syntax), though it should be allowed in anything compatable with gnu past version 3.1.
-     asm ("fsinx %[angle],%[output]"
-          : [output] "=f" (result)
-          : [angle] "f" (angle));
-#endif
+  // Alternative example asm declarations (how to use the 68881's fsinx
+  // instruction):
    }
 
 // Specification of asm in function parameter declaration does not appear to be allowed

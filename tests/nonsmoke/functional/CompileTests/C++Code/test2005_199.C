@@ -1,17 +1,3 @@
-#if 0
-ROSE gives the following bug message:
-
-g++3.3.3 -c output.cpp  -o test.o
-identityTranslator:
-../../../../NEW_ROSE/src/frontend/legacy_frontend/sage_gen_be.C:16268:
-SgExpression* sage_gen_expr(an_expr_node*, int): Assertion
-`result->get_file_info()->ok()' failed.
-/home/saebjornsen1/links/g++3.3.3: line 4: 23585 Aborted                
-/home/saebjornsen1/ROSE-October/gcc3.3.3/exampleTranslators/documentedExamples/simpleTranslatorExamples/identityTranslator
-$@
-
-Andreas
-#endif
 
 
 class Complex

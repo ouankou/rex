@@ -75,11 +75,11 @@
 /
 
 &restart_nml
-   restart_freq_opt = 'never' 
+   restart_freq_opt = 'never'
    restart_freq     = 100000
    restart_outfile  = 'unknown_restart_outfile'
    restart_fmt      = 'bin'
-   leven_odd_on     = .false. 
+   leven_odd_on     = .false.
    even_odd_freq    = 100000
    pressure_correction = .false.
 /
@@ -131,7 +131,7 @@
    convect_diff = 1000.0
    convect_visc = 1000.0
    bottom_heat_flx = 0.0
-   bottom_heat_flx_depth = 100000.00 
+   bottom_heat_flx_depth = 100000.00
 /
 
 &vmix_const_nml
@@ -169,26 +169,26 @@
 /
 
 &hmix_del2u_nml
-   lauto_hmix           = .true. 
-   lvariable_hmix       = .false. 
+   lauto_hmix           = .true.
+   lvariable_hmix       = .false.
    am                   = 1.e8
 /
 
 &hmix_del2t_nml
-   lauto_hmix           = .true. 
-   lvariable_hmix       = .false. 
+   lauto_hmix           = .true.
+   lvariable_hmix       = .false.
    ah                   = 1.e8
 /
 
 &hmix_del4u_nml
-   lauto_hmix           = .true. 
-   lvariable_hmix       = .false. 
+   lauto_hmix           = .true.
+   lvariable_hmix       = .false.
    am                   = -0.6e20
 /
 
 &hmix_del4t_nml
-   lauto_hmix           = .true. 
-   lvariable_hmix       = .false. 
+   lauto_hmix           = .true.
+   lvariable_hmix       = .false.
    ah                   = -0.2e20
 /
 
@@ -235,7 +235,7 @@
    state_choice = 'mwjf'
    state_file = 'internal'
    state_range_opt = 'enforce'
-   state_range_freq = 100000   
+   state_range_freq = 100000
 /
 
 &baroclinic_nml

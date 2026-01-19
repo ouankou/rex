@@ -1,7 +1,7 @@
 ! { dg-do compile }
 ! { dg-require-effective-target vect_float }
 
-subroutine s111 (ntimes,ld,n,ctime,dtime,a,b,c,d,e,aa,bb,cc) 
+subroutine s111 (ntimes,ld,n,ctime,dtime,a,b,c,d,e,aa,bb,cc)
 !     linear dependence testing
 !     no dependence - vectorizable
 !     but not consecutive access

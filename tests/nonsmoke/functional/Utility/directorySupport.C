@@ -9,7 +9,6 @@ main( int argc, char * argv[] )
      SgProject* project = frontend(argc,argv);
      AstTests::runAllTests(project);
 
-#if 1
   // Add a directory and unparse the code (to the new directory)
      SgDirectory* directory = new SgDirectory("xxx_new_directory_node_support");
 
@@ -28,30 +27,17 @@ main( int argc, char * argv[] )
      project->get_fileList().erase(find(project->get_fileList().begin(),project->get_fileList().end(),file));
 
      file->set_parent(directory->get_fileList());
-#else
-  // SgFile* file = project->get_file(0);
-     SgFile* file = project->get_fileList()[0];
-     SageInterface::moveToSubdirectory ("xxx_new_directory_node_support",file);
-#endif
 
-#if 1
-  // printf ("Generate the dot output of the SAGE III AST \n");
+     // printf ("Generate the dot output of the SAGE III AST \n");
      generateDOT ( *project );
-  // printf ("DONE: Generate the dot output of the SAGE III AST \n");
-#endif
+     // printf ("DONE: Generate the dot output of the SAGE III AST \n");
 
-#if 1
-  // DQ (6/14/2007): Added support for simpler function for generation of graph of whole AST.
+     // DQ (6/14/2007): Added support for simpler function for generation of
+     // graph of whole AST.
      const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 8000;
   // printf ("Generate whole AST graph if small enough \n");
      generateAstGraph(project,MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH);
-  // printf ("DONE: Generate whole AST graph if small enough \n");
-#endif
+     // printf ("DONE: Generate whole AST graph if small enough \n");
 
-#if 0
-  // only the backend error code is reported
-     return backend(project);
-#else
      return 0;
-#endif
    }

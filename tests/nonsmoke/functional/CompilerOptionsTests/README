@@ -12,7 +12,7 @@ This directory tests the ROSE options:
    This directory includes tests of debugging output from running the preprocessor.
 
 4) testHeaderFileOutput
-   This directory includes tests of the -H option.   
+   This directory includes tests of the -H option.
 
 5) testOutputFileOption
    This directory includes tests of the -o option to specify the output file.

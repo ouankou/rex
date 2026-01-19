@@ -17,7 +17,7 @@ contains
     sizeof = 1
   end function sizeof
 end module
-	
+
 module m2
   use m1
   type, extends(t1) :: t2
@@ -58,4 +58,4 @@ end module
 end
 
 ! { dg-final { cleanup-modules "m1 m2 m3" } }
- 	
+

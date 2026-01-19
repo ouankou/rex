@@ -4,13 +4,9 @@ class X
      public:
           void foo();
 
-       // The existence of the friend function is essential to reproducing the bug.
-#if 1
-          friend 
-#endif
-          void foobar()
-             {
-             }
+          // The existence of the friend function is essential to reproducing
+          // the bug.
+          friend void foobar() {}
    };
 
 int

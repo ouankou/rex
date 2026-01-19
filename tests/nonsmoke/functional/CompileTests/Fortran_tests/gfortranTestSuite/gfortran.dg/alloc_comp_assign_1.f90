@@ -10,7 +10,7 @@
 
   type(ivs) :: a, b
   type(ivs) :: x(3), y(3)
-  
+
   allocate(a%chars(5))
   a%chars = (/"h","e","l","l","o"/)
 

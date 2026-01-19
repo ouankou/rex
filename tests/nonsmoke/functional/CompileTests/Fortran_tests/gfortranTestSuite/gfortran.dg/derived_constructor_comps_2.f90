@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! Tests fix for PR29115, in which an ICE would be produced by 
+! Tests fix for PR29115, in which an ICE would be produced by
 ! non-pointer elements being supplied to the pointer components
 ! in a derived type constructor.
 !

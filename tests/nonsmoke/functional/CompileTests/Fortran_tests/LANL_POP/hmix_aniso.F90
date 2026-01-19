@@ -93,14 +93,14 @@
 
 !-----------------------------------------------------------------------
 !
-!  F_PARA and F_PERP represent the actual anisotropic viscosities 
+!  F_PARA and F_PERP represent the actual anisotropic viscosities
 !  used when lvariable_hmix_aniso is true. For lsmag_aniso option,
 !  they contain the time-invariant "numerical" parts of the
 !  anisotropic viscosity coefficients.
 !
 !-----------------------------------------------------------------------
- 
-   real (r8), dimension(:,:,:,:), allocatable :: &  
+
+   real (r8), dimension(:,:,:,:), allocatable :: &
       F_PARA,                 &! spatial dependence of viscosity
                                ! parallel to alignment direction
       F_PERP                   ! spatial dependence of viscosity
@@ -215,9 +215,9 @@
    smag_lat       = 20.0_r8
    smag_lat_fact  = 0.98_r8
    smag_lat_gauss = 98.0_r8
-   var_viscosity_infile      = 'unknown_var_viscosity_infile'  
+   var_viscosity_infile      = 'unknown_var_viscosity_infile'
    var_viscosity_infile_fmt  = 'bin'
-   var_viscosity_outfile     = 'unknown_var_viscosity_outfile' 
+   var_viscosity_outfile     = 'unknown_var_viscosity_outfile'
    var_viscosity_outfile_fmt = 'bin'
 
    if (my_task == master_task) then
@@ -290,12 +290,12 @@
          if (trim(var_viscosity_infile) == 'ccsm-internal') then
             write(stdout,'(a38)') &
                           'Using variable anisotropic parameters:'
-            write(stdout,param_fmt) '   vconst_1  = ',vconst_1 
-            write(stdout,param_fmt) '   vconst_2  = ',vconst_2 
-            write(stdout,param_fmt) '   vconst_3  = ',vconst_3 
-            write(stdout,param_fmt) '   vconst_4  = ',vconst_4 
-            write(stdout,'(a15,2x,i6)') '   vconst_5  = ',vconst_5 
-            write(stdout,param_fmt) '   vconst_6  = ',vconst_6 
+            write(stdout,param_fmt) '   vconst_1  = ',vconst_1
+            write(stdout,param_fmt) '   vconst_2  = ',vconst_2
+            write(stdout,param_fmt) '   vconst_3  = ',vconst_3
+            write(stdout,param_fmt) '   vconst_4  = ',vconst_4
+            write(stdout,'(a15,2x,i6)') '   vconst_5  = ',vconst_5
+            write(stdout,param_fmt) '   vconst_6  = ',vconst_6
             if (trim(var_viscosity_outfile) /= &
                 'unknown_var_viscosity_outfile') then
                write(stdout,'(a44,a)') &
@@ -401,7 +401,7 @@
 !-----------------------------------------------------------------------
 
    if (lvariable_hmix_aniso) then
- 
+
       allocate(F_PARA(nx_block,ny_block,km,nblocks_clinic), &
                F_PERP(nx_block,ny_block,km,nblocks_clinic))
 
@@ -503,8 +503,8 @@
 !  set up latitudinal variation of Smagorinsky viscosity
 !
 !-----------------------------------------------------------------------
- 
- 
+
+
    if ( lsmag_aniso ) then
 
       allocate(F_PARA_SMAG(nx_block,ny_block,max_blocks_clinic), &
@@ -818,8 +818,8 @@
 
             case (hmix_alignment_type_grid)
 
-               A = p5*(work3+work4) 
-               B = p5*(work3+work4) 
+               A = p5*(work3+work4)
+               B = p5*(work3+work4)
                C = c0
                D = work4
 
@@ -868,8 +868,8 @@
 
          case (hmix_alignment_type_grid)
 
-            A = p5*(work3+work4) 
-            B = p5*(work3+work4) 
+            A = p5*(work3+work4)
+            B = p5*(work3+work4)
             C = c0
             D = work4
 
@@ -1052,33 +1052,33 @@
 !  This routine computes spatially-varying anisotropic viscosity
 !  coefficients similar to NCOM.
 !  \begin{equation}
-!   \nu_A = F_{PARA} \\ 
+!   \nu_A = F_{PARA} \\
 !         = \max{(0.5*visc_vel_scale(z)*A*\max[dx,dy],vconst_6}
 !
 !  \end{equation}
 !   where
 !          A = 0.425 * cos(pi*y*radian/30) + 0.575   for |y*radian| < 30
-!          A = 0.15                                  otherwise 
+!          A = 0.15                                  otherwise
 !
 !   Here, A provides a horizontal variation for visc_vel_scale.
 !
 !   "B_viscosity" = F_PERP = max( bu, bv)
 !
-!   and 
+!   and
 !        F_PARA = min(F_PARA, AMAX_CFL),
-!        F_PERP = min(F_PERP, AMAX_CFL) 
+!        F_PERP = min(F_PERP, AMAX_CFL)
 !
 !   are enforced in init_aniso and hdiffu_aniso for the lvariable_hmix_aniso
-!   and lsmag_aniso choices, respectively. 
+!   and lsmag_aniso choices, respectively.
 !
-!   In the above equations, 
+!   In the above equations,
 !
 !        bu  = vconst_1 * ( 1 + vconst_2
 !             * ( 1 + cos( 2*y + pi ) ) )
 !        bv  = vconst_3 * beta_f * dx^3
 !             * exp( - (vconst_4 * distance)^2 )
 !
-!   with 
+!   with
 !        beta_f         (x,y)   = 2 * omega * cos(ULAT(i,j)) / radius
 !        distance       (x,y,z) = actual distance to "vconst_5" points
 !                                 west of the nearest western boundary
@@ -1086,9 +1086,9 @@
 !        dy             (x,y)   = DYU(i,j)
 !        visc_vel_scale (z)     = 100.0 * exp(-zt(k)/visc_vel_scale_length)
 !        visc_vel_scale_length  = e-folding scale ( = 1500.0e2 cm)
-!        y              (x,y)   = ULAT(i,j), latitude of "u/v" grid pts in radians 
+!        y              (x,y)   = ULAT(i,j), latitude of "u/v" grid pts in radians
 !
-!   Also, "vconst_#" are input parameters defined in namelist hmix_aniso_nml. 
+!   Also, "vconst_#" are input parameters defined in namelist hmix_aniso_nml.
 !   note that "vconst_1", "vconst_6", and "vconst_4" have dimensions of cm^2/s,
 !   cm^2/s, and 1/cm, respectively. "vconst_5" is an INTEGER.
 !
@@ -1120,10 +1120,10 @@
       indexo,                  &! index of nwbp + buffer
       ig,jg,igp1,              &! dummy loop counters (global)
       iblock,                  &! block counter
-      ncount                    ! number of western boundaries 	
+      ncount                    ! number of western boundaries
 
    real (r8) ::                &
-      visc_vel_scale,          &! viscous velocity scale		
+      visc_vel_scale,          &! viscous velocity scale
       bu, bv                    ! B_viscosity terms
 
    integer (int_kind), dimension(nx_global) :: &
@@ -1139,7 +1139,7 @@
 
    real (r8), dimension(nx_global,ny_global) :: &
       HTN_G,                   &! zonal distance between U points
-      DIST_G                    ! distance to nwbp (cm)     
+      DIST_G                    ! distance to nwbp (cm)
 
    real (r8), dimension(nx_block,ny_block,max_blocks_clinic) :: &
       BETA_F,                  &! Coriolis parameter
@@ -1180,7 +1180,7 @@
                igp1 = ig + 1
                if ( ig == nx_global )  igp1 = 1
                if ( (KMU_G(ig  ,jg) <  k) .and. &
-                    (KMU_G(igp1,jg) >= k) ) then 
+                    (KMU_G(igp1,jg) >= k) ) then
                   ncount = ncount + 1
                   iwp(ncount) = ig
                endif
@@ -1236,7 +1236,7 @@
                   endif
                endif
             endif
-	
+
          enddo
          enddo
       endif 	! (my_task == master_task)
@@ -1272,7 +1272,7 @@
          bv = bv*exp(-(vconst_4*DIST(i,j,iblock))**2)
 
          F_PERP(i,j,k,iblock) = max(bu,bv)
- 
+
          ! the diffusive CFL criteria will be enforced in subroutine
          ! init_aniso
 

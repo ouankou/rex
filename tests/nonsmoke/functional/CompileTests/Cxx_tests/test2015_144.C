@@ -4,20 +4,11 @@ class A
           int x;
    };
 
-class B
-   {
-#if 0
-     public:
-          int x;
-#endif
-   };
+   class B {};
 
-class C : public A, B
-   {
-     public:
-#if 1
-          int x;
-#endif
+   class C : public A, B {
+   public:
+     int x;
    };
 
 void foobar()

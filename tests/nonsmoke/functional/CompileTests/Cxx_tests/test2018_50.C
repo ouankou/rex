@@ -14,16 +14,6 @@ class foobar_class
    {
      public:
           map<int>::iterator it;
-
-#if 0
-          void foobar_member_function()
-             {
-            // This will fail (seems it has to be a part of a template).
-            // It should output: "map<int>::iterator it;"
-               map<int>::iterator it;
-            // map::iterator it;
-             }
-#endif
    };
 
 

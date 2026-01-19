@@ -5,7 +5,7 @@
 ! Contributed by Salvatore Filippone <sfilippone@uniroma2.it>
 
 module s_mat_mod
-  implicit none 
+  implicit none
   type :: s_sparse_mat
   end type
 contains
@@ -25,5 +25,5 @@ contains
 end module
 
 end
- 
+
 ! { dg-final { cleanup-modules "s_mat_mod s_tester" } }

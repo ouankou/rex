@@ -62,13 +62,13 @@ do
     if ! ($cmd >> $out1); then
  	exit 1;
     fi
-    
+
     # Remove the copy. Next read will a "new" file.
     rm $TMP/cp_${in_file[${file_num}]}
 
     # Turn off header next time around.
     h=
-    
+
     # Switch to the next input file of three.
     let file_num=$file_num+1
     test $file_num -eq $num_in_files && file_num=0

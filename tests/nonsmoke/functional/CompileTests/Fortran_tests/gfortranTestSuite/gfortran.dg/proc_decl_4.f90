@@ -7,4 +7,4 @@ program p
 
 procedure():: proc  ! { dg-error "Fortran 2003: PROCEDURE statement" }
 
-end program 
+end program

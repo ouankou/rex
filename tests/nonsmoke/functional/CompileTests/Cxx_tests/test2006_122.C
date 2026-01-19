@@ -1,19 +1,5 @@
 // Example showing use of template template arguments
 
-#if 0
-// This code is an example of a C++ error, not a bug in ROSE!
-template<class T, int i> class A { int x; };
-template<class T> class A<T, 5> { short x; };
-
-// The error is that this template must be defined 
-// to use the template template argument.
-template<template<class T> class U> class B1 { };
-
-// Declaration using template type taking template template argument
-B1<A> c;
-#endif
-
-
 // We don't need the iostream header file if we are not using "typeid()"
 // #include <iostream>
 // using namespace std;

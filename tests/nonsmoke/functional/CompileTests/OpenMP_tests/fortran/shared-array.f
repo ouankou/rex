@@ -5,7 +5,7 @@
       double precision u(n,m)
       integer i,j
 
-!$omp parallel do 
+!$omp parallel do
       do j = 1,m
          do i = 1,n
             u(i,j) = 0.0

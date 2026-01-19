@@ -69,14 +69,14 @@
 
       common/hydro_stations_scalar/  num_cruises, station_nday
      &  , num_stations, station_xy
-      common/hydro_stations_char/ cruise_file 
+      common/hydro_stations_char/ cruise_file
 
       integer, dimension(num_stations_max, num_cruises_max
      &                  , nnbr_stations, 2) :: ADDR_STATIONS
       TYPE, dimension(num_stations_max, num_cruises_max
      &                  , nnbr_stations) :: DIST_STATIONS
 
-      common/hydro_stations_array/ ADDR_STATIONS, DIST_STATIONS 
+      common/hydro_stations_array/ ADDR_STATIONS, DIST_STATIONS
 
       integer num_slices_max, num_columns_max, num_slices
       parameter ( num_slices_max = 1, num_columns_max = 500)
@@ -87,14 +87,14 @@
       character*80 slice_file(num_slices_max)
 
       common/hydro_columns_scalar/  num_slices , num_columns, column_xy
-      common/hydro_columns_char/ slice_file 
+      common/hydro_columns_char/ slice_file
 
       integer, dimension(num_columns_max, num_slices_max
      &                  , nnbr_columns, 2) :: ADDR_COLUMNS
       TYPE, dimension(num_columns_max, num_slices_max
      &                  , nnbr_columns) :: DIST_COLUMNS
 
-      common/hydro_columns_array/ ADDR_COLUMNS, DIST_COLUMNS 
+      common/hydro_columns_array/ ADDR_COLUMNS, DIST_COLUMNS
 
 c|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 c     begin file station.F
@@ -200,7 +200,7 @@ c-----------------------------------------------------------------------
      &                 num_stations_max
             num_stations(cruise) = num_stations_max
          endif
-           
+
          do station = 1,num_stations(cruise)
             read(31,11)lat,lon,syear,smonth,sday
             station_xy(station,cruise,1) = lon/radian
@@ -332,9 +332,9 @@ c-----------------------------------------------------------------------
 c     Rotate horizontal velocity vector to lat-long grid.
 c-----------------------------------------------------------------------
 
-               FIELDS_STATIONS(:,:,:,3) = 
+               FIELDS_STATIONS(:,:,:,3) =
      &            WORK1*cos(WORK3) + WORK2*sin(-WORK3)
-               FIELDS_STATIONS(:,:,:,4) = 
+               FIELDS_STATIONS(:,:,:,4) =
      &            WORK2*cos(WORK3) - WORK1*sin(-WORK3)
 
                call wcalc(FIELD,U,V,this_block)  !  FIELD contains W
@@ -348,7 +348,7 @@ c-----------------------------------------------------------------------
                write(*,*)' Appending file: ',temp_file
 
 c-----------------------------------------------------------------------
-c     First write long, lat, time and number of neighbors of station data.  
+c     First write long, lat, time and number of neighbors of station data.
 c     Then loop over neighboring points, first dumping the distance
 c     from the model point to the true station point, then dumping data
 c     at all depths.
@@ -402,7 +402,7 @@ c-----------------------------------------------------------------------
 
       double precision pos_columns(num_columns_max,2)
       integer, dimension(num_columns_max,nnbr_columns,2) :: ADDR_TEMP
-      double precision, 
+      double precision,
      &   dimension(num_columns_max,nnbr_columns) :: DIST_TEMP
 
 c****************************************************************
@@ -479,7 +479,7 @@ c-----------------------------------------------------------------------
      &                  ' columns '
             num_columns(slice) = num_columns_max
          endif
-           
+
          do column = 1,num_columns(slice)
             read(31,*)lat,lon
             column_xy(column,slice,1) = lon/radian
@@ -533,9 +533,9 @@ c-----------------------------------------------------------------------
       character*10 cday
 
       integer, dimension(num_columns_max,nnbr_columns,2) :: ADDR_TEMP
-      double precision, dimension(num_columns_max,nnbr_columns,km) 
+      double precision, dimension(num_columns_max,nnbr_columns,km)
      &    :: WORK1, WORK2, WORK3
-      real, dimension(num_columns_max,nnbr_columns,km,mum_fields) 
+      real, dimension(num_columns_max,nnbr_columns,km,mum_fields)
      &    :: FIELDS_COLUMNS
       double precision, dimension(imt,jmt,km) :: FIELD
       integer, dimension(512) :: ITEMP
@@ -634,7 +634,7 @@ c-----------------------------------------------------------------------
 
          call CMF_cm_array_to_file(nu,ITEMP,iostat)
          if (iostat.eq.-1) then
-          if(my_task.eq.master_task) 
+          if(my_task.eq.master_task)
      &       write(*,*) ' i/o error writing ',ITEMP
           call write_status(iostat)
           stop
@@ -642,7 +642,7 @@ c-----------------------------------------------------------------------
 
          call CMF_cm_array_to_file(nu,DIST_TEMP,iostat)
          if (iostat.eq.-1) then
-          if(my_task.eq.master_task) 
+          if(my_task.eq.master_task)
      &       write(*,*) ' i/o error writing ',DIST_TEMP
           call write_status(iostat)
           stop
@@ -650,7 +650,7 @@ c-----------------------------------------------------------------------
 
          call CMF_cm_array_to_file(nu,XY_TEMP,iostat)
          if (iostat.eq.-1) then
-          if(my_task.eq.master_task) 
+          if(my_task.eq.master_task)
      &       write(*,*) ' i/o error writing ',XY_TEMP
           call write_status(iostat)
           stop
@@ -658,7 +658,7 @@ c-----------------------------------------------------------------------
 
          call CMF_cm_array_to_file(nu,FIELDS_COLUMNS,iostat)
          if (iostat.eq.-1) then
-          if(my_task.eq.master_task) 
+          if(my_task.eq.master_task)
      &       write(*,*) ' i/o error writing ',FIELDS_COLUMNS
           call write_status(iostat)
           stop
@@ -677,7 +677,7 @@ c     begin file gather.F
 c|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
 c***********************************************************************
-c     this set of routines searches for and gathers the nnbr closest 
+c     this set of routines searches for and gathers the nnbr closest
 c     points on an ocean grid to a given set of target points.
 c
 c     written by: Phil Jones, T-3, Los Alamos National Laboratory
@@ -733,8 +733,8 @@ c-----------------------------------------------------------------------
 
       DSTARR = 0.0
       do k = 1,km
-         forall (n=1:nlist, i=1:nnbr) 
-     &       DSTARR(n,i,k) = SRCARR(IADDR(n,i,1),IADDR(n,i,2),k) 
+         forall (n=1:nlist, i=1:nnbr)
+     &       DSTARR(n,i,k) = SRCARR(IADDR(n,i,1),IADDR(n,i,2),k)
       enddo
 
 c-----------------------------------------------------------------------
@@ -749,7 +749,7 @@ c***********************************************************************
      &                             plist, NBR_DIST)
 
 c-----------------------------------------------------------------------
-c     this subroutine sets up address arrays for the nnbr closests 
+c     this subroutine sets up address arrays for the nnbr closests
 c     points to a set of target points.
 c-----------------------------------------------------------------------
 

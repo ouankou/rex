@@ -1862,11 +1862,6 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
                        _Category>::__copy_m(__first, __last, __result);
     }
 
-
-
-#if 0
-#endif
-
 // # 509 "/nfs/casc/overture/ROSE/opt/rhel6/x86_64/gcc/4.4.7/mpc/1.0/mpfr/3.1.2/gmp/5.1.2/lib/gcc/x86_64-unknown-linux-gnu/4.4.7/../../../../include/c++/4.4.7/bits/stl_algobase.h" 3
   template<bool, bool, typename>
     struct __copy_move_backward
@@ -2564,7 +2559,6 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
 
     };
 
-#if 1
   template<typename _T1, typename _T2>
     inline bool
     operator==(const allocator<_T1>&, const allocator<_T2>&)
@@ -2628,8 +2622,7 @@ namespace std __attribute__ ((__visibility__ ("default"))) {
       static bool
       _S_do_it(const _Alloc& __one, const _Alloc& __two)
       { return __one != __two; }
-    };
-#endif
+  };
 }
 
 

@@ -1,7 +1,7 @@
 !{ dg-do run }
 ! Tests arrays of derived types containing derived type arrays whose
 ! components are character arrays - exercises object name parser in
-! list_read.c. Checks that namelist output can be reread. 
+! list_read.c. Checks that namelist output can be reread.
 ! provided by Paul Thomas - pault@gcc.gnu.org
 
 module global
@@ -33,10 +33,10 @@ program namelist_15
   write (10, '(A)') " x(1)%m(2)%ch(1:2)(2:2) = 'z','z',"
   write (10, '(A)') " x(2)%m(2)%ch(1:2)(2:2) = 'z','z',"
   write (10, '(A)') "/"
-   
+
   rewind (10)
   read (10, nml = mynml, iostat = ier)
-  if (ier .ne. 0) call abort () 
+  if (ier .ne. 0) call abort ()
   close (10)
 
   open (10, status = "scratch", delim='apostrophe')
@@ -44,7 +44,7 @@ program namelist_15
   rewind (10)
 
   read (10, nml = mynml, iostat = ier)
-  if (ier .ne. 0) call abort () 
+  if (ier .ne. 0) call abort ()
   close(10)
 
   if (.not. ((x(1)%i(1) == 3)          .and. &

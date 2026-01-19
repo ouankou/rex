@@ -23,7 +23,7 @@ CONTAINS
   END FUNCTION test2
 
 END MODULE testmod
-  
+
 CHARACTER(len=i) FUNCTION test3 (i) ! { dg-bogus "used before|of INTEGER" }
   ! i is IMPLICIT INTEGER by default
   test3 = "foobar"

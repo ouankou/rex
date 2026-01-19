@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! { dg-require-effective-target fortran_large_int }
 ! Program to test the eoshift intrinsic for kind=16_k integers
-! 
+!
 program intrinsic_eoshift
   integer, parameter :: k=16
   integer(kind=k), dimension(3_k, 3_k) :: a

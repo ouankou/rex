@@ -2,7 +2,7 @@
 ! { dg-options "-O" }
 ! Test the fix for PR29216 in which function results did not
 ! get default initialization.
-! Contributed by Stephan Kramer  <stephan.kramer@imperial.ac.uk>  
+! Contributed by Stephan Kramer  <stephan.kramer@imperial.ac.uk>
 !
   type A
     integer, pointer:: p => null ()

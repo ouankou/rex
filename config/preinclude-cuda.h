@@ -24,11 +24,7 @@
 //               NameQualificationTraversal::evaluateInheritedAttribute(SgNode*,
 //               NameQualificationInheritedAttribute): Assertion
 //               `currentStatement != __null' failed.
-#if 1
 typedef unsigned long size_t;
-#else
-#include <cstdlib>
-#endif
 
 /* CUDA Built-in Macros */
 

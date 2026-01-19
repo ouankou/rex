@@ -78,24 +78,6 @@ public:
 #endif
   };
 
-#if 0
-        inline Internal_Index ( const Range & X , int Input_Stride = 1 )
-           : Base (X.Base), Count ( ((X.Bound - X.Base) / Input_Stride)+1 ),
-             Stride (Input_Stride), Bound (X.Base + (Count-1) * Input_Stride),
-             Index_Mode (Index_Triplet)
-           {
-             if (Base > Bound)
-                  Index_Mode = Null_Index;
- 
-             if ( Count == 0 )
-                  Index_Mode = Null_Index;
-
-#if defined(COMPILE_DEBUG_STATEMENTS) || defined(BOUNDS_CHECK)
-             Consistency_Check("constructor(Range,int=1)");
-#endif
-           }
-#endif
-
   inline Internal_Index(int Input_Base, int Input_Count, int Input_Stride = 1)
       : Base(Input_Base), Count(Input_Count), Stride(Input_Stride),
         Bound(Input_Base + (Input_Count - 1) * Input_Stride),
@@ -272,28 +254,7 @@ public:
   Internal_Index operator()(const Internal_Index &X) const;
 #endif
 
-#if 0
-     // This function can't return a reference (must return by value)
-        int operator() ( int x ) const
-           {
-#if COMPILE_DEBUG_STATEMENTS
-             if (APP_DEBUG > 0)
-                  printf ("Inside of int Internal_Index::operator(int x) \n");
-#endif
-
-          //  ... (1/29/97,kdb) this doesn't compile so comment out for now
-          //   APP_ASSERT(Index_Mode != Null_Index);
-          //   APP_ASSERT(Index_Mode != All_Index);
-
-          // I need to think again about if this is the correct definition of scalar indexing 
-          // also we need to account for stride (not done here).
-	     // ... (3/23/98,kdb) this should just be x ...
-             //return x-Base;
-             return x;
-           }
-#else
   int operator()(int x) const;
-#endif
 
   // (10/11/2000) Special request from Anders
   inline Internal_Index grow(int i) {

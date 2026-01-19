@@ -98,19 +98,21 @@ struct param
 typedef struct param initparam;
 
 static initparam special_params[] = {
-   { {((void *)0),"#",       (1<<1)|(1<<22)|(1<<10)},          {((void *)0)}, {(GsuScalar)(void *)(&(pound_gsu))},     10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"ERRNO",   (1<<1)|(1<<22)|0},                {((void *)0)}, {(GsuScalar)(void *)(&(errno_gsu))},     10,0,((void *)0),((void *)0),((void *)0),0}
-#if 0
-   { {((void *)0),"GID",     (1<<1)|(1<<22)|(1<<23) | (1<<24)},{((void *)0)}, {(GsuScalar)(void *)(&(gid_gsu))},       10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"EGID",    (1<<1)|(1<<22)|(1<<23) | (1<<24)},{((void *)0)}, {(GsuScalar)(void *)(&(egid_gsu))},      10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"HISTSIZE",(1<<1)|(1<<22)|(1<<24)},          {((void *)0)}, {(GsuScalar)(void *)(&(histsize_gsu))},  10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"RANDOM",  (1<<1)|(1<<22)|0},                {((void *)0)}, {(GsuScalar)(void *)(&(random_gsu))},    10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"SAVEHIST",(1<<1)|(1<<22)|(1<<24)},          {((void *)0)}, {(GsuScalar)(void *)(&(savehist_gsu))},  10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"SECONDS", (1<<1)|(1<<22)|0},                {((void *)0)}, {(GsuScalar)(void *)(&(intseconds_gsu))},10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"UID",     (1<<1)|(1<<22)|(1<<23) | (1<<24)},{((void *)0)}, {(GsuScalar)(void *)(&(uid_gsu))},       10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"EUID",    (1<<1)|(1<<22)|(1<<23) | (1<<24)},{((void *)0)}, {(GsuScalar)(void *)(&(euid_gsu))},      10,0,((void *)0),((void *)0),((void *)0),0},
-   { {((void *)0),"TTYIDLE", (1<<1)|(1<<22)|(1<<10)},          {((void *)0)}, {(GsuScalar)(void *)(&(ttyidle_gsu))},   10,0,((void *)0),((void *)0),((void *)0),0}
-#endif
-};
-
-
+    {{((void *)0), "#", (1 << 1) | (1 << 22) | (1 << 10)},
+     {((void *)0)},
+     {(GsuScalar)(void *)(&(pound_gsu))},
+     10,
+     0,
+     ((void *)0),
+     ((void *)0),
+     ((void *)0),
+     0},
+    {{((void *)0), "ERRNO", (1 << 1) | (1 << 22) | 0},
+     {((void *)0)},
+     {(GsuScalar)(void *)(&(errno_gsu))},
+     10,
+     0,
+     ((void *)0),
+     ((void *)0),
+     ((void *)0),
+     0}};

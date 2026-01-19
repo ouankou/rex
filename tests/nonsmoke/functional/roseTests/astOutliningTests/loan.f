@@ -14,6 +14,6 @@ c     another way of comment
         AMOUNT = AMOUNT +(AMOUNT * RATE) - REPAY
         WRITE(*,'(1X,I9,F11.2)') IYEAR, AMOUNT
 c        WRITE(*,*) IYEAR, AMOUNT
-15    CONTINUE      
+15    CONTINUE
       END
 c test comments after END

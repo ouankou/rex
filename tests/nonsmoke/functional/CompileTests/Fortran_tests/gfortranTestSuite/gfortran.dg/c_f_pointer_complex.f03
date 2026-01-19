@@ -16,7 +16,7 @@ contains
     complex(c_float_complex), pointer :: my_f03_float_complex
     complex(c_double_complex), pointer :: my_f03_double_complex
     complex(c_long_double_complex), pointer :: my_f03_long_double_complex
-    
+
     call c_f_pointer(my_c_float_complex, my_f03_float_complex)
     call c_f_pointer(my_c_double_complex, my_f03_double_complex)
     call c_f_pointer(my_c_long_double_complex, my_f03_long_double_complex)
@@ -31,7 +31,7 @@ contains
        long_double_complex_array, num_elems) bind(c)
     type(c_ptr), value :: float_complex_array
     type(c_ptr), value :: double_complex_array
-    type(c_ptr), value :: long_double_complex_array    
+    type(c_ptr), value :: long_double_complex_array
     complex(c_float_complex), pointer, dimension(:) :: f03_float_complex_array
     complex(c_double_complex), pointer, dimension(:) :: &
          f03_double_complex_array

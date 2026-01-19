@@ -19,16 +19,13 @@ void SimpleInstrumentation::visit(SgNode* astNode)
           printf ("Found SgFunctionDefinition: funcdef->get_declaration()->get_name() = %s \n",funcdef->get_declaration()->get_name().str());
 
           SgScopeStatement *scope = getGlobalScope(funcdef);
-#if 1
           SgFunctionDeclaration *func_defn = buildDefiningFunctionDeclaration(
               SgName("testFunc"), buildVoidType(),
               buildFunctionParameterList(
                   buildInitializedName(SgName("param1"), buildIntType(), NULL)),
               scope);
-#endif
-#if 1
-          SgFunctionDeclaration *func_decl = buildNondefiningFunctionDeclaration(func_defn, scope);
-#endif
+          SgFunctionDeclaration *func_decl =
+              buildNondefiningFunctionDeclaration(func_defn, scope);
           if (NULL != isSgGlobal(scope))
              {
                SgStatement *first_stmt = findFirstDefiningFunctionDecl(scope);
@@ -42,36 +39,28 @@ void SimpleInstrumentation::visit(SgNode* astNode)
 
                if (NULL != first_stmt)
                   {
-                    printf ("Calling insertStatementBefore() \n");
-#if 1
-                    insertStatementBefore(first_stmt,func_decl);
-#endif
+                 printf("Calling insertStatementBefore() \n");
+                 insertStatementBefore(first_stmt, func_decl);
                   }
                  else
                   {
-                    printf ("Calling prependStatement() \n");
-#if 1
-                    prependStatement(func_decl,scope);
-#endif
+                    printf("Calling prependStatement() \n");
+                    prependStatement(func_decl, scope);
                   }
              }
             else
              {
-               printf ("Handling the non-global scope \n");
-#if 1
+               printf("Handling the non-global scope \n");
                prependStatement(func_decl, scope);
-#endif
              }
 
-#if 1
           SgStatement *last_global_decl = findLastDeclarationStatement(scope);
           insertStatementAfter(last_global_decl, func_defn);
 
           SgBasicBlock *func_body = func_defn->get_definition()->get_body();
 
           SgVariableDeclaration *i = buildVariableDeclaration(SgName("i"),buildIntType(),buildAssignInitializer(buildIntVal(0),buildIntType()),func_body);
-          appendStatement(i,func_body);
-#endif
+          appendStatement(i, func_body);
 
           done = true;
         }

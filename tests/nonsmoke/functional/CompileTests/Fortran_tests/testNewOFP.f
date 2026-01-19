@@ -1,12 +1,12 @@
-*      subroutine initialize (n,m,alpha,dx,dy,u,f) 
-      subroutine initialize (n,m) 
+*      subroutine initialize (n,m,alpha,dx,dy,u,f)
+      subroutine initialize (n,m)
 ******************************************************
-* Initializes data 
+* Initializes data
 * Assumes exact solution is u(x,y) = (1-x^2)*(1-y^2)
 *
 ******************************************************
-      implicit none 
-     
+      implicit none
+
       integer n,m
 
       integer i,j,xx
@@ -18,5 +18,5 @@
       enddo
 !$omp end parallel do
 
-      return 
-      end 
+      return
+      end

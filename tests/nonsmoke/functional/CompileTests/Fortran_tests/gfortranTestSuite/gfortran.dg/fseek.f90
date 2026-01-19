@@ -45,7 +45,7 @@ PROGRAM test_fseek
 
   CALL FSEEK(fd, HUGE(0_4), SEEK_SET, ierr)
   IF (ierr /= 0 .OR. FTELL(fd) /= HUGE(0_4)) CALL abort()
-  
+
   CALL FSEEK(fd, -HUGE(0_4), SEEK_CUR, ierr)
   IF (ierr /= 0 .OR. FTELL(fd) /= 0) CALL abort()
 END PROGRAM

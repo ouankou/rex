@@ -8,13 +8,13 @@ module a1
 contains
   subroutine myRoutine
   end subroutine
-end module 
+end module
 
 module a2
 contains
   subroutine myRoutine
   end subroutine
-end module 
+end module
 
 module b
 contains

@@ -91,7 +91,7 @@
       fullsteps_per_interval, &! num of full timesteps per fitting interval
       halfsteps_per_interval, &! num of half timesteps per fitting interval
       fullsteps_per_day     , &! num of full timesteps per day
-      halfsteps_per_day     , &! num of half timesteps per day 
+      halfsteps_per_day     , &! num of half timesteps per day
       nsteps_per_interval   , &! number of steps in each 'fit' interval
       nsteps_this_interval     ! number of steps in current 'fit' interval
 
@@ -112,7 +112,7 @@
       matsuno_ts          ,&!   an Euler-backward timestep
       midnight            ,&!   at midnight
       ice_ts              ,&!   an ice-formation timestep
-      sample_qflux_ts       !   time to sample qflux for time avg 
+      sample_qflux_ts       !   time to sample qflux for time avg
 
    logical (log_kind)   :: &! the last timestep was:
       eod_last            ,&!   at the end of the day
@@ -128,7 +128,7 @@
       back_to_back_next   ,&!   a second avg step in a row
       end_run_at_midnight ,&! does model run end at midnight
       new_dtt_value         ! does restart have a new step size
- 
+
    real (r8)      ::       &
       steps_per_year      ,&  ! number of timesteps in one year
       steps_per_day       ,&  ! number of timesteps in one day
@@ -176,11 +176,11 @@
       ihour0              ,&!
       iminute0            ,&!
       isecond0              !
- 
+
 
    integer (int_kind) ::      &
       iyear_start_run        ,&! initial start date and time
-      imonth_start_run       ,&!   for this run              
+      imonth_start_run       ,&!   for this run
       iday_start_run         ,&!
       ihour_start_run        ,&!
       iminute_start_run      ,&!
@@ -189,15 +189,15 @@
 
    integer (int_kind) ::      &
       iyear_end_run          ,&! final date for this run
-      imonth_end_run         ,&!  
+      imonth_end_run         ,&!
       iday_end_run             !
 
    integer (int_kind)   ::     &! number of:
       days_in_year            ,&! days in present year
-      days_in_prior_year      ,&! days in prior   year 
+      days_in_prior_year      ,&! days in prior   year
       elapsed_days            ,&! full days elapsed since    01-01-0000
-      elapsed_days0           ,&! full days elapsed between  01-01-0000 
-                                !                   and day0 
+      elapsed_days0           ,&! full days elapsed between  01-01-0000
+                                !                   and day0
       elapsed_days_jan1       ,&! full days elapsed prior to 01-01-iyear
       elapsed_days_this_run   ,&! full days elapsed since beginning of
                                 !                   this segment of run
@@ -205,7 +205,7 @@
       elapsed_days_init_date  ,&! full days elapsed since initial time
       elapsed_days_end_run    ,&! full days elapsed from 01-01-0000 to end
                                 !                   of this run
-      elapsed_days_max        ,&! maximum number of full days allowed 
+      elapsed_days_max        ,&! maximum number of full days allowed
       elapsed_months          ,&! full months elapsed since 01-01-0000
       elapsed_months_this_run ,&! full months elapsed since beginning of
                                 !                     this segment of run
@@ -214,7 +214,7 @@
       elapsed_years_this_run  ,&! full years  elapsed since beginning of
                                 !                     this segment of run
       elapsed_years_init_date   ! full years  elapsed since initial time
- 
+
    integer (int_kind), parameter :: &
       days_in_leap_year = 366,      & !   days in a leap year
       days_in_norm_year = 365         !   days in a non-leap year
@@ -227,13 +227,13 @@
 
    real (r8) ::               &
       seconds_this_year      ,&! seconds elapsed since beginning of year
-      seconds_this_day       ,&! seconds elapsed this day    
+      seconds_this_day       ,&! seconds elapsed this day
       seconds_this_day_next  ,&! seconds elapsed this day  at next timestep
       seconds_this_year_next ,&! seconds elapsed this year at next timestep
       seconds_in_year        ,&! seconds in one year -- this varies,
                                !         if leap years are allowed
       hours_in_year            ! hours   in one year
- 
+
    real (r8) ::               &
       frac_day               ,&! fraction of the day elapsed today
       tyear                  ,&! decimal elapsed time in years
@@ -269,13 +269,13 @@
    character (2), dimension(12), parameter :: &
       cmonths  = (/'01','02','03','04','05','06',  &
                    '07','08','09','10','11','12'/)
- 
+
    character (2), dimension(31), parameter :: &
       cdays    = (/'01','02','03','04','05','06','07','08','09','10', &
                    '11','12','13','14','15','16','17','18','19','20', &
                    '21','22','23','24','25','26','27','28','29','30', &
                    '31'/)
- 
+
    real (r8), parameter ::            &
       seconds_in_minute =    60.0_r8, &
       seconds_in_hour   =  3600.0_r8, &
@@ -323,7 +323,7 @@
       next_opt_month    = 2,        &
       next_opt_year     = 3,        &
       stop_opt_never    = 0,        &
-      stop_opt_sometime = 1 
+      stop_opt_sometime = 1
 
 !-----------------------------------------------------------------------
 !
@@ -384,10 +384,10 @@
       tmix_avg     = 2,  &! use averaging step for time mixing
       tmix_avgbb   = 3,  &! use averaging step for time mixing, with
                           !  back_to_back option to keep time boundaries
-      tmix_avgfit  = 4    ! use averaging step for time mixing, 
+      tmix_avgfit  = 4    ! use averaging step for time mixing,
                           !  selecting the timestep size in such
                           !  a way as to force the end of the day
-                          !  (or interval) to coincide with the end of 
+                          !  (or interval) to coincide with the end of
                           !  a timestep
 
    integer (int_kind) :: &
@@ -432,7 +432,7 @@
 
 ! !DESCRIPTION:
 !  Initializes some time manager variables from namelist inputs
-!  and sets time step.  Remaining time manager variables are 
+!  and sets time step.  Remaining time manager variables are
 !  initialized after restart files are read.
 !
 ! !REVISION HISTORY:
@@ -574,7 +574,7 @@
    call broadcast_scalar (stop_count      , master_task)
    call broadcast_scalar (allow_leapyear  , master_task)
    call broadcast_scalar (date_separator  , master_task)
- 
+
    if (tmix_iopt == -1000) then
       call exit_POP(sigAbort,'unknown option for time mixing')
    endif
@@ -588,8 +588,8 @@
 !-----------------------------------------------------------------------
 
    select case (dt_option)
- 
-   case('auto_dt')   
+
+   case('auto_dt')
       !*** scale tracer timestep  dt = 1 hr at dx = 2 degrees
       dtt = seconds_in_hour*(180.0_r8/float(nx_global))
       steps_per_day  = seconds_in_day/dtt
@@ -618,7 +618,7 @@
    case default
       call exit_POP(sigAbort,'unknown dt_option')
    end select
- 
+
 !-----------------------------------------------------------------------
 !
 !  modify dtt value, if using avgfit option
@@ -626,41 +626,41 @@
 !-----------------------------------------------------------------------
 
    if (tmix_iopt  == tmix_avgfit) then
- 
+
       !*** determine the number of full, half, and total number of
       !*** steps in each interval. an interval is typically one day,
-      !*** unless fit_freq is greater than one (eg, coupling 
+      !*** unless fit_freq is greater than one (eg, coupling
       !*** frequency > 1x/day)
 
       nsteps_per_day         = steps_per_day
       fullsteps_per_interval = nsteps_per_day/fit_freq
       if (fullsteps_per_interval < 1) fullsteps_per_interval = 1
-      halfsteps_per_interval = 1 + & 
+      halfsteps_per_interval = 1 + &
                                nsteps_per_day/(fit_freq*time_mix_freq)
       nsteps_per_interval    = fullsteps_per_interval + &
                                halfsteps_per_interval
- 
+
       !*** is an adjustment to the number of half and full steps in
       !*** each interval needed?
- 
-      if ((fullsteps_per_interval/time_mix_freq) <  &  
+
+      if ((fullsteps_per_interval/time_mix_freq) <  &
           (nsteps_per_interval   /time_mix_freq)    ) then
          halfsteps_per_interval = halfsteps_per_interval + 1
          nsteps_per_interval    = nsteps_per_interval    + 1
       endif
- 
+
       !*** determine the number of half, full, and total steps in
       !*** each day
 
       fullsteps_per_day      = fit_freq*fullsteps_per_interval
       halfsteps_per_day      = fit_freq*halfsteps_per_interval
       nsteps_per_day         = fullsteps_per_day + halfsteps_per_day
- 
+
       !*** compute modified dtt value
 
       dtt = seconds_in_day/(fullsteps_per_day + 0.5*halfsteps_per_day)
       steps_per_day  = seconds_in_day/dtt
- 
+
    else
       nsteps_per_interval = steps_per_day
    endif
@@ -729,11 +729,11 @@
 !
 !-----------------------------------------------------------------------
 
-   eom_next          = .false.  
-   eom_last          = .false.  
-   eod_last          = .false.  
-   eoy_last          = .false.  
-   midnight_last     = .false.  
+   eom_next          = .false.
+   eom_last          = .false.
+   eod_last          = .false.
+   eoy_last          = .false.
+   midnight_last     = .false.
 
    iyear        = iyear0
    imonth       = imonth0
@@ -802,7 +802,7 @@
 
    character (*), parameter :: &
       date_fmt = "(a17, 2x, a4,'-',a2,'-',a2)"
- 
+
 !-----------------------------------------------------------------------
 !
 !  determine the number of days, months, and years elapsed since
@@ -854,7 +854,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  determine if this is a leap year; set days_in_year and 
+!  determine if this is a leap year; set days_in_year and
 !  days_in_prior_months, regardless of value of allow_leapyear
 !
 !-----------------------------------------------------------------------
@@ -896,16 +896,16 @@
 
 !-----------------------------------------------------------------------
 !
-!  thour00_begin_this_year, thour00_midmonth_{equal,calendar} and 
-!       thour00_endmonth_{equal,calendar} are used in forcing routines 
-!       with the 'monthly-equal' or  'monthly-calendar'  option for 
-!       forcing_data_freq, where 'monthly-equal' designates 12 equally 
-!       spaced months of length 365/12 days and 'monthly-calendar' uses 
+!  thour00_begin_this_year, thour00_midmonth_{equal,calendar} and
+!       thour00_endmonth_{equal,calendar} are used in forcing routines
+!       with the 'monthly-equal' or  'monthly-calendar'  option for
+!       forcing_data_freq, where 'monthly-equal' designates 12 equally
+!       spaced months of length 365/12 days and 'monthly-calendar' uses
 !       the non-leapyear calendar.
-!       
-!  thour00_midmonth_{equal,calendar} and 
-!  thour00_endmonth_{equal,calendar} 
-!       are relative to the beginning of the year, so vary between 
+!
+!  thour00_midmonth_{equal,calendar} and
+!  thour00_endmonth_{equal,calendar}
+!       are relative to the beginning of the year, so vary between
 !       0 and 365*24.
 !
 !-----------------------------------------------------------------------
@@ -949,7 +949,7 @@
 !  save iyear, imonth, etc from the beginning of this run
 !
 !-----------------------------------------------------------------------
-      
+
    iyear_start_run        = iyear
    imonth_start_run       = imonth
    iday_start_run         = iday
@@ -965,14 +965,14 @@
 !
 !-----------------------------------------------------------------------
 
-   if (tmix_iopt == tmix_avgfit) then 
+   if (tmix_iopt == tmix_avgfit) then
       if (.not. midnight) then
          call exit_POP(sigAbort, &
                        'model run must start at day boundary '/&
                      &/'when using avgfit option')
       endif
    endif
- 
+
 !-----------------------------------------------------------------------
 !
 !  will this run end exactly at midnight?
@@ -996,81 +996,81 @@
 !-----------------------------------------------------------------------
 
    stop_iopt = stop_opt_sometime
- 
-   select case (stop_option)        
- 
-   case ('never')   !*** coupler or signal catcher stops POP     
 
-      stop_iopt = stop_opt_never     
+   select case (stop_option)
+
+   case ('never')   !*** coupler or signal catcher stops POP
+
+      stop_iopt = stop_opt_never
       iyear_end_run  = 9999
-      imonth_end_run = 1        
-      iday_end_run   = 1              
-      elapsed_days_max = 1e9  
- 
+      imonth_end_run = 1
+      iday_end_run   = 1
+      elapsed_days_max = 1e9
+
    case ('eoy')     !*** stop at end of stop_count years
 
       if (end_run_at_midnight) then
          iyear_end_run  = iyear + stop_count
-         imonth_end_run = 1        
-         iday_end_run   = 1              
+         imonth_end_run = 1
+         iday_end_run   = 1
       else
          if (imonth  == 12 .and. iday == 31) then
             iyear_end_run = iyear + stop_count
          else
             iyear_end_run = iyear + stop_count - 1
-         endif 
+         endif
          imonth_end_run = 12
          iday_end_run   = 31
       endif
 
    case ('eom')     !*** stop at end of stop_count months
- 
+
       iyear_end_run  = iyear
-      imonth_end_run = imonth + stop_count 
- 
+      imonth_end_run = imonth + stop_count
+
       call reduce_months (imonth_end_run, iyear_end_run )
- 
+
       if (end_run_at_midnight) then
          iday_end_run = 1
       else
          iday_end_run = days_in_month(imonth_end_run)
       endif
- 
+
    case ('eod')     !*** stop at end of stop_count days
 
       if (end_run_at_midnight) then
          iyear_end_run  = iyear
-         imonth_end_run = imonth 
+         imonth_end_run = imonth
          iday_end_run   = iday + stop_count
       else
          iyear_end_run  = iyear
-         imonth_end_run = imonth 
+         imonth_end_run = imonth
          iday_end_run   = iday + stop_count - 1
       endif
- 
+
    case ('nyear', 'nyears') !*** stop after stop_count years
                             !*** need not be end of year
 
       iyear_end_run  = iyear + stop_count
       imonth_end_run = imonth
-      iday_end_run   = iday           
+      iday_end_run   = iday
       if (allow_leapyear .and. is_leapyear(iyear_end_run)) then
          days_in_year_end_run = days_in_leap_year
       else
          days_in_year_end_run = days_in_norm_year
       endif
-      if (is_near(mod(seconds_in_day*days_in_year_end_run, dtt), &  
+      if (is_near(mod(seconds_in_day*days_in_year_end_run, dtt), &
                   c0, dt_tol) ) then
          end_run_at_midnight = .true.
       else
          end_run_at_midnight = .false.
       endif
- 
+
       case ('nmonth', 'nmonths')  !*** stop after stop_count months
                                   !*** need not be end of month
-      iyear_end_run  = iyear   
-      imonth_end_run = imonth + stop_count 
-      iday_end_run   = iday           
+      iyear_end_run  = iyear
+      imonth_end_run = imonth + stop_count
+      iday_end_run   = iday
 
       call reduce_months (imonth_end_run, iyear_end_run )
 
@@ -1079,31 +1079,31 @@
 
       if (end_run_at_midnight) then
          iyear_end_run  = iyear
-         imonth_end_run = imonth 
+         imonth_end_run = imonth
          iday_end_run   = iday + stop_count
       else
          iyear_end_run  = iyear
-         imonth_end_run = imonth 
+         imonth_end_run = imonth
          iday_end_run   = iday + stop_count - 1
       endif
- 
+
    case ('nstep', 'nsteps')   !*** stop after stop_count steps
 
       ndays_temp     = stop_count/steps_per_day
-      iday_end_run   = iday + ndays_temp 
+      iday_end_run   = iday + ndays_temp
       iyear_end_run  = iyear
-      imonth_end_run = imonth 
- 
+      imonth_end_run = imonth
+
    case ('date')
 
       call date2ymd (stop_count, iyear_end_run, &
                      imonth_end_run, iday_end_run)
- 
+
    case default
       call exit_POP(sigAbort,'Invalid stop_option: '/&
                                                      &/stop_option)
    end select
- 
+
 !-----------------------------------------------------------------------
 !
 !  if necessary, adjust iyear_end_run, imonth_end_run, iday_end_run
@@ -1124,13 +1124,13 @@
       else if (leapyear_test) then
          imonth_end_run = 2
          iday_end_run   = 29
-      else 
+      else
          imonth_end_run = 2
          iday_end_run   = 28
       endif
- 
+
    else if (imonth_end_run == 2 .and. iday_end_run == 29) then
- 
+
       if (.not. leapyear_test) then
          if (end_run_at_midnight) then
             imonth_end_run = 3
@@ -1142,40 +1142,40 @@
       endif
 
    else
- 
+
       if (imonth_end_run == 2 .and. leapyear_test) then
          days_in_month_temp = 29
       else
          days_in_month_temp = days_in_month(imonth_end_run)
       endif
- 
+
       do while (iday_end_run > days_in_month_temp)
- 
+
          iday_end_run   = iday_end_run - days_in_month_temp
          imonth_end_run = imonth_end_run + 1
- 
+
          call reduce_months (imonth_end_run, iyear_end_run )
- 
+
          if (allow_leapyear .and. is_leapyear(iyear_end_run)) then
             leapyear_test = .true.
          else
             leapyear_test = .false.
          endif
- 
+
          if (imonth_end_run == 2 .and. is_leapyear(iyear_end_run)) then
             days_in_month_temp = 29
          else
             days_in_month_temp = days_in_month(imonth_end_run)
          endif
- 
+
       enddo
 
    endif
- 
+
 
    call ymd2eday (iyear_end_run, imonth_end_run, iday_end_run, &
                   elapsed_days_end_run)
- 
+
    if (stop_iopt /= stop_opt_never)                     &
       elapsed_days_max = elapsed_days_end_run +         &
                          (dtt+dt_tol)/seconds_in_day
@@ -1200,7 +1200,7 @@
       endif
       call exit_POP(sigAbort,'invalid end date')
    endif
- 
+
 !-----------------------------------------------------------------------
 !
 !  print various time manager options to log (stdout)
@@ -1222,8 +1222,8 @@
  subroutine time_manager (lcoupled, liceform)
 
 ! !DESCRIPTION:
-!  This routine updates various time-related variables to their 
-!  end-of-step values.  It is called once at the beginning of each 
+!  This routine updates various time-related variables to their
+!  end-of-step values.  It is called once at the beginning of each
 !  timestep.
 !
 ! !REVISION HISTORY:
@@ -1254,9 +1254,9 @@
    eod_last          = eod
    eom_last          = eom
    eoy_last          = eoy
- 
+
    midnight_last     = midnight
- 
+
 !-----------------------------------------------------------------------
 !
 !  set logical switches to default values
@@ -1391,7 +1391,7 @@
 !  this section must follow call set_time_flag_all
 !
 !-----------------------------------------------------------------------
-      
+
    if (liceform) then
       if (lcoupled) then
 
@@ -1404,7 +1404,7 @@
                              'Cannot use tmix_avg or tmix_avgbb '/&
                            &/'with lcoupled and liceform')
             endif
-          
+
             if (avg_ts) call exit_POP (sigAbort, &
                                        'Cannot have coupled timestep '/&
                                      &/'be an averaging timestep')
@@ -1458,19 +1458,19 @@
       if (nsteps_run == stop_count) call set_time_flag(stop_now,.true.)
 
    else if (stop_iopt /= stop_opt_never .and. eod) then
- 
+
       if (iyear == iyear_end_run .and. imonth == imonth_end_run   &
                                  .and. iday == iday_end_run) then
 
          call set_time_flag(stop_now,.true.)
- 
+
          if (stop_option == 'eoy' .and. .not. eoy) then
             call set_time_flag(stop_now,.false.)
          endif
          if (stop_option == 'eom' .and. .not. eom) then
             call set_time_flag(stop_now,.false.)
          endif
- 
+
       else if (elapsed_days > elapsed_days_max ) then
 
          call set_time_flag(stop_now,.true.)
@@ -1484,7 +1484,7 @@
       if (stop_option == 'eom' .and.  eom  .and. &
           elapsed_months_this_run == stop_count) &
          call set_time_flag(stop_now,.true.)
- 
+
    endif
 
    new_dtt_value = .false.
@@ -1526,7 +1526,7 @@
    back_to_back       = .false.  ! not a second time-averaging step
    back_to_back_next  = .false.  ! not the step before 2nd avg step
    ice_ts             = .false.  ! not an ice timestep
-   sample_qflux_ts    = .false.  ! do not sample qflux 
+   sample_qflux_ts    = .false.  ! do not sample qflux
 
    call reset_time_flag_all
 
@@ -1540,11 +1540,11 @@
 ! !IROUTINE: set_switches
 ! !INTERFACE:
 
- subroutine set_switches              
+ subroutine set_switches
 
 ! !DESCRIPTION:
 !  Determine if logical switches should be set to non-default values
-!  for this timestep.  The switches set in this subroutine must depend 
+!  for this timestep.  The switches set in this subroutine must depend
 !  ONLY on nsteps\_run, or nsteps\_total.
 !
 ! !REVISION HISTORY:
@@ -1558,7 +1558,7 @@
 !
 !-----------------------------------------------------------------------
 
-   if (first_step) then 
+   if (first_step) then
       leapfrogts = .false.
       f_euler_ts = .true.
       newday     = .true.
@@ -1577,10 +1577,10 @@
       if (mod(nsteps_total  ,time_mix_freq) == 0) avg_ts       = .true.
 
    endif
- 
+
 !-----------------------------------------------------------------------
 !
-!  set back-to-back flags  (avgbb option)   
+!  set back-to-back flags  (avgbb option)
 !
 !-----------------------------------------------------------------------
 
@@ -1595,7 +1595,7 @@
 !  set avg_ts flags (avgfit option)
 !
 !-----------------------------------------------------------------------
- 
+
    if (tmix_iopt == tmix_avgfit) then
 
       if      (nsteps_this_interval == 1) then
@@ -1607,13 +1607,13 @@
       else if (mod(nsteps_this_interval  ,time_mix_freq) == 0) then
          avg_ts      = .true.
       endif
- 
+
       !*** no averaging step in the first step of an interval
 
       if (nsteps_this_interval == nsteps_per_interval) then
-         avg_ts_next = .false.   
+         avg_ts_next = .false.
       endif
- 
+
    endif
 
 !-----------------------------------------------------------------------
@@ -1664,7 +1664,7 @@
 ! !OUTPUT PARAMETERS:
 
    integer (int_kind) :: &
-      init_time_flag          ! flag id which also is integer index 
+      init_time_flag          ! flag id which also is integer index
                               !    into time flag array
 
 !EOP
@@ -1718,10 +1718,10 @@
 !
 !  set default if requested
 !
-!  NOTE: If flag previously defined and optional arguments are 
-!        present, this will override any previous definition of 
-!        optional arguments. user must make sure calls do not 
-!        contain optional arguments or else that the last call to 
+!  NOTE: If flag previously defined and optional arguments are
+!        present, this will override any previous definition of
+!        optional arguments. user must make sure calls do not
+!        contain optional arguments or else that the last call to
 !        this routine for a specific flag contains desired values.
 !
 !-----------------------------------------------------------------------
@@ -2032,7 +2032,7 @@
       if (time_flags(n)%freq_opt /= freq_opt_never) then
 
          time_flags(n)%old_value = time_flags(n)%value
-         time_flags(n)%value = time_to_do(time_flags(n)%freq_opt, & 
+         time_flags(n)%value = time_to_do(time_flags(n)%freq_opt, &
                                           time_flags(n)%freq)
 
       endif
@@ -2051,7 +2051,7 @@
  function time_to_do (in_freq_opt, in_freq)
 
 ! !DESCRIPTION:
-!  Determines whether it is time to take a particular action based on 
+!  Determines whether it is time to take a particular action based on
 !  input frequency options.
 !
 ! !REVISION HISTORY:
@@ -2121,7 +2121,7 @@
  function time_to_start (in_start_opt, in_start)
 
 ! !DESCRIPTION:
-!  Determines whether it is time to start a particular function based 
+!  Determines whether it is time to start a particular function based
 !  on input start options.
 !
 ! !REVISION HISTORY:
@@ -2153,8 +2153,8 @@
 !-----------------------------------------------------------------------
 !
 !  check start conditions - do not start if called from initial
-!  (nsteps_run == 0) and the condition matches exactly - the 
-!  start will instead be triggered during the time step.  This 
+!  (nsteps_run == 0) and the condition matches exactly - the
+!  start will instead be triggered during the time step.  This
 !  avoids looking for restarts that do not yet exist.
 !
 !-----------------------------------------------------------------------
@@ -2173,7 +2173,7 @@
    case (start_opt_nday)
       if (elapsed_days_init_date > in_start) then
          time_to_start = .true.
-      else if (elapsed_days_init_date == in_start .and. & 
+      else if (elapsed_days_init_date == in_start .and. &
                nsteps_run /= 0) then
          time_to_start = .true.
       endif
@@ -2181,7 +2181,7 @@
    case (start_opt_nyear)
       if (elapsed_years_init_date > in_start) then
          time_to_start = .true.
-      else if (elapsed_years_init_date == in_start .and. & 
+      else if (elapsed_years_init_date == in_start .and. &
                nsteps_run /= 0) then
          time_to_start = .true.
       else if (elapsed_years_init_date == in_start .and. &
@@ -2233,7 +2233,7 @@
       rminute,           &! number of minutes beyond the hour
       rsecond,           &! number of seconds beyond the minute
       seconds_today       ! number of seconds elapsed today
- 
+
    integer (int_kind) :: &
       day_inc             ! change in the number of days elapsed
                           !   between timesteps
@@ -2287,7 +2287,7 @@
 !  determine iday_of_year, imonth, iday, etc, for next timestep
 !
 !-----------------------------------------------------------------------
- 
+
    call ymd_hms(seconds_this_year_next,                    &
                 seconds_this_day_next,                     &
                 iday_of_year_next,                         &
@@ -2314,7 +2314,7 @@
 !  newday?   (a timestep can be both eod and newday for dt > 24hrs)
 !
 !-----------------------------------------------------------------------
- 
+
    if (iday_of_year > iday_of_year_last .and. .not. midnight) &
       newday = .true.
    if (eod_last ) newday = .true.
@@ -2326,15 +2326,15 @@
 !-----------------------------------------------------------------------
 
    if (eod) then
- 
+
       if (eom_next) then
          eom      = .true.
          eom_next = .false.
       else
- 
+
          if (imonth_next > imonth_last  .or. &
              imonth_next == 1 .and. imonth_last == 12) then
- 
+
             if (iday <= days_in_month(imonth_last) .and. &
                 midnight_next .and. iday_next == 1 ) then
                eom      = .false.
@@ -2356,12 +2356,12 @@
 
          endif
       endif
- 
+
    endif ! eod
 
 !-----------------------------------------------------------------------
 !
-!  elapsed months (integer) 
+!  elapsed months (integer)
 !
 !-----------------------------------------------------------------------
 
@@ -2369,14 +2369,14 @@
       elapsed_months           = elapsed_months           + 1
       elapsed_months_this_run  = elapsed_months_this_run  + 1
       elapsed_months_init_date = elapsed_months_init_date + 1
-      if (increment_elapsed_months_next) & 
+      if (increment_elapsed_months_next) &
           increment_elapsed_months_next = .false.
    else if (eom) then
       increment_elapsed_months_next = .true.
-   else 
+   else
       increment_elapsed_months_next = .false.
    endif
- 
+
    if (eom_last) eom = .false.
 
 !-----------------------------------------------------------------------
@@ -2385,7 +2385,7 @@
 !
 !-----------------------------------------------------------------------
 
-   if (eom .and. imonth_next == 1 .and. imonth_last == 12) eoy = .true.       
+   if (eom .and. imonth_next == 1 .and. imonth_last == 12) eoy = .true.
 
 !-----------------------------------------------------------------------
 !
@@ -2402,15 +2402,15 @@
       call ymd2eday (iyear , 1, 1, elapsed_days_jan1)
       elapsed_days_this_year  = elapsed_days - elapsed_days_jan1
 
-      if (increment_elapsed_years_next) & 
+      if (increment_elapsed_years_next) &
           increment_elapsed_years_next = .false.
 
    else if (eoy) then
       increment_elapsed_years_next = .true.
-   else 
+   else
       increment_elapsed_years_next = .false.
    endif
- 
+
    if (eoy_last) eoy = .false.
 
 !-----------------------------------------------------------------------
@@ -2418,15 +2418,15 @@
 !  character values for iyear, imonth, iday
 !
 !-----------------------------------------------------------------------
-      
+
    if (iyear  /= iyear_last ) call int_to_char(4, iyear, cyear)
- 
+
    if (imonth /= imonth_last) then
       cmonth  = cmonths   (imonth)
       cmonth3 = month3_all(imonth)
    endif
 
-   if (iday   /= iday_last) cday = cdays(iday)                
+   if (iday   /= iday_last) cday = cdays(iday)
 
 !-----------------------------------------------------------------------
 !
@@ -2444,7 +2444,7 @@
    elapsed_days_this_run  = elapsed_days_this_run  + day_inc
    elapsed_days_this_year = elapsed_days_this_year + day_inc
    elapsed_days_init_date = elapsed_days_init_date + day_inc
- 
+
 !-----------------------------------------------------------------------
 !
 !  has a valid date been selected?
@@ -2457,9 +2457,9 @@
 
 !-----------------------------------------------------------------------
 !EOC
- 
+
  end subroutine model_date
- 
+
 !***********************************************************************
 !BOP
 ! !IROUTINE: get_tday
@@ -2526,7 +2526,7 @@
                     midnight_loc, adjust_year_loc)
 
 ! !DESCRIPTION:
-!  Computes integer values iday\_of\_year, iyear, imonth, iday, ihour, 
+!  Computes integer values iday\_of\_year, iyear, imonth, iday, ihour,
 !  iminute, isecond.
 !
 ! !REVISION HISTORY:
@@ -2541,7 +2541,7 @@
 
    logical (log_kind), intent(inout) :: &
       adjust_year_loc           ! year adjustment flag
- 
+
    real (r8), intent(inout) :: &
       seconds_this_year_loc   ,&! number of seconds in year
       seconds_this_day_loc      ! number of seconds in day
@@ -2549,7 +2549,7 @@
 ! !OUTPUT PARAMETERS:
 
    integer  (int_kind), intent(out) :: &
-      imonth_loc,              &! local value of imonth 
+      imonth_loc,              &! local value of imonth
       iday_loc,                &! local value of iday
       ihour_loc,               &! local value of ihour
       iminute_loc,             &! local value of iminute
@@ -2563,7 +2563,7 @@
 
    logical (log_kind), intent(out) :: &
       midnight_loc              ! midnight flag
- 
+
 !EOP
 !BOC
 !-----------------------------------------------------------------------
@@ -2587,7 +2587,7 @@
 !  determine day number   [1,days_in_year]
 !
 !-----------------------------------------------------------------------
- 
+
    rtest = seconds_this_year_loc/seconds_in_day
    itest =  int (rtest)
    ntest = nint (rtest)
@@ -2598,13 +2598,13 @@
    else
       iday_of_year_loc = itest + 1
    endif
- 
+
 !-----------------------------------------------------------------------
 !
-!  determine month number [1,12]                
+!  determine month number [1,12]
 !
 !-----------------------------------------------------------------------
- 
+
    imonth_loc = 12
 
    do nm = 1,11
@@ -2618,25 +2618,25 @@
 !  determine day-of-month number [1,31]
 !
 !-----------------------------------------------------------------------
- 
+
    iday_loc = iday_of_year_loc - days_in_prior_months(imonth_loc)
- 
+
 !-----------------------------------------------------------------------
 !
 !  determine integer hour, minute, and second
 !
 !-----------------------------------------------------------------------
- 
+
    call hms (seconds_this_day_loc,                &
              ihour_loc, iminute_loc, isecond_loc, &
              rhour_loc, rminute_loc, rsecond_loc)
- 
+
 !-----------------------------------------------------------------------
 !
 !  midnight?
 !
 !-----------------------------------------------------------------------
- 
+
    if (ihour_loc == 0 .and. iminute_loc == 0 .and. &
                             isecond_loc == 0) then
       midnight_loc = .true.
@@ -2646,10 +2646,10 @@
 
 !-----------------------------------------------------------------------
 !
-!  if midnight, increment iday 
+!  if midnight, increment iday
 !
 !-----------------------------------------------------------------------
- 
+
    if (iday_loc == iday_compare .and. midnight_loc) &
       iday_loc =  iday_loc + 1
 
@@ -2658,7 +2658,7 @@
 !  if necessary, adjust month value and year-adjustment indicator
 !
 !-----------------------------------------------------------------------
- 
+
    if (iday_loc > days_in_month(imonth_loc)) then
       iday_loc = iday_loc - days_in_month(imonth_loc)
       imonth_loc = imonth_loc + 1
@@ -2693,8 +2693,8 @@
 ! !INPUT PARAMETERS:
 
    real (r8), intent(inout) :: &
-      seconds_loc         ! elapsed seconds in current day 
- 
+      seconds_loc         ! elapsed seconds in current day
+
 ! !OUTPUT PARAMETERS:
 
    integer(log_kind), intent(out) :: &
@@ -2706,7 +2706,7 @@
       rhour_loc,         &! real values for the above quantities
       rminute_loc,       &
       rsecond_loc
- 
+
 !EOP
 !BOC
 !-----------------------------------------------------------------------
@@ -2723,7 +2723,7 @@
 
    rsecond_loc = (rminute_loc - iminute_loc)*seconds_in_minute
    isecond_loc = nint (rsecond_loc)
- 
+
 !-----------------------------------------------------------------------
 !
 !  corrections to second, minute, and/or hour
@@ -2746,13 +2746,13 @@
 
 !-----------------------------------------------------------------------
 !
-!  if h:m:s == 0:00:00, then adjust seconds 
+!  if h:m:s == 0:00:00, then adjust seconds
 !
 !-----------------------------------------------------------------------
 
-   if (ihour_loc == 0  .and. iminute_loc == 0  .and. & 
+   if (ihour_loc == 0  .and. iminute_loc == 0  .and. &
                              isecond_loc == 0) seconds_loc = c0
- 
+
 !-----------------------------------------------------------------------
 !EOC
 
@@ -2781,12 +2781,12 @@
 !EOP
 !BOC
 !-----------------------------------------------------------------------
- 
+
    do while (imonth_loc > 12)
       imonth_loc = imonth_loc - 12
       iyear_loc  = iyear_loc  + 1
    enddo
- 
+
 !-----------------------------------------------------------------------
 !EOC
 
@@ -2812,7 +2812,7 @@
    real (r8), intent(inout) :: &
       seconds_this_day_loc,    &! current value of seconds_this_day
       seconds_this_year_loc     ! current value of seconds_this_year
- 
+
 ! !OUTPUT PARAMETERS:
 
    logical (log_kind), intent(out) :: &
@@ -2844,7 +2844,7 @@
             seconds_this_day_loc = seconds_this_day_loc - &
                                    seconds_in_day
       enddo
- 
+
    endif
 
 !-----------------------------------------------------------------------
@@ -2853,19 +2853,19 @@
 !  reset seconds_this_year
 !
 !-----------------------------------------------------------------------
-    
+
    if (seconds_this_year_loc >= seconds_in_year - stepsize .and.     &
        (seconds_this_year_loc >= seconds_in_year .or.                &
         is_near(seconds_this_year_loc,seconds_in_year,dt_tol_year))) &
                                                                 then
- 
+
       seconds_this_year_loc = seconds_this_year_loc - seconds_in_year
 
       if (is_near(seconds_this_year_loc, c0, dt_tol)) then
          seconds_this_year_loc = c0
          seconds_this_day_loc  = c0
       endif
- 
+
       adjust_year_loc  = .true.
    else
       adjust_year_loc  = .false.
@@ -2873,7 +2873,7 @@
 
 !-----------------------------------------------------------------------
 !EOC
- 
+
  end subroutine reduce_seconds
 
 !***********************************************************************
@@ -2891,11 +2891,11 @@
 
 !EOP
 !BOC
-!---------------------------------------------------------------------  
+!---------------------------------------------------------------------
 !
 !  local variables
 !
-!---------------------------------------------------------------------  
+!---------------------------------------------------------------------
 
    integer (int_kind) :: nm  ! dummy month index
 
@@ -2904,9 +2904,9 @@
 !  is iyear a leap year?
 !
 !-----------------------------------------------------------------------
- 
+
    leapyear = is_leapyear (iyear)
- 
+
 !-----------------------------------------------------------------------
 !
 !  adjust the number of days in February and in the year
@@ -2923,15 +2923,15 @@
 
    seconds_in_year     = days_in_year*seconds_in_day
    hours_in_year       = days_in_year*24.0_r8
- 
+
 !-----------------------------------------------------------------------
 !
 !  reset the values of days_in_prior_months(imonth)
 !
 !-----------------------------------------------------------------------
- 
+
    call prior_days (days_in_prior_months, days_in_month)
- 
+
 !-----------------------------------------------------------------------
 !EOC
 
@@ -3155,7 +3155,7 @@
 
    if (days <= 0 .or. days > days_in_leap_year ) then
       err_string = char_blank
-      write (err_string,'(a,i6)') & 
+      write (err_string,'(a,i6)') &
           'eday2ymd: days undetermined, days = ', days
       call exit_POP(sigAbort,trim(err_string))
    endif
@@ -3241,23 +3241,23 @@
       nm,                    &! dummy month index
       num_leapyears           ! leap year counters
 
-!---------------------------------------------------------------------  
+!---------------------------------------------------------------------
 !
 !  If leap years are not allowed, eday computation is straightforward
 !
-!---------------------------------------------------------------------  
+!---------------------------------------------------------------------
 
    if (.not. allow_leapyear) then
       eday = year*days_in_norm_year + &
              days_in_prior_months(month) + day - 1
- 
-!---------------------------------------------------------------------  
+
+!---------------------------------------------------------------------
 !
 !  If leap years are allowed, compute the number of days elapsed
 !  in prior months for *this* year and the number of elapsed
 !  leap years prior to this year
 !
-!---------------------------------------------------------------------  
+!---------------------------------------------------------------------
 
    else
 
@@ -3282,7 +3282,7 @@
 
    endif ! .not. allow_leapyear
 
-!---------------------------------------------------------------------  
+!---------------------------------------------------------------------
 !EOC
 
  end subroutine ymd2eday
@@ -3328,7 +3328,7 @@
 !
 !-----------------------------------------------------------------------
 
-   if (.not. valid_date(date)) & 
+   if (.not. valid_date(date)) &
       call exit_POP(sigAbort,'date2eday: invalid date')
 
    call date2ymd (date, year, month, day)
@@ -3397,14 +3397,14 @@
 
 ! !DESCRIPTION:
 !  Defines or resets the total number of days in prior months;
-!  if leap years are allowed, this routine will be called once per 
+!  if leap years are allowed, this routine will be called once per
 !  year.
 !
 ! !REVISION HISTORY:
 !  same as module
 
 ! !INPUT PARAMETERS:
- 
+
    integer (int_kind), dimension(12), intent(in) :: &
       days_in_month_loc      ! current num of days in each month
 
@@ -3412,7 +3412,7 @@
 
    integer (int_kind), dimension(12), intent(out) :: &
       days_in_prior_months_loc  ! number of days in prior months
- 
+
 !EOP
 !BOC
 !-----------------------------------------------------------------------
@@ -3423,7 +3423,7 @@
 
    integer (int_kind) :: &
       nm                 !   local month index
- 
+
 !-----------------------------------------------------------------------
 
    days_in_prior_months_loc(1) = 0
@@ -3465,7 +3465,7 @@
       time_string,          &! a string to fill with time stamp
       beg_date               ! date string to use as first date in
                              !   'range' option
- 
+
 !EOP
 !BOC
 !-----------------------------------------------------------------------
@@ -3481,7 +3481,7 @@
       date_fmt1 = '(i4.4,2(a,i2.2))', &
       date_fmt2 = '(i4.4,2(i2.2))  ', &
       time_fmt  = '(i2.2,2(a,i2.2))'
- 
+
    integer (int_kind) :: date_len  ! length of date string
 
 !-----------------------------------------------------------------------
@@ -3562,7 +3562,7 @@
                                       &/'-'
          date_len = len_trim(date_string) + 1
          if (date_separator /= ' ') then
-            write (date_string(date_len:),date_fmt1)              & 
+            write (date_string(date_len:),date_fmt1)              &
                                           iyear , date_separator, &
                                           imonth, date_separator, &
                                           iday
@@ -3615,7 +3615,7 @@
 !
 !-----------------------------------------------------------------------
 
-   logical (log_kind) :: & 
+   logical (log_kind) :: &
       is_near            ! result (T or F) of nearness test
 
 !-----------------------------------------------------------------------
@@ -3665,12 +3665,12 @@
 
    integer (int_kind), intent(in) :: &
       iyear_loc              ! input year to test for leapyear
- 
+
 ! !OUTPUT PARAMETERS:
 
    logical (log_kind) :: &
       is_leapyear  ! logical result with true if test year is leapyear
- 
+
 !EOP
 !BOC
 !-----------------------------------------------------------------------
@@ -3776,7 +3776,7 @@
 !  local variables
 !
 !-----------------------------------------------------------------------
-      
+
    logical (log_kind) :: &
       valid_year,        &! flags to determine validity of
       valid_month,       &! specific values
@@ -3811,7 +3811,7 @@
    valid_eday_run    = .true.
    valid_eday_year   = .true.
    valid_feb_day     = .true.
- 
+
 !-----------------------------------------------------------------------
 !
 !  check a variety of possible error conditions
@@ -3832,24 +3832,24 @@
       valid_ymd_hms = .false.
       valid_day_b   = .false.
    endif
- 
+
    if (valid_ymd_hms) then   ! prevents out-of-range reference
       if (iday > days_in_month(imonth)) then
          valid_ymd_hms = .false.
          valid_day_e   = .false.
       endif
    endif
- 
+
    if (ihour < 0 .or. ihour > 24) then
       valid_ymd_hms = .false.
       valid_hour    = .false.
    endif
- 
+
    if (iminute < 0 .or. iminute > 60) then
       valid_ymd_hms = .false.
       valid_minute  = .false.
    endif
- 
+
    if (isecond < 0 .or. isecond > 60) then
       valid_ymd_hms = .false.
       valid_second  = .false.
@@ -3859,17 +3859,17 @@
       valid_ymd_hms   = .false.
       valid_eday_year = .false.
    endif
- 
+
    if (elapsed_days_init_date < 0) then
       valid_ymd_hms   = .false.
       valid_eday_run  = .false.
    endif
- 
+
    if (.not. allow_leapyear .and. imonth == 2 .and. iday == 29) then
       valid_ymd_hms = .false.
       valid_feb_day = .false.
    endif
- 
+
 !-----------------------------------------------------------------------
 !
 !  if errors detected, write out message and quit
@@ -3883,54 +3883,54 @@
       if (.not. valid_year) &
          write(err_string,err_fmt) &
               'Invalid date (iyear must be > 0 ): iyear = ', iyear
- 
+
       if (.not. valid_month) &
          write(err_string,err_fmt) &
               'Invalid date ( imonth must be in [1,12] ): imonth = ', &
                                                           imonth
- 
+
       if (.not. valid_day_b) &
          write(err_string,err_fmt) &
               'Invalid date (iday must be greater than 1): iday = ',iday
- 
+
       if (.not. valid_day_e) &
          write(err_string,err_fmt) &
               'Invalid date (iday must be less than days_in_month):'/&
-              &/' iday = ',iday 
- 
+              &/' iday = ',iday
+
       if (.not. valid_hour) &
          write(err_string,err_fmt) &
               'Invalid date (ihour must be in [0,23] ): ihour = ', ihour
- 
+
       if (.not. valid_minute) &
          write(err_string,err_fmt) &
               'Invalid date (iminute must be in [0,59] ): iminute = ', &
                                                           iminute
- 
+
       if (.not. valid_second) &
          write(err_string,err_fmt) &
               'Invalid date (isecond must be in [0,59] ): isecond = ', &
                                                           isecond
- 
+
       if (.not. valid_eday_run) &
          write(err_string,err_fmt) &
               'Invalid date (elapsed_days_init_date must be > 0 ) ', &
                              elapsed_days_init_date
- 
+
       if (.not. valid_eday_year) &
          write(err_string,err_fmt) &
               'Invalid date (elapsed_days_this_year must be > 0) ', &
                              elapsed_days_this_year
- 
+
       if (.not. valid_feb_day) &
          write(err_string,*) &
               ' Error: initial date contains leap day '/&
               &/' but no leap years are allowed.', iday
- 
+
       call exit_POP(sigAbort,trim(err_string))
- 
+
    endif   ! valid_ymd_hms
- 
+
 !-----------------------------------------------------------------------
 !EOC
 
@@ -3964,13 +3964,13 @@
 
    character (1) :: &
       suffix
- 
+
    character (2) ::   &
       cmonth_end_run, &!
       cday_end_run,   &!
       cmonth0,        &!
       cday0            !
- 
+
    character (3) ::   &
       mix_step
 
@@ -3980,7 +3980,7 @@
 
    character (char_len) :: &
       mix_steps
- 
+
    character (*), parameter :: &! output formats
       out_fmt1 = "('       date(month-day-year):',2x,2(a2,'-'),a4)", &
       out_fmt2 = "('                    ',a7,2x,i10)",               &
@@ -4042,7 +4042,7 @@
          write (stdout,out_fmt2) '  step:', nsteps_total
 
       write (stdout,blank_fmt)
- 
+
       if (end_run_at_midnight) then
          write (stdout,out_fmt3)  'at 00:00:00 on'
       else if (dtt > seconds_in_day) then
@@ -4050,17 +4050,17 @@
       else
          write (stdout,out_fmt3)  'at the end of the day on'
       endif
- 
+
       if (stop_count == 1) then
          suffix = ' '
       else
          suffix = 's'
       endif
- 
+
       write (stdout,out_fmt1) cmonth_end_run,cday_end_run,cyear_end_run
- 
-      select case (stop_option)        
- 
+
+      select case (stop_option)
+
       case ('never')
          write (stdout,out_fmt4) 'upon receipt of stop signal' /&
                                &/ ' from external source (eg, cpl)'
@@ -4116,26 +4116,26 @@
 
       write (stdout,blank_fmt)
       write (stdout,'(a11,1pe12.6)') 'dt_count = ',dt_count
- 
+
       if (tmix_iopt == tmix_avgfit) then
          write(stdout,out_fmt9) fullsteps_per_day,' full '
          write(stdout,out_fmt9) halfsteps_per_day,' half '
          write(stdout,out_fmt9) nsteps_per_day,   ' total'
       endif
- 
+
       write (stdout,blank_fmt)
       write (stdout,'(a16,i6)') 'time_mix_freq = ', time_mix_freq
- 
+
       write (stdout,'(a19)') 'Time mixing option:'
       select case (tmix_iopt)
- 
+
       case (tmix_avg)
          write (stdout,'(a23)') '  avg -- time averaging'
- 
+
       case (tmix_avgbb)
          write (stdout,'(a59)') '  avgbb -- time averaging'/&
                                &/' with back-to-back averaging steps'
- 
+
       case (tmix_avgfit)
          write (stdout,'(a26)') '  avgfit -- time averaging'
          write (stdout,'(a71)') '  with timestep chosen to fit'/&
@@ -4152,7 +4152,7 @@
          else
             ind = 1
             mix_steps = '2'
- 
+
             do nn = 3, nsteps_per_interval
                if (mod(nn,time_mix_freq) == 0) then
                    write(mix_step,'(i2)' )  nn
@@ -4161,7 +4161,7 @@
                                                       &/ trim(mix_step)
                endif
             enddo
- 
+
             if (fit_freq == 1) then
                write (stdout,'(a40,a,a9)') &
                   'Averaging time steps are at step numbers', &
@@ -4172,7 +4172,7 @@
                   trim(mix_steps), ' each interval'
             endif
          endif
- 
+
       case (tmix_matsuno)
          write (stdout,'(a25,i6,a6)') &
             'Matsuno time steps every ',time_mix_freq,' steps'
@@ -4198,7 +4198,7 @@
                  (mod(time_mix_freq,10) == 3 .and. &
                   time_mix_freq /= 13)) then
             write (stdout,out_fmt7) time_mix_freq, 'rd'
-         else   
+         else
             write (stdout,out_fmt7) time_mix_freq, 'th'
          endif
       case (tmix_matsuno)
@@ -4274,13 +4274,13 @@
 
 ! !INPUT PARAMETERS:
 
-   integer (int_kind), intent(in) :: & 
+   integer (int_kind), intent(in) :: &
       string_length,     &! length of desired output character string
       int_in              ! input integer to be converted
 
 ! !OUTPUT PARAMETERS:
 
-   character(string_length), intent(out) :: & 
+   character(string_length), intent(out) :: &
       char_out            ! character equivalent of input integer
 
 !EOP

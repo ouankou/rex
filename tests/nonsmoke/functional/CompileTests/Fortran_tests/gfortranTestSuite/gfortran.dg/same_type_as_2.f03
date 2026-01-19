@@ -6,7 +6,7 @@
 
  type :: t1
   integer :: i
- end type 
+ end type
 
  type, extends(t1) :: t2
   integer :: j

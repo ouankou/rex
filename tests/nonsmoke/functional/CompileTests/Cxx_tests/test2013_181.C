@@ -5,16 +5,5 @@
  * */
 #include <vector>
 
-#if 0
-namespace mystd
-{
-};
-#endif
-
 namespace s = std;
 // namespace s = std;
-
-#if 0
-namespace ms = mystd;
-namespace ms = mystd;
-#endif

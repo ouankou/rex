@@ -3,17 +3,6 @@
 // simpler test code will not generate the specially named namespace.
 
 #include <vector>
-#if 0
-// An attempt to build a simpler vector defintion failed to generate the namespace with the special name.
-namespace std 
-{
-template <typename T> 
-class vector 
-   {
-      T t;
-   };
-}
-#endif
 
 namespace google {
 namespace protobuf {

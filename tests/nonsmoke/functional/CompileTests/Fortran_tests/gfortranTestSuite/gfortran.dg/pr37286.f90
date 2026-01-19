@@ -20,11 +20,11 @@ contains
   subroutine gn_fatal(message)
     character(len = *), intent(in) :: message
 
-    stop 1 
+    stop 1
   end subroutine gn_fatal
 
   function gn_monte_rand(min, max) result(monte)
-    real(kind = GNDP), intent(in) :: min 
+    real(kind = GNDP), intent(in) :: min
     real(kind = GNDP), intent(in) :: max
     real(kind = GNDP) :: monte
 

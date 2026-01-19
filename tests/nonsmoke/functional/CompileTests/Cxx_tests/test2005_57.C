@@ -26,12 +26,11 @@ using namespace std;
 // This is unparsed as: "template void foobar < int > (int x,int x);"
 template void foobar<int>(int x);
 
-#if 1
 // Explicit instantiation of templated function
 template int min<int>(int x, int y);
 
 // DQ (10/11/2007): testing...
 // Explicit instantiation of templated member function
-// template basic_string<char> & basic_string<char>::append<string::iterator>(string::iterator __first, string::iterator __last);
-#endif
-
+// template basic_string<char> &
+// basic_string<char>::append<string::iterator>(string::iterator __first,
+// string::iterator __last);

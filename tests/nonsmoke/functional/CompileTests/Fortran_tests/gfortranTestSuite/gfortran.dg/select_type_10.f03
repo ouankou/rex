@@ -29,6 +29,6 @@ contains
     end select
   end function
 
-end module 
+end module
 
 ! { dg-final { cleanup-modules "bar_module" } }

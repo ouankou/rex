@@ -15,7 +15,7 @@ MODULE testmod
   END TYPE t
 
 CONTAINS
-  
+
   SUBROUTINE proc1 (me)
     IMPLICIT NONE
     TYPE(t1) :: me

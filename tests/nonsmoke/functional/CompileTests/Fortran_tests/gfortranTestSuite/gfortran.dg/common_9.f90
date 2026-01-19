@@ -9,7 +9,7 @@
 !  that is also an external function in a function subprogram."
 !
 ! F2003: 16.2.1
-! "A name that identifies a common block in a scoping unit shall not be used 
+! "A name that identifies a common block in a scoping unit shall not be used
 !  to identify a constant or an intrinsic procedure in that scoping unit. If
 !  a local identifier is also the name of a common block, the appearance of
 !  that name in any context other than as a common block name in a COMMON

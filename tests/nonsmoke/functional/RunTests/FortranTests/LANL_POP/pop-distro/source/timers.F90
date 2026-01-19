@@ -83,7 +83,7 @@
    type (timer_data), dimension(max_timers) :: &
       all_timers               ! timer data for all timers
 
-   integer (int_kind) ::      & 
+   integer (int_kind) ::      &
       cycles_max               ! max clock cycles allowed by system
 
    real (r8) ::               &
@@ -180,7 +180,7 @@
  subroutine get_timer(timer_id, name_choice, num_blocks, num_nodes)
 
 ! !DESCRIPTION:
-!  This routine initializes a timer with a given name and returns a 
+!  This routine initializes a timer with a given name and returns a
 !  timer id.
 !
 ! !REVISION HISTORY:
@@ -200,7 +200,7 @@
 ! !OUTPUT PARAMETERS:
 
    integer (int_kind), intent(out) :: &
-      timer_id           ! timer number assigned to this timer 
+      timer_id           ! timer number assigned to this timer
 
 !EOP
 !BOC
@@ -231,7 +231,7 @@
          all_timers(n)%name       = name_choice
          all_timers(n)%in_use     = .true.
          all_timers(n)%num_blocks = num_blocks
-         all_timers(n)%num_nodes  = num_nodes 
+         all_timers(n)%num_nodes  = num_nodes
 
          allocate(all_timers(n)%block_started   (num_blocks), &
                   all_timers(n)%block_cycles1   (num_blocks), &
@@ -286,7 +286,7 @@
 !-----------------------------------------------------------------------
 
    if (all_timers(timer_id)%in_use) then
-     
+
       all_timers(timer_id)%name = 'unknown_timer_name'
 
       all_timers(timer_id)%in_use       = .false.
@@ -428,7 +428,7 @@
          !*** another thread.  if already started, keep track
          !*** of number of start requests in order to match
          !*** start and stop requests
- 
+
          !$OMP CRITICAL
 
          if (.not. all_timers(timer_id)%node_started) then
@@ -469,7 +469,7 @@
 !EOC
 
  end subroutine timer_start
- 
+
 !***********************************************************************
 !BOP
 ! !IROUTINE: timer_stop
@@ -478,7 +478,7 @@
  subroutine timer_stop(timer_id, block_id)
 
 ! !DESCRIPTION:
-!  This routine stops a given node timer if appropriate.  If block 
+!  This routine stops a given node timer if appropriate.  If block
 !  information is available the appropriate block timer is also stopped.
 !
 ! !REVISION HISTORY:
@@ -548,7 +548,7 @@
          !*** stop node timer if number of requested stops
          !*** matches the number of starts (to avoid stopping
          !*** a node timer started by multiple threads)
- 
+
          cycles1 = all_timers(timer_id)%node_cycles1
 
          !$OMP CRITICAL
@@ -608,7 +608,7 @@
 !EOC
 
  end subroutine timer_stop
- 
+
 !***********************************************************************
 !BOP
 ! !IROUTINE: timer_print
@@ -687,7 +687,7 @@
          local_time = c0
       endif
       max_time = global_maxval(local_time)
-      
+
       if (my_task == master_task) then
         write (stdout,*) 'Time in timer: ',trim(all_timers(timer_id)%name)
         write (stdout,timer_format) timer_id,max_time
@@ -827,7 +827,7 @@
 
 ! !DESCRIPTION:
 !  This routine checks a given timer by stopping and restarting the
-!  timer.  This is primarily used to periodically accumulate time in 
+!  timer.  This is primarily used to periodically accumulate time in
 !  the timer to prevent timer cycles from wrapping around max_cycles.
 !
 ! !REVISION HISTORY:

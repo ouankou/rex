@@ -32,7 +32,7 @@ $(TRANSLATOR): $(TRANSLATOR_SOURCE)
 
 # test the translator
 check: $(TRANSLATOR)
-	./$(TRANSLATOR) -c -I. -I$(ROSE_INSTALL)/include $(TESTCODE) 
+	./$(TRANSLATOR) -c -I. -I$(ROSE_INSTALL)/include $(TESTCODE)
 
 clean:
 	rm -rf $(TRANSLATOR) *.o rose_* *.dot

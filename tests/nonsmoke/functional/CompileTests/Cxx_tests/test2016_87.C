@@ -19,12 +19,3 @@ void foo()
   // if ( (int x = 0) != 2) {}
   // if ( (typename std::set<test<V> >::iterator i3=s.begin() ) != s.end()) {}
    }
-
-#if 0
-template<template<class> class T, class V>
-void foobar()
-   {
-     std::set<T<V> > XXX;
-     typename std::set<T<V> >::iterator i = XXX.begin();
-   }
-#endif

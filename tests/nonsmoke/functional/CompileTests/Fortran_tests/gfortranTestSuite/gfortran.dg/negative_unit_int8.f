@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! { dg-options "-fdefault-integer-8" }
-! 
+!
 ! NOTE: This test is identical to negative_unit.f except -fdefault-integer-8
 !
 ! PR libfortran/20660 and other bugs (not filed in bugzilla) relating
@@ -12,12 +12,12 @@
       integer i
       integer, parameter ::ERROR_BAD_UNIT = 5005
       logical l
-      
+
       i = -1
 ! gfortran created a 'fort.-1' file and wrote "Hello" in it
       write (unit=i, fmt=*, iostat=i) "Hello"
       if (i <= 0) call abort
-      
+
       i = -11
       open (unit=i, file="xxx", iostat=i)
       if (i <= 0) call abort

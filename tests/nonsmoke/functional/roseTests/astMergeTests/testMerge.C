@@ -39,14 +39,6 @@ int main(int argc, char * argv[]) {
 
   AstTests::runAllTests(project);
 
-#if 0
-  // DQ (8/1/2005): Commented out because AstMerge is now called within frontend processing
-  createDOT(project, "pre");
-  AstMerge am;
-  am.addAST(project);
-  project = am.getAST();
-#endif
-
   AstTests::runAllTests(project);
 
   vector<string> files = project->getAbsolutePathFileNames();

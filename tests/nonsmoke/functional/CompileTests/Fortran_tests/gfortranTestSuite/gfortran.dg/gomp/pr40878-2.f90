@@ -1,6 +1,6 @@
 ! PR fortran/40878
 ! { dg-do compile }
-! { dg-options "-fopenmp" } 
+! { dg-options "-fopenmp" }
 
 subroutine test1
   integer :: j, k

@@ -69,13 +69,13 @@
       timer_recv_from_cpl, &
       timer_recv_to_send,  &
       timer_send_to_recv
- 
+
    integer (int_kind) ::   &
       cpl_stop_now,        &! flag id for stop_now flag
       cpl_ts,              &! flag id for coupled_ts flag
       cpl_write_restart,   &! flag id for write restart
       cpl_write_history,   &! flag id for write history
-      cpl_write_tavg,      &! flag id for write tavg      
+      cpl_write_tavg,      &! flag id for write tavg
       cpl_diag_global,     &! flag id for computing diagnostics
       cpl_diag_transp       ! flag id for computing diagnostics
 
@@ -444,7 +444,7 @@
 
       do j=this_block%jb,this_block%je
       do i=this_block%ib,this_block%ie
-      
+
          LONSE(i,j,iblock) = ULON(i  ,j-1,iblock)
          LONNW(i,j,iblock) = ULON(i-1,j  ,iblock)
          LONSW(i,j,iblock) = ULON(i-1,j-1,iblock)
@@ -497,7 +497,7 @@
 
       do j=this_block%jb,this_block%je
       do i=this_block%ib,this_block%ie
-      
+
          LONNE(i,j,iblock) = radian*ULAT(i  ,j  ,iblock)
          LONSE(i,j,iblock) = radian*ULAT(i  ,j-1,iblock)
          LONNW(i,j,iblock) = radian*ULAT(i-1,j  ,iblock)
@@ -591,7 +591,7 @@
 !  initialize timers for coupled model
 !
 !-----------------------------------------------------------------------
-      
+
    call get_timer (timer_send_to_cpl  , 'SEND'        , 1, &
                                          distrb_clinic%nprocs)
    call get_timer (timer_recv_from_cpl, 'RECV'        , 1, &
@@ -679,14 +679,14 @@
       call timer_start (timer_recv_to_send)
 
       !NCARif ( shf_formulation == 'partially-coupled' ) then
-      !NCAR   SHF_COMP(:,:,shf_comp_cpl) = STF(:,:,1) 
+      !NCAR   SHF_COMP(:,:,shf_comp_cpl) = STF(:,:,1)
       !NCAR   if ( .not. lms_balance ) then
-      !NCAR      SHF_COMP(:,:,shf_comp_cpl) = & 
+      !NCAR      SHF_COMP(:,:,shf_comp_cpl) = &
       !NCAR      SHF_COMP(:,:,shf_comp_cpl) * MASK_SR
       !NCAR      SHF_QSW = SHF_QSW * MASK_SR
       !NCAR   endif
       !NCARendif
- 
+
       !NCARif ( sfwf_formulation == 'partially-coupled' ) then
 
       !NCAR   if (sfc_layer_type == sfc_layer_varthick .and. &
@@ -708,11 +708,11 @@
       !NCAR   endif
 
       !NCARendif
- 
+
       !NCARif ( luse_cpl_ifrac ) then
       !NCAR   OCN_WGT = (c1-IFRAC) * RCALCT
       !NCARendif
- 
+
    endif
 
 #endif
@@ -867,7 +867,7 @@
    endif
 
    if (ibuff(12) >= 2) then
-      ldiag_cpl = .true. 
+      ldiag_cpl = .true.
    else
       ldiag_cpl = .false.
    endif
@@ -1000,7 +1000,7 @@
       SMFT(:,:,2,iblock)=(TAUY_F(:,:,iblock)*cos(ANGLET(:,:,iblock)) -&
                           TAUX_F(:,:,iblock)*sin(ANGLET(:,:,iblock)))*&
                           RCALCT(:,:,iblock)*momentum_factor
- 
+
       !***
       !*** Shift SMFT to U grid
       !***
@@ -1013,7 +1013,7 @@
       !***  and salt fluxes
       !***
 
-      if (sfc_layer_type == sfc_layer_varthick .and. & 
+      if (sfc_layer_type == sfc_layer_varthick .and. &
           .not. lfw_as_salt_flx) then
 
          !*** compute fresh water flux (cm/s)
@@ -1070,7 +1070,7 @@
          end do
 
       !***
-      !***  if not a variable thickness surface layer or if 
+      !***  if not a variable thickness surface layer or if
       !***  fw_as_salt_flx flag is on, convert fresh and salt inputs
       !***  to a virtual salinity flux
       !***
@@ -1102,11 +1102,11 @@
 !     balance salt/freshwater in marginal seas
 !
 !-----------------------------------------------------------------------
-!NCAR 
+!NCAR
 !NCAR      if  (lms_balance .and. sfwf_formulation /= 'partially-coupled' )
 !NCAR     & call ms_balancing (STF(:,:,2),EVAP_F, PREC_F, MELT_F,ROFF_F
 !NCAR     &,                   SALT_F, 'salt')
-!NCAR 
+!NCAR
 !NCAR      endif
 !NCAR
 !-----------------------------------------------------------------------
@@ -1205,7 +1205,7 @@
 !
 !-----------------------------------------------------------------------
 
-   !$OMP PARALLEL DO 
+   !$OMP PARALLEL DO
    do iblock=1,nblocks_clinic
 
       !*** Coupler assumes all variables are on T points
@@ -1467,8 +1467,8 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8) :: &  ! global sums of fields 
-      gsum_ifrac,   &  
+   real (r8) :: &  ! global sums of fields
+      gsum_ifrac,   &
       gsum_mslp,    &
       gsum_taux,    &
       gsum_tauy,    &
@@ -1482,8 +1482,8 @@
       gsum_evap,    &
       gsum_melt,    &
       gsum_roff,    &
-      m2percm2   
- 
+      m2percm2
+
    character (46), parameter :: &
       out_fmt1 = "('comm_diag ',a3,1x,a4,1x,i3,1x,es26.19,1x,a6)"
 
@@ -1493,49 +1493,49 @@
 !-----------------------------------------------------------------------
 
    m2percm2  = mpercm*mpercm
- 
+
    gsum_ifrac  = global_sum_prod(IFRC , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_mslp   = global_sum_prod(MSLP , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_taux   = global_sum_prod(TAUX , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_tauy   = global_sum_prod(TAUY , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_netsw  = global_sum_prod(NETSW, TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_senhf  = global_sum_prod(SENHF, TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_lwup   = global_sum_prod(LWUP , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
 
    gsum_lwdn   = global_sum_prod(LWDN , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_melthf = global_sum_prod(MELTH, TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_salt   = global_sum_prod(SALT , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
-  
+
    gsum_prec   = global_sum_prod(PREC , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_evap   = global_sum_prod(EVAP , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_melt   = global_sum_prod(MELTW, TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_roff   = global_sum_prod(ROFF , TAREA, distrb_clinic, &
                                  field_loc_center, RCALCT)*m2percm2
- 
+
 !-----------------------------------------------------------------------
 !
 !  print diagnostics
@@ -1553,9 +1553,9 @@
       write(stdout,'(a46,1x,a4,a1,a2,a1,a2,3x,a2,a1,a2,a1,a2)') &
             ' report global averages of fluxes from cpl at ',   &
             cyear,'/',cmonth,'/',cday,chour,':',cminute,':',csecond
- 
+
         write(stdout,out_fmt1)'ocn','recv', krbuff_ifrac ,gsum_ifrac , &
-                              'ifrac ' 
+                              'ifrac '
         write(stdout,out_fmt1)'ocn','recv', krbuff_mslp  ,gsum_mslp  , &
                               'mslp  '
         write(stdout,out_fmt2)'ocn','recv', krbuff_taux  ,gsum_taux  , &
@@ -1565,7 +1565,7 @@
         write(stdout,out_fmt2)'ocn','recv', krbuff_netsw ,gsum_netsw , &
                               'netsw ','(Watts)  '
         write(stdout,out_fmt2)'ocn','recv', krbuff_senhf ,gsum_senhf , &
-                              'senhf ','(Watts)  ' 
+                              'senhf ','(Watts)  '
         write(stdout,out_fmt2)'ocn','recv', krbuff_lwup  ,gsum_lwup  , &
                               'lwup  ','(Watts)  '
         write(stdout,out_fmt2)'ocn','recv', krbuff_lwdwn ,gsum_lwdn ,  &
@@ -1583,12 +1583,12 @@
         write(stdout,out_fmt2)'ocn','recv', krbuff_roff  ,gsum_roff  , &
                               'roff  ','(kg/s)   '
    endif
- 
+
 !-----------------------------------------------------------------------
 !EOC
 
  end subroutine coupled_diagnostics_recv
- 
+
 !***********************************************************************
 !BOP
 ! !IROUTINE: subroutine coupled_diagnostics_send
@@ -1622,8 +1622,8 @@
 !  local variables
 !
 !-----------------------------------------------------------------------
- 
-   real (r8) :: &! global sums of sent fields 
+
+   real (r8) :: &! global sums of sent fields
       gsum_sst,  &
       gsum_sss,  &
       gsum_uvel, &
@@ -1632,7 +1632,7 @@
       gsum_dhdy, &
       gsum_q,    &
       m2percm2
- 
+
    character (46), parameter :: &
       out_fmt1 = "('comm_diag ',a3,1x,a4,1x,i3,1x,es26.19,1x,a6)"
 
@@ -1644,30 +1644,30 @@
 !  compute global integrals
 !
 !-----------------------------------------------------------------------
- 
+
    m2percm2  = mpercm*mpercm
- 
+
    gsum_sst  = global_sum_prod(SST , TAREA, distrb_clinic, &
                                field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_sss  = global_sum_prod(SSS , TAREA, distrb_clinic, &
                                field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_uvel = global_sum_prod(UUU , TAREA, distrb_clinic, &
                                field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_vvel = global_sum_prod(VVV , TAREA, distrb_clinic, &
                                field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_dhdx = global_sum_prod(DHDX, TAREA, distrb_clinic, &
                                field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_dhdy = global_sum_prod(DHDY, TAREA, distrb_clinic, &
                                field_loc_center, RCALCT)*m2percm2
- 
+
    gsum_q    = global_sum_prod(Q   , TAREA, distrb_clinic, &
                                field_loc_center, RCALCT)*m2percm2
- 
+
 !-----------------------------------------------------------------------
 !
 !  print diagnostics
@@ -1685,7 +1685,7 @@
       write(stdout,'(a44,1x,a4,a1,a2,a1,a2,3x,a2,a1,a2,a1,a2)') &
             ' report global averages of fluxes to cpl at ',     &
             cyear,'/',cmonth,'/',cday,chour,':',cminute,':',csecond
- 
+
       write(stdout,out_fmt1)'ocn','send', ksbuff_sst , gsum_sst , &
                             'sst   '
       write(stdout,out_fmt1)'ocn','send', ksbuff_sss , gsum_sss , &
@@ -1701,12 +1701,12 @@
       write(stdout,out_fmt2)'ocn','send', ksbuff_q   , gsum_q   , &
                             'q   ','(Watts)  '
    endif
- 
+
 !-----------------------------------------------------------------------
 !EOC
 
  end subroutine coupled_diagnostics_send
- 
+
 #endif
 !***********************************************************************
 
@@ -1723,13 +1723,13 @@
 !!     has been selected
 !!
 !!-----------------------------------------------------------------------
-! 
+!
 !      real (kind=dbl_kind), dimension(nx,ny,nt) ::
 !     &   STF    !  surface tracer fluxes
-! 
+!
 !      real (kind=dbl_kind), dimension(nx,ny) :: WORK1, WORK2
-! 
-!      
+!
+!
 !#if coupled
 !
 !      if ( shf_formulation == 'partially-coupled' ) then
@@ -1759,15 +1759,15 @@
 !
 !            STF(:,:,2) =  SFWF_COMP(:,:,sfwf_comp_wrest)
 !     &                  + SFWF_COMP(:,:,sfwf_comp_srest)
-!     &                  + WORK2 
+!     &                  + WORK2
 !     &                  + SFWF_COMP(:,:,sfwf_comp_flxio) * MASK_SR
-!          else     
+!          else
 !
 !            STF(:,:,2) =  SFWF_COMP(:,:,sfwf_comp_wrest)
 !     &                  + SFWF_COMP(:,:,sfwf_comp_srest)
 !     &                  + SFWF_COMP(:,:,sfwf_comp_cpl)
-!     &                  + SFWF_COMP(:,:,sfwf_comp_flxio) 
-! 
+!     &                  + SFWF_COMP(:,:,sfwf_comp_flxio)
+!
 !          endif
 !        endif
 !      endif

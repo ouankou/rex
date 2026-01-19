@@ -6,15 +6,6 @@
 // Member function form of test
 // ****************************
 
-#if 0
-// Class containing member function not availabe to primative types
-class A
-   {
-     public:
-          void increment() {}
-   };
-#endif
-
 // template function containing member function that would 
 // be an error to instantiate with a primative type
 template <typename T>

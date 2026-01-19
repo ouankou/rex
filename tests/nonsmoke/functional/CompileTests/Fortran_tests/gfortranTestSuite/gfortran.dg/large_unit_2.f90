@@ -1,5 +1,5 @@
 ! { dg-do run }
-! PR31201 Too large unit number generates wrong code 
+! PR31201 Too large unit number generates wrong code
 ! Test case by Francois-Xavier Coudert  <fxcoudert@gcc.gnu.org>
       integer :: i
       logical :: l

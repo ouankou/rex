@@ -6,5 +6,5 @@ contains
 FUNCTION test ()
   REAL, DIMENSION (1) :: test
   test(1)=0.0
-END FUNCTION 
+END FUNCTION
 end module

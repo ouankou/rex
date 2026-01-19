@@ -8,7 +8,7 @@
 
       write (c,100) 0, 1
       if (c .ne. 'i = 0, j = 1') call abort
-      
+
       write (c,100) 0
       if (c .ne. 'i = 0       ') call abort
 

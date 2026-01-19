@@ -1,7 +1,6 @@
 
 // int abc;
 
-#if 1
 // #include "InnerInternal1.h"
 // v4_rename_me = 55;
 
@@ -19,5 +18,3 @@
 // #include "InnerInternal4.h"
 // v7_rename_me = 33;
 int v3_rename_me;
-#endif
-

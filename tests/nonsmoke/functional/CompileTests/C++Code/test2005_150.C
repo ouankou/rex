@@ -11,14 +11,6 @@ class X
           template <typename S> X(S t) {};      
    };
 
-#if 0
-// This is OK to run through legacy frontend, but g++ can't resolve which function this is a specialization for!
-template <>
-inline X < int > ::X(int t) : t(t)
-{
-}
-#endif
-
 int main()
    {
      X<int> a(1);

@@ -23,7 +23,7 @@ contains
        write (s, '(a)') "abcd"
     end if
   end function foo
-  
+
   function bar (i) result (s)
     integer, intent(in) :: i
     character (len=4)   :: s, t

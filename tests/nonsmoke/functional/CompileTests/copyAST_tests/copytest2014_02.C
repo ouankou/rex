@@ -2,15 +2,10 @@
 // it is part of a bug related to a change in the traversal for the 
 // SgTemplateInstantiationDirective IR node.
 
-
-#if 1
 // #4 BUG MESSAGE GONE WHEN: remove the following line
 // This causes the scope of subsequent declarations to reference this scope
 // instead of the scope of the firstDefiningDeclaration.
-namespace Geometry
-   {
-   } // end namespace Geometry
-#endif
+namespace Geometry {} // end namespace Geometry
 
 namespace Geometry
    {
@@ -19,7 +14,6 @@ namespace Geometry
           public:
         };
 
-#if 1
      template <typename CoreMesh>
      class MeshBase;
 
@@ -40,10 +34,7 @@ namespace Geometry
         }; // end class MeshBase
 
   // #1 BUG MESSAGE GONE WHEN: remove the following line and the declaration
-     template <> MeshBase<PolyMesh >::MeshBase(const char* meshFile);
-#else
-     template <typename CoreMesh> void getCoreMesh(CoreMesh&) {}
-#endif
+        template <> MeshBase<PolyMesh>::MeshBase(const char *meshFile);
    } // end namespace Geometry
 
 using namespace Geometry;

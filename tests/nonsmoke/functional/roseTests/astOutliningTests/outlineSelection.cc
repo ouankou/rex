@@ -352,23 +352,6 @@ static void collectRandom(SgProject *root, size_t max_num_outline,
 
 // =====================================================================
 
-#if 0 // JJW 10-17-2007 This is not used, but probably should be
-static
-void
-usage (const string& prog_name)
-{
-  cerr << endl
-       << "usage: " << prog_name
-       << " [-rose:outline:random <n>]"
-       << " [-rose:outline:seq <k>]"
-       << " [-rose:outline:line <n>]"
-       << " [-rose:outline:preproc-only]"
-       << " [-rose:outline:emit-stages]"
-       << " ..." << endl
-       << endl;
-}
-#endif
-
 static bool getOptions(vector<string> &argvList, ProgramOptions_t &opts) {
   // Required: none.
 
@@ -581,10 +564,6 @@ static void preprocess(SgStatement *s, bool emit = false) {
 
   SgBasicBlock *b = Outliner::preprocess(s);
   ROSE_ASSERT(b);
-#if 0 
-//bug 151
-  ASTtools::attachComment (toString (s, count), b);
-#endif
   if (emit) // Unparse this intermediate result
     unparseIt(getRoot(b));
 }
@@ -598,10 +577,6 @@ static void outline(SgStatement *s, bool emit = false) {
 
   Outliner::Result r = Outliner::outline(s);
   ROSE_ASSERT(r.isValid());
-#if 0 
-//bug 151
-  ASTtools::attachComment (toString (s, count), r.decl_);
-#endif
   if (emit)
     unparseIt(getRoot(s));
 }

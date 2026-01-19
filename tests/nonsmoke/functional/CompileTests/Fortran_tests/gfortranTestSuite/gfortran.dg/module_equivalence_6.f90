@@ -17,6 +17,6 @@ PROGRAM fortranlibtest
   USE HDF5
   IMPLICIT NONE
   INTEGER :: ii
-  ii = H5P_DEFAULT_F 
+  ii = H5P_DEFAULT_F
 END PROGRAM fortranlibtest
 ! { dg-final { cleanup-modules "H5GLOBAL HDF5" } }

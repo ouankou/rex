@@ -31,7 +31,7 @@ end subroutine err4
 ! duplicate array specs
 subroutine err5
   pointer (ipt, array(7))
-  real array(10)      ! { dg-error "Duplicate array" }  
+  real array(10)      ! { dg-error "Duplicate array" }
 end subroutine err5
 
 subroutine err6

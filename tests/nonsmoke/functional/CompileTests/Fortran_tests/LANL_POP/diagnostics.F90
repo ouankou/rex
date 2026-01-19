@@ -531,7 +531,7 @@
 
          do iblock=1,nblocks_clinic
 
-            this_block = get_block(blocks_clinic(iblock),iblock)  
+            this_block = get_block(blocks_clinic(iblock),iblock)
 
             ib = this_block%ib
             ie = this_block%ie
@@ -815,7 +815,7 @@
 
       do iblock = 1,nblocks_clinic
 
-         this_block = get_block(blocks_clinic(iblock),iblock)  
+         this_block = get_block(blocks_clinic(iblock),iblock)
 
          ib = this_block%ib
          ie = this_block%ie
@@ -836,7 +836,7 @@
          WORK1 = (UVEL(:,:,1,curtime,iblock)*SMF(:,:,1,iblock)   &
                  +VVEL(:,:,1,curtime,iblock)*SMF(:,:,2,iblock))*UFACT
          local_sums(iblock,dcount) = sum(WORK1(ib:ie,jb:je))
- 
+
          dcount = dcount + 1
          WORK1 = DIAG_KE_ADV_2D(:,:,iblock)*UFACT
          local_sums(iblock,dcount) = sum(WORK1(ib:ie,jb:je))
@@ -927,7 +927,7 @@
          end do !tracer loop
       end do ! block loop
 
-      !$OMP END PARALLEL DO 
+      !$OMP END PARALLEL DO
 
 !-----------------------------------------------------------------------
 !
@@ -973,11 +973,11 @@
                          global_sum(sum_tmp,distrb_clinic)/volume_t
         dcount = dcount + 1
         sum_tmp = sum(local_sums(:,dcount))
-        diag_tracer_vdiff(n) = & 
+        diag_tracer_vdiff(n) = &
                          global_sum(sum_tmp,distrb_clinic)/volume_t
         dcount = dcount + 1
         sum_tmp = sum(local_sums(:,dcount))
-        diag_tracer_source(n) = & 
+        diag_tracer_source(n) = &
                          global_sum(sum_tmp,distrb_clinic)/volume_t
         dcount = dcount + 1
         sum_tmp = sum(local_sums(:,dcount))
@@ -1067,7 +1067,7 @@
 
       do iblock = 1,nblocks_clinic
 
-         this_block = get_block(blocks_clinic(iblock),iblock)  
+         this_block = get_block(blocks_clinic(iblock),iblock)
 
          ib = this_block%ib
          ie = this_block%ie
@@ -1106,7 +1106,7 @@
                              c0, KMU(:,:,iblock) >= k)
             endif
 
-            local_sums(iblock,dcount) = local_sums(iblock,dcount) + & 
+            local_sums(iblock,dcount) = local_sums(iblock,dcount) + &
                                         sum(WORK1(ib:ie,jb:je))
 
          enddo ! k loop
@@ -1135,7 +1135,7 @@
                   endif
                endif
 
-               local_sums(iblock,dcount) = local_sums(iblock,dcount) + & 
+               local_sums(iblock,dcount) = local_sums(iblock,dcount) + &
                                            sum(WORK1(ib:ie,jb:je))
 
                if (diag_all_levels) then
@@ -1505,7 +1505,7 @@
 
       do iblock = 1,nblocks_clinic
 
-         this_block = get_block(blocks_clinic(iblock),iblock)  
+         this_block = get_block(blocks_clinic(iblock),iblock)
 
          ib = this_block%ib
          ie = this_block%ie
@@ -1710,7 +1710,7 @@
    real (r8), dimension(nx_block,ny_block) :: &
       CFL_E, CFL_W, &! cfl numbers due to advective fluxes through
       CFL_N, CFL_S, &! each face
-      CFL_T, CFL_B, &! 
+      CFL_T, CFL_B, &!
       CFL_TOT        ! sum for total cfl number
 
 !-----------------------------------------------------------------------
@@ -2168,11 +2168,11 @@
 
    case(1)
       cfl_hdifftk_block(iblock,k) = cfltemp*dt(k)
-      cfladd_hdifftk_block(:,iblock,k) = cfltemp_add(:) 
+      cfladd_hdifftk_block(:,iblock,k) = cfltemp_add(:)
 
    case(2)
       cfl_hdiffuk_block(iblock,k) = cfltemp*dtu
-      cfladd_hdiffuk_block(:,iblock,k) = cfltemp_add(:) 
+      cfladd_hdiffuk_block(:,iblock,k) = cfltemp_add(:)
 
    end select
 
@@ -2513,7 +2513,7 @@
          write(stdout,cfl_fmt1) name_temp1, cfl_advw, cfladd_advw(:)
          name_temp1 = 'total advection          '
          write(stdout,cfl_fmt1) name_temp1, cfl_advt, cfladd_advt(:)
- 
+
          if (cfl_vdifft /= c0) then
             name_temp1 = 'vertical tracer mixing   '
             write(stdout,cfl_fmt1) name_temp1, cfl_vdifft, &
@@ -2524,12 +2524,12 @@
             write(stdout,cfl_fmt1) name_temp1, cfl_vdiffu, &
                                                cfladd_vdiffu(:)
          endif
- 
+
          name_temp1 = 'horizontal tracer mixing '
          write(stdout,cfl_fmt1) name_temp1, cfl_hdifft, cfladd_hdifft(:)
          name_temp1 = 'horiz. momentum mixing   '
          write(stdout,cfl_fmt1) name_temp1, cfl_hdiffu, cfladd_hdiffu(:)
- 
+
          if (cfl_all_levels) then
             write(stdout,'(a27)') 'CFL numbers at all levels: '
             do k=1,km
@@ -2541,7 +2541,7 @@
                                       cfladd_hdifftk(:,k), k
             end do
          endif
- 
+
 !-----------------------------------------------------------------------
 !
 !        write results to output file

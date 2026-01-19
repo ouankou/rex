@@ -7,13 +7,11 @@ template<class T> class SwigValueWrapper
 
 class X {};
 
-#if 1
 template<class T> class Y
    {
      public:
          typedef int templateArgument;
-   };
-#endif
+};
 
 void foo()
    {
@@ -26,13 +24,11 @@ void foo()
   // Force the conversion operator to be called so that the copy constructor for X can be called with new!
   // X_resultptr = new X ((X&)X_result);
 
-#if 1
   // Case using nested templates Y<Y<X> > does not compile because
   // legacy frontend generates typename of "Y<Y<X>>" instead of "Y<Y<X> >"
   SwigValueWrapper<Y<Y<X>>> Y_result;
   Y<Y<X>> *Y_resultptr;
 
   // Force the conversion operator to be called so that the copy constructor for Y<Y<X>> can be called with new!
-     Y_resultptr = new Y<Y<X> > ((Y<Y<X> >&)Y_result);
-#endif
+  Y_resultptr = new Y<Y<X>>((Y<Y<X>> &)Y_result);
    }

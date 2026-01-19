@@ -31,17 +31,6 @@ namespace Namespace1
      class XXX
         {
           template<typename t_ty_Parm14, typename t_ty_Parm15> t_Class0<t_Class6<typename t_Struct1<t_ty_Parm14, t_ty_Parm15>::t_ty_Typedef7> > t_func1();
-
-#if 0
-       // This is not allowed: error: explicit specialization is not allowed in the current scope
-          template<> 
-          t_Class0<t_Class6<t_Struct1<t_Class4< int >, t_Class4< int >::Typedef4>::t_ty_Typedef7> >
-          t_func1<t_Class4< int >, t_Class4< int >::Typedef4>() 
-             {
-            // t_Class0<t_Class6<t_Struct1<t_Class4< int >, t_Class4< int >::Typedef4>::t_ty_Typedef7> > var1;
-            // return (var1);
-             } // end t_func1
-#endif
         };
    } // end Namespace1
 

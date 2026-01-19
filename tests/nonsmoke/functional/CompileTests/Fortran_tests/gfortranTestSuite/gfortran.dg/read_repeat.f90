@@ -6,7 +6,7 @@ program rread
   integer :: iarr(1:7), ia, ib, i
 
   iarr = 0
-  
+
   open(10, status="scratch")
   write(10,*) " 2*1  3*2 /"
   write(10,*) " 12"
@@ -20,6 +20,6 @@ program rread
   if (any(iarr(3:5).ne.2)) call abort
   if (any(iarr(6:7).ne.0)) call abort
   if (ia .ne. 12 .or. ib .ne. 13) call abort
-  
+
   close(10)
 end program rread

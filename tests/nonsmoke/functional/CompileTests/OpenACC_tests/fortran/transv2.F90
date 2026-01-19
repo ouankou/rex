@@ -54,7 +54,7 @@ contains
         c4(i)=c6(i)+t3(i)
         c5(i)=c7(i)+t1(i)*t4(i)
       endif
-    
+
     enddo
 ! !$acc end data
 

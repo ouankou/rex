@@ -17,13 +17,13 @@
 
    use kinds_mod, only: r8, int_kind, log_kind, char_len
    use blocks, only: block, nx_block, ny_block, get_block
-   !use distribution, only: 
+   !use distribution, only:
    use domain, only: nblocks_clinic, blocks_clinic, init_domain_blocks,    &
        init_domain_distribution
    use constants, only: delim_fmt, blank_fmt, field_loc_center, blank_fmt, &
        c0, ppt_to_salt, mpercm, c1, field_type_scalar, init_constants
    use communicate, only: my_task, master_task, init_communicate
-   !use boundary, only: 
+   !use boundary, only:
    use broadcast, only: broadcast_array, broadcast_scalar
    use prognostic, only: init_prognostic, max_blocks_clinic, nx_global,    &
        ny_global, km, nt, TRACER, curtime, RHO, newtime, oldtime
@@ -288,7 +288,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  initialize X display 
+!  initialize X display
 !
 !-----------------------------------------------------------------------
 
@@ -430,7 +430,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  read input namelist and broadcast 
+!  read input namelist and broadcast
 !
 !-----------------------------------------------------------------------
 
@@ -568,7 +568,7 @@
                 TRACER(:,:,k,n,curtime,iblock) = c0
          end do
          end do
- 
+
          !*** convert salinity to model units
          TRACER(:,:,:,2,curtime,iblock) = &
          TRACER(:,:,:,2,curtime,iblock)*ppt_to_salt
@@ -601,7 +601,7 @@
       !***
 
       call get_unit(nu)
-      if (my_task == master_task) then 
+      if (my_task == master_task) then
          write(stdout,'(a40,a)') &
             'Initial mean T,S profile read from file:', &
             trim(init_ts_file)
@@ -643,7 +643,7 @@
    case ('internal')
       first_step = .true.
       if (my_task == master_task) then
-         write(stdout,'(a63)') & 
+         write(stdout,'(a63)') &
         'Initial T,S profile computed internally from 1992 Levitus data'
       endif
 
@@ -662,7 +662,7 @@
 
             sinterp = (dpth_meters         - depth_levitus(kk))/ &
                       (depth_levitus(kk+1) - depth_levitus(kk))
- 
+
             tinit(k) = (c1 - sinterp)*tmean_levitus(kk) + &
                              sinterp *tmean_levitus(kk+1)
             sinit(k) = (c1 - sinterp)*smean_levitus(kk) + &

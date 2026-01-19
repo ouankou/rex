@@ -2,7 +2,7 @@ character (len=*) function id (c)
              character (len=*), intent(in) :: c
              id= c
  end function id
-   
+
  program main
 		 character (len=3), external :: id
 		 character (len=3) :: start
@@ -16,7 +16,7 @@ character (len=*) function id (c)
 		 third=repeat(second,2)//"  "
 		 fourth=adjustr(third)
 		 fifth=adjustl(fourth)
-                 
+
 		 if(fifth.NE.third) then
 		   print *, "failed"
 		 else
@@ -25,7 +25,7 @@ character (len=*) function id (c)
 		     print *, "failed"
 		   else
              print *, "OK"
-           end if			 
+           end if
 
          end if
-       end	
+       end

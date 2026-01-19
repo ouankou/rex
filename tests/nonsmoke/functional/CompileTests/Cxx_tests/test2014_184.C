@@ -7,23 +7,9 @@ struct X
      void foo();
    };
 
-#if 0
-namespace 
-   {
-     int variable;
-   }  // namespace
-#else
-int variable;
-#endif
+   int variable;
 
-void X::foo() 
-   {
-#if 0
-     int extension = variable;
-#else
-     int extension = internal::variable;
-#endif
-   }
+   void X::foo() { int extension = internal::variable; }
 
 }  // namespace internal
 

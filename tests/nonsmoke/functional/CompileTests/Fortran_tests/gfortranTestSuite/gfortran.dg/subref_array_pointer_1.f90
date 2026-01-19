@@ -9,16 +9,16 @@
 contains
   subroutine pr29396
 ! Contributed by Francois-Xavier Coudert <fxcoudert@gcc.gnu.org>
-    CHARACTER(LEN=2), DIMENSION(:), POINTER :: a 
-    CHARACTER(LEN=4), DIMENSION(3), TARGET :: b 
-    b=(/"bbbb","bbbb","bbbb"/) 
-    a=>b(:)(2:3) 
-    a="aa" 
-    IF (ANY(b.NE.(/"baab","baab","baab"/))) CALL ABORT() 
+    CHARACTER(LEN=2), DIMENSION(:), POINTER :: a
+    CHARACTER(LEN=4), DIMENSION(3), TARGET :: b
+    b=(/"bbbb","bbbb","bbbb"/)
+    a=>b(:)(2:3)
+    a="aa"
+    IF (ANY(b.NE.(/"baab","baab","baab"/))) CALL ABORT()
   END subroutine
 
   subroutine pr29606
-! Contributed by Daniel Franke <franke.daniel@gmail.com> 
+! Contributed by Daniel Franke <franke.daniel@gmail.com>
     TYPE foo
       INTEGER :: value
     END TYPE
@@ -34,7 +34,7 @@ contains
   END subroutine
 
   subroutine pr30625
-! Contributed by Paul Thomas <pault@gcc.gnu.org> 
+! Contributed by Paul Thomas <pault@gcc.gnu.org>
     type :: a
       real :: r = 3.14159
       integer :: i = 42
@@ -46,7 +46,7 @@ contains
   end subroutine
 
   subroutine pr30871
-! Contributed by Joost VandeVondele <jv244@cam.ac.uk> 
+! Contributed by Joost VandeVondele <jv244@cam.ac.uk>
     TYPE data
       CHARACTER(LEN=3) :: A
     END TYPE

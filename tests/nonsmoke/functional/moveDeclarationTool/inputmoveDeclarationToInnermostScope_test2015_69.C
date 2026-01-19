@@ -1,11 +1,9 @@
 
-#if 0
-// This fails
-#define MY_MACRO_2(c) c; c; c
-#else
 // This works
-#define MY_MACRO_2(c) c; c; c;
-#endif
+#define MY_MACRO_2(c)                                                          \
+  c;                                                                           \
+  c;                                                                           \
+  c;
 
 void foobar()
    {

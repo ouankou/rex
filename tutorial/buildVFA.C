@@ -26,16 +26,6 @@ public:
     // Filter out compiler generated functions
     if (funcDecl->get_file_info()->isCompilerGenerated() == true)
       returnValue = false;
-#if 0
-      //Filter out prototypes when defining function declarations exist at the same time
-      // This is now necessary since we always generate the first nondefining declaration in ROSE using legacy frontend 4.4.
-      //  We cannot do this since the call graph generator always tries to use first nondefining decl whenenver possible.
-      //  This non-defining decl filter will essentially zero out the call graph.
-      //Liao 1/23/2013
-      if (funcDecl->get_definingDeclaration () != NULL)
-        if (funcDecl->get_firstNondefiningDeclaration() == funcDecl)
-          returnValue = false;
-#endif
     return returnValue;
   }
 };

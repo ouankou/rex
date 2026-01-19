@@ -26,13 +26,5 @@ int foo()
 #include "test2006_33.h"
              ;
 
-#if 0
-  // This will cause the intializer to have a start an end in the current source file!
-  // Remove the "(" and ")" to trigger error to be caught (start and end position in different files).
-     int j = (
-#include "test2006_33.h"
-             );
-#endif
-
      return 0x1110;
    }

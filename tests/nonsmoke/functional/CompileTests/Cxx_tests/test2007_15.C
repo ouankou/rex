@@ -2,7 +2,6 @@
 // This test code demonstrates the required use of name qualification in the
 // base type of a typedef declaration.
 
-#if 1
 struct A
    {
      struct B {};
@@ -51,8 +50,7 @@ y yyy;
 typedef struct Atag3
    {
      Atag3* a;
-   } A3;
-#endif
+} A3;
 
 // Forward declaration of __IO_FILE (name qualification not allowed here).
 // This is a case where we have to search the AST to see if this declaration
@@ -64,7 +62,6 @@ struct _IO_FILE
      int _flags;
    };
 
-#if 1
 namespace X
    {
 // Defining declaration for __IO_FILE
@@ -76,13 +73,9 @@ namespace X
 
 typedef struct X::_IO_FILE namespace__FILE;
 
-#if 1
 // Name qualification is allowed here
 typedef struct _IO_FILE another__FILE;
 
 // Name qualification is allowed here (though we always output a class specifier 
 // in the generated code so this is no different than the previous case).
 typedef _IO_FILE yet_another__FILE;
-#endif
-#endif
-

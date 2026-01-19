@@ -2,7 +2,7 @@
 ! Test the fix for PR31879 in which the concatenation operators below
 ! would cause ICEs because the character lengths were never resolved.
 !
-! Contributed by Vivek Rao <vivekrao4@yahoo.com> 
+! Contributed by Vivek Rao <vivekrao4@yahoo.com>
 !
 module str_mod
   character(3) :: mz(2) = (/"fgh","ijk"/)

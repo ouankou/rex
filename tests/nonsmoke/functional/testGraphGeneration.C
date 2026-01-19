@@ -17,12 +17,6 @@ int main( int argc, char * argv[] )
   // AST consistency tests (optional for users, but this enforces more of our tests)
   // AstTests::runAllTests(project);
 
-#if 0
-  // DQ (11/20/2013): Test using support for multiple files.
-  // Output an optional graph of the AST (just the tree, when active)
-  // generateDOT ( *project );
-     generateDOTforMultipleFile(*project);
-#else
      AstDOTGeneration astdotgen;
   // SgProject & nonconstProject = (SgProject &) project;
      std::string filenamePostfix;
@@ -34,28 +28,19 @@ int main( int argc, char * argv[] )
      ROSE_ASSERT(file != NULL);
 
   // DQ (6/1/2019): Commented out to debug multiple file support.
-     astdotgen.generateWithinFile(file,DOTGeneration<SgNode*>::TOPDOWNBOTTOMUP,filenamePostfix);
-#endif
+     astdotgen.generateWithinFile(
+         file, DOTGeneration<SgNode *>::TOPDOWNBOTTOMUP, filenamePostfix);
 
-  // Output an optional graph of the AST (the whole graph, of bounded complexity, when active)
+     // Output an optional graph of the AST (the whole graph, of bounded
+     // complexity, when active)
      const int MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH = 10000;
      generateAstGraph(project,MAX_NUMBER_OF_IR_NODES_TO_GRAPH_FOR_WHOLE_GRAPH,"");
 
-#if 1
   // DQ (5/24/2021): Add the support to generate graph with header files.
-     generateDOTforMultipleFile(*project,"with_header_files");
-#endif
+     generateDOTforMultipleFile(*project, "with_header_files");
 
-#if 0
-  // DQ (8/20/2013): Added initial support for IR node specific DOT graphs.
-  // std::vector<VariantT> nodeKindList = {V_SgTemplateFunctionDeclaration,V_SgTemplateMemberFunctionDeclaration};
-  // VariantT initializationArray[3] = {V_SgInitializedName,V_SgTemplateFunctionDeclaration,V_SgTemplateMemberFunctionDeclaration};
-     VariantT initializationArray[3] = {V_SgDeclarationStatement,V_SgTemplateFunctionDeclaration,V_SgTemplateMemberFunctionDeclaration};
-     std::vector<VariantT> nodeKindList(initializationArray, initializationArray+1);
-     intermediateRepresentationNodeGraph(project,nodeKindList);
-#endif
-
-  // AST consistency tests (optional for users, but this enforces more of our tests)
+     // AST consistency tests (optional for users, but this enforces more of our
+     // tests)
      AstTests::runAllTests(project);
 
   // regenerate the source code and call the vendor 

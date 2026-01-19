@@ -10,7 +10,7 @@ module test_struct
     module procedure tao_lat_equal_tao_lat
   end interface
   type bunch_params_struct
-    integer n_live_particle          
+    integer n_live_particle
   end type
   type tao_lattice_struct
     type (bunch_params_struct), allocatable :: bunch_params(:)
@@ -21,7 +21,7 @@ module test_struct
     character(200), pointer :: descrip => NULL()
   end type
   type tao_super_universe_struct
-    type (tao_universe_struct), allocatable :: u(:)          
+    type (tao_universe_struct), allocatable :: u(:)
   end type
   type (tao_super_universe_struct), save, target :: s
   contains
@@ -31,10 +31,10 @@ module test_struct
       type (tao_lattice_struct), intent(in) :: lat2
       if (allocated(lat2%bunch_params)) then
         lat1%bunch_params = lat2%bunch_params
-      end if 
+      end if
       if (allocated(lat2%bunch_params2)) then
         lat1%bunch_params2 = lat2%bunch_params2
-      end if 
+      end if
     end subroutine
 end module
 

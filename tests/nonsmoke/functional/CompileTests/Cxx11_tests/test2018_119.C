@@ -15,15 +15,3 @@ void Class1::func3()
           this->func2();
         } );
    }
-
-#if 0
-The issue is that
-           this->func2();
-gets unparsed to:
-        ->  func2 ();
-resulting in the error:
-rose_ROSE-39.cxx(22): error: expected an expression
-        ->  func2 ();
-        ^
-#endif
-

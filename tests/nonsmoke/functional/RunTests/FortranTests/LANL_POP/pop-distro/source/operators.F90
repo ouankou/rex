@@ -66,7 +66,7 @@
 
    integer (int_kind), intent(in) :: k   ! vertical level
 
-   real (r8), dimension(nx_block,ny_block), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(in) :: &
       UX,UY              ! vector field defined at U-points
 
    type (block), intent(in) :: &
@@ -74,7 +74,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(out) :: &
       DIV_OUT            ! divergence at T-points times cell area
 
 !EOP
@@ -102,7 +102,7 @@
 
    do j=2,ny_block
    do i=2,nx_block
-      DIV_OUT(i,j) = p5*(UX(i  ,j  )*DYU(i  ,j  ,bid) +  & 
+      DIV_OUT(i,j) = p5*(UX(i  ,j  )*DYU(i  ,j  ,bid) +  &
                          UX(i  ,j-1)*DYU(i  ,j-1,bid) -  &
                          UX(i-1,j  )*DYU(i-1,j  ,bid) -  &
                          UX(i-1,j-1)*DYU(i-1,j-1,bid) +  &
@@ -114,7 +114,7 @@
    end do
 
    where (k > KMT(:,:,bid)) DIV_OUT = c0
-      
+
 !-----------------------------------------------------------------------
 !EOC
 
@@ -143,7 +143,7 @@
 
    integer (int_kind), intent(in) :: k  ! vertical level
 
-   real (r8), dimension(nx_block,ny_block), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(in) :: &
       F                  ! field defined at T points
 
    type (block), intent(in) :: &
@@ -151,7 +151,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(out) :: &
       GRADX,GRADY        ! gradient in (i,j) direction at U points
 
 !EOP
@@ -171,7 +171,7 @@
 !  compute gradient with a 4 point stencil
 !
 !-----------------------------------------------------------------------
-      
+
    bid = this_block%local_id
 
    GRADX = c0
@@ -179,7 +179,7 @@
 
    do j=1,ny_block-1
    do i=1,nx_block-1
-      GRADX(i,j) = DXUR(i,j,bid)*p5*(F(i+1,j+1) - F(i  ,j) - & 
+      GRADX(i,j) = DXUR(i,j,bid)*p5*(F(i+1,j+1) - F(i  ,j) - &
                                      F(i  ,j+1) + F(i+1,j))
       GRADY(i,j) = DYUR(i,j,bid)*p5*(F(i+1,j+1) - F(i  ,j) + &
                                      F(i  ,j+1) - F(i+1,j))
@@ -190,7 +190,7 @@
       GRADX = c0    ! zero at land points
       GRADY = c0
    endwhere
-      
+
 !-----------------------------------------------------------------------
 !EOC
 
@@ -205,7 +205,7 @@
 
 ! !DESCRIPTION:
 !  This function returns the z-component of the curl of a vector
-!  field defined at U points. 
+!  field defined at U points.
 !
 !  \begin{equation}
 !     \hat{\bf\rm z}\cdot\nabla\times{\bf\rm u} =
@@ -213,8 +213,8 @@
 !     {1\over{\Delta_x}} \delta_y(\Delta_x u_x)
 !  \end{equation}
 !
-!  The result is actually multiplied by cell area and returned at 
-!  T points. 
+!  The result is actually multiplied by cell area and returned at
+!  T points.
 !
 ! !REVISION HISTORY:
 !  same as module
@@ -223,7 +223,7 @@
 
    integer (int_kind), intent(in) :: k  ! vertical level
 
-   real (r8), dimension(nx_block,ny_block), intent(in) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(in) :: &
       UX,UY              ! vector field defined at U-points
 
    type (block), intent(in) :: &
@@ -231,7 +231,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block), intent(out) :: &
       CURL              ! z.curl(Ux,Uy) at T-points times cell area
 
 !EOP
@@ -259,7 +259,7 @@
 
    do j=2,ny_block
    do i=2,nx_block
-      CURL(i,j) = p5*(UY(i  ,j  )*DYU(i  ,j  ,bid) +  & 
+      CURL(i,j) = p5*(UY(i  ,j  )*DYU(i  ,j  ,bid) +  &
                       UY(i  ,j-1)*DYU(i  ,j-1,bid) -  &
                       UY(i-1,j  )*DYU(i-1,j  ,bid) -  &
                       UY(i-1,j-1)*DYU(i-1,j-1,bid) -  &
@@ -271,7 +271,7 @@
    end do
 
    where (k > KMT(:,:,bid)) CURL = c0
-      
+
 !-----------------------------------------------------------------------
 !EOC
 
@@ -302,7 +302,7 @@
 
 ! !OUTPUT PARAMETERS:
 
-   real (r8), dimension(nx_block,ny_block,km), intent(out) :: & 
+   real (r8), dimension(nx_block,ny_block,km), intent(out) :: &
       WWW            ! vertical velocity at T points for all levels
 
 !EOP
@@ -379,7 +379,7 @@
             !*** vertical velocity at top of box from continuity eq.
             !***
 
-            WWW(i,j,k) = wtkb - & 
+            WWW(i,j,k) = wtkb - &
                     (fvn - fvs + fue - fuw)*TAREA_R(i,j,bid)
 
             wtkb = WWW(i,j,k) ! top value becomes bottom for next pass
@@ -422,7 +422,7 @@
                       VVV(i-1,j  ,k)*DXU(i-1,j  ,bid))
             fvs = p5*(VVV(i  ,j-1,k)*DXU(i  ,j-1,bid) + &
                       VVV(i-1,j-1,k)*DXU(i-1,j-1,bid))
-   
+
             !***
             !*** vertical velocity at top of box from continuity eq.
             !***

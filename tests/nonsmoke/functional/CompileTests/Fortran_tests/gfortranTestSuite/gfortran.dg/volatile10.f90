@@ -133,17 +133,17 @@ contains
 end program main
 
 ! { dg-final { scan-tree-dump      "one_test1"   "optimized" } }
-! TODO: dg-final { scan-tree-dump-not  "one_test2_1" "optimized" } 
+! TODO: dg-final { scan-tree-dump-not  "one_test2_1" "optimized" }
 ! { dg-final { scan-tree-dump      "one_test2_2" "optimized" } }
 ! { dg-final { scan-tree-dump      "one_test2_2" "optimized" } }
 ! { dg-final { scan-tree-dump      "two_test2_1" "optimized" } }
 ! { dg-final { scan-tree-dump      "two_test2_2" "optimized" } }
 ! { dg-final { scan-tree-dump      "main_test1_1" "optimized" } }
-! TODO: dg-final { scan-tree-dump-not  "main_test1_2" "optimized" } 
+! TODO: dg-final { scan-tree-dump-not  "main_test1_2" "optimized" }
 ! { dg-final { scan-tree-dump      "main_test1_3" "optimized" } }
 ! { dg-final { scan-tree-dump      "main_test2_1" "optimized" } }
 ! { dg-final { scan-tree-dump      "main_test2_2" "optimized" } }
-! TODO: dg-final { scan-tree-dump-not  "main_test2_3" "optimized" } 
+! TODO: dg-final { scan-tree-dump-not  "main_test2_3" "optimized" }
 ! { dg-final { scan-tree-dump      "main_test2_4" "optimized" } }
 ! { dg-final { cleanup-tree-dump  "optimized" } }
 ! { dg-final { cleanup-modules "impl one two" } }

@@ -16,20 +16,15 @@ public:
         my_BidirectionalIterator();
     };
 
-#if 0
-    typedef my_BidirectionalIterator<NodeIterator, Node, typename StlMap::iterator> my_Super;
-#endif
+    class NodeIterator
+        : public my_BidirectionalIterator<NodeIterator, Node,
+                                          typename StlMap::iterator> {
+      typedef my_BidirectionalIterator<NodeIterator, Node,
+                                       typename StlMap::iterator>
+          Super;
 
-#if 1
-    class NodeIterator: public my_BidirectionalIterator<NodeIterator, Node, typename StlMap::iterator> {
-#if 1
-        typedef                my_BidirectionalIterator<NodeIterator, Node, typename StlMap::iterator> Super;
-#endif
-#if 1
     public:
-        NodeIterator();
-#endif
+      NodeIterator();
     };
-#endif
 };
 

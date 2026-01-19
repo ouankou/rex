@@ -4,10 +4,10 @@
 program test
   implicit none
   type tao_title_struct
-    character(2) justify   
+    character(2) justify
   end type
   type tao_plot_page_struct
-    real shape_height_max 
+    real shape_height_max
     type (tao_title_struct) title ! Comment this line out and the bug goes away.
     real size(2)
   end type

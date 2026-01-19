@@ -1,23 +1,9 @@
 class A
    {
-     public:
-#if 1
-         A();
-#else
-         A() {}
-#endif
+public:
+  A();
    };
 
-#if 1
-A::A()
-   {
-   }
-#endif
+   A::A() {}
 
-int 
-main()
-   {
-     return 0;
-   }
-
-
+   int main() { return 0; }

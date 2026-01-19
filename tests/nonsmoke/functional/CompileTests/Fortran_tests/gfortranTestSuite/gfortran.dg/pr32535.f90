@@ -2,7 +2,7 @@
 !
 ! PR32535: namelist with private items contained in sub-sub-procedure of a module rejected
 !
-! Contributed by Janus Weil <jaydub66@gmail.com> 
+! Contributed by Janus Weil <jaydub66@gmail.com>
 
 module mo
 implicit none

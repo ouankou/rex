@@ -8,7 +8,7 @@
 !     This is allowed in the subroutine
       IMPLICIT DOUBLE PRECISION(A-H,O-Z)
 
-! If there is an implicit statement for the suroutine and there are function parameters, 
+! If there is an implicit statement for the suroutine and there are function parameters,
 ! then they must be explicitly typed or declared after the implicit type statement.
       INTEGER PI,TEST
 

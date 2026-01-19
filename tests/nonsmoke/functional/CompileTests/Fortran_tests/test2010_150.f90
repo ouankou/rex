@@ -1,6 +1,6 @@
 ! P01-forward-ref-derived-type.f90
 ! If a pointer component of a derived type makes a forward reference
-! to another derived type, it is unparsed with type 'integer'. 
+! to another derived type, it is unparsed with type 'integer'.
 
 program p
 
@@ -8,7 +8,7 @@ program p
       type(t2), pointer :: c  ! type of 'c' becomes 'integer'
 
     ! Note that this (below) is not legal code since t2 has not ben seen yet.
-    ! So we only have to deal with the indirect ways in which previously 
+    ! So we only have to deal with the indirect ways in which previously
     ! unseen types can be referenced.
     ! type(t2) :: d  ! type of 'c' becomes 'integer'
    end type

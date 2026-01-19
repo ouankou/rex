@@ -33,8 +33,6 @@ int main (int argc, char *argv[])
   // insert prototype function declaration
   appendStatement (func2);
 
-#if 1
-
   // build a defining function declaration
 
   SgFunctionParameterList * paraList3 = isSgFunctionParameterList(deepCopy(paraList));
@@ -65,16 +63,12 @@ int main (int argc, char *argv[])
   // insert the defining function
   appendStatement (func3);
 
-#endif 
-
-#if 1
   // build nondefining  int foo(int x, float) the 3rd time
   SgFunctionParameterList * paraList4= isSgFunctionParameterList(deepCopy(paraList));
   SgFunctionDeclaration * func4 = buildNondefiningFunctionDeclaration \
      (SgName("foo"),buildVoidType(),paraList4);
-  appendStatement (func4);
-#endif 
- // pop the final scope after all AST insertion
+  appendStatement(func4);
+  // pop the final scope after all AST insertion
   popScopeStack ();
 
   AstTests::runAllTests(project);

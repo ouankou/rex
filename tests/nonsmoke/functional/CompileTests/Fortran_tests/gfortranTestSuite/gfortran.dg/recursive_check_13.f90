@@ -10,7 +10,7 @@
 module m
   implicit none
 contains
-  subroutine f(rec) 
+  subroutine f(rec)
     logical :: rec
     if(rec) then
       call h()

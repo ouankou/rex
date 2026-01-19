@@ -4,15 +4,7 @@ namespace std
      typedef long unsigned int 	MY_size_t;
      typedef long int	MY_ptrdiff_t;
 
-
-     template<typename _Tp>
-     struct MY_less
-        {
-#if 0
-          bool operator()(const _Tp& __x, const _Tp& __y) const
-          { return __x < __y; }
-#endif
-        };
+     template <typename _Tp> struct MY_less {};
    }
 
 namespace std 

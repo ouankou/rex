@@ -8,11 +8,11 @@ void foobar()
    {
   // switch( ({ char * x_ptr; x_ptr; }) == 0L)
   // switch( ({ char* x_ptr; x_ptr; }) == 42)
-#if 1
-     if( ({ char* x_ptr; x_ptr; }) == 42)
-        {
-        }
-#endif
+  if (({
+        char *x_ptr;
+        x_ptr;
+      }) == 42) {
+  }
 
   // switch( ({ char* x_ptr; x_ptr; }) == (void*)0L)
      switch( ({ int x_ptr; x_ptr; }) == 0L)

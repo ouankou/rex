@@ -20,12 +20,8 @@ int foobar()
                   }
 #endif
              }
-        }
-#if 1
-       else
-        {
-        }
-#endif
+     } else {
+     }
 
      return 0;
    }

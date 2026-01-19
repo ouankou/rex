@@ -14,7 +14,7 @@
 
 subroutine test1()
   call test(uec=-1)
-contains 
+contains
   subroutine test(str,uec)
     implicit none
     character*(*), intent(in), optional:: str
@@ -34,7 +34,7 @@ contains
   end subroutine
   complex function trace(a)
     implicit none
-    complex, intent(in),  dimension(0:3,0:3) :: a 
+    complex, intent(in),  dimension(0:3,0:3) :: a
   end function trace
   function matrixMult_C2(a,b) result(matrix)
     implicit none

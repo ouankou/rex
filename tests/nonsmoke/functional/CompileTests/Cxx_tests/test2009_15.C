@@ -7,13 +7,6 @@ class A
           A (double i);
    };
 
-#if 1
-A::A( int i)
-   {
-   }
-#endif
+   A::A(int i) {}
 
-A::A( double i)
-   {
-   }
-
+   A::A(double i) {}

@@ -7,16 +7,9 @@ class X
    {
      public:
        // This is an overloaded non-template member function
-          void foobar(T t){};
-#if 0
-       // This is an overloaded non-template member function
-          void foobar(T t, int i ){};
-#endif
-#if 1
+       void foobar(T t) {};
        // This is an overloaded template member function
-          template <typename S>
-          void foobar(S t){};
-#endif
+       template <typename S> void foobar(S t) {};
    };
 
 void foo()

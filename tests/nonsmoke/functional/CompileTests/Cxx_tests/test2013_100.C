@@ -15,11 +15,8 @@ class QGDItList : public QList
              }
    };
 
-#if 1
 void foobar()
    {
      QGDItList x,y;
      x = y;
-   }
-#endif
-
+}

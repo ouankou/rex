@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! { dg-options "-std=gnu" }
-! This test case exists because gfortran had an error in converting the 
+! This test case exists because gfortran had an error in converting the
 ! expressions for the derived types from iso_c_binding in some cases.
 module c_ptr_tests_10
   use, intrinsic :: iso_c_binding, only: c_ptr, c_null_ptr

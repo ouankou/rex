@@ -6,7 +6,7 @@
 ! Adapted by Janus Weil <janus@gcc.gnu.org>
 
 program bsp
-  implicit none   
+  implicit none
 
   abstract interface
     subroutine up()
@@ -59,4 +59,4 @@ program bsp
       f = 317 + x
     end function
 
-end program bsp 
+end program bsp

@@ -145,14 +145,6 @@ SynNestingDepth LoopLevelProcessing::evaluateSynthesizedAttribute(
   // DQ (1/2/2006): Added support for new attribute interface.
   // printf ("LoopLevelProcessing::evaluateSynthesizedAttribute(): using new
   // attribute interface \n");
-#if 0
-     if (node->get_attribute() == NULL)
-        {
-          AstAttributeMechanism* attributePtr = new AstAttributeMechanism();
-          ROSE_ASSERT(attributePtr != NULL);
-          node->set_attribute(attributePtr);
-        }
-#endif
   // node->attribute.add("loopNestingInfo",nla);
   // node->attribute().add("loopNestingInfo",nla);
   node->addNewAttribute("loopNestingInfo", nla);

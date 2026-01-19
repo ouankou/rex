@@ -42,32 +42,3 @@ class B
                int y;
              }
    };
-
-#if 0
-// This is not legal C++
-class C
-   {
-  // This declaration should result in one defining declaration and NO non-defining declaration.
-     public:
-       // Calling f2 within definition of f1 (andbefore f2 is declared)
-          void f1()
-             {
-            // Builds a non-definingfunction declaration for use by the function call (puts it into the symbol table)
-               f2();
-             }
-
-       // Can't have a namespace inside of a class (I'm happy for that)
-          namespace X
-             {
-            // Reuses the non-defining declaration in construction of the defining declaration of member function
-               void f2();
-                  {
-                    int x;
-                    int y;
-                  }
-             }
-   };
-#endif
-
-
-

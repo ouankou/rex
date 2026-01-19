@@ -1,4 +1,4 @@
-! { dg-do compile } 
+! { dg-do compile }
 ! PR18923 segfault after subroutine name confusion.
 program foo
 contains

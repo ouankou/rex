@@ -11,5 +11,5 @@
       do i = lower, upper, stride
         j = omp_get_thread_num();
         print *, "Iteration ", i, " by thread:", j
-      enddo  
+      enddo
       end

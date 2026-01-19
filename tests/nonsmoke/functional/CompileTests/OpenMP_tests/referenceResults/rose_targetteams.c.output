@@ -1,1 +1,1 @@
-#pragma omp target teams 
+#pragma omp target teams

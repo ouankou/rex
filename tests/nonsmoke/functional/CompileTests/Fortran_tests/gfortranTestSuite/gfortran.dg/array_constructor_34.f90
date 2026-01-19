@@ -24,4 +24,4 @@ program test
        h1 = (/(sum((/(exp(-2*pi*(0,1)*mod(k*L,N)/N)*h2(L),L=0,N-1)/)),k=0,N-1)/)
      end do
    end do
-end program test 
+end program test

@@ -5,10 +5,4 @@ class X
           friend bool operator== (T,int);
    };
 
-#if 1
-template <typename T>
-bool operator== (T a,int b)
-   {
-     return false;
-   }
-#endif
+   template <typename T> bool operator==(T a, int b) { return false; }

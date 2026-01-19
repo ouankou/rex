@@ -823,12 +823,3 @@ SurfaceFacetHashTable::Iterator::Iterator ( SurfaceFacetHashTable& theTable ) :
 {
    m_objCount += 1;
 }
-
-#if 0
-SurfaceFacetHashTable::Iterator::Iterator ( const SurfaceFacetHashTable::Iterator& given ) :
-             GenericHashTable::Iterator(*((GenericHashTable::Iterator*)(&given)))
-{
-   m_objCount += 1;
-}
-#endif
-

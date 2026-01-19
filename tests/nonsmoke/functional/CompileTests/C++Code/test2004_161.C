@@ -54,13 +54,5 @@ void foo()
   // This line works fine!
      _Destroy<A>(a1);
      A **a2 = &a1;
-
-#if 0
- // This line fails since I don't have a name for the "A*" type 
- // unless I generate an alias via a compiler generated typedef
- // However, generating a typedef does not seem to preserve the 
- // source-to-source behavior.
-     _Destroy<A*>(a2);
-#endif
    }
 

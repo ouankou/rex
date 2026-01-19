@@ -33,5 +33,5 @@ contains
     end select
   end function
 end module concrete_inner_product
- 
+
 ! { dg-final { cleanup-modules "concrete_vector concrete_gradient concrete_inner_product" } }

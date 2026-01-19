@@ -1,6 +1,5 @@
 // Only the class and constant integer cases seem to work!
 
-#if 1
 template<class T>
 class TestClassArgument
    {
@@ -19,48 +18,20 @@ class TestClassArgument
 // Note: in instantiated template for foo() it should be uparsed as: "int foo();"
 // Note: the function declaration for the template function foo() should be: "int TestClassArgument<int>::foo()"
 
-template<class T>
-T TestClassArgument<T>::foo ()
-   {
-     return xyz;
-   }
-#endif
+   template <class T> T TestClassArgument<T>::foo() { return xyz; }
 
-#if 0
-template<int T>
-class TestIntegerArgument
-   {
-     public:
-          int xyz;
-          int foo();
-   };
+   // DQ (1/16/2012): Since the template instantiations are not transformed the
+   // template instantion for the templated class should not be output.  To
+   // compound problems, the non-defining member function instantiation
+   // declaration is NOT output which it should be if the class is output.  So
+   // there are two issues to fix! (tomorrow)...
 
-template<int T>
-int TestIntegerArgument<T>::foo ()
-   {
-     return T;
-   }
-#endif
+   int main() {
+     // It seems that only one of these can be turned on at a time!
 
-// DQ (1/16/2012): Since the template instantiations are not transformed the template instantion for the 
-// templated class should not be output.  To compound problems, the non-defining member function instantiation 
-// declaration is NOT output which it should be if the class is output.  So there are two issues to fix! 
-// (tomorrow)...
-
-int main()
-   {
-  // It seems that only one of these can be turned on at a time!
-
-#if 1
      TestClassArgument<int> object1;
      object1.xyz = 7;
      object1.xyz = object1.foo();
-#endif
-
-#if 0
-     TestIntegerArgument<2> object2;
-     object2.xyz = object2.foo();
-#endif
 
      return 0;
    }

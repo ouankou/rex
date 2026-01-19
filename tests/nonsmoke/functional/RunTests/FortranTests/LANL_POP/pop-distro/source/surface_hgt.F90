@@ -16,7 +16,7 @@
 
    use kinds_mod, only: int_kind, r8
    use blocks, only: nx_block, ny_block, block, get_block
-!   use distribution, only: 
+!   use distribution, only:
    use domain, only: nblocks_clinic, blocks_clinic
    use constants, only: grav, c0
    use prognostic, only: max_blocks_clinic, PSURF, GRADPX, GRADPY, newtime,  &
@@ -25,7 +25,7 @@
    use grid, only: sfc_layer_type, sfc_layer_varthick, sfc_layer_rigid,      &
        sfc_layer_oldfree, CALCU, tgrid_to_ugrid
    use time_management, only: mix_pass, dtp
-!   use boundary, only: 
+!   use boundary, only:
    use tavg, only: define_tavg_field, tavg_requested, accumulate_tavg_field
 
    implicit none
@@ -102,21 +102,21 @@
  subroutine dhdt(DH,DHU)
 
 ! !DESCRIPTION:
-!  This routine calculates the change in surface height 
-!  $d\eta/dt$ from surface pressure and including freshwater 
-!  flux for a variable-thickness surface layer 
+!  This routine calculates the change in surface height
+!  $d\eta/dt$ from surface pressure and including freshwater
+!  flux for a variable-thickness surface layer
 !  $(d\eta/dt - F_W)$.
 !
 !  The surface pressure contribution at T points is
-!  \begin{equation}  
+!  \begin{equation}
 !    {{d\eta}\over{dt}} = {{(p^n - p^{n-1})}\over{g\Delta t}}.
-!  \end{equation}  
-!  At U points, the change in surface height is the area-weighted 
+!  \end{equation}
+!  At U points, the change in surface height is the area-weighted
 !  average of its value at surrounding T points.
 !
-!  In the advection routines, the vertical velocity $w = w_t,w_u$ in 
-!  T,U columns is determined by integrating the continuity equation 
-!  $L(1) = 0$ from the surface down to level k.  Depending on surface 
+!  In the advection routines, the vertical velocity $w = w_t,w_u$ in
+!  T,U columns is determined by integrating the continuity equation
+!  $L(1) = 0$ from the surface down to level k.  Depending on surface
 !  layer type, the integration starts with:
 !  \begin{equation}\begin{array}{llll}
 !     w &=& 0               &{\rm (rigid\ lid)}       \\
@@ -132,11 +132,11 @@
 !  where ${\bf U} = (U,V)$ is the barotropic velocity.
 !
 !  On the second pass of a matsuno timestep, the predicted pressure
-!  from the 1st pass is contained in array PSURF(:,:,newtime) 
-!  (PSURF(:,:,curtime) is not updated until the end of the matsuno 
+!  from the 1st pass is contained in array PSURF(:,:,newtime)
+!  (PSURF(:,:,curtime) is not updated until the end of the matsuno
 !  step).
 !
-!  Note that DH, DHU represents $d\eta/dt - F_W$ at 
+!  Note that DH, DHU represents $d\eta/dt - F_W$ at
 !  T, U points in variable thickness surface layer
 !
 ! !REVISION HISTORY:
@@ -156,7 +156,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       iblock             ! block index
 
    type (block) ::       &
@@ -177,7 +177,7 @@
    !$OMP PARALLEL DO PRIVATE(iblock, this_block, WORK)
 
    do iblock = 1,nblocks_clinic
-      this_block = get_block(blocks_clinic(iblock),iblock)  
+      this_block = get_block(blocks_clinic(iblock),iblock)
 
       select case (sfc_layer_type)
 
@@ -247,7 +247,7 @@
 
 !-----------------------------------------------------------------------
 !
-!     calculate dh/dt (or dh/dt - Fw) at U points as the area-weighted 
+!     calculate dh/dt (or dh/dt - Fw) at U points as the area-weighted
 !     average of value at T points.
 !
 !-----------------------------------------------------------------------

@@ -2,7 +2,7 @@ c { dg-do run }
 c  f90-intrinsic-mathematical.f
 c
 c Test Fortran 90 intrinsic mathematical functions - Section 13.10.3 and
-c 13.13 
+c 13.13
 c     David Billinghurst <David.Billinghurst@riotinto.com>
 c
 c Notes:
@@ -25,7 +25,7 @@ c     ASIN - Section 13.13.12
 c     ATAN - Section 13.13.14
       call c_r(ATAN(1.5574077),1.0,'ATAN(real)')
       call c_d(ATAN(1.5574077d0),1.d0,'ATAN(double)')
-      
+
 c     ATAN2 - Section 13.13.15
       call c_r(ATAN2(1.5574077,1.),1.0,'ATAN2(real)')
       call c_d(ATAN2(1.5574077d0,1.d0),1.d0,'ATAN2(double)')
@@ -76,11 +76,11 @@ c     SQRT - Section 13.13.102
       call c_c(SQRT((4.,0.)),(2.,0.),'SQRT(complex)')
       call c_z(SQRT((4.d0,0.)),(2.d0,0.),
      $     'SQRT(complex(kind=8))')
- 
+
 c     TAN - Section 13.13.105
       call c_r(TAN(1.0),1.5574077,'TAN(real)')
       call c_d(TAN(1.d0),1.5574077d0,'TAN(double)')
-     
+
 c     TANH - Section 13.13.106
       call c_r(TANH(1.0),0.76159416,'TANH(real)')
       call c_d(TANH(1.d0),0.76159416d0,'TANH(double)')

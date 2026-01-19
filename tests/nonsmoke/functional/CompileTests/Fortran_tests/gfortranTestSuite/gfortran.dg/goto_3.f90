@@ -20,4 +20,4 @@
       a = a/2
 40 end where   ! { dg-error "not a valid branch target statement" }
  end
- 
+

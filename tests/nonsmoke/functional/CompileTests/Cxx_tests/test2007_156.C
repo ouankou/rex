@@ -2,21 +2,16 @@
 // #line 1 "/home/dquinlan/ROSE/NEW_ROSE/src/ROSETTA/Grammar/grammarClassDeclatationMacros.macro"
 #line 10 ""
 
-enum Cxx_GrammarVariants 
-   { 
-#if 1
+enum Cxx_GrammarVariants {
 #line 100 ""
 
-     ModifierTag, 
+  ModifierTag, 
 #line 1000 "abc3"
-     TOKEN, 
+  TOKEN,
 #line 10000 "abc4"
-#endif
-     Cxx_Grammar_UNKNOWN_GRAMMAR,
-     Cxx_Grammar_LAST_TAG 
-   }; 
-
-
+  Cxx_Grammar_UNKNOWN_GRAMMAR,
+  Cxx_Grammar_LAST_TAG
+};
 
 #line 1 "/home/dquinlan/ROSE/NEW_ROSE/src/ROSETTA/Grammar/grammarClassDeclatationMacros.macro"
 

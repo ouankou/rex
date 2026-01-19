@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! Tests fix for PR25059, which gave and ICE after error message  
+! Tests fix for PR25059, which gave and ICE after error message
 ! Contributed by Joost VandeVondele  <jv244@cam.ac.uk>
 MODULE M1
  TYPE T1

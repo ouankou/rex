@@ -5,7 +5,6 @@ class A
           const int & operator[](int i) const;
    };
 
-#if 1
 class X
    {
      public:
@@ -17,16 +16,4 @@ class X
                     data[z] = 42;
                   }
              }
-   };
-#endif
-
-#if 0
-void
-set()
-   {
-     A data;
-  // int x = data[42];
-     data[0] = 42;
-   }
-#endif
-
+};

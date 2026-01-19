@@ -20,12 +20,7 @@ int TestIntegerArgument<S>::foo ()
   // handle this? WARNING: Using "T" as the name of the template parameter is an
   // error?
 
-#if 1
   // This is not supported well in the new legacy frontend 4.3 connection (need
   // IR support).
   return S;
-#else
-  // This works fine (but is not the original failing code).
-  return 0;
-#endif
 }

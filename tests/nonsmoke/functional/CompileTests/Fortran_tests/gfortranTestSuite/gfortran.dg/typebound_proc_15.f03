@@ -3,7 +3,7 @@
 !
 ! PR 40117: [OOP][F2008] Type-bound procedure: allow list after PROCEDURE
 !
-! Contributed by Janus Weil <janus@gcc.gnu.org> 
+! Contributed by Janus Weil <janus@gcc.gnu.org>
 
 module m
 

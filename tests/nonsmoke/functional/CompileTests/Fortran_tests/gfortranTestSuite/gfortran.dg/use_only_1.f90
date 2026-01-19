@@ -83,8 +83,8 @@ contains
     USE xmod, ONLY: x => x, xfoobar => xfoobar
     USE ymod, ONLY: y => y, yfoobar => yfoobar
     USE ymod
-    if (kind (x) /= 4) call abort ()    
-    if (kind (y) /= 4) call abort ()    
+    if (kind (x) /= 4) call abort ()
+    if (kind (y) /= 4) call abort ()
     if (xfoobar (77) /= 77_4) call abort ()
     if (yfoobar (77) /= 77_4) call abort ()
   end subroutine

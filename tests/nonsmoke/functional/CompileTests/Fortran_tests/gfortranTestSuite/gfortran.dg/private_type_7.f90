@@ -28,7 +28,7 @@ program testit
   use gfcbug68
   integer :: i = 27
   integer :: k
-  
+
   k = foo(i)
   print *, "in the main:", k
 end program testit

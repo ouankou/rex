@@ -12,5 +12,5 @@ t2 => NULL(t2)
 if(associated(t2)) print *, 'NonVolatileNotOptimizedAway'
 end
 ! { dg-final { scan-tree-dump "VolatileNotOptimizedAway" "optimized" } }
-! { dg-final { scan-tree-dump-not "NonVolatileNotOptimizedAway" "optimized" } } 
-! { dg-final { cleanup-tree-dump "optimized" } } 
+! { dg-final { scan-tree-dump-not "NonVolatileNotOptimizedAway" "optimized" } }
+! { dg-final { cleanup-tree-dump "optimized" } }

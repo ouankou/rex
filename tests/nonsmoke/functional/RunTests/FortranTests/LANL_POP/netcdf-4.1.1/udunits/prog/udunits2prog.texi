@@ -77,17 +77,17 @@ If not specified, then the default, compile-time pathname is used.
 When successfully started, the program will print the prompt
 
 @example
-You have: 
+You have:
 @end example
 
 At this point you can exit the program by entering the end-of-file character
 (usually control-D) or continue by entering either a value or a unit.
 (a value comprises a numerical value and a unit.
-For example, 
+For example,
 
 @example
 You have: 80 km/h
-You want: 
+You want:
 @end example
 
 At this point, if you enter a blank line, then the program will assume
@@ -97,7 +97,7 @@ unit-system that it imported on startup.  For example,
 
 @example
 You have: 80 km/h
-You want: 
+You want:
     22.2222222222222 m.s-1
 You have:
 @end example
@@ -117,7 +117,7 @@ You want: mi/h
 You have:
 @end example
 
-The first line after ``@kbd{You want:}'' shows the ``have'' value in the 
+The first line after ``@kbd{You want:}'' shows the ``have'' value in the
 desired ``want'' unit.
 
 The second line shows the transformation between numerical values

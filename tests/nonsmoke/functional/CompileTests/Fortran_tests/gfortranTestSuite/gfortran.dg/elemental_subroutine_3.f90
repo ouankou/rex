@@ -5,7 +5,7 @@
 ! This test is based on
 ! http://home.comcast.net/~kmbtib/Fortran_stuff/elem_assign.f90
 ! as reported by Harald Anlauf <anlauf@gmx.de> in the PR.
-! 
+!
 module elem_assign
    implicit none
    type mytype
@@ -30,7 +30,7 @@ program test
                                   mytype(4000),mytype(50000),&
                                   mytype(1000000)/)
    type(mytype) :: z(2, 3)
-! The original case - dependency between lhs and rhs. 
+! The original case - dependency between lhs and rhs.
    x = x((/2,3,1,4,5,6/))
    if (any(x%x .ne. (/40, 600, 2, 8000, 100000, 2000000/))) call abort ()
 ! Slightly more elborate case with non-trivial array ref on lhs.

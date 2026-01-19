@@ -23,13 +23,5 @@ namespace XXX
 
       } // unnamed namespace, back to XXX
 
-#if 1
-     void foobar( const int def[size] )
-        {
-#if 0
-          AAA abc;
-          abc.isPeriodic = false;
-#endif
-        }
-#endif
+      void foobar(const int def[size]) {}
    } // namespace XXX

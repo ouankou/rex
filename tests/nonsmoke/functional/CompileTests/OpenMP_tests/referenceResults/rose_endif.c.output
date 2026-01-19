@@ -1,2 +1,2 @@
-#pragma omp parallel 
-#pragma omp atomic 
+#pragma omp parallel
+#pragma omp atomic

@@ -18,11 +18,9 @@ struct __is_integer<bool>
   // typedef __true_type __type;
    };
 
-#if 1
 template<>
 struct __is_integer<char>
    {
   // enum { __value = 1 };
   // typedef __true_type __type;
-   };
-#endif
+};

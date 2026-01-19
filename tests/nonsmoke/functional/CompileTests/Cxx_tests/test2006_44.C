@@ -1,12 +1,4 @@
 
-#if 0
-- if use -rose:C_only, ROSE reports a false alarm 
-  ("array containing unknown-sized type") on 
-  "/usr/include/_G_config.h" for the code:
-
-Best regards,
-Lingxiao Jiang
-#endif
 
 // Cong (10/20/2010): Use gconv.h to exercise iconv ABI types.
 #include <gconv.h>

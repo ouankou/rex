@@ -11,7 +11,7 @@ module foo_mod
     generic :: do => doit
   end type
 contains
-  subroutine  doit(a) 
+  subroutine  doit(a)
     class(foo) :: a
   end subroutine
 end module
@@ -23,6 +23,6 @@ contains
     class(foo) :: x
     call x%do()
   end subroutine
-end 
+end
 
 ! { dg-final { cleanup-modules "foo_mod" } }

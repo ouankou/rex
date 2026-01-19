@@ -1,6 +1,6 @@
 ! { dg-do run }
 ! PR 30056 - exceeding the record length was misrepresented as an EOF
-!            on read and ignored on write 
+!            on read and ignored on write
       program main
       integer i,j
       open (10, form="unformatted", access="direct", recl=4)

@@ -1,4 +1,4 @@
-edge 
+edge
 edge SgVariableDeclaration:int color =(0);SgVariableDeclaration:int a =(0);SgVariableDeclaration:int b =(0);SgVariableDeclaration:int c =(0);SgVariableDeclaration:int r =(0); SgIntVal:1 always
 edge SgIntVal:2 SgExprStatement:b++;SgExprStatement:c = a;SgBreakStmt:break; true
 edge SgIntVal:2 SgBreakStmt:break; false

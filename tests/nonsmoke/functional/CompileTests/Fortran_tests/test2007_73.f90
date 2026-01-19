@@ -1,7 +1,7 @@
 PROGRAM ASSOCIATE_EXAMPLE
 
 ! Do loop without expressions
-DO 
+DO
    J = 7
 ENDDO
 

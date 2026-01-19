@@ -8,7 +8,7 @@ C***************************************************
       PRINT *, 'outer begin'
 !$OMP PARALLEL
       PRINT *, 'Hello World!'
-c$omp end parallel 
+c$omp end parallel
       PRINT *, ' outer end'
-c$omp end parallel 
+c$omp end parallel
       END

@@ -4,7 +4,7 @@ c { dg-do compile }
 * Subject: ICE in g77 from egcs-19981109
 * Message-Id: <199811101134.MAA29838@keksy.mchp.siemens.de>
 
-* As of 1998-11-17, fails -O2 -fomit-frame-pointer with 
+* As of 1998-11-17, fails -O2 -fomit-frame-pointer with
 * egcs/gcc/testsuite/g77.f-torture/compile/981117-1.f:8: internal error--insn does not satisfy its constraints:
 * (insn 31 83 32 (set (reg:SF 8 %st(0))
 *         (mult:SF (reg:SF 8 %st(0))

@@ -6,11 +6,9 @@ void foo(int x)
         {
          case abxyz:
            {
-           }
-#if 1
+         }
          default:
             {
-            }
-#endif
+         }
         }
    }

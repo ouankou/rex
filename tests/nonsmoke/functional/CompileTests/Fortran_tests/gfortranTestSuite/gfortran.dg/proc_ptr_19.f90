@@ -30,6 +30,6 @@ CONTAINS
     add = a+b
 
   END FUNCTION add
- 
+
 END PROGRAM test_prog
 

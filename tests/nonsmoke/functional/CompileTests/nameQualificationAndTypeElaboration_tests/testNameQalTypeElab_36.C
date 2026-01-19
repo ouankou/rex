@@ -6,14 +6,6 @@
 namespace rex {
 namespace lambda_test {
 
-#if 0
-namespace X {
-  // These are constants types and need to be initialised
-  typedef int Integer;
-  int _1;
-} // unnamed
-#endif
-   
 namespace {
   // These are constants types and need to be initialised
   typedef int Integer;

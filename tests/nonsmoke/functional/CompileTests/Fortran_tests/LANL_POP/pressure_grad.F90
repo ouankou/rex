@@ -6,7 +6,7 @@
 ! !MODULE: pressure_grad
 !
 ! !DESCRIPTION:
-!  Contains routines for computing the pressure gradient force, 
+!  Contains routines for computing the pressure gradient force,
 !  including the use of pressure averaging.
 !
 ! !REVISION HISTORY:
@@ -16,9 +16,9 @@
 ! !USES:
 
    use kinds_mod, only: log_kind, r8, int_kind
-!   use domain, only: 
+!   use domain, only:
    use blocks, only: nx_block, ny_block, block
-!   use distribution, only: 
+!   use distribution, only:
    use constants, only: grav, p5, delim_fmt, blank_fmt, c1, p25, c2, c0
    use operators, only: grad
    use grid, only: dzw
@@ -53,15 +53,15 @@
 !
 !-----------------------------------------------------------------------
 
-   real (r8), dimension(nx_block,ny_block,max_blocks_clinic) :: & 
-      SUMX, SUMY,        &! incremental k sum of Grad{x,y}(P(k)) 
-      RHOKMX, RHOKMY      ! x,y gradient of density at k-1 level 
+   real (r8), dimension(nx_block,ny_block,max_blocks_clinic) :: &
+      SUMX, SUMY,        &! incremental k sum of Grad{x,y}(P(k))
+      RHOKMX, RHOKMY      ! x,y gradient of density at k-1 level
 
 !-----------------------------------------------------------------------
 !
 !  The factor, r(p), removes the contribution of pressure-
-!  dependent compressibility from the density and thereby 
-!  improves the accuracy of the Boussinesq approximation 
+!  dependent compressibility from the density and thereby
+!  improves the accuracy of the Boussinesq approximation
 !  for the pressure gradient.
 !
 !  See Dukowicz, J. K., 2000: Reduction of Pressure and
@@ -103,7 +103,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) :: & 
+   integer (int_kind) :: &
       k,                 &! vertical level index
       nml_error           ! namelist i/o error flag
 
@@ -186,20 +186,20 @@
  subroutine gradp(k, PKX, PKY, RHOK_OLD, RHOK_CUR, RHOK_NEW, this_block)
 
 ! !DESCRIPTION:
-!  This routine computes the gradient of hydrostatic pressure at 
+!  This routine computes the gradient of hydrostatic pressure at
 !  level $k$:
 !
 !  \begin{eqnarray}
-!     \delta_x \overline{p_k}^y &=& \delta_x \overline{p_s}^y + 
-!           g \sum_{m=1}^k{ {1\over 2}\left[ 
-!           \delta_x \overline{\rho_{m-1}}^y + 
+!     \delta_x \overline{p_k}^y &=& \delta_x \overline{p_s}^y +
+!           g \sum_{m=1}^k{ {1\over 2}\left[
+!           \delta_x \overline{\rho_{m-1}}^y +
 !           \delta_x \overline{\rho_m}^y \right] dz_{m-{1\over 2}} } \\
-!     \delta_y \overline{p_k}^x &=& \delta_y \overline{p_s}^x + 
-!           g \sum_{m=1}^k{ {1\over 2}\left[ 
-!           \delta_y \overline{\rho_{m-1}}^x + 
+!     \delta_y \overline{p_k}^x &=& \delta_y \overline{p_s}^x +
+!           g \sum_{m=1}^k{ {1\over 2}\left[
+!           \delta_y \overline{\rho_{m-1}}^x +
 !           \delta_y \overline{\rho_m}^x \right] dz_{m-{1\over 2}} }
 !  \end{eqnarray}
-!  where $p_k$ is the hydrostatic pressure at level $k$, 
+!  where $p_k$ is the hydrostatic pressure at level $k$,
 !  $\rho_m$ is the density at level $m$, and $\rho_0=\rho_1$ for $k=0$.
 !
 !  This routine must be called successively with $k = 1,2,3,...$
@@ -227,7 +227,7 @@
 !EOP
 !BOC
 !-----------------------------------------------------------------------
-! 
+!
 !  local or common variables:
 !
 !-----------------------------------------------------------------------
@@ -253,7 +253,7 @@
 !  calculate density at new time for pressure averaging
 !
 !-----------------------------------------------------------------------
- 
+
    if (lpressure_avg .and. leapfrogts) then
       RHOAVG = p25*(RHOK_NEW + c2*RHOK_CUR + RHOK_OLD)*bouss(k)
    else
@@ -264,7 +264,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  set Rho(0) = Rho(1) at top level, 
+!  set Rho(0) = Rho(1) at top level,
 !  initialize sum for pressure gradients to zero.
 !
 !-----------------------------------------------------------------------
@@ -289,16 +289,16 @@
 
    PKX  = SUMX(:,:,bid)
    PKY  = SUMY(:,:,bid)
-      
+
 !-----------------------------------------------------------------------
 !
 !  overwrite level k-1 with level k density gradients for next pass
 !
 !-----------------------------------------------------------------------
-       
+
    RHOKMX(:,:,bid) = RHOKX
    RHOKMY(:,:,bid) = RHOKY
-      
+
 !-----------------------------------------------------------------------
 !EOC
 

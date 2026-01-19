@@ -1,6 +1,6 @@
 ! { dg-do compile }
-! Verify that initialization of c_ptr components works.  This is based on 
-! code from fgsl: 
+! Verify that initialization of c_ptr components works.  This is based on
+! code from fgsl:
 ! http://www.lrz-muenchen.de/services/software/mathematik/gsl/fortran/
 ! and tests PR 33395.
 module fgsl
@@ -41,5 +41,5 @@ contains
   end subroutine expb_df
 end module tmod
 
-! { dg-final { cleanup-modules "fgsl tmod" } } 
+! { dg-final { cleanup-modules "fgsl tmod" } }
 

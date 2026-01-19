@@ -41,9 +41,7 @@ class MessageProcessorData {
 private:
 public:
   void addMessage(shared_ptr<MessagePackage const> const &message) {
-#if 1
     messages.push_back(message);
-#endif
   }
 
 private:

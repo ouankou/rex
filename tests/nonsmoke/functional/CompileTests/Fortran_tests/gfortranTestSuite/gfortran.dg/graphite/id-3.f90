@@ -1,4 +1,4 @@
-subroutine gentrs (ptrst, ncls, xmin, dcls, xdont, ndon) 
+subroutine gentrs (ptrst, ncls, xmin, dcls, xdont, ndon)
 do icls1 = 1, ncls
    prec:    do
       select case (isns)

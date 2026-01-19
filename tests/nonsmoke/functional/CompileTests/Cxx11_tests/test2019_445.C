@@ -17,25 +17,10 @@ namespace XYZ
 
 using namespace XYZ;
 
-#if 0
-class MyClass
-   {
-     public:
-          A::Type foobar();
-   };
-#endif
-
 A::Type foobar();
 
 using namespace A;
 using namespace B;
-
-#if 0
-A::Type MyClass::foobar()
-   {
-     return ERROR_MODE;
-   }
-#endif
 
 A::Type foobar()
    {

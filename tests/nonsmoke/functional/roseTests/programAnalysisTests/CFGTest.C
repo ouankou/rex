@@ -129,12 +129,7 @@ int main(int argc, char *argv[]) {
         UseOA(argc, argv) ? TestCFGWrap::OA : TestCFGWrap::ROSE;
     string filename = sageFile->getFileName();
 
-#if 0 // Test harness uses stdout rather than a temporary file
-      string txtname = filename.substr(filename.rfind('/')+1) + ".outx"; 
-      TestCFGWrap_Text txtop(t,txtname);
-#else
     TestCFGWrap_Stdout txtop(t);
-#endif
     // string dotname = string(strrchr(sageFile.getFileName(),'/')+1) + ".dot";
     string dotname = filename.substr(filename.rfind('/') + 1) + ".dot";
     TestCFGWrap_DOT dotop(t);

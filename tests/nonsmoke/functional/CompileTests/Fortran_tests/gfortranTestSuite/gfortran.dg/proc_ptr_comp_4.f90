@@ -54,7 +54,7 @@ module process_libraries
 contains
 
   subroutine process_library_load (prc_lib)
-    use iso_c_binding 
+    use iso_c_binding
     type(process_library_t) :: prc_lib
     type(c_funptr) :: c_fptr
     call c_f_procpointer (c_fptr, prc_lib%write_list)
@@ -103,7 +103,7 @@ end module hard_interactions
   type :: var_entry_t
     procedure(), nopass, pointer :: obs1_int
   end type var_entry_t
-  
+
   type(var_entry_t), pointer :: var
 
   var => var_list_get_var_ptr ()

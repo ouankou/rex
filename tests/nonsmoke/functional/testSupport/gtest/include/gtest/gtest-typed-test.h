@@ -38,52 +38,6 @@
 // list.  You must know which types you want to test with when writing
 // typed tests. Here's how you do it:
 
-#if 0
-
-// First, define a fixture class template.  It should be parameterized
-// by a type.  Remember to derive it from testing::Test.
-template <typename T>
-class FooTest : public testing::Test {
- public:
-  ...
-  typedef std::list<T> List;
-  static T shared_;
-  T value_;
-};
-
-// Next, associate a list of types with the test case, which will be
-// repeated for each type in the list.  The typedef is necessary for
-// the macro to parse correctly.
-typedef testing::Types<char, int, unsigned int> MyTypes;
-TYPED_TEST_CASE(FooTest, MyTypes);
-
-// If the type list contains only one type, you can write that type
-// directly without Types<...>:
-//   TYPED_TEST_CASE(FooTest, int);
-
-// Then, use TYPED_TEST() instead of TEST_F() to define as many typed
-// tests for this test case as you want.
-TYPED_TEST(FooTest, DoesBlah) {
-  // Inside a test, refer to TypeParam to get the type parameter.
-  // Since we are inside a derived class template, C++ requires use to
-  // visit the members of FooTest via 'this'.
-  TypeParam n = this->value_;
-
-  // To visit static members of the fixture, add the TestFixture::
-  // prefix.
-  n += TestFixture::shared_;
-
-  // To refer to typedefs in the fixture, add the "typename
-  // TestFixture::" prefix.
-  typename TestFixture::List values;
-  values.push_back(n);
-  ...
-}
-
-TYPED_TEST(FooTest, HasPropertyA) { ... }
-
-#endif // 0
-
 // Type-parameterized tests are abstract test patterns parameterized
 // by a type.  Compared with typed tests, type-parameterized tests
 // allow you to define the test pattern without knowing what the type
@@ -97,54 +51,6 @@ TYPED_TEST(FooTest, HasPropertyA) { ... }
 // each implementation can easily instantiate the test suite to verify
 // that it conforms to the requirements, without having to write
 // similar tests repeatedly.  Here's an example:
-
-#if 0
-
-// First, define a fixture class template.  It should be parameterized
-// by a type.  Remember to derive it from testing::Test.
-template <typename T>
-class FooTest : public testing::Test {
-  ...
-};
-
-// Next, declare that you will define a type-parameterized test case
-// (the _P suffix is for "parameterized" or "pattern", whichever you
-// prefer):
-TYPED_TEST_CASE_P(FooTest);
-
-// Then, use TYPED_TEST_P() to define as many type-parameterized tests
-// for this type-parameterized test case as you want.
-TYPED_TEST_P(FooTest, DoesBlah) {
-  // Inside a test, refer to TypeParam to get the type parameter.
-  TypeParam n = 0;
-  ...
-}
-
-TYPED_TEST_P(FooTest, HasPropertyA) { ... }
-
-// Now the tricky part: you need to register all test patterns before
-// you can instantiate them.  The first argument of the macro is the
-// test case name; the rest are the names of the tests in this test
-// case.
-REGISTER_TYPED_TEST_CASE_P(FooTest,
-                           DoesBlah, HasPropertyA);
-
-// Finally, you are free to instantiate the pattern with the types you
-// want.  If you put the above code in a header file, you can #include
-// it in multiple C++ source files and instantiate it multiple times.
-//
-// To distinguish different instances of the pattern, the first
-// argument to the INSTANTIATE_* macro is a prefix that will be added
-// to the actual test case name.  Remember to pick unique prefixes for
-// different instances.
-typedef testing::Types<char, int, unsigned int> MyTypes;
-INSTANTIATE_TYPED_TEST_CASE_P(My, FooTest, MyTypes);
-
-// If the type list contains only one type, you can write that type
-// directly without Types<...>:
-//   INSTANTIATE_TYPED_TEST_CASE_P(My, FooTest, int);
-
-#endif // 0
 
 #include "gtest/internal/gtest-port.h"
 

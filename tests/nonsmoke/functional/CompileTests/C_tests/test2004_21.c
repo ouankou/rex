@@ -12,9 +12,6 @@ C).
 
 /* Change 0 to 1 to demonstrate errors in compiling using GNU gcc and/or legacy
  * frontend (in C mode) */
-#if 0
-#define DEMO_ERROR_CASE
-#endif
 
 /* Note that "float" in place of "double", in foo7, is permitted by GNU
    (compiles) but is ignored (as I understand it) since all floats are pushed
@@ -35,7 +32,6 @@ int foo7 (int x, float y, int* z);
 int foo7 (int x, double y, int* z);
 #endif
 
-#if 1
 int foo7 (x,y,z)
    int x;
    float y;
@@ -44,7 +40,6 @@ int foo7 (x,y,z)
      x = 42 + y + *z;
      return x;
    }
-#endif
 
 #ifdef DEMO_ERROR_CASE
 /* Error in GNU gcc: argument `y' doesn't match prototype */
@@ -53,7 +48,6 @@ int foo6 (int x, float y, int* z);
 int foo6 (int x, double y, int* z);
 #endif
 
-#if 1
 int foo6(x,y,z)
    int x;
    double y;
@@ -62,7 +56,6 @@ int foo6(x,y,z)
      x = 42 + y + *z;
      return x;
    }
-#endif
 
 /* Demonstrate prototype with consistant but different 
    declaration than associated function definition 

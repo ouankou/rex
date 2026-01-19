@@ -5,19 +5,11 @@ namespace std {
   template<typename _CharT>
     class numpunct 
     {
-    public:
-#if 1
-      string
-      grouping() const
-#if 1
-       { string s; return s; }
-#else
-       { return ""; }
-#endif
-#else
-      string
-      grouping() const;
-#endif
+  public:
+    string grouping() const {
+      string s;
+      return s;
+    }
     };
 
 }

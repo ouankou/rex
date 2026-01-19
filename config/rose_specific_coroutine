@@ -68,7 +68,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template <typename _Result, typename = void>
    struct __coroutine_traits_impl {};
 
-#if 1
 // DQ (7/26/2020): Fixup header files for legacy frontend.
   template <typename> struct my__void_t {};
   template <typename _Result>
@@ -77,14 +76,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     {
       using promise_type = typename _Result::promise_type;
     };
-#else
-  template <typename _Result>
-    struct __coroutine_traits_impl<_Result,
-				    __void_t<typename _Result::promise_type>>
-    {
-      using promise_type = typename _Result::promise_type;
-    };
-#endif
 
   template <typename _Result, typename...>
     struct coroutine_traits : __coroutine_traits_impl<_Result> {};
@@ -101,7 +92,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       // 17.12.3.1, construct/reset
       constexpr coroutine_handle() noexcept : _M_fr_ptr(0) {}
 
-#if 1
    // DQ (7/26/2020): Fixup header files for legacy frontend.
       typedef void* nullptr_t;
       constexpr coroutine_handle(nullptr_t __h) noexcept
@@ -113,17 +103,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	_M_fr_ptr = nullptr;
 	return *this;
       }
-#else
-      constexpr coroutine_handle(std::nullptr_t __h) noexcept
-	: _M_fr_ptr(__h)
-      {}
-
-      coroutine_handle& operator=(std::nullptr_t) noexcept
-      {
-	_M_fr_ptr = nullptr;
-	return *this;
-      }
-#endif
 
     public:
       // 17.12.3.2, export/import
@@ -165,19 +144,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   }
 
 #if _COROUTINES_USE_SPACESHIP
-#if 1
 // DQ (7/26/2020): Fixup header files for legacy frontend.
   constexpr strong_ordering
   operator<=>(coroutine_handle<> __a, coroutine_handle<> __b) noexcept
   {
- // return std::compare_three_way()(__a.address(), __b.address()); 
+ // return std::compare_three_way()(__a.address(), __b.address());
     return strong_ordering::equal;
   }
-#else
-  constexpr strong_ordering
-  operator<=>(coroutine_handle<> __a, coroutine_handle<> __b) noexcept
-  { return std::compare_three_way()(__a.address(), __b.address()); }
-#endif
 #else
   // These are to enable operation with std=c++14,17.
   constexpr bool operator!=(coroutine_handle<> __a,
@@ -225,7 +198,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	return __self;
       }
 
-#if 1
    // DQ (7/26/2020): Fixup header files for legacy frontend.
       typedef void* nullptr_t;
       coroutine_handle& operator=(nullptr_t) noexcept
@@ -233,13 +205,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	coroutine_handle<>::operator=(nullptr);
 	return *this;
       }
-#else
-      coroutine_handle& operator=(std::nullptr_t) noexcept
-      {
-	coroutine_handle<>::operator=(nullptr);
-	return *this;
-      }
-#endif
 
     // 17.12.3.2, export/import
     constexpr static coroutine_handle from_address(void* __a)
@@ -296,13 +261,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       // 17.12.4.2.3, promise access
       _Promise& promise() const
       {
-#if 1
      // DQ (7/26/2020): Fixup header files for legacy frontend.
         return _Promise();
-#else
-	return *static_cast<_Promise*>(
-	  __builtin_coro_promise(this->_M_fr_ptr, __alignof(_Promise), false));
-#endif
       }
 
       // 17.12.4.2.4, address

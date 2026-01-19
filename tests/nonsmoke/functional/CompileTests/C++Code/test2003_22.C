@@ -1,72 +1,4 @@
 
-#if 0
-typedef unsigned int wint_t;
-
-/* typedef struct */
-typedef struct
-{
-  int __count;
-  union
-  {
-    wint_t __wch;
-    char __wchb[4];
-  } __value;		/* Value so far.  */
-} __mbstate_t;
-
-// problem statements
-typedef struct { } __quad_t; 
-typedef struct { } __u_quad_t; 
-typedef struct { } __fsid_t; 
-typedef struct {} pthread_cond_t; 
-typedef struct {} pthread_condattr_t; 
-typedef struct {} pthread_mutex_t; 
-typedef struct {} pthread_mutexattr_t; 
-typedef struct {} __mbstate_t; 
-typedef struct {} _G_fpos_t; 
-typedef struct {} _G_fpos64_t; 
-
-typedef union {} _G_iconv_t; 
-
-extern struct _IO_FILE_plus _IO_2_1_stdin_;
-extern struct _IO_FILE_plus _IO_2_1_stdout_;
-extern struct _IO_FILE_plus _IO_2_1_stderr_;
-
-struct __gconv_step
-{
-  struct __gconv_loaded_object *__shlib_handle;
-  __const char *__modname;
-
-  int __counter;
-
-  char *__from_name;
-  char *__to_name;
-
-  __gconv_fct __fct;
-  __gconv_init_fct __init_fct;
-  __gconv_end_fct __end_fct;
-
-  /* Information about the number of bytes needed or produced in this
-     step.  This helps optimizing the buffer sizes.  */
-  int __min_needed_from;
-  int __max_needed_from;
-  int __min_needed_to;
-  int __max_needed_to;
-
-  /* Flag whether this is a stateful encoding or not.  */
-  int __stateful;
-
-  void *__data;		/* Pointer to step-local data.  */
-};
-
-struct _IO_marker {
-  struct _IO_marker *_next;
-  struct _IO_FILE *_sbuf;
-  int _pos;
-};
-
-// struct _IO_marker {struct _IO_marker * _next;struct _IO_FILE ;* _sbuf;int _pos;}; 
-
-#else
 
 typedef unsigned int size_t; 
 typedef unsigned char __u_char; 
@@ -272,7 +204,4 @@ extern "C" {char * ctermid(char * __s);}
 extern "C" {void flockfile(FILE * __stream);} 
 extern "C" {int ftrylockfile(FILE * __stream);} 
 extern "C" {void funlockfile(FILE * __stream);} 
-int x; 
-
-#endif
-
+int x;

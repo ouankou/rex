@@ -1,4 +1,4 @@
-the tests extracted from 
+the tests extracted from
 https://github.com/LLNL/dataracebench/tree/master/micro-benchmarks
 
 We plan to add more tests here, later migrate to dataRaceBench
@@ -7,7 +7,7 @@ Goals
 * cover all OpenMP regions
 
 Original file list as of Jan. 29, 2018
-* new tests are added with 2018_ prefix . 
+* new tests are added with 2018_ prefix .
 3mm.h
 3mm-parallel-no.c
 3mm-tile-no.c

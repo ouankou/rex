@@ -26,15 +26,11 @@ namespace std
         {
        // typedef __make_unsigned<_Tp> __unsignedt;
        // typedef typename __unsignedt::__type __unsigned_type;
-#if 1
-          typedef typename __make_unsigned<_Tp>::__type __unsigned_type;
-#else
-          typedef unsigned long __unsigned_type;
-#endif
-          typedef __match_cv_qualifiers<__unsigned_type> __cv_unsigned;
+       typedef typename __make_unsigned<_Tp>::__type __unsigned_type;
+       typedef __match_cv_qualifiers<__unsigned_type> __cv_unsigned;
 
-          public:
-               typedef typename __cv_unsigned::__type __type; // Part of type cycle.
+     public:
+       typedef typename __cv_unsigned::__type __type; // Part of type cycle.
         };
 
      template<typename _Tp>
@@ -48,7 +44,6 @@ namespace std
 // static typename make_unsigned<unsigned long>::type foobar();
 // std::make_unsigned<long>::type foobar();
 
-#if 1
 namespace __gnu_cxx
    {
      template<typename _Tp>
@@ -103,7 +98,6 @@ namespace std{
       // static typename make_unsigned<__difference_type>::type _S_size_type_helper;
       // typedef decltype(_S_size_type_helper) __size_type;
 
-#if 1
    // static typename make_unsigned<__difference_type>::type _S_size_type_helper(...);
    // typedef decltype(_S_size_type_helper((_Alloc*)0)) __size_type;
       typedef typename make_unsigned<__difference_type>::type __size_type;
@@ -112,7 +106,6 @@ namespace std{
 
     //NEEDED:
       typedef __size_type size_type;
-#endif
     };
 
 } // namespace std
@@ -185,5 +178,3 @@ public:
 namespace namespace_1 {
   typedef unordered_map<int>::const_iterator typedef_1;
 }
-
-#endif

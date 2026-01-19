@@ -29,9 +29,6 @@ int main() {
   U u;
   V v;
 
-#if 0
-noexcept(may_throw());
-#else
   std::cout << std::boolalpha << "Is may_throw() noexcept? "
             << noexcept(may_throw()) << '\n'
             << "Is no_throw() noexcept? " << noexcept(no_throw()) << '\n'
@@ -47,5 +44,4 @@ noexcept(may_throw());
             << "Is V(rvalue V) noexcept? " << noexcept(V(std::declval<V>()))
             << '\n'
             << "Is V(lvalue V) noexcept? " << noexcept(V(v)) << '\n';
-#endif
 }

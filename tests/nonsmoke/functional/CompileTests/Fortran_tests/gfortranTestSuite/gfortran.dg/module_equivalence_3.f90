@@ -2,14 +2,14 @@
 ! This checks the fix for PR32103 in which not using one member
 ! of an equivalence group would cause all memory of the equivalence
 ! to be lost and subsequent incorrect referencing of the remaining
-! members. 
+! members.
 !
-! Contributed by Toon Moene <toon@moene.indiv.nluug.nl> 
+! Contributed by Toon Moene <toon@moene.indiv.nluug.nl>
 !
 module aap
-   real :: a(5) = (/1.0,2.0,3.0,4.0,5.0/) 
+   real :: a(5) = (/1.0,2.0,3.0,4.0,5.0/)
    real :: b(3)
-   real :: d(5) = (/1.0,2.0,3.0,4.0,5.0/) 
+   real :: d(5) = (/1.0,2.0,3.0,4.0,5.0/)
    equivalence (a(3),b(1))
 end module aap
 

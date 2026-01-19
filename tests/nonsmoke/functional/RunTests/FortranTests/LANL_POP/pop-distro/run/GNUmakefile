@@ -11,21 +11,21 @@
 #  The bourne shell is safest for gmake
 SHELL = /bin/sh
 #
-#  This script should have been invoked from a working directory created 
+#  This script should have been invoked from a working directory created
 #  by the "setup_run_dir" script.  TOP means this working directory.
 TOP   = .
 #
-#  The compile subdirectory tree is meant to hold clutter that you normally 
-#  wouldn't want to look at, including generated makefiles, preprocessed 
+#  The compile subdirectory tree is meant to hold clutter that you normally
+#  wouldn't want to look at, including generated makefiles, preprocessed
 #  source files, object files, and libraries.
 COMPDIR = compile
 #
-#  LEVEL indicates which directory is being processed.  It is a holdover 
-#  from the time when this makefile system was used to process multilevel 
+#  LEVEL indicates which directory is being processed.  It is a holdover
+#  from the time when this makefile system was used to process multilevel
 #  trees.
 LEVEL = 0
 #
-#  By default, you build optimized code.  To override, add "OPTIMIZE=no" 
+#  By default, you build optimized code.  To override, add "OPTIMIZE=no"
 #  to the gmake command line.
 OPTIMIZE   = yes
 #
@@ -60,7 +60,7 @@ SrcDepDir = SrcDepends
 #----------------------------------------------------------------------------
 
 #  First clean out current list of suffixes, then define them
-.SUFFIXES: 
+.SUFFIXES:
 .SUFFIXES: .o .c .f .f90 .h .F .F90 .C .H .d .e .do .eo
 
 #  Build the name of the one and only library, ./compile/ObjDepends/libpop.a
@@ -68,7 +68,7 @@ SUFFIX = .a
 LIBRARIES = ./$(COMPDIR)/$(ObjDepDir)/lib$(TARGETX)$(SUFFIX)
 #----------------------------------------------------------------------------
 #
-#  Include architecture flags. 
+#  Include architecture flags.
 #
 #----------------------------------------------------------------------------
 ifneq (,$(ARCHDIR))
@@ -84,15 +84,15 @@ endif
 #  Define sources in symbol SRCDIRS.
 #
 #----------------------------------------------------------------------------
-OBJS = 
+OBJS =
 
-#  There are three source directories: this one $(TOP), $(TOP)/../source, and 
+#  There are three source directories: this one $(TOP), $(TOP)/../source, and
 #  the architecture-specific $(TOP)/../$(COMMDIR).
 SRCDIRS = $(TOP)/../source/
 SRCDIRS := $(SRCDIRS) $(TOP)/
 SRCDIRS := $(SRCDIRS) $(TOP)/../$(COMMDIR)/
 
-#  VPATH is the built-in symbol whose value is the path that gmake will 
+#  VPATH is the built-in symbol whose value is the path that gmake will
 #  search for dependencies.
 VPATH = $(SRCDIRS)
 
@@ -154,7 +154,7 @@ endif
 #----------------------------------------------------------------------------
 
 #
-# $(COMPDIR).m is a dummy target which will cause gmake to drop down into 
+# $(COMPDIR).m is a dummy target which will cause gmake to drop down into
 # the compile subdirectory
 all: $(Incl) $(Dincl) $(COMPDIR).m
 	@echo "  GNUmakefile is making target 'all' "
@@ -166,7 +166,7 @@ all: $(Incl) $(Dincl) $(COMPDIR).m
 #
 #----------------------------------------------------------------------------
 
-%.m: 
+%.m:
 	@echo "  GNUmakefile is making $(ARCHDIR) target 'lib' in subdirectory '$*'"
 	@cd $*; $(MAKE) objs LEVEL=0 ARCHDIR=$(ARCHDIR) OPTIMIZE=$(OPTIMIZE)
 
@@ -220,7 +220,7 @@ sources:
 
 $(TARGETX): $(OBJS)
 	@echo "  GNUmakefile is making target '$(TARGETX)'"
-	@$(LD) -o $(TARGETX) $(LDFLAGS) $(OBJS) $(LDLIBS) 
+	@$(LD) -o $(TARGETX) $(LDFLAGS) $(OBJS) $(LDLIBS)
 
 #----------------------------------------------------------------------------
 #

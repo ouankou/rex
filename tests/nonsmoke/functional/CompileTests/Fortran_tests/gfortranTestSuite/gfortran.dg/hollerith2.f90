@@ -8,7 +8,7 @@
        parameter (r = 4hdead)
        parameter (y = 4*r)
        parameter (j = selected_real_kind (i))
-       x = 4H1234 
+       x = 4H1234
        x = sin(r)
        x = x * r
        x = x / r

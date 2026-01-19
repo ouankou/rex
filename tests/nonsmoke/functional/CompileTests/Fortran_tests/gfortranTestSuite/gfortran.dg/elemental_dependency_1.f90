@@ -13,7 +13,7 @@ PROGRAM main
 
   b = a
   CALL double(a(sz-b+1), a) ! { dg-warning "might interfere with actual" }
-  ! Don't check the result, as the above is invalid 
+  ! Don't check the result, as the above is invalid
   ! and might produce unexpected results (overlapping vector subscripts).
 
 
@@ -24,7 +24,7 @@ PROGRAM main
 
   b = a
   CALL double (a+1, a)             ! same range, no temporary
-  IF (ANY(a /= 2*b+2)) CALL abort 
+  IF (ANY(a /= 2*b+2)) CALL abort
 
 
   b = a
@@ -34,22 +34,22 @@ PROGRAM main
 
   b = a
   CALL double(a(1:sz-1), a(2:sz)) ! { dg-warning "might interfere with actual" }
-  ! Don't check the result, as the above is invalid, 
-  ! and might produce unexpected results (arguments overlap). 
+  ! Don't check the result, as the above is invalid,
+  ! and might produce unexpected results (arguments overlap).
 
 
   b = a
   CALL double((a(1:sz-1)), a(2:sz))     ! paren expression, temporary created
 ! { dg-final { scan-tree-dump-times "A\.16\\\[4\\\]" 1 "original" } }
 
-  IF (ANY(a /= (/ b(1), (2*b(i), i=1,sz-1) /))) CALL abort 
+  IF (ANY(a /= (/ b(1), (2*b(i), i=1,sz-1) /))) CALL abort
 
 
   b = a
   CALL double(a(1:sz-1)+1, a(2:sz))     ! op expression, temporary created
 ! { dg-final { scan-tree-dump-times "A\.25\\\[4\\\]" 1 "original" } }
 
-  IF (ANY(a /= (/ b(1), (2*b(i)+2, i=1,sz-1) /))) CALL abort 
+  IF (ANY(a /= (/ b(1), (2*b(i)+2, i=1,sz-1) /))) CALL abort
 
 
   b = a
@@ -61,7 +61,7 @@ PROGRAM main
   CALL double(self(a(1:sz-1)), a(2:sz))  ! function expr, temporary created
 ! { dg-final { scan-tree-dump-times "A\.37\\\[4\\\]" 1 "original" } }
 
-  IF (ANY(a /= (/ b(1), (2*b(i), i=1,sz-1) /))) CALL abort 
+  IF (ANY(a /= (/ b(1), (2*b(i), i=1,sz-1) /))) CALL abort
 
 
 CONTAINS

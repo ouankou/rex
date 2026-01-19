@@ -15,17 +15,6 @@ namespace X
         };
    }
 
-
-#if 0
-// The addition of this call does not confuse C++ or ROSE.
-class A 
-   {
-     public:
-          int x;
-          A(int x);
-   };
-#endif
-
 class B : public X::A
    {
      public:

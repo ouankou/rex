@@ -7,9 +7,9 @@
 !
 module class_mesh
   type mesh
-    real(kind(1.d0)), allocatable :: area(:) 
+    real(kind(1.d0)), allocatable :: area(:)
   end type mesh
-contains 
+contains
   subroutine create_mesh(msh)
     type(mesh), intent(out) :: msh
     allocate(msh%area(10))
@@ -61,9 +61,9 @@ module class_scalar_field
   type scalar_field
     private
     type(field) :: base
-    real(kind(1.d0)), allocatable :: x(:)  
-    real(kind(1.d0)), allocatable :: bx(:) 
-    real(kind(1.d0)), allocatable :: x_old(:) 
+    real(kind(1.d0)), allocatable :: x(:)
+    real(kind(1.d0)), allocatable :: bx(:)
+    real(kind(1.d0)), allocatable :: x_old(:)
   end type scalar_field
 
   interface create_field

@@ -3,7 +3,7 @@
 ! a temporary in the course of evaluating MINLOC or MAXLOC, thereby
 ! setting the start of the scalarizer loop to zero.
 !
-! Contributed by Jens Bischoff <jens.bischoff@freenet.de> 
+! Contributed by Jens Bischoff <jens.bischoff@freenet.de>
 !
 PROGRAM ERR_MINLOC
 

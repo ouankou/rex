@@ -54,7 +54,7 @@ end module foo2_mod
 program testd15
   use foo2_mod
   type(foo2) :: af2
-  class(foo), allocatable :: afab 
+  class(foo), allocatable :: afab
 
   allocate(foo2 :: afab)
   call af2%do()

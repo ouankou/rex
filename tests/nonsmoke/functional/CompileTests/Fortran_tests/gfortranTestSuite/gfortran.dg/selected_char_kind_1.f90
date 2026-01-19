@@ -1,5 +1,5 @@
 ! { dg-do run }
-! 
+!
 ! Checks for the SELECTED_CHAR_KIND intrinsic
 !
   integer, parameter :: ascii = selected_char_kind ("ascii")

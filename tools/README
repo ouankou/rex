@@ -17,7 +17,7 @@ tests/nonsmoke/functional/moveDeclarationTool/
 * rajaChecker:  a C++ source code analysis tool to detect some specialized code patterns.
 The current pattern is called the nodal accumulation pattern. It may be a source of data races.
 
-To use it, install ROSE as usual and rajaChecker will be installed by default. 
+To use it, install ROSE as usual and rajaChecker will be installed by default.
 
 Replace your C++ compiler with rajaChecker and add addtitional compiler options such as
  --report string
@@ -29,7 +29,7 @@ Replace your C++ compiler with rajaChecker and add addtitional compiler options 
              Only used when keep_going is turned on. Specify the report file for storing files the tool cannot process, default is
                         HOME/rajaChecker-failed-files.txt
 
-To list all options, type 
+To list all options, type
    rajaChecker --help
 
 The generated report file will contain text like:
@@ -42,4 +42,4 @@ Found a nodal accumulation loop at line:210
 ------------------------
 /home/liao6/workspace/raja/example/loopsuite.git/loopsuite/StressWorkBaseLoopAlgorithm.cxx
 
-           
+

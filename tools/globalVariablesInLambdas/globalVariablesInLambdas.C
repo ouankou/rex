@@ -100,11 +100,6 @@ Traversal::evaluateInheritedAttribute ( SgNode* astNode, InheritedAttribute inhe
              }
         }
 
-#if 0
-     printf ("evaluateInheritedAttribute(): astNode = %p = %s inheritedAttribute.parentConstraintSatisfied = %s \n",
-          astNode,astNode->class_name().c_str(),inheritedAttribute.parentConstraintSatisfied ? "true" : "false");
-#endif
-
      if (inheritedAttribute.parentConstraintSatisfied == true)
         {
           SgVarRefExp* varRefExp = isSgVarRefExp(astNode);
@@ -214,14 +209,10 @@ main ( int argc, char* argv[] )
   //   1) Use of global variables in all lmbda functions in each function.
   //   2) Use of global variables in all functions (independent of use of lambda functions).
 
-  // DQ (3/30/2017): Use the default that matches the filename.
-#if 0
-     bool onlyInLambdaFunctions = false;
-#else
+     // DQ (3/30/2017): Use the default that matches the filename.
      bool onlyInLambdaFunctions = true;
-#endif
 
-  // Define the traversal
+     // Define the traversal
      Traversal astTraversal(onlyInLambdaFunctions);
 
   // Call the traversal starting at the project (root) node of the AST

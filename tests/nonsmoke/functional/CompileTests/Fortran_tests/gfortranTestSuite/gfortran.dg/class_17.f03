@@ -59,6 +59,6 @@ module b_module
      class(not_yet_defined_type_type),pointer::b_component  ! { dg-error "is a type that has not been declared" }
   end type b_type
 end module b_module
- 
+
 
 ! { dg-final { cleanup-modules "error_stack_module b_module" } }

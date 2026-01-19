@@ -1,20 +1,3 @@
-#if 0
-The following code:
-inline void* operator new(unsigned int, void* __p)  { return __p; }
-
-class MotionItem{
-};
-
-void foo(){
-        void* x;
-        MotionItem* item = new (x)
-          MotionItem();
-};
-gives the following error:
-rose_test2.C: In function `void foo()':
-rose_test2.C:17: error: `xMotionItem' has not been declared
-
-#endif
 
 // The first parameter must be size_t (but size_t is unsigned int, so this works)
 inline void* operator new(unsigned int, void* __p)  { return __p; }

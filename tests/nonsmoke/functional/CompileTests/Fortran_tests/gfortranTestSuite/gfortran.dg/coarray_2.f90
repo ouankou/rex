@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! { dg-options "-fcoarray=single" }
 ! { dg-shouldfail "error stop" }
-! 
+!
 ! Coarray support
 ! PR fortran/18918
 

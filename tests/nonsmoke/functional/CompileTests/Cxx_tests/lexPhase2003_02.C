@@ -8,15 +8,9 @@
 // It is possible that a hack is possible to interpret this and do the right thing later, 
 // this is not clear presently.  I would hate to implement such a hack!
 
-extern "C"
-{
-#if 0
+extern "C" {
 #include "test2001_18A.h"
 }
-#else
-#include "test2001_18A.h"
-}
-#endif
 
 int main ()
    {

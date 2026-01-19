@@ -1,7 +1,7 @@
 c { dg-do run }
 c  intrinsic-unix-bessel.f
 c
-c Test Bessel function intrinsics.  
+c Test Bessel function intrinsics.
 c These functions are only available if provided by system
 c
 c     David Billinghurst <David.Billinghurst@riotinto.com>
@@ -17,7 +17,7 @@ c
       fail = .false.
 
       x = 2.0
-      dx = x 
+      dx = x
       i = 2
       j = i
       k = i

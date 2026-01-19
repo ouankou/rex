@@ -45,7 +45,7 @@ end function
 
 ! This was found whilst investigating => segfault
 subroutine thy_sub (a)
-  interface 
+  interface
     subroutine thy_sub (a) ! { dg-error "enclosing procedure" }
       real a
     end subroutine

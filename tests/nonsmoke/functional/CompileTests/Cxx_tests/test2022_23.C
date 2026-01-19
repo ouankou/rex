@@ -1,14 +1,7 @@
 // Regression test for base-class using-declaration handling.
 
 // Declaration of template class A
-template<typename T, bool value = false>
-class A
-   {
-#if 0
-     public:
-          void foo();
-#endif
-   };
+template <typename T, bool value = false> class A {};
 
 // Specialization of template class A
 template<typename T>
@@ -28,8 +21,4 @@ struct B<T1 T2::*>
   // In earlier behavior this was treated as a type and then resolved to be a
   // class. In newer behavior it is treated as a base-class.
   using A<T1 T2::*>::A;
-#if 0
-     public:
-          void foobar() { A a; }
-#endif
    };

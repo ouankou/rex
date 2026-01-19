@@ -63,23 +63,3 @@ void foobar()
      *pl;
      delete pl;
    }
-
-#if 0
-// Same error for all three: error: specializing member ‘::g<short int>’ requires ‘template<>’ syntax
-
-// Also, the error is that the template instantiations are output.
-class X< short  > *g< short  > (class X< short  > r)
-{
-  return new class X< short  > ((r . i + 1),(r . j + 1));
-}
-
-class X< int  > *g< int  > (class X< int  > r)
-{
-  return new class X< int  > (r . i + 1,r . j + 1);
-}
-
-class X< long  > *g< long  > (class X< long  > r)
-{
-  return new class X< long  > (r . i + 1,r . j + 1);
-}
-#endif

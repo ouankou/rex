@@ -83,7 +83,7 @@ C     Loop indices.
 C     Error handling.
       integer retval
 
-C     Open the file. 
+C     Open the file.
       retval = nf_open(FILE_NAME, nf_nowrite, ncid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
@@ -139,7 +139,7 @@ C     record at a time.
          do lvl = 1, NLVLS
             do lat = 1, NLATS
                do lon = 1, NLONS
-                  if (pres_in(lon, lat, lvl) .ne. SAMPLE_PRESSURE + i) 
+                  if (pres_in(lon, lat, lvl) .ne. SAMPLE_PRESSURE + i)
      $                 stop 2
                   if (temp_in(lon, lat, lvl) .ne. SAMPLE_TEMP + i)
      $                 stop 2
@@ -149,7 +149,7 @@ C     record at a time.
          end do
 C     next record
       end do
-         
+
 C     Close the file. This frees up any internal netCDF resources
 C     associated with the file.
       retval = nf_close(ncid)

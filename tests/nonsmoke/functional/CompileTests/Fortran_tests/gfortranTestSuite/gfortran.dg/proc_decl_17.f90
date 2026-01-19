@@ -18,7 +18,7 @@ module m
          integer(C_INT) x(:)
          character(size(my_message),C_CHAR) abs_fun(size(x))
       end function abs_fun
-   end interface 
+   end interface
 
 contains
 

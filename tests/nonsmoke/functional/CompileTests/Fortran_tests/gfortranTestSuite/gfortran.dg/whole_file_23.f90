@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! 
+!
 ! PR fortran/40873
 !
 ! Failed to compile (segfault) with -fwhole-file.
@@ -21,7 +21,7 @@ module util_mod
   end interface
   contains
   function join (words, sep) result(str)
-! trim and concatenate a vector of character variables, 
+! trim and concatenate a vector of character variables,
 ! inserting sep between them
     character (len=*), intent(in)        :: words(:), sep
     character (len=lensum (words, sep))  :: str
@@ -42,7 +42,7 @@ end module util_mod
 program xjoin
   use util_mod, only: join
   implicit none
-  character (len=5) :: words(2) = (/"two  ","three"/) 
+  character (len=5) :: words(2) = (/"two  ","three"/)
   write (*,"(1x,'words = ',a)") "'"//join (words, "&")//"'"
 end program xjoin
 

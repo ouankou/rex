@@ -24,7 +24,6 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   SgStatement *stmt1 = getFirstStatement(getFirstGlobalScope(project));
 
-#if 1
   // case 1. Calling it with project available, but input file does not exist
   remove(fileName.c_str());
   SgSourceFile *sgfile = isSgSourceFile(buildFile(fileName, fileName, project));
@@ -41,9 +40,7 @@ int main(int argc, char *argv[]) {
     SgStatement *copy = deepCopy<SgStatement>(stmt1);
     appendStatement(copy, isSgScopeStatement(global));
   }
-#endif
 
-#if 1
   // case 2. Calling it without the project parameter and without input file
   remove(fileName2.c_str());
   SgSourceFile *sgfile2 = isSgSourceFile(buildFile(fileName2, fileName2));
@@ -64,9 +61,7 @@ int main(int argc, char *argv[]) {
   AstTests::runAllTests(project2);
   project2->unparse();
   // backend(project2);
-#endif
 
-#if 1
   // case 3. Input File already exists, load it and do some transformation,
   // project exists
   SgSourceFile *sgfile3 =
@@ -82,9 +77,7 @@ int main(int argc, char *argv[]) {
   AstTests::runAllTests(project);
   project->unparse();
   // backend(project);
-#endif
 
-#if 1
   // case 4. Input File already exists, but project does not.
   SgSourceFile *sgfile4 = isSgSourceFile(buildFile(fileName, fileName4));
 
@@ -98,7 +91,6 @@ int main(int argc, char *argv[]) {
   AstTests::runAllTests(project4);
   project4->unparse();
   // backend(project);
-#endif
 
   return 0;
 }

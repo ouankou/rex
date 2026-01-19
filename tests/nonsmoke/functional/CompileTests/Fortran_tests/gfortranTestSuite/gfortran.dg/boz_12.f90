@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! 
+!
 program test
   implicit none
   real x4

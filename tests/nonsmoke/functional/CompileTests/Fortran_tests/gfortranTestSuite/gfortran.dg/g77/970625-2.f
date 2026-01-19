@@ -8,28 +8,28 @@
 * <199706251027.GAA07892@churchy.gnu.ai.mit.edu>
 * X-Mailer: VM 6.30 under Emacs 19.34.1
 * Content-Type: text/plain; charset=US-ASCII
-* 
+*
 * >>>>> "CB" == Craig Burley <burley@gnu.ai.mit.edu> writes:
-* 
+*
 *  CB> but OTOH I'd like to see more problems like this on other
 *  CB> applications, and especially other systems
-* 
+*
 * How about this one: An application that prints "112." on all
 * compilers/platforms I have tested, except with the new g77 on ALPHA (I
 * don't have the new g77 on any other platform here to test)?
-* 
+*
 * Application Appended. Source code courtesy of my boss.....
 * Disclaimer: I do not know the right answer, or even whether there is a
 * single right answer.....
-* 
+*
 * Regards,
-* -- 
+* --
 * ===== R.Hooft@EuroMail.com   http://www.Sander.EMBL-Heidelberg.DE/rob/ ==
 * ==== In need of protein modeling?  http://www.Sander.EMBL-Heidelberg.DE/whatif/
 * Validation of protein structures?  http://biotech.EMBL-Heidelberg.DE:8400/ ====
 * == PGPid 0xFA19277D == Use Linux!  Free Software Rules The World! =============
-* 
-* nu[152]for% cat humor.f      
+*
+* nu[152]for% cat humor.f
       PROGRAM SUBROUTINE
       LOGICAL ELSE IF
       INTEGER REAL, GO TO PROGRAM, WHILE, THEN, END DO
@@ -75,10 +75,10 @@
       END ! IF
 * nu[153]for% f77 humor.f
 * nu[154]for% ./a.out
-*    112.0000    
-* nu[155]for% f90 humor.f  
-* nu[156]for% ./a.out    
-*    112.0000    
-* nu[157]for% g77 humor.f 
-* nu[158]for% ./a.out    
+*    112.0000
+* nu[155]for% f90 humor.f
+* nu[156]for% ./a.out
+*    112.0000
+* nu[157]for% g77 humor.f
+* nu[158]for% ./a.out
 *   40.

@@ -1,4 +1,4 @@
-Outline of C++17 features from: 
+Outline of C++17 features from:
    https://stackoverflow.com/questions/38060436/what-are-the-new-features-in-c17
 
 

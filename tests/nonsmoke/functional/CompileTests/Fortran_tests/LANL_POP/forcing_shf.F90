@@ -463,11 +463,11 @@
                                REGION_MASK(:,:,iblock) < 0)
       end do
       !$OMP END PARALLEL DO
-   
+
    else
       no_region_mask = .true.
    endif
-  
+
 !-----------------------------------------------------------------------
 !
 !  convert interp_type to corresponding integer value.
@@ -1735,7 +1735,7 @@
 !  Reference : two band solar absorption model of Simpson and
 !     Paulson (1977)
 !  Note: below 200m the solar penetration gets set to zero,
-!     otherwise the limit for the exponent ($+/- 5678$) needs to be 
+!     otherwise the limit for the exponent ($+/- 5678$) needs to be
 !     taken care of.
 !
 ! !REVISION HISTORY:

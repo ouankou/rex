@@ -8,5 +8,5 @@ module test_derived_types
     integer(c_int) :: i(100)
     real(c_float) :: x(20)
   end subroutine fu
-  
+
 end module

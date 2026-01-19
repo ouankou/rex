@@ -7,5 +7,5 @@ program test
 
   x = 2
   print *, bug(x)
-  
+
 end program test

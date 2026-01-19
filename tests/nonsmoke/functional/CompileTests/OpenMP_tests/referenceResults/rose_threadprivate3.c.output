@@ -1,4 +1,4 @@
 #pragma omp threadprivate (sum0)
-#pragma omp parallel 
-#pragma omp for 
-#pragma omp critical 
+#pragma omp parallel
+#pragma omp for
+#pragma omp critical

@@ -3,14 +3,6 @@ class X
    {
      public:
           X operator=(const X & x);
-
-#if 0
-          void foo()
-             {
-               X x;
-               operator=(x);
-             }
-#endif
    };
 
 
@@ -20,15 +12,6 @@ class Y : public X
           Y operator=(const Y & y);
           Y operator=(const X & x);
 
-#if 0
-          void foo()
-             {
-               Y y;
-               operator=(y);
-               X x;
-               X::operator=(x);
-             }
-#endif
           void foobar()
              {
                X x;

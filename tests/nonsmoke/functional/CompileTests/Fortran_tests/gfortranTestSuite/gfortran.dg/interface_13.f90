@@ -3,7 +3,7 @@
 ! Test case is that of the reporters
    module files_module
       implicit none
-          integer, parameter :: REAL8 = SELECTED_REAL_KIND(12)      
+          integer, parameter :: REAL8 = SELECTED_REAL_KIND(12)
       save
       private
       interface my_sio_file_read_common

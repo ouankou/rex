@@ -1,7 +1,7 @@
 ! PR libfortran/19678 and PR libfortran/19679
 ! { dg-do run }
       integer i, j
-      
+
       open (10,status='scratch')
       write (10,'(2A)') '1', achar(13)
       rewind (10)

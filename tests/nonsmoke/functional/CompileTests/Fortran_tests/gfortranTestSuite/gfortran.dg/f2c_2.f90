@@ -20,4 +20,4 @@ if (sqrt(c) /= (0., 1.)) call abort ()
 d = c
 if (sqrt(d) /= (0._8, 1._8)) call abort ()
 end
- 
+

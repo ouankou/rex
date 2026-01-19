@@ -12,11 +12,11 @@ C I found a bug in g77 in snapshot 971105
       return
       end
 C ai.f: In subroutine `ai':
-C ai.f:1: 
+C ai.f:1:
 C          subroutine ai (a)
 C                         ^
 C Array `a' at (^) is too large to handle
-C 
+C
 C This happens whenever the lower index boundary is negative and the upper index
-C boundary is '*'. 
+C boundary is '*'.
 

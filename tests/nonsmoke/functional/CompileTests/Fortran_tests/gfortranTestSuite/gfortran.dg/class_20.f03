@@ -23,11 +23,11 @@ contains
   function fun()  ! { dg-bogus "must be dummy, allocatable or pointer.*must be dummy, allocatable or pointer" }
     class(t) :: fun
   end function
- 
+
   function fun2()  ! { dg-bogus "cannot have a deferred shape.*cannot have a deferred shape" }
     integer,dimension(:) :: fun2
   end function
- 
+
   function fun3() result(res)  ! { dg-bogus "is not extensible.*is not extensible" }
     class(s),pointer :: res
   end function

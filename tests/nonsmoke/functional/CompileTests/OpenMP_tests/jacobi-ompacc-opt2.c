@@ -92,15 +92,6 @@ int main(void) {
   m = MSIZE;
   tol = 0.0000000001;
   mits = 5000;
-#if 0 // Not yet support concurrent CPU and GPU threads
-#ifdef _OPENMP
-#pragma omp parallel
-  {
-#pragma omp single
-    printf("Running using %d threads...\n",omp_get_num_threads());
-  }
-#endif
-#endif
   driver();
   return 0;
 }

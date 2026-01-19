@@ -64,22 +64,17 @@ class LayoutParser // : public QXmlDefaultHandler
         typedef void (LayoutParser::*Handler)(const QXmlAttributes &attrib,
                                               MemberListType type,
                                               const QCString &title,
-                                              const QCString &subtitle); 
+                                              const QCString &subtitle);
+
       public:
-#if 1
-     // This falis because the source sequence position for the "const QCString &ss = QCString()" is too far off from the function's source sequence entry.
-        StartElementHandlerMember(LayoutParser *parent, 
-                                  Handler h,
-                                  MemberListType type,
-                                  const QCString &tl,
-                                  const QCString &ss = QCString()
-                                 ) 
-          : m_parent(parent), m_handler(h), m_type(type),
-            m_title(tl), m_subscript(ss) {}
-#else
-     // This works, because the source sequence position is closer to being correct in this case.
-        StartElementHandlerMember(LayoutParser *parent, Handler h,MemberListType type,const QCString &tl,const QCString &ss = QCString()) : m_parent(parent), m_handler(h), m_type(type),m_title(tl), m_subscript(ss) {}
-#endif
+        // This falis because the source sequence position for the "const
+        // QCString &ss = QCString()" is too far off from the function's source
+        // sequence entry.
+        StartElementHandlerMember(LayoutParser *parent, Handler h,
+                                  MemberListType type, const QCString &tl,
+                                  const QCString &ss = QCString())
+            : m_parent(parent), m_handler(h), m_type(type), m_title(tl),
+              m_subscript(ss) {}
         void operator()(const QXmlAttributes &attrib) 
         { 
           (m_parent->*m_handler)(attrib,m_type,m_title,m_subscript); 

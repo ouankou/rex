@@ -5,7 +5,7 @@
 ! The second module and the check that CALCULATION2 is a good actual
 ! argument was added following the fix for PR26374.
 !
-! Contributed by Joost VandeVondele  <jv244@cam.ac.uk> 
+! Contributed by Joost VandeVondele  <jv244@cam.ac.uk>
 !
 MODULE TEST
 INTERFACE CALCULATION
@@ -32,10 +32,10 @@ SUBROUTINE C3(r)
  REAL :: r
 END SUBROUTINE
 END MODULE TEST2
-    
+
 USE TEST
 USE TEST2
-CALL F(CALCULATION)  ! { dg-error "GENERIC procedure" } 
+CALL F(CALCULATION)  ! { dg-error "GENERIC procedure" }
 
 CALL F(CALCULATION2) ! OK because there is a same name specific, but: ! { dg-warning "More actual than formal arguments" }
 END

@@ -75,7 +75,6 @@ template <class T> T mypair<T>::getmax() {
 class Base {
   virtual void f(int);
 };
-#if 1
 struct Derived : Base {
   // this member template does not override B::f
   template <class T> void f(T);
@@ -83,7 +82,6 @@ struct Derived : Base {
   // non-template member override can call the template:
   void f(int i) { f<>(i); }
 };
-#endif
 
 // operator overload
 class Integer {

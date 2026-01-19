@@ -53,7 +53,6 @@ int main()
 
      PNF namespace_function_pointer = X::namespace_function;
 
-#if 1
   // Build a struct object of type "foo"
      foo X;
 
@@ -65,7 +64,6 @@ int main()
 
   // Using "v": Access through a pointer of type "foo"
      Xptr->*v = 42;
-#endif
 
      return 0;
    }

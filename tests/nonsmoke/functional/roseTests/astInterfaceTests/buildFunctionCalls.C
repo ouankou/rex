@@ -18,17 +18,9 @@ int main(int argc, char *argv[]) {
   //  we only deal with one file here, so only one global scope
   SgGlobal *globalscope = getFirstGlobalScope(project);
   // insert header
-#if 0
- // using MiddleLevelRewrite to parse the content of the header, but NOT working!
-  MiddleLevelRewrite::ScopeIdentifierEnum scope = MidLevelCollectionTypedefs::StatementScope;
-  MiddleLevelRewrite::PlacementPositionEnum locationInScope = \
-	MidLevelCollectionTypedefs::TopOfCurrentScope;
-  MiddleLevelRewrite::insert(globalscope,"#include \"inputbuildFunctionCalls.h\" \n",scope,locationInScope);
-#else
 
   insertHeader("inputbuildFunctionCalls.h", PreprocessingInfo::after, false,
                globalscope);
-#endif
   // go to the function body
   SgFunctionDeclaration *mainFunc = findMain(project);
   SgBasicBlock *body = mainFunc->get_definition()->get_body();
@@ -46,7 +38,6 @@ int main(int argc, char *argv[]) {
   // insert before the last return statement
   SgStatement *lastStmt = getLastStatement(topScopeStack());
   insertStatement(lastStmt, callStmt1);
-#if 1
   // int bar(double); it is declared in a header
   // build call stmt then
   SgType *return_type_2 = buildIntType();
@@ -59,7 +50,6 @@ int main(int argc, char *argv[]) {
   // insert before the last return statement
   lastStmt = getLastStatement(topScopeStack());
   insertStatement(lastStmt, callStmt_2);
-#endif
   popScopeStack();
   AstPostProcessing(project);
 

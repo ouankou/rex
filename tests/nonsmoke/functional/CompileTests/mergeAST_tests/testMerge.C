@@ -59,7 +59,6 @@ int main(int argc, char **argv) {
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != NULL);
 
-#if 1
   // Run AST tests (takes a while on large ASTs, so we sometime skip this for
   // some phases of development on AST merge)
   if (SgProject::get_verbose() > 0)
@@ -69,34 +68,6 @@ int main(int argc, char **argv) {
 
   if (SgProject::get_verbose() > 0)
     printf("Running AST tests in main(): DONE \n");
-#else
-  printf("Skipping AST tests in main(): DONE \n");
-#endif
-
-#if 0
-     printf ("Exiting after running AstTests::runAllTests() \n");
-     ROSE_ASSERT(false);
-#endif
-
-#if 0
-  // Output an optional graph of the AST (just the tree, when active)
-     printf ("Generating a dot file... (ROSE Release Note: turn off output of dot files before committing code) \n");
-  // DQ (12/22/2019): Call multi-file version (instead of generateDOT() function).
-  // generateAstGraph(project, 2000);
-  // generateDOT ( *project );
-     generateDOTforMultipleFile(*project);
-#endif
-
-#if 0
-  // DQ (6/14/2007): Added support for simpler function for generation of graph of whole AST.
-     const int MAX_NUMBER_OF_IR_NODES = 10000;
-     generateAstGraph( project, MAX_NUMBER_OF_IR_NODES, "_beforeMerge" );
-#endif
-
-#if 0
-  // Output performance information for ROSE plus performance information for AST Merge
-     AstPerformance::generateReport();
-#endif
 
   if (SgProject::get_verbose() > 0)
     printf("Program Terminated Normally! \n");

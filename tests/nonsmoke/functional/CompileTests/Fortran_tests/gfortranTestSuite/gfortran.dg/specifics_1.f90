@@ -19,7 +19,7 @@ function diff(a,b)
   logical diff
   diff = (abs(a - b) .gt. 0.00001)
 end function
-end subroutine 
+end subroutine
 
 subroutine test_z(fn, val, res)
   double complex fn
@@ -32,7 +32,7 @@ function diff(a,b)
   logical diff
   diff = (abs(a - b) .gt. 0.00001)
 end function
-end subroutine 
+end subroutine
 
 subroutine test_cabs(fn, val, res)
   real fn, res
@@ -45,7 +45,7 @@ function diff(a,b)
   logical diff
   diff = (abs(a - b) .gt. 0.00001)
 end function
-end subroutine 
+end subroutine
 
 subroutine test_cdabs(fn, val, res)
   double precision fn, res
@@ -58,7 +58,7 @@ function diff(a,b)
   logical diff
   diff = (abs(a - b) .gt. 0.00001)
 end function
-end subroutine 
+end subroutine
 
 subroutine test_r(fn, val, res)
   real fn
@@ -253,7 +253,7 @@ program specifics
   call test_r (exp, 1.0, exp(1.0))
   call test_r2 (sign, 1.0, -2.0, sign(1.0, -2.0))
   call test_r2 (amod, 3.5, 2.0, amod(3.5, 2.0))
-  
+
   call test_d (dabs, -1d0, abs(-1d0))
   call test_d (dint, 1.7d0, 1d0)
   call test_d (dnint, 1.7d0, 2d0)

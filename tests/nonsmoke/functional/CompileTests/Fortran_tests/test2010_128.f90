@@ -5,7 +5,7 @@
  ! This is an array of characters (correct)
  ! character, dimension(30) :: fname2
 
- ! These will represent the same type internally (SgTypeString, both are correct) 
+ ! These will represent the same type internally (SgTypeString, both are correct)
    character*30 fname2
    character(len=30) :: fname3
 

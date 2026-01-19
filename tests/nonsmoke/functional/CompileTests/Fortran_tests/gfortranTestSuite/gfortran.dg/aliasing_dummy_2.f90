@@ -12,13 +12,13 @@ program test
     integer :: i
     integer :: j
   end type
-  type (t) :: a(5) 
+  type (t) :: a(5)
   call sub('one',a%j)
   call sub('two',a%i)
 contains
   subroutine sub(key,a)
-    integer, intent(out)    :: a(:) 
+    integer, intent(out)    :: a(:)
     character(*),intent(in) :: key
-    a = 1   
+    a = 1
   end subroutine
-end program 
+end program

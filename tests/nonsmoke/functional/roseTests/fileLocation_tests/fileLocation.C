@@ -74,61 +74,11 @@ bool isLink(const string &name) {
     }
   }
 
-#if 0
-     char fn[]="temp.file";
-     char ln[]="temp.link";
-     int file_descriptor;
-
-     if ((file_descriptor = creat(fn, S_IWUSR)) < 0)
-          perror("creat() error");
-       else
-        {
-          close(file_descriptor);
-          if (link(fn, ln) != 0)
-               perror("link() error");
-            else
-             {
-               if (lstat(ln, &info) != 0)
-                    perror("lstat() error");
-                 else
-                  {
-                    puts("lstat() returned:");
-                    printf("  inode:   %d\n",   (int) info.st_ino);
-                    printf(" dev id:   %d\n",   (int) info.st_dev);
-                    printf("   mode:   %08x\n",       info.st_mode);
-                    printf("  links:   %d\n",         info.st_nlink);
-                    printf("    uid:   %d\n",   (int) info.st_uid);
-                    printf("    gid:   %d\n",   (int) info.st_gid);
-                  }
-               unlink(ln);
-             }
-          unlink(fn);
-        }
-#else
-
-#if 0
-  // DQ (1/30/2010): Skip the display of output (too much for testing).
-     printf ("testing for link: name = %s \n",name.c_str());
-#endif
-
   if (lstat(name.c_str(), &info) != 0) {
     // perror("lstat() error");
     printf("lstat() error for name = %s \n", name.c_str());
   } else {
-#if 0
-       // DQ (1/30/2010): Skip the display of output (too much for testing).
-          puts("lstat() returned:");
-          printf("  inode:   %d\n",   (int) info.st_ino);
-          printf(" dev id:   %d\n",   (int) info.st_dev);
-          printf("   mode:   %08x\n",       info.st_mode);
-          printf("  links:   %d\n",         info.st_nlink);
-          printf("    uid:   %d\n",   (int) info.st_uid);
-          printf("    gid:   %d\n",   (int) info.st_gid);
-
-          printf ("S_ISLNK(info.mode) = %s \n",S_ISLNK(info.st_mode) ? "true" : "false");
-#endif
   }
-#endif
 
   // The minimum is to have a single link for a normal file.
   // bool isALink = info.st_nlink > 1;
@@ -162,22 +112,10 @@ bool islinkOrPartOfLinkedDirectory(const string &fileName) {
     // string directoryName = dirname(name.c_str());
     string directoryName = dirname(c_version);
 
-#if 0
-       // DQ (1/30/2010): Skip the display of output (too much for testing).
-          printf ("directoryName = %s \n",directoryName.c_str());
-#endif
-
     fileNameWithPath = directoryName;
 
     directoryIsLink = isLink(directoryName);
   }
-
-#if 0
-     if (directoryIsLink == true)
-        {
-          printf ("This file is classified as a link because it is in a linked directory \n");
-        }
-#endif
 
   if (directoryIsLink == false) {
     fileIsLink = isLink(fileName);
@@ -186,13 +124,6 @@ bool islinkOrPartOfLinkedDirectory(const string &fileName) {
     // our purposes in filename classification)
     fileIsLink = true;
   }
-
-#if 0
-     if (fileIsLink == true)
-        {
-          printf ("This file is classified as a link \n");
-        }
-#endif
 
   return fileIsLink;
 }
@@ -276,13 +207,8 @@ void visitorTraversal::visit(SgNode *n) {
     // "compilerGenerated")
     if (previousFilenames.count(filename) == 0 &&
         filename != "compilerGenerated") {
-#if 0
-            // DQ (1/30/2010): Skip the display of output (too much for testing).
-               printf ("\n\nfilename = %s statement = %s \n",filename.c_str(),n->class_name().c_str());
-#endif
 
       FileNameClassification classification;
-#if 1
       // string sourceDir =
       // "/home/dquinlan/ROSE/roseCompileTree-g++4.2.2/developersScratchSpace/Dan/fileLocation_tests";
 
@@ -296,17 +222,11 @@ void visitorTraversal::visit(SgNode *n) {
       // string sourceDir = "/home/dquinlan/ROSE";
 
       classification = classifyFileName(filename, sourceDir, libs);
-#else
-      string home = "/home/dquinlan/";
-      string sourceDir = home + "ROSE/svn-rose/";
-      classification = classifyFileName("/usr/include/stdio.h", sourceDir);
-#endif
 
       FileNameLocation fileTypeClassification = classification.getLocation();
       FileNameLibrary libraryClassification = classification.getLibrary();
       // int pathEditDistance = classification.getDistanceFromSourceDirectory();
 
-#if 1
       if (fileTypeClassification == FILENAME_LOCATION_UNKNOWN) {
         cerr << "filename: " << filename << " is classified as UNKNOWN!!!"
              << endl;
@@ -317,19 +237,7 @@ void visitorTraversal::visit(SgNode *n) {
              << getName(fileTypeClassification) << " " << libraryClassification
              << endl;
       }
-#endif
 
-#if 0
-            // DQ (1/30/2010): Skip the display of output (too much for testing).
-	       printf ("\n\nfilename: %s\n", filename.c_str());
-               printf ("fileTypeClassification = %d \n",fileTypeClassification);
-               display(fileTypeClassification,"Display fileTypeClassification");
-               printf ("libraryClassification  = %s \n",libraryClassification.c_str());
-               //display(libraryClassification,"Display libraryClassification");
-               printf ("pathEditDistance       = %d \n",pathEditDistance);
-#endif
-
-#if 1
       // DQ (1/30/2010): Skip the display of output (too much for testing).
 
       // Some of our tests explicitly build a link and this tests that it is
@@ -346,7 +254,6 @@ void visitorTraversal::visit(SgNode *n) {
       // ROSE_ASSERT(islinkOrPartOfLinkedDirectory(filename) == false);
       //  printf ("islinkOrPartOfLinkedDirectory(filename) = %s
       //  \n",islinkOrPartOfLinkedDirectory(filename) ? "true" : "false");
-#endif
       previousFilenames.insert(filename);
     }
 

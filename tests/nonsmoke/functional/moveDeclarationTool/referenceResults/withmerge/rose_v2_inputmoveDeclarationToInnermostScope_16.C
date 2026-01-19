@@ -1,10 +1,7 @@
 // Test from Dan: demonstrate preprocessing info. attached
 
-void foobar(int e)
-{
-#if 1
+void foobar(int e) {
   int x;
-#endif
   if (e) {
     int d = 0;
   }

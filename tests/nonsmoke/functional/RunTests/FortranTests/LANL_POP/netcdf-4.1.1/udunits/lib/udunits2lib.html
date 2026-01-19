@@ -46,8 +46,8 @@ WITH THE ACCESS, USE OR PERFORMANCE OF THIS SOFTWARE.
   pre.smallexample { font-size:smaller }
   pre.smalllisp    { font-size:smaller }
   span.sc    { font-variant:small-caps }
-  span.roman { font-family:serif; font-weight:normal; } 
-  span.sansserif { font-family:sans-serif; font-weight:normal; } 
+  span.roman { font-family:serif; font-weight:normal; }
+  span.sansserif { font-family:sans-serif; font-weight:normal; }
 --></style>
 </head>
 <body>
@@ -109,7 +109,7 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#dir">(dir)</a>
 
 <h2 class="unnumbered">UDUNITS-2</h2>
 
-<p>This manual describes how to use the C API of the UDUNITS-2 library. 
+<p>This manual describes how to use the C API of the UDUNITS-2 library.
 Among other things, the library allows C code to obtain a binary
 representation of a unit of a physical quantity, to
 operate on such units, and to convert numeric values between compatible
@@ -149,7 +149,7 @@ WITH THE ACCESS, USE OR PERFORMANCE OF THIS SOFTWARE.
 
 <ul class="menu">
 <li><a accesskey="1" href="#Synopsis">Synopsis</a>:             Terse usage display
-<li><a accesskey="2" href="#Why">Why</a>:                  What's a unit package good for? 
+<li><a accesskey="2" href="#Why">Why</a>:                  What's a unit package good for?
 <li><a accesskey="3" href="#Unit_002dSystems">Unit-Systems</a>:         Explanation of unit-systems and how to get one
 <li><a accesskey="4" href="#Parsing">Parsing</a>:              Converting strings into units
 <li><a accesskey="5" href="#Syntax">Syntax</a>:               Syntax for string representation of units
@@ -263,20 +263,20 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
 
 <h2 class="chapter">2 What's a Unit Package Good For?</h2>
 
-<p>The existance of a software package is justified by what you can do with it. 
+<p>The existance of a software package is justified by what you can do with it.
 The three main things you can do with the UDUNIT-2 package are
      <ol type=1 start=1>
-<li><a href="#Value-Conversion">Convert numeric values between compatible units</a>. 
+<li><a href="#Value-Conversion">Convert numeric values between compatible units</a>.
 <li>Convert a string representation of a unit into a binary one &mdash; enabling
-the programatic manipulation of units. 
+the programatic manipulation of units.
 There are three ways to do this:
           <ul>
-<li><a href="#Extracting">Get the unit</a> from a <a href="#unit_002dsystem">unit-system</a>. 
+<li><a href="#Extracting">Get the unit</a> from a <a href="#unit_002dsystem">unit-system</a>.
 This requires that
-you know the unit's name or symbol and that the unit is in a unit-system. 
-<li><a href="#Parsing">Parse a string representation of the unit into its binary representation</a>. 
-This requires that the string be parsable by <code><a href="#ut_005fparse_0028_0029">ut_parse()</a></code>. 
-<li><a href="#Operations">Explicity construct the unit from subcomponent units using unit operations</a>. 
+you know the unit's name or symbol and that the unit is in a unit-system.
+<li><a href="#Parsing">Parse a string representation of the unit into its binary representation</a>.
+This requires that the string be parsable by <code><a href="#ut_005fparse_0028_0029">ut_parse()</a></code>.
+<li><a href="#Operations">Explicity construct the unit from subcomponent units using unit operations</a>.
 </ul>
      <li><a href="#Formatting">Convert a binary representation of a unit into a string</a> &mdash;
 enabling the printing and storing of units in a human-readable form.
@@ -300,9 +300,9 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
 <p><a name="index-unit_002dsystem-2"></a><a name="index-system-of-units-3"></a>
 A unit-system is a set of units that are all defined in terms of the same
 set of
-<a name="index-unit_002c-base-4"></a><a name="index-base-unit-5"></a>base units. 
+<a name="index-unit_002c-base-4"></a><a name="index-base-unit-5"></a>base units.
 In the SI system of units, for example, the base units are the
-meter, kilogram, second, ampere, kelvin, mole, and candela. 
+meter, kilogram, second, ampere, kelvin, mole, and candela.
 (For definitions of these base units, see
 <a href="http://physics.nist.gov/cuu/Units/current.html">http://physics.nist.gov/cuu/Units/current.html</a>.)
 
@@ -314,11 +314,11 @@ unit-systems always compare unequal.
    <p>There are several categories of operations on unit-systems:
 
 <ul class="menu">
-<li><a accesskey="1" href="#Obtaining">Obtaining</a>:    How to obtain a unit-system. 
-<li><a accesskey="2" href="#Extracting">Extracting</a>:   Getting a unit from a unit-system. 
-<li><a accesskey="3" href="#Adding">Adding</a>:       Adding new units to a unit-system. 
-<li><a accesskey="4" href="#Prefixes">Prefixes</a>:     Add new unit-prefixes to a unit-system. 
-<li><a accesskey="5" href="#Misc">Misc</a>:         Miscelaneous unit-system operations. 
+<li><a accesskey="1" href="#Obtaining">Obtaining</a>:    How to obtain a unit-system.
+<li><a accesskey="2" href="#Extracting">Extracting</a>:   Getting a unit from a unit-system.
+<li><a accesskey="3" href="#Adding">Adding</a>:       Adding new units to a unit-system.
+<li><a accesskey="4" href="#Prefixes">Prefixes</a>:     Add new unit-prefixes to a unit-system.
+<li><a accesskey="5" href="#Misc">Misc</a>:         Miscelaneous unit-system operations.
 </ul>
 
 <div class="node">
@@ -333,28 +333,28 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Unit_002dSystems">Unit-Systems</a>
 
 <p><a name="index-database_002c-unit_002c-obtaining-predefined-6"></a><a name="index-unit-database_002c-obtaining-predefined-7"></a><a name="index-unit_002dsystem_002c-obtaining-predefined-8"></a><a name="index-units_002c-obtaining-predefined-9"></a><a name="index-g_t_0040code_007but_005fread_005fxml_0028_0029_007d_002c-discussion-of-10"></a>Typically, you would obtain a unit-system of predefined units by reading
 the default unit database using <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml()</a></code>
-with a <code>NULL</code> pathname argument. 
-If this doesn't quite match your needs, then there are alternatives. 
+with a <code>NULL</code> pathname argument.
+If this doesn't quite match your needs, then there are alternatives.
 Together with the typical solution, the means for obtaining a useful
 unit-system are (in order of increasing difficulty):
 
      <ul>
-<li>Obtain the default unit-system using <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml</a>(NULL)</code>. 
+<li>Obtain the default unit-system using <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml</a>(NULL)</code>.
 <li>Copy and customize the unit database and then
 call <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml()</a></code> with the pathname of the customized
-database to obtain a customized unit-system. 
+database to obtain a customized unit-system.
 <li>Same as either of the above but then adding new units to the unit-system using
 <code><a href="#ut_005fnew_005fbase_005funit_0028_0029">ut_new_base_unit()</a></code> and
-<code><a href="#ut_005fnew_005fdimensionless_005funit_0028_0029">ut_new_dimensionless_unit()</a></code>. 
+<code><a href="#ut_005fnew_005fdimensionless_005funit_0028_0029">ut_new_dimensionless_unit()</a></code>.
 <li>Same as the above but also deriving new units using
 <a href="#Operations">unit operations</a>
 and then adding them to the unit-system using
-<a href="#Mapping">unit mapping</a>. 
+<a href="#Mapping">unit mapping</a>.
 <li>Same as the above but starting with an empty unit-system obtained from
 <code><a href="#ut_005fnew_005fsystem_0028_0029">ut_new_system()</a></code>,
 in which case you will definitely have to start with
 <code><a href="#ut_005fnew_005fbase_005funit_0028_0029">ut_new_base_unit()</a></code> and
-<code><a href="#ut_005fnew_005fdimensionless_005funit_0028_0029">ut_new_dimensionless_unit()</a></code>. 
+<code><a href="#ut_005fnew_005fdimensionless_005funit_0028_0029">ut_new_dimensionless_unit()</a></code>.
 </ul>
 
    <p>You should pass every unit-system pointer to <code><a href="#ut_005ffree_005fsystem_0028_0029">ut_free_system()</a></code>
@@ -365,31 +365,31 @@ when you no longer need the corresponding unit-system.
 <div class="defun">
 &mdash; Function: <code>ut_system*</code> <b>ut_read_xml</b> <code>(const char* </code><var>path</var><code>)</code><var><a name="index-ut_005fread_005fxml-11"></a></var><br>
 <blockquote><p>Reads the XML-formatted unit-database specified by <var>path</var>
-and returns the corresponding unit-sytem. 
+and returns the corresponding unit-sytem.
 If <var>path</var> is <code>NULL</code>, then the pathname specified by the
 environment variable <code>UDUNITS2_XML_PATH</code> is used if set; otherwise,
 the compile-time pathname of the installed, default, unit database is
-used. 
+used.
 You should pass the returned pointer to <code>ut_free_system()</code> when you
-no longer need the unit-system. 
+no longer need the unit-system.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_OPEN_ARG</code><dd><var>path</var> is non-<code>NULL</code> but the file couldn't be opened. 
-See <code>errno</code> for the reason. 
+<dt><code>UT_OPEN_ARG</code><dd><var>path</var> is non-<code>NULL</code> but the file couldn't be opened.
+See <code>errno</code> for the reason.
 <br><dt><code>UT_OPEN_ENV</code><dd><var>path</var> is <code>NULL</code> and environment variable
-<code>UDUNITS2_XML_PATH</code> is set but the file couldn't be opened. 
-See <code>errno</code> for the reason. 
+<code>UDUNITS2_XML_PATH</code> is set but the file couldn't be opened.
+See <code>errno</code> for the reason.
 <br><dt><code>UT_OPEN_DEFAULT</code><dd><var>path</var> is <code>NULL</code>, environment variable
 <code>UDUNITS2_XML_PATH</code> is unset, and the installed, default, unit
-database couldn't be opened. 
-See <code>errno</code> for the reason. 
-<br><dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code>. 
-<br><dt><code>UT_PARSE</code><dd>The database file couldn't be parsed. 
+database couldn't be opened.
+See <code>errno</code> for the reason.
+<br><dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code>.
+<br><dt><code>UT_PARSE</code><dd>The database file couldn't be parsed.
 </dl>
         </p></blockquote></div>
 
@@ -397,19 +397,19 @@ See <code>errno</code> for the reason.
 
 <div class="defun">
 &mdash; Function: <code>ut_system*</code> <b>ut_new_system</b> <code>(void)</code><var><a name="index-ut_005fnew_005fsystem-12"></a></var><br>
-<blockquote><p>Creates and returns a new unit-system. 
+<blockquote><p>Creates and returns a new unit-system.
 On success, the unit-system will be empty
-except for the dimensionless unit one. 
+except for the dimensionless unit one.
 You should pass the returned pointer to <code>ut_free_system()</code> when you
-no longer need the unit-system. 
+no longer need the unit-system.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return the following:
 
           <dl>
-<dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code>. 
+<dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code>.
 </dl>
         </p></blockquote></div>
 
@@ -425,12 +425,12 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Unit_002dSystems">Unit-Systems</a>
 <h3 class="section">3.2 Extracting Units from a Unit-System</h3>
 
 <p><strong>NOTE:</strong> This section covers low-level access to the indidual units of a
-<a href="#unit_002dsystem">unit-system</a>. 
+<a href="#unit_002dsystem">unit-system</a>.
 General parsing of arbitrary unit specifications is coverted in
 the section <a href="#Parsing">Parsing</a>.
 
    <p>A <a href="#unit_002dsystem">unit-system</a> contains mappings from identifiers to units (and
-vice versa). 
+vice versa).
 Consequently, once you have a unit-system, you can easily
 obtain a unit for which you know the name or symbol using
 the function <code><a href="#ut_005fget_005funit_005fby_005fname_0028_0029">ut_get_unit_by_name()</a></code> or
@@ -441,15 +441,15 @@ the function <code><a href="#ut_005fget_005funit_005fby_005fname_0028_0029">ut_g
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_get_unit_by_name</b> <code>(const ut_system* </code><var>system</var><code>, const char* </code><var>name</var><code>)</code><var><a name="index-ut_005fget_005funit_005fby_005fname-15"></a></var><br>
 <blockquote><p>Returns the unit to which <var>name</var> maps from the unit-system referenced by
-<var>system</var> or <code>NULL</code> if no such unit exists. 
-Name comparisons are case-insensitive. 
+<var>system</var> or <code>NULL</code> if no such unit exists.
+Name comparisons are case-insensitive.
 If this function returns <code>NULL</code>, then
 <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return
 one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd><var>name</var> doesn't map to a unit of <var>system</var>. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>name</var> is <code>NULL</code>. 
+<dt><code>UT_SUCCESS</code><dd><var>name</var> doesn't map to a unit of <var>system</var>.
+<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>name</var> is <code>NULL</code>.
 </dl>
         </p></blockquote></div>
 
@@ -458,15 +458,15 @@ one of the following:
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_get_unit_by_symbol</b> <code>(const ut_system* </code><var>system</var><code>, const char* </code><var>symbol</var><code>)</code><var><a name="index-ut_005fget_005funit_005fby_005fsymbol-18"></a></var><br>
 <blockquote><p>Returns the unit to which <var>symbol</var> maps from the unit-system referenced by
-<var>system</var> or <code>NULL</code> if no such unit exists. 
-Symbol comparisons are case-sensitive. 
+<var>system</var> or <code>NULL</code> if no such unit exists.
+Symbol comparisons are case-sensitive.
 If this function returns <code>NULL</code>, then
 <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return
 one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd><var>symbol</var> doesn't map to a unit of <var>system</var>. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>symbol</var> is <code>NULL</code>. 
+<dt><code>UT_SUCCESS</code><dd><var>symbol</var> doesn't map to a unit of <var>system</var>.
+<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>symbol</var> is <code>NULL</code>.
 </dl>
         </p></blockquote></div>
 
@@ -475,13 +475,13 @@ one of the following:
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_get_dimensionless_unit_one</b> <code>(const ut_system* </code><var>system</var><code>)</code><var><a name="index-ut_005fget_005fdimensionless_005funit_005fone-19"></a></var><br>
 <blockquote><p>Returns the dimensionless unit one of the unit-system referenced by
-<var>system</var>. 
+<var>system</var>.
 While not necessary, the returned pointer may be passed to <code>ut_free()</code>
-when you no longer need the unit. 
+when you no longer need the unit.
 If <var>system</var> is <code>NULL</code>, then this function writes an error-message
 using <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
-Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return <code>UT_BAD_ARG</code>. 
+and returns <code>NULL</code>.
+Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return <code>UT_BAD_ARG</code>.
 </p></blockquote></div>
 
 <div class="node">
@@ -501,9 +501,9 @@ add any new units to a unit-system.
 
    <p>Because you get units via their names or symbols, adding a unit to a
 unit-system actually means mapping one or more identifiers (i.e., names
-or symbols) to the unit. 
+or symbols) to the unit.
 Thereafter, you can use <code><a href="#ut_005fget_005funit_005fby_005fname_0028_0029">ut_get_unit_by_name()</a></code> and
-<code><a href="#ut_005fget_005funit_005fby_005fsymbol_0028_0029">ut_get_unit_by_symbol()</a></code> to retrieve the unit. 
+<code><a href="#ut_005fget_005funit_005fby_005fsymbol_0028_0029">ut_get_unit_by_symbol()</a></code> to retrieve the unit.
 The mapping of identifiers to units is covered <a href="#Mapping">here</a>.
 
    <p>Having said that, it is possible to create a new base or dimensionless
@@ -516,44 +516,44 @@ it later by identifier.
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_new_base_unit</b> <code>(ut_system* </code><var>system</var><code>)</code><var><a name="index-ut_005fnew_005fbase_005funit-23"></a></var><br>
-<blockquote><p>Creates and adds a new base-unit to the unit-system referenced by <var>system</var>. 
-This function returns the new base-unit. 
+<blockquote><p>Creates and adds a new base-unit to the unit-system referenced by <var>system</var>.
+This function returns the new base-unit.
 You should pass the returned pointer to <code>ut_free()</code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>system</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
+<dt><code>UT_BAD_ARG</code><dd><var>system</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
 </dl>
         If you use <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml()</a></code>, then you should not normally need to call this
-function. 
+function.
 </p></blockquote></div>
 
    <p><a name="ut_005fnew_005fdimensionless_005funit_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_new_dimensionless_unit</b> <code>(ut_system* </code><var>system</var><code>)</code><var><a name="index-ut_005fnew_005fdimensionless_005funit-24"></a></var><br>
-<blockquote><p>Creates and adds a new dimensionless-unit to the unit-system referenced by <var>system</var>. 
-This function returns the new dimensionless-unit. 
+<blockquote><p>Creates and adds a new dimensionless-unit to the unit-system referenced by <var>system</var>.
+This function returns the new dimensionless-unit.
 You should pass the returned pointer to <code>ut_free()</code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>system</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
+<dt><code>UT_BAD_ARG</code><dd><var>system</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
 </dl>
         If you use <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml()</a></code>, then you should not normally need to call this
-function. 
+function.
 </p></blockquote></div>
 
 <div class="node">
@@ -581,16 +581,16 @@ add any new prefixes to a unit-system.
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_add_name_prefix</b> <code>(ut_system* </code><var>system</var><code>, const char* </code><var>name</var><code>, double </code><var>value</var><code>)</code><var><a name="index-ut_005fadd_005fname_005fprefix-28"></a></var><br>
 <blockquote><p>Adds the name-prefix <var>name</var> with the value <var>value</var>
-to the unit-system <var>system</var>. 
-A name-prefix is something like &ldquo;mega&rdquo; or &ldquo;milli&rdquo;. 
-Comparisons between name-prefixes are case-insensitive. 
+to the unit-system <var>system</var>.
+A name-prefix is something like &ldquo;mega&rdquo; or &ldquo;milli&rdquo;.
+Comparisons between name-prefixes are case-insensitive.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>name</var> is <code>NULL</code>, or <var>value</var> is <code>0</code>. 
-<br><dt><code>UT_EXISTS</code><dd><var>name</var> already maps to a different value. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>name</var> is <code>NULL</code>, or <var>value</var> is <code>0</code>.
+<br><dt><code>UT_EXISTS</code><dd><var>name</var> already maps to a different value.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
 </dl>
         </p></blockquote></div>
 
@@ -599,16 +599,16 @@ This function returns one of the following:
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_add_symbol_prefix</b> <code>(ut_system* </code><var>system</var><code>, const char* </code><var>symbol</var><code>, double </code><var>value</var><code>)</code><var><a name="index-ut_005fadd_005fsymbol_005fprefix-29"></a></var><br>
 <blockquote><p>Adds the symbol-prefix <var>symbol</var> with the value <var>value</var>
-to the unit-system <var>system</var>. 
-A symbol-prefix is something like &ldquo;M&rdquo; or &ldquo;m&rdquo;. 
-Comparisons between symbol-prefixes are case-sensitive. 
+to the unit-system <var>system</var>.
+A symbol-prefix is something like &ldquo;M&rdquo; or &ldquo;m&rdquo;.
+Comparisons between symbol-prefixes are case-sensitive.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>symbol</var> is <code>NULL</code>, or <var>value</var> is <code>0</code>. 
-<br><dt><code>UT_EXISTS</code><dd><var>symbol</var> already maps to a different value. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>symbol</var> is <code>NULL</code>, or <var>value</var> is <code>0</code>.
+<br><dt><code>UT_EXISTS</code><dd><var>symbol</var> already maps to a different value.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
 </dl>
         </p></blockquote></div>
 
@@ -628,7 +628,7 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Unit_002dSystems">Unit-Systems</a>
 &mdash; Function: <code>void</code> <b>ut_free_system</b> <code>(ut_system* </code><var>system</var><code>)</code><var><a name="index-ut_005ffree_005fsystem-30"></a></var><br>
 <blockquote><p>Frees the unit-system referenced by <var>system</var>.  All unit-to-identifier and
 identifier-to-unit mappings are removed.  Use of <code>system</code> after this
-function returns results in undefined behavior. 
+function returns results in undefined behavior.
 </p></blockquote></div>
 
    <p><a name="ut_005fset_005fsecond_0028_0029"></a>
@@ -636,15 +636,15 @@ function returns results in undefined behavior.
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_set_second</b> <code>(const ut_unit* </code><var>second</var><code>)</code><var><a name="index-ut_005fset_005fsecond-31"></a></var><br>
 <blockquote><p>Sets the &ldquo;second&rdquo; unit of a unit-system.  This function must be called before
-the first call to <code>ut_offset_by_time()</code> for a unit in the same unit-system. 
+the first call to <code>ut_offset_by_time()</code> for a unit in the same unit-system.
 <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml()</a></code> calls this function if the
-unit-system it's reading contains a unit named &ldquo;second&rdquo;. 
+unit-system it's reading contains a unit named &ldquo;second&rdquo;.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>The &ldquo;second&rdquo; unit of <var>system</var> was successfully set. 
-<br><dt><code>UT_EXISTS</code><dd>The &ldquo;second&rdquo; unit of <var>system</var> is set to a different unit. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>second</var> is <code>NULL</code>. 
+<dt><code>UT_SUCCESS</code><dd>The &ldquo;second&rdquo; unit of <var>system</var> was successfully set.
+<br><dt><code>UT_EXISTS</code><dd>The &ldquo;second&rdquo; unit of <var>system</var> is set to a different unit.
+<br><dt><code>UT_BAD_ARG</code><dd><var>second</var> is <code>NULL</code>.
 </dl>
         </p></blockquote></div>
 
@@ -661,7 +661,7 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
 
 <p><a name="index-converting-values-between-units-32"></a><a name="index-unit-conversion-33"></a>
 You can convert numeric values in one unit to equivalent values in
-another, compatible unit by means of a converter. 
+another, compatible unit by means of a converter.
 For example
 
 <pre class="example">     #include &lt;udunits2.h&gt;
@@ -671,7 +671,7 @@ For example
          cv_converter* converter = ut_get_converter(from, to);
          double       fromValue = ...;
          double       toValue = cv_convert_double(converter, fromValue);
-     
+
          cv_free(converter);
 </pre>
    <p>The converter API is declared in the header-file <code>&lt;converter.h&gt;</code>,
@@ -683,17 +683,17 @@ which is automatically included by the UDUNITS-2 header-file
 <div class="defun">
 &mdash; Function: <code>int</code> <b>ut_are_convertible</b> <code>(const ut_unit* </code><var>unit1</var><code>, uconst t_unit* </code><var>unit2</var><code>)</code><var><a name="index-ut_005fare_005fconvertible-34"></a></var><br>
 <blockquote><p>Indicates if numeric values in unit <var>unit1</var> are convertible to numeric
-values in unit <var>unit2</var> via <a href="#ut_005fget_005fconverter_0028_0029">ut_get_converter()</a>. 
-In making this determination, dimensionless units are ignored. 
+values in unit <var>unit2</var> via <a href="#ut_005fget_005fconverter_0028_0029">ut_get_converter()</a>.
+In making this determination, dimensionless units are ignored.
 This function returns a non-zero value if conversion is possible;
 otherwise, <code>0</code> is returned and <a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a> will return one
 of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit1</var> or <var>unit2</var> is <code>NULL</code>. 
-<br><dt><code>UT_NOT_SAME_SYSTEM</code><dd><var>unit1</var> and <var>unit2</var> belong to different <a href="#unit_002dsystem">unit-system</a>s. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit1</var> or <var>unit2</var> is <code>NULL</code>.
+<br><dt><code>UT_NOT_SAME_SYSTEM</code><dd><var>unit1</var> and <var>unit2</var> belong to different <a href="#unit_002dsystem">unit-system</a>s.
 <br><dt><code>UT_SUCCESS</code><dd>Conversion between the units is not possible (e.g., <var>unit1</var> refers
-to a meter and <var>unit2</var> refers to a kilogram. 
+to a meter and <var>unit2</var> refers to a kilogram.
 </dl>
         </p></blockquote></div>
 
@@ -702,21 +702,21 @@ to a meter and <var>unit2</var> refers to a kilogram.
 <div class="defun">
 &mdash; Function: <code>cv_converter*</code> <b>ut_get_converter</b> <code>(ut_unit* const </code><var>from</var><code>, ut_unit* const </code><var>to</var><code>)</code><var><a name="index-ut_005fget_005fconverter-35"></a></var><br>
 <blockquote><p>Creates and returns a converter of numeric values in the <var>from</var> unit
-to equivalent values in the <var>to</var> unit. 
+to equivalent values in the <var>to</var> unit.
 You should pass the returned pointer to <code>cv_free()</code> when you
-no longer need the converter. 
+no longer need the converter.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>from</var> or <var>to</var> is <code>NULL</code>. 
-<br><dt><code>UT_NOT_SAME_SYSTEM</code><dd>The units <var>from</var> and <var>to</var> don't belong to the same unit-system. 
+<dt><code>UT_BAD_ARG</code><dd><var>from</var> or <var>to</var> is <code>NULL</code>.
+<br><dt><code>UT_NOT_SAME_SYSTEM</code><dd>The units <var>from</var> and <var>to</var> don't belong to the same unit-system.
 <br><dt><code>UT_MEANINGLESS</code><dd>The units belong to the same unit-system but conversion between them is
-meaningless (e.g., conversion between seconds and kilograms is meaningless). 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
+meaningless (e.g., conversion between seconds and kilograms is meaningless).
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
 </dl>
         </p></blockquote></div>
 
@@ -725,7 +725,7 @@ meaningless (e.g., conversion between seconds and kilograms is meaningless).
 <div class="defun">
 &mdash; Function: <code>float</code> <b>cv_convert_float</b> <code>(const cv_converter* </code><var>converter</var><code>, const float </code><var>value</var><code>)</code><var><a name="index-cv_005fconvert_005ffloat-36"></a></var><br>
 <blockquote><p>Converts the single floating-point value <var>value</var> and
-returns the new value. 
+returns the new value.
 </p></blockquote></div>
 
    <p><a name="cv_005fconvert_005fdouble_0028_0029"></a>
@@ -733,7 +733,7 @@ returns the new value.
 <div class="defun">
 &mdash; Function: <code>double</code> <b>cv_convert_double</b> <code>(const cv_converter* </code><var>converter</var><code>, const double </code><var>value</var><code>)</code><var><a name="index-cv_005fconvert_005fdouble-37"></a></var><br>
 <blockquote><p>Converts the single double-precision value <var>value</var> and
-returns the new value. 
+returns the new value.
 </p></blockquote></div>
 
    <p><a name="cv_005fconvert_005ffloats_0028_0029"></a>
@@ -742,8 +742,8 @@ returns the new value.
 &mdash; Function: <code>float*</code> <b>cv_convert_floats</b> <code>(const cv_converter* </code><var>converter</var><code>, const float* </code><var>in</var><code>, size_t </code><var>count</var><code>, float* </code><var>out</var><code>)</code><var><a name="index-cv_005fconvert_005ffloats-38"></a></var><br>
 <blockquote><p>Converts the <var>count</var> floating-point values starting at <var>in</var>, writing
 the new values starting at <var>out</var> and, as a convenience,
-returns <var>out</var>. 
-The input and output arrays may overlap or be identical. 
+returns <var>out</var>.
+The input and output arrays may overlap or be identical.
 </p></blockquote></div>
 
    <p><a name="cv_005fconvert_005fdoubles_0028_0029"></a>
@@ -752,17 +752,17 @@ The input and output arrays may overlap or be identical.
 &mdash; Function: <code>double*</code> <b>cv_convert_doubles</b> <code>(const cv_converter* </code><var>converter</var><code>, const double* </code><var>in</var><code>, size_t </code><var>count</var><code>, double* </code><var>out</var><code>)</code><var><a name="index-cv_005fconvert_005fdoubles-39"></a></var><br>
 <blockquote><p>Converts the <var>count</var> double-precision values starting at <var>in</var>, writing
 the new values starting at <var>out</var> and, as a convenience,
-returns <var>out</var>. 
-The input and output arrays may overlap or be identical. 
+returns <var>out</var>.
+The input and output arrays may overlap or be identical.
 </p></blockquote></div>
 
    <p><a name="cv_005ffree_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>void</code> <b>cv_free</b> <code>(cv_converter* </code><var>conv</var><code>)</code><var>;<a name="index-cv_005ffree-40"></a></var><br>
-<blockquote><p>Frees resources associated with the converter referenced by <var>conv</var>. 
-You should call this function when you no longer need the converter. 
-Use of <var>conv</var> upon return results in undefined behavior. 
+<blockquote><p>Frees resources associated with the converter referenced by <var>conv</var>.
+You should call this function when you no longer need the converter.
+Use of <var>conv</var> upon return results in undefined behavior.
 </p></blockquote></div>
 
 <div class="node">
@@ -786,7 +786,7 @@ its binary representation:
          ut_system*   unitSystem = <a href="#ut_005fread_005fxml_0028_0029">ut_read_xml(NULL)</a>;
          const char* string = "kg.m2/s3";
          ut_unit*     watt = <a href="#ut_005fparse_0028_0029">ut_parse</a>(unitSystem, string, UT_ASCII);
-     
+
          if (watt == NULL) {
              /* Unable to parse string. */
          }
@@ -800,17 +800,17 @@ its binary representation:
 &mdash; Function: <code>ut_unit*</code> <b>ut_parse</b> <code>(const ut_system* </code><var>system</var><code>, const char* </code><var>string</var><code>, ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005fparse-43"></a></var><br>
 <blockquote><p>Returns the binary unit representation corresponding to the string unit
 representation <var>string</var> in the character-set <var>encoding</var> using the
-unit-system <var>system</var>. 
+unit-system <var>system</var>.
 <var>string</var> must have no leading or trailing whitespace (see
-<code><a href="#ut_005ftrim_0028_0029">ut_trim()</a></code>). 
+<code><a href="#ut_005ftrim_0028_0029">ut_trim()</a></code>).
 If an error occurs, then this function returns <code>NULL</code> and
 <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>string</var> is <code>NULL</code>. 
-<br><dt><code>UT_SYNTAX</code><dd><var>string</var> contained a syntax error. 
-<br><dt><code>UT_UNKNOWN</code><dd><var>string</var> contained an unknown identifier. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code> for the reason. 
+<dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>string</var> is <code>NULL</code>.
+<br><dt><code>UT_SYNTAX</code><dd><var>string</var> contained a syntax error.
+<br><dt><code>UT_UNKNOWN</code><dd><var>string</var> contained an unknown identifier.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code> for the reason.
 </dl>
         </p></blockquote></div>
 
@@ -820,7 +820,7 @@ If an error occurs, then this function returns <code>NULL</code> and
 &mdash; Function: <code>size_t</code> <b>ut_trim</b> <code>(char* </code><var>string</var><code>, ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005ftrim-44"></a></var><br>
 <blockquote><p>Removes all leading and trailing whitespace from the NUL-terminated string
 <var>string</var>.  Returns <var>string</var>, which is modified if it contained leading
-or trailing whitespace. 
+or trailing whitespace.
 </p></blockquote></div>
 
 <div class="node">
@@ -836,8 +836,8 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
 
 <p><a name="index-unit-syntax-45"></a><a name="index-syntax_002c-unit-46"></a>
 For the most part, the UDUNITS-2 package follows the syntax for unit-strings
-promulgated by the US National Institute for Standards and Technology (NIST). 
-Details, of which, can be found at <a href="http://physics.nist.gov/cuu/Units/index.html">http://physics.nist.gov/cuu/Units/index.html</a>. 
+promulgated by the US National Institute for Standards and Technology (NIST).
+Details, of which, can be found at <a href="http://physics.nist.gov/cuu/Units/index.html">http://physics.nist.gov/cuu/Units/index.html</a>.
 The one general exception to this is the invention of a syntax for
 &ldquo;offset&rdquo;-units (e.g., the definition of the degree Celsius is &ldquo;K @
 273.15&rdquo;).
@@ -900,35 +900,35 @@ and words printed &lt;thusly&gt; indicate lexical elements.
 <pre class="example">     <em>Unit-Spec: one of</em>
              nothing
              <em>Shift-Spec</em>
-     
+
      <em>Shift-Spec: one of</em>
              <em>Product-Spec</em>
              <em>Product-Spec</em> SHIFT REAL
              <em>Product-Spec</em> SHIFT INT
              <em>Product-Spec</em> SHIFT <em>Timestamp</em>
-     
+
      <em>Product-Spec: one of</em>
              <em>Power-Spec</em>
              <em>Product-Spec</em> <em>Power-Spec</em>
              <em>Product-Spec</em> MULTIPLY <em>Power-Spec</em>
              <em>Product-Spec</em> DIVIDE <em>Power-Spec</em>
-     
+
      <em>Power-Spec: one of</em>
              <em>Basic-Spec</em>
              <em>Basic-Spec</em> INT
              <em>Basic-Spec</em> EXPONENT
              <em>Basic-Spec</em> RAISE INT
-     
+
      <em>Basic-Spec: one of</em>
              ID
              "(" <em>Shift-Spec</em> ")"
              LOGREF <em>Product_Spec</em> ")"
              <em>Number</em>
-     
+
      <em>Number: one of</em>
              INT
              REAL
-     
+
      <em>Timestamp: one of</em>
              DATE
              DATE CLOCK
@@ -938,45 +938,45 @@ and words printed &lt;thusly&gt; indicate lexical elements.
              TIMESTAMP
              TIMESTAMP INT
              TIMESTAMP ID
-     
+
      SHIFT:
              &lt;space&gt;* &lt;shift_op&gt; &lt;space&gt;*
-     
+
      &lt;shift_op&gt;: one of
              "@"
              "after"
              "from"
              "since"
              "ref"
-     
+
      REAL:
              the usual floating-point format
-     
+
      INT:
              the usual integer format
-     
+
      MULTIPLY: one of
              "-"
              "."
              "*"
              &lt;space&gt;+
              &lt;centered middot&gt;
-     
+
      DIVIDE:
              &lt;space&gt;* &lt;divide_op&gt; &lt;space&gt;*
-     
+
      &lt;divide_op&gt;: one of
              per
              PER
              "/"
-     
+
      EXPONENT:
              ISO-8859-9 or UTF-8 encoded exponent characters
-     
+
      RAISE: one of
              "^"
              "**"
-     
+
      ID: one of
              &lt;id&gt;
              "%"
@@ -984,61 +984,61 @@ and words printed &lt;thusly&gt; indicate lexical elements.
              "\""
              degree sign
              greek mu character
-     
+
      &lt;id&gt;:
              &lt;alpha&gt; &lt;alphanum&gt;*
-     
+
      &lt;alpha&gt;:
              [A-Za-z_]
              ISO-8859-1 alphabetic characters
              non-breaking space
-     
+
      &lt;alphanum&gt;: one of
              &lt;alpha&gt;
              &lt;digit&gt;
-     
+
      &lt;digit&gt;:
              [0-9]
-     
+
      LOGREF:
              &lt;log&gt; &lt;space&gt;* &lt;logref&gt;
-     
+
      &lt;log&gt;: one of
              "log"
              "lg"
              "ln"
              "lb"
-     
+
      &lt;logref&gt;:
              "(" &lt;space&gt;* &lt;re&gt; ":"? &lt;space&gt;*
-     
+
      DATE:
              &lt;year&gt; "-" &lt;month&gt; ("-" &lt;day&gt;)?
-     
+
      &lt;year&gt;:
              [+-]?[0-9]{1,4}
-     
+
      &lt;month&gt;:
              "0"?[1-9]|1[0-2]
-     
+
      &lt;day&gt;:
              "0"?[1-9]|[1-2][0-9]|"30"|"31"
-     
+
      CLOCK:
              &lt;hour&gt; ":" &lt;minute&gt; (":" &lt;second&gt;)?
-     
+
      TIMSTAMP:
              &lt;year&gt; (&lt;month&gt; &lt;day&gt;?)? "T" &lt;hour&gt; (&lt;minute&gt; &lt;second&gt;?)?
-     
+
      &lt;hour&gt;:
              [+-]?[0-1]?[0-9]|2[0-3]
-     
+
      &lt;minute&gt;:
              [0-5]?[0-9]
-     
+
      &lt;second&gt;:
              (&lt;minute&gt;|60) (\.[0-9]*)?
-     
+
 </pre>
    <div class="node">
 <p><hr>
@@ -1053,7 +1053,7 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
 
 <p><a name="index-formatting-a-unit-into-a-string-51"></a><a name="index-unit_002c-formatting-into-a-string-52"></a><a name="index-string_002c-formatting-a-unit-into-a-53"></a>
 Use the <code><a href="#ut_005fformat_0028_0029">ut_format()</a></code> function to obtain the string representation
-of a binary unit. 
+of a binary unit.
 For example, the following gets the definition of the unit "watt" in
 ASCII characters using unit-symbols rather than unit-names:
 
@@ -1061,7 +1061,7 @@ ASCII characters using unit-symbols rather than unit-names:
      char        buf[128];
      unsigned    opts = <a href="#ut_005fencoding">UT_ASCII</a> | UT_DEFINITION;
      int         len = <a href="#ut_005fformat_0028_0029">ut_format</a>(watt, buf, sizeof(buf), opts);
-     
+
      if (len == -1) {
          /* Couldn't get string */
      }
@@ -1077,19 +1077,19 @@ ASCII characters using unit-symbols rather than unit-names:
 <div class="defun">
 &mdash; Function: <code>int</code> <b>ut_format</b> <code>(const ut_unit* </code><var>unit</var><code>, char* </code><var>buf</var><code>, size_t </code><var>size</var><code>, unsigned </code><var>opts</var><code>)</code><var><a name="index-ut_005fformat-54"></a></var><br>
 <blockquote><p>Formats the unit <var>unit</var> (i.e., returns its string representation)
-into the buffer pointed-to by <var>buf</var> of size <var>size</var>. 
+into the buffer pointed-to by <var>buf</var> of size <var>size</var>.
 The argument <var>opts</var> specifies how the formatting is to be done and
 is a bitwise OR of a <a href="#ut_005fencoding">ut_encoding</a> value and zero or more of the following:
 
           <dl>
-<dt><code>UT_NAMES</code><dd>Use unit names instead of symbols. 
+<dt><code>UT_NAMES</code><dd>Use unit names instead of symbols.
 <br><dt><code>UT_DEFINITION</code><dd>The formatted string should be the definition of <var>unit</var> in terms
 of basic-units instead of stopping any expansion at the highest level
-possible. 
+possible.
 </dl>
 
         <p>On succes, this function returns the number of characters written into
-<var>buf</var>, which will be less than or equal to <var>size</var>. 
+<var>buf</var>, which will be less than or equal to <var>size</var>.
 If the number is equal to <var>size</var>, then the buffer is too small to
 have a terminating <code>NUL</code> character.
 
@@ -1098,11 +1098,11 @@ have a terminating <code>NUL</code> character.
           <dl>
 <dt><code>UT_BAD_ARG</code><dd><var>unit</var> or <var>buf</var> is <code>NULL</code>, or
 <var>opts</var> contains the bit patterns of both <code>UT_LATIN1</code> and
-<code>UT_UTF8</code>. 
+<code>UT_UTF8</code>.
 <br><dt><code>UT_CANT_FORMAT</code><dd><var>unit</var> can't be formatted in the desired manner (e.g., <var>opts</var>
 contains <code>UT_ASCII</code> but <var>unit</var> doesn't have an identifier in
 that character-set or <var>opts</var> doesn't contain UT_NAMES and a necessary
-symbol doesn't exist). 
+symbol doesn't exist).
 </dl>
         </p></blockquote></div>
 
@@ -1141,25 +1141,25 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Operations">Operations</a>
 
 <div class="defun">
 &mdash; Function: <code>void</code> <b>ut_free</b> <code>(ut_unit* </code><var>unit</var><code>)</code><var><a name="index-ut_005ffree-58"></a></var><br>
-<blockquote><p>Frees resources associated with <var>unit</var>. 
-You should invoke this function on every unit that you no longer need. 
+<blockquote><p>Frees resources associated with <var>unit</var>.
+You should invoke this function on every unit that you no longer need.
 Use of <var>unit</var> upon
-return from this function results in undefined behavior. 
+return from this function results in undefined behavior.
 </p></blockquote></div>
 
    <p><a name="ut_005fscale_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_scale</b> <code>(double </code><var>factor</var><code>, const ut_unit* </code><var>unit</var><code>)</code><var><a name="index-ut_005fscale-59"></a></var><br>
-<blockquote><p>Returns a unit equivalent to another unit scaled by a numeric factor. 
+<blockquote><p>Returns a unit equivalent to another unit scaled by a numeric factor.
 For example:
      <pre class="example">          const ut_unit*   meter = ...
           const ut_unit*   kilometer = ut_scale(1000, meter);
 </pre>
         <p>The returned unit is equivalent to <var>unit</var> multiplied by
-<var>factor</var>. 
+<var>factor</var>.
 You should pass the returned pointer to <code><a href="#ut_005ffree_0028_0029">ut_free()</a></code> when you
-no longer need the unit. 
+no longer need the unit.
 </p></blockquote></div>
 
    <p><a name="ut_005foffset_0028_0029"></a>
@@ -1167,21 +1167,21 @@ no longer need the unit.
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_offset</b> <code>(const ut_unit* </code><var>unit</var><code>, double </code><var>offset</var><code>)</code><var><a name="index-ut_005foffset-60"></a></var><br>
 <blockquote><p>Returns a unit equivalent to another unit relative to a particular
-origin. 
+origin.
 For example:
      <pre class="example">          const ut_unit*   kelvin = ...
           const ut_unit*   celsius = ut_offset(kelvin, 273.15);
 </pre>
         <p>The returned unit is equivalent to <var>unit</var> with an origin of
-<var>offset</var>. 
+<var>offset</var>.
 You should pass the returned pointer to <code><a href="#ut_005ffree_0028_0029">ut_free()</a></code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs, then this function returns <code>NULL</code> and
 <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code> for the reason. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code> for the reason.
 </dl>
         </p></blockquote></div>
 
@@ -1191,56 +1191,56 @@ If an error occurs, then this function returns <code>NULL</code> and
 &mdash; Function: <code>ut_unit*</code> <b>ut_offset_by_time</b> <code>(const ut_unit* const </code><var>unit</var><code>, const double </code><var>origin</var><code>)</code><var><a name="index-ut_005foffset_005fby_005ftime-61"></a></var><br>
 <blockquote><p>Returns a timestamp-unit equivalent to the time unit <var>unit</var>
 referenced to the time-origin <var>origin</var> (as returned by
-<code><a href="#ut_005fencode_005ftime_0028_0029">ut_encode_time()</a></code>). 
+<code><a href="#ut_005fencode_005ftime_0028_0029">ut_encode_time()</a></code>).
 For example:
      <pre class="example">          const ut_unit*   second = ...
           const ut_unit*   secondsSinceTheEpoch =
               ut_offset_by_time(second, ut_encode_time(1970, 1, 1, 0, 0, 0.0));
 </pre>
-        <p>Leap seconds are not taken into account. 
+        <p>Leap seconds are not taken into account.
 You should pass the returned pointer to <code><a href="#ut_005ffree_0028_0029">ut_free()</a></code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs, then this function returns <code>NULL</code> and
 <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code> for the reason. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code> for the reason.
 <br><dt><code>UT_MEANINGLESS</code><dd>Creation of a timestamp unit based on <var>unit</var> is not meaningful.  It
-might not be a time-unit, for example. 
+might not be a time-unit, for example.
 <br><dt><code>UT_NO_SECOND</code><dd>The associated unit-system doesn't contain a &ldquo;second&rdquo; unit.  See
-<code><a href="#ut_005fset_005fsecond_0028_0029">ut_set_second()</a></code>. 
+<code><a href="#ut_005fset_005fsecond_0028_0029">ut_set_second()</a></code>.
 </dl>
 
         <p><strong>CAUTION:</strong>
 The timestamp-unit was created to be analogous to, for example, the degree
-celsius&mdash;but for the time dimension. 
+celsius&mdash;but for the time dimension.
 I've come to believe, however, that creating
 such a unit was a mistake, primarily because users try to use the unit in
 ways for which it was not designed (such as converting dates in a
-calendar whose year is exactly 365 days long). 
-Such activities are much better handled by a dedicated calendar package. 
-Please be careful about using timestamp-units. 
+calendar whose year is exactly 365 days long).
+Such activities are much better handled by a dedicated calendar package.
+Please be careful about using timestamp-units.
 </p></blockquote></div>
 
    <p><a name="ut_005finvert_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_invert</b> <code>(const ut_unit* </code><var>unit</var><code>)</code><var><a name="index-ut_005finvert-62"></a></var><br>
-<blockquote><p>Returns the inverse (i.e., reciprocal) of the unit <var>unit</var>. 
+<blockquote><p>Returns the inverse (i.e., reciprocal) of the unit <var>unit</var>.
 This convenience function is equal to
-<code><a href="#ut_005fraise_0028_0029">ut_raise(</code><var>unit</var><code>,-1)</a></code>. 
+<code><a href="#ut_005fraise_0028_0029">ut_raise(</code><var>unit</var><code>,-1)</a></code>.
 You should pass the returned pointer to <code><a href="#ut_005ffree_0028_0029">ut_free()</a></code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason.
 </dl>
         </p></blockquote></div>
 
@@ -1248,18 +1248,18 @@ Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_raise</b> <code>(const ut_unit* </code><var>unit</var><code>, int </code><var>power</var><code>)</code><var><a name="index-ut_005fraise-63"></a></var><br>
-<blockquote><p>Returns the unit equal to unit <var>unit</var> raised to the power <var>power</var>. 
+<blockquote><p>Returns the unit equal to unit <var>unit</var> raised to the power <var>power</var>.
 You should pass the returned pointer to <code>ut_free()</code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason.
 </dl>
         </p></blockquote></div>
 
@@ -1267,22 +1267,22 @@ Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_root</b> <code>(const ut_unit* </code><var>unit</var><code>, int </code><var>root</var><code>)</code><var><a name="index-ut_005froot-64"></a></var><br>
-<blockquote><p>Returns the unit equal to the <var>root</var> root of unit <var>unit</var>. 
+<blockquote><p>Returns the unit equal to the <var>root</var> root of unit <var>unit</var>.
 You should pass the returned pointer to <code>ut_free()</code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_MEANINGLESS</code><dd>It's meaningless to take the given root of the given unit. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_MEANINGLESS</code><dd>It's meaningless to take the given root of the given unit.
 This could be because the
 resulting unit would have fractional (i.e., non-integral) dimensionality,
-or because the unit is, for example, a logarithmic unit. 
-<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason. 
+or because the unit is, for example, a logarithmic unit.
+<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason.
 </dl>
         </p></blockquote></div>
 
@@ -1291,17 +1291,17 @@ or because the unit is, for example, a logarithmic unit.
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_log</b> <code>(double </code><var>base</var><code>, const ut_unit* </code><var>reference</var><code>)</code><var><a name="index-ut_005flog-65"></a></var><br>
 <blockquote><p>Returns the logarithmic unit corresponding to the logarithmic base
-<var>base</var> and a reference level specified as the unit <var>reference</var>. 
+<var>base</var> and a reference level specified as the unit <var>reference</var>.
 For example, the following creates a decibel unit with a
 one milliwatt reference level:
      <pre class="example">               const ut_unit* milliWatt = ...;
                const ut_unit* bel_1_mW = ut_log(10.0, milliWatt);
-          
+
                if (bel_1_mW != NULL) {
                    const ut_unit* decibel_1_mW = <a href="#ut_005fscale_0028_0029">ut_scale</a>(0.1, bel_1_mW);
-          
+
                    <a href="#ut_005ffree_0028_0029">ut_free</a>(bel_1_mW);   /* no longer needed */
-          
+
                    if (decibel_1_mW != NULL) {
                        /* Have decibel unit with 1 mW reference */
                        ...
@@ -1310,17 +1310,17 @@ one milliwatt reference level:
                }
 </pre>
         <p>You should pass the returned pointer to <code>ut_free()</code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>reference</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>base</var> is invalid (e.g., it must be greater than one). 
+<dt><code>UT_BAD_ARG</code><dd><var>reference</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason.
+<br><dt><code>UT_BAD_ARG</code><dd><var>base</var> is invalid (e.g., it must be greater than one).
 </dl>
         </p></blockquote></div>
 
@@ -1329,14 +1329,14 @@ Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code
 <div class="defun">
 &mdash; Function: <code>const char*</code> <b>ut_get_name</b> <code>(const ut_unit* </code><var>unit</var><code>, ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005fget_005fname-66"></a></var><br>
 <blockquote><p>Returns the name to which the unit referenced by <var>unit</var> maps in the
-character-encoding specified by <var>encoding</var>. 
+character-encoding specified by <var>encoding</var>.
 If this function returns <code>NULL</code>, then
 <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return
 one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>name</var> is <code>NULL</code>. 
-<br><dt><code>UT_SUCCESS</code><dd><var>unit</var> doesn't map to a name in the given character-set. 
+<dt><code>UT_BAD_ARG</code><dd><var>name</var> is <code>NULL</code>.
+<br><dt><code>UT_SUCCESS</code><dd><var>unit</var> doesn't map to a name in the given character-set.
 </dl>
         </p></blockquote></div>
 
@@ -1345,14 +1345,14 @@ one of the following:
 <div class="defun">
 &mdash; Function: <code>const char*</code> <b>ut_get_symbol</b> <code>(const ut_unit* </code><var>unit</var><code>, ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005fget_005fsymbol-67"></a></var><br>
 <blockquote><p>Returns the symbol to which the unit referenced by <var>unit</var> maps in the
-character-encoding specified by <var>encoding</var>. 
+character-encoding specified by <var>encoding</var>.
 If this function returns <code>NULL</code>, then
 <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return
 one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>symbol</var> is <code>NULL</code>. 
-<br><dt><code>UT_SUCCESS</code><dd><var>unit</var> doesn't map to a symbol in the given character-set. 
+<dt><code>UT_BAD_ARG</code><dd><var>symbol</var> is <code>NULL</code>.
+<br><dt><code>UT_SUCCESS</code><dd><var>unit</var> doesn't map to a symbol in the given character-set.
 </dl>
         </p></blockquote></div>
 
@@ -1360,25 +1360,25 @@ one of the following:
 
 <div class="defun">
 &mdash; Function: <code>ut_system*</code> <b>ut_get_system</b> <code>(const ut_unit* </code><var>unit</var><code>)</code><var><a name="index-ut_005fget_005fsystem-68"></a></var><br>
-<blockquote><p>Returns the unit-system to which the unit referenced by <var>unit</var> belongs. 
+<blockquote><p>Returns the unit-system to which the unit referenced by <var>unit</var> belongs.
 If <var>unit</var> is <code>NULL</code>, then this function writes an error-message
 using <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
-Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return <code>UT_BAD_ARG</code>. 
+and returns <code>NULL</code>.
+Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return <code>UT_BAD_ARG</code>.
 </p></blockquote></div>
 
    <p><a name="ut_005fis_005fdimensionless_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>int</code> <b>ut_is_dimensionless</b> <code>(const ut_unit* </code><var>unit</var><code>)</code><var><a name="index-ut_005fis_005fdimensionless-69"></a></var><br>
-<blockquote><p>Indicates if unit <var>unit</var> is dimensionless (like &ldquo;radian&rdquo;). 
+<blockquote><p>Indicates if unit <var>unit</var> is dimensionless (like &ldquo;radian&rdquo;).
 This function returns a non-zero value if the unit is dimensionfull;
 otherwise, <code>0</code> is returned and
 <a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit1</var> is <code>NULL</code>. 
-<br><dt><code>UT_SUCCESS</code><dd>The unit is dimensionless. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit1</var> is <code>NULL</code>.
+<br><dt><code>UT_SUCCESS</code><dd>The unit is dimensionless.
 </dl>
         </p></blockquote></div>
 
@@ -1386,35 +1386,35 @@ otherwise, <code>0</code> is returned and
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_clone</b> <code>(const ut_unit* </code><var>unit</var><code>)</code><var><a name="index-ut_005fclone-70"></a></var><br>
-<blockquote><p>Returns a copy of the unit referenced by <var>unit</var>. 
+<blockquote><p>Returns a copy of the unit referenced by <var>unit</var>.
 You should pass the returned pointer to <code>ut_free()</code> when you
-no longer need the unit. 
+no longer need the unit.
 If an error occurs,
 then this function writes an error-message using
 <code><a href="#ut_005fhandle_005ferror_005fmessage_0028_0029">ut_handle_error_message()</a></code>
-and returns <code>NULL</code>. 
+and returns <code>NULL</code>.
 Also, <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
 </dl>
         If you use <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml()</a></code>, then you should not normally
-need to call this function. 
+need to call this function.
 </p></blockquote></div>
 
    <p><a name="ut_005faccept_005fvisitor_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_accept_visitor</b> <code>(const ut_unit* </code><var>unit</var><code>, const <a href="#ut_005fvisitor">ut_visitor</a>* </code><var>visitor</var><code>, void* </code><var>arg</var><code>)</code><var><a name="index-ut_005faccept_005fvisitor-71"></a></var><br>
-<blockquote><p>Accepts the visitor <var>visitor</var> to the unit <var>unit</var>. 
-The argument <var>arg</var> is passed to the visitor's functions. 
+<blockquote><p>Accepts the visitor <var>visitor</var> to the unit <var>unit</var>.
+The argument <var>arg</var> is passed to the visitor's functions.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>visitor</var> or <var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_VISIT_ERROR</code><dd>An error occurred in <var>visitor</var> while visiting <var>unit</var>. 
-<br><dt><code>UT_SUCCESS</code><dd>Success. 
+<dt><code>UT_BAD_ARG</code><dd><var>visitor</var> or <var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_VISIT_ERROR</code><dd>An error occurred in <var>visitor</var> while visiting <var>unit</var>.
+<br><dt><code>UT_SUCCESS</code><dd>Success.
 </dl>
         </p></blockquote></div>
 
@@ -1423,31 +1423,31 @@ This function returns one of the following:
 <div class="defun">
 &mdash; Data type: <b>ut_visitor</b><var> int foo(int) int bar(int, int)<a name="index-ut_005fvisitor-72"></a></var><br>
 <blockquote><p>You pass a pointer to a data object of this type if and when you call
-<code><a href="#ut_005faccept_005fvisitor_0028_0029">ut_accept_visitor()</a></code>. 
+<code><a href="#ut_005faccept_005fvisitor_0028_0029">ut_accept_visitor()</a></code>.
 It contains the following pointers to functions that implement your
 unit-visitor:
 
           <dl>
 <dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_basic)(const ut_unit* </code><var>unit</var><code>, void* </code><var>arg</var><code>);</code><dd>Visits the basic-unit <var>unit</var>.  A basic-unit is a base unit like
-&ldquo;meter&rdquo; or a non-dimensional but named unit like &ldquo;radian&rdquo;. 
-This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success. 
-<br><dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_product)(const ut_unit* </code><var>unit</var><code>, int </code><var>count</var><code>, const ut_unit* const* </code><var>basicUnits</var><code>, const int* </code><var>powers</var><code>, void* </code><var>arg</var><code>);</code><dd>Visits the product-unit <var>unit</var>. 
+&ldquo;meter&rdquo; or a non-dimensional but named unit like &ldquo;radian&rdquo;.
+This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success.
+<br><dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_product)(const ut_unit* </code><var>unit</var><code>, int </code><var>count</var><code>, const ut_unit* const* </code><var>basicUnits</var><code>, const int* </code><var>powers</var><code>, void* </code><var>arg</var><code>);</code><dd>Visits the product-unit <var>unit</var>.
 The product-unit is a product of the <var>count</var>
 basic-units referenced by <var>basicUnits</var>, each raised to their respective,
-non-zero power in <var>powers</var>. 
-This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success. 
-<br><dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_galilean)(const ut_unit* </code><var>unit</var><code>, double </code><var>scale</var><code>, const ut_unit* </code><var>underlyingUnit</var><code>, double </code><var>origin</var><code>, void* arg);</code><dd>Visits the Galilean-unit <var>unit</var>. 
+non-zero power in <var>powers</var>.
+This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success.
+<br><dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_galilean)(const ut_unit* </code><var>unit</var><code>, double </code><var>scale</var><code>, const ut_unit* </code><var>underlyingUnit</var><code>, double </code><var>origin</var><code>, void* arg);</code><dd>Visits the Galilean-unit <var>unit</var>.
 The Galilean-unit has the underlying unit <var>underlyingUnit</var> and either the
-non-unity scale factor <var>scale</var> or the non-zero origin <var>origin</var>, or both. 
-This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success. 
-<br><dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_timestamp)(const ut_unit* </code><var>unit</var><code>, const ut_unit* </code><var>timeUnit</var><code>, double </code><var>origin</var><code>, void* </code><var>arg</var><code>);</code><dd>Visits the timestamp-unit <var>unit</var>. 
+non-unity scale factor <var>scale</var> or the non-zero origin <var>origin</var>, or both.
+This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success.
+<br><dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_timestamp)(const ut_unit* </code><var>unit</var><code>, const ut_unit* </code><var>timeUnit</var><code>, double </code><var>origin</var><code>, void* </code><var>arg</var><code>);</code><dd>Visits the timestamp-unit <var>unit</var>.
 The timestamp-unit has the underlying unit of time <var>timeUnit</var>
-and the <code><a href="#ut_005fencode_005ftime_0028_0029">ut_encode_time()</a></code>-encoded time-origin <var>origin</var>. 
-This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success. 
-<br><dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_logarithmic)(const ut_unit* </code><var>unit</var><code>, double </code><var>base</var><code>, const ut_unit* </code><var>reference</var><code>, void* </code><var>arg</var><code>);</code><dd>Visits the logarithmic-unit <var>unit</var>. 
+and the <code><a href="#ut_005fencode_005ftime_0028_0029">ut_encode_time()</a></code>-encoded time-origin <var>origin</var>.
+This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success.
+<br><dt><code><a href="#ut_005fstatus">ut_status</a> (*visit_logarithmic)(const ut_unit* </code><var>unit</var><code>, double </code><var>base</var><code>, const ut_unit* </code><var>reference</var><code>, void* </code><var>arg</var><code>);</code><dd>Visits the logarithmic-unit <var>unit</var>.
 The logarithmic-unit has the logarithmic base <var>base</var> and
-the reference-level is specified by the unit <var>reference</var>. 
-This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success. 
+the reference-level is specified by the unit <var>reference</var>.
+This function returns <code><a href="#ut_005fstatus">UT_SUCCESS</a></code> on and only on success.
 </dl>
         </p></blockquote></div>
 
@@ -1470,15 +1470,15 @@ binary unit operations but they are documented elsewhere.
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_multiply</b> <code>(const ut_unit* </code><var>unit1</var><code>, const ut_unit* </code><var>unit2</var><code>)</code><var><a name="index-ut_005fmultiply-74"></a></var><br>
-<blockquote><p>Returns the result of multiplying unit <var>unit1</var> by unit <var>unit2</var>. 
+<blockquote><p>Returns the result of multiplying unit <var>unit1</var> by unit <var>unit2</var>.
 You should pass the pointer to <a href="#ut_005ffree_0028_0029">ut_free()</a> when you no longer need the unit
 On failure, this function returns <code>NULL</code> and <a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a>
 will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit1</var> or <var>unit2</var> is <code>NULL</code>. 
-<br><dt><code>UT_NOT_SAME_SYSTEM</code><dd><var>unit1</var> and <var>unit2</var> belong to different <a href="#unit_002dsystem">unit-system</a>s. 
-<br><dt><code>UT_OS</code><dd>Operating-system error. See <var>errno</var> for the reason. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit1</var> or <var>unit2</var> is <code>NULL</code>.
+<br><dt><code>UT_NOT_SAME_SYSTEM</code><dd><var>unit1</var> and <var>unit2</var> belong to different <a href="#unit_002dsystem">unit-system</a>s.
+<br><dt><code>UT_OS</code><dd>Operating-system error. See <var>errno</var> for the reason.
 </dl>
         </p></blockquote></div>
 
@@ -1486,15 +1486,15 @@ will return one of the following:
 
 <div class="defun">
 &mdash; Function: <code>ut_unit*</code> <b>ut_divide</b> <code>(const ut_unit* </code><var>numer</var><code>, const ut_unit* </code><var>denom</var><code>)</code><var><a name="index-ut_005fdivide-75"></a></var><br>
-<blockquote><p>Returns the result of dividing unit <var>numer</var> by unit <var>denom</var>. 
+<blockquote><p>Returns the result of dividing unit <var>numer</var> by unit <var>denom</var>.
 You should pass the pointer to <a href="#ut_005ffree_0028_0029">ut_free()</a> when you no longer need the unit
 On failure, this function returns <code>NULL</code> and <a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a>
 will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>numer</var> or <var>denom</var> is <code>NULL</code>. 
-<br><dt><code>UT_NOT_SAME_SYSTEM</code><dd><var>unit1</var> and <var>unit2</var> belong to different <a href="#unit_002dsystem">unit-system</a>s. 
-<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason. 
+<dt><code>UT_BAD_ARG</code><dd><var>numer</var> or <var>denom</var> is <code>NULL</code>.
+<br><dt><code>UT_NOT_SAME_SYSTEM</code><dd><var>unit1</var> and <var>unit2</var> belong to different <a href="#unit_002dsystem">unit-system</a>s.
+<br><dt><code>UT_OS</code><dd>Operating-system error. See <code>errno</code> for the reason.
 </dl>
         </p></blockquote></div>
 
@@ -1504,23 +1504,23 @@ will return one of the following:
 &mdash; Function: <code>int</code> <b>ut_compare</b> <code>(const ut_unit* </code><var>unit1</var><code>, const ut_unit* </code><var>unit2</var><code>)</code><var><a name="index-ut_005fcompare-76"></a></var><br>
 <blockquote><p>Compares two units.  Returns a value less than, equal to, or greater than
 zero as <var>unit1</var> is considered less than, equal to, or greater than
-<var>unit2</var>, respectively. 
-Units from different <a href="#unit_002dsystem">unit-system</a>s never compare equal. 
-The value zero is also returned if both unit pointers are <code>NULL</code>. 
+<var>unit2</var>, respectively.
+Units from different <a href="#unit_002dsystem">unit-system</a>s never compare equal.
+The value zero is also returned if both unit pointers are <code>NULL</code>.
 </p></blockquote></div>
 
    <p><a name="ut_005fsame_005fsystem_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>int</code> <b>ut_same_system</b> <code>(const ut_unit* </code><var>unit1</var><code>, const ut_unit* </code><var>unit2</var><code>)</code><var><a name="index-ut_005fsame_005fsystem-77"></a></var><br>
-<blockquote><p>Indicates if two units belong to the same unit-system. 
+<blockquote><p>Indicates if two units belong to the same unit-system.
 This function returns a non-zero value if the two units belong to the
 same <a href="#unit_002dsystem">unit-system</a>; otherwise, <code>0</code> is returned and
 <a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a> will return one of the following:
 
           <dl>
-<dt><code>UT_BAD_ARG</code><dd><var>unit1</var> or <var>unit2</var> is <code>NULL</code>. 
-<br><dt><code>UT_SUCCESS</code><dd>The units belong to different <a href="#unit_002dsystem">unit-system</a>s. 
+<dt><code>UT_BAD_ARG</code><dd><var>unit1</var> or <var>unit2</var> is <code>NULL</code>.
+<br><dt><code>UT_SUCCESS</code><dd>The units belong to different <a href="#unit_002dsystem">unit-system</a>s.
 </dl>
         </p></blockquote></div>
 
@@ -1537,17 +1537,17 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
 
 <p><a name="index-mapping-units-78"></a><a name="index-mapping-identifiers-79"></a><a name="index-units_002c-mapping-to-identifiers-80"></a>
 Within a unit-system, you can map an identifier to a unit and vice
-versa. 
+versa.
 If an identifier maps to a unit, then the unit can be retrieved from the
-unit-system via the identifier. 
+unit-system via the identifier.
 Similarly, if a unit maps to an identifier, then the unit can be printed
 using the identifier.
 
    <p>There a two kinds of identifiers: names and symbols.
 
 <ul class="menu">
-<li><a accesskey="1" href="#Names">Names</a>:        Mapping between units and names. 
-<li><a accesskey="2" href="#Symbols">Symbols</a>:      Mapping between units and symbols. 
+<li><a accesskey="1" href="#Names">Names</a>:        Mapping between units and names.
+<li><a accesskey="2" href="#Symbols">Symbols</a>:      Mapping between units and symbols.
 </ul>
 
 <div class="node">
@@ -1570,14 +1570,14 @@ You can map a name to a unit and vice versa.  If you use
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_map_name_to_unit</b> <code>(const char* </code><var>name</var><code>, const ut_encoding </code><var>encoding</var><code>, const ut_unit* </code><var>unit</var><code>)</code><var><a name="index-ut_005fmap_005fname_005fto_005funit-82"></a></var><br>
 <blockquote><p>Maps the name referenced by <var>name</var>, in character-set <var>encoding</var>,
 to the unit referenced by <var>unit</var>
-in the unit-system that contains <var>unit</var>. 
+in the unit-system that contains <var>unit</var>.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>name</var> or <var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
-<br><dt><code>UT_EXISTS</code><dd><var>name</var> already maps to a different unit. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>name</var> or <var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
+<br><dt><code>UT_EXISTS</code><dd><var>name</var> already maps to a different unit.
 </dl>
         </p></blockquote></div>
 
@@ -1585,12 +1585,12 @@ This function returns one of the following:
 
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_unmap_name_to_unit</b> <code>(ut_system* </code><var>system</var><code>, const char* </code><var>name</var><code>, const ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005funmap_005fname_005fto_005funit-83"></a></var><br>
-<blockquote><p>Removes any mapping from name <var>name</var>, in character-set <var>encoding</var>, to a unit in unit-system <var>system</var>. 
+<blockquote><p>Removes any mapping from name <var>name</var>, in character-set <var>encoding</var>, to a unit in unit-system <var>system</var>.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>name</var> is <code>NULL</code>. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>name</var> is <code>NULL</code>.
 </dl>
         </p></blockquote></div>
 
@@ -1599,15 +1599,15 @@ This function returns one of the following:
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_map_unit_to_name</b> <code>(const ut_unit* </code><var>unit</var><code>, const char* </code><var>name</var><code>, ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005fmap_005funit_005fto_005fname-84"></a></var><br>
 <blockquote><p>Maps the unit <var>unit</var> to the name <var>name</var>, which is in character-set
-<var>encoding</var>, in the unit-system that contains the unit. 
+<var>encoding</var>, in the unit-system that contains the unit.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
+<dt><code>UT_SUCCESS</code><dd>Success.
 <br><dt><code>UT_BAD_ARG</code><dd><var>unit</var> or <var>name</var> is <code>NULL</code>, or <var>name</var> is not in the
-character-set <var>encoding</var>. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
-<br><dt><code>UT_EXISTS</code><dd><var>unit</var> already maps to a different name. 
+character-set <var>encoding</var>.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
+<br><dt><code>UT_EXISTS</code><dd><var>unit</var> already maps to a different name.
 </dl>
         </p></blockquote></div>
 
@@ -1616,12 +1616,12 @@ character-set <var>encoding</var>.
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_unmap_unit_to_name</b> <code>(const ut_unit* </code><var>unit</var><code>, ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005funmap_005funit_005fto_005fname-85"></a></var><br>
 <blockquote><p>Removes any mapping from unit <var>unit</var> to a name in character-set
-<var>encoding</var> from the unit-system that contains the unit. 
+<var>encoding</var> from the unit-system that contains the unit.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>.
 </dl>
         </p></blockquote></div>
 
@@ -1645,14 +1645,14 @@ You can map a symbol to a unit and vice versa.  If you use
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_map_symbol_to_unit</b> <code>(const char* </code><var>symbol</var><code>, const ut_encoding </code><var>encoding</var><code>, const ut_unit* </code><var>unit</var><code>)</code><var><a name="index-ut_005fmap_005fsymbol_005fto_005funit-87"></a></var><br>
 <blockquote><p>Maps the symbol referenced by <var>symbol</var>, in character-set <var>encoding</var>,
 to the unit referenced by <var>unit</var>
-in the unit-system that contains <var>unit</var>. 
+in the unit-system that contains <var>unit</var>.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>symbol</var> or <var>unit</var> is <code>NULL</code>. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
-<br><dt><code>UT_EXISTS</code><dd><var>symbol</var> already maps to a different unit. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>symbol</var> or <var>unit</var> is <code>NULL</code>.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
+<br><dt><code>UT_EXISTS</code><dd><var>symbol</var> already maps to a different unit.
 </dl>
         </p></blockquote></div>
 
@@ -1660,12 +1660,12 @@ This function returns one of the following:
 
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_unmap_symbol_to_unit</b> <code>(ut_system* </code><var>system</var><code>, const char* </code><var>symbol</var><code>, const ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005funmap_005fsymbol_005fto_005funit-88"></a></var><br>
-<blockquote><p>Removes any mapping from symbol <var>symbol</var>, in character-set <var>encoding</var>, to a unit in unit-system <var>system</var>. 
+<blockquote><p>Removes any mapping from symbol <var>symbol</var>, in character-set <var>encoding</var>, to a unit in unit-system <var>system</var>.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>symbol</var> is <code>NULL</code>. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>system</var> or <var>symbol</var> is <code>NULL</code>.
 </dl>
         </p></blockquote></div>
 
@@ -1674,15 +1674,15 @@ This function returns one of the following:
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_map_unit_to_symbol</b> <code>(const ut_unit* </code><var>unit</var><code>, const char* </code><var>symbol</var><code>, ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005fmap_005funit_005fto_005fsymbol-89"></a></var><br>
 <blockquote><p>Maps the unit <var>unit</var> to the symbol <var>symbol</var>, which is in character-set
-<var>encoding</var>, in the unit-system that contains the unit. 
+<var>encoding</var>, in the unit-system that contains the unit.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>unit</var> or <var>symbol</var> is <code>NULL</code>. 
-<br><dt><code>UT_BAD_ARG</code><dd>Symbol <var>symbol</var> is not in the character-set <var>encoding</var>. 
-<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>. 
-<br><dt><code>UT_EXISTS</code><dd><var>unit</var> already maps to a different symbol. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>unit</var> or <var>symbol</var> is <code>NULL</code>.
+<br><dt><code>UT_BAD_ARG</code><dd>Symbol <var>symbol</var> is not in the character-set <var>encoding</var>.
+<br><dt><code>UT_OS</code><dd>Operating-system failure.  See <code>errno</code>.
+<br><dt><code>UT_EXISTS</code><dd><var>unit</var> already maps to a different symbol.
 </dl>
         </p></blockquote></div>
 
@@ -1691,12 +1691,12 @@ This function returns one of the following:
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005fstatus">ut_status</a></code> <b>ut_unmap_unit_to_symbol</b> <code>(const ut_unit* </code><var>unit</var><code>, ut_encoding </code><var>encoding</var><code>)</code><var><a name="index-ut_005funmap_005funit_005fto_005fsymbol-90"></a></var><br>
 <blockquote><p>Removes any mapping from unit <var>unit</var> to a symbol in character-set
-<var>encoding</var> from the unit-system that contains the unit. 
+<var>encoding</var> from the unit-system that contains the unit.
 This function returns one of the following:
 
           <dl>
-<dt><code>UT_SUCCESS</code><dd>Success. 
-<br><dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>. 
+<dt><code>UT_SUCCESS</code><dd>Success.
+<br><dt><code>UT_BAD_ARG</code><dd><var>unit</var> is <code>NULL</code>.
 </dl>
         </p></blockquote></div>
 
@@ -1719,7 +1719,7 @@ double-precision value, which can then be acted upon arithmetically.
 
 <div class="defun">
 &mdash; Function: <code>double</code> <b>ut_encode_time</b> <code>(int </code><var>year</var><code>, int </code><var>month</var><code>, int </code><var>day</var><code>, int </code><var>hour</var><code>, int </code><var>minute</var><code>, double </code><var>second</var><code>)</code><var><a name="index-ut_005fencode_005ftime-92"></a></var><br>
-<blockquote><p>Encodes a time as a double-precision value. 
+<blockquote><p>Encodes a time as a double-precision value.
 This convenience function is equivalent to
      <pre class="example">          <a href="#ut_005fencode_005fdate_0028_0029">ut_encode_date</a>(<var>year</var>,<var>month</var>,<var>day</var>) + <a href="#ut_005fencode_005fclock_0028_0029">ut_encode_clock</a>(<var>hour</var>,<var>minute</var>,<var>second</var>)
 </pre>
@@ -1729,25 +1729,25 @@ This convenience function is equivalent to
 
 <div class="defun">
 &mdash; Function: <code>double</code> <b>ut_encode_date</b> <code>(int </code><var>year</var><code>, int </code><var>month</var><code>, int </code><var>day</var><code>)</code><var><a name="index-ut_005fencode_005fdate-93"></a></var><br>
-<blockquote><p>Encodes a date as a double-precision value. 
-You probably won't use this function. 
+<blockquote><p>Encodes a date as a double-precision value.
+You probably won't use this function.
 </p></blockquote></div>
 
    <p><a name="ut_005fencode_005fclock_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>double</code> <b>ut_encode_clock</b> <code>(int </code><var>hour</var><code>, int </code><var>minute</var><code>, double </code><var>second</var><code>)</code><var><a name="index-ut_005fencode_005fclock-94"></a></var><br>
-<blockquote><p>Encodes a clock-time as a double-precision value. 
-You probably won't use this function. 
+<blockquote><p>Encodes a clock-time as a double-precision value.
+You probably won't use this function.
 </p></blockquote></div>
 
    <p><a name="ut_005fdecode_005ftime_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>void</code> <b>ut_decode_time</b> <code>(double </code><var>time</var><code>, int* </code><var>year</var><code>, int* </code><var>month</var><code>, int* </code><var>day</var><code>, int* </code><var>hour</var><code>, int* </code><var>minute</var><code>, double* </code><var>second</var><code>, double* </code><var>resolution</var><code>)</code><var><a name="index-ut_005fdecode_005ftime-95"></a></var><br>
-<blockquote><p>Decodes a time from a double-precision value into its individual components. 
+<blockquote><p>Decodes a time from a double-precision value into its individual components.
 The variable referenced by <var>resolution</var> will be set to the resolution
-(i.e., uncertainty) of the time in seconds. 
+(i.e., uncertainty) of the time in seconds.
 </p></blockquote></div>
 
 <div class="node">
@@ -1766,8 +1766,8 @@ Error-handling in the units module has two aspects: the status of
 the last operation performed by the module and the handling of error-messages:
 
 <ul class="menu">
-<li><a accesskey="1" href="#Status">Status</a>:       The status of the last operation. 
-<li><a accesskey="2" href="#Messages">Messages</a>:     The handling of error-messages. 
+<li><a accesskey="1" href="#Status">Status</a>:       The status of the last operation.
+<li><a accesskey="2" href="#Messages">Messages</a>:     The handling of error-messages.
 </ul>
 
 <div class="node">
@@ -1781,7 +1781,7 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Errors">Errors</a>
 <h3 class="section">11.1 Status of Last Operation</h3>
 
 <p><a name="index-status-of-last-operation-97"></a><a name="index-module-status-98"></a>
-UDUNITS-2 functions set their status by calling <code><a href="#ut_005fset_005fstatus_0028_0029">ut_set_status()</a></code>. 
+UDUNITS-2 functions set their status by calling <code><a href="#ut_005fset_005fstatus_0028_0029">ut_set_status()</a></code>.
 You can use the function <code><a href="#ut_005fget_005fstatus_0028_0029">ut_get_status()</a></code> to retrieve that
 status.
 
@@ -1797,7 +1797,7 @@ status.
 
 <div class="defun">
 &mdash; Function: <code>void</code> <b>ut_set_status</b> <code>(<a href="#ut_005fstatus">ut_status</a> </code><var>status</var><code>)</code><var><a name="index-ut_005fset_005fstatus-100"></a></var><br>
-<blockquote><p>Set the status of the units module to <var>status</var>. 
+<blockquote><p>Set the status of the units module to <var>status</var>.
 </p></blockquote></div>
 
    <p><a name="ut_005fstatus"></a>
@@ -1808,10 +1808,10 @@ status.
 
           <dl>
 <dt><code>UT_SUCCESS</code><dd>Success
-<br><dt><code>UT_BAD_ARG</code><dd>An argument violates the the function's contract (e.g., it's <code>NULL</code>). 
+<br><dt><code>UT_BAD_ARG</code><dd>An argument violates the the function's contract (e.g., it's <code>NULL</code>).
 <br><dt><code>UT_EXISTS</code><dd>Unit, prefix, or identifier already exists
 <br><dt><code>UT_NO_UNIT</code><dd>No such unit exists
-<br><dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code> for the reason. 
+<br><dt><code>UT_OS</code><dd>Operating-system error.  See <code>errno</code> for the reason.
 <br><dt><code>UT_NOT_SAME_SYSTEM</code><dd>The units belong to different unit-systems
 <br><dt><code>UT_MEANINGLESS</code><dd>The operation on the unit or units is meaningless
 <br><dt><code>UT_NO_SECOND</code><dd>The unit-system doesn't have a unit named &ldquo;second&rdquo;
@@ -1842,14 +1842,14 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Errors">Errors</a>
 <div class="defun">
 &mdash; Function: <code>int</code> <b>ut_handle_error_message</b> <code>(const char* </code><var>fmt</var><code>, ...)</code><var><a name="index-ut_005fhandle_005ferror_005fmessage-104"></a></var><br>
 <blockquote><p>Handles the error-message corresponding to the format-string <var>fmt</var> and
-any subsequent arguments referenced by it. 
+any subsequent arguments referenced by it.
 The interpretation of the formatting-string is identical to that of
-the UNIX function <code>printf()</code>. 
+the UNIX function <code>printf()</code>.
 On success, this function returns the number of bytes in the
 error-message; otherwise, this function returns <code>-1</code>.
 
         <p>Use the function <code><a href="#ut_005fset_005ferror_005fmessage_005fhandler_0028_0029">ut_set_error_message_handler()</a></code> to change how
-error-messages are handled. 
+error-messages are handled.
 </p></blockquote></div>
 
    <p><a name="ut_005fset_005ferror_005fmessage_005fhandler_0028_0029"></a>
@@ -1857,8 +1857,8 @@ error-messages are handled.
 <div class="defun">
 &mdash; Function: <code><a href="#ut_005ferror_005fmessage_005fhandler">ut_error_message_handler</a></code> <b>ut_set_error_message_handler</b> <code>(<a href="#ut_005ferror_005fmessage_005fhandler">ut_error_message_handler</a> </code><var>handler</var><code>)</code><var><a name="index-ut_005fset_005ferror_005fmessage_005fhandler-105"></a></var><br>
 <blockquote><p>Sets the function that handles error-messages and returns the previous
-error-message handler. 
-The initial error-message handler is <code><a href="#ut_005fwrite_005fto_005fstderr_0028_0029">ut_write_to_stderr()</a></code>. 
+error-message handler.
+The initial error-message handler is <code><a href="#ut_005fwrite_005fto_005fstderr_0028_0029">ut_write_to_stderr()</a></code>.
 </p></blockquote></div>
 
    <p><a name="ut_005fwrite_005fto_005fstderr_0028_0029"></a>
@@ -1867,29 +1867,29 @@ The initial error-message handler is <code><a href="#ut_005fwrite_005fto_005fstd
 &mdash; Function: <code>int</code> <b>ut_write_to_stderr</b> <code>(const char* </code><var>fmt</var><code>, va_list </code><var>args</var><code>)</code><var><a name="index-ut_005fwrite_005fto_005fstderr-106"></a></var><br>
 <blockquote><p>Writes the variadic error-message
 corresponding to formatting-string <var>fmt</var> and arguments <var>args</var>
-to the standard-error stream and appends a newline. 
+to the standard-error stream and appends a newline.
 The interpretation of the formatting-string is identical to that of
-the UNIX function <code>printf()</code>. 
+the UNIX function <code>printf()</code>.
 On success, this function returns the number of bytes in the
-error-message; otherwise, this function returns <code>-1</code>. 
+error-message; otherwise, this function returns <code>-1</code>.
 </p></blockquote></div>
 
    <p><a name="ut_005fignore_0028_0029"></a>
 
 <div class="defun">
 &mdash; Function: <code>int</code> <b>ut_ignore</b> <code>(const char* </code><var>fmt</var><code>, va_list </code><var>args</var><code>)</code><var><a name="index-ut_005fignore-107"></a></var><br>
-<blockquote><p>Does nothing. 
+<blockquote><p>Does nothing.
 In particular, it ignores the variadic error-message
-corresponding to formatting-string <var>fmt</var> and arguments <var>args</var>. 
+corresponding to formatting-string <var>fmt</var> and arguments <var>args</var>.
 Pass this function to <code><a href="#ut_005fset_005ferror_005fmessage_005fhandler_0028_0029">ut_set_error_message_handler()</a></code>
-when you don't want the unit module to print any error-messages. 
+when you don't want the unit module to print any error-messages.
 </p></blockquote></div>
 
    <p><a name="ut_005ferror_005fmessage_005fhandler"></a>
 
 <div class="defun">
 &mdash; Data type: <b>ut_error_message_handler</b><var><a name="index-ut_005ferror_005fmessage_005fhandler-108"></a></var><br>
-<blockquote><p>This is the type of an error-message handler. 
+<blockquote><p>This is the type of an error-message handler.
 It's definition is
      <pre class="example">          typedef int (*ut_error_message_handler)(const char* fmt, va_list args);
 </pre>
@@ -1908,17 +1908,17 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
 
 <p><a name="index-units-database-109"></a><a name="index-database_002c-units-110"></a>
 The database of units that comes with the UDUNITS-2 package is an
-XML-formatted file that is based on the SI system of units. 
+XML-formatted file that is based on the SI system of units.
 It contains the names and symbols of most of the units that you will ever
-encounter. 
+encounter.
 The pathname of the installed file is
 <em>datadir</em><code>/udunits2.xml</code>, where <em>datadir</em> is the
 installation-directory for read-only, architecture-independent data
-(e.g., <code>/usr/local/share</code>). 
+(e.g., <code>/usr/local/share</code>).
 This pathname is the default that <code><a href="#ut_005fread_005fxml_0028_0029">ut_read_xml()</a></code> uses.
 
    <p>Naturally, because the database is a regular file, it can be edited
-to add new units or remove existing ones. 
+to add new units or remove existing ones.
 Be very careful about doing this, however, because you might lose
 the benefit of exchanging unit-based information with others who
 haven't modified their database.
@@ -1945,11 +1945,11 @@ The data types <code><a href="#ut_005fvisitor">ut_visitor</a></code>, <code><a h
 <blockquote><p>This enumeration has the following values:
 
           <dl>
-<dt><code>UT_ASCII</code><dd><a href="http://en.wikipedia.org/wiki/Ascii">US ASCII</a> character-set. 
-<br><dt><code>UT_ISO_8859_1</code><dd>The <a href="http://en.wikipedia.org/wiki/Iso-8859-1">ISO-8859-1</a> character-set. 
-<br><dt><code>UT_LATIN1</code><dd>Synonym for <code>UT_ISO_8859_1</code>. 
+<dt><code>UT_ASCII</code><dd><a href="http://en.wikipedia.org/wiki/Ascii">US ASCII</a> character-set.
+<br><dt><code>UT_ISO_8859_1</code><dd>The <a href="http://en.wikipedia.org/wiki/Iso-8859-1">ISO-8859-1</a> character-set.
+<br><dt><code>UT_LATIN1</code><dd>Synonym for <code>UT_ISO_8859_1</code>.
 <br><dt><code>UT_UTF8</code><dd>The <a href="http://en.wikipedia.org/wiki/Utf-8">UTF-8</a> encoding of the Unicode
-character-set. 
+character-set.
 </dl>
         </p></blockquote></div>
 

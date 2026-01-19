@@ -6,10 +6,10 @@
 !
 ! Contributed by Paul Thomas  <pault@gcc.gnu.org>
 !
-module string 
+module string
   interface
     function  lc(string )
-      character(len=*), intent(in)  :: string 
+      character(len=*), intent(in)  :: string
       character(len=len(string ))    :: lc
     end function lc
   end interface
@@ -21,7 +21,7 @@ end module serial
 
   use serial
   use string
-  character*15  :: buffer  
+  character*15  :: buffer
   buffer = lc ("Have a Nice DAY")
   end
 

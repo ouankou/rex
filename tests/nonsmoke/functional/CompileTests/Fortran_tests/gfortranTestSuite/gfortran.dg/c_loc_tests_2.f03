@@ -4,7 +4,7 @@ module c_loc_tests_2
 use, intrinsic :: iso_c_binding
 implicit none
 
-interface 
+interface
    function test_scalar_address(cptr) bind(c)
      use, intrinsic :: iso_c_binding, only: c_ptr, c_int
      type(c_ptr), value :: cptr
@@ -47,7 +47,7 @@ contains
     integer, target, dimension(100) :: int_array_tar
     type(c_ptr) :: my_c_ptr_1 = c_null_ptr
     type(c_ptr) :: my_c_ptr_2 = c_null_ptr
-    
+
     int_array_tar = 100
     my_c_ptr_1 = c_loc(int_array_tar)
     if(test_array_address(my_c_ptr_1, 100) .ne. 1) then
@@ -64,7 +64,7 @@ contains
     type(f90type), pointer :: type_ptr
     type(c_ptr) :: my_c_ptr_1 = c_null_ptr
     type(c_ptr) :: my_c_ptr_2 = c_null_ptr
-    
+
     type_ptr => type_tar
     type_tar%i = 100
     type_tar%x = 1.0d0

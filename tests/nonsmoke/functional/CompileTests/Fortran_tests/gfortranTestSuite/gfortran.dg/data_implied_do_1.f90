@@ -1,8 +1,8 @@
 ! { dg-do run }
 ! Test of the patch for PR23232, in which implied do loop
 ! variables were not permitted in DATA statements.
-! 
-! Contributed by Roger Ferrer Ibáñez <rofi@ya.com> 
+!
+! Contributed by Roger Ferrer Ibáñez <rofi@ya.com>
 !
 PROGRAM p
   REAL :: TWO_ARRAY (3, 3)

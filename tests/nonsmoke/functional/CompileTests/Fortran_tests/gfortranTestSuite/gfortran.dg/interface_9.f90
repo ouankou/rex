@@ -1,7 +1,7 @@
 ! { dg-do compile }
 ! Test of the patch for PR30096, in which gfortran incorrectly.
 ! compared local with host associated interfaces.
-! 
+!
 ! Based on contribution by Harald Anlauf <anlauf@gmx.de>
 !
 module module1

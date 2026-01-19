@@ -35,7 +35,7 @@ subroutine caller
   p => func         ! { dg-error "INTENT mismatch in argument" }
 end subroutine
 
-end module 
+end module
 
 ! { dg-final { cleanup-modules "m" } }
 

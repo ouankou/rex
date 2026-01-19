@@ -55,14 +55,12 @@ struct non_const_member_base {
 
 } // namespace detail
 
-#if 1
 template <class Class, typename Type, Type Class::*PtrToMember>
 struct member
     : mpl::if_c<is_const<Type>::value,
                 detail::const_member_base<Class, Type, PtrToMember>,
                 detail::non_const_member_base<Class, Type, PtrToMember>>::type {
 };
-#endif
 
 } /* namespace multi_index */
 } /* namespace boost */
@@ -100,9 +98,7 @@ template <> struct uintptr_candidates<4> {
   typedef unsigned int type;
 };
 
-#if 1
 struct uintptr_aux {
-#if 1
   BOOST_STATIC_CONSTANT(
       int, index = sizeof(void *) == sizeof(uintptr_candidates<0>::type)   ? 0
                    : sizeof(void *) == sizeof(uintptr_candidates<1>::type) ? 1
@@ -114,12 +110,10 @@ struct uintptr_aux {
 
   BOOST_STATIC_CONSTANT(bool, has_uintptr_type = (index >= 0));
   typedef uintptr_candidates<index>::type type;
-#endif
 };
 
 typedef mpl::bool_<uintptr_aux::has_uintptr_type> has_uintptr_type;
 typedef uintptr_aux::type uintptr_type;
-#endif
 
 enum ordered_index_color { red = false, black = true };
 enum ordered_index_side { to_left = false, to_right = true };
@@ -149,7 +143,6 @@ template <typename Allocator> struct ordered_index_node_compressed_base {
 template <typename Allocator>
 struct ordered_index_node_impl_base :
 
-#if 1
     mpl::if_c<
         !(has_uintptr_type::value) ||
             (alignment_of<
@@ -162,16 +155,11 @@ struct ordered_index_node_impl_base :
                               type>::type::pointer,
                       ordered_index_node_impl<Allocator> *>::value),
         ordered_index_node_std_base<Allocator>,
-        ordered_index_node_compressed_base<Allocator>>::type {
-};
-#endif
+        ordered_index_node_compressed_base<Allocator>>::type {};
 
-#if 1
 template <typename Allocator>
 struct ordered_index_node_impl : ordered_index_node_impl_base<Allocator> {};
-#endif
 
-#if 1
 template <typename Super>
 struct ordered_index_node_trampoline
     : prevent_eti<
@@ -183,9 +171,7 @@ struct ordered_index_node_trampoline
       ordered_index_node_impl<typename boost::detail::allocator::rebind_to<
           typename Super::allocator_type, char>::type>>::type impl_type;
 };
-#endif
 
-#if 1
 template <typename Super>
 struct ordered_index_node : Super, ordered_index_node_trampoline<Super> {
 private:
@@ -198,7 +184,6 @@ public:
   impl_parent_ref parent();
   //  static ordered_index_node* from_impl(impl_pointer x);
 };
-#endif
 
 template <typename Node, typename KeyFromValue, typename CompatibleKey,
           typename CompatibleCompare>
@@ -242,48 +227,36 @@ public:
 } // namespace detail
 
 /* ordered_index specifiers */
-#if 1
 template <typename Arg1, typename Arg2, typename Arg3> struct ordered_unique {
   typedef typename detail::ordered_index_args<Arg1, Arg2, Arg3> index_args;
   typedef typename index_args::tag_list_type::type tag_list_type;
   typedef typename index_args::key_from_value_type key_from_value_type;
   typedef typename index_args::compare_type compare_type;
-#if 1
   template <typename Super> struct node_class {
     typedef detail::ordered_index_node<Super> type;
   };
-#endif
-#if 1
   template <typename SuperMeta> struct index_class {
     typedef detail::ordered_index<key_from_value_type, compare_type, SuperMeta,
                                   tag_list_type, detail::ordered_unique_tag>
         type;
   };
-#endif
 };
-#endif
 
-#if 1
 template <typename Arg1, typename Arg2, typename Arg3>
 struct ordered_non_unique {
   typedef detail::ordered_index_args<Arg1, Arg2, Arg3> index_args;
   typedef typename index_args::tag_list_type::type tag_list_type;
   typedef typename index_args::key_from_value_type key_from_value_type;
   typedef typename index_args::compare_type compare_type;
-#if 1
   template <typename Super> struct node_class {
     typedef detail::ordered_index_node<Super> type;
   };
-#endif
-#if 1
   template <typename SuperMeta> struct index_class {
     typedef detail::ordered_index<key_from_value_type, compare_type, SuperMeta,
                                   tag_list_type, detail::ordered_non_unique_tag>
         type;
   };
-#endif
 };
-#endif
 
 } /* namespace multi_index */
 } /* namespace boost */

@@ -8,7 +8,7 @@
       IMPLICIT REAL (a-h,o-z)
       IMPLICIT INTEGER (i-n)
       DIMENSION vec(ny)
-      ny = fun(vec(ny),1,1) 
+      ny = fun(vec(ny),1,1)
       RETURN
       END SUBROUTINE sub
       REAL FUNCTION fun(r1, i1, i2)

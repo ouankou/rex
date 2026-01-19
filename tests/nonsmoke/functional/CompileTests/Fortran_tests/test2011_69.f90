@@ -1,15 +1,15 @@
 ! Bug report from Jean (ANL) modVar.f90
 module a
   implicit none
-  private 
+  private
   save
   integer, parameter, public :: km =3
-end module 
+end module
 
-module b  
+module b
   use a
-    
-  real, dimension(km), public :: zw 
+
+  real, dimension(km), public :: zw
 end module
 
 module c
@@ -18,13 +18,13 @@ contains
 subroutine foo(x)
   real :: x
   real :: zw
-  zw=x 
+  zw=x
   zw=zw+1.0
   x=zw
 end subroutine
-end module 
- 
-program p 
+end module
+
+program p
  use c
  integer k
  k=1

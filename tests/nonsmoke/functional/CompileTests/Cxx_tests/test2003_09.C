@@ -28,34 +28,3 @@ void transpose(intArray &X)
 
 // This approach is independent of 32 or 64 bit systems (at least for GNU)
 typedef __SIZE_TYPE__ size_t;
-
-#if 0
-// This is not defined by default for GNU unless we include the system headers.
-// It is defined by default for ROSE, since it is required for the Plum Hall 
-// tests and I think it is required within the C++ standard.  It is OK to
-// redeclare it as long as it is done consistantly!
-#ifdef __LP64__
-// 64 bit case
-typedef long unsigned int size_t;
-#else
-// 32 bit case
-typedef unsigned int size_t;
-#endif
-
-class A
-   { 
-     public: 
-          A(int) {};
-          void *operator new (size_t Size) {};
-   };
-
-// A & x = *(new A(i));
-
-void foo ()
-   {
-     A & Result = *(new A (1));
-
-  // int j;
-
-   }
-#endif

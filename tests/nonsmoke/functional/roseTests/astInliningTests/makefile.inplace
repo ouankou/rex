@@ -46,9 +46,9 @@ CPP_FILES = \
 # different versions of output, using different options
 
 # v1:  without post processing
-CPP_FILES_OUT_v1 = $(addprefix rose_v1_,${CPP_FILES}) 
+CPP_FILES_OUT_v1 = $(addprefix rose_v1_,${CPP_FILES})
 # v2: with post processing, default behavior
-CPP_FILES_OUT_v2 = $(addprefix rose_v2_,${CPP_FILES}) 
+CPP_FILES_OUT_v2 = $(addprefix rose_v2_,${CPP_FILES})
 
 # rules to generate the output files
 $(CPP_FILES_OUT_v1): $(@:rose_v1_%=%)
@@ -58,7 +58,7 @@ $(CPP_FILES_OUT_v2): $(@:rose_v2_%=%)
 	$(INLINER) -c $(@:rose_v2_%=%) -rose:output $@
 
 #--------further convert dot file to pdf and pgn file------
-all: $(CPP_FILES_OUT_v1) $(CPP_FILES_OUT_v2) 
+all: $(CPP_FILES_OUT_v1) $(CPP_FILES_OUT_v2)
 
 check: $(CPP_FILES_OUT_v1) $(CPP_FILES_OUT_v2)
 

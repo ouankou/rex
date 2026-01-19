@@ -5,7 +5,7 @@
 !      external foo
 !$omp parallel
       call foo()
-!$omp end parallel      
+!$omp end parallel
       stop
       end
 

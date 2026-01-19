@@ -5,13 +5,11 @@
 // each time.  This would not have to be the case if they were in the same name
 // space but within separate namespace definitions!
 
-#if 1
 typedef struct _IO_FILE __FILE;
 struct _IO_FILE 
    {
      int x;
-   };
-#endif
+};
 
 struct __foo;
 // struct __foo {};

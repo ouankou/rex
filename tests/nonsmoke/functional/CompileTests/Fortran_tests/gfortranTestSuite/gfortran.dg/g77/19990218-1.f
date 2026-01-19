@@ -2,7 +2,7 @@ c { dg-do compile }
 c
 c  g77 used to warn for this case
 c 19990218-1.f: In program `test':
-c 19990218-1.f:13: 
+c 19990218-1.f:13:
 c             double precision function fun(a,b)
 c                                       1
 c  19990218-1.f:23: (continued):

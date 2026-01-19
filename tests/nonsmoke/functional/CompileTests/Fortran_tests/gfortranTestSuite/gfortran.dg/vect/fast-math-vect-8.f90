@@ -1,5 +1,5 @@
-! { dg-do compile } 
-! { dg-require-effective-target vect_float } 
+! { dg-do compile }
+! { dg-require-effective-target vect_float }
 
 module solv_cap
 
@@ -89,5 +89,5 @@ contains
 
 end module solv_cap
 
-! { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" } } 
-! { dg-final { cleanup-tree-dump "vect" } } 
+! { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" } }
+! { dg-final { cleanup-tree-dump "vect" } }

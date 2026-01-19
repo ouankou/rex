@@ -1,11 +1,3 @@
-#if 0
-template< typename T >
-class _Rb_tree
-   {
-     public:
-          typedef T iterator;
-   };
-#endif
 
 template < typename _Key >
 class map

@@ -23,13 +23,13 @@ end module person_education
     integer :: personnel_number = 0
     character(24) :: department = ""
   end type service
-  
+
   type, extends(service) :: person_record
     type (person_record), pointer :: supervisor => NULL ()
   end type person_record
-  
+
   type(person_record), pointer :: recruit, supervisor
-  
+
 ! Check that references by ultimate component work
 
   allocate (supervisor)

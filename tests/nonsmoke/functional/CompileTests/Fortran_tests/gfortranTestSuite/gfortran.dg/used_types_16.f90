@@ -23,7 +23,7 @@ END MODULE
 MODULE class_dummy_atom_list
 USE class_dummy_atom_types, ONLY: dummy_atom_list
 
-INTERFACE 
+INTERFACE
   SUBROUTINE dummy_atom_list_init_copy(this, other)
     USE class_dummy_atom_types, ONLY: dummy_atom_list
     TYPE(dummy_atom_list), INTENT(out) :: this

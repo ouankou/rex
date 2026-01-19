@@ -8,12 +8,12 @@ program if_stop
     stop 2
   endif
   if (.false.) then
-    n = 1   
+    n = 1
   else
     stop
   endif
   if (n .eq. 1) then
-    stop 'Done #123' 
+    stop 'Done #123'
   else
     stop 2
   endif

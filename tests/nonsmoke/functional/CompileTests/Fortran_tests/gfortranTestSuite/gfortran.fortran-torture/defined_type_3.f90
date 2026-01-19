@@ -2,8 +2,8 @@
 ! temporary to hold type%var
 ! fortran/18157
 program testcase_fold
-  type :: struct                            
-     real      :: var       ! its julian sec  
+  type :: struct
+     real      :: var       ! its julian sec
   end type struct
   type(struct), dimension(:), pointer :: mystruct
   mystruct(1:2)%var = mystruct(2:3)%var

@@ -5,7 +5,7 @@
 subroutine foo(a)
   real, dimension(:) :: a
 
-  a(1:3:2) = a(1:2) 
-  a(1:2) = a(1:3:2) 
+  a(1:3:2) = a(1:2)
+  a(1:2) = a(1:3:2)
 end subroutine
 

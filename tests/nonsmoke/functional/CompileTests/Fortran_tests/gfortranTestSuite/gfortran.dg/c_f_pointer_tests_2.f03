@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! This should compile.  There was a bug in resolving c_f_pointer that was 
+! This should compile.  There was a bug in resolving c_f_pointer that was
 ! caused by not sorting the actual args to match the order of the formal args.
 ! PR fortran/32800
 !

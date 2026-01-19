@@ -1,8 +1,8 @@
 ! { dg-do run }
 ! Tests the fix for PR19546 in which an ICE would result from
-! setting the parent result in a contained procedure. 
+! setting the parent result in a contained procedure.
 ! Check that parent alternate entry results can be referenced.
-! 
+!
 function f()
   integer :: f, g
   f = 42

@@ -123,20 +123,6 @@ size_t totaldimsize(OCnode *node) {
   return count;
 }
 
-#if 0 /*def IGNORE*/
-size_t
-totaldimsize(unsigned int rank, size_t* dimsizes)
-{
-    unsigned int i;
-    int unlim = 0;
-    unsigned long size = 1;
-    for(i=0;i<rank;i++) {
-        if(dimsizes[i] != 0) size = (size * dimsizes[i]); else unlim = 1;
-    }
-    return size;
-}
-#endif
-
 size_t octypesize(OCtype etype) {
   switch (etype) {
   case OC_Char:

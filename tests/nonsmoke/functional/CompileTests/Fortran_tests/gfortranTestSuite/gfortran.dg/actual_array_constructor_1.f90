@@ -71,7 +71,7 @@ contains
 
     b = 'hola! '
     call option_stopwatch_a((/a, b, 'goddag'/))
-  end subroutine option_stopwatch_s 
+  end subroutine option_stopwatch_s
   subroutine option_stopwatch_a (a)
     character (*) :: a(:)
     if (any (a .ne. (/'hello ','hola! ','goddag'/))) call abort ()

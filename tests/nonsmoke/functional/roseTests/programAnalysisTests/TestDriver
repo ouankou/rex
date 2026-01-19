@@ -16,25 +16,25 @@ DIFFOPTIONS="-U5"
 echo ./steensgaardTest1 8
 ./steensgaardTest1 8 > out
 echo "Calling: ${DIFF} ${DIFFOPTIONS} out $srcdir/steensgaardTest1.out"
-${DIFF} ${DIFFOPTIONS} out $srcdir/steensgaardTest1.out 
+${DIFF} ${DIFFOPTIONS} out $srcdir/steensgaardTest1.out
 rm out
 
 echo ./PtrAnalTest $srcdir/testPtr1.C
 ./PtrAnalTest $srcdir/testPtr1.C  > out
 echo "Calling: ${DIFF} ${DIFFOPTIONS} out $srcdir/PtrAnalTest.out1"
-${DIFF} ${DIFFOPTIONS} out $srcdir/PtrAnalTest.out1 
+${DIFF} ${DIFFOPTIONS} out $srcdir/PtrAnalTest.out1
 rm out
 
 echo ./PtrAnalTest $srcdir/testPtr2.C
 ./PtrAnalTest $srcdir/testPtr2.C  > out
 echo "Calling: ${DIFF} ${DIFFOPTIONS} out $srcdir/PtrAnalTest.out2"
-${DIFF} ${DIFFOPTIONS} out $srcdir/PtrAnalTest.out2 
+${DIFF} ${DIFFOPTIONS} out $srcdir/PtrAnalTest.out2
 rm out
 
 echo ./steensgaardTest2 $srcdir/testPtr1.C
 ./steensgaardTest2 $srcdir/testPtr1.C  > out
 echo "Calling: ${DIFF} ${DIFFOPTIONS} out $srcdir/steensgaardTest2.out1"
-${DIFF} ${DIFFOPTIONS} out $srcdir/steensgaardTest2.out1 
+${DIFF} ${DIFFOPTIONS} out $srcdir/steensgaardTest2.out1
 rm out
 
 echo ./steensgaardTest2 $srcdir/testPtr2.C

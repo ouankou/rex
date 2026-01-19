@@ -44,7 +44,7 @@ C     variables."
       real START_LAT, START_LON
       parameter (START_LAT = 25.0, START_LON = -125.0)
 
-C     We will write surface temperature and pressure fields. 
+C     We will write surface temperature and pressure fields.
       character*(*) PRES_NAME, TEMP_NAME
       parameter (PRES_NAME='pressure')
       parameter (TEMP_NAME='temperature')
@@ -82,14 +82,14 @@ C     have some real data to write, for example, model output.
       end do
       do lon = 1, NLONS
          do lat = 1, NLATS
-            pres_out(lon, lat) = SAMPLE_PRESSURE + 
+            pres_out(lon, lat) = SAMPLE_PRESSURE +
      +           (lon - 1) * NLATS + (lat - 1)
-            temp_out(lon, lat) = SAMPLE_TEMP + 
+            temp_out(lon, lat) = SAMPLE_TEMP +
      +           .25 * ((lon - 1) * NLATS + (lat - 1))
          end do
       end do
 
-C     Create the file. 
+C     Create the file.
       retval = nf_create(FILE_NAME, nf_clobber, ncid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
@@ -102,20 +102,20 @@ C     Define the dimensions.
 C     Define the coordinate variables. They will hold the coordinate
 C     information, that is, the latitudes and longitudes. A varid is
 C     returned for each.
-      retval = nf_def_var(ncid, LAT_NAME, NF_REAL, 1, lat_dimid, 
+      retval = nf_def_var(ncid, LAT_NAME, NF_REAL, 1, lat_dimid,
      +     lat_varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
-      retval = nf_def_var(ncid, LON_NAME, NF_REAL, 1, lon_dimid, 
+      retval = nf_def_var(ncid, LON_NAME, NF_REAL, 1, lon_dimid,
      +     lon_varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
 C     Assign units attributes to coordinate var data. This attaches a
 C     text attribute to each of the coordinate variables, containing the
 C     units.
-      retval = nf_put_att_text(ncid, lat_varid, UNITS, len(LAT_UNITS), 
+      retval = nf_put_att_text(ncid, lat_varid, UNITS, len(LAT_UNITS),
      +     LAT_UNITS)
       if (retval .ne. nf_noerr) call handle_err(retval)
-      retval = nf_put_att_text(ncid, lon_varid, UNITS, len(LON_UNITS), 
+      retval = nf_put_att_text(ncid, lon_varid, UNITS, len(LON_UNITS),
      +     LON_UNITS)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
@@ -123,19 +123,19 @@ C     Define the netCDF variables. The dimids array is used to pass the
 C     dimids of the dimensions of the netCDF variables.
       dimids(1) = lon_dimid
       dimids(2) = lat_dimid
-      retval = nf_def_var(ncid, PRES_NAME, NF_REAL, NDIMS, dimids, 
+      retval = nf_def_var(ncid, PRES_NAME, NF_REAL, NDIMS, dimids,
      +     pres_varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
-      retval = nf_def_var(ncid, TEMP_NAME, NF_REAL, NDIMS, dimids, 
+      retval = nf_def_var(ncid, TEMP_NAME, NF_REAL, NDIMS, dimids,
      +     temp_varid)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
 C     Assign units attributes to the pressure and temperature netCDF
 C     variables.
-      retval = nf_put_att_text(ncid, pres_varid, UNITS, len(PRES_UNITS), 
+      retval = nf_put_att_text(ncid, pres_varid, UNITS, len(PRES_UNITS),
      +     PRES_UNITS)
       if (retval .ne. nf_noerr) call handle_err(retval)
-      retval = nf_put_att_text(ncid, temp_varid, UNITS, len(TEMP_UNITS), 
+      retval = nf_put_att_text(ncid, temp_varid, UNITS, len(TEMP_UNITS),
      +     TEMP_UNITS)
       if (retval .ne. nf_noerr) call handle_err(retval)
 
@@ -161,7 +161,7 @@ C     the netCDF variables we have defined.
 C     Close the file.
       retval = nf_close(ncid)
       if (retval .ne. nf_noerr) call handle_err(retval)
-   
+
 C     If we got this far, everything worked as expected. Yipee!
       print *,'*** SUCCESS writing example file sfc_pres_temp.nc!'
       end

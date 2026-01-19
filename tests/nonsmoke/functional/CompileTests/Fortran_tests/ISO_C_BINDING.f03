@@ -46,7 +46,7 @@ module iso_c_binding
 ! Character Constants
 ! The following parameters give Fortran values for all of the C ``backslash'' escape sequences.
 ! Note that "achar()" is the Character in ASCII collating sequence.
-  CHARACTER,PARAMETER :: c_null_char = char(0)         ! C '\0' 
+  CHARACTER,PARAMETER :: c_null_char = char(0)         ! C '\0'
   CHARACTER,PARAMETER :: c_alert = achar(7)            ! C '\a'
   CHARACTER,PARAMETER :: c_backspace = achar(8)        ! C '\b'
   CHARACTER,PARAMETER :: c_form_feed = achar(12)       ! C '\f'
@@ -71,18 +71,18 @@ module iso_c_binding
   END TYPE
 
 ! This type represents a C function pointer, and is used when passing procedure arguments
-! to a C routine. The interface to the C routine is declared with a TYPE(c_funptr) dummy 
-! argument, and values of this type can be created by using the function c_funloc on a 
+! to a C routine. The interface to the C routine is declared with a TYPE(c_funptr) dummy
+! argument, and values of this type can be created by using the function c_funloc on a
 ! procedure name (see below for restrictions).
 
   TYPE c_ptr
     PRIVATE
   END TYPE
 
-! This type represents a ``(void *)'' C data pointer, and is used when passing pointer 
-! arguments to a C routine. The interface to the C routine is declared with a TYPE(c_ptr) 
+! This type represents a ``(void *)'' C data pointer, and is used when passing pointer
+! arguments to a C routine. The interface to the C routine is declared with a TYPE(c_ptr)
 ! dummy argument; values of this type are created using the c_loc function (Fortran)
-! pointer or target (see below for restrictions). A C pointer can be turned into a 
+! pointer or target (see below for restrictions). A C pointer can be turned into a
 ! Fortran pointer using the c_f_pointer function (see below for the full description).
 ! Procedure Descriptions
 

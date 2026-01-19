@@ -27,66 +27,10 @@ internal_fnmatch (const char *pattern, const char *string, const char *string_en
             char cold;
             unsigned char fn;
 
-            for (;;)
-              {
-#if 0
-                if (!(flags & (1 << 1)) && c == '\\')
-                  {
-                    goto normal_bracket;
-                  }
-                else if (c == '[' && *p == ':')
-                  {
-
-                    char str[256 + 1];
-                    size_t c1 = 0;
-
-                    wctype_t wt;
-
-                    const char *startp = p;
-
-                    for (;;)
-                      {
-                        if (c < 'a' || c >= 'z')
-                          {
-                            goto normal_bracket;
-                          }
-                      }
-
-// # 287 "fnmatch_loop.c"
-                    if (iswctype (btowc ((unsigned char) *n), wt))
-                      goto matched;
-// # 305 "fnmatch_loop.c"
-                    c = *p++;
-                  }
-// # 413 "fnmatch_loop.c"
-                else if (c == '\0')
-                  {
-
-                    p = p_init;
-                    n = n_init;
-                    c = '[';
-                    goto normal_match;
-                  }
-                else
-                  {
-                    _Bool is_range = 0;
-// # 599 "fnmatch_loop.c"
-                      {
-                        c = ((flags & (1 << 4)) ? tolower (c) : (c));
-                      normal_bracket:
-                        is_range = (*p == '-' && p[1] != '\0'
-                                    && p[1] != ']');
-
-                        if (!is_range && c == fn)
-                          goto matched;
-                        cold = c;
-                        c = *p++;
-                      }
-                  }
-#endif
-                if (c == ']')
-                  break;
-              }
+            for (;;) {
+              if (c == ']')
+                break;
+            }
 
             if (!not)
               return 1;

@@ -8,7 +8,7 @@
 program a_cant_assert_keyword_nonull
     call g(*100)  ! assertion failure: 'keyword' is null
  100 continue
- 
+
 contains
  subroutine g(*)
  end subroutine

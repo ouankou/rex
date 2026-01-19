@@ -305,13 +305,6 @@ static void test_self_copy() {
     ASSERT_always_require2(AllocationCounter<Attr4>::nAllocated == 1,
                            "one value inserted");
     ASSERT_always_require(a.exists("x"));
-
-#if 0 // [Robb Matzke 2015-11-11]: a self-returning copy constructor is caught
-      // by the library now
-        AstAttributeMechanism b(a);
-        ASSERT_always_require2(!a.exists("x"), "value lacking proper copy constructor should not have been copied");
-        ASSERT_always_require2(AllocationCounter<Attr4>::nAllocated == 1, "one value inserted");
-#endif
   }
   ASSERT_always_require2(AllocationCounter<Attr4>::nAllocated == 0,
                          "containers destroyed");
@@ -552,22 +545,6 @@ static void test_ast_attributes() {
   ASSERT_always_require(4 == AllocationCounter<Attr6>::nAllocated);
   ASSERT_always_require(2 == attr1_n);
   ASSERT_always_require(2 == attr5_n);
-
-#if 0 // [Robb Matzke 2021-05-03]: It is unsafe to delete AST nodes
-    // Delete an ast node, which should delete its attributes
-    SageInterface::deleteAST(node1);
-    node1 = NULL;
-
-    ASSERT_always_require(2 == node0->numberOfAttributes());
-    ASSERT_always_require(node0->attributeExists("attr1"));
-    ASSERT_always_require(node0->getAttribute("attr1") == attr1);
-    ASSERT_always_require(node0->attributeExists("attr4"));
-    ASSERT_always_require(node0->getAttribute("attr4") == attr5);
-
-    ASSERT_always_require(2 == AllocationCounter<Attr6>::nAllocated);
-    ASSERT_always_require(1 == attr1_n);
-    ASSERT_always_require(1 == attr5_n);
-#endif
 
   // Tear down the AST while Attr6 counters remain in scope.
   SageInterface::tearDownAst(nullptr);

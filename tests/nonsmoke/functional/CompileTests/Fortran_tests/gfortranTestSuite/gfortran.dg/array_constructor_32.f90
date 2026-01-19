@@ -16,7 +16,7 @@
   real, parameter :: d3(3) = (/7., 8., 9./)
 
   integer :: i, z(n)
- 
+
   data (b(i), i = 1, n) /a(d1), a(d2), a(d3)/
   data (z(i), i = 1, n) / 1, 2, 3/
 

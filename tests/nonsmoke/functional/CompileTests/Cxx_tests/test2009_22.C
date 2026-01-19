@@ -10,16 +10,7 @@ public:
   
 };
 
-IdxSet& IdxSet::operator=(const IdxSet& rhs)
-{
-#if 0  
-   if (this != &rhs)
-   {
-         i = rhs.i;
-   }
-#endif   
-   return *this;
-}
+IdxSet &IdxSet::operator=(const IdxSet &rhs) { return *this; }
 
 // derived class--------------
 class DIdxSet: public IdxSet

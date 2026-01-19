@@ -106,8 +106,8 @@ your site has an unusual setup for locations of compilers and various
 other tools like netCDF, you may have to edit the {\em archdir.gnu}
 file to reflect the different setup.
 
-POP version 2.0 or later requires version 3.5 or later of the 
-netCDF library.  If not already installed on your system, the 
+POP version 2.0 or later requires version 3.5 or later of the
+netCDF library.  If not already installed on your system, the
 netCDF package can be obtained free of charge from
 
 \noindent
@@ -140,19 +140,19 @@ a problem to run on different threads and processors.  Note
 that even the serial versions decompose the domain in order
 to achieve better performance on cache-based microprocessors.
 
-In POP, the full horizontal domain size 
-{\em (nx\_global,ny\_global)} is broken up into domains 
-or blocks. The size of these blocks can be chosen to 
-achieve better performance as described below.  Any block 
-size can be chosen, but to avoid padding the domain with 
-extra points, the block size in each direction should be 
-chosen such that it divides the global domain size in that 
+In POP, the full horizontal domain size
+{\em (nx\_global,ny\_global)} is broken up into domains
+or blocks. The size of these blocks can be chosen to
+achieve better performance as described below.  Any block
+size can be chosen, but to avoid padding the domain with
+extra points, the block size in each direction should be
+chosen such that it divides the global domain size in that
 direction evenly.
 
 Once the domain has been decomposed into blocks, the
 blocks are distributed among the processors or nodes, ignoring
 blocks that only contain land points.  The distribution
-of blocks across processors or nodes can be performed using 
+of blocks across processors or nodes can be performed using
 either a load-balanced distribution to try to give all processors
 an equal amount of work or a Cartesian distribution
 which ensures that the block's north, south, east and
@@ -192,8 +192,8 @@ at run time through a namelist input file.
 
 The full model size must be set in the domain\_size module
 (in the file {\em domain\_size.F90} located in the run directory).
-The horizontal extents of the grid {\em nx\_global} and 
-{\em ny\_global} are defined here as well as the number of 
+The horizontal extents of the grid {\em nx\_global} and
+{\em ny\_global} are defined here as well as the number of
 vertical levels {\em km}.  The number of tracers
 {\em nt} also must be defined here and must be at least two
 to handle potential temperature and salinity which are always
@@ -212,7 +212,7 @@ directory).  The parameter
 grid points in the first horizontal dimension;  the
 parameter {\em block\_size\_y} determines the number
 of physical grid points in the (wait for it...) second
-horizontal dimension.  The two parameters 
+horizontal dimension.  The two parameters
 {\em max\_blocks\_clinic} and
 {\em max\_blocks\_tropic} determine the maximum number
 of blocks that can be distributed onto a processor or node.
@@ -244,7 +244,7 @@ where {\em NPROCX} is the value found in the old POP
 analogously.  The {\em max\_blocks} parameters
 are then set to one.  After using this configuration,
 users can experiment with reducing the block size to
-improve performance. 
+improve performance.
 
 \subsection{Coupled model runs}\label{sec:compile-coupled}
 
@@ -258,7 +258,7 @@ requested on the makefile command line:
 {\em gmake COUPLED=yes}.
 
 \noindent
-This option turns on the COUPLED ifdef flag for the 
+This option turns on the COUPLED ifdef flag for the
 preprocessor so that the code necessary for model
 coupling is included during the preprocessing phase.
 
@@ -277,18 +277,18 @@ By default, this will create an executable named
 \section{Testing POP}\label{sec:testPOP}
 
 The POP distribution includes a simple test case that can be used
-for a variety of purposes, including validation, performance 
-tuning and benchmarking.  The key point is that there are no input 
-fields: the model grid, topography, initial state, equation of 
-state coefficients and wind stress (there is no other forcing 
-enabled) are all generated internally.  The only file that is 
+for a variety of purposes, including validation, performance
+tuning and benchmarking.  The key point is that there are no input
+fields: the model grid, topography, initial state, equation of
+state coefficients and wind stress (there is no other forcing
+enabled) are all generated internally.  The only file that is
 read is {\em pop\_in}.
 
-To run the test problem, type 
+To run the test problem, type
 
-{\em ./setup\_run\_dir test test} 
+{\em ./setup\_run\_dir test test}
 
-\noindent 
+\noindent
 and a
 directory called {\em test} will be created that contains all of the
 appropriate files.  The default model size is 192x128x20 grid points,
@@ -300,9 +300,9 @@ grid with idealized landmasses. Make the executable as described
          {sec:build}
 The {\em pop\_in} file defaults to running 20 steps with
 full diagnostics output every step.  Note that for performance
-benchmarks, the diagnostic frequency should be set to `never' 
-as the global diagnostics are expensive and typically 
-requested relatively infrequently (e.g. every 10 days) in a 
+benchmarks, the diagnostic frequency should be set to `never'
+as the global diagnostics are expensive and typically
+requested relatively infrequently (e.g. every 10 days) in a
 production simulation.
 
 To use this test case for validation, the user can compare their ouput

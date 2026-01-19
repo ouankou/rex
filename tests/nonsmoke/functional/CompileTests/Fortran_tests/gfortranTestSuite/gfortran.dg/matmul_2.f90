@@ -17,5 +17,5 @@ program matmul_2
       c(1,5) /= 18 .or. c(2,5) /= 18 .or. &
       c(1,6) /= 1789789 .or. c(2,6) /= 1789789 .or. &
       c(1,7) /= 18 .or. c(2,7) /= 18) call abort
-      
+
 end program matmul_2

@@ -5,13 +5,11 @@ namespace X
         {
        // int __pos;
           int __state;
-        } _G_fpos64_t;
-#if 1
+     } _G_fpos64_t;
      typedef struct
         {
        // int __pos;
           int __state;
-        } _G_fpos64;
-#endif
+     } _G_fpos64;
    }
 

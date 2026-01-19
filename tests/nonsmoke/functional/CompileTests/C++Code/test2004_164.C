@@ -23,10 +23,5 @@ void foo()
   // Original code: (a3->operator*(a2)).foo();
   // ERROR Unparsed code: (*a3).foo();
      (a3->operator*(a2)).foo();
-
-#if 0
-  // Alternative formulation using overloaded operator syntax (with same result)
-     ((*a3) * a2).foo();
-#endif
    }
 

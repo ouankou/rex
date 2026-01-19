@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! PR25598 Error on repeated backspaces.
 ! Derived from example given in PR by Dale Ranta
-! Contributed by Jerry DeLisle  <jvdelisle@gcc.gnu.org> 
+! Contributed by Jerry DeLisle  <jvdelisle@gcc.gnu.org>
        integer data
        data=-1
        open(unit=11,status='scratch',form='unformatted')

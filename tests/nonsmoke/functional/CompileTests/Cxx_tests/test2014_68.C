@@ -1,5 +1,4 @@
 
-#if 1
 
 namespace XXX {
 
@@ -22,6 +21,4 @@ void coarsenNodalByInjection(
      int r[3] = {1,1,1};
    }
 
-}
-#endif
-
+   } // namespace XXX

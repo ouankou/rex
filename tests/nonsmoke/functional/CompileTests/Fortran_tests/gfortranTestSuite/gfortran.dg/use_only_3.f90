@@ -9,7 +9,7 @@
 ! way in which the renaming inserted new symtree entries.  Unless somenody can
 ! come up with a reduced version, this relatively large file will have to be added
 ! to the testsuite.  Fortunately, it only has to be comiled once:)
-!  
+!
 ! Reported by Tobias Burnus <burnus@gcc.gnu.org>
 !
 include 'use_only_3.inc'

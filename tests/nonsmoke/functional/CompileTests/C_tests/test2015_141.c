@@ -8826,23 +8826,44 @@ void foobar()
    {
      long ret = 0;
      struct xen_platform_op curop, *op = &curop;
-     ({ 
-        const typeof(*((*
-          ({ unsigned long __ptr; 
+     ({
+       const typeof(*(
+           (*({ unsigned long __ptr; 
              __asm__ ("" : "=r"(__ptr) : "0"((typeof(&(boot_edid_info)))(__maddr_to_virt((unsigned long)((__virt_to_maddr((unsigned long)(&(boot_edid_info))))))))); 
-             (typeof((typeof(&(boot_edid_info)))(__maddr_to_virt((unsigned long)((__virt_to_maddr((unsigned long)(&(boot_edid_info))))))))) (__ptr + (trampoline_phys-(__virt_to_maddr((unsigned long)(trampoline_start))))); 
-           })))) *_s = ((*
-               ({ unsigned long __ptr; __asm__ ("" : "=r"(__ptr) : "0"((typeof(&(boot_edid_info)))(__maddr_to_virt((unsigned long)((__virt_to_maddr((unsigned long)(&(boot_edid_info))))))))); 
-                  (typeof((typeof(&(boot_edid_info)))(__maddr_to_virt((unsigned long)((__virt_to_maddr((unsigned long)(&(boot_edid_info))))))))) (__ptr + (trampoline_phys-(__virt_to_maddr((unsigned long)(trampoline_start))))); 
-                })));
-#if 1
-        char (*_d)[sizeof(*_s)] = (void *)(op->u.firmware_info.u.vbeddc_info.edid).p;
-        ((void)((op->u.firmware_info.u.vbeddc_info.edid).p == ((*
-          ({ unsigned long __ptr;
-             __asm__ ("" : "=r"(__ptr) : "0"((typeof(&(boot_edid_info)))(__maddr_to_virt((unsigned long)((__virt_to_maddr((unsigned long)(&(boot_edid_info)))))))));
-            (typeof((typeof(&(boot_edid_info)))(__maddr_to_virt((unsigned long)((__virt_to_maddr((unsigned long)(&(boot_edid_info))))))))) (__ptr + (trampoline_phys-(__virt_to_maddr((unsigned long)(trampoline_start)))));
-           })))));
-#endif
-        (((((((get_cpu_info()->current_vcpu)))->domain)->guest_type != guest_type_pv)) ? copy_to_user_hvm((_d+(0)), (_s), (sizeof(*_s)*(128))) : copy_to_user((_d+(0)), (_s), (sizeof(*_s)*(128))));
+             (typeof((typeof(&(boot_edid_info)))(__maddr_to_virt((unsigned long)((__virt_to_maddr((unsigned long)(&(boot_edid_info))))))))) (__ptr + (trampoline_phys-(__virt_to_maddr((unsigned long)(trampoline_start)))));
+           })))) *_s = ((*({
+         unsigned long __ptr;
+         __asm__(
+             ""
+             : "=r"(__ptr)
+             : "0"((typeof(&(boot_edid_info)))(__maddr_to_virt((unsigned long)((
+                 __virt_to_maddr((unsigned long)(&(boot_edid_info)))))))));
+         (typeof((typeof(&(boot_edid_info)))(__maddr_to_virt((
+             unsigned long)((__virt_to_maddr((unsigned long)(&(
+             boot_edid_info)))))))))(__ptr +
+                                     (trampoline_phys -
+                                      (__virt_to_maddr(
+                                          (unsigned long)(trampoline_start)))));
+       })));
+       char (*_d)[sizeof(*_s)] =
+           (void *)(op->u.firmware_info.u.vbeddc_info.edid).p;
+       ((void)((op->u.firmware_info.u.vbeddc_info.edid).p == ((*({
+                 unsigned long __ptr;
+                 __asm__(""
+                         : "=r"(__ptr)
+                         : "0"((typeof(&(boot_edid_info)))(__maddr_to_virt(
+                             (unsigned long)((__virt_to_maddr(
+                                 (unsigned long)(&(boot_edid_info)))))))));
+                 (typeof((typeof(&(boot_edid_info)))(__maddr_to_virt((
+                     unsigned long)((__virt_to_maddr((unsigned long)(&(
+                     boot_edid_info)))))))))(__ptr +
+                                             (trampoline_phys -
+                                              (__virt_to_maddr((
+                                                  unsigned long)(trampoline_start)))));
+               })))));
+       (((((((get_cpu_info()->current_vcpu)))->domain)->guest_type !=
+          guest_type_pv))
+            ? copy_to_user_hvm((_d + (0)), (_s), (sizeof(*_s) * (128)))
+            : copy_to_user((_d + (0)), (_s), (sizeof(*_s) * (128))));
      });
    }

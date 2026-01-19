@@ -29,62 +29,6 @@ double vec_norm1(double *v__79,int x__80)
   return sum__81;
 }
 
-#if 0
-// Bad code
-double vec_norm1(double *v__75,int x__76)
-{
-  double sum__77 = (0);
-  for (int i__78 = 0; i__78 < x__76; ++i__78) {
-    double rose_temp__3__79;
-    double x__81;
-    if (x__81 > (0)) {
-      rose_temp__3__79 = x__81;
-      goto rose_inline_end__2__82;
-    }
-    else {
-      rose_temp__3__79 = (-x__81);
-      goto rose_inline_end__2__82;
-    }
-    rose_inline_end__2__82:
-    sum__77 += rose_temp__3__79;
-  }
-  return sum__77;
-}
-#endif
-
-#if 0
-// Bad code (without flattenBlocks() and cleanupInlinedCode()
-double vec_norm1(double *v__75,int x__76)
-{
-  double sum__77 = (0);
-  for (int i__78 = 0; i__78 < x__76; ++i__78) {
-    double rose_temp__3__79;
-{
-      double x__shadow__80;
-{
-        double x__81;
-{
-          if (x__81 > (0)) {{
-              rose_temp__3__79 = x__81;
-              goto rose_inline_end__2__82;
-            }
-          }
-          else {{
-              rose_temp__3__79 = (-x__81);
-              goto rose_inline_end__2__82;
-            }
-          }
-        }
-        rose_inline_end__2__82:
-        0;
-      }
-    }
-    sum__77 += rose_temp__3__79;
-  }
-  return sum__77;
-}
-#endif
-
 double mat_norm1(double *v__87,int m__88,int n__89)
 {
   double norm__90 = ((-1.) / (0));

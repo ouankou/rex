@@ -59,15 +59,3 @@ using t_Class2 =
  
 
 t_Class2<namespace1::struct2, int> local1;
-
- 
- 
-#if 0
-t_Class2<namespace1::struct2, int> local1;
-gets this error on Ares in ROSE 0.9.9.246:
-rose_ROSE-25.cc(30): error: identifier "struct2" is undefined
-  t_Class2 < struct2  , int  >  local1;
-             ^
-#endif
-
- 

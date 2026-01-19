@@ -11,7 +11,6 @@ class map
 // This causes the name qualification of the type in doSomething() to be "map<int>::iterator".
 map<int>::iterator it;
 
-#if 1
 class foo
    {
      public:
@@ -19,6 +18,4 @@ class foo
              {
                map<int>::iterator it;
              }
-   };
-#endif
-
+};

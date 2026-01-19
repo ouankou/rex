@@ -1,13 +1,7 @@
 
 typedef enum _HTDirShow {
-    HT_DS_SIZE = 0x1,
-    HT_DS_DATE = 0x2,
-#if 0
-    HT_DS_HID = 0x4,
-    HT_DS_DES = 0x8,
-    HT_DS_ICON = 0x10,
-    HT_DS_HOTI = 0x20
-#endif
+  HT_DS_SIZE = 0x1,
+  HT_DS_DATE = 0x2,
 } HTDirShow;
 
 // This is unparsed as: static HTDirShow dir_show = _HTDirShow(27);

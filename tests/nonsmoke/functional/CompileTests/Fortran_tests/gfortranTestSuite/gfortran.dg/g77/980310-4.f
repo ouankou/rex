@@ -3,13 +3,13 @@ C To: egcs-bugs@cygnus.com
 C Subject: -fPIC problem showing up with fortran on x86
 C From: Dave Love <d.love@dl.ac.uk>
 C Date: 19 Dec 1997 19:31:41 +0000
-C 
-C 
+C
+C
 C This illustrates a long-standing problem noted at the end of the g77
 C `Actual Bugs' info node and thought to be in the back end.  Although
 C the report is against gcc 2.7 I can reproduce it (specifically on
 C redhat 4.2) with the 971216 egcs snapshot.
-C 
+C
 C g77 version 0.5.21
 C  gcc -v -fnull-version -o /tmp/gfa00415 -xf77-cpp-input /tmp/gfa00415.f -xnone
 C -lf2c -lm

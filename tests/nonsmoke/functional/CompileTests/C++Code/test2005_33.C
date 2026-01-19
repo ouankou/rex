@@ -32,7 +32,6 @@ class Z
   // Nothing to put in this class ...
    };
 
-#if 1
 void foo()
    {
   // ROSE can properly handle integer constants but we need to handle
@@ -42,5 +41,4 @@ void foo()
      double var1 = Y::pi;     // This works
      double var2 = y.pi;      // This does not work presently
      double var3 = yptr->pi;  // This does not work presently
-   }
-#endif
+}

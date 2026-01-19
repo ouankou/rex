@@ -11,7 +11,7 @@ module a1_11_55
   interface a1Foo
      module procedure bar
   end interface
-contains 
+contains
   subroutine bar()
     s=s+1
   end subroutine bar
@@ -37,9 +37,9 @@ program multRename
   bL=2
   call a1Foo()
   call b1Foo()
-  if (aL==2 .and. bL == 3) then 
+  if (aL==2 .and. bL == 3) then
      print *,'OK'
-  else 
+  else
      print *,'FAILED'
   endif
 end program multRename

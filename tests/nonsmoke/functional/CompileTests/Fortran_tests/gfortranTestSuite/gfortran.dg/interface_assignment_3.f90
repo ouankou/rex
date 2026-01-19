@@ -3,7 +3,7 @@
 ! for the first argument of assign_m, whereas both INOUT and OUT
 ! should be allowed.
 !
-! Contributed by Harald Anlauf <anlauf@gmx.de> 
+! Contributed by Harald Anlauf <anlauf@gmx.de>
 !
 module mo_memory
   implicit none

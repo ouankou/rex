@@ -85324,7 +85324,6 @@ inline void save(
     ar << boost::serialization::make_nvp("px", t_ptr);
 }
 
-#if 1
 template<class Archive, class T>
 inline void load(
     Archive & ar,
@@ -85342,24 +85341,8 @@ inline void load(
         ar.template get_helper<shared_ptr_helper<boost::shared_ptr> >(
             shared_ptr_helper_id
         );
-    h.reset(t,r);    
+    h.reset(t,r);
 }
-#endif
-
-#if 0
-template<class Archive, class T>
-inline void serialize(
-    Archive & ar,
-    boost::shared_ptr< T > &t,
-    const unsigned int file_version
-){
-    
-    
-    static_assert(boost::serialization::tracking_level< T > ::value != boost::serialization::track_never, "boost::serialization::tracking_level< T >::value != boost::serialization::track_never");
-    boost::serialization::split_free(ar, t, file_version);
-}
-#endif
-
 } 
 } 
 
@@ -85410,43 +85393,6 @@ inline void save(
     const T * t_ptr = t.get();
     ar << boost::serialization::make_nvp("px", t_ptr);
 }
-
-#if 0
-template<class Archive, class T>
-inline void load(
-    Archive & ar,
-    std::shared_ptr< T > &t,
-    const unsigned int  
-){
-    
-    
-    
-    static_assert((tracking_level< T > ::value != track_never), "(tracking_level< T >::value != track_never)");
-    T* r;
-    ar >> boost::serialization::make_nvp("px", r);
-    
-    boost::serialization::shared_ptr_helper<std::shared_ptr> & h =
-        ar.template get_helper<
-            shared_ptr_helper<std::shared_ptr>
-        >(
-            shared_ptr_helper_id
-        );
-    h.reset(t,r);
-}
-
-template<class Archive, class T>
-inline void serialize(
-    Archive & ar,
-    std::shared_ptr< T > &t,
-    const unsigned int file_version
-){
-    
-    
-    static_assert(boost::serialization::tracking_level< T > ::value != boost::serialization::track_never, "boost::serialization::tracking_level< T >::value != boost::serialization::track_never");
-    boost::serialization::split_free(ar, t, file_version);
-}
-#endif
-
 } 
 } 
 

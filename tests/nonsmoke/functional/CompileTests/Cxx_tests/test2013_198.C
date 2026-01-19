@@ -16,15 +16,11 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   struct __conditional_type
   { typedef _Iftrue __type; };
 
-  template<typename _Tp>
-    class new_allocator
-    {
-#if 1
-    public:
-      typedef long  difference_type;
-      typedef _Tp        value_type;
-#endif
-    };
+  template <typename _Tp> class new_allocator {
+  public:
+    typedef long difference_type;
+    typedef _Tp value_type;
+  };
 
 _GLIBCXX_END_NAMESPACE
 

@@ -1,9 +1,6 @@
 // Test from Dan: demonstrate preprocessing info. attached
-void foobar(int e)
-{
-#if 1
+void foobar(int e) {
   int x;
-#endif
   int d;
   if (e)
   {
@@ -13,4 +10,4 @@ void foobar(int e)
   {
     d =1;
   }
-} 
+}

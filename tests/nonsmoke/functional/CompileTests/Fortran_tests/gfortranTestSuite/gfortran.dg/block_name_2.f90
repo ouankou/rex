@@ -56,5 +56,5 @@ program blocks
   forall (i=1:10)
   end forall f2 ! { dg-error "Syntax error in END FORALL statement" }
   end forall
-  
+
 end program blocks

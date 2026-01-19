@@ -7,20 +7,13 @@ typedef struct
      int a;
    } B, *BP;
 
-#if 1
-int foo(B b, BP bp) 
-   {
-     return b.a + bp->a;
-   }
-#endif
+   int foo(B b, BP bp) { return b.a + bp->a; }
 
-#if 1
-// typedef declaration with multiple types declared
-typedef int integer, *integerPointer;
+   // typedef declaration with multiple types declared
+   typedef int integer, *integerPointer;
 
-// variable declaration with multiple variables declared
-struct 
-   {
+   // variable declaration with multiple variables declared
+   struct {
      int x;
      double y;
    } var1, *var2;
@@ -32,11 +25,4 @@ void foobar()
      var2 = &var1;
    }
 
-enum 
-   {
-     ZERO, ONE, TWO 
-   } numbers, more_numbers;
-#endif
-
-
-
+   enum { ZERO, ONE, TWO } numbers, more_numbers;

@@ -22,20 +22,14 @@ void foo()
   // In this case the SgArrowOp is required.
      (&result)->foobar();
 
-#if 1
      result.operator&()->foobar();
-#endif
 
-#if 1
-  // In this case the SgArrowOp is supressed.
+     // In this case the SgArrowOp is supressed.
      result->foobar();
-#endif
 
-#if 1
      result.operator->()->foobar();
-#endif
 
-  // (&result)->result2->foobar();
+     // (&result)->result2->foobar();
      (&result)->foobar();
      result.result2->foobar();
    }

@@ -7,12 +7,12 @@
 
 SUBROUTINE BUG(A,B)
   IMPLICIT NONE
-  
+
   INTEGER   :: A
   INTEGER   :: B(2)
-  
+
   INTEGER, PARAMETER :: C(2) = (/ 1,2 /)
-  
+
   WHERE (C(:).EQ.A)
     B = -1
   END WHERE

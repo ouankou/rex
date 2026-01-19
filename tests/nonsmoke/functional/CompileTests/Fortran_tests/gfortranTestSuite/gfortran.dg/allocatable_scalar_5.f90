@@ -15,11 +15,11 @@ program test
   if (.not.allocated (func (.true.))) call abort ()
   b = 7
   b = func(.true.)
-  if (b /= 5332) call abort () 
+  if (b /= 5332) call abort ()
   b = 7
   b = func(.true.) + 1
-  if (b /= 5333) call abort () 
-   
+  if (b /= 5333) call abort ()
+
   call intout (a, .false.)
   if (allocated (a)) call abort ()
   call intout (a, .true.)

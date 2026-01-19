@@ -36,16 +36,13 @@ void bar() {
 /****START CODE****/
 void rab() {
   int x;
-#if 1
   union {
     int x;
     float y;
   } un; /*similar to the struct above*/
-#endif
 }
 /****END CODE*****/
 
-#if 1
 /****START CODE****/
 #include <stdarg.h>
 struct vastrs {
@@ -59,10 +56,7 @@ void ap_scan_script_header_err_strs(int termarg, ...) {
                                    a va_list this works fine*/
 }
 /****END CODE*****/
-#endif
 
-#if 1
 /****START CODE****/
 int foo2(register long r) { /* the register keyword*/ }
 /****END CODE*****/
-#endif

@@ -14,21 +14,6 @@ class A
           A*  Aptr;
    };
 
-#if 0
-template <typename T>
-class B
-   {
-     public:
-          B();
-          B( int *x, int y);
-          int & operator[](int i);
-          B<T>* Bptr;
-          B<T>** Bptrptr;
-          B *operator->() const { return Bptr; }
-          B& operator*() const  { return *Bptr; }
-   };
-#endif
-
 void fooError()
    {
       A a;

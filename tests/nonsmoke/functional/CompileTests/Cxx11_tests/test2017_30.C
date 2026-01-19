@@ -78,36 +78,21 @@ namespace RAJA {
         } else {
           return omp_parallel_for_exec;
         }
-      }
-#if 0
-    // This is only used for C++14 version
-    template <typename BODY>
-      inline __attribute__((always_inline))
-      void policySwitcher(POLICY_TYPE policy, BODY body) {
-        switch (policy) {
-          case seq_exec: body(RAJA::seq_exec()); break;
-          case omp_parallel_for_exec: body(RAJA::omp_parallel_for_exec()); break;
-        }
-      }
-#endif
-  } // end switcher namespace
-#if 1
-  // This is the new specialization we want to generate
-  struct switcher_exec{}; 
-  template <typename LOOP_BODY>
+    }
+    } // namespace switcher
+    // This is the new specialization we want to generate
+    struct switcher_exec {};
+    template <typename LOOP_BODY>
     //    inline __attribute__((always_inline))
-    void forall(switcher_exec,
-        Index_type begin, Index_type end,
-        LOOP_BODY loop_body)                                                                                                
-    {                                                                                                                       
+    void forall(switcher_exec, Index_type begin, Index_type end,
+                LOOP_BODY loop_body) {                                                                                                                       
       switch(switcher::getRandomPolicy()) {                                                                                 
         case switcher::seq_exec:                                                                                            
           RAJA::forall( RAJA::seq_exec(), begin, end, loop_body ); break;                                                   
         case switcher::omp_parallel_for_exec:                                                                               
           RAJA::forall( RAJA::omp_parallel_for_exec(), begin, end, loop_body ); break;                                      
-      }                                                                                                                     
+      }
     }
-#endif    
 } // end namespace
 
 int main()

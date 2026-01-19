@@ -3,7 +3,7 @@
 ! { dg-options "-std=legacy" }
 !
       character*30 s
-      
+
       write (s,2000) 0.0, 0.02
       if (s .ne. "    0.00       2.000E-02") call abort
       write (s,2000) 0.01, 0.02

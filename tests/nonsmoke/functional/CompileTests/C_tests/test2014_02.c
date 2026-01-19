@@ -11,10 +11,4 @@ static int*** parse_params(char **argv)
   /* Auto decl suppresses "func without a prototype" warning: */
   // auto int* alloc_action(int sizeof_struct);
      int* alloc_action(int sizeof_struct);
-
-#if 0
-     int* alloc_action(int sizeof_struct)
-        {
-        }
-#endif
    }

@@ -31,14 +31,4 @@ void foo()
 
      // Note that legacy frontend maps "__FUNCTION__" to "__func__" internally.
      foobar(__FUNCTION__);
-
-#if 0
-  // Debug this later after I understand the problem better.
-     for (int i=0; i < 3; i++)
-        {
-       // This fails to resolve the SgFunctionDefinition from the current scope in sage_gen_be.C.
-          assert(i >= 0);
-        }
-#endif
-
    }

@@ -22,7 +22,7 @@
        read(11,end=        1001 )idata
         if(idata(1).ne. -705.or.idata(  1011).ne. -706)call abort()
  1001  continue
-       close(11,status='keep')        
+       close(11,status='keep')
       open(unit=11,form='unformatted')
       rewind 11
       read(11)idata
@@ -37,7 +37,7 @@
       if(idata(1).ne.-707)then
       call abort()
       endif
-      close(11,status='delete')  
+      close(11,status='delete')
       stop
       end
 

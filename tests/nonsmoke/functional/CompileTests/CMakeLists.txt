@@ -98,7 +98,7 @@ if(ENABLE-C)
   add_subdirectory(nameQualificationAndTypeElaboration_tests)
   add_subdirectory(unparse_template_from_ast)
   add_subdirectory(STL_tests)
-  
+
   # Legacy frontend interface tests are obsolete
   # if(enable-legacy-frontend-interface)
   #   add_subdirectory(LegacyFrontendInterface_C_tests)

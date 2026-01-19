@@ -28,7 +28,7 @@ contains
     use modone
     type (mytype) mytype_cur
     call subone(mytype_cur)
-  end subroutine 
+  end subroutine
 
 end module
 ! { dg-final { cleanup-modules "modone modtwo" } }

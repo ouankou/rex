@@ -1,13 +1,5 @@
 // Test of designators in structs
 
-#if 0
-struct T 
-   {
-     int w;
-     char x;
-   };
-#endif
-
 struct S 
    {
      int a[5];

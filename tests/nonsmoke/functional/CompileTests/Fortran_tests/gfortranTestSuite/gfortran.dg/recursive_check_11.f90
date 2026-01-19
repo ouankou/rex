@@ -14,7 +14,7 @@ program test
  i = f(.true.)
  print *,i
 contains
-  integer function f(rec) 
+  integer function f(rec)
     logical :: rec
     if(rec) then
       f = g()

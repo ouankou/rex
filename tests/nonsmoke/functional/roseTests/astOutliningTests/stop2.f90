@@ -1,3 +1,3 @@
 !$rose_outline
-STOP 
+STOP
 END

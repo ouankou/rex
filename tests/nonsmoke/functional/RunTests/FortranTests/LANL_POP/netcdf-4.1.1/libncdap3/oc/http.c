@@ -168,52 +168,6 @@ static size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb,
   return realsize;
 }
 
-#if 0
-static void
-assembleurl(DAPURL* durl, OCbytes* buf, int what)
-{
-	encodeurltext(durl->url,buf);
-	if(what & WITHPROJ) {
-		ocbytescat(buf,"?");
-		encodeurltext(durl->projection,buf);
-	}
-	if(what & WITHSEL) encodeurltext(durl->selection,buf);
-
-}
-
-static char mustencode="";
-static char hexchars[16] = {
-	'0', '1', '2', '3',
-	'4', '5', '6', '7',
-	'8', '9', 'a', 'b',
-	'c', 'd', 'e', 'f',
-};
-
-static void
-encodeurltext(char* text, OCbytes* buf)
-{
-	/* Encode the URL to handle illegal characters */
-	len = strlen(url);
-	encoded = ocmalloc(len*4+1); /* should never be larger than this*/
-	if(encoded==NULL) return;
-	p = url; q = encoded;
-	while((c=*p++)) {
-		if(strchr(mustencode,c) != NULL) {
-			char tmp[8];
-			int hex1, hex2;
-			hex1 = (c & 0x0F);
-			hex2 = (c & 0xF0) >> 4;
-			tmp[0] = '0'; tmp[1] = 'x';
-			tmp[2] = hexchars[hex2]; tmp[3] = hexchars[hex1];
-			tmp[4] = '\0';
-			ocbytescat(buf,tmp);
-		} else *q++ = (char)c;
-	}
-
-}
-
-#endif
-
 int occurlopen(CURL **curlp) {
   int stat = OC_NOERR;
   CURLcode cstat;

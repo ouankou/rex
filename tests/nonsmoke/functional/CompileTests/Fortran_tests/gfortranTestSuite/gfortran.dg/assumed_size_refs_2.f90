@@ -35,7 +35,7 @@ contains
 ! Check non-array valued intrinsics
     print *, ubound (m, 1)
     print *, ubound (m, 2)     ! { dg-error "not a valid dimension index" }
-    
+
     i = 2
     print *, size (m, i)
 

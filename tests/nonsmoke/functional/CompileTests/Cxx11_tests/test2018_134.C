@@ -30,12 +30,8 @@ void func1()
   // This should be unparsed as: 
   // const std::vector<Class1*>::size_type local1 = 0;
 
-#if 1
   // const vector<int>::size_type local1 = 0;
   // const vector::size_type local1 = 0;
-     const vector<int>::size_type local1 = 0;
-#else
-     vector<int>::size_type local1 = 0;
-#endif
+  const vector<int>::size_type local1 = 0;
    }
 

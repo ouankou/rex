@@ -5,7 +5,7 @@
 ! a namespace.
 !
 ! Contributed by Daniel Franke <franke.daniel@gmail.com>
-! 
+!
 MODULE types
 TYPE :: dummy_atom_list
   TYPE(dummy_atom), DIMENSION(:), POINTER :: table => null()

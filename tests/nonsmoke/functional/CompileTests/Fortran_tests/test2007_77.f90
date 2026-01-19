@@ -1,6 +1,6 @@
-! Sometimes it is necessary to jump out of more than the innermost DO loop. To allow this, loops 
-! can be given names and then the EXIT statement can be made to refer to a particular loop. An 
-! analogous situation also exists for CYCLE. The (optional) name following the EXIT or CYCLE 
+! Sometimes it is necessary to jump out of more than the innermost DO loop. To allow this, loops
+! can be given names and then the EXIT statement can be made to refer to a particular loop. An
+! analogous situation also exists for CYCLE. The (optional) name following the EXIT or CYCLE
 ! highlights which loop the statement refers to.
 
 subroutine foo(i)

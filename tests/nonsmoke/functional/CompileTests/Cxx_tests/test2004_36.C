@@ -8,9 +8,7 @@ class A_4_36
 
 A_4_36 a;
 
-#if 1
 template <> inline void A_4_36::foo(int i) {}
-#endif
 
 int main()
    {

@@ -14,25 +14,14 @@ int main(int argc, char **argv) {
       project, "bar", NULL, true);
   ROSE_ASSERT(func != NULL);
 
-#if 1
   printf("func->get_type() = %p = %s \n", func->get_type(),
          func->get_type()->class_name().c_str());
-#endif
 
   SgFunctionDeclaration *func_copy =
       isSgFunctionDeclaration(copyStatement(func));
   func_copy->set_name("bar_copy");
   SgGlobal *glb = getFirstGlobalScope(project);
   appendStatement(func_copy, glb);
-
-#if 0 // this has been merged into fixStatement() called by appendStatement()
-  SgFunctionSymbol *func_symbol =  glb->lookup_function_symbol ("bar_copy", func_copy->get_type()); 
-  if (func_symbol == NULL);
-  {
-    func_symbol = new SgFunctionSymbol (func_copy);
-    glb ->insert_symbol("bar_copy", func_symbol);
-  }
-#endif
 
   // copy a non-defining function declaration
 

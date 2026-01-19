@@ -12,15 +12,9 @@ void foobar()
                          break;
                   }
 //           }
-               
-          case 1:
-             {
-#if 0
-               switch(x)
-                  {
-                  }
-#endif
-             }
+
+          case 1: {
+          }
         }
 
    }

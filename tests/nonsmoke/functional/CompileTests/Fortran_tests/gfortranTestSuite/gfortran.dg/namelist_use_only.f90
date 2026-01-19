@@ -30,7 +30,7 @@ program namelist_use_only
   read (10,nml=nml1,iostat=i)
   if ((i.ne.0).or.(aa.ne."lmno").or.(ii.ne.1).or.(rr.ne.2.5)) call abort ()
 
-  read (10,nml=nml2,iostat=i) 
+  read (10,nml=nml2,iostat=i)
   if ((i.ne.0).or.(rrrr.ne.3.5).or.foo()) call abort ()
   close (10)
 end program namelist_use_only

@@ -64,12 +64,6 @@ int main(int argc, char *argv[]) {
 
   anal->pruneCallGraph(builder);
 
-#if 0     
-     std::string filename;
-     filename = string(strrchr(mainDecl->get_definition()->get_file_info()->get_filename() ,'/')+1);
-     filename = filename + ".callGraph.dot";
-#endif
-
   printf("Calling VirtualFunctionAnalysis(): writeIncidenceGraphToDOTFile \n");
 
   AstDOTGeneration dotgen2;

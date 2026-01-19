@@ -13,9 +13,4 @@ typedef void OnShutdownFunc();
 //    class vector< void (* > *shutdown_functions = 0L;
 vector<void (*)()>* shutdown_functions = 0L;
 
-#if 1
-void InitShutdownFunctions() 
-   {
-     shutdown_functions = new vector<void (*)()>;
-   }
-#endif
+void InitShutdownFunctions() { shutdown_functions = new vector<void (*)()>; }

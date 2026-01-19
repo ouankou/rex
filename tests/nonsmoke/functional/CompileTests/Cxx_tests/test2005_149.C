@@ -32,15 +32,13 @@ class Y
 // Template Instantiation Directive
 // template X<int>;
 
-#if 1
 int main()
    {
      X<int> x;
      Y<int> y;
      x = 7;
      y = 42;
-   }
-#endif
+}
 
 #else
   #warning "Not tested on gnu 4.0 or greater versions"

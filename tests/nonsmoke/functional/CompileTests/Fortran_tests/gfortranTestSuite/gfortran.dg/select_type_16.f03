@@ -11,10 +11,10 @@ module d_base_mat_mod
 
   type :: d_base_sparse_mat
   contains
-    procedure, pass(a) :: mv_to_coo   => d_base_mv_to_coo   
+    procedure, pass(a) :: mv_to_coo   => d_base_mv_to_coo
   end type d_base_sparse_mat
 
-  interface 
+  interface
     subroutine d_base_mv_to_coo(a)
       import d_base_sparse_mat
       class(d_base_sparse_mat), intent(inout) :: a
@@ -22,7 +22,7 @@ module d_base_mat_mod
   end interface
 
   type :: d_sparse_mat
-    class(d_base_sparse_mat), allocatable  :: a 
+    class(d_base_sparse_mat), allocatable  :: a
   end type d_sparse_mat
 
 contains
@@ -31,7 +31,7 @@ contains
     type(d_sparse_mat), intent(inout) :: ax
     select type(aa=> ax%a)
     class default
-      call aa%mv_to_coo() 
+      call aa%mv_to_coo()
     end select
   end subroutine bug21
 

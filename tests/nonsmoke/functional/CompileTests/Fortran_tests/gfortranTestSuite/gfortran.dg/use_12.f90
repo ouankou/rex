@@ -13,7 +13,7 @@ module m2
   contains
     function get_nfirst( ) result(fnres)  ! { dg-warning "not set" }
       use m1, only: numclusters
-      real :: fnres(numclusters)   ! change to REAL and it works!!  
+      real :: fnres(numclusters)   ! change to REAL and it works!!
     end function get_nfirst
 end module m2
 

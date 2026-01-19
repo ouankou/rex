@@ -1,26 +1,4 @@
 
-#if 0
-Type 1 case:
-   for (typename MeshType::ZoneIterator zoneItr = mesh.ownedZoneBegin(); zoneItr != mesh.ownedZoneEnd(); ++zoneItr) 
-        mOldZoneVolumes[*zoneItr] = ...
-
-
-Type 2 cases:
-   for (typename MeshType::ZoneIterator zoneItr = mesh.ownedZoneBegin(); zoneItr != mesh.ownedZoneEnd(); ++zoneItr) 
-       mOldZoneVolumes[*zoneItr] = zoneItr->getVolume();
-
-   for (typename Geometry::Field<MeshType, Zone, Scalar>::Index i = mOldZoneVolumes.startIndex(); i < mOldZoneVolumes.endIndex(); ++i) 
-       mOldZoneVolumes[i] = zoneItr->getVolume();
-
-Type 3 case (cannot convert these):
-   for (typename MeshType::ZoneIterator zoneItr = mesh.ownedZoneBegin(); zoneItr != mesh.ownedZoneEnd(); ++zoneItr) 
-      foo(zoneItr);
-      zoneItr->foo();
-#endif
-
-
-
-
 
 class MeshType
    {
@@ -75,15 +53,13 @@ void foo()
      for (MeshType::ZoneIterator i = mesh.begin(); i != mesh.end(); i++) 
         {
           ::foobar(i);      // type 3
-        }
-#if 1
+     }
      for (MeshType::ZoneIterator i = mesh.begin(); i != mesh.end(); i++) 
         {
           mesh[*i];       // type 1
           i->getVolume(); // type 2
           foobar(i);      // type 3
-        }
-#endif
+     }
 
      MeshType::ZoneIterator i;
      for (i = mesh.begin(); i != mesh.end(); i++) 

@@ -26,36 +26,7 @@ inline void calc(double *a_data, double *b_data, double *c_data, double *d_data,
         A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ +
         A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ +
         A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ +
-        A_ + A_ + A_ + A_
-#if 0
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-#endif
-    );
+        A_ + A_ + A_ + A_);
   }
 }
 
@@ -63,12 +34,6 @@ int main() {
   ifstream PARAMETER;
   double *a_data, *b_data, *c_data, *d_data, *e_data;
   int N = 10, iter = 20, cnt, i;
-
-#if 0
-  PARAMETER.open("para.dat",ios :: in);
-  PARAMETER >> N >> iter;
-  PARAMETER.close();
-#endif
 
   a_data = new double[N];
   b_data = new double[N];

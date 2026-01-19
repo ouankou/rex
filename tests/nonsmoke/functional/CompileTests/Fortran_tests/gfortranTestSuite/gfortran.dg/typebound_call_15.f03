@@ -6,7 +6,7 @@
 
 module ice5
   type::a_type
-   contains  
+   contains
      procedure::a_subroutine_1
      procedure::a_subroutine_2
   end type a_type
@@ -21,5 +21,5 @@ contains
     call this%a_subroutine_1()    ! { dg-error "should be a SUBROUTINE" }
   end subroutine
 end module ice5
- 
+
 ! { dg-final { cleanup-modules "ice5" } }

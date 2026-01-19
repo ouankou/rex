@@ -20,20 +20,8 @@ class TestClassArgument
           T foo();
    };
 
-#if 1
 template<class T>
 T TestClassArgument<T>::foo ()
    {
      return xyz;
    }
-
-#endif
-
-#if 0
-int main()
-   {
-     TestClassArgument<A> a;
-
-     return 0;
-   }
-#endif

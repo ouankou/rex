@@ -49,7 +49,6 @@ namespace N
         };
    }
 
-#if 1
 // I don't think the use of extern "C" is an issue.
 // extern "C" void OUT__1__7816__(void **__out_argv)
 void OUT__1__7816__(void **__out_argv)
@@ -58,5 +57,4 @@ void OUT__1__7816__(void **__out_argv)
      const class N::A *&this__ptr__ =  *((const class N::A **)__out_argv[0]);
      for (int i = 1; i <= this__ptr__ ->  foo (); i++) 
           result += i;
-   }
-#endif
+}

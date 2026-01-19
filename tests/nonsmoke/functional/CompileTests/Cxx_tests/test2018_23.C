@@ -27,5 +27,3 @@ void foobar(int i, ...) {
   iequals(41, ivalue((x_.*__builtin_va_arg(ap, PMF_))(1)),
           ivalue(132 + 51 + 1));
 }
-#if 0
-#endif

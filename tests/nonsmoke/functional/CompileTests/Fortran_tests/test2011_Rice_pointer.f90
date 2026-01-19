@@ -1,6 +1,6 @@
 program test_pointer
- integer, pointer, dimension(:):: cp1 
- integer, pointer :: cp2(:) 
+ integer, pointer, dimension(:):: cp1
+ integer, pointer :: cp2(:)
   character(len = 10), pointer :: p1 ! length lost in translation
   character, pointer :: p2*(5) ! length lost in translation
   character(len = 10, kind = 1), dimension(:), pointer :: p3 ! length lost in translation

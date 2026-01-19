@@ -5,7 +5,7 @@
       integer x
       namelist/casein/x
       open(1, status="scratch")
-      write(1,'(a)') "&CASEIN"	
+      write(1,'(a)') "&CASEIN"
       write(1,'(a)') "\t\tx = 1"
       write(1,'(a)') "/"
       rewind(1)

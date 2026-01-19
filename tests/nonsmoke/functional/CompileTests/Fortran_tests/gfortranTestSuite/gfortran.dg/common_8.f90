@@ -4,7 +4,7 @@
 ! PR fortran/25062
 !
 ! F2003: 16.2.1
-! "A name that identifies a common block in a scoping unit shall not be used 
+! "A name that identifies a common block in a scoping unit shall not be used
 !  to identify a constant or an intrinsic procedure in that scoping unit."
 !
 subroutine try

@@ -22,21 +22,13 @@ Traversal::Traversal (ofstream *datfile)
      file = datfile;
    }
 
-void
-Traversal::outputPositionInformation ( SgStatement* statement )
-   {
-#if 0
-     int lineNumber  = statement->get_file_info()->get_line();
-     string fileName = statement->get_file_info()->get_filename();
-#else
+   void Traversal::outputPositionInformation(SgStatement *statement) {
      int lineNumber  = statement->get_file_info()->get_raw_line();
      string fileName = statement->get_file_info()->get_raw_filename();
-#endif
      printf ("Problem Variable Declaration at line = %4d file = %s \n",lineNumber,fileName.c_str());
      ROSE_ASSERT(file != NULL);
      (*file) << "Problem Variable Declaration at line = " << lineNumber << " file = " << fileName << std::endl;
    }
-
 
 void
 Traversal::visit(SgNode* node)
@@ -98,30 +90,19 @@ main ( int argc, char* argv[] )
 
   // datfile << "This is a test!" << std::endl;
 
-#if 1
      SgProject* project = frontend(argc,argv);
      ROSE_ASSERT (project != NULL);
 
      Traversal traversal(&datfile);
-     traversal.traverse(project,preorder);
-#endif
+     traversal.traverse(project, preorder);
 
      datfile.close();
 
-#if 1
   // Run AST consistancy tests (so that we can test them while we analize KULL
-     AstTests::runAllTests(const_cast<SgProject*>(project));
-#else
-     printf ("Skipped agressive (slow) internal consistancy tests! \n");
-#endif
+     AstTests::runAllTests(const_cast<SgProject *>(project));
 
-
-
-#if 0
-     return 0;
-#else
-  // Output the source code and generate the object file so that 
-  // we can test these parts of KULL processing as well
+     // Output the source code and generate the object file so that
+     // we can test these parts of KULL processing as well
      if (project->get_verbose() > 0)
           printf ("Calling the backend() \n");
 
@@ -138,7 +119,5 @@ main ( int argc, char* argv[] )
        // Output any saved performance data (see ROSE/src/astDiagnostics/AstPerformance.h)
           AstPerformance::generateReport();
         }
-     return errorCode;
-#endif
-
+        return errorCode;
    }

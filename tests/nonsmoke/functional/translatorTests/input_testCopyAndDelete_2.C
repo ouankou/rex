@@ -1,14 +1,11 @@
 // This test code is copied from: tests/nonsmoke/functional/roseTests/astInterfaceTests/inputdeepDelete.C
 
-#if 1
 const int  mnp=100;
 
 //test typedef
 typedef double type_double;
-type_double a_variable =10;
-#endif
+type_double a_variable = 10;
 
-#if 1
 //test struct declaration
 struct school{
     int class_num;
@@ -16,29 +13,20 @@ struct school{
 } sc;
 
 typedef school sch;
-#endif
 
-#if 1
 //test enum declaration
-enum DAY            
-{
-#if 1
-    saturday,
-    sunday,      
-    monday,         
-    tuesday,
-    wednesday,      
-    thursday,
-#endif
-    friday
+enum DAY {
+  saturday,
+  sunday,
+  monday,
+  tuesday,
+  wednesday,
+  thursday,
+  friday
 } workday;
-#endif
 
-#if 1
 DAY wk;
-#endif
 
-#if 1
 //test class declaration and instantiation
 class XYZ {
     private:
@@ -55,9 +43,7 @@ int XYZ::get_b(int b){
 }
 
 XYZ *xyz = new XYZ;
-#endif
 
-#if 1
 //test overloaded functions
 int foo (int x);
 int foo (int a[10]);
@@ -90,28 +76,9 @@ p=foo(k);
 int r = (p+2) *globalVar;
 }
 
-
-#if 0
-// DQ (1/12/13): This has always been commented out (in the original test code).
-// But perhaps this is an example of a bug that needs to be fixed.
-
-// test template
-template <class T>
-class Template_class{
-       T a;
-       T get(){return a;}
-};
-
-Template_class<int> clss;
-#endif
-
-
-
 //main function
 int main()
 {
   int i = 0;    
   return 0;
 }
-#endif
-

@@ -1,13 +1,5 @@
 
-#if 0
-struct A
-   {
-     struct B { A *a; B *b; };
-   };
-#endif
 
-
-#if 1
 // global typedef that will be hidden
 typedef int my_integer_t;
 
@@ -35,7 +27,6 @@ void foo()
      typedef ::my_integer_t foo_integer_t;
    }
 
-#if 1
 struct A { struct B{}; };
 namespace X
    {
@@ -55,7 +46,4 @@ void foobar()
      struct A { struct D{}; };
      typedef ::A::B x3_type;
      typedef A::D   x4_type;
-   }
-#endif
-#endif
-
+}

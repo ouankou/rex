@@ -9,8 +9,7 @@ void foobar()
           case 1:
             int f1;
           case 2:
-            int a2,b2;
-#if 1
+            int a2, b2;
           case 3:
             int f3;
           case 4:
@@ -21,7 +20,6 @@ void foobar()
             int a6,b6;
           case 7:
             int f7;
-#endif
           default:
             int default1, default2;
         }

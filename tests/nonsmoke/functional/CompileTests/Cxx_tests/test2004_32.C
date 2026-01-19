@@ -1,10 +1,7 @@
 // This test code tests a number of different ways that templates can be used
 
-#if 1
-template < class T > void templateFunction () {};
-#endif
+template <class T> void templateFunction() {};
 
-#if 1
 class ClassType
    {
      public:
@@ -20,10 +17,8 @@ class ClassType
      protected: template < class T > friend void protectedTemplateFriendFunction () {}
      public   : template < class T > friend void publicTemplateFriendFunction    () {}
      private  : template < class T > friend void privateTemplateFriendFunction   () {}
-   };
-#endif
+};
 
-#if 1
 template < class T >
 class TemplatedClass
    {
@@ -38,10 +33,8 @@ class TemplatedClass
           template < class S > S publicTemplateMemberFunction (T t) {}
 
           static T t1;
-   };
-#endif
+};
 
-#if 1
 template < class T >
 class ClassTypeWithStaticData
    {
@@ -49,28 +42,20 @@ class ClassTypeWithStaticData
           static T templateParameterVariable;
    };
 
-template < class T >
-T ClassTypeWithStaticData<T>::templateParameterVariable = 0;
-#endif
+   template <class T>
+   T ClassTypeWithStaticData<T>::templateParameterVariable = 0;
 
-#if 1
-template < class T >
-class TemplateClassTypeWithNestedClass
-   {
+   template <class T> class TemplateClassTypeWithNestedClass {
+   public:
+     int integerVariable;
+     T templateParameterVariable;
+
+     template <class S> class NestedClass {
      public:
-          int integerVariable;
-          T templateParameterVariable;
-
-          template < class S >
-          class NestedClass
-             {
-               public:
-                    S templateParameterVariable;
-             };
+       S templateParameterVariable;
+     };
    };
-#endif
 
-#if 1
 class ClassTypeWithNestedClass
    {
      public:
@@ -88,6 +73,3 @@ template < class S >
 S ClassTypeWithNestedClass::NestedClass<S>::templateParameterVariable = 0;
 
 // int x;
-#endif
-
-

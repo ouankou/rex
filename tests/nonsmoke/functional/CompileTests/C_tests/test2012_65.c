@@ -14,7 +14,6 @@ struct Y
     } *v;
   };
 
-#if 1
 void foobar()
    {
      struct X A;
@@ -22,6 +21,4 @@ void foobar()
      int x;
      x = A.v.x;
      x = B.v->x;
-   }
-#endif
-
+}

@@ -8,7 +8,7 @@
 
       LDA=2048
       N=2048
-        
+
       DO I = 1,N
         Do J = 1,N
           L(I,J)=0.0
@@ -37,7 +37,7 @@
 
 
       gflops = ((2*(N/1000)*(N/1000)*(N/1000))/3)/(ttotal)
-*      WRITE (*,*) ' Time (s) = ', ttotal 
+*      WRITE (*,*) ' Time (s) = ', ttotal
 *     WRITE (*,*) ' GFLOPS = ', gflops
 
       END
@@ -51,7 +51,7 @@
       integer I
 
       call date_and_time ( date, time )
-      
+
       DO I = 1,4
       END DO
       write ( *, '(a8,2x,a10)' ) date, time

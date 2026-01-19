@@ -52,7 +52,7 @@
   open(10, iostat=u,status="unknown")
   open(10, iostat=u,status="old")
   open(10, iostat=u,status=foo) ! { dg-warning "STATUS specifier in OPEN statement" }
-  
+
   open(10, iostat=u,status="new") ! { dg-warning "no FILE specifier is present" }
   open(10, iostat=u,status="replace   ") ! { dg-warning "no FILE specifier is present" }
   open(10, iostat=u,status="scratch",file=str) ! { dg-warning "cannot have the value SCRATCH if a FILE specifier is present" }
@@ -113,7 +113,7 @@
   open(10, err=99,status="unknown")
   open(10, err=99,status="old")
   open(10, err=99,status=foo) ! { dg-warning "STATUS specifier in OPEN statement" }
-  
+
   open(10, err=99,status="new") ! { dg-warning "no FILE specifier is present" }
   open(10, err=99,status="replace   ") ! { dg-warning "no FILE specifier is present" }
   open(10, err=99,status="scratch",file=str) ! { dg-warning "cannot have the value SCRATCH if a FILE specifier is present" }
@@ -174,7 +174,7 @@
   open(10,status="unknown")
   open(10,status="old")
   open(10,status=foo) ! { dg-error "STATUS specifier in OPEN statement" }
-  
+
   open(10,status="new") ! { dg-error "no FILE specifier is present" }
   open(10,status="replace   ") ! { dg-error "no FILE specifier is present" }
   open(10,status="scratch",file=str) ! { dg-error "cannot have the value SCRATCH if a FILE specifier is present" }

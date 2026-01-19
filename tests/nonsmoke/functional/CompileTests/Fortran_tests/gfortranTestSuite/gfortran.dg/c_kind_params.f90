@@ -2,7 +2,7 @@
 ! { dg-require-effective-target stdint_types }
 ! { dg-additional-sources c_kinds.c }
 ! { dg-options "-w -std=c99" }
-! the -w option is needed to make f951 not report a warning for 
+! the -w option is needed to make f951 not report a warning for
 ! the -std=c99 option that the C file needs.
 !
 module c_kind_params
@@ -72,6 +72,6 @@ contains
     if(my_char        /= c_char_'y') call abort()
     if(my_bool      .neqv. .true._c_bool) call abort()
   end subroutine param_test
-    
+
 end module c_kind_params
 ! { dg-final { cleanup-modules "c_kind_params" } }

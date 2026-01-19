@@ -8,9 +8,3 @@ namespace namespace_1 {}
 
 #include "test2019_506.h"
 }
-
-#if 0
-And header file:
-
-namespace namespace_1 {
-#endif

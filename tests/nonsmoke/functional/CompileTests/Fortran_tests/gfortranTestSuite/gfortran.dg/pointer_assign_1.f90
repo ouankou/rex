@@ -1,5 +1,5 @@
 ! { dg-do compile }
-! Tests fix for PR20838 - would ICE with vector subscript in 
+! Tests fix for PR20838 - would ICE with vector subscript in
 ! pointer assignment.
 !
 ! Contributed by Paul Thomas  <pault@gcc.gnu.org>

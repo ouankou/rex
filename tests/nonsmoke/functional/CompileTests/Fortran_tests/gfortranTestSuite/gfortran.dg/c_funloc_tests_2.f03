@@ -7,7 +7,7 @@ contains
   recursive subroutine sub0() bind(c)
     type(c_funptr) :: my_c_funptr
     integer :: my_local_variable
-    
+
     my_c_funptr = c_funloc() ! { dg-error "Missing argument" }
     my_c_funptr = c_funloc(sub0)
     my_c_funptr = c_funloc(sub0, sub0) ! { dg-error "More actual than formal" }

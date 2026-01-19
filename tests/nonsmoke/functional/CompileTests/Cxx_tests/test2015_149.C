@@ -17,7 +17,6 @@ namespace boost {
   namespace graph {
     namespace keywords {
 
-#if 1
       namespace tag { 
          struct weight_map 
             { 
@@ -25,12 +24,13 @@ namespace boost {
            // typedef boost::parameter::value_type< boost::mpl::_2, weight_map, boost::parameter::void_ > _; 
            // typedef boost::parameter::value_type< boost::mpl::_2, weight_map, boost::parameter::void_ > _1; 
             }; 
-      } 
+      }
 
-      namespace { ::boost::parameter::keyword<tag::weight_map> const& _weight_map = ::boost::parameter::keyword<tag::weight_map> ::instance; } 
-#endif
+      namespace {
+      ::boost::parameter::keyword<tag::weight_map> const &_weight_map =
+          ::boost::parameter::keyword<tag::weight_map>::instance;
+      }
 
-#if 1
       namespace tag { 
            struct weight_map2 
               { 
@@ -38,12 +38,13 @@ namespace boost {
              // typedef boost::parameter::value_type< boost::mpl::_2, weight_map2, boost::parameter::void_ > _; 
              // typedef boost::parameter::value_type< boost::mpl::_2, weight_map2, boost::parameter::void_ > _1; 
               }; 
-      } 
+      }
 
-      namespace { ::boost::parameter::keyword<tag::weight_map2> const& _weight_map2 = ::boost::parameter::keyword<tag::weight_map2> ::instance; } 
-#endif
+      namespace {
+      ::boost::parameter::keyword<tag::weight_map2> const &_weight_map2 =
+          ::boost::parameter::keyword<tag::weight_map2>::instance;
+      }
 
-#if 1
       namespace tag { 
            struct distance_map 
               { 
@@ -51,11 +52,12 @@ namespace boost {
              // typedef boost::parameter::value_type< boost::mpl::_2, distance_map, boost::parameter::void_ > _; 
              // typedef boost::parameter::value_type< boost::mpl::_2, distance_map, boost::parameter::void_ > _1; 
               }; 
-      } 
+      }
 
-      namespace { ::boost::parameter::keyword<tag::distance_map> const& _distance_map = ::boost::parameter::keyword<tag::distance_map> ::instance; } 
-#endif
-
+      namespace {
+      ::boost::parameter::keyword<tag::distance_map> const &_distance_map =
+          ::boost::parameter::keyword<tag::distance_map>::instance;
+      }
     }
   }
 

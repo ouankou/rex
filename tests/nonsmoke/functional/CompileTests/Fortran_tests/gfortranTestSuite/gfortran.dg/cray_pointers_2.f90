@@ -3409,7 +3409,7 @@ subroutine ptr13(nnn,mmm)
   iptr4 = loc(itarg1)
   iptr5 = loc(itarg2)
   iptr7 = loc(rtarg1)
-  iptr8 = loc(rtarg2)  
+  iptr8 = loc(rtarg2)
 
   do, i=1,n
      ipte1(i) = i
@@ -3489,7 +3489,7 @@ subroutine parmptr(ipointer,intarr,n,m)
   pointer (ipointer,newpte)
   integer newpte(m,n)
   ! write(*,*) "loc(newpte)",loc(newpte)
-  ! write(*,*) "loc(intarr)",loc(intarr) 
+  ! write(*,*) "loc(intarr)",loc(intarr)
   ! write(*,*) "loc(newpte(1,1))",loc(newpte(1,1))
   ! newpte(1,1) = 101
   ! write(*,*) "newpte(1,1)=",newpte(1,1)
@@ -3556,7 +3556,7 @@ logical function intne(ii,jj)
 end function intne
 
 logical function realne(r1,r2)
-  real :: r1, r2  
+  real :: r1, r2
   common /foo/foo
   integer foo
   foo = foo + 1
@@ -3567,7 +3567,7 @@ logical function realne(r1,r2)
 end function realne
 
 logical function chne(ch1,ch2)
-  character :: ch1, ch2  
+  character :: ch1, ch2
   common /foo/foo
   integer foo
   foo = foo + 1
@@ -3578,7 +3578,7 @@ logical function chne(ch1,ch2)
 end function chne
 
 logical function ch8ne(ch1,ch2)
-  character*8 :: ch1, ch2  
+  character*8 :: ch1, ch2
   common /foo/foo
   integer foo
   foo = foo + 1

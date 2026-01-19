@@ -22,14 +22,10 @@ class CFGPath {
   std::vector<CFGEdge> edges;
 
 public:
-#if 1
   // Either of these line cause the error: STL type names are in the
   // scope of MyCFG and referenced before we visit the MyCFG namespace.
   // CFGPath(CFGEdge e): edges(1, e) {}
   CFGPath() : edges() {}
-#else
-  CFGPath(CFGEdge e) {}
-#endif
 };
 
 } // namespace MyCFG

@@ -1,5 +1,5 @@
 ! { dg-do run }
-! PR 18710 : We used to not read and write the imaginary part of 
+! PR 18710 : We used to not read and write the imaginary part of
 ! complex numbers
        COMPLEX C, D
        COMPLEX(KIND=8) E, F

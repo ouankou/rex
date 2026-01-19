@@ -7,10 +7,4 @@ struct X
   // int Y::* *p2;
    };
 
-#if 1
-void foobar()
-   {
-     int X::Y::* X::Y::* *p3;
-   }
-#endif
- 
+   void foobar() { int X::Y::*X::Y::**p3; }

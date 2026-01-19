@@ -24,7 +24,7 @@
  type(t1), target :: x
  type(t2), target :: y
  type(t3), target :: z
- 
+
  c1 => x
  c2 => y
  z%cc => y

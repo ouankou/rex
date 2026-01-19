@@ -1,5 +1,5 @@
 ! { dg-lto-do run }
-! This testcase tests c_funloc and c_funptr from iso_c_binding.  It uses 
+! This testcase tests c_funloc and c_funptr from iso_c_binding.  It uses
 ! functions defined in c_funloc_tests_3_funcs.c.
 module c_funloc_tests_3
  implicit none

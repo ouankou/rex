@@ -30,7 +30,6 @@ void StressZero(real8 *newSxx,real8 *newSyy,real8 *newSzz,real8 *newTxy,real8 *n
       newTxz[i] = 0.0;
       newTyz[i] = 0.0;
     }
-#if 1
     if (newSxx[i] < stress2 && newSxx[i] > nstres2) 
       newSxx[i] = 0.0;
     if (newSyy[i] < stress2 && newSyy[i] > nstres2) 
@@ -41,8 +40,7 @@ void StressZero(real8 *newSxx,real8 *newSyy,real8 *newSzz,real8 *newTxy,real8 *n
       newTxy[i] = 0.0;
     if (newTxz[i] < stress2 && newTxz[i] > nstres2) 
       newTxz[i] = 0.0;
-    if (newTyz[i] < stress2 && newTyz[i] > nstres2) 
+    if (newTyz[i] < stress2 && newTyz[i] > nstres2)
       newTyz[i] = 0.0;
-#endif
   }
 }

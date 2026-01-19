@@ -25,7 +25,7 @@ program matrix
 
 contains
 
-  function f()    
+  function f()
     implicit none
     real, dimension(2,2)::f
     f=1

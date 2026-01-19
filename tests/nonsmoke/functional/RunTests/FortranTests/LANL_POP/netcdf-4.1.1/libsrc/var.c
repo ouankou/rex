@@ -386,10 +386,6 @@ out:
   } else { /* OK for last var to be "too big", indicated by this special len */
     varp->len = X_UINT_MAX;
   }
-#if 0
-	arrayp("\tshape", varp->ndims, varp->shape);
-	arrayp("\tdsizes", varp->ndims, varp->dsizes);
-#endif
   return NC_NOERR;
 }
 

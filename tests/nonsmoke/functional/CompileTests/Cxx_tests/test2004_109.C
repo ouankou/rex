@@ -19,8 +19,6 @@ class Z : public X
 // No inline specifier was used in the declaration in the class so none appears here
 void Z::noninlinePublicMemberFunctionWithoutDefinition () {}
 
-
-#if 1
 class classTypeWithPureVirtualMember
    {
      public:
@@ -78,14 +76,10 @@ class classTypeWithMultipleVirtualBaseClasses : virtual public    classTypeWitho
    {
      public:
           int a;
-   };
-#endif
+};
 
-#if 1
 template < class T >
 class templateClassType
    {
      typename T::X x;
-   };
-#endif
-
+};

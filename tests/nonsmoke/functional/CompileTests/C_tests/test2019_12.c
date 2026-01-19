@@ -6,9 +6,5 @@ void setup ()
      void initial_set();
    }
 
-#if 1
 // defining declaration of a function
-void initial_set()
-   {
-   }
-#endif
+   void initial_set() {}

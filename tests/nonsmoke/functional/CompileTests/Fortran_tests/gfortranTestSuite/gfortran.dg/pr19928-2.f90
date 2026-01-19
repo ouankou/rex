@@ -19,5 +19,5 @@ contains
     integer :: calls, foo
     calls = calls + 1
     foo = 2
-  end function foo 
+  end function foo
 end program main

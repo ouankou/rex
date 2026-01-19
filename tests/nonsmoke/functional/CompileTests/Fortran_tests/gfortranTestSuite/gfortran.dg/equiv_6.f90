@@ -16,7 +16,7 @@ program check_6
              2, 0, 0, 5, 6, 7, 8, 9,10, 0/)
 
 ! These two calls replace the previously made call to subroutine
-! set_arrays which was erroneous because of parameter-induced 
+! set_arrays which was erroneous because of parameter-induced
 ! aliasing.
   call set_array_listpr (listpr)
   call set_array_lisbit (lisbit)

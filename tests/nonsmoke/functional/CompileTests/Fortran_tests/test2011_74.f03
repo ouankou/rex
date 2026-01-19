@@ -7,7 +7,7 @@ module m_test2011_74
   type t
     integer :: k
   end type t
-  
+
 contains
 
 type(t) function b()  ! =>  FUNCTION B()
@@ -17,6 +17,6 @@ integer function c()
   type t2
     logical :: b  ! this component has the same name as the function b previously defined
   end type t2
-end function 
+end function
 
 end module

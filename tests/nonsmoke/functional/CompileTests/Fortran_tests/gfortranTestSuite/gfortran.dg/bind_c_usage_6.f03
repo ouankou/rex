@@ -6,7 +6,7 @@ module x
 contains
   function foo() bind(c,name="xx")
     integer(c_int),bind(c,name="xy") :: foo ! { dg-error "only be used for variables or common blocks" }
-    ! NAG f95: "BIND(C) for non-variable FOO"  
+    ! NAG f95: "BIND(C) for non-variable FOO"
     ! g95: "Duplicate BIND attribute specified"
     ! gfortran: Accepted
     foo = 5_c_int
@@ -21,7 +21,7 @@ contains
   end function test
 
   function bar() bind(c)
-    integer(c_int) :: bar 
+    integer(c_int) :: bar
     bind(c,name="zx") :: bar ! { dg-error "only be used for variables or common blocks" }
     bar = 5_c_int
   end function bar
@@ -35,12 +35,12 @@ contains
     integer(c_int), value :: i
   end subroutine sub1
 
-  subroutine sub2(i) 
+  subroutine sub2(i)
     use, intrinsic :: iso_c_binding, only: c_int
     integer(c_int), value :: i
   end subroutine sub2
 
-  subroutine sub3(i) 
+  subroutine sub3(i)
     use, intrinsic :: iso_c_binding, only: c_int
     integer(c_int), value :: i
     bind(c) :: sub3 ! { dg-error "only be used for variables or common blocks" }

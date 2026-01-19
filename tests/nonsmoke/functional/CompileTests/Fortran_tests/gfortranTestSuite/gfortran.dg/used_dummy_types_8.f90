@@ -5,7 +5,7 @@
 ! came about because the function with multiple entries
 ! assigns the initializer earlier than for other cases.
 !
-! Contributed by Joost VandeVondele <jv244@cam.ac.uk> 
+! Contributed by Joost VandeVondele <jv244@cam.ac.uk>
 !
 MODULE M1
   TYPE T1

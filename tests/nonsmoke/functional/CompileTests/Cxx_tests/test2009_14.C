@@ -1,8 +1,3 @@
-#if 0
-Hi Dan,
-attached is a test file which demonstrates the issues with bit shifting. The comments should explain the problem.
-
-#endif
 
 
 // using only the include fails

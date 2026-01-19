@@ -7,17 +7,17 @@ program cray_pointers_7
   integer tmp
   integer, external :: fn
   external sub
-  
+
   ! We can't mix function and subroutine pointers.
   pointer (subptr,subpte)
   pointer (fnptr,fnpte)
-  
+
   ! Declare pointee types.
   external subpte
   integer, external :: fnpte
-  
+
   tmp = 0
-  
+
   ! Check pointers to subroutines.
   subptr = loc(sub)
   call subpte(tmp)
@@ -27,7 +27,7 @@ program cray_pointers_7
   fnptr = loc(fn)
   tmp = fnpte(7)
   if (tmp .ne. 14) call abort()
-  
+
 end program cray_pointers_7
 
 ! Trivial subroutine to be called through a Cray pointer.

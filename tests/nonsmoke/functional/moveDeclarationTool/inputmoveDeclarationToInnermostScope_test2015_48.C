@@ -1,12 +1,8 @@
 void foobar() 
    {
      int abc;
-// Example of dark tokens in leading whitespace
-#if 0
-     int x,y;
-#else
+     // Example of dark tokens in leading whitespace
      int z;
-#endif
 
      int a;
 

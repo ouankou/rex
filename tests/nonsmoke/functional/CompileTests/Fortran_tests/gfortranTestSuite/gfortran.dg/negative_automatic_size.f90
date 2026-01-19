@@ -5,7 +5,7 @@
 ! runtime error: Attempt to allocate a negative amount of memory
 ! resulted.
 !
-! Contributed by Philip Mason  <pmason@ricardo.com> 
+! Contributed by Philip Mason  <pmason@ricardo.com>
 !
 program fred
   call jackal (1, 0)

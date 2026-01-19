@@ -197,22 +197,22 @@
  contains
 
 
-  ! ----- 
+  ! -----
   ! Variable definitions and inquiry
-  ! ----- 
+  ! -----
   function nf90_def_var_Scalar(ncid, name, xtype, varid)
     integer,               intent( in) :: ncid
     character (len = *),   intent( in) :: name
     integer,               intent( in) :: xtype
     integer,               intent(out) :: varid
     integer                            :: nf90_def_var_Scalar
-    
+
     ! Dummy - shouldn't get used
     integer, dimension(1) :: dimids
-    
+
 !    nf90_def_var_Scalar = nf_def_var(ncid, name, xtype, 0, dimids, varid)
   end function nf90_def_var_Scalar
-  ! ----- 
+  ! -----
   function nf90_def_var_oneDim(ncid, name, xtype, dimids, varid)
     integer,               intent( in) :: ncid
     character (len = *),   intent( in) :: name
@@ -220,12 +220,12 @@
     integer,               intent( in) :: dimids
     integer,               intent(out) :: varid
     integer                            :: nf90_def_var_oneDim
-    
+
     integer, dimension(1) :: dimidsA
     dimidsA(1) = dimids
 !    nf90_def_var_oneDim = nf_def_var(ncid, name, xtype, 1, dimidsA, varid)
   end function nf90_def_var_oneDim
-  ! ----- 
+  ! -----
   function nf90_def_var_ManyDims(ncid, name, xtype, dimids, varid)
     integer,               intent( in) :: ncid
     character (len = *),   intent( in) :: name
@@ -233,33 +233,33 @@
     integer, dimension(:), intent( in) :: dimids
     integer,               intent(out) :: varid
     integer                            :: nf90_def_var_ManyDims
-    
+
 !    nf90_def_var_ManyDims = nf_def_var(ncid, name, xtype, size(dimids), dimids, varid)
   end function nf90_def_var_ManyDims
-  ! ----- 
+  ! -----
   function nf90_inq_varid(ncid, name, varid)
     integer,             intent( in) :: ncid
     character (len = *), intent( in) :: name
     integer,             intent(out) :: varid
     integer                          :: nf90_inq_varid
-    
+
 !    nf90_inq_varid = nf_inq_varid(ncid, name, varid)
   end function nf90_inq_varid
-  ! ----- 
+  ! -----
   function nf90_inquire_variable(ncid, varid, name, xtype, ndims, dimids, nAtts)
     integer,                         intent( in) :: ncid, varid
     character (len = *),   optional, intent(out) :: name
-    integer,               optional, intent(out) :: xtype, ndims 
+    integer,               optional, intent(out) :: xtype, ndims
     integer, dimension(:), optional, intent(out) :: dimids
     integer,               optional, intent(out) :: nAtts
     integer                                      :: nf90_inquire_variable
-    
+
     ! Local variables
     character (len = nf90_max_name)       :: varName
     integer                               :: externalType, numDimensions
     integer, dimension(nf90_max_var_dims) :: dimensionIDs
     integer                               :: numAttributes
-    
+
 !    nf90_inquire_variable = nf_inq_var(ncid, varid, varName, externalType, &
 !                                       numDimensions, dimensionIDs, numAttributes)
     if (nf90_inquire_variable == nf90_noerr) then
@@ -276,15 +276,15 @@
         if(present(nAtts))  nAtts                  = numAttributes
     endif
   end function nf90_inquire_variable
-  ! ----- 
+  ! -----
   function nf90_rename_var(ncid, varid, newname)
     integer,             intent( in) :: ncid, varid
     character (len = *), intent( in) :: newname
     integer                          :: nf90_rename_var
-    
+
 !   nf90_rename_var = nf_rename_var(ncid, varid, newname)
   end function nf90_rename_var
-  ! ----- 
+  ! -----
 
 
 
@@ -320,7 +320,7 @@
 
 ! !DESCRIPTION:
 !  This routine defines an io field for a netCDF file.
-!  When reading a file, the define routine will attempt to fill an 
+!  When reading a file, the define routine will attempt to fill an
 !  io field structure with meta-data information from the netCDF file.
 !  When writing a file, it calls the appropriate netCDF routines
 !  to define all the field attributes and assign a field id.
@@ -448,7 +448,7 @@
          if (iostat /= nf90_noerr) &
             call exit_POP(sigAbort, &
                    'error getting netCDF field attribute name')
-   
+
          call broadcast_scalar(att_name, master_task)
 
          !***
@@ -568,15 +568,15 @@
 !               iostat = nf90_Inquire_Attribute(ncid, io_field%id, &
 !                                               trim(att_name),    &
 !                                               xtype = itype,     &
-!                                               len = nsize) 
+!                                               len = nsize)
             endif
-   
+
             call broadcast_scalar(iostat, master_task)
             if (iostat /= nf90_noerr) then
                call exit_POP(sigAbort, &
                    'Error reading netCDF file attribute')
             endif
-   
+
             call broadcast_scalar(itype, master_task)
 
             select case (itype)
@@ -609,7 +609,7 @@
                   call exit_POP(sigAbort, &
                                 'Error reading netCDF file attribute')
                endif
-   
+
                call broadcast_scalar(att_ival, master_task)
                if (att_name(1:4) == 'LOG_') then !*** attribute logical
                   work_line = att_name
@@ -654,11 +654,11 @@
                   call exit_POP(sigAbort, &
                                 'Error reading netCDF file attribute')
                endif
-   
+
                call broadcast_scalar(att_dval, master_task)
                call add_attrib_io_field(io_field, trim(att_name), &
                                                   att_dval)
-   
+
             end select
 
          end select
@@ -797,7 +797,7 @@
          endif
 
          !*** grid_loc
- 
+
          if (io_field%grid_loc /= '    ') then
 !            iostat = NF90_INQUIRE_ATTRIBUTE(ncid=NCID, varid=varid, &
 !                                            name='grid_loc')

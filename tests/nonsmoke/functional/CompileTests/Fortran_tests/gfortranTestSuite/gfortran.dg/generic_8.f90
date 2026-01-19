@@ -3,7 +3,7 @@
 ! would emit an error because of mistaken INTENT; the wrong
 ! specific interface would be used for the comparison.
 !
-! Contributed by 
+! Contributed by
 !
 MODULE M
   IMPLICIT NONE

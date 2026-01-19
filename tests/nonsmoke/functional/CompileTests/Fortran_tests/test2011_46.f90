@@ -14,5 +14,5 @@ if( x.EQ.2) then
   print *, "OK"
 else
  print *, "failed",X
-end if   
+end if
 end program main

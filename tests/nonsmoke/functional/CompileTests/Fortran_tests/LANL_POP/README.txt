@@ -1,18 +1,18 @@
-The LANL POP code is a 75K line F90 Ocean climate simulation code that 
+The LANL POP code is a 75K line F90 Ocean climate simulation code that
 we have permission to use as part of tests of ROSE Fortran support.
 
 There are currently a few locations in the code where code is
-commented out becuase it was a problem for ROSE. This was done 
+commented out becuase it was a problem for ROSE. This was done
 because the fix was not clear and so we moved on to identify
-the scope of the problems associated with the Fortran 90 support 
+the scope of the problems associated with the Fortran 90 support
 in ROSE.
 
 At present ROSE compiles about all of the POP code.  Specific tests include:
    1) Parsing (done and in place with the "make check" rule and thus part of commit tests)
-   2) Compiling for analysis; this builds the AST and does any unparsing as required for 
+   2) Compiling for analysis; this builds the AST and does any unparsing as required for
       construction of *.rmod files to handle module support and use statements.  This
       step is the most recent accomplishment.  ROSE can compile POP for analysis
-      with the exception of a dozen lines of code that are commented out (some code is 
+      with the exception of a dozen lines of code that are commented out (some code is
       repeated multiple times); details below in point 1-9.
    3) Unparsing to generate new code (not tested yet)
    4) Compiling the generated (unparsed) code to verify that it will compile using the
@@ -51,21 +51,8 @@ currently understand the problem.
 whole file compiles cleanly with ROSE.  So this will be revisited later.
 
   This code fragment is commented out in only one location:
-#if 0
-! DQ ((9/12/2010): Comment this out as a test.
-            iostat = NF90_INQ_DIMID(ncid=ncid,                         &
-                                 name=trim(io_field%field_dim(n)%name),&
-                                 dimid=dimid)
-#endif
 
   This code fragment is commented out in 4 locations:
-#if 0
-! DQ (9/12/2010): Comment this out as a test.
-               iostat = NF90_DEF_DIM (ncid=ncid,                    &
-                             name=trim(io_field%field_dim(n)%name), &
-                             len=io_field%field_dim(n)%length,      &
-                             dimid=io_field%field_dim(n)%id)
-#endif
 
 
 4) File: io_binary.F90
@@ -106,13 +93,13 @@ AND
 
 
 8) FIXED: Another problem is that aliased symbols appear to be growing exponentially, so I need
-   to check this soon.  I think that including them from multiple modules is causing them 
+   to check this soon.  I think that including them from multiple modules is causing them
    to be redundentaly entered into the symbol tables and this is a mistake (but it does
    not fail; it just represents a performance issue in the compiling (especially with
    internal debugging tunred on).  This expoential problem is a serious issue and
-   causes it to take an hour or so to compile the last third of the POP code.  So this 
+   causes it to take an hour or so to compile the last third of the POP code.  So this
    is the most important bug in ROSE currently and will get fixed next.
-   We also can't include compiling POP into the "make check" rule until we fix this 
+   We also can't include compiling POP into the "make check" rule until we fix this
    performance problem.
 
    In general we should likely report the symbol table sizes to more easily track this
@@ -120,7 +107,7 @@ AND
 
 9) File: vertical_mix.F90
    This appears to be a problem similar as to that in #6 (above).
-   
+
 ! DQ (9/12/2010): Commented out uses of "km" because this is an error in ROSE.
 !            VTFB = merge( -bottom_heat_flx, VTFB,      &
 !                         k == KMT(:,:,bid) .and.       &

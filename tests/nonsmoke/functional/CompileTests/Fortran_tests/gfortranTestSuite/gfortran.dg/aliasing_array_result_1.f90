@@ -17,7 +17,7 @@ module foo
   INTEGER, PARAMETER :: TWO = 2
   integer :: foo_a(ONE)
   integer :: check(ONE) = TEN
-  LOGICAL :: abort_flag = .false. 
+  LOGICAL :: abort_flag = .false.
 contains
   function foo_f()
      integer :: foo_f(ONE)

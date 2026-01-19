@@ -17,34 +17,14 @@ struct LayoutNavEntry
         {
           private:
             // typedef void (LayoutParser::*Handler)(LayoutDocEntry::Kind kind);
-               typedef void (*Handler)(LayoutDocEntry::Kind kind);
-#if 0
-               void foobar_A() 
-                  {
-                    (m_parent->*m_handler)(m_kind);
-                  }
-
-               LayoutParser *m_parent;
-               Handler m_handler;
-               LayoutDocEntry::Kind m_kind;
-#endif
+            typedef void (*Handler)(LayoutDocEntry::Kind kind);
         };
 
      class StartElementHandlerNavEntry
         {
           private:
             // typedef void (LayoutParser::*Handler)(LayoutNavEntry::Kind kind);
-               typedef void (*Handler)(LayoutNavEntry::Kind kind);
-#if 0
-               void foobar_B() 
-                  {
-                    (m_parent->*m_handler)(m_kind);
-                  }
-
-               LayoutParser *m_parent;
-               Handler m_handler;
-               LayoutNavEntry::Kind m_kind;
-#endif
+            typedef void (*Handler)(LayoutNavEntry::Kind kind);
         };
 
 //   };

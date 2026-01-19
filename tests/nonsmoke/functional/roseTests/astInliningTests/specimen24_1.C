@@ -10,18 +10,7 @@ struct Domain{
       for (Index_t i=0;i<numNode;++i) {
         nodeElemCount(i)=0;
       }   
-    } 
-
-#if 0  // the best inline result should look like the following
-    void AllocateNodeElemIndexes_inlined()
-    {
-      Index_t numNode = m_numNode; // call site 1 inlined
-
-      for (Index_t i=0;i<numNode;++i) {
-        m_nodeElemCount[i] =0;  // call site 2 inlined
-      }   
-    } 
-#endif
+    }
 
     Index_t& nodeElemCount(Index_t idx) { return m_nodeElemCount[idx] ; }
     Index_t&  numNode()            { return m_numNode ; }

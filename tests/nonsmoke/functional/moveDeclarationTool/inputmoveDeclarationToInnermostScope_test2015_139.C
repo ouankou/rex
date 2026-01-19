@@ -5,19 +5,12 @@ int foobar()
    {
      int pid;
 
-#if 1
-     if ( 1 ) {
-#if 0 
-          pid = foo2();
-#else
-          pid = foo2();
-#endif
+     if (1) {
+       pid = foo2();
 
-          if ( pid == -1 ) { }
+       if (pid == -1) {
+       }
      }
-#else
-     foo1();
-#endif
 
      return( 0 ) ;
    }

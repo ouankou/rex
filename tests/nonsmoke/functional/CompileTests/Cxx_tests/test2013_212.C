@@ -2,22 +2,6 @@
 // template member functions.
 
 #include <set>
-#if 0
-template <typename T>
-class set
-   {
-     T t;
-
-     public:
-          class iterator
-             {
-               public:
-                    T second;
-             };
-
-          iterator insert(T);
-   };
-#endif
 
 namespace google {
 namespace protobuf {
@@ -53,12 +37,10 @@ int FileDescriptor::DebugString() const {
 
   for (int i = 0; i < extension_count(); i++) {
     if (true) {
-#if 1
       // This appears to be important code in demonstrating the bug:
       // it is unparsed as: groups . insert((this) ->  extension (i) ->
       // message_type ());
       groups.insert(extension(i)->message_type());
-#endif
     }
   }
 

@@ -14,14 +14,11 @@ class Map
                     BidirectionalIterator();
              };
 
-          class NodeIterator: public BidirectionalIterator<NodeIterator, Node>
-             {
-#if 1
+             class NodeIterator
+                 : public BidirectionalIterator<NodeIterator, Node> {
                typedef BidirectionalIterator<NodeIterator, Node> Super;
-#endif
-#if 1
-               public:
-                    NodeIterator();
-#endif
+
+             public:
+               NodeIterator();
              };
    };

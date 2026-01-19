@@ -18,7 +18,7 @@ program main
   if (c /= 'ab ') call abort
   close (95)
   call check_end_record
-  
+
   call write_file
   backspace 95
   close (95)

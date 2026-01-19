@@ -17,11 +17,6 @@ struct TagFileParser
    {
      enum State { Invalid };
 
-#if 0
-  // Fortunately this is not legal code (good, since it would have made over qualification of some types in template arguments an error).
-     struct TagFileParser { enum State { Invalid }; };
-#endif
-
      void startMember()
         {
        // m_stateStack_alt.push(0L);

@@ -93,21 +93,5 @@ CONTAINS
     func = (/ 1, 3, 5 /)
   END FUNCTION func
 
-#if 0
-  ! Test association to character variable with automatic length.
-  SUBROUTINE test_char (n)
-    INTEGER, INTENT(IN) :: n
-
-    CHARACTER(LEN=n) :: str
-
-    str = "foobar"
-    ASSOCIATE (my => str)
-      IF (LEN (my) /= n) CALL abort ()
-      IF (my /= "fooba") CALL abort ()
-      my = "abcdef"
-    END ASSOCIATE
-    IF (str /= "abcde") CALL abort ()
-  END SUBROUTINE test_char
-#endif
 
 END PROGRAM main

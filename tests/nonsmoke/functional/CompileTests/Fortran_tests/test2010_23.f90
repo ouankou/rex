@@ -2,7 +2,7 @@
 program foo
   logical ll
   integer i
-  if (ll .eqv. .true.) then 
+  if (ll .eqv. .true.) then
     i = 1
-  endif 
+  endif
 end

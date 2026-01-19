@@ -28,13 +28,9 @@ void foo::prod ()
   // Again, this does not associate the scope with "void prod(int)"
      void prod (int x);
 
-  // Error: global scope name qualification is dropped in generated code!
-  // global qualification here is required!
-#if 0
-     ::prod (0);
-#else
-     prod (0);
-#endif
+     // Error: global scope name qualification is dropped in generated code!
+     // global qualification here is required!
+     prod(0);
    }
 
 void prod (int x);

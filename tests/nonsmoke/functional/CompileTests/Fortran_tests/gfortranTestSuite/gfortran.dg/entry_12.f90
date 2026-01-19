@@ -16,10 +16,10 @@ MODULE ksbin1_aux_mod
     module procedure j, k
   end interface
   CONTAINS
-    FUNCTION j () 
+    FUNCTION j ()
     j = 1
     return
-    ENTRY k (i) 
+    ENTRY k (i)
     k = 2
     END FUNCTION j
 END MODULE ksbin1_aux_mod

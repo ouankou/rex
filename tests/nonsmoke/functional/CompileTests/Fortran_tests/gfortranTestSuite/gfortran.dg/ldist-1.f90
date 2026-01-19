@@ -1,4 +1,4 @@
-! { dg-do compile }     
+! { dg-do compile }
 ! { dg-options "-O2 -ftree-loop-distribution -fdump-tree-ldist-all" }
 
 Subroutine PADEC(DKS,DKDS,HVAR,WM,WG,FN,NS,AN,BN,CN,IT)

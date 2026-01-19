@@ -71,37 +71,3 @@ entry_key_pressed(GntWidget *w, FinchConv *ggconv)
 	gnt_entry_add_to_history(GNT_ENTRY(ggconv->entry), text);
 	gnt_entry_clear(GNT_ENTRY(ggconv->entry));
 }
-
-#if 0
-  // The function "g_free(escape);" is unparsed in the wrong scope"
-     if (!purple_account_is_connected((purple_conversation_get_account((ggconv -> active_conv))))) 
-        {
-          purple_conversation_write(ggconv -> active_conv,"",((const char *)(dgettext("pidgin","Message was not sent, because you are not signed on."))),(576),time(((void *)0)));
-        }
-       else 
-        {
-          char *escape = purple_markup_escape_text((( *text) == '/'?text + 1 : text),(- 1));
-          switch(purple_conversation_get_type((ggconv -> active_conv)))
-             {
-               case PURPLE_CONV_TYPE_IM:
-                  {
-                    purple_conv_im_send_with_flags(purple_conversation_get_im_data((ggconv -> active_conv)),escape,PURPLE_MESSAGE_SEND);
-                    break; 
-                  }
-               case PURPLE_CONV_TYPE_CHAT:
-                  {
-                    purple_conv_chat_send(purple_conversation_get_chat_data((ggconv -> active_conv)),escape);
-                    break; 
-                  }
-               default:
-                  {
-                    g_free(escape);
-                    (void )(({g_log(((gchar *)0),G_LOG_LEVEL_CRITICAL,"file %s: line %d (%s): should not be reached","gntconv.c",206,__PRETTY_FUNCTION__); return ; }));
-                  }
-             }
-        }
-    g_free(escape);
-    purple_idle_touch();
-  }
-
-#endif

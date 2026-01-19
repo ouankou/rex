@@ -61,7 +61,7 @@ g77-bprob-1.f
 
 
 Directory g77.dg/gcov
-gcov-1.f 
+gcov-1.f
 
 Directory g77.f-torture/compile
 12002.f				Y
@@ -133,7 +133,7 @@ g77.f-torture/execute
 20001111.f			Y
 20001201.f & 20001201.x
 20010116.f			Y
-20010426.f renamed 20010426-1.f	Y 
+20010426.f renamed 20010426-1.f	Y
 20010430.f			Y
 20010610.f			Y
 5122.f				- Assembler failure
@@ -170,7 +170,7 @@ dnrm2.f				Y Add dg-warning as required
 erfc.f				Y
 exp.f				  Compiler warnings and fails
 f90-intrinsic-bit.f             F 16581 Compile errors
-f90-intrinsic-mathematical.f	Y 
+f90-intrinsic-mathematical.f	Y
 f90-intrinsic-numeric.f		Y
 int8421.f			Y
 intrinsic-f2c-z.f		F Execution fail

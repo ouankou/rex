@@ -46,7 +46,6 @@ void foobar2()
    {
    }
 
-#if 1
 int main()
    {
   // X x;
@@ -54,5 +53,4 @@ int main()
 
   // x.foo();
   // y.foo();
-   }
-#endif
+}

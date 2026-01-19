@@ -12,6 +12,6 @@ C***************************************************
       if (tid .ne. 0) call abort
 !$omp END MASTER
       PRINT *, 'Hello World!'
-c$omp end parallel 
+c$omp end parallel
       PRINT *, 'the end'
       END

@@ -171,24 +171,21 @@ namespace Geometry
         };
    }
 
-namespace Geometry
-   {
-#if 1
-  // DQ (5/30/2011): The name qualification for Zone clears the qualified name in the map where we store the state.
-     template <class CoordinateSystem>
-     class PolyMesh<CoordinateSystem>::Zone
-        {
-          public:
-               typedef PolyMesh<CoordinateSystem> MeshType;
+   namespace Geometry {
+   // DQ (5/30/2011): The name qualification for Zone clears the qualified name
+   // in the map where we store the state.
+   template <class CoordinateSystem> class PolyMesh<CoordinateSystem>::Zone {
+   public:
+     typedef PolyMesh<CoordinateSystem> MeshType;
 
-               typedef typename PolyMesh<CoordinateSystem>::Face **           iterator;
-               typedef typename PolyMesh<CoordinateSystem>::Face * const *    const_iterator;
-               typedef typename PolyMesh<CoordinateSystem>::Side * const *    SideIterator;
-               typedef typename PolyMesh<CoordinateSystem>::Corner **         CornerIterator;
-               typedef typename PolyMesh<CoordinateSystem>::Corner * const *  const_CornerIterator;
-        };
-#endif
-   }
+     typedef typename PolyMesh<CoordinateSystem>::Face **iterator;
+     typedef typename PolyMesh<CoordinateSystem>::Face *const *const_iterator;
+     typedef typename PolyMesh<CoordinateSystem>::Side *const *SideIterator;
+     typedef typename PolyMesh<CoordinateSystem>::Corner **CornerIterator;
+     typedef typename PolyMesh<CoordinateSystem>::Corner *const
+         *const_CornerIterator;
+   };
+   } // namespace Geometry
 
 // Simple initial test
 X2<  Geometry::MeshBase < Geometry::PolygonalMeshTypeInfo > >::Scalar *sp;

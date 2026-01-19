@@ -1,15 +1,12 @@
-int globalVariableX;  
-#if 1
-
+int globalVariableX;
 
 class A 
 {
   public: int x;
   int foo();
 }
-;  
+;
 
-#endif
 int GlobalScopePreambleStart;
 int GlobalScopePreambleEnd;
 int CurrentLocationTopOfScopeStart;

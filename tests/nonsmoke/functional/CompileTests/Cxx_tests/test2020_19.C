@@ -16,31 +16,8 @@ namespace X
              {
                using namespace X;
                i = 45;
-             }
-#if 0
-          void N::f()
-             {
-               using namespace ::X::N;
-               i = 46;
-             }
-          void f()
-             {
-               using namespace X;
-               i = 47;
-             }
-#endif
+          }
         }
    }
 
-
-void foobar()
-   {
-#if 0
-     namespace A = X::N;
-     A::X::f();
-     A::N::f();
-#endif
-#if 0
-     A::f();
-#endif
-   }
+   void foobar() {}

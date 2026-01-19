@@ -63755,33 +63755,24 @@ namespace boost {
   };
 }
 
-#if 1
 namespace boost {
-  template <class OutEdgeListS = vecS,
-            class VertexListS = vecS,
-            class DirectedS = directedS,
-            class VertexProperty = no_property,
-            class EdgeProperty = no_property,
-            class GraphProperty = no_property,
-            class EdgeListS = listS>
-  class adjacency_list
-#if 1
+template <class OutEdgeListS = vecS, class VertexListS = vecS,
+          class DirectedS = directedS, class VertexProperty = no_property,
+          class EdgeProperty = no_property, class GraphProperty = no_property,
+          class EdgeListS = listS>
+class adjacency_list
     : public detail::adj_list_gen<
-      adjacency_list<OutEdgeListS,VertexListS,DirectedS,
-                     VertexProperty,EdgeProperty,GraphProperty,EdgeListS>,
-      VertexListS, OutEdgeListS, DirectedS,
-      VertexProperty, EdgeProperty,
-      GraphProperty, EdgeListS>::type,
+          adjacency_list<OutEdgeListS, VertexListS, DirectedS, VertexProperty,
+                         EdgeProperty, GraphProperty, EdgeListS>,
+          VertexListS, OutEdgeListS, DirectedS, VertexProperty, EdgeProperty,
+          GraphProperty, EdgeListS>::type,
       public graph::maybe_named_graph<
-        adjacency_list<OutEdgeListS,VertexListS,DirectedS,
-                       VertexProperty,EdgeProperty,GraphProperty,EdgeListS>,
-        typename adjacency_list_traits<OutEdgeListS, VertexListS, DirectedS,
-                                       EdgeListS>::vertex_descriptor,
-        VertexProperty>
-#endif
-  { };
-}
-#endif
+          adjacency_list<OutEdgeListS, VertexListS, DirectedS, VertexProperty,
+                         EdgeProperty, GraphProperty, EdgeListS>,
+          typename adjacency_list_traits<OutEdgeListS, VertexListS, DirectedS,
+                                         EdgeListS>::vertex_descriptor,
+          VertexProperty> {};
+} // namespace boost
 
 using namespace boost;
 int main(int argc, char *argv[])

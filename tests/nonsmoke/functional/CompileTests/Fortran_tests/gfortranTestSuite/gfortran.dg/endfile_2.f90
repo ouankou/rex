@@ -1,5 +1,5 @@
 ! { dg-do run }
-! pr18778 abort on endfile without opening unit 
+! pr18778 abort on endfile without opening unit
       program test
       implicit none
       integer i

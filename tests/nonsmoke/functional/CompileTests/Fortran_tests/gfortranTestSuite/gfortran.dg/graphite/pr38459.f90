@@ -10,5 +10,5 @@ SUBROUTINE mltfftsg ( a, ldax, lday, b, ldbx, ldby, &
   COMPLEX ( dbl ), INTENT ( INOUT ) :: b ( ldbx, ldby )
 
    B(N+1:LDBX,1:M) = CMPLX(0._dbl,0._dbl,dbl)
-    
+
 END SUBROUTINE mltfftsg

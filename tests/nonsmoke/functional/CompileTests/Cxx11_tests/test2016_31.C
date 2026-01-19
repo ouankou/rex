@@ -64,23 +64,8 @@ namespace std __attribute__ ((__visibility__ ("default")))
     : public true_type
     { };
 
-#if 1
   // This is allowed in GNU 4.9.2 (but not in legacy frontend).
-  template<typename _B1>
-    struct __and_<_B1>
-    : public _B1
-    { };
-#else
-  template<typename _B1>
-    struct __and_<_B1>
-   // : public _B1
-  // { };
-     { 
-        public: 
-           static const bool value = true; 
-        // typedef int type;
-     };
-#endif
+  template <typename _B1> struct __and_<_B1> : public _B1 {};
 
   template<typename _B1, typename _B2>
     struct __and_<_B1, _B2>
@@ -1254,13 +1239,8 @@ namespace std __attribute__ ((__visibility__ ("default")))
     struct enable_if<true, _Tp>
     { typedef _Tp type; };
 
-#if 1
-  template<typename... _Cond>
-    using _Require = typename enable_if<__and_<_Cond...>::value>::type;
-#else
-    template<typename _Cond> using _Require = typename enable_if<__and_<_Cond>::value>::type;
-#endif
-
+  template <typename... _Cond>
+  using _Require = typename enable_if<__and_<_Cond...>::value>::type;
 }
 
 

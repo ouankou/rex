@@ -7,11 +7,11 @@ C To: egcs-bugs@cygnus.com
 C Subject: g77 crashes compiling Dungeon
 C Message-ID: <Pine.OSF.3.91.970823003521.11281A-100000@lynx.dac.neu.edu>
 C
-C The following small segment of Dungeon (the adventure that became the 
-C commercial hit Zork) causes an internal error in f771.  The platform is 
-C i586-pc-linux-gnulibc1, the compiler is egcs-ss-970821 (g77-GNU Fortran 
+C The following small segment of Dungeon (the adventure that became the
+C commercial hit Zork) causes an internal error in f771.  The platform is
+C i586-pc-linux-gnulibc1, the compiler is egcs-ss-970821 (g77-GNU Fortran
 C 0.5.21-19970811)
-C 
+C
 C --cut here--cut here--cut here--cut here--cut here--cut here--
 C g77 --verbose -fugly -fvxt -c subr_.f
 C g77 version 0.5.21-19970811
@@ -26,11 +26,11 @@ C GNU Fortran Front End version 0.5.21-19970811
 C f/com.c:941: failed assertion `TYPE_PRECISION (type) <= TYPE_PRECISION (TREE_TYPE (e))'
 C gcc: Internal compiler error: program f771 got fatal signal 6
 C --cut here--cut here--cut here--cut here--cut here--cut here--
-C 
-C Here's the FORTRAN code, it's basically a single subroutine from subr.f 
-C in the Dungeon source, slightly altered (the original calls RAN(), which 
+C
+C Here's the FORTRAN code, it's basically a single subroutine from subr.f
+C in the Dungeon source, slightly altered (the original calls RAN(), which
 C doesn't exist in the g77 runtime)
-C 
+C
 C RND - Return a random integer mod n
 C
       INTEGER FUNCTION RND (N)

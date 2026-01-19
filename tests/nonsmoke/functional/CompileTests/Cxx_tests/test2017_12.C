@@ -9,14 +9,6 @@
 typedef __float128 long_double_t;
 
 int main() {
-#if 0
-#ifdef USE_FLOAT128
-    typedef __float128  long_double_t;
-#else
-// #error "USE_FLOAT128 is not defined!"
-    typedef long double long_double_t;
-#endif
-#endif
 
   long_double_t ld;
 

@@ -5,7 +5,7 @@
       implicit none
       integer         :: i(6),j,k
       character(12)  :: r(12,2) = '0123456789AB'
- 
+
 ! Write to and read from a whole character array
 
       i = (/(j,j=1,6)/)
@@ -21,7 +21,7 @@
          end do
       end do
 
- ! Write to a portion of a character array      
+ ! Write to a portion of a character array
       r = '0123456789AB'
       write(r(3:9,1),'(6(i12/))') i
       if (r(2,1).ne.'0123456789AB') call abort()

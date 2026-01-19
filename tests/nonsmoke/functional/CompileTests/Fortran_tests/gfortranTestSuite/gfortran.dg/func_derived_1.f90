@@ -33,7 +33,7 @@ function f(i,x,c,arr)
   type(t) :: f
   character*5 c
   integer arr(5,5)
-  
+
   f = t(i,x,c,arr)
 end function f
 

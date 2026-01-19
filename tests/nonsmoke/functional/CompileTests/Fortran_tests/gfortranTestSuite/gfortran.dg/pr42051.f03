@@ -9,7 +9,7 @@
 ! reduced by Janus Weil <janus@gcc.gnu.org>.
 
 module grid_module
-  implicit none 
+  implicit none
   type grid
   end type
   type field
@@ -19,11 +19,11 @@ contains
   real function return_x(this)
     class(grid) :: this
   end function
-end module 
+end module
 
 module field_module
   use grid_module, only: field,return_x
-  implicit none 
+  implicit none
 contains
   subroutine output(this)
     class(field) :: this

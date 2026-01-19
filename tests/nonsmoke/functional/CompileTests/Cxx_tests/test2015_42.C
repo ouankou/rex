@@ -3,7 +3,6 @@ void foobar()
  // This is an assignment initializer using the "default value" for type int (zero is the default value for int so we get zero internally).
     int z = int();
 
-#if 1
     int y;
 
     typedef int xxx;
@@ -17,5 +16,4 @@ void foobar()
 
  // unparses as: "y_ptr -> ~int;" but should unparse as "typedef int xxx; y_ptr->~xxx();"
     y_ptr->~xxx();
-#endif
   }

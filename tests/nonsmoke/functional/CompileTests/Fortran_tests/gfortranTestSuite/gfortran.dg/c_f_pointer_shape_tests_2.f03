@@ -1,7 +1,7 @@
 ! { dg-do run }
 ! { dg-additional-sources c_f_pointer_shape_tests_2_driver.c }
 ! Verify that the optional SHAPE parameter to c_f_pointer can be of any
-! valid integer kind.  We don't test all kinds here since it would be 
+! valid integer kind.  We don't test all kinds here since it would be
 ! difficult to know what kinds are valid for the architecture we're running on.
 ! However, testing ones that should be different should be sufficient.
 module c_f_pointer_shape_tests_2
@@ -15,9 +15,9 @@ contains
     integer, dimension(:), pointer :: myArrayPtr
     integer(c_long_long), dimension(1) :: shape
     integer :: i
-    
+
     shape(1) = num_elems
-    call c_f_pointer(cPtr, myArrayPtr, shape) 
+    call c_f_pointer(cPtr, myArrayPtr, shape)
     do i = 1, num_elems
        if(myArrayPtr(i) /= (i-1)) call abort ()
     end do
@@ -31,10 +31,10 @@ contains
     integer, dimension(:,:), pointer :: myArrayPtr
     integer(c_long_long), dimension(2) :: shape
     integer :: i,j
-    
+
     shape(1) = num_rows
     shape(2) = num_cols
-    call c_f_pointer(cPtr, myArrayPtr, shape) 
+    call c_f_pointer(cPtr, myArrayPtr, shape)
     do j = 1, num_cols
        do i = 1, num_rows
           if(myArrayPtr(i,j) /= ((j-1)*num_rows)+(i-1)) call abort ()
@@ -49,9 +49,9 @@ contains
     integer, dimension(:), pointer :: myArrayPtr
     integer(c_long), dimension(1) :: shape
     integer :: i
-    
+
     shape(1) = num_elems
-    call c_f_pointer(cPtr, myArrayPtr, shape) 
+    call c_f_pointer(cPtr, myArrayPtr, shape)
     do i = 1, num_elems
        if(myArrayPtr(i) /= (i-1)) call abort ()
     end do
@@ -64,9 +64,9 @@ contains
     integer, dimension(:), pointer :: myArrayPtr
     integer(c_int), dimension(1) :: shape
     integer :: i
-    
+
     shape(1) = num_elems
-    call c_f_pointer(cPtr, myArrayPtr, shape) 
+    call c_f_pointer(cPtr, myArrayPtr, shape)
     do i = 1, num_elems
        if(myArrayPtr(i) /= (i-1)) call abort ()
     end do
@@ -79,9 +79,9 @@ contains
     integer, dimension(:), pointer :: myArrayPtr
     integer(c_short), dimension(1) :: shape
     integer :: i
-    
+
     shape(1) = num_elems
-    call c_f_pointer(cPtr, myArrayPtr, shape) 
+    call c_f_pointer(cPtr, myArrayPtr, shape)
     do i = 1, num_elems
        if(myArrayPtr(i) /= (i-1)) call abort ()
     end do
@@ -97,18 +97,18 @@ contains
     integer :: i
 
     shape1(1) = num_elems
-    call c_f_pointer(cPtr, myArrayPtr, shape1) 
+    call c_f_pointer(cPtr, myArrayPtr, shape1)
     do i = 1, num_elems
        if(myArrayPtr(i) /= (i-1)) call abort ()
     end do
 
     nullify(myArrayPtr)
     shape2(1) = num_elems
-    call c_f_pointer(cPtr, myArrayPtr, shape2) 
+    call c_f_pointer(cPtr, myArrayPtr, shape2)
     do i = 1, num_elems
        if(myArrayPtr(i) /= (i-1)) call abort ()
     end do
   end subroutine test_mixed
 end module c_f_pointer_shape_tests_2
-! { dg-final { cleanup-modules "c_f_pointer_shape_tests_2" } } 
+! { dg-final { cleanup-modules "c_f_pointer_shape_tests_2" } }
 

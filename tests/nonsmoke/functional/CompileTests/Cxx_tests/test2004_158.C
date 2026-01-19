@@ -6,12 +6,6 @@
 int x = 42;
 // float y = (float) x;
 
-#if 0
-reinterpret_cast
-const_cast
-dynamic_cast
-#endif
-
 #define NULL 0L
 
 class X {};

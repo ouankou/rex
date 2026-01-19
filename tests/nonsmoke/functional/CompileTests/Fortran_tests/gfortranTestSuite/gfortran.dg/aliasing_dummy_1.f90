@@ -19,7 +19,7 @@ program test_lex
     type(dtype), dimension(4) :: list
     integer :: l = 4
   end type list
- 
+
   type(list) :: table
   type(dtype) :: elist(2,2)
 

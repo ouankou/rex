@@ -247,14 +247,11 @@ stringsubst(LinkList list, LinkNode node, int pf_flags, int asssub)
                  // of a nested true branch all contained in the outer while loop).
 
                     int x = 42;
-                  }
-#if 1
-                 else
-                    if (asssub && ((c == '=') || c == ((char) 0x8b)) && str != str3)
-                       {
-                         pf_flags |= 0x04;
-                       }
-#endif
+          }
+            else if (asssub && ((c == '=') || c == ((char)0x8b)) &&
+                     str != str3) {
+              pf_flags |= 0x04;
+            }
           str++;
         }
 

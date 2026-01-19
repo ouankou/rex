@@ -121,42 +121,187 @@ uchar *key_cache_read(KEY_CACHE *keycache,
  // if (__builtin_expect (mysql_keycache__read__start_semaphore, 0))
     if (1)
     {
-      do { 
+      do {
 
-#if 0
-           __asm__ __volatile__ ("990: nop" "\n" ".pushsection .note.stapsdt" "," "\"?\"" "," "\"note\"" "\n" ".balign 4" "\n" ".4byte 992f-991f" "," "994f-993f" "," "3" "\n" "991: .asciz \"stapsdt\"" "\n" "992: .balign 4" "\n" "993: .8byte 990b" "\n" ".8byte _.stapsdt.base" "\n" ".8byte mysql_keycache__read__start_semaphore" "\n" ".asciz \"mysql\"" "\n" ".asciz \"keycache__read__start\"" "\n" ".asciz \"%n[_SDT_S1]@%[_SDT_A1] %n[_SDT_S2]@%[_SDT_A2] %n[_SDT_S3]@%[_SDT_A3] %n[_SDT_S4]@%[_SDT_A4]\"" "\n" "994: .balign 4" "\n" ".popsection" "\n" :: [_SDT_S1] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, (my_filename(file)), 0U))) __sdt_unsp) & ((unsigned long long)1 << (sizeof (unsigned long long) * 8 - 1))) == 0) || (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, (my_filename(file)), 0U))) -1 > (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, (my_filename(file)), 0U))) 0)) ? 1 : -1) * (int) ((__builtin_classify_type (my_filename(file)) == 14 || __builtin_classify_type (my_filename(file)) == 5) ? sizeof (void *) : sizeof (my_filename(file)))), [_SDT_A1] "nor" ((my_filename(file))), [_SDT_S2] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type (length) + 3) & -4) == 4, (length), 0U))) __sdt_unsp) & ((unsigned long long)1 << (sizeof (unsigned long long) * 8 - 1))) == 0) || (__typeof (__builtin_choose_expr (((__builtin_classify_type (length) + 3) & -4) == 4, (length), 0U))) -1 > (__typeof (__builtin_choose_expr (((__builtin_classify_type (length) + 3) & -4) == 4, (length), 0U))) 0)) ? 1 : -1) * (int) ((__builtin_classify_type (length) == 14 || __builtin_classify_type (length) == 5) ? sizeof (void *) : sizeof (length))), [_SDT_A2] "nor" ((length)), [_SDT_S3] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)), 0U))) __sdt_unsp) & ((unsigned long long)1 << (sizeof (unsigned long long) * 8 - 1))) == 0) || (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)), 0U))) -1 > (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)), 0U))) 0)) ? 1 : -1) * (int) ((__builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) == 14 || __builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) == 5) ? sizeof (void *) : sizeof ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)))), [_SDT_A3] "nor" (((ulong) (keycache->blocks_used * keycache->key_cache_block_size))), [_SDT_S4] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)), 0U))) __sdt_unsp) & ((unsigned long long)1 << (sizeof (unsigned long long) * 8 - 1))) == 0) || (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)), 0U))) -1 > (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)), 0U))) 0)) ? 1 : -1) * (int) ((__builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) == 14 || __builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) == 5) ? sizeof (void *) : sizeof ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)))), [_SDT_A4] "nor" (((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)))); 
+        __asm__ __volatile__(
+            "990: nop"
+            "\n"
+            ".pushsection .note.stapsdt"
+            ","
+            "\"?\""
+            ","
+            "\"note\""
+            "\n"
+            ".balign 4"
+            "\n"
+            ".4byte 992f-991f"
+            ","
+            "994f-993f"
+            ","
+            "3"
+            "\n"
+            "991: .asciz \"stapsdt\""
+            "\n"
+            "992: .balign 4"
+            "\n"
+            "993: .8byte 990b"
+            "\n"
+            ".8byte _.stapsdt.base"
+            "\n"
+            ".8byte mysql_keycache__read__start_semaphore"
+            "\n"
+            ".asciz \"mysql\""
+            "\n"
+            ".asciz \"keycache__read__start\""
+            "\n"
+            ".asciz \"%n[_SDT_S1]@%[_SDT_A1] %n[_SDT_S2]@%[_SDT_A2] "
+            "%n[_SDT_S3]@%[_SDT_A3] %n[_SDT_S4]@%[_SDT_A4]\""
+            "\n"
+            "994: .balign 4"
+            "\n"
+            ".popsection"
+            "\n" ::
 
-#else
+                // [_SDT_S1] "n" (((!__extension__ (__builtin_constant_p
+                // ((((unsigned long long) (__typeof (__builtin_choose_expr
+                // (((__builtin_classify_type (my_filename(file)) + 3) & -4) ==
+                // 4, 0U))) __sdt_unsp) ) == 0) )) ? 1 : -1) ),
+                // [_SDT_S1] "n" (((!__extension__ (__builtin_constant_p
+                // ((((unsigned long long) (__typeof (__builtin_choose_expr
+                // (((__builtin_classify_type (my_filename(file)) + 3) & -4) ==
+                // 4, 0U))) __sdt_unsp) ) == 0) )) ? 1 : -1) ),
 
-           __asm__ __volatile__ ("990: nop" "\n" ".pushsection .note.stapsdt" "," "\"?\"" "," "\"note\"" "\n" ".balign 4" "\n" ".4byte 992f-991f" "," "994f-993f" "," "3" "\n" "991: .asciz \"stapsdt\"" "\n" "992: .balign 4" "\n" "993: .8byte 990b" "\n" ".8byte _.stapsdt.base" "\n" ".8byte mysql_keycache__read__start_semaphore" "\n" ".asciz \"mysql\"" "\n" ".asciz \"keycache__read__start\"" "\n" ".asciz \"%n[_SDT_S1]@%[_SDT_A1] %n[_SDT_S2]@%[_SDT_A2] %n[_SDT_S3]@%[_SDT_A3] %n[_SDT_S4]@%[_SDT_A4]\"" "\n" "994: .balign 4" "\n" ".popsection" "\n" :: 
+            [_SDT_S1] "n"(
+                ((!__extension__(__builtin_constant_p(
+                     (((unsigned long long)(__typeof(__builtin_choose_expr(
+                         ((__builtin_classify_type(my_filename(file)) + 3) &
+                          -4) == 4,
+                         0U)))__sdt_unsp)) == 0)))
+                     ? 1
+                     : -1)),
 
-#if 0
+            [_SDT_A1] "nor"((my_filename(file))),
 
-[_SDT_S1] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, (my_filename(file)), 0U))) __sdt_unsp) & ((unsigned long long)1 << (sizeof (unsigned long long) * 8 - 1))) == 0) || (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, (my_filename(file)), 0U))) -1 > (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, (my_filename(file)), 0U))) 0)) ? 1 : -1) /* * (int) ((__builtin_classify_type (my_filename(file)) == 14 || __builtin_classify_type (my_filename(file)) == 5) ? sizeof (void *) : sizeof (my_filename(file))) */ ), 
+            [_SDT_S2] "n"(
+                ((!__extension__(
+                     __builtin_constant_p(
+                         (((unsigned long long)(__typeof(__builtin_choose_expr(
+                              ((__builtin_classify_type(length) + 3) & -4) == 4,
+                              (length), 0U)))__sdt_unsp) &
+                          ((unsigned long long)1
+                           << (sizeof(unsigned long long) * 8 - 1))) == 0) ||
+                     (__typeof(__builtin_choose_expr(
+                         ((__builtin_classify_type(length) + 3) & -4) == 4,
+                         (length), 0U)))-1 >
+                         (__typeof(__builtin_choose_expr(
+                             ((__builtin_classify_type(length) + 3) & -4) == 4,
+                             (length), 0U)))0))
+                     ? 1
+                     : -1) *
+                (int)((__builtin_classify_type(length) == 14 ||
+                       __builtin_classify_type(length) == 5)
+                          ? sizeof(void *)
+                          : sizeof(length))),
+            [_SDT_A2] "nor"((length)),
 
-#else
+            [_SDT_S3] "n"(
+                ((!__extension__(
+                     __builtin_constant_p(
+                         (((unsigned long long)(__typeof(__builtin_choose_expr(
+                              ((__builtin_classify_type(
+                                    (ulong)(keycache->blocks_used *
+                                            keycache->key_cache_block_size)) +
+                                3) &
+                               -4) == 4,
+                              ((ulong)(keycache->blocks_used *
+                                       keycache->key_cache_block_size)),
+                              0U)))__sdt_unsp) &
+                          ((unsigned long long)1
+                           << (sizeof(unsigned long long) * 8 - 1))) == 0) ||
+                     (__typeof(__builtin_choose_expr(
+                         ((__builtin_classify_type(
+                               (ulong)(keycache->blocks_used *
+                                       keycache->key_cache_block_size)) +
+                           3) &
+                          -4) == 4,
+                         ((ulong)(keycache->blocks_used *
+                                  keycache->key_cache_block_size)),
+                         0U)))-1 >
+                         (__typeof(__builtin_choose_expr(
+                             ((__builtin_classify_type(
+                                   (ulong)(keycache->blocks_used *
+                                           keycache->key_cache_block_size)) +
+                               3) &
+                              -4) == 4,
+                             ((ulong)(keycache->blocks_used *
+                                      keycache->key_cache_block_size)),
+                             0U)))0))
+                     ? 1
+                     : -1) *
+                (int)((__builtin_classify_type(
+                           (ulong)(keycache->blocks_used *
+                                   keycache->key_cache_block_size)) == 14 ||
+                       __builtin_classify_type(
+                           (ulong)(keycache->blocks_used *
+                                   keycache->key_cache_block_size)) == 5)
+                          ? sizeof(void *)
+                          : sizeof((ulong)(keycache->blocks_used *
+                                           keycache->key_cache_block_size)))),
+            [_SDT_A3] "nor"(((ulong)(keycache->blocks_used *
+                                     keycache->key_cache_block_size))),
 
-// [_SDT_S1] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, 0U))) __sdt_unsp) ) == 0) )) ? 1 : -1) ), 
-// [_SDT_S1] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, 0U))) __sdt_unsp) ) == 0) )) ? 1 : -1) ), 
+            [_SDT_S4] "n"(
+                ((!__extension__(
+                     __builtin_constant_p(
+                         (((unsigned long long)(__typeof(__builtin_choose_expr(
+                              ((__builtin_classify_type(
+                                    (ulong)(keycache->blocks_unused *
+                                            keycache->key_cache_block_size)) +
+                                3) &
+                               -4) == 4,
+                              ((ulong)(keycache->blocks_unused *
+                                       keycache->key_cache_block_size)),
+                              0U)))__sdt_unsp) &
+                          ((unsigned long long)1
+                           << (sizeof(unsigned long long) * 8 - 1))) == 0) ||
+                     (__typeof(__builtin_choose_expr(
+                         ((__builtin_classify_type(
+                               (ulong)(keycache->blocks_unused *
+                                       keycache->key_cache_block_size)) +
+                           3) &
+                          -4) == 4,
+                         ((ulong)(keycache->blocks_unused *
+                                  keycache->key_cache_block_size)),
+                         0U)))-1 >
+                         (__typeof(__builtin_choose_expr(
+                             ((__builtin_classify_type(
+                                   (ulong)(keycache->blocks_unused *
+                                           keycache->key_cache_block_size)) +
+                               3) &
+                              -4) == 4,
+                             ((ulong)(keycache->blocks_unused *
+                                      keycache->key_cache_block_size)),
+                             0U)))0))
+                     ? 1
+                     : -1) *
+                (int)((__builtin_classify_type(
+                           (ulong)(keycache->blocks_unused *
+                                   keycache->key_cache_block_size)) == 14 ||
+                       __builtin_classify_type(
+                           (ulong)(keycache->blocks_unused *
+                                   keycache->key_cache_block_size)) == 5)
+                          ? sizeof(void *)
+                          : sizeof((ulong)(keycache->blocks_unused *
+                                           keycache->key_cache_block_size)))),
 
+            [_SDT_A4] "nor"(((ulong)(keycache->blocks_unused *
+                                     keycache->key_cache_block_size))));
 
-[_SDT_S1] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type (my_filename(file)) + 3) & -4) == 4, 0U))) __sdt_unsp) ) == 0) )) ? 1 : -1) ), 
-
-#endif
-
-[_SDT_A1] "nor" ((my_filename(file))), 
-
-[_SDT_S2] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type (length) + 3) & -4) == 4, (length), 0U))) __sdt_unsp) & ((unsigned long long)1 << (sizeof (unsigned long long) * 8 - 1))) == 0) || (__typeof (__builtin_choose_expr (((__builtin_classify_type (length) + 3) & -4) == 4, (length), 0U))) -1 > (__typeof (__builtin_choose_expr (((__builtin_classify_type (length) + 3) & -4) == 4, (length), 0U))) 0)) ? 1 : -1) * (int) ((__builtin_classify_type (length) == 14 || __builtin_classify_type (length) == 5) ? sizeof (void *) : sizeof (length))), [_SDT_A2] "nor" ((length)), 
-
-[_SDT_S3] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)), 0U))) __sdt_unsp) & ((unsigned long long)1 << (sizeof (unsigned long long) * 8 - 1))) == 0) || (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)), 0U))) -1 > (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)), 0U))) 0)) ? 1 : -1) * (int) ((__builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) == 14 || __builtin_classify_type ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)) == 5) ? sizeof (void *) : sizeof ((ulong) (keycache->blocks_used * keycache->key_cache_block_size)))), [_SDT_A3] "nor" (((ulong) (keycache->blocks_used * keycache->key_cache_block_size))), 
-
-[_SDT_S4] "n" (((!__extension__ (__builtin_constant_p ((((unsigned long long) (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)), 0U))) __sdt_unsp) & ((unsigned long long)1 << (sizeof (unsigned long long) * 8 - 1))) == 0) || (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)), 0U))) -1 > (__typeof (__builtin_choose_expr (((__builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) + 3) & -4) == 4, ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)), 0U))) 0)) ? 1 : -1) * (int) ((__builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) == 14 || __builtin_classify_type ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)) == 5) ? sizeof (void *) : sizeof ((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)))), 
-
-[_SDT_A4] "nor" (((ulong) (keycache->blocks_unused * keycache->key_cache_block_size)))); 
-#endif
-
-
-  // __asm__ __volatile__ (".ifndef _.stapsdt.base" "\n" ".pushsection .stapsdt.base" "," "\"aG\"" "," "\"progbits\"" "," ".stapsdt.base" "," "comdat" "\n" ".weak _.stapsdt.base" "\n" ".hidden _.stapsdt.base" "\n" "_.stapsdt.base: .space 1" "\n" ".size _.stapsdt.base" "," "1" "\n" ".popsection" "\n" ".endif" "\n"); 
+        // __asm__ __volatile__ (".ifndef _.stapsdt.base" "\n" ".pushsection
+        // .stapsdt.base" "," "\"aG\"" "," "\"progbits\"" "," ".stapsdt.base"
+        // "," "comdat" "\n" ".weak _.stapsdt.base" "\n" ".hidden
+        // _.stapsdt.base" "\n" "_.stapsdt.base: .space 1" "\n" ".size
+        // _.stapsdt.base" "," "1" "\n" ".popsection" "\n" ".endif" "\n"); 
 
 } while (0)
 

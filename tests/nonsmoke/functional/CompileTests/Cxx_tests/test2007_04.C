@@ -23,7 +23,6 @@ int main()
   // This was reported in test2007_01.C but is isolated into a separate test code (address operator is dropped or never generated).
      int foo::*v = &foo::bar;
 
-#if 1
   // Build a struct object of type "foo"
      foo X;
 
@@ -35,7 +34,6 @@ int main()
 
   // Using "v": Access through a pointer of type "foo"
      Xptr->*v = 42;
-#endif
 
      return 0;
    }

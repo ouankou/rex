@@ -5,7 +5,7 @@
 !BOP
 ! !MODULE: tavg
 ! !DESCRIPTION:
-!  This module contains data types and routines for computing running 
+!  This module contains data types and routines for computing running
 !  time-averages of selected fields and writing this data to files.
 !
 ! !REVISION HISTORY:
@@ -194,7 +194,7 @@
 
    namelist /tavg_nml/ tavg_freq_opt, tavg_freq, tavg_infile,       &
                        tavg_outfile, tavg_contents, tavg_start_opt, &
-                       tavg_start, tavg_fmt_in, tavg_fmt_out 
+                       tavg_start, tavg_fmt_in, tavg_fmt_out
 
 !-----------------------------------------------------------------------
 !
@@ -489,7 +489,7 @@
 
       !*** if it is time to start, make sure requested fields
       !*** get triggered by the requested function
- 
+
       if (ltavg_on) then
          do n=1,num_avail_tavg_fields
             if (avail_tavg_fields(n)%buf_loc < 0) &
@@ -677,7 +677,7 @@
 
       call date_and_time(date=date_created, time=time_created)
       hist_string = char_blank
-      write(hist_string,'(a23,a8,1x,a10)') & 
+      write(hist_string,'(a23,a8,1x,a10)') &
          'POP TAVG file created: ',date_created,time_created
 
       tavg_file_desc = construct_file(tavg_fmt_out,                    &
@@ -717,7 +717,7 @@
 !     in this first phase, we define all the fields to be written
 !
 !-----------------------------------------------------------------------
- 
+
       !*** define dimensions
 
       i_dim = construct_io_dim('i',nx_global)
@@ -776,7 +776,7 @@
 !     file can be closed
 !
 !-----------------------------------------------------------------------
- 
+
       do nfield = 1,num_avail_tavg_fields  ! check all available fields
 
          loc = avail_tavg_fields(nfield)%buf_loc ! locate field in buffer
@@ -947,7 +947,7 @@
 
 !-----------------------------------------------------------------------
 !
-!  if pointer files are used, pointer file and must be read to get 
+!  if pointer files are used, pointer file and must be read to get
 !  actual filenames
 !
 !-----------------------------------------------------------------------
@@ -1237,7 +1237,7 @@
          !*** 3-d fields
 
          else
-      
+
             !$OMP PARALLEL DO PRIVATE(k)
             do iblock = 1,nblocks_clinic
                WORK(:,:,iblock) = c0
@@ -1246,7 +1246,7 @@
 
                case(field_loc_center)
                   do k=1,km
-                     RMASK = merge(c1, c0, k <= KMT(:,:,iblock)) 
+                     RMASK = merge(c1, c0, k <= KMT(:,:,iblock))
                      WORK(:,:,iblock) = WORK(:,:,iblock) + dz(k)* &
                                         TAVG_BUF_3D(:,:,k,iblock,ifield)* &
                                         TAREA(:,:,iblock)*RMASK
@@ -1254,7 +1254,7 @@
 
                case(field_loc_NEcorner)
                   do k=1,km
-                     RMASK = merge(c1, c0, k <= KMU(:,:,iblock)) 
+                     RMASK = merge(c1, c0, k <= KMU(:,:,iblock))
                      WORK(:,:,iblock) = WORK(:,:,iblock) + dz(k)* &
                                         TAVG_BUF_3D(:,:,k,iblock,ifield)* &
                                         UAREA(:,:,iblock)*RMASK
@@ -1262,7 +1262,7 @@
 
                case default ! make U cell the default for all other cases
                   do k=1,km
-                     RMASK = merge(c1, c0, k <= KMU(:,:,iblock)) 
+                     RMASK = merge(c1, c0, k <= KMU(:,:,iblock))
                      WORK(:,:,iblock) = WORK(:,:,iblock) + dz(k)* &
                                         TAVG_BUF_3D(:,:,k,iblock,ifield)* &
                                         UAREA(:,:,iblock)*RMASK
@@ -1308,8 +1308,8 @@
 
 ! !DESCRIPTION:
 !  This routine updates a tavg field.  If the time average of the
-!  field is requested, it accumulates a time sum of a field by 
-!  multiplying by the time step and accumulating the sum into the 
+!  field is requested, it accumulates a time sum of a field by
+!  multiplying by the time step and accumulating the sum into the
 !  tavg buffer array.  If the min or max of a field is requested, it
 !  checks the current value and replaces the min, max if the current
 !  value is less than or greater than the stored value.
@@ -1325,7 +1325,7 @@
       field_id          ! index into available fields for tavg field info
 
    real (r8), dimension(nx_block,ny_block), intent(in) :: &
-      ARRAY             ! array of data for this block to add to 
+      ARRAY             ! array of data for this block to add to
                         !  accumulated sum in tavg buffer
 !EOP
 !BOC
@@ -1431,7 +1431,7 @@
       ndims                     ! number of dims (2 or 3) of tavg field
 
    integer (i4), intent(in), optional :: &
-      field_loc,              &! location in grid 
+      field_loc,              &! location in grid
       field_type,             &! type of field (scalar, vector, angle)
       tavg_method              ! id for method of averaging
                                ! default is tavg_method_avg
@@ -1464,7 +1464,7 @@
       call exit_POP(sigAbort, &
                     'tavg: defined tavg fields > max allowed')
    endif
- 
+
    id = num_avail_tavg_fields
 
 !-----------------------------------------------------------------------
@@ -1637,8 +1637,8 @@
 
 ! !DESCRIPTION:
 !  This function determines whether an available (defined) tavg field
-!  has been requested by a user (through the input contents file) and 
-!  returns true if it has.  Note that if tavg has been turned off, 
+!  has been requested by a user (through the input contents file) and
+!  returns true if it has.  Note that if tavg has been turned off,
 !  the function will always return false.
 !
 ! !REVISION HISTORY:
@@ -1688,7 +1688,7 @@
  subroutine create_suffix_tavg(file_suffix)
 
 ! !DESCRIPTION:
-!  Creates a suffix to append to output filename based on frequency 
+!  Creates a suffix to append to output filename based on frequency
 !  option and averaging interval.
 !
 ! !REVISION HISTORY:
@@ -1717,7 +1717,7 @@
    character (10) :: &
       cstep_beg,     &! beginning step  of this particular average
       cstep_end,     &! ending    step  of this particular average
-      cdate           ! character string with yyyymmdd and optional 
+      cdate           ! character string with yyyymmdd and optional
                       ! separator (eg yyyy-mm-dd)
 
    character (4) :: &
@@ -1741,7 +1741,7 @@
    file_suffix(1:cindx2) = trim(runid)/&
                                        &/'.'
    cindx1 = cindx2 + 1
-   
+
 !-----------------------------------------------------------------------
 !
 !  extract beginning year, month, day or time step from beg_date
@@ -1842,7 +1842,7 @@
                                  &/trim(cstep_end)
 
    end select
- 
+
 !-----------------------------------------------------------------------
 !EOC
 

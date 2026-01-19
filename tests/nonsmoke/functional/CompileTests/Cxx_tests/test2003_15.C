@@ -1,33 +1,7 @@
-#if 0
-#include <stdarg.h> // #include <varargs.h>
 
-#include <stdio.h>
-
-#include <stdlib.h>
-#endif
-
-#if 0
-#include <AEStackElm.h>
-
-#include <Rgst.h>
-#endif
 #include <irs.h>
 
 #include <irsctl.h>
-
-#if 0
-double type;
-int i;
-
-#error "DEAD CODE"
-
-void foo(...)
-{
-  va_list ap;
-  va_start(ap, type);
-  i = va_arg(ap,int);
-}
-#endif
 
 // Include portable var arg mechanism
 #include <stdarg.h> // #include <varargs.h>
@@ -47,25 +21,6 @@ void foo(...)
 // #define va_arg(AP, TYPE)						\
 //  (AP = (__builtin_va_list) ((char *) (AP) + __va_rounded_size (TYPE)),	\
 //   *((TYPE *) (void *) ((char *) (AP) - __va_rounded_size (TYPE))))
-
-#if 0
-
-#error "DEAD CODE"
-
-#if 0
-#define __builtin_stdarg_start(a, b) (void *)(a, b)
-#define __builtin_va_end(a) (void *)(a)
-#else
-// #define __builtin_stdarg_start(a,b) va_start(a,b)
-// #define __builtin_va_end(a) va_end(a)
-#define va_start(a, b) (void *)(a, b)
-#define va_end(a) (void *)(a)
-#define va_arg(a, b) (void *)((a), sizeof(b))
-#endif
-
-#error "DEAD CODE"
-
-#endif
 
 void foo(char *fmt, ...) {
   va_list args;

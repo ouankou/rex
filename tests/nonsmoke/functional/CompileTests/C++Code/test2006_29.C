@@ -89,12 +89,6 @@ int main() {
   ifstream PARAMETER;
   int i, iter, N = 10;
 
-#if 0
-  PARAMETER.open("para.dat",ios :: in);
-  PARAMETER >> N >> iter;
-  PARAMETER.close();
-#endif
-
   Vector A_(N, 0.);
   Vector B_(N, 3.);
   Vector C_(N, 5.);
@@ -131,19 +125,6 @@ marke:
       A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ +
       A_
 
-#if 0
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-+ A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_ + A_
-#endif
   );
   i++;
   if (i < iter)

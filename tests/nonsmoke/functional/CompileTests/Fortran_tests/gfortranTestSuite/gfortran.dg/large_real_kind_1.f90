@@ -24,7 +24,7 @@ contains
     character(len=*),intent(in) :: s
 
     character(len=len(s)) :: c
-    
+
     write (c,f) a
     if (c /= s) call abort
   end subroutine outputstring

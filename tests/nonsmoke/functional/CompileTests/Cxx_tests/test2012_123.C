@@ -1,8 +1,4 @@
-#if 0
-int x,*y;
-#else
-int x = 42,*y = 0L;
-#endif
+int x = 42, *y = 0L;
 
 int z = 7;
 

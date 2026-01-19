@@ -34,7 +34,7 @@ SrcDepDir = SrcDepends
 #
 #----------------------------------------------------------------------------
 
-.SUFFIXES: 
+.SUFFIXES:
 .SUFFIXES: .o .c .f .f90 .h .F .F90 .C .H .d .e .do .eo
 
 #----------------------------------------------------------------------------
@@ -69,7 +69,7 @@ objs:
 	+@if [ ! -d $(ObjDepDir) ]; then mkdir $(ObjDepDir); fi
 	+@if [ ! -d $(SrcDepDir) ]; then mkdir $(SrcDepDir); fi
 	@$(MAKE) $(OBJS) LEVEL=1 ARCHDIR=$(ARCHDIR) OPTIMIZE=$(OPTIMIZE)
-	
+
 #
 #  Make the library for all the object files: ./compile/ObjDepends/libpop.a
 lib:
@@ -77,7 +77,7 @@ lib:
 	+@if [ ! -d $(ObjDepDir) ]; then mkdir $(ObjDepDir); fi
 	+@if [ ! -d $(SrcDepDir) ]; then mkdir $(SrcDepDir); fi
 	@$(MAKE) $(TARGETLIB) LEVEL=1 ARCHDIR=$(ARCHDIR) OPTIMIZE=$(OPTIMIZE)
-	
+
 #----------------------------------------------------------------------------
 #
 #  Echo makefile variables.
@@ -141,7 +141,7 @@ VPATH = $(SRCDIRS)
 #  and object files.
 #
 # Each of the following commands has a similar pattern:
-#    List all files of a certain type from the current directory 
+#    List all files of a certain type from the current directory
 #         plus all files of that same type from SRCDIRS
 #
 # The distinction between uppercase and lowercase suffixes has
@@ -214,20 +214,20 @@ endif
 
 ifneq (,$(LFSRCS))
   ifneq (,$(FSRCS))
-    LFSRCS    := $(filter-out $(FSRCS:.F=.f),$(LFSRCS)) 
+    LFSRCS    := $(filter-out $(FSRCS:.F=.f),$(LFSRCS))
   endif
   ifneq (,$(strip $(LFSRCS)))
-    OBJS    := $(notdir $(LFSRCS:.f=.o)) $(OBJS) 
+    OBJS    := $(notdir $(LFSRCS:.f=.o)) $(OBJS)
     DEPENDS := $(DEPENDS) $(addprefix $(ObjDepDir)/, $(notdir $(LFSRCS:.f=$(DEPSUF))))
   endif
 endif
 
 ifneq (,$(LF90SRCS))
   ifneq (,$(F90SRCS))
-    LFSRCS    := $(filter-out $(F90SRCS:.F90=.f90),$(LF90SRCS)) 
+    LFSRCS    := $(filter-out $(F90SRCS:.F90=.f90),$(LF90SRCS))
   endif
   ifneq (,$(strip $(LF90SRCS)))
-    OBJS    := $(notdir $(LF90SRCS:.f90=.o)) $(OBJS) 
+    OBJS    := $(notdir $(LF90SRCS:.f90=.o)) $(OBJS)
     DEPENDS := $(DEPENDS) $(addprefix $(ObjDepDir)/, $(notdir $(LF90SRCS:.f90=$(DEPSUF))))
   endif
 endif

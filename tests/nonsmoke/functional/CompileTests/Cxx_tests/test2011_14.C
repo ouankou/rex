@@ -13,12 +13,3 @@ identityTranslator -c /preprocessorBug.C
 rose_preprocessorBug.C:1: error: unterminated #if
 
 */
-
-#if 0
-
-class C
-{
-}
-
-// Make sure there is NOT a newline after the #endif.
-#endif

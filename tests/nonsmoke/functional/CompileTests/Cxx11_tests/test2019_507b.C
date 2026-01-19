@@ -1,5 +1,5 @@
-// #if (!defined(SKIP_122Y24)&&!defined(SKIP12)&&!defined(ONLY))||defined(CASE_122Y24)
-#if 1
+// #if
+// (!defined(SKIP_122Y24)&&!defined(SKIP12)&&!defined(ONLY))||defined(CASE_122Y24)
 class X_
 	{
 public:
@@ -10,16 +10,6 @@ public:
 	};
 int X_::count = 0;
 X_ f_(X_ x);
-#endif /* CASE_122Y24 */
 
 // #include "final_defs.h"
-int main(int argc, char *argv[])
-{
-#if 0
-  // Implements core 320 - 2006 [editorial]
-     X_ a(1);
-  // ieq(X_::count, 1);
-     a = f_(a);
-  // chk(X_::count >= 3);
-#endif
-}
+int main(int argc, char *argv[]) {}

@@ -23,7 +23,6 @@ void foo ( istream & in_stream )
      std::getline(in_stream, line, '\n');
    }
 
-#if 1
 int main()
    {
   // Test output operator
@@ -36,5 +35,4 @@ int main()
 #endif
 
      return 0;
-   }
-#endif
+}

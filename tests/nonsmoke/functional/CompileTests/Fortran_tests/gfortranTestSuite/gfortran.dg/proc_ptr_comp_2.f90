@@ -36,7 +36,7 @@
   if (base/=8) call abort
   call foo (obj%ppc1,5)
 
-! Check compatibility components with non-components  
+! Check compatibility components with non-components
   f => obj%ppc
   base=f(6)
   if (base/=12) call abort

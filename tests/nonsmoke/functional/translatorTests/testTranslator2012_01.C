@@ -187,14 +187,9 @@ Traversal::evaluateSynthesizedAttribute ( SgNode* astNode, InheritedAttribute in
              {
                printf ("evaluateSynthesizedAttribute(): Found the main function ...\n");
                vector<SgDeclarationStatement*>::iterator i = find(globalScope->get_declarations().begin(),globalScope->get_declarations().end(),localResult.main_function);
-               globalScope->get_declarations().insert(i,inheritedAttribute.statements_from_first_file.begin(),inheritedAttribute.statements_from_first_file.end());
-#if 0
-            // Set the parents of each declaration to match the new location (avoids warning that might later be an error).
-               for (size_t i = 0; i < inheritedAttribute.statements_from_first_file.size(); i++)
-                  {
-                    inheritedAttribute.statements_from_first_file[i]->set_parent(globalScope);
-                  }
-#endif
+               globalScope->get_declarations().insert(
+                   i, inheritedAttribute.statements_from_first_file.begin(),
+                   inheritedAttribute.statements_from_first_file.end());
              }
         }
 

@@ -1,2 +1,2 @@
-      REAL*8 X 
+      REAL*8 X
       END

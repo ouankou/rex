@@ -43,16 +43,7 @@ class Z : public Y
                numberValue.foobar();
              }
 
-         ::numberType foo ( ::numberType numberValue );
-#if 0
-         ::numberType foo ( numberType numberValue, int x );
-
-      // The code generation will output a redundant "::" (global qualifier) becuase legacy frontend things it is required.
-         ::numberType foo ( Y::numberType numberValue, int x );
-
-      // The global qualifier for the function parameter is marked as required, but is not REALLY needed.
-         ::numberType foo ( ::Y::numberType numberValue );
-#endif
+             ::numberType foo(::numberType numberValue);
    };
 
 #else
