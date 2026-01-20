@@ -2,39 +2,27 @@
 
 SgType *SgTypeIdOp::get_type() const {
 
-  // get_type on SgTypeIdOp must always retuen a const referene to
+  // get_type on SgTypeIdOp must always return a const reference to
   // "std::type_info"
 
-  SgType *returnType = NULL;
-  // If we call get_type() on a node that is not fully build then this will
-  // break.
-  SgGlobal *globalScope = SageInterface::getGlobalScope(this);
-  ROSE_ASSERT(globalScope && "globalScope is NULL");
+  // The result type is stored explicitly at construction time.
+  SgType *returnType = get_expression_type();
+  ROSE_ASSERT(returnType && "SgTypeIdOp expression_type is NULL");
 
-  SgNamespaceSymbol *stdNamespaceSymbol =
-      globalScope->lookup_namespace_symbol(SgName("std"));
-  ROSE_ASSERT(stdNamespaceSymbol &&
-              "lookup_namespace_symbol did not found std symbol");
+  SgReferenceType *refType = isSgReferenceType(returnType);
+  SgType *baseType = (refType != NULL) ? refType->get_base_type() : returnType;
+  if (!SageInterface::isConstType(baseType)) {
+    baseType = SageBuilder::buildConstType(baseType);
+    ROSE_ASSERT(baseType);
+  }
 
-  SgNamespaceDeclarationStatement *namespaceDeclarationStatement =
-      stdNamespaceSymbol->get_declaration();
-  SgNamespaceDefinitionStatement *namespaceDefinitionStatement =
-      namespaceDeclarationStatement->get_definition();
-  ROSE_ASSERT(namespaceDefinitionStatement && "get_definition() retured NULL");
+  if (refType == NULL || baseType != refType->get_base_type()) {
+    SgReferenceType *constRefType = SageBuilder::buildReferenceType(baseType);
+    ROSE_ASSERT(constRefType);
+    return constRefType;
+  }
 
-  SgClassSymbol *typeInfoClassSymbol =
-      namespaceDefinitionStatement->lookup_class_symbol(SgName("type_info"));
-  ROSE_ASSERT(typeInfoClassSymbol &&
-              "lookup_class_symbol did not found type_info symbol");
-
-  // returnType = SageInterface::deepCopy(typeInfoClassSymbol->get_type());
-  returnType = typeInfoClassSymbol->get_type();
-  ROSE_ASSERT(isSgClassType(returnType));
-
-  SgModifierType *constType = SageBuilder::buildConstType(returnType);
-  ROSE_ASSERT(constType);
-  SgReferenceType *constRefType = SageBuilder::buildReferenceType(constType);
-  return constRefType;
+  return returnType;
 }
 
 // DQ (6/11/2015): Moved these six access functions, they should not be

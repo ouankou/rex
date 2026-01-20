@@ -4364,7 +4364,8 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
     } else if (current_arg == "-fexceptions" ||
                current_arg == "-fno-exceptions" ||
                current_arg == "-fcxx-exceptions" ||
-               current_arg == "-fno-cxx-exceptions") {
+               current_arg == "-fno-cxx-exceptions" ||
+               current_arg == "-frtti" || current_arg == "-fno-rtti") {
       clang_frontend_args.push_back(current_arg);
     } else if (current_arg == "-rex:clang:continue-on-error") {
       clang_frontend_args.push_back(current_arg);

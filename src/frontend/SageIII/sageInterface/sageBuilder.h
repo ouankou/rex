@@ -651,7 +651,8 @@ buildDeleteExp(SgExpression *variable, short is_array,
 
 //! DQ (1/25/2013): Added support for typeId operators.
 ROSE_DLL_API SgTypeIdOp *buildTypeIdOp(SgExpression *operand_expr,
-                                       SgType *operand_type);
+                                       SgType *operand_type,
+                                       SgType *expression_type = NULL);
 
 #undef BUILD_UNARY_PROTO
 

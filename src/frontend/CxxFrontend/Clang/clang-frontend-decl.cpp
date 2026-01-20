@@ -2004,6 +2004,266 @@ void ClangToSageTranslator::populateClassDefinition(
   // REX FIX: We must detect if an access specifier was explicitly written.
   bool explicit_access_context = false;
 
+  // Populate base classes for C++ records.
+  if (clang::CXXRecordDecl *cxx_record =
+          llvm::dyn_cast<clang::CXXRecordDecl>(record_decl)) {
+    auto canonical_class_decl =
+        [](SgClassDeclaration *decl) -> SgClassDeclaration * {
+      if (decl == NULL) {
+        return NULL;
+      }
+      if (SgClassDeclaration *first =
+              isSgClassDeclaration(decl->get_firstNondefiningDeclaration())) {
+        return first;
+      }
+      return decl;
+    };
+
+    auto has_class_base = [&](SgClassDeclaration *decl) -> bool {
+      if (decl == NULL) {
+        return true;
+      }
+      SgClassDeclaration *canon = canonical_class_decl(decl);
+      for (SgBaseClass *existing : class_def->get_inheritances()) {
+        if (existing == NULL) {
+          continue;
+        }
+        if (isSgNonrealBaseClass(existing) != NULL) {
+          continue;
+        }
+        SgClassDeclaration *existing_decl = existing->get_base_class();
+        if (existing_decl == NULL) {
+          continue;
+        }
+        if (canonical_class_decl(existing_decl) == canon) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    auto sanitize_base_name = [&](const std::string &raw) -> SgName {
+      std::string name = trimWhitespace(raw);
+      if (name.rfind("struct ", 0) == 0) {
+        name = trimWhitespace(name.substr(7));
+      } else if (name.rfind("class ", 0) == 0) {
+        name = trimWhitespace(name.substr(6));
+      } else if (name.rfind("union ", 0) == 0) {
+        name = trimWhitespace(name.substr(6));
+      }
+      size_t lt = name.find('<');
+      if (lt != std::string::npos) {
+        name = trimWhitespace(name.substr(0, lt));
+      }
+      if (name.empty()) {
+        name = "__unknown_base";
+      }
+      return SgName(name);
+    };
+
+    SgScopeStatement *base_scope = NULL;
+    if (SgClassDeclaration *owner_decl = class_def->get_declaration()) {
+      base_scope = owner_decl->get_scope();
+    }
+    if (base_scope == NULL) {
+      base_scope = SageBuilder::topScopeStack();
+    }
+    if (base_scope == NULL) {
+      base_scope = class_def;
+    }
+
+    auto ensure_defining_decl = [&](SgClassDeclaration *decl) -> void {
+      if (decl == NULL) {
+        return;
+      }
+      if (decl->get_definingDeclaration() != NULL) {
+        return;
+      }
+      if (decl->get_definition() != NULL) {
+        decl->set_definingDeclaration(decl);
+        if (decl->get_firstNondefiningDeclaration() == NULL) {
+          decl->set_firstNondefiningDeclaration(decl);
+        }
+        return;
+      }
+      SgClassDeclaration *nondef =
+          isSgClassDeclaration(decl->get_firstNondefiningDeclaration());
+      if (nondef == NULL) {
+        nondef = decl;
+      }
+      SgScopeStatement *scope = nondef->get_scope();
+      if (scope == NULL) {
+        scope = base_scope;
+      }
+
+      if (SgTemplateInstantiationDecl *inst =
+              isSgTemplateInstantiationDecl(nondef)) {
+        SgClassDefinition *defn =
+            SageBuilder::buildClassDefinition_nfi(inst, true);
+        inst->set_definition(defn);
+        defn->set_declaration(inst);
+        defn->set_parent(inst);
+        inst->set_definingDeclaration(inst);
+        inst->unsetForward();
+        setCompilerGeneratedFileInfo(defn);
+        return;
+      }
+
+      if (nondef->get_type() == NULL) {
+        nondef->set_type(SgClassType::createType(nondef));
+      }
+
+      SgClassDefinition *defn = SageBuilder::buildClassDefinition_nfi();
+      SgClassDeclaration *defdecl =
+          new SgClassDeclaration(nondef->get_name(), nondef->get_class_type(),
+                                 nondef->get_type(), defn);
+      defdecl->set_definition(defn);
+      defn->set_declaration(defdecl);
+      defn->set_parent(defdecl);
+      defdecl->set_definingDeclaration(defdecl);
+      defdecl->set_firstNondefiningDeclaration(nondef);
+      defdecl->unsetForward();
+      defdecl->set_scope(scope);
+      defdecl->set_parent(scope);
+      nondef->set_definingDeclaration(defdecl);
+      setCompilerGeneratedFileInfo(defdecl);
+      setCompilerGeneratedFileInfo(defn);
+    };
+
+    auto build_placeholder_base_decl =
+        [&](const SgName &base_name) -> SgClassDeclaration * {
+      SgScopeStatement *scope = NULL;
+      if (SgClassDeclaration *owner_decl = class_def->get_declaration()) {
+        scope = owner_decl->get_scope();
+      }
+      if (scope == NULL) {
+        scope = SageBuilder::topScopeStack();
+      }
+      if (scope == NULL) {
+        scope = class_def;
+      }
+      SgName sanitized = base_name;
+      if (SageInterface::hasTemplateSyntax(sanitized)) {
+        sanitized = sanitize_base_name(sanitized.getString());
+      }
+      SgClassDeclaration *nondef =
+          SageBuilder::buildNondefiningClassDeclaration_nfi(
+              sanitized, SgClassDeclaration::e_class, scope,
+              /*buildTemplateInstantiation=*/false, nullptr);
+      if (nondef == NULL) {
+        return NULL;
+      }
+      ensure_defining_decl(nondef);
+      return nondef;
+    };
+
+    for (SgBaseClass *existing : class_def->get_inheritances()) {
+      if (existing == NULL) {
+        continue;
+      }
+      SgClassDeclaration *existing_decl = existing->get_base_class();
+      if (existing_decl == NULL) {
+        continue;
+      }
+      ensure_defining_decl(existing_decl);
+    }
+
+    for (const clang::CXXBaseSpecifier &base : cxx_record->bases()) {
+      clang::QualType base_type = base.getType();
+      if (base_type.isNull()) {
+        continue;
+      }
+
+      SgType *sg_base_type = buildTypeFromQualifiedType(base_type);
+      if (sg_base_type == NULL) {
+        sg_base_type = SageBuilder::buildUnknownType();
+      }
+
+      SgType *stripped = sg_base_type->stripTypedefsAndModifiers();
+      if (stripped == NULL) {
+        stripped = sg_base_type;
+      }
+
+      SgBaseClass *base_class = NULL;
+      if (SgClassType *class_type = isSgClassType(stripped)) {
+        SgClassDeclaration *base_decl =
+            isSgClassDeclaration(class_type->get_declaration());
+        if (base_decl != NULL) {
+          if (SgClassDeclaration *first = isSgClassDeclaration(
+                  base_decl->get_firstNondefiningDeclaration())) {
+            base_decl = first;
+          }
+          ensure_defining_decl(base_decl);
+          if (!has_class_base(base_decl)) {
+            base_class = SageBuilder::buildBaseClass(base_decl, class_def,
+                                                     base.isVirtual(), true);
+          }
+        } else {
+          SgName base_name = sanitize_base_name(base_type.getAsString());
+          SgClassDeclaration *placeholder =
+              build_placeholder_base_decl(base_name);
+          if (placeholder != NULL && !has_class_base(placeholder)) {
+            base_class = SageBuilder::buildBaseClass(placeholder, class_def,
+                                                     base.isVirtual(), true);
+          }
+        }
+      } else if (SgNonrealType *nr_type = isSgNonrealType(stripped)) {
+        SgNonrealDecl *nrdecl = isSgNonrealDecl(nr_type->get_declaration());
+        SgName base_name = nrdecl != NULL
+                               ? nrdecl->get_name()
+                               : sanitize_base_name("__unknown_base");
+        SgClassDeclaration *placeholder =
+            build_placeholder_base_decl(base_name);
+        if (placeholder != NULL && !has_class_base(placeholder)) {
+          base_class = SageBuilder::buildBaseClass(placeholder, class_def,
+                                                   base.isVirtual(), true);
+        }
+      } else if (SgTemplateType *tmpl_type = isSgTemplateType(stripped)) {
+        SgName base_name = tmpl_type->get_name();
+        if (base_name.getString().empty()) {
+          base_name = "__template_base";
+        }
+        SgClassDeclaration *placeholder =
+            build_placeholder_base_decl(base_name);
+        if (placeholder != NULL && !has_class_base(placeholder)) {
+          base_class = SageBuilder::buildBaseClass(placeholder, class_def,
+                                                   base.isVirtual(), true);
+        }
+      } else {
+        SgName base_name = sanitize_base_name(base_type.getAsString());
+        SgClassDeclaration *placeholder =
+            build_placeholder_base_decl(base_name);
+        if (placeholder != NULL && !has_class_base(placeholder)) {
+          base_class = SageBuilder::buildBaseClass(placeholder, class_def,
+                                                   base.isVirtual(), true);
+        }
+      }
+
+      if (base_class != NULL) {
+        SgBaseClassModifier *modifier = base_class->get_baseClassModifier();
+        if (modifier != NULL) {
+          SgAccessModifier &access = modifier->get_accessModifier();
+          switch (base.getAccessSpecifier()) {
+          case clang::AS_public:
+            access.setPublic();
+            break;
+          case clang::AS_protected:
+            access.setProtected();
+            break;
+          case clang::AS_private:
+            access.setPrivate();
+            break;
+          case clang::AS_none:
+            access.setUnknown();
+            break;
+          }
+          access.set_is_explicit(base.getAccessSpecifierAsWritten() !=
+                                 clang::AS_none);
+        }
+      }
+    }
+  }
+
   for (clang::Decl *inner_decl : record_decl->decls()) {
     if (inner_decl == NULL) {
       continue;
@@ -6366,6 +6626,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     instantiationDecl->set_definingDeclaration(NULL);
     instantiationDecl->set_forward(true);
     instantiationDecl->set_templateName(name);
+    instantiationDecl->set_nameResetFromMangledForm(true);
 
     SgClassType *type = SgClassType::createType(instantiationDecl);
     instantiationDecl->set_type(type);
@@ -6453,6 +6714,9 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     if (instantiationDecl->get_parent() == NULL) {
       instantiationDecl->set_parent(parent_scope);
     }
+    if (!instantiationDecl->get_nameResetFromMangledForm()) {
+      instantiationDecl->set_nameResetFromMangledForm(true);
+    }
     // setStatementSourcePosition(instantiationDecl, class_tpl_spec_decl); //
     // Don't reset position of reused decl
   }
@@ -6497,6 +6761,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       definingDecl->set_definingDeclaration(definingDecl);
       definingDecl->set_forward(false);
       definingDecl->set_templateName(name);
+      definingDecl->set_nameResetFromMangledForm(true);
       definingDecl->set_type(firstNondefiningDeclaration->get_type());
 
       applySourceRange(definingDecl, class_tpl_spec_decl->getSourceRange());
@@ -6531,6 +6796,9 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       }
       if (definingDecl->get_templateName().getString().empty()) {
         definingDecl->set_templateName(name);
+      }
+      if (!definingDecl->get_nameResetFromMangledForm()) {
+        definingDecl->set_nameResetFromMangledForm(true);
       }
       if (definingDecl->get_type() == NULL &&
           firstNondefiningDeclaration->get_type() != NULL) {

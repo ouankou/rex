@@ -380,7 +380,7 @@ void SgExpression::set_explicitly_stored_type(SgType *type) {
   case V_SgTypeIdOp: {
     SgTypeIdOp *exp = isSgTypeIdOp(this);
     ROSE_ASSERT(exp != NULL);
-    exp->set_operand_type(type);
+    exp->set_expression_type(type);
     break;
   }
 
