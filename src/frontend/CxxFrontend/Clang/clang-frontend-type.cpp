@@ -2738,6 +2738,9 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
           arg->set_parent(inst_decl);
         }
       }
+      if (!inst_decl->get_nameResetFromMangledForm()) {
+        inst_decl->set_nameResetFromMangledForm(true);
+      }
     }
     ensure_file_info(inst_decl);
     return inst_decl;
@@ -2801,6 +2804,7 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   // NameQualificationTraversal will add the necessary qualification (e.g.
   // "std::")
   inst_decl->set_templateName(SgName(template_base_name));
+  inst_decl->set_nameResetFromMangledForm(true);
 
   // Create class type pointing to this instantiation
   class_type = SgClassType::createType(inst_decl);

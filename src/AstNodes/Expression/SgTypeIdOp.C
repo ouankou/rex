@@ -2,28 +2,42 @@
 
 SgType *SgTypeIdOp::get_type() const {
 
-  // get_type on SgTypeIdOp must always retuen a const referene to
+  // get_type on SgTypeIdOp must always return a const reference to
   // "std::type_info"
 
   SgType *returnType = NULL;
-  // If we call get_type() on a node that is not fully build then this will
-  // break.
-  SgGlobal *globalScope = SageInterface::getGlobalScope(this);
-  ROSE_ASSERT(globalScope && "globalScope is NULL");
 
-  SgNamespaceSymbol *stdNamespaceSymbol =
-      globalScope->lookup_namespace_symbol(SgName("std"));
-  ROSE_ASSERT(stdNamespaceSymbol &&
-              "lookup_namespace_symbol did not found std symbol");
+  // Resolve std::type_info without relying on parent pointers.
+  SgClassSymbol *typeInfoClassSymbol = NULL;
+  std::vector<SgGlobal *> globalScopes =
+      SageInterface::getSgNodeListFromMemoryPool<SgGlobal>();
+  for (SgGlobal *globalScope : globalScopes) {
+    if (globalScope == NULL) {
+      continue;
+    }
+    SgNamespaceSymbol *stdNamespaceSymbol =
+        globalScope->lookup_namespace_symbol(SgName("std"));
+    if (stdNamespaceSymbol == NULL) {
+      continue;
+    }
 
-  SgNamespaceDeclarationStatement *namespaceDeclarationStatement =
-      stdNamespaceSymbol->get_declaration();
-  SgNamespaceDefinitionStatement *namespaceDefinitionStatement =
-      namespaceDeclarationStatement->get_definition();
-  ROSE_ASSERT(namespaceDefinitionStatement && "get_definition() retured NULL");
+    SgNamespaceDeclarationStatement *namespaceDeclarationStatement =
+        stdNamespaceSymbol->get_declaration();
+    if (namespaceDeclarationStatement == NULL) {
+      continue;
+    }
+    SgNamespaceDefinitionStatement *namespaceDefinitionStatement =
+        namespaceDeclarationStatement->get_definition();
+    if (namespaceDefinitionStatement == NULL) {
+      continue;
+    }
 
-  SgClassSymbol *typeInfoClassSymbol =
-      namespaceDefinitionStatement->lookup_class_symbol(SgName("type_info"));
+    typeInfoClassSymbol =
+        namespaceDefinitionStatement->lookup_class_symbol(SgName("type_info"));
+    if (typeInfoClassSymbol != NULL) {
+      break;
+    }
+  }
   ROSE_ASSERT(typeInfoClassSymbol &&
               "lookup_class_symbol did not found type_info symbol");
 

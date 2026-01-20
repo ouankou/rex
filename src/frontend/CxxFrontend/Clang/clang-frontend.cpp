@@ -75,6 +75,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   bool continue_on_error = false;
   enum class ExceptionMode { Unspecified, Enabled, Disabled };
   ExceptionMode exception_mode = ExceptionMode::Unspecified;
+  enum class RttiMode { Unspecified, Enabled, Disabled };
+  RttiMode rtti_mode = RttiMode::Unspecified;
 
   for (int i = 0; i < argc; i++) {
     std::string current_arg(argv[i]);
@@ -170,6 +172,10 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                current_arg == "-fno-cxx-exceptions") {
       exception_mode = ExceptionMode::Disabled;
       passthrough_args.push_back(current_arg);
+    } else if (current_arg == "-frtti") {
+      rtti_mode = RttiMode::Enabled;
+    } else if (current_arg == "-fno-rtti") {
+      rtti_mode = RttiMode::Disabled;
     } else if (current_arg == "-rex:clang:continue-on-error") {
       continue_on_error = true;
     } else if (!current_arg.empty() && current_arg[0] == '-') {
@@ -289,6 +295,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
        language == ClangToSageTranslator::CUDA)) {
     exception_mode = ExceptionMode::Enabled;
     passthrough_args.push_back("-fexceptions");
+  }
+
+  if (rtti_mode == RttiMode::Unspecified &&
+      (language == ClangToSageTranslator::CPLUSPLUS ||
+       language == ClangToSageTranslator::CUDA)) {
+    rtti_mode = RttiMode::Enabled;
   }
 
   const char *cxx_config_include_dirs_array[] = CXX_INCLUDE_STRING;
@@ -526,6 +538,17 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     } else {
       lang_opts.CXXExceptions = 1;
       lang_opts.Exceptions = 1;
+    }
+  }
+
+  if (language == ClangToSageTranslator::CPLUSPLUS ||
+      language == ClangToSageTranslator::CUDA) {
+    if (rtti_mode == RttiMode::Disabled) {
+      lang_opts.RTTI = 0;
+      lang_opts.RTTIData = 0;
+    } else {
+      lang_opts.RTTI = 1;
+      lang_opts.RTTIData = 1;
     }
   }
 
