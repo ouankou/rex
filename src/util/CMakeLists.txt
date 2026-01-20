@@ -13,6 +13,7 @@ file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string 
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_TREE            = \"${ROSE_TOP_BINARY_DIR}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_PREFIX        = \"${CMAKE_INSTALL_PREFIX}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_INCLUDE_DIR   = \"${INCLUDE_INSTALL_DIR}\";\n")
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_LIB_DIR       = \"${LIB_INSTALL_DIR}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_CLANG_INCLUDE_DIR = \"${CLANG_BUILTIN_HEADERS_INSTALL_DIR}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR = \"${ROSE_TOP_BINARY_DIR}/include-staging\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_LIB_DIR         = \"${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\";\n")

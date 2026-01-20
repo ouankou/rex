@@ -9,7 +9,14 @@
 ## ROSE installation contains
 ##   * libraries, e.g. "librose.la"
 ##   * headers, e.g. "rose.h"
-ROSE_INSTALL=/home/liao6/workspace/raja/rose/install
+ROSE_PREFIX ?= $(shell rose-config prefix)
+ROSE_CONFIG ?= $(ROSE_PREFIX)/bin/rose-config
+
+ROSE_CXX ?= $(shell $(ROSE_CONFIG) ROSE_CXX)
+ROSE_CPPFLAGS := $(shell $(ROSE_CONFIG) ROSE_CPPFLAGS)
+ROSE_CXXFLAGS := $(shell $(ROSE_CONFIG) ROSE_CXXFLAGS)
+ROSE_LDFLAGS := $(shell $(ROSE_CONFIG) ROSE_LDFLAGS)
+ROSE_LINK_RPATHS := $(shell $(ROSE_CONFIG) ROSE_LINK_RPATHS)
 
 ## Your translator
 TRANSLATOR=rajaChecker
@@ -18,7 +25,7 @@ TRANSLATOR_SOURCE=$(TRANSLATOR).C
 ## Input testcode for your translator
 TESTCODE=hello.cpp
 
-LINK_FLAGS=-Wl,-rpath=$(ROSE_INSTALL)/lib -L$(ROSE_INSTALL)/lib -lrose -pthread -lm
+LINK_FLAGS=$(ROSE_LDFLAGS) $(ROSE_LINK_RPATHS)
 #-------------------------------------------------------------
 # Makefile Targets
 #-------------------------------------------------------------
@@ -28,11 +35,11 @@ all: $(TRANSLATOR)
 # compile the translator and generate an executable
 # -g is recommended to be used by default to enable debugging your code
 $(TRANSLATOR): $(TRANSLATOR_SOURCE)
-	g++ -g $(TRANSLATOR_SOURCE) -I$(ROSE_INSTALL)/include/rose $(LINK_FLAGS) -o $(TRANSLATOR)
+	$(ROSE_CXX) -g $(ROSE_CPPFLAGS) $(ROSE_CXXFLAGS) $(TRANSLATOR_SOURCE) $(LINK_FLAGS) -o $(TRANSLATOR)
 
 # test the translator
 check: $(TRANSLATOR)
-	./$(TRANSLATOR) -c -I. -I$(ROSE_INSTALL)/include $(TESTCODE)
+	./$(TRANSLATOR) -c -I. -I$(ROSE_PREFIX)/include $(TESTCODE)
 
 clean:
 	rm -rf $(TRANSLATOR) *.o rose_* *.dot

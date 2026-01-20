@@ -18,6 +18,8 @@
 
 #include "rose.h"
 
+#include "rose_path_resolver.h"
+
 #include <filesystem>
 
 #include <system_error>
@@ -83,7 +85,11 @@ std::string getTrueFilePath(SgFunctionDeclaration *inFuncDecl) {
 
 struct OnlyCurrentDirectory {
   bool operator()(SgFunctionDeclaration *node) const {
-    std::string stringToFilter = ROSE_COMPILE_TREE_PATH + std::string("/tests");
+    static const RosePathRoots roots = resolveRosePaths(nullptr);
+    std::string stringToFilter;
+    if (!roots.build_root.empty()) {
+      stringToFilter = (fs::path(roots.build_root) / "tests").string();
+    }
     std::string srcDir = ROSE_SOURCE_TREE;
 
     // #if 0
@@ -109,7 +115,8 @@ struct OnlyCurrentDirectory {
     // if
     // (string(node->get_file_info()->get_filename()).substr(0,stringToFilter.size())
     // == stringToFilter  )
-    if (sourceFilenameSubstring == stringToFilter)
+    if (!stringToFilter.empty() &&
+        rosePathIsWithinTree(stringToFilter, sourceFilename))
       return true;
     // else
     // if (

@@ -5,7 +5,7 @@ use Cwd 'abs_path';
 
 sub new {
   my($cls,@root) = @_;
-  my $self = bless {build=>0,               # include build subtrees identified by presence of "include-staging"?
+  my $self = bless {build=>0,               # include build subtrees identified by CMake build markers?
 		    thirdparty=>0,          # software not "owned by" ROSE developers
 		    generated=>0,           # software that is machine-generated
 		    install=>0,             # files in the ROSE install directory
@@ -115,7 +115,7 @@ sub next_name {
   my($self) = @_;
   my $retval = shift @{$self->{pending}};
   return $retval unless defined $retval;
-  if ((!$self->{build}      && -d "$retval/include-staging") ||
+  if ((!$self->{build}      && (-f "$retval/CMakeCache.txt" || -d "$retval/CMakeFiles")) ||
       (!$self->{thirdparty} && is_3rdparty($retval)) ||
       (!$self->{generated}  && $self->is_generated($retval)) ||
       (!$self->{install}    && is_install($retval)) ||

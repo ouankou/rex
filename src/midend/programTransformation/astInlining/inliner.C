@@ -273,7 +273,7 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     // They are not from user code.
     if (funcall->get_file_info()->isCompilerGenerated())
       return false;
-    // check if the file is within include-staging/ header directories
+    // check if the file is within compiler header staging directories
     if (insideSystemHeader(funcall))
       return false;
   }

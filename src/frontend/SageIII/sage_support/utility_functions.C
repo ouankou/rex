@@ -29,6 +29,7 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
+#include "rose_path_resolver.h"
 // DQ (9/8/2017): Debugging ROSE_ASSERT. Call sighandler_t signal(int signum,
 // sighandler_t handler);
 #include <signal.h>
@@ -246,13 +247,17 @@ std::string version_message() {
   //-----------------------------------------------------------------------
 
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
-#ifdef USE_CMAKE
-  string build_tree_path = "not available";
-  string install_path = "not available";
-#else
-  string build_tree_path = ROSE_COMPILE_TREE_PATH;
-  string install_path = ROSE_INSTALLATION_PATH;
-#endif
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
+  string build_tree_path =
+      roots.build_root.empty() ? "not available" : roots.build_root;
+  string install_path;
+  if (!roots.install_prefix.empty()) {
+    install_path = roots.install_prefix;
+  } else if (!ROSE_INSTALL_PREFIX.empty()) {
+    install_path = ROSE_INSTALL_PREFIX;
+  } else {
+    install_path = "not available";
+  }
   ss << "  --- library build path:         " << build_tree_path << "\n";
   ss << "  --- original installation path: " << install_path << "\n";
 #endif

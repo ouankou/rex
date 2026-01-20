@@ -17,8 +17,8 @@ usage() {
 #    Pattern: <BASE>/<DATE>/<TYPE>-<SEQUENCE>
 #    Example: /usr/local/rose/2025-10-10/release-007
 #
-#    * <BASE> is a base name and defaults to (1) the first argument of this script, or (2) the non-empty value of the
-#      ROSE_INSTALLATION_BASE environment variable, or (3) "/usr/local/rose" if it exists, or (4) "$HOME/rose-installed".
+#    * <BASE> is a base name and defaults to (1) the first argument of this script, or (2) the CMake install prefix from
+#      CMakeCache.txt if present, or (3) "$HOME/rose-installed".
 #
 #    * <DATE> is the current date in the ISO 8601 format "YYYY-MM-DD".
 #
@@ -74,13 +74,10 @@ TYPE="$2"
 # Emit the base name and set BASE.
 installation-base() {
     if [ "$BASE" = "" ]; then
-	if [ -n "$ROSE_INSTALLATION_BASE" ]; then
-	    BASE="$ROSE_INSTALLATION_BASE"
-	elif [ -d /usr/local/rose ]; then
-	    BASE=/usr/local/rose
-	else
-	    BASE="$HOME/rose-installed"
+	if [ -f CMakeCache.txt ]; then
+	    BASE="$(grep '^CMAKE_INSTALL_PREFIX[^_a-zA-Z0-9]' CMakeCache.txt |cut -d= -f2)"
 	fi
+	BASE="${BASE:-$HOME/rose-installed}"
     fi
     echo -n "$BASE"
 }

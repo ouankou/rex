@@ -28,30 +28,29 @@
  * #   1. The ROSE library has been properly installed (refer to the
  * #      documentation for configuring, building, and installing ROSE).
  * #
- * #   2. The top of the installation directory is $(ROSE_HOME). This
- * #      is the same directory you specified for the "--prefix" argument
- * #      of the "configure" script, or the "CMAKE_INSTALL_PREFIX" if using
- * #      cmake. E.g., "/usr/local".
+ * #   2. The top of the installation directory is $(ROSE_PREFIX). This
+ * #      is the same directory you specified for "CMAKE_INSTALL_PREFIX".
  * #
- * # The "rose-config" tool currently only works for ROSE configured with
- * # GNU auto tools (e.g., you ran "configure" when you built and
- * # installed ROSE). The "cmake" configuration is not currently
- * # supported by "rose-config" [September 2015].
  * ##############################################################################
  *
- * #If the ROSE bin directory is in your path, rose-config can be found
- * automatically ifndef ROSE_HOME ROSE_HOME = $(shell rose-config prefix) endif
+ * # If the ROSE bin directory is in your PATH, rose-config can be found
+ * # automatically.
+ * ifndef ROSE_PREFIX
+ * ROSE_PREFIX = $(shell rose-config prefix)
+ * endif
  *
- * include $(ROSE_HOME)/lib/rose-config.cfg
+ * ROSE_CONFIG = $(ROSE_PREFIX)/bin/rose-config
+ *
+ * include $(ROSE_PREFIX)/lib/rose-config.cfg
  *
  * # Standard C++ compiler stuff (see rose-config --help)
- * ROSE_CXX         = $(shell $(ROSE_HOME)/bin/rose-config ROSE_CXX)
- * ROSE_CPPFLAGS    = $(shell $(ROSE_HOME)/bin/rose-config ROSE_CPPFLAGS)
- * ROSE_CXXFLAGS    = $(shell $(ROSE_HOME)/bin/rose-config ROSE_CXXFLAGS)
- * ROSE_LDFLAGS     = $(shell $(ROSE_HOME)/bin/rose-config ROSE_LDFLAGS)
- * ROSE_LIBDIRS     = $(shell $(ROSE_HOME)/bin/rose-config ROSE_LIBDIRS)
- * ROSE_RPATHS      = $(shell $(ROSE_HOME)/bin/rose-config ROSE_RPATHS)
- * ROSE_LINK_RPATHS = $(shell $(ROSE_HOME)/bin/rose-config ROSE_LINK_RPATHS)
+ * ROSE_CXX         = $(shell $(ROSE_CONFIG) ROSE_CXX)
+ * ROSE_CPPFLAGS    = $(shell $(ROSE_CONFIG) ROSE_CPPFLAGS)
+ * ROSE_CXXFLAGS    = $(shell $(ROSE_CONFIG) ROSE_CXXFLAGS)
+ * ROSE_LDFLAGS     = $(shell $(ROSE_CONFIG) ROSE_LDFLAGS)
+ * ROSE_LIBDIRS     = $(shell $(ROSE_CONFIG) ROSE_LIBDIRS)
+ * ROSE_RPATHS      = $(shell $(ROSE_CONFIG) ROSE_RPATHS)
+ * ROSE_LINK_RPATHS = $(shell $(ROSE_CONFIG) ROSE_LINK_RPATHS)
  *
  * MOSTLYCLEANFILES =
  *
@@ -65,7 +64,7 @@
  *
  * demo: demo.o
  * 	$(ROSE_CXX) $(ROSE_CXXFLAGS) -o $@ $^ $(ROSE_LDFLAGS)
- * $(ROSE_LINK_RPATHS) -Wl,-rpath=$(ROSE_HOME)/lib
+ * $(ROSE_LINK_RPATHS) -Wl,-rpath=$(ROSE_PREFIX)/lib
  *
  * MOSTLYCLEANFILES += demo demo.o
  *

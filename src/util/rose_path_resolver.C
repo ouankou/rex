@@ -309,17 +309,10 @@ RosePathRoots make_install_tree_roots(const path &install_prefix) {
 } // namespace
 
 RosePathRoots resolveRosePaths(const char *argv0) {
-  std::vector<path> override_candidates;
-  const char *rose_home = std::getenv("ROSE_HOME");
-  if (rose_home && *rose_home) {
-    override_candidates.emplace_back(rose_home);
-  }
-
-  const bool force_build_tree = std::getenv("ROSE_IN_BUILD_TREE") != nullptr;
   auto argv_prefix = prefix_from_executable(argv0);
   auto library_prefix = prefix_from_shared_library();
 
-  std::vector<path> build_candidates = override_candidates;
+  std::vector<path> build_candidates;
   if (library_prefix) {
     build_candidates.push_back(*library_prefix);
   }
@@ -328,14 +321,12 @@ RosePathRoots resolveRosePaths(const char *argv0) {
   }
   auto build_root = find_build_root(build_candidates);
 
-  bool allow_build_tree_fallback = force_build_tree;
-  if (!allow_build_tree_fallback) {
-    const path build_tree_root(ROSE_BUILD_TREE);
-    if (library_prefix && is_same_path(build_tree_root, *library_prefix)) {
-      allow_build_tree_fallback = true;
-    } else if (argv_prefix && is_same_path(build_tree_root, *argv_prefix)) {
-      allow_build_tree_fallback = true;
-    }
+  bool allow_build_tree_fallback = false;
+  const path build_tree_root(ROSE_BUILD_TREE);
+  if (library_prefix && is_same_path(build_tree_root, *library_prefix)) {
+    allow_build_tree_fallback = true;
+  } else if (argv_prefix && is_same_path(build_tree_root, *argv_prefix)) {
+    allow_build_tree_fallback = true;
   }
 
   if (!build_root && allow_build_tree_fallback) {
@@ -349,22 +340,20 @@ RosePathRoots resolveRosePaths(const char *argv0) {
     return make_build_tree_roots(*build_root);
   }
 
-  if (!force_build_tree) {
-    std::vector<path> install_candidates = override_candidates;
-    if (library_prefix) {
-      install_candidates.push_back(*library_prefix);
-    }
-    if (argv_prefix) {
-      install_candidates.push_back(*argv_prefix);
-    }
-    if (!ROSE_INSTALL_PREFIX.empty()) {
-      install_candidates.emplace_back(ROSE_INSTALL_PREFIX);
-    }
+  std::vector<path> install_candidates;
+  if (library_prefix) {
+    install_candidates.push_back(*library_prefix);
+  }
+  if (argv_prefix) {
+    install_candidates.push_back(*argv_prefix);
+  }
+  if (!ROSE_INSTALL_PREFIX.empty()) {
+    install_candidates.emplace_back(ROSE_INSTALL_PREFIX);
+  }
 
-    auto install_prefix = find_install_prefix(install_candidates);
-    if (install_prefix) {
-      return make_install_tree_roots(*install_prefix);
-    }
+  auto install_prefix = find_install_prefix(install_candidates);
+  if (install_prefix) {
+    return make_install_tree_roots(*install_prefix);
   }
 
   ROSE_ASSERT(!"Unable to resolve ROSE build/install roots.");

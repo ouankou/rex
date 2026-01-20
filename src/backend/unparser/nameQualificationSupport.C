@@ -10928,8 +10928,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       // DQ (6/1/2011): This happens when there is no explicit constructor that
       // can be used to build a class, in this case the class name must be used
       // to define a default constructor. This is a problem for test2004_130.C
-      // (at line 165 col = 14 file =
-      // /home/dquinlan/ROSE/ROSE_CompileTree/git-LINUX-64bit-4.2.4-dq-cxx-rc/include-staging/g++_HEADERS/hdrs3/bits/stl_iterator_base_types.h).
+      // (at line 165 col = 14 file under the build-tree compiler header
+      // staging area, e.g., g++_HEADERS/hdrs3/bits/stl_iterator_base_types.h).
       // Need to investigate this later (it is strange that it is not an issue
       // in test2011_63.C, but it is a struct instead of a class and that might
       // be why).
