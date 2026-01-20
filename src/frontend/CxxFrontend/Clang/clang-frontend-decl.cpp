@@ -2170,10 +2170,7 @@ RehomeFunctionSymbolResult rehome_function_symbols_between_scopes(
     if (sym == NULL) {
       return;
     }
-    if (detach_symbol(scope, table, sym)) {
-      // Keep the symbol alive; other nodes may still reference it.
-      sym->set_parent(nullptr);
-    }
+    detach_symbol(scope, table, sym);
   };
 
   std::vector<SgSymbol *> target_symbols =
@@ -11824,7 +11821,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
       if (removed && discard) {
         // Keep the symbol alive; other nodes may still reference it.
-        sym->set_parent(nullptr);
       }
     };
 
