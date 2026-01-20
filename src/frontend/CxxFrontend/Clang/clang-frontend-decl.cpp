@@ -2228,6 +2228,30 @@ void rehome_friend_function_symbol(SgFunctionDeclaration *func_decl,
   }
 }
 
+void rehome_friend_function_symbol_if_needed(SgDeclarationStatement *decl,
+                                             SgScopeStatement *current_scope,
+                                             SgScopeStatement *friend_scope) {
+  if (friend_scope == NULL) {
+    return;
+  }
+  SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(decl);
+  if (func_decl == NULL) {
+    return;
+  }
+  SgScopeStatement *source_scope = isSgScopeStatement(func_decl->get_parent());
+  if (source_scope == NULL) {
+    source_scope = current_scope;
+  }
+  if (source_scope == NULL) {
+    return;
+  }
+  if (isSgClassDefinition(source_scope) != NULL ||
+      isSgTemplateClassDefinition(source_scope) != NULL ||
+      isSgTemplateInstantiationDefn(source_scope) != NULL) {
+    rehome_friend_function_symbol(func_decl, source_scope, friend_scope);
+  }
+}
+
 clang::NamespaceDecl *getCanonicalNamespaceDecl(clang::NamespaceDecl *decl) {
   if (decl == NULL) {
     return NULL;
@@ -4380,21 +4404,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
   }
   diagnose_null_scope(sg_decl, "FriendDecl");
 
-  if (friend_scope != NULL) {
-    if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(sg_decl)) {
-      SgScopeStatement *source_scope =
-          isSgScopeStatement(func_decl->get_parent());
-      if (source_scope == NULL) {
-        source_scope = current_scope;
-      }
-      if (source_scope != NULL &&
-          (isSgClassDefinition(source_scope) != NULL ||
-           isSgTemplateClassDefinition(source_scope) != NULL ||
-           isSgTemplateInstantiationDefn(source_scope) != NULL)) {
-        rehome_friend_function_symbol(func_decl, source_scope, friend_scope);
-      }
-    }
-  }
+  rehome_friend_function_symbol_if_needed(sg_decl, current_scope, friend_scope);
 
   // Ensure friend definitions are wired consistently for analysis passes such
   // as VirtualCFG. Do not mark friend prototypes as defining declarations.
@@ -4555,21 +4565,7 @@ bool ClangToSageTranslator::VisitFriendTemplateDecl(
                             isSgFunctionDeclaration(def_decl) == NULL);
   }
 
-  if (friend_scope != NULL) {
-    if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(sg_decl)) {
-      SgScopeStatement *source_scope =
-          isSgScopeStatement(func_decl->get_parent());
-      if (source_scope == NULL) {
-        source_scope = current_scope;
-      }
-      if (source_scope != NULL &&
-          (isSgClassDefinition(source_scope) != NULL ||
-           isSgTemplateClassDefinition(source_scope) != NULL ||
-           isSgTemplateInstantiationDefn(source_scope) != NULL)) {
-        rehome_friend_function_symbol(func_decl, source_scope, friend_scope);
-      }
-    }
-  }
+  rehome_friend_function_symbol_if_needed(sg_decl, current_scope, friend_scope);
 
   if (sg_decl->get_firstNondefiningDeclaration() == NULL) {
     sg_decl->set_firstNondefiningDeclaration(sg_decl);
