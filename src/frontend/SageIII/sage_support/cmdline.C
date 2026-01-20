@@ -1986,6 +1986,10 @@ void SgFile::usage() {
 
         "\n"
         "Control Fortran frontend processing:\n"
+        "     -rose:fortran_frontend <flang|ofp>\n"
+        "                             select the Fortran frontend (default: "
+        "flang when enabled,\n"
+        "                             otherwise ofp)\n"
         "     -rose:cray_pointer_support\n"
         "                             turn on internal support for cray "
         "pointers\n"
@@ -3650,6 +3654,11 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     set_skip_unparse_asm_commands(true);
   }
 
+  // Default to the Flang frontend when available.
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+  set_experimental_flang_frontend(true);
+#endif
+
   // Added support the experimental fortran frontend using the Flang parser
   // [Rasmussen 2019.08.30]
   if (CommandlineProcessing::isOption(
@@ -3659,6 +3668,43 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
           << "Using experimental Flang Fortran frontend (explicitly set: ON)\n";
     }
     set_experimental_flang_frontend(true);
+  }
+
+  std::string fortranFrontendOption;
+  if (CommandlineProcessing::isOptionWithParameter(
+          argv, "-rose:", "(fortran_frontend)", fortranFrontendOption, true) ==
+      true) {
+    std::string frontend =
+        Rose::StringUtility::convertToLowerCase(fortranFrontendOption);
+    if (frontend == "flang") {
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+      if (SgProject::get_verbose() > 0) {
+        std::cout << "Using Flang Fortran frontend (explicitly set: ON)\n";
+      }
+      set_experimental_flang_frontend(true);
+#else
+      ROSE_ASSERT(!"[FATAL] [ROSE] [frontend] [Fortran] "
+                   "error: ROSE was not configured to support the Flang "
+                   "frontend.");
+#endif
+    } else if (frontend == "ofp") {
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
+      if (SgProject::get_verbose() > 0) {
+        std::cout << "Using OFP Fortran frontend (explicitly set: ON)\n";
+      }
+      set_experimental_flang_frontend(false);
+#else
+      ROSE_ASSERT(!"[FATAL] [ROSE] [frontend] [Fortran] "
+                   "error: ROSE was not configured to support the OFP "
+                   "frontend.");
+#endif
+    } else {
+      std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+                   "error: Unknown Fortran frontend '"
+                << fortranFrontendOption
+                << "'. Use -rose:fortran_frontend <flang|ofp>.\n";
+      ROSE_ABORT();
+    }
   }
 
   // DQ (9/26/2011): Adding options to support internal debugging of ROSE based
@@ -4113,6 +4159,9 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   // Rasmussen (8/30/2019): Added support for experimental Flang parser for
   // Fortran
   optionCount = sla(argv, "-rose:", "($)", "(experimental_flang_frontend)", 1);
+  char *fortranFrontendOption = NULL;
+  optionCount = sla(argv, "-rose:", "($)^", "(fortran_frontend)",
+                    fortranFrontendOption, 1);
 
   // DQ (9/15/2013): Remove this from being output to the backend compiler.
   optionCount = sla(argv, "-rose:", "($)",

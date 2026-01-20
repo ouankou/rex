@@ -12,9 +12,13 @@
 
 #include "BuildVisitor.h"
 
+#include "FlangModuleInfo.h"
+
 #include <iostream>
 
 #include <optional>
+
+#include <set>
 
 #include "type-parsers.h"
 
@@ -188,6 +192,181 @@ FirstSourcePosition(const parser::SpecificationPart &x) {
 
   return std::optional<SourcePosition>{std::nullopt};
 }
+
+namespace {
+bool namesMatch(const SgName &left, const SgName &right, bool caseInsensitive) {
+  if (!caseInsensitive) {
+    return left == right;
+  }
+  return StringUtility::convertToLowerCase(left.str()) ==
+         StringUtility::convertToLowerCase(right.str());
+}
+
+bool isPubliclyAccessibleSymbol(SgSymbol *symbol) {
+  SgNode *symbolBasis = symbol->get_symbol_basis();
+  if (auto *declaration = isSgDeclarationStatement(symbolBasis)) {
+    auto &access = declaration->get_declarationModifier().get_accessModifier();
+    return access.isPublic() || access.isDefault() || access.isUndefined();
+  }
+
+  if (auto *initializedName = isSgInitializedName(symbolBasis)) {
+    auto *parent = initializedName->get_parent();
+    if (auto *declaration = isSgDeclarationStatement(parent)) {
+      auto &access =
+          declaration->get_declarationModifier().get_accessModifier();
+      if (access.isPublic() || access.isDefault() || access.isUndefined()) {
+        return true;
+      }
+      if (initializedName->get_protected_declaration()) {
+        return false;
+      }
+    }
+  }
+
+  return false;
+}
+
+std::string definedOperatorName(const parser::DefinedOpName &opName) {
+  return opName.v.ToString();
+}
+
+std::string definedOperatorSpec(const parser::DefinedOpName &opName) {
+  return "OPERATOR(" + definedOperatorName(opName) + ")";
+}
+
+SgRenamePair *buildRenamePair(const parser::Rename &rename) {
+  SgRenamePair *renamePair{nullptr};
+  common::visit(
+      common::visitors{[&](const parser::Rename::Names &names) {
+                         std::string localName{std::get<0>(names.t).ToString()};
+                         std::string useName{std::get<1>(names.t).ToString()};
+                         renamePair = new SgRenamePair(localName, useName);
+                       },
+                       [&](const parser::Rename::Operators &ops) {
+                         std::string localName =
+                             definedOperatorSpec(std::get<0>(ops.t));
+                         std::string useName =
+                             definedOperatorSpec(std::get<1>(ops.t));
+                         renamePair = new SgRenamePair(localName, useName);
+                       }},
+      rename.u);
+  ASSERT_not_null(renamePair);
+  SageInterface::setSourcePosition(renamePair);
+  return renamePair;
+}
+
+SgRenamePair *buildOnlyRenamePair(const parser::Only &only) {
+  SgRenamePair *renamePair{nullptr};
+  common::visit(
+      common::visitors{
+          [&](const parser::Name &name) {
+            std::string useName{name.ToString()};
+            renamePair = new SgRenamePair(useName, useName);
+          },
+          [&](const parser::Rename &rename) {
+            renamePair = buildRenamePair(rename);
+          },
+          [&](const common::Indirection<parser::GenericSpec> &genericSpec) {
+            std::string specText{genericSpec.value().source.ToString()};
+            renamePair = new SgRenamePair(specText, specText);
+          }},
+      only.u);
+  ASSERT_not_null(renamePair);
+  SageInterface::setSourcePosition(renamePair);
+  return renamePair;
+}
+
+SgModuleStatement *lookupModuleStatement(const std::string &moduleName) {
+  SgClassSymbol *moduleSymbol =
+      SageInterface::lookupClassSymbolInParentScopes(moduleName);
+  if (moduleSymbol == nullptr) {
+    return nullptr;
+  }
+
+  SgClassDeclaration *decl = moduleSymbol->get_declaration();
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  SgClassDeclaration *definingDecl =
+      isSgClassDeclaration(decl->get_definingDeclaration());
+  if (definingDecl == nullptr) {
+    definingDecl = isSgClassDeclaration(decl);
+  }
+
+  return isSgModuleStatement(definingDecl);
+}
+
+SgClassSymbol *lookupDerivedTypeSymbol(const SgName &derivedTypeName,
+                                       SgScopeStatement *currentScope) {
+  SgClassSymbol *derivedTypeSymbol{nullptr};
+  SgScopeStatement *scope{currentScope};
+  while (derivedTypeSymbol == nullptr && scope != nullptr) {
+    derivedTypeSymbol = scope->lookup_class_symbol(derivedTypeName);
+    scope = isSgGlobal(scope) ? nullptr : scope->get_scope();
+  }
+
+  return derivedTypeSymbol;
+}
+
+void replace_return_type(SgFunctionType *functionType,
+                         SgFunctionDeclaration *functionDeclaration,
+                         SgClassSymbol *derivedTypeSymbol) {
+  bool hasEllipses = functionType->get_has_ellipses();
+  ROSE_ASSERT(derivedTypeSymbol->get_declaration() != nullptr);
+  ROSE_ASSERT(derivedTypeSymbol->get_declaration()->get_type() != nullptr);
+
+  SgFunctionType *newFunctionType = new SgFunctionType(
+      derivedTypeSymbol->get_declaration()->get_type(), hasEllipses);
+  ROSE_ASSERT(functionType->get_argument_list() != nullptr);
+
+  SgTypePtrList &functionArgumentTypeList = functionType->get_arguments();
+  for (auto *argType : functionArgumentTypeList) {
+    newFunctionType->append_argument(argType);
+  }
+
+  functionDeclaration->set_type(newFunctionType);
+
+  SgFunctionSymbol *newFunctionSymbol =
+      new SgFunctionSymbol(functionDeclaration);
+  functionDeclaration->get_scope()->insert_symbol(
+      functionDeclaration->get_name(), newFunctionSymbol);
+}
+
+void fixup_possible_incomplete_function_return_type(
+    SgScopeStatement *currentScope) {
+  SgFunctionDeclaration *functionDeclaration =
+      SageInterface::getEnclosingFunctionDeclaration(currentScope, true);
+  if (functionDeclaration == nullptr) {
+    return;
+  }
+
+  SgFunctionType *functionType =
+      isSgFunctionType(functionDeclaration->get_type());
+  ROSE_ASSERT(functionType != nullptr);
+
+  SgType *returnType = functionType->get_return_type();
+  ROSE_ASSERT(returnType != nullptr);
+
+  if (auto *defaultType = isSgTypeDefault(returnType)) {
+    SgName derivedTypeName = defaultType->get_name();
+    SgClassSymbol *derivedTypeSymbol =
+        lookupDerivedTypeSymbol(derivedTypeName, currentScope);
+    if (derivedTypeSymbol != nullptr) {
+      replace_return_type(functionType, functionDeclaration, derivedTypeSymbol);
+    }
+  } else if (auto *classType = isSgClassType(returnType)) {
+    SgName derivedTypeName = classType->get_name();
+    SgClassSymbol *derivedTypeSymbol =
+        lookupDerivedTypeSymbol(derivedTypeName, currentScope);
+    replace_return_type(functionType, functionDeclaration, derivedTypeSymbol);
+  }
+}
+
+void use_statement_fixup(SgScopeStatement *currentScope) {
+  fixup_possible_incomplete_function_return_type(currentScope);
+}
+} // namespace
 
 // Callback for the Flang parser. Converts a parsed
 // Fortran::Parser::Program to ROSE Sage nodes.
@@ -1136,6 +1315,149 @@ void BuildVisitor::Build(parser::ImplicitStmt &x) {
   const ImplicitStmt &xx{std::move(implicitList)};
   x.u = std::move(implicitList);
 #endif
+}
+
+void BuildVisitor::Build(
+    parser::Statement<common::Indirection<parser::UseStmt>> &x) {
+  using namespace Fortran::parser;
+
+  SgScopeStatement *currentScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(currentScope);
+
+  UseStmt &useStmtNode = x.statement.value();
+  std::string moduleName{useStmtNode.moduleName.ToString()};
+  bool hasOnly = std::holds_alternative<std::list<Only>>(useStmtNode.u);
+
+  SgUseStatement *useStmt = new SgUseStatement(moduleName, hasOnly, "");
+  ASSERT_not_null(useStmt);
+
+  if (useStmtNode.nature) {
+    std::string nature{UseStmt::EnumToString(*useStmtNode.nature)};
+    useStmt->set_module_nature(nature);
+  }
+
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  builder.setSourcePosition(useStmt, srcBegin, srcEnd);
+
+  SgModuleStatement *moduleStmt = lookupModuleStatement(moduleName);
+  if (moduleStmt == nullptr) {
+    moduleStmt = FlangModuleInfo::getModule(moduleName);
+    if (moduleStmt == nullptr) {
+      std::cerr << "Error: cannot find module '" << moduleName << "'\n";
+      ROSE_ABORT();
+    }
+  }
+
+  useStmt->set_module(moduleStmt);
+
+  std::vector<SgRenamePair *> renamePairs;
+  if (hasOnly) {
+    const auto &onlyList = std::get<std::list<Only>>(useStmtNode.u);
+    for (const auto &only : onlyList) {
+      renamePairs.push_back(buildOnlyRenamePair(only));
+    }
+  } else {
+    const auto &renameList = std::get<std::list<Rename>>(useStmtNode.u);
+    for (const auto &rename : renameList) {
+      renamePairs.push_back(buildRenamePair(rename));
+    }
+  }
+
+  SgClassDefinition *classDefinition = moduleStmt->get_definition();
+  ROSE_ASSERT(classDefinition != nullptr);
+
+  auto attachRenamePair = [&](SgRenamePair *renamePair) {
+    useStmt->get_rename_list().push_back(renamePair);
+    renamePair->set_parent(useStmt);
+  };
+
+  if (!hasOnly) {
+    if (renamePairs.empty()) {
+      SgSymbol *symbol = classDefinition->first_any_symbol();
+      while (symbol != nullptr) {
+        if (isPubliclyAccessibleSymbol(symbol)) {
+          SgName symbolName = symbol->get_name();
+          if (!currentScope->symbol_exists(symbolName)) {
+            SgAliasSymbol *aliasSymbol = new SgAliasSymbol(symbol, false);
+            currentScope->insert_symbol(symbolName, aliasSymbol);
+          }
+        }
+        symbol = classDefinition->next_any_symbol();
+      }
+    } else {
+      std::set<SgSymbol *> renamedSymbols;
+      for (SgRenamePair *renamePair : renamePairs) {
+        attachRenamePair(renamePair);
+
+        SgSymbol *symbol = classDefinition->first_any_symbol();
+        while (symbol != nullptr) {
+          if (namesMatch(renamePair->get_use_name(), symbol->get_name(),
+                         currentScope->isCaseInsensitive()) &&
+              isPubliclyAccessibleSymbol(symbol)) {
+            SgName localName = renamePair->get_local_name();
+            SgSymbol *aliasSymbol = nullptr;
+            if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+              SgInitializedName *initName =
+                  SageInterface::deepCopy(varSymbol->get_declaration());
+              initName->set_name(localName);
+              initName->set_scope(currentScope);
+              aliasSymbol = new SgVariableSymbol(initName);
+            } else {
+              aliasSymbol = new SgAliasSymbol(symbol, true, localName);
+            }
+            currentScope->insert_symbol(localName, aliasSymbol);
+            renamedSymbols.insert(symbol);
+          }
+          symbol = classDefinition->next_any_symbol();
+        }
+      }
+
+      SgSymbol *symbol = classDefinition->first_any_symbol();
+      while (symbol != nullptr) {
+        if (renamedSymbols.find(symbol) == renamedSymbols.end() &&
+            isPubliclyAccessibleSymbol(symbol)) {
+          SgName symbolName = symbol->get_name();
+          SgAliasSymbol *aliasSymbol = new SgAliasSymbol(symbol, false);
+          currentScope->insert_symbol(symbolName, aliasSymbol);
+        }
+        symbol = classDefinition->next_any_symbol();
+      }
+    }
+  } else {
+    for (SgRenamePair *renamePair : renamePairs) {
+      attachRenamePair(renamePair);
+      SgSymbol *symbol = classDefinition->first_any_symbol();
+      while (symbol != nullptr) {
+        bool isRenamed =
+            (renamePair->get_use_name() != renamePair->get_local_name());
+        if (namesMatch(renamePair->get_use_name(), symbol->get_name(),
+                       currentScope->isCaseInsensitive())) {
+          ROSE_ASSERT(isPubliclyAccessibleSymbol(symbol) == true);
+          SgName localName = renamePair->get_local_name();
+          if (!currentScope->symbol_exists(localName)) {
+            SgSymbol *aliasSymbol = nullptr;
+            if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+              SgInitializedName *initName =
+                  SageInterface::deepCopy(varSymbol->get_declaration());
+              initName->set_name(localName);
+              initName->set_scope(currentScope);
+              aliasSymbol = new SgVariableSymbol(initName);
+            } else {
+              aliasSymbol = isRenamed
+                                ? new SgAliasSymbol(symbol, true, localName)
+                                : new SgAliasSymbol(symbol, false);
+            }
+            currentScope->insert_symbol(localName, aliasSymbol);
+          }
+        }
+        symbol = classDefinition->next_any_symbol();
+      }
+    }
+  }
+
+  builder.Leave(useStmt);
+  use_statement_fixup(currentScope);
 }
 
 void BuildVisitor::Build(parser::CommonStmt &x) {

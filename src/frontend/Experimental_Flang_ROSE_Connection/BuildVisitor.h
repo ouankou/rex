@@ -118,6 +118,8 @@ public:
   // SpecificationPart
   void Build(Fortran::parser::ImplicitStmt &);
   void Build(Fortran::parser::CommonStmt &);
+  void Build(Fortran::parser::Statement<
+             Fortran::common::Indirection<Fortran::parser::UseStmt>> &);
   void Build(Fortran::parser::TypeDeclarationStmt &);
 
   // SpecificationConstruct

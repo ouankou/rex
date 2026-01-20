@@ -98,11 +98,6 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
   const char *fc{getenv("F18_FC")};
   ctx.driver.fcArgs.push_back(fc ? fc : "gfortran");
 
-  ctx.options.predefinitions.emplace_back("__F18", "1");
-  ctx.options.predefinitions.emplace_back("__F18_MAJOR__", "1");
-  ctx.options.predefinitions.emplace_back("__F18_MINOR__", "1");
-  ctx.options.predefinitions.emplace_back("__F18_PATCHLEVEL__", "1");
-
   Fortran::common::IntrinsicTypeDefaultKinds defaultKinds;
 
   while (!args.empty()) {

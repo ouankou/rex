@@ -368,10 +368,10 @@ endif()
 option(ENABLE-FORTRAN "Enable Fortran analysis." OFF)
 
 # JVM-based Open Fortran Parser (OFP) dependency (legacy frontend)
-option(ENABLE-FORTRAN-OFP "Enable JVM-based Open Fortran Parser (OFP) support." ON)
+option(ENABLE-FORTRAN-OFP "Enable JVM-based Open Fortran Parser (OFP) support." OFF)
 
-# Experimental Flang frontend (f18)
-option(ENABLE-FORTRAN-FLANG "Enable experimental Flang frontend (f18) support." OFF)
+# Flang frontend (LLVM 20)
+option(ENABLE-FORTRAN-FLANG "Enable Flang frontend support (LLVM 20)." ON)
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 
 # Legacy tests still reference enable-fortran (lowercase).

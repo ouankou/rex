@@ -27,11 +27,16 @@
 
 #include "rose_paths.h"
 
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
 #include "FortranModuleInfo.h"
 
 #include "FortranParserState.h"
 
+#include "unparseFortran_modfile.h"
+#endif
+
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+#include "FlangModuleInfo.h"
 #include "unparseFortran_modfile.h"
 #endif
 
@@ -1351,10 +1356,15 @@ int SgProject::parse() {
 
   // ROSE_ASSERT (p_fileList != NULL);
 
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
   // FMZ (5/29/2008)
   FortranModuleInfo::setCurrentProject(this);
   FortranModuleInfo::set_inputDirs(this);
+#endif
+
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+  FlangModuleInfo::setCurrentProject(this);
+  FlangModuleInfo::set_inputDirs(this);
 #endif
 
   // Simplify multi-file handling so that a single file is just the trivial
@@ -2080,20 +2090,30 @@ int SgFile::callFrontEnd() {
   // traversals.
   // AstPostProcessing(this);
 
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-  // FMZ: 05/30/2008.  Do not generate .rmod file for the PU imported by "use"
-  // stmt DXN (01/18/2011): Fixed to build rmod file only when there is no error
-  // passed back from the frontend. if (get_Fortran_only() == true &&
-  // FortranModuleInfo::isRmodFile() == false)
-  if (get_Fortran_only() == true && FortranModuleInfo::isRmodFile() == false &&
-      frontendErrorLevel == 0) {
-    if (get_verbose() > 1)
-      printf("Generating a Fortran 90 module file (*.rmod) \n");
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT) ||                           \
+    defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+  // FMZ: 05/30/2008.  Do not generate module files for nested module loads.
+  if (get_Fortran_only() == true && frontendErrorLevel == 0) {
+    bool isModuleFile = false;
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+    if (get_experimental_flang_frontend() == true) {
+      isModuleFile = FlangModuleInfo::isModuleFile();
+    }
+#endif
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
+    if (get_experimental_flang_frontend() == false) {
+      isModuleFile = FortranModuleInfo::isRmodFile();
+    }
+#endif
+    if (isModuleFile == false) {
+      if (get_verbose() > 1)
+        printf("Generating a Fortran module file (*.rmod) \n");
 
-    generateModFile(this);
+      generateModFile(this);
 
-    if (get_verbose() > 1)
-      printf("DONE: Generating a Fortran 90 module file (*.rmod) \n");
+      if (get_verbose() > 1)
+        printf("DONE: Generating a Fortran module file (*.rmod) \n");
+    }
   }
 #endif
 
@@ -2489,6 +2509,11 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
   // The Flang parser doesn't require the JVM.
   if (get_experimental_flang_frontend() == true) {
     int status{-1};
+
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+    FlangModuleInfo::setCurrentProject(get_project());
+    FlangModuleInfo::set_inputDirs(get_project());
+#endif
 
     vector<string> flangCommandLine;
     flangCommandLine.push_back("f18-parse-demo");

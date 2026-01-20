@@ -1,5 +1,6 @@
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   add_library(flang_frontend OBJECT
+    FlangModuleInfo.C
     fortran_flang_support.C
     unparse-sage.cpp
     sage-build.C)
