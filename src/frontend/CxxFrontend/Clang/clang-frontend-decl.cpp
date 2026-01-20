@@ -2119,35 +2119,33 @@ bool function_symbol_matches_declaration(SgSymbol *symbol,
   return isSgFunctionSymbol(symbol) != NULL;
 }
 
-void rehome_friend_function_symbol(SgFunctionDeclaration *func_decl,
-                                   SgScopeStatement *from_scope,
-                                   SgScopeStatement *to_scope) {
-  if (func_decl == NULL || from_scope == NULL || to_scope == NULL) {
-    return;
-  }
-  if (from_scope == to_scope) {
-    return;
-  }
-  if (isSgMemberFunctionDeclaration(func_decl) != NULL) {
-    return;
-  }
+enum RehomeFunctionSymbolMode {
+  REHOME_REQUIRE_SOURCE_SYMBOLS,
+  REHOME_ALLOW_EMPTY_SOURCE
+};
 
-  SgFunctionDeclaration *symbol_decl =
-      isSgFunctionDeclaration(func_decl->get_firstNondefiningDeclaration());
-  if (symbol_decl == NULL) {
-    symbol_decl = func_decl;
+struct RehomeFunctionSymbolResult {
+  RehomeFunctionSymbolResult() : existing(NULL), had_source_symbols(false) {}
+  SgSymbol *existing;
+  bool had_source_symbols;
+};
+
+RehomeFunctionSymbolResult rehome_function_symbols_between_scopes(
+    SgFunctionDeclaration *symbol_decl, SgScopeStatement *from_scope,
+    SgScopeStatement *to_scope, RehomeFunctionSymbolMode mode) {
+  RehomeFunctionSymbolResult result;
+  if (symbol_decl == NULL || from_scope == NULL || to_scope == NULL) {
+    return result;
   }
 
   SgSymbolTable *from_table = from_scope->get_symbol_table();
   SgSymbolTable *to_table = to_scope->get_symbol_table();
-  if (from_table == NULL || to_table == NULL) {
-    return;
-  }
 
   std::vector<SgSymbol *> symbols =
       find_function_symbols_in_scope(from_scope, symbol_decl);
-  if (symbols.empty()) {
-    return;
+  result.had_source_symbols = !symbols.empty();
+  if (symbols.empty() && mode == REHOME_REQUIRE_SOURCE_SYMBOLS) {
+    return result;
   }
 
   SgSymbol *existing = NULL;
@@ -2219,13 +2217,44 @@ void rehome_friend_function_symbol(SgFunctionDeclaration *func_decl,
     detach_symbol(from_scope, from_table, symbol);
     if (!to_scope->symbol_exists(symbol)) {
       to_scope->insert_symbol(symbol->get_name(), symbol);
-    } else if (symbol->get_parent() != to_table) {
+    } else if (to_table != NULL && symbol->get_parent() != to_table) {
       symbol->set_parent(to_table);
     }
     if (existing == NULL) {
       existing = symbol;
     }
   }
+
+  result.existing = existing;
+  return result;
+}
+
+void rehome_friend_function_symbol(SgFunctionDeclaration *func_decl,
+                                   SgScopeStatement *from_scope,
+                                   SgScopeStatement *to_scope) {
+  if (func_decl == NULL || from_scope == NULL || to_scope == NULL) {
+    return;
+  }
+  if (from_scope == to_scope) {
+    return;
+  }
+  if (isSgMemberFunctionDeclaration(func_decl) != NULL) {
+    return;
+  }
+
+  SgFunctionDeclaration *symbol_decl =
+      isSgFunctionDeclaration(func_decl->get_firstNondefiningDeclaration());
+  if (symbol_decl == NULL) {
+    symbol_decl = func_decl;
+  }
+
+  if (from_scope->get_symbol_table() == NULL ||
+      to_scope->get_symbol_table() == NULL) {
+    return;
+  }
+
+  rehome_function_symbols_between_scopes(symbol_decl, from_scope, to_scope,
+                                         REHOME_REQUIRE_SOURCE_SYMBOLS);
 }
 
 void rehome_friend_function_symbol_if_needed(SgDeclarationStatement *decl,
@@ -2740,88 +2769,10 @@ void ClangToSageTranslator::populateClassDefinition(
         }
 
         if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(decl)) {
-          std::vector<SgSymbol *> symbols =
-              find_function_symbols_in_scope(old_scope, func_decl);
-          SgSymbol *existing = NULL;
-          SgSymbolTable *old_table = old_scope->get_symbol_table();
-          SgSymbolTable *new_table = new_scope->get_symbol_table();
-
-          auto detach_symbol = [&](SgScopeStatement *scope,
-                                   SgSymbolTable *table,
-                                   SgSymbol *sym) -> bool {
-            if (scope == NULL || sym == NULL) {
-              return false;
-            }
-            if (scope->symbol_exists(sym)) {
-              scope->remove_symbol(sym);
-              return true;
-            }
-            if (table != NULL && table->exists(sym)) {
-              table->remove(sym);
-              return true;
-            }
-            return false;
-          };
-          auto discard_symbol = [&](SgScopeStatement *scope,
-                                    SgSymbolTable *table, SgSymbol *sym) {
-            if (sym == NULL) {
-              return;
-            }
-            if (detach_symbol(scope, table, sym)) {
-              delete sym;
-            }
-          };
-
-          std::vector<SgSymbol *> target_symbols =
-              find_function_symbols_in_scope(new_scope, func_decl);
-          for (SgSymbol *symbol : target_symbols) {
-            if (symbol == NULL) {
-              continue;
-            }
-            if (isSgAliasSymbol(symbol) != NULL) {
-              discard_symbol(new_scope, new_table, symbol);
-              continue;
-            }
-            if (function_symbol_matches_declaration(symbol, func_decl)) {
-              if (existing == NULL) {
-                existing = symbol;
-              } else {
-                discard_symbol(new_scope, new_table, symbol);
-              }
-            } else {
-              discard_symbol(new_scope, new_table, symbol);
-            }
-          }
-
-          for (SgSymbol *symbol : symbols) {
-            if (symbol == NULL) {
-              continue;
-            }
-            if (isSgAliasSymbol(symbol) != NULL) {
-              discard_symbol(old_scope, old_table, symbol);
-              continue;
-            }
-            if (!function_symbol_matches_declaration(symbol, func_decl)) {
-              discard_symbol(old_scope, old_table, symbol);
-              continue;
-            }
-            if (existing != NULL && symbol != existing) {
-              discard_symbol(old_scope, old_table, symbol);
-              continue;
-            }
-
-            detach_symbol(old_scope, old_table, symbol);
-            if (!new_scope->symbol_exists(symbol)) {
-              new_scope->insert_symbol(symbol->get_name(), symbol);
-            } else if (new_table != NULL && symbol->get_parent() != new_table) {
-              symbol->set_parent(new_table);
-            }
-            if (existing == NULL) {
-              existing = symbol;
-            }
-          }
-
-          if (existing == NULL &&
+          RehomeFunctionSymbolResult rehome_result =
+              rehome_function_symbols_between_scopes(
+                  func_decl, old_scope, new_scope, REHOME_ALLOW_EMPTY_SOURCE);
+          if (rehome_result.existing == NULL &&
               new_scope->find_symbol_from_declaration(decl) == NULL) {
             SgSymbol *symbol = build_symbol_for_decl(decl);
             if (symbol != NULL && !new_scope->symbol_exists(symbol)) {
@@ -4138,7 +4089,6 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
   if (friend_scope == NULL) {
     friend_scope = getGlobalScope();
   }
-  friend_scope = normalizeNamespaceScope(friend_scope);
   friend_scope = normalizeNamespaceScope(friend_scope);
 
   // Translate the underlying entity being declared as a friend.
