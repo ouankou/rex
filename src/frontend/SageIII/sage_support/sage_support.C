@@ -549,6 +549,16 @@ static std::string resolveRoseSupportPath(const std::string &root,
   return (std::filesystem::path(root) / suffix_path).string();
 }
 
+static std::string resolveXompArchivePath() {
+  static const RosePathRoots roots = resolveRosePaths(nullptr);
+  string xomp_lib_root =
+      roots.in_install_tree
+          ? resolveRoseSupportPath(roots.install_prefix, ROSE_INSTALL_LIB_DIR)
+          : ROSE_BUILD_LIB_DIR;
+  ROSE_ASSERT(!xomp_lib_root.empty());
+  return (std::filesystem::path(xomp_lib_root) / "libxomp.a").string();
+}
+
 string findRoseSupportPathFromSource(const string &sourceTreeLocation,
                                      const string &installTreeLocation) {
   static const RosePathRoots roots = resolveRosePaths(nullptr);
@@ -4658,17 +4668,7 @@ int SgProject::link(const std::vector<std::string> &argv,
     ROSE_ABORT();
 #endif
 
-    static const RosePathRoots roots = resolveRosePaths(nullptr);
-    string xomp_lib_root;
-    if (roots.in_install_tree) {
-      xomp_lib_root =
-          resolveRoseSupportPath(roots.install_prefix, ROSE_INSTALL_LIB_DIR);
-    } else {
-      xomp_lib_root = ROSE_BUILD_LIB_DIR;
-    }
-    ROSE_ASSERT(!xomp_lib_root.empty());
-    linkingCommand.push_back(
-        (std::filesystem::path(xomp_lib_root) / "libxomp.a").string());
+    linkingCommand.push_back(resolveXompArchivePath());
 
     // lib path is available if --with-gomp_omp_runtime_library=XXX is used
     string gomp_lib_path(GCC_GOMP_OPENMP_LIB_PATH);
@@ -4678,17 +4678,7 @@ int SgProject::link(const std::vector<std::string> &argv,
 #else
 // GOMP has higher priority when both GOMP and OMNI are specified (wrongfully)
 #ifdef OMNI_OPENMP_LIB_PATH
-    static const RosePathRoots roots = resolveRosePaths(nullptr);
-    string xomp_lib_root;
-    if (roots.in_install_tree) {
-      xomp_lib_root =
-          resolveRoseSupportPath(roots.install_prefix, ROSE_INSTALL_LIB_DIR);
-    } else {
-      xomp_lib_root = ROSE_BUILD_LIB_DIR;
-    }
-    ROSE_ASSERT(!xomp_lib_root.empty());
-    linkingCommand.push_back(
-        (std::filesystem::path(xomp_lib_root) / "libxomp.a").string());
+    linkingCommand.push_back(resolveXompArchivePath());
 
     string omni_lib_path(OMNI_OPENMP_LIB_PATH);
     ROSE_ASSERT(omni_lib_path.size() != 0);
