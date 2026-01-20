@@ -7,5 +7,14 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     ${CMAKE_SOURCE_DIR}/src/frontend/Experimental_Flang_ROSE_Connection
     ${FLANG_INCLUDE_DIRS})
 
+  if(LLVM_INCLUDE_DIRS)
+    target_include_directories(flang_parser SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+  endif()
+
+  if(DEFINED ROSE_FLANG_ENDIAN_DEFINES)
+    target_compile_definitions(flang_parser PRIVATE ${ROSE_FLANG_ENDIAN_DEFINES})
+  endif()
+
+  add_dependencies(flang_parser rosetta_generated)
   target_compile_features(flang_parser PRIVATE cxx_std_17)
 endif()

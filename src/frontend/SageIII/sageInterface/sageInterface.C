@@ -136,7 +136,9 @@ template <class T> void setSourcePositionToDefault(T *node);
 }
 
 // We need this so that USE_CMAKE will be seen (set via configure).
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
 #include "jserver.h"
+#endif
 
 #include "rose_config.h"
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
@@ -20094,7 +20096,7 @@ SgProject *findAnyLiveProject() {
 
 void tearDownAstAtExit() {
   if (g_astTeardownComplete) {
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
     Rose::Frontend::Fortran::Ofp::jserver_finish();
 #endif
     return;
@@ -20175,7 +20177,7 @@ void SageInterface::tearDownAst(SgProject *project) {
 
   clearTokenStreamGlobalMaps();
 
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
   Rose::Frontend::Fortran::Ofp::jserver_finish();
 #endif
 

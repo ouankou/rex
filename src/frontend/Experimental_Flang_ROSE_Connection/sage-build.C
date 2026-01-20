@@ -2,9 +2,9 @@
 
 #include "SageTreeBuilder.h"
 
-#include "flang-sage.h"
-
 #include "sage-build.h"
+
+#include "flang-sage.h"
 
 #include "unparse-sage.h"
 
@@ -14,11 +14,15 @@
 
 #include "FlangModuleInfo.h"
 
+#include <cstdint>
+
 #include <iostream>
 
 #include <optional>
 
 #include <set>
+
+#include <unordered_map>
 
 #include "type-parsers.h"
 
@@ -200,6 +204,32 @@ bool namesMatch(const SgName &left, const SgName &right, bool caseInsensitive) {
   }
   return StringUtility::convertToLowerCase(left.str()) ==
          StringUtility::convertToLowerCase(right.str());
+}
+
+bool isPubliclyAccessibleSymbol(SgSymbol *symbol);
+
+using SymbolList = std::vector<SgSymbol *>;
+using PublicSymbolMap = std::unordered_map<std::string, SymbolList>;
+
+std::string symbolKey(const SgName &name, bool caseInsensitive) {
+  if (!caseInsensitive) {
+    return name.str();
+  }
+  return StringUtility::convertToLowerCase(name.str());
+}
+
+PublicSymbolMap collectPublicSymbols(SgClassDefinition *classDefinition,
+                                     bool caseInsensitive) {
+  PublicSymbolMap publicSymbols;
+  SgSymbol *symbol = classDefinition->first_any_symbol();
+  while (symbol != nullptr) {
+    if (isPubliclyAccessibleSymbol(symbol)) {
+      publicSymbols[symbolKey(symbol->get_name(), caseInsensitive)].push_back(
+          symbol);
+    }
+    symbol = classDefinition->next_any_symbol();
+  }
+  return publicSymbols;
 }
 
 bool isPubliclyAccessibleSymbol(SgSymbol *symbol) {
@@ -728,33 +758,47 @@ void BuildVisitor::Build(parser::BlockData &x) {
 
   using namespace Fortran::parser;
   std::cout << "Rose::builder::Build(BlockData)\n";
-
-  std::optional<std::string> name{std::nullopt};
-  bool hasEndName{false};
-
   auto &stmt{std::get<Statement<BlockDataStmt>>(x.t)};
   auto &end{std::get<Statement<EndBlockDataStmt>>(x.t)};
 
-  if (stmt.statement.v) {
-    name = stmt.statement.v->ToString();
-  }
-  if (end.statement.v) {
-    hasEndName = true;
-  }
+  ROSE_ASSERT(stmt.statement.v);
+  std::string name{stmt.statement.v->ToString()};
+  bool haveEndStmt{static_cast<bool>(end.statement.v)};
 
-  // Begin SageTreeBuilder for SgProcedureHeaderStatement
-  SgProcedureHeaderStatement *procHeader{nullptr};
-  builder.Enter(procHeader, name);
-
-  std::optional<SourcePosition> srcBegin{
+  std::optional<SourcePosition> srcPosBody{
+      FirstSourcePosition(std::get<SpecificationPart>(x.t))};
+  std::optional<SourcePosition> srcPosBegin{
       BuildSourcePosition(stmt, Order::begin)};
-  SourcePosition srcEnd{BuildSourcePosition(end, Order::end)};
-  builder.setSourcePosition(procHeader, *srcBegin, srcEnd);
+  SourcePosition srcPosEnd{BuildSourcePosition(end, Order::end)};
+  if (!srcPosBody) {
+    srcPosBody.emplace(srcPosEnd);
+  }
+  Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
-  Walk(std::get<parser::SpecificationPart>(x.t));
+  SgFunctionParameterList *paramList{nullptr};
+  SgScopeStatement *paramScope{nullptr};
+  SgFunctionDeclaration *functionDecl{nullptr};
+  std::list<std::string> dummyArgs;
+  LanguageTranslation::FunctionModifierList modifiers;
+  std::vector<Rose::builder::Token> comments{};
+  bool isDefDecl{true};
 
-  // Leave SageTreeBuilder for SgProcedureHeaderStatement
-  builder.Leave(procHeader, hasEndName);
+  builder.Enter(paramList, paramScope, name, /*function_type*/ nullptr,
+                isDefDecl);
+
+  Walk(std::get<SpecificationPart>(x.t));
+
+  builder.Leave(paramList, paramScope, dummyArgs);
+
+  builder.Enter(functionDecl, name, /*return_type*/ nullptr, paramList,
+                modifiers, isDefDecl, sources, comments);
+
+  if (auto *procDecl = isSgProcedureHeaderStatement(functionDecl)) {
+    procDecl->set_subprogram_kind(
+        SgProcedureHeaderStatement::e_block_data_subprogram_kind);
+  }
+
+  builder.Leave(functionDecl, paramScope, haveEndStmt);
 }
 
 void BuildFunctionReturnType(const parser::SpecificationPart &x,
@@ -783,32 +827,63 @@ void BuildVisitor::Build(parser::AssignmentStmt &x) {
   builder.Leave(stmt, labels);
 }
 
-static void BuildLoopControl(parser::NonLabelDoStmt &x, SgExpression *&name,
-                             SgExpression *&condition) {
-  // std::tuple<> std::optional<Name>, std::optional<Label>,
-  // std::optional<LoopControl>
+namespace {
+struct LoopControlInfo {
+  SgExpression *initialization{nullptr};
+  SgExpression *bound{nullptr};
+  SgExpression *increment{nullptr};
+  SgExpression *condition{nullptr};
+  bool isWhile{false};
+  bool isConcurrent{false};
+};
 
-  name = nullptr;
-  condition = nullptr;
-
-  std::optional<std::string> doName{std::nullopt};
-  if (std::get<0>(x.t)) {
-    doName = std::get<0>(x.t).value().ToString();
-    ABORT_NO_IMPL;
-  }
-
-  std::optional<std::string> doLabel{std::nullopt};
-  if (std::get<1>(x.t)) {
-    doLabel = std::to_string(std::get<1>(x.t).value());
-    ABORT_NO_IMPL;
-  }
-
-  // LoopControl
-  if (std::get<2>(x.t)) {
-    WalkExpr(std::get<2>(x.t), condition);
-    ASSERT_not_null(condition);
-  }
+SgExpression *BuildScalarExpr(parser::ScalarExpr &expr) {
+  SgExpression *result{nullptr};
+  WalkExpr(expr.thing.value(), result);
+  ASSERT_not_null(result);
+  return result;
 }
+
+SgExpression *BuildScalarLogicalExpr(parser::ScalarLogicalExpr &expr) {
+  SgExpression *result{nullptr};
+  WalkExpr(expr.thing.thing.value(), result);
+  ASSERT_not_null(result);
+  return result;
+}
+
+SgExpression *BuildDoInitialization(parser::LoopControl::Bounds &bounds) {
+  std::string name{bounds.name.thing.ToString()};
+  SgExpression *lhs = SageBuilderCpp17::buildVarRefExp_nfi(name);
+  SgExpression *lower = BuildScalarExpr(bounds.lower);
+  return SageBuilder::buildBinaryExpression_nfi<SgAssignOp>(lhs, lower);
+}
+
+LoopControlInfo
+BuildLoopControl(std::optional<parser::LoopControl> &loopControl) {
+  LoopControlInfo info;
+  if (!loopControl) {
+    return info;
+  }
+
+  auto &control = loopControl.value();
+  common::visit(
+      common::visitors{
+          [&](parser::LoopControl::Bounds &bounds) {
+            info.initialization = BuildDoInitialization(bounds);
+            info.bound = BuildScalarExpr(bounds.upper);
+            if (bounds.step) {
+              info.increment = BuildScalarExpr(bounds.step.value());
+            }
+          },
+          [&](parser::ScalarLogicalExpr &expr) {
+            info.isWhile = true;
+            info.condition = BuildScalarLogicalExpr(expr);
+          },
+          [&](parser::LoopControl::Concurrent &) { info.isConcurrent = true; }},
+      control.u);
+  return info;
+}
+} // namespace
 
 void BuildVisitor::Build(parser::DoConstruct &x) {
   //  std::tuple<Statement<NonLabelDoStmt>, Block, Statement<EndDoStmt>> t;
@@ -817,28 +892,100 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
 
   SgWhileStmt *whileStmt{nullptr};
   SgFortranDo *doStmt{nullptr};
-  SgExpression *condition{nullptr}; // loop-control
-  SgExpression *name{nullptr};      // do-construct-name
-
-  // Traverse NonLabelDoStmt to get the loop condition
-  BuildLoopControl(std::get<0>(x.t).statement, name, condition);
+  auto &loopControl = std::get<2>(std::get<0>(x.t).statement.t);
+  const LoopControlInfo control = BuildLoopControl(loopControl);
+  if (control.isConcurrent) {
+    std::cerr << "[WARN] Do concurrent is not supported yet.\n";
+    ROSE_ABORT();
+  }
 
   // Enter SageTreeBuilder
-  if (x.IsDoWhile()) {
-    builder.Enter(whileStmt, condition);
+  if (control.isWhile) {
+    ASSERT_not_null(control.condition);
+    builder.Enter(whileStmt, control.condition);
   } else {
-    // Simple form for now
-    builder.Enter(doStmt);
+    builder.Enter(doStmt, control.initialization, control.bound,
+                  control.increment);
   }
 
   // Traverse the body
   Walk(std::get<1>(x.t));
 
   // Leave SageTreeBuilder
-  if (x.IsDoWhile()) {
+  if (control.isWhile) {
     builder.Leave(whileStmt, /*hasEndDo*/ true);
   } else {
     builder.Leave(doStmt);
+  }
+}
+
+void BuildVisitor::Build(parser::LabelDoStmt &x) {
+  // LabelDoStmt std::tuple<Label, std::optional<LoopControl>> t;
+  const auto endLabel = std::get<parser::Label>(x.t);
+  const LoopControlInfo control = BuildLoopControl(std::get<1>(x.t));
+
+  if (control.isConcurrent) {
+    std::cerr << "[WARN] Do concurrent is not supported yet.\n";
+    ROSE_ABORT();
+  }
+
+  if (control.isWhile) {
+    ASSERT_not_null(control.condition);
+    SgWhileStmt *whileStmt{nullptr};
+    builder.Enter(whileStmt, control.condition);
+
+    if (label_) {
+      SageInterface::setFortranNumericLabel(whileStmt,
+                                            static_cast<int>(label_.value()),
+                                            SgLabelSymbol::e_start_label_type);
+    }
+
+    label_do_stack_.push_back(
+        LabelDoFrame{endLabel, LabelDoFrame::Kind::While, whileStmt});
+    return;
+  }
+
+  SgFortranDo *doStmt{nullptr};
+  builder.Enter(doStmt, control.initialization, control.bound,
+                control.increment);
+  doStmt->set_has_end_statement(false);
+
+  if (label_) {
+    SageInterface::setFortranNumericLabel(doStmt,
+                                          static_cast<int>(label_.value()),
+                                          SgLabelSymbol::e_start_label_type);
+  }
+
+  label_do_stack_.push_back(
+      LabelDoFrame{endLabel, LabelDoFrame::Kind::FortranDo, doStmt});
+}
+
+void BuildVisitor::CloseLabelDoLoops(const parser::Label &label) {
+  while (!label_do_stack_.empty() &&
+         label_do_stack_.back().end_label == label) {
+    LabelDoFrame frame = label_do_stack_.back();
+    label_do_stack_.pop_back();
+    auto *labelScope =
+        SageInterface::getEnclosingFunctionDefinition(frame.stmt);
+    ASSERT_not_null(labelScope);
+    SgName labelName(StringUtility::numberToString(label));
+    SgLabelSymbol *labelSymbol = labelScope->lookup_label_symbol(labelName);
+    if (labelSymbol == nullptr) {
+      std::cerr << "Missing label symbol for DO end label " << label << "\n";
+      ROSE_ABORT();
+    }
+    SgLabelRefExp *ref = SageBuilder::buildLabelRefExp(labelSymbol);
+    ref->set_parent(frame.stmt);
+    frame.stmt->set_end_numeric_label(ref);
+    if (frame.kind == LabelDoFrame::Kind::FortranDo) {
+      auto *doStmt = isSgFortranDo(frame.stmt);
+      ASSERT_not_null(doStmt);
+      builder.Leave(doStmt);
+    } else {
+      auto *whileStmt = isSgWhileStmt(frame.stmt);
+      ASSERT_not_null(whileStmt);
+      builder.Leave(whileStmt, /*hasEndDo*/ false);
+    }
   }
 }
 
@@ -1151,7 +1298,7 @@ void BuildImpl(parser::CharLength &x, SgExpression *&expr) {
   // CharLength std::variant<TypeParamValue, std::uint64_t> u;
   using namespace Fortran;
 
-  common::visit(common::visitors{[&](unsigned long long &y) {
+  common::visit(common::visitors{[&](std::uint64_t &y) {
                                    std::string strVal{std::to_string(y)};
                                    expr = SageBuilder::buildLongLongIntVal_nfi(
                                        y, strVal);
@@ -1367,6 +1514,18 @@ void BuildVisitor::Build(
   SgClassDefinition *classDefinition = moduleStmt->get_definition();
   ROSE_ASSERT(classDefinition != nullptr);
 
+  const bool caseInsensitive = currentScope->isCaseInsensitive();
+  const PublicSymbolMap publicSymbols =
+      collectPublicSymbols(classDefinition, caseInsensitive);
+
+  auto findPublicSymbols = [&](const SgName &name) -> const SymbolList * {
+    auto it = publicSymbols.find(symbolKey(name, caseInsensitive));
+    if (it == publicSymbols.end()) {
+      return nullptr;
+    }
+    return &it->second;
+  };
+
   auto attachRenamePair = [&](SgRenamePair *renamePair) {
     useStmt->get_rename_list().push_back(renamePair);
     renamePair->set_parent(useStmt);
@@ -1374,84 +1533,77 @@ void BuildVisitor::Build(
 
   if (!hasOnly) {
     if (renamePairs.empty()) {
-      SgSymbol *symbol = classDefinition->first_any_symbol();
-      while (symbol != nullptr) {
-        if (isPubliclyAccessibleSymbol(symbol)) {
+      for (const auto &entry : publicSymbols) {
+        for (SgSymbol *symbol : entry.second) {
           SgName symbolName = symbol->get_name();
           if (!currentScope->symbol_exists(symbolName)) {
             SgAliasSymbol *aliasSymbol = new SgAliasSymbol(symbol, false);
             currentScope->insert_symbol(symbolName, aliasSymbol);
           }
         }
-        symbol = classDefinition->next_any_symbol();
       }
     } else {
       std::set<SgSymbol *> renamedSymbols;
       for (SgRenamePair *renamePair : renamePairs) {
         attachRenamePair(renamePair);
 
-        SgSymbol *symbol = classDefinition->first_any_symbol();
-        while (symbol != nullptr) {
-          if (namesMatch(renamePair->get_use_name(), symbol->get_name(),
-                         currentScope->isCaseInsensitive()) &&
-              isPubliclyAccessibleSymbol(symbol)) {
-            SgName localName = renamePair->get_local_name();
-            SgSymbol *aliasSymbol = nullptr;
-            if (auto *varSymbol = isSgVariableSymbol(symbol)) {
-              SgInitializedName *initName =
-                  SageInterface::deepCopy(varSymbol->get_declaration());
-              initName->set_name(localName);
-              initName->set_scope(currentScope);
-              aliasSymbol = new SgVariableSymbol(initName);
-            } else {
-              aliasSymbol = new SgAliasSymbol(symbol, true, localName);
-            }
-            currentScope->insert_symbol(localName, aliasSymbol);
-            renamedSymbols.insert(symbol);
+        const SymbolList *symbols =
+            findPublicSymbols(renamePair->get_use_name());
+        if (symbols == nullptr) {
+          continue;
+        }
+        for (SgSymbol *symbol : *symbols) {
+          SgName localName = renamePair->get_local_name();
+          SgSymbol *aliasSymbol = nullptr;
+          if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+            SgInitializedName *initName =
+                SageInterface::deepCopy(varSymbol->get_declaration());
+            initName->set_name(localName);
+            initName->set_scope(currentScope);
+            aliasSymbol = new SgVariableSymbol(initName);
+          } else {
+            aliasSymbol = new SgAliasSymbol(symbol, true, localName);
           }
-          symbol = classDefinition->next_any_symbol();
+          currentScope->insert_symbol(localName, aliasSymbol);
+          renamedSymbols.insert(symbol);
         }
       }
 
-      SgSymbol *symbol = classDefinition->first_any_symbol();
-      while (symbol != nullptr) {
-        if (renamedSymbols.find(symbol) == renamedSymbols.end() &&
-            isPubliclyAccessibleSymbol(symbol)) {
-          SgName symbolName = symbol->get_name();
-          SgAliasSymbol *aliasSymbol = new SgAliasSymbol(symbol, false);
-          currentScope->insert_symbol(symbolName, aliasSymbol);
+      for (const auto &entry : publicSymbols) {
+        for (SgSymbol *symbol : entry.second) {
+          if (renamedSymbols.find(symbol) == renamedSymbols.end()) {
+            SgName symbolName = symbol->get_name();
+            SgAliasSymbol *aliasSymbol = new SgAliasSymbol(symbol, false);
+            currentScope->insert_symbol(symbolName, aliasSymbol);
+          }
         }
-        symbol = classDefinition->next_any_symbol();
       }
     }
   } else {
     for (SgRenamePair *renamePair : renamePairs) {
       attachRenamePair(renamePair);
-      SgSymbol *symbol = classDefinition->first_any_symbol();
-      while (symbol != nullptr) {
-        bool isRenamed =
-            (renamePair->get_use_name() != renamePair->get_local_name());
-        if (namesMatch(renamePair->get_use_name(), symbol->get_name(),
-                       currentScope->isCaseInsensitive())) {
-          ROSE_ASSERT(isPubliclyAccessibleSymbol(symbol) == true);
-          SgName localName = renamePair->get_local_name();
-          if (!currentScope->symbol_exists(localName)) {
-            SgSymbol *aliasSymbol = nullptr;
-            if (auto *varSymbol = isSgVariableSymbol(symbol)) {
-              SgInitializedName *initName =
-                  SageInterface::deepCopy(varSymbol->get_declaration());
-              initName->set_name(localName);
-              initName->set_scope(currentScope);
-              aliasSymbol = new SgVariableSymbol(initName);
-            } else {
-              aliasSymbol = isRenamed
-                                ? new SgAliasSymbol(symbol, true, localName)
-                                : new SgAliasSymbol(symbol, false);
-            }
-            currentScope->insert_symbol(localName, aliasSymbol);
+      const SymbolList *symbols = findPublicSymbols(renamePair->get_use_name());
+      if (symbols == nullptr) {
+        continue;
+      }
+      bool isRenamed =
+          (renamePair->get_use_name() != renamePair->get_local_name());
+      for (SgSymbol *symbol : *symbols) {
+        SgName localName = renamePair->get_local_name();
+        if (!currentScope->symbol_exists(localName)) {
+          SgSymbol *aliasSymbol = nullptr;
+          if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+            SgInitializedName *initName =
+                SageInterface::deepCopy(varSymbol->get_declaration());
+            initName->set_name(localName);
+            initName->set_scope(currentScope);
+            aliasSymbol = new SgVariableSymbol(initName);
+          } else {
+            aliasSymbol = isRenamed ? new SgAliasSymbol(symbol, true, localName)
+                                    : new SgAliasSymbol(symbol, false);
           }
+          currentScope->insert_symbol(localName, aliasSymbol);
         }
-        symbol = classDefinition->next_any_symbol();
       }
     }
   }
@@ -1504,17 +1656,18 @@ void BuildVisitor::Build(parser::DataStmt &x) {
   //   SignedRealLiteralConstant, SignedComplexLiteralConstant, NullInit,
   //   common::Indirection<Designator>, StructureConstructor
 
-  // Begin SageTreeBuilder for SgAttributeSpecificationStatement
-  SgAttributeSpecificationStatement *dataStmt{nullptr};
-  auto kind{SgAttributeSpecificationStatement::e_dataStatement};
-  builder.Enter(dataStmt, kind);
+  SgAttributeSpecificationStatement *dataStmt =
+      SageBuilder::buildAttributeSpecificationStatement(
+          SgAttributeSpecificationStatement::e_dataStatement);
+  ASSERT_not_null(dataStmt);
+  SageInterface::appendStatement(dataStmt, SageBuilder::topScopeStack());
 
   // An SgDataStatementGroup corresponds to a DataStmtSet
   auto &groups{dataStmt->get_data_statement_group_list()};
 
   for (auto &set : x.v) {
-    SgDataStatementGroup *dataGroup{nullptr};
-    builder.Enter(dataGroup);
+    SgDataStatementGroup *dataGroup = new SgDataStatementGroup();
+    ASSERT_not_null(dataGroup);
 
     // Add data statement groups
     for (auto &setObject : std::get<0>(set.t)) {
@@ -1522,12 +1675,15 @@ void BuildVisitor::Build(parser::DataStmt &x) {
       WalkExpr(setObject, expr);
       ASSERT_not_null(expr);
 
-      SgDataStatementObject *dataObject{nullptr};
-      builder.Enter(dataObject);
+      SgDataStatementObject *dataObject = new SgDataStatementObject();
+      ASSERT_not_null(dataObject);
+      if (!dataObject->get_variableReference_list()) {
+        dataObject->set_variableReference_list(
+            SageBuilder::buildExprListExp_nfi());
+      }
 
       dataObject->get_variableReference_list()->get_expressions().push_back(
           expr);
-      builder.Leave(dataObject);
 
       dataGroup->get_object_list().push_back(dataObject);
     }
@@ -1540,21 +1696,18 @@ void BuildVisitor::Build(parser::DataStmt &x) {
 
       // TODO: other kind variants
       auto valueKind{SgDataStatementValue::e_explict_list};
-      SgDataStatementValue *dataValue{nullptr};
-      builder.Enter(dataValue, valueKind);
+      SgDataStatementValue *dataValue = new SgDataStatementValue(valueKind);
+      ASSERT_not_null(dataValue);
+      if (!dataValue->get_initializer_list()) {
+        dataValue->set_initializer_list(SageBuilder::buildExprListExp_nfi());
+      }
 
       dataValue->get_initializer_list()->get_expressions().push_back(expr);
-      builder.Leave(dataValue);
 
       dataGroup->get_value_list().push_back(dataValue);
     }
-
-    builder.Leave(dataGroup);
     groups.push_back(dataGroup);
   }
-
-  // Leave SageTreeBuilder for SgAttributeSpecificationStatement
-  builder.Leave(dataStmt);
 }
 
 void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
@@ -1575,7 +1728,7 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
               type); // std::list<EntityDecl>
 
   SgVariableDeclaration *varDecl{nullptr};
-  builder.Enter(varDecl, type, initInfo, getLabels());
+  builder.Enter(varDecl, type, initInfo);
   builder.Leave(varDecl, modifiers);
 }
 
@@ -2268,6 +2421,20 @@ template <typename T> void Build(parser::Expr::Negate &x, T *&expr) {
 void BuildExprVisitor::Build(parser::Expr::NOT &x /*, SgExpression* &expr*/) {
   info(x, "BuildExprVisitor::::Build(NOT)");
   ABORT_NO_IMPL;
+}
+
+void BuildExprVisitor::Build(parser::Expr::UnaryPlus &x) {
+  SgExpression *operand{nullptr};
+  WalkExpr(x.v.value(), operand);
+  ASSERT_not_null(operand);
+  this->set(SageBuilder::buildUnaryAddOp_nfi(operand));
+}
+
+void BuildExprVisitor::Build(parser::Expr::Negate &x) {
+  SgExpression *operand{nullptr};
+  WalkExpr(x.v.value(), operand);
+  ASSERT_not_null(operand);
+  this->set(SageBuilder::buildMinusOp_nfi(operand));
 }
 
 void BuildExprVisitor::Build(parser::Expr::Power &x /*, SgExpression* &expr*/) {

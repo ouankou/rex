@@ -5374,6 +5374,20 @@ SgVoidVal *SageBuilder::buildVoidVal_nfi() {
   return voidValue;
 }
 
+SgColonShapeExp *SageBuilder::buildColonShapeExp() {
+  SgColonShapeExp *shape = new SgColonShapeExp();
+  ROSE_ASSERT(shape);
+  setOneSourcePositionForTransformation(shape);
+  return shape;
+}
+
+SgColonShapeExp *SageBuilder::buildColonShapeExp_nfi() {
+  SgColonShapeExp *shape = new SgColonShapeExp();
+  ROSE_ASSERT(shape);
+  setOneSourcePositionNull(shape);
+  return shape;
+}
+
 SgCharVal *SageBuilder::buildCharVal(char value /*= 0*/) {
   SgCharVal *result = new SgCharVal(value, "");
   ROSE_ASSERT(result);

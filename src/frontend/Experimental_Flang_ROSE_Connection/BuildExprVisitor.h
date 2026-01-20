@@ -55,6 +55,8 @@ public:
   void Build(Fortran::parser::Expr::NE &);
   void Build(Fortran::parser::Expr::GE &);
   void Build(Fortran::parser::Expr::GT &);
+  void Build(Fortran::parser::Expr::UnaryPlus &);
+  void Build(Fortran::parser::Expr::Negate &);
   void Build(Fortran::parser::Expr::NOT &);
   void Build(Fortran::parser::Expr::AND &);
   void Build(Fortran::parser::Expr::OR &);

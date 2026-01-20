@@ -2412,7 +2412,12 @@ void FortranCodeGeneration_locatedNode::unparseLabelStmt(
       // Print label without formatting for now, think about fixed form later
       curprint(labelStmt->get_label().getString() + " ");
     }
-    unparseLanguageSpecificStatement(labelStmt->get_statement(), info);
+    if (labelStmt->get_statement() != nullptr) {
+      unparseLanguageSpecificStatement(labelStmt->get_statement(), info);
+    } else {
+      curprint_keyword("CONTINUE", info);
+      unp->cur.insert_newline(1);
+    }
   } else {
     // This IR node corresponds to Fortran 'label CONTINUE' statement
     // TODO: rethink label handling in old parser

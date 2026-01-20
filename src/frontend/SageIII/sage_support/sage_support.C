@@ -37,6 +37,7 @@
 
 #if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
 #include "FlangModuleInfo.h"
+#include "fortran_flang_support.h"
 #include "unparseFortran_modfile.h"
 #endif
 
@@ -1362,11 +1363,6 @@ int SgProject::parse() {
   FortranModuleInfo::set_inputDirs(this);
 #endif
 
-#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
-  FlangModuleInfo::setCurrentProject(this);
-  FlangModuleInfo::set_inputDirs(this);
-#endif
-
   // Simplify multi-file handling so that a single file is just the trivial
   // case and not a special separate case.
 #if DEBUG_PARSE
@@ -2518,6 +2514,50 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     vector<string> flangCommandLine;
     flangCommandLine.push_back("f18-parse-demo");
     flangCommandLine.push_back("-fexternal-builder");
+    vector<string> flangArgs = argv;
+    SgFile::stripRoseCommandLineOptions(flangArgs);
+    for (size_t i = 1; i < flangArgs.size(); ++i) {
+      const string &arg = flangArgs[i];
+      if (arg == "-c") {
+        flangCommandLine.push_back(arg);
+        continue;
+      }
+      if (arg == "-o") {
+        if (i + 1 < flangArgs.size()) {
+          flangCommandLine.push_back(arg);
+          flangCommandLine.push_back(flangArgs[++i]);
+        }
+        continue;
+      }
+      if (arg.rfind("-I", 0) == 0) {
+        flangCommandLine.push_back(arg);
+        if (arg == "-I" && i + 1 < flangArgs.size()) {
+          flangCommandLine.push_back(flangArgs[++i]);
+        }
+        continue;
+      }
+      if (arg.rfind("-D", 0) == 0) {
+        flangCommandLine.push_back(arg);
+        if (arg == "-D" && i + 1 < flangArgs.size()) {
+          flangCommandLine.push_back(flangArgs[++i]);
+        }
+        continue;
+      }
+      if (arg.rfind("-U", 0) == 0) {
+        flangCommandLine.push_back(arg);
+        if (arg == "-U" && i + 1 < flangArgs.size()) {
+          flangCommandLine.push_back(flangArgs[++i]);
+        }
+        continue;
+      }
+      if (arg == "-Mfixed" || arg == "-Mfree" || arg == "-Mextend" ||
+          arg == "-fbackslash" || arg == "-fno-backslash" ||
+          arg == "-fopenmp" || arg == "-E" || arg == "-P" ||
+          arg == "-fno-reformat") {
+        flangCommandLine.push_back(arg);
+        continue;
+      }
+    }
     flangCommandLine.push_back(get_sourceFileNameWithPath());
     CommandlineProcessing::ArgvStorage flangArgvStorage(flangCommandLine);
     int flangArgc = flangArgvStorage.argc();
@@ -2539,7 +2579,8 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     return status;
   }
 
-#if defined(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT)
+#if defined(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT) &&                            \
+    defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
   // This is how we pass the pointer to the SgFile created in ROSE before the
   // Open Fortran Parser is called to the Open Fortran Parser.  In the case of
   // C/C++ using the legacy frontend the SgFile is passed through the frontend
@@ -3246,7 +3287,9 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
   // DQ (11/11/2010): There should be no include files on the stack from
   // previous files, see test2010_78.C and test2010_79.C when compiled together
   // on the same command line.
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
   ROSE_ASSERT(astIncludeStack.size() == 0);
+#endif
 
   if (get_experimental_flang_frontend() == true) {
     vector<string> experimentalFrontEndCommandLine;
@@ -3308,6 +3351,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
   // DQ (11/11/2010): There should be no include files left in the stack, see
   // test2010_78.C and test2010_79.C when compiled together on the same command
   // line. ROSE_ASSERT(astIncludeStack.size() == 0);
+#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
   if (astIncludeStack.size() != 0) {
     // DQ (3/17/2017): Added support to use message streams.
     MLOG_WARN_C("sage_support",
@@ -3316,6 +3360,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
                 " \n",
                 astIncludeStack.size());
   }
+#endif
 
   if (get_verbose() > 1)
     printf("DONE: Calling the openFortranParser_main() function (which loads "

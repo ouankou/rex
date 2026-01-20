@@ -2,11 +2,24 @@
 #define ROSE_MODULE_BUILDER_H_
 
 #include <map>
+#include <string>
+#include <vector>
 
 #define TEMPLATES 0
 
 class SgProject;
 class SgSourceFile;
+class SgGlobal;
+class SgSymbol;
+class SgSymbolTable;
+class SgEnumSymbol;
+class SgClassSymbol;
+class SgVariableSymbol;
+class SgType;
+
+namespace SageInterface {
+SgProject *getProject();
+}
 
 // Need std=c++11
 //

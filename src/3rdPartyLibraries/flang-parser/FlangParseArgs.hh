@@ -18,11 +18,11 @@
 
 #include <flang/Parser/unparse.h>
 
-#include <flang/Support/Fortran-features.h>
+#include <flang/Common/Fortran-features.h>
 
-#include <flang/Support/LangOptions.h>
+#include <flang/Common/LangOptions.h>
 
-#include <flang/Support/default-kinds.h>
+#include <flang/Common/default-kinds.h>
 
 #include <llvm/Support/Errno.h>
 
@@ -96,7 +96,7 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
   ctx.driver.prefix = prefix.data();
 
   const char *fc{getenv("F18_FC")};
-  ctx.driver.fcArgs.push_back(fc ? fc : "gfortran");
+  ctx.driver.fcArgs.push_back(fc ? fc : "flang-20");
 
   Fortran::common::IntrinsicTypeDefaultKinds defaultKinds;
 

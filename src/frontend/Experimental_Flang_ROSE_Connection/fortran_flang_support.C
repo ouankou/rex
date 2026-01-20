@@ -3,6 +3,8 @@
 #include "rose_config.h"
 
 #include "SageTreeBuilder.h"
+#include "rose_paths.h"
+#include "sageBuilder.h"
 
 #include "flang-external-builder-main.h"
 
@@ -10,6 +12,7 @@
 
 using namespace Rose;
 
+#include <cstdlib>
 #include <iostream>
 using std::cout;
 
@@ -28,6 +31,11 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
   ROSE_ASSERT(global_scope &&
               "fortran_flang_support: failed initialize_global_scope");
 
+  const char *fc_env = std::getenv("F18_FC");
+  if ((fc_env == nullptr || *fc_env == '\0') && !ROSE_GFORTRAN_PATH.empty()) {
+    setenv("F18_FC", ROSE_GFORTRAN_PATH.c_str(), 0);
+  }
+
   status = flang_external_builder_main(argc, argv, srcFile);
 
   if (SgProject::get_verbose() > 0) {
@@ -36,3 +44,22 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
 
   return status;
 }
+
+#if !defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
+SgScopeStatement *getTopOfScopeStack() {
+  ROSE_ASSERT(SageBuilder::emptyScopeStack() == false);
+  SgScopeStatement *topOfStack = SageBuilder::topScopeStack();
+  ROSE_ASSERT(topOfStack != nullptr);
+
+  for (const auto *scope : SageBuilder::ScopeStack) {
+    ROSE_ASSERT(scope != nullptr);
+    ROSE_ASSERT(scope->isCaseInsensitive() == true);
+  }
+
+  return topOfStack;
+}
+
+bool emptyFortranStateStack() { return SageBuilder::emptyScopeStack(); }
+
+bool emptyFortranScopeStack() { return SageBuilder::emptyScopeStack(); }
+#endif

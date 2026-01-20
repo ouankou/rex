@@ -50,6 +50,7 @@ string FlangModuleInfo::find_file_from_inputDirs(const string &basename) {
 }
 
 void FlangModuleInfo::set_inputDirs(SgProject *project) {
+  inputDirs.clear();
   vector<string> args = project->get_originalCommandLineArgumentList();
   string rmodDir;
 
@@ -82,7 +83,7 @@ void FlangModuleInfo::setCurrentProject(SgProject *project) {
 SgModuleStatement *FlangModuleInfo::getModule(const string &modName) {
   size_t numberOfModules_before = moduleNameAstMap.size();
 
-  string lowerName = StringUtility::convertToLowerCase(modName);
+  string lowerName = Rose::StringUtility::convertToLowerCase(modName);
 
   ModuleMapType::iterator mapIterator = moduleNameAstMap.find(lowerName);
   SgModuleStatement *modStmt =
@@ -134,7 +135,7 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
   int errorCode = 0;
   vector<string> argv;
 
-  string moduleBase = StringUtility::convertToLowerCase(moduleName);
+  string moduleBase = Rose::StringUtility::convertToLowerCase(moduleName);
   string moduleFileName = find_existing_module_file(moduleBase);
 
   if (moduleFileName.empty()) {
@@ -160,11 +161,7 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
   ROSE_ASSERT(newFile != nullptr);
 
   newFile->runFrontend(errorCode);
-  if (errorCode != 0) {
-    printf("In FlangModuleInfo::createSgSourceFile(): errorCode != 0 is not "
-           "checked \n");
-    ROSE_ASSERT(errorCode == 0);
-  }
+  ROSE_ASSERT(errorCode == 0);
 
   ROSE_ASSERT(newFile->get_startOfConstruct() != nullptr);
 

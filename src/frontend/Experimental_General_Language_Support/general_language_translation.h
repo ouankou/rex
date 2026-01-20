@@ -69,6 +69,9 @@ enum ExpressionKind {
   e_type_modifier_truncate,
   e_type_modifier_volatile,
   e_type_modifier_z,
+  e_type_modifier_abstract,
+  e_type_modifier_bind_c,
+  e_type_modifier_parameter,
 
   // Function formal parameters
   // --------------------------

@@ -757,8 +757,6 @@ void SageTreeBuilder::Enter(
 
   if (list_contains(modifiers, e_function_modifier_recursive))
     function_decl->get_functionModifier().setRecursive();
-  if (list_contains(modifiers, e_function_modifier_reentrant))
-    function_decl->get_functionModifier().setReentrant();
 
   if (list_contains(modifiers, e_function_modifier_pure))
     function_decl->get_functionModifier().setPure();
@@ -915,6 +913,40 @@ void SageTreeBuilder::Leave(SgDerivedTypeStatement *derived_type_stmt) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgDerivedTypeStatement*) \n";
   SageBuilder::popScopeStack(); // class definition
+}
+
+void SageTreeBuilder::Leave(
+    SgDerivedTypeStatement *derived_type_stmt,
+    std::list<LanguageTranslation::ExpressionKind> &modifier_enum_list) {
+  MLOG_TRACE_CXX(MLOG_FRONTEND)
+      << "SageTreeBuilder::Leave(SgDerivedTypeStatement*) with modifiers \n";
+
+  for (LanguageTranslation::ExpressionKind modifier_enum : modifier_enum_list) {
+    switch (modifier_enum) {
+    case LanguageTranslation::ExpressionKind::e_access_modifier_public:
+      derived_type_stmt->get_declarationModifier()
+          .get_accessModifier()
+          .setPublic();
+      break;
+    case LanguageTranslation::ExpressionKind::e_access_modifier_private:
+      derived_type_stmt->get_declarationModifier()
+          .get_accessModifier()
+          .setPrivate();
+      break;
+    case LanguageTranslation::ExpressionKind::e_type_modifier_abstract:
+      derived_type_stmt->get_declarationModifier()
+          .get_typeModifier()
+          .setAbstract();
+      break;
+    case LanguageTranslation::ExpressionKind::e_type_modifier_bind_c:
+      derived_type_stmt->get_declarationModifier().get_typeModifier().setBind();
+      break;
+    default:
+      break;
+    }
+  }
+
+  Leave(derived_type_stmt);
 }
 
 // Statements
@@ -1330,6 +1362,16 @@ void SageTreeBuilder::Leave(SgReturnStmt *return_stmt) {
   SageInterface::appendStatement(return_stmt, SageBuilder::topScopeStack());
 }
 
+void SageTreeBuilder::Leave(SgReturnStmt *return_stmt,
+                            const std::vector<std::string> &labels) {
+  MLOG_TRACE_CXX(MLOG_FRONTEND)
+      << "SageTreeBuilder::Leave(SgReturnStmt*, ...) with labels \n";
+  ASSERT_not_null(return_stmt);
+
+  SgStatement *stmt = wrapStmtWithLabels(return_stmt, labels);
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
 void SageTreeBuilder::Enter(SgCaseOptionStmt *&case_option_stmt,
                             SgExprListExp *key) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
@@ -1433,8 +1475,7 @@ void SageTreeBuilder::Enter(SgWhileStmt *&while_stmt, SgExpression *condition) {
       SageBuilder::buildExprStatement_nfi(condition);
   SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
 
-  while_stmt = SageBuilder::buildWhileStmt_nfi(condition_stmt, body,
-                                               /*else_body*/ nullptr);
+  while_stmt = SageBuilder::buildWhileStmt_nfi(condition_stmt, body);
 
   // Append before push (so that symbol lookup will work)
   SageInterface::appendStatement(while_stmt, SageBuilder::topScopeStack());
@@ -1704,11 +1745,37 @@ void SageTreeBuilder::Enter(
           SageBuilder::buildInitializedName_nfi(name, type, init);
       var_decl->append_variable(init_name, init);
       init_name->set_declptr(var_decl);
+      init_name->set_parent(var_decl);
+      init_name->set_scope(SageBuilder::topScopeStack());
+      if (init != nullptr) {
+        init->set_parent(init_name);
+      }
 
       // A symbol for the variable also has to be created
       SgVariableSymbol *var_sym = new SgVariableSymbol(init_name);
       ASSERT_not_null(var_sym);
-      SageBuilder::topScopeStack()->insert_symbol(SgName(name), var_sym);
+      SgScopeStatement *scope = SageBuilder::topScopeStack();
+      ASSERT_not_null(scope);
+      scope->insert_symbol(SgName(name), var_sym);
+
+      // Fix any dangling variable references from prior implicit use.
+      if (forward_var_refs_.find(name) != forward_var_refs_.end()) {
+        auto range = forward_var_refs_.equal_range(name);
+        for (auto it = range.first; it != range.second; ++it) {
+          SgVarRefExp *prev_var_ref = it->second;
+          SgVariableSymbol *prev_var_sym = prev_var_ref->get_symbol();
+          ASSERT_not_null(prev_var_sym);
+
+          SgInitializedName *prev_init_name = prev_var_sym->get_declaration();
+          ASSERT_require(prev_init_name->get_name() == init_name->get_name());
+
+          prev_var_ref->set_symbol(var_sym);
+
+          delete prev_var_sym;
+          delete prev_init_name;
+        }
+        forward_var_refs_.erase(name);
+      }
     }
   }
 }
@@ -1736,6 +1803,13 @@ void SageTreeBuilder::Leave(
     }
     case LanguageTranslation::ExpressionKind::e_type_modifier_intent_inout: {
       var_decl->get_declarationModifier().get_typeModifier().setIntent_inout();
+      break;
+    }
+    case LanguageTranslation::ExpressionKind::e_type_modifier_bind_c: {
+      var_decl->get_declarationModifier().setBind();
+      break;
+    }
+    case LanguageTranslation::ExpressionKind::e_type_modifier_parameter: {
       break;
     }
     default:
@@ -1983,6 +2057,33 @@ SageTreeBuilder::wrapStmtWithLabels(SgStatement *stmt,
       // Found a placeholder label statement
       labelStmt->set_statement(stmt);
       stmt->set_parent(labelStmt);
+    }
+
+    if (SageInterface::is_Fortran_language()) {
+      auto *labelScope =
+          SageInterface::getEnclosingFunctionDefinition(SB::topScopeStack());
+      ASSERT_not_null(labelScope);
+      SgLabelSymbol *labelSymbol =
+          labelScope->lookup_label_symbol(labelStmt->get_label());
+      if (labelSymbol == nullptr) {
+        labelSymbol = new SgLabelSymbol(labelStmt);
+        labelScope->insert_symbol(labelSymbol->get_name(), labelSymbol);
+      }
+      if (labelSymbol->get_fortran_statement() == nullptr) {
+        labelSymbol->set_fortran_statement(stmt);
+      } else if (labelSymbol->get_fortran_statement() != stmt) {
+        std::cerr << "Duplicate Fortran label " << label << "\n";
+        ROSE_ABORT();
+      }
+      const int labelValue = std::atoi(label.c_str());
+      ROSE_ASSERT(labelValue > 0);
+      const int numericValue = labelSymbol->get_numeric_label_value();
+      if (numericValue <= 0) {
+        labelSymbol->set_numeric_label_value(labelValue);
+      } else if (numericValue != labelValue) {
+        std::cerr << "Mismatched Fortran label value for " << label << "\n";
+        ROSE_ABORT();
+      }
     }
 
     stmt = labelStmt;
