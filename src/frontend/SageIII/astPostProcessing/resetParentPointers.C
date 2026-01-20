@@ -779,13 +779,25 @@ void repairSymbolTableParents(SgScopeStatement *scope) {
           continue;
         if (fd->search_for_symbol_from_symbol_table() != NULL)
           continue;
-        SgType *ftype = fd->get_type();
-        if (table != NULL &&
-            table->find_function(fd->get_name(), ftype) != NULL)
+        SgScopeStatement *decl_scope = fd->get_scope();
+        if (decl_scope != NULL && decl_scope != scope)
           continue;
-        SgFunctionSymbol *sym = new SgFunctionSymbol(fd);
-        if (table != NULL) {
-          table->insert(fd->get_name(), sym);
+
+        SgSymbol *sym = NULL;
+        if (SgTemplateMemberFunctionDeclaration *tmpl_mem =
+                isSgTemplateMemberFunctionDeclaration(fd)) {
+          sym = new SgTemplateMemberFunctionSymbol(tmpl_mem);
+        } else if (SgTemplateFunctionDeclaration *tmpl_func =
+                       isSgTemplateFunctionDeclaration(fd)) {
+          sym = new SgTemplateFunctionSymbol(tmpl_func);
+        } else if (SgMemberFunctionDeclaration *mem =
+                       isSgMemberFunctionDeclaration(fd)) {
+          sym = new SgMemberFunctionSymbol(mem);
+        } else {
+          sym = new SgFunctionSymbol(fd);
+        }
+        if (table != NULL && sym != NULL) {
+          table->insert(sym->get_name(), sym);
           sym->set_parent(table);
         }
         continue;
