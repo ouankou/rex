@@ -5426,6 +5426,18 @@ bool ClangToSageTranslator::VisitCXXTypeidExpr(
 #endif
   bool res = true;
 
+  SgType *expression_type =
+      buildTypeFromQualifiedType(cxx_typeid_expr->getType());
+  SgReferenceType *ref_type = isSgReferenceType(expression_type);
+  SgType *base_type =
+      (ref_type != NULL) ? ref_type->get_base_type() : expression_type;
+  if (!SageInterface::isConstType(base_type)) {
+    base_type = SageBuilder::buildConstType(base_type);
+  }
+  if (ref_type == NULL || base_type != ref_type->get_base_type()) {
+    expression_type = SageBuilder::buildReferenceType(base_type);
+  }
+
   if (cxx_typeid_expr->isTypeOperand()) {
     SgType *type = NULL;
     if (p_compiler_instance != nullptr) {
@@ -5435,14 +5447,15 @@ bool ClangToSageTranslator::VisitCXXTypeidExpr(
     if (type == NULL) {
       type = SageBuilder::buildUnknownType();
     }
-    *node = SageBuilder::buildTypeIdOp(NULL, type);
+    *node = SageBuilder::buildTypeIdOp(NULL, type, expression_type);
   } else {
     SgNode *tmp_expr = Traverse(cxx_typeid_expr->getExprOperand());
     SgExpression *expr = isSgExpression(tmp_expr);
     if (expr == NULL) {
       expr = SageBuilder::buildNullExpression();
     }
-    SgTypeIdOp *typeid_op = SageBuilder::buildTypeIdOp(expr, NULL);
+    SgTypeIdOp *typeid_op =
+        SageBuilder::buildTypeIdOp(expr, NULL, expression_type);
     expr->set_parent(typeid_op);
     *node = typeid_op;
   }

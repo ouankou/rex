@@ -2733,14 +2733,11 @@ void Grammar::setUpExpressions() {
   TypeIdOp.setDataPrototype("SgType*", "operand_type", "= NULL",
                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
-  // DQ (1/14/2006): We should not store the type of unary operators but instead
-  // obtain it from the operand directly. TypeIdOp.setDataPrototype ( "SgType*"
-  // , "expression_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // TypeIdOp.setDataPrototype ( "SgType*"      , "expression_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  // Store the typeid expression result type explicitly (const std::type_info&).
+  // This avoids name-based lookups and does not depend on operand typing.
+  TypeIdOp.setDataPrototype("SgType*", "expression_type", "= NULL",
+                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            NO_TRAVERSAL, NO_DELETE);
 
   // DQ (6/11/2015): Skip building of access functions (because it sets the
   // isModified flag, not wanted for the name qualification step). DQ
