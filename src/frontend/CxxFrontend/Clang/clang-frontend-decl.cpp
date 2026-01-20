@@ -2078,9 +2078,13 @@ find_function_symbols_in_scope(SgScopeStatement *scope,
     for (auto it = range.first; it != range.second; ++it) {
       record_match(it->second);
     }
-    if (matches.empty()) {
-      for (auto it = symtab->begin(); it != symtab->end(); ++it) {
-        record_match(it->second);
+    if (matches.empty() && key.getString().empty()) {
+      SgName mangled = decl_first->get_mangled_name();
+      if (!mangled.getString().empty() && mangled != key) {
+        auto mangled_range = symtab->equal_range(mangled);
+        for (auto it = mangled_range.first; it != mangled_range.second; ++it) {
+          record_match(it->second);
+        }
       }
     }
   }
