@@ -2198,6 +2198,14 @@ void ClangToSageTranslator::populateClassDefinition(
             base_class = SageBuilder::buildBaseClass(base_decl, class_def,
                                                      base.isVirtual(), true);
           }
+        } else {
+          SgName base_name = sanitize_base_name(base_type.getAsString());
+          SgClassDeclaration *placeholder =
+              build_placeholder_base_decl(base_name);
+          if (placeholder != NULL && !has_class_base(placeholder)) {
+            base_class = SageBuilder::buildBaseClass(placeholder, class_def,
+                                                     base.isVirtual(), true);
+          }
         }
       } else if (SgNonrealType *nr_type = isSgNonrealType(stripped)) {
         SgNonrealDecl *nrdecl = isSgNonrealDecl(nr_type->get_declaration());
