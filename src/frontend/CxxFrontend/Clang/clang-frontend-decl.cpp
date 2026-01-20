@@ -2171,7 +2171,8 @@ RehomeFunctionSymbolResult rehome_function_symbols_between_scopes(
       return;
     }
     if (detach_symbol(scope, table, sym)) {
-      delete sym;
+      // Keep the symbol alive; other nodes may still reference it.
+      sym->set_parent(nullptr);
     }
   };
 
@@ -11822,7 +11823,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
       }
       if (removed && discard) {
-        delete sym;
+        // Keep the symbol alive; other nodes may still reference it.
+        sym->set_parent(nullptr);
       }
     };
 
