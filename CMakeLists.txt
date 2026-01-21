@@ -698,6 +698,17 @@ if(CLANG_VERSION_MAJOR GREATER_EQUAL 18)
   list(APPEND CLANG_LIBS clangAPINotes clangTooling)
 endif()
 
+if(CLANG_VERSION_MAJOR GREATER_EQUAL 21)
+  # Some distributions do not ship clangARCMigrate; drop it when unavailable.
+  find_library(CLANG_ARCMIGRATE_LIB
+    NAMES clangARCMigrate
+    HINTS ${CLANG_LIBRARY_DIRS} ${LLVM_LIBRARY_DIRS})
+  if(NOT CLANG_ARCMIGRATE_LIB)
+    list(REMOVE_ITEM CLANG_LIBS clangARCMigrate)
+    message(WARNING "clangARCMigrate not found; disabling ARC migration support.")
+  endif()
+endif()
+
 set(_rose_clang_cpp_candidates
   clang-cpp
   clang-cpp${CLANG_VERSION_MAJOR}

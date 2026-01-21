@@ -1,0 +1,88 @@
+name: Weekly LoongArch64 CI
+
+on:
+  schedule:
+    # Every Monday at 00:00 UTC
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-loongarch64-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-loong64:
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        persist-credentials: false
+
+    - name: Set up QEMU (loong64)
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: loong64
+
+    - name: Build and test (loong64 via QEMU)
+      env:
+        # Debian sid for loong64 ships LLVM 21; use it until LLVM 20 packages exist.
+        LLVM_VERSION: 21
+      run: |
+        set -euo pipefail
+        docker run --rm --platform=linux/loong64 \
+          -v "${GITHUB_WORKSPACE}:/work" \
+          -w /work \
+          -e DEBIAN_FRONTEND=noninteractive \
+          -e LLVM_VERSION="${LLVM_VERSION}" \
+          ghcr.io/loong64/debian:latest \
+          bash -lc '
+            set -euo pipefail
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              antlr4 \
+              bison \
+              build-essential \
+              cmake \
+              clang-${LLVM_VERSION} \
+              curl \
+              flang-${LLVM_VERSION} \
+              flex \
+              g++ \
+              ghostscript \
+              git \
+              graphviz \
+              libantlr4-runtime-dev \
+              libclang-${LLVM_VERSION}-dev \
+              libclang-cpp${LLVM_VERSION}-dev \
+              libhpdf-dev \
+              libtool \
+              llvm-${LLVM_VERSION} \
+              llvm-${LLVM_VERSION}-dev \
+              openjdk-21-jdk \
+              pkg-config
+
+            export PATH="/usr/lib/llvm-${LLVM_VERSION}/bin:${PATH}"
+            export CMAKE_PREFIX_PATH="/usr/lib/llvm-${LLVM_VERSION}"
+            export LLVM_DIR="/usr/lib/llvm-${LLVM_VERSION}"
+            export CC="clang-${LLVM_VERSION}"
+            export CXX="clang++-${LLVM_VERSION}"
+            export FC="flang-${LLVM_VERSION}"
+
+            JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"
+            export LD_LIBRARY_PATH="/usr/lib/llvm-${LLVM_VERSION}/lib:${JAVA_HOME}/lib/server:${LD_LIBRARY_PATH:-}"
+
+            git config --global --add safe.directory /work
+
+            ./build-rex.sh /work/rex_install Debug
+
+            cd /work/build
+            ctest -R astInterface
+            ctest -R testQuery
+            ctest -R rex
+          '

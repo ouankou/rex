@@ -42,12 +42,39 @@ bool nestedNameSpecifierHasTypeQualifier(
     const clang::NestedNameSpecifier *qualifier) {
   for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
        nns = nns->getPrefix()) {
-    if (nns->getKind() == clang::NestedNameSpecifier::TypeSpec ||
-        nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+    if (nns->getKind() == clang::NestedNameSpecifier::TypeSpec
+#if LLVM_VERSION_MAJOR < 21
+        || nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate
+#endif
+    ) {
       return true;
     }
   }
   return false;
+}
+
+bool nestedNameSpecifierHasTemplateKeyword(
+    const clang::NestedNameSpecifier *nns) {
+  if (nns == nullptr) {
+    return false;
+  }
+#if LLVM_VERSION_MAJOR < 21
+  return nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate;
+#else
+  if (nns->getKind() != clang::NestedNameSpecifier::TypeSpec) {
+    return false;
+  }
+  const clang::Type *type = nns->getAsType();
+  if (const auto *elab = llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
+    type = elab->getNamedType().getTypePtr();
+  }
+  if (const auto *dependent =
+          llvm::dyn_cast_or_null<clang::DependentTemplateSpecializationType>(
+              type)) {
+    return dependent->getDependentTemplateName().hasTemplateKeyword();
+  }
+  return false;
+#endif
 }
 
 struct DependentTemplateSpecializationNameInfo {
@@ -127,10 +154,18 @@ std::string getTemplateNameBase(const clang::TemplateName &tname) {
 
   if (const clang::DependentTemplateName *dtn =
           tname.getAsDependentTemplateName()) {
+#if LLVM_VERSION_MAJOR >= 21
+    clang::IdentifierOrOverloadedOperator name = dtn->getName();
+    if (const clang::IdentifierInfo *id = name.getIdentifier()) {
+      return id->getName().str();
+    }
+    return buildOverloadedOperatorName(name.getOperator());
+#else
     if (dtn->isIdentifier()) {
       return dtn->getIdentifier()->getName().str();
     }
     return buildOverloadedOperatorName(dtn->getOperator());
+#endif
   }
 
   if (const clang::SubstTemplateTemplateParmStorage *subst =
@@ -1082,7 +1117,7 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
   // Wide character and Unicode types - use wchar for wide chars, int/long for
   // char16/32
   case clang::BuiltinType::Char_U:
-    *node = SageBuilder::buildUnsignedCharType();
+    *node = SageBuilder::buildCharType();
     break;
   case clang::BuiltinType::WChar_U:
     *node = SageBuilder::buildWcharType();
@@ -1482,7 +1517,19 @@ bool ClangToSageTranslator::VisitMemberPointerType(
 #endif
   bool res = true;
 
+#if LLVM_VERSION_MAJOR >= 21
+  clang::QualType classQualType;
+  if (clang::NestedNameSpecifier *qualifier =
+          member_pointer_type->getQualifier()) {
+    if (const clang::Type *qual_type = qualifier->getAsType()) {
+      classQualType = clang::QualType(qual_type, 0);
+    } else if (clang::CXXRecordDecl *record = qualifier->getAsRecordDecl()) {
+      classQualType = clang::QualType(record->getTypeForDecl(), 0);
+    }
+  }
+#else
   clang::QualType classQualType(member_pointer_type->getClass(), 0);
+#endif
   SgType *classType = buildTypeFromQualifiedType(classQualType);
   if (classType == NULL) {
     classType = SageBuilder::buildUnknownType();
@@ -2975,7 +3022,10 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
     }
 
     case clang::NestedNameSpecifier::TypeSpec:
-    case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+#if LLVM_VERSION_MAJOR < 21
+    case clang::NestedNameSpecifier::TypeSpecWithTemplate:
+#endif
+    {
       segment_type = buildNonrealTypeForNestedNameSpecifierType(
           nns->getAsType(), current_scope);
       break;
@@ -3000,7 +3050,7 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
       SgNonrealDecl *segment_decl =
           isSgNonrealDecl(segment_type->get_declaration());
       ROSE_ASSERT(segment_decl != nullptr);
-      if (nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+      if (nestedNameSpecifierHasTemplateKeyword(nns)) {
         segment_decl->set_has_template_keyword(true);
       }
       current_scope = segment_decl->get_nonreal_decl_scope();
@@ -3072,7 +3122,10 @@ ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
       break;
     }
     case clang::NestedNameSpecifier::TypeSpec:
-    case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+#if LLVM_VERSION_MAJOR < 21
+    case clang::NestedNameSpecifier::TypeSpecWithTemplate:
+#endif
+    {
       segment_type = buildNonrealTypeForNestedNameSpecifierType(
           nns->getAsType(), current_scope);
       break;
@@ -3095,7 +3148,7 @@ ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
       SgNonrealDecl *segment_decl =
           isSgNonrealDecl(segment_type->get_declaration());
       ROSE_ASSERT(segment_decl != nullptr);
-      if (nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+      if (nestedNameSpecifierHasTemplateKeyword(nns)) {
         segment_decl->set_has_template_keyword(true);
       }
       current_scope = segment_decl->get_nonreal_decl_scope();
