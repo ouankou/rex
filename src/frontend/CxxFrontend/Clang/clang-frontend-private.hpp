@@ -14,6 +14,14 @@
 
 #include <vector>
 
+static inline SgSymbolTable &get_orphan_symbol_table() {
+  static std::unique_ptr<SgSymbolTable> orphan_table;
+  if (!orphan_table) {
+    orphan_table.reset(new SgSymbolTable());
+  }
+  return *orphan_table;
+}
+
 static inline void move_symbol_to_orphan_table(SgSymbol *symbol) {
   if (symbol == nullptr) {
     return;
@@ -25,8 +33,7 @@ static inline void move_symbol_to_orphan_table(SgSymbol *symbol) {
   }
 
   // Keep detached symbols alive without reintroducing them into a scope.
-  static SgSymbolTable orphan_table;
-  orphan_table.insert(symbol->get_name(), symbol);
+  get_orphan_symbol_table().insert(symbol->get_name(), symbol);
 }
 
 #include <clang/AST/AST.h>

@@ -786,6 +786,10 @@ void repairSymbolTableParents(SgScopeStatement *scope) {
         SgScopeStatement *decl_scope = fd->get_scope();
         if (decl_scope != nullptr && decl_scope != scope)
           continue;
+        SgType *ftype = fd->get_type();
+        if (table != nullptr &&
+            table->find_function(fd->get_name(), ftype) != nullptr)
+          continue;
 
         SgSymbol *sym = nullptr;
         if (SgTemplateMemberFunctionDeclaration *tmpl_mem =
