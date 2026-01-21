@@ -1609,17 +1609,19 @@ void BuildVisitor::Build(
         }
         for (SgSymbol *symbol : *symbols) {
           SgName localName = renamePair->get_local_name();
-          SgSymbol *aliasSymbol = nullptr;
-          if (auto *varSymbol = isSgVariableSymbol(symbol)) {
-            SgInitializedName *initName =
-                SageInterface::deepCopy(varSymbol->get_declaration());
-            initName->set_name(localName);
-            initName->set_scope(currentScope);
-            aliasSymbol = new SgVariableSymbol(initName);
-          } else {
-            aliasSymbol = new SgAliasSymbol(symbol, true, localName);
+          if (!currentScope->symbol_exists(localName)) {
+            SgSymbol *aliasSymbol = nullptr;
+            if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+              SgInitializedName *initName =
+                  SageInterface::deepCopy(varSymbol->get_declaration());
+              initName->set_name(localName);
+              initName->set_scope(currentScope);
+              aliasSymbol = new SgVariableSymbol(initName);
+            } else {
+              aliasSymbol = new SgAliasSymbol(symbol, true, localName);
+            }
+            currentScope->insert_symbol(localName, aliasSymbol);
           }
-          currentScope->insert_symbol(localName, aliasSymbol);
           renamedSymbols.insert(symbol);
         }
       }
