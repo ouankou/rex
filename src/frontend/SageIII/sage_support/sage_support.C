@@ -1362,6 +1362,12 @@ int SgProject::parse() {
   FortranModuleInfo::setCurrentProject(this);
   FortranModuleInfo::set_inputDirs(this);
 #endif
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+  if (get_experimental_flang_frontend() == true) {
+    FlangModuleInfo::setCurrentProject(this);
+    FlangModuleInfo::set_inputDirs(this);
+  }
+#endif
 
   // Simplify multi-file handling so that a single file is just the trivial
   // case and not a special separate case.
@@ -2507,8 +2513,6 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     int status{-1};
 
 #if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
-    FlangModuleInfo::setCurrentProject(get_project());
-    FlangModuleInfo::set_inputDirs(get_project());
 #endif
 
     vector<string> flangCommandLine;

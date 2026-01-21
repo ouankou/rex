@@ -509,22 +509,18 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     list(APPEND FLANG_INCLUDE_DIRS ${LLVM_INCLUDE_DIRS})
   endif()
   if(NOT FLANG_INCLUDE_DIRS)
-    if(LLVM_INCLUDE_DIRS)
-      set(FLANG_INCLUDE_DIRS "${LLVM_INCLUDE_DIRS}")
-    else()
-      find_program(ROSE_LLVM_CONFIG_EXECUTABLE NAMES llvm-config-20 llvm-config)
-      if(ROSE_LLVM_CONFIG_EXECUTABLE)
-        execute_process(
-          COMMAND ${ROSE_LLVM_CONFIG_EXECUTABLE} --includedir
-          OUTPUT_VARIABLE _rose_llvm_includedir
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-        if(_rose_llvm_includedir)
-          set(FLANG_INCLUDE_DIRS "${_rose_llvm_includedir}")
-        endif()
-        unset(_rose_llvm_includedir)
+    find_program(ROSE_LLVM_CONFIG_EXECUTABLE NAMES llvm-config-20 llvm-config)
+    if(ROSE_LLVM_CONFIG_EXECUTABLE)
+      execute_process(
+        COMMAND ${ROSE_LLVM_CONFIG_EXECUTABLE} --includedir
+        OUTPUT_VARIABLE _rose_llvm_includedir
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+      if(_rose_llvm_includedir)
+        set(FLANG_INCLUDE_DIRS "${_rose_llvm_includedir}")
       endif()
-      unset(ROSE_LLVM_CONFIG_EXECUTABLE)
+      unset(_rose_llvm_includedir)
     endif()
+    unset(ROSE_LLVM_CONFIG_EXECUTABLE)
   endif()
   list(REMOVE_DUPLICATES FLANG_INCLUDE_DIRS)
   set(FLANG_INCLUDE_DIRS "${FLANG_INCLUDE_DIRS}" CACHE INTERNAL "Flang include dirs")

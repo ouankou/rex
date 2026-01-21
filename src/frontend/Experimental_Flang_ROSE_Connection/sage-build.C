@@ -20,6 +20,8 @@
 
 #include <optional>
 
+#include <sstream>
+
 #include <set>
 
 #include <unordered_map>
@@ -216,6 +218,45 @@ std::string symbolKey(const SgName &name, bool caseInsensitive) {
     return name.str();
   }
   return StringUtility::convertToLowerCase(name.str());
+}
+
+std::string formatSourcePosition(const SourcePosition &pos) {
+  if (pos.path.empty() && pos.line <= 0 && pos.column <= 0) {
+    return {};
+  }
+  std::ostringstream out;
+  if (!pos.path.empty()) {
+    out << pos.path;
+  }
+  if (pos.line > 0) {
+    out << ":" << pos.line;
+    if (pos.column > 0) {
+      out << ":" << pos.column;
+    }
+  }
+  return out.str();
+}
+
+std::string formatLocatedNode(const SgLocatedNode *node) {
+  if (node == nullptr) {
+    return {};
+  }
+  const Sg_File_Info *info = node->get_startOfConstruct();
+  if (info == nullptr) {
+    return {};
+  }
+  std::ostringstream out;
+  const std::string &file = info->get_filenameString();
+  if (!file.empty()) {
+    out << file;
+  }
+  if (info->get_line() > 0) {
+    out << ":" << info->get_line();
+    if (info->get_col() > 0) {
+      out << ":" << info->get_col();
+    }
+  }
+  return out.str();
 }
 
 PublicSymbolMap collectPublicSymbols(SgClassDefinition *classDefinition,
@@ -761,8 +802,10 @@ void BuildVisitor::Build(parser::BlockData &x) {
   auto &stmt{std::get<Statement<BlockDataStmt>>(x.t)};
   auto &end{std::get<Statement<EndBlockDataStmt>>(x.t)};
 
-  ROSE_ASSERT(stmt.statement.v);
-  std::string name{stmt.statement.v->ToString()};
+  std::string name;
+  if (stmt.statement.v) {
+    name = stmt.statement.v->ToString();
+  }
   bool haveEndStmt{static_cast<bool>(end.statement.v)};
 
   std::optional<SourcePosition> srcPosBody{
@@ -971,7 +1014,13 @@ void BuildVisitor::CloseLabelDoLoops(const parser::Label &label) {
     SgName labelName(StringUtility::numberToString(label));
     SgLabelSymbol *labelSymbol = labelScope->lookup_label_symbol(labelName);
     if (labelSymbol == nullptr) {
-      std::cerr << "Missing label symbol for DO end label " << label << "\n";
+      const std::string location =
+          formatLocatedNode(isSgLocatedNode(frame.stmt));
+      std::cerr << "Missing label symbol for DO end label " << label;
+      if (!location.empty()) {
+        std::cerr << " at " << location;
+      }
+      std::cerr << ". Ensure the label statement appears in the same scope.\n";
       ROSE_ABORT();
     }
     SgLabelRefExp *ref = SageBuilder::buildLabelRefExp(labelSymbol);
@@ -1491,7 +1540,13 @@ void BuildVisitor::Build(
   if (moduleStmt == nullptr) {
     moduleStmt = FlangModuleInfo::getModule(moduleName);
     if (moduleStmt == nullptr) {
-      std::cerr << "Error: cannot find module '" << moduleName << "'\n";
+      const std::string location = formatSourcePosition(srcBegin);
+      std::cerr << "Error: cannot find module '" << moduleName << "'";
+      if (!location.empty()) {
+        std::cerr << " at " << location;
+      }
+      std::cerr << ". Ensure module files are in the search path (use -I) or "
+                   "available as .rmod/.rcmp.\n";
       ROSE_ABORT();
     }
   }

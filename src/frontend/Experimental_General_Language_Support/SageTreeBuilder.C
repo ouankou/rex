@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+#include <sstream>
+
 constexpr bool TRACE_ATTACH_COMMENT = false;
 
 namespace Rose {
@@ -17,6 +19,30 @@ using namespace LanguageTranslation;
 
 namespace SB = SageBuilder;
 namespace SI = SageInterface;
+
+namespace {
+std::string formatLocatedNode(const SgLocatedNode *node) {
+  if (node == nullptr) {
+    return {};
+  }
+  const Sg_File_Info *info = node->get_startOfConstruct();
+  if (info == nullptr) {
+    return {};
+  }
+  std::ostringstream out;
+  const std::string &file = info->get_filenameString();
+  if (!file.empty()) {
+    out << file;
+  }
+  if (info->get_line() > 0) {
+    out << ":" << info->get_line();
+    if (info->get_col() > 0) {
+      out << ":" << info->get_col();
+    }
+  }
+  return out.str();
+}
+} // namespace
 
 /// Initialize the global scope and push it onto the scope stack
 ///
@@ -331,7 +357,6 @@ void SageTreeBuilder::Leave(SgScopeStatement *scope) {
         SgVariableSymbol *prev_var_sym = prev_var_ref->get_symbol();
         ASSERT_not_null(prev_var_sym);
 
-        SgInitializedName *prev_init_name = prev_var_sym->get_declaration();
         SgNode *prev_parent = prev_var_ref->get_parent();
 
         // There may be more options but only three are known so far
@@ -364,10 +389,14 @@ void SageTreeBuilder::Leave(SgScopeStatement *scope) {
           // The dangling variable reference has been fixed
           it = forward_var_refs_.erase(it);
 
-          // Delete the previous variable reference, symbol and initialized name
-          delete prev_init_name;
-          delete prev_var_sym;
-          delete prev_var_ref;
+          // Detach the placeholder symbol from the scope and leave cleanup to
+          // the normal AST lifecycle.
+          SgScopeStatement *prev_scope = prev_var_sym->get_scope();
+          ASSERT_not_null(prev_scope);
+          if (prev_scope->symbol_exists(prev_var_sym)) {
+            prev_scope->remove_symbol(prev_var_sym);
+          }
+          prev_var_ref->set_parent(nullptr);
         } else {
           // Unexpected previous parent node
           MLOG_WARN_CXX(MLOG_FRONTEND) << "{" << it->first << ": " << it->second
@@ -1701,9 +1730,13 @@ void SageTreeBuilder::Enter(SgVariableDeclaration *&var_decl,
         // explicit variable declaration
         prev_var_ref->set_symbol(var_sym);
 
-        // Delete the previous symbol and initialized name
-        delete prev_var_sym;
-        delete prev_init_name;
+        // Detach the placeholder symbol from the scope and leave cleanup to
+        // the normal AST lifecycle.
+        SgScopeStatement *prev_scope = prev_var_sym->get_scope();
+        ASSERT_not_null(prev_scope);
+        if (prev_scope->symbol_exists(prev_var_sym)) {
+          prev_scope->remove_symbol(prev_var_sym);
+        }
       }
       // Remove all variable refs associated with name
       forward_var_refs_.erase(name);
@@ -1771,8 +1804,13 @@ void SageTreeBuilder::Enter(
 
           prev_var_ref->set_symbol(var_sym);
 
-          delete prev_var_sym;
-          delete prev_init_name;
+          // Detach the placeholder symbol from the scope and leave cleanup to
+          // the normal AST lifecycle.
+          SgScopeStatement *prev_scope = prev_var_sym->get_scope();
+          ASSERT_not_null(prev_scope);
+          if (prev_scope->symbol_exists(prev_var_sym)) {
+            prev_scope->remove_symbol(prev_var_sym);
+          }
         }
         forward_var_refs_.erase(name);
       }
@@ -2081,7 +2119,14 @@ SageTreeBuilder::wrapStmtWithLabels(SgStatement *stmt,
       if (numericValue <= 0) {
         labelSymbol->set_numeric_label_value(labelValue);
       } else if (numericValue != labelValue) {
-        std::cerr << "Mismatched Fortran label value for " << label << "\n";
+        const std::string location = formatLocatedNode(stmt);
+        std::cerr << "Mismatched Fortran label value for " << label
+                  << " (symbol=" << numericValue << ", statement=" << labelValue
+                  << ")";
+        if (!location.empty()) {
+          std::cerr << " at " << location;
+        }
+        std::cerr << "\n";
         ROSE_ABORT();
       }
     }

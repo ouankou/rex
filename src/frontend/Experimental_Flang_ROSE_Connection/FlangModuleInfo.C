@@ -90,7 +90,7 @@ SgModuleStatement *FlangModuleInfo::getModule(const string &modName) {
       (mapIterator != moduleNameAstMap.end()) ? mapIterator->second : nullptr;
 
   size_t numberOfModules_after = moduleNameAstMap.size();
-  ROSE_ASSERT(numberOfModules_before == numberOfModules_after);
+  ROSE_ASSERT(numberOfModules_after >= numberOfModules_before);
 
   if (modStmt != nullptr) {
     if (SgProject::get_verbose() > 1)
