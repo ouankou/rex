@@ -32,8 +32,10 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
               "fortran_flang_support: failed initialize_global_scope");
 
   const char *fc_env = std::getenv("F18_FC");
-  if ((fc_env == nullptr || *fc_env == '\0') && !ROSE_GFORTRAN_PATH.empty()) {
-    setenv("F18_FC", ROSE_GFORTRAN_PATH.c_str(), 0);
+  if (fc_env == nullptr || *fc_env == '\0') {
+    if (!ROSE_GFORTRAN_PATH.empty()) {
+      setenv("F18_FC", ROSE_GFORTRAN_PATH.c_str(), 1);
+    }
   }
 
   status = flang_external_builder_main(argc, argv, srcFile);
