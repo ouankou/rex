@@ -41,11 +41,11 @@
 
 #include <flang/Parser/unparse.h>
 
-#include <flang/Support/Fortran-features.h>
+#include <flang/Common/Fortran-features.h>
 
-#include <flang/Support/LangOptions.h>
+#include <flang/Common/LangOptions.h>
 
-#include <flang/Support/default-kinds.h>
+#include <flang/Common/default-kinds.h>
 
 #include <llvm/Support/Errno.h>
 
@@ -312,7 +312,7 @@ int main(int argc, char *const argv[]) {
 
   DriverOptions driver;
   const char *fc{getenv("F18_FC")};
-  driver.fcArgs.push_back(fc ? fc : "gfortran");
+  driver.fcArgs.push_back(fc ? fc : "flang-20");
 
   std::list<std::string> args{argList(argc, argv)};
   std::string prefix{args.front()};
@@ -321,11 +321,6 @@ int main(int argc, char *const argv[]) {
   driver.prefix = prefix.data();
 
   Fortran::parser::Options options;
-  options.predefinitions.emplace_back("__F18", "1");
-  options.predefinitions.emplace_back("__F18_MAJOR__", "1");
-  options.predefinitions.emplace_back("__F18_MINOR__", "1");
-  options.predefinitions.emplace_back("__F18_PATCHLEVEL__", "1");
-
   options.features.Enable(Fortran::common::LanguageFeature::BackslashEscapes,
                           true);
 

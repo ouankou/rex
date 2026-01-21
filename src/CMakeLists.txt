@@ -248,7 +248,7 @@ set(LINK_FILES
   ${CMAKE_DL_LIBS})
 
 # Depending on which language analysis (frontend) features are enabled in ROSE, we may need some additional libraries.
-if(ENABLE-FORTRAN)
+if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
   list(APPEND LINK_FILES roseFortran)
 endif()
 

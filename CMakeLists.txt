@@ -368,10 +368,10 @@ endif()
 option(ENABLE-FORTRAN "Enable Fortran analysis." OFF)
 
 # JVM-based Open Fortran Parser (OFP) dependency (legacy frontend)
-option(ENABLE-FORTRAN-OFP "Enable JVM-based Open Fortran Parser (OFP) support." ON)
+option(ENABLE-FORTRAN-OFP "Enable JVM-based Open Fortran Parser (OFP) support." OFF)
 
-# Experimental Flang frontend (f18)
-option(ENABLE-FORTRAN-FLANG "Enable experimental Flang frontend (f18) support." OFF)
+# Flang frontend (LLVM 20)
+option(ENABLE-FORTRAN-FLANG "Enable Flang frontend support (LLVM 20)." ON)
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 
 # Legacy tests still reference enable-fortran (lowercase).
@@ -508,7 +508,22 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   if(LLVM_INCLUDE_DIRS)
     list(APPEND FLANG_INCLUDE_DIRS ${LLVM_INCLUDE_DIRS})
   endif()
+  if(NOT FLANG_INCLUDE_DIRS)
+    find_program(ROSE_LLVM_CONFIG_EXECUTABLE NAMES llvm-config-20 llvm-config)
+    if(ROSE_LLVM_CONFIG_EXECUTABLE)
+      execute_process(
+        COMMAND ${ROSE_LLVM_CONFIG_EXECUTABLE} --includedir
+        OUTPUT_VARIABLE _rose_llvm_includedir
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+      if(_rose_llvm_includedir)
+        set(FLANG_INCLUDE_DIRS "${_rose_llvm_includedir}")
+      endif()
+      unset(_rose_llvm_includedir)
+    endif()
+    unset(ROSE_LLVM_CONFIG_EXECUTABLE)
+  endif()
   list(REMOVE_DUPLICATES FLANG_INCLUDE_DIRS)
+  set(FLANG_INCLUDE_DIRS "${FLANG_INCLUDE_DIRS}" CACHE INTERNAL "Flang include dirs")
 
   set(_flang_lib_names FortranCommon FortranParser FortranSemantics
     FortranEvaluate FortranLower FortranRuntime FortranDecimal)
@@ -528,6 +543,14 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   endforeach()
   if(_flang_missing)
     message(FATAL_ERROR "Flang libraries not found: ${_flang_missing}. Set -DFLANG_ROOT=... or disable ENABLE-FORTRAN-FLANG.")
+  endif()
+
+  include(TestBigEndian)
+  test_big_endian(ROSE_FLANG_BIG_ENDIAN)
+  if(ROSE_FLANG_BIG_ENDIAN)
+    set(ROSE_FLANG_ENDIAN_DEFINES FLANG_BIG_ENDIAN=1)
+  else()
+    set(ROSE_FLANG_ENDIAN_DEFINES FLANG_LITTLE_ENDIAN=1)
   endif()
 
   add_compile_definitions(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
@@ -1378,6 +1401,8 @@ set(ROSE_SOURCE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astTokenStream
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astHiddenTypeAndDeclarationLists
   ${ROSE_TOP_SRC_DIR}/src/frontend/OpenFortranParser_SAGE_Connection
+  ${ROSE_TOP_SRC_DIR}/src/frontend/Experimental_Flang_ROSE_Connection
+  ${ROSE_TOP_SRC_DIR}/src/frontend/Experimental_General_Language_Support
   ${ROSE_TOP_SRC_DIR}/src/frontend
   ${ROSE_TOP_SRC_DIR}/src/backend/unparser
   ${ROSE_TOP_SRC_DIR}/src/backend/unparser/formatSupport

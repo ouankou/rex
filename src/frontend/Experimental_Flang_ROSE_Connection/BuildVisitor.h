@@ -1,5 +1,9 @@
 #pragma once
 
+#include <optional>
+
+#include <vector>
+
 namespace Rose::builder {
 
 class BuildVisitor {
@@ -22,6 +26,9 @@ public:
     }
   }
   template <typename T> void Post(Fortran::parser::Statement<T> &x) {
+    if (label_) {
+      CloseLabelDoLoops(label_.value());
+    }
     label_ = std::nullopt;
   }
 
@@ -118,6 +125,8 @@ public:
   // SpecificationPart
   void Build(Fortran::parser::ImplicitStmt &);
   void Build(Fortran::parser::CommonStmt &);
+  void Build(Fortran::parser::Statement<
+             Fortran::common::Indirection<Fortran::parser::UseStmt>> &);
   void Build(Fortran::parser::TypeDeclarationStmt &);
 
   // SpecificationConstruct
@@ -138,6 +147,7 @@ public:
   // ExecutionPart
   void Build(Fortran::parser::AssignmentStmt &);
   void Build(Fortran::parser::DoConstruct &);
+  void Build(Fortran::parser::LabelDoStmt &);
 
   // ActionStmt
   void Build(Fortran::parser::ContinueStmt &);
@@ -181,9 +191,19 @@ public:
   }
 
 private:
+  struct LabelDoFrame {
+    enum class Kind { FortranDo, While };
+    Fortran::parser::Label end_label;
+    Kind kind;
+    SgStatement *stmt;
+  };
+
+  void CloseLabelDoLoops(const Fortran::parser::Label &label);
+
   Fortran::parser::AllCookedSources *cooked_;
   SgType *type_; // synthesized attribute
   std::optional<Fortran::parser::Label> label_;
+  std::vector<LabelDoFrame> label_do_stack_;
 
 }; // BuildVisitor
 

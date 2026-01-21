@@ -171,6 +171,8 @@ public:
 
   void Enter(SgDerivedTypeStatement *&, const std::string &);
   void Leave(SgDerivedTypeStatement *);
+  void Leave(SgDerivedTypeStatement *,
+             std::list<LanguageTranslation::ExpressionKind> &);
 
   void Enter(SgVariableDeclaration *&, const std::string &, SgType *,
              SgExpression *);
@@ -231,6 +233,7 @@ public:
 
   void Enter(SgReturnStmt *&, const std::optional<SgExpression *> &);
   void Leave(SgReturnStmt *);
+  void Leave(SgReturnStmt *, const std::vector<std::string> &);
 
   void Enter(SgCaseOptionStmt *&, SgExprListExp *);
   void Leave(SgCaseOptionStmt *);

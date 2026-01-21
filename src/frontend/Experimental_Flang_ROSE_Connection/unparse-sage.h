@@ -19,7 +19,7 @@
 
 #include <iosfwd>
 
-#include <flang/Support/LangOptions.h>
+#include <flang/Common/LangOptions.h>
 namespace llvm {
 class raw_ostream;
 }

@@ -13,7 +13,7 @@
 // By default, runs the supplied source files through the F18 preprocessing and
 // parsing phases, reconstitutes a Fortran program from the parse tree, and
 // passes that Fortran program to a Fortran compiler identified by the $F18_FC
-// environment variable (defaulting to gfortran).  The Fortran preprocessor is
+// environment variable (defaulting to flang-20).  The Fortran preprocessor is
 // always run, whatever the case of the source file extension.  Unrecognized
 // options are passed through to the underlying Fortran compiler.
 //
@@ -84,7 +84,7 @@ std::string CompileOtherLanguage(const std::string &path,
 }
 
 std::string CompileFortran(const std::string &path,
-                           const Fortran::parser::Options &options,
+                           const Fortran::parser::Options &optionsIn,
                            const DriverOptions &driver) {
   // TODO: should be able to use -o to set object file name
   // TODO: support Unicode names in filesystem?
@@ -92,51 +92,48 @@ std::string CompileFortran(const std::string &path,
     llvm::errs() << "Compiling \"" << path << "\"\n";
   }
 
-  auto extension{path.substr(path.rfind(".") + 1)};
-  auto pathBuf{path};
-  std::string cookedPath{path};
-  llvm::raw_ostream *cooked{nullptr};
-  if (!driver.noReformat) {
-    // Preprocess, reformat, and write to a temporary file.
-    // Preprocessor doesn't respect -o, so we handle that.
-    std::string tmpPath;
-    {
-      llvm::SmallVector<char, 32> tmp;
-      llvm::sys::fs::createTemporaryFile("f18", "f90", tmp);
-      tmpPath = llvm::StringRef(tmp.data(), tmp.size());
-    }
-    auto pstatus{
-        Fortran::parser::Preprocess(path, tmpPath, driver.searchDirectories)};
-    if (pstatus != EXIT_SUCCESS) {
-      std::exit(EXIT_FAILURE);
-    }
-    cookedPath = tmpPath;
-    auto fd = llvm::sys::fs::openFileForRead(tmpPath);
-    if (!fd) {
-      llvm::errs() << "f18-parse-demo: could not open " << tmpPath << "\n";
-      std::exit(EXIT_FAILURE);
-    }
-    filesToDelete.push_back(tmpPath);
-    auto tmp = llvm::make_unique<llvm::raw_fd_ostream>(*fd, false);
-    cooked = tmp.get();
+  Fortran::parser::Options options{optionsIn};
+  options.searchDirectories = driver.searchDirectories;
+  options.encoding = driver.encoding;
+  options.expandIncludeLinesInPreprocessedOutput = driver.lineDirectives;
+
+  Fortran::parser::AllSources allSources;
+  allSources.set_encoding(driver.encoding);
+  allSources.setShowColors(options.showColors);
+  Fortran::parser::AllCookedSources allCookedSources{allSources};
+  Fortran::parser::Parsing parsing{allCookedSources};
+
+  parsing.Prescan(path, options);
+
+  auto &messages = parsing.messages();
+  messages.ResolveProvenances(parsing.allCooked());
+  if (!messages.empty()) {
+    messages.Emit(llvm::errs(), parsing.allCooked());
+  }
+  if (messages.AnyFatalError()) {
+    return {};
   }
 
-  Fortran::parser::AllCookedSources allCookedSources;
-  Fortran::parser::Parsing parsing{allCookedSources, driver.encoding};
-  parsing.Prescan(cookedPath, driver.searchDirectories, driver.lineDirectives,
-                  cooked);
-  parsing.Parse(options);
-
-  int exitStatus{EXIT_SUCCESS};
-  if (auto msgs{parsing.messages()}) {
-    Fortran::parser::ShowMessages(llvm::errs(), *msgs,
-                                  parsing.allCookedSources());
-    if (msgs->AnyFatalError()) {
-      exitStatus = EXIT_FAILURE;
-      return {};
-    }
+  if (options.prescanAndReformat) {
+    parsing.EmitPreprocessedSource(llvm::outs(), driver.lineDirectives);
+    return {};
   }
-  auto &parseTree{*parsing.parseTree()};
+
+  parsing.Parse(llvm::nulls());
+
+  messages.ResolveProvenances(parsing.allCooked());
+  if (!messages.empty()) {
+    messages.Emit(llvm::errs(), parsing.allCooked());
+  }
+  if (messages.AnyFatalError()) {
+    return {};
+  }
+
+  auto &parseTreeOpt = parsing.parseTree();
+  if (!parseTreeOpt) {
+    return {};
+  }
+  auto &parseTree{*parseTreeOpt};
 
   // Transform the parse tree using Rose::builder
   if (driver.externalBuilder) {
@@ -154,12 +151,11 @@ std::string CompileFortran(const std::string &path,
     return {};
   }
   if (driver.dumpParseTree) {
-    Fortran::parser::DumpParseTree(llvm::outs(), parseTree);
+    Fortran::parser::DumpTree(llvm::outs(), parseTree);
     return {};
   }
   if (driver.dumpUnparse) {
-    Unparse(llvm::outs(), parseTree, driver.langOpts, driver.encoding,
-            true /*capitalize*/,
+    Unparse(llvm::outs(), parseTree, driver.encoding, true /*capitalize*/,
             options.features.IsEnabled(
                 Fortran::common::LanguageFeature::BackslashEscapes));
     return {};
@@ -176,15 +172,17 @@ std::string CompileFortran(const std::string &path,
       llvm::sys::fs::createTemporaryFile("f18", "f90", tmp);
       tmpPath = llvm::StringRef(tmp.data(), tmp.size());
     }
-    auto fd = llvm::sys::fs::openFileForRead(tmpPath);
-    if (!fd) {
-      llvm::errs() << "f18-parse-demo: could not open " << tmpPath << "\n";
+    int fd = -1;
+    if (std::error_code ec = llvm::sys::fs::openFileForWrite(
+            tmpPath, fd, llvm::sys::fs::CD_CreateAlways,
+            llvm::sys::fs::OF_Text)) {
+      llvm::errs() << "f18-parse-demo: could not open " << tmpPath << ": "
+                   << ec.message() << "\n";
       std::exit(EXIT_FAILURE);
     }
     filesToDelete.push_back(tmpPath);
     llvm::raw_fd_ostream tmpSource(fd, /*shouldClose*/ true);
-    Unparse(tmpSource, parseTree, driver.langOpts, driver.encoding,
-            true /*capitalize*/,
+    Unparse(tmpSource, parseTree, driver.encoding, true /*capitalize*/,
             options.features.IsEnabled(
                 Fortran::common::LanguageFeature::BackslashEscapes));
     unparsedPath = tmpPath;
@@ -209,8 +207,8 @@ std::string CompileFortran(const std::string &path,
     }
   }
   argv.push_back(objectPath);
-  for (auto &arg : driver.fcArgs) {
-    argv.push_back(arg);
+  for (size_t i = 1; i < driver.fcArgs.size(); ++i) {
+    argv.push_back(driver.fcArgs[i]);
   }
   Exec(argv, driver.verbose);
   if (driver.compileOnly) {
@@ -230,8 +228,8 @@ void Link(const std::vector<std::string> &relocatables,
   }
   std::vector<llvm::StringRef> argv;
   argv.push_back(driver.fcArgs[0]);
-  for (auto &arg : driver.fcArgs) {
-    argv.push_back(arg);
+  for (size_t i = 1; i < driver.fcArgs.size(); ++i) {
+    argv.push_back(driver.fcArgs[i]);
   }
   for (auto &path : relocatables) {
     argv.push_back(path);
@@ -247,10 +245,8 @@ int flang_external_builder_main(int argc, char *const argv[],
                                 SgSourceFile *roseSourceFile) {
   atexit(CleanUpAtExit);
 
-  // The SageTreeBuilder must be initialized before using it via
-  // getSageTreeBuilder()
-  initSageTreeBuilder(roseSourceFile,
-                      Rose::builder::SageTreeBuilder::LanguageEnum::Fortran);
+  // The SageTreeBuilder must be initialized before using it.
+  Rose::builder::setSgSourceFile(roseSourceFile);
 
   // Initialize Flang command-line arguments
   DriverContext ctx{};

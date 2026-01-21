@@ -1,9 +1,6 @@
 #ifndef ROSE_BUILDER_BUILD_H_
 #define ROSE_BUILDER_BUILD_H_
 
-// HACK-TMP-TODO
-#define FLANG_LITTLE_ENDIAN 1
-
 // Using this macro to make unneeded build (not in visitor) functions go away
 #define USE_DEPRECATED 0
 

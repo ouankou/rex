@@ -1,6 +1,8 @@
 #ifndef POS_INFO_H_
 #define POS_INFO_H_
 
+#include <ostream>
+
 class SgLocatedNode;
 
 namespace Rose {
