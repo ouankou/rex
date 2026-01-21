@@ -150,7 +150,7 @@ extendSourceRangeWithTrailingSemicolon(clang::SourceRange range,
 std::string getFloatingLiteralSpelling(const clang::FloatingLiteral *literal,
                                        clang::SourceManager &sm,
                                        const clang::LangOptions &lang_opts) {
-  if (literal == NULL) {
+  if (literal == nullptr) {
     return "";
   }
 
@@ -195,7 +195,7 @@ std::string getFloatingLiteralSpelling(const clang::FloatingLiteral *literal,
 std::string getIntegerLiteralSpelling(const clang::IntegerLiteral *literal,
                                       clang::SourceManager &sm,
                                       const clang::LangOptions &lang_opts) {
-  if (literal == NULL) {
+  if (literal == nullptr) {
     return "";
   }
 
@@ -238,16 +238,17 @@ std::string getIntegerLiteralSpelling(const clang::IntegerLiteral *literal,
 }
 
 SgSymbol *findEnclosingThisSymbol(SgScopeStatement *starting_scope) {
-  for (SgNode *node = starting_scope; node != NULL; node = node->get_parent()) {
+  for (SgNode *node = starting_scope; node != nullptr;
+       node = node->get_parent()) {
     SgClassDefinition *class_def = isSgClassDefinition(node);
-    if (class_def == NULL) {
+    if (class_def == nullptr) {
       continue;
     }
 
     SgClassDeclaration *class_decl = class_def->get_declaration();
-    ROSE_ASSERT(class_decl != NULL);
+    ROSE_ASSERT(class_decl != nullptr);
     SgScopeStatement *decl_scope = class_decl->get_scope();
-    ROSE_ASSERT(decl_scope != NULL);
+    ROSE_ASSERT(decl_scope != nullptr);
 
     if (SgClassSymbol *class_sym =
             SageInterface::lookupClassSymbolInParentScopes(
@@ -261,7 +262,8 @@ SgSymbol *findEnclosingThisSymbol(SgScopeStatement *starting_scope) {
     }
 
     if (SgSymbol *sym = class_decl->search_for_symbol_from_symbol_table()) {
-      if (isSgClassSymbol(sym) != NULL || isSgNonrealSymbol(sym) != NULL) {
+      if (isSgClassSymbol(sym) != nullptr ||
+          isSgNonrealSymbol(sym) != nullptr) {
         return sym;
       }
     }
@@ -269,7 +271,7 @@ SgSymbol *findEnclosingThisSymbol(SgScopeStatement *starting_scope) {
     break;
   }
 
-  return NULL;
+  return nullptr;
 }
 
 std::string trimWhitespace(const std::string &input) {
@@ -560,30 +562,30 @@ void attachExplicitQualifierFromNestedName(
 }
 
 SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
-  if (scope == NULL) {
-    return NULL;
+  if (scope == nullptr) {
+    return nullptr;
   }
 
   SgNamespaceDefinitionStatement *ns_def =
       isSgNamespaceDefinitionStatement(scope);
-  if (ns_def == NULL) {
+  if (ns_def == nullptr) {
     return scope;
   }
 
   SgNamespaceDeclarationStatement *ns_decl = ns_def->get_namespaceDeclaration();
-  if (ns_decl == NULL) {
+  if (ns_decl == nullptr) {
     return scope;
   }
 
   SgNamespaceDeclarationStatement *first_nondef =
       isSgNamespaceDeclarationStatement(
           ns_decl->get_firstNondefiningDeclaration());
-  if (first_nondef == NULL) {
+  if (first_nondef == nullptr) {
     return scope;
   }
 
   SgNamespaceDefinitionStatement *first_def = first_nondef->get_definition();
-  return first_def != NULL ? first_def : scope;
+  return first_def != nullptr ? first_def : scope;
 }
 
 bool isSkippableLineBetweenPragmaAndStatement(const std::string &trimmed_line) {
@@ -715,145 +717,145 @@ ClangToSageTranslator::buildNonrealRefExpFromNestedNameSpecifier(
 }
 
 SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
-  if (stmt == NULL)
-    return NULL;
+  if (stmt == nullptr)
+    return nullptr;
 
   std::map<clang::Stmt *, SgNode *>::iterator it =
       p_stmt_translation_map.find(stmt);
   if (it != p_stmt_translation_map.end())
     return it->second;
 
-  SgNode *result = NULL;
+  SgNode *result = nullptr;
   bool ret_status = false;
 
   switch (stmt->getStmtClass()) {
   case clang::Stmt::GCCAsmStmtClass:
     ret_status = VisitGCCAsmStmt((clang::GCCAsmStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::MSAsmStmtClass:
     ret_status = VisitMSAsmStmt((clang::MSAsmStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::BreakStmtClass:
     ret_status = VisitBreakStmt((clang::BreakStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CapturedStmtClass:
     ret_status = VisitCapturedStmt((clang::CapturedStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CompoundStmtClass:
     ret_status = VisitCompoundStmt((clang::CompoundStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ContinueStmtClass:
     ret_status = VisitContinueStmt((clang::ContinueStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CoreturnStmtClass:
     ret_status = VisitCoreturnStmt((clang::CoreturnStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXCatchStmtClass:
     ret_status = VisitCXXCatchStmt((clang::CXXCatchStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXForRangeStmtClass:
     ret_status = VisitCXXForRangeStmt((clang::CXXForRangeStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXTryStmtClass:
     ret_status = VisitCXXTryStmt((clang::CXXTryStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::DeclStmtClass:
     ret_status = VisitDeclStmt((clang::DeclStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::DoStmtClass:
     ret_status = VisitDoStmt((clang::DoStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ForStmtClass:
     ret_status = VisitForStmt((clang::ForStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::GotoStmtClass:
     ret_status = VisitGotoStmt((clang::GotoStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::IfStmtClass:
     ret_status = VisitIfStmt((clang::IfStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::IndirectGotoStmtClass:
     ret_status =
         VisitIndirectGotoStmt((clang::IndirectGotoStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::MSDependentExistsStmtClass:
     ret_status = VisitMSDependentExistsStmt(
         (clang::MSDependentExistsStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::NullStmtClass:
     ret_status = VisitNullStmt((clang::NullStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPAtomicDirectiveClass:
     ret_status =
         VisitOMPAtomicDirective((clang::OMPAtomicDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPBarrierDirectiveClass:
     ret_status =
         VisitOMPBarrierDirective((clang::OMPBarrierDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPCancellationPointDirectiveClass:
     ret_status = VisitOMPCancellationPointDirective(
         (clang::OMPCancellationPointDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPCriticalDirectiveClass:
     ret_status =
         VisitOMPCriticalDirective((clang::OMPCriticalDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPFlushDirectiveClass:
     ret_status =
         VisitOMPFlushDirective((clang::OMPFlushDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPDistributeDirectiveClass:
     ret_status = VisitOMPDistributeDirective(
         (clang::OMPDistributeDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPDistributeParallelForDirectiveClass:
     ret_status = VisitOMPDistributeParallelForDirective(
         (clang::OMPDistributeParallelForDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPDistributeParallelForSimdDirectiveClass:
     ret_status = VisitOMPDistributeParallelForSimdDirective(
         (clang::OMPDistributeParallelForSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPDistributeSimdDirectiveClass:
     ret_status = VisitOMPDistributeSimdDirective(
         (clang::OMPDistributeSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPForDirectiveClass:
     ret_status = VisitOMPForDirective((clang::OMPForDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPForSimdDirectiveClass:
     ret_status =
         VisitOMPForSimdDirective((clang::OMPForSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   // case clang::Stmt::OMPMasterTaskLoopDirectiveClass:
   //     ret_status =
@@ -866,12 +868,12 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   case clang::Stmt::OMPParallelForDirectiveClass:
     ret_status = VisitOMPParallelForDirective(
         (clang::OMPParallelForDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPParallelForSimdDirectiveClass:
     ret_status = VisitOMPParallelForSimdDirective(
         (clang::OMPParallelForSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   // case clang::Stmt::OMPParallelMasterTaskLoopDirectiveClass:
   //     ret_status =
@@ -880,27 +882,27 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   case clang::Stmt::OMPSimdDirectiveClass:
     ret_status =
         VisitOMPSimdDirective((clang::OMPSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPTargetParallelForDirectiveClass:
     ret_status = VisitOMPTargetParallelForDirective(
         (clang::OMPTargetParallelForDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPTargetParallelForSimdDirectiveClass:
     ret_status = VisitOMPTargetParallelForSimdDirective(
         (clang::OMPTargetParallelForSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPTargetSimdDirectiveClass:
     ret_status = VisitOMPTargetSimdDirective(
         (clang::OMPTargetSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPTargetTeamsDistributeDirectiveClass:
     ret_status = VisitOMPTargetTeamsDistributeDirective(
         (clang::OMPTargetTeamsDistributeDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   // case clang::Stmt::OMPTargetTeamsDistributeParallelForSimdDirectiveClass:
   //     ret_status =
@@ -909,17 +911,17 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   case clang::Stmt::OMPTargetTeamsDistributeSimdDirectiveClass:
     ret_status = VisitOMPTargetTeamsDistributeSimdDirective(
         (clang::OMPTargetTeamsDistributeSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPTaskLoopDirectiveClass:
     ret_status =
         VisitOMPTaskLoopDirective((clang::OMPTaskLoopDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPTaskLoopSimdDirectiveClass:
     ret_status = VisitOMPTaskLoopSimdDirective(
         (clang::OMPTaskLoopSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   // case clang::Stmt::OMPTeamDistributeDirectiveClass:
   //     ret_status =
@@ -936,182 +938,182 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   case clang::Stmt::OMPMasterDirectiveClass:
     ret_status =
         VisitOMPMasterDirective((clang::OMPMasterDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPOrderedDirectiveClass:
     ret_status =
         VisitOMPOrderedDirective((clang::OMPOrderedDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPParallelDirectiveClass:
     ret_status =
         VisitOMPParallelDirective((clang::OMPParallelDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OMPParallelSectionsDirectiveClass:
     ret_status = VisitOMPParallelSectionsDirective(
         (clang::OMPParallelSectionsDirective *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ReturnStmtClass:
     ret_status = VisitReturnStmt((clang::ReturnStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SEHExceptStmtClass:
     ret_status = VisitSEHExceptStmt((clang::SEHExceptStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SEHFinallyStmtClass:
     ret_status = VisitSEHFinallyStmt((clang::SEHFinallyStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SEHLeaveStmtClass:
     ret_status = VisitSEHLeaveStmt((clang::SEHLeaveStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SEHTryStmtClass:
     ret_status = VisitSEHTryStmt((clang::SEHTryStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CaseStmtClass:
     ret_status = VisitCaseStmt((clang::CaseStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::DefaultStmtClass:
     ret_status = VisitDefaultStmt((clang::DefaultStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SwitchStmtClass:
     ret_status = VisitSwitchStmt((clang::SwitchStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::AttributedStmtClass:
     ret_status = VisitAttributedStmt((clang::AttributedStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::BinaryConditionalOperatorClass:
     ret_status = VisitBinaryConditionalOperator(
         (clang::BinaryConditionalOperator *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ConditionalOperatorClass:
     ret_status =
         VisitConditionalOperator((clang::ConditionalOperator *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::AddrLabelExprClass:
     ret_status = VisitAddrLabelExpr((clang::AddrLabelExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ArrayInitIndexExprClass:
     ret_status =
         VisitArrayInitIndexExpr((clang::ArrayInitIndexExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ArrayInitLoopExprClass:
     ret_status =
         VisitArrayInitLoopExpr((clang::ArrayInitLoopExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ArraySubscriptExprClass:
     ret_status =
         VisitArraySubscriptExpr((clang::ArraySubscriptExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ArrayTypeTraitExprClass:
     ret_status =
         VisitArrayTypeTraitExpr((clang::ArrayTypeTraitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::AsTypeExprClass:
     ret_status = VisitAsTypeExpr((clang::AsTypeExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::AtomicExprClass:
     ret_status = VisitAtomicExpr((clang::AtomicExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CompoundAssignOperatorClass:
     ret_status = VisitCompoundAssignOperator(
         (clang::CompoundAssignOperator *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::BlockExprClass:
     ret_status = VisitBlockExpr((clang::BlockExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CUDAKernelCallExprClass:
     ret_status =
         VisitCUDAKernelCallExpr((clang::CUDAKernelCallExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXMemberCallExprClass:
     ret_status =
         VisitCXXMemberCallExpr((clang::CXXMemberCallExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXOperatorCallExprClass:
     ret_status =
         VisitCXXOperatorCallExpr((clang::CXXOperatorCallExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::UserDefinedLiteralClass:
     ret_status =
         VisitUserDefinedLiteral((clang::UserDefinedLiteral *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::BuiltinBitCastExprClass:
     ret_status =
         VisitBuiltinBitCastExpr((clang::BuiltinBitCastExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CStyleCastExprClass:
     ret_status = VisitCStyleCastExpr((clang::CStyleCastExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXFunctionalCastExprClass:
     ret_status = VisitCXXFunctionalCastExpr(
         (clang::CXXFunctionalCastExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXConstCastExprClass:
     ret_status =
         VisitCXXConstCastExpr((clang::CXXConstCastExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXDynamicCastExprClass:
     ret_status =
         VisitCXXDynamicCastExpr((clang::CXXDynamicCastExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXReinterpretCastExprClass:
     ret_status = VisitCXXReinterpretCastExpr(
         (clang::CXXReinterpretCastExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXStaticCastExprClass:
     ret_status =
         VisitCXXStaticCastExpr((clang::CXXStaticCastExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ImplicitCastExprClass:
     ret_status =
         VisitImplicitCastExpr((clang::ImplicitCastExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CharacterLiteralClass:
     ret_status =
         VisitCharacterLiteral((clang::CharacterLiteral *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ChooseExprClass:
     ret_status = VisitChooseExpr((clang::ChooseExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CompoundLiteralExprClass:
     ret_status =
         VisitCompoundLiteralExpr((clang::CompoundLiteralExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   // case clang::Stmt::ConceptSpecializationExprClass:
   //     ret_status =
@@ -1120,81 +1122,81 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   case clang::Stmt::ConvertVectorExprClass:
     ret_status =
         VisitConvertVectorExpr((clang::ConvertVectorExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CoawaitExprClass:
     ret_status = VisitCoawaitExpr((clang::CoawaitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CoyieldExprClass:
     ret_status = VisitCoyieldExpr((clang::CoyieldExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXBindTemporaryExprClass:
     ret_status =
         VisitCXXBindTemporaryExpr((clang::CXXBindTemporaryExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXBoolLiteralExprClass:
     ret_status =
         VisitCXXBoolLiteralExpr((clang::CXXBoolLiteralExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXConstructExprClass:
     ret_status =
         VisitCXXConstructExpr((clang::CXXConstructExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXTemporaryObjectExprClass:
     ret_status = VisitCXXTemporaryObjectExpr(
         (clang::CXXTemporaryObjectExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXDefaultArgExprClass:
     ret_status =
         VisitCXXDefaultArgExpr((clang::CXXDefaultArgExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXDefaultInitExprClass:
     ret_status =
         VisitCXXDefaultInitExpr((clang::CXXDefaultInitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXDeleteExprClass:
     ret_status = VisitCXXDeleteExpr((clang::CXXDeleteExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXDependentScopeMemberExprClass:
     ret_status = VisitCXXDependentScopeMemberExpr(
         (clang::CXXDependentScopeMemberExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXFoldExprClass:
     ret_status = VisitCXXFoldExpr((clang::CXXFoldExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXInheritedCtorInitExprClass:
     ret_status = VisitCXXInheritedCtorInitExpr(
         (clang::CXXInheritedCtorInitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXNewExprClass:
     ret_status = VisitCXXNewExpr((clang::CXXNewExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXNoexceptExprClass:
     ret_status = VisitCXXNoexceptExpr((clang::CXXNoexceptExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXNullPtrLiteralExprClass:
     ret_status = VisitCXXNullPtrLiteralExpr(
         (clang::CXXNullPtrLiteralExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXPseudoDestructorExprClass:
     ret_status = VisitCXXPseudoDestructorExpr(
         (clang::CXXPseudoDestructorExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   // case clang::Stmt::CXXRewrittenBinaryOperatorClass:
   //     ret_status =
@@ -1203,258 +1205,258 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   case clang::Stmt::CXXScalarValueInitExprClass:
     ret_status = VisitCXXScalarValueInitExpr(
         (clang::CXXScalarValueInitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXStdInitializerListExprClass:
     ret_status = VisitCXXStdInitializerListExpr(
         (clang::CXXStdInitializerListExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXThisExprClass:
     ret_status = VisitCXXThisExpr((clang::CXXThisExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXThrowExprClass:
     ret_status = VisitCXXThrowExpr((clang::CXXThrowExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXTypeidExprClass:
     ret_status = VisitCXXTypeidExpr((clang::CXXTypeidExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXUnresolvedConstructExprClass:
     ret_status = VisitCXXUnresolvedConstructExpr(
         (clang::CXXUnresolvedConstructExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXUuidofExprClass:
     ret_status = VisitCXXUuidofExpr((clang::CXXUuidofExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::DeclRefExprClass:
     ret_status = VisitDeclRefExpr((clang::DeclRefExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::DependentCoawaitExprClass:
     ret_status =
         VisitDependentCoawaitExpr((clang::DependentCoawaitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::DependentScopeDeclRefExprClass:
     ret_status = VisitDependentScopeDeclRefExpr(
         (clang::DependentScopeDeclRefExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::DesignatedInitExprClass:
     ret_status =
         VisitDesignatedInitExpr((clang::DesignatedInitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::DesignatedInitUpdateExprClass:
     ret_status = VisitDesignatedInitUpdateExpr(
         (clang::DesignatedInitUpdateExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ExpressionTraitExprClass:
     ret_status =
         VisitExpressionTraitExpr((clang::ExpressionTraitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ExtVectorElementExprClass:
     ret_status =
         VisitExtVectorElementExpr((clang::ExtVectorElementExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::FixedPointLiteralClass:
     ret_status =
         VisitFixedPointLiteral((clang::FixedPointLiteral *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::FloatingLiteralClass:
     ret_status = VisitFloatingLiteral((clang::FloatingLiteral *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ConstantExprClass:
     ret_status = VisitConstantExpr((clang::ConstantExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ExprWithCleanupsClass:
     ret_status =
         VisitExprWithCleanups((clang::ExprWithCleanups *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::FunctionParmPackExprClass:
     ret_status =
         VisitFunctionParmPackExpr((clang::FunctionParmPackExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::GenericSelectionExprClass:
     ret_status =
         VisitGenericSelectionExpr((clang::GenericSelectionExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::GNUNullExprClass:
     ret_status = VisitGNUNullExpr((clang::GNUNullExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ImaginaryLiteralClass:
     ret_status =
         VisitImaginaryLiteral((clang::ImaginaryLiteral *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ImplicitValueInitExprClass:
     ret_status = VisitImplicitValueInitExpr(
         (clang::ImplicitValueInitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::InitListExprClass:
     ret_status = VisitInitListExpr((clang::InitListExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::IntegerLiteralClass:
     ret_status = VisitIntegerLiteral((clang::IntegerLiteral *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::LambdaExprClass:
     ret_status = VisitLambdaExpr((clang::LambdaExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::MaterializeTemporaryExprClass:
     ret_status = VisitMaterializeTemporaryExpr(
         (clang::MaterializeTemporaryExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::MemberExprClass:
     ret_status = VisitMemberExpr((clang::MemberExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::MSPropertyRefExprClass:
     ret_status =
         VisitMSPropertyRefExpr((clang::MSPropertyRefExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::MSPropertySubscriptExprClass:
     ret_status = VisitMSPropertySubscriptExpr(
         (clang::MSPropertySubscriptExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::NoInitExprClass:
     ret_status = VisitNoInitExpr((clang::NoInitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OffsetOfExprClass:
     ret_status = VisitOffsetOfExpr((clang::OffsetOfExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ArraySectionExprClass:
     ret_status =
         VisitOMPArraySectionExpr((clang::ArraySectionExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OpaqueValueExprClass:
     ret_status = VisitOpaqueValueExpr((clang::OpaqueValueExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::UnresolvedLookupExprClass:
     ret_status =
         VisitUnresolvedLookupExpr((clang::UnresolvedLookupExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::UnresolvedMemberExprClass:
     ret_status =
         VisitUnresolvedMemberExpr((clang::UnresolvedMemberExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::PackExpansionExprClass:
     ret_status =
         VisitPackExpansionExpr((clang::PackExpansionExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ParenExprClass:
     ret_status = VisitParenExpr((clang::ParenExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ParenListExprClass:
     ret_status = VisitParenListExpr((clang::ParenListExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::PredefinedExprClass:
     ret_status = VisitPredefinedExpr((clang::PredefinedExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::PseudoObjectExprClass:
     ret_status =
         VisitPseudoObjectExpr((clang::PseudoObjectExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ShuffleVectorExprClass:
     ret_status =
         VisitShuffleVectorExpr((clang::ShuffleVectorExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SizeOfPackExprClass:
     ret_status = VisitSizeOfPackExpr((clang::SizeOfPackExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SourceLocExprClass:
     ret_status = VisitSourceLocExpr((clang::SourceLocExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::StmtExprClass:
     ret_status = VisitStmtExpr((clang::StmtExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::StringLiteralClass:
     ret_status = VisitStringLiteral((clang::StringLiteral *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SubstNonTypeTemplateParmPackExprClass:
     ret_status = VisitSubstNonTypeTemplateParmPackExpr(
         (clang::SubstNonTypeTemplateParmPackExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::SubstNonTypeTemplateParmExprClass:
     ret_status = VisitSubstNonTypeTemplateParmExpr(
         (clang::SubstNonTypeTemplateParmExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::TypeTraitExprClass:
     ret_status = VisitTypeTraitExpr((clang::TypeTraitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   // TypoExpr was removed in LLVM 20
   // case clang::Stmt::TypoExprClass:
   //     ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, &result);
-  //     ROSE_ASSERT(result != NULL);
+  //     ROSE_ASSERT(result != nullptr);
   //     break;
   case clang::Stmt::UnaryExprOrTypeTraitExprClass:
     ret_status = VisitUnaryExprOrTypeTraitExpr(
         (clang::UnaryExprOrTypeTraitExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::VAArgExprClass:
     ret_status = VisitVAArgExpr((clang::VAArgExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::LabelStmtClass:
     ret_status = VisitLabelStmt((clang::LabelStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::WhileStmtClass:
     ret_status = VisitWhileStmt((clang::WhileStmt *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::UnaryOperatorClass:
     ret_status = VisitUnaryOperator((clang::UnaryOperator *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CallExprClass:
     ret_status = VisitCallExpr((clang::CallExpr *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::BinaryOperatorClass:
     ret_status = VisitBinaryOperator((clang::BinaryOperator *)stmt, &result);
-    ROSE_ASSERT(result != NULL);
+    ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::RecoveryExprClass:
     // CLANG FRONTEND FIX: Use SgNullExpression instead of SgIntVal(42) for
@@ -1474,7 +1476,7 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     ROSE_ABORT();
   }
 
-  ROSE_ASSERT(result != NULL);
+  ROSE_ASSERT(result != nullptr);
 
   p_stmt_translation_map.insert(
       std::pair<clang::Stmt *, SgNode *>(stmt, result));
@@ -1491,7 +1493,7 @@ bool ClangToSageTranslator::VisitStmt(clang::Stmt *stmt, SgNode **node) {
   std::cerr << "ClangToSageTranslator::VisitStmt" << std::endl;
 #endif
 
-  if (*node == NULL) {
+  if (*node == nullptr) {
     std::cerr << "Runtime error: No Sage node associated with the Statement: "
               << stmt->getStmtClassName() << std::endl;
     stmt->dump();
@@ -1500,8 +1502,8 @@ bool ClangToSageTranslator::VisitStmt(clang::Stmt *stmt, SgNode **node) {
 
   // TODO Is there anything else todo?
 
-  if (isSgLocatedNode(*node) != NULL &&
-      (isSgLocatedNode(*node)->get_file_info() == NULL ||
+  if (isSgLocatedNode(*node) != nullptr &&
+      (isSgLocatedNode(*node)->get_file_info() == nullptr ||
        !(isSgLocatedNode(*node)->get_file_info()->isCompilerGenerated()))) {
     clang::SourceRange range = stmt->getSourceRange();
 
@@ -1606,7 +1608,7 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
   for (unsigned i = 0; i < asmNumOutput; ++i) {
     SgNode *tmp_node = Traverse(gcc_asm_stmt->getOutputExpr(i));
     SgExpression *outputExpr = isSgExpression(tmp_node);
-    ROSE_ASSERT(outputExpr != NULL);
+    ROSE_ASSERT(outputExpr != nullptr);
 
     std::string outputConstraintStr =
         static_cast<std::string>(gcc_asm_stmt->getOutputConstraint(i));
@@ -1676,7 +1678,7 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
   for (unsigned i = 0; i < asmNumInput; ++i) {
     SgNode *tmp_node = Traverse(gcc_asm_stmt->getInputExpr(i));
     SgExpression *inputExpr = isSgExpression(tmp_node);
-    ROSE_ASSERT(inputExpr != NULL);
+    ROSE_ASSERT(inputExpr != nullptr);
 
     std::string inputConstraintStr =
         static_cast<std::string>(gcc_asm_stmt->getInputConstraint(i));
@@ -1786,11 +1788,11 @@ bool ClangToSageTranslator::VisitCapturedStmt(
   // If the traversal returned an expression instead of a statement,
   // wrap it in an expression statement (this happens when the captured
   // region contains a single expression like a function call)
-  if (body == NULL && tmp_stmt != NULL) {
+  if (body == nullptr && tmp_stmt != nullptr) {
     SgExpression *expr = isSgExpression(tmp_stmt);
-    if (expr != NULL) {
+    if (expr != nullptr) {
       body = SageBuilder::buildExprStatement(expr);
-      if (clang_body != NULL) {
+      if (clang_body != nullptr) {
         applySourceRange(body, clang_body->getSourceRange());
       }
     } else {
@@ -1801,7 +1803,7 @@ bool ClangToSageTranslator::VisitCapturedStmt(
     }
   }
 
-  if (body == NULL) {
+  if (body == nullptr) {
     body = SageBuilder::buildNullStatement();
   }
 
@@ -1901,8 +1903,8 @@ bool ClangToSageTranslator::collectOpenMPPragmas(
 SgPragmaDeclaration *ClangToSageTranslator::buildOpenMPPragmaDeclaration(
     const std::string &directive, unsigned pragma_line,
     SgScopeStatement *scope) {
-  if (scope == NULL || directive.empty()) {
-    return NULL;
+  if (scope == nullptr || directive.empty()) {
+    return nullptr;
   }
 
   // Don't normalize here - OMP unparser will handle normalization
@@ -1927,7 +1929,7 @@ SgPragmaDeclaration *ClangToSageTranslator::buildOpenMPPragmaDeclaration(
 
 void ClangToSageTranslator::appendOpenMPPragmasBefore(clang::Stmt *stmt,
                                                       SgScopeStatement *scope) {
-  if (scope == NULL) {
+  if (scope == nullptr) {
     return;
   }
 
@@ -1937,7 +1939,7 @@ void ClangToSageTranslator::appendOpenMPPragmasBefore(clang::Stmt *stmt,
   }
 
   for (const auto &entry : pragmas) {
-    SgPragmaDeclaration *pragma_decl = NULL;
+    SgPragmaDeclaration *pragma_decl = nullptr;
     if (entry.is_openmp) {
       pragma_decl = buildOpenMPPragmaDeclaration(entry.text, entry.line, scope);
     } else {
@@ -1948,11 +1950,11 @@ void ClangToSageTranslator::appendOpenMPPragmasBefore(clang::Stmt *stmt,
         pragma_body = trimWhitespace(pragma_body.substr(prefix.size()));
       }
       pragma_decl = SageBuilder::buildPragmaDeclaration(pragma_body, scope);
-      if (pragma_decl != NULL) {
+      if (pragma_decl != nullptr) {
         pragma_decl->set_parent(scope);
       }
     }
-    if (pragma_decl == NULL) {
+    if (pragma_decl == nullptr) {
       continue;
     }
 
@@ -1967,8 +1969,8 @@ void ClangToSageTranslator::appendOpenMPPragmasBefore(clang::Stmt *stmt,
 SgStatement *
 ClangToSageTranslator::wrapStatementWithOpenMPPragmas(clang::Stmt *stmt,
                                                       SgStatement *statement) {
-  if (statement == NULL) {
-    return NULL;
+  if (statement == nullptr) {
+    return nullptr;
   }
 
   std::vector<CapturedPragma> pragmas;
@@ -1980,7 +1982,7 @@ ClangToSageTranslator::wrapStatementWithOpenMPPragmas(clang::Stmt *stmt,
   setCompilerGeneratedFileInfo(wrapper_block, true);
 
   for (const auto &entry : pragmas) {
-    SgPragmaDeclaration *pragma_decl = NULL;
+    SgPragmaDeclaration *pragma_decl = nullptr;
     if (entry.is_openmp) {
       pragma_decl =
           buildOpenMPPragmaDeclaration(entry.text, entry.line, wrapper_block);
@@ -1992,11 +1994,11 @@ ClangToSageTranslator::wrapStatementWithOpenMPPragmas(clang::Stmt *stmt,
       }
       pragma_decl =
           SageBuilder::buildPragmaDeclaration(pragma_body, wrapper_block);
-      if (pragma_decl != NULL) {
+      if (pragma_decl != nullptr) {
         pragma_decl->set_parent(wrapper_block);
       }
     }
-    if (pragma_decl != NULL) {
+    if (pragma_decl != nullptr) {
       wrapper_block->append_statement(pragma_decl);
     }
   }
@@ -2029,37 +2031,37 @@ bool ClangToSageTranslator::VisitCompoundStmt(
     SgNode *tmp_node = Traverse(child_stmt);
 
 #if DEBUG_VISIT_STMT
-    if (tmp_node != NULL)
+    if (tmp_node != nullptr)
       std::cerr << "In VisitCompoundStmt : child is " << tmp_node->class_name()
                 << std::endl;
     else
-      std::cerr << "In VisitCompoundStmt : child is NULL" << std::endl;
+      std::cerr << "In VisitCompoundStmt : child is nullptr" << std::endl;
 #endif
 
     SgClassDeclaration *class_decl = isSgClassDeclaration(tmp_node);
-    if (class_decl != NULL &&
+    if (class_decl != nullptr &&
         (class_decl->get_name() == "" || class_decl->get_isUnNamed()))
       continue;
     SgEnumDeclaration *enum_decl = isSgEnumDeclaration(tmp_node);
-    if (enum_decl != NULL &&
+    if (enum_decl != nullptr &&
         (enum_decl->get_name() == "" || enum_decl->get_isUnNamed()))
       continue;
 #if DEBUG_VISIT_STMT
-    else if (enum_decl != NULL)
+    else if (enum_decl != nullptr)
       std::cerr << "enum_decl = " << enum_decl
                 << " >> name: " << enum_decl->get_name() << std::endl;
 #endif
 
     SgStatement *stmt = isSgStatement(tmp_node);
     SgExpression *expr = isSgExpression(tmp_node);
-    if (tmp_node != NULL && stmt == NULL && expr == NULL) {
-      std::cerr
-          << "Runtime error: tmp_node != NULL && stmt == NULL && expr == NULL"
-          << std::endl;
+    if (tmp_node != nullptr && stmt == nullptr && expr == nullptr) {
+      std::cerr << "Runtime error: tmp_node != nullptr && stmt == nullptr && "
+                   "expr == nullptr"
+                << std::endl;
       res = false;
-    } else if (stmt != NULL) {
+    } else if (stmt != nullptr) {
       block->append_statement(stmt);
-    } else if (expr != NULL) {
+    } else if (expr != nullptr) {
       SgExprStatement *expr_stmt = SageBuilder::buildExprStatement(expr);
       applySourceRangeWithTrailingSemicolon(expr_stmt, child_stmt);
       block->append_statement(expr_stmt);
@@ -2112,41 +2114,43 @@ bool ClangToSageTranslator::VisitCXXCatchStmt(
 #endif
   bool res = true;
 
-  SgCatchOptionStmt *catch_stmt = SageBuilder::buildCatchOptionStmt(NULL, NULL);
+  SgCatchOptionStmt *catch_stmt =
+      SageBuilder::buildCatchOptionStmt(nullptr, nullptr);
 
   SgScopeStatement *catch_scope = isSgScopeStatement(catch_stmt);
-  ROSE_ASSERT(catch_scope != NULL);
+  ROSE_ASSERT(catch_scope != nullptr);
   SageBuilder::pushScopeStack(catch_scope);
 
-  SgVariableDeclaration *condition_decl = NULL;
+  SgVariableDeclaration *condition_decl = nullptr;
   if (clang::VarDecl *exception_decl = cxx_catch_stmt->getExceptionDecl()) {
     SgNode *tmp_condition = Traverse(exception_decl);
     condition_decl = isSgVariableDeclaration(tmp_condition);
-    if (tmp_condition != NULL && condition_decl == NULL) {
-      std::cerr << "Runtime error: tmp_condition != NULL && condition_decl == "
-                   "NULL"
-                << std::endl;
+    if (tmp_condition != nullptr && condition_decl == nullptr) {
+      std::cerr
+          << "Runtime error: tmp_condition != nullptr && condition_decl == "
+             "nullptr"
+          << std::endl;
       res = false;
     }
   } else {
     SgName empty_name("");
     SgType *ellipsis_type = SgTypeEllipse::createType();
     condition_decl = SageBuilder::buildVariableDeclaration_nfi(
-        empty_name, ellipsis_type, NULL, SageBuilder::topScopeStack());
+        empty_name, ellipsis_type, nullptr, SageBuilder::topScopeStack());
   }
 
-  if (condition_decl != NULL) {
+  if (condition_decl != nullptr) {
     SgInitializedName *init_name =
         SageInterface::getFirstInitializedName(condition_decl);
-    if (init_name != NULL && init_name->get_scope() == NULL) {
+    if (init_name != nullptr && init_name->get_scope() == nullptr) {
       init_name->set_scope(catch_scope);
     }
   }
 
   SgNode *tmp_body = Traverse(cxx_catch_stmt->getHandlerBlock());
   SgStatement *body_stmt = isSgStatement(tmp_body);
-  if (tmp_body != NULL && body_stmt == NULL) {
-    std::cerr << "Runtime error: tmp_body != NULL && body_stmt == NULL"
+  if (tmp_body != nullptr && body_stmt == nullptr) {
+    std::cerr << "Runtime error: tmp_body != nullptr && body_stmt == nullptr"
               << std::endl;
     res = false;
   }
@@ -2154,11 +2158,11 @@ bool ClangToSageTranslator::VisitCXXCatchStmt(
   SageBuilder::popScopeStack();
 
   catch_stmt->set_condition(condition_decl);
-  if (condition_decl != NULL) {
+  if (condition_decl != nullptr) {
     condition_decl->set_parent(catch_stmt);
   }
 
-  ROSE_ASSERT(body_stmt != NULL);
+  ROSE_ASSERT(body_stmt != nullptr);
   catch_stmt->set_body(body_stmt);
   body_stmt->set_parent(catch_stmt);
 
@@ -2177,10 +2181,10 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
   // range-for (e.g., `__range`, `__begin`, `__end`, and the loop variable) are
   // inserted into the correct symbol table (see VisitForStmt()).
   SgForStatement *sg_for_stmt = new SgForStatement(
-      (SgStatement *)NULL, (SgExpression *)NULL, (SgStatement *)NULL);
+      (SgStatement *)nullptr, (SgExpression *)nullptr, (SgStatement *)nullptr);
 
   sg_for_stmt->set_parent(SageBuilder::topScopeStack());
-  ROSE_ASSERT(sg_for_stmt->get_parent() != NULL);
+  ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
   SageBuilder::pushScopeStack(sg_for_stmt);
 
   // ROOT CAUSE FIX: C++11 range-based for loop: `for (auto x : container) { ...
@@ -2327,7 +2331,7 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
 
   SageBuilder::buildForStatement_nfi(sg_for_stmt, for_init, test_stmt, inc,
                                      body);
-  ROSE_ASSERT(sg_for_stmt->get_parent() != NULL);
+  ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
 
   *node = sg_for_stmt;
 
@@ -2343,8 +2347,8 @@ bool ClangToSageTranslator::VisitCXXTryStmt(clang::CXXTryStmt *cxx_try_stmt,
 
   SgNode *tmp_body = Traverse(cxx_try_stmt->getTryBlock());
   SgStatement *try_body = isSgStatement(tmp_body);
-  if (try_body == NULL) {
-    if (tmp_body != NULL) {
+  if (try_body == nullptr) {
+    if (tmp_body != nullptr) {
       std::cerr << "Runtime error: try body translated to non-statement node: "
                 << tmp_body->class_name() << std::endl;
     }
@@ -2359,7 +2363,7 @@ bool ClangToSageTranslator::VisitCXXTryStmt(clang::CXXTryStmt *cxx_try_stmt,
       setCompilerGeneratedFileInfo(try_body);
       res = false;
     } else {
-      ROSE_ASSERT(try_body != NULL);
+      ROSE_ASSERT(try_body != nullptr);
     }
   }
 
@@ -2368,13 +2372,14 @@ bool ClangToSageTranslator::VisitCXXTryStmt(clang::CXXTryStmt *cxx_try_stmt,
   for (unsigned i = 0; i < cxx_try_stmt->getNumHandlers(); ++i) {
     SgNode *tmp_handler = Traverse(cxx_try_stmt->getHandler(i));
     SgCatchOptionStmt *handler_stmt = isSgCatchOptionStmt(tmp_handler);
-    if (tmp_handler != NULL && handler_stmt == NULL) {
-      std::cerr << "Runtime error: tmp_handler != NULL && handler_stmt == NULL"
-                << std::endl;
+    if (tmp_handler != nullptr && handler_stmt == nullptr) {
+      std::cerr
+          << "Runtime error: tmp_handler != nullptr && handler_stmt == nullptr"
+          << std::endl;
       res = false;
       continue;
     }
-    if (handler_stmt != NULL) {
+    if (handler_stmt != nullptr) {
       try_stmt->append_catch_statement(handler_stmt);
       handler_stmt->set_trystmt(try_stmt);
     }
@@ -2412,23 +2417,23 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
       SgNode *child = Traverse(decl);
 
       SgDeclarationStatement *sub_decl_stmt = isSgDeclarationStatement(child);
-      if (sub_decl_stmt == NULL && child != NULL) {
+      if (sub_decl_stmt == nullptr && child != nullptr) {
         std::cerr << "Runtime error: the node produce for a clang::Decl is not "
                      "a SgDeclarationStatement !"
                   << std::endl;
         std::cerr << "    class = " << child->class_name() << std::endl;
         res = false;
         continue;
-      } else if (child != NULL) {
+      } else if (child != nullptr) {
         // FIXME This is a hack to avoid autonomous decl of unnamed type to
         // being added to the global scope....
         SgClassDeclaration *class_decl = isSgClassDeclaration(child);
-        if (class_decl != NULL &&
+        if (class_decl != nullptr &&
             (class_decl->get_name() == "" || class_decl->get_isUnNamed()))
           continue;
 
         SgEnumDeclaration *enum_decl = isSgEnumDeclaration(child);
-        if (enum_decl != NULL &&
+        if (enum_decl != nullptr &&
             (enum_decl->get_name() == "" || enum_decl->get_isUnNamed()))
           continue;
         if (clang::TagDecl::classof(decl)) {
@@ -2445,9 +2450,10 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
     --it;
     SgNode *lastDecl = Traverse((clang::Decl *)(*it));
     SgDeclarationStatement *last_decl_Stmt = isSgDeclarationStatement(lastDecl);
-    if (lastDecl != NULL && last_decl_Stmt == NULL) {
-      std::cerr << "Runtime error: lastDecl != NULL && last_decl_Stmt == NULL"
-                << std::endl;
+    if (lastDecl != nullptr && last_decl_Stmt == nullptr) {
+      std::cerr
+          << "Runtime error: lastDecl != nullptr && last_decl_Stmt == nullptr"
+          << std::endl;
       res = false;
     }
     *node = last_decl_Stmt;
@@ -2470,17 +2476,17 @@ bool ClangToSageTranslator::VisitDoStmt(clang::DoStmt *do_stmt, SgNode **node) {
 
   SgNode *tmp_cond = Traverse(do_stmt->getCond());
   SgExpression *cond = isSgExpression(tmp_cond);
-  ROSE_ASSERT(cond != NULL);
+  ROSE_ASSERT(cond != nullptr);
 
   SgStatement *expr_stmt = SageBuilder::buildExprStatement(cond);
   if (p_compiler_instance != nullptr && do_stmt->getCond() != nullptr) {
     applySourceRange(expr_stmt, do_stmt->getCond()->getSourceRange());
   }
 
-  ROSE_ASSERT(expr_stmt != NULL);
+  ROSE_ASSERT(expr_stmt != nullptr);
 
   SgDoWhileStmt *sg_do_stmt =
-      SageBuilder::buildDoWhileStmt_nfi(expr_stmt, NULL);
+      SageBuilder::buildDoWhileStmt_nfi(expr_stmt, nullptr);
 
   sg_do_stmt->set_parent(SageBuilder::topScopeStack());
 
@@ -2494,11 +2500,11 @@ bool ClangToSageTranslator::VisitDoStmt(clang::DoStmt *do_stmt, SgNode **node) {
   SgNode *tmp_body = Traverse(do_stmt->getBody());
   SgStatement *body = isSgStatement(tmp_body);
   SgExpression *expr = isSgExpression(tmp_body);
-  if (expr != NULL) {
+  if (expr != nullptr) {
     body = SageBuilder::buildExprStatement(expr);
     applySourceRangeWithTrailingSemicolon(body, do_stmt->getBody());
   }
-  ROSE_ASSERT(body != NULL);
+  ROSE_ASSERT(body != nullptr);
   body = wrapStatementWithOpenMPPragmas(do_stmt->getBody(), body);
 
   body->set_parent(sg_do_stmt);
@@ -2523,7 +2529,7 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
   // DQ (11/28/2020): We have to build the scope first, and then build the rest
   // bottom up.
   SgForStatement *sg_for_stmt = new SgForStatement(
-      (SgStatement *)NULL, (SgExpression *)NULL, (SgStatement *)NULL);
+      (SgStatement *)nullptr, (SgExpression *)nullptr, (SgStatement *)nullptr);
 
 #if DEBUG_VISIT_STMT
   printf("In VisitForStmt(): Setting the parent of the sg_for_stmt \n");
@@ -2533,29 +2539,30 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
   sg_for_stmt->set_parent(SageBuilder::topScopeStack());
 
   // DQ (11/28/2020): Adding asertion.
-  ROSE_ASSERT(sg_for_stmt->get_parent() != NULL);
+  ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
 
   SageBuilder::pushScopeStack(sg_for_stmt);
 
   // Initialization
 
-  SgForInitStatement *for_init_stmt = NULL;
+  SgForInitStatement *for_init_stmt = nullptr;
 
   {
     SgStatementPtrList for_init_stmt_list;
     SgNode *tmp_init = Traverse(for_stmt->getInit());
     SgStatement *init_stmt = isSgStatement(tmp_init);
     SgExpression *init_expr = isSgExpression(tmp_init);
-    if (tmp_init != NULL && init_stmt == NULL && init_expr == NULL) {
-      std::cerr << "Runtime error: tmp_init != NULL && init_stmt == NULL && "
-                   "init_expr == NULL ("
-                << tmp_init->class_name() << ")" << std::endl;
+    if (tmp_init != nullptr && init_stmt == nullptr && init_expr == nullptr) {
+      std::cerr
+          << "Runtime error: tmp_init != nullptr && init_stmt == nullptr && "
+             "init_expr == nullptr ("
+          << tmp_init->class_name() << ")" << std::endl;
       res = false;
-    } else if (init_expr != NULL) {
+    } else if (init_expr != nullptr) {
       init_stmt = SageBuilder::buildExprStatement(init_expr);
       applySourceRange(init_stmt, for_stmt->getInit()->getSourceRange());
     }
-    if (init_stmt != NULL)
+    if (init_stmt != nullptr)
       for_init_stmt_list.push_back(init_stmt);
 
     if (for_init_stmt_list.size() == 0) {
@@ -2570,7 +2577,7 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
     printf("In VisitForStmt(): for_init_stmt = %p  \n");
 #endif
 
-    if (for_stmt->getInit() != NULL)
+    if (for_stmt->getInit() != nullptr)
       applySourceRange(for_init_stmt, for_stmt->getInit()->getSourceRange());
     else
       setCompilerGeneratedFileInfo(for_init_stmt, true);
@@ -2578,17 +2585,17 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
 
   // Condition
 
-  SgStatement *cond_stmt = NULL;
+  SgStatement *cond_stmt = nullptr;
 
   {
     SgNode *tmp_cond = Traverse(for_stmt->getCond());
     SgExpression *cond = isSgExpression(tmp_cond);
-    if (tmp_cond != NULL && cond == NULL) {
-      std::cerr << "Runtime error: tmp_cond != NULL && cond == NULL"
+    if (tmp_cond != nullptr && cond == nullptr) {
+      std::cerr << "Runtime error: tmp_cond != nullptr && cond == nullptr"
                 << std::endl;
       res = false;
     }
-    if (cond != NULL) {
+    if (cond != nullptr) {
       cond_stmt = SageBuilder::buildExprStatement(cond);
       applySourceRange(cond_stmt, for_stmt->getCond()->getSourceRange());
     } else {
@@ -2596,18 +2603,19 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
       setCompilerGeneratedFileInfo(cond_stmt, true);
     }
 
-    if (cond_stmt != NULL) {
+    if (cond_stmt != nullptr) {
       auto *expr_stmt = isSgExprStatement(cond_stmt);
-      if (expr_stmt != NULL) {
+      if (expr_stmt != nullptr) {
         auto simplifyOperand = [](SgExpression *operand) -> SgExpression * {
           SgExpression *current = operand;
           while (auto cast = isSgCastExp(current)) {
             current = cast->get_operand_i();
           }
-          if (isSgVarRefExp(current) != NULL || isSgIntVal(current) != NULL ||
-              isSgUnsignedIntVal(current) != NULL ||
-              isSgLongLongIntVal(current) != NULL ||
-              isSgUnsignedLongLongIntVal(current) != NULL) {
+          if (isSgVarRefExp(current) != nullptr ||
+              isSgIntVal(current) != nullptr ||
+              isSgUnsignedIntVal(current) != nullptr ||
+              isSgLongLongIntVal(current) != nullptr ||
+              isSgUnsignedLongLongIntVal(current) != nullptr) {
             return SageInterface::copyExpression(current);
           }
           return nullptr;
@@ -2618,7 +2626,7 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
               simplifyOperand(less_than->get_lhs_operand());
           SgExpression *rhs_simplified =
               simplifyOperand(less_than->get_rhs_operand());
-          if (lhs_simplified != NULL && rhs_simplified != NULL) {
+          if (lhs_simplified != nullptr && rhs_simplified != nullptr) {
             SgExpression *new_cond =
                 SageBuilder::buildLessThanOp(lhs_simplified, rhs_simplified);
             applySourceRange(new_cond, for_stmt->getCond()->getSourceRange());
@@ -2632,16 +2640,17 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
 
   // Increment
 
-  SgExpression *inc = NULL;
+  SgExpression *inc = nullptr;
 
   {
     SgNode *tmp_inc = Traverse(for_stmt->getInc());
     inc = isSgExpression(tmp_inc);
-    if (tmp_inc != NULL && inc == NULL) {
-      std::cerr << "Runtime error: tmp_inc != NULL && inc == NULL" << std::endl;
+    if (tmp_inc != nullptr && inc == nullptr) {
+      std::cerr << "Runtime error: tmp_inc != nullptr && inc == nullptr"
+                << std::endl;
       res = false;
     }
-    if (inc == NULL) {
+    if (inc == nullptr) {
       inc = SageBuilder::buildNullExpression_nfi();
       setCompilerGeneratedFileInfo(inc, true);
     }
@@ -2649,24 +2658,24 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
 
   // Body
 
-  SgStatement *body = NULL;
+  SgStatement *body = nullptr;
 
   {
     SgNode *tmp_body = Traverse(for_stmt->getBody());
     body = isSgStatement(tmp_body);
-    if (body == NULL) {
+    if (body == nullptr) {
       SgExpression *body_expr = isSgExpression(tmp_body);
-      if (body_expr != NULL) {
+      if (body_expr != nullptr) {
         body = SageBuilder::buildExprStatement(body_expr);
         applySourceRange(body, for_stmt->getBody()->getSourceRange());
       }
     }
-    if (tmp_body != NULL && body == NULL) {
-      std::cerr << "Runtime error: tmp_body != NULL && body == NULL"
+    if (tmp_body != nullptr && body == nullptr) {
+      std::cerr << "Runtime error: tmp_body != nullptr && body == nullptr"
                 << std::endl;
       res = false;
     }
-    if (body == NULL) {
+    if (body == nullptr) {
       body = SageBuilder::buildNullStatement_nfi();
       setCompilerGeneratedFileInfo(body);
     }
@@ -2686,17 +2695,17 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
   }
   sg_for_stmt->set_for_init_stmt(for_init_stmt);
 
-  if (cond_stmt != NULL) {
+  if (cond_stmt != nullptr) {
     cond_stmt->set_parent(sg_for_stmt);
     sg_for_stmt->set_test(cond_stmt);
   }
 
-  if (inc != NULL) {
+  if (inc != nullptr) {
     inc->set_parent(sg_for_stmt);
     sg_for_stmt->set_increment(inc);
   }
 
-  if (body != NULL) {
+  if (body != nullptr) {
     body->set_parent(sg_for_stmt);
     sg_for_stmt->set_loop_body(body);
   }
@@ -2707,7 +2716,7 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
                                      body);
 
   // DQ (11/28/2020): Adding asertion.
-  ROSE_ASSERT(sg_for_stmt->get_parent() != NULL);
+  ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
 
   *node = sg_for_stmt;
 
@@ -2724,10 +2733,10 @@ bool ClangToSageTranslator::VisitGotoStmt(clang::GotoStmt *goto_stmt,
 
   SgSymbol *tmp_sym = GetSymbolFromSymbolTable(goto_stmt->getLabel());
   SgLabelSymbol *sym = isSgLabelSymbol(tmp_sym);
-  if (sym == NULL) {
+  if (sym == nullptr) {
     SgNode *tmp_label = Traverse(goto_stmt->getLabel()->getStmt());
     SgLabelStatement *label_stmt = isSgLabelStatement(tmp_label);
-    if (label_stmt == NULL) {
+    if (label_stmt == nullptr) {
       std::cerr << "Runtime error: Cannot find the symbol for the label: \""
                 << goto_stmt->getLabel()->getStmt()->getName() << "\"."
                 << std::endl;
@@ -2745,7 +2754,7 @@ bool ClangToSageTranslator::VisitGotoStmt(clang::GotoStmt *goto_stmt,
   /*
       SgNode * tmp_label = Traverse(goto_stmt->getLabel()->getStmt());
       SgLabelStatement * label_stmt = isSgLabelStatement(tmp_label);
-      if (label_stmt == NULL) {
+      if (label_stmt == nullptr) {
           std::cerr << "Runtime Error: Cannot find the label: \"" <<
      goto_stmt->getLabel()->getStmt()->getName() << "\"." << std::endl; res =
      false;
@@ -2767,7 +2776,7 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
   // TODO if_stmt->getConditionVariable() appears when a variable is declared in
   // the condition...
 
-  *node = SageBuilder::buildIfStmt_nfi(NULL, NULL, NULL);
+  *node = SageBuilder::buildIfStmt_nfi(nullptr, nullptr, nullptr);
 
   // Pei-Hung (04/22/22) Needs to setup parent node before processing the
   // operands. Needed for test2013_55.c and other similar tests
@@ -2781,9 +2790,9 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
 
   SgNode *tmp_then = Traverse(if_stmt->getThen());
   SgStatement *then_stmt = isSgStatement(tmp_then);
-  if (then_stmt == NULL) {
+  if (then_stmt == nullptr) {
     SgExpression *then_expr = isSgExpression(tmp_then);
-    ROSE_ASSERT(then_expr != NULL);
+    ROSE_ASSERT(then_expr != nullptr);
     then_stmt = SageBuilder::buildExprStatement(then_expr);
   }
   applySourceRange(then_stmt, if_stmt->getThen()->getSourceRange());
@@ -2791,12 +2800,12 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
 
   SgNode *tmp_else = Traverse(if_stmt->getElse());
   SgStatement *else_stmt = isSgStatement(tmp_else);
-  if (else_stmt == NULL) {
+  if (else_stmt == nullptr) {
     SgExpression *else_expr = isSgExpression(tmp_else);
-    if (else_expr != NULL)
+    if (else_expr != nullptr)
       else_stmt = SageBuilder::buildExprStatement(else_expr);
   }
-  if (else_stmt != NULL) {
+  if (else_stmt != nullptr) {
     applySourceRange(else_stmt, if_stmt->getElse()->getSourceRange());
     else_stmt = wrapStatementWithOpenMPPragmas(if_stmt->getElse(), else_stmt);
   }
@@ -2808,7 +2817,7 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
 
   then_stmt->set_parent(*node);
   isSgIfStmt(*node)->set_true_body(then_stmt);
-  if (else_stmt != NULL) {
+  if (else_stmt != nullptr) {
     else_stmt->set_parent(*node);
     isSgIfStmt(*node)->set_false_body(else_stmt);
   }
@@ -2859,14 +2868,14 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(
             << std::endl;
 #endif
   bool res = true;
-  SgStatement *associated_stmt = NULL;
+  SgStatement *associated_stmt = nullptr;
 
   // Traverse the body statement
   if (clang::Stmt *clang_associated_stmt =
           omp_executable_directive->getAssociatedStmt()) {
     SgNode *tmp_stmt = Traverse(clang_associated_stmt);
     associated_stmt = isSgStatement(tmp_stmt);
-    if (tmp_stmt != NULL && associated_stmt == NULL) {
+    if (tmp_stmt != nullptr && associated_stmt == nullptr) {
       std::cerr << "Runtime error: associated OpenMP statement did not "
                    "translate into an SgStatement."
                 << std::endl;
@@ -2875,7 +2884,7 @@ bool ClangToSageTranslator::VisitOMPExecutableDirective(
   }
 
   SgStatement *target_stmt = associated_stmt;
-  if (target_stmt == NULL) {
+  if (target_stmt == nullptr) {
     target_stmt = SageBuilder::buildNullStatement();
     target_stmt->set_parent(SageBuilder::topScopeStack());
   }
@@ -3246,8 +3255,9 @@ bool ClangToSageTranslator::VisitReturnStmt(clang::ReturnStmt *return_stmt,
 
   SgNode *tmp_expr = Traverse(return_stmt->getRetValue());
   SgExpression *expr = isSgExpression(tmp_expr);
-  if (tmp_expr != NULL && expr == NULL) {
-    std::cerr << "Runtime error: tmp_expr != NULL && expr == NULL" << std::endl;
+  if (tmp_expr != nullptr && expr == nullptr) {
+    std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
+              << std::endl;
     res = false;
   }
   *node = SageBuilder::buildReturnStmt(expr);
@@ -3324,28 +3334,28 @@ bool ClangToSageTranslator::VisitCaseStmt(clang::CaseStmt *case_stmt,
   SgNode *tmp_stmt = Traverse(case_stmt->getSubStmt());
   SgStatement *stmt = isSgStatement(tmp_stmt);
   SgExpression *expr = isSgExpression(tmp_stmt);
-  if (expr != NULL) {
+  if (expr != nullptr) {
     stmt = SageBuilder::buildExprStatement(expr);
     applySourceRangeWithTrailingSemicolon(stmt, case_stmt->getSubStmt());
   }
-  ROSE_ASSERT(stmt != NULL);
+  ROSE_ASSERT(stmt != nullptr);
   stmt = wrapStatementWithOpenMPPragmas(case_stmt->getSubStmt(), stmt);
 
   SgNode *tmp_lhs = Traverse(case_stmt->getLHS());
   SgExpression *lhs = isSgExpression(tmp_lhs);
-  ROSE_ASSERT(lhs != NULL);
+  ROSE_ASSERT(lhs != nullptr);
 
-  SgExpression *rhs = NULL;
+  SgExpression *rhs = nullptr;
   if (case_stmt->getRHS() != nullptr) {
     SgNode *tmp_rhs = Traverse(case_stmt->getRHS());
     rhs = isSgExpression(tmp_rhs);
-    ROSE_ASSERT(rhs != NULL);
+    ROSE_ASSERT(rhs != nullptr);
   }
 
   SgCaseOptionStmt *caseOptionStmt =
       SageBuilder::buildCaseOptionStmt_nfi(lhs, stmt);
 
-  if (rhs != NULL) {
+  if (rhs != nullptr) {
     caseOptionStmt->set_key_range_end(rhs);
   }
 
@@ -3363,11 +3373,11 @@ bool ClangToSageTranslator::VisitDefaultStmt(clang::DefaultStmt *default_stmt,
   SgNode *tmp_stmt = Traverse(default_stmt->getSubStmt());
   SgStatement *stmt = isSgStatement(tmp_stmt);
   SgExpression *expr = isSgExpression(tmp_stmt);
-  if (expr != NULL) {
+  if (expr != nullptr) {
     stmt = SageBuilder::buildExprStatement(expr);
     applySourceRangeWithTrailingSemicolon(stmt, default_stmt->getSubStmt());
   }
-  ROSE_ASSERT(stmt != NULL);
+  ROSE_ASSERT(stmt != nullptr);
   stmt = wrapStatementWithOpenMPPragmas(default_stmt->getSubStmt(), stmt);
 
   *node = SageBuilder::buildDefaultOptionStmt_nfi(stmt);
@@ -3383,13 +3393,13 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
 
   SgNode *tmp_cond = Traverse(switch_stmt->getCond());
   SgExpression *cond = isSgExpression(tmp_cond);
-  ROSE_ASSERT(cond != NULL);
+  ROSE_ASSERT(cond != nullptr);
 
   SgStatement *expr_stmt = SageBuilder::buildExprStatement(cond);
   applySourceRange(expr_stmt, switch_stmt->getCond()->getSourceRange());
 
   SgSwitchStatement *sg_switch_stmt =
-      SageBuilder::buildSwitchStatement_nfi(expr_stmt, NULL);
+      SageBuilder::buildSwitchStatement_nfi(expr_stmt, nullptr);
 
   sg_switch_stmt->set_parent(SageBuilder::topScopeStack());
 
@@ -3400,7 +3410,7 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
 
   SgNode *tmp_body = Traverse(switch_stmt->getBody());
   SgStatement *body = isSgStatement(tmp_body);
-  ROSE_ASSERT(body != NULL);
+  ROSE_ASSERT(body != nullptr);
 
   SageBuilder::popScopeStack();
 
@@ -3423,7 +3433,7 @@ bool ClangToSageTranslator::VisitValueStmt(clang::ValueStmt *value_stmt,
 
   // DQ (11/28/2020): In test2020_45.c: I think this is the enum field.
   // clang::Expr* expr = value_stmt->getExprStmt();
-  // ROSE_ASSERT(expr != NULL);
+  // ROSE_ASSERT(expr != nullptr);
 
   // DQ (11/28/2020): Note that value_stmt->getExprStmt() == value_stmt, but not
   // sure why.
@@ -3446,7 +3456,7 @@ bool ClangToSageTranslator::VisitAttributedStmt(
   // the attribute and translate the wrapped statement directly.
   clang::Stmt *sub_stmt = attributed_stmt->getSubStmt();
   SgNode *sub_node = Traverse(sub_stmt);
-  if (sub_node == NULL) {
+  if (sub_node == nullptr) {
     sub_node = SageBuilder::buildNullStatement();
   }
   *node = sub_node;
@@ -3576,8 +3586,9 @@ bool ClangToSageTranslator::VisitArraySubscriptExpr(
 
   SgNode *tmp_base = Traverse(array_subscript_expr->getBase());
   SgExpression *base = isSgExpression(tmp_base);
-  if (tmp_base != NULL && base == NULL) {
-    std::cerr << "Runtime error: tmp_base != NULL && base == NULL" << std::endl;
+  if (tmp_base != nullptr && base == nullptr) {
+    std::cerr << "Runtime error: tmp_base != nullptr && base == nullptr"
+              << std::endl;
     res = false;
   }
   if (SgCastExp *cast = isSgCastExp(base)) {
@@ -3615,8 +3626,9 @@ bool ClangToSageTranslator::VisitArraySubscriptExpr(
 
   SgNode *tmp_idx = Traverse(array_subscript_expr->getIdx());
   SgExpression *idx = isSgExpression(tmp_idx);
-  if (tmp_idx != NULL && idx == NULL) {
-    std::cerr << "Runtime error: tmp_idx != NULL && idx == NULL" << std::endl;
+  if (tmp_idx != nullptr && idx == nullptr) {
+    std::cerr << "Runtime error: tmp_idx != nullptr && idx == nullptr"
+              << std::endl;
     res = false;
   }
 
@@ -3634,19 +3646,19 @@ bool ClangToSageTranslator::VisitArrayTypeTraitExpr(
   // Array type traits map to builtins like __array_rank and __array_extent.
   const char *trait_spelling =
       clang::getTraitSpelling(array_type_trait_expr->getTrait());
-  ROSE_ASSERT(trait_spelling != NULL);
+  ROSE_ASSERT(trait_spelling != nullptr);
 
   SgNodePtrList args;
   SgType *queried_type =
       buildTypeFromQualifiedType(array_type_trait_expr->getQueriedType());
-  ROSE_ASSERT(queried_type != NULL);
+  ROSE_ASSERT(queried_type != nullptr);
   args.push_back(queried_type);
 
   if (clang::Expr *dimension =
           array_type_trait_expr->getDimensionExpression()) {
     SgNode *tmp_dim = Traverse(dimension);
     SgExpression *dim_expr = isSgExpression(tmp_dim);
-    ROSE_ASSERT(dim_expr != NULL);
+    ROSE_ASSERT(dim_expr != nullptr);
     args.push_back(dim_expr);
   }
 
@@ -3683,9 +3695,9 @@ bool ClangToSageTranslator::VisitAtomicExpr(clang::AtomicExpr *atomic_expr,
   for (unsigned i = 0; i < atomic_expr->getNumSubExprs(); i++) {
     SgNode *tmp_arg = Traverse(atomic_expr->getSubExprs()[i]);
     SgExpression *arg = isSgExpression(tmp_arg);
-    if (arg != NULL) {
+    if (arg != nullptr) {
       args->append_expression(arg);
-    } else if (tmp_arg != NULL) {
+    } else if (tmp_arg != nullptr) {
       std::cerr << "Warning: AtomicExpr argument " << i
                 << " is not an expression" << std::endl;
       res = false;
@@ -3716,15 +3728,17 @@ bool ClangToSageTranslator::VisitBinaryOperator(
 
   SgNode *tmp_lhs = Traverse(binary_operator->getLHS());
   SgExpression *lhs = isSgExpression(tmp_lhs);
-  if (tmp_lhs != NULL && lhs == NULL) {
-    std::cerr << "Runtime error: tmp_lhs != NULL && lhs == NULL" << std::endl;
+  if (tmp_lhs != nullptr && lhs == nullptr) {
+    std::cerr << "Runtime error: tmp_lhs != nullptr && lhs == nullptr"
+              << std::endl;
     res = false;
   }
 
   SgNode *tmp_rhs = Traverse(binary_operator->getRHS());
   SgExpression *rhs = isSgExpression(tmp_rhs);
-  if (tmp_rhs != NULL && rhs == NULL) {
-    std::cerr << "Runtime error: tmp_rhs != NULL && rhs == NULL" << std::endl;
+  if (tmp_rhs != nullptr && rhs == nullptr) {
+    std::cerr << "Runtime error: tmp_rhs != nullptr && rhs == nullptr"
+              << std::endl;
     res = false;
   }
 
@@ -3910,24 +3924,24 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
           llvm::dyn_cast_or_null<clang::LambdaExpr>(callee_base)) {
     SgNode *tmp_lambda = Traverse(lambda_callee);
     SgLambdaExp *lambda_exp = isSgLambdaExp(tmp_lambda);
-    ROSE_ASSERT(lambda_exp != NULL);
+    ROSE_ASSERT(lambda_exp != nullptr);
 
     SgFunctionDeclaration *lambda_func = lambda_exp->get_lambda_function();
-    ROSE_ASSERT(lambda_func != NULL);
+    ROSE_ASSERT(lambda_func != nullptr);
     SgMemberFunctionDeclaration *member_decl =
         isSgMemberFunctionDeclaration(lambda_func);
-    ROSE_ASSERT(member_decl != NULL);
+    ROSE_ASSERT(member_decl != nullptr);
 
     SgMemberFunctionSymbol *member_sym =
         isSgMemberFunctionSymbol(member_decl->get_symbol_from_symbol_table());
-    if (member_sym == NULL) {
+    if (member_sym == nullptr) {
       if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
         member_sym =
             isSgMemberFunctionSymbol(decl_scope->lookup_function_symbol(
                 member_decl->get_name(), member_decl->get_type()));
       }
     }
-    if (member_sym == NULL) {
+    if (member_sym == nullptr) {
       member_sym = new SgMemberFunctionSymbol(member_decl);
       if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
         decl_scope->insert_symbol(member_decl->get_name(), member_sym);
@@ -3935,7 +3949,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         member_sym->set_parent(member_decl);
       }
     }
-    ROSE_ASSERT(member_sym != NULL);
+    ROSE_ASSERT(member_sym != nullptr);
 
     SgExpression *member_ref =
         SageBuilder::buildMemberFunctionRefExp_nfi(member_sym, false, false);
@@ -3943,12 +3957,257 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
   } else {
     SgNode *tmp_expr = Traverse(callee_expr);
     expr = isSgExpression(tmp_expr);
-    if (tmp_expr != NULL && expr == NULL) {
-      std::cerr << "Runtime error: tmp_expr != NULL && expr == NULLL"
+    if (tmp_expr != nullptr && expr == nullptr) {
+      std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
                 << std::endl;
       res = false;
     }
   }
+
+  auto maybe_upgrade_template_callee = [&]() {
+    if (expr == nullptr) {
+      return;
+    }
+
+    clang::FunctionDecl *direct_callee = call_expr->getDirectCallee();
+    if (direct_callee == nullptr) {
+      return;
+    }
+
+    SgExpression *ref_expr = expr;
+    SgBinaryOp *member_access = nullptr;
+    if (SgDotExp *dot = isSgDotExp(expr)) {
+      member_access = dot;
+      ref_expr = dot->get_rhs_operand();
+    } else if (SgArrowExp *arrow = isSgArrowExp(expr)) {
+      member_access = arrow;
+      ref_expr = arrow->get_rhs_operand();
+    }
+
+    SgFunctionRefExp *func_ref = isSgFunctionRefExp(ref_expr);
+    SgMemberFunctionRefExp *member_ref = isSgMemberFunctionRefExp(ref_expr);
+    if (func_ref == nullptr && member_ref == nullptr) {
+      return;
+    }
+
+    SgFunctionSymbol *func_sym =
+        func_ref != nullptr ? func_ref->get_symbol() : nullptr;
+    SgMemberFunctionSymbol *member_sym =
+        member_ref != nullptr ? member_ref->get_symbol() : nullptr;
+    SgFunctionDeclaration *ref_decl = nullptr;
+    if (member_sym != nullptr) {
+      ref_decl = isSgFunctionDeclaration(member_sym->get_declaration());
+    } else if (func_sym != nullptr) {
+      ref_decl = isSgFunctionDeclaration(func_sym->get_declaration());
+    }
+    if (ref_decl == nullptr) {
+      return;
+    }
+
+    if (isSgTemplateFunctionDeclaration(ref_decl) == nullptr &&
+        isSgTemplateMemberFunctionDeclaration(ref_decl) == nullptr) {
+      return;
+    }
+
+    const clang::TemplateArgumentList *clang_args =
+        direct_callee->getTemplateSpecializationArgs();
+    if (clang_args == nullptr || clang_args->size() == 0) {
+      return;
+    }
+
+    size_t explicit_arg_count = 0;
+    if (const clang::ASTTemplateArgumentListInfo *args_as_written =
+            direct_callee->getTemplateSpecializationArgsAsWritten()) {
+      clang::TemplateArgumentListInfo arg_info(args_as_written->getLAngleLoc(),
+                                               args_as_written->getRAngleLoc());
+      for (const clang::TemplateArgumentLoc &loc :
+           args_as_written->arguments()) {
+        arg_info.addArgument(loc);
+      }
+      explicit_arg_count = countExpandedTemplateArguments(arg_info);
+    }
+
+    const bool has_explicit_args = explicit_arg_count > 0;
+    SgTemplateArgumentPtrList template_args =
+        buildTemplateArguments(*clang_args, explicit_arg_count);
+    SgTemplateArgumentPtrList *template_args_ptr = &template_args;
+
+    SgSymbol *direct_sym = GetSymbolFromSymbolTable(direct_callee);
+    if (direct_sym == nullptr ||
+        isSgTemplateFunctionSymbol(direct_sym) != nullptr ||
+        isSgTemplateMemberFunctionSymbol(direct_sym) != nullptr) {
+      Traverse(direct_callee);
+      direct_sym = GetSymbolFromSymbolTable(direct_callee);
+    }
+
+    auto replace_ref = [&](SgExpression *new_ref) {
+      if (new_ref == nullptr) {
+        return;
+      }
+      if (member_access != nullptr) {
+        member_access->set_rhs_operand(new_ref);
+        new_ref->set_parent(member_access);
+      } else {
+        expr = new_ref;
+      }
+    };
+
+    if (SgMemberFunctionSymbol *inst_member_sym =
+            isSgMemberFunctionSymbol(direct_sym)) {
+      SgMemberFunctionDeclaration *inst_decl =
+          isSgMemberFunctionDeclaration(inst_member_sym->get_declaration());
+      if (inst_decl != nullptr &&
+          (isSgTemplateInstantiationMemberFunctionDecl(inst_decl) != nullptr ||
+           isSgTemplateInstantiationMemberFunctionDecl(
+               inst_decl->get_firstNondefiningDeclaration()) != nullptr)) {
+        SgExpression *new_ref = SageBuilder::buildMemberFunctionRefExp_nfi(
+            inst_member_sym, false, false);
+        replace_ref(new_ref);
+        return;
+      }
+    }
+
+    if (SgFunctionSymbol *inst_func_sym = isSgFunctionSymbol(direct_sym)) {
+      SgFunctionDeclaration *inst_decl =
+          isSgFunctionDeclaration(inst_func_sym->get_declaration());
+      if (inst_decl != nullptr &&
+          (isSgTemplateInstantiationFunctionDecl(inst_decl) != nullptr ||
+           isSgTemplateInstantiationFunctionDecl(
+               inst_decl->get_firstNondefiningDeclaration()) != nullptr)) {
+        SgExpression *new_ref = SageBuilder::buildFunctionRefExp(inst_func_sym);
+        replace_ref(new_ref);
+        return;
+      }
+    }
+
+    SgScopeStatement *func_scope = nullptr;
+    if (member_sym != nullptr) {
+      func_scope = member_sym->get_scope();
+    } else if (func_sym != nullptr) {
+      func_scope = func_sym->get_scope();
+    }
+    if (func_scope == nullptr) {
+      func_scope = SageBuilder::topScopeStack();
+    }
+
+    SgFunctionDeclaration *base_decl = ref_decl;
+    SgName template_base_name = ref_decl->get_name();
+    if (SgTemplateFunctionDeclaration *tmpl_decl =
+            isSgTemplateFunctionDeclaration(ref_decl)) {
+      template_base_name = tmpl_decl->get_name();
+    } else if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                   isSgTemplateMemberFunctionDeclaration(ref_decl)) {
+      template_base_name = tmpl_decl->get_name();
+    }
+
+    SgType *lookup_type = ref_decl->get_type();
+    if (SgType *clang_type =
+            buildTypeFromQualifiedType(direct_callee->getType())) {
+      if (isSgFunctionType(clang_type) != nullptr ||
+          isSgMemberFunctionType(clang_type) != nullptr ||
+          lookup_type == nullptr) {
+        lookup_type = clang_type;
+      }
+    }
+
+    if (member_sym != nullptr) {
+      SgMemberFunctionType *member_type = isSgMemberFunctionType(lookup_type);
+      SgType *ret_type = member_type != nullptr
+                             ? member_type->get_return_type()
+                             : SageBuilder::buildUnknownType();
+      SgFunctionParameterList *param_list =
+          (member_type != nullptr &&
+           member_type->get_argument_list() != nullptr)
+              ? SageBuilder::buildFunctionParameterList_nfi(
+                    member_type->get_argument_list())
+              : SageBuilder::buildFunctionParameterList_nfi();
+      unsigned int functionConstVolatileFlags =
+          member_type != nullptr ? member_type->get_mfunc_specifier() : 0;
+
+      SgTemplateInstantiationMemberFunctionDecl *inst_decl =
+          isSgTemplateInstantiationMemberFunctionDecl(
+              SageBuilder::buildNondefiningMemberFunctionDeclaration(
+                  template_base_name, ret_type, param_list, func_scope,
+                  functionConstVolatileFlags,
+                  /*buildTemplateInstantiation=*/true, template_args_ptr));
+      ensure_function_param_list(inst_decl, param_list);
+      if (inst_decl != nullptr) {
+        inst_decl->set_template_argument_list_is_explicit(has_explicit_args);
+        SageBuilder::setTemplateArgumentsInDeclaration(inst_decl,
+                                                       template_args_ptr);
+        if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                isSgTemplateMemberFunctionDeclaration(base_decl)) {
+          inst_decl->set_templateDeclaration(tmpl_decl);
+          inst_decl->set_templateName(tmpl_decl->get_name());
+        } else if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                       isSgTemplateMemberFunctionDeclaration(
+                           base_decl->get_firstNondefiningDeclaration())) {
+          inst_decl->set_templateDeclaration(tmpl_decl);
+          inst_decl->set_templateName(tmpl_decl->get_name());
+        }
+
+        SgMemberFunctionSymbol *inst_sym =
+            isSgMemberFunctionSymbol(inst_decl->get_symbol_from_symbol_table());
+        if (inst_sym == nullptr && func_scope != nullptr) {
+          inst_sym = new SgMemberFunctionSymbol(inst_decl);
+          inst_sym->set_parent(inst_decl);
+          func_scope->insert_symbol(template_base_name, inst_sym);
+        }
+        if (inst_sym != nullptr) {
+          SgExpression *new_ref = SageBuilder::buildMemberFunctionRefExp_nfi(
+              inst_sym, false, false);
+          replace_ref(new_ref);
+        }
+      }
+    } else if (func_sym != nullptr) {
+      SgFunctionType *func_type = isSgFunctionType(lookup_type);
+      SgType *ret_type = func_type != nullptr ? func_type->get_return_type()
+                                              : SageBuilder::buildUnknownType();
+      SgFunctionParameterList *param_list =
+          (func_type != nullptr && func_type->get_argument_list() != nullptr)
+              ? SageBuilder::buildFunctionParameterList_nfi(
+                    func_type->get_argument_list())
+              : SageBuilder::buildFunctionParameterList_nfi();
+
+      SgTemplateInstantiationFunctionDecl *inst_decl =
+          isSgTemplateInstantiationFunctionDecl(
+              SageBuilder::buildNondefiningFunctionDeclaration(
+                  template_base_name, ret_type, param_list, func_scope,
+                  /*buildTemplateInstantiation=*/true, template_args_ptr,
+                  SgStorageModifier::e_default,
+                  /*forceFreeFunctionScope=*/false));
+      ensure_function_param_list(inst_decl, param_list);
+      if (inst_decl != nullptr) {
+        inst_decl->set_template_argument_list_is_explicit(has_explicit_args);
+        SageBuilder::setTemplateArgumentsInDeclaration(inst_decl,
+                                                       template_args_ptr);
+        if (SgTemplateFunctionDeclaration *tmpl_decl =
+                isSgTemplateFunctionDeclaration(base_decl)) {
+          inst_decl->set_templateDeclaration(tmpl_decl);
+          inst_decl->set_templateName(tmpl_decl->get_name());
+        } else if (SgTemplateFunctionDeclaration *tmpl_decl =
+                       isSgTemplateFunctionDeclaration(
+                           base_decl->get_firstNondefiningDeclaration())) {
+          inst_decl->set_templateDeclaration(tmpl_decl);
+          inst_decl->set_templateName(tmpl_decl->get_name());
+        }
+
+        SgFunctionSymbol *inst_sym =
+            isSgFunctionSymbol(inst_decl->get_symbol_from_symbol_table());
+        if (inst_sym == nullptr && func_scope != nullptr) {
+          inst_sym = new SgFunctionSymbol(inst_decl);
+          inst_sym->set_parent(inst_decl);
+          func_scope->insert_symbol(template_base_name, inst_sym);
+        }
+        if (inst_sym != nullptr) {
+          SgExpression *new_ref = SageBuilder::buildFunctionRefExp(inst_sym);
+          replace_ref(new_ref);
+        }
+      }
+    }
+  };
+
+  maybe_upgrade_template_callee();
 
   SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
   applySourceRange(param_list, call_expr->getSourceRange());
@@ -3957,8 +4216,8 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
   for (it = call_expr->arg_begin(); it != call_expr->arg_end(); ++it) {
     SgNode *tmp_expr = Traverse(*it);
     SgExpression *expr = isSgExpression(tmp_expr);
-    if (tmp_expr != NULL && expr == NULL) {
-      std::cerr << "Runtime error: tmp_expr != NULL && expr == NULL"
+    if (tmp_expr != nullptr && expr == nullptr) {
+      std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
                 << std::endl;
       res = false;
       continue;
@@ -3995,17 +4254,17 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       }
     }
   }
-  if (call_type == NULL && expr != NULL) {
+  if (call_type == nullptr && expr != nullptr) {
     call_type = expr->get_type();
   }
 
   SgFunctionCallExp *call_exp =
       new SgFunctionCallExp(expr, param_list, call_type);
-  if (call_exp != NULL) {
-    if (expr != NULL) {
+  if (call_exp != nullptr) {
+    if (expr != nullptr) {
       expr->set_parent(call_exp);
     }
-    if (param_list != NULL) {
+    if (param_list != nullptr) {
       param_list->set_parent(call_exp);
     }
     SageInterface::setOneSourcePositionNull(call_exp);
@@ -4051,25 +4310,25 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
       cxx_operator_call_expr->getNumArgs() >= 2) {
     SgNode *tmp_lhs = Traverse(cxx_operator_call_expr->getArg(0));
     SgExpression *lhs = isSgExpression(tmp_lhs);
-    if (tmp_lhs != NULL && lhs == NULL) {
+    if (tmp_lhs != nullptr && lhs == nullptr) {
       MLOG_ERROR_C(MLOG_FRONTEND,
-                   "Runtime error: tmp_lhs != NULL && lhs == NULL\n");
+                   "Runtime error: tmp_lhs != nullptr && lhs == nullptr\n");
       res = false;
     }
 
     SgNode *tmp_rhs = Traverse(cxx_operator_call_expr->getArg(1));
     SgExpression *rhs = isSgExpression(tmp_rhs);
-    if (tmp_rhs != NULL && rhs == NULL) {
+    if (tmp_rhs != nullptr && rhs == nullptr) {
       MLOG_ERROR_C(MLOG_FRONTEND,
-                   "Runtime error: tmp_rhs != NULL && rhs == NULL\n");
+                   "Runtime error: tmp_rhs != nullptr && rhs == nullptr\n");
       res = false;
     }
 
-    if (lhs != NULL && rhs != NULL) {
+    if (lhs != nullptr && rhs != nullptr) {
       SgType *lhs_type = lhs->get_type();
       SgType *op_type =
           buildTypeFromQualifiedType(cxx_operator_call_expr->getType());
-      if (lhs_type != NULL && op_type != NULL && lhs_type == op_type) {
+      if (lhs_type != nullptr && op_type != nullptr && lhs_type == op_type) {
         *node = SageBuilder::buildAssignOp(lhs, rhs);
         return VisitExpr(cxx_operator_call_expr, node) && res;
       }
@@ -4089,7 +4348,7 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
       // remain as the first argument so it can emit `obj[idx]`. Do not convert
       // the implicit object into a dot/arrow callee for this operator.
       if (cxx_operator_call_expr->getOperator() == clang::OO_Subscript) {
-        SgNode *tmp_decl = NULL;
+        SgNode *tmp_decl = nullptr;
         auto it_decl = p_decl_translation_map.find(direct_callee);
         if (it_decl != p_decl_translation_map.end()) {
           tmp_decl = it_decl->second;
@@ -4099,24 +4358,24 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
 
         SgMemberFunctionDeclaration *member_decl =
             isSgMemberFunctionDeclaration(tmp_decl);
-        SgMemberFunctionSymbol *member_sym = NULL;
-        if (member_decl != NULL) {
+        SgMemberFunctionSymbol *member_sym = nullptr;
+        if (member_decl != nullptr) {
           member_sym = isSgMemberFunctionSymbol(
               member_decl->get_symbol_from_symbol_table());
-          if (member_sym == NULL) {
+          if (member_sym == nullptr) {
             if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
               member_sym =
                   isSgMemberFunctionSymbol(decl_scope->lookup_function_symbol(
                       member_decl->get_name(), member_decl->get_type()));
             }
           }
-          if (member_sym == NULL) {
+          if (member_sym == nullptr) {
             member_sym = new SgMemberFunctionSymbol(member_decl);
             member_sym->set_parent(member_decl);
           }
         }
 
-        if (member_sym != NULL) {
+        if (member_sym != nullptr) {
           SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
           applySourceRange(param_list,
                            cxx_operator_call_expr->getSourceRange());
@@ -4124,8 +4383,8 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
           for (unsigned i = 0; i < cxx_operator_call_expr->getNumArgs(); ++i) {
             SgNode *tmp_arg = Traverse(cxx_operator_call_expr->getArg(i));
             SgExpression *arg = isSgExpression(tmp_arg);
-            if (tmp_arg != NULL && arg == NULL) {
-              std::cerr << "Runtime error: tmp_arg != NULL && arg == NULL"
+            if (tmp_arg != nullptr && arg == nullptr) {
+              std::cerr << "Runtime error: tmp_arg != nullptr && arg == nullptr"
                         << std::endl;
               res = false;
               continue;
@@ -4144,13 +4403,13 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
 
       SgNode *tmp_base = Traverse(cxx_operator_call_expr->getArg(0));
       SgExpression *base = isSgExpression(tmp_base);
-      if (tmp_base != NULL && base == NULL) {
-        std::cerr << "Runtime error: tmp_base != NULL && base == NULL"
+      if (tmp_base != nullptr && base == nullptr) {
+        std::cerr << "Runtime error: tmp_base != nullptr && base == nullptr"
                   << std::endl;
         res = false;
       }
 
-      SgNode *tmp_decl = NULL;
+      SgNode *tmp_decl = nullptr;
       auto it_decl = p_decl_translation_map.find(direct_callee);
       if (it_decl != p_decl_translation_map.end()) {
         tmp_decl = it_decl->second;
@@ -4160,28 +4419,28 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
 
       SgMemberFunctionDeclaration *member_decl =
           isSgMemberFunctionDeclaration(tmp_decl);
-      SgMemberFunctionSymbol *member_sym = NULL;
-      if (member_decl != NULL) {
+      SgMemberFunctionSymbol *member_sym = nullptr;
+      if (member_decl != nullptr) {
         member_sym = isSgMemberFunctionSymbol(
             member_decl->get_symbol_from_symbol_table());
-        if (member_sym == NULL) {
+        if (member_sym == nullptr) {
           if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
             member_sym =
                 isSgMemberFunctionSymbol(decl_scope->lookup_function_symbol(
                     member_decl->get_name(), member_decl->get_type()));
           }
         }
-        if (member_sym == NULL) {
+        if (member_sym == nullptr) {
           member_sym = new SgMemberFunctionSymbol(member_decl);
           member_sym->set_parent(member_decl);
         }
       }
 
-      if (base != NULL && member_sym != NULL) {
+      if (base != nullptr && member_sym != nullptr) {
         SgExpression *member_ref = SageBuilder::buildMemberFunctionRefExp_nfi(
             member_sym, false, false);
 
-        SgExpression *callee = NULL;
+        SgExpression *callee = nullptr;
         if (isSgPointerType(base->get_type())) {
           callee = SageBuilder::buildArrowExp(base, member_ref);
         } else {
@@ -4194,8 +4453,8 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
         for (unsigned i = 1; i < cxx_operator_call_expr->getNumArgs(); ++i) {
           SgNode *tmp_arg = Traverse(cxx_operator_call_expr->getArg(i));
           SgExpression *arg = isSgExpression(tmp_arg);
-          if (tmp_arg != NULL && arg == NULL) {
-            std::cerr << "Runtime error: tmp_arg != NULL && arg == NULL"
+          if (tmp_arg != nullptr && arg == nullptr) {
+            std::cerr << "Runtime error: tmp_arg != nullptr && arg == nullptr"
                       << std::endl;
             res = false;
             continue;
@@ -4222,11 +4481,11 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
   // CLANG FRONTEND FIX: Set uses_operator_syntax flag to true for operator
   // overloads This tells the unparser to generate operator syntax (e.g., a + b)
   // instead of explicit function call syntax (e.g., operator+(a, b))
-  if (*node != NULL && res) {
+  if (*node != nullptr && res) {
     SgFunctionCallExp *funcCall = isSgFunctionCallExp(*node);
-    if (funcCall != NULL) {
+    if (funcCall != nullptr) {
       SgExpression *callee = funcCall->get_function();
-      bool is_member_callee = (isSgMemberAccessExp(callee) != NULL);
+      bool is_member_callee = (isSgMemberAccessExp(callee) != nullptr);
       funcCall->set_uses_operator_syntax(!is_member_callee);
     }
   }
@@ -4256,7 +4515,7 @@ bool ClangToSageTranslator::VisitCastExpr(clang::CastExpr *cast_expr,
   // Process the sub-expression being cast
   SgNode *tmp_expr = Traverse(cast_expr->getSubExpr());
   SgExpression *sg_expr = isSgExpression(tmp_expr);
-  ROSE_ASSERT(sg_expr != NULL);
+  ROSE_ASSERT(sg_expr != nullptr);
 
   // Get the target type
   SgType *sg_type = buildTypeFromQualifiedType(cast_expr->getType());
@@ -4281,7 +4540,7 @@ bool ClangToSageTranslator::VisitExplicitCastExpr(
 
   SgNode *tmp_expr = Traverse(explicit_cast_expr->getSubExpr());
   SgExpression *sg_expr = isSgExpression(tmp_expr);
-  ROSE_ASSERT(sg_expr != NULL);
+  ROSE_ASSERT(sg_expr != nullptr);
 
   SgType *sg_type =
       buildTypeFromQualifiedType(explicit_cast_expr->getTypeAsWritten());
@@ -4366,7 +4625,7 @@ bool ClangToSageTranslator::VisitCXXFunctionalCastExpr(
 
   SgConstructorInitializer *ctor_init =
       SageBuilder::buildConstructorInitializer_nfi(
-          NULL, // declaration (filled in later by AST fixup if needed)
+          nullptr, // declaration (filled in later by AST fixup if needed)
           args, cast_type,
           true,         // need_name
           false,        // need_qualifier
@@ -4457,7 +4716,7 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
   SgNode *tmp_expr = Traverse(implicit_cast_expr->getSubExpr());
   SgExpression *expr = isSgExpression(tmp_expr);
 
-  ROSE_ASSERT(expr != NULL);
+  ROSE_ASSERT(expr != nullptr);
 
   // FIX: Pass through implicit casts without creating SgCastExp nodes
   // Legacy frontend doesn't create explicit cast nodes for implicit casts
@@ -4507,10 +4766,10 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
 #endif
 
   SgType *type = buildTypeFromQualifiedType(compound_literal->getType());
-  ROSE_ASSERT(type != NULL);
+  ROSE_ASSERT(type != nullptr);
   SgNode *tmp_node = Traverse(compound_literal->getInitializer());
   SgExprListExp *expr = isSgExprListExp(tmp_node);
-  ROSE_ASSERT(expr != NULL);
+  ROSE_ASSERT(expr != nullptr);
 
   SgAggregateInitializer *initializer =
       SageBuilder::buildAggregateInitializer_nfi(expr, type);
@@ -4556,7 +4815,7 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
     fi->unsetOutputInCodeGeneration();
   }
 
-  if (initializer != NULL) {
+  if (initializer != nullptr) {
     initializer->set_parent(iname);
   }
 
@@ -4565,7 +4824,7 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
 
   scope->insert_symbol(name, vsym);
   var_decl->set_isAssociatedWithDeclarationList(true);
-  if (scope != NULL) {
+  if (scope != nullptr) {
     SageInterface::appendStatement(var_decl, scope);
   }
 
@@ -4721,9 +4980,9 @@ bool ClangToSageTranslator::VisitCXXBindTemporaryExpr(
   // ROOT CAUSE FIX: CXXBindTemporaryExpr extends lifetime of temporary object
   // ROSE handles temporaries differently - just traverse the subexpression
   clang::Expr *sub_expr = cxx_bind_temporary_expr->getSubExpr();
-  if (sub_expr != NULL) {
+  if (sub_expr != nullptr) {
     *node = Traverse(sub_expr);
-    if (*node == NULL) {
+    if (*node == nullptr) {
       return false;
     }
   } else {
@@ -4777,6 +5036,27 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
     SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
     applySourceRange(args, cxx_construct_expr->getParenOrBraceRange());
 
+    auto is_std_init_list_arg = [](clang::Expr *arg) {
+      clang::Expr *base = arg;
+      while (base != nullptr) {
+        base = base->IgnoreParenImpCasts();
+        if (llvm::isa<clang::CXXStdInitializerListExpr>(base)) {
+          return true;
+        }
+        if (auto *materialize =
+                llvm::dyn_cast<clang::MaterializeTemporaryExpr>(base)) {
+          base = materialize->getSubExpr();
+          continue;
+        }
+        if (auto *bind = llvm::dyn_cast<clang::CXXBindTemporaryExpr>(base)) {
+          base = bind->getSubExpr();
+          continue;
+        }
+        break;
+      }
+      return false;
+    };
+
     // Traverse constructor arguments
     for (unsigned i = 0; i < cxx_construct_expr->getNumArgs(); ++i) {
       clang::Expr *arg = cxx_construct_expr->getArg(i);
@@ -4792,6 +5072,13 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
 
         SgNode *sg_arg = Traverse(arg);
         if (SgExpression *sg_expr = isSgExpression(sg_arg)) {
+          if (cxx_construct_expr->isListInitialization() &&
+              is_std_init_list_arg(arg)) {
+            if (SgAggregateInitializer *agg_init =
+                    isSgAggregateInitializer(sg_expr)) {
+              agg_init->set_need_explicit_braces(false);
+            }
+          }
           args->append_expression(sg_expr);
         }
       }
@@ -4817,7 +5104,7 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
 
     SgConstructorInitializer *ctor_init =
         SageBuilder::buildConstructorInitializer_nfi(
-            NULL, // declaration (filled in later by AST fixup if needed)
+            nullptr, // declaration (filled in later by AST fixup if needed)
             args, constructed_type,
             false,        // need_name
             false,        // need_qualifier
@@ -4904,14 +5191,14 @@ bool ClangToSageTranslator::VisitCXXDefaultArgExpr(
   if (cxx_default_arg_expr->getExpr() != nullptr) {
     SgNode *tmp_expr = Traverse(cxx_default_arg_expr->getExpr());
     SgExpression *expr = isSgExpression(tmp_expr);
-    if (tmp_expr != NULL && expr == NULL) {
-      std::cerr << "Runtime error: tmp_expr != NULL && expr == NULL"
+    if (tmp_expr != nullptr && expr == nullptr) {
+      std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
                 << std::endl;
       res = false;
       *node = SageBuilder::buildNullExpression();
-    } else if (expr != NULL) {
+    } else if (expr != nullptr) {
       SgExpression *expr_copy = SageInterface::deepCopy(expr);
-      ROSE_ASSERT(expr_copy != NULL);
+      ROSE_ASSERT(expr_copy != nullptr);
       *node = expr_copy;
     } else {
       *node = SageBuilder::buildNullExpression();
@@ -4932,14 +5219,14 @@ bool ClangToSageTranslator::VisitCXXDefaultInitExpr(
   bool res = true;
 
   clang::Expr *init_expr = cxx_default_init_expr->getExpr();
-  ROSE_ASSERT(init_expr != NULL);
+  ROSE_ASSERT(init_expr != nullptr);
 
   SgNode *tmp_expr = Traverse(init_expr);
   SgExpression *expr = isSgExpression(tmp_expr);
-  ROSE_ASSERT(expr != NULL);
+  ROSE_ASSERT(expr != nullptr);
 
   SgExpression *expr_copy = SageInterface::deepCopy(expr);
-  ROSE_ASSERT(expr_copy != NULL);
+  ROSE_ASSERT(expr_copy != nullptr);
   *node = expr_copy;
 
   return res;
@@ -4959,7 +5246,7 @@ bool ClangToSageTranslator::VisitCXXDeleteExpr(
   SgNode *tmp_arg = Traverse(cxx_delete_expr->getArgument());
   SgExpression *arg = isSgExpression(tmp_arg);
 
-  if (arg == NULL) {
+  if (arg == nullptr) {
     // If we can't get the argument, create a null expression as placeholder
     arg = SageBuilder::buildNullExpression();
   }
@@ -4968,7 +5255,7 @@ bool ClangToSageTranslator::VisitCXXDeleteExpr(
   bool is_array = cxx_delete_expr->isArrayForm();
 
   // Build the delete expression
-  *node = SageBuilder::buildDeleteExp(arg, is_array, false, NULL);
+  *node = SageBuilder::buildDeleteExp(arg, is_array, false, nullptr);
 
   return VisitExpr(cxx_delete_expr, node) && res;
 }
@@ -4992,20 +5279,20 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
       cxx_dependent_scope_member_expr->getMember().getAsString();
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
-  if (current_scope == NULL) {
+  if (current_scope == nullptr) {
     current_scope = getGlobalScope();
   }
-  ROSE_ASSERT(current_scope != NULL);
+  ROSE_ASSERT(current_scope != nullptr);
 
-  SgExpression *base_expr = NULL;
+  SgExpression *base_expr = nullptr;
   if (!cxx_dependent_scope_member_expr->isImplicitAccess()) {
     SgNode *tmp_base = Traverse(cxx_dependent_scope_member_expr->getBase());
     base_expr = isSgExpression(tmp_base);
-    ROSE_ASSERT(base_expr != NULL);
+    ROSE_ASSERT(base_expr != nullptr);
   }
 
   SgTemplateArgumentPtrList template_args;
-  const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+  const SgTemplateArgumentPtrList *template_args_ptr = nullptr;
   if (cxx_dependent_scope_member_expr->hasExplicitTemplateArgs()) {
     clang::TemplateArgumentListInfo arg_info;
     cxx_dependent_scope_member_expr->copyTemplateArgumentsInto(arg_info);
@@ -5017,7 +5304,7 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
       cxx_dependent_scope_member_expr->getQualifier(), current_scope,
       SgName(member_name),
       cxx_dependent_scope_member_expr->hasTemplateKeyword(), template_args_ptr);
-  ROSE_ASSERT(member_ref != NULL);
+  ROSE_ASSERT(member_ref != nullptr);
   clang::NestedNameSpecifierLoc qualifier_loc =
       cxx_dependent_scope_member_expr->getQualifierLoc();
   const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
@@ -5027,7 +5314,7 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
       member_ref, cxx_dependent_scope_member_expr->getQualifier(),
       qualifier_loc_ptr, p_compiler_instance);
 
-  if (base_expr != NULL) {
+  if (base_expr != nullptr) {
     if (cxx_dependent_scope_member_expr->isArrow()) {
       *node = SageBuilder::buildArrowExp(base_expr, member_ref);
     } else {
@@ -5039,7 +5326,7 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
 
   // Set source position
   SgExpression *expr = isSgExpression(*node);
-  if (expr != NULL) {
+  if (expr != nullptr) {
     applySourceRange(expr, cxx_dependent_scope_member_expr->getSourceRange());
   }
 
@@ -5083,7 +5370,7 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
   clang::QualType allocatedType = cxx_new_expr->getAllocatedType();
   SgType *sg_type = buildTypeFromQualifiedType(allocatedType);
 
-  SgExprListExp *placementArgs = NULL;
+  SgExprListExp *placementArgs = nullptr;
   if (cxx_new_expr->getNumPlacementArgs() > 0) {
     placementArgs = SageBuilder::buildExprListExp();
     for (clang::Expr *placementArg : cxx_new_expr->placement_arguments()) {
@@ -5094,7 +5381,7 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
     }
   }
 
-  SgConstructorInitializer *constructor_args = NULL;
+  SgConstructorInitializer *constructor_args = nullptr;
   if (const clang::CXXConstructExpr *construct_expr =
           cxx_new_expr->getConstructExpr()) {
     SgNode *constructorInitializer =
@@ -5103,7 +5390,7 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
   }
 
   SgNode *clangFuncDecl = Traverse(cxx_new_expr->getOperatorNew());
-  if (constructor_args && cxx_new_expr->getConstructExpr() != NULL) {
+  if (constructor_args && cxx_new_expr->getConstructExpr() != nullptr) {
     // (4/28/23 Pei-Hung) The type name is given through sg_type,
     // SgConstructorInitializer doesn't seem to provide name for unparsing.
     constructor_args->set_need_name(false);
@@ -5116,7 +5403,7 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
     // TODO
   }
 
-  SgExpression *builtin_args = NULL;
+  SgExpression *builtin_args = nullptr;
   short int need_global_specifier = (short int)cxx_new_expr->isGlobalNew();
 
   SgNewExp *newExp =
@@ -5170,7 +5457,7 @@ bool ClangToSageTranslator::VisitCXXNullPtrLiteralExpr(
   SgType *nullptr_type =
       buildTypeFromQualifiedType(cxx_null_ptr_literal_expr->getType());
 
-  if (nullptr_type == NULL) {
+  if (nullptr_type == nullptr) {
     // Fallback: if type conversion fails, use void pointer type
     nullptr_type = SageBuilder::buildPointerType(SageBuilder::buildVoidType());
   }
@@ -5196,9 +5483,9 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
 
   SgNode *tmp_base = Traverse(cxx_pseudo_destructor_expr->getBase());
   SgExpression *base = isSgExpression(tmp_base);
-  ROSE_ASSERT(base != NULL);
+  ROSE_ASSERT(base != nullptr);
 
-  SgType *destroyed_type = NULL;
+  SgType *destroyed_type = nullptr;
   if (clang::TypeSourceInfo *type_info =
           cxx_pseudo_destructor_expr->getDestroyedTypeInfo()) {
     destroyed_type = buildTypeFromQualifiedType(type_info->getType());
@@ -5212,15 +5499,15 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
           SageBuilder::buildTemplateType(SgName(id->getName().str()));
     }
   }
-  ROSE_ASSERT(destroyed_type != NULL);
+  ROSE_ASSERT(destroyed_type != nullptr);
 
   Sg_File_Info *file_info =
       Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
-  ROSE_ASSERT(file_info != NULL);
+  ROSE_ASSERT(file_info != nullptr);
 
   SgPseudoDestructorRefExp *pseudo_dtor =
       new SgPseudoDestructorRefExp(file_info, destroyed_type);
-  ROSE_ASSERT(pseudo_dtor != NULL);
+  ROSE_ASSERT(pseudo_dtor != nullptr);
   pseudo_dtor->post_construction_initialization();
 
   clang::SourceLocation tilde_loc = cxx_pseudo_destructor_expr->getTildeLoc();
@@ -5235,7 +5522,7 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
     applySourceRange(pseudo_dtor, cxx_pseudo_destructor_expr->getSourceRange());
   }
 
-  SgExpression *callee = NULL;
+  SgExpression *callee = nullptr;
   if (cxx_pseudo_destructor_expr->isArrow()) {
     callee =
         SageBuilder::buildBinaryExpression_nfi<SgArrowExp>(base, pseudo_dtor);
@@ -5243,7 +5530,7 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
     callee =
         SageBuilder::buildBinaryExpression_nfi<SgDotExp>(base, pseudo_dtor);
   }
-  ROSE_ASSERT(callee != NULL);
+  ROSE_ASSERT(callee != nullptr);
   applySourceRange(callee, cxx_pseudo_destructor_expr->getSourceRange());
 
   *node = callee;
@@ -5281,7 +5568,7 @@ bool ClangToSageTranslator::VisitCXXScalarValueInitExpr(
   SgType *type =
       buildTypeFromQualifiedType(cxx_scalar_value_init_expr->getType());
 
-  if (type == NULL) {
+  if (type == nullptr) {
     type = SageBuilder::buildVoidType();
   }
 
@@ -5302,7 +5589,46 @@ bool ClangToSageTranslator::VisitCXXStdInitializerListExpr(
 #endif
   bool res = true;
 
-  // TODO
+  clang::Expr *sub_expr = cxx_std_initializer_list_expr->getSubExpr();
+  if (sub_expr == nullptr) {
+    std::cerr << "Runtime error: CXXStdInitializerListExpr has no subexpr."
+              << std::endl;
+    return false;
+  }
+
+  SgNode *tmp_sub = Traverse(sub_expr);
+  if (tmp_sub == nullptr) {
+    std::cerr << "Runtime error: failed to translate CXXStdInitializerListExpr "
+                 "subexpr."
+              << std::endl;
+    return false;
+  }
+
+  SgExprListExp *expr_list = isSgExprListExp(tmp_sub);
+  if (expr_list == nullptr) {
+    if (SgAggregateInitializer *agg_init = isSgAggregateInitializer(tmp_sub)) {
+      *node = agg_init;
+      return VisitExpr(cxx_std_initializer_list_expr, node) && res;
+    }
+
+    SgExpression *expr = isSgExpression(tmp_sub);
+    if (expr == nullptr) {
+      std::cerr << "Runtime error: CXXStdInitializerListExpr subexpr is not an "
+                   "expression."
+                << std::endl;
+      return false;
+    }
+
+    expr_list = SageBuilder::buildExprListExp_nfi();
+    expr_list->append_expression(expr);
+  }
+
+  SgType *init_list_type =
+      buildTypeFromQualifiedType(cxx_std_initializer_list_expr->getType());
+  SgAggregateInitializer *agg_init =
+      SageBuilder::buildAggregateInitializer_nfi(expr_list, init_list_type);
+  applySourceRange(agg_init, cxx_std_initializer_list_expr->getSourceRange());
+  *node = agg_init;
 
   return VisitExpr(cxx_std_initializer_list_expr, node) && res;
 }
@@ -5315,18 +5641,18 @@ bool ClangToSageTranslator::VisitCXXThisExpr(clang::CXXThisExpr *cxx_this_expr,
   bool res = true;
 
   SgSymbol *this_symbol = findEnclosingThisSymbol(SageBuilder::topScopeStack());
-  if (this_symbol == NULL) {
+  if (this_symbol == nullptr) {
     const clang::Type *this_type_ptr =
         cxx_this_expr->getType().getTypePtrOrNull();
     const clang::PointerType *pointer_type =
-        this_type_ptr != NULL ? this_type_ptr->getAs<clang::PointerType>()
-                              : NULL;
-    const clang::CXXRecordDecl *record_decl = NULL;
-    if (pointer_type != NULL) {
+        this_type_ptr != nullptr ? this_type_ptr->getAs<clang::PointerType>()
+                                 : nullptr;
+    const clang::CXXRecordDecl *record_decl = nullptr;
+    if (pointer_type != nullptr) {
       record_decl = pointer_type->getPointeeType()->getAsCXXRecordDecl();
     }
 
-    if (record_decl != NULL) {
+    if (record_decl != nullptr) {
       const clang::CXXRecordDecl *canonical_decl =
           record_decl->getCanonicalDecl();
       auto it = p_decl_translation_map.find(
@@ -5336,7 +5662,7 @@ bool ClangToSageTranslator::VisitCXXThisExpr(clang::CXXThisExpr *cxx_this_expr,
             const_cast<clang::CXXRecordDecl *>(record_decl));
       }
 
-      SgClassDeclaration *class_decl = NULL;
+      SgClassDeclaration *class_decl = nullptr;
       if (it != p_decl_translation_map.end()) {
         class_decl = isSgClassDeclaration(it->second);
       } else {
@@ -5345,7 +5671,7 @@ bool ClangToSageTranslator::VisitCXXThisExpr(clang::CXXThisExpr *cxx_this_expr,
         class_decl = isSgClassDeclaration(tmp_class);
       }
 
-      if (class_decl != NULL && class_decl->get_scope() != NULL) {
+      if (class_decl != nullptr && class_decl->get_scope() != nullptr) {
         SgScopeStatement *decl_scope = class_decl->get_scope();
         SgName class_name = class_decl->get_name();
 
@@ -5354,11 +5680,11 @@ bool ClangToSageTranslator::VisitCXXThisExpr(clang::CXXThisExpr *cxx_this_expr,
         // SgTemplateClassDeclaration) and avoids inserting invalid
         // SgClassSymbol entries that trip AstConsistencyTests.
         SgSymbol *class_sym = class_decl->get_symbol_from_symbol_table();
-        if (class_sym == NULL) {
+        if (class_sym == nullptr) {
           class_sym = decl_scope->lookup_symbol(class_name);
         }
 
-        if (class_sym == NULL) {
+        if (class_sym == nullptr) {
           if (SgTemplateClassDeclaration *tmpl_decl =
                   isSgTemplateClassDeclaration(class_decl)) {
             class_sym = new SgTemplateClassSymbol(tmpl_decl);
@@ -5373,7 +5699,7 @@ bool ClangToSageTranslator::VisitCXXThisExpr(clang::CXXThisExpr *cxx_this_expr,
     }
   }
 
-  ROSE_ASSERT(this_symbol != NULL);
+  ROSE_ASSERT(this_symbol != nullptr);
 
   SgThisExp *this_exp = SageBuilder::buildThisExp_nfi(this_symbol);
   *node = this_exp;
@@ -5390,16 +5716,16 @@ bool ClangToSageTranslator::VisitCXXThrowExpr(
 
   // ROOT CAUSE FIX: CXXThrowExpr represents C++ throw expressions
   // Can be either "throw expr;" or bare "throw;" (rethrow)
-  SgExpression *throw_operand = NULL;
+  SgExpression *throw_operand = nullptr;
   SgThrowOp::e_throw_kind throw_kind;
 
   // Check if this is a rethrow (bare "throw;") or throw with expression
   clang::Expr *sub_expr = cxx_throw_expr->getSubExpr();
-  if (sub_expr != NULL) {
+  if (sub_expr != nullptr) {
     // Regular throw with an expression
     SgNode *tmp_expr = Traverse(sub_expr);
     throw_operand = isSgExpression(tmp_expr);
-    if (throw_operand == NULL) {
+    if (throw_operand == nullptr) {
       std::cerr << "Error: Failed to convert throw operand expression"
                 << std::endl;
       return false;
@@ -5412,7 +5738,7 @@ bool ClangToSageTranslator::VisitCXXThrowExpr(
 
   // Build the throw operation
   SgThrowOp *throw_op = SageBuilder::buildThrowOp(throw_operand, throw_kind);
-  ROSE_ASSERT(throw_op != NULL);
+  ROSE_ASSERT(throw_op != nullptr);
 
   *node = throw_op;
 
@@ -5430,32 +5756,32 @@ bool ClangToSageTranslator::VisitCXXTypeidExpr(
       buildTypeFromQualifiedType(cxx_typeid_expr->getType());
   SgReferenceType *ref_type = isSgReferenceType(expression_type);
   SgType *base_type =
-      (ref_type != NULL) ? ref_type->get_base_type() : expression_type;
+      (ref_type != nullptr) ? ref_type->get_base_type() : expression_type;
   if (!SageInterface::isConstType(base_type)) {
     base_type = SageBuilder::buildConstType(base_type);
   }
-  if (ref_type == NULL || base_type != ref_type->get_base_type()) {
+  if (ref_type == nullptr || base_type != ref_type->get_base_type()) {
     expression_type = SageBuilder::buildReferenceType(base_type);
   }
 
   if (cxx_typeid_expr->isTypeOperand()) {
-    SgType *type = NULL;
+    SgType *type = nullptr;
     if (p_compiler_instance != nullptr) {
       type = buildTypeFromQualifiedType(cxx_typeid_expr->getTypeOperand(
           p_compiler_instance->getASTContext()));
     }
-    if (type == NULL) {
+    if (type == nullptr) {
       type = SageBuilder::buildUnknownType();
     }
-    *node = SageBuilder::buildTypeIdOp(NULL, type, expression_type);
+    *node = SageBuilder::buildTypeIdOp(nullptr, type, expression_type);
   } else {
     SgNode *tmp_expr = Traverse(cxx_typeid_expr->getExprOperand());
     SgExpression *expr = isSgExpression(tmp_expr);
-    if (expr == NULL) {
+    if (expr == nullptr) {
       expr = SageBuilder::buildNullExpression();
     }
     SgTypeIdOp *typeid_op =
-        SageBuilder::buildTypeIdOp(expr, NULL, expression_type);
+        SageBuilder::buildTypeIdOp(expr, nullptr, expression_type);
     expr->set_parent(typeid_op);
     *node = typeid_op;
   }
@@ -5485,7 +5811,7 @@ bool ClangToSageTranslator::VisitCXXUnresolvedConstructExpr(
   for (unsigned i = 0; i < cxx_unresolved_construct_expr->getNumArgs(); i++) {
     SgNode *tmp_expr = Traverse(cxx_unresolved_construct_expr->getArg(i));
     SgExpression *arg = isSgExpression(tmp_expr);
-    if (arg != NULL) {
+    if (arg != nullptr) {
       args->append_expression(arg);
     }
   }
@@ -5493,8 +5819,8 @@ bool ClangToSageTranslator::VisitCXXUnresolvedConstructExpr(
   // Build constructor initializer for the unresolved construct
   SgConstructorInitializer *ctor_init =
       SageBuilder::buildConstructorInitializer_nfi(
-          NULL, // declaration will be NULL for unresolved/dependent
-                // constructors
+          nullptr, // declaration will be nullptr for unresolved/dependent
+                   // constructors
           args, type,
           false, // need_name
           false, // need_qualifier
@@ -5525,7 +5851,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   if (clang::NonTypeTemplateParmDecl *non_type_param =
           llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(
               decl_ref_expr->getDecl())) {
-    SgDeclarationStatement *owning_template = NULL;
+    SgDeclarationStatement *owning_template = nullptr;
     if (clang::DeclContext *ctx = non_type_param->getDeclContext()) {
       if (clang::TemplateDecl *template_ctx =
               llvm::dyn_cast<clang::TemplateDecl>(ctx)) {
@@ -5540,11 +5866,11 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     SgTemplateParameter *sg_param =
         translateTemplateParameter(non_type_param, owning_template, position);
 
-    if (sg_param != NULL) {
+    if (sg_param != nullptr) {
       SgTemplateParameterVal *param_val =
           SageBuilder::buildTemplateParameterVal(non_type_param->getIndex());
       param_val->set_valueString(non_type_param->getNameAsString());
-      if (sg_param->get_type() != NULL) {
+      if (sg_param->get_type() != nullptr) {
         param_val->set_valueType(sg_param->get_type());
       }
       applySourceRange(param_val, decl_ref_expr->getSourceRange());
@@ -5621,7 +5947,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   // they are declared...)
   // FIXME: I feel like it could work now, we will see ....
 
-  SgSymbol *sym = NULL;
+  SgSymbol *sym = nullptr;
   if (decl_ref_expr->hasQualifier()) {
     if (const clang::NestedNameSpecifier *qualifier =
             decl_ref_expr->getQualifier()) {
@@ -5630,7 +5956,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 ensureNamespaceDeclaration(namespaceDecl)) {
           SgNamespaceDefinitionStatement *namespaceDefinition =
               namespaceDeclStmt->get_definition();
-          if (namespaceDefinition != NULL) {
+          if (namespaceDefinition != nullptr) {
             SageBuilder::pushScopeStack(namespaceDefinition);
             sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
             SageBuilder::popScopeStack();
@@ -5643,20 +5969,20 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           // Resolve the class definition for qualified lookup, translating
           // on-demand if needed.
           SgClassDefinition *classDef = classDecl->get_definition();
-          if (classDef == NULL) {
+          if (classDef == nullptr) {
             if (SgClassDeclaration *def_decl = isSgClassDeclaration(
                     classDecl->get_definingDeclaration())) {
               classDef = def_decl->get_definition();
             }
           }
-          if (classDef == NULL) {
+          if (classDef == nullptr) {
             if (clang::CXXRecordDecl *definitionDecl =
                     cxxRecordDecl->getDefinition()) {
               SgNode *def_node = TraverseOnDemand(definitionDecl);
               if (SgClassDeclaration *def_decl =
                       isSgClassDeclaration(def_node)) {
                 classDef = def_decl->get_definition();
-                if (classDef == NULL) {
+                if (classDef == nullptr) {
                   if (SgClassDeclaration *defining_decl = isSgClassDeclaration(
                           def_decl->get_definingDeclaration())) {
                     classDef = defining_decl->get_definition();
@@ -5668,7 +5994,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               }
             }
           }
-          ROSE_ASSERT(classDef != NULL);
+          ROSE_ASSERT(classDef != nullptr);
           SageBuilder::pushScopeStack(classDef);
           sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
           SageBuilder::popScopeStack();
@@ -5698,11 +6024,71 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
   }
 
-  if (sym == NULL) {
+  if (sym == nullptr) {
     sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
   }
 
-  if (sym == NULL) {
+  if (sym != nullptr) {
+    if (clang::FunctionDecl *clang_func =
+            llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
+      if (isSgTemplateFunctionSymbol(sym) != nullptr &&
+          clang_func->getDescribedFunctionTemplate() == nullptr &&
+          clang_func->getPrimaryTemplate() == nullptr) {
+        SgNode *tmp_decl = nullptr;
+        auto it_decl = p_decl_translation_map.find(clang_func);
+        if (it_decl != p_decl_translation_map.end()) {
+          tmp_decl = it_decl->second;
+        } else if (p_decl_translation_in_progress.find(clang_func) ==
+                   p_decl_translation_in_progress.end()) {
+          tmp_decl = Traverse(clang_func);
+        }
+
+        if (SgFunctionDeclaration *func_decl =
+                isSgFunctionDeclaration(tmp_decl)) {
+          SgScopeStatement *decl_scope =
+              normalizeNamespaceScope(func_decl->get_scope());
+          if (decl_scope != nullptr && func_decl->get_scope() != decl_scope) {
+            func_decl->set_scope(decl_scope);
+            if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+                    func_decl->get_firstNondefiningDeclaration())) {
+              if (first_nondef->get_scope() != decl_scope) {
+                first_nondef->set_scope(decl_scope);
+              }
+            }
+            if (SgFunctionDeclaration *def_decl = isSgFunctionDeclaration(
+                    func_decl->get_definingDeclaration())) {
+              if (def_decl->get_scope() != decl_scope) {
+                def_decl->set_scope(decl_scope);
+              }
+            }
+          }
+
+          SgFunctionSymbol *func_sym = nullptr;
+          if (decl_scope != nullptr) {
+            func_sym = decl_scope->lookup_nontemplate_function_symbol(
+                func_decl->get_name(), func_decl->get_type(), nullptr);
+          }
+          if (func_sym == nullptr && decl_scope != nullptr) {
+            func_sym = decl_scope->lookup_function_symbol(
+                func_decl->get_name(), func_decl->get_type());
+          }
+          if (func_sym == nullptr) {
+            func_sym = new SgFunctionSymbol(func_decl);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(func_decl->get_name(), func_sym);
+            } else {
+              func_sym->set_parent(func_decl);
+            }
+          }
+          if (func_sym != nullptr) {
+            sym = func_sym;
+          }
+        }
+      }
+    }
+  }
+
+  if (sym == nullptr) {
     // If Clang resolved a templated member call to a concrete FunctionDecl,
     // traversing that declaration can build multiple "foo" declarations that
     // collide (same name/signature) across different template arguments.
@@ -5720,9 +6106,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               countExpandedTemplateArguments(arg_info);
 
           clang::CXXRecordDecl *parent_decl = method_decl->getParent();
-          SgScopeStatement *class_scope = NULL;
-          if (parent_decl != NULL) {
-            SgNode *parent_node = NULL;
+          SgScopeStatement *class_scope = nullptr;
+          if (parent_decl != nullptr) {
+            SgNode *parent_node = nullptr;
             std::map<clang::Decl *, SgNode *>::iterator it_decl =
                 p_decl_translation_map.find(parent_decl);
             if (it_decl != p_decl_translation_map.end()) {
@@ -5743,7 +6129,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             }
           }
 
-          if (class_scope != NULL) {
+          if (class_scope != nullptr) {
             unsigned int functionConstVolatileFlags = 0;
             if (method_decl->isConst()) {
               functionConstVolatileFlags |= SgMemberFunctionType::e_const;
@@ -5770,19 +6156,19 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
             SgType *ret_type =
                 buildTypeFromQualifiedType(method_decl->getReturnType());
-            if (ret_type == NULL) {
+            if (ret_type == nullptr) {
               ret_type = SageBuilder::buildUnknownType();
             }
 
-            SgFunctionParameterList *param_list = NULL;
+            SgFunctionParameterList *param_list = nullptr;
             if (SgFunctionType *func_type = isSgFunctionType(
                     buildTypeFromQualifiedType(method_decl->getType()))) {
-              if (func_type->get_argument_list() != NULL) {
+              if (func_type->get_argument_list() != nullptr) {
                 param_list = SageBuilder::buildFunctionParameterList_nfi(
                     func_type->get_argument_list());
               }
             }
-            if (param_list == NULL) {
+            if (param_list == nullptr) {
               param_list = SageBuilder::buildFunctionParameterList_nfi();
             }
 
@@ -5807,18 +6193,18 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                         /*buildTemplateInstantiation=*/true, builder_args));
 
             ensure_function_param_list(inst_decl, param_list);
-            if (inst_decl != NULL) {
+            if (inst_decl != nullptr) {
               inst_decl->set_template_argument_list_is_explicit(true);
               SageBuilder::setTemplateArgumentsInDeclaration(inst_decl,
                                                              &template_args);
 
-              if (inst_decl->get_templateDeclaration() == NULL) {
+              if (inst_decl->get_templateDeclaration() == nullptr) {
                 clang::FunctionTemplateDecl *primary_template =
                     clang_func->getPrimaryTemplate();
-                if (primary_template == NULL) {
+                if (primary_template == nullptr) {
                   primary_template = clang_func->getDescribedFunctionTemplate();
                 }
-                if (primary_template != NULL) {
+                if (primary_template != nullptr) {
                   SgNode *tmpl_node = Traverse(primary_template);
                   if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                           isSgTemplateMemberFunctionDeclaration(tmpl_node)) {
@@ -5847,96 +6233,171 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     SgNode *tmp_decl = Traverse(decl_ref_expr->getDecl());
 
     // DQ (11/29/2020): Added assertion.
-    ROSE_ASSERT(tmp_decl != NULL);
+    ROSE_ASSERT(tmp_decl != nullptr);
 
 #if DEBUG_VISIT_STMT
     printf("tmp_decl = %p = %s \n", tmp_decl, tmp_decl->class_name().c_str());
 #endif
     SgInitializedName *initializedName = isSgInitializedName(tmp_decl);
 #if DEBUG_VISIT_STMT
-    if (initializedName != NULL) {
+    if (initializedName != nullptr) {
       printf("Found SgInitializedName: initializedName->get_name() = %s \n",
              initializedName->get_name().str());
     }
 #endif
 
-    if (tmp_decl != NULL) {
+    if (tmp_decl != nullptr) {
       sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
     }
 
     // FIXME hack Traverse have added the symbol but we cannot find it
     // (probably: problem with type and function lookup)
 
-    if (sym == NULL && isSgFunctionDeclaration(tmp_decl) != NULL) {
+    if (sym == nullptr && isSgFunctionDeclaration(tmp_decl) != nullptr) {
       if (SgMemberFunctionDeclaration *member_func_decl =
               isSgMemberFunctionDeclaration(tmp_decl)) {
         SgScopeStatement *decl_scope = member_func_decl->get_scope();
         decl_scope = normalizeNamespaceScope(decl_scope);
-        SgMemberFunctionSymbol *member_sym = NULL;
-        if (decl_scope != NULL) {
-          member_sym = decl_scope->lookup_nontemplate_member_function_symbol(
-              member_func_decl->get_name(), member_func_decl->get_type(), NULL);
-        }
-        if (member_sym != NULL) {
-          sym = member_sym;
+
+        SgSymbol *member_sym = nullptr;
+        if (SgTemplateMemberFunctionDeclaration *tmpl_member =
+                isSgTemplateMemberFunctionDeclaration(member_func_decl)) {
+          SgTemplateParameterPtrList *params =
+              &tmpl_member->get_templateParameters();
+          if (decl_scope != nullptr) {
+            member_sym = decl_scope->lookup_template_member_function_symbol(
+                tmpl_member->get_name(), tmpl_member->get_type(), params);
+          }
+          if (member_sym == nullptr) {
+            SgTemplateMemberFunctionSymbol *new_sym =
+                new SgTemplateMemberFunctionSymbol(tmpl_member);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(tmpl_member->get_name(), new_sym);
+            } else {
+              new_sym->set_parent(tmpl_member);
+            }
+            member_sym = new_sym;
+          }
         } else {
-          SgFunctionSymbol *wrong_sym = NULL;
-          if (decl_scope != NULL) {
-            wrong_sym = decl_scope->lookup_function_symbol(
-                member_func_decl->get_name(), member_func_decl->get_type());
+          SgMemberFunctionSymbol *member_func_sym = nullptr;
+          if (decl_scope != nullptr) {
+            member_func_sym =
+                decl_scope->lookup_nontemplate_member_function_symbol(
+                    member_func_decl->get_name(), member_func_decl->get_type(),
+                    nullptr);
           }
-          if (wrong_sym != NULL && decl_scope != NULL) {
-            decl_scope->remove_symbol(wrong_sym);
-            delete wrong_sym;
+          if (member_func_sym == nullptr && decl_scope != nullptr) {
+            if (SgFunctionSymbol *wrong_sym =
+                    decl_scope->lookup_function_symbol(
+                        member_func_decl->get_name(),
+                        member_func_decl->get_type())) {
+              decl_scope->remove_symbol(wrong_sym);
+              move_symbol_to_orphan_table(wrong_sym);
+            }
           }
-          SgMemberFunctionSymbol *new_sym =
-              new SgMemberFunctionSymbol(member_func_decl);
-          if (decl_scope != NULL) {
-            decl_scope->insert_symbol(member_func_decl->get_name(), new_sym);
-          } else {
-            new_sym->set_parent(member_func_decl);
+          if (member_func_sym == nullptr) {
+            SgMemberFunctionSymbol *new_sym =
+                new SgMemberFunctionSymbol(member_func_decl);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(member_func_decl->get_name(), new_sym);
+            } else {
+              new_sym->set_parent(member_func_decl);
+            }
+            member_func_sym = new_sym;
           }
-          sym = new_sym;
+          member_sym = member_func_sym;
         }
+        sym = member_sym;
       } else {
         SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(tmp_decl);
-        SgFunctionSymbol *new_sym = new SgFunctionSymbol(func_decl);
-        if (SgScopeStatement *decl_scope =
-                normalizeNamespaceScope(func_decl->get_scope())) {
-          decl_scope->insert_symbol(func_decl->get_name(), new_sym);
-        } else {
-          new_sym->set_parent(func_decl);
+        SgScopeStatement *decl_scope =
+            normalizeNamespaceScope(func_decl->get_scope());
+        if (decl_scope != nullptr && func_decl->get_scope() != decl_scope) {
+          func_decl->set_scope(decl_scope);
+          if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+                  func_decl->get_firstNondefiningDeclaration())) {
+            if (first_nondef->get_scope() != decl_scope) {
+              first_nondef->set_scope(decl_scope);
+            }
+          }
+          if (SgFunctionDeclaration *def_decl = isSgFunctionDeclaration(
+                  func_decl->get_definingDeclaration())) {
+            if (def_decl->get_scope() != decl_scope) {
+              def_decl->set_scope(decl_scope);
+            }
+          }
         }
-        sym = new_sym;
+
+        SgSymbol *func_sym = nullptr;
+        if (SgTemplateFunctionDeclaration *tmpl_decl =
+                isSgTemplateFunctionDeclaration(func_decl)) {
+          SgTemplateParameterPtrList *params =
+              &tmpl_decl->get_templateParameters();
+          if (decl_scope != nullptr) {
+            func_sym = decl_scope->lookup_template_function_symbol(
+                tmpl_decl->get_name(), tmpl_decl->get_type(), params);
+          }
+          if (func_sym == nullptr) {
+            SgTemplateFunctionSymbol *new_sym =
+                new SgTemplateFunctionSymbol(tmpl_decl);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(tmpl_decl->get_name(), new_sym);
+            } else {
+              new_sym->set_parent(tmpl_decl);
+            }
+            func_sym = new_sym;
+          }
+        } else {
+          SgFunctionSymbol *non_template_sym = nullptr;
+          if (decl_scope != nullptr) {
+            non_template_sym = decl_scope->lookup_nontemplate_function_symbol(
+                func_decl->get_name(), func_decl->get_type(), nullptr);
+            if (non_template_sym == nullptr) {
+              non_template_sym = decl_scope->lookup_function_symbol(
+                  func_decl->get_name(), func_decl->get_type());
+            }
+          }
+          if (non_template_sym == nullptr) {
+            SgFunctionSymbol *new_sym = new SgFunctionSymbol(func_decl);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(func_decl->get_name(), new_sym);
+            } else {
+              new_sym->set_parent(func_decl);
+            }
+            non_template_sym = new_sym;
+          }
+          func_sym = non_template_sym;
+        }
+        sym = func_sym;
       }
     }
     // ROOT CAUSE FIX: Handle SgVariableDeclaration from VisitVarDecl
     // Extract the InitializedName and create symbol if needed
-    if (sym == NULL && isSgVariableDeclaration(tmp_decl) != NULL) {
+    if (sym == nullptr && isSgVariableDeclaration(tmp_decl) != nullptr) {
       SgVariableDeclaration *var_decl_result =
           isSgVariableDeclaration(tmp_decl);
       if (var_decl_result->get_variables().size() > 0) {
         SgInitializedName *init_name = var_decl_result->get_variables()[0];
-        if (init_name != NULL) {
+        if (init_name != nullptr) {
           // Try to get existing symbol first
           SgScopeStatement *init_scope =
               normalizeNamespaceScope(init_name->get_scope());
-          if (init_scope != NULL) {
+          if (init_scope != nullptr) {
             sym = init_scope->lookup_variable_symbol(init_name->get_name());
           }
           // If still not found, create new symbol
-          if (sym == NULL) {
+          if (sym == nullptr) {
             sym = new SgVariableSymbol(init_name);
             sym->set_parent(init_name);
-            if (init_scope != NULL) {
+            if (init_scope != nullptr) {
               init_scope->insert_symbol(init_name->get_name(), sym);
             }
           }
         }
       }
     }
-    // Pei-Hung (04/07/2022) sym can be NULL in the case for C99 VLA
-    if (sym == NULL && isSgInitializedName(tmp_decl) != NULL) {
+    // Pei-Hung (04/07/2022) sym can be nullptr in the case for C99 VLA
+    if (sym == nullptr && isSgInitializedName(tmp_decl) != nullptr) {
       sym = new SgVariableSymbol(isSgInitializedName(tmp_decl));
       sym->set_parent(tmp_decl);
       SageBuilder::topScopeStack()->insert_symbol(
@@ -5944,41 +6405,41 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
   }
 
-  if (sym != NULL) {
-    // Not else if it was NULL we have try to traverse it....
+  if (sym != nullptr) {
+    // Not else if it was nullptr we have try to traverse it....
     SgVariableSymbol *var_sym = isSgVariableSymbol(sym);
     SgMemberFunctionSymbol *member_func_sym = isSgMemberFunctionSymbol(sym);
     SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym);
     SgEnumFieldSymbol *enum_sym = isSgEnumFieldSymbol(sym);
 
-    if (var_sym != NULL) {
+    if (var_sym != nullptr) {
       SgExpression *ref_exp = SageBuilder::buildVarRefExp(var_sym);
       attach_explicit_qualifier(ref_exp);
       *node = ref_exp;
     } else {
       SgMemberFunctionSymbol *member_sym = member_func_sym;
-      if (member_sym == NULL && func_sym != NULL) {
+      if (member_sym == nullptr && func_sym != nullptr) {
         if (SgMemberFunctionDeclaration *member_decl =
                 isSgMemberFunctionDeclaration(func_sym->get_declaration())) {
           SgScopeStatement *decl_scope = member_decl->get_scope();
           decl_scope = normalizeNamespaceScope(decl_scope);
-          if (decl_scope != NULL) {
+          if (decl_scope != nullptr) {
             member_sym = decl_scope->lookup_nontemplate_member_function_symbol(
-                member_decl->get_name(), member_decl->get_type(), NULL);
+                member_decl->get_name(), member_decl->get_type(), nullptr);
           }
 
-          if (member_sym == NULL) {
-            SgFunctionSymbol *wrong_sym = NULL;
-            if (decl_scope != NULL) {
+          if (member_sym == nullptr) {
+            SgFunctionSymbol *wrong_sym = nullptr;
+            if (decl_scope != nullptr) {
               wrong_sym = decl_scope->lookup_function_symbol(
                   member_decl->get_name(), member_decl->get_type());
             }
-            if (wrong_sym != NULL && decl_scope != NULL) {
+            if (wrong_sym != nullptr && decl_scope != nullptr) {
               decl_scope->remove_symbol(wrong_sym);
-              delete wrong_sym;
+              move_symbol_to_orphan_table(wrong_sym);
             }
             member_sym = new SgMemberFunctionSymbol(member_decl);
-            if (decl_scope != NULL) {
+            if (decl_scope != nullptr) {
               decl_scope->insert_symbol(member_decl->get_name(), member_sym);
             } else {
               member_sym->set_parent(member_decl);
@@ -6005,25 +6466,35 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       size_t explicit_arg_count = 0;
       const bool has_explicit_template_args =
           get_explicit_template_arg_info(explicit_arg_info, explicit_arg_count);
+      const clang::TemplateArgumentList *deduced_args =
+          clang_func != nullptr ? clang_func->getTemplateSpecializationArgs()
+                                : nullptr;
+      const bool has_deduced_template_args =
+          deduced_args != nullptr && deduced_args->size() != 0;
+      if (has_deduced_template_args && explicit_arg_count == 0) {
+        explicit_arg_count = deduced_args->size();
+      }
+      const bool should_build_instantiation =
+          has_explicit_template_args || has_deduced_template_args;
       auto get_decl_namespace_scope =
           [&](clang::NamedDecl *clang_decl) -> SgScopeStatement * {
-        if (clang_decl == NULL) {
-          return NULL;
+        if (clang_decl == nullptr) {
+          return nullptr;
         }
 
         clang::DeclContext *ctx = clang_decl->getDeclContext();
-        while (ctx != NULL && !ctx->isTranslationUnit() &&
+        while (ctx != nullptr && !ctx->isTranslationUnit() &&
                !llvm::isa<clang::NamespaceDecl>(ctx)) {
           ctx = ctx->getParent();
         }
 
         clang::NamespaceDecl *ns_decl =
             llvm::dyn_cast_or_null<clang::NamespaceDecl>(ctx);
-        if (ns_decl == NULL) {
-          return NULL;
+        if (ns_decl == nullptr) {
+          return nullptr;
         }
 
-        SgScopeStatement *ns_scope = NULL;
+        SgScopeStatement *ns_scope = nullptr;
         auto it_decl = p_decl_translation_map.find(ns_decl);
         if (it_decl != p_decl_translation_map.end()) {
           if (SgNamespaceDeclarationStatement *ns_stmt =
@@ -6035,7 +6506,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
         }
 
-        if (ns_scope == NULL) {
+        if (ns_scope == nullptr) {
           if (SgNamespaceDeclarationStatement *ns_stmt =
                   ensureNamespaceDeclaration(ns_decl)) {
             ns_scope = ns_stmt->get_definition();
@@ -6045,14 +6516,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         return normalizeNamespaceScope(ns_scope);
       };
 
-      if (member_sym != NULL) {
+      if (member_sym != nullptr) {
         SgMemberFunctionSymbol *ref_member_sym = member_sym;
-        if (has_explicit_template_args) {
+        if (should_build_instantiation) {
           SgTemplateArgumentPtrList template_args;
           bool template_args_built = false;
           auto ensure_template_args = [&]() -> SgTemplateArgumentPtrList * {
             if (!template_args_built) {
-              if (clang_func != NULL) {
+              if (clang_func != nullptr) {
                 if (const clang::TemplateArgumentList *clang_args =
                         clang_func->getTemplateSpecializationArgs()) {
                   if (clang_args->size() != 0) {
@@ -6077,13 +6548,13 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           SgMemberFunctionDeclaration *member_decl =
               isSgMemberFunctionDeclaration(member_sym->get_declaration());
           SgScopeStatement *func_scope =
-              member_decl != NULL ? member_decl->get_scope() : NULL;
-          if (func_scope == NULL) {
+              member_decl != nullptr ? member_decl->get_scope() : nullptr;
+          if (func_scope == nullptr) {
             func_scope = SageBuilder::topScopeStack();
           }
 
           SgName template_base_name = member_sym->get_name();
-          if (member_decl != NULL) {
+          if (member_decl != nullptr) {
             if (SgTemplateInstantiationMemberFunctionDecl *existing_inst =
                     isSgTemplateInstantiationMemberFunctionDecl(member_decl)) {
               if (existing_inst->get_templateName().is_null() == false) {
@@ -6112,7 +6583,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               inst_decl->set_templateName(template_base_name);
             }
             reused_instantiation = true;
-          } else if (member_decl != NULL) {
+          } else if (member_decl != nullptr) {
             if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
                     isSgTemplateInstantiationMemberFunctionDecl(
                         member_decl->get_firstNondefiningDeclaration())) {
@@ -6130,7 +6601,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
           if (!reused_instantiation) {
             SgType *sym_type = member_sym->get_type();
-            if (sym_type == NULL && member_decl != NULL) {
+            if (sym_type == nullptr && member_decl != nullptr) {
               sym_type = member_decl->get_type();
             }
 
@@ -6140,32 +6611,32 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                         decl_ref_expr->getDecl())) {
               if (SgType *clang_type =
                       buildTypeFromQualifiedType(clang_func->getType())) {
-                if (isSgMemberFunctionType(clang_type) != NULL ||
-                    lookup_type == NULL) {
+                if (isSgMemberFunctionType(clang_type) != nullptr ||
+                    lookup_type == nullptr) {
                   lookup_type = clang_type;
                 }
               }
             }
 
             SgFunctionType *func_type = isSgFunctionType(lookup_type);
-            SgFunctionSymbol *existing_inst_sym = NULL;
-            if (func_scope != NULL) {
+            SgFunctionSymbol *existing_inst_sym = nullptr;
+            if (func_scope != nullptr) {
               existing_inst_sym = func_scope->lookup_function_symbol(
                   template_base_name, lookup_type, ensure_template_args());
-              if (existing_inst_sym == NULL && lookup_type != NULL) {
+              if (existing_inst_sym == nullptr && lookup_type != nullptr) {
                 SgFunctionSymbol *fallback_sym =
                     func_scope->lookup_function_symbol(template_base_name,
                                                        lookup_type);
-                if (fallback_sym != NULL) {
+                if (fallback_sym != nullptr) {
                   if (isSgTemplateInstantiationMemberFunctionDecl(
-                          fallback_sym->get_declaration()) != NULL) {
+                          fallback_sym->get_declaration()) != nullptr) {
                     existing_inst_sym = fallback_sym;
                   } else if (SgMemberFunctionDeclaration *first_nondef =
                                  isSgMemberFunctionDeclaration(
                                      fallback_sym->get_declaration()
                                          ->get_firstNondefiningDeclaration())) {
                     if (isSgTemplateInstantiationMemberFunctionDecl(
-                            first_nondef) != NULL) {
+                            first_nondef) != nullptr) {
                       existing_inst_sym = fallback_sym;
                     }
                   }
@@ -6176,11 +6647,11 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             SgMemberFunctionSymbol *inst_member_sym =
                 isSgMemberFunctionSymbol(existing_inst_sym);
             SgTemplateInstantiationMemberFunctionDecl *inst_decl =
-                inst_member_sym != NULL
+                inst_member_sym != nullptr
                     ? isSgTemplateInstantiationMemberFunctionDecl(
                           inst_member_sym->get_declaration())
-                    : NULL;
-            if (inst_decl == NULL && inst_member_sym != NULL) {
+                    : nullptr;
+            if (inst_decl == nullptr && inst_member_sym != nullptr) {
               if (SgMemberFunctionDeclaration *first_nondef =
                       isSgMemberFunctionDeclaration(
                           inst_member_sym->get_declaration()
@@ -6190,7 +6661,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               }
             }
 
-            if (inst_member_sym != NULL && inst_decl != NULL) {
+            if (inst_member_sym != nullptr && inst_decl != nullptr) {
               ensure_function_param_list(inst_decl, nullptr);
               ref_member_sym = inst_member_sym;
               inst_decl->set_template_argument_list_is_explicit(
@@ -6203,13 +6674,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               }
             } else {
               SgType *ret_type =
-                  func_type != NULL ? func_type->get_return_type() : NULL;
-              if (ret_type == NULL) {
+                  func_type != nullptr ? func_type->get_return_type() : nullptr;
+              if (ret_type == nullptr) {
                 ret_type = SageBuilder::buildUnknownType();
               }
 
-              SgFunctionParameterList *param_list = NULL;
-              if (func_type != NULL && func_type->get_argument_list() != NULL) {
+              SgFunctionParameterList *param_list = nullptr;
+              if (func_type != nullptr &&
+                  func_type->get_argument_list() != nullptr) {
                 param_list = SageBuilder::buildFunctionParameterList_nfi(
                     func_type->get_argument_list());
               } else {
@@ -6231,13 +6703,13 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                           /*buildTemplateInstantiation=*/true, builder_args));
 
               ensure_function_param_list(inst_decl, param_list);
-              if (inst_decl != NULL) {
+              if (inst_decl != nullptr) {
                 inst_decl->set_template_argument_list_is_explicit(
                     has_explicit_template_args);
                 SageBuilder::setTemplateArgumentsInDeclaration(
                     inst_decl, ensure_template_args());
 
-                if (member_decl != NULL) {
+                if (member_decl != nullptr) {
                   if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                           isSgTemplateMemberFunctionDeclaration(member_decl)) {
                     inst_decl->set_templateDeclaration(tmpl_decl);
@@ -6251,18 +6723,18 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                   }
                 }
 
-                if (inst_decl->get_templateDeclaration() == NULL) {
+                if (inst_decl->get_templateDeclaration() == nullptr) {
                   if (clang::FunctionDecl *clang_func =
                           llvm::dyn_cast<clang::FunctionDecl>(
                               decl_ref_expr->getDecl())) {
                     clang::FunctionTemplateDecl *primary_template =
                         clang_func->getPrimaryTemplate();
-                    if (primary_template == NULL) {
+                    if (primary_template == nullptr) {
                       primary_template =
                           clang_func->getDescribedFunctionTemplate();
                     }
 
-                    if (primary_template != NULL) {
+                    if (primary_template != nullptr) {
                       SgNode *tmpl_node = Traverse(primary_template);
                       if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                               isSgTemplateMemberFunctionDeclaration(
@@ -6276,7 +6748,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
                 SgMemberFunctionSymbol *inst_sym = isSgMemberFunctionSymbol(
                     inst_decl->get_symbol_from_symbol_table());
-                if (inst_sym == NULL) {
+                if (inst_sym == nullptr) {
                   if (SgMemberFunctionDeclaration *first_nondef =
                           isSgMemberFunctionDeclaration(
                               inst_decl->get_firstNondefiningDeclaration())) {
@@ -6284,16 +6756,16 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                         first_nondef->get_symbol_from_symbol_table());
                   }
                 }
-                if (inst_sym == NULL && func_scope != NULL) {
+                if (inst_sym == nullptr && func_scope != nullptr) {
                   SgFunctionSymbol *lookup_sym =
                       func_scope->lookup_function_symbol(
                           template_base_name, lookup_type,
                           ensure_template_args());
-                  if (lookup_sym == NULL && lookup_type != NULL) {
+                  if (lookup_sym == nullptr && lookup_type != nullptr) {
                     lookup_sym = func_scope->lookup_function_symbol(
                         template_base_name, lookup_type);
                   }
-                  if (lookup_sym != NULL) {
+                  if (lookup_sym != nullptr) {
                     if (SgTemplateInstantiationMemberFunctionDecl *lookup_decl =
                             isSgTemplateInstantiationMemberFunctionDecl(
                                 lookup_sym->get_declaration())) {
@@ -6304,18 +6776,18 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                                 lookup_sym->get_declaration()
                                     ->get_firstNondefiningDeclaration())) {
                       if (isSgTemplateInstantiationMemberFunctionDecl(
-                              first_nondef) != NULL) {
+                              first_nondef) != nullptr) {
                         inst_sym = isSgMemberFunctionSymbol(lookup_sym);
                       }
                     }
                   }
                 }
-                if (inst_sym == NULL && func_scope != NULL) {
+                if (inst_sym == nullptr && func_scope != nullptr) {
                   inst_sym = new SgMemberFunctionSymbol(inst_decl);
                   inst_sym->set_parent(inst_decl);
                   func_scope->insert_symbol(template_base_name, inst_sym);
                 }
-                if (inst_sym != NULL) {
+                if (inst_sym != nullptr) {
                   ref_member_sym = inst_sym;
                 }
               }
@@ -6328,14 +6800,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             ref_member_sym, false, need_qualifier);
         attach_explicit_qualifier(ref_exp);
         *node = ref_exp;
-      } else if (func_sym != NULL) {
+      } else if (func_sym != nullptr) {
         SgFunctionSymbol *ref_func_sym = func_sym;
-        if (has_explicit_template_args) {
+        if (should_build_instantiation) {
           SgTemplateArgumentPtrList template_args;
           bool template_args_built = false;
           auto ensure_template_args = [&]() -> SgTemplateArgumentPtrList * {
             if (!template_args_built) {
-              if (clang_func != NULL) {
+              if (clang_func != nullptr) {
                 if (const clang::TemplateArgumentList *clang_args =
                         clang_func->getTemplateSpecializationArgs()) {
                   if (clang_args->size() != 0) {
@@ -6366,14 +6838,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                              decl_ref_expr->getDecl()))) {
             func_scope = decl_scope;
           }
-          if (func_scope == NULL) {
+          if (func_scope == nullptr) {
             func_scope = SageBuilder::topScopeStack();
           }
 
           SgFunctionDeclaration *decl =
               isSgFunctionDeclaration(func_sym->get_declaration());
           SgName template_base_name = func_sym->get_name();
-          if (decl != NULL) {
+          if (decl != nullptr) {
             if (SgTemplateInstantiationFunctionDecl *existing_inst =
                     isSgTemplateInstantiationFunctionDecl(decl)) {
               if (existing_inst->get_templateName().is_null() == false) {
@@ -6400,7 +6872,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               inst_decl->set_templateName(template_base_name);
             }
             reused_instantiation = true;
-          } else if (decl != NULL) {
+          } else if (decl != nullptr) {
             if (SgTemplateInstantiationFunctionDecl *inst_decl =
                     isSgTemplateInstantiationFunctionDecl(
                         decl->get_firstNondefiningDeclaration())) {
@@ -6423,32 +6895,32 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                         decl_ref_expr->getDecl())) {
               if (SgType *clang_type =
                       buildTypeFromQualifiedType(clang_func->getType())) {
-                if (isSgFunctionType(clang_type) != NULL ||
-                    lookup_type == NULL) {
+                if (isSgFunctionType(clang_type) != nullptr ||
+                    lookup_type == nullptr) {
                   lookup_type = clang_type;
                 }
               }
             }
 
             SgFunctionType *func_type = isSgFunctionType(lookup_type);
-            SgFunctionSymbol *existing_inst_sym = NULL;
-            if (func_scope != NULL) {
+            SgFunctionSymbol *existing_inst_sym = nullptr;
+            if (func_scope != nullptr) {
               existing_inst_sym = func_scope->lookup_function_symbol(
                   template_base_name, lookup_type, ensure_template_args());
-              if (existing_inst_sym == NULL && lookup_type != NULL) {
+              if (existing_inst_sym == nullptr && lookup_type != nullptr) {
                 SgFunctionSymbol *fallback_sym =
                     func_scope->lookup_function_symbol(template_base_name,
                                                        lookup_type);
-                if (fallback_sym != NULL) {
+                if (fallback_sym != nullptr) {
                   if (isSgTemplateInstantiationFunctionDecl(
-                          fallback_sym->get_declaration()) != NULL) {
+                          fallback_sym->get_declaration()) != nullptr) {
                     existing_inst_sym = fallback_sym;
                   } else if (SgFunctionDeclaration *first_nondef =
                                  isSgFunctionDeclaration(
                                      fallback_sym->get_declaration()
                                          ->get_firstNondefiningDeclaration())) {
                     if (isSgTemplateInstantiationFunctionDecl(first_nondef) !=
-                        NULL) {
+                        nullptr) {
                       existing_inst_sym = fallback_sym;
                     }
                   }
@@ -6459,10 +6931,11 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             SgFunctionSymbol *inst_func_sym =
                 isSgFunctionSymbol(existing_inst_sym);
             SgTemplateInstantiationFunctionDecl *inst_decl =
-                inst_func_sym != NULL ? isSgTemplateInstantiationFunctionDecl(
-                                            inst_func_sym->get_declaration())
-                                      : NULL;
-            if (inst_decl == NULL && inst_func_sym != NULL) {
+                inst_func_sym != nullptr
+                    ? isSgTemplateInstantiationFunctionDecl(
+                          inst_func_sym->get_declaration())
+                    : nullptr;
+            if (inst_decl == nullptr && inst_func_sym != nullptr) {
               if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
                       inst_func_sym->get_declaration()
                           ->get_firstNondefiningDeclaration())) {
@@ -6470,7 +6943,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               }
             }
 
-            if (inst_func_sym != NULL && inst_decl != NULL) {
+            if (inst_func_sym != nullptr && inst_decl != nullptr) {
               ensure_function_param_list(inst_decl, nullptr);
               ref_func_sym = inst_func_sym;
               inst_decl->set_template_argument_list_is_explicit(
@@ -6483,13 +6956,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               }
             } else {
               SgType *ret_type =
-                  func_type != NULL ? func_type->get_return_type() : NULL;
-              if (ret_type == NULL) {
+                  func_type != nullptr ? func_type->get_return_type() : nullptr;
+              if (ret_type == nullptr) {
                 ret_type = SageBuilder::buildUnknownType();
               }
 
-              SgFunctionParameterList *param_list = NULL;
-              if (func_type != NULL && func_type->get_argument_list() != NULL) {
+              SgFunctionParameterList *param_list = nullptr;
+              if (func_type != nullptr &&
+                  func_type->get_argument_list() != nullptr) {
                 param_list = SageBuilder::buildFunctionParameterList_nfi(
                     func_type->get_argument_list());
               } else {
@@ -6506,7 +6980,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                           /*forceFreeFunctionScope=*/false));
 
               ensure_function_param_list(inst_decl, param_list);
-              if (inst_decl != NULL) {
+              if (inst_decl != nullptr) {
                 inst_decl->set_template_argument_list_is_explicit(
                     has_explicit_template_args);
                 SageBuilder::setTemplateArgumentsInDeclaration(
@@ -6514,7 +6988,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
                 SgFunctionDeclaration *base_decl =
                     isSgFunctionDeclaration(func_sym->get_declaration());
-                if (base_decl != NULL) {
+                if (base_decl != nullptr) {
                   if (SgTemplateFunctionDeclaration *tmpl_decl =
                           isSgTemplateFunctionDeclaration(base_decl)) {
                     inst_decl->set_templateDeclaration(tmpl_decl);
@@ -6528,18 +7002,18 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                   }
                 }
 
-                if (inst_decl->get_templateDeclaration() == NULL) {
+                if (inst_decl->get_templateDeclaration() == nullptr) {
                   if (clang::FunctionDecl *clang_func =
                           llvm::dyn_cast<clang::FunctionDecl>(
                               decl_ref_expr->getDecl())) {
                     clang::FunctionTemplateDecl *primary_template =
                         clang_func->getPrimaryTemplate();
-                    if (primary_template == NULL) {
+                    if (primary_template == nullptr) {
                       primary_template =
                           clang_func->getDescribedFunctionTemplate();
                     }
 
-                    if (primary_template != NULL) {
+                    if (primary_template != nullptr) {
                       SgNode *tmpl_node = Traverse(primary_template);
                       if (SgTemplateFunctionDeclaration *tmpl_decl =
                               isSgTemplateFunctionDeclaration(tmpl_node)) {
@@ -6552,7 +7026,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
 
                 SgFunctionSymbol *inst_sym = isSgFunctionSymbol(
                     inst_decl->get_symbol_from_symbol_table());
-                if (inst_sym == NULL) {
+                if (inst_sym == nullptr) {
                   if (SgFunctionDeclaration *first_nondef =
                           isSgFunctionDeclaration(
                               inst_decl->get_firstNondefiningDeclaration())) {
@@ -6560,36 +7034,36 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                         first_nondef->get_symbol_from_symbol_table());
                   }
                 }
-                if (inst_sym == NULL && func_scope != NULL) {
+                if (inst_sym == nullptr && func_scope != nullptr) {
                   inst_sym = func_scope->lookup_function_symbol(
                       template_base_name, lookup_type, ensure_template_args());
-                  if (inst_sym == NULL && lookup_type != NULL) {
+                  if (inst_sym == nullptr && lookup_type != nullptr) {
                     inst_sym = func_scope->lookup_function_symbol(
                         template_base_name, lookup_type);
                   }
-                  if (inst_sym != NULL) {
+                  if (inst_sym != nullptr) {
                     if (isSgTemplateInstantiationFunctionDecl(
-                            inst_sym->get_declaration()) == NULL) {
+                            inst_sym->get_declaration()) == nullptr) {
                       if (SgFunctionDeclaration *first_nondef =
                               isSgFunctionDeclaration(
                                   inst_sym->get_declaration()
                                       ->get_firstNondefiningDeclaration())) {
                         if (isSgTemplateInstantiationFunctionDecl(
-                                first_nondef) == NULL) {
-                          inst_sym = NULL;
+                                first_nondef) == nullptr) {
+                          inst_sym = nullptr;
                         }
                       } else {
-                        inst_sym = NULL;
+                        inst_sym = nullptr;
                       }
                     }
                   }
                 }
-                if (inst_sym == NULL && func_scope != NULL) {
+                if (inst_sym == nullptr && func_scope != nullptr) {
                   inst_sym = new SgFunctionSymbol(inst_decl);
                   inst_sym->set_parent(inst_decl);
                   func_scope->insert_symbol(template_base_name, inst_sym);
                 }
-                if (inst_sym != NULL) {
+                if (inst_sym != nullptr) {
                   ref_func_sym = inst_sym;
                 }
               }
@@ -6600,34 +7074,34 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         attach_explicit_qualifier(ref_exp);
         *node = ref_exp;
       } else {
-        if (enum_sym != NULL) {
+        if (enum_sym != nullptr) {
           // ROOT CAUSE FIX: Get enum declaration from the type instead of
           // parent The Clang frontend may not set parent pointers
           // correctly for enum constants But the type is always set
           // correctly to an SgEnumType
           SgInitializedName *init_name = enum_sym->get_declaration();
-          SgEnumDeclaration *enum_decl = NULL;
+          SgEnumDeclaration *enum_decl = nullptr;
 
-          if (init_name != NULL && init_name->get_type() != NULL) {
+          if (init_name != nullptr && init_name->get_type() != nullptr) {
             SgEnumType *enum_type = isSgEnumType(init_name->get_type());
-            if (enum_type != NULL) {
+            if (enum_type != nullptr) {
               enum_decl = isSgEnumDeclaration(enum_type->get_declaration());
             }
           }
 
           // Fallback: try getting from parent if type method didn't work
-          if (enum_decl == NULL && init_name != NULL) {
+          if (enum_decl == nullptr && init_name != nullptr) {
             enum_decl = isSgEnumDeclaration(init_name->get_parent());
           }
 
-          ROSE_ASSERT(enum_decl != NULL);
+          ROSE_ASSERT(enum_decl != nullptr);
           SgName name = enum_sym->get_name();
           SgExpression *ref_exp =
               SageBuilder::buildEnumVal_nfi(0, enum_decl, name);
           attach_explicit_qualifier(ref_exp);
           *node = ref_exp;
         } else {
-          if (sym != NULL) {
+          if (sym != nullptr) {
             std::cerr << "Runtime error: Unknown type of symbol for a "
                          "declaration reference."
                       << std::endl;
@@ -6659,13 +7133,13 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
 
     SgScopeStatement *current_scope = SageBuilder::topScopeStack();
-    if (current_scope == NULL) {
+    if (current_scope == nullptr) {
       current_scope = getGlobalScope();
     }
-    ROSE_ASSERT(current_scope != NULL);
+    ROSE_ASSERT(current_scope != nullptr);
 
     SgTemplateArgumentPtrList template_args;
-    const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+    const SgTemplateArgumentPtrList *template_args_ptr = nullptr;
     if (decl_ref_expr->hasExplicitTemplateArgs()) {
       clang::TemplateArgumentListInfo arg_info;
       decl_ref_expr->copyTemplateArgumentsInto(arg_info);
@@ -6713,13 +7187,13 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
       dependent_scope_decl_ref_expr->getDeclName().getAsString();
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
-  if (current_scope == NULL) {
+  if (current_scope == nullptr) {
     current_scope = getGlobalScope();
   }
-  ROSE_ASSERT(current_scope != NULL);
+  ROSE_ASSERT(current_scope != nullptr);
 
   SgTemplateArgumentPtrList template_args;
-  const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+  const SgTemplateArgumentPtrList *template_args_ptr = nullptr;
   if (dependent_scope_decl_ref_expr->hasExplicitTemplateArgs()) {
     clang::TemplateArgumentListInfo arg_info;
     dependent_scope_decl_ref_expr->copyTemplateArgumentsInto(arg_info);
@@ -6734,7 +7208,7 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
 
   // Set source position
   SgExpression *expr = isSgExpression(*node);
-  if (expr != NULL) {
+  if (expr != nullptr) {
     clang::NestedNameSpecifierLoc qualifier_loc =
         dependent_scope_decl_ref_expr->getQualifierLoc();
     const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
@@ -6759,23 +7233,23 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
   std::cerr << "ClangToSageTranslator::VisitDesignatedInitExpr" << std::endl;
 #endif
 
-  SgInitializer *base_init = NULL;
-  SgDesignatedInitializer *designated_init = NULL;
-  SgExprListExp *expr_list_exp = NULL;
+  SgInitializer *base_init = nullptr;
+  SgDesignatedInitializer *designated_init = nullptr;
+  SgExprListExp *expr_list_exp = nullptr;
   {
     SgNode *tmp_expr = Traverse(designated_init_expr->getInit());
     SgExpression *expr = isSgExpression(tmp_expr);
-    ROSE_ASSERT(expr != NULL);
+    ROSE_ASSERT(expr != nullptr);
     SgExprListExp *expr_list_exp = isSgExprListExp(expr);
-    if (expr_list_exp != NULL) {
+    if (expr_list_exp != nullptr) {
       // FIXME get the type right...
       base_init =
-          SageBuilder::buildAggregateInitializer_nfi(expr_list_exp, NULL);
+          SageBuilder::buildAggregateInitializer_nfi(expr_list_exp, nullptr);
     } else {
       base_init =
           SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
     }
-    ROSE_ASSERT(base_init != NULL);
+    ROSE_ASSERT(base_init != nullptr);
     applySourceRange(base_init,
                      designated_init_expr->getInit()->getSourceRange());
   }
@@ -6791,7 +7265,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
 
   for (auto it = designatorSize; it > 0; it--) {
     expr_list_exp = SageBuilder::buildExprListExp_nfi();
-    SgExpression *expr = NULL;
+    SgExpression *expr = nullptr;
     clang::DesignatedInitExpr::Designator *D =
         designated_init_expr->getDesignator(it - 1);
     if (D->isFieldDesignator()) {
@@ -6799,8 +7273,8 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
       clang::FieldDecl *field_decl = D->getFieldDecl();
       SgSymbol *symbol = GetSymbolFromSymbolTable(field_decl);
       SgVariableSymbol *var_sym = isSgVariableSymbol(symbol);
-      if (var_sym == NULL && field_decl != NULL) {
-        SgNode *field_node = NULL;
+      if (var_sym == nullptr && field_decl != nullptr) {
+        SgNode *field_node = nullptr;
         auto it_decl = p_decl_translation_map.find(field_decl);
         if (it_decl != p_decl_translation_map.end()) {
           field_node = it_decl->second;
@@ -6808,27 +7282,27 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
           field_node = Traverse(field_decl);
         }
         SgInitializedName *init_name = isSgInitializedName(field_node);
-        if (init_name == NULL) {
+        if (init_name == nullptr) {
           if (SgVariableDeclaration *var_decl =
                   isSgVariableDeclaration(field_node)) {
             init_name = SageInterface::getFirstInitializedName(var_decl);
           }
         }
-        if (init_name != NULL) {
+        if (init_name != nullptr) {
           SgScopeStatement *decl_scope = init_name->get_scope();
-          if (decl_scope != NULL) {
+          if (decl_scope != nullptr) {
             var_sym = decl_scope->lookup_variable_symbol(init_name->get_name());
           }
-          if (var_sym == NULL) {
+          if (var_sym == nullptr) {
             var_sym = new SgVariableSymbol(init_name);
-            if (decl_scope != NULL) {
+            if (decl_scope != nullptr) {
               var_sym->set_parent(decl_scope);
               decl_scope->insert_symbol(init_name->get_name(), var_sym);
             }
           }
         }
       }
-      if (var_sym == NULL) {
+      if (var_sym == nullptr) {
         std::string field_name =
             field_decl ? field_decl->getNameAsString() : "";
         if (field_name.empty()) {
@@ -6840,7 +7314,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
         expr = SageBuilder::buildVarRefExp_nfi(var_sym);
       }
     } else if (D->isArrayDesignator()) {
-      SgNode *tmp_expr = NULL;
+      SgNode *tmp_expr = nullptr;
       if (clang::ConstantExpr::classof(
               designated_init_expr->getArrayIndex(*D))) {
         clang::FullExpr *fullExpr =
@@ -6853,7 +7327,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
         tmp_expr = Traverse(designated_init_expr->getArrayIndex(*D));
       }
       expr = isSgExpression(tmp_expr);
-      ROSE_ASSERT(expr != NULL);
+      ROSE_ASSERT(expr != nullptr);
 
     } else if (D->isArrayRangeDesignator()) {
       ROSE_ASSERT(!"I don't believe range designator initializer are supported "
@@ -6861,7 +7335,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
     } else
       ROSE_ABORT();
 
-    ROSE_ASSERT(expr != NULL);
+    ROSE_ASSERT(expr != nullptr);
 
     applySourceRange(expr, D->getSourceRange());
     expr->set_parent(expr_list_exp);
@@ -6876,7 +7350,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
       design_init->set_parent(aggListExp);
       aggListExp->append_expression(design_init);
       SgAggregateInitializer *newAggInit =
-          SageBuilder::buildAggregateInitializer_nfi(aggListExp, NULL);
+          SageBuilder::buildAggregateInitializer_nfi(aggListExp, nullptr);
       expr_list_exp = SageBuilder::buildExprListExp_nfi();
       base_init = newAggInit;
     }
@@ -6895,17 +7369,17 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
   // information stored in the list
   /*
       for (auto it=0; it < designatorSize; it++) {
-          SgExpression * expr = NULL;
+          SgExpression * expr = nullptr;
           clang::DesignatedInitExpr::Designator * D =
   designated_init_expr->getDesignator(it); if (D->isFieldDesignator()) {
               SgSymbol * symbol = GetSymbolFromSymbolTable(D->getField());
               SgVariableSymbol * var_sym = isSgVariableSymbol(symbol);
-              ROSE_ASSERT(var_sym != NULL);
+              ROSE_ASSERT(var_sym != nullptr);
               expr = SageBuilder::buildVarRefExp_nfi(var_sym);
               applySourceRange(expr, D->getSourceRange());
           }
           else if (D->isArrayDesignator()) {
-              SgNode * tmp_expr = NULL;
+              SgNode * tmp_expr = nullptr;
               if(clang::ConstantExpr::classof(designated_init_expr->getArrayIndex(*D)))
               {
                  clang::FullExpr* fullExpr = (clang::FullExpr*)
@@ -6920,7 +7394,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
                  tmp_expr = Traverse(designated_init_expr->getArrayIndex(*D));
               }
               expr = isSgExpression(tmp_expr);
-              ROSE_ASSERT(expr != NULL);
+              ROSE_ASSERT(expr != nullptr);
           }
           else if (D->isArrayRangeDesignator()) {
               ROSE_ASSERT(!"I don't believe range designator initializer are
@@ -6928,7 +7402,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
           }
           else ROSE_ABORT();
 
-          ROSE_ASSERT(expr != NULL);
+          ROSE_ASSERT(expr != nullptr);
 
           expr->set_parent(expr_list_exp);
           expr_list_exp->append_expression(expr);
@@ -6984,9 +7458,9 @@ bool ClangToSageTranslator::VisitExtVectorElementExpr(
 #if DEBUG_VISIT_STMT
   // if (base) std::cerr << "DEBUG: VisitExtVectorElementExpr base node type: "
   // << base->class_name() << std::endl; else std::cerr << "DEBUG:
-  // VisitExtVectorElementExpr base node is NULL" << std::endl;
+  // VisitExtVectorElementExpr base node is nullptr" << std::endl;
 #endif
-  ROSE_ASSERT(base != NULL);
+  ROSE_ASSERT(base != nullptr);
 
   SgType *type = buildTypeFromQualifiedType(ext_vector_element_expr->getType());
 
@@ -6995,12 +7469,12 @@ bool ClangToSageTranslator::VisitExtVectorElementExpr(
 
   SgScopeStatement *scope = SageBuilder::ScopeStack.front();
   SgGlobal *global = isSgGlobal(scope);
-  ROSE_ASSERT(global != NULL);
+  ROSE_ASSERT(global != nullptr);
 
   // Build Manually a SgVarRefExp to have the same Accessor (text version) TODO
   // ExtVectorAccessor and ExtVectorType
   SgInitializedName *init_name = SageBuilder::buildInitializedName(
-      ident, SageBuilder::buildVoidType(), NULL);
+      ident, SageBuilder::buildVoidType(), nullptr);
   setCompilerGeneratedFileInfo(init_name);
   init_name->set_scope(global);
   SgVariableSymbol *var_symbol = new SgVariableSymbol(init_name);
@@ -7008,13 +7482,13 @@ bool ClangToSageTranslator::VisitExtVectorElementExpr(
   setCompilerGeneratedFileInfo(pseudo_field, true);
   init_name->set_parent(pseudo_field);
 
-  SgExpression *res = NULL;
+  SgExpression *res = nullptr;
   if (ext_vector_element_expr->isArrow())
     res = SageBuilder::buildArrowExp(base, pseudo_field);
   else
     res = SageBuilder::buildDotExp(base, pseudo_field);
 
-  ROSE_ASSERT(res != NULL);
+  ROSE_ASSERT(res != nullptr);
 
   *node = res;
 
@@ -7188,10 +7662,10 @@ bool ClangToSageTranslator::VisitImaginaryLiteral(
 
   SgNode *tmp_imag_val = Traverse(imaginary_literal->getSubExpr());
   SgValueExp *imag_val = isSgValueExp(tmp_imag_val);
-  ROSE_ASSERT(imag_val != NULL);
+  ROSE_ASSERT(imag_val != nullptr);
 
   SgComplexVal *comp_val =
-      new SgComplexVal(NULL, imag_val, imag_val->get_type(), "");
+      new SgComplexVal(nullptr, imag_val, imag_val->get_type(), "");
 
   *node = comp_val;
 
@@ -7207,9 +7681,9 @@ bool ClangToSageTranslator::VisitImplicitValueInitExpr(
 
   SgType *type =
       buildTypeFromQualifiedType(implicit_value_init_expr->getType());
-  SgExpression *expr = NULL;
+  SgExpression *expr = nullptr;
 
-  if (type == NULL) {
+  if (type == nullptr) {
     expr = SageBuilder::buildNullExpression();
   } else if (SageInterface::isScalarType(type) ||
              SageInterface::isPointerType(type) ||
@@ -7218,12 +7692,12 @@ bool ClangToSageTranslator::VisitImplicitValueInitExpr(
     expr = SageBuilder::buildCastExp(SageBuilder::buildIntVal(0), type);
   } else {
     bool class_unknown = false;
-    if (isSgTypedefType(type) == NULL && isSgClassType(type) == NULL) {
+    if (isSgTypedefType(type) == nullptr && isSgClassType(type) == nullptr) {
       class_unknown = true;
     }
     SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
     expr = SageBuilder::buildConstructorInitializer_nfi(
-        NULL, args, type,
+        nullptr, args, type,
         false,        // need_name
         false,        // need_qualifier
         false,        // need_parenthesis_after_name
@@ -7243,7 +7717,7 @@ bool ClangToSageTranslator::VisitInitListExpr(
 #endif
 
   // We use the syntactic version of the initializer if it exists
-  if (init_list_expr->getSyntacticForm() != NULL)
+  if (init_list_expr->getSyntacticForm() != nullptr)
     return VisitInitListExpr(init_list_expr->getSyntacticForm(), node);
 
   SgExprListExp *expr_list_expr = SageBuilder::buildExprListExp_nfi();
@@ -7252,17 +7726,17 @@ bool ClangToSageTranslator::VisitInitListExpr(
   for (it = init_list_expr->begin(); it != init_list_expr->end(); it++) {
     SgNode *tmp_expr = Traverse(*it);
     SgExpression *expr = isSgExpression(tmp_expr);
-    ROSE_ASSERT(expr != NULL);
+    ROSE_ASSERT(expr != nullptr);
 
     // Pei-Hung (05/13/2022) the expr can another InitListExpr
     SgExprListExp *child_expr_list_expr = isSgExprListExp(expr);
-    SgInitializer *init = NULL;
-    if (child_expr_list_expr != NULL) {
+    SgInitializer *init = nullptr;
+    if (child_expr_list_expr != nullptr) {
       SgType *type = expr->get_type();
       init = SageBuilder::buildAggregateInitializer(child_expr_list_expr, type);
     }
 
-    if (init != NULL) {
+    if (init != nullptr) {
       applySourceRange(init, (*it)->getSourceRange());
       expr_list_expr->append_expression(init);
     } else
@@ -7423,8 +7897,8 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
 
   auto detach_declaration_from_scope =
       [](SgDeclarationStatement *decl) -> SgScopeStatement * {
-    if (decl == NULL) {
-      return NULL;
+    if (decl == nullptr) {
+      return nullptr;
     }
 
     SgScopeStatement *original_scope = decl->get_scope();
@@ -7445,7 +7919,7 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
     }
 
     auto is_attached_to_parent_container = [](SgStatement *stmt) -> bool {
-      if (stmt == NULL || stmt->get_parent() == NULL) {
+      if (stmt == nullptr || stmt->get_parent() == nullptr) {
         return false;
       }
 
@@ -7474,11 +7948,11 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
       return false;
     };
 
-    if (original_scope != NULL) {
+    if (original_scope != nullptr) {
       if (is_attached_to_parent_container(decl)) {
         SageInterface::removeStatement(decl, false);
       }
-      decl->set_parent(NULL);
+      decl->set_parent(nullptr);
     }
 
     return original_scope;
@@ -7493,9 +7967,9 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
       lambda_expr->getCallOperator();
 
   // Convert Clang lambda class to ROSE class declaration
-  SgClassDeclaration *lambda_closure_class = NULL;
-  SgScopeStatement *lambda_closure_lexical_scope = NULL;
-  if (clang_lambda_class != NULL) {
+  SgClassDeclaration *lambda_closure_class = nullptr;
+  SgScopeStatement *lambda_closure_lexical_scope = nullptr;
+  if (clang_lambda_class != nullptr) {
     SgNode *tmp_class =
         Traverse(const_cast<clang::CXXRecordDecl *>(clang_lambda_class));
     lambda_closure_class = isSgClassDeclaration(tmp_class);
@@ -7505,9 +7979,10 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
     lambda_closure_lexical_scope =
         detach_declaration_from_scope(lambda_closure_class);
 
-    // Preserve a valid scope so downstream lookups don't see NULL after
+    // Preserve a valid scope so downstream lookups don't see nullptr after
     // detachment.
-    if (lambda_closure_class != NULL && lambda_closure_lexical_scope != NULL) {
+    if (lambda_closure_class != nullptr &&
+        lambda_closure_lexical_scope != nullptr) {
       lambda_closure_class->set_scope(lambda_closure_lexical_scope);
       if (SgClassDefinition *class_def =
               lambda_closure_class->get_definition()) {
@@ -7517,9 +7992,9 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
   }
 
   // Convert Clang call operator to ROSE function declaration
-  SgFunctionDeclaration *lambda_function = NULL;
-  SgScopeStatement *lambda_function_scope = NULL;
-  if (clang_call_operator != NULL) {
+  SgFunctionDeclaration *lambda_function = nullptr;
+  SgScopeStatement *lambda_function_scope = nullptr;
+  if (clang_call_operator != nullptr) {
     SgNode *tmp_func =
         Traverse(const_cast<clang::CXXMethodDecl *>(clang_call_operator));
     lambda_function = isSgFunctionDeclaration(tmp_func);
@@ -7527,11 +8002,11 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
     lambda_function_scope = detach_declaration_from_scope(lambda_function);
 
     // Restore the scope pointer for operator() so later queries succeed.
-    if (lambda_function != NULL) {
-      if (lambda_function_scope != NULL) {
+    if (lambda_function != nullptr) {
+      if (lambda_function_scope != nullptr) {
         lambda_function->set_scope(lambda_function_scope);
-      } else if (lambda_closure_class != NULL &&
-                 lambda_closure_class->get_definition() != NULL) {
+      } else if (lambda_closure_class != nullptr &&
+                 lambda_closure_class->get_definition() != nullptr) {
         lambda_function->set_scope(lambda_closure_class->get_definition());
       }
     }
@@ -7545,24 +8020,24 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
        capture_it != lambda_expr->capture_end();
        ++capture_it, ++capture_index) {
     const clang::LambdaCapture &capture = *capture_it;
-    SgExpression *capture_expression = NULL;
+    SgExpression *capture_expression = nullptr;
     bool handled_capture = false;
 
     if (capture.capturesThis()) {
       SgSymbol *this_symbol =
           findEnclosingThisSymbol(SageBuilder::topScopeStack());
-      ROSE_ASSERT(this_symbol != NULL);
+      ROSE_ASSERT(this_symbol != nullptr);
       capture_expression = SageBuilder::buildThisExp_nfi(this_symbol);
       handled_capture = true;
     } else if (capture.capturesVariable()) {
       clang::ValueDecl *captured_val = capture.getCapturedVar();
       clang::VarDecl *captured_var =
           llvm::dyn_cast_or_null<clang::VarDecl>(captured_val);
-      if (captured_var != NULL) {
+      if (captured_var != nullptr) {
         // Look up the existing symbol instead of traversing again (avoids
         // duplicate decls)
         SgSymbol *captured_symbol = GetSymbolFromSymbolTable(captured_var);
-        if (captured_symbol == NULL) {
+        if (captured_symbol == nullptr) {
           clang::VarDecl *canonical_decl = captured_var->getCanonicalDecl();
           if (canonical_decl != captured_var) {
             captured_symbol = GetSymbolFromSymbolTable(canonical_decl);
@@ -7588,7 +8063,7 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
       continue;
     }
 
-    if (!handled_capture || capture_expression == NULL) {
+    if (!handled_capture || capture_expression == nullptr) {
       continue;
     }
 
@@ -7598,14 +8073,14 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
         (capture_kind == clang::LCK_ByRef || capture_kind == clang::LCK_This);
 
     SgLambdaCapture *sg_capture =
-        SageBuilder::buildLambdaCapture(capture_expression, NULL, NULL);
+        SageBuilder::buildLambdaCapture(capture_expression, nullptr, nullptr);
     sg_capture->set_capture_by_reference(capture_by_reference);
     sg_capture->set_implicit(capture.isImplicit());
     sg_capture->set_pack_expansion(capture.isPackExpansion());
     if (is_init_capture && capture_index < total_captures) {
       clang::Expr *clang_init_expr =
           lambda_expr->capture_init_begin()[capture_index];
-      if (clang_init_expr != NULL) {
+      if (clang_init_expr != nullptr) {
         SgNode *init_node = Traverse(clang_init_expr);
         if (SgExpression *init_expr = isSgExpression(init_node)) {
           sg_capture->set_source_closure_variable(init_expr);
@@ -7620,7 +8095,7 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
 
   SgLambdaExp *built_lambda = SageBuilder::buildLambdaExp(
       lambda_capture_list, lambda_closure_class, lambda_function);
-  ROSE_ASSERT(built_lambda != NULL);
+  ROSE_ASSERT(built_lambda != nullptr);
 
   clang::LambdaCaptureDefault capture_default =
       lambda_expr->getCaptureDefault();
@@ -7663,18 +8138,19 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
   bool res = true;
 
   bool implicit_access = member_expr->isImplicitAccess();
-  SgExpression *base = NULL;
+  SgExpression *base = nullptr;
   if (!implicit_access) {
     SgNode *tmp_base = Traverse(member_expr->getBase());
     base = isSgExpression(tmp_base);
-    if (base == NULL) {
-      // std::cerr << "DEBUG: VisitMemberExpr base is NULL! Base stmt class: "
+    if (base == nullptr) {
+      // std::cerr << "DEBUG: VisitMemberExpr base is nullptr! Base stmt class:
+      // "
       // << member_expr->getBase()->getStmtClassName() << std::endl;
     } else {
       // std::cerr << "DEBUG: VisitMemberExpr base type: " << base->class_name()
       // << std::endl;
     }
-    ROSE_ASSERT(base != NULL);
+    ROSE_ASSERT(base != nullptr);
   }
 
   SgSymbol *sym = GetSymbolFromSymbolTable(member_expr->getMemberDecl());
@@ -7685,23 +8161,23 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       isSgFunctionSymbol(sym); // Regular function symbol (not member)
   SgClassSymbol *class_sym = isSgClassSymbol(sym);
 
-  SgExpression *sg_member_expr = NULL;
+  SgExpression *sg_member_expr = nullptr;
 
   bool successful_cast = var_sym || func_sym || plain_func_sym || class_sym;
-  if (sym != NULL && !successful_cast) {
+  if (sym != nullptr && !successful_cast) {
     std::cerr << "Runtime error: Unknown type of symbol for a member reference."
               << std::endl;
     std::cerr << "    sym->class_name() = " << sym->class_name() << std::endl;
     res = false;
-  } else if (var_sym != NULL) {
+  } else if (var_sym != nullptr) {
     sg_member_expr = SageBuilder::buildVarRefExp(var_sym);
-  } else if (func_sym != NULL) { // C++ member function
+  } else if (func_sym != nullptr) { // C++ member function
     sg_member_expr = SageBuilder::buildMemberFunctionRefExp_nfi(
         func_sym, false, false);       // FIXME 2nd and 3rd params ?
-  } else if (plain_func_sym != NULL) { // Regular function treated as member
-                                       // (e.g., static member or inherited)
+  } else if (plain_func_sym != nullptr) { // Regular function treated as member
+                                          // (e.g., static member or inherited)
     sg_member_expr = SageBuilder::buildFunctionRefExp(plain_func_sym);
-  } else if (class_sym != NULL) {
+  } else if (class_sym != nullptr) {
     SgClassDeclaration *classDecl = class_sym->get_declaration();
     SgClassDeclaration *classDefDecl =
         isSgClassDeclaration(classDecl->get_definition());
@@ -7711,7 +8187,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       SgName varName(generate_name_for_variable(member_expr));
       std::cerr << "build varName:" << varName << std::endl;
       SgVariableDeclaration *var_decl = SageBuilder::buildVariableDeclaration(
-          varName, classType, NULL, SageBuilder::topScopeStack());
+          varName, classType, nullptr, SageBuilder::topScopeStack());
       var_decl->set_baseTypeDefiningDeclaration(classDefDecl);
       var_decl->set_variableDeclarationContainsBaseTypeDefiningDeclaration(
           true);
@@ -7719,10 +8195,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
       sg_member_expr = SageBuilder::buildVarRefExp(var_decl);
     }
-  } else if (sym == NULL) {
+  } else if (sym == nullptr) {
     // Symbol not found - check if member declaration has already been traversed
     // to avoid infinite recursion during template member access
-    SgNode *tmp_member = NULL;
+    SgNode *tmp_member = nullptr;
     clang::ValueDecl *member_decl = member_expr->getMemberDecl();
 
     // First check if already in translation map
@@ -7735,20 +8211,20 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     }
 
     // If not in map, traverse it (but this might fail for template members)
-    if (tmp_member == NULL) {
+    if (tmp_member == nullptr) {
       tmp_member = Traverse(member_decl);
     }
 
 #if DEBUG_VISIT_STMT
-    if (tmp_member != NULL) {
+    if (tmp_member != nullptr) {
       // std::cerr << "DEBUG VisitMemberExpr: Got/traversed member, node type: "
       // << tmp_member->class_name() << std::endl;
     } else {
-      // std::cerr << "DEBUG VisitMemberExpr: Member not available (NULL)" <<
+      // std::cerr << "DEBUG VisitMemberExpr: Member not available (nullptr)" <<
       // std::endl;
     }
 #endif
-    if (tmp_member != NULL) {
+    if (tmp_member != nullptr) {
       // CLANG FRONTEND FIX: Extract symbol from the traversed member
       // declaration.
       //
@@ -7757,15 +8233,15 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       // here would create infinite recursion when template members reference
       // each other.
       //
-      // SOLUTION: Set sym=NULL to skip the GetSymbolFromSymbolTable call below
-      // (around line 4290), and instead extract the symbol directly from the
-      // already-constructed SAGE node (tmp_member).
+      // SOLUTION: Set sym=nullptr to skip the GetSymbolFromSymbolTable call
+      // below (around line 4290), and instead extract the symbol directly from
+      // the already-constructed SAGE node (tmp_member).
       //
       // This breaks the cycle: GetSymbolFromSymbolTable → VisitMemberExpr →
-      // Traverse(member) → GetSymbolFromSymbolTable (AVOIDED by sym=NULL)
+      // Traverse(member) → GetSymbolFromSymbolTable (AVOIDED by sym=nullptr)
       //
-      sym = NULL; // Skip GetSymbolFromSymbolTable below; extract from
-                  // tmp_member instead
+      sym = nullptr; // Skip GetSymbolFromSymbolTable below; extract from
+                     // tmp_member instead
 
       // Extract symbol directly from the traversed node
       if (isSgVariableDeclaration(tmp_member)) {
@@ -7773,12 +8249,12 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
             isSgVariableDeclaration(tmp_member));
         if (init_name) {
           sym = init_name->search_for_symbol_from_symbol_table();
-          if (sym == NULL) {
+          if (sym == nullptr) {
             SgScopeStatement *decl_scope = init_name->get_scope();
-            if (decl_scope == NULL) {
+            if (decl_scope == nullptr) {
               decl_scope = SageBuilder::topScopeStack();
             }
-            if (decl_scope != NULL) {
+            if (decl_scope != nullptr) {
               SgVariableSymbol *new_sym = new SgVariableSymbol(init_name);
               new_sym->set_parent(decl_scope);
               decl_scope->insert_symbol(init_name->get_name(), new_sym);
@@ -7816,29 +8292,52 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       }
       // ROOT CAUSE FIX: Handle SgMemberFunctionDeclaration from
       // VisitCXXMethodDecl
-      else if (sym == NULL &&
-               isSgMemberFunctionDeclaration(tmp_member) != NULL) {
+      else if (sym == nullptr &&
+               isSgMemberFunctionDeclaration(tmp_member) != nullptr) {
         SgMemberFunctionDeclaration *member_func_decl =
             isSgMemberFunctionDeclaration(tmp_member);
         // Try to find existing symbol in the class scope
         SgScopeStatement *decl_scope = member_func_decl->get_scope();
-        if (decl_scope != NULL) {
-          // Use type-aware lookup to handle overloaded member functions
-          // correctly
-          SgFunctionType *func_type = member_func_decl->get_type();
-          sym = decl_scope->lookup_function_symbol(member_func_decl->get_name(),
-                                                   func_type);
-        }
-        // If still not found, create new member function symbol
-        if (sym == NULL) {
-          SgMemberFunctionSymbol *new_func_sym =
-              new SgMemberFunctionSymbol(member_func_decl);
-          new_func_sym->set_parent(member_func_decl);
-          if (decl_scope != NULL) {
-            decl_scope->insert_symbol(member_func_decl->get_name(),
-                                      new_func_sym);
+        if (SgTemplateMemberFunctionDeclaration *tmpl_member =
+                isSgTemplateMemberFunctionDeclaration(member_func_decl)) {
+          SgTemplateParameterPtrList *params =
+              &tmpl_member->get_templateParameters();
+          if (decl_scope != nullptr) {
+            sym = decl_scope->lookup_template_member_function_symbol(
+                tmpl_member->get_name(), tmpl_member->get_type(), params);
           }
-          sym = new_func_sym;
+          if (sym == nullptr) {
+            SgTemplateMemberFunctionSymbol *new_func_sym =
+                new SgTemplateMemberFunctionSymbol(tmpl_member);
+            new_func_sym->set_parent(tmpl_member);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(tmpl_member->get_name(), new_func_sym);
+            }
+            sym = new_func_sym;
+          }
+        } else {
+          if (decl_scope != nullptr) {
+            // Use type-aware lookup to handle overloaded member functions
+            // correctly
+            SgFunctionType *func_type = member_func_decl->get_type();
+            sym = decl_scope->lookup_nontemplate_member_function_symbol(
+                member_func_decl->get_name(), func_type, nullptr);
+            if (sym == nullptr) {
+              sym = decl_scope->lookup_function_symbol(
+                  member_func_decl->get_name(), func_type);
+            }
+          }
+          // If still not found, create new member function symbol
+          if (sym == nullptr) {
+            SgMemberFunctionSymbol *new_func_sym =
+                new SgMemberFunctionSymbol(member_func_decl);
+            new_func_sym->set_parent(member_func_decl);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(member_func_decl->get_name(),
+                                        new_func_sym);
+            }
+            sym = new_func_sym;
+          }
         }
         if (isSgMemberFunctionSymbol(sym)) {
           sg_member_expr = SageBuilder::buildMemberFunctionRefExp_nfi(
@@ -7846,24 +8345,64 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
         }
       }
       // Also handle regular function declarations that might be static members
-      else if (sym == NULL && isSgFunctionDeclaration(tmp_member) != NULL) {
+      else if (sym == nullptr &&
+               isSgFunctionDeclaration(tmp_member) != nullptr) {
         SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(tmp_member);
         // Try to find existing symbol
-        SgScopeStatement *decl_scope = func_decl->get_scope();
-        if (decl_scope != NULL) {
-          // Use type-aware lookup to handle overloaded functions correctly
-          SgFunctionType *func_type = func_decl->get_type();
-          sym = decl_scope->lookup_function_symbol(func_decl->get_name(),
-                                                   func_type);
-        }
-        // If not found, create new function symbol
-        if (sym == NULL) {
-          SgFunctionSymbol *new_func_sym = new SgFunctionSymbol(func_decl);
-          new_func_sym->set_parent(func_decl);
-          if (decl_scope != NULL) {
-            decl_scope->insert_symbol(func_decl->get_name(), new_func_sym);
+        SgScopeStatement *decl_scope =
+            normalizeNamespaceScope(func_decl->get_scope());
+        if (decl_scope != nullptr && func_decl->get_scope() != decl_scope) {
+          func_decl->set_scope(decl_scope);
+          if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+                  func_decl->get_firstNondefiningDeclaration())) {
+            if (first_nondef->get_scope() != decl_scope) {
+              first_nondef->set_scope(decl_scope);
+            }
           }
-          sym = new_func_sym;
+          if (SgFunctionDeclaration *def_decl = isSgFunctionDeclaration(
+                  func_decl->get_definingDeclaration())) {
+            if (def_decl->get_scope() != decl_scope) {
+              def_decl->set_scope(decl_scope);
+            }
+          }
+        }
+        if (SgTemplateFunctionDeclaration *tmpl_decl =
+                isSgTemplateFunctionDeclaration(func_decl)) {
+          SgTemplateParameterPtrList *params =
+              &tmpl_decl->get_templateParameters();
+          if (decl_scope != nullptr) {
+            sym = decl_scope->lookup_template_function_symbol(
+                tmpl_decl->get_name(), tmpl_decl->get_type(), params);
+          }
+          if (sym == nullptr) {
+            SgTemplateFunctionSymbol *new_func_sym =
+                new SgTemplateFunctionSymbol(tmpl_decl);
+            new_func_sym->set_parent(tmpl_decl);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(tmpl_decl->get_name(), new_func_sym);
+            }
+            sym = new_func_sym;
+          }
+        } else {
+          if (decl_scope != nullptr) {
+            // Use type-aware lookup to handle overloaded functions correctly
+            SgFunctionType *func_type = func_decl->get_type();
+            sym = decl_scope->lookup_nontemplate_function_symbol(
+                func_decl->get_name(), func_type, nullptr);
+            if (sym == nullptr) {
+              sym = decl_scope->lookup_function_symbol(func_decl->get_name(),
+                                                       func_type);
+            }
+          }
+          // If not found, create new function symbol
+          if (sym == nullptr) {
+            SgFunctionSymbol *new_func_sym = new SgFunctionSymbol(func_decl);
+            new_func_sym->set_parent(func_decl);
+            if (decl_scope != nullptr) {
+              decl_scope->insert_symbol(func_decl->get_name(), new_func_sym);
+            }
+            sym = new_func_sym;
+          }
         }
         if (isSgMemberFunctionSymbol(sym)) {
           sg_member_expr = SageBuilder::buildMemberFunctionRefExp_nfi(
@@ -7875,18 +8414,18 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       }
     }
 
-    // If still NULL, create a placeholder
-    if (sg_member_expr == NULL) {
+    // If still nullptr, create a placeholder
+    if (sg_member_expr == nullptr) {
       std::string member_name = member_expr->getMemberNameInfo().getAsString();
       clang::ValueDecl *member_decl = member_expr->getMemberDecl();
       if (member_decl) {
         std::cerr << "Warning: Cannot resolve "
                   << member_decl->getDeclKindName() << " member '"
                   << member_name << "'";
-        if (tmp_member != NULL) {
+        if (tmp_member != nullptr) {
           std::cerr << " (traversed to " << tmp_member->class_name() << ")";
         } else {
-          std::cerr << " (traverse returned NULL)";
+          std::cerr << " (traverse returned nullptr)";
         }
         std::cerr << ", using placeholder" << std::endl;
       } else {
@@ -7898,28 +8437,74 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     }
   }
 
-  if (sym != NULL && func_sym == NULL) {
+  if (sym != nullptr && func_sym == nullptr) {
     func_sym = isSgMemberFunctionSymbol(sym);
   }
 
-  if (member_expr->hasExplicitTemplateArgs()) {
-    clang::FunctionDecl *clang_func =
-        llvm::dyn_cast<clang::FunctionDecl>(member_expr->getMemberDecl());
-    clang::TemplateArgumentListInfo arg_info;
+  clang::FunctionDecl *clang_func =
+      llvm::dyn_cast<clang::FunctionDecl>(member_expr->getMemberDecl());
+  auto get_explicit_template_arg_info =
+      [&](clang::TemplateArgumentListInfo &arg_info,
+          size_t &explicit_arg_count) -> bool {
+    if (!member_expr->hasExplicitTemplateArgs()) {
+      return false;
+    }
+
     member_expr->copyTemplateArgumentsInto(arg_info);
-    const size_t explicit_arg_count = countExpandedTemplateArguments(arg_info);
-    SgTemplateArgumentPtrList template_args =
-        buildTemplateArguments(arg_info, true);
+    explicit_arg_count = countExpandedTemplateArguments(arg_info);
+    return true;
+  };
+
+  clang::TemplateArgumentListInfo explicit_arg_info;
+  size_t explicit_arg_count = 0;
+  const bool has_explicit_template_args =
+      get_explicit_template_arg_info(explicit_arg_info, explicit_arg_count);
+  const clang::TemplateArgumentList *deduced_args =
+      clang_func != nullptr ? clang_func->getTemplateSpecializationArgs()
+                            : nullptr;
+  const bool has_deduced_template_args =
+      deduced_args != nullptr && deduced_args->size() != 0;
+  if (has_deduced_template_args && explicit_arg_count == 0) {
+    explicit_arg_count = deduced_args->size();
+  }
+  const bool should_build_instantiation =
+      has_explicit_template_args || has_deduced_template_args;
+
+  if (should_build_instantiation) {
+    SgTemplateArgumentPtrList template_args;
+    bool template_args_built = false;
+    auto ensure_template_args = [&]() -> SgTemplateArgumentPtrList * {
+      if (!template_args_built) {
+        if (clang_func != nullptr) {
+          if (const clang::TemplateArgumentList *clang_args =
+                  clang_func->getTemplateSpecializationArgs()) {
+            if (clang_args->size() != 0) {
+              template_args =
+                  buildTemplateArguments(*clang_args, explicit_arg_count);
+            } else {
+              template_args = buildTemplateArguments(explicit_arg_info, true);
+            }
+          } else {
+            template_args = buildTemplateArguments(explicit_arg_info, true);
+          }
+        } else {
+          template_args = buildTemplateArguments(explicit_arg_info, true);
+        }
+        template_args_built = true;
+      }
+      return &template_args;
+    };
 
     auto update_inst_decl =
         [&](SgTemplateInstantiationMemberFunctionDecl *inst_decl,
             const SgName &template_base_name) {
-          if (inst_decl == NULL) {
+          if (inst_decl == nullptr) {
             return;
           }
-          inst_decl->set_template_argument_list_is_explicit(true);
-          SageBuilder::setTemplateArgumentsInDeclaration(inst_decl,
-                                                         &template_args);
+          inst_decl->set_template_argument_list_is_explicit(
+              has_explicit_template_args);
+          SageBuilder::setTemplateArgumentsInDeclaration(
+              inst_decl, ensure_template_args());
           if (inst_decl->get_templateName().is_null() == false) {
             return;
           }
@@ -7930,19 +8515,19 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
     auto ensure_template_instantiation_symbol =
         [&](SgMemberFunctionSymbol *member_symbol) -> SgMemberFunctionSymbol * {
-      if (member_symbol == NULL) {
-        return NULL;
+      if (member_symbol == nullptr) {
+        return nullptr;
       }
 
       SgMemberFunctionDeclaration *member_decl =
           isSgMemberFunctionDeclaration(member_symbol->get_declaration());
-      if (member_decl == NULL) {
+      if (member_decl == nullptr) {
         return member_symbol;
       }
 
       SgTemplateInstantiationMemberFunctionDecl *inst_decl =
           isSgTemplateInstantiationMemberFunctionDecl(member_decl);
-      if (inst_decl == NULL) {
+      if (inst_decl == nullptr) {
         if (SgMemberFunctionDeclaration *first_nondef =
                 isSgMemberFunctionDeclaration(
                     member_decl->get_firstNondefiningDeclaration())) {
@@ -7964,39 +8549,42 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
         }
       }
 
-      if (inst_decl != NULL) {
+      if (inst_decl != nullptr) {
         ensure_function_param_list(inst_decl, nullptr);
         update_inst_decl(inst_decl, template_base_name);
         return member_symbol;
       }
 
       SgScopeStatement *func_scope = member_decl->get_scope();
-      if (func_scope == NULL) {
+      if (func_scope == nullptr) {
         func_scope = SageBuilder::topScopeStack();
       }
 
       SgType *sym_type = member_decl->get_type();
-      if (clang_func != NULL) {
+      if (clang_func != nullptr) {
         if (SgType *clang_type =
                 buildTypeFromQualifiedType(clang_func->getType())) {
-          if (isSgMemberFunctionType(clang_type) != NULL || sym_type == NULL) {
+          if (isSgMemberFunctionType(clang_type) != nullptr ||
+              sym_type == nullptr) {
             sym_type = clang_type;
           }
         }
       }
 
       SgMemberFunctionType *member_type = isSgMemberFunctionType(sym_type);
-      SgType *ret_type = member_type != NULL ? member_type->get_return_type()
-                                             : SageBuilder::buildUnknownType();
+      SgType *ret_type = member_type != nullptr
+                             ? member_type->get_return_type()
+                             : SageBuilder::buildUnknownType();
       SgFunctionParameterList *param_list =
-          (member_type != NULL && member_type->get_argument_list() != NULL)
+          (member_type != nullptr &&
+           member_type->get_argument_list() != nullptr)
               ? SageBuilder::buildFunctionParameterList_nfi(
                     member_type->get_argument_list())
               : SageBuilder::buildFunctionParameterList_nfi();
       unsigned int functionConstVolatileFlags =
-          member_type != NULL ? member_type->get_mfunc_specifier() : 0;
+          member_type != nullptr ? member_type->get_mfunc_specifier() : 0;
 
-      SgTemplateArgumentPtrList builder_args(template_args);
+      SgTemplateArgumentPtrList builder_args(*ensure_template_args());
       SgTemplateInstantiationMemberFunctionDecl *new_inst_decl =
           isSgTemplateInstantiationMemberFunctionDecl(
               SageBuilder::buildNondefiningMemberFunctionDeclaration(
@@ -8005,7 +8593,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
                   /*buildTemplateInstantiation=*/true, &builder_args));
 
       ensure_function_param_list(new_inst_decl, param_list);
-      if (new_inst_decl == NULL) {
+      if (new_inst_decl == nullptr) {
         return member_symbol;
       }
 
@@ -8020,13 +8608,13 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
                          member_decl->get_firstNondefiningDeclaration())) {
         new_inst_decl->set_templateDeclaration(tmpl_decl);
         new_inst_decl->set_templateName(tmpl_decl->get_name());
-      } else if (clang_func != NULL) {
+      } else if (clang_func != nullptr) {
         clang::FunctionTemplateDecl *primary_template =
             clang_func->getPrimaryTemplate();
-        if (primary_template == NULL) {
+        if (primary_template == nullptr) {
           primary_template = clang_func->getDescribedFunctionTemplate();
         }
-        if (primary_template != NULL) {
+        if (primary_template != nullptr) {
           if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                   isSgTemplateMemberFunctionDeclaration(
                       Traverse(primary_template))) {
@@ -8038,25 +8626,26 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
       SgMemberFunctionSymbol *inst_sym = isSgMemberFunctionSymbol(
           new_inst_decl->get_symbol_from_symbol_table());
-      if (inst_sym == NULL && func_scope != NULL) {
+      if (inst_sym == nullptr && func_scope != nullptr) {
         inst_sym = new SgMemberFunctionSymbol(new_inst_decl);
         inst_sym->set_parent(new_inst_decl);
         func_scope->insert_symbol(template_base_name, inst_sym);
       }
-      return inst_sym != NULL ? inst_sym : member_symbol;
+      return inst_sym != nullptr ? inst_sym : member_symbol;
     };
 
-    if (func_sym != NULL) {
+    if (func_sym != nullptr) {
       SgMemberFunctionSymbol *inst_sym =
           ensure_template_instantiation_symbol(func_sym);
-      if (inst_sym != NULL && inst_sym != func_sym) {
+      if (inst_sym != nullptr && inst_sym != func_sym) {
         sg_member_expr =
             SageBuilder::buildMemberFunctionRefExp_nfi(inst_sym, false, false);
         func_sym = inst_sym;
       }
     }
 
-    if (clang_func != NULL && explicit_arg_count == 0 && func_sym != NULL) {
+    if (clang_func != nullptr && explicit_arg_count == 0 &&
+        func_sym != nullptr) {
       if (SgMemberFunctionDeclaration *member_decl =
               isSgMemberFunctionDeclaration(func_sym->get_declaration())) {
         if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
@@ -8067,7 +8656,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     }
   }
 
-  ROSE_ASSERT(sg_member_expr != NULL);
+  ROSE_ASSERT(sg_member_expr != nullptr);
 
   // TODO (C++) member_expr->getQualifier() : for 'a->Base::foo'
 
@@ -8248,13 +8837,13 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
   std::string function_name = unresolved_lookup_expr->getName().getAsString();
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
-  if (current_scope == NULL) {
+  if (current_scope == nullptr) {
     current_scope = getGlobalScope();
   }
-  ROSE_ASSERT(current_scope != NULL);
+  ROSE_ASSERT(current_scope != nullptr);
 
   SgTemplateArgumentPtrList template_args;
-  const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+  const SgTemplateArgumentPtrList *template_args_ptr = nullptr;
   if (unresolved_lookup_expr->hasExplicitTemplateArgs()) {
     clang::TemplateArgumentListInfo arg_info;
     unresolved_lookup_expr->copyTemplateArgumentsInto(arg_info);
@@ -8269,7 +8858,7 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
 
   // Set source position
   SgExpression *expr = isSgExpression(*node);
-  if (expr != NULL) {
+  if (expr != nullptr) {
     clang::NestedNameSpecifierLoc qualifier_loc =
         unresolved_lookup_expr->getQualifierLoc();
     const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
@@ -8301,21 +8890,21 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
       unresolved_member_expr->getMemberName().getAsString();
 
   SgScopeStatement *current_scope = SageBuilder::topScopeStack();
-  if (current_scope == NULL) {
+  if (current_scope == nullptr) {
     current_scope = getGlobalScope();
   }
-  ROSE_ASSERT(current_scope != NULL);
+  ROSE_ASSERT(current_scope != nullptr);
 
   // Handle the base expression (the object/pointer being accessed)
-  SgExpression *base_expr = NULL;
+  SgExpression *base_expr = nullptr;
   if (!unresolved_member_expr->isImplicitAccess()) {
     SgNode *tmp_base = Traverse(unresolved_member_expr->getBase());
     base_expr = isSgExpression(tmp_base);
-    ROSE_ASSERT(base_expr != NULL);
+    ROSE_ASSERT(base_expr != nullptr);
   }
 
   SgTemplateArgumentPtrList template_args;
-  const SgTemplateArgumentPtrList *template_args_ptr = NULL;
+  const SgTemplateArgumentPtrList *template_args_ptr = nullptr;
   if (unresolved_member_expr->hasExplicitTemplateArgs()) {
     clang::TemplateArgumentListInfo arg_info;
     unresolved_member_expr->copyTemplateArgumentsInto(arg_info);
@@ -8327,7 +8916,7 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
       unresolved_member_expr->getQualifier(), current_scope,
       SgName(member_name), unresolved_member_expr->hasTemplateKeyword(),
       template_args_ptr);
-  ROSE_ASSERT(member_ref != NULL);
+  ROSE_ASSERT(member_ref != nullptr);
   clang::NestedNameSpecifierLoc qualifier_loc =
       unresolved_member_expr->getQualifierLoc();
   const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
@@ -8337,7 +8926,7 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
                                         unresolved_member_expr->getQualifier(),
                                         qualifier_loc_ptr, p_compiler_instance);
 
-  if (base_expr != NULL) {
+  if (base_expr != nullptr) {
     if (unresolved_member_expr->isArrow()) {
       *node = SageBuilder::buildArrowExp(base_expr, member_ref);
     } else {
@@ -8364,10 +8953,10 @@ bool ClangToSageTranslator::VisitPackExpansionExpr(
   // ROOT CAUSE FIX: Pack expansion expressions (e.g., f(args...) where args is
   // a pack) Traverse the pattern expression (the expression before the ...)
   clang::Expr *pattern = pack_expansion_expr->getPattern();
-  if (pattern != NULL) {
+  if (pattern != nullptr) {
     SgNode *tmp_node = Traverse(pattern);
     SgExpression *pattern_expr = isSgExpression(tmp_node);
-    if (pattern_expr != NULL) {
+    if (pattern_expr != nullptr) {
       *node = pattern_expr;
       return VisitExpr(pack_expansion_expr, node) && res;
     }
@@ -8389,8 +8978,8 @@ bool ClangToSageTranslator::VisitParenExpr(clang::ParenExpr *paren_expr,
 
   SgNode *tmp_subexpr = Traverse(paren_expr->getSubExpr());
   SgExpression *subexpr = isSgExpression(tmp_subexpr);
-  if (tmp_subexpr != NULL && subexpr == NULL) {
-    std::cerr << "Runtime error: tmp_subexpr != NULL && subexpr == NULL"
+  if (tmp_subexpr != nullptr && subexpr == nullptr) {
+    std::cerr << "Runtime error: tmp_subexpr != nullptr && subexpr == nullptr"
               << std::endl;
     res = false;
   }
@@ -8424,9 +9013,9 @@ bool ClangToSageTranslator::VisitParenListExpr(
     for (unsigned i = 0; i < num_exprs; i++) {
       SgNode *tmp_expr = Traverse(paran_list_expr->getExpr(i));
       SgExpression *expr = isSgExpression(tmp_expr);
-      if (expr != NULL) {
+      if (expr != nullptr) {
         expr_list->append_expression(expr);
-      } else if (tmp_expr != NULL) {
+      } else if (tmp_expr != nullptr) {
         std::cerr << "Warning: ParenListExpr element " << i
                   << " is not an expression" << std::endl;
         res = false;
@@ -8451,14 +9040,14 @@ bool ClangToSageTranslator::VisitPredefinedExpr(
 
   // Traverse the scope's stack to find the last function definition:
 
-  SgFunctionDefinition *func_def = NULL;
+  SgFunctionDefinition *func_def = nullptr;
   std::list<SgScopeStatement *>::reverse_iterator it =
       SageBuilder::ScopeStack.rbegin();
-  while (it != SageBuilder::ScopeStack.rend() && func_def == NULL) {
+  while (it != SageBuilder::ScopeStack.rend() && func_def == nullptr) {
     func_def = isSgFunctionDefinition(*it);
     it++;
   }
-  ROSE_ASSERT(func_def != NULL);
+  ROSE_ASSERT(func_def != nullptr);
 
   // Determine the name of the variable
 
@@ -8494,10 +9083,10 @@ bool ClangToSageTranslator::VisitPredefinedExpr(
   // Else, build a compiler generated initialized name for this variable in the
   // function defintion scope.
 
-  if (symbol == NULL) {
+  if (symbol == nullptr) {
     SgInitializedName *init_name = SageBuilder::buildInitializedName_nfi(
         name, SageBuilder::buildPointerType(SageBuilder::buildCharType()),
-        NULL);
+        nullptr);
 
     init_name->set_parent(func_def);
     init_name->set_scope(func_def);
@@ -8516,7 +9105,7 @@ bool ClangToSageTranslator::VisitPredefinedExpr(
 
     func_def->insert_symbol(name, symbol);
   }
-  ROSE_ASSERT(symbol != NULL);
+  ROSE_ASSERT(symbol != nullptr);
 
   // Finally build the variable reference
 
@@ -8634,8 +9223,8 @@ bool ClangToSageTranslator::VisitStmtExpr(clang::StmtExpr *stmt_expr,
 
   SgNode *tmp_substmt = Traverse(stmt_expr->getSubStmt());
   SgStatement *substmt = isSgStatement(tmp_substmt);
-  if (tmp_substmt != NULL && substmt == NULL) {
-    std::cerr << "Runtime error: tmp_substmt != NULL && substmt == NULL"
+  if (tmp_substmt != nullptr && substmt == nullptr) {
+    std::cerr << "Runtime error: tmp_substmt != nullptr && substmt == nullptr"
               << std::endl;
     res = false;
   }
@@ -8822,8 +9411,8 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
 
   bool res = true;
 
-  SgExpression *expr = NULL;
-  SgType *type = NULL;
+  SgExpression *expr = nullptr;
+  SgType *type = nullptr;
 
   if (unary_expr_or_type_trait_expr->isArgumentType()) {
     type = buildTypeFromQualifiedType(
@@ -8833,8 +9422,8 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
         Traverse(unary_expr_or_type_trait_expr->getArgumentExpr());
     expr = isSgExpression(tmp_expr);
 
-    if (tmp_expr != NULL && expr == NULL) {
-      std::cerr << "Runtime error: tmp_expr != NULL && expr == NULL"
+    if (tmp_expr != nullptr && expr == nullptr) {
+      std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
                 << std::endl;
       res = false;
     }
@@ -8842,7 +9431,7 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
 
   switch (unary_expr_or_type_trait_expr->getKind()) {
   case clang::UETT_SizeOf:
-    if (type != NULL) {
+    if (type != nullptr) {
       std::map<SgClassType *, bool>::iterator bool_it =
           p_class_type_decl_first_see_in_type.find(isSgClassType(type));
       SgSizeOfOp *sizeofOp = SageBuilder::buildSizeOfOp_nfi(type);
@@ -8893,19 +9482,19 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
       }
 
       *node = sizeofOp;
-    } else if (expr != NULL)
+    } else if (expr != nullptr)
       *node = SageBuilder::buildSizeOfOp_nfi(expr);
     else
       res = false;
     break;
   case clang::UETT_AlignOf:
   case clang::UETT_PreferredAlignOf:
-    if (type != NULL) {
+    if (type != nullptr) {
       *node = SageBuilder::buildSizeOfOp_nfi(type);
       ROSE_ASSERT(FAIL_FIXME ==
                   0); // difference between AlignOf and PreferredAlignOf is not
                       // represented in ROSE
-    } else if (expr != NULL)
+    } else if (expr != nullptr)
       *node = SageBuilder::buildSizeOfOp_nfi(expr);
     else
       res = false;
@@ -8929,8 +9518,8 @@ bool ClangToSageTranslator::VisitUnaryOperator(
 
   SgNode *tmp_subexpr = Traverse(unary_operator->getSubExpr());
   SgExpression *subexpr = isSgExpression(tmp_subexpr);
-  if (tmp_subexpr != NULL && subexpr == NULL) {
-    std::cerr << "Runtime error: tmp_subexpr != NULL && subexpr == NULL"
+  if (tmp_subexpr != nullptr && subexpr == nullptr) {
+    std::cerr << "Runtime error: tmp_subexpr != nullptr && subexpr == nullptr"
               << std::endl;
     res = false;
   }
@@ -8993,11 +9582,11 @@ bool ClangToSageTranslator::VisitVAArgExpr(clang::VAArgExpr *va_arg_expr,
 
   SgNode *tmp_expr = Traverse(va_arg_expr->getSubExpr());
   SgExpression *expr = isSgExpression(tmp_expr);
-  ROSE_ASSERT(expr != NULL);
+  ROSE_ASSERT(expr != nullptr);
 
   SgType *type =
       buildTypeFromQualifiedType(va_arg_expr->getWrittenTypeInfo()->getType());
-  ROSE_ASSERT(type != NULL);
+  ROSE_ASSERT(type != nullptr);
 
   *node = SageBuilder::buildVarArgOp_nfi(expr, type);
 
@@ -9013,18 +9602,18 @@ bool ClangToSageTranslator::VisitLabelStmt(clang::LabelStmt *label_stmt,
 
   SgName name(label_stmt->getName());
 
-  *node = SageBuilder::buildLabelStatement_nfi(name, NULL,
+  *node = SageBuilder::buildLabelStatement_nfi(name, nullptr,
                                                SageBuilder::topScopeStack());
   SgLabelStatement *sg_label_stmt = isSgLabelStatement(*node);
 
-  SgFunctionDefinition *label_scope = NULL;
+  SgFunctionDefinition *label_scope = nullptr;
   std::list<SgScopeStatement *>::reverse_iterator it =
       SageBuilder::ScopeStack.rbegin();
-  while (it != SageBuilder::ScopeStack.rend() && label_scope == NULL) {
+  while (it != SageBuilder::ScopeStack.rend() && label_scope == nullptr) {
     label_scope = isSgFunctionDefinition(*it);
     it++;
   }
-  if (label_scope == NULL) {
+  if (label_scope == nullptr) {
     std::cerr << "Runtime error: Cannot find a surrounding function definition "
                  "for the label statement: \""
               << name << "\"." << std::endl;
@@ -9037,15 +9626,15 @@ bool ClangToSageTranslator::VisitLabelStmt(clang::LabelStmt *label_stmt,
 
   SgNode *tmp_sub_stmt = Traverse(label_stmt->getSubStmt());
   SgStatement *sg_sub_stmt = isSgStatement(tmp_sub_stmt);
-  if (sg_sub_stmt == NULL) {
+  if (sg_sub_stmt == nullptr) {
     SgExpression *sg_sub_expr = isSgExpression(tmp_sub_stmt);
-    ROSE_ASSERT(sg_sub_expr != NULL);
+    ROSE_ASSERT(sg_sub_expr != nullptr);
     sg_sub_stmt = SageBuilder::buildExprStatement(sg_sub_expr);
     applySourceRangeWithTrailingSemicolon(sg_sub_stmt,
                                           label_stmt->getSubStmt());
   }
 
-  ROSE_ASSERT(sg_sub_stmt != NULL);
+  ROSE_ASSERT(sg_sub_stmt != nullptr);
   sg_sub_stmt =
       wrapStatementWithOpenMPPragmas(label_stmt->getSubStmt(), sg_sub_stmt);
 
@@ -9063,14 +9652,15 @@ bool ClangToSageTranslator::VisitWhileStmt(clang::WhileStmt *while_stmt,
 
   SgNode *tmp_cond = Traverse(while_stmt->getCond());
   SgExpression *cond = isSgExpression(tmp_cond);
-  ROSE_ASSERT(cond != NULL);
+  ROSE_ASSERT(cond != nullptr);
 
   SgStatement *expr_stmt = SageBuilder::buildExprStatement(cond);
   if (p_compiler_instance != nullptr && while_stmt->getCond() != nullptr) {
     applySourceRange(expr_stmt, while_stmt->getCond()->getSourceRange());
   }
 
-  SgWhileStmt *sg_while_stmt = SageBuilder::buildWhileStmt_nfi(expr_stmt, NULL);
+  SgWhileStmt *sg_while_stmt =
+      SageBuilder::buildWhileStmt_nfi(expr_stmt, nullptr);
 
   sg_while_stmt->set_parent(SageBuilder::topScopeStack());
 
@@ -9082,11 +9672,11 @@ bool ClangToSageTranslator::VisitWhileStmt(clang::WhileStmt *while_stmt,
   SgNode *tmp_body = Traverse(while_stmt->getBody());
   SgStatement *body = isSgStatement(tmp_body);
   SgExpression *expr = isSgExpression(tmp_body);
-  if (expr != NULL) {
+  if (expr != nullptr) {
     body = SageBuilder::buildExprStatement(expr);
     applySourceRangeWithTrailingSemicolon(body, while_stmt->getBody());
   }
-  ROSE_ASSERT(body != NULL);
+  ROSE_ASSERT(body != nullptr);
   body = wrapStatementWithOpenMPPragmas(while_stmt->getBody(), body);
 
   body->set_parent(sg_while_stmt);
