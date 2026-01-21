@@ -191,6 +191,9 @@ endif()
 
 set(ROSE_FLAGS  -rose:verbose 0 )
 
+set(ROSE_TEST_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/rose_output)
+file(MAKE_DIRECTORY ${ROSE_TEST_OUTPUT_DIR})
+
 set(TESTCODE_INCLUDES "")
 
 foreach(testcode ${TESTCODES_REQUIRED_TO_PASS})
@@ -198,6 +201,7 @@ foreach(testcode ${TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME copyAST_${basename}
     COMMAND copyExample ${ROSE_FLAGS}
+            -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_${basename}.C
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode})
   set_tests_properties(copyAST_${basename} PROPERTIES LABELS COPYASTTEST)
 endforeach()
@@ -205,6 +209,7 @@ endforeach()
 add_test(
   NAME copyAST_copyLoops
   COMMAND copyLoops ${ROSE_FLAGS}
+          -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_copyLoops_copytest2007_60.C
           -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_60.C
 )
 set_tests_properties(copyAST_copyLoops PROPERTIES LABELS COPYASTTEST)
@@ -212,6 +217,7 @@ set_tests_properties(copyAST_copyLoops PROPERTIES LABELS COPYASTTEST)
 add_test(
   NAME copyAST_copyBlocks
   COMMAND copyBlocks ${ROSE_FLAGS}
+          -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_copyBlocks_copytest2007_63.C
           -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_63.C
 )
 set_tests_properties(copyAST_copyBlocks PROPERTIES LABELS COPYASTTEST)
@@ -219,6 +225,7 @@ set_tests_properties(copyAST_copyBlocks PROPERTIES LABELS COPYASTTEST)
 add_test(
   NAME copyAST_copyFunctionDefinitions
   COMMAND copyFunctionDefinitions ${ROSE_FLAGS}
+          -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_copyFunctionDefinitions_copytest2007_63.C
           -c ${CMAKE_CURRENT_SOURCE_DIR}/copytest2007_63.C
 )
 set_tests_properties(copyAST_copyFunctionDefinitions PROPERTIES LABELS COPYASTTEST)
@@ -229,6 +236,7 @@ foreach(testcode ${EXTRA_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME copyAST_${basename}
     COMMAND copyExample ${ROSE_FLAGS}
+            -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_${basename}.C
             -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${testcode})
   set_tests_properties(copyAST_${basename} PROPERTIES LABELS COPYASTTEST)
@@ -239,6 +247,7 @@ foreach(testcode ${_copyast_disabled_extra_tests})
   add_test(
     NAME copyAST_${basename}
     COMMAND copyExample ${ROSE_FLAGS}
+            -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_${basename}.C
             -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${testcode})
   set_tests_properties(copyAST_${basename} PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
@@ -276,6 +285,7 @@ foreach(testcode ${_copyast_disabled_tests})
   add_test(
     NAME copyAST_${basename}
     COMMAND copyExample ${ROSE_FLAGS}
+            -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_${basename}.C
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode})
   set_tests_properties(copyAST_${basename} PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
 endforeach()
