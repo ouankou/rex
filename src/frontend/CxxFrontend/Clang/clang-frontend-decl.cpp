@@ -8095,21 +8095,42 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
   // for ROSE AST.
   bool isembedded = false;
   bool iscompleteDefined = false;
-  bool hasElaboratedType = false;
+  clang::TagDecl *ownedTagDecl = nullptr;
   bool isOwnedTagDeclADefinition = false;
   bool isDefinitionRequired = false;
   // Definitions embedded in a declarator are not autonomous.
   bool isAutonomousDeclaration = true;
+  auto isEmbeddedInThisTypedef = [&](clang::TagDecl *tag) -> bool {
+    if (!isembedded || tag == nullptr || p_compiler_instance == nullptr) {
+      return isembedded;
+    }
+    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+    clang::SourceLocation decl_loc = tag->getBeginLoc();
+    clang::SourceRange typedef_range = typedef_decl->getSourceRange();
+    if (!decl_loc.isValid() || !typedef_range.isValid()) {
+      return isembedded;
+    }
+    decl_loc = sm.getFileLoc(decl_loc);
+    clang::SourceLocation range_begin = sm.getFileLoc(typedef_range.getBegin());
+    clang::SourceLocation range_end = sm.getFileLoc(typedef_range.getEnd());
+    if (!decl_loc.isValid() || !range_begin.isValid() || !range_end.isValid()) {
+      return isembedded;
+    }
+    if (sm.isBeforeInTranslationUnit(decl_loc, range_begin) ||
+        sm.isBeforeInTranslationUnit(range_end, decl_loc)) {
+      return false;
+    }
+    return true;
+  };
 
   // Adding check for EaboratedType and PointerType to retrieve base EnumType
   while ((llvm::isa<clang::ElaboratedType>(underlyingType)) ||
          (llvm::isa<clang::PointerType>(underlyingType)) ||
          (llvm::isa<clang::ArrayType>(underlyingType))) {
     if (llvm::isa<clang::ElaboratedType>(underlyingType)) {
-      hasElaboratedType = true;
       underlyingQualType =
           ((clang::ElaboratedType *)underlyingType)->getNamedType();
-      clang::TagDecl *ownedTagDecl =
+      ownedTagDecl =
           ((clang::ElaboratedType *)underlyingType)->getOwnedTagDecl();
       if (ownedTagDecl != nullptr) {
         isOwnedTagDeclADefinition =
@@ -8130,6 +8151,7 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
     clang::EnumDecl *enumDeclaration = underlyingEnumType->getDecl();
     isembedded = enumDeclaration->isEmbeddedInDeclarator();
     iscompleteDefined = enumDeclaration->isCompleteDefinition();
+    isembedded = isEmbeddedInThisTypedef(enumDeclaration);
   }
 
   if (llvm::isa<clang::RecordType>(underlyingType)) {
@@ -8138,9 +8160,10 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
     clang::RecordDecl *recordDeclaration = underlyingRecordType->getDecl();
     isembedded = recordDeclaration->isEmbeddedInDeclarator();
     iscompleteDefined = recordDeclaration->isCompleteDefinition();
+    isembedded = isEmbeddedInThisTypedef(recordDeclaration);
   }
 
-  if (hasElaboratedType) {
+  if (ownedTagDecl != nullptr) {
     isDefinitionRequired = isOwnedTagDeclADefinition;
   } else {
     isDefinitionRequired = iscompleteDefined;
@@ -8168,7 +8191,9 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
     sg_underlyingType = type;
   }
 
-  sg_typedef_decl = SageBuilder::buildTypedefDeclaration_nfi(name, type, scope);
+  bool has_defining_base = isembedded && isDefinitionRequired;
+  sg_typedef_decl = SageBuilder::buildTypedefDeclaration_nfi(name, type, scope,
+                                                             has_defining_base);
   if (SgProject::get_verbose() > 0) {
     if (name == "uint8_t" || name == "uint16_t" || name == "uint32_t" ||
         name == "in_port_t" || name == "in_addr_t") {
@@ -8221,6 +8246,28 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
       // enumDefDecl->set_isAutonomousDeclaration(false);
       sg_typedef_decl->set_declaration(enumDefDecl);
       sg_typedef_decl->set_typedefBaseTypeContainsDefiningDeclaration(true);
+    }
+  }
+
+  if (!has_defining_base) {
+    if (SgClassDeclaration *classDecl =
+            isSgClassDeclaration(sg_typedef_decl->get_declaration())) {
+      if (classDecl->get_definingDeclaration() == classDecl) {
+        SgDeclarationStatement *nondef =
+            classDecl->get_firstNondefiningDeclaration();
+        if (nondef != nullptr && nondef != classDecl) {
+          sg_typedef_decl->set_declaration(nondef);
+        }
+      }
+    } else if (SgEnumDeclaration *enumDecl =
+                   isSgEnumDeclaration(sg_typedef_decl->get_declaration())) {
+      if (enumDecl->get_definingDeclaration() == enumDecl) {
+        SgDeclarationStatement *nondef =
+            enumDecl->get_firstNondefiningDeclaration();
+        if (nondef != nullptr && nondef != enumDecl) {
+          sg_typedef_decl->set_declaration(nondef);
+        }
+      }
     }
   }
 
