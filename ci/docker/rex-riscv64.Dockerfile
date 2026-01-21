@@ -1,4 +1,4 @@
-FROM debian:forky
+FROM debian:sid
 
 ARG LLVM_VERSION=21
 ENV DEBIAN_FRONTEND=noninteractive

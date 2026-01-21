@@ -1,4 +1,4 @@
-FROM ghcr.io/loong64/debian:forky
+FROM ghcr.io/loong64/debian:sid
 
 ARG LLVM_VERSION=21
 ENV DEBIAN_FRONTEND=noninteractive

@@ -31,7 +31,7 @@ jobs:
 
     - name: Build and test (loong64 via QEMU)
       env:
-        # Base image ships LLVM 21 for loong64 on Debian forky.
+        # Base image ships LLVM 21 for loong64 on Debian sid.
         LLVM_VERSION: 21
       run: |
         set -euo pipefail

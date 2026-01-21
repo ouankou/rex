@@ -24,8 +24,9 @@ jobs:
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
       BASE_TAG: base
-      RISCV_TAG: base-riscv64
-      LOONG_TAG: base-loongarch64
+      PACKAGE_NAME: rex
+      TMP_RISCV_TAG: tmp-${{ github.run_id }}-riscv64
+      TMP_LOONG_TAG: tmp-${{ github.run_id }}-loongarch64
 
     steps:
     - uses: actions/checkout@v4
@@ -49,28 +50,78 @@ jobs:
 
     - name: Build and push base image (riscv64)
       run: |
+        set -euo pipefail
+        metadata_file="${RUNNER_TEMP}/riscv64-metadata.json"
         docker buildx build \
           --platform linux/riscv64 \
           --pull \
           -f ci/docker/rex-riscv64.Dockerfile \
-          -t "${IMAGE_REPO}:${RISCV_TAG}" \
+          -t "${IMAGE_REPO}:${TMP_RISCV_TAG}" \
+          --metadata-file "${metadata_file}" \
           --push \
           .
+        export METADATA_FILE="${metadata_file}"
+        riscv_digest="$(python3 - <<'PY'
+import json
+import os
+
+with open(os.environ["METADATA_FILE"], "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+print(data["containerimage.digest"])
+PY
+)"
+        echo "RISCV_DIGEST=${riscv_digest}" >> "${GITHUB_ENV}"
 
     - name: Build and push base image (loong64)
       run: |
+        set -euo pipefail
+        metadata_file="${RUNNER_TEMP}/loong64-metadata.json"
         docker buildx build \
           --platform linux/loong64 \
           --pull \
           -f ci/docker/rex-loongarch64.Dockerfile \
-          -t "${IMAGE_REPO}:${LOONG_TAG}" \
+          -t "${IMAGE_REPO}:${TMP_LOONG_TAG}" \
+          --metadata-file "${metadata_file}" \
           --push \
           .
+        export METADATA_FILE="${metadata_file}"
+        loong_digest="$(python3 - <<'PY'
+import json
+import os
 
-    - name: Publish multi-arch manifest
+with open(os.environ["METADATA_FILE"], "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+print(data["containerimage.digest"])
+PY
+)"
+        echo "LOONG_DIGEST=${loong_digest}" >> "${GITHUB_ENV}"
+
+    - name: Publish multi-arch manifest (base tag only)
       run: |
+        set -euo pipefail
         docker buildx imagetools create \
           -t "${IMAGE_REPO}:${BASE_TAG}" \
-          "${IMAGE_REPO}:${RISCV_TAG}" \
-          "${IMAGE_REPO}:${LOONG_TAG}"
+          "${IMAGE_REPO}@${RISCV_DIGEST}" \
+          "${IMAGE_REPO}@${LOONG_DIGEST}"
         docker buildx imagetools inspect "${IMAGE_REPO}:${BASE_TAG}"
+
+    - name: Delete temporary tags
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        owner="${{ github.repository_owner }}"
+        if gh api "/orgs/${owner}" >/dev/null 2>&1; then
+          owner_path="orgs/${owner}"
+        else
+          owner_path="users/${owner}"
+        fi
+
+        version_ids="$(gh api --paginate "/${owner_path}/packages/container/${PACKAGE_NAME}/versions?per_page=100" \
+          --jq '.[] | select((.metadata.container.tags // []) | index(env.TMP_RISCV_TAG) or index(env.TMP_LOONG_TAG)) | .id')"
+
+        if [ -n "${version_ids}" ]; then
+          for version_id in ${version_ids}; do
+            gh api -X DELETE "/${owner_path}/packages/container/${PACKAGE_NAME}/versions/${version_id}"
+          done
+        fi
