@@ -25,8 +25,8 @@ static inline void move_symbol_to_orphan_table(SgSymbol *symbol) {
   }
 
   // Keep detached symbols alive without reintroducing them into a scope.
-  static SgSymbolTable *orphan_table = new SgSymbolTable();
-  orphan_table->insert(symbol->get_name(), symbol);
+  static SgSymbolTable orphan_table;
+  orphan_table.insert(symbol->get_name(), symbol);
 }
 
 #include <clang/AST/AST.h>
