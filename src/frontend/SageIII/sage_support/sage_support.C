@@ -2518,49 +2518,12 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     flangCommandLine.push_back("-fexternal-builder");
     vector<string> flangArgs = argv;
     SgFile::stripRoseCommandLineOptions(flangArgs);
-    for (size_t i = 1; i < flangArgs.size(); ++i) {
-      const string &arg = flangArgs[i];
-      if (arg == "-c") {
-        flangCommandLine.push_back(arg);
-        continue;
-      }
-      if (arg.rfind("-o", 0) == 0) {
-        flangCommandLine.push_back(arg);
-        if (arg == "-o" && i + 1 < flangArgs.size()) {
-          flangCommandLine.push_back(flangArgs[++i]);
-        }
-        continue;
-      }
-      if (arg.rfind("-I", 0) == 0) {
-        flangCommandLine.push_back(arg);
-        if (arg == "-I" && i + 1 < flangArgs.size()) {
-          flangCommandLine.push_back(flangArgs[++i]);
-        }
-        continue;
-      }
-      if (arg.rfind("-D", 0) == 0) {
-        flangCommandLine.push_back(arg);
-        if (arg == "-D" && i + 1 < flangArgs.size()) {
-          flangCommandLine.push_back(flangArgs[++i]);
-        }
-        continue;
-      }
-      if (arg.rfind("-U", 0) == 0) {
-        flangCommandLine.push_back(arg);
-        if (arg == "-U" && i + 1 < flangArgs.size()) {
-          flangCommandLine.push_back(flangArgs[++i]);
-        }
-        continue;
-      }
-      if (arg == "-Mfixed" || arg == "-Mfree" || arg == "-Mextend" ||
-          arg == "-fbackslash" || arg == "-fno-backslash" ||
-          arg == "-fopenmp" || arg == "-E" || arg == "-P" ||
-          arg == "-fno-reformat") {
-        flangCommandLine.push_back(arg);
-        continue;
-      }
+    if (flangArgs.size() > 1) {
+      flangCommandLine.insert(flangCommandLine.end(), flangArgs.begin() + 1,
+                              flangArgs.end());
+    } else {
+      flangCommandLine.push_back(get_sourceFileNameWithPath());
     }
-    flangCommandLine.push_back(get_sourceFileNameWithPath());
     CommandlineProcessing::ArgvStorage flangArgvStorage(flangCommandLine);
     int flangArgc = flangArgvStorage.argc();
     char **flangArgv = flangArgvStorage.argv();

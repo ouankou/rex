@@ -39,7 +39,7 @@ SgProject *FlangModuleInfo::getCurrentProject() { return currentProject; }
 
 string FlangModuleInfo::find_file_from_inputDirs(const string &basename) {
   for (const auto &dir : inputDirs) {
-    string name = dir + "/" + basename;
+    string name = (std::filesystem::path(dir) / basename).string();
     string candidate = find_existing_module_file(name);
     if (!candidate.empty()) {
       return name;
@@ -93,29 +93,35 @@ SgModuleStatement *FlangModuleInfo::getModule(const string &modName) {
   ROSE_ASSERT(numberOfModules_after >= numberOfModules_before);
 
   if (modStmt != nullptr) {
-    if (SgProject::get_verbose() > 1)
-      printf("This module has been previously processed in this compilation "
-             "unit. \n");
+    if (SgProject::get_verbose() > 1) {
+      MLOG_DEBUG_CXX("FlangModuleInfo")
+          << "This module has been previously processed in this compilation "
+             "unit.";
+    }
     return modStmt;
   }
 
   string nameWithPath = find_file_from_inputDirs(lowerName);
-  if (SgProject::get_verbose() > 1)
-    printf("In FlangModuleInfo::getModule(%s): nameWithPath = %s \n",
-           lowerName.c_str(), nameWithPath.c_str());
+  if (SgProject::get_verbose() > 1) {
+    MLOG_DEBUG_CXX("FlangModuleInfo")
+        << "In FlangModuleInfo::getModule(" << lowerName
+        << "): nameWithPath = " << nameWithPath;
+  }
 
   SgSourceFile *newModuleFile = createSgSourceFile(nameWithPath);
   if (newModuleFile == nullptr) {
-    printf("In FlangModuleInfo::getModule(%s): cannot locate module file\n",
-           lowerName.c_str());
+    MLOG_ERROR_CXX("FlangModuleInfo")
+        << "In FlangModuleInfo::getModule(" << lowerName
+        << "): cannot locate module file";
     return nullptr;
   }
 
   Rose_STL_Container<SgNode *> moduleDeclarationList =
       NodeQuery::querySubTree(newModuleFile, V_SgModuleStatement);
   if (moduleDeclarationList.empty()) {
-    printf("In FlangModuleInfo::getModule(%s): no module declarations found\n",
-           lowerName.c_str());
+    MLOG_ERROR_CXX("FlangModuleInfo")
+        << "In FlangModuleInfo::getModule(" << lowerName
+        << "): no module declarations found";
     return nullptr;
   }
 
@@ -124,9 +130,11 @@ SgModuleStatement *FlangModuleInfo::getModule(const string &modName) {
 
   moduleNameAstMap.insert(ModuleMapType::value_type(lowerName, modStmt));
 
-  if (SgProject::get_verbose() > 2)
-    printf("Leaving FlangModuleInfo::getModule(%s): modStmt = %p \n",
-           lowerName.c_str(), modStmt);
+  if (SgProject::get_verbose() > 2) {
+    MLOG_DEBUG_CXX("FlangModuleInfo")
+        << "Leaving FlangModuleInfo::getModule(" << lowerName
+        << "): modStmt = " << modStmt;
+  }
 
   return modStmt;
 }
@@ -139,9 +147,9 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
   string moduleFileName = find_existing_module_file(moduleBase);
 
   if (moduleFileName.empty()) {
-    printf("File moduleFileName = %s[.rcmp|.rmod] NOT FOUND (expected to be "
-           "present) \n",
-           moduleBase.c_str());
+    MLOG_ERROR_CXX("FlangModuleInfo")
+        << "File moduleFileName = " << moduleBase
+        << "[.rcmp|.rmod] NOT FOUND (expected to be present)";
     return nullptr;
   }
 
@@ -150,10 +158,11 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
 
   nestedSgFile++;
 
-  if (SgProject::get_verbose() > 1)
-    printf(
-        "START FlangModuleInfo::createSgSourceFile(%s): nestedSgFile = %d \n",
-        moduleFileName.c_str(), nestedSgFile);
+  if (SgProject::get_verbose() > 1) {
+    MLOG_DEBUG_CXX("FlangModuleInfo")
+        << "START FlangModuleInfo::createSgSourceFile(" << moduleFileName
+        << "): nestedSgFile = " << nestedSgFile;
+  }
 
   SgProject *project = getCurrentProject();
   SgSourceFile *newFile =
@@ -171,9 +180,11 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
 
   project->set_file(*newFile);
 
-  if (SgProject::get_verbose() > 1)
-    printf("END FlangModuleInfo::createSgSourceFile(%s): nestedSgFile = %d \n",
-           moduleFileName.c_str(), nestedSgFile);
+  if (SgProject::get_verbose() > 1) {
+    MLOG_DEBUG_CXX("FlangModuleInfo")
+        << "END FlangModuleInfo::createSgSourceFile(" << moduleFileName
+        << "): nestedSgFile = " << nestedSgFile;
+  }
 
   nestedSgFile--;
 
