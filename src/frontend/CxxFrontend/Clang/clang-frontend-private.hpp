@@ -14,6 +14,21 @@
 
 #include <vector>
 
+static inline void move_symbol_to_orphan_table(SgSymbol *symbol) {
+  if (symbol == NULL) {
+    return;
+  }
+  if (SgSymbolTable *parent_table = isSgSymbolTable(symbol->get_parent())) {
+    if (parent_table->exists(symbol)) {
+      return;
+    }
+  }
+
+  // Keep detached symbols alive without reintroducing them into a scope.
+  SgSymbolTable *orphan_table = new SgSymbolTable();
+  orphan_table->insert(symbol->get_name(), symbol);
+}
+
 #include <clang/AST/AST.h>
 
 #include <clang/AST/ASTConsumer.h>

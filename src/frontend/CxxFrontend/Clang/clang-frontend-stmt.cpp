@@ -6274,7 +6274,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                         member_func_decl->get_name(),
                         member_func_decl->get_type())) {
               decl_scope->remove_symbol(wrong_sym);
-              delete wrong_sym;
+              move_symbol_to_orphan_table(wrong_sym);
             }
           }
           if (member_func_sym == NULL) {
@@ -6418,7 +6418,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             }
             if (wrong_sym != NULL && decl_scope != NULL) {
               decl_scope->remove_symbol(wrong_sym);
-              delete wrong_sym;
+              move_symbol_to_orphan_table(wrong_sym);
             }
             member_sym = new SgMemberFunctionSymbol(member_decl);
             if (decl_scope != NULL) {

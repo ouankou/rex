@@ -2175,10 +2175,7 @@ RehomeFunctionSymbolResult rehome_function_symbols_between_scopes(
       return;
     }
     if (detach_symbol(scope, table, sym)) {
-      // Keep the symbol alive; other nodes may still reference it.
-      if (table != NULL) {
-        sym->set_parent(table);
-      }
+      move_symbol_to_orphan_table(sym);
     }
   };
 
@@ -11829,10 +11826,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
       }
       if (removed && discard) {
-        // Keep the symbol alive; other nodes may still reference it.
-        if (SgSymbolTable *table = scope->get_symbol_table()) {
-          sym->set_parent(table);
-        }
+        move_symbol_to_orphan_table(sym);
       }
     };
 
