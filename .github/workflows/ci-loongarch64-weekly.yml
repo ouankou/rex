@@ -31,42 +31,17 @@ jobs:
 
     - name: Build and test (loong64 via QEMU)
       env:
-        # Debian sid for loong64 ships LLVM 21; use it until LLVM 20 packages exist.
+        # Base image ships LLVM 21 for loong64 on Debian forky.
         LLVM_VERSION: 21
       run: |
         set -euo pipefail
         docker run --rm --platform=linux/loong64 \
           -v "${GITHUB_WORKSPACE}:/work" \
           -w /work \
-          -e DEBIAN_FRONTEND=noninteractive \
           -e LLVM_VERSION="${LLVM_VERSION}" \
-          ghcr.io/loong64/debian:latest \
+          ghcr.io/${{ github.repository_owner }}/rex:base \
           bash -lc '
             set -euo pipefail
-            apt-get update
-            apt-get install -y --no-install-recommends \
-              antlr4 \
-              bison \
-              build-essential \
-              cmake \
-              clang-${LLVM_VERSION} \
-              curl \
-              flang-${LLVM_VERSION} \
-              flex \
-              g++ \
-              ghostscript \
-              git \
-              graphviz \
-              libantlr4-runtime-dev \
-              libclang-${LLVM_VERSION}-dev \
-              libclang-cpp${LLVM_VERSION}-dev \
-              libhpdf-dev \
-              libtool \
-              llvm-${LLVM_VERSION} \
-              llvm-${LLVM_VERSION}-dev \
-              openjdk-21-jdk \
-              pkg-config
-
             export PATH="/usr/lib/llvm-${LLVM_VERSION}/bin:${PATH}"
             export CMAKE_PREFIX_PATH="/usr/lib/llvm-${LLVM_VERSION}"
             export LLVM_DIR="/usr/lib/llvm-${LLVM_VERSION}"

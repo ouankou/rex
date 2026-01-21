@@ -1,0 +1,76 @@
+name: Weekly Base Images
+
+on:
+  schedule:
+    # Every Wednesday at 00:00 UTC
+    - cron: "0 0 * * 3"
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-base-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-images:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      BASE_TAG: base
+      RISCV_TAG: base-riscv64
+      LOONG_TAG: base-loongarch64
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: Set up QEMU (riscv64, loong64)
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: riscv64,loong64
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push base image (riscv64)
+      run: |
+        docker buildx build \
+          --platform linux/riscv64 \
+          --pull \
+          -f ci/docker/rex-riscv64.Dockerfile \
+          -t "${IMAGE_REPO}:${RISCV_TAG}" \
+          --push \
+          .
+
+    - name: Build and push base image (loong64)
+      run: |
+        docker buildx build \
+          --platform linux/loong64 \
+          --pull \
+          -f ci/docker/rex-loongarch64.Dockerfile \
+          -t "${IMAGE_REPO}:${LOONG_TAG}" \
+          --push \
+          .
+
+    - name: Publish multi-arch manifest
+      run: |
+        docker buildx imagetools create \
+          -t "${IMAGE_REPO}:${BASE_TAG}" \
+          "${IMAGE_REPO}:${RISCV_TAG}" \
+          "${IMAGE_REPO}:${LOONG_TAG}"
+        docker buildx imagetools inspect "${IMAGE_REPO}:${BASE_TAG}"

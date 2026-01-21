@@ -37,36 +37,10 @@ jobs:
         docker run --rm --platform=linux/riscv64 \
           -v "${GITHUB_WORKSPACE}:/work" \
           -w /work \
-          -e DEBIAN_FRONTEND=noninteractive \
           -e LLVM_VERSION="${LLVM_VERSION}" \
-          debian:forky \
+          ghcr.io/${{ github.repository_owner }}/rex:base \
           bash -lc '
             set -euo pipefail
-            apt-get update
-            apt-get install -y --no-install-recommends \
-              antlr4 \
-              bison \
-              build-essential \
-              cmake \
-              clang-${LLVM_VERSION} \
-              curl \
-              flang-${LLVM_VERSION} \
-              flex \
-              g++ \
-              ghostscript \
-              git \
-              graphviz \
-              libantlr4-runtime-dev \
-              libclang-${LLVM_VERSION}-dev \
-              libclang-cpp${LLVM_VERSION}-dev \
-              libhpdf-dev \
-              libtool \
-              llvm-${LLVM_VERSION} \
-              llvm-${LLVM_VERSION}-dev \
-              openjdk-25-jdk \
-              pkg-config
-
-            # Debian forky ships matching antlr4 tool/runtime versions, so no manual override needed.
             export PATH="/usr/lib/llvm-${LLVM_VERSION}/bin:${PATH}"
             export CMAKE_PREFIX_PATH="/usr/lib/llvm-${LLVM_VERSION}"
             export LLVM_DIR="/usr/lib/llvm-${LLVM_VERSION}"
