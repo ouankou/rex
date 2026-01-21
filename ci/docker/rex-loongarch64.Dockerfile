@@ -25,7 +25,7 @@ RUN apt-get update \
       libtool \
       llvm-${LLVM_VERSION} \
       llvm-${LLVM_VERSION}-dev \
-      openjdk-25-jdk \
+      openjdk-21-jdk \
       pkg-config \
     && rm -rf /var/lib/apt/lists/*
 

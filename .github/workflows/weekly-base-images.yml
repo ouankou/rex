@@ -117,6 +117,11 @@ PY
           owner_path="users/${owner}"
         fi
 
+        if ! gh api "/${owner_path}/packages/container/${PACKAGE_NAME}" >/dev/null 2>&1; then
+          echo "GHCR package ${PACKAGE_NAME} not found; skipping tag cleanup."
+          exit 0
+        fi
+
         version_ids="$(gh api --paginate "/${owner_path}/packages/container/${PACKAGE_NAME}/versions?per_page=100" \
           --jq '.[] | select((.metadata.container.tags // []) | index(env.TMP_RISCV_TAG) or index(env.TMP_LOONG_TAG)) | .id')"
 
