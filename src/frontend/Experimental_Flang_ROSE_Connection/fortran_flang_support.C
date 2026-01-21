@@ -3,6 +3,7 @@
 #include "rose_config.h"
 
 #include "SageTreeBuilder.h"
+#include "rose_paths.h"
 #include "sageBuilder.h"
 
 #include "flang-external-builder-main.h"
@@ -11,6 +12,7 @@
 
 using namespace Rose;
 
+#include <cstdlib>
 #include <iostream>
 using std::cout;
 
@@ -28,6 +30,19 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
   SgGlobal *global_scope = Rose::builder::initialize_global_scope(srcFile);
   ROSE_ASSERT(global_scope &&
               "fortran_flang_support: failed initialize_global_scope");
+
+  const char *fc_env = std::getenv("F18_FC");
+  if (fc_env == nullptr || *fc_env == '\0') {
+    if (!ROSE_GFORTRAN_PATH.empty()) {
+      if (ROSE_GFORTRAN_PATH.find("flang") == std::string::npos) {
+        std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+                  << "ROSE_GFORTRAN_PATH must point to flang: "
+                  << ROSE_GFORTRAN_PATH << "\n";
+        ROSE_ABORT();
+      }
+      setenv("F18_FC", ROSE_GFORTRAN_PATH.c_str(), 1);
+    }
+  }
 
   status = flang_external_builder_main(argc, argv, srcFile);
 
