@@ -15,7 +15,7 @@
 #include <vector>
 
 static inline void move_symbol_to_orphan_table(SgSymbol *symbol) {
-  if (symbol == NULL) {
+  if (symbol == nullptr) {
     return;
   }
   if (SgSymbolTable *parent_table = isSgSymbolTable(symbol->get_parent())) {
