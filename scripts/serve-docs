@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dir0="${0%/*}"
+root="$(cd "$dir0/.." && pwd)"
+
+bash "$root/scripts/ci-docs-build"
+
+cd "$root/_site"
+exec python3 -m http.server 8080 --bind 0.0.0.0

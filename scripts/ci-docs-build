@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+arg0="${0##*/}"
+dir0="${0%/*}"
+root="$(cd "$dir0/.." && pwd)"
+
+BUILD_DIR="${DOCS_BUILD_DIR:-$root/build}"
+VENV_DIR="${DOCS_VENV_DIR:-$root/.venv-docs}"
+TOOLS_DIR="${DOCS_TOOLS_DIR:-$root/.tools}"
+MRDOCS_ROOT="${MRDOCS_ROOT:-$TOOLS_DIR/mrdocs}"
+JOBS="${DOCS_JOBS:-32}"
+ANTLR4_EXECUTABLE="${DOCS_ANTLR4_EXECUTABLE:-}"
+
+die() {
+  echo "$arg0: error:" "$@" >&2
+  exit 1
+}
+
+install_mrdocs() {
+  local info version url
+  info="$(python3 - <<'PY'
+import json
+import urllib.request
+
+release = json.loads(urllib.request.urlopen(
+    "https://api.github.com/repos/cppalliance/mrdocs/releases/latest",
+    timeout=10,
+).read().decode("utf-8"))
+tag = release.get("tag_name", "")
+assets = {a.get("name", ""): a.get("browser_download_url", "") for a in release.get("assets", [])}
+linux_xz = next((u for n, u in assets.items() if n.endswith("Linux.tar.xz")), "")
+linux_gz = next((u for n, u in assets.items() if n.endswith("Linux.tar.gz")), "")
+url = linux_xz or linux_gz
+print(f"{tag}\n{url}")
+PY
+)"
+  version="$(printf '%s\n' "$info" | head -n 1)"
+  url="$(printf '%s\n' "$info" | sed -n '2p')"
+  if [ -z "$version" ] || [ -z "$url" ]; then
+    die "unable to resolve latest MrDocs release"
+  fi
+
+  if [ -f "$MRDOCS_ROOT/.version" ] && [ "$(cat "$MRDOCS_ROOT/.version")" = "$version" ] \
+    && [ -x "$MRDOCS_ROOT/current/bin/mrdocs" ]; then
+    echo "$MRDOCS_ROOT/current/bin/mrdocs"
+    return 0
+  fi
+
+  rm -rf "$MRDOCS_ROOT"
+  mkdir -p "$MRDOCS_ROOT"
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+
+  curl -L "$url" -o "$tmp_dir/mrdocs.tar.xz"
+  tar -xf "$tmp_dir/mrdocs.tar.xz" -C "$MRDOCS_ROOT"
+  local top_dir
+  top_dir="$(tar -tf "$tmp_dir/mrdocs.tar.xz" | sed -n '1p' | cut -d/ -f1)"
+  if [ -z "$top_dir" ] || [ ! -d "$MRDOCS_ROOT/$top_dir" ]; then
+    die "failed to unpack MrDocs archive"
+  fi
+  ln -sfn "$MRDOCS_ROOT/$top_dir" "$MRDOCS_ROOT/current"
+  echo "$version" > "$MRDOCS_ROOT/.version"
+  echo "$MRDOCS_ROOT/current/bin/mrdocs"
+}
+
+if [ ! -d "$VENV_DIR" ]; then
+  python3 -m venv "$VENV_DIR"
+fi
+
+"$VENV_DIR/bin/python" -m pip install --upgrade pip
+"$VENV_DIR/bin/python" -m pip install --upgrade -r "$root/docs/requirements.txt"
+
+if ! command -v asciidoctor >/dev/null 2>&1; then
+  die "asciidoctor is required (install the asciidoctor package or gem)"
+fi
+
+MRDOCS_BIN="$(install_mrdocs)"
+export MRDOCS_BIN
+
+if [ ! -f "$BUILD_DIR/compile_commands.json" ]; then
+  cmake_args=()
+  if [ -n "$ANTLR4_EXECUTABLE" ]; then
+    cmake_args+=("-DANTLR4_EXECUTABLE=$ANTLR4_EXECUTABLE")
+  elif [ -x "$root/.tools/antlr4/antlr4" ]; then
+    cmake_args+=("-DANTLR4_EXECUTABLE=$root/.tools/antlr4/antlr4")
+  fi
+
+  cmake -S "$root" -B "$BUILD_DIR" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DENABLE-C=ON \
+    -DENABLE-FORTRAN=OFF \
+    -DENABLE-FORTRAN-OFP=OFF \
+    -DENABLE-TESTS-DIRECTORY=OFF \
+    -DENABLE-TUTORIAL-DIRECTORY=OFF \
+    "${cmake_args[@]}"
+fi
+
+"$root/scripts/generate-api-documentation"
+python3 "$root/scripts/generate-reference-stubs.py"
+python3 "$root/scripts/fix-reference-relfileprefix.py"
+python3 "$root/scripts/link-reference-types.py"
+python3 "$root/scripts/add-signatures-to-function-tables.py"
+python3 "$root/scripts/validate-docs-output.py"
+
+"$VENV_DIR/bin/mkdocs" build -f "$root/mkdocs.yml"
+python3 "$root/scripts/generate-api-symbol-index.py" "$root/docs/reference/sections" "$root/_site/assets/api/symbols.json"
+python3 "$root/scripts/validate-reference-return-links.py"
+python3 "$root/scripts/validate-site-links.py"
+
+echo "Docs built in $root/_site"

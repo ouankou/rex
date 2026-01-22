@@ -291,7 +291,7 @@ if sections_dir.exists():
         raise SystemExit(f"expected directory at {sections_dir}")
 sections_dir.mkdir(parents=True)
 
-header_template = "= {title}\n:relfileprefix: ../\n:mrdocs:\n\n"
+header_template = "= {title}\n:relfileprefix: ../../\n:mrdocs:\n\n"
 
 for title, slug in targets:
     content = sections.get(title)
@@ -393,9 +393,7 @@ text = proc.stderr.decode("utf-8", errors="ignore")
 paths = []
 in_block = False
 for line in text.splitlines():
-    if line.strip() == "
-
-#include <...> search starts here:":
+    if line.strip() == "#include <...> search starts here:":
         in_block = True
         continue
     if in_block:
@@ -441,7 +439,8 @@ build-docs-compilation-db() {
     local compiler="$3"
     local build_dir="$4"
     local compile_db="$5"
-"$PYTHON_BIN" - "$config" "$out_dir" "$compiler" "$build_dir" "$compile_db" <<'PY'
+    local overlay_dir="${6-}"
+"$PYTHON_BIN" - "$config" "$out_dir" "$compiler" "$build_dir" "$compile_db" "$overlay_dir" <<'PY'
 import fnmatch
 import json
 import os
@@ -453,7 +452,9 @@ out_dir = Path(sys.argv[2])
 compiler = sys.argv[3]
 build_dir_arg = sys.argv[4]
 compile_db_path = Path(sys.argv[5]) if len(sys.argv) > 5 else None
+overlay_dir_arg = sys.argv[6] if len(sys.argv) > 6 else ""
 build_dir = Path(build_dir_arg).resolve() if build_dir_arg else None
+overlay_dir = Path(overlay_dir_arg).resolve() if overlay_dir_arg else None
 lines = config_path.read_text(encoding="utf-8").splitlines()
 
 def parse_scalar(key: str) -> str | None:
@@ -643,6 +644,8 @@ for path in include_dirs:
         continue
     seen.add(path)
     include_args.extend(["-I", str(path)])
+if overlay_dir and overlay_dir.is_dir():
+    include_args = ["-I", str(overlay_dir), *include_args]
 
 entries = []
 for idx, path in enumerate(headers):
@@ -665,7 +668,7 @@ for idx, path in enumerate(headers):
         encoding="utf-8",
     )
     obj_path = out_dir / f"mrdocs_{idx}.o"
-    args = [compiler, "-std=gnu++17", *include_args, "-c", str(cpp_path), "-o", str(obj_path)]
+    args = [compiler, "-std=gnu++17", "-DROSE_DOCGEN", *include_args, "-c", str(cpp_path), "-o", str(obj_path)]
     entries.append({
         "directory": str(out_dir),
         "file": str(cpp_path),
@@ -907,6 +910,51 @@ print(out_path)
 PY
 }
 
+merge-compilation-db() {
+    local base_db="$1"
+    local extra_db="$2"
+    local out_path="$3"
+    "$PYTHON_BIN" - "$base_db" "$extra_db" "$out_path" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+base_db = Path(sys.argv[1])
+extra_db = Path(sys.argv[2])
+out_path = Path(sys.argv[3])
+
+def load(path: Path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        raise SystemExit(f"compile_commands.json is not a list: {path}")
+    return data
+
+base = load(base_db)
+extra = load(extra_db)
+
+seen = set()
+merged = []
+for entry in base + extra:
+    if not isinstance(entry, dict):
+        continue
+    file_value = entry.get("file")
+    directory = entry.get("directory")
+    arguments = entry.get("arguments")
+    key = (
+        str(directory or ""),
+        str(file_value or ""),
+        tuple(arguments) if isinstance(arguments, list) else (),
+    )
+    if key in seen:
+        continue
+    seen.add(key)
+    merged.append(entry)
+
+out_path.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+print(out_path)
+PY
+}
+
 ####################################################################################################################################
 build-include-overlay() {
     local compiler="$1"
@@ -1100,7 +1148,6 @@ else
 fi
 
 compiler="$(resolve-compiler "$(compiler-from-db "$compilation_db")")"
-build_dir="$(cd "$(dirname "$compilation_db")" && pwd)"
 docs_dir="$(mktemp -d)"
 include_overlay="$(build-include-overlay "$compiler" "$docs_dir" "$compilation_db")"
 docs_db="$(filter-compilation-db "$CONFIG" "$compilation_db" "$docs_dir" "$include_overlay")"
