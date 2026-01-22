@@ -1462,6 +1462,14 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
         // outside of the template class shoudl not be output with the
         // "template<>" syntax. curprint("template<> ");
         if (isSgTemplateInstantiationMemberFunctionDecl(decl_stmt) != NULL) {
+          SgTemplateInstantiationMemberFunctionDecl
+              *templateInstantiationMemberFunctionDecl =
+                  isSgTemplateInstantiationMemberFunctionDecl(decl_stmt);
+          bool is_explicit_specialization =
+              templateInstantiationMemberFunctionDecl != NULL &&
+              (templateInstantiationMemberFunctionDecl
+                   ->get_template_argument_list_is_explicit() ||
+               templateInstantiationMemberFunctionDecl->isSpecialization());
           // Check for additional rule in the output of "template<>" for member
           // function instantiations.
           SgTemplateInstantiationDefn *templateClassInstatiationDefn =
@@ -1567,7 +1575,7 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
                       ->isOutputInCodeGeneration() &&
                   is_decl_attached_to_parent_scope(templateClassInstantiation);
             }
-            if (isOutput == true) {
+            if (isOutput == true && !is_explicit_specialization) {
 #if DEBUG_TEMPLATE_SPECIALIZATION
               curprint(
                   "/* Member function's class instantation WAS output, so we "

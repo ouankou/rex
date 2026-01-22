@@ -6,12 +6,11 @@
 
 #include "sage3basic.h"
 
+#include <algorithm>
 #include <iostream>
-
 #include <memory>
-
 #include <set>
-
+#include <string>
 #include <vector>
 
 static inline SgSymbolTable &get_orphan_symbol_table() {
@@ -35,6 +34,33 @@ static inline void move_symbol_to_orphan_table(SgSymbol *symbol) {
   // Keep detached symbols alive without reintroducing them into a scope.
   get_orphan_symbol_table().insert(symbol->get_name(), symbol);
 }
+
+class MissingTemplateHeaderFixupAttribute : public AstAttribute {
+public:
+  MissingTemplateHeaderFixupAttribute(std::string file,
+                                      std::vector<unsigned> offsets)
+      : file_(std::move(file)), offsets_(std::move(offsets)) {
+    std::sort(offsets_.begin(), offsets_.end());
+    offsets_.erase(std::unique(offsets_.begin(), offsets_.end()),
+                   offsets_.end());
+  }
+
+  bool matches(const std::string &file, unsigned offset) const {
+    if (!file_.empty() && file != file_) {
+      return false;
+    }
+    return std::binary_search(offsets_.begin(), offsets_.end(), offset);
+  }
+
+  const std::string &file() const { return file_; }
+
+private:
+  std::string file_;
+  std::vector<unsigned> offsets_;
+};
+
+inline constexpr char kMissingTemplateHeaderFixupAttributeName[] =
+    "rex_missing_template_header_fixups";
 
 #include <clang/AST/AST.h>
 
