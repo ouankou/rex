@@ -236,8 +236,6 @@ set(_cxxcode_disabled_tests
   test2004_62.C
   test2004_63.C
   test2005_24.C
-  test2005_69.C
-  test2005_81.C
   test2005_85.C
   test2005_93.C
   test2005_98.C

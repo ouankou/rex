@@ -7,6 +7,8 @@
 
 #include <memory>
 
+#include <llvm/Support/MemoryBuffer.h>
+
 #include "clang-frontend-private.hpp"
 
 #include "sage3basic.h"
@@ -20,6 +22,169 @@
 #include <clang/Lex/Lexer.h>
 
 #include "rose_config.h"
+
+namespace {
+
+struct TokenWithOffset {
+  clang::Token token;
+  unsigned offset;
+};
+
+// Preserve legacy frontend acceptance of explicit member specializations that
+// omit the required template<> header.
+std::unique_ptr<llvm::MemoryBuffer>
+maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
+                              clang::FileID file_id,
+                              const clang::LangOptions &lang_opts,
+                              std::vector<unsigned> *insert_offsets_out) {
+  auto buffer_or = source_manager.getBufferOrNone(file_id);
+  if (!buffer_or) {
+    return nullptr;
+  }
+  clang::Lexer lexer(file_id, *buffer_or, source_manager, lang_opts);
+  std::vector<TokenWithOffset> tokens;
+  tokens.reserve(256);
+
+  clang::Token token;
+  while (true) {
+    lexer.LexFromRawLexer(token);
+    if (token.is(clang::tok::eof)) {
+      break;
+    }
+    if (source_manager.getFileID(token.getLocation()) != file_id) {
+      continue;
+    }
+    tokens.push_back(
+        {token, source_manager.getFileOffset(token.getLocation())});
+  }
+
+  if (tokens.empty()) {
+    return nullptr;
+  }
+
+  auto is_boundary = [](const clang::Token &tok) {
+    return tok.isOneOf(clang::tok::semi, clang::tok::l_brace,
+                       clang::tok::r_brace);
+  };
+  auto is_identifier_like = [](const clang::Token &tok) {
+    return tok.isOneOf(clang::tok::identifier, clang::tok::raw_identifier);
+  };
+  auto is_template_keyword = [&](const clang::Token &tok) -> bool {
+    if (tok.is(clang::tok::kw_template)) {
+      return true;
+    }
+    if (!is_identifier_like(tok)) {
+      return false;
+    }
+    std::string spelling =
+        clang::Lexer::getSpelling(tok, source_manager, lang_opts);
+    return spelling == "template";
+  };
+
+  std::vector<unsigned> insert_offsets;
+  insert_offsets.reserve(8);
+
+  for (size_t i = 1; i < tokens.size(); ++i) {
+    if (!tokens[i].token.is(clang::tok::coloncolon)) {
+      continue;
+    }
+    if (!tokens[i - 1].token.isOneOf(clang::tok::greater,
+                                     clang::tok::greatergreater)) {
+      continue;
+    }
+
+    bool has_template_id = false;
+    for (size_t j = i; j-- > 0;) {
+      if (is_boundary(tokens[j].token)) {
+        break;
+      }
+      if (tokens[j].token.is(clang::tok::less)) {
+        has_template_id = true;
+        break;
+      }
+    }
+    if (!has_template_id) {
+      continue;
+    }
+
+    size_t name_index = i + 1;
+    if (name_index >= tokens.size()) {
+      continue;
+    }
+    if (tokens[name_index].token.is(clang::tok::tilde)) {
+      ++name_index;
+      if (name_index >= tokens.size()) {
+        continue;
+      }
+    }
+    if (!(is_identifier_like(tokens[name_index].token) ||
+          tokens[name_index].token.is(clang::tok::kw_operator))) {
+      continue;
+    }
+
+    bool matched = false;
+    bool saw_extra_identifier = false;
+    for (size_t k = name_index + 1; k < tokens.size(); ++k) {
+      if (is_identifier_like(tokens[k].token)) {
+        saw_extra_identifier = true;
+        break;
+      }
+      if (tokens[k].token.is(clang::tok::l_paren)) {
+        matched = !saw_extra_identifier;
+        break;
+      }
+      if (is_boundary(tokens[k].token)) {
+        break;
+      }
+    }
+    if (!matched) {
+      continue;
+    }
+
+    size_t boundary = i;
+    while (boundary > 0 && !is_boundary(tokens[boundary - 1].token)) {
+      --boundary;
+    }
+
+    bool has_template_keyword = false;
+    for (size_t j = boundary; j < i; ++j) {
+      if (is_template_keyword(tokens[j].token)) {
+        has_template_keyword = true;
+        break;
+      }
+    }
+    if (has_template_keyword) {
+      continue;
+    }
+
+    insert_offsets.push_back(tokens[boundary].offset);
+  }
+
+  std::sort(insert_offsets.begin(), insert_offsets.end());
+  insert_offsets.erase(
+      std::unique(insert_offsets.begin(), insert_offsets.end()),
+      insert_offsets.end());
+  if (insert_offsets_out != nullptr) {
+    *insert_offsets_out = insert_offsets;
+  }
+
+  if (insert_offsets.empty()) {
+    return nullptr;
+  }
+
+  std::string updated = buffer_or->getBuffer().str();
+  const std::string insertion = "template<> ";
+  size_t shift = 0;
+  for (unsigned offset : insert_offsets) {
+    updated.insert(offset + shift, insertion);
+    shift += insertion.size();
+  }
+
+  return llvm::MemoryBuffer::getMemBufferCopy(updated,
+                                              buffer_or->getBufferIdentifier());
+}
+
+} // namespace
 
 // DQ (11/28/2020): Use this for testing the DOT graph generator.
 #define EXIT_AFTER_BUILDING_DOT_FILE 0
@@ -73,6 +238,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   bool enable_openmp_simd = false;
   bool disable_openmp_via_flag = false;
   bool continue_on_error = false;
+  bool disable_access_control = false;
   enum class ExceptionMode { Unspecified, Enabled, Disabled };
   ExceptionMode exception_mode = ExceptionMode::Unspecified;
   enum class RttiMode { Unspecified, Enabled, Disabled };
@@ -178,6 +344,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       rtti_mode = RttiMode::Disabled;
     } else if (current_arg == "-rex:clang:continue-on-error") {
       continue_on_error = true;
+    } else if (current_arg == "-rex:clang:disable-access-control") {
+      disable_access_control = true;
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // TODO -include
 #if DEBUG_ARGS
@@ -523,6 +691,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   clang::LangOptions::setLangDefaults(lang_opts, clang_lang, target_triple,
                                       lang_specific_includes, requested_std);
+  if (lang_opts.GNUCVersion == 0) {
+    // Clang's driver normally sets a GCC compatibility version; mirror that
+    // here so GNU built-in macros (e.g., __GNUC__) are defined.
+    lang_opts.GNUCVersion = 40201; // GCC 4.2.1 (Clang default)
+  }
 
   if (language == ClangToSageTranslator::CPLUSPLUS) {
     ROSE_ASSERT(lang_opts.CPlusPlus &&
@@ -558,12 +731,19 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   if (enable_opencl) {
     lang_opts.OpenCL = 1;
   }
+  if (language == ClangToSageTranslator::CPLUSPLUS ||
+      language == ClangToSageTranslator::CUDA) {
+    if (disable_access_control) {
+      lang_opts.AccessControl = 0;
+    }
+  }
 
   // Now create file manager with FileSystemOptions from the parsed invocation
   compiler_instance->createFileManager(vfs);
 
   clang::PreprocessorOptions &pp_opts =
       compiler_instance->getInvocation().getPreprocessorOpts();
+  pp_opts.UsePredefines = true;
   if (!lang_specific_includes.empty()) {
     pp_opts.Includes.insert(pp_opts.Includes.end(),
                             lang_specific_includes.begin(),
@@ -597,6 +777,31 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // In LLVM 20, createFileID takes FileEntryRef instead of const FileEntry*
   clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(
       input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
+  if (language == ClangToSageTranslator::CPLUSPLUS ||
+      language == ClangToSageTranslator::CUDA) {
+    std::vector<unsigned> missing_template_offsets;
+    if (auto fixed_buffer = maybeFixMissingTemplateHeader(
+            compiler_instance->getSourceManager(), mainFileID, lang_opts,
+            &missing_template_offsets)) {
+      compiler_instance->getSourceManager().overrideFileContents(
+          input_file_entry, std::move(fixed_buffer));
+      // The token stream no longer matches the on-disk source; unparse from
+      // the AST to preserve the normalized template<> specialization headers.
+      sageFile.set_unparse_tokens(false);
+    }
+    if (!missing_template_offsets.empty()) {
+      std::string file_name = input_file;
+      if (auto entry =
+              compiler_instance->getSourceManager().getFileEntryRefForID(
+                  mainFileID)) {
+        file_name = entry->getName().str();
+      }
+      sageFile.addNewAttribute(
+          kMissingTemplateHeaderFixupAttributeName,
+          new MissingTemplateHeaderFixupAttribute(
+              std::move(file_name), std::move(missing_template_offsets)));
+    }
+  }
 
   compiler_instance->getSourceManager().setMainFileID(mainFileID);
 
@@ -948,6 +1153,14 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
       clang::FileID file_begin = sm.getFileID(begin);
       clang::FileID file_end = sm.getFileID(end);
 
+      if (!sm.isWrittenInMainFile(begin) &&
+          sm.isWrittenInMainFile(spelling_begin)) {
+        begin = spelling_begin;
+        end = spelling_end;
+        file_begin = sm.getFileID(begin);
+        file_end = sm.getFileID(end);
+      }
+
       if (!file_begin.isInvalid() && !file_end.isInvalid()) {
         auto end_buffer = sm.getBufferDataOrNone(file_end);
         const bool in_main_file = file_begin == sm.getMainFileID();
@@ -998,14 +1211,33 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
                        "check before...");
         }
 
-        // In LLVM 20, getFileEntryForID still returns const
-        // FileEntry*
+        // In LLVM 20, getFileEntryForID still returns const FileEntry*.
         const clang::FileEntry *fileEntry = sm.getFileEntryForID(file_begin);
+        std::string file;
         if (fileEntry) {
-          // In LLVM 20, FileEntry uses tryGetRealPathName() instead
-          // of getName()
-          std::string file = fileEntry->tryGetRealPathName().str();
+          // In LLVM 20, FileEntry uses tryGetRealPathName() instead of
+          // getName().
+          file = fileEntry->tryGetRealPathName().str();
+        }
+        if (file.empty()) {
+          file = sm.getFilename(begin).str();
+        }
+        if ((file.empty() || file == "<built-in>") &&
+            sm.isWrittenInMainFile(begin)) {
+          const clang::FileEntry *main_entry =
+              sm.getFileEntryForID(sm.getMainFileID());
+          if (main_entry) {
+            file = main_entry->tryGetRealPathName().str();
+          }
+        }
+        if (file.empty()) {
+          clang::PresumedLoc ploc = sm.getPresumedLoc(begin);
+          if (ploc.isValid()) {
+            file = ploc.getFilename();
+          }
+        }
 
+        if (!file.empty()) {
           // start_fi = new Sg_File_Info(file, ls, cs);
           // end_fi   = new Sg_File_Info(file, le, ce);
           // Mark nodes for code generation only when they originate

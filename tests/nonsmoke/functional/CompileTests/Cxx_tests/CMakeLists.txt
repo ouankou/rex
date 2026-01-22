@@ -509,6 +509,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2005_66.C
   test2005_67.C
   test2005_68.C
+  test2005_69.C
   test2005_70.C
   test2005_71.C
   test2005_72.C
@@ -1377,6 +1378,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2013_239.C
   test2013_243.C
   test2013_244.C
+  test2013_247.C
   test2013_25.C
   test2013_250.C
   test2013_251.C
@@ -2207,7 +2209,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2005_201.C
   test2005_204.C
   test2005_205.C
-  test2005_69.C
   test2005_85.C
   test2006_09.C
   test2006_11.C
@@ -2449,7 +2450,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2013_241.C
   test2013_242.C
   test2013_245.C
-  test2013_247.C
   test2013_248.C
   test2013_249.C
   test2013_24.C
@@ -2540,7 +2540,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2016_94.C
   test2016_95.C
   test2017_05.C
-  test2017_07.C
   test2017_08.C
   test2017_12.C
   test2017_20.C
@@ -2580,7 +2579,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2005_201.C
   test2005_204.C
   test2005_205.C
-  test2005_69.C
   test2005_85.C
   test2006_09.C
   test2006_11.C
@@ -2818,7 +2816,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2013_241.C
   test2013_242.C
   test2013_245.C
-  test2013_247.C
   test2013_248.C
   test2013_249.C
   test2013_24.C
@@ -2908,7 +2905,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2016_94.C
   test2016_95.C
   test2017_05.C
-  test2017_07.C
   test2017_08.C
   test2017_12.C
   test2017_20.C
@@ -2953,7 +2949,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2005_205.C
   test2005_42.C
   test2005_50.C
-  test2005_69.C
   test2005_85.C
   test2006_08.C
   test2006_09.C
@@ -3202,7 +3197,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_24.C
   test2013_243.C
   test2013_245.C
-  test2013_247.C
   test2013_248.C
   test2013_249.C
   test2013_254.C
@@ -3237,7 +3231,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_101.C
   test2014_102.C
   test2014_118.C
-  test2014_119.C
   test2014_120.C
   test2014_121.C
   test2014_138.C
@@ -3274,9 +3267,7 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_135.C
   test2015_136.C
   test2015_25.C
-  test2015_70.C
   test2015_72_icpc.C
-  test2015_81.C
   test2015_82.C
   test2015_83.C
   test2015_84.C
@@ -3285,7 +3276,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2016_52.C
   test2016_82.C
   test2017_05.C
-  test2017_07.C
   test2017_08.C
   test2017_12.C
   test2017_20.C
@@ -3314,7 +3304,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test_gnu.C
   vector_cpp.C
   test2004_117.C
-  test2004_121.C
   test2007_35.C
   test2007_56.C
   test2009_23.C
