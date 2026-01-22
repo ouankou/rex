@@ -6,15 +6,43 @@ theme:
   features:
     - navigation.top
     - navigation.tabs
+    - navigation.path
+    - navigation.tracking
+    - toc.follow
+    - content.code.copy
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
   - tables
   - toc:
       permalink: true
 
+hooks:
+  - docs/mkdocs-search-exclude.py
+  - docs/mkdocs-reference-titles.py
+  - docs/mkdocs-build-manifest.py
+
 plugins:
-  - search
+  - material/search:
+      separator: "[\\s\\-_:]+"
+  - asciidoctor_backend:
+      max_workers: 32
+
+extra_css:
+  - stylesheets/reference.css
+
+extra_javascript:
+  - javascripts/reference-table-sizing.js
+
+not_in_nav: |
+  reference/**/*.adoc
+  !reference/index.adoc
+  !reference/sections/*.adoc
 
 nav:
   - Home: index.md
@@ -25,4 +53,14 @@ nav:
       - Template Status: CLANG_CPP_TEMPLATE_STATUS.md
       - System Header Mutation: system-header-mutation.md
       - Upstream Sync: upstream-sync/rose-upstream-sync-guide.md
-  - API Reference: api.md
+  - API:
+      - Overview: api.md
+      - Quick Lookup: api-lookup.md
+      - Reference Index: reference/index.adoc
+      - Namespaces: reference/sections/namespaces.adoc
+      - Types: reference/sections/types.adoc
+      - Enums: reference/sections/enums.adoc
+      - Functions: reference/sections/functions.adoc
+      - Variables: reference/sections/variables.adoc
+      - Using Declarations: reference/sections/using-declarations.adoc
+      - Using Namespace Directives: reference/sections/using-namespace-directives.adoc
