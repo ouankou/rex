@@ -8,9 +8,12 @@ namespace Rose::builder {
 
 class BuildVisitor {
 public:
-  BuildVisitor() : cooked_{nullptr} {}
+  BuildVisitor()
+      : cooked_{nullptr}, type_{nullptr}, label_{std::nullopt},
+        type_context_depth_{0} {}
   BuildVisitor(Fortran::parser::AllCookedSources &cooked)
-      : cooked_{&cooked}, type_{nullptr}, label_{std::nullopt} {}
+      : cooked_{&cooked}, type_{nullptr}, label_{std::nullopt},
+        type_context_depth_{0} {}
 
   // In nearly all cases, this code avoids defining Boolean-valued Pre()
   // callbacks for the parse tree walking framework in favor of two void
@@ -22,7 +25,10 @@ public:
   // Save and subsequently remove any label
   template <typename T> void Before(Fortran::parser::Statement<T> &x) {
     if (x.label) {
-      label_ = x.label;
+      const int labelValue = static_cast<int>(x.label.value());
+      if (labelValue > 0) {
+        label_ = x.label;
+      }
     }
   }
   template <typename T> void Post(Fortran::parser::Statement<T> &x) {
@@ -123,16 +129,26 @@ public:
   void Build(Fortran::parser::ContainsStmt &);
 
   // SpecificationPart
+  void Build(Fortran::parser::SpecificationPart &);
   void Build(Fortran::parser::ImplicitStmt &);
   void Build(Fortran::parser::CommonStmt &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::UseStmt>> &);
+  void Build(Fortran::parser::Statement<
+             Fortran::common::Indirection<Fortran::parser::ParameterStmt>> &);
+  void
+  Build(Fortran::parser::Statement<
+        Fortran::common::Indirection<Fortran::parser::OldParameterStmt>> &);
   void Build(Fortran::parser::TypeDeclarationStmt &);
 
   // SpecificationConstruct
   void Build(Fortran::parser::DataStmt &);
+  void Build(Fortran::parser::AllocatableStmt &);
+  void Build(Fortran::parser::ExternalStmt &);
+  void Build(Fortran::parser::InterfaceBlock &);
   void Build(Fortran::parser::DerivedTypeDef &);
   void Build(Fortran::parser::DimensionStmt &);
+  void Build(Fortran::parser::NamelistStmt &);
 
   void Build(Fortran::parser::IntegerTypeSpec &);
   void Build(Fortran::parser::IntrinsicTypeSpec::Real &);
@@ -143,20 +159,47 @@ public:
   void Build(Fortran::parser::IntrinsicTypeSpec::Logical &);
 
   void Build(Fortran::parser::DeclarationTypeSpec::Type &x);
+  void Build(Fortran::parser::DeclarationTypeSpec::Class &x);
+  void Build(Fortran::parser::DeclarationTypeSpec::TypeStar &x);
+  void Build(Fortran::parser::DeclarationTypeSpec::ClassStar &x);
+  void Build(Fortran::parser::DeclarationTypeSpec::Record &x);
 
   // ExecutionPart
   void Build(Fortran::parser::AssignmentStmt &);
+  void Build(Fortran::parser::AssociateConstruct &);
   void Build(Fortran::parser::DoConstruct &);
   void Build(Fortran::parser::LabelDoStmt &);
+  void Build(Fortran::parser::IfConstruct &);
+  void Build(Fortran::parser::IfStmt &);
+  void Build(Fortran::parser::Statement<
+             Fortran::common::Indirection<Fortran::parser::FormatStmt>> &);
 
   // ActionStmt
+  void Build(Fortran::parser::AllocateStmt &);
+  void Build(Fortran::parser::BackspaceStmt &);
+  void Build(Fortran::parser::CloseStmt &);
   void Build(Fortran::parser::ContinueStmt &);
+  void Build(Fortran::parser::CycleStmt &);
+  void Build(Fortran::parser::DeallocateStmt &);
+  void Build(Fortran::parser::EndfileStmt &);
+  void Build(Fortran::parser::ExitStmt &);
   void Build(Fortran::parser::GotoStmt &);
   void Build(Fortran::parser::FailImageStmt &);
+  void Build(Fortran::parser::FlushStmt &);
+  void Build(Fortran::parser::InquireStmt &);
+  void Build(Fortran::parser::OpenStmt &);
+  void Build(Fortran::parser::PointerAssignmentStmt &);
+  void Build(Fortran::parser::NullifyStmt &);
+  void Build(Fortran::parser::ReadStmt &);
+  void Build(Fortran::parser::RewindStmt &);
   void Build(Fortran::parser::ReturnStmt &);
   void Build(Fortran::parser::StopStmt &);
+  void Build(Fortran::parser::WaitStmt &);
   void Build(Fortran::parser::WriteStmt &);
   void Build(Fortran::parser::PrintStmt &);
+  void Build(Fortran::parser::CallStmt &);
+  void Build(Fortran::parser::ProcedureDeclarationStmt &);
+  void Build(Fortran::parser::ArithmeticIfStmt &);
 
   void Done() const { std::cerr << "Done()\n"; }
 
@@ -166,8 +209,11 @@ public:
 
   // Build types using a synthesized attribute
   void BuildType(Fortran::parser::DeclarationTypeSpec &x, SgType *&type) {
+    ++type_context_depth_;
+    type_ = nullptr;
     Walk(x);
     this->get(type); // get synthesized attribute
+    --type_context_depth_;
   }
 
   // Accessor for statement label
@@ -186,11 +232,17 @@ public:
   }
   void set(SgType *type) {
     ASSERT_not_null(type);
+    if (type_context_depth_ == 0) {
+      type_ = nullptr;
+      return;
+    }
     ASSERT_require(type_ == nullptr);
     type_ = type;
   }
 
 private:
+  void ApplyStatementLabel(SgStatement *stmt, SgScopeStatement *scope) const;
+
   struct LabelDoFrame {
     enum class Kind { FortranDo, While };
     Fortran::parser::Label end_label;
@@ -204,6 +256,7 @@ private:
   SgType *type_; // synthesized attribute
   std::optional<Fortran::parser::Label> label_;
   std::vector<LabelDoFrame> label_do_stack_;
+  int type_context_depth_;
 
 }; // BuildVisitor
 

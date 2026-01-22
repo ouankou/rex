@@ -810,6 +810,19 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
       printf("\n");
     }
 
+    if (project->get_compileOnly() == true) {
+      bool addCompileOnlyFlag = true;
+      for (const auto &arg : commandLineToGenerateObjectFile) {
+        if (arg == "-c") {
+          addCompileOnlyFlag = false;
+          break;
+        }
+      }
+      if (addCompileOnlyFlag) {
+        commandLineToGenerateObjectFile.push_back("-c");
+      }
+    }
+
     // DQ (12/28/2010): If we specified to NOT compile the input code then don't
     // do so even when it is the original code. This is important for Fortran
     // 2003 test codes that will not compile with gfortran and for which the

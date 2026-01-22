@@ -17,6 +17,8 @@
 // This limits the use of ROSE header files at the moment.
 //
 class SgBasicBlock;
+class SgArithmeticIfStatement;
+class SgBreakStmt;
 class SgCaseOptionStmt;
 class SgCastExp;
 class SgCommonBlock;
@@ -208,6 +210,8 @@ public:
 
   void Enter(SgContinueStmt *&);
   void Leave(SgContinueStmt *, const std::vector<std::string> &);
+  void Enter(SgBreakStmt *&);
+  void Leave(SgBreakStmt *, const std::vector<std::string> &);
 
   void Enter(SgFortranContinueStmt *&);
   void Leave(SgFortranContinueStmt *, const std::vector<std::string> &);
@@ -219,6 +223,8 @@ public:
              std::vector<Rose::builder::Token> &, bool is_ifthen = false,
              bool has_end_stmt = false, bool is_else_if = false);
   void Leave(SgIfStmt *);
+  void Leave(SgIfStmt *, const std::vector<std::string> &);
+  void Leave(SgArithmeticIfStatement *, const std::vector<std::string> &);
 
   void Enter(SgLabelStatement *&, const std::string &label);
   void Leave(SgLabelStatement *, const std::vector<std::string> &);
@@ -247,6 +253,8 @@ public:
 
   void Enter(SgPrintStatement *&, SgExpression *, std::list<SgExpression *> &);
   void Leave(SgPrintStatement *);
+  void Leave(SgPrintStatement *, const std::vector<std::string> &);
+  void Leave(SgFormatStatement *, const std::vector<std::string> &);
 
   void Enter(SgWhileStmt *&, SgExpression *);
   void Leave(SgWhileStmt *, bool has_end_do_stmt = false);
@@ -388,7 +396,8 @@ SgExpression *buildComplexVal_nfi(SgExpression *real_value,
                                   const std::string &str);
 SgExpression *buildExprListExp_nfi();
 SgExpression *buildVarRefExp_nfi(std::string &name,
-                                 SgScopeStatement *scope = nullptr);
+                                 SgScopeStatement *scope = nullptr,
+                                 bool allow_implicit = true);
 SgExpression *buildSubtractOp_nfi(SgExpression *lhs, SgExpression *rhs);
 SgExpression *buildSubscriptExpression_nfi(SgExpression *lower_bound,
                                            SgExpression *upper_bound,

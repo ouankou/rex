@@ -115,7 +115,8 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
             suffix == "f90" || suffix == "F90" || suffix == "ff90" ||
             suffix == "f95" || suffix == "F95" || suffix == "ff95" ||
             suffix == "cuf" || suffix == "CUF" || suffix == "f18" ||
-            suffix == "F18" || suffix == "ff18") {
+            suffix == "F18" || suffix == "ff18" || suffix == "rmod" ||
+            suffix == "rcmp" || suffix == "RMOD" || suffix == "RCMP") {
           ctx.fortranSources.push_back(arg);
         } else if (suffix == "o" || suffix == "a") {
           ctx.relocatables.push_back(arg);
@@ -133,6 +134,16 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
       break;
     } else if (arg == "-Mextend") {
       ctx.options.fixedFormColumns = 132;
+      ctx.options.isFixedForm = true;
+      ctx.driver.forcedForm = true;
+    } else if (arg == "-Mfixed" || arg == "-ffixed-form" || arg == "-fixed" ||
+               arg == "-qfixed") {
+      ctx.options.isFixedForm = true;
+      ctx.driver.forcedForm = true;
+    } else if (arg == "-Mfree" || arg == "-ffree-form" || arg == "-free" ||
+               arg == "-qfree" || arg == "-fno-fixed-form") {
+      ctx.options.isFixedForm = false;
+      ctx.driver.forcedForm = true;
     } else if (arg == "-Mstandard") {
       ctx.driver.warnOnNonstandardUsage = true;
     } else if (arg == "-pedantic") {

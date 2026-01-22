@@ -1,6 +1,8 @@
 #ifndef mangling_support_INCLUDED
 #define mangling_support_INCLUDED
 
+class SgFunctionDefinition;
+
 // DQ (10/31/2015): Adding new namespace to organize mangled name handling.
 namespace MangledNameSupport {
 // Although the purpose of this namespace is to eventually have most or all of
@@ -19,6 +21,9 @@ namespace MangledNameSupport {
 typedef std::set<SgClassDefinition *> setType;
 
 extern setType visitedTemplateDefinitions;
+
+typedef std::set<SgFunctionDefinition *> functionSetType;
+extern functionSetType visitedFunctionDefinitions;
 
 void outputVisitedTemplateDefinitions();
 } // namespace MangledNameSupport

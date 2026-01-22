@@ -34,7 +34,152 @@
 
 #include "../../frontend/Experimental_Flang_ROSE_Connection/sage-build.h"
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <fstream>
+#include <llvm/Support/Path.h>
+
 std::vector<std::string> filesToDelete;
+
+namespace {
+bool IsIncludeDirective(const std::string &line, size_t &headerEnd,
+                        size_t &trailingStart) {
+  size_t pos = line.find_first_not_of(" \t");
+  if (pos == std::string::npos || line[pos] != '#') {
+    return false;
+  }
+  pos = line.find_first_not_of(" \t", pos + 1);
+  if (pos == std::string::npos) {
+    return false;
+  }
+  constexpr const char *kInclude = "include";
+  constexpr size_t kIncludeLen = 7;
+  if (line.compare(pos, kIncludeLen, kInclude) != 0) {
+    return false;
+  }
+  pos += kIncludeLen;
+  if (pos < line.size() &&
+      std::isalpha(static_cast<unsigned char>(line[pos]))) {
+    return false;
+  }
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos) {
+    return false;
+  }
+  char opener = line[pos];
+  char closer = '\0';
+  if (opener == '<') {
+    closer = '>';
+  } else if (opener == '"') {
+    closer = '"';
+  } else {
+    return false;
+  }
+  size_t end = line.find(closer, pos + 1);
+  if (end == std::string::npos) {
+    return false;
+  }
+  headerEnd = end + 1;
+  trailingStart = line.find_first_not_of(" \t", headerEnd);
+  return trailingStart != std::string::npos;
+}
+
+bool ShouldSplitIncludeLine(const std::string &line) {
+  size_t headerEnd = 0;
+  size_t trailingStart = 0;
+  if (!IsIncludeDirective(line, headerEnd, trailingStart)) {
+    return false;
+  }
+  const char ch = line[trailingStart];
+  if (ch == '!') {
+    return false;
+  }
+  if (ch == '/' && trailingStart + 1 < line.size()) {
+    const char next = line[trailingStart + 1];
+    if (next == '/' || next == '*') {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool WriteIncludeFixedCopy(const std::string &path, std::string &fixedPath) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    return false;
+  }
+
+  std::string output;
+  bool changed = false;
+  std::string line;
+  while (std::getline(input, line)) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    if (ShouldSplitIncludeLine(line)) {
+      size_t headerEnd = 0;
+      size_t trailingStart = 0;
+      if (IsIncludeDirective(line, headerEnd, trailingStart)) {
+        output.append(line.substr(0, headerEnd));
+        output.push_back('\n');
+        output.append(line.substr(trailingStart));
+        output.push_back('\n');
+        changed = true;
+        continue;
+      }
+    }
+    output.append(line);
+    output.push_back('\n');
+  }
+
+  if (!changed) {
+    return false;
+  }
+
+  std::filesystem::path dir = std::filesystem::path(path).parent_path();
+  if (dir.empty()) {
+    dir = ".";
+  }
+  llvm::SmallString<256> pattern(dir.string());
+  llvm::sys::path::append(pattern, "rose-f18-include-%%%%.F90");
+  int fd = -1;
+  llvm::SmallString<256> tmpPath;
+  if (std::error_code ec =
+          llvm::sys::fs::createUniqueFile(pattern, fd, tmpPath)) {
+    llvm::errs() << "f18-parse-demo: could not create temp file in "
+                 << dir.string() << ": " << ec.message() << "\n";
+    std::exit(EXIT_FAILURE);
+  }
+  llvm::raw_fd_ostream tmpOut(fd, /*shouldClose*/ true);
+  tmpOut << output;
+  fixedPath = llvm::StringRef(tmpPath.data(), tmpPath.size());
+  filesToDelete.push_back(fixedPath);
+  return true;
+}
+} // namespace
+
+static bool IsFixedFormFile(const std::string &path) {
+  auto dot = path.rfind('.');
+  if (dot == std::string::npos) {
+    return false;
+  }
+  std::string ext = path.substr(dot + 1);
+  std::transform(ext.begin(), ext.end(), ext.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  static const std::set<std::string> fixedExt{"f",   "for", "ftn",
+                                              "f66", "f77", "ff"};
+  static const std::set<std::string> freeExt{"f90",  "f95",   "f03",   "f08",
+                                             "f18",  "f2003", "f2008", "ff90",
+                                             "ff95", "ff03",  "ff08",  "ff18"};
+  if (fixedExt.find(ext) != fixedExt.end()) {
+    return true;
+  }
+  if (freeExt.find(ext) != freeExt.end()) {
+    return false;
+  }
+  return false;
+}
 
 static void CleanUpAtExit() {
   for (const auto &path : filesToDelete) {
@@ -96,6 +241,9 @@ std::string CompileFortran(const std::string &path,
   options.searchDirectories = driver.searchDirectories;
   options.encoding = driver.encoding;
   options.expandIncludeLinesInPreprocessedOutput = driver.lineDirectives;
+  if (!driver.forcedForm && path != "-") {
+    options.isFixedForm = IsFixedFormFile(path);
+  }
 
   Fortran::parser::AllSources allSources;
   allSources.set_encoding(driver.encoding);
@@ -103,7 +251,13 @@ std::string CompileFortran(const std::string &path,
   Fortran::parser::AllCookedSources allCookedSources{allSources};
   Fortran::parser::Parsing parsing{allCookedSources};
 
-  parsing.Prescan(path, options);
+  std::string prescanPath = path;
+  std::string fixedPath;
+  if (WriteIncludeFixedCopy(path, fixedPath)) {
+    prescanPath = fixedPath;
+  }
+
+  parsing.Prescan(prescanPath, options);
 
   auto &messages = parsing.messages();
   messages.ResolveProvenances(parsing.allCooked());
@@ -161,6 +315,10 @@ std::string CompileFortran(const std::string &path,
     return {};
   }
   if (driver.syntaxOnly) {
+    return {};
+  }
+  if (driver.externalBuilder) {
+    // ROSE only needs the parse tree; avoid invoking the external compiler.
     return {};
   }
   std::string unparsedPath{path};

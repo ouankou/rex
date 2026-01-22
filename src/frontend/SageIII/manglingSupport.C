@@ -10,6 +10,8 @@ using namespace Rose;
 // DQ (10/31/2015): Need to define this in a single location instead of in the
 // header file included by multiple source files.
 MangledNameSupport::setType MangledNameSupport::visitedTemplateDefinitions;
+MangledNameSupport::functionSetType
+    MangledNameSupport::visitedFunctionDefinitions;
 
 string replaceNonAlphaNum(const string &s) {
   ostringstream s_new;
@@ -249,7 +251,23 @@ string mangleQualifiersToString(const SgScopeStatement *scope) {
       // 'scope' is part of scope for locally defined classes
       const SgFunctionDefinition *def = isSgFunctionDefinition(scope);
       ROSE_ASSERT(def != nullptr);
+      SgFunctionDefinition *nonconst_def =
+          const_cast<SgFunctionDefinition *>(def);
+      if (MangledNameSupport::visitedFunctionDefinitions.find(nonconst_def) !=
+          MangledNameSupport::visitedFunctionDefinitions.end()) {
+        const SgFunctionDeclaration *decl = def->get_declaration();
+        if (decl != nullptr) {
+          mangled_name = decl->get_name().getString();
+        } else {
+          mangled_name = "function";
+        }
+        mangled_name += "_" + Rose::StringUtility::numberToString(
+                                  reinterpret_cast<size_t>(def));
+        break;
+      }
+      MangledNameSupport::visitedFunctionDefinitions.insert(nonconst_def);
       mangled_name = def->get_mangled_name().getString();
+      MangledNameSupport::visitedFunctionDefinitions.erase(nonconst_def);
       break;
     }
 

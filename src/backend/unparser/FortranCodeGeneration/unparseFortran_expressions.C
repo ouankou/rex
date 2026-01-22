@@ -7,8 +7,187 @@
 
 #include "unparser.h"
 
+#include <limits>
+
 using namespace std;
 using namespace Rose;
+
+namespace {
+bool EvaluateConstIntExpr(SgExpression *expr, long long &value) {
+  if (expr == nullptr) {
+    return false;
+  }
+  if (auto *intVal = isSgIntVal(expr)) {
+    value = intVal->get_value();
+    return true;
+  }
+  if (auto *longVal = isSgLongIntVal(expr)) {
+    value = longVal->get_value();
+    return true;
+  }
+  if (auto *longLongVal = isSgLongLongIntVal(expr)) {
+    value = longLongVal->get_value();
+    return true;
+  }
+  if (auto *shortVal = isSgShortVal(expr)) {
+    value = shortVal->get_value();
+    return true;
+  }
+  if (auto *uintVal = isSgUnsignedIntVal(expr)) {
+    value = static_cast<long long>(uintVal->get_value());
+    return true;
+  }
+  if (auto *ulongVal = isSgUnsignedLongVal(expr)) {
+    unsigned long raw = ulongVal->get_value();
+    if (raw >
+        static_cast<unsigned long>(std::numeric_limits<long long>::max())) {
+      return false;
+    }
+    value = static_cast<long long>(raw);
+    return true;
+  }
+  if (auto *ulongLongVal = isSgUnsignedLongLongIntVal(expr)) {
+    unsigned long long raw = ulongLongVal->get_value();
+    if (raw > static_cast<unsigned long long>(
+                  std::numeric_limits<long long>::max())) {
+      return false;
+    }
+    value = static_cast<long long>(raw);
+    return true;
+  }
+  if (auto *ushortVal = isSgUnsignedShortVal(expr)) {
+    value = static_cast<long long>(ushortVal->get_value());
+    return true;
+  }
+  if (auto *varRef = isSgVarRefExp(expr)) {
+    SgVariableSymbol *symbol = varRef->get_symbol();
+    if (symbol == nullptr) {
+      return false;
+    }
+    SgInitializedName *initName = symbol->get_declaration();
+    if (initName == nullptr) {
+      return false;
+    }
+    bool isConst = SageInterface::isConstType(initName->get_type());
+    if (!isConst) {
+      if (auto *varDecl = isSgVariableDeclaration(initName->get_parent())) {
+        isConst = varDecl->get_declarationModifier()
+                      .get_typeModifier()
+                      .get_constVolatileModifier()
+                      .isConst();
+      }
+    }
+    if (!isConst) {
+      return false;
+    }
+    auto *initializer = isSgAssignInitializer(initName->get_initializer());
+    if (initializer == nullptr) {
+      return false;
+    }
+    return EvaluateConstIntExpr(initializer->get_operand(), value);
+  }
+  if (auto *addOp = isSgAddOp(expr)) {
+    long long lhs = 0;
+    long long rhs = 0;
+    if (!EvaluateConstIntExpr(addOp->get_lhs_operand(), lhs) ||
+        !EvaluateConstIntExpr(addOp->get_rhs_operand(), rhs)) {
+      return false;
+    }
+    value = lhs + rhs;
+    return true;
+  }
+  if (auto *subOp = isSgSubtractOp(expr)) {
+    long long lhs = 0;
+    long long rhs = 0;
+    if (!EvaluateConstIntExpr(subOp->get_lhs_operand(), lhs) ||
+        !EvaluateConstIntExpr(subOp->get_rhs_operand(), rhs)) {
+      return false;
+    }
+    value = lhs - rhs;
+    return true;
+  }
+  if (auto *mulOp = isSgMultiplyOp(expr)) {
+    long long lhs = 0;
+    long long rhs = 0;
+    if (!EvaluateConstIntExpr(mulOp->get_lhs_operand(), lhs) ||
+        !EvaluateConstIntExpr(mulOp->get_rhs_operand(), rhs)) {
+      return false;
+    }
+    value = lhs * rhs;
+    return true;
+  }
+  if (auto *divOp = isSgDivideOp(expr)) {
+    long long lhs = 0;
+    long long rhs = 0;
+    if (!EvaluateConstIntExpr(divOp->get_lhs_operand(), lhs) ||
+        !EvaluateConstIntExpr(divOp->get_rhs_operand(), rhs) || rhs == 0) {
+      return false;
+    }
+    value = lhs / rhs;
+    return true;
+  }
+  if (auto *modOp = isSgModOp(expr)) {
+    long long lhs = 0;
+    long long rhs = 0;
+    if (!EvaluateConstIntExpr(modOp->get_lhs_operand(), lhs) ||
+        !EvaluateConstIntExpr(modOp->get_rhs_operand(), rhs) || rhs == 0) {
+      return false;
+    }
+    value = lhs % rhs;
+    return true;
+  }
+  if (auto *minusOp = isSgMinusOp(expr)) {
+    long long operand = 0;
+    if (!EvaluateConstIntExpr(minusOp->get_operand(), operand)) {
+      return false;
+    }
+    value = -operand;
+    return true;
+  }
+  if (auto *unaryAddOp = isSgUnaryAddOp(expr)) {
+    long long operand = 0;
+    if (!EvaluateConstIntExpr(unaryAddOp->get_operand(), operand)) {
+      return false;
+    }
+    value = operand;
+    return true;
+  }
+  return false;
+}
+
+bool ImpliedDoHasZeroIterations(const SgExpression *expr) {
+  const auto *impliedDo = isSgImpliedDo(expr);
+  if (impliedDo == nullptr) {
+    return false;
+  }
+
+  SgExpression *init = impliedDo->get_do_var_initialization();
+  SgExpression *upper = impliedDo->get_last_val();
+  SgExpression *step = impliedDo->get_increment();
+  if (init == nullptr || upper == nullptr || step == nullptr) {
+    return false;
+  }
+
+  auto *assignOp = isSgAssignOp(init);
+  if (assignOp == nullptr) {
+    return false;
+  }
+
+  long long lowerVal = 0;
+  long long upperVal = 0;
+  long long stepVal = 0;
+  if (!EvaluateConstIntExpr(assignOp->get_rhs_operand(), lowerVal) ||
+      !EvaluateConstIntExpr(upper, upperVal) ||
+      !EvaluateConstIntExpr(step, stepVal) || stepVal == 0) {
+    return false;
+  }
+
+  if (stepVal > 0) {
+    return lowerVal > upperVal;
+  }
+  return lowerVal < upperVal;
+}
+} // namespace
 
 void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
     SgExpression *expr, SgUnparse_Info &info) {
@@ -859,13 +1038,16 @@ void FortranCodeGeneration_locatedNode::unparseInitializerList(
     curprint("(/");
   }
 
-  SgExpressionPtrList::iterator it = expr_list->get_expressions().begin();
-  while (it != expr_list->get_expressions().end()) {
-    unparseExpression(*it, info);
-    it++;
-    if (it != expr_list->get_expressions().end()) {
+  bool needComma = false;
+  for (SgExpression *item : expr_list->get_expressions()) {
+    if (ImpliedDoHasZeroIterations(item)) {
+      continue;
+    }
+    if (needComma) {
       curprint(",");
     }
+    unparseExpression(item, info);
+    needComma = true;
   }
 
   if (paren) {
@@ -1105,13 +1287,16 @@ void FortranCodeGeneration_locatedNode::unparseExprList(SgExpression *expr,
   if (paren) {
     curprint("(");
   }
-  SgExpressionPtrList::iterator it = expr_list->get_expressions().begin();
-  while (it != expr_list->get_expressions().end()) {
-    unparseExpression(*it, info);
-    it++;
-    if (it != expr_list->get_expressions().end()) {
+  bool needComma = false;
+  for (SgExpression *item : expr_list->get_expressions()) {
+    if (ImpliedDoHasZeroIterations(item)) {
+      continue;
+    }
+    if (needComma) {
       curprint(",");
     }
+    unparseExpression(item, info);
+    needComma = true;
   }
   if (paren) {
     curprint(")");
@@ -1127,22 +1312,67 @@ bool FortranCodeGeneration_locatedNode::isSubroutineCall(
   // Note that the function declaration is explicitly marked and I think this is
   // better than getting the return type.
 
-  SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(fcall->get_function());
-  ASSERT_not_null(functionRefExp);
+  SgExpression *functionExpr = fcall->get_function();
+  ASSERT_not_null(functionExpr);
 
-  SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
-  ASSERT_not_null(functionSymbol);
+  if (SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(functionExpr)) {
+    SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
+    ASSERT_not_null(functionSymbol);
 
-  SgFunctionDeclaration *functionDeclaration =
-      functionSymbol->get_declaration();
-  ASSERT_not_null(functionDeclaration);
+    SgFunctionDeclaration *functionDeclaration =
+        functionSymbol->get_declaration();
+    ASSERT_not_null(functionDeclaration);
 
-  SgProcedureHeaderStatement *procedureHeaderStatement =
-      isSgProcedureHeaderStatement(functionDeclaration);
-  ASSERT_not_null(procedureHeaderStatement);
+    SgProcedureHeaderStatement *procedureHeaderStatement =
+        isSgProcedureHeaderStatement(functionDeclaration);
+    ASSERT_not_null(procedureHeaderStatement);
 
-  return (procedureHeaderStatement->get_subprogram_kind() ==
-          SgProcedureHeaderStatement::e_subroutine_subprogram_kind);
+    return (procedureHeaderStatement->get_subprogram_kind() ==
+            SgProcedureHeaderStatement::e_subroutine_subprogram_kind);
+  }
+
+  auto stripModifierType = [](SgType *type) {
+    while (auto *modifier = isSgModifierType(type)) {
+      type = modifier->get_base_type();
+    }
+    return type;
+  };
+
+  auto stripPointerType = [&](SgType *type) {
+    type = stripModifierType(type);
+    if (auto *pointer = isSgPointerType(type)) {
+      type = pointer->get_base_type();
+    }
+    return stripModifierType(type);
+  };
+
+  auto getExprType = [&](auto &&self, SgExpression *expr) -> SgType * {
+    if (expr == nullptr) {
+      return nullptr;
+    }
+    if (expr->get_type() != nullptr) {
+      return expr->get_type();
+    }
+    if (auto *varRef = isSgVarRefExp(expr)) {
+      if (SgVariableSymbol *sym = varRef->get_symbol()) {
+        return sym->get_type();
+      }
+    }
+    if (auto *dot = isSgDotExp(expr)) {
+      return self(self, dot->get_rhs_operand_i());
+    }
+    return nullptr;
+  };
+
+  SgType *type = stripPointerType(getExprType(getExprType, functionExpr));
+  if (SgFunctionType *funcType = isSgFunctionType(type)) {
+    return isSgTypeVoid(funcType->get_return_type()) != nullptr;
+  }
+  if (SgMemberFunctionType *funcType = isSgMemberFunctionType(type)) {
+    return isSgTypeVoid(funcType->get_return_type()) != nullptr;
+  }
+
+  return false;
 }
 
 void FortranCodeGeneration_locatedNode::unparseUnknownArrayOrFunctionReference(

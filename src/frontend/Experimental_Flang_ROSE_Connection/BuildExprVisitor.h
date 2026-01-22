@@ -65,12 +65,35 @@ public:
 
   void Build(Fortran::parser::Name &);
   void Build(Fortran::parser::IntLiteralConstant &x) { BuildReplace(x); }
+  void Build(Fortran::parser::UnsignedLiteralConstant &x) { BuildReplace(x); }
+  void Build(Fortran::parser::SignedIntLiteralConstant &x) { BuildReplace(x); }
   void Build(Fortran::parser::CharLiteralConstant &x) { BuildReplace(x); }
   void Build(Fortran::parser::RealLiteralConstant &x) { BuildReplace(x); }
+  void Build(Fortran::parser::SignedRealLiteralConstant &x) { BuildReplace(x); }
+  void Build(Fortran::parser::ComplexLiteralConstant &x) { BuildReplace(x); }
+  void Build(Fortran::parser::SignedComplexLiteralConstant &x) {
+    BuildReplace(x);
+  }
+  void Build(Fortran::parser::BOZLiteralConstant &x) { BuildReplace(x); }
+  void Build(Fortran::parser::HollerithLiteralConstant &x) { BuildReplace(x); }
   void Build(Fortran::parser::LogicalLiteralConstant &x) { BuildReplace(x); }
   void Build(Fortran::parser::KindSelector::StarSize &x) { BuildReplace(x); }
   void Build(Fortran::parser::CharLength &x) { BuildReplace(x); }
   void Build(Fortran::parser::TypeParamValue &x) { BuildReplace(x); }
+
+  void Build(Fortran::parser::Designator &x);
+  void Build(Fortran::parser::Substring &x);
+  void Build(Fortran::parser::CharLiteralConstantSubstring &x);
+  void Build(Fortran::parser::SubstringInquiry &x);
+  void Build(Fortran::parser::StructureConstructor &x);
+  void Build(Fortran::parser::Expr::DefinedUnary &x);
+  void Build(Fortran::parser::Expr::DefinedBinary &x);
+  void Build(Fortran::parser::Expr::ComplexConstructor &x);
+  void Build(Fortran::parser::Expr::Parentheses &x);
+  void Build(Fortran::parser::Expr::PercentLoc &x);
+
+  void Build(Fortran::parser::FunctionReference &x);
+  void Build(Fortran::parser::ArrayConstructor &x);
 
   // CommonBlockObject
   void Build(Fortran::parser::CommonBlockObject &x) { BuildReplace(x); }
@@ -97,7 +120,6 @@ public:
   }
   void set(SgExpression *expr) {
     ASSERT_not_null(expr);
-    ASSERT_require(post_ == nullptr);
     post_ = expr;
   }
 
@@ -115,6 +137,10 @@ template <typename T> void WalkExpr(T &root, SgExpression *&expr) {
   Walk(root, visitor);
   visitor.Done();
   visitor.get(expr); // synthesized expression attribute
+}
+
+template <typename T> void WalkExpr(const T &root, SgExpression *&expr) {
+  WalkExpr(const_cast<T &>(root), expr);
 }
 
 } // namespace Rose::builder

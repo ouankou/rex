@@ -376,14 +376,16 @@ set(F03_TESTCODES_REQUIRED_TO_PASS
 structure_constructor_5.f03 value_7.f03)
 
 set(ROSE_FLAGS -rose:verbose 0 -rose:skip_syntax_check
-               -rose:skipfinalCompileStep -rose:detect_dangling_pointers 1)
+               -rose:skipfinalCompileStep -rose:detect_dangling_pointers 1
+               -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR})
 
 foreach(file_to_test ${F90_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:f90 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE)
+  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
 foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
@@ -391,7 +393,8 @@ foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:f77 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE)
+  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
 set(_gfortran_f90_disabled_tests
@@ -409,7 +412,8 @@ foreach(file_to_test ${_gfortran_f90_disabled_tests})
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:f90 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES DISABLED TRUE
+    LABELS GFORTRANSUITE WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
 set(_gfortran_f77_disabled_tests
@@ -423,7 +427,8 @@ foreach(file_to_test ${_gfortran_f77_disabled_tests})
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:f77 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES DISABLED TRUE
+    LABELS GFORTRANSUITE WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
 set(_gfortran_untested_tests
@@ -479,7 +484,8 @@ foreach(file_to_test ${_gfortran_untested_tests})
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES DISABLED TRUE
+    LABELS GFORTRANSUITE WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
 add_test(
@@ -488,7 +494,7 @@ add_test(
           -rose:skipfinalCompileStep -rose:detect_dangling_pointers 1 -c
           ${CMAKE_CURRENT_SOURCE_DIR}/bind_c_coms_driver.c
 )
-set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_gfortranTestSuite_gfortran.dg_bind_c_coms_driver.c PROPERTIES LABELS GFORTRANSUITE DEPENDS GFORTRANSUITE_bind_c_coms_driver.c)
+set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_gfortranTestSuite_gfortran.dg_bind_c_coms_driver.c PROPERTIES LABELS GFORTRANSUITE DEPENDS GFORTRANSUITE_bind_c_coms_driver.c WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # Note: If using gfortran version greater then 4.1, we can't call it with Fortran 2003 code since it is so buggy.
 #       So we use -rose:skip_syntax_check to avoid the frontend syntax checking and -rose:skipfinalCompileStep
@@ -501,7 +507,8 @@ foreach(file_to_test ${F03_TESTCODES_REQUIRED_TO_PASS})
     COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
             -rose:skipfinalCompileStep -rose:f2003 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE)
+  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
 set(_gfortran_f03_disabled_tests
@@ -517,13 +524,14 @@ foreach(file_to_test ${_gfortran_f03_disabled_tests})
     COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
             -rose:skipfinalCompileStep -rose:f2003 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES DISABLED TRUE LABELS GFORTRANSUITE)
+  set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES DISABLED TRUE
+    LABELS GFORTRANSUITE WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_CompileTests_Fortran_tests_gfortranTestSuite_gfortran.dg_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}

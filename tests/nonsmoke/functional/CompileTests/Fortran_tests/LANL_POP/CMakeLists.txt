@@ -3,6 +3,7 @@ set(ROSE_FLAGS -rose:verbose 0)
 function(LANL_POP_test file_to_compile)
   add_test(
     NAME ${file_to_compile}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND testAnalysis ${ROSE_FLAGS}
             -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_compile})
@@ -11,6 +12,7 @@ endfunction()
 function(LANL_POP_parse_test file_to_compile)
   add_test(
     NAME lanl_pop_parse_${file_to_compile}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND testParser ${ROSE_FLAGS}
             -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_compile})
@@ -250,23 +252,8 @@ set_tests_properties(xdisplay.F90 PROPERTIES DEPENDS "kinds_mod.F90;blocks.F90;d
 
 # Makefile check targets.
 add_test(
-  NAME nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=POP.F90\;kinds_mod.F90\;typeSizes.F90
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis PROPERTIES LABELS disabled DEPENDS "POP.F90;kinds_mod.F90;typeSizes.F90" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis PROPERTIES DISABLED TRUE)
-endif()
-if(NOT REX_ENABLE_DISABLED_TESTS)
-endif()
-add_test(
   NAME nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}

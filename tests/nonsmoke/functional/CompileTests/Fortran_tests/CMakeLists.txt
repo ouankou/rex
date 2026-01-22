@@ -20,7 +20,8 @@ include(Fortran_F03_Testcodes_Disabled.cmake)
 include(Fortran_Comments_Testcodes_Disabled.cmake)
 
 set(ROSE_FLAGS -rose:verbose 0 -rose:detect_dangling_pointers 2
-               -I${CMAKE_CURRENT_SOURCE_DIR})
+               -I${CMAKE_CURRENT_SOURCE_DIR}
+               -I${CMAKE_CURRENT_BINARY_DIR})
 
 set(ROSE_DISABLED_TESTCODES
   ${F90_DISABLED_TESTCODES}
@@ -31,14 +32,17 @@ set(ROSE_DISABLED_TESTCODES
 function(fortran_test input_file)
   add_test(
     NAME FORTRANTEST_${input_file}_translation
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND testTranslator ${ROSE_FLAGS} ${FORTRAN_FLAGS}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   add_test(
     NAME FORTRANTEST_${input_file}_graph_generation
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND testGraphGeneration ${ROSE_FLAGS} ${FORTRAN_FLAGS}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   add_test(
     NAME FORTRANTEST_${input_file}_token_generation
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND testTokenGeneration ${ROSE_FLAGS} ${FORTRAN_FLAGS}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   set(_labels FORTRANTEST)
@@ -90,6 +94,7 @@ add_test(
 
 add_test(
   NAME fortran_testCPP_Defines
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS} -DPS=8
     ${CMAKE_CURRENT_SOURCE_DIR}/inputUsingDefinesOnCommandline.F90
 )
@@ -103,6 +108,7 @@ foreach(testcode IN LISTS _fortran_mpi_type_tests)
   string(REPLACE "." "_" _name ${testcode})
   add_test(
     NAME fortran_testMPItypes_${_name}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND testTranslator ${ROSE_FLAGS}
       -rose:skip_syntax_check -rose:skipfinalCompileStep
       ${CMAKE_CURRENT_SOURCE_DIR}/${testcode}
@@ -142,12 +148,14 @@ endforeach()
 
 add_test(
   NAME fortran_module_module_A_file
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/module_A_file.f90
 )
 add_test(
   NAME fortran_module_module_B_file
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/module_B_file.f90
@@ -156,12 +164,14 @@ set_tests_properties(fortran_module_module_B_file PROPERTIES DEPENDS fortran_mod
 
 add_test(
   NAME fortran_module_test2019_module_1_file
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2019_module_1_file.f90
 )
 add_test(
   NAME fortran_module_test2019_module_2_file
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2019_module_2_file.f90
@@ -170,12 +180,14 @@ set_tests_properties(fortran_module_test2019_module_2_file PROPERTIES DEPENDS fo
 
 add_test(
   NAME fortran_module_test2019_private_attribute2
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2019_private_attribute2.f90
 )
 add_test(
   NAME fortran_module_test2019_private_attribute
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2019_private_attribute.f90
@@ -184,12 +196,14 @@ set_tests_properties(fortran_module_test2019_private_attribute PROPERTIES DEPEND
 
 add_test(
   NAME fortran_module_test2020_use_iso_c_binding_3
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2020_use_iso_c_binding_3.f90
 )
 add_test(
   NAME fortran_module_test2020_use_iso_c_binding_4
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2020_use_iso_c_binding_4.f90
@@ -199,7 +213,7 @@ set_tests_properties(fortran_module_test2020_use_iso_c_binding_4 PROPERTIES DEPE
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_CompileTests_Fortran_tests_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}

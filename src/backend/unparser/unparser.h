@@ -52,7 +52,7 @@ class Unparse_MOD_SAGE;
 
 // Whether to use Rice's code to wrap long lines in Fortran.
 #define USE_RICE_FORTRAN_WRAPPING                                              \
-  0 // 1 if you're Rice, 0 if you want to get through Jenkins
+  1 // Enable fixed/free form wrapping to preserve Fortran line-length rules.
 
 // Maximum line lengths for Fortran fixed source form and free source form, per
 // the F90 specification.

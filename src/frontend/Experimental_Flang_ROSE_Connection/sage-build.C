@@ -14,8 +14,9 @@
 
 #include "FlangModuleInfo.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
-
 #include <iostream>
 
 #include <optional>
@@ -38,6 +39,7 @@
 
 #define DO_TODO 0
 #define DEPRECATED 0
+#define DEBUG_FLANG_UNPARSE 0
 
 namespace Fortran::parser {
 
@@ -97,6 +99,323 @@ enum class Order { begin, end };
 // Why is this needed?
 template <typename T> void WalkExpr(T &root, SgExpression *&expr);
 
+namespace {
+SgExprListExp *BuildArraySpecExprList(Fortran::parser::ArraySpec &x);
+void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
+                                      SgFunctionDeclaration *functionDecl);
+SgVariableSymbol *buildUseAssociatedVariableSymbol(SgVariableSymbol *varSymbol,
+                                                   const SgName &localName,
+                                                   SgScopeStatement *scope);
+bool NamesMatch(const std::string &left, const std::string &right,
+                bool case_insensitive);
+bool ScopeHasNamelistGroup(SgScopeStatement *scope,
+                           const std::string &group_name);
+std::optional<std::string>
+ExtractBareNameFromFormat(const Fortran::parser::Format &format);
+void AppendExpr(SgExprListExp *list, SgExpression *expr);
+SgExpression *BuildIoUnitExpr(const Fortran::parser::IoUnit &x);
+SgExpression *BuildFormatExpr(const Fortran::parser::Format &x);
+std::string
+FormatSpecificationToString(const Fortran::format::FormatSpecification &spec);
+std::string FormatItemToString(const Fortran::format::FormatItem &item);
+std::string
+FormatItemsToString(const std::list<Fortran::format::FormatItem> &items);
+void ApplyIoControlSpec(const Fortran::parser::IoControlSpec &x,
+                        SgReadStatement *readStmt, SgWriteStatement *writeStmt);
+void ApplyConnectSpec(const Fortran::parser::ConnectSpec &x,
+                      SgOpenStatement *stmt);
+void ApplyCloseSpec(const Fortran::parser::CloseStmt::CloseSpec &x,
+                    SgCloseStatement *stmt);
+void ApplyPositionOrFlushSpec(const Fortran::parser::PositionOrFlushSpec &x,
+                              SgIOStatement *stmt);
+
+constexpr const char *kFortranImplicitDeclAttr =
+    "rose_fortran_implicit_declaration";
+
+class FortranImplicitDeclAttribute : public AstAttribute {
+public:
+  AstAttribute *copy() const override {
+    return new FortranImplicitDeclAttribute();
+  }
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+};
+
+void MarkFortranImplicitDeclaration(SgVariableDeclaration *decl) {
+  ASSERT_not_null(decl);
+  if (decl->getAttribute(kFortranImplicitDeclAttr) != nullptr) {
+    return;
+  }
+  decl->addNewAttribute(kFortranImplicitDeclAttr,
+                        new FortranImplicitDeclAttribute());
+}
+
+void EnsureCaseInsensitiveSymbolTable(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return;
+  }
+  if (!SageInterface::is_language_case_insensitive() &&
+      !scope->isCaseInsensitive()) {
+    return;
+  }
+  SgSymbolTable *old_table = scope->get_symbol_table();
+  if (old_table == nullptr) {
+    return;
+  }
+  std::set<SgNode *> symbols = old_table->get_symbols();
+  SgSymbolTable *new_table = new SgSymbolTable();
+  ASSERT_not_null(new_table);
+  new_table->set_parent(scope);
+  new_table->setCaseInsensitive(true);
+  scope->set_symbol_table(new_table);
+  for (SgNode *sym_node : symbols) {
+    SgSymbol *symbol = isSgSymbol(sym_node);
+    if (symbol == nullptr) {
+      continue;
+    }
+    scope->insert_symbol(symbol->get_name(), symbol);
+  }
+  delete old_table;
+}
+
+void EnsureSymbolsForBlockDeclarations(SgBasicBlock *block) {
+  if (block == nullptr) {
+    return;
+  }
+  SgSymbolTable *symtab = block->get_symbol_table();
+  const SgStatementPtrList &stmts = block->get_statements();
+  for (SgStatement *stmt : stmts) {
+    SgVariableDeclaration *var_decl = isSgVariableDeclaration(stmt);
+    if (var_decl == nullptr) {
+      continue;
+    }
+    for (SgInitializedName *init_name : var_decl->get_variables()) {
+      if (init_name == nullptr) {
+        continue;
+      }
+      if (init_name->get_scope() != block) {
+        init_name->set_scope(block);
+      }
+    }
+    SageInterface::fixVariableDeclaration(var_decl, block);
+    for (SgInitializedName *init_name : var_decl->get_variables()) {
+      if (init_name == nullptr) {
+        continue;
+      }
+      if (symtab != nullptr && symtab->find(init_name) == nullptr) {
+        SgVariableSymbol *var_sym = new SgVariableSymbol(init_name);
+        block->insert_symbol(init_name->get_name(), var_sym);
+      }
+    }
+  }
+}
+
+SgType *StripModifierType(SgType *type) {
+  while (auto *modifier = isSgModifierType(type)) {
+    type = modifier->get_base_type();
+  }
+  return type;
+}
+
+SgType *StripPointerType(SgType *type) {
+  type = StripModifierType(type);
+  if (auto *pointer = isSgPointerType(type)) {
+    type = pointer->get_base_type();
+  }
+  return StripModifierType(type);
+}
+
+bool IsArrayType(SgType *type) {
+  type = StripPointerType(type);
+  return isSgArrayType(type) != nullptr;
+}
+
+bool IsFunctionType(SgType *type) {
+  type = StripPointerType(type);
+  return isSgFunctionType(type) != nullptr ||
+         isSgMemberFunctionType(type) != nullptr;
+}
+
+SgFunctionType *
+BuildProcedureInterfaceType(std::optional<parser::ProcInterface> &optInterface,
+                            SgScopeStatement *scope) {
+  auto buildFunctionType = [](SgType *returnType) {
+    SgFunctionParameterTypeList *typeList = new SgFunctionParameterTypeList();
+    ASSERT_not_null(typeList);
+    return SageBuilder::buildFunctionType(returnType, typeList);
+  };
+
+  SgFunctionType *procType{nullptr};
+  if (optInterface) {
+    common::visit(common::visitors{
+                      [&](parser::Name &ifaceName) {
+                        SgFunctionSymbol *sym =
+                            SageInterface::lookupFunctionSymbolInParentScopes(
+                                ifaceName.ToString(), scope);
+                        if (sym != nullptr) {
+                          procType = isSgFunctionType(sym->get_type());
+                        }
+                        if (procType == nullptr) {
+                          procType =
+                              buildFunctionType(SageBuilder::buildVoidType());
+                        }
+                      },
+                      [&](parser::DeclarationTypeSpec &spec) {
+                        SgType *returnType{nullptr};
+                        Rose::builder::Build(spec, returnType);
+                        if (returnType == nullptr) {
+                          returnType = SageBuilder::buildUnknownType();
+                        }
+                        procType = buildFunctionType(returnType);
+                      }},
+                  optInterface->u);
+  }
+
+  if (procType == nullptr) {
+    procType = buildFunctionType(SageBuilder::buildVoidType());
+  }
+  return procType;
+}
+
+bool IsFortranSpecificationStatement(const SgStatement *stmt) {
+  return isSgDeclarationStatement(stmt) != nullptr ||
+         isSgUseStatement(stmt) != nullptr || isSgImplicitStatement(stmt) ||
+         isSgAttributeSpecificationStatement(stmt) != nullptr;
+}
+
+SgScopeStatement *FindFortranImplicitDeclScope(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+
+  if (SgFunctionDefinition *funcDef =
+          SageInterface::getEnclosingFunctionDefinition(scope, true)) {
+    if (SgBasicBlock *body = funcDef->get_body()) {
+      return body;
+    }
+  }
+
+  if (SgBasicBlock *block = isSgBasicBlock(scope)) {
+    SgNode *parent = block->get_parent();
+    if (parent != nullptr && isSgScopeStatement(parent) != nullptr &&
+        isSgFunctionDefinition(parent) == nullptr) {
+      return block;
+    }
+  }
+
+  if (SgModuleStatement *moduleStmt =
+          SageInterface::getEnclosingModuleStatement(scope, true)) {
+    if (SgClassDefinition *moduleDef = moduleStmt->get_definition()) {
+      return moduleDef;
+    }
+  }
+
+  return scope;
+}
+
+void InsertFortranSpecificationStatement(SgStatement *stmt,
+                                         SgScopeStatement *scope) {
+  ASSERT_not_null(stmt);
+  ASSERT_not_null(scope);
+
+  for (SgStatement *scopeStmt : scope->generateStatementList()) {
+    if (!IsFortranSpecificationStatement(scopeStmt)) {
+      SageInterface::insertStatementBefore(scopeStmt, stmt);
+      return;
+    }
+  }
+  SageInterface::appendStatement(stmt, scope);
+}
+
+void HoistInlineIfSpecStatements(SgIfStmt *ifNode, SgBasicBlock *trueBody) {
+  if (ifNode == nullptr || trueBody == nullptr) {
+    return;
+  }
+  if (ifNode->get_use_then_keyword() || ifNode->get_has_end_statement()) {
+    return;
+  }
+  if (!SageInterface::is_Fortran_language()) {
+    return;
+  }
+
+  const SgStatementPtrList &stmts = trueBody->get_statements();
+  if (stmts.size() <= 1) {
+    return;
+  }
+
+  SgScopeStatement *implicitScope = FindFortranImplicitDeclScope(trueBody);
+  if (implicitScope == nullptr) {
+    implicitScope = SageBuilder::topScopeStack();
+  }
+  ASSERT_not_null(implicitScope);
+
+  std::vector<SgStatement *> toMove{};
+  for (SgStatement *stmt : stmts) {
+    if (IsFortranSpecificationStatement(stmt)) {
+      toMove.push_back(stmt);
+    }
+  }
+
+  for (SgStatement *stmt : toMove) {
+    SageInterface::removeStatement(stmt);
+    if (SgDeclarationStatement *decl = isSgDeclarationStatement(stmt)) {
+      decl->set_scope(implicitScope);
+    }
+    if (SgVariableDeclaration *varDecl = isSgVariableDeclaration(stmt)) {
+      SageInterface::fixVariableDeclaration(varDecl, implicitScope);
+    }
+    stmt->set_parent(implicitScope);
+    InsertFortranSpecificationStatement(stmt, implicitScope);
+  }
+}
+
+SgType *GetExprTypeForDisambiguation(SgExpression *expr) {
+  if (expr == nullptr) {
+    return nullptr;
+  }
+  if (expr->get_type() != nullptr) {
+    return expr->get_type();
+  }
+  if (auto *varRef = isSgVarRefExp(expr)) {
+    if (SgVariableSymbol *sym = varRef->get_symbol()) {
+      return sym->get_type();
+    }
+  }
+  if (auto *dot = isSgDotExp(expr)) {
+    return GetExprTypeForDisambiguation(dot->get_rhs_operand_i());
+  }
+  return nullptr;
+}
+
+bool IsArrayDesignator(SgExpression *expr) {
+  return IsArrayType(GetExprTypeForDisambiguation(expr));
+}
+
+SgExpression *BuildArrayRefFromCallArgs(SgExpression *base,
+                                        SgExprListExp *args) {
+  ASSERT_not_null(base);
+  ASSERT_not_null(args);
+  return SageBuilderCpp17::buildPntrArrRefExp_nfi(base, args);
+}
+} // namespace
+
+void Build(parser::ComponentDecl &x, std::list<EntityDeclTuple> &componentDecls,
+           SgType *baseType);
+void Build(parser::ComponentDecl &x, std::string &name, SgExpression *&init,
+           SgType *&type, SgType *baseType);
+void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt);
+void Build(parser::DataStmtObject &x, SgExpression *&expr);
+void Build(parser::DataIDoObject &x, SgExpression *&expr);
+void Build(parser::DataImpliedDo &x, SgExpression *&expr);
+void Build(parser::DataStmtValue &x, SgExpression *&expr);
+void Build(parser::DataStmtConstant &x, SgExpression *&expr);
+void Build(parser::DataStmtRepeat &x, SgExpression *&expr);
+void getComponentAttrSpec(
+    parser::ComponentAttrSpec &x,
+    std::list<LanguageTranslation::ExpressionKind> &modifiers,
+    SgType *&baseType);
+
 template <typename T>
 void BuildExprVisitor::BuildExpressions(T &x, SgExpression *&lhs,
                                         SgExpression *&rhs) {
@@ -108,6 +427,163 @@ void BuildExprVisitor::BuildExpressions(T &x, SgExpression *&lhs,
 void BuildExprVisitor::Build(Fortran::parser::Name &x) {
   std::string name{x.ToString()};
   this->set(SageBuilderCpp17::buildVarRefExp_nfi(name));
+}
+
+void BuildExprVisitor::Build(Fortran::parser::Designator &x) {
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(x, expr);
+  ASSERT_not_null(expr);
+  this->set(expr);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::Substring &x) {
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(x, expr);
+  ASSERT_not_null(expr);
+  this->set(expr);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::CharLiteralConstantSubstring &x) {
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(x, expr);
+  ASSERT_not_null(expr);
+  this->set(expr);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::SubstringInquiry &x) {
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(x, expr);
+  ASSERT_not_null(expr);
+  this->set(expr);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::StructureConstructor &x) {
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(x, expr);
+  ASSERT_not_null(expr);
+  this->set(expr);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::Expr::DefinedUnary &x) {
+  SgExpression *arg{nullptr};
+  WalkExpr(std::get<1>(x.t).value(), arg);
+  ASSERT_not_null(arg);
+  std::string name{std::get<0>(x.t).v.ToString()};
+  std::list<SgExpression *> args{arg};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  SgFunctionCallExp *call = SageBuilder::buildFunctionCallExp(
+      SgName(name), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(call);
+  this->set(call);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::Expr::DefinedBinary &x) {
+  SgExpression *lhs{nullptr};
+  SgExpression *rhs{nullptr};
+  WalkExpr(std::get<1>(x.t).value(), lhs);
+  WalkExpr(std::get<2>(x.t).value(), rhs);
+  ASSERT_not_null(lhs);
+  ASSERT_not_null(rhs);
+  std::string name{std::get<0>(x.t).v.ToString()};
+  std::list<SgExpression *> args{lhs, rhs};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  SgFunctionCallExp *call = SageBuilder::buildFunctionCallExp(
+      SgName(name), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(call);
+  this->set(call);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::Expr::ComplexConstructor &x) {
+  SgExpression *lhs{nullptr};
+  SgExpression *rhs{nullptr};
+  BuildExpressions(x, lhs, rhs);
+  ASSERT_not_null(lhs);
+  ASSERT_not_null(rhs);
+  std::list<SgExpression *> args{lhs, rhs};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  SgFunctionCallExp *call = SageBuilder::buildFunctionCallExp(
+      SgName("cmplx"), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(call);
+  this->set(call);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::Expr::Parentheses &x) {
+  SgExpression *operand{nullptr};
+  WalkExpr(x.v.value(), operand);
+  ASSERT_not_null(operand);
+  SageBuilderCpp17::set_need_paren(operand);
+  this->set(operand);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::Expr::PercentLoc &x) {
+  SgExpression *arg{nullptr};
+  WalkExpr(x.v.value(), arg);
+  ASSERT_not_null(arg);
+  std::list<SgExpression *> args{arg};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  SgFunctionCallExp *call = SageBuilder::buildFunctionCallExp(
+      SgName("loc"), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(call);
+  this->set(call);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::FunctionReference &x) {
+  std::list<SgExpression *> arg_list;
+  std::string func_name;
+
+  SgExpression *designator{nullptr};
+  Rose::builder::Build(x.v, arg_list, func_name, designator); // Call
+
+  SgExprListExp *param_list = SageBuilderCpp17::buildExprListExp_nfi(arg_list);
+  ASSERT_not_null(param_list);
+
+  SgExpression *call_expr = nullptr;
+  if (designator != nullptr) {
+    if (IsArrayDesignator(designator)) {
+      call_expr = BuildArrayRefFromCallArgs(designator, param_list);
+    } else {
+      call_expr = SageBuilder::buildFunctionCallExp_nfi(designator, param_list);
+    }
+  } else {
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    ASSERT_not_null(scope);
+    if (SgVariableSymbol *var_sym =
+            SageInterface::lookupVariableSymbolInParentScopes(func_name,
+                                                              scope)) {
+      SgType *var_type = var_sym->get_type();
+      if (IsArrayType(var_type)) {
+        SgVarRefExp *var_ref = SageBuilder::buildVarRefExp_nfi(var_sym);
+        call_expr = BuildArrayRefFromCallArgs(var_ref, param_list);
+      } else if (IsFunctionType(var_type)) {
+        SgVarRefExp *var_ref = SageBuilder::buildVarRefExp_nfi(var_sym);
+        call_expr = SageBuilder::buildFunctionCallExp_nfi(var_ref, param_list);
+      }
+    }
+
+    if (call_expr == nullptr) {
+      call_expr = SageBuilder::buildFunctionCallExp(
+          SgName(func_name), SageBuilder::buildUnknownType(), param_list,
+          SageBuilder::topScopeStack());
+    }
+  }
+  ASSERT_not_null(call_expr);
+
+  this->set(call_expr);
+}
+
+void BuildExprVisitor::Build(Fortran::parser::ArrayConstructor &x) {
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(x, expr);
+  ASSERT_not_null(expr);
+  this->set(expr);
 }
 
 //-------------------------------------------
@@ -125,12 +601,32 @@ void setSgSourceFile(SgSourceFile *sg_file) { builder.setSourceFile(sg_file); }
 // TODO: change this to a reference
 Fortran::parser::AllCookedSources *cooked_{nullptr};
 
+namespace {
+class CookedSourcesGuard {
+public:
+  CookedSourcesGuard(Fortran::parser::AllCookedSources *&slot,
+                     Fortran::parser::AllCookedSources *next)
+      : slot_(slot), prev_(slot) {
+    slot_ = next;
+  }
+  CookedSourcesGuard(const CookedSourcesGuard &) = delete;
+  CookedSourcesGuard &operator=(const CookedSourcesGuard &) = delete;
+  ~CookedSourcesGuard() { slot_ = prev_; }
+
+private:
+  Fortran::parser::AllCookedSources *&slot_;
+  Fortran::parser::AllCookedSources *prev_;
+};
+} // namespace
+
 template <typename T>
 SourcePosition BuildSourcePosition(const Fortran::parser::Statement<T> &x,
                                    Order from) {
   std::optional<SourcePosition> pos{std::nullopt};
 
-  if (auto sourceInfo{cooked_->GetSourcePositionRange(x.source)}) {
+  if (cooked_ == nullptr || x.source.empty()) {
+    pos.emplace(SourcePosition{});
+  } else if (auto sourceInfo{cooked_->GetSourcePositionRange(x.source)}) {
     if (from == Order::begin)
       pos.emplace(SourcePosition{sourceInfo->first.path, sourceInfo->first.line,
                                  sourceInfo->first.column});
@@ -445,14 +941,15 @@ void Build(parser::Program &x, parser::AllCookedSources &cooked) {
   BuildVisitor visitor{cooked};
 
   // TODO: make go away
-  cooked_ = &cooked;
+  CookedSourcesGuard cooked_guard{cooked_, &cooked};
   // TODO: make go away
   common::LangOptions langOpts{};
 
-  // Testing...
+#if DEBUG_FLANG_UNPARSE
   parser::Encoding encoding{Fortran::parser::Encoding::LATIN_1};
   parser::Unparse(llvm::outs(), x, langOpts, encoding, true /*capitalize*/,
                   false, nullptr, cooked_);
+#endif
 
   // Initialize SageBuilder global scope
   SgScopeStatement *scope{nullptr};
@@ -492,7 +989,10 @@ void BuildVisitor::Build(parser::MainProgram &x) {
     name.emplace(stmt.value().statement.v.ToString());
   }
   if (stmt && stmt->label) {
-    labels.push_back(std::to_string(stmt->label.value()));
+    const int labelValue = static_cast<int>(stmt->label.value());
+    if (labelValue > 0) {
+      labels.push_back(std::to_string(labelValue));
+    }
   }
 
   if (auto pos{FirstSourcePosition(spec)}) {
@@ -513,7 +1013,7 @@ void BuildVisitor::Build(parser::MainProgram &x) {
   // Build the SgProgramHeaderStatement node
   //
   SgProgramHeaderStatement *programDecl{nullptr};
-  std::optional<std::string> opt_name{*name};
+  std::optional<std::string> opt_name{name};
 
   builder.Enter(programDecl, opt_name, labels,
                 SourcePositions{*srcPosBegin, *srcPosBody, srcPosEnd},
@@ -531,7 +1031,10 @@ void BuildVisitor::Build(parser::MainProgram &x) {
     endName = end.statement.v.value().ToString();
   }
   if (end.label) {
-    endLabel = std::to_string(end.label.value());
+    const int labelValue = static_cast<int>(end.label.value());
+    if (labelValue > 0) {
+      endLabel = std::to_string(labelValue);
+    }
   }
 
   // Fortran specific functionality
@@ -552,10 +1055,15 @@ void DummyArg(std::list<parser::DummyArg> &x, std::list<std::string> &args) {
 }
 
 void getSubroutineStmt(parser::SubroutineStmt &x, std::list<std::string> &args,
-                       LanguageTranslation::FunctionModifierList &modifiers) {
+                       LanguageTranslation::FunctionModifierList &modifiers,
+                       BuildVisitor &visitor) {
   // std::tuple<> std::list<PrefixSpec>, Name, std::list<DummyArg>,
   // std::optional<LanguageBindingSpec>
   using namespace Fortran::parser;
+
+  SgType *prefix_type = nullptr;
+  visitor.BuildPrefix(std::get<std::list<parser::PrefixSpec>>(x.t), modifiers,
+                      prefix_type);
 
   // DummyArg list
   DummyArg(std::get<std::list<parser::DummyArg>>(x.t), args);
@@ -566,7 +1074,6 @@ void getSubroutineStmt(parser::SubroutineStmt &x, std::list<std::string> &args,
     // WalkExpr(opt.value(), expr);
     LanguageTranslation::ExpressionKind m;
     getModifiers(opt.value(), m);
-    ABORT_NO_IMPL;
   }
 }
 
@@ -582,6 +1089,22 @@ void BuildVisitor::Build(parser::ContainsStmt &x) {
   SgContainsStatement *stmt{nullptr};
   builder.Enter(stmt);
   builder.Leave(stmt);
+}
+
+void BuildVisitor::Build(parser::SpecificationPart &x) {
+  // std::tuple<> - OmpEndForallDirective, OmpEndParallelDoDirective,
+  //                std::list<Statement<UseStmt>>,
+  //                std::list<Statement<ImportStmt>>, ImplicitPart,
+  //                std::list<DeclarationConstruct>
+  Walk(std::get<0>(x.t));
+  Walk(std::get<
+       std::list<parser::Statement<common::Indirection<parser::UseStmt>>>>(
+      x.t));
+  Walk(std::get<
+       std::list<parser::Statement<common::Indirection<parser::ImportStmt>>>>(
+      x.t));
+  Walk(std::get<parser::ImplicitPart>(x.t));
+  Walk(std::get<std::list<parser::DeclarationConstruct>>(x.t));
 }
 
 // SubroutineSubprogram
@@ -614,7 +1137,7 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
 
   std::list<std::string> dummyArgs;
   LanguageTranslation::FunctionModifierList modifiers;
-  getSubroutineStmt(stmt.statement, dummyArgs, modifiers);
+  getSubroutineStmt(stmt.statement, dummyArgs, modifiers, *this);
 
   // Enter SageTreeBuilder for SgFunctionParameterList
   bool isDefDecl{true};
@@ -622,9 +1145,8 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
   builder.Enter(paramList, paramScope, name, /*function_type*/ nullptr,
                 isDefDecl);
 
-  // SpecificationPart and ExecutionPart
+  // SpecificationPart
   Walk(std::get<SpecificationPart>(x.t));
-  Walk(std::get<ExecutionPart>(x.t));
 
   // Leave SageTreeBuilder for SgFunctionParameterList
   builder.Leave(paramList, paramScope, dummyArgs);
@@ -632,6 +1154,10 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
   // Begin SageTreeBuilder for SgFunctionDeclaration
   builder.Enter(funcDecl, name, /*return_type*/ nullptr, paramList, modifiers,
                 isDefDecl, sources, comments);
+  TransferParamScopeToFunctionBody(paramScope, funcDecl);
+
+  // ExecutionPart
+  Walk(std::get<ExecutionPart>(x.t));
 
   // EndSubroutineStmt - std::optional<Name> v;
   bool haveEndStmt{false};
@@ -651,7 +1177,6 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   // std::tuple<> Statement<FunctionStmt>, SpecificationPart, ExecutionPart,
   //              std::optional<InternalSubprogramPart>,
   //              Statement<EndFunctionStmt>
-  std::cout << "BuildVisitor::Build(FunctionSubprogram)\n";
   using namespace Fortran::parser;
 
   // FunctionStmt - std::tuple<> std::list<PrefixSpec>, Name, std::list<Name>,
@@ -698,32 +1223,50 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
     // TODO: LanguageBinding also in suffix
     resultName = suffix->resultName.value().ToString();
   }
-  if (!resultName.empty() && returnType) {
+  const bool case_insensitive = SageInterface::is_language_case_insensitive();
+  const bool useFunctionNameResult =
+      resultName.empty() || NamesMatch(resultName, name, case_insensitive);
+  if (!resultName.empty() && !useFunctionNameResult && returnType) {
     undeclaredResultName = true;
   }
 
   // Peek into the SpecificationPart to get the return type if don't already
   // know it
   if (!returnType) {
+    std::string lookupName = resultName.empty() ? name : resultName;
     BuildFunctionReturnType(std::get<parser::SpecificationPart>(x.t),
-                            resultName, returnType);
+                            lookupName, returnType);
   }
 
   // Enter SageTreeBuilder for SgFunctionParameterList
-  builder.Enter(paramList, paramScope, name, returnType, isDefDecl);
+  SgType *param_result_type = useFunctionNameResult ? returnType : nullptr;
+  builder.Enter(paramList, paramScope, name, param_result_type, isDefDecl);
 
   // SpecificationPart
   Walk(std::get<SpecificationPart>(x.t));
 
   // Need to create initialized name here for result, if result is not declared
   // in SpecificationPart
-  if (undeclaredResultName) {
+  if (undeclaredResultName &&
+      paramScope->lookup_variable_symbol(resultName) == nullptr) {
     SageBuilderCpp17::fixUndeclaredResultName(resultName, paramScope,
                                               returnType);
   }
-
-  // ExecutionPart
-  Walk(std::get<ExecutionPart>(x.t));
+  if (resultName.empty() &&
+      paramScope->lookup_variable_symbol(name) == nullptr) {
+    if (!returnType) {
+      returnType = SageBuilder::buildFortranImplicitType(name);
+    }
+    SageBuilderCpp17::fixUndeclaredResultName(name, paramScope, returnType);
+  }
+  if (!resultName.empty() &&
+      paramScope->lookup_variable_symbol(resultName) == nullptr) {
+    if (!returnType) {
+      returnType = SageBuilder::buildFortranImplicitType(resultName);
+    }
+    SageBuilderCpp17::fixUndeclaredResultName(resultName, paramScope,
+                                              returnType);
+  }
 
   // Leave SageTreeBuilder for SgFunctionParameterList
   builder.Leave(paramList, paramScope, dummyArgs);
@@ -731,6 +1274,10 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   // Begin SageTreeBuilder for SgFunctionDeclaration
   builder.Enter(functionDecl, name, returnType, paramList, modifiers, isDefDecl,
                 sources, comments);
+  TransferParamScopeToFunctionBody(paramScope, functionDecl);
+
+  // ExecutionPart
+  Walk(std::get<ExecutionPart>(x.t));
 
   // EndFunctionStmt - std::optional<Name>
   bool haveEndStmt{false};
@@ -846,14 +1393,157 @@ void BuildVisitor::Build(parser::BlockData &x) {
 
 void BuildFunctionReturnType(const parser::SpecificationPart &x,
                              std::string &result_name, SgType *&return_type) {
-  std::cout << "Rose::builder::Build(SpecificationPart)\n";
+  using namespace Fortran::parser;
+
+  if (return_type != nullptr || result_name.empty()) {
+    return;
+  }
+
+  const bool caseInsensitive = SageInterface::is_language_case_insensitive();
+  const SgName targetName(result_name);
+  const auto &decls = std::get<6>(x.t);
+
+  for (const auto &decl : decls) {
+    bool found = false;
+    common::visit(
+        common::visitors{
+            [&](const SpecificationConstruct &spec) {
+              common::visit(
+                  common::visitors{
+                      [&](const Statement<
+                          common::Indirection<TypeDeclarationStmt>> &stmt) {
+                        const auto &typeDecl = stmt.statement.value();
+                        SgType *baseType{nullptr};
+                        auto &declType =
+                            std::get<DeclarationTypeSpec>(typeDecl.t);
+                        Build(const_cast<DeclarationTypeSpec &>(declType),
+                              baseType);
+                        if (baseType == nullptr) {
+                          return;
+                        }
+
+                        const auto &entities =
+                            std::get<std::list<EntityDecl>>(typeDecl.t);
+                        for (const auto &entity : entities) {
+                          const std::string entityName =
+                              std::get<Name>(entity.t).ToString();
+                          if (!namesMatch(SgName(entityName), targetName,
+                                          caseInsensitive)) {
+                            continue;
+                          }
+
+                          SgType *entityBase = baseType;
+                          if (auto &lenOpt =
+                                  std::get<std::optional<CharLength>>(
+                                      entity.t)) {
+                            SgExpression *lenExpr{nullptr};
+                            auto &lenRef = lenOpt.value();
+                            BuildImpl(const_cast<CharLength &>(lenRef),
+                                      lenExpr);
+                            if (lenExpr != nullptr) {
+                              if (auto *stringType =
+                                      isSgTypeString(entityBase)) {
+                                SgTypeString *newType =
+                                    SageBuilder::buildStringType(lenExpr);
+                                newType->set_type_kind(
+                                    stringType->get_type_kind());
+                                entityBase = newType;
+                              } else if (isSgTypeChar(entityBase)) {
+                                entityBase =
+                                    SageBuilder::buildStringType(lenExpr);
+                              }
+                            }
+                          }
+
+                          SgType *entityType = entityBase;
+                          if (auto &arrayOpt =
+                                  std::get<std::optional<ArraySpec>>(
+                                      entity.t)) {
+                            auto &arrayRef = arrayOpt.value();
+                            Build(const_cast<ArraySpec &>(arrayRef), entityType,
+                                  entityBase);
+                          }
+
+                          return_type =
+                              entityType != nullptr ? entityType : entityBase;
+                          found = true;
+                          return;
+                        }
+                      },
+                      [&](auto &) {}},
+                  spec.u);
+            },
+            [&](auto &) {}},
+        decl.u);
+    if (found) {
+      return;
+    }
+  }
 }
+
+namespace {
+void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
+                                      SgFunctionDeclaration *functionDecl) {
+  if (paramScope == nullptr || functionDecl == nullptr) {
+    return;
+  }
+  SgBasicBlock *paramBlock = isSgBasicBlock(paramScope);
+  if (paramBlock == nullptr) {
+    return;
+  }
+  SgFunctionDefinition *functionDef = functionDecl->get_definition();
+  if (functionDef == nullptr) {
+    return;
+  }
+  SgBasicBlock *functionBody = functionDef->get_body();
+  ASSERT_not_null(functionBody);
+  SgName functionName = functionDecl->get_name();
+  SgVariableSymbol *resultSymbol =
+      paramBlock->lookup_variable_symbol(functionName);
+  EnsureCaseInsensitiveSymbolTable(paramBlock);
+  EnsureSymbolsForBlockDeclarations(paramBlock);
+  SageInterface::moveStatementsBetweenBlocks(paramBlock, functionBody);
+  if (resultSymbol != nullptr) {
+    if (functionBody->lookup_variable_symbol(functionName) == nullptr) {
+      functionBody->insert_symbol(functionName, resultSymbol);
+    }
+    if (SgInitializedName *initName = resultSymbol->get_declaration()) {
+      initName->set_scope(functionBody);
+    }
+  }
+
+  auto transfer_label_symbols = [&](SgScopeStatement *from_scope) {
+    if (from_scope == nullptr) {
+      return;
+    }
+    SgSymbolTable *symtab = from_scope->get_symbol_table();
+    if (symtab == nullptr) {
+      return;
+    }
+    std::set<SgNode *> symbols = symtab->get_symbols();
+    for (SgNode *symNode : symbols) {
+      SgLabelSymbol *labelSym = isSgLabelSymbol(symNode);
+      if (labelSym == nullptr) {
+        continue;
+      }
+      from_scope->remove_symbol(labelSym);
+      if (functionDef->lookup_label_symbol(labelSym->get_name()) == nullptr) {
+        functionDef->insert_symbol(labelSym->get_name(), labelSym);
+      }
+      if (SgLabelStatement *labelStmt = labelSym->get_declaration()) {
+        labelStmt->set_scope(functionDef);
+      }
+    }
+  };
+  transfer_label_symbols(paramBlock);
+}
+} // namespace
 
 void BuildVisitor::Build(parser::AssignmentStmt &x) {
   // std::tuple<> Variable, Expr
   using namespace Fortran::parser;
 
-  std::vector<std::string> labels{};
+  std::vector<std::string> labels = getLabels();
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   SgExprStatement *stmt{nullptr};
 
@@ -870,6 +1560,96 @@ void BuildVisitor::Build(parser::AssignmentStmt &x) {
   builder.Leave(stmt, labels);
 }
 
+void BuildVisitor::Build(parser::AssociateConstruct &x) {
+  using namespace Fortran::parser;
+
+  auto &associateStmt = std::get<Statement<AssociateStmt>>(x.t);
+  auto &block = std::get<Block>(x.t);
+  auto &endStmt = std::get<Statement<EndAssociateStmt>>(x.t);
+
+  SgScopeStatement *outerScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(outerScope);
+
+  SgAssociateStatement *associateStatement = new SgAssociateStatement();
+  ASSERT_not_null(associateStatement);
+
+  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
+  ASSERT_not_null(body);
+
+  associateStatement->set_body(body);
+  if (outerScope->isCaseInsensitive()) {
+    associateStatement->setCaseInsensitive(true);
+    body->setCaseInsensitive(true);
+  }
+
+  body->set_parent(associateStatement);
+
+  SourcePosition srcBegin{BuildSourcePosition(associateStmt, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(endStmt, Order::end)};
+  builder.setSourcePosition(associateStatement, srcBegin, srcEnd);
+
+  SageInterface::appendStatement(associateStatement, outerScope);
+
+  auto set_label = [&](const std::optional<Label> &label,
+                       SgLabelSymbol::label_type_enum label_type) {
+    if (!label) {
+      return;
+    }
+    const int labelValue = static_cast<int>(label.value());
+    if (labelValue <= 0) {
+      return;
+    }
+    SgScopeStatement *labelScope =
+        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
+    if (labelScope == nullptr) {
+      labelScope = SageInterface::getEnclosingScope(outerScope, true);
+    }
+    ASSERT_not_null(labelScope);
+    SageInterface::setFortranNumericLabel(associateStatement, labelValue,
+                                          label_type, labelScope);
+  };
+
+  set_label(associateStmt.label, SgLabelSymbol::e_start_label_type);
+  set_label(endStmt.label, SgLabelSymbol::e_end_label_type);
+
+  EnsureCaseInsensitiveSymbolTable(associateStatement);
+  EnsureCaseInsensitiveSymbolTable(body);
+
+  SageInterface::setSourcePosition(body);
+  SageBuilder::pushScopeStack(body);
+
+  auto &associations =
+      std::get<std::list<Association>>(associateStmt.statement.t);
+  for (auto &association : associations) {
+    std::string name = std::get<Name>(association.t).ToString();
+    SgExpression *selector{nullptr};
+    auto &selectorValue = std::get<Selector>(association.t).u;
+    common::visit(
+        common::visitors{[&](Expr &expr) { WalkExpr(expr, selector); },
+                         [&](Variable &var) { WalkExpr(var, selector); }},
+        selectorValue);
+    ASSERT_not_null(selector);
+
+    SgType *assocType = selector->get_type();
+    if (assocType == nullptr) {
+      assocType = SageBuilder::buildUnknownType();
+    }
+
+    SgInitializer *initializer =
+        SageBuilder::buildAssignInitializer_nfi(selector, assocType);
+    ASSERT_not_null(initializer);
+
+    SgVariableDeclaration *varDecl = SageBuilder::buildVariableDeclaration_nfi(
+        name, assocType, initializer, body);
+    ASSERT_not_null(varDecl);
+    associateStatement->append_associate(varDecl);
+  }
+
+  Walk(block);
+
+  SageBuilder::popScopeStack();
+}
+
 namespace {
 struct LoopControlInfo {
   SgExpression *initialization{nullptr};
@@ -879,6 +1659,16 @@ struct LoopControlInfo {
   bool isWhile{false};
   bool isConcurrent{false};
 };
+
+void PopulateBlock(Rose::builder::BuildVisitor &visitor,
+                   Fortran::parser::Block &block, SgBasicBlock *body) {
+  ASSERT_not_null(body);
+  SageInterface::setSourcePosition(body);
+
+  SageBuilder::pushScopeStack(body);
+  visitor.Walk(block);
+  SageBuilder::popScopeStack();
+}
 
 SgExpression *BuildScalarExpr(parser::ScalarExpr &expr) {
   SgExpression *result{nullptr};
@@ -932,9 +1722,19 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
   //  std::tuple<Statement<NonLabelDoStmt>, Block, Statement<EndDoStmt>> t;
   //  bool IsDoNormal() const;  bool IsDoWhile() const; bool IsDoConcurrent()
   //  const;
+  using namespace Fortran::parser;
 
   SgWhileStmt *whileStmt{nullptr};
   SgFortranDo *doStmt{nullptr};
+  std::string doName;
+  auto &doStmtInfo = std::get<Statement<NonLabelDoStmt>>(x.t).statement;
+  if (auto &nameOpt = std::get<std::optional<Name>>(doStmtInfo.t)) {
+    doName = nameOpt->ToString();
+  }
+  auto &endName = std::get<Statement<EndDoStmt>>(x.t).statement.v;
+  if (doName.empty() && endName) {
+    doName = endName->ToString();
+  }
   auto &loopControl = std::get<2>(std::get<0>(x.t).statement.t);
   const LoopControlInfo control = BuildLoopControl(loopControl);
   if (control.isConcurrent) {
@@ -946,9 +1746,15 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
   if (control.isWhile) {
     ASSERT_not_null(control.condition);
     builder.Enter(whileStmt, control.condition);
+    if (!doName.empty()) {
+      whileStmt->set_string_label(doName);
+    }
   } else {
     builder.Enter(doStmt, control.initialization, control.bound,
                   control.increment);
+    if (!doName.empty()) {
+      doStmt->set_string_label(doName);
+    }
   }
 
   // Traverse the body
@@ -960,6 +1766,137 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
   } else {
     builder.Leave(doStmt);
   }
+}
+
+void BuildVisitor::Build(parser::IfConstruct &x) {
+  using namespace Fortran::parser;
+
+  auto &ifStmt = std::get<Statement<IfThenStmt>>(x.t);
+  SgExpression *condition =
+      BuildScalarLogicalExpr(std::get<ScalarLogicalExpr>(ifStmt.statement.t));
+  ASSERT_not_null(condition);
+
+  std::vector<Rose::builder::Token> comments{};
+  SgBasicBlock *trueBody = SageBuilder::buildBasicBlock_nfi();
+  ASSERT_not_null(trueBody);
+  if (SageBuilder::topScopeStack()->isCaseInsensitive()) {
+    trueBody->setCaseInsensitive(true);
+  }
+  trueBody->set_scope(SageBuilder::topScopeStack());
+  SgIfStmt *ifNode{nullptr};
+  builder.Enter(ifNode, condition, trueBody, /*false_body*/ nullptr, comments,
+                /*is_ifthen*/ true, /*has_end_stmt*/ true,
+                /*is_else_if*/ false);
+  builder.Leave(ifNode);
+  trueBody->set_scope(SageBuilder::topScopeStack());
+
+  PopulateBlock(*this, std::get<Block>(x.t), trueBody);
+
+  SgIfStmt *currentIf = ifNode;
+  for (auto &elseIfBlock : std::get<std::list<IfConstruct::ElseIfBlock>>(x.t)) {
+    auto &elseIfStmt = std::get<Statement<ElseIfStmt>>(elseIfBlock.t);
+    SgExpression *elseIfCond = BuildScalarLogicalExpr(
+        std::get<ScalarLogicalExpr>(elseIfStmt.statement.t));
+    ASSERT_not_null(elseIfCond);
+
+    SgIfStmt *elseIfNode{nullptr};
+    SgBasicBlock *elseIfBody = SageBuilder::buildBasicBlock_nfi();
+    ASSERT_not_null(elseIfBody);
+    if (SageBuilder::topScopeStack()->isCaseInsensitive()) {
+      elseIfBody->setCaseInsensitive(true);
+    }
+    elseIfBody->set_scope(SageBuilder::topScopeStack());
+    builder.Enter(elseIfNode, elseIfCond, elseIfBody, /*false_body*/ nullptr,
+                  comments, /*is_ifthen*/ true, /*has_end_stmt*/ false,
+                  /*is_else_if*/ true);
+    elseIfBody->set_scope(SageBuilder::topScopeStack());
+
+    currentIf->set_false_body(elseIfNode);
+    elseIfNode->set_parent(currentIf);
+    PopulateBlock(*this, std::get<Block>(elseIfBlock.t), elseIfBody);
+    currentIf = elseIfNode;
+  }
+
+  if (auto &optElse = std::get<std::optional<IfConstruct::ElseBlock>>(x.t)) {
+    SgBasicBlock *elseBody = SageBuilder::buildBasicBlock_nfi();
+    ASSERT_not_null(elseBody);
+    if (SageBuilder::topScopeStack()->isCaseInsensitive()) {
+      elseBody->setCaseInsensitive(true);
+    }
+    currentIf->set_false_body(elseBody);
+    elseBody->set_parent(currentIf);
+    elseBody->set_scope(SageBuilder::topScopeStack());
+    PopulateBlock(*this, std::get<Block>(optElse->t), elseBody);
+  }
+}
+
+void BuildVisitor::Build(parser::IfStmt &x) {
+  using namespace Fortran::parser;
+
+  SgExpression *condition =
+      BuildScalarLogicalExpr(std::get<ScalarLogicalExpr>(x.t));
+  ASSERT_not_null(condition);
+
+  std::vector<std::string> labels = getLabels();
+  std::optional<parser::Label> saved_label = label_;
+
+  SgBasicBlock *trueBody = SageBuilder::buildBasicBlock_nfi();
+  ASSERT_not_null(trueBody);
+  if (SageBuilder::topScopeStack()->isCaseInsensitive()) {
+    trueBody->setCaseInsensitive(true);
+  }
+  trueBody->set_scope(SageBuilder::topScopeStack());
+
+  std::vector<Rose::builder::Token> comments{};
+  SgIfStmt *ifNode{nullptr};
+  builder.Enter(ifNode, condition, trueBody, /*false_body*/ nullptr, comments,
+                /*is_ifthen*/ false, /*has_end_stmt*/ false,
+                /*is_else_if*/ false);
+  builder.Leave(ifNode, labels);
+  trueBody->set_scope(SageBuilder::topScopeStack());
+
+  SageInterface::setSourcePosition(trueBody);
+  SageBuilder::pushScopeStack(trueBody);
+  label_ = std::nullopt;
+  Walk(std::get<UnlabeledStatement<ActionStmt>>(x.t));
+  label_ = saved_label;
+  HoistInlineIfSpecStatements(ifNode, trueBody);
+  SageBuilder::popScopeStack();
+}
+
+void BuildVisitor::Build(parser::ArithmeticIfStmt &x) {
+  SgExpression *condition{nullptr};
+  WalkExpr(std::get<parser::Expr>(x.t), condition);
+  ASSERT_not_null(condition);
+
+  SgExpression *lessExpr{nullptr};
+  SgExpression *equalExpr{nullptr};
+  SgExpression *greaterExpr{nullptr};
+  Rose::builder::Build(std::get<1>(x.t), lessExpr);
+  Rose::builder::Build(std::get<2>(x.t), equalExpr);
+  Rose::builder::Build(std::get<3>(x.t), greaterExpr);
+  ASSERT_not_null(lessExpr);
+  ASSERT_not_null(equalExpr);
+  ASSERT_not_null(greaterExpr);
+
+  SgLabelRefExp *lessRef = isSgLabelRefExp(lessExpr);
+  SgLabelRefExp *equalRef = isSgLabelRefExp(equalExpr);
+  SgLabelRefExp *greaterRef = isSgLabelRefExp(greaterExpr);
+  ROSE_ASSERT(lessRef != nullptr);
+  ROSE_ASSERT(equalRef != nullptr);
+  ROSE_ASSERT(greaterRef != nullptr);
+
+  SgArithmeticIfStatement *stmt =
+      new SgArithmeticIfStatement(condition, lessRef, equalRef, greaterRef);
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+  condition->set_parent(stmt);
+  lessRef->set_parent(stmt);
+  equalRef->set_parent(stmt);
+  greaterRef->set_parent(stmt);
+
+  auto labels = getLabels();
+  builder.Leave(stmt, labels);
 }
 
 void BuildVisitor::Build(parser::LabelDoStmt &x) {
@@ -978,9 +1915,15 @@ void BuildVisitor::Build(parser::LabelDoStmt &x) {
     builder.Enter(whileStmt, control.condition);
 
     if (label_) {
-      SageInterface::setFortranNumericLabel(whileStmt,
-                                            static_cast<int>(label_.value()),
-                                            SgLabelSymbol::e_start_label_type);
+      SgScopeStatement *labelScope =
+          SageInterface::getEnclosingFunctionDefinition(whileStmt);
+      if (labelScope == nullptr) {
+        labelScope = SageInterface::getEnclosingScope(whileStmt, true);
+      }
+      ASSERT_not_null(labelScope);
+      SageInterface::setFortranNumericLabel(
+          whileStmt, static_cast<int>(label_.value()),
+          SgLabelSymbol::e_start_label_type, labelScope);
     }
 
     label_do_stack_.push_back(
@@ -994,9 +1937,15 @@ void BuildVisitor::Build(parser::LabelDoStmt &x) {
   doStmt->set_has_end_statement(false);
 
   if (label_) {
-    SageInterface::setFortranNumericLabel(doStmt,
-                                          static_cast<int>(label_.value()),
-                                          SgLabelSymbol::e_start_label_type);
+    SgScopeStatement *labelScope =
+        SageInterface::getEnclosingFunctionDefinition(doStmt);
+    if (labelScope == nullptr) {
+      labelScope = SageInterface::getEnclosingScope(doStmt, true);
+    }
+    ASSERT_not_null(labelScope);
+    SageInterface::setFortranNumericLabel(
+        doStmt, static_cast<int>(label_.value()),
+        SgLabelSymbol::e_start_label_type, labelScope);
   }
 
   label_do_stack_.push_back(
@@ -1008,8 +1957,11 @@ void BuildVisitor::CloseLabelDoLoops(const parser::Label &label) {
          label_do_stack_.back().end_label == label) {
     LabelDoFrame frame = label_do_stack_.back();
     label_do_stack_.pop_back();
-    auto *labelScope =
+    SgScopeStatement *labelScope =
         SageInterface::getEnclosingFunctionDefinition(frame.stmt);
+    if (labelScope == nullptr) {
+      labelScope = SageInterface::getEnclosingScope(frame.stmt, true);
+    }
     ASSERT_not_null(labelScope);
     SgName labelName(StringUtility::numberToString(label));
     SgLabelSymbol *labelSymbol = labelScope->lookup_label_symbol(labelName);
@@ -1038,17 +1990,236 @@ void BuildVisitor::CloseLabelDoLoops(const parser::Label &label) {
   }
 }
 
+void BuildVisitor::ApplyStatementLabel(SgStatement *stmt,
+                                       SgScopeStatement *scope) const {
+  if (!label_ || stmt == nullptr) {
+    return;
+  }
+  ASSERT_not_null(scope);
+  SgScopeStatement *labelScope =
+      SageInterface::getEnclosingFunctionDefinition(scope, true);
+  if (labelScope == nullptr) {
+    labelScope = SageInterface::getEnclosingScope(scope, true);
+  }
+  ASSERT_not_null(labelScope);
+  SageInterface::setFortranNumericLabel(stmt, static_cast<int>(label_.value()),
+                                        SgLabelSymbol::e_start_label_type,
+                                        labelScope);
+}
+
+namespace {
+SgExpression *BuildAllocateObjectExpr(parser::AllocateObject &x) {
+  SgExpression *expr{nullptr};
+  common::visit(
+      common::visitors{[&](parser::Name &y) {
+                         std::string name = y.ToString();
+                         expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
+                       },
+                       [&](parser::StructureComponent &y) { Build(y, expr); }},
+      x.u);
+  ASSERT_not_null(expr);
+  return expr;
+}
+
+SgExpression *BuildAllocateShapeSpecExpr(parser::AllocateShapeSpec &x) {
+  SgExpression *lower{nullptr};
+  SgExpression *upper{nullptr};
+  if (std::get<0>(x.t)) {
+    WalkExpr(std::get<0>(x.t).value(), lower);
+  }
+  WalkExpr(std::get<1>(x.t), upper);
+  ASSERT_not_null(upper);
+
+  if (lower == nullptr) {
+    return upper;
+  }
+
+  SgExpression *stride = SageBuilder::buildIntVal_nfi(std::string("1"));
+  return SageBuilderCpp17::buildSubscriptExpression_nfi(lower, upper, stride);
+}
+
+SgExpression *BuildAllocationExpr(parser::Allocation &x) {
+  auto &obj = std::get<parser::AllocateObject>(x.t);
+  auto &shapeSpecs = std::get<std::list<parser::AllocateShapeSpec>>(x.t);
+  auto &coarraySpec = std::get<std::optional<parser::AllocateCoarraySpec>>(x.t);
+
+  if (coarraySpec) {
+    std::cerr << "Allocate coarray specs not supported yet.\n";
+    ROSE_ABORT();
+  }
+
+  SgExpression *base = BuildAllocateObjectExpr(obj);
+  ASSERT_not_null(base);
+
+  if (shapeSpecs.empty()) {
+    return base;
+  }
+
+  SgExprListExp *subscripts = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(subscripts);
+  for (auto &spec : shapeSpecs) {
+    SgExpression *shapeExpr = BuildAllocateShapeSpecExpr(spec);
+    ASSERT_not_null(shapeExpr);
+    SageInterface::appendExpression(subscripts, shapeExpr);
+  }
+
+  return SageBuilderCpp17::buildPntrArrRefExp_nfi(base, subscripts);
+}
+
+void ApplyStatOrErrmsg(parser::StatOrErrmsg &x, SgExpression *&statExpr,
+                       SgExpression *&errmsgExpr) {
+  common::visit(
+      common::visitors{
+          [&](parser::StatVariable &y) {
+            if (statExpr != nullptr) {
+              std::cerr << "Duplicate STAT spec in allocate/deallocate.\n";
+              ROSE_ABORT();
+            }
+            WalkExpr(y.v, statExpr);
+          },
+          [&](parser::MsgVariable &y) {
+            if (errmsgExpr != nullptr) {
+              std::cerr << "Duplicate ERRMSG spec in allocate/deallocate.\n";
+              ROSE_ABORT();
+            }
+            WalkExpr(y.v, errmsgExpr);
+          }},
+      x.u);
+}
+} // namespace
+
 // ActionStmt(s)
 //
+void BuildVisitor::Build(parser::AllocateStmt &x) {
+  if (std::get<std::optional<parser::TypeSpec>>(x.t)) {
+    std::cerr << "Allocate type-spec not supported yet.\n";
+    ROSE_ABORT();
+  }
+
+  SgAllocateStatement *stmt = new SgAllocateStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  SgExprListExp *exprList = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(exprList);
+  for (auto &alloc : std::get<std::list<parser::Allocation>>(x.t)) {
+    SgExpression *allocExpr = BuildAllocationExpr(alloc);
+    ASSERT_not_null(allocExpr);
+    SageInterface::appendExpression(exprList, allocExpr);
+  }
+  stmt->set_expr_list(exprList);
+  exprList->set_parent(stmt);
+
+  SgExpression *statExpr{nullptr};
+  SgExpression *errmsgExpr{nullptr};
+  SgExpression *sourceExpr{nullptr};
+
+  for (auto &opt : std::get<std::list<parser::AllocOpt>>(x.t)) {
+    common::visit(
+        common::visitors{
+            [&](parser::AllocOpt::Mold &) {
+              std::cerr << "Allocate MOLD option not supported yet.\n";
+              ROSE_ABORT();
+            },
+            [&](parser::AllocOpt::Source &y) {
+              if (sourceExpr != nullptr) {
+                std::cerr << "Duplicate SOURCE spec in allocate.\n";
+                ROSE_ABORT();
+              }
+              WalkExpr(y.v.value(), sourceExpr);
+            },
+            [&](parser::StatOrErrmsg &y) {
+              ApplyStatOrErrmsg(y, statExpr, errmsgExpr);
+            },
+            [&](parser::AllocOpt::Stream &) {
+              std::cerr << "Allocate STREAM option not supported yet.\n";
+              ROSE_ABORT();
+            },
+            [&](parser::AllocOpt::Pinned &) {
+              std::cerr << "Allocate PINNED option not supported yet.\n";
+              ROSE_ABORT();
+            }},
+        opt.u);
+  }
+
+  if (statExpr != nullptr) {
+    stmt->set_stat_expression(statExpr);
+    statExpr->set_parent(stmt);
+  }
+  if (errmsgExpr != nullptr) {
+    stmt->set_errmsg_expression(errmsgExpr);
+    errmsgExpr->set_parent(stmt);
+  }
+  if (sourceExpr != nullptr) {
+    stmt->set_source_expression(sourceExpr);
+    sourceExpr->set_parent(stmt);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
 void BuildVisitor::Build(parser::ContinueStmt &) {
   SgFortranContinueStmt *stmt{nullptr};
   builder.Enter(stmt);
   builder.Leave(stmt, getLabels());
 }
 
+void BuildVisitor::Build(parser::CycleStmt &x) {
+  SgContinueStmt *stmt{nullptr};
+  builder.Enter(stmt);
+  if (x.v) {
+    stmt->set_do_string_label(x.v->ToString());
+  }
+  builder.Leave(stmt, getLabels());
+}
+
+void BuildVisitor::Build(parser::DeallocateStmt &x) {
+  SgDeallocateStatement *stmt = new SgDeallocateStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  SgExprListExp *exprList = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(exprList);
+  for (auto &obj : std::get<std::list<parser::AllocateObject>>(x.t)) {
+    SgExpression *objExpr = BuildAllocateObjectExpr(obj);
+    ASSERT_not_null(objExpr);
+    SageInterface::appendExpression(exprList, objExpr);
+  }
+  stmt->set_expr_list(exprList);
+  exprList->set_parent(stmt);
+
+  SgExpression *statExpr{nullptr};
+  SgExpression *errmsgExpr{nullptr};
+  for (auto &opt : std::get<std::list<parser::StatOrErrmsg>>(x.t)) {
+    ApplyStatOrErrmsg(opt, statExpr, errmsgExpr);
+  }
+
+  if (statExpr != nullptr) {
+    stmt->set_stat_expression(statExpr);
+    statExpr->set_parent(stmt);
+  }
+  if (errmsgExpr != nullptr) {
+    stmt->set_errmsg_expression(errmsgExpr);
+    errmsgExpr->set_parent(stmt);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
 void BuildVisitor::Build(parser::FailImageStmt &) {
   SgProcessControlStatement *stmt{nullptr};
   builder.Enter(stmt, "fail_image", std::nullopt, std::nullopt);
+  builder.Leave(stmt, getLabels());
+}
+
+void BuildVisitor::Build(parser::ExitStmt &x) {
+  SgBreakStmt *stmt{nullptr};
+  builder.Enter(stmt);
+  if (x.v) {
+    stmt->set_do_string_label(x.v->ToString());
+  }
   builder.Leave(stmt, getLabels());
 }
 
@@ -1071,53 +2242,654 @@ void BuildVisitor::Build(parser::PrintStmt &x) {
   SgPrintStatement *stmt{nullptr};
   SgExpression *format{nullptr};
 
+  // Format
+  common::visit(common::visitors{
+                    [&](parser::Expr &y) { WalkExpr(y, format); },
+                    [&](parser::Label &y) { Rose::builder::Build(y, format); },
+                    [&](parser::Star &y) { Rose::builder::Build(y, format); }},
+                std::get<0>(x.t).u);
+  if (format == nullptr) {
+    format = SageBuilderCpp17::buildAsteriskShapeExp_nfi();
+  }
+
   // OutputItem
   // std::variant<Expr, common::Indirection<OutputImpliedDo>> u;
   std::list<SgExpression *> items{};
 
-  // OutputItems
-  // TODO: move to BuildVisitor:: function
   for (auto &item : std::get<1>(x.t)) {
-    common::visit(
-        common::visitors{
-            [&](parser::Expr &y) {
-              WalkExpr(y, format);
-              ASSERT_not_null(format);
-              items.push_back(format);
-            },
-            [&](auto &y) {
-              std::cout
-                  << "[WARN] IMPL_ME_ common::Indirection<OutputImpliedDo\n";
-              ASSERT_require(false);
-            }},
-        item.u);
+    SgExpression *itemExpr{nullptr};
+    Rose::builder::Build(item, itemExpr);
+    ASSERT_not_null(itemExpr);
+    items.push_back(itemExpr);
   }
-
-  // SgAsteriskShapeExp used to represent Star
-  // Fortran::parser::Star assumed, not parsed
-  format = SageBuilderCpp17::buildAsteriskShapeExp_nfi();
 
   // Enter/Leave SageTreeBuilder
   builder.Enter(stmt, format, items);
-  builder.Leave(stmt);
+  builder.Leave(stmt, getLabels());
+}
+
+void BuildVisitor::Build(
+    parser::Statement<common::Indirection<parser::ParameterStmt>> &x) {
+  using namespace Fortran::parser;
+
+  auto &paramStmt = x.statement.value();
+
+  SgAttributeSpecificationStatement *stmt =
+      SageBuilder::buildAttributeSpecificationStatement(
+          SgAttributeSpecificationStatement::e_parameterStatement);
+  ASSERT_not_null(stmt);
+
+  SgExprListExp *paramList = stmt->get_parameter_list();
+  if (paramList == nullptr) {
+    paramList = SageBuilder::buildExprListExp_nfi();
+    ASSERT_not_null(paramList);
+    stmt->set_parameter_list(paramList);
+    paramList->set_parent(stmt);
+  }
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  for (auto &def : paramStmt.v) {
+    auto &named = std::get<0>(def.t);
+    auto &constant = std::get<1>(def.t);
+    std::string name = named.v.ToString();
+    SgExpression *lhs = SageBuilderCpp17::buildVarRefExp_nfi(name);
+    ASSERT_not_null(lhs);
+    SgExpression *rhs{nullptr};
+    Rose::builder::Build(constant, rhs);
+    ASSERT_not_null(rhs);
+    SgExpression *assign =
+        SageBuilder::buildBinaryExpression_nfi<SgAssignOp>(lhs, rhs);
+    ASSERT_not_null(assign);
+    lhs->set_parent(assign);
+    rhs->set_parent(assign);
+    paramList->get_expressions().push_back(assign);
+    assign->set_parent(paramList);
+  }
+
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  builder.setSourcePosition(stmt, srcBegin, srcEnd);
+
+  ApplyStatementLabel(stmt, scope);
+  SageInterface::appendStatement(stmt, scope);
+}
+
+void BuildVisitor::Build(
+    parser::Statement<common::Indirection<parser::OldParameterStmt>> &x) {
+  using namespace Fortran::parser;
+
+  auto &paramStmt = x.statement.value();
+
+  SgAttributeSpecificationStatement *stmt =
+      SageBuilder::buildAttributeSpecificationStatement(
+          SgAttributeSpecificationStatement::e_parameterStatement);
+  ASSERT_not_null(stmt);
+
+  SgExprListExp *paramList = stmt->get_parameter_list();
+  if (paramList == nullptr) {
+    paramList = SageBuilder::buildExprListExp_nfi();
+    ASSERT_not_null(paramList);
+    stmt->set_parameter_list(paramList);
+    paramList->set_parent(stmt);
+  }
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  for (auto &def : paramStmt.v) {
+    auto &named = std::get<0>(def.t);
+    auto &constant = std::get<1>(def.t);
+    std::string name = named.v.ToString();
+    SgExpression *lhs = SageBuilderCpp17::buildVarRefExp_nfi(name);
+    ASSERT_not_null(lhs);
+    SgExpression *rhs{nullptr};
+    Rose::builder::Build(constant, rhs);
+    ASSERT_not_null(rhs);
+    SgExpression *assign =
+        SageBuilder::buildBinaryExpression_nfi<SgAssignOp>(lhs, rhs);
+    ASSERT_not_null(assign);
+    lhs->set_parent(assign);
+    rhs->set_parent(assign);
+    paramList->get_expressions().push_back(assign);
+    assign->set_parent(paramList);
+  }
+
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  builder.setSourcePosition(stmt, srcBegin, srcEnd);
+
+  ApplyStatementLabel(stmt, scope);
+  SageInterface::appendStatement(stmt, scope);
+}
+
+void BuildVisitor::Build(
+    parser::Statement<common::Indirection<parser::FormatStmt>> &x) {
+  using namespace Fortran::parser;
+
+  auto &formatStmt = x.statement.value();
+
+  SgFormatItemList *itemList = new SgFormatItemList();
+  ASSERT_not_null(itemList);
+
+  auto appendItem = [&](const std::string &text) {
+    if (text.empty()) {
+      return;
+    }
+    SgFormatItem *item = new SgFormatItem();
+    ASSERT_not_null(item);
+    item->set_repeat_specification(-1);
+
+    SgStringVal *data = SageBuilder::buildStringVal_nfi(text);
+    ASSERT_not_null(data);
+    data->set_usesSingleQuotes(false);
+    data->set_usesDoubleQuotes(false);
+    data->set_parent(item);
+    item->set_data(data);
+
+    item->set_parent(itemList);
+    itemList->get_format_item_list().push_back(item);
+  };
+
+  for (const auto &item : formatStmt.v.items) {
+    appendItem(FormatItemToString(item));
+  }
+  if (!formatStmt.v.unlimitedItems.empty()) {
+    appendItem("*(" + FormatItemsToString(formatStmt.v.unlimitedItems) + ")");
+  }
+
+  SgFormatStatement *stmt = new SgFormatStatement(itemList);
+  ASSERT_not_null(stmt);
+  itemList->set_parent(stmt);
+
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  builder.setSourcePosition(stmt, srcBegin, srcEnd);
+
+  builder.Leave(stmt, getLabels());
+}
+
+void BuildVisitor::Build(parser::CallStmt &x) {
+  std::string proc_name;
+  std::list<SgExpression *> arg_list;
+  SgExpression *designator{nullptr};
+
+  if (x.chevrons) {
+    ABORT_NO_IMPL;
+  }
+
+  Rose::builder::Build(x.call, arg_list, proc_name, designator);
+
+  SgExprListExp *param_list = SageBuilderCpp17::buildExprListExp_nfi(arg_list);
+  ASSERT_not_null(param_list);
+
+  SgExprStatement *stmt{nullptr};
+  auto labels = getLabels();
+  if (designator != nullptr) {
+    SgFunctionCallExp *call_expr =
+        SageBuilder::buildFunctionCallExp_nfi(designator, param_list);
+    ASSERT_not_null(call_expr);
+    stmt = SageBuilder::buildExprStatement_nfi(call_expr);
+    builder.Leave(stmt, labels);
+  } else {
+    builder.Enter(stmt, proc_name, param_list, /*abort_phrase*/ "");
+    builder.Leave(stmt, labels);
+  }
 }
 
 void BuildVisitor::Build(parser::WriteStmt &x) {
-  SgProcessControlStatement *stmt{nullptr};
-  std::cerr << "...Build(WriteStmt)...\n";
+  SgWriteStatement *stmt = new SgWriteStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
   if (x.iounit) {
-    std::cerr << "...Build(WriteStmt)...   has IoUnit!\n";
-  } else {
-    std::cerr << "...Build(WriteStmt)...    no IoUnit!\n";
+    SgExpression *expr = BuildIoUnitExpr(x.iounit.value());
+    stmt->set_unit(expr);
+    expr->set_parent(stmt);
   }
+
   if (x.format) {
-    std::cerr << "...Build(WriteStmt)...   has Format!\n";
-  } else {
-    std::cerr << "...Build(WriteStmt)...    no Format!\n";
+    std::optional<std::string> formatName =
+        ExtractBareNameFromFormat(x.format.value());
+    if (formatName &&
+        ScopeHasNamelistGroup(SageBuilder::topScopeStack(), *formatName)) {
+      SgExpression *expr = SageBuilder::buildDanglingVarRefExp(
+          SgName(*formatName), SageBuilder::topScopeStack());
+      ASSERT_not_null(expr);
+      stmt->set_namelist(expr);
+      expr->set_parent(stmt);
+    } else {
+      SgExpression *expr = BuildFormatExpr(x.format.value());
+      stmt->set_format(expr);
+      expr->set_parent(stmt);
+    }
   }
+
   for (auto &spec : x.controls) {
-    std::cerr << "...Build(WriteStmt)...    IoControlSpec...list\n";
+    ApplyIoControlSpec(spec, /*readStmt*/ nullptr, /*writeStmt*/ stmt);
   }
+
+  SgExprListExp *iolist = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(iolist);
+  for (auto &item : x.items) {
+    SgExpression *itemExpr{nullptr};
+    Rose::builder::Build(item, itemExpr);
+    ASSERT_not_null(itemExpr);
+    AppendExpr(iolist, itemExpr);
+  }
+  stmt->set_io_stmt_list(iolist);
+  iolist->set_parent(stmt);
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::ReadStmt &x) {
+  SgReadStatement *stmt = new SgReadStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  if (x.iounit) {
+    SgExpression *expr = BuildIoUnitExpr(x.iounit.value());
+    stmt->set_unit(expr);
+    expr->set_parent(stmt);
+  }
+
+  if (x.format) {
+    std::optional<std::string> formatName =
+        ExtractBareNameFromFormat(x.format.value());
+    if (formatName &&
+        ScopeHasNamelistGroup(SageBuilder::topScopeStack(), *formatName)) {
+      SgExpression *expr = SageBuilder::buildDanglingVarRefExp(
+          SgName(*formatName), SageBuilder::topScopeStack());
+      ASSERT_not_null(expr);
+      stmt->set_namelist(expr);
+      expr->set_parent(stmt);
+    } else {
+      SgExpression *expr = BuildFormatExpr(x.format.value());
+      stmt->set_format(expr);
+      expr->set_parent(stmt);
+    }
+  }
+
+  for (auto &spec : x.controls) {
+    ApplyIoControlSpec(spec, /*readStmt*/ stmt, /*writeStmt*/ nullptr);
+  }
+
+  SgExprListExp *iolist = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(iolist);
+  for (auto &item : x.items) {
+    SgExpression *itemExpr{nullptr};
+    Rose::builder::Build(item, itemExpr);
+    ASSERT_not_null(itemExpr);
+    AppendExpr(iolist, itemExpr);
+  }
+  stmt->set_io_stmt_list(iolist);
+  iolist->set_parent(stmt);
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::OpenStmt &x) {
+  SgOpenStatement *stmt = new SgOpenStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  for (auto &spec : x.v) {
+    ApplyConnectSpec(spec, stmt);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::CloseStmt &x) {
+  SgCloseStatement *stmt = new SgCloseStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  for (auto &spec : x.v) {
+    ApplyCloseSpec(spec, stmt);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::RewindStmt &x) {
+  SgRewindStatement *stmt = new SgRewindStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  for (auto &spec : x.v) {
+    ApplyPositionOrFlushSpec(spec, stmt);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::BackspaceStmt &x) {
+  SgBackspaceStatement *stmt = new SgBackspaceStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  for (auto &spec : x.v) {
+    ApplyPositionOrFlushSpec(spec, stmt);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::EndfileStmt &x) {
+  SgEndfileStatement *stmt = new SgEndfileStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  for (auto &spec : x.v) {
+    ApplyPositionOrFlushSpec(spec, stmt);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::FlushStmt &x) {
+  SgFlushStatement *stmt = new SgFlushStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  for (auto &spec : x.v) {
+    ApplyPositionOrFlushSpec(spec, stmt);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::WaitStmt &x) {
+  SgWaitStatement *stmt = new SgWaitStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  for (auto &spec : x.v) {
+    common::visit(
+        common::visitors{[&](const parser::FileUnitNumber &y) {
+                           SgExpression *expr{nullptr};
+                           WalkExpr(y.v, expr);
+                           ASSERT_not_null(expr);
+                           stmt->set_unit(expr);
+                           expr->set_parent(stmt);
+                         },
+                         [&](const parser::ErrLabel &y) {
+                           SgExpression *expr{nullptr};
+                           Rose::builder::Build(y.v, expr);
+                           ASSERT_not_null(expr);
+                           stmt->set_err(expr);
+                           expr->set_parent(stmt);
+                         },
+                         [&](const parser::MsgVariable &y) {
+                           SgExpression *expr{nullptr};
+                           WalkExpr(y.v, expr);
+                           ASSERT_not_null(expr);
+                           stmt->set_iomsg(expr);
+                           expr->set_parent(stmt);
+                         },
+                         [&](const parser::StatVariable &y) {
+                           SgExpression *expr{nullptr};
+                           WalkExpr(y.v, expr);
+                           ASSERT_not_null(expr);
+                           stmt->set_iostat(expr);
+                           expr->set_parent(stmt);
+                         },
+                         [&](const auto &) { /* ignore unsupported spec */ }},
+        spec.u);
+  }
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::InquireStmt &x) {
+  SgInquireStatement *stmt = new SgInquireStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  common::visit(
+      common::visitors{
+          [&](const std::list<parser::InquireSpec> &specs) {
+            for (auto &spec : specs) {
+              common::visit(
+                  common::visitors{
+                      [&](const parser::FileUnitNumber &y) {
+                        SgExpression *expr{nullptr};
+                        WalkExpr(y.v, expr);
+                        ASSERT_not_null(expr);
+                        stmt->set_unit(expr);
+                        expr->set_parent(stmt);
+                      },
+                      [&](const parser::FileNameExpr &y) {
+                        SgExpression *expr{nullptr};
+                        WalkExpr(y, expr);
+                        ASSERT_not_null(expr);
+                        stmt->set_file(expr);
+                        expr->set_parent(stmt);
+                      },
+                      [&](const parser::InquireSpec::CharVar &y) {
+                        SgExpression *expr{nullptr};
+                        WalkExpr(std::get<1>(y.t), expr);
+                        ASSERT_not_null(expr);
+                        auto kind = std::get<0>(y.t);
+                        switch (kind) {
+                        case parser::InquireSpec::CharVar::Kind::Access:
+                          stmt->set_access(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Action:
+                          stmt->set_action(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Asynchronous:
+                          stmt->set_asynchronous(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Blank:
+                          stmt->set_blank(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Decimal:
+                          stmt->set_decimal(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Delim:
+                          stmt->set_delim(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Direct:
+                          stmt->set_direct(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Form:
+                          stmt->set_form(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Formatted:
+                          stmt->set_formatted(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Iomsg:
+                          stmt->set_iomsg(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Name:
+                          stmt->set_name(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Pad:
+                          stmt->set_pad(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Position:
+                          stmt->set_position(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Read:
+                          stmt->set_read(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Readwrite:
+                          stmt->set_readwrite(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Sequential:
+                          stmt->set_sequential(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Stream:
+                          stmt->set_stream(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Unformatted:
+                          stmt->set_unformatted(expr);
+                          break;
+                        case parser::InquireSpec::CharVar::Kind::Write:
+                          stmt->set_write(expr);
+                          break;
+                        default:
+                          break;
+                        }
+                        expr->set_parent(stmt);
+                      },
+                      [&](const parser::InquireSpec::IntVar &y) {
+                        SgExpression *expr{nullptr};
+                        WalkExpr(std::get<1>(y.t), expr);
+                        ASSERT_not_null(expr);
+                        auto kind = std::get<0>(y.t);
+                        switch (kind) {
+                        case parser::InquireSpec::IntVar::Kind::Iostat:
+                          stmt->set_iostat(expr);
+                          break;
+                        case parser::InquireSpec::IntVar::Kind::Nextrec:
+                          stmt->set_nextrec(expr);
+                          break;
+                        case parser::InquireSpec::IntVar::Kind::Number:
+                          stmt->set_number(expr);
+                          break;
+                        case parser::InquireSpec::IntVar::Kind::Pos:
+                          stmt->set_position(expr);
+                          break;
+                        case parser::InquireSpec::IntVar::Kind::Recl:
+                          stmt->set_recl(expr);
+                          break;
+                        case parser::InquireSpec::IntVar::Kind::Size:
+                          stmt->set_size(expr);
+                          break;
+                        default:
+                          break;
+                        }
+                        expr->set_parent(stmt);
+                      },
+                      [&](const parser::InquireSpec::LogVar &y) {
+                        SgExpression *expr{nullptr};
+                        WalkExpr(std::get<1>(y.t), expr);
+                        ASSERT_not_null(expr);
+                        auto kind = std::get<0>(y.t);
+                        switch (kind) {
+                        case parser::InquireSpec::LogVar::Kind::Exist:
+                          stmt->set_exist(expr);
+                          break;
+                        case parser::InquireSpec::LogVar::Kind::Named:
+                          stmt->set_named(expr);
+                          break;
+                        case parser::InquireSpec::LogVar::Kind::Opened:
+                          stmt->set_opened(expr);
+                          break;
+                        case parser::InquireSpec::LogVar::Kind::Pending:
+                          stmt->set_pending(expr);
+                          break;
+                        }
+                        expr->set_parent(stmt);
+                      },
+                      [&](const parser::IdExpr &y) {
+                        SgExpression *expr{nullptr};
+                        WalkExpr(y.v, expr);
+                        ASSERT_not_null(expr);
+                        stmt->set_id(expr);
+                        expr->set_parent(stmt);
+                      },
+                      [&](const parser::ErrLabel &y) {
+                        SgExpression *expr{nullptr};
+                        Rose::builder::Build(y.v, expr);
+                        ASSERT_not_null(expr);
+                        stmt->set_err(expr);
+                        expr->set_parent(stmt);
+                      }},
+                  spec.u);
+            }
+          },
+          [&](parser::InquireStmt::Iolength &iolength) {
+            SgExpression *lenExpr{nullptr};
+            WalkExpr(std::get<0>(iolength.t), lenExpr);
+            ASSERT_not_null(lenExpr);
+            SgVarRefExp *lenVar = isSgVarRefExp(lenExpr);
+            ROSE_ASSERT(lenVar != nullptr);
+            stmt->set_iolengthExp(lenVar);
+            lenVar->set_parent(stmt);
+
+            auto &items = std::get<1>(iolength.t);
+            if (!items.empty()) {
+              SgExprListExp *iolist = SageBuilder::buildExprListExp_nfi();
+              ASSERT_not_null(iolist);
+              for (auto &item : items) {
+                SgExpression *itemExpr{nullptr};
+                Rose::builder::Build(item, itemExpr);
+                ASSERT_not_null(itemExpr);
+                AppendExpr(iolist, itemExpr);
+              }
+              stmt->set_io_stmt_list(iolist);
+              iolist->set_parent(stmt);
+            }
+          }},
+      x.u);
+
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::PointerAssignmentStmt &x) {
+  SgExpression *lhs{nullptr};
+  Rose::builder::Build(std::get<parser::DataRef>(x.t), lhs);
+  ASSERT_not_null(lhs);
+
+  SgExpression *rhs{nullptr};
+  WalkExpr(std::get<parser::Expr>(x.t), rhs);
+  ASSERT_not_null(rhs);
+
+  SgPointerAssignOp *assign = new SgPointerAssignOp(lhs, rhs, nullptr);
+  ASSERT_not_null(assign);
+  SageInterface::setSourcePosition(assign);
+  lhs->set_parent(assign);
+  rhs->set_parent(assign);
+
+  SgExprStatement *stmt = SageBuilder::buildExprStatement_nfi(assign);
+  ASSERT_not_null(stmt);
+  assign->set_parent(stmt);
+
+  auto labels = getLabels();
+  builder.Leave(stmt, labels);
+}
+
+void BuildVisitor::Build(parser::NullifyStmt &x) {
+  SgNullifyStatement *stmt = new SgNullifyStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  SgExprListExp *list = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(list);
+  for (auto &obj : x.v) {
+    SgExpression *expr{nullptr};
+    common::visit(
+        common::visitors{[&](const parser::Name &y) {
+                           std::string name = y.ToString();
+                           expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
+                         },
+                         [&](parser::StructureComponent &y) {
+                           Rose::builder::Build(y, expr);
+                         }},
+        obj.u);
+    ASSERT_not_null(expr);
+    AppendExpr(list, expr);
+  }
+  stmt->set_pointer_list(list);
+  list->set_parent(stmt);
+
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
 }
 
 void BuildVisitor::BuildPrefix(
@@ -1126,36 +2898,117 @@ void BuildVisitor::BuildPrefix(
   // std::variant<> - DeclarationTypeSpec, Elemental, Impure, Module,
   // Non_Recursive,
   //                  Pure, Recursive, Attributes, Launch_Bounds, Cluster_Dims
-  std::cout << "[WARN] BuildVisitor::Build(PrefixSpec): NEEDS further "
-               "IMPLEMENTATION\n";
+  auto add_modifier = [&](LanguageTranslation::FunctionModifier kind) {
+    if (std::find(modifiers.begin(), modifiers.end(), kind) ==
+        modifiers.end()) {
+      modifiers.push_back(kind);
+    }
+  };
+  auto remove_modifier = [&](LanguageTranslation::FunctionModifier kind) {
+    auto it = std::remove(modifiers.begin(), modifiers.end(), kind);
+    if (it != modifiers.end()) {
+      modifiers.erase(it, modifiers.end());
+    }
+  };
 
   for (auto &prefix : x) {
     common::visit(
         common::visitors{
             [&](parser::DeclarationTypeSpec &y) { BuildType(y, type); },
-            [&](auto &y) {
-              std::cout << "   [WARN] IMPL_ME_ SOMETHING something else\n";
-            }},
+            [&](const parser::PrefixSpec::Elemental &) {
+              add_modifier(LanguageTranslation::FunctionModifier::
+                               e_function_modifier_elemental);
+            },
+            [&](const parser::PrefixSpec::Impure &) {
+              add_modifier(LanguageTranslation::FunctionModifier::
+                               e_function_modifier_impure);
+              remove_modifier(LanguageTranslation::FunctionModifier::
+                                  e_function_modifier_pure);
+            },
+            [&](const parser::PrefixSpec::Module &) {
+              add_modifier(LanguageTranslation::FunctionModifier::
+                               e_function_modifier_module);
+            },
+            [&](const parser::PrefixSpec::Non_Recursive &) {
+              remove_modifier(LanguageTranslation::FunctionModifier::
+                                  e_function_modifier_recursive);
+            },
+            [&](const parser::PrefixSpec::Pure &) {
+              add_modifier(LanguageTranslation::FunctionModifier::
+                               e_function_modifier_pure);
+            },
+            [&](const parser::PrefixSpec::Recursive &) {
+              add_modifier(LanguageTranslation::FunctionModifier::
+                               e_function_modifier_recursive);
+            },
+            [&](const parser::PrefixSpec::Attributes &) {},
+            [&](const parser::PrefixSpec::Launch_Bounds &) {},
+            [&](const parser::PrefixSpec::Cluster_Dims &) {}},
         prefix.u);
   }
 }
 
 void BuildSuffix(parser::Suffix &x, std::string &resultName) {
-  std::cout << "BuildVisitor::BuildSuffix(Suffix)\n";
-
-  // std::optional<Name>
   if (x.resultName) {
     resultName = x.resultName.value().ToString();
   }
 
-  // TODO:
-  //  std::optional<LanguageBindingSpec> binding;
-  ABORT_NO_IMPL;
+  // TODO: handle LanguageBindingSpec in suffix when needed.
 }
 
 void Build(parser::Substring &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(Substring)\n";
-  ABORT_NO_IMPL;
+  auto &dataRef = std::get<parser::DataRef>(x.t);
+  auto &range = std::get<parser::SubstringRange>(x.t);
+
+  SgExpression *base{nullptr};
+  Build(dataRef, base);
+  ASSERT_not_null(base);
+
+  SgExpression *lower{nullptr};
+  SgExpression *upper{nullptr};
+  if (std::get<0>(range.t)) {
+    WalkExpr(std::get<0>(range.t).value(), lower);
+  }
+  if (std::get<1>(range.t)) {
+    WalkExpr(std::get<1>(range.t).value(), upper);
+  }
+  if (lower == nullptr) {
+    lower = SageBuilderCpp17::buildNullExpression_nfi();
+  }
+  if (upper == nullptr) {
+    upper = SageBuilderCpp17::buildNullExpression_nfi();
+  }
+  SgExpression *stride = SageBuilder::buildIntVal_nfi(std::string("1"));
+
+  SgExpression *subscript =
+      SageBuilderCpp17::buildSubscriptExpression_nfi(lower, upper, stride);
+  ASSERT_not_null(subscript);
+
+  expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(base, subscript);
+}
+
+void Build(parser::Designator &x, SgExpression *&expr) {
+  common::visit(common::visitors{[&](parser::DataRef &y) { Build(y, expr); },
+                                 [&](parser::Substring &y) { Build(y, expr); }},
+                x.u);
+}
+
+void Build(parser::DataRef &x, SgExpression *&expr) {
+  common::visit(common::visitors{
+                    [&](parser::Name &y) {
+                      std::string name = y.ToString();
+                      expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
+                    },
+                    [&](common::Indirection<parser::StructureComponent> &y) {
+                      Build(y.value(), expr);
+                    },
+                    [&](common::Indirection<parser::ArrayElement> &y) {
+                      Build(y.value(), expr);
+                    },
+                    [&](common::Indirection<parser::CoindexedNamedObject> &y) {
+                      Build(y.value(), expr);
+                    }},
+                x.u);
 }
 
 void Build(parser::FunctionReference &x, SgExpression *&expr) {
@@ -1166,28 +3019,120 @@ void Build(parser::FunctionReference &x, SgExpression *&expr) {
   std::list<SgExpression *> arg_list;
   std::string func_name;
 
-  Build(x.v, arg_list, func_name); // Call
+  SgExpression *designator{nullptr};
+  Build(x.v, arg_list, func_name, designator); // Call
 
   SgExprListExp *param_list = SageBuilderCpp17::buildExprListExp_nfi(arg_list);
 
-  // Begin SageTreeBuilder
-  SgFunctionCallExp *func_call;
-  builder.Enter(func_call, func_name, param_list);
+  SgExpression *call_expr = nullptr;
+  if (designator != nullptr) {
+    if (IsArrayDesignator(designator)) {
+      call_expr = BuildArrayRefFromCallArgs(designator, param_list);
+    } else {
+      call_expr = SageBuilder::buildFunctionCallExp_nfi(designator, param_list);
+    }
+  } else {
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    ASSERT_not_null(scope);
+    if (SgVariableSymbol *var_sym =
+            SageInterface::lookupVariableSymbolInParentScopes(func_name,
+                                                              scope)) {
+      SgType *var_type = var_sym->get_type();
+      if (IsArrayType(var_type)) {
+        SgVarRefExp *var_ref = SageBuilder::buildVarRefExp_nfi(var_sym);
+        call_expr = BuildArrayRefFromCallArgs(var_ref, param_list);
+      } else if (IsFunctionType(var_type)) {
+        SgVarRefExp *var_ref = SageBuilder::buildVarRefExp_nfi(var_sym);
+        call_expr = SageBuilder::buildFunctionCallExp_nfi(var_ref, param_list);
+      }
+    }
+    if (call_expr == nullptr) {
+      call_expr = SageBuilder::buildFunctionCallExp(
+          SgName(func_name), SageBuilder::buildUnknownType(), param_list,
+          SageBuilder::topScopeStack());
+    }
+  }
 
-  // Use wrapper function because can't use inheritance of pointers until Rose
-  // accepts Cpp17
-  expr = SageBuilder::buildFunctionCallExp(func_call);
+  expr = call_expr;
 }
 
 void Build(parser::Call &x, std::list<SgExpression *> &arg_list,
-           std::string &name) {
-  std::cout << "Rose::builder::Build(Call)\n";
-  ABORT_NO_IMPL;
+           std::string &name, SgExpression *&designator) {
+  using namespace Fortran::parser;
+
+  designator = nullptr;
+
+  // ProcedureDesignator std::variant<Name, ProcComponentRef> u;
+  common::visit(common::visitors{[&](Name &procName) {
+                                   name = procName.ToString();
+                                   designator = nullptr;
+                                 },
+                                 [&](ProcComponentRef &procRef) {
+                                   name.clear();
+                                   Build(procRef, designator);
+                                 }},
+                std::get<ProcedureDesignator>(x.t).u);
+
+  // ActualArgSpec std::tuple<std::optional<Keyword>, ActualArg> t;
+  for (auto &spec : std::get<std::list<ActualArgSpec>>(x.t)) {
+    auto &actual = std::get<ActualArg>(spec.t);
+    if (auto *expr = std::get_if<common::Indirection<Expr>>(&actual.u)) {
+      SgExpression *arg{nullptr};
+      WalkExpr(expr->value(), arg);
+      ASSERT_not_null(arg);
+      arg_list.push_back(arg);
+    } else if (auto *percentVal =
+                   std::get_if<ActualArg::PercentVal>(&actual.u)) {
+      SgExpression *arg{nullptr};
+      WalkExpr(percentVal->v, arg);
+      ASSERT_not_null(arg);
+      arg_list.push_back(arg);
+    } else if (auto *percentRef =
+                   std::get_if<ActualArg::PercentRef>(&actual.u)) {
+      SgExpression *arg{nullptr};
+      WalkExpr(percentRef->v, arg);
+      ASSERT_not_null(arg);
+      arg_list.push_back(arg);
+    } else if (auto *altReturn = std::get_if<AltReturnSpec>(&actual.u)) {
+      SgScopeStatement *currentScope = SageBuilder::topScopeStack();
+      ASSERT_not_null(currentScope);
+      SgScopeStatement *labelScope =
+          SageInterface::getEnclosingFunctionDefinition(currentScope, true);
+      if (labelScope == nullptr) {
+        labelScope = SageInterface::getEnclosingScope(currentScope, true);
+      }
+      ASSERT_not_null(labelScope);
+      const auto labelValue = static_cast<int>(altReturn->v);
+      const std::string labelText = StringUtility::numberToString(labelValue);
+      SgName labelName(labelText);
+      SgLabelSymbol *labelSymbol = labelScope->lookup_label_symbol(labelName);
+      if (labelSymbol == nullptr) {
+        SgLabelStatement *labelStmt{nullptr};
+        builder.Enter(labelStmt, labelText);
+        ASSERT_not_null(labelStmt);
+        labelSymbol = labelScope->lookup_label_symbol(labelName);
+      }
+      ASSERT_not_null(labelSymbol);
+      const int numericValue = labelSymbol->get_numeric_label_value();
+      if (numericValue <= 0) {
+        labelSymbol->set_numeric_label_value(labelValue);
+      } else if (numericValue != labelValue) {
+        std::cerr << "Mismatched Fortran label value for " << labelText
+                  << " (symbol=" << numericValue << ", reference=" << labelValue
+                  << ")\n";
+        ROSE_ABORT();
+      }
+      SgLabelRefExp *labelRef = SageBuilder::buildLabelRefExp(labelSymbol);
+      ASSERT_not_null(labelRef);
+      arg_list.push_back(labelRef);
+    } else {
+      ABORT_NO_IMPL;
+    }
+  }
 }
 
 void Build(parser::ProcComponentRef &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(ProcComponentRef)\n";
-  ABORT_NO_IMPL;
+  Build(x.v.thing, expr);
 }
 
 void Build(parser::ActualArgSpec &x, SgExpression *&expr) {
@@ -1201,8 +3146,8 @@ void Build(parser::Keyword &x, SgExpression *&expr) {
 }
 
 void Build(parser::NamedConstant &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(NamedConstant)\n";
-  ABORT_NO_IMPL;
+  std::string name = x.v.ToString();
+  expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
 }
 
 void Build(parser::Expr::IntrinsicBinary &x, SgExpression *&expr) {
@@ -1212,13 +3157,12 @@ void Build(parser::Expr::IntrinsicBinary &x, SgExpression *&expr) {
 
 // LiteralConstant(s)
 void BuildImpl(parser::HollerithLiteralConstant &x, SgExpression *&expr) {
-  std::cout << "BuildImpl(HollerithLiteralConstant)\n";
-  ABORT_NO_IMPL;
+  expr = SageBuilder::buildStringVal_nfi(x.GetString());
 }
 
 // KindParam - for now create a string (seems that a Sage value expression
 // should have Fortran kind
-void BuildImpl(std::optional<Fortran::parser::KindParam> &x,
+void BuildImpl(const std::optional<Fortran::parser::KindParam> &x,
                std::uint64_t &ikind, std::string &strVal) {
   // std::variant<> = std::uint64_t, Scalar<Integer<Constant<Name>>>
   using namespace Fortran::parser;
@@ -1234,6 +3178,29 @@ void BuildImpl(std::optional<Fortran::parser::KindParam> &x,
                          }},
         x.value().u);
   }
+}
+
+void BuildImpl(Fortran::parser::KindParam &x, SgExpression *&expr) {
+  // std::variant<> = std::uint64_t, Scalar<Integer<Constant<Name>>>
+  using namespace Fortran::parser;
+
+  ASSERT_require(expr == nullptr);
+  common::visit(
+      common::visitors{[&](const std::int64_t &y) {
+                         const std::string value = std::to_string(y);
+                         expr = SageBuilder::buildLongLongIntVal_nfi(y, value);
+                       },
+                       [&](const std::uint64_t &y) {
+                         const std::string value = std::to_string(y);
+                         expr = SageBuilder::buildLongLongIntVal_nfi(
+                             static_cast<long long>(y), value);
+                       },
+                       [&](const Scalar<Integer<Constant<Name>>> &y) {
+                         std::string name = y.thing.thing.thing.ToString();
+                         expr = SageBuilderCpp17::buildVarRefExp_nfi(
+                             name, /*scope*/ nullptr, /*allow_implicit*/ false);
+                       }},
+      x.u);
 }
 
 void BuildImpl(parser::IntLiteralConstant &x, SgExpression *&expr) {
@@ -1265,52 +3232,199 @@ void BuildImpl(parser::IntLiteralConstant &x, SgExpression *&expr) {
   expr = SageBuilder::buildLongLongIntVal_nfi(llVal, strVal);
 }
 
-void BuildImpl(parser::SignedIntLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(parser::UnsignedLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<> - CharBlock, std::optional<KindParam>
-  std::cout << "BuildImpl(SignedIntLiteralConstant)\n";
-  ABORT_NO_TEST;
+  using namespace Fortran::parser;
 
-  expr = SageBuilder::buildIntVal_nfi(stoi(std::get<0>(x.t).ToString()));
+  unsigned long long ullVal{0};
+  std::string strVal{std::get<CharBlock>(x.t).ToString()};
+
+  try {
+    ullVal = std::stoull(strVal);
+  } catch (const std::out_of_range &e) {
+    std::cerr << "[WARN] UnsignedLiteralConstant out of range: " << e.what()
+              << std::endl;
+  } catch (const std::invalid_argument &e) {
+    std::cerr << "[WARN] UnsignedLiteralConstant invalid argument: " << e.what()
+              << std::endl;
+  }
+
+  if (std::get<1>(x.t)) {
+    std::string kind{};
+    uint64_t ikind{0};
+    BuildImpl(std::get<1>(x.t), ikind, kind);
+    strVal += "_" + kind;
+  }
+
+  expr = SageBuilder::buildUnsignedLongLongIntVal_nfi(ullVal, strVal);
 }
 
+void BuildImpl(parser::SignedIntLiteralConstant &x, SgExpression *&expr) {
+  // std::tuple<> - CharBlock, std::optional<KindParam>
+  std::string strVal = std::get<0>(x.t).ToString();
+  std::string parsedVal;
+  parsedVal.reserve(strVal.size());
+  for (char ch : strVal) {
+    if (ch == '_' || std::isspace(static_cast<unsigned char>(ch))) {
+      continue;
+    }
+    parsedVal.push_back(ch);
+  }
+
+  long long llVal{0};
+  try {
+    llVal = std::stoll(parsedVal);
+  } catch (const std::out_of_range &e) {
+    std::cerr << "[WARN] SignedIntLiteralConstant out of range: " << e.what()
+              << std::endl;
+  } catch (const std::invalid_argument &e) {
+    std::cerr << "[WARN] SignedIntLiteralConstant invalid argument: "
+              << e.what() << std::endl;
+  }
+  if (std::get<1>(x.t)) {
+    std::string kind{};
+    uint64_t ikind{0};
+    BuildImpl(std::get<1>(x.t), ikind, kind);
+    strVal += "_" + kind;
+  }
+  expr = SageBuilder::buildLongLongIntVal_nfi(llVal, strVal);
+}
+
+namespace {
+std::string FormatRealLiteralConstant(const parser::RealLiteralConstant &x) {
+  std::string value = x.real.source.ToString();
+  if (x.kind) {
+    std::string kind{};
+    uint64_t ikind{0};
+    BuildImpl(x.kind, ikind, kind);
+    if (!kind.empty()) {
+      value += "_" + kind;
+    }
+  }
+  return value;
+}
+} // namespace
+
 void BuildImpl(parser::RealLiteralConstant &x, SgExpression *&expr) {
-  // has std::optional<KindParam> kind
-  expr = SageBuilder::buildFloatVal_nfi(x.real.source.ToString());
+  expr = SageBuilder::buildFloatVal_nfi(FormatRealLiteralConstant(x));
 }
 
 void BuildImpl(parser::SignedRealLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<std::optional<Sign>, RealLiteralConstant> t;
-  ABORT_NO_IMPL;
+  std::string value = FormatRealLiteralConstant(std::get<1>(x.t));
+  if (std::get<0>(x.t)) {
+    if (std::get<0>(x.t).value() == parser::Sign::Negative) {
+      value = "-" + value;
+    }
+  }
+  expr = SageBuilder::buildFloatVal_nfi(value);
 }
 
 void BuildImpl(parser::ComplexLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<ComplexPart, ComplexPart> t;
-  std::cout << "BuildImpl(ComplexLiteralConstant)\n";
-  ABORT_NO_IMPL;
+  auto buildComplexPart = [](parser::ComplexPart &part) -> SgExpression * {
+    SgExpression *partExpr{nullptr};
+    common::visit(
+        common::visitors{[&](parser::SignedIntLiteralConstant &y) {
+                           BuildImpl(y, partExpr);
+                         },
+                         [&](parser::SignedRealLiteralConstant &y) {
+                           BuildImpl(y, partExpr);
+                         },
+                         [&](parser::NamedConstant &y) { Build(y, partExpr); }},
+        part.u);
+    return partExpr;
+  };
+
+  SgExpression *realPart = buildComplexPart(std::get<0>(x.t));
+  SgExpression *imagPart = buildComplexPart(std::get<1>(x.t));
+  ASSERT_not_null(realPart);
+  ASSERT_not_null(imagPart);
+
+  if (isSgValueExp(realPart) && isSgValueExp(imagPart)) {
+    expr = SageBuilderCpp17::buildComplexVal_nfi(realPart, imagPart, "");
+    return;
+  }
+
+  std::list<SgExpression *> args{realPart, imagPart};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  expr = SageBuilder::buildFunctionCallExp(
+      SgName("cmplx"), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+}
+
+void BuildImpl(parser::SignedComplexLiteralConstant &x, SgExpression *&expr) {
+  // std::tuple<Sign, ComplexLiteralConstant> t;
+  SgExpression *complexExpr{nullptr};
+  BuildImpl(std::get<1>(x.t), complexExpr);
+  ASSERT_not_null(complexExpr);
+  if (std::get<0>(x.t) == parser::Sign::Negative) {
+    expr = SageBuilder::buildMinusOp_nfi(complexExpr);
+  } else {
+    expr = complexExpr;
+  }
 }
 
 void BuildImpl(parser::BOZLiteralConstant &x, SgExpression *&expr) {
-  std::cout << "BuildImpl(BOZLiteralConstant)\n";
-  ABORT_NO_IMPL;
+  std::string value = x.v;
+  int base = 10;
+  if (!value.empty()) {
+    char prefix = std::toupper(value.front());
+    if (prefix == 'B') {
+      base = 2;
+    } else if (prefix == 'O') {
+      base = 8;
+    } else if (prefix == 'Z') {
+      base = 16;
+    }
+  }
+  auto start = value.find_first_of("'\"");
+  auto end = value.find_last_of("'\"");
+  std::string digits = value;
+  if (start != std::string::npos && end != std::string::npos && end > start) {
+    digits = value.substr(start + 1, end - start - 1);
+  }
+  digits.erase(
+      std::remove_if(digits.begin(), digits.end(),
+                     [](char c) { return c == '_' || std::isspace(c); }),
+      digits.end());
+  long long llVal = 0;
+  if (!digits.empty()) {
+    llVal = std::stoll(digits, nullptr, base);
+  }
+  expr = SageBuilder::buildLongLongIntVal_nfi(llVal, value);
 }
 
 void BuildImpl(parser::CharLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<std::optional<KindParam>, std::string> t;
-
-  if (std::get<0>(x.t)) {
-    // KindParam
-    ABORT_NO_IMPL;
+  std::string value = x.GetString();
+  std::string escaped;
+  escaped.reserve(value.size());
+  for (char ch : value) {
+    if (ch == '\'') {
+      escaped.push_back('\'');
+    }
+    escaped.push_back(ch);
   }
-  expr = SageBuilder::buildStringVal_nfi(x.GetString());
+
+  SgStringVal *stringVal = SageBuilder::buildStringVal_nfi(escaped);
+  ASSERT_not_null(stringVal);
+  stringVal->set_usesSingleQuotes(true);
+  stringVal->set_usesDoubleQuotes(false);
+  expr = stringVal;
+  if (std::get<0>(x.t)) {
+    SgExpression *kindExpr{nullptr};
+    BuildImpl(std::get<0>(x.t).value(), kindExpr);
+  }
 }
 
 void BuildImpl(parser::LogicalLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<> bool, std::optional<KindParam>
-  if (std::get<1>(x.t)) {
-    // KindParam
-    ABORT_NO_IMPL;
-  }
   expr = SageBuilder::buildBoolValExp_nfi(std::get<0>(x.t));
+  if (std::get<1>(x.t)) {
+    SgExpression *kindExpr{nullptr};
+    BuildImpl(std::get<1>(x.t).value(), kindExpr);
+  }
 }
 
 void BuildImpl(parser::KindSelector::StarSize &x, SgExpression *&expr) {
@@ -1323,7 +3437,6 @@ void BuildImpl(parser::KindSelector::StarSize &x, SgExpression *&expr) {
 void BuildImpl(parser::TypeParamValue &x, SgExpression *&expr) {
   // TypeParamValue std::variant<ScalarIntExpr, Star, Deferred> u;
   // Star is "*", Deferred is ":"
-  std::cerr << "TypeParamValue\n";
   common::visit(common::visitors{[&](parser::ScalarIntExpr &y) {
                                    // Walking inside of a visitor not fully
                                    // explored, for now make sure no previous
@@ -1338,7 +3451,6 @@ void BuildImpl(parser::TypeParamValue &x, SgExpression *&expr) {
                                  [&](parser::TypeParamValue::Deferred &y) {
                                    expr = new SgColonShapeExp();
                                    SageInterface::setSourcePosition(expr);
-                                   ABORT_NO_TEST;
                                  }},
                 x.u);
 }
@@ -1347,29 +3459,39 @@ void BuildImpl(parser::CharLength &x, SgExpression *&expr) {
   // CharLength std::variant<TypeParamValue, std::uint64_t> u;
   using namespace Fortran;
 
-  common::visit(common::visitors{[&](std::uint64_t &y) {
-                                   std::string strVal{std::to_string(y)};
-                                   expr = SageBuilder::buildLongLongIntVal_nfi(
-                                       y, strVal);
-                                 },
-                                 [&](parser::TypeParamValue &y) {
-                                   WalkExpr(y, expr);
-                                   ABORT_NO_TEST;
-                                 }},
-                x.u);
+  common::visit(
+      common::visitors{[&](std::uint64_t &y) {
+                         std::string strVal{std::to_string(y)};
+                         expr = SageBuilder::buildLongLongIntVal_nfi(y, strVal);
+                       },
+                       [&](parser::TypeParamValue &y) { WalkExpr(y, expr); }},
+      x.u);
 }
 
 void BuildImpl(parser::CommonBlockObject &x, SgExpression *&expr) {
   // CommonBlockObject std::tuple<Name, std::optional<ArraySpec>> t;
 
-  // ArraySpec
-  if (std::get<std::optional<parser::ArraySpec>>(x.t)) {
-    std::cout << "BuildImpl(CommonBlockObject): TODO: optional ArraySpec\n";
-    ABORT_NO_IMPL;
+  std::string name{std::get<parser::Name>(x.t).ToString()};
+
+  SgExpression *refExpr = SageBuilderCpp17::buildVarRefExp_nfi(name);
+  SgVarRefExp *ref = isSgVarRefExp(refExpr);
+  ASSERT_not_null(ref);
+  SgVariableSymbol *symbol = ref->get_symbol();
+  ASSERT_not_null(symbol);
+
+  // ArraySpec acts like a DIMENSION specification; update the declaration type.
+  if (auto &opt = std::get<std::optional<parser::ArraySpec>>(x.t)) {
+    SgInitializedName *initName = symbol->get_declaration();
+    ASSERT_not_null(initName);
+    SgType *baseType = initName->get_type();
+    ASSERT_not_null(baseType);
+    SgType *arrayType{nullptr};
+    Build(opt.value(), arrayType, baseType);
+    ASSERT_not_null(arrayType);
+    initName->set_type(arrayType);
   }
 
-  std::string name{std::get<parser::Name>(x.t).ToString()};
-  expr = SageBuilder::buildVarRefExp(name);
+  expr = ref;
 }
 
 void BuildImpl(parser::AssumedImpliedSpec &x, SgExpression *&expr) {
@@ -1438,29 +3560,47 @@ void Build(
     std::list<
         std::tuple<SgType *, std::list<std::tuple<char, std::optional<char>>>>>
         &implicit_spec_list) {
-  std::cout << "Rose::builder::Build(std::list<ImplicitSpec>)\n";
-  ABORT_NO_IMPL;
+  for (auto &spec : x) {
+    SgType *type{nullptr};
+    std::list<std::tuple<char, std::optional<char>>> letter_spec_list;
+    Build(spec, type, letter_spec_list);
+    ASSERT_not_null(type);
+    implicit_spec_list.push_back(std::make_tuple(type, letter_spec_list));
+  }
 }
 
 void Build(parser::ImplicitSpec &x, SgType *&type,
            std::list<std::tuple<char, std::optional<char>>> &letter_spec_list) {
   // std::tuple<DeclarationTypeSpec, std::list<LetterSpec>> t;
-  std::cout << "Rose::builder::Build(ImplicitSpec)\n";
-  ABORT_NO_IMPL;
+  BuildVisitor typeBuilder;
+  typeBuilder.BuildType(std::get<parser::DeclarationTypeSpec>(x.t), type);
+  Build(std::get<std::list<parser::LetterSpec>>(x.t), letter_spec_list);
 }
 
 void Build(std::list<parser::LetterSpec> &x,
            std::list<std::tuple<char, std::optional<char>>> &letter_spec_list) {
-  std::cout << "Rose::builder::Build(std::list<LetterSpec>)\n";
-  ABORT_NO_IMPL;
+  for (auto &spec : x) {
+    std::tuple<char, std::optional<char>> letter_spec;
+    Build(spec, letter_spec);
+    letter_spec_list.push_back(letter_spec);
+  }
 }
 
 void Build(parser::LetterSpec &x,
            std::tuple<char, std::optional<char>> &letter_spec) {
   // std::tuple<Location, std::optional<Location>> t;
   // using Location = const char *;
-  std::cout << "Rose::builder::Build(LetterSpec)\n";
-  ABORT_NO_IMPL;
+  char first = '\0';
+  if (const char *loc = std::get<0>(x.t)) {
+    first = *loc;
+  }
+  std::optional<char> second = std::nullopt;
+  if (std::get<1>(x.t)) {
+    if (const char *loc = std::get<1>(x.t).value()) {
+      second = *loc;
+    }
+  }
+  letter_spec = std::make_tuple(first, second);
 }
 
 #define TEMPORARY_COOL_FIXME 0
@@ -1479,7 +3619,15 @@ void BuildVisitor::Build(parser::ImplicitStmt &x) {
 
   common::visit(
       common::visitors{
-          [&](const std::list<ImplicitSpec> &y) { ABORT_NO_IMPL; },
+          [&](std::list<ImplicitSpec> &y) {
+            std::list<std::tuple<
+                SgType *, std::list<std::tuple<char, std::optional<char>>>>>
+                implicit_spec_list;
+            Rose::builder::Build(y, implicit_spec_list);
+            SgImplicitStatement *stmt{nullptr};
+            builder.Enter(stmt, implicit_spec_list);
+            builder.Leave(stmt);
+          },
           [&](const std::list<ImplicitStmt::ImplicitNoneNameSpec> &y) {
             // ENUM_CLASS(ImplicitNoneNameSpec, External, Type) // R866
             implicitNone = true;
@@ -1497,20 +3645,6 @@ void BuildVisitor::Build(parser::ImplicitStmt &x) {
     builder.Enter(stmt, implicitExternal, implicitType);
     builder.Leave(stmt);
   }
-
-#if TEMPORARY_COOL_FIXME
-  // Need variant I think (no, like an enum, just assign to ONE of the
-  // variants!)
-  //  x.u = std::move(makeImplicitNone());
-  //  const std::list<ImplicitStmt::ImplicitNoneNameSpec>
-  //  &implicitList{makeImplicitNone()};
-#else
-  const std::list<ImplicitStmt::ImplicitNoneNameSpec> &implicitList{
-      ImplicitStmt::ImplicitNoneNameSpec::External,
-      ImplicitStmt::ImplicitNoneNameSpec::Type};
-  const ImplicitStmt &xx{std::move(implicitList)};
-  x.u = std::move(implicitList);
-#endif
 }
 
 void BuildVisitor::Build(
@@ -1592,8 +3726,14 @@ void BuildVisitor::Build(
         for (SgSymbol *symbol : entry.second) {
           SgName symbolName = symbol->get_name();
           if (!currentScope->symbol_exists(symbolName)) {
-            SgAliasSymbol *aliasSymbol = new SgAliasSymbol(symbol, false);
-            currentScope->insert_symbol(symbolName, aliasSymbol);
+            SgSymbol *useSymbol = nullptr;
+            if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+              useSymbol = buildUseAssociatedVariableSymbol(
+                  varSymbol, symbolName, currentScope);
+            } else {
+              useSymbol = new SgAliasSymbol(symbol, false);
+            }
+            currentScope->insert_symbol(symbolName, useSymbol);
           }
         }
       }
@@ -1612,11 +3752,8 @@ void BuildVisitor::Build(
           if (!currentScope->symbol_exists(localName)) {
             SgSymbol *aliasSymbol = nullptr;
             if (auto *varSymbol = isSgVariableSymbol(symbol)) {
-              SgInitializedName *initName =
-                  SageInterface::deepCopy(varSymbol->get_declaration());
-              initName->set_name(localName);
-              initName->set_scope(currentScope);
-              aliasSymbol = new SgVariableSymbol(initName);
+              aliasSymbol = buildUseAssociatedVariableSymbol(
+                  varSymbol, localName, currentScope);
             } else {
               aliasSymbol = new SgAliasSymbol(symbol, true, localName);
             }
@@ -1630,8 +3767,14 @@ void BuildVisitor::Build(
         for (SgSymbol *symbol : entry.second) {
           if (renamedSymbols.find(symbol) == renamedSymbols.end()) {
             SgName symbolName = symbol->get_name();
-            SgAliasSymbol *aliasSymbol = new SgAliasSymbol(symbol, false);
-            currentScope->insert_symbol(symbolName, aliasSymbol);
+            SgSymbol *useSymbol = nullptr;
+            if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+              useSymbol = buildUseAssociatedVariableSymbol(
+                  varSymbol, symbolName, currentScope);
+            } else {
+              useSymbol = new SgAliasSymbol(symbol, false);
+            }
+            currentScope->insert_symbol(symbolName, useSymbol);
           }
         }
       }
@@ -1650,11 +3793,8 @@ void BuildVisitor::Build(
         if (!currentScope->symbol_exists(localName)) {
           SgSymbol *aliasSymbol = nullptr;
           if (auto *varSymbol = isSgVariableSymbol(symbol)) {
-            SgInitializedName *initName =
-                SageInterface::deepCopy(varSymbol->get_declaration());
-            initName->set_name(localName);
-            initName->set_scope(currentScope);
-            aliasSymbol = new SgVariableSymbol(initName);
+            aliasSymbol = buildUseAssociatedVariableSymbol(varSymbol, localName,
+                                                           currentScope);
           } else {
             aliasSymbol = isRenamed ? new SgAliasSymbol(symbol, true, localName)
                                     : new SgAliasSymbol(symbol, false);
@@ -1673,13 +3813,12 @@ void BuildVisitor::Build(parser::CommonStmt &x) {
   // CommonStmt std::list<Block> blocks;
   // Block std::tuple<std::optional<Name>, std::list<CommonBlockObject>> t;
 
-  // Begin SageTreeBuilder for SgCommonBlock
-  SgCommonBlock *blockStmt{nullptr};
-  builder.Enter(blockStmt);
+  std::list<SgCommonBlockObject *> commonBlocks;
 
   for (auto &block : x.blocks) {
     std::string blockName{""};
     SgExprListExp *blockObjects{SageBuilder::buildExprListExp_nfi()};
+    ASSERT_not_null(blockObjects);
 
     if (std::get<std::optional<parser::Name>>(block.t)) {
       blockName = std::get<std::optional<parser::Name>>(block.t)->ToString();
@@ -1690,15 +3829,18 @@ void BuildVisitor::Build(parser::CommonStmt &x) {
          std::get<std::list<parser::CommonBlockObject>>(block.t)) {
       SgExpression *varRef{nullptr};
       WalkExpr(object, varRef);
-      blockObjects->get_expressions().push_back(varRef);
+      ASSERT_not_null(varRef);
+      SageInterface::appendExpression(blockObjects, varRef);
     }
 
     SgCommonBlockObject *sageObject =
         SageBuilder::buildCommonBlockObject(blockName, blockObjects);
-    blockStmt->get_block_list().push_back(sageObject);
+    ASSERT_not_null(sageObject);
+    commonBlocks.push_back(sageObject);
   }
 
-  // Leave SageTreeBuilder for SgCommonBlock
+  SgCommonBlock *blockStmt{nullptr};
+  builder.Enter(blockStmt, commonBlocks);
   builder.Leave(blockStmt);
 }
 
@@ -1729,7 +3871,7 @@ void BuildVisitor::Build(parser::DataStmt &x) {
     // Add data statement groups
     for (auto &setObject : std::get<0>(set.t)) {
       SgExpression *expr{nullptr};
-      WalkExpr(setObject, expr);
+      Rose::builder::Build(setObject, expr);
       ASSERT_not_null(expr);
 
       SgDataStatementObject *dataObject = new SgDataStatementObject();
@@ -1739,32 +3881,183 @@ void BuildVisitor::Build(parser::DataStmt &x) {
             SageBuilder::buildExprListExp_nfi());
       }
 
-      dataObject->get_variableReference_list()->get_expressions().push_back(
-          expr);
+      SageInterface::appendExpression(dataObject->get_variableReference_list(),
+                                      expr);
 
       dataGroup->get_object_list().push_back(dataObject);
     }
 
     // Add data statement values
     for (auto &setValue : std::get<1>(set.t)) {
-      SgExpression *expr{nullptr};
-      WalkExpr(setValue, expr);
-      ASSERT_not_null(expr);
+      auto &repeatOpt =
+          std::get<std::optional<parser::DataStmtRepeat>>(setValue.t);
+      auto &constant = std::get<parser::DataStmtConstant>(setValue.t);
 
-      // TODO: other kind variants
-      auto valueKind{SgDataStatementValue::e_explict_list};
-      SgDataStatementValue *dataValue = new SgDataStatementValue(valueKind);
+      SgDataStatementValue *dataValue = new SgDataStatementValue();
       ASSERT_not_null(dataValue);
       if (!dataValue->get_initializer_list()) {
-        dataValue->set_initializer_list(SageBuilder::buildExprListExp_nfi());
+        SgExprListExp *exprList = SageBuilder::buildExprListExp_nfi();
+        ASSERT_not_null(exprList);
+        dataValue->set_initializer_list(exprList);
+        exprList->set_parent(dataValue);
       }
 
-      dataValue->get_initializer_list()->get_expressions().push_back(expr);
+      if (repeatOpt) {
+        dataValue->set_data_initialization_format(
+            SgDataStatementValue::e_implicit_list);
+        SgExpression *repeatExpr{nullptr};
+        Rose::builder::Build(repeatOpt.value(), repeatExpr);
+        ASSERT_not_null(repeatExpr);
+        dataValue->set_repeat_expression(repeatExpr);
+        repeatExpr->set_parent(dataValue);
+
+        SgExpression *constExpr{nullptr};
+        Rose::builder::Build(constant, constExpr);
+        ASSERT_not_null(constExpr);
+        dataValue->set_constant_expression(constExpr);
+        constExpr->set_parent(dataValue);
+      } else {
+        dataValue->set_data_initialization_format(
+            SgDataStatementValue::e_explict_list);
+        SgExpression *constExpr{nullptr};
+        Rose::builder::Build(constant, constExpr);
+        ASSERT_not_null(constExpr);
+        SageInterface::appendExpression(dataValue->get_initializer_list(),
+                                        constExpr);
+      }
 
       dataGroup->get_value_list().push_back(dataValue);
     }
     groups.push_back(dataGroup);
   }
+}
+
+void BuildVisitor::Build(parser::AllocatableStmt &x) {
+  SgAttributeSpecificationStatement *allocStmt =
+      SageBuilder::buildAttributeSpecificationStatement(
+          SgAttributeSpecificationStatement::e_allocatableStatement);
+  ASSERT_not_null(allocStmt);
+  SageInterface::setSourcePosition(allocStmt);
+
+  SgExprListExp *paramList = allocStmt->get_parameter_list();
+  if (paramList == nullptr) {
+    paramList = SageBuilder::buildExprListExp_nfi();
+    ASSERT_not_null(paramList);
+    allocStmt->set_parameter_list(paramList);
+    paramList->set_parent(allocStmt);
+  }
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  for (auto &decl : x.v) {
+    const std::string name = std::get<parser::ObjectName>(decl.t).ToString();
+    SgVariableSymbol *symbol =
+        SageInterface::lookupVariableSymbolInParentScopes(name, scope);
+    if (symbol == nullptr) {
+      SgType *implicitType = SageBuilder::buildFortranImplicitType(name);
+      SgVariableDeclaration *varDecl =
+          SageBuilder::buildVariableDeclaration_nfi(name, implicitType,
+                                                    /*initializer*/ nullptr,
+                                                    scope);
+      ASSERT_not_null(varDecl);
+      SageInterface::setSourcePosition(varDecl);
+      MarkFortranImplicitDeclaration(varDecl);
+      SageInterface::appendStatement(varDecl, scope);
+      symbol = SageInterface::lookupVariableSymbolInParentScopes(name, scope);
+    }
+    ASSERT_not_null(symbol);
+
+    SgInitializedName *initName = symbol->get_declaration();
+    ASSERT_not_null(initName);
+
+    SgExpression *ref = SageBuilder::buildVarRefExp(symbol);
+    ASSERT_not_null(ref);
+
+    if (auto &arrayOpt = std::get<std::optional<parser::ArraySpec>>(decl.t)) {
+      if (!IsArrayType(initName->get_type())) {
+        SgType *baseType = initName->get_type();
+        if (auto *modifierType = isSgModifierType(baseType)) {
+          baseType = modifierType->get_base_type();
+        }
+        if (auto *arrayType = isSgArrayType(baseType)) {
+          baseType = arrayType->get_base_type();
+        }
+
+        SgType *arrayType{nullptr};
+        Rose::builder::Build(arrayOpt.value(), arrayType, baseType);
+        if (arrayType != nullptr) {
+          initName->set_type(arrayType);
+          initName->set_shapeDeferred(true);
+        }
+      }
+    }
+
+    if (std::get<std::optional<parser::CoarraySpec>>(decl.t)) {
+      ABORT_NO_TEST;
+    }
+
+    paramList->get_expressions().push_back(ref);
+    ref->set_parent(paramList);
+  }
+
+  SageInterface::appendStatement(allocStmt, scope);
+}
+
+void BuildVisitor::Build(parser::ExternalStmt &x) {
+  SgAttributeSpecificationStatement *externalStmt =
+      SageBuilder::buildAttributeSpecificationStatement(
+          SgAttributeSpecificationStatement::e_externalStatement);
+  ASSERT_not_null(externalStmt);
+  SageInterface::setSourcePosition(externalStmt);
+
+  SgExprListExp *paramList = externalStmt->get_parameter_list();
+  if (paramList == nullptr) {
+    paramList = SageBuilder::buildExprListExp_nfi();
+    ASSERT_not_null(paramList);
+    externalStmt->set_parameter_list(paramList);
+    paramList->set_parent(externalStmt);
+  }
+
+  SgFunctionParameterTypeList *types = new SgFunctionParameterTypeList();
+  ASSERT_not_null(types);
+  SgType *returnType = SageBuilder::buildVoidType();
+  SgFunctionType *funcType = SageBuilder::buildFunctionType(returnType, types);
+  ASSERT_not_null(funcType);
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+  for (auto &name : x.v) {
+    SgFunctionRefExp *ref = SageBuilder::buildFunctionRefExp(
+        SgName(name.ToString()), funcType, scope);
+    ASSERT_not_null(ref);
+    SageInterface::setSourcePosition(ref);
+    AppendExpr(paramList, ref);
+  }
+
+  SageInterface::appendStatement(externalStmt, scope);
+}
+
+void BuildVisitor::Build(parser::NamelistStmt &x) {
+  SgNamelistStatement *stmt = new SgNamelistStatement();
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+
+  for (auto &group : x.v) {
+    const std::string groupName = std::get<parser::Name>(group.t).ToString();
+    const auto &names = std::get<std::list<parser::Name>>(group.t);
+
+    SgNameGroup *nameGroup = new SgNameGroup();
+    ASSERT_not_null(nameGroup);
+    SageInterface::setSourcePosition(nameGroup);
+    nameGroup->set_group_name(groupName);
+    for (auto &name : names) {
+      nameGroup->get_name_list().push_back(name.ToString());
+    }
+    stmt->get_group_list().push_back(nameGroup);
+  }
+
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
 }
 
 void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
@@ -1776,17 +4069,65 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
   BuildType(std::get<parser::DeclarationTypeSpec>(x.t), type);
 
   std::list<LanguageTranslation::ExpressionKind> modifiers{};
+  parser::ArraySpec *dimensionSpec = nullptr;
   for (auto &attr : std::get<std::list<AttrSpec>>(x.t)) {
+    if (auto *arraySpec = std::get_if<parser::ArraySpec>(&attr.u)) {
+      if (dimensionSpec == nullptr) {
+        dimensionSpec = arraySpec;
+      }
+      continue;
+    }
     getAttrSpec(attr, modifiers, type);
   }
 
   std::list<EntityDeclTuple> initInfo{};
-  EntityDecls(std::get<std::list<EntityDecl>>(x.t), initInfo,
-              type); // std::list<EntityDecl>
+  EntityDecls(std::get<std::list<EntityDecl>>(x.t), initInfo, type,
+              dimensionSpec); // std::list<EntityDecl>
 
-  SgVariableDeclaration *varDecl{nullptr};
-  builder.Enter(varDecl, type, initInfo);
-  builder.Leave(varDecl, modifiers);
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  for (const auto &entry : initInfo) {
+    std::string name;
+    SgType *entityType{nullptr};
+    SgExpression *initExpr{nullptr};
+    std::tie(name, entityType, initExpr) = entry;
+
+    if (entityType == nullptr) {
+      entityType = type;
+    }
+
+    bool reusedImplicitDecl = false;
+    SgVariableSymbol *symbol =
+        SageInterface::lookupVariableSymbolInParentScopes(name, scope);
+    if (symbol != nullptr && symbol->get_scope() == scope) {
+      SgInitializedName *initName = symbol->get_declaration();
+      SgVariableDeclaration *existingDecl =
+          initName != nullptr ? isSgVariableDeclaration(initName->get_parent())
+                              : nullptr;
+      if (existingDecl != nullptr &&
+          existingDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr) {
+        initName->set_type(entityType);
+        if (initExpr != nullptr) {
+          SgInitializer *initializer =
+              SageBuilder::buildAssignInitializer_nfi(initExpr, entityType);
+          ASSERT_not_null(initializer);
+          initName->set_initializer(initializer);
+          initializer->set_parent(initName);
+        }
+        builder.Leave(existingDecl, modifiers);
+        existingDecl->removeAttribute(kFortranImplicitDeclAttr);
+        reusedImplicitDecl = true;
+      }
+    }
+
+    if (!reusedImplicitDecl) {
+      std::list<EntityDeclTuple> singleInitInfo{entry};
+      SgVariableDeclaration *varDecl{nullptr};
+      builder.Enter(varDecl, type, singleInitInfo);
+      builder.Leave(varDecl, modifiers);
+    }
+  }
 }
 
 // SpecificationConstruct
@@ -1810,9 +4151,117 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
 
   std::list<LanguageTranslation::ExpressionKind> modifiers;
   for (auto &attr : std::get<0>(stmt.statement.t)) {
+    if (auto *extends = std::get_if<parser::TypeAttrSpec::Extends>(&attr.u)) {
+      const std::string baseName = extends->v.ToString();
+      SgScopeStatement *lookupScope = derived->get_scope();
+      SgClassSymbol *baseSymbol =
+          lookupDerivedTypeSymbol(baseName, lookupScope);
+      if (baseSymbol == nullptr) {
+        SageBuilder::buildDerivedTypeStatement(baseName, lookupScope);
+        baseSymbol = lookupScope->lookup_class_symbol(baseName);
+      }
+      if (baseSymbol != nullptr && baseSymbol->get_declaration() != nullptr) {
+        SgClassDefinition *def = derived->get_definition();
+        ASSERT_not_null(def);
+        SgBaseClass *base = SageBuilder::buildBaseClass(
+            baseSymbol->get_declaration(), def, /*isVirtual*/ false,
+            /*isDirect*/ true);
+        ASSERT_not_null(base);
+        def->append_inheritance(base);
+      }
+      continue;
+    }
+
     LanguageTranslation::ExpressionKind m;
     getModifiers(attr, m);
     modifiers.push_back(m);
+  }
+
+  SgClassDefinition *classDef = derived->get_definition();
+  ASSERT_not_null(classDef);
+
+  for (auto &specStmt :
+       std::get<std::list<Statement<PrivateOrSequence>>>(x.t)) {
+    common::visit(common::visitors{
+                      [&](PrivateStmt &) { classDef->set_isPrivate(true); },
+                      [&](SequenceStmt &) { classDef->set_isSequence(true); }},
+                  specStmt.statement.u);
+  }
+
+  for (auto &componentStmt :
+       std::get<std::list<Statement<ComponentDefStmt>>>(x.t)) {
+    common::visit(
+        common::visitors{
+            [&](DataComponentDefStmt &y) {
+              SgStatement *builtStmt{nullptr};
+              Rose::builder::Build(y, builtStmt);
+            },
+            [&](ProcComponentDefStmt &y) {
+              auto &optInterface = std::get<std::optional<ProcInterface>>(y.t);
+              auto &attrSpecs = std::get<std::list<ProcComponentAttrSpec>>(y.t);
+              auto &decls = std::get<std::list<ProcDecl>>(y.t);
+
+              SgScopeStatement *scope = SageBuilder::topScopeStack();
+              ASSERT_not_null(scope);
+
+              SgFunctionType *procType =
+                  BuildProcedureInterfaceType(optInterface, scope);
+
+              std::list<LanguageTranslation::ExpressionKind> modifiers{};
+              for (auto &attr : attrSpecs) {
+                common::visit(
+                    common::visitors{[&](AccessSpec &spec) {
+                                       LanguageTranslation::ExpressionKind m;
+                                       getModifiers(spec, m);
+                                       modifiers.push_back(m);
+                                     },
+                                     [&](const NoPass &) {}, [&](Pass &) {},
+                                     [&](const Pointer &) {
+                                       modifiers.push_back(
+                                           LanguageTranslation::ExpressionKind::
+                                               e_type_modifier_pointer);
+                                     }},
+                    attr.u);
+              }
+
+              std::list<EntityDeclTuple> initInfo{};
+              for (auto &decl : decls) {
+                std::string name = std::get<parser::Name>(decl.t).ToString();
+                SgExpression *initExpr{nullptr};
+
+                if (auto &optInit =
+                        std::get<std::optional<ProcPointerInit>>(decl.t)) {
+                  common::visit(
+                      common::visitors{
+                          [&](const NullInit &) {
+                            initExpr =
+                                SageBuilderCpp17::buildNullExpression_nfi();
+                          },
+                          [&](const Name &target) {
+                            SgFunctionRefExp *ref =
+                                SageBuilder::buildFunctionRefExp(
+                                    SgName(target.ToString()), procType, scope);
+                            initExpr = ref;
+                          }},
+                      optInit->u);
+                }
+
+                initInfo.push_back(std::make_tuple(name, procType, initExpr));
+              }
+
+              if (initInfo.empty()) {
+                return;
+              }
+
+              SgVariableDeclaration *varDecl{nullptr};
+              builder.Enter(varDecl, procType, initInfo);
+              builder.Leave(varDecl, modifiers);
+            },
+            [&](common::Indirection<CompilerDirective> &y) {
+              Rose::builder::Build(y.value());
+            },
+            [&](ErrorRecovery &) { ABORT_NO_IMPL; }},
+        componentStmt.statement.u);
   }
 
   // Leave SageTreeBuilder for SgDerivedTypeStmt
@@ -1820,39 +4269,345 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
 }
 
 void BuildVisitor::Build(parser::DimensionStmt &x) {
-  std::cerr << "[WARN] BuildVisitor::Build(DimensionStmt) unimplemented\n";
-  ABORT_NO_IMPL;
+  SgAttributeSpecificationStatement *dimStmt =
+      SageBuilder::buildAttributeSpecificationStatement(
+          SgAttributeSpecificationStatement::e_dimensionStatement);
+  ASSERT_not_null(dimStmt);
+  SageInterface::appendStatement(dimStmt, SageBuilder::topScopeStack());
+
+  SgExprListExp *paramList = dimStmt->get_parameter_list();
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  for (auto &decl : x.v) {
+    const std::string name = std::get<parser::Name>(decl.t).ToString();
+    SgVariableSymbol *symbol =
+        SageInterface::lookupVariableSymbolInParentScopes(name, scope);
+    if (symbol == nullptr) {
+      SgType *implicitType = SageBuilder::buildFortranImplicitType(name);
+      SgVariableDeclaration *varDecl =
+          SageBuilder::buildVariableDeclaration_nfi(name, implicitType,
+                                                    /*initializer*/ nullptr,
+                                                    scope);
+      ASSERT_not_null(varDecl);
+      SageInterface::setSourcePosition(varDecl);
+      MarkFortranImplicitDeclaration(varDecl);
+      SageInterface::appendStatement(varDecl, scope);
+      symbol = SageInterface::lookupVariableSymbolInParentScopes(name, scope);
+    }
+    ASSERT_not_null(symbol);
+
+    SgInitializedName *initName = symbol->get_declaration();
+    ASSERT_not_null(initName);
+    SgType *baseType = initName->get_type();
+    if (auto *modifierType = isSgModifierType(baseType)) {
+      baseType = modifierType->get_base_type();
+    }
+    if (auto *arrayType = isSgArrayType(baseType)) {
+      baseType = arrayType->get_base_type();
+    }
+
+    SgType *arrayType{nullptr};
+    Rose::builder::Build(std::get<parser::ArraySpec>(decl.t), arrayType,
+                         baseType);
+    if (arrayType != nullptr) {
+      initName->set_type(arrayType);
+    }
+
+    if (paramList) {
+      SgVarRefExp *ref = SageBuilder::buildVarRefExp(symbol);
+      ASSERT_not_null(ref);
+      SgExprListExp *dimInfo =
+          BuildArraySpecExprList(std::get<parser::ArraySpec>(decl.t));
+      ASSERT_not_null(dimInfo);
+      SgPntrArrRefExp *arrayRef = SageBuilder::buildPntrArrRefExp(ref, dimInfo);
+      ASSERT_not_null(arrayRef);
+      paramList->get_expressions().push_back(arrayRef);
+      arrayRef->set_parent(paramList);
+    }
+  }
 }
+
+void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
+  using namespace Fortran::parser;
+
+  auto &optInterface = std::get<std::optional<ProcInterface>>(x.t);
+  auto &attrSpecs = std::get<std::list<ProcAttrSpec>>(x.t);
+  auto &decls = std::get<std::list<ProcDecl>>(x.t);
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  auto buildFunctionType = [](SgType *returnType) {
+    SgFunctionParameterTypeList *typeList = new SgFunctionParameterTypeList();
+    ASSERT_not_null(typeList);
+    return SageBuilder::buildFunctionType(returnType, typeList);
+  };
+
+  SgFunctionType *procType{nullptr};
+  if (optInterface) {
+    common::visit(common::visitors{
+                      [&](Name &ifaceName) {
+                        SgFunctionSymbol *sym =
+                            SageInterface::lookupFunctionSymbolInParentScopes(
+                                ifaceName.ToString(), scope);
+                        if (sym != nullptr) {
+                          procType = isSgFunctionType(sym->get_type());
+                        }
+                        if (procType == nullptr) {
+                          procType =
+                              buildFunctionType(SageBuilder::buildVoidType());
+                        }
+                      },
+                      [&](DeclarationTypeSpec &spec) {
+                        SgType *returnType{nullptr};
+                        BuildType(spec, returnType);
+                        if (returnType == nullptr) {
+                          returnType = SageBuilder::buildUnknownType();
+                        }
+                        procType = buildFunctionType(returnType);
+                      }},
+                  optInterface->u);
+  }
+
+  if (procType == nullptr) {
+    procType = buildFunctionType(SageBuilder::buildVoidType());
+  }
+
+  std::list<LanguageTranslation::ExpressionKind> modifiers{};
+  for (auto &attr : attrSpecs) {
+    common::visit(
+        common::visitors{
+            [&](AccessSpec &y) {
+              LanguageTranslation::ExpressionKind m;
+              getModifiers(y, m);
+              modifiers.push_back(m);
+            },
+            [&](LanguageBindingSpec &y) {
+              LanguageTranslation::ExpressionKind m;
+              getModifiers(y, m);
+              modifiers.push_back(m);
+            },
+            [&](IntentSpec &y) {
+              LanguageTranslation::ExpressionKind m;
+              getModifiers(y, m);
+              modifiers.push_back(m);
+            },
+            [&](const Optional &) {
+              modifiers.push_back(LanguageTranslation::ExpressionKind::
+                                      e_type_modifier_optional);
+            },
+            [&](const Pointer &) {
+              modifiers.push_back(
+                  LanguageTranslation::ExpressionKind::e_type_modifier_pointer);
+            },
+            [&](const Protected &) {
+              modifiers.push_back(LanguageTranslation::ExpressionKind::
+                                      e_type_modifier_protected);
+            },
+            [&](const Save &) {
+              modifiers.push_back(
+                  LanguageTranslation::ExpressionKind::e_type_modifier_save);
+            },
+            [&](const ErrorRecovery &) { ABORT_NO_IMPL; }},
+        attr.u);
+  }
+
+  std::list<EntityDeclTuple> initInfo{};
+  for (auto &decl : decls) {
+    std::string name = std::get<Name>(decl.t).ToString();
+    SgExpression *initExpr{nullptr};
+
+    if (auto &optInit = std::get<std::optional<ProcPointerInit>>(decl.t)) {
+      common::visit(common::visitors{
+                        [&](const NullInit &) {
+                          initExpr =
+                              SageBuilderCpp17::buildNullExpression_nfi();
+                        },
+                        [&](const Name &target) {
+                          SgFunctionRefExp *ref =
+                              SageBuilder::buildFunctionRefExp(
+                                  SgName(target.ToString()), procType, scope);
+                          initExpr = ref;
+                        }},
+                    optInit->u);
+    }
+
+    initInfo.push_back(std::make_tuple(name, procType, initExpr));
+  }
+
+  if (initInfo.empty()) {
+    return;
+  }
+
+  SgVariableDeclaration *varDecl{nullptr};
+  builder.Enter(varDecl, procType, initInfo);
+  builder.Leave(varDecl, modifiers);
+}
+
+namespace {
+SgType *BuildDerivedTypeSpec(const parser::DerivedTypeSpec &derivedSpec) {
+  const std::string name = std::get<parser::Name>(derivedSpec.t).ToString();
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+  SgScopeStatement *declScope = scope;
+  if (SgClassDefinition *classDef = isSgClassDefinition(declScope)) {
+    SgDeclarationStatement *decl = classDef->get_declaration();
+    if (isSgDerivedTypeStatement(decl)) {
+      declScope = declScope->get_scope();
+    }
+  }
+  ASSERT_not_null(declScope);
+  SgClassSymbol *symbol = lookupDerivedTypeSymbol(name, declScope);
+  if (symbol == nullptr) {
+    SgDerivedTypeStatement *forward =
+        SageBuilder::buildDerivedTypeStatement(name, declScope);
+    if (forward != nullptr) {
+      forward->set_scope(declScope);
+      forward->set_parent(declScope);
+      symbol = declScope->lookup_class_symbol(name);
+    }
+  }
+  if (symbol != nullptr && symbol->get_declaration() != nullptr &&
+      symbol->get_declaration()->get_type() != nullptr) {
+    return symbol->get_declaration()->get_type();
+  }
+  return SgTypeDefault::createType(name);
+}
+
+SgVariableSymbol *buildUseAssociatedVariableSymbol(SgVariableSymbol *varSymbol,
+                                                   const SgName &localName,
+                                                   SgScopeStatement *scope) {
+  ASSERT_not_null(varSymbol);
+  ASSERT_not_null(scope);
+
+  SgType *varType = varSymbol->get_type();
+  if (varType == nullptr) {
+    varType = SageBuilder::buildUnknownType();
+  }
+
+  SgInitializedName *initName = nullptr;
+  if (varSymbol->get_declaration() != nullptr) {
+    initName = SageInterface::deepCopy(varSymbol->get_declaration());
+  }
+  if (initName == nullptr) {
+    initName = SageBuilder::buildInitializedName_nfi(localName, varType,
+                                                     /*initializer*/ nullptr);
+  }
+
+  initName->set_name(localName);
+  initName->set_type(varType);
+  initName->set_scope(scope);
+  initName->set_parent(scope);
+
+  return new SgVariableSymbol(initName);
+}
+
+SgClassDefinition *findClassDefinition(SgType *type) {
+  if (type == nullptr) {
+    return nullptr;
+  }
+  SgType *stripped = type->stripType(
+      SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE |
+      SgType::STRIP_POINTER_TYPE | SgType::STRIP_ARRAY_TYPE |
+      SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
+  auto *classType = isSgClassType(stripped);
+  if (classType == nullptr) {
+    return nullptr;
+  }
+  auto *classDecl = isSgClassDeclaration(classType->get_declaration());
+  if (classDecl == nullptr) {
+    return nullptr;
+  }
+  SgClassDeclaration *defDecl =
+      isSgClassDeclaration(classDecl->get_definingDeclaration());
+  if (defDecl == nullptr) {
+    defDecl = classDecl;
+  }
+  return defDecl->get_definition();
+}
+
+SgVariableSymbol *findComponentSymbol(SgClassDefinition *def,
+                                      const SgName &name) {
+  if (def == nullptr) {
+    return nullptr;
+  }
+  if (SgVariableSymbol *sym = def->lookup_variable_symbol(name)) {
+    return sym;
+  }
+  for (SgBaseClass *base : def->get_inheritances()) {
+    if (base == nullptr) {
+      continue;
+    }
+    SgClassDeclaration *baseDecl = base->get_base_class();
+    if (baseDecl == nullptr) {
+      continue;
+    }
+    if (SgVariableSymbol *sym =
+            findComponentSymbol(baseDecl->get_definition(), name)) {
+      return sym;
+    }
+  }
+  return nullptr;
+}
+} // namespace
 
 void BuildVisitor::Build(parser::DeclarationTypeSpec::Type &x) {
   // Type DerivedTypeSpec derived;
   //      DerivedTypeSpec std::tuple<Name, std::list<TypeParamSpec>> t;
+  SgType *type = BuildDerivedTypeSpec(x.derived);
+  ASSERT_not_null(type);
+  this->set(type);
+}
 
-  std::cout << "Rose::builder::Build(DeclarationTypeSpec::Type)\n";
-  std::string name = std::get<parser::Name>(x.derived.t).ToString();
-  std::cout << "DerivedTypeSpec name is " << name << "\n";
+void BuildVisitor::Build(parser::DeclarationTypeSpec::Class &x) {
+  SgType *type{nullptr};
+  Rose::builder::Build(x, type);
+  ASSERT_not_null(type);
+  this->set(type);
+}
 
-  ABORT_NO_IMPL;
+void BuildVisitor::Build(parser::DeclarationTypeSpec::TypeStar &x) {
+  SgType *type{nullptr};
+  Rose::builder::Build(x, type);
+  ASSERT_not_null(type);
+  this->set(type);
+}
+
+void BuildVisitor::Build(parser::DeclarationTypeSpec::ClassStar &x) {
+  SgType *type{nullptr};
+  Rose::builder::Build(x, type);
+  ASSERT_not_null(type);
+  this->set(type);
+}
+
+void BuildVisitor::Build(parser::DeclarationTypeSpec::Record &x) {
+  SgType *type{nullptr};
+  Rose::builder::Build(x, type);
+  ASSERT_not_null(type);
+  this->set(type);
+}
+
+void Build(parser::DeclarationTypeSpec &x, SgType *&type) {
+  BuildVisitor visitor;
+  visitor.BuildType(x, type);
 }
 
 void Build(parser::DeclarationTypeSpec::TypeStar &x, SgType *&type) {
-  std::cout << "Rose::builder::Build(TypeStar)\n";
-  ABORT_NO_IMPL;
+  type = SageBuilder::buildUnknownType();
 }
 
 void Build(parser::DeclarationTypeSpec::Class &x, SgType *&type) {
-  std::cout << "Rose::builder::Build(Class)\n";
-  ABORT_NO_IMPL;
+  type = BuildDerivedTypeSpec(x.derived);
 }
 
 void Build(parser::DeclarationTypeSpec::ClassStar &x, SgType *&type) {
-  std::cout << "Rose::builder::Build(ClassStar)\n";
-  ABORT_NO_IMPL;
+  type = SageBuilder::buildUnknownType();
 }
 
 void Build(parser::DeclarationTypeSpec::Record &x, SgType *&type) {
-  std::cout << "Rose::builder::Build(Record)\n";
-  ABORT_NO_IMPL;
+  std::string name = x.v.ToString();
+  type = SgTypeDefault::createType(name);
 }
 
 void Build(parser::AttrSpec &x, LanguageTranslation::ExpressionKind &modifier) {
@@ -1930,8 +4685,15 @@ void BuildVisitor::Build(parser::IntrinsicTypeSpec::Character &x) {
                          }},
         x.selector->u);
 
+    if (len == nullptr) {
+      // Default character length is 1 when only KIND is specified.
+      len = SageBuilder::buildIntVal_nfi(1, "1");
+      SageInterface::setSourcePosition(len);
+    }
     type = SageBuilder::buildStringType(len);
-    type->set_type_kind(kind);
+    if (kind != nullptr) {
+      type->set_type_kind(kind);
+    }
   } else {
     type = SageBuilder::buildCharType();
   }
@@ -1987,28 +4749,151 @@ void Build(parser::TypeParamValue &x, SgExpression *&expr) {
 #endif
 
 void EntityDecls(std::list<Fortran::parser::EntityDecl> &x,
-                 std::list<EntityDeclTuple> &entityDecls, SgType *baseType) {
+                 std::list<EntityDeclTuple> &entityDecls, SgType *baseType,
+                 Fortran::parser::ArraySpec *dimensionSpec) {
   for (auto &entity : x) {
     SgType *type{nullptr};
     SgExpression *init{nullptr};
     std::string name{std::get<0>(entity.t).ToString()};
+    SgType *entityBase = baseType;
+    SgModifierType *modifierType = isSgModifierType(entityBase);
+    SgType *charBase =
+        modifierType != nullptr ? modifierType->get_base_type() : entityBase;
 
     if (auto &opt = std::get<1>(entity.t)) { // ArraySpec
-      Build(opt.value(), type, baseType);
+      Build(opt.value(), type, entityBase);
     }
     if (auto &opt = std::get<2>(entity.t)) { // CoarraySpec
       ABORT_NO_TEST;
-      Build(opt.value(), type, baseType);
+      Build(opt.value(), type, entityBase);
     }
     if (auto &opt = std::get<3>(entity.t)) { // CharLength
-      WalkExpr(opt.value(), init);
+      SgExpression *lenExpr{nullptr};
+      BuildImpl(opt.value(), lenExpr);
+      if (lenExpr != nullptr) {
+        SgType *newCharType = nullptr;
+        if (auto *stringType = isSgTypeString(charBase)) {
+          SgTypeString *updated = SageBuilder::buildStringType(lenExpr);
+          updated->set_type_kind(stringType->get_type_kind());
+          newCharType = updated;
+        } else if (isSgTypeChar(charBase)) {
+          newCharType = SageBuilder::buildStringType(lenExpr);
+        }
+        if (newCharType != nullptr) {
+          if (modifierType != nullptr) {
+            modifierType->set_base_type(newCharType);
+            entityBase = modifierType;
+          } else {
+            entityBase = newCharType;
+          }
+        }
+      }
     }
     if (auto &opt = std::get<4>(entity.t)) { // Initialization
-      WalkExpr(opt.value(), init);
+      Build(opt.value(), init);
+    }
+    if (type == nullptr && dimensionSpec != nullptr) {
+      Build(*dimensionSpec, type, entityBase);
+    }
+    if (type != nullptr) {
+      if (auto *arrayType = isSgArrayType(type)) {
+        arrayType->set_base_type(entityBase);
+      } else {
+        type = entityBase;
+      }
+    } else {
+      type = entityBase;
     }
     entityDecls.push_back(std::make_tuple(name, type, init));
   }
 }
+
+namespace {
+SgExprListExp *BuildArraySpecExprList(Fortran::parser::ArraySpec &x) {
+  using namespace Fortran::parser;
+
+  SgExpression *expr{nullptr};
+  SgExprListExp *dimInfo{SageBuilder::buildExprListExp_nfi()};
+
+  common::visit(
+      common::visitors{
+          [&](std::list<ExplicitShapeSpec> &y) {
+            for (ExplicitShapeSpec &spec :
+                 y) { // is [ lower-bound : ] upper-bound
+              BuildImpl(spec, expr = nullptr);
+              ASSERT_not_null(expr);
+              SageInterface::appendExpression(dimInfo, expr);
+            }
+          },
+          [&](std::list<AssumedShapeSpec> &y) {
+            for (AssumedShapeSpec &spec : y) { // is [ lower-bound ]:
+              BuildImpl(spec, expr = nullptr);
+              ASSERT_not_null(expr);
+              SageInterface::appendExpression(dimInfo, expr);
+            }
+          },
+          [&](DeferredShapeSpecList &y) {
+            for (int ii{0}; ii < y.v; ii++) { // is :
+              SageInterface::appendExpression(
+                  dimInfo, SageBuilder::buildColonShapeExp_nfi());
+            }
+          },
+          [&](AssumedSizeSpec &y) {
+            // std::tuple<std::list<ExplicitShapeSpec>, AssumedImpliedSpec> t;
+            for (ExplicitShapeSpec &spec :
+                 std::get<0>(y.t)) { // is [ lower-bound : ] upper-bound
+              BuildImpl(spec, expr = nullptr);
+              ASSERT_not_null(expr);
+              SageInterface::appendExpression(dimInfo, expr);
+            }
+            AssumedImpliedSpec &spec{std::get<1>(y.t)};
+            BuildImpl(spec, expr = nullptr);
+            ASSERT_not_null(expr);
+            SageInterface::appendExpression(dimInfo, expr);
+          },
+          [&](ImpliedShapeSpec &y) {
+            for (AssumedImpliedSpec &spec : y.v) { // is [ lower-bound : ] *
+              BuildImpl(spec, expr = nullptr);
+              ASSERT_not_null(expr);
+              SageInterface::appendExpression(dimInfo, expr);
+            }
+          },
+          [&](AssumedRankSpec &y) {
+            // is ..
+            // TODO: Need new expression type in ROSE
+            ABORT_NO_IMPL;
+          }},
+      x.u);
+
+  return dimInfo;
+}
+
+SgExprListExp *
+BuildComponentArraySpecExprList(Fortran::parser::ComponentArraySpec &x) {
+  using namespace Fortran::parser;
+
+  SgExpression *expr{nullptr};
+  SgExprListExp *dimInfo{SageBuilder::buildExprListExp_nfi()};
+
+  common::visit(
+      common::visitors{[&](std::list<ExplicitShapeSpec> &y) {
+                         for (ExplicitShapeSpec &spec : y) {
+                           BuildImpl(spec, expr = nullptr);
+                           ASSERT_not_null(expr);
+                           SageInterface::appendExpression(dimInfo, expr);
+                         }
+                       },
+                       [&](DeferredShapeSpecList &y) {
+                         for (int ii{0}; ii < y.v; ii++) {
+                           SageInterface::appendExpression(
+                               dimInfo, SageBuilder::buildColonShapeExp_nfi());
+                         }
+                       }},
+      x.u);
+
+  return dimInfo;
+}
+} // namespace
 
 // ArraySpec
 void Build(parser::ArraySpec &x, SgType *&type, SgType *baseType) {
@@ -2023,59 +4908,12 @@ void Build(parser::ArraySpec &x, SgType *&type, SgType *baseType) {
   // ImpliedShapeSpec - std::list<AssumedImpliedSpec> v;
   // AssumedRankSpec - using EmptyTrait = std::true_type;
   //
-  using namespace Fortran::parser;
+  SgExprListExp *dimInfo = BuildArraySpecExprList(x);
+  type = SageBuilder::buildArrayType(baseType, dimInfo);
+}
 
-  SgExpression *expr{nullptr};
-  SgExprListExp *dimInfo{SageBuilder::buildExprListExp_nfi()};
-
-  common::visit(
-      common::visitors{
-          [&](std::list<ExplicitShapeSpec> &y) {
-            for (ExplicitShapeSpec &spec :
-                 y) { // is [ lower-bound : ] upper-bound
-              WalkExpr(spec, expr = nullptr);
-              dimInfo->get_expressions().push_back(expr);
-            }
-          },
-          [&](std::list<AssumedShapeSpec> &y) {
-            for (AssumedShapeSpec &spec : y) { // is [ lower-bound ]:
-              WalkExpr(spec, expr = nullptr);
-              dimInfo->get_expressions().push_back(expr);
-            }
-          },
-          [&](DeferredShapeSpecList &y) {
-            for (int ii{0}; ii < y.v; ii++) { // is :
-              dimInfo->get_expressions().push_back(
-                  SageBuilder::buildColonShapeExp_nfi());
-            }
-          },
-          [&](AssumedSizeSpec &y) {
-            // std::tuple<std::list<ExplicitShapeSpec>, AssumedImpliedSpec> t;
-            for (ExplicitShapeSpec &spec :
-                 std::get<0>(y.t)) { // is [ lower-bound : ] upper-bound
-              WalkExpr(spec, expr = nullptr);
-              dimInfo->get_expressions().push_back(expr);
-            }
-            AssumedImpliedSpec &spec{
-                std::get<1>(y.t)}; // is [ lower-bound : ] *
-            WalkExpr(spec, expr = nullptr);
-            dimInfo->get_expressions().push_back(expr);
-          },
-          [&](ImpliedShapeSpec &y) {
-            for (AssumedImpliedSpec &spec : y.v) { // is [ lower-bound : ] *
-              WalkExpr(spec, expr = nullptr);
-              dimInfo->get_expressions().push_back(expr);
-            }
-          },
-          [&](AssumedRankSpec &y) {
-            // is ..
-            // TODO: Need new espression type in ROSE
-            // dimInfo->get_expressions().push_back(SageBuilder::buildRankShapeExp_nfi());
-            ABORT_NO_IMPL;
-          }},
-      x.u);
-
-  // build the final array type as return value
+void Build(parser::ComponentArraySpec &x, SgType *&type, SgType *baseType) {
+  SgExprListExp *dimInfo = BuildComponentArraySpecExprList(x);
   type = SageBuilder::buildArrayType(baseType, dimInfo);
 }
 
@@ -2085,36 +4923,51 @@ void Build(parser::CoarraySpec &x, SgType *&type, SgType *baseType) {
   ABORT_NO_IMPL;
 }
 
-void Build(parser::CharLength &x, SgExpression *&) {
-  std::cout << "Rose::builder::Build(CharLength)\n";
-  ABORT_NO_IMPL;
-}
+void Build(parser::CharLength &x, SgExpression *&expr) { WalkExpr(x, expr); }
 
 void Build(parser::Initialization &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(Initialization)\n";
-  ABORT_NO_IMPL;
+  using namespace Fortran::parser;
+  common::visit(common::visitors{
+                    [&](ConstantExpr &y) { WalkExpr(y, expr); },
+                    [&](NullInit &y) { WalkExpr(y.v, expr); },
+                    [&](InitialDataTarget &y) { Build(y.value(), expr); },
+                    [&](std::list<common::Indirection<DataStmtValue>> &y) {
+                      std::list<SgExpression *> values;
+                      for (auto &value : y) {
+                        SgExpression *valueExpr{nullptr};
+                        Build(value.value(), valueExpr);
+                        ASSERT_not_null(valueExpr);
+                        values.push_back(valueExpr);
+                      }
+
+                      SgExprListExp *exprList =
+                          SageBuilderCpp17::buildExprListExp_nfi(values);
+                      for (SgExpression *item : exprList->get_expressions()) {
+                        if (item) {
+                          item->set_parent(exprList);
+                        }
+                      }
+                      expr = SageBuilder::buildAggregateInitializer_nfi(
+                          exprList,
+                          /*explicit_type*/ nullptr);
+                    }},
+                x.u);
 }
 
 void Build(parser::SpecificationExpr &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(SpecificationExpr)\n";
-  ABORT_NO_IMPL;
-
-  Build(x.v, expr); // Scalar<IntExpr>
+  WalkExpr(x.v, expr); // Scalar<IntExpr>
 }
 
 void Build(parser::Scalar<parser::IntExpr> &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(Scalar<IntExpr>)");
-  ABORT_NO_IMPL;
+  WalkExpr(x.thing, expr);
 }
 
 void Build(parser::Scalar<parser::LogicalExpr> &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(Scalar<LogicalExpr>)");
-  ABORT_NO_IMPL;
+  WalkExpr(x.thing, expr);
 }
 
 void Build(parser::ConstantExpr &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(Scalar<ConstantExpr>)");
-  ABORT_NO_IMPL;
+  WalkExpr(x.thing, expr);
 }
 
 // DeclarationConstruct
@@ -2127,8 +4980,102 @@ void BuildImpl(parser::FormatStmt &x) {
 
 void BuildImpl(parser::EntryStmt &x) {
   // EntryStmt std::tuple<> Name, std::list<DummyArg>, std::optional<Suffix>
-  std::cout << "BuildImpl(EntryStmt)\n";
-  ABORT_NO_IMPL;
+  using namespace Fortran::parser;
+
+  const std::string entryName = std::get<Name>(x.t).ToString();
+  std::list<std::string> dummyArgs;
+  DummyArg(std::get<std::list<Fortran::parser::DummyArg>>(x.t), dummyArgs);
+
+  std::string resultName;
+  if (auto &suffix = std::get<std::optional<Suffix>>(x.t)) {
+    if (suffix->resultName) {
+      resultName = suffix->resultName->ToString();
+    }
+  }
+
+  SgScopeStatement *currentScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(currentScope);
+
+  SgFunctionDeclaration *enclosingDecl =
+      SageInterface::getEnclosingFunctionDeclaration(currentScope, true);
+  SgProcedureHeaderStatement *procDecl =
+      isSgProcedureHeaderStatement(enclosingDecl);
+
+  SgType *returnType = nullptr;
+  if (procDecl &&
+      procDecl->get_subprogram_kind() ==
+          SgProcedureHeaderStatement::e_subroutine_subprogram_kind) {
+    returnType = SageBuilder::buildVoidType();
+  } else if (enclosingDecl && enclosingDecl->get_type()) {
+    returnType = enclosingDecl->get_type()->get_return_type();
+  }
+  if (returnType == nullptr) {
+    returnType = SageBuilder::buildFortranImplicitType(entryName);
+  }
+
+  SgFunctionType *functionType = new SgFunctionType(returnType, false);
+  SgEntryStatement *entryStmt = new SgEntryStatement(
+      SgName(entryName), functionType, /*definition*/ nullptr);
+  entryStmt->set_scope(currentScope);
+
+  SgFunctionParameterList *paramList = entryStmt->get_parameterList();
+  ASSERT_not_null(paramList);
+  SageInterface::setSourcePosition(paramList);
+
+  for (const std::string &argName : dummyArgs) {
+    SgVariableSymbol *symbol =
+        SageInterface::lookupVariableSymbolInParentScopes(argName,
+                                                          currentScope);
+    if (symbol == nullptr) {
+      SgType *implicitType = SageBuilder::buildFortranImplicitType(argName);
+      SgVariableDeclaration *varDecl =
+          SageBuilder::buildVariableDeclaration_nfi(argName, implicitType,
+                                                    /*initializer*/ nullptr,
+                                                    currentScope);
+      ASSERT_not_null(varDecl);
+      SageInterface::setSourcePosition(varDecl);
+      MarkFortranImplicitDeclaration(varDecl);
+      SageInterface::appendStatement(varDecl, currentScope);
+      symbol = SageInterface::lookupVariableSymbolInParentScopes(argName,
+                                                                 currentScope);
+    }
+
+    SgInitializedName *declInit =
+        symbol != nullptr ? symbol->get_declaration() : nullptr;
+    SgType *argType = declInit != nullptr
+                          ? declInit->get_type()
+                          : SageBuilder::buildFortranImplicitType(argName);
+    SgInitializedName *paramInit =
+        SageBuilder::buildInitializedName_nfi(argName, argType,
+                                              /*initializer*/ nullptr);
+    SageInterface::setSourcePosition(paramInit);
+    if (declInit != nullptr) {
+      paramInit->get_storageModifier() = declInit->get_storageModifier();
+    }
+    paramList->append_arg(paramInit);
+    paramInit->set_parent(paramList);
+  }
+
+  if (!resultName.empty()) {
+    SgVariableSymbol *resultSymbol =
+        SageInterface::lookupVariableSymbolInParentScopes(resultName,
+                                                          currentScope);
+    if (resultSymbol == nullptr) {
+      SageBuilderCpp17::fixUndeclaredResultName(resultName, currentScope,
+                                                returnType);
+      resultSymbol = SageInterface::lookupVariableSymbolInParentScopes(
+          resultName, currentScope);
+    }
+    if (resultSymbol != nullptr && resultSymbol->get_declaration() != nullptr) {
+      SgInitializedName *resultInit = resultSymbol->get_declaration();
+      resultInit->set_parent(entryStmt);
+      resultInit->set_scope(currentScope);
+      entryStmt->set_result_name(resultInit);
+    }
+  }
+
+  SageInterface::setSourcePosition(entryStmt);
+  SageInterface::appendStatement(entryStmt, currentScope);
 }
 
 void BuildImpl(parser::StmtFunctionStmt &x) {
@@ -2141,19 +5088,133 @@ void BuildImpl(parser::ErrorRecovery &x) {
   ABORT_NO_IMPL;
 }
 
+void Build(parser::DataStmtObject &x, SgExpression *&expr) {
+  common::visit(
+      common::visitors{[&](common::Indirection<parser::Variable> &y) {
+                         WalkExpr(y.value(), expr);
+                       },
+                       [&](parser::DataImpliedDo &y) { Build(y, expr); }},
+      x.u);
+}
+
+void Build(parser::DataIDoObject &x, SgExpression *&expr) {
+  common::visit(
+      common::visitors{
+          [&](parser::Scalar<common::Indirection<parser::Designator>> &y) {
+            WalkExpr(y.thing.value(), expr);
+          },
+          [&](common::Indirection<parser::DataImpliedDo> &y) {
+            Build(y.value(), expr);
+          }},
+      x.u);
+}
+
+namespace {
+void BuildDataImpliedDoBounds(
+    const parser::LoopBounds<parser::DoVariable, parser::ScalarIntConstantExpr>
+        &bounds,
+    SgExpression *&init, SgExpression *&upper, SgExpression *&step) {
+  SgExpression *lower{nullptr};
+  WalkExpr(const_cast<parser::ScalarIntConstantExpr &>(bounds.lower), lower);
+  WalkExpr(const_cast<parser::ScalarIntConstantExpr &>(bounds.upper), upper);
+  if (bounds.step) {
+    WalkExpr(const_cast<parser::ScalarIntConstantExpr &>(bounds.step.value()),
+             step);
+  } else {
+    step = SageBuilder::buildIntVal_nfi(std::string("1"));
+  }
+  std::string varName = bounds.name.thing.thing.ToString();
+  SgExpression *varRef = SageBuilderCpp17::buildVarRefExp_nfi(varName);
+  init = SageBuilder::buildAssignOp_nfi(varRef, lower);
+}
+} // namespace
+
+void Build(parser::DataImpliedDo &x, SgExpression *&expr) {
+  std::list<SgExpression *> object_items;
+  for (auto &item : std::get<0>(x.t)) {
+    SgExpression *itemExpr{nullptr};
+    Build(item, itemExpr);
+    ASSERT_not_null(itemExpr);
+    object_items.push_back(itemExpr);
+  }
+
+  SgExprListExp *objectList =
+      SageBuilderCpp17::buildExprListExp_nfi(object_items);
+  for (SgExpression *item : objectList->get_expressions()) {
+    if (item) {
+      item->set_parent(objectList);
+    }
+  }
+
+  SgExpression *init{nullptr};
+  SgExpression *upper{nullptr};
+  SgExpression *step{nullptr};
+  BuildDataImpliedDoBounds(std::get<2>(x.t), init, upper, step);
+  ASSERT_not_null(init);
+  ASSERT_not_null(upper);
+  ASSERT_not_null(step);
+
+  SgImpliedDo *impliedDo =
+      new SgImpliedDo(init, upper, step, objectList, nullptr);
+  SageInterface::setSourcePosition(impliedDo);
+  objectList->set_parent(impliedDo);
+  init->set_parent(impliedDo);
+  upper->set_parent(impliedDo);
+  step->set_parent(impliedDo);
+  expr = impliedDo;
+}
+
 // DataStmt
 void Build(parser::DataStmtValue &x, SgExpression *&expr) {
   // std::tuple<std::optional<DataStmtRepeat>, DataStmtConstant> t;
-  std::cout << "Rose::builder::Build(DataStmtValue)\n";
-  ABORT_NO_IMPL;
+  auto &constant = std::get<parser::DataStmtConstant>(x.t);
+  Build(constant, expr);
 }
 
 void Build(parser::DataStmtConstant &x, SgExpression *&expr) {
   //     std::variant<LiteralConstant, SignedIntLiteralConstant,
   //      SignedRealLiteralConstant, SignedComplexLiteralConstant, NullInit,
   //      common::Indirection<Designator>, StructureConstructor>  u;
-  std::cout << "Rose::builder::Build(DataStmtConstant)\n";
-  ABORT_NO_IMPL;
+  using namespace Fortran::parser;
+
+  common::visit(
+      common::visitors{
+          [&](LiteralConstant &y) {
+            common::visit(
+                common::visitors{
+                    [&](HollerithLiteralConstant &z) { BuildImpl(z, expr); },
+                    [&](IntLiteralConstant &z) { BuildImpl(z, expr); },
+                    [&](RealLiteralConstant &z) { BuildImpl(z, expr); },
+                    [&](ComplexLiteralConstant &z) { BuildImpl(z, expr); },
+                    [&](BOZLiteralConstant &z) { BuildImpl(z, expr); },
+                    [&](CharLiteralConstant &z) { BuildImpl(z, expr); },
+                    [&](LogicalLiteralConstant &z) { BuildImpl(z, expr); },
+                    [&](UnsignedLiteralConstant &z) { BuildImpl(z, expr); }},
+                y.u);
+          },
+          [&](SignedIntLiteralConstant &y) { BuildImpl(y, expr); },
+          [&](SignedRealLiteralConstant &y) { BuildImpl(y, expr); },
+          [&](SignedComplexLiteralConstant &y) { BuildImpl(y, expr); },
+          [&](NullInit &y) { WalkExpr(y.v, expr); },
+          [&](common::Indirection<CharLiteralConstantSubstring> &y) {
+            Build(y.value(), expr);
+          },
+          [&](common::Indirection<Designator> &y) { Build(y.value(), expr); },
+          [&](StructureConstructor &y) { Build(y, expr); },
+          [&](UnsignedLiteralConstant &y) { BuildImpl(y, expr); }},
+      x.u);
+}
+
+void Build(parser::DataStmtRepeat &x, SgExpression *&expr) {
+  // std::variant<IntLiteralConstant, Scalar<Integer<ConstantSubobject>>> u;
+  using namespace Fortran::parser;
+  common::visit(
+      common::visitors{[&](IntLiteralConstant &y) { BuildImpl(y, expr); },
+                       [&](Scalar<Integer<ConstantSubobject>> &y) {
+                         auto &designator = y.thing.thing.thing.value();
+                         Build(designator, expr);
+                       }},
+      x.u);
 }
 
 // ActionStmt
@@ -2222,18 +5283,10 @@ void Build(parser::FormTeamStmt &x) {
 }
 
 void BuildVisitor::Build(parser::GotoStmt &x) {
-  std::cout << "BuildVisitor::Build(GotoStmt)\n";
-
-  std::string target;
-
-  target = std::string{"13"};
-
+  std::string target = StringUtility::numberToString(static_cast<int>(x.v));
   SgGotoStatement *stmt{nullptr};
   builder.Enter(stmt, target);
   builder.Leave(stmt, getLabels());
-
-  // need target
-  ABORT_NO_IMPL;
 }
 
 void Build(parser::IfStmt &x) {
@@ -2268,33 +5321,871 @@ void BuildImpl(parser::PointerAssignmentStmt &x) {
 }
 
 void Build(parser::DefaultCharExpr &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(DefaultCharExpr)");
-  ABORT_NO_IMPL;
+  WalkExpr(x.thing, expr);
 }
 
-void Build(parser::Label &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(Label)");
-  ABORT_NO_IMPL;
+void Build(const parser::Label &x, SgExpression *&expr) {
+  const int labelValue = static_cast<int>(x);
+  const std::string labelText = StringUtility::numberToString(labelValue);
+  SgScopeStatement *currentScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(currentScope);
+  SgScopeStatement *labelScope =
+      SageInterface::getEnclosingFunctionDefinition(currentScope, true);
+  if (labelScope == nullptr) {
+    labelScope = SageInterface::getEnclosingScope(currentScope, true);
+  }
+  ASSERT_not_null(labelScope);
+  SgName labelName(labelText);
+  SgLabelSymbol *labelSymbol = labelScope->lookup_label_symbol(labelName);
+  if (labelSymbol == nullptr) {
+    SgLabelStatement *labelStmt{nullptr};
+    builder.Enter(labelStmt, labelText);
+    ASSERT_not_null(labelStmt);
+    labelSymbol = labelScope->lookup_label_symbol(labelName);
+  }
+  ASSERT_not_null(labelSymbol);
+  const int numericValue = labelSymbol->get_numeric_label_value();
+  if (numericValue <= 0) {
+    labelSymbol->set_numeric_label_value(labelValue);
+  } else if (numericValue != labelValue) {
+    std::cerr << "Mismatched Fortran label value for " << labelText
+              << " (symbol=" << numericValue << ", reference=" << labelValue
+              << ")\n";
+    ROSE_ABORT();
+  }
+  expr = SageBuilder::buildLabelRefExp(labelSymbol);
 }
 
-void Build(parser::Star &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(Star)");
-  ABORT_NO_TEST;
-
+void Build(const parser::Star &x, SgExpression *&expr) {
   expr = SageBuilderCpp17::buildAsteriskShapeExp_nfi();
 }
 
+void Build(parser::InputItem &x, SgExpression *&expr) {
+  common::visit(
+      common::visitors{[&](parser::Variable &y) { WalkExpr(y, expr); },
+                       [&](common::Indirection<parser::InputImpliedDo> &y) {
+                         Build(y.value(), expr);
+                       }},
+      x.u);
+}
+
 void Build(parser::OutputItem &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(OutputItem)");
-  ABORT_NO_IMPL;
-
-  expr = nullptr;
+  common::visit(
+      common::visitors{[&](parser::Expr &y) { WalkExpr(y, expr); },
+                       [&](common::Indirection<parser::OutputImpliedDo> &y) {
+                         Build(y.value(), expr);
+                       }},
+      x.u);
 }
 
-void Build(parser::OutputImpliedDo &x) {
-  std::cout << "Rose::builder::Build(OutputImpliedDo)\n";
-  ABORT_NO_IMPL;
+namespace {
+void BuildLoopBounds(
+    const parser::LoopBounds<parser::DoVariable, parser::ScalarIntExpr> &bounds,
+    SgExpression *&init, SgExpression *&upper, SgExpression *&step) {
+  SgExpression *lower{nullptr};
+  WalkExpr(const_cast<parser::ScalarIntExpr &>(bounds.lower), lower);
+  WalkExpr(const_cast<parser::ScalarIntExpr &>(bounds.upper), upper);
+  if (bounds.step) {
+    WalkExpr(const_cast<parser::ScalarIntExpr &>(bounds.step.value()), step);
+  } else {
+    step = SageBuilder::buildIntVal_nfi(std::string("1"));
+  }
+  std::string varName = bounds.name.thing.thing.ToString();
+  SgExpression *varRef = SageBuilderCpp17::buildVarRefExp_nfi(varName);
+  init = SageBuilder::buildAssignOp_nfi(varRef, lower);
 }
+} // namespace
+
+void Build(parser::OutputImpliedDo &x, SgExpression *&expr) {
+  std::list<SgExpression *> object_items;
+  for (auto &item : std::get<0>(x.t)) {
+    SgExpression *itemExpr{nullptr};
+    Build(item, itemExpr);
+    ASSERT_not_null(itemExpr);
+    object_items.push_back(itemExpr);
+  }
+
+  SgExprListExp *objectList =
+      SageBuilderCpp17::buildExprListExp_nfi(object_items);
+  for (SgExpression *item : objectList->get_expressions()) {
+    if (item) {
+      item->set_parent(objectList);
+    }
+  }
+
+  SgExpression *init{nullptr};
+  SgExpression *upper{nullptr};
+  SgExpression *step{nullptr};
+  BuildLoopBounds(std::get<1>(x.t), init, upper, step);
+  ASSERT_not_null(init);
+  ASSERT_not_null(upper);
+  ASSERT_not_null(step);
+
+  SgImpliedDo *impliedDo =
+      new SgImpliedDo(init, upper, step, objectList, nullptr);
+  SageInterface::setSourcePosition(impliedDo);
+  objectList->set_parent(impliedDo);
+  init->set_parent(impliedDo);
+  upper->set_parent(impliedDo);
+  step->set_parent(impliedDo);
+  expr = impliedDo;
+}
+
+void Build(parser::InputImpliedDo &x, SgExpression *&expr) {
+  std::list<SgExpression *> object_items;
+  for (auto &item : std::get<0>(x.t)) {
+    SgExpression *itemExpr{nullptr};
+    Build(item, itemExpr);
+    ASSERT_not_null(itemExpr);
+    object_items.push_back(itemExpr);
+  }
+
+  SgExprListExp *objectList =
+      SageBuilderCpp17::buildExprListExp_nfi(object_items);
+  for (SgExpression *item : objectList->get_expressions()) {
+    if (item) {
+      item->set_parent(objectList);
+    }
+  }
+
+  SgExpression *init{nullptr};
+  SgExpression *upper{nullptr};
+  SgExpression *step{nullptr};
+  BuildLoopBounds(std::get<1>(x.t), init, upper, step);
+  ASSERT_not_null(init);
+  ASSERT_not_null(upper);
+  ASSERT_not_null(step);
+
+  SgImpliedDo *impliedDo =
+      new SgImpliedDo(init, upper, step, objectList, nullptr);
+  SageInterface::setSourcePosition(impliedDo);
+  objectList->set_parent(impliedDo);
+  init->set_parent(impliedDo);
+  upper->set_parent(impliedDo);
+  step->set_parent(impliedDo);
+  expr = impliedDo;
+}
+
+namespace {
+std::string QuoteFortranString(const std::string &value) {
+  std::string result;
+  result.reserve(value.size() + 2);
+  result.push_back('\'');
+  for (char ch : value) {
+    if (ch == '\'') {
+      result.push_back('\'');
+    }
+    result.push_back(ch);
+  }
+  result.push_back('\'');
+  return result;
+}
+
+std::string FormatIntrinsicTypeToString(
+    const Fortran::format::IntrinsicTypeDataEditDesc &desc) {
+  using Kind = Fortran::format::IntrinsicTypeDataEditDesc::Kind;
+
+  std::string result;
+  switch (desc.kind) {
+  case Kind::I:
+    result = "I";
+    break;
+  case Kind::B:
+    result = "B";
+    break;
+  case Kind::O:
+    result = "O";
+    break;
+  case Kind::Z:
+    result = "Z";
+    break;
+  case Kind::F:
+    result = "F";
+    break;
+  case Kind::E:
+    result = "E";
+    break;
+  case Kind::EN:
+    result = "EN";
+    break;
+  case Kind::ES:
+    result = "ES";
+    break;
+  case Kind::EX:
+    result = "EX";
+    break;
+  case Kind::G:
+    result = "G";
+    break;
+  case Kind::L:
+    result = "L";
+    break;
+  case Kind::A:
+    result = "A";
+    break;
+  case Kind::D:
+    result = "D";
+    break;
+  }
+
+  auto append_int = [&](const std::optional<int> &value) {
+    if (value) {
+      result += std::to_string(*value);
+    }
+  };
+
+  if (desc.kind == Kind::L || desc.kind == Kind::A) {
+    append_int(desc.width);
+    return result;
+  }
+
+  append_int(desc.width);
+  if (desc.digits) {
+    result += ".";
+    result += std::to_string(*desc.digits);
+  }
+  if (desc.exponentWidth) {
+    result += "E";
+    result += std::to_string(*desc.exponentWidth);
+  }
+  return result;
+}
+
+std::string FormatDerivedTypeToString(
+    const Fortran::format::DerivedTypeDataEditDesc &desc) {
+  std::string result = "DT";
+  if (!desc.type.empty()) {
+    result += QuoteFortranString(desc.type);
+  }
+  if (!desc.parameters.empty()) {
+    result += "(";
+    bool first = true;
+    for (const auto &param : desc.parameters) {
+      if (!first) {
+        result += ",";
+      }
+      result += std::to_string(param);
+      first = false;
+    }
+    result += ")";
+  }
+  return result;
+}
+
+std::string
+FormatControlEditToString(const Fortran::format::ControlEditDesc &desc) {
+  using Kind = Fortran::format::ControlEditDesc::Kind;
+  switch (desc.kind) {
+  case Kind::T:
+    return "T" + std::to_string(desc.count);
+  case Kind::TL:
+    return "TL" + std::to_string(desc.count);
+  case Kind::TR:
+    return "TR" + std::to_string(desc.count);
+  case Kind::X:
+    return std::to_string(desc.count) + "X";
+  case Kind::Slash:
+    return "/";
+  case Kind::Colon:
+    return ":";
+  case Kind::SS:
+    return "SS";
+  case Kind::SP:
+    return "SP";
+  case Kind::S:
+    return "S";
+  case Kind::P:
+    return std::to_string(desc.count) + "P";
+  case Kind::BN:
+    return "BN";
+  case Kind::BZ:
+    return "BZ";
+  case Kind::RU:
+    return "RU";
+  case Kind::RD:
+    return "RD";
+  case Kind::RZ:
+    return "RZ";
+  case Kind::RN:
+    return "RN";
+  case Kind::RC:
+    return "RC";
+  case Kind::RP:
+    return "RP";
+  case Kind::DC:
+    return "DC";
+  case Kind::DP:
+    return "DP";
+  case Kind::Dollar:
+    return "$";
+  case Kind::Backslash:
+    return "\\";
+  }
+  return "";
+}
+
+std::string
+FormatItemsToString(const std::list<Fortran::format::FormatItem> &items);
+
+std::string FormatItemToString(const Fortran::format::FormatItem &item) {
+  std::string body;
+  common::visit(
+      common::visitors{
+          [&](const Fortran::format::IntrinsicTypeDataEditDesc &desc) {
+            body = FormatIntrinsicTypeToString(desc);
+          },
+          [&](const Fortran::format::DerivedTypeDataEditDesc &desc) {
+            body = FormatDerivedTypeToString(desc);
+          },
+          [&](const Fortran::format::ControlEditDesc &desc) {
+            body = FormatControlEditToString(desc);
+          },
+          [&](const std::string &value) { body = QuoteFortranString(value); },
+          [&](const std::list<Fortran::format::FormatItem> &nested) {
+            body = "(" + FormatItemsToString(nested) + ")";
+          }},
+      item.u);
+
+  if (item.repeatCount) {
+    return std::to_string(*item.repeatCount) + body;
+  }
+  return body;
+}
+
+std::string
+FormatItemsToString(const std::list<Fortran::format::FormatItem> &items) {
+  std::string result;
+  bool first = true;
+  for (const auto &item : items) {
+    if (!first) {
+      result += ",";
+    }
+    result += FormatItemToString(item);
+    first = false;
+  }
+  return result;
+}
+
+std::string
+FormatSpecificationToString(const Fortran::format::FormatSpecification &spec) {
+  std::string result = FormatItemsToString(spec.items);
+  if (!spec.unlimitedItems.empty()) {
+    if (!result.empty()) {
+      result += ",";
+    }
+    result += "*(" + FormatItemsToString(spec.unlimitedItems) + ")";
+  }
+  return result;
+}
+
+bool NamesMatch(const std::string &left, const std::string &right,
+                bool case_insensitive) {
+  if (!case_insensitive) {
+    return left == right;
+  }
+  if (left.size() != right.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < left.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(left[i])) !=
+        std::tolower(static_cast<unsigned char>(right[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool ScopeHasNamelistGroup(SgScopeStatement *scope,
+                           const std::string &group_name) {
+  if (scope == nullptr) {
+    return false;
+  }
+  if (isSgGlobal(scope)) {
+    return false;
+  }
+  if (isSgIfStmt(scope)) {
+    return ScopeHasNamelistGroup(scope->get_scope(), group_name);
+  }
+  const bool case_insensitive = SageInterface::is_language_case_insensitive() ||
+                                scope->isCaseInsensitive();
+  for (SgStatement *stmt : scope->generateStatementList()) {
+    SgNamelistStatement *namelist = isSgNamelistStatement(stmt);
+    if (namelist == nullptr) {
+      continue;
+    }
+    for (SgNameGroup *group : namelist->get_group_list()) {
+      if (group == nullptr) {
+        continue;
+      }
+      if (NamesMatch(group->get_group_name(), group_name, case_insensitive)) {
+        return true;
+      }
+    }
+  }
+  return ScopeHasNamelistGroup(scope->get_scope(), group_name);
+}
+
+std::optional<std::string>
+ExtractBareNameFromExpr(const Fortran::parser::Expr &expr) {
+  if (auto *designator =
+          std::get_if<Fortran::common::Indirection<parser::Designator>>(
+              &expr.u)) {
+    const parser::Designator &designatorValue = designator->value();
+    if (auto *dataRef = std::get_if<parser::DataRef>(&designatorValue.u)) {
+      if (auto *name = std::get_if<parser::Name>(&dataRef->u)) {
+        return name->ToString();
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string>
+ExtractBareNameFromFormat(const Fortran::parser::Format &format) {
+  if (auto *expr = std::get_if<parser::Expr>(&format.u)) {
+    return ExtractBareNameFromExpr(*expr);
+  }
+  return std::nullopt;
+}
+
+void AppendExpr(SgExprListExp *list, SgExpression *expr) {
+  ASSERT_not_null(list);
+  ASSERT_not_null(expr);
+  list->get_expressions().push_back(expr);
+  expr->set_parent(list);
+}
+
+SgExpression *BuildIoUnitExpr(const parser::IoUnit &x) {
+  SgExpression *expr{nullptr};
+  common::visit(
+      common::visitors{
+          [&](const parser::Variable &y) { WalkExpr(y, expr); },
+          [&](const parser::FileUnitNumber &y) { WalkExpr(y.v, expr); },
+          [&](const parser::Star &) {
+            expr = SageBuilderCpp17::buildAsteriskShapeExp_nfi();
+          }},
+      x.u);
+  ASSERT_not_null(expr);
+  return expr;
+}
+
+SgExpression *BuildFormatExpr(const parser::Format &x) {
+  SgExpression *expr{nullptr};
+  common::visit(
+      common::visitors{
+          [&](const parser::Expr &y) { WalkExpr(y, expr); },
+          [&](const parser::Label &y) { Rose::builder::Build(y, expr); },
+          [&](const parser::Star &y) { Rose::builder::Build(y, expr); }},
+      x.u);
+  ASSERT_not_null(expr);
+  return expr;
+}
+
+void ApplyIoStatementCommon(SgIOStatement *stmt, const parser::IoControlSpec &x,
+                            SgExpression *expr) {
+  ASSERT_not_null(stmt);
+  ASSERT_not_null(expr);
+  if (auto *ioUnit = std::get_if<parser::IoUnit>(&x.u)) {
+    stmt->set_unit(expr);
+  } else if (auto *msgVar = std::get_if<parser::MsgVariable>(&x.u)) {
+    stmt->set_iomsg(expr);
+  } else if (auto *statVar = std::get_if<parser::StatVariable>(&x.u)) {
+    stmt->set_iostat(expr);
+  } else if (auto *errLabel = std::get_if<parser::ErrLabel>(&x.u)) {
+    stmt->set_err(expr);
+  }
+}
+
+void ApplyIoControlSpec(const parser::IoControlSpec &x,
+                        SgReadStatement *readStmt,
+                        SgWriteStatement *writeStmt) {
+  auto *ioStmt = isSgIOStatement(readStmt != nullptr
+                                     ? static_cast<SgStatement *>(readStmt)
+                                     : static_cast<SgStatement *>(writeStmt));
+  ASSERT_not_null(ioStmt);
+
+  common::visit(common::visitors{
+                    [&](const parser::IoUnit &y) {
+                      SgExpression *expr = BuildIoUnitExpr(y);
+                      ioStmt->set_unit(expr);
+                      expr->set_parent(ioStmt);
+                    },
+                    [&](const parser::Format &y) {
+                      SgExpression *expr = BuildFormatExpr(y);
+                      if (readStmt) {
+                        readStmt->set_format(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_format(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::Name &y) {
+                      std::string name = y.ToString();
+                      SgExpression *expr = SageBuilder::buildDanglingVarRefExp(
+                          SgName(name), SageBuilder::topScopeStack());
+                      ASSERT_not_null(expr);
+                      if (readStmt) {
+                        readStmt->set_namelist(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_namelist(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::IoControlSpec::CharExpr &y) {
+                      SgExpression *expr{nullptr};
+                      WalkExpr(std::get<1>(y.t), expr);
+                      ASSERT_not_null(expr);
+                      auto kind = std::get<0>(y.t);
+                      if (readStmt) {
+                        switch (kind) {
+                        case parser::IoControlSpec::CharExpr::Kind::Advance:
+                          readStmt->set_advance(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Blank:
+                          readStmt->set_blank(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Decimal:
+                          readStmt->set_decimal(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Delim:
+                          readStmt->set_delim(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Pad:
+                          readStmt->set_pad(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Round:
+                          readStmt->set_round(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Sign:
+                          readStmt->set_sign(expr);
+                          break;
+                        }
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        switch (kind) {
+                        case parser::IoControlSpec::CharExpr::Kind::Advance:
+                          writeStmt->set_advance(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Blank:
+                          writeStmt->set_blank(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Decimal:
+                          writeStmt->set_decimal(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Delim:
+                          writeStmt->set_delim(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Pad:
+                          writeStmt->set_pad(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Round:
+                          writeStmt->set_round(expr);
+                          break;
+                        case parser::IoControlSpec::CharExpr::Kind::Sign:
+                          writeStmt->set_sign(expr);
+                          break;
+                        }
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::IoControlSpec::Asynchronous &y) {
+                      SgExpression *expr{nullptr};
+                      WalkExpr(y.v, expr);
+                      ASSERT_not_null(expr);
+                      if (readStmt) {
+                        readStmt->set_asynchronous(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_asynchronous(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::EndLabel &y) {
+                      SgExpression *expr{nullptr};
+                      Rose::builder::Build(y.v, expr);
+                      ASSERT_not_null(expr);
+                      if (readStmt) {
+                        readStmt->set_end(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_end(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::EorLabel &y) {
+                      SgExpression *expr{nullptr};
+                      Rose::builder::Build(y.v, expr);
+                      ASSERT_not_null(expr);
+                      if (readStmt) {
+                        readStmt->set_eor(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_eor(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::ErrLabel &y) {
+                      SgExpression *expr{nullptr};
+                      Rose::builder::Build(y.v, expr);
+                      ASSERT_not_null(expr);
+                      ioStmt->set_err(expr);
+                      expr->set_parent(ioStmt);
+                    },
+                    [&](const parser::IdVariable &y) {
+                      SgExpression *expr{nullptr};
+                      WalkExpr(y.v, expr);
+                      ASSERT_not_null(expr);
+                      if (readStmt) {
+                        readStmt->set_id(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_id(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::MsgVariable &y) {
+                      SgExpression *expr{nullptr};
+                      WalkExpr(y.v, expr);
+                      ASSERT_not_null(expr);
+                      ioStmt->set_iomsg(expr);
+                      expr->set_parent(ioStmt);
+                    },
+                    [&](const parser::StatVariable &y) {
+                      SgExpression *expr{nullptr};
+                      WalkExpr(y.v, expr);
+                      ASSERT_not_null(expr);
+                      ioStmt->set_iostat(expr);
+                      expr->set_parent(ioStmt);
+                    },
+                    [&](const parser::IoControlSpec::Pos &y) {
+                      SgExpression *expr{nullptr};
+                      WalkExpr(y.v, expr);
+                      ASSERT_not_null(expr);
+                      if (readStmt) {
+                        readStmt->set_pos(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_pos(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::IoControlSpec::Rec &y) {
+                      SgExpression *expr{nullptr};
+                      WalkExpr(y.v, expr);
+                      ASSERT_not_null(expr);
+                      if (readStmt) {
+                        readStmt->set_rec(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_rec(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    },
+                    [&](const parser::IoControlSpec::Size &y) {
+                      SgExpression *expr{nullptr};
+                      WalkExpr(y.v, expr);
+                      ASSERT_not_null(expr);
+                      if (readStmt) {
+                        readStmt->set_size(expr);
+                        expr->set_parent(readStmt);
+                      }
+                      if (writeStmt) {
+                        writeStmt->set_size(expr);
+                        expr->set_parent(writeStmt);
+                      }
+                    }},
+                x.u);
+}
+
+void ApplyConnectSpec(const parser::ConnectSpec &x, SgOpenStatement *stmt) {
+  ASSERT_not_null(stmt);
+  common::visit(
+      common::visitors{[&](const parser::FileUnitNumber &y) {
+                         SgExpression *expr{nullptr};
+                         WalkExpr(y.v, expr);
+                         ASSERT_not_null(expr);
+                         stmt->set_unit(expr);
+                         expr->set_parent(stmt);
+                       },
+                       [&](const parser::FileNameExpr &y) {
+                         SgExpression *expr{nullptr};
+                         WalkExpr(y, expr);
+                         ASSERT_not_null(expr);
+                         stmt->set_file(expr);
+                         expr->set_parent(stmt);
+                       },
+                       [&](const parser::ConnectSpec::CharExpr &y) {
+                         SgExpression *expr{nullptr};
+                         WalkExpr(std::get<1>(y.t), expr);
+                         ASSERT_not_null(expr);
+                         auto kind = std::get<0>(y.t);
+                         switch (kind) {
+                         case parser::ConnectSpec::CharExpr::Kind::Access:
+                           stmt->set_access(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Action:
+                           stmt->set_action(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Asynchronous:
+                           stmt->set_asynchronous(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Blank:
+                           stmt->set_blank(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Delim:
+                           stmt->set_delim(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Form:
+                           stmt->set_form(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Pad:
+                           stmt->set_pad(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Position:
+                           stmt->set_position(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Round:
+                           stmt->set_round(expr);
+                           break;
+                         case parser::ConnectSpec::CharExpr::Kind::Sign:
+                           stmt->set_sign(expr);
+                           break;
+                         default:
+                           break;
+                         }
+                         expr->set_parent(stmt);
+                       },
+                       [&](const parser::MsgVariable &y) {
+                         SgExpression *expr{nullptr};
+                         WalkExpr(y.v, expr);
+                         ASSERT_not_null(expr);
+                         stmt->set_iomsg(expr);
+                         expr->set_parent(stmt);
+                       },
+                       [&](const parser::StatVariable &y) {
+                         SgExpression *expr{nullptr};
+                         WalkExpr(y.v, expr);
+                         ASSERT_not_null(expr);
+                         stmt->set_iostat(expr);
+                         expr->set_parent(stmt);
+                       },
+                       [&](const parser::ConnectSpec::Recl &y) {
+                         SgExpression *expr{nullptr};
+                         WalkExpr(y.v, expr);
+                         ASSERT_not_null(expr);
+                         stmt->set_recl(expr);
+                         expr->set_parent(stmt);
+                       },
+                       [&](const parser::ConnectSpec::Newunit &y) {
+                         SgExpression *expr{nullptr};
+                         WalkExpr(y.v, expr);
+                         ASSERT_not_null(expr);
+                         stmt->set_unit(expr);
+                         expr->set_parent(stmt);
+                       },
+                       [&](const parser::ErrLabel &y) {
+                         SgExpression *expr{nullptr};
+                         Rose::builder::Build(y.v, expr);
+                         ASSERT_not_null(expr);
+                         stmt->set_err(expr);
+                         expr->set_parent(stmt);
+                       },
+                       [&](const parser::StatusExpr &y) {
+                         SgExpression *expr{nullptr};
+                         WalkExpr(y.v, expr);
+                         ASSERT_not_null(expr);
+                         stmt->set_status(expr);
+                         expr->set_parent(stmt);
+                       }},
+      x.u);
+}
+
+void ApplyCloseSpec(const parser::CloseStmt::CloseSpec &x,
+                    SgCloseStatement *stmt) {
+  ASSERT_not_null(stmt);
+  common::visit(common::visitors{[&](const parser::FileUnitNumber &y) {
+                                   SgExpression *expr{nullptr};
+                                   WalkExpr(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_unit(expr);
+                                   expr->set_parent(stmt);
+                                 },
+                                 [&](const parser::StatVariable &y) {
+                                   SgExpression *expr{nullptr};
+                                   WalkExpr(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_iostat(expr);
+                                   expr->set_parent(stmt);
+                                 },
+                                 [&](const parser::MsgVariable &y) {
+                                   SgExpression *expr{nullptr};
+                                   WalkExpr(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_iomsg(expr);
+                                   expr->set_parent(stmt);
+                                 },
+                                 [&](const parser::ErrLabel &y) {
+                                   SgExpression *expr{nullptr};
+                                   Rose::builder::Build(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_err(expr);
+                                   expr->set_parent(stmt);
+                                 },
+                                 [&](const parser::StatusExpr &y) {
+                                   SgExpression *expr{nullptr};
+                                   WalkExpr(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_status(expr);
+                                   expr->set_parent(stmt);
+                                 }},
+                x.u);
+}
+
+void ApplyPositionOrFlushSpec(const parser::PositionOrFlushSpec &x,
+                              SgIOStatement *stmt) {
+  ASSERT_not_null(stmt);
+  common::visit(common::visitors{[&](const parser::FileUnitNumber &y) {
+                                   SgExpression *expr{nullptr};
+                                   WalkExpr(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_unit(expr);
+                                   expr->set_parent(stmt);
+                                 },
+                                 [&](const parser::MsgVariable &y) {
+                                   SgExpression *expr{nullptr};
+                                   WalkExpr(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_iomsg(expr);
+                                   expr->set_parent(stmt);
+                                 },
+                                 [&](const parser::StatVariable &y) {
+                                   SgExpression *expr{nullptr};
+                                   WalkExpr(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_iostat(expr);
+                                   expr->set_parent(stmt);
+                                 },
+                                 [&](const parser::ErrLabel &y) {
+                                   SgExpression *expr{nullptr};
+                                   Rose::builder::Build(y.v, expr);
+                                   ASSERT_not_null(expr);
+                                   stmt->set_err(expr);
+                                   expr->set_parent(stmt);
+                                 }},
+                x.u);
+}
+} // namespace
 
 void BuildImpl(parser::ReadStmt &x) {
   std::cout << "BuildImpl(ReadStmt)\n";
@@ -2346,7 +6237,6 @@ void BuildVisitor::Build(parser::StopStmt &x) {
     SgExpression *expr{nullptr};
     WalkExpr(std::get<2>(x.t), expr);
     quiet = expr;
-    ABORT_NO_TEST;
   }
 
   builder.Enter(stmt, std::string{kind}, code, quiet);
@@ -2399,8 +6289,37 @@ void BuildImpl(parser::ForallStmt &x) {
 }
 
 void BuildImpl(parser::ArithmeticIfStmt &x) {
-  std::cout << "BuildImpl(ArithmeticIfStmt)\n";
-  ABORT_NO_IMPL;
+  SgExpression *condition{nullptr};
+  WalkExpr(std::get<parser::Expr>(x.t), condition);
+  ASSERT_not_null(condition);
+
+  SgExpression *lessExpr{nullptr};
+  SgExpression *equalExpr{nullptr};
+  SgExpression *greaterExpr{nullptr};
+  Rose::builder::Build(std::get<1>(x.t), lessExpr);
+  Rose::builder::Build(std::get<2>(x.t), equalExpr);
+  Rose::builder::Build(std::get<3>(x.t), greaterExpr);
+  ASSERT_not_null(lessExpr);
+  ASSERT_not_null(equalExpr);
+  ASSERT_not_null(greaterExpr);
+
+  SgLabelRefExp *lessRef = isSgLabelRefExp(lessExpr);
+  SgLabelRefExp *equalRef = isSgLabelRefExp(equalExpr);
+  SgLabelRefExp *greaterRef = isSgLabelRefExp(greaterExpr);
+  ROSE_ASSERT(lessRef != nullptr);
+  ROSE_ASSERT(equalRef != nullptr);
+  ROSE_ASSERT(greaterRef != nullptr);
+
+  SgArithmeticIfStatement *stmt =
+      new SgArithmeticIfStatement(condition, lessRef, equalRef, greaterRef);
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+  condition->set_parent(stmt);
+  lessRef->set_parent(stmt);
+  equalRef->set_parent(stmt);
+  greaterRef->set_parent(stmt);
+
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
 }
 
 void BuildImpl(parser::AssignStmt &x) {
@@ -2436,48 +6355,190 @@ void BuildImpl(parser::OldParameterStmt &x) {
 // Expr
 //
 void Build(parser::CharLiteralConstantSubstring &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(CharLiteralConstantSubstring)\n";
-  ABORT_NO_IMPL;
+  SgExpression *base{nullptr};
+  WalkExpr(std::get<parser::CharLiteralConstant>(x.t), base);
+  ASSERT_not_null(base);
+
+  auto &range = std::get<parser::SubstringRange>(x.t);
+  SgExpression *lower{nullptr};
+  SgExpression *upper{nullptr};
+  if (std::get<0>(range.t)) {
+    WalkExpr(std::get<0>(range.t).value(), lower);
+  }
+  if (std::get<1>(range.t)) {
+    WalkExpr(std::get<1>(range.t).value(), upper);
+  }
+  if (lower == nullptr) {
+    lower = SageBuilderCpp17::buildNullExpression_nfi();
+  }
+  if (upper == nullptr) {
+    upper = SageBuilderCpp17::buildNullExpression_nfi();
+  }
+  SgExpression *stride = SageBuilder::buildIntVal_nfi(std::string("1"));
+
+  SgExpression *subscript =
+      SageBuilderCpp17::buildSubscriptExpression_nfi(lower, upper, stride);
+  ASSERT_not_null(subscript);
+  expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(base, subscript);
 }
 
 void Build(parser::SubstringInquiry &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(SubstringInquiry)\n";
-  ABORT_NO_IMPL;
+  Build(x.v, expr);
+}
+
+namespace {
+SgType *BuildTypeSpec(parser::TypeSpec &x) {
+  SgType *type{nullptr};
+  common::visit(common::visitors{[&](parser::IntrinsicTypeSpec &y) {
+                                   BuildVisitor typeBuilder;
+                                   typeBuilder.Walk(y);
+                                   typeBuilder.get(type);
+                                 },
+                                 [&](parser::DerivedTypeSpec &y) {
+                                   type = BuildDerivedTypeSpec(y);
+                                 }},
+                x.u);
+  return type;
+}
+} // namespace
+
+void Build(parser::AcValue &x, SgExpression *&expr);
+
+void Build(parser::AcImpliedDo &x, SgExpression *&expr) {
+  std::list<SgExpression *> object_items;
+  for (auto &value : std::get<0>(x.t)) {
+    SgExpression *itemExpr{nullptr};
+    Build(value, itemExpr);
+    ASSERT_not_null(itemExpr);
+    object_items.push_back(itemExpr);
+  }
+
+  SgExprListExp *objectList =
+      SageBuilderCpp17::buildExprListExp_nfi(object_items);
+  for (SgExpression *item : objectList->get_expressions()) {
+    if (item) {
+      item->set_parent(objectList);
+    }
+  }
+
+  auto &control = std::get<1>(x.t);
+  auto &bounds = std::get<parser::AcImpliedDoControl::Bounds>(control.t);
+  SgExpression *init{nullptr};
+  SgExpression *upper{nullptr};
+  SgExpression *step{nullptr};
+  BuildLoopBounds(bounds, init, upper, step);
+  ASSERT_not_null(init);
+  ASSERT_not_null(upper);
+  ASSERT_not_null(step);
+
+  SgImpliedDo *impliedDo =
+      new SgImpliedDo(init, upper, step, objectList, nullptr);
+  SageInterface::setSourcePosition(impliedDo);
+  objectList->set_parent(impliedDo);
+  init->set_parent(impliedDo);
+  upper->set_parent(impliedDo);
+  step->set_parent(impliedDo);
+  expr = impliedDo;
+}
+
+void Build(parser::AcValue &x, SgExpression *&expr) {
+  common::visit(common::visitors{
+                    [&](parser::AcValue::Triplet &y) {
+                      SgExpression *lower{nullptr};
+                      SgExpression *upper{nullptr};
+                      SgExpression *step{nullptr};
+                      WalkExpr(std::get<0>(y.t), lower);
+                      WalkExpr(std::get<1>(y.t), upper);
+                      if (std::get<2>(y.t)) {
+                        WalkExpr(std::get<2>(y.t).value(), step);
+                      } else {
+                        step = SageBuilder::buildIntVal_nfi(std::string("1"));
+                      }
+                      expr = SageBuilder::buildSubscriptExpression_nfi(
+                          lower, upper, step);
+                    },
+                    [&](common::Indirection<parser::Expr> &y) {
+                      WalkExpr(y.value(), expr);
+                    },
+                    [&](common::Indirection<parser::AcImpliedDo> &y) {
+                      Build(y.value(), expr);
+                    }},
+                x.u);
 }
 
 void Build(parser::ArrayConstructor &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(ArrayConstructor)\n";
-  ABORT_NO_IMPL;
+  Build(x.v, expr);
 }
 
 void Build(parser::AcSpec &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(AcSpec)\n";
-  ABORT_NO_IMPL;
+  std::list<SgExpression *> values;
+  for (auto &value : x.values) {
+    SgExpression *valueExpr{nullptr};
+    Build(value, valueExpr);
+    ASSERT_not_null(valueExpr);
+    values.push_back(valueExpr);
+  }
+
+  SgExprListExp *exprList = SageBuilderCpp17::buildExprListExp_nfi(values);
+  for (SgExpression *item : exprList->get_expressions()) {
+    if (item) {
+      item->set_parent(exprList);
+    }
+  }
+  SgType *explicitType{nullptr};
+  if (x.type) {
+    explicitType = BuildTypeSpec(x.type.value());
+  }
+  expr = SageBuilder::buildAggregateInitializer_nfi(exprList, explicitType);
 }
 
-template <typename T> void Build(parser::StructureConstructor &x, T *&expr) {
-  info(x, "Rose::builder::Build(StructureConstructor)");
-  ABORT_NO_IMPL;
+void Build(parser::StructureConstructor &x, SgExpression *&expr) {
+  auto &derivedSpec = std::get<parser::DerivedTypeSpec>(x.t);
+  auto &components = std::get<std::list<parser::ComponentSpec>>(x.t);
+
+  SgType *type = BuildDerivedTypeSpec(derivedSpec);
+  std::string typeName = std::get<parser::Name>(derivedSpec.t).ToString();
+
+  std::list<SgExpression *> args;
+  for (auto &component : components) {
+    SgExpression *value{nullptr};
+    WalkExpr(std::get<parser::ComponentDataSource>(component.t).v.value(),
+             value);
+    ASSERT_not_null(value);
+    args.push_back(value);
+  }
+
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  expr = SageBuilder::buildFunctionCallExp(
+      SgName(typeName), type ? type : SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(expr);
 }
 
-template <typename T> void Build(parser::Expr::Parentheses &x, T *&expr) {
-  info(x, "Rose::builder::Build(Parentheses)");
-  ABORT_NO_IMPL;
+void Build(parser::Expr::Parentheses &x, SgExpression *&expr) {
+  WalkExpr(x.v.value(), expr);
+  if (expr != nullptr) {
+    SageBuilderCpp17::set_need_paren(expr);
+  }
 }
 
-template <typename T> void Build(parser::Expr::UnaryPlus &x, T *&expr) {
-  info(x, "Rose::builder::Build(UnaryPlus)");
-  ABORT_NO_IMPL;
+void Build(parser::Expr::UnaryPlus &x, SgExpression *&expr) {
+  WalkExpr(x.v.value(), expr);
 }
 
-template <typename T> void Build(parser::Expr::Negate &x, T *&expr) {
-  info(x, "Rose::builder::Build(Negate)");
-  ABORT_NO_IMPL;
+void Build(parser::Expr::Negate &x, SgExpression *&expr) {
+  SgExpression *operand{nullptr};
+  WalkExpr(x.v.value(), operand);
+  ASSERT_not_null(operand);
+  expr = SageBuilderCpp17::buildMinusOp_nfi(operand, /*is_prefix*/ true);
 }
 
 void BuildExprVisitor::Build(parser::Expr::NOT &x /*, SgExpression* &expr*/) {
-  info(x, "BuildExprVisitor::::Build(NOT)");
-  ABORT_NO_IMPL;
+  SgExpression *operand{nullptr};
+  WalkExpr(x.v.value(), operand);
+  ASSERT_not_null(operand);
+  this->set(SageBuilder::buildNotOp_nfi(operand));
 }
 
 void BuildExprVisitor::Build(parser::Expr::UnaryPlus &x) {
@@ -2495,8 +6556,9 @@ void BuildExprVisitor::Build(parser::Expr::Negate &x) {
 }
 
 void BuildExprVisitor::Build(parser::Expr::Power &x /*, SgExpression* &expr*/) {
-  std::cout << "Rose::builder::Build(Power)\n";
-  ABORT_NO_IMPL;
+  SgExpression *lhs{nullptr}, *rhs{nullptr};
+  BuildExpressions(x, lhs, rhs);
+  this->set(SageBuilder::buildExponentiationOp_nfi(lhs, rhs));
 }
 
 void BuildExprVisitor::Build(parser::Expr::Multiply &x) {
@@ -2590,48 +6652,178 @@ void BuildExprVisitor::Build(parser::Expr::NEQV &x) {
 }
 
 void Build(parser::Expr::DefinedBinary &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(DefinedBinary)\n";
-  ABORT_NO_IMPL;
+  SgExpression *lhs{nullptr};
+  SgExpression *rhs{nullptr};
+  WalkExpr(std::get<1>(x.t).value(), lhs);
+  WalkExpr(std::get<2>(x.t).value(), rhs);
+  ASSERT_not_null(lhs);
+  ASSERT_not_null(rhs);
+  std::string name{std::get<0>(x.t).v.ToString()};
+  std::list<SgExpression *> args{lhs, rhs};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  expr = SageBuilder::buildFunctionCallExp(
+      SgName(name), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(expr);
+}
+
+void Build(parser::Expr::DefinedUnary &x, SgExpression *&expr) {
+  SgExpression *arg{nullptr};
+  WalkExpr(std::get<1>(x.t).value(), arg);
+  ASSERT_not_null(arg);
+  std::string name{std::get<0>(x.t).v.ToString()};
+  std::list<SgExpression *> args{arg};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  expr = SageBuilder::buildFunctionCallExp(
+      SgName(name), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(expr);
+}
+
+void Build(parser::Expr::PercentLoc &x, SgExpression *&expr) {
+  SgExpression *arg{nullptr};
+  WalkExpr(x.v.value(), arg);
+  ASSERT_not_null(arg);
+  std::list<SgExpression *> args{arg};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  expr = SageBuilder::buildFunctionCallExp(
+      SgName("loc"), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(expr);
+}
+
+void Build(parser::Expr::NOT &x, SgExpression *&expr) {
+  SgExpression *operand{nullptr};
+  WalkExpr(x.v.value(), operand);
+  ASSERT_not_null(operand);
+  expr = SageBuilder::buildNotOp_nfi(operand);
+  ASSERT_not_null(expr);
 }
 
 void Build(parser::Expr::ComplexConstructor &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(ComplexConstructor)\n";
-  ABORT_NO_IMPL;
+  SgExpression *lhs{nullptr};
+  SgExpression *rhs{nullptr};
+  WalkExpr(std::get<0>(x.t).value(), lhs);
+  WalkExpr(std::get<1>(x.t).value(), rhs);
+  ASSERT_not_null(lhs);
+  ASSERT_not_null(rhs);
+  std::list<SgExpression *> args{lhs, rhs};
+  SgExprListExp *params = SageBuilderCpp17::buildExprListExp_nfi(args);
+  ASSERT_not_null(params);
+  expr = SageBuilder::buildFunctionCallExp(
+      SgName("cmplx"), SageBuilder::buildUnknownType(), params,
+      SageBuilder::topScopeStack());
+  ASSERT_not_null(expr);
 }
 
 void Build(parser::StructureComponent &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(StructureComponent)\n";
-  ABORT_NO_IMPL;
+  SgExpression *base{nullptr};
+  Build(x.base, base);
+  ASSERT_not_null(base);
+  std::string componentName = x.component.ToString();
+  SgExpression *component{nullptr};
+  SgType *baseType = base->get_type();
+  SgVariableSymbol *componentSymbol = nullptr;
+  if (baseType != nullptr) {
+    if (SgClassDefinition *def = findClassDefinition(baseType)) {
+      componentSymbol = findComponentSymbol(def, SgName(componentName));
+      if (componentSymbol != nullptr &&
+          componentSymbol->get_declaration() == nullptr) {
+        componentSymbol = nullptr;
+      }
+    }
+  }
+  if (componentSymbol != nullptr) {
+    component = SageBuilder::buildVarRefExp_nfi(componentSymbol);
+    SageInterface::setSourcePosition(component);
+  } else {
+    component = SageBuilderCpp17::buildVarRefExp_nfi(componentName,
+                                                     /*scope*/ nullptr,
+                                                     /*allow_implicit*/ false);
+  }
+  ASSERT_not_null(component);
+  expr = SageBuilder::buildDotExp(base, component);
+  ASSERT_not_null(expr);
 }
 
 void Build(parser::ArrayElement &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(ArrayElement)\n";
-  ABORT_NO_IMPL;
+  SgExpression *base{nullptr};
+  Build(x.base, base);
+  ASSERT_not_null(base);
+
+  SgExprListExp *subscripts = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(subscripts);
+  for (auto &subscript : x.subscripts) {
+    SgExpression *subExpr{nullptr};
+    Build(subscript, subExpr);
+    ASSERT_not_null(subExpr);
+    subscripts->get_expressions().push_back(subExpr);
+    subExpr->set_parent(subscripts);
+  }
+
+  expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(base, subscripts);
+  ASSERT_not_null(expr);
 }
 
 void Build(parser::CoindexedNamedObject &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(CoindexedNamedObject)\n";
-  ABORT_NO_IMPL;
+  Build(x.base, expr);
+  ASSERT_not_null(expr);
 }
 
 void Build(parser::ImageSelector &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(ImageSelector)\n";
-  ABORT_NO_IMPL;
+  SgExprListExp *exprList = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(exprList);
+  for (auto &cosubscript : std::get<0>(x.t)) {
+    SgExpression *item{nullptr};
+    WalkExpr(cosubscript.thing, item);
+    ASSERT_not_null(item);
+    exprList->get_expressions().push_back(item);
+    item->set_parent(exprList);
+  }
+  expr = exprList;
 }
 
 void Build(parser::ImageSelectorSpec &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(ImageSelectorSpec)");
-  ABORT_NO_IMPL;
+  expr = SageBuilderCpp17::buildNullExpression_nfi();
 }
 
 void Build(parser::SectionSubscript &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(SectionSubscript)");
-  ABORT_NO_IMPL;
+  common::visit(
+      common::visitors{[&](parser::IntExpr &y) { WalkExpr(y, expr); },
+                       [&](parser::SubscriptTriplet &y) { Build(y, expr); }},
+      x.u);
 }
 
 void Build(parser::SubscriptTriplet &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(SubscriptTriplet)");
-  ABORT_NO_IMPL;
+  SgExpression *lower{nullptr};
+  SgExpression *upper{nullptr};
+  SgExpression *stride{nullptr};
+
+  if (std::get<0>(x.t)) {
+    WalkExpr(std::get<0>(x.t).value(), lower);
+  }
+  if (std::get<1>(x.t)) {
+    WalkExpr(std::get<1>(x.t).value(), upper);
+  }
+  if (std::get<2>(x.t)) {
+    WalkExpr(std::get<2>(x.t).value(), stride);
+  }
+
+  if (lower == nullptr) {
+    lower = SageBuilderCpp17::buildNullExpression_nfi();
+  }
+  if (upper == nullptr) {
+    upper = SageBuilderCpp17::buildNullExpression_nfi();
+  }
+  if (stride == nullptr) {
+    stride = SageBuilder::buildIntVal_nfi(std::string("1"));
+  }
+
+  expr = SageBuilderCpp17::buildSubscriptExpression_nfi(lower, upper, stride);
+  ASSERT_not_null(expr);
 }
 
 // ExecutableConstruct
@@ -2746,6 +6938,17 @@ void Build(parser::OpenACCConstruct &x) {
   ABORT_NO_IMPL;
 }
 
+void Build(parser::CompilerDirective &x) {
+  const std::string directive = x.source.ToString();
+  if (directive.empty()) {
+    return;
+  }
+  SgPragmaDeclaration *pragma = SageBuilder::buildPragmaDeclaration(
+      directive, SageBuilder::topScopeStack());
+  ASSERT_not_null(pragma);
+  SageInterface::appendStatement(pragma, SageBuilder::topScopeStack());
+}
+
 void Build(parser::AccEndCombinedDirective &x) {
   std::cerr
       << "[WARN] Rose::builder::Build(AccEndCombinedDirective) unimplemented\n";
@@ -2793,14 +6996,42 @@ void Build(parser::DerivedTypeStmt &x, std::string &name,
 void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt) {
   // std::tuple<> DeclarationTypeSpec, std::list<ComponentAttrSpec>,
   // std::list<ComponentOrFill>
-  std::cout << "Rose::builder::Build(DataComponentDefStmt)\n";
-  ABORT_NO_IMPL;
+  using namespace Fortran::parser;
+
+  SgType *type{nullptr};
+  Build(std::get<DeclarationTypeSpec>(x.t), type);
+  ASSERT_not_null(type);
+
+  std::list<LanguageTranslation::ExpressionKind> modifiers{};
+  for (auto &attr : std::get<std::list<ComponentAttrSpec>>(x.t)) {
+    getComponentAttrSpec(attr, modifiers, type);
+  }
+
+  std::list<EntityDeclTuple> initInfo{};
+  for (auto &item : std::get<std::list<ComponentOrFill>>(x.t)) {
+    common::visit(common::visitors{
+                      [&](ComponentDecl &decl) { Build(decl, initInfo, type); },
+                      [&](FillDecl &) { /* No ROSE equivalent */ }},
+                  item.u);
+  }
+
+  if (initInfo.empty()) {
+    return;
+  }
+
+  SgVariableDeclaration *varDecl{nullptr};
+  builder.Enter(varDecl, type, initInfo);
+  builder.Leave(varDecl, modifiers);
+  stmt = varDecl;
 }
 
 void Build(Fortran::parser::ComponentDecl &x,
            std::list<EntityDeclTuple> &componentDecls, SgType *baseType) {
-  std::cout << "Rose::builder::Build(ComponentDecl&)\n";
-  ABORT_NO_IMPL;
+  std::string name;
+  SgExpression *init{nullptr};
+  SgType *type{nullptr};
+  Build(x, name, init, type, baseType);
+  componentDecls.push_back(std::make_tuple(name, type, init));
 }
 
 void Build(parser::ComponentDecl &x, std::string &name, SgExpression *&init,
@@ -2808,8 +7039,41 @@ void Build(parser::ComponentDecl &x, std::string &name, SgExpression *&init,
   //  std::tuple<> Name, std::optional<ComponentArraySpec>,
   //  std::optional<CoarraySpec>, std::optional<CharLength>,
   //               std::optional<Initialization>
-  std::cout << "Rose::builder::Build(ComponentDecl)\n";
-  ABORT_NO_IMPL;
+  using namespace Fortran::parser;
+
+  name = std::get<Name>(x.t).ToString();
+  init = nullptr;
+  type = nullptr;
+
+  SgType *localBase = base_type;
+  if (auto &opt = std::get<std::optional<CharLength>>(x.t)) {
+    SgExpression *lenExpr{nullptr};
+    Build(opt.value(), lenExpr);
+    ASSERT_not_null(lenExpr);
+
+    if (auto *stringType = isSgTypeString(localBase)) {
+      SgTypeString *newType = SageBuilder::buildStringType(lenExpr);
+      newType->set_type_kind(stringType->get_type_kind());
+      localBase = newType;
+    } else if (isSgTypeChar(localBase)) {
+      localBase = SageBuilder::buildStringType(lenExpr);
+    }
+  }
+
+  if (auto &opt = std::get<std::optional<ComponentArraySpec>>(x.t)) {
+    Build(opt.value(), type, localBase);
+  } else {
+    type = localBase;
+  }
+
+  if (auto &opt = std::get<std::optional<CoarraySpec>>(x.t)) {
+    ABORT_NO_IMPL;
+    Build(opt.value(), type, localBase);
+  }
+
+  if (auto &opt = std::get<std::optional<Initialization>>(x.t)) {
+    Build(opt.value(), init);
+  }
 }
 
 void Build(parser::EnumDef &x) {
@@ -2817,9 +7081,341 @@ void Build(parser::EnumDef &x) {
   ABORT_NO_IMPL;
 }
 
-void Build(parser::InterfaceBlock &x) {
-  std::cout << "Rose::builder::Build(InterfaceBlock)\n";
-  ABORT_NO_IMPL;
+void BuildVisitor::Build(parser::InterfaceBlock &x) {
+  using namespace Fortran::parser;
+
+  auto &stmt = std::get<Statement<InterfaceStmt>>(x.t);
+  auto &specs = std::get<std::list<InterfaceSpecification>>(x.t);
+
+  SgInterfaceStatement::generic_spec_enum kind =
+      SgInterfaceStatement::e_unnamed_interface_type;
+  SgName interfaceName;
+
+  if (auto *optGeneric =
+          std::get_if<std::optional<GenericSpec>>(&stmt.statement.u)) {
+    if (*optGeneric) {
+      GenericSpec &generic = optGeneric->value();
+      common::visit(
+          common::visitors{
+              [&](Name &y) {
+                kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceName = SgName(y.ToString());
+              },
+              [&](DefinedOperator &y) {
+                kind = SgInterfaceStatement::e_operator_interface_type;
+                auto operatorName = [&](const DefinedOperator &op) {
+                  using IntrinsicOp = DefinedOperator::IntrinsicOperator;
+                  return common::visit(
+                      common::visitors{
+                          [&](const DefinedOpName &name) {
+                            std::string opName = name.v.ToString();
+                            if (!opName.empty() && opName.front() != '.') {
+                              opName.insert(opName.begin(), '.');
+                            }
+                            if (!opName.empty() && opName.back() != '.') {
+                              opName.push_back('.');
+                            }
+                            return opName;
+                          },
+                          [&](IntrinsicOp opKind) {
+                            switch (opKind) {
+                            case IntrinsicOp::Power:
+                              return std::string("**");
+                            case IntrinsicOp::Multiply:
+                              return std::string("*");
+                            case IntrinsicOp::Divide:
+                              return std::string("/");
+                            case IntrinsicOp::Add:
+                              return std::string("+");
+                            case IntrinsicOp::Subtract:
+                              return std::string("-");
+                            case IntrinsicOp::Concat:
+                              return std::string("//");
+                            case IntrinsicOp::LT:
+                              return std::string(".LT.");
+                            case IntrinsicOp::LE:
+                              return std::string(".LE.");
+                            case IntrinsicOp::EQ:
+                              return std::string(".EQ.");
+                            case IntrinsicOp::NE:
+                              return std::string(".NE.");
+                            case IntrinsicOp::GE:
+                              return std::string(".GE.");
+                            case IntrinsicOp::GT:
+                              return std::string(".GT.");
+                            case IntrinsicOp::NOT:
+                              return std::string(".NOT.");
+                            case IntrinsicOp::AND:
+                              return std::string(".AND.");
+                            case IntrinsicOp::OR:
+                              return std::string(".OR.");
+                            case IntrinsicOp::EQV:
+                              return std::string(".EQV.");
+                            case IntrinsicOp::NEQV:
+                              return std::string(".NEQV.");
+                            }
+                            ROSE_ABORT();
+                          }},
+                      op.u);
+                };
+                interfaceName = SgName(operatorName(y));
+              },
+              [&](GenericSpec::Assignment &) {
+                kind = SgInterfaceStatement::e_assignment_interface_type;
+                interfaceName = SgName("=");
+              },
+              [&](GenericSpec::ReadFormatted &) {
+                kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceName = SgName(generic.source.ToString());
+              },
+              [&](GenericSpec::ReadUnformatted &) {
+                kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceName = SgName(generic.source.ToString());
+              },
+              [&](GenericSpec::WriteFormatted &) {
+                kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceName = SgName(generic.source.ToString());
+              },
+              [&](GenericSpec::WriteUnformatted &) {
+                kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceName = SgName(generic.source.ToString());
+              }},
+          generic.u);
+    }
+  }
+
+  SgInterfaceStatement *interfaceStmt =
+      new SgInterfaceStatement(interfaceName, kind);
+  ASSERT_not_null(interfaceStmt);
+  SageInterface::setSourcePosition(interfaceStmt);
+  SageInterface::appendStatement(interfaceStmt, SageBuilder::topScopeStack());
+
+  auto stabilizeParamScopeParent = [](SgScopeStatement *paramScope) {
+    if (paramScope == nullptr) {
+      return;
+    }
+    SgBasicBlock *parentBlock = isSgBasicBlock(paramScope->get_parent());
+    if (parentBlock == nullptr) {
+      return;
+    }
+    SgScopeStatement *stableScope =
+        isSgScopeStatement(parentBlock->get_parent());
+    if (stableScope != nullptr) {
+      paramScope->set_parent(stableScope);
+    }
+  };
+
+  for (auto &spec : specs) {
+    common::visit(
+        common::visitors{
+            [&](InterfaceBody &body) {
+              common::visit(
+                  common::visitors{
+                      [&](InterfaceBody::Subroutine &subr) {
+                        auto &subrStmt =
+                            std::get<Statement<SubroutineStmt>>(subr.t);
+                        auto &endStmt =
+                            std::get<Statement<EndSubroutineStmt>>(subr.t);
+                        std::list<std::string> dummyArgs;
+                        LanguageTranslation::FunctionModifierList modifiers;
+                        getSubroutineStmt(subrStmt.statement, dummyArgs,
+                                          modifiers, *this);
+
+                        std::string name =
+                            std::get<Name>(subrStmt.statement.t).ToString();
+                        SgFunctionParameterList *paramList{nullptr};
+                        SgScopeStatement *paramScope{nullptr};
+                        bool isDefDecl{false};
+
+                        builder.Enter(paramList, paramScope, name,
+                                      /*function_type*/ nullptr, isDefDecl);
+                        stabilizeParamScopeParent(paramScope);
+
+                        auto &specPart =
+                            std::get<common::Indirection<SpecificationPart>>(
+                                subr.t);
+                        Walk(specPart.value());
+
+                        builder.Leave(paramList, paramScope, dummyArgs);
+
+                        SgProcedureHeaderStatement *procDecl = SageBuilder::
+                            buildNondefiningProcedureHeaderStatement(
+                                SgName(name), SageBuilder::buildVoidType(),
+                                paramList,
+                                SgProcedureHeaderStatement::
+                                    e_subroutine_subprogram_kind,
+                                SageBuilder::topScopeStack());
+                        ASSERT_not_null(procDecl);
+
+                        procDecl->set_functionParameterScope(
+                            isSgFunctionParameterScope(paramScope));
+                        procDecl->set_parent(interfaceStmt);
+
+                        SgInterfaceBody *bodyNode =
+                            new SgInterfaceBody(SgName(name), procDecl,
+                                                /*use_function_name*/ false);
+                        ASSERT_not_null(bodyNode);
+                        bodyNode->set_parent(interfaceStmt);
+                        SageInterface::setSourcePosition(bodyNode);
+                        interfaceStmt->get_interface_body_list().push_back(
+                            bodyNode);
+                      },
+                      [&](InterfaceBody::Function &func) {
+                        auto &funcStmt =
+                            std::get<Statement<FunctionStmt>>(func.t);
+                        std::list<std::string> dummyArgs;
+                        std::string name =
+                            std::get<Name>(funcStmt.statement.t).ToString();
+                        for (auto &arg :
+                             std::get<std::list<Name>>(funcStmt.statement.t)) {
+                          dummyArgs.push_back(arg.ToString());
+                        }
+
+                        SgFunctionParameterList *paramList{nullptr};
+                        SgScopeStatement *paramScope{nullptr};
+                        bool isDefDecl{false};
+
+                        SgType *returnType{nullptr};
+                        LanguageTranslation::FunctionModifierList modifiers;
+                        BuildPrefix(std::get<std::list<PrefixSpec>>(
+                                        funcStmt.statement.t),
+                                    modifiers, returnType);
+
+                        std::string resultName;
+                        bool undeclaredResultName{false};
+                        auto &suffix = std::get<std::optional<Suffix>>(
+                            funcStmt.statement.t);
+                        if (suffix && suffix->resultName) {
+                          resultName = suffix->resultName->ToString();
+                        }
+                        const bool case_insensitive =
+                            SageInterface::is_language_case_insensitive();
+                        const bool useFunctionNameResult =
+                            resultName.empty() ||
+                            NamesMatch(resultName, name, case_insensitive);
+                        if (!resultName.empty() && !useFunctionNameResult &&
+                            returnType) {
+                          undeclaredResultName = true;
+                        }
+
+                        auto &specPart =
+                            std::get<common::Indirection<SpecificationPart>>(
+                                func.t);
+                        if (!returnType) {
+                          std::string lookupName =
+                              resultName.empty() ? name : resultName;
+                          BuildFunctionReturnType(specPart.value(), lookupName,
+                                                  returnType);
+                        }
+
+                        SgType *param_result_type =
+                            useFunctionNameResult ? returnType : nullptr;
+                        builder.Enter(paramList, paramScope, name,
+                                      param_result_type, isDefDecl);
+                        stabilizeParamScopeParent(paramScope);
+
+                        Walk(specPart.value());
+
+                        if (!returnType) {
+                          std::string implicitName =
+                              resultName.empty() ? name : resultName;
+                          returnType = SageBuilder::buildFortranImplicitType(
+                              implicitName);
+                        }
+
+                        if (undeclaredResultName &&
+                            paramScope->lookup_variable_symbol(resultName) ==
+                                nullptr) {
+                          SageBuilderCpp17::fixUndeclaredResultName(
+                              resultName, paramScope, returnType);
+                        }
+                        if (!resultName.empty() &&
+                            paramScope->lookup_variable_symbol(resultName) ==
+                                nullptr) {
+                          SageBuilderCpp17::fixUndeclaredResultName(
+                              resultName, paramScope, returnType);
+                        }
+                        if (useFunctionNameResult &&
+                            paramScope->lookup_variable_symbol(name) ==
+                                nullptr) {
+                          SageBuilderCpp17::fixUndeclaredResultName(
+                              name, paramScope, returnType);
+                        }
+
+                        builder.Leave(paramList, paramScope, dummyArgs);
+
+                        if (!returnType) {
+                          returnType = SageBuilder::buildUnknownType();
+                        }
+
+                        SgProcedureHeaderStatement *procDecl = SageBuilder::
+                            buildNondefiningProcedureHeaderStatement(
+                                SgName(name), returnType, paramList,
+                                SgProcedureHeaderStatement::
+                                    e_function_subprogram_kind,
+                                SageBuilder::topScopeStack());
+                        ASSERT_not_null(procDecl);
+
+                        procDecl->set_functionParameterScope(
+                            isSgFunctionParameterScope(paramScope));
+                        procDecl->set_parent(interfaceStmt);
+
+                        auto hasModifier =
+                            [&](LanguageTranslation::FunctionModifier kind) {
+                              return std::find(modifiers.begin(),
+                                               modifiers.end(),
+                                               kind) != modifiers.end();
+                            };
+                        if (hasModifier(LanguageTranslation::FunctionModifier::
+                                            e_function_modifier_recursive)) {
+                          procDecl->get_functionModifier().setRecursive();
+                        }
+                        if (hasModifier(LanguageTranslation::FunctionModifier::
+                                            e_function_modifier_pure)) {
+                          procDecl->get_functionModifier().setPure();
+                        }
+                        if (hasModifier(LanguageTranslation::FunctionModifier::
+                                            e_function_modifier_elemental)) {
+                          procDecl->get_functionModifier().setElemental();
+                        }
+
+                        const std::string lookupName =
+                            resultName.empty() ? name : resultName;
+                        if (SgVariableSymbol *result_symbol =
+                                paramScope->lookup_variable_symbol(
+                                    lookupName)) {
+                          SgInitializedName *result_name =
+                              result_symbol->get_declaration();
+                          ASSERT_not_null(result_name);
+                          procDecl->set_result_name(result_name);
+                          result_name->set_parent(procDecl);
+                        }
+
+                        SgInterfaceBody *bodyNode =
+                            new SgInterfaceBody(SgName(name), procDecl,
+                                                /*use_function_name*/ false);
+                        ASSERT_not_null(bodyNode);
+                        bodyNode->set_parent(interfaceStmt);
+                        SageInterface::setSourcePosition(bodyNode);
+                        interfaceStmt->get_interface_body_list().push_back(
+                            bodyNode);
+                      }},
+                  body.u);
+            },
+            [&](Statement<ProcedureStmt> &procStmt) {
+              auto &names = std::get<std::list<Name>>(procStmt.statement.t);
+              for (auto &procName : names) {
+                SgInterfaceBody *bodyNode =
+                    new SgInterfaceBody(SgName(procName.ToString()), nullptr,
+                                        /*use_function_name*/ true);
+                ASSERT_not_null(bodyNode);
+                bodyNode->set_parent(interfaceStmt);
+                SageInterface::setSourcePosition(bodyNode);
+                interfaceStmt->get_interface_body_list().push_back(bodyNode);
+              }
+            }},
+        spec.u);
+  }
 }
 
 void Build(parser::StructureDef &x) {
@@ -2833,8 +7429,8 @@ void Build(parser::GenericStmt &x) {
 }
 
 void Build(parser::ProcedureDeclarationStmt &x) {
-  std::cout << "Rose::builder::Build(ProcedureDeclarationStmt)\n";
-  ABORT_NO_IMPL;
+  BuildVisitor visitor;
+  visitor.Build(x);
 }
 
 // OpenACCDeclarativeConstruct
@@ -2864,7 +7460,7 @@ void getModifiers(parser::AccessSpec &x,
 }
 
 // IntentSpec
-void getModifiers(parser::IntentSpec &x,
+void getModifiers(const parser::IntentSpec &x,
                   LanguageTranslation::ExpressionKind &m) {
   using namespace LanguageTranslation;
   switch (x.v) {
@@ -2881,11 +7477,9 @@ void getModifiers(parser::IntentSpec &x,
 }
 
 // LanguageBindingSpec
-void getModifiers(parser::LanguageBindingSpec &x,
+void getModifiers(const parser::LanguageBindingSpec &x,
                   LanguageTranslation::ExpressionKind &m) {
-  std::cout << "[WARN] getModifiers(LanguageBindingSpec): MAYBE need build of "
-               "ScalarDefaultCharConstantExpr\n";
-  ABORT_NO_IMPL;
+  m = LanguageTranslation::ExpressionKind::e_type_modifier_bind_c;
 }
 
 // TypeAttrSpec
@@ -2904,7 +7498,43 @@ void getModifiers(parser::TypeAttrSpec &x,
           [&](TypeAttrSpec::BindC &y) {
             m = ExpressionKind::e_type_modifier_bind_c;
           },
-          [&](TypeAttrSpec::Extends &y) { ABORT_NO_IMPL; }},
+          [&](TypeAttrSpec::Extends &y) { m = ExpressionKind::e_unknown; }},
+      x.u);
+}
+
+void getComponentAttrSpec(
+    parser::ComponentAttrSpec &x,
+    std::list<LanguageTranslation::ExpressionKind> &modifiers,
+    SgType *&baseType) {
+  // std::variant<> AccessSpec, Allocatable, CoarraySpec, Contiguous,
+  //                ComponentArraySpec, Pointer, common::CUDADataAttr
+  using namespace Fortran::parser;
+  using namespace LanguageTranslation;
+
+  common::visit(
+      common::visitors{
+          [&](ComponentArraySpec &y) {
+            SgType *type{nullptr};
+            Build(y, type, baseType);
+            baseType = type;
+          },
+          [&](CoarraySpec &) { ABORT_NO_IMPL; },
+          [&](const Allocatable &) {
+            modifiers.push_back(ExpressionKind::e_type_modifier_allocatable);
+          },
+          [&](const Contiguous &) {
+            modifiers.push_back(ExpressionKind::e_storage_modifier_contiguous);
+          },
+          [&](AccessSpec &y) {
+            ExpressionKind m;
+            getModifiers(y, m);
+            modifiers.push_back(m);
+          },
+          [&](const Pointer &) {
+            modifiers.push_back(ExpressionKind::e_type_modifier_pointer);
+          },
+          [&](const common::CUDADataAttr &) { ABORT_NO_IMPL; },
+          [&](const ErrorRecovery &) { ABORT_NO_IMPL; }},
       x.u);
 }
 
@@ -2931,14 +7561,20 @@ void getAttrSpec(parser::AttrSpec &x,
           [&](CoarraySpec &) {
             ABORT_NO_IMPL; /*CODIMENSION*/
           },
-          [&](ComponentArraySpec &) {
-            ABORT_NO_TEST; /*DIMENSION*/
+          [&](ComponentArraySpec &y) {
+            SgType *type{nullptr};
+            Build(y, type, baseType);
+            baseType = type;
           },
-          [&](const IntentSpec &) {
-            ABORT_NO_IMPL; /*INTENT*/
+          [&](const IntentSpec &y) {
+            ExpressionKind m;
+            getModifiers(y, m);
+            modifiers.push_back(m);
           },
-          [&](const LanguageBindingSpec &) {
-            ABORT_NO_IMPL; /*BINDING*/
+          [&](const LanguageBindingSpec &y) {
+            ExpressionKind m;
+            getModifiers(y, m);
+            modifiers.push_back(m);
           },
           [&](const common::CUDADataAttr &) {
             ABORT_NO_IMPL; /*CUDADataAttr*/
@@ -2951,6 +7587,11 @@ void getAttrSpec(parser::AttrSpec &x,
           },
           [&](const Contiguous &) {
             modifiers.push_back(ExpressionKind::e_storage_modifier_contiguous);
+          },
+          [&](AccessSpec &y) {
+            ExpressionKind m;
+            getModifiers(y, m);
+            modifiers.push_back(m);
           },
           [&](const External &) {
             modifiers.push_back(ExpressionKind::e_storage_modifier_external);

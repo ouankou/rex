@@ -1056,13 +1056,85 @@ ResetParentPointers::evaluateInheritedAttribute(
 
         // DQ (2/6/2020): Added debugging information.
         if (initializedName == nullptr) {
-          printf("In resetParentPointers.C: case V_SgVarRefExp: variableSymbol "
-                 "= %p = %s \n",
-                 variableSymbol, variableSymbol->class_name().c_str());
-          printf("In resetParentPointers.C: case V_SgVarRefExp: "
-                 "variableRefExpression = %p = %s \n",
-                 variableRefExpression,
-                 variableRefExpression->class_name().c_str());
+          fprintf(stderr,
+                  "In resetParentPointers.C: case V_SgVarRefExp: "
+                  "variableSymbol = %p = %s \n",
+                  variableSymbol, variableSymbol->class_name().c_str());
+          bool found_symbol_name = false;
+          if (SgProject *project = SageInterface::getProject(node)) {
+            Rose_STL_Container<SgNode *> scopes =
+                NodeQuery::querySubTree(project, V_SgScopeStatement);
+            for (SgNode *scope_node : scopes) {
+              SgScopeStatement *scope = isSgScopeStatement(scope_node);
+              if (scope == nullptr) {
+                continue;
+              }
+              SgSymbolTable *symtab = scope->get_symbol_table();
+              if (symtab == nullptr) {
+                continue;
+              }
+              rose_hash_multimap *table = symtab->get_table();
+              if (table == nullptr) {
+                continue;
+              }
+              for (auto it = table->begin(); it != table->end(); ++it) {
+                if (it->second == variableSymbol) {
+                  std::string symbol_name = it->first.getString();
+                  fprintf(stderr,
+                          "In resetParentPointers.C: case V_SgVarRefExp: "
+                          "symbol table name = %s \n",
+                          symbol_name.c_str());
+                  found_symbol_name = true;
+                  break;
+                }
+              }
+              if (found_symbol_name) {
+                break;
+              }
+            }
+          }
+          if (!found_symbol_name) {
+            fprintf(stderr, "In resetParentPointers.C: case V_SgVarRefExp: "
+                            "symbol name not found in symbol tables\n");
+          }
+          fprintf(stderr,
+                  "In resetParentPointers.C: case V_SgVarRefExp: "
+                  "variableRefExpression = %p = %s \n",
+                  variableRefExpression,
+                  variableRefExpression->class_name().c_str());
+          if (SgFunctionDeclaration *enclosing =
+                  SageInterface::getEnclosingFunctionDeclaration(
+                      variableRefExpression)) {
+            fprintf(stderr,
+                    "In resetParentPointers.C: case V_SgVarRefExp: "
+                    "enclosing function = %s \n",
+                    enclosing->get_name().str());
+          }
+          for (SgNode *parent = variableRefExpression->get_parent();
+               parent != nullptr; parent = parent->get_parent()) {
+            if (SgStatement *stmt = isSgStatement(parent)) {
+              fprintf(stderr,
+                      "In resetParentPointers.C: case V_SgVarRefExp: "
+                      "enclosing statement = %p = %s \n",
+                      stmt, stmt->class_name().c_str());
+              if (Sg_File_Info *stmt_info = stmt->get_file_info()) {
+                fprintf(stderr,
+                        "In resetParentPointers.C: case V_SgVarRefExp: "
+                        "statement location line=%d col=%d file=%s \n",
+                        stmt_info->get_line(), stmt_info->get_col(),
+                        stmt_info->get_filenameString().c_str());
+              }
+              break;
+            }
+          }
+          if (Sg_File_Info *info = variableRefExpression->get_file_info()) {
+            fprintf(stderr,
+                    "In resetParentPointers.C: case V_SgVarRefExp: "
+                    "location line=%d col=%d file=%s \n",
+                    info->get_line(), info->get_col(),
+                    info->get_filenameString().c_str());
+          }
+          fflush(stderr);
         }
         ROSE_ASSERT(initializedName != nullptr);
 
@@ -1972,6 +2044,32 @@ void ResetParentPointersInMemoryPool::visit(SgNode *node) {
         SgScopeStatement *scope = declaration->get_scope();
         ROSE_ASSERT(scope != nullptr);
         ensure_symbol_parent(symbol, scope);
+        break;
+      }
+
+      case V_SgFunctionTypeSymbol: {
+        SgFunctionTypeSymbol *tempSymbol = isSgFunctionTypeSymbol(symbol);
+        ROSE_ASSERT(tempSymbol != nullptr);
+        SgType *type = tempSymbol->get_type();
+        SgSymbolTable *table = nullptr;
+        if (isSgFunctionType(type) != nullptr ||
+            isSgMemberFunctionType(type) != nullptr) {
+          SgFunctionTypeTable *funcTable =
+              SgNode::get_globalFunctionTypeTable();
+          ROSE_ASSERT(funcTable != nullptr);
+          table = funcTable->get_function_type_table();
+        } else {
+          SgTypeTable *typeTable = SgNode::get_globalTypeTable();
+          ROSE_ASSERT(typeTable != nullptr);
+          table = typeTable->get_type_table();
+        }
+        ROSE_ASSERT(table != nullptr);
+        if (table->exists(tempSymbol) == false) {
+          table->insert(tempSymbol->get_name(), tempSymbol);
+        }
+        if (tempSymbol->get_parent() != table) {
+          tempSymbol->set_parent(table);
+        }
         break;
       }
 
