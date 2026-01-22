@@ -142,7 +142,6 @@ set(_source_position_disabled_tests
   test2004_25.C
   test2005_04.C
   test2005_06.C
-  test2005_69.C
   test2005_85.C
   test2005_88.C
   test2005_115.C
