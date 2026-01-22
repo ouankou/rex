@@ -13,6 +13,11 @@ RUN apt-get update \
 RUN mkdir -p /aosc-rootfs \
     && curl -fsSL "${AOSC_CONTAINER_URL}" -o /tmp/aosc-rootfs.tar.xz \
     && tar -xJf /tmp/aosc-rootfs.tar.xz -C /aosc-rootfs \
+    && if [ ! -e /aosc-rootfs/lib64 ]; then ln -s usr/lib /aosc-rootfs/lib64; fi \
+    && if [ ! -e /aosc-rootfs/lib ]; then ln -s usr/lib /aosc-rootfs/lib; fi \
+    && sed -i 's/^no_check_dbus = .*/no_check_dbus = true/' /aosc-rootfs/etc/oma.toml \
+    && sed -i 's/^check_battery = .*/check_battery = \"ignore\"/' /aosc-rootfs/etc/oma.toml \
+    && sed -i 's/^take_wake_lock = .*/take_wake_lock = \"ignore\"/' /aosc-rootfs/etc/oma.toml \
     && rm /tmp/aosc-rootfs.tar.xz
 
 FROM scratch
