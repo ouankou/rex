@@ -238,6 +238,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   bool enable_openmp_simd = false;
   bool disable_openmp_via_flag = false;
   bool continue_on_error = false;
+  bool disable_access_control = false;
   enum class ExceptionMode { Unspecified, Enabled, Disabled };
   ExceptionMode exception_mode = ExceptionMode::Unspecified;
   enum class RttiMode { Unspecified, Enabled, Disabled };
@@ -343,6 +344,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       rtti_mode = RttiMode::Disabled;
     } else if (current_arg == "-rex:clang:continue-on-error") {
       continue_on_error = true;
+    } else if (current_arg == "-rex:clang:disable-access-control") {
+      disable_access_control = true;
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // TODO -include
 #if DEBUG_ARGS
@@ -730,8 +733,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   }
   if (language == ClangToSageTranslator::CPLUSPLUS ||
       language == ClangToSageTranslator::CUDA) {
-    // Preserve legacy frontend permissiveness for access violations.
-    lang_opts.AccessControl = 0;
+    if (disable_access_control) {
+      lang_opts.AccessControl = 0;
+    }
   }
 
   // Now create file manager with FileSystemOptions from the parsed invocation

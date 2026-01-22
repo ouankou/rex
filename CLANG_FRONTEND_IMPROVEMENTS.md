@@ -69,7 +69,18 @@ return 0;
 **Impact**: CI/tooling now treats Clang errors as failures by default while still allowing
 explicit best-effort code generation when requested.
 
-### 2. UnresolvedLookupExpr Support
+### 2. Access Control Checks (Opt-in)
+
+**Default**: Clang access control checks remain enabled (standard-conforming).
+
+**Opt-in**: Use `-rex:clang:disable-access-control` to relax access control checks
+to match legacy-frontend permissiveness when needed for compatibility.
+
+**Note**: Disabling access control can accept otherwise ill-formed C++ and may
+affect overload resolution and analysis results. Prefer leaving it enabled
+unless you have a specific compatibility requirement.
+
+### 3. UnresolvedLookupExpr Support
 
 **File**: `src/frontend/CxxFrontend/Clang/clang-frontend-stmt.cpp`
 **Lines**: 3526-3565
