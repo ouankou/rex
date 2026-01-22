@@ -509,6 +509,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2005_66.C
   test2005_67.C
   test2005_68.C
+  test2005_69.C
   test2005_70.C
   test2005_71.C
   test2005_72.C
@@ -1377,6 +1378,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2013_239.C
   test2013_243.C
   test2013_244.C
+  test2013_247.C
   test2013_25.C
   test2013_250.C
   test2013_251.C
