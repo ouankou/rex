@@ -3,6 +3,7 @@ set(ROSE_FLAGS -rose:verbose 0)
 function(LANL_POP_test file_to_compile)
   add_test(
     NAME ${file_to_compile}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND testAnalysis ${ROSE_FLAGS}
             -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_compile})
@@ -11,10 +12,10 @@ endfunction()
 function(LANL_POP_parse_test file_to_compile)
   add_test(
     NAME lanl_pop_parse_${file_to_compile}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND testParser ${ROSE_FLAGS}
             -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_compile})
-  set_tests_properties(lanl_pop_parse_${file_to_compile} PROPERTIES DISABLED TRUE)
 endfunction()
 
 set(files_to_compile
@@ -83,34 +84,17 @@ set(files_to_compile
   vmix_rich.F90
   xdisplay.F90
   POP.F90
+  current_meters.F90
+  drifters.F90
+  hydro_sections.F90
+  fix_64.C
+  io_netcdf_testcode_01.F90
+  io_netcdf_testcode_02.F90
 )
 
 foreach(file_to_compile ${files_to_compile})
   LANL_POP_test(${file_to_compile})
   LANL_POP_parse_test(${file_to_compile})
-endforeach()
-
-set(disabled_files_to_compile
-  current_meters.F90
-  drifters.F90
-  hydro_sections.F90
-  fix_64.C
-)
-
-foreach(file_to_compile ${disabled_files_to_compile})
-  LANL_POP_test(${file_to_compile})
-  LANL_POP_parse_test(${file_to_compile})
-  set_tests_properties(${file_to_compile} PROPERTIES DISABLED TRUE)
-endforeach()
-
-set(failing_files_to_compile
-  io_netcdf_testcode_01.F90
-  io_netcdf_testcode_02.F90
-)
-
-foreach(file_to_compile ${failing_files_to_compile})
-  LANL_POP_test(${file_to_compile})
-  set_tests_properties(${file_to_compile} PROPERTIES DISABLED TRUE)
 endforeach()
 
 # set up dependencies between tests
@@ -247,30 +231,3 @@ set_tests_properties(vmix_kpp.F90 PROPERTIES DEPENDS "kinds_mod.F90;blocks.F90;d
 set_tests_properties(vmix_rich.F90 PROPERTIES DEPENDS "kinds_mod.F90;blocks.F90;distribution.F90;domain.F90;constants.F90;grid.F90;broadcast.F90;io.F90;state_mod.F90;time_management.F90;exit_mod.F90)")
 
 set_tests_properties(xdisplay.F90 PROPERTIES DEPENDS "kinds_mod.F90;blocks.F90;domain_size.F90;domain.F90;constants.F90;communicate.F90;io_types.F90;broadcast.F90;prognostic.F90;grid.F90;exit_mod.F90)")
-
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=POP.F90\;kinds_mod.F90\;typeSizes.F90
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis PROPERTIES LABELS disabled DEPENDS "POP.F90;kinds_mod.F90;typeSizes.F90" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_check-analysis PROPERTIES DISABLED TRUE)
-endif()
-if(NOT REX_ENABLE_DISABLED_TESTS)
-endif()
-add_test(
-  NAME nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=POP.F90
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_Fortran_tests_LANL_POP_conditional-check-local PROPERTIES DEPENDS POP.F90 )

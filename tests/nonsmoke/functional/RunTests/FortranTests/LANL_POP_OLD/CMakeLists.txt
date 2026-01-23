@@ -6,21 +6,6 @@ if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; LANL_POP_OLD tests require bash")
 endif()
 
-set(_lanl_pop_old_enabled TRUE)
-if(NOT ENABLE-FORTRAN)
-  set(_lanl_pop_old_enabled FALSE)
-endif()
-
-set(_gfortran_4_0 FALSE)
-if(BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH MATCHES "gfortran"
-   AND BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER STREQUAL "4"
-   AND BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER STREQUAL "0")
-  set(_gfortran_4_0 TRUE)
-endif()
-if(_gfortran_4_0)
-  set(_lanl_pop_old_enabled FALSE)
-endif()
-
 add_test(
   NAME RunTests_LANL_POP_OLD
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -55,18 +40,3 @@ add_test(
      ./test.sh"
 )
 set_tests_properties(RunTests_LANL_POP_OLD PROPERTIES LABELS RunTests RESOURCE_LOCK lanl_pop_old)
-if(NOT _lanl_pop_old_enabled)
-  set_tests_properties(RunTests_LANL_POP_OLD PROPERTIES DISABLED TRUE)
-endif()
-
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_RunTests_FortranTests_LANL_POP_OLD_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=RunTests_LANL_POP_OLD
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_OLD_check-local PROPERTIES DEPENDS RunTests_LANL_POP_OLD )

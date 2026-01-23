@@ -15191,8 +15191,9 @@ SgModuleStatement::post_construction_initialization()
 SgName
 SgModuleStatement::get_mangled_name() const
    {
-  // printf ("Sorry, SgModuleStatement::get_mangled_name() not implemented! \n");
-     return SgName("_module_");
+     std::string module_name = get_name().getString();
+     module_name = Rose::StringUtility::convertToLowerCase(module_name);
+     return SgName("_module_" + module_name);
    }
 
 

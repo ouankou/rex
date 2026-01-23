@@ -171,14 +171,12 @@ if(ENABLE-C)
       ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/parameter.f
       -o /dev/null
   )
-  set_tests_properties(Translator_testFortranParameter PROPERTIES DISABLED TRUE)
 
   add_test(
     NAME Translator_testFortranProtected
     COMMAND sh -c
-      "gfortran -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03 && gdb --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null"
+      "gfortran -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03 && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null"
   )
-  set_tests_properties(Translator_testFortranProtected PROPERTIES DISABLED TRUE)
 
 endif()
 
@@ -194,9 +192,6 @@ set(_translator_cxx_tests
   Translator_label_stmt_file_info
   Translator_querySubTree
 )
-set(_translator_fortran_tests
-  Translator_testTranslator2010_01
-)
 add_test(
   NAME nonsmoke_functional_translatorTests_check-cxx
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -209,19 +204,6 @@ add_test(
 set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES LABELS disabled DEPENDS "${_translator_cxx_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES DISABLED TRUE)
-endif()
-add_test(
-  NAME nonsmoke_functional_translatorTests_check-fortran
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_translator_fortran_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_translatorTests_check-fortran PROPERTIES LABELS disabled DEPENDS "${_translator_fortran_tests}" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_translatorTests_check-fortran PROPERTIES DISABLED TRUE)
 endif()
 add_test(
   NAME nonsmoke_functional_translatorTests_check-local

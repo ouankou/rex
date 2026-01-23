@@ -148,6 +148,10 @@ void FortranCodeGeneration_locatedNode::unparseStatementNumbers(
         "This is a CPP directive, skip leading white space in unparsing. \n");
     return;
   }
+  if (flangParser && isSgLabelStatement(stmt) != nullptr) {
+    // Label statements handle their own fixed/free-form alignment.
+    return;
+  }
 
   // This fixes a formatting problem, an aspect fo which was reported by Liao
   // 12/28/2007).
@@ -2408,9 +2412,26 @@ void FortranCodeGeneration_locatedNode::unparseLabelStmt(
     SgLabelStatement *labelStmt, SgUnparse_Info &info) {
   if (flangParser) {
     // The SgLabelStatement is used for the label
-    if (labelStmt->get_label().getString().size() > 0) {
-      // Print label without formatting for now, think about fixed form later
-      curprint(labelStmt->get_label().getString() + " ");
+    const std::string label = labelStmt->get_label().getString();
+    if (!label.empty()) {
+      bool fixedFormat = (unp->currentFile == nullptr) ||
+                         (unp->currentFile->get_outputFormat() ==
+                          SgFile::e_unknown_output_format) ||
+                         (unp->currentFile->get_outputFormat() ==
+                          SgFile::e_fixed_form_output_format);
+      if (fixedFormat) {
+        std::string labelText = label + " ";
+        while (labelText.size() < 6) {
+          labelText.insert(labelText.begin(), ' ');
+        }
+        curprint(labelText);
+      } else {
+        curprint(label + " ");
+      }
+    } else {
+      // For Flang-built ASTs, a label may be recorded as a numeric label.
+      // Fall back to the numeric label when no string label is present.
+      unparseStatementNumbersSupport(labelStmt->get_numeric_label(), info);
     }
     if (labelStmt->get_statement() != nullptr) {
       unparseLanguageSpecificStatement(labelStmt->get_statement(), info);
@@ -2852,6 +2873,7 @@ void FortranCodeGeneration_locatedNode::unparseInquireStatement(
                                info);
     unparse_IO_Control_Support("SIZE", inquireStatement->get_size(), false,
                                info);
+    unparse_IO_Control_Support("ID", inquireStatement->get_id(), false, info);
     unparse_IO_Control_Support("PENDING", inquireStatement->get_pending(),
                                false, info);
   }
@@ -4254,6 +4276,14 @@ void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
     // check whether line wrapping is needed
     int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
     int free_cols = usable_cols - used_cols;
+    auto is_comment_line = [&]() {
+      size_t first = str.find_first_not_of(' ');
+      if (first == std::string::npos) {
+        return false;
+      }
+      return str[first] == '!' || str[first] == '#';
+    };
+
     if (str.size() > free_cols) {
       if (is_fixed_format) {
         // only noncomment lines need wrapping
@@ -4268,6 +4298,10 @@ void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
           unp->u_sage->curprint("     &");
         }
       } else if (is_free_format) {
+        if (is_comment_line()) {
+          unp->u_sage->curprint(str);
+          return;
+        }
         // warn if successful wrapping is impossible
         if (str.size() > usable_cols)
           printf("Warning: can't wrap long line in Fortran free format (text "

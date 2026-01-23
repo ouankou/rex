@@ -4341,6 +4341,9 @@ void Grammar::setUpStatements() {
   InquireStatement.setDataPrototype(
       "SgExpression*", "pending", "= NULL", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  InquireStatement.setDataPrototype(
+      "SgExpression*", "id", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (9/3/2010): Added to handle case of "INQUIRE (IOLENGTH=<VarRefExp>)"
   InquireStatement.setDataPrototype(

@@ -14201,7 +14201,9 @@ void SageInterface::fixVariableDeclaration(SgVariableDeclaration *varDecl,
   // we have to replace the fake one with the real one once the variable
   // declaration is inserted into AST
   if (SageInterface::is_Fortran_language() == true) {
-    fixVariableReferences(scope);
+    // Defer symbol cleanup until the AST is fully built so we don't delete
+    // placeholder symbols that are still referenced after scope moves.
+    fixVariableReferences(scope, /*cleanUnusedSymbols*/ false);
   }
 }
 
@@ -14212,6 +14214,23 @@ int SageInterface::fixVariableReferences(SgNode *root,
   Rose_STL_Container<SgNode *> varList;
 
   SgVarRefExp *varRef = NULL;
+  auto findScopeForNode = [](SgNode *node) -> SgScopeStatement * {
+    for (SgNode *parent = node; parent != nullptr;
+         parent = parent->get_parent()) {
+      if (SgScopeStatement *scope = isSgScopeStatement(parent)) {
+        return scope;
+      }
+    }
+    return nullptr;
+  };
+  SgScopeStatement *fallback_scope = findScopeForNode(root);
+  if (fallback_scope == nullptr) {
+    fallback_scope = SageBuilder::topScopeStack();
+  }
+  auto scopeForVarRef = [&](SgVarRefExp *ref) -> SgScopeStatement * {
+    SgScopeStatement *scope = findScopeForNode(ref);
+    return scope != nullptr ? scope : fallback_scope;
+  };
   Rose_STL_Container<SgNode *> reflist =
       NodeQuery::querySubTree(root, V_SgVarRefExp);
   for (Rose_STL_Container<SgNode *>::iterator i = reflist.begin();
@@ -14224,7 +14243,7 @@ int SageInterface::fixVariableReferences(SgNode *root,
     if (initname == NULL) {
       // Provide a safe placeholder so downstream type queries won't crash.
       SgName placeholderName("undefined");
-      SgScopeStatement *scope = getScope(varRef);
+      SgScopeStatement *scope = scopeForVarRef(varRef);
       SgVarRefExp *placeholderRef =
           SageBuilder::buildDanglingVarRefExp(placeholderName, scope);
       if (placeholderRef != NULL) {
@@ -14282,15 +14301,15 @@ int SageInterface::fixVariableReferences(SgNode *root,
             }
           }
           if (realSymbol == NULL) {
-            realSymbol =
-                lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+            realSymbol = lookupVariableSymbolInParentScopes(
+                varName, scopeForVarRef(varRef));
           }
         } else {
           // DQ (8/16/2013): We want to lookup variable symbols not just any
           // symbol. realSymbol =
           // lookupSymbolInParentScopes(varName,getScope(varRef));
-          realSymbol =
-              lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+          realSymbol = lookupVariableSymbolInParentScopes(
+              varName, scopeForVarRef(varRef));
         }
       } else if (SgDotExp *dotExp = isSgDotExp(varRef->get_parent())) {
         if (varRef == dotExp->get_rhs_operand_i()) {
@@ -14317,21 +14336,21 @@ int SageInterface::fixVariableReferences(SgNode *root,
             }
           }
           if (realSymbol == NULL) {
-            realSymbol =
-                lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+            realSymbol = lookupVariableSymbolInParentScopes(
+                varName, scopeForVarRef(varRef));
           }
         } else
           // DQ (8/16/2013): We want to lookup variable symbols not just any
           // symbol. realSymbol =
           // lookupSymbolInParentScopes(varName,getScope(varRef));
-          realSymbol =
-              lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+          realSymbol = lookupVariableSymbolInParentScopes(
+              varName, scopeForVarRef(varRef));
       } else {
         // DQ (8/16/2013): We want to lookup variable symbols not just any
         // symbol. realSymbol =
         // lookupSymbolInParentScopes(varName,getScope(varRef));
         realSymbol =
-            lookupVariableSymbolInParentScopes(varName, getScope(varRef));
+            lookupVariableSymbolInParentScopes(varName, scopeForVarRef(varRef));
       }
 
       // should find a real symbol at this final fixing stage!
@@ -14474,6 +14493,9 @@ void SageInterface::fixLabelStatement(SgLabelStatement *stmt,
   SgName name = label_stmt->get_label();
 
   SgScopeStatement *label_scope = getEnclosingFunctionDefinition(scope, true);
+  if (label_scope == NULL) {
+    label_scope = scope;
+  }
 
   // DQ (11/16/2014): Added error checking for when the input scope is the
   // SgFunctionDefinition instead of a nested scope.
@@ -14525,11 +14547,40 @@ void SageInterface::setFortranNumericLabel(
     symbol = new SgLabelSymbol((SgLabelStatement *)NULL);
     ROSE_ASSERT(symbol != NULL);
     symbol->set_fortran_statement(stmt);
-    symbol->set_numeric_label_value(label_value);
     label_scope->insert_symbol(label_name, symbol);
   } else {
-    cerr << "Error. SageInterface::setFortranNumericLabel() tries to set a "
-            "duplicated label value!"
+    SgStatement *existing_stmt = symbol->get_fortran_statement();
+    bool can_rebind = false;
+    if (existing_stmt == NULL) {
+      can_rebind = true;
+    } else if (existing_stmt == stmt) {
+      can_rebind = true;
+    } else if (isSgNullStatement(existing_stmt) != NULL) {
+      can_rebind = true;
+    } else if (SgLabelStatement *label_stmt =
+                   isSgLabelStatement(existing_stmt)) {
+      if (label_stmt->get_statement() == NULL ||
+          label_stmt->get_statement() == stmt) {
+        can_rebind = true;
+      }
+    }
+
+    if (can_rebind) {
+      symbol->set_fortran_statement(stmt);
+    } else {
+      cerr << "Error. SageInterface::setFortranNumericLabel() tries to set a "
+              "duplicated label value!"
+           << endl;
+      ROSE_ABORT();
+    }
+  }
+
+  int numeric_value = symbol->get_numeric_label_value();
+  if (numeric_value <= 0) {
+    symbol->set_numeric_label_value(label_value);
+  } else if (numeric_value != label_value) {
+    cerr << "Error. SageInterface::setFortranNumericLabel() label value "
+            "mismatch!"
          << endl;
     ROSE_ABORT();
   }
@@ -20425,7 +20476,13 @@ static void moveOneStatement(SgScopeStatement *sourceBlock,
         // Must also move the symbol into the source block, Liao 2019/8/14
         SgVariableSymbol *var_sym = isSgVariableSymbol(
             init_name->search_for_symbol_from_symbol_table());
-        ROSE_ASSERT(var_sym);
+        if (var_sym == NULL) {
+          if (init_name->get_scope() == NULL) {
+            init_name->set_scope(sourceBlock);
+          }
+          var_sym = new SgVariableSymbol(init_name);
+          sourceBlock->insert_symbol(init_name->get_name(), var_sym);
+        }
         SgScopeStatement *old_scope = var_sym->get_scope();
         if (old_scope != sourceBlock) {
           old_scope->remove_symbol(var_sym);
@@ -20444,8 +20501,24 @@ static void moveOneStatement(SgScopeStatement *sourceBlock,
 
       break;
     }
+    case V_SgProcedureHeaderStatement:
+    case V_SgProgramHeaderStatement:
+    case V_SgEntryStatement:
+    case V_SgInterfaceStatement:
+    case V_SgUseStatement:
+    case V_SgNamelistStatement:
+    case V_SgEquivalenceStatement:
+    case V_SgCommonBlock:
+    case V_SgImportStatement:
+    case V_SgFormatStatement: {
+      declaration->set_parent(targetBlock);
+      declaration->set_scope(targetBlock);
+      break;
+    }
     // needed to move record into definition of C++ namespace
     case V_SgClassDeclaration:
+    case V_SgDerivedTypeStatement:
+    case V_SgModuleStatement:
     case V_SgEnumDeclaration: {
       SgDeclarationStatement *nondef_decl =
           declaration->get_firstNondefiningDeclaration();

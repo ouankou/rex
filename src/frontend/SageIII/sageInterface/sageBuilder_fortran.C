@@ -15,6 +15,53 @@
 using namespace std;
 using namespace SageInterface;
 
+namespace {
+SgScopeStatement *findImplicitScope(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+
+  if (SgFunctionDefinition *funcDef =
+          SageInterface::getEnclosingFunctionDefinition(scope, true)) {
+    if (SgBasicBlock *body = funcDef->get_body()) {
+      return body;
+    }
+  }
+
+  if (SgBasicBlock *block = isSgBasicBlock(scope)) {
+    SgNode *parent = block->get_parent();
+    if (parent != nullptr && isSgScopeStatement(parent) != nullptr &&
+        isSgFunctionDefinition(parent) == nullptr) {
+      return block;
+    }
+  }
+
+  if (SgModuleStatement *moduleStmt =
+          SageInterface::getEnclosingModuleStatement(scope, true)) {
+    if (SgClassDefinition *moduleDef = moduleStmt->get_definition()) {
+      return moduleDef;
+    }
+  }
+
+  return scope;
+}
+
+bool matchesImplicitRange(const std::string &range, char letter) {
+  if (range.empty()) {
+    return false;
+  }
+  char start = static_cast<char>(tolower(range[0]));
+  char end = start;
+  if (range.size() >= 3 && range[1] == '-') {
+    end = static_cast<char>(tolower(range[2]));
+  }
+  if (start > end) {
+    std::swap(start, end);
+  }
+  return letter >= start && letter <= end;
+}
+} // namespace
+
 //! Put Fortran-specific builders here
 // Many of them share the same implementations as those in
 // src/frontend/OpenFortranParser_SAGE_Connection/fortran_support.C
@@ -35,6 +82,36 @@ SgType *SageBuilder::buildFortranImplicitType(SgName sg_name) {
 
   ROSE_ASSERT(tolower(name[0]) >= 'a');
   ROSE_ASSERT(tolower(name[0]) <= 'z');
+
+  if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
+    SgScopeStatement *implicitScope = findImplicitScope(scope);
+    if (implicitScope != nullptr) {
+      SgStatementPtrList stmts = implicitScope->generateStatementList();
+      const char first = static_cast<char>(tolower(name[0]));
+      for (auto it = stmts.rbegin(); it != stmts.rend(); ++it) {
+        SgImplicitStatement *implicitStmt = isSgImplicitStatement(*it);
+        if (implicitStmt == nullptr) {
+          continue;
+        }
+        if (implicitStmt->get_implicit_spec() !=
+            SgImplicitStatement::e_has_implicit_spec_list) {
+          continue;
+        }
+        for (SgInitializedName *init : implicitStmt->get_variables()) {
+          if (init == nullptr) {
+            continue;
+          }
+          const std::string range = init->get_name().str();
+          if (matchesImplicitRange(range, first)) {
+            SgType *implicitType = init->get_type();
+            if (implicitType != nullptr) {
+              return implicitType;
+            }
+          }
+        }
+      }
+    }
+  }
 
   if (tolower(name[0]) < 'i') {
     returnType = buildFloatType();

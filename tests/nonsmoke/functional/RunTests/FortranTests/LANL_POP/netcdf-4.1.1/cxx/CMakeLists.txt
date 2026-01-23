@@ -23,7 +23,4 @@ foreach(test IN LISTS _netcdf_cxx_tests)
       COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${test}
     )
   endif()
-  if(test STREQUAL "tst_failure")
-    set_tests_properties(netcdf_cxx_${_name} PROPERTIES DISABLED TRUE)
-  endif()
 endforeach()

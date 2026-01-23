@@ -101,6 +101,14 @@ void UnparseLanguageIndependentConstructs::curprint(
     // check whether line wrapping is needed
     int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
     int free_cols = usable_cols - used_cols;
+    auto is_comment_line = [&]() {
+      size_t first = str.find_first_not_of(' ');
+      if (first == std::string::npos) {
+        return false;
+      }
+      return str[first] == '!' || str[first] == '#';
+    };
+
     if (str.size() > free_cols) {
       if (is_fixed_format) {
         // only noncomment lines need wrapping
@@ -115,6 +123,10 @@ void UnparseLanguageIndependentConstructs::curprint(
           unp->u_sage->curprint("     &");
         }
       } else if (is_free_format) {
+        if (is_comment_line()) {
+          unp->u_sage->curprint(str);
+          return;
+        }
         // warn if successful wrapping is impossible
         if (str.size() > usable_cols)
           printf("Warning: can't wrap long line in Fortran free format (text "
