@@ -30,6 +30,54 @@ struct TokenWithOffset {
   unsigned offset;
 };
 
+bool isTargetFeatureSpecified(const std::vector<std::string> &features,
+                              llvm::StringRef feature_name) {
+  for (const auto &feature : features) {
+    llvm::StringRef feature_ref(feature);
+    if (feature_ref.size() != feature_name.size() + 1) {
+      continue;
+    }
+    if (feature_ref.front() != '+' && feature_ref.front() != '-') {
+      continue;
+    }
+    if (feature_ref.drop_front() == feature_name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void ensureX86BaselineTargetFeatures(clang::TargetOptions &target_opts) {
+  if (target_opts.Triple.empty()) {
+    target_opts.Triple = llvm::sys::getDefaultTargetTriple();
+  }
+
+  llvm::Triple triple(target_opts.Triple);
+  if (triple.getArch() != llvm::Triple::x86 &&
+      triple.getArch() != llvm::Triple::x86_64) {
+    return;
+  }
+
+  auto &features = target_opts.Features;
+  if (!isTargetFeatureSpecified(features, "mmx")) {
+    features.push_back("+mmx");
+  }
+  if (!isTargetFeatureSpecified(features, "sse")) {
+    features.push_back("+sse");
+  }
+  if (!isTargetFeatureSpecified(features, "sse2")) {
+    features.push_back("+sse2");
+  }
+}
+
+void dropRelativeIncludeDirs(std::vector<std::string> &dirs) {
+  dirs.erase(std::remove_if(dirs.begin(), dirs.end(),
+                            [](const std::string &dir) {
+                              return !dir.empty() && dir[0] != '/';
+                            }),
+             dirs.end());
+}
+
 // Preserve legacy frontend acceptance of explicit member specializations that
 // omit the required template<> header.
 std::unique_ptr<llvm::MemoryBuffer>
@@ -484,18 +532,10 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
           sizeof(c_config_include_dirs_array) / sizeof(const char *));
 
   RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
-  std::string compiler_header_root = clang_paths.compiler_header_root;
   std::string builtin_header_root = clang_paths.builtin_header_root;
 
-  std::vector<std::string>::iterator it;
-  for (it = c_config_include_dirs.begin(); it != c_config_include_dirs.end();
-       it++)
-    if (it->length() > 0 && (*it)[0] != '/')
-      *it = compiler_header_root + *it;
-  for (it = cxx_config_include_dirs.begin();
-       it != cxx_config_include_dirs.end(); it++)
-    if (it->length() > 0 && (*it)[0] != '/')
-      *it = compiler_header_root + *it;
+  dropRelativeIncludeDirs(c_config_include_dirs);
+  dropRelativeIncludeDirs(cxx_config_include_dirs);
 
   sys_dirs_list.push_back(builtin_header_root);
 
@@ -609,13 +649,15 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   compiler_instance->createDiagnostics(*vfs, diag_printer, true);
 
   clang::CompilerInvocation &invocation = compiler_instance->getInvocation();
-  const llvm::Triple target_triple(llvm::sys::getDefaultTargetTriple());
 
   // Parse command-line arguments to populate invocation (including
   // FileSystemOptions like -working-directory, -sysroot)
   llvm::ArrayRef<const char *> argsArrayRef(args.data(), args.size());
   clang::CompilerInvocation::CreateFromArgs(
       invocation, argsArrayRef, compiler_instance->getDiagnostics());
+  clang::TargetOptions &target_opts = invocation.getTargetOpts();
+  ensureX86BaselineTargetFeatures(target_opts);
+  llvm::Triple target_triple(target_opts.Triple);
 
   // CLANG FRONTEND FIX: Configure header search paths properly
   // WHY: Default paths may point to incorrect locations (e.g.,
@@ -752,13 +794,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   // LLVM 20 requires shared_ptr, LLVM 21+ requires reference
 #if LLVM_VERSION_MAJOR >= 21
-  clang::TargetOptions target_options;
-  target_options.Triple = llvm::sys::getDefaultTargetTriple();
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
-      compiler_instance->getDiagnostics(), target_options);
+      compiler_instance->getDiagnostics(), invocation.getTargetOpts());
 #else
-  auto target_options = std::make_shared<clang::TargetOptions>();
-  target_options->Triple = llvm::sys::getDefaultTargetTriple();
+  auto target_options =
+      std::make_shared<clang::TargetOptions>(invocation.getTargetOpts());
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
       compiler_instance->getDiagnostics(), target_options);
 #endif

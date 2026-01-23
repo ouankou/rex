@@ -1,4 +1,6 @@
 
+#include <algorithm>
+
 #include <iostream>
 
 #include <memory>
@@ -25,6 +27,58 @@ using namespace CLANG_ROSE_Graph;
 // to the source sequence lists (and which node's source sequence list they are
 // associated with).
 std::set<void *> graphNodeSet;
+
+namespace {
+
+bool isTargetFeatureSpecified(const std::vector<std::string> &features,
+                              llvm::StringRef feature_name) {
+  for (const auto &feature : features) {
+    llvm::StringRef feature_ref(feature);
+    if (feature_ref.size() != feature_name.size() + 1) {
+      continue;
+    }
+    if (feature_ref.front() != '+' && feature_ref.front() != '-') {
+      continue;
+    }
+    if (feature_ref.drop_front() == feature_name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void ensureX86BaselineTargetFeatures(clang::TargetOptions &target_opts) {
+  if (target_opts.Triple.empty()) {
+    target_opts.Triple = llvm::sys::getDefaultTargetTriple();
+  }
+
+  llvm::Triple triple(target_opts.Triple);
+  if (triple.getArch() != llvm::Triple::x86 &&
+      triple.getArch() != llvm::Triple::x86_64) {
+    return;
+  }
+
+  auto &features = target_opts.Features;
+  if (!isTargetFeatureSpecified(features, "mmx")) {
+    features.push_back("+mmx");
+  }
+  if (!isTargetFeatureSpecified(features, "sse")) {
+    features.push_back("+sse");
+  }
+  if (!isTargetFeatureSpecified(features, "sse2")) {
+    features.push_back("+sse2");
+  }
+}
+
+void dropRelativeIncludeDirs(std::vector<std::string> &dirs) {
+  dirs.erase(std::remove_if(dirs.begin(), dirs.end(),
+                            [](const std::string &dir) {
+                              return !dir.empty() && dir[0] != '/';
+                            }),
+             dirs.end());
+}
+
+} // namespace
 
 // #define DEBUG_CLANG_DOT_GRAPH_SUPPORT 0
 // #define DEBUG_HEADER_GRAPH_SUPPORT 0
@@ -126,18 +180,10 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
           sizeof(c_config_include_dirs_array) / sizeof(const char *));
 
   RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
-  std::string compiler_header_root = clang_paths.compiler_header_root;
   std::string builtin_include_path = clang_paths.builtin_header_root;
 
-  std::vector<std::string>::iterator it;
-  for (it = c_config_include_dirs.begin(); it != c_config_include_dirs.end();
-       it++)
-    if (it->length() > 0 && (*it)[0] != '/')
-      *it = compiler_header_root + *it;
-  for (it = cxx_config_include_dirs.begin();
-       it != cxx_config_include_dirs.end(); it++)
-    if (it->length() > 0 && (*it)[0] != '/')
-      *it = compiler_header_root + *it;
+  dropRelativeIncludeDirs(c_config_include_dirs);
+  dropRelativeIncludeDirs(cxx_config_include_dirs);
 
   inc_dirs_list.push_back(builtin_include_path);
 
@@ -224,12 +270,15 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
   clang::CompilerInvocation::CreateFromArgs(
       compiler_instance->getInvocation(), argsArrayRef,
       compiler_instance->getDiagnostics());
+  clang::TargetOptions &target_opts =
+      compiler_instance->getInvocation().getTargetOpts();
+  ensureX86BaselineTargetFeatures(target_opts);
 
   // Now create file manager with FileSystemOptions from the parsed invocation
   compiler_instance->createFileManager(vfs);
 
   clang::LangOptions &lang_opts = compiler_instance->getLangOpts();
-  const llvm::Triple target_triple(llvm::sys::getDefaultTargetTriple());
+  llvm::Triple target_triple(target_opts.Triple);
   std::vector<std::string> lang_specific_includes;
   clang::LangStandard::Kind requested_std = lang_opts.LangStd;
   clang::LangStandard std_info =
@@ -298,13 +347,12 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
 
   // LLVM 20 requires shared_ptr, LLVM 21+ requires reference
 #if LLVM_VERSION_MAJOR >= 21
-  clang::TargetOptions target_options;
-  target_options.Triple = llvm::sys::getDefaultTargetTriple();
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
-      compiler_instance->getDiagnostics(), target_options);
+      compiler_instance->getDiagnostics(),
+      compiler_instance->getInvocation().getTargetOpts());
 #else
-  auto target_options = std::make_shared<clang::TargetOptions>();
-  target_options->Triple = llvm::sys::getDefaultTargetTriple();
+  auto target_options = std::make_shared<clang::TargetOptions>(
+      compiler_instance->getInvocation().getTargetOpts());
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
       compiler_instance->getDiagnostics(), target_options);
 #endif
