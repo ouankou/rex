@@ -7,11 +7,6 @@ set(_omp_fortran_includes
 
 set(_omp_fortran_flags ${_omp_fortran_includes} -rose:openmp:lowering -g)
 
-set(_omp_fortran_disable_all FALSE)
-if(NOT enable-fortran)
-  set(_omp_fortran_disable_all TRUE)
-endif()
-
 set(_omp_fortran_f77_compile_tests
   array-one.f
   shared-array.f
@@ -42,41 +37,24 @@ set(_omp_fortran_f77_failing_tests
   section1.f
 )
 
-foreach(specimen IN LISTS _omp_fortran_f77_compile_tests _omp_fortran_f77_run_tests)
-  string(REPLACE "." "_" _name ${specimen})
-  add_test(
-    NAME omp_lowering_fortran_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND $<TARGET_FILE:roseomp> ${_omp_fortran_flags}
-      -c ${_omp_fortran_dir}/${specimen}
-  )
-  if(_omp_fortran_disable_all)
-    set_tests_properties(omp_lowering_fortran_${_name} PROPERTIES DISABLED TRUE)
-  endif()
-endforeach()
+if(enable-fortran)
+  foreach(specimen IN LISTS _omp_fortran_f77_compile_tests _omp_fortran_f77_run_tests)
+    string(REPLACE "." "_" _name ${specimen})
+    add_test(
+      NAME omp_lowering_fortran_${_name}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND $<TARGET_FILE:roseomp> ${_omp_fortran_flags}
+        -c ${_omp_fortran_dir}/${specimen}
+    )
+  endforeach()
 
-foreach(specimen IN LISTS _omp_fortran_f77_failing_tests)
-  string(REPLACE "." "_" _name ${specimen})
-  add_test(
-    NAME omp_lowering_fortran_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND $<TARGET_FILE:roseomp> ${_omp_fortran_flags}
-      -c ${_omp_fortran_dir}/${specimen}
-  )
-  set_tests_properties(omp_lowering_fortran_${_name} PROPERTIES DISABLED TRUE)
-  if(_omp_fortran_disable_all)
-    set_tests_properties(omp_lowering_fortran_${_name} PROPERTIES DISABLED TRUE)
-  endif()
-endforeach()
-
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_ompLoweringTests_fortran_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=omp_lowering_fortran_array-one_f\;omp_lowering_fortran_shared-array_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_fortran_conditional-check-local PROPERTIES DEPENDS "omp_lowering_fortran_array-one_f;omp_lowering_fortran_shared-array_f" )
+  foreach(specimen IN LISTS _omp_fortran_f77_failing_tests)
+    string(REPLACE "." "_" _name ${specimen})
+    add_test(
+      NAME omp_lowering_fortran_${_name}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND $<TARGET_FILE:roseomp> ${_omp_fortran_flags}
+        -c ${_omp_fortran_dir}/${specimen}
+    )
+  endforeach()
+endif()

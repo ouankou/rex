@@ -1270,7 +1270,6 @@ if(enable-fortran)
         ${_exit_status}
         f77cp_${specimen}.passed
     )
-    set_tests_properties(gdf_f77_constprop_${_name} PROPERTIES DISABLED TRUE)
   endforeach()
 
   foreach(specimen IN LISTS F03_CONSTPROP_SPECIMENS)
@@ -1295,7 +1294,6 @@ if(enable-fortran)
         ${_exit_status}
         f03cp_${specimen}.passed
     )
-    set_tests_properties(gdf_f03_constprop_${_name} PROPERTIES DISABLED TRUE)
   endforeach()
 endif()
 

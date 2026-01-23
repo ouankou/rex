@@ -1,19 +1,5 @@
 function(rex_add_disabled_test)
   add_test(${ARGV})
-  set(_name "")
-  list(FIND ARGV "NAME" _name_index)
-  if(_name_index GREATER -1)
-    math(EXPR _name_index "${_name_index}+1")
-    list(GET ARGV ${_name_index} _name)
-  elseif(ARGC GREATER 0)
-    set(_name "${ARGV0}")
-  endif()
-  if(_name)
-    set_tests_properties(${_name} PROPERTIES LABELS disabled)
-    if(NOT REX_ENABLE_DISABLED_TESTS)
-      set_tests_properties(${_name} PROPERTIES DISABLED TRUE)
-    endif()
-  endif()
 endfunction()
 
 add_subdirectory(cxx)
@@ -59,18 +45,3 @@ rex_add_disabled_test(
   COMMAND sh -c
     "${CMAKE_Fortran_COMPILER} `./nc-config --fflags` ${CMAKE_CURRENT_SOURCE_DIR}/test_prog.f90 -o test_prog `./nc-config --libs`"
 )
-
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_check_nc_config
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=netcdf_check_nc_config\;netcdf_test_prog_F\;netcdf_test_prog_c\;netcdf_test_prog_f90
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_check_nc_config PROPERTIES LABELS disabled DEPENDS "netcdf_check_nc_config;netcdf_test_prog_F;netcdf_test_prog_c;netcdf_test_prog_f90" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_check_nc_config PROPERTIES DISABLED TRUE)
-endif()
