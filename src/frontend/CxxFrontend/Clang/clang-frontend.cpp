@@ -11,6 +11,8 @@
 
 #include "clang-frontend-private.hpp"
 
+#include "clang-frontend-utils.hpp"
+
 #include "sage3basic.h"
 
 #include "clang-to-dot.hpp"
@@ -484,18 +486,10 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
           sizeof(c_config_include_dirs_array) / sizeof(const char *));
 
   RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
-  std::string compiler_header_root = clang_paths.compiler_header_root;
   std::string builtin_header_root = clang_paths.builtin_header_root;
 
-  std::vector<std::string>::iterator it;
-  for (it = c_config_include_dirs.begin(); it != c_config_include_dirs.end();
-       it++)
-    if (it->length() > 0 && (*it)[0] != '/')
-      *it = compiler_header_root + *it;
-  for (it = cxx_config_include_dirs.begin();
-       it != cxx_config_include_dirs.end(); it++)
-    if (it->length() > 0 && (*it)[0] != '/')
-      *it = compiler_header_root + *it;
+  dropRelativeIncludeDirs(c_config_include_dirs);
+  dropRelativeIncludeDirs(cxx_config_include_dirs);
 
   sys_dirs_list.push_back(builtin_header_root);
 
@@ -609,13 +603,15 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   compiler_instance->createDiagnostics(*vfs, diag_printer, true);
 
   clang::CompilerInvocation &invocation = compiler_instance->getInvocation();
-  const llvm::Triple target_triple(llvm::sys::getDefaultTargetTriple());
 
   // Parse command-line arguments to populate invocation (including
   // FileSystemOptions like -working-directory, -sysroot)
   llvm::ArrayRef<const char *> argsArrayRef(args.data(), args.size());
   clang::CompilerInvocation::CreateFromArgs(
       invocation, argsArrayRef, compiler_instance->getDiagnostics());
+  clang::TargetOptions &target_opts = invocation.getTargetOpts();
+  ensureX86BaselineTargetFeatures(target_opts);
+  llvm::Triple target_triple(target_opts.Triple);
 
   // CLANG FRONTEND FIX: Configure header search paths properly
   // WHY: Default paths may point to incorrect locations (e.g.,
@@ -752,13 +748,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   // LLVM 20 requires shared_ptr, LLVM 21+ requires reference
 #if LLVM_VERSION_MAJOR >= 21
-  clang::TargetOptions target_options;
-  target_options.Triple = llvm::sys::getDefaultTargetTriple();
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
-      compiler_instance->getDiagnostics(), target_options);
+      compiler_instance->getDiagnostics(), invocation.getTargetOpts());
 #else
-  auto target_options = std::make_shared<clang::TargetOptions>();
-  target_options->Triple = llvm::sys::getDefaultTargetTriple();
+  auto target_options =
+      std::make_shared<clang::TargetOptions>(invocation.getTargetOpts());
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
       compiler_instance->getDiagnostics(), target_options);
 #endif

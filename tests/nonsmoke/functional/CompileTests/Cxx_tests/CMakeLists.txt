@@ -2705,7 +2705,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_97.C
   test2007_99.C
   test2008_07.C
-  test2008_15.C
   test2009_07.C
   test2009_13.C
   test2009_17.C
@@ -3078,7 +3077,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_97.C
   test2007_99.C
   test2008_07.C
-  test2008_15.C
   test2009_07.C
   test2009_13.C
   test2009_17.C
@@ -3288,7 +3286,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2017_46.C
   test2017_47.C
   test2017_67.C
-  test2017_69.C
   test2017_85.C
   test2017_86.C
   test2018_01.C
