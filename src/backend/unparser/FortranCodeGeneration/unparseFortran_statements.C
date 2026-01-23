@@ -2412,8 +2412,8 @@ void FortranCodeGeneration_locatedNode::unparseLabelStmt(
     SgLabelStatement *labelStmt, SgUnparse_Info &info) {
   if (flangParser) {
     // The SgLabelStatement is used for the label
-    if (labelStmt->get_label().getString().size() > 0) {
-      const std::string label = labelStmt->get_label().getString();
+    const std::string label = labelStmt->get_label().getString();
+    if (!label.empty()) {
       bool fixedFormat = (unp->currentFile == nullptr) ||
                          (unp->currentFile->get_outputFormat() ==
                           SgFile::e_unknown_output_format) ||
@@ -2428,6 +2428,10 @@ void FortranCodeGeneration_locatedNode::unparseLabelStmt(
       } else {
         curprint(label + " ");
       }
+    } else {
+      // For Flang-built ASTs, a label may be recorded as a numeric label.
+      // Fall back to the numeric label when no string label is present.
+      unparseStatementNumbersSupport(labelStmt->get_numeric_label(), info);
     }
     if (labelStmt->get_statement() != nullptr) {
       unparseLanguageSpecificStatement(labelStmt->get_statement(), info);
