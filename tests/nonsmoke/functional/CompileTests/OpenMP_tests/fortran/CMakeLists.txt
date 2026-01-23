@@ -1,10 +1,9 @@
 include(OpenMP_fortran_Testcodes.cmake)
-include(OpenMP_fortran_Testcodes_Disabled.cmake)
 
 set(ROSE_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
 set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
 
-foreach(file_to_test ${OPENMP_FORTRAN_TESTCODES} ${OPENMP_FORTRAN_DISABLED_TESTCODES})
+foreach(file_to_test ${OPENMP_FORTRAN_TESTCODES})
   add_test(
     NAME OMPFORTRAN_${file_to_test}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

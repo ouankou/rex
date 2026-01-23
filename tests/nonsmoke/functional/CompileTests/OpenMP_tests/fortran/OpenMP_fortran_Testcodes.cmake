@@ -32,4 +32,24 @@ set(OPENMP_FORTRAN_TESTCODES
   critical.f90
   continuation.f90
   single-copyprivate.f90
+  parallel-if.f
+  parallel-if-numthreads.f
+  barrier.f
+  exampleA11f.f
+  exampleA211f.f
+  exampleA281f.f
+  exampleA102f.f90
+  exampleA161f.f90
+  flush2.f
+  exmpaleA221f.f
+  conditional.f
+  exampleA41f.f90
+  exampleA134f.f90
+  ompdo-decremental-2.f
+  array-one.f
+  array_initialize.f
+  jacobi.f
+  ompdo-multiple.f
+  shared-array.f
+  collapse.f90
 )
