@@ -928,7 +928,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   sys_dirs_list.push_back(builtin_header_root);
 
-#if LLVM_VERSION_MAJOR >= 21
   auto append_unique_dirs = [](std::vector<std::string> &dest,
                                const std::vector<std::string> &src) {
     for (const auto &entry : src) {
@@ -961,7 +960,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                               }),
                dirs.end());
   };
-#endif
 
   switch (language) {
   case ClangToSageTranslator::C:
@@ -974,19 +972,15 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     // across different platforms, architectures, and compiler versions.
     sys_dirs_list.insert(sys_dirs_list.begin(), cxx_config_include_dirs.begin(),
                          cxx_config_include_dirs.end());
-#if LLVM_VERSION_MAJOR >= 21
     // Ensure C system headers are available for libc++/libstdc++ internals
     // that include <stdint.h> and other C headers.
     append_unique_dirs(sys_dirs_list, c_config_include_dirs);
-#endif
     inc_list.push_back("clang-builtin-cpp.hpp");
     break;
   case ClangToSageTranslator::CUDA:
     sys_dirs_list.insert(sys_dirs_list.begin(), cxx_config_include_dirs.begin(),
                          cxx_config_include_dirs.end());
-#if LLVM_VERSION_MAJOR >= 21
     append_unique_dirs(sys_dirs_list, c_config_include_dirs);
-#endif
     inc_list.push_back("clang-builtin-cuda.hpp");
     break;
   case ClangToSageTranslator::OPENCL:
@@ -1007,10 +1001,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // FIXME should be handle by Clang ?
   define_list.push_back("__I__=_Complex_I");
 
-#if LLVM_VERSION_MAJOR >= 21
   // Avoid staged Clang resource headers that cause include_next loops.
   filter_staged_resource_dirs(sys_dirs_list);
-#endif
 
   // If user explicitly provided -D_OPENMP=value on command line, honor it
   // Otherwise, when -fopenmp is passed to Clang (enable_openmp=true), Clang
@@ -1020,15 +1012,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // Do not pass _OPENMP to the Clang frontend: OpenMP pragmas are handled as
   // plain text and Clang's omp.h expects OpenMP-enabled parsing semantics.
 
-#if LLVM_VERSION_MAJOR >= 21
   const size_t estimated_argc = 1 + define_list.size() + inc_dirs_list.size() +
                                 (sys_dirs_list.size() * 2) +
                                 (inc_list.size() * 2) + passthrough_args.size();
-#else
-  const size_t estimated_argc = 1 + define_list.size() + inc_dirs_list.size() +
-                                sys_dirs_list.size() + inc_list.size() +
-                                passthrough_args.size();
-#endif
   std::vector<std::string> args_storage;
   args_storage.reserve(estimated_argc);
   args_storage.push_back(language_arg);
@@ -1038,7 +1024,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   for (const auto &inc_dir : inc_dirs_list) {
     args_storage.push_back("-I" + inc_dir);
   }
-#if LLVM_VERSION_MAJOR >= 21
   for (const auto &sys_dir : sys_dirs_list) {
     args_storage.push_back("-isystem");
     args_storage.push_back(sys_dir);
@@ -1047,14 +1032,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     args_storage.push_back("-include");
     args_storage.push_back(inc);
   }
-#else
-  for (const auto &sys_dir : sys_dirs_list) {
-    args_storage.push_back("-isystem" + sys_dir);
-  }
-  for (const auto &inc : inc_list) {
-    args_storage.push_back("-include" + inc);
-  }
-#endif
   for (const auto &pass : passthrough_args) {
     args_storage.push_back(pass);
   }
@@ -1064,14 +1041,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   for (const auto &arg : args_storage) {
     args.push_back(arg.c_str());
   }
-#if LLVM_VERSION_MAJOR >= 21
   if (std::getenv("ROSE_CLANG_DUMP_INCLUDES") != nullptr) {
     std::cerr << "ROSE clang invocation args:\n";
     for (const auto &arg : args_storage) {
       std::cerr << "  " << arg << '\n';
     }
   }
-#endif
 #if DEBUG_ARGS
   for (size_t index = 0; index < args.size(); ++index) {
     std::cerr << "args[" << index << "] = " << args[index] << std::endl;
@@ -1226,7 +1201,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   headerSearchOpts.UseStandardSystemIncludes = true;
   headerSearchOpts.UseStandardCXXIncludes = true;
 
-#if LLVM_VERSION_MAJOR >= 21
   auto add_header_path = [&](const std::string &path,
                              clang::frontend::IncludeDirGroup group) {
     auto already_present =
@@ -1261,7 +1235,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       llvm::errs() << "  [" << group_name << "] " << entry.Path << "\n";
     }
   }
-#endif
 
   // ResourceDir and system include paths are already correctly set by
   // CreateFromArgs() based on the Clang installation and target triple. Do NOT

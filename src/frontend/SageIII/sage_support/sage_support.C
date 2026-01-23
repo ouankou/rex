@@ -3011,7 +3011,6 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     } else if (get_inputFormat() == e_free_form_output_format) {
       fortranCommandLine.push_back("-ffree-form");
     }
-
     // DQ (12/8/2007): Added support for cray pointers from commandline.
     if (get_cray_pointer_support() == true) {
       // Flang accepts Cray pointer syntax without a dedicated flag.

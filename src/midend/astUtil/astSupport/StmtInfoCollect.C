@@ -151,7 +151,7 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
       modstack.push_back(s);
       while (pv != vars.end()) {
         AstNodePtr ast = *pv;
-        AstNodePtr read_ast = *pa;
+        AstNodePtr read_ast = (pa != args.end()) ? *pa : AstNodePtr();
         if (read_ast != 0) {
           operator()(fa, read_ast);
         }
@@ -161,7 +161,8 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
           AppendAliasDecl(fa, ast, read_ast);
         }
         ++pv;
-        ++pa;
+        if (pa != args.end())
+          ++pa;
       }
       Skip(s);
     } else if (AstInterface::IsMemoryAllocation(s)) {

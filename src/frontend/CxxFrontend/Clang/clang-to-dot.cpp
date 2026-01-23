@@ -163,7 +163,6 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
 
   inc_dirs_list.push_back(builtin_include_path);
 
-#if LLVM_VERSION_MAJOR >= 21
   auto append_unique_dirs = [](std::vector<std::string> &dest,
                                const std::vector<std::string> &src) {
     for (const auto &entry : src) {
@@ -172,7 +171,6 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
       }
     }
   };
-#endif
 
   // FIXME add ROSE path to gcc headers...
   switch (language) {
@@ -184,17 +182,13 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
   case ClangToDotTranslator::CPLUSPLUS:
     inc_dirs_list.insert(inc_dirs_list.begin(), cxx_config_include_dirs.begin(),
                          cxx_config_include_dirs.end());
-#if LLVM_VERSION_MAJOR >= 21
     append_unique_dirs(inc_dirs_list, c_config_include_dirs);
-#endif
     inc_list.push_back("clang-builtin-cpp.hpp");
     break;
   case ClangToDotTranslator::CUDA:
     inc_dirs_list.insert(inc_dirs_list.begin(), cxx_config_include_dirs.begin(),
                          cxx_config_include_dirs.end());
-#if LLVM_VERSION_MAJOR >= 21
     append_unique_dirs(inc_dirs_list, c_config_include_dirs);
-#endif
     inc_list.push_back("clang-builtin-cuda.hpp");
     break;
   case ClangToDotTranslator::OPENCL:

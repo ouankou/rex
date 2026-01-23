@@ -29,9 +29,10 @@ ARG LLVM_VERSION=21
 ENV LLVM_VERSION=${LLVM_VERSION}
 ENV QEMU_CPU=Loongson-3A4000
 
-RUN oma refresh \
-    && oma upgrade --autoremove -y \
-    && oma install -y --no-install-recommends --no-install-suggests \
+RUN set -euo pipefail; \
+    oma refresh --no-refresh-topics --no-progress; \
+    oma install -y --no-install-recommends --no-install-suggests \
+      antlr4 \
       antlr4-cpp-runtime \
       bison \
       cmake \
@@ -47,9 +48,11 @@ RUN oma refresh \
       llvm-runtime-${LLVM_VERSION} \
       make \
       ninja \
-      openjdk-21 \
-      pkg-config \
-    && oma clean
+      openjdk-17 \
+      pkg-config; \
+    update-alternatives --set java /usr/lib/java-17/bin/java; \
+    oma clean; \
+    rm -rf /var/lib/apt/lists/* || true
 
 ENV PATH=/usr/lib/llvm-${LLVM_VERSION}/bin:${PATH}
 ENV CMAKE_PREFIX_PATH=/usr/lib/llvm-${LLVM_VERSION}

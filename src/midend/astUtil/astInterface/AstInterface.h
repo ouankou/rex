@@ -105,9 +105,12 @@ public:
   bool operator!=(BaseType *p) const { return repr_ != p; }
   // The < operator is required to allow AstNodePtr be stored in set containers.
   bool operator<(const AstNodePtr &that) const {
-    return repr_ < that.repr_ || (repr_ == that.repr_ && sig_ < that.sig_) ||
-           (repr_ == that.repr_ && sig_ == that.sig_ &&
-            nodetype_ < that.nodetype_);
+    if (repr_ == that.repr_) {
+      if (sig_ != that.sig_)
+        return sig_ < that.sig_;
+      return nodetype_ < that.nodetype_;
+    }
+    return std::less<BaseType *>()(repr_, that.repr_);
   }
   BaseType *operator->() const { return repr_; }
   BaseType *get_ptr() const { return repr_; }

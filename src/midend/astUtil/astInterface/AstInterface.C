@@ -2611,7 +2611,11 @@ bool AstInterface::IsAddressOfOp(const AstNodePtr &_s) {
 bool AstInterface::IsMemoryAllocation(const AstNodePtr &s, AstNodeType *exptype,
                                       AstNodePtr *init) {
   AstNodePtrImpl s1 = SkipCasting(s.get_ptr()), f;
-  if (s1.get_ptr() == nullptr) {
+  SgNode *node = s1.get_ptr();
+  if (node == nullptr) {
+    return false;
+  }
+  if (isSgExpression(node) == nullptr && isSgExprStatement(node) == nullptr) {
     return false;
   }
   AstInterfaceImpl astImpl(s1.get_ptr());
@@ -2649,7 +2653,11 @@ bool AstInterface::IsMemoryFree(const AstNodePtr &s, AstNodeType *exptype,
                                 AstNodePtr *variable) {
   AstNodePtrImpl s1 = SkipCasting(s.get_ptr()), f;
   AstNodeList params;
-  if (s1.get_ptr() == nullptr) {
+  SgNode *node = s1.get_ptr();
+  if (node == nullptr) {
+    return false;
+  }
+  if (isSgExpression(node) == nullptr && isSgExprStatement(node) == nullptr) {
     return false;
   }
   AstInterfaceImpl astImpl(s1.get_ptr());
@@ -3251,7 +3259,7 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
     if (outargs != 0) {
       AstNodeList::const_iterator p1 = args->begin();
       for (AstTypeList::const_iterator p = paramtypes->begin();
-           p != paramtypes->end(); ++p, ++p1) {
+           p != paramtypes->end() && p1 != args->end(); ++p, ++p1) {
         SgType *t = AstNodeTypeImpl(*p).get_ptr();
         if (t != 0 && t->variantT() == V_SgReferenceType) {
           auto *modifier = isSgConstVolatileModifier(t->get_modifiers());
