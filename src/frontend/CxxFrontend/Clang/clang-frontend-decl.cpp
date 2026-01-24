@@ -2294,6 +2294,95 @@ clang::NamespaceDecl *getCanonicalNamespaceDecl(clang::NamespaceDecl *decl) {
   return canonical != nullptr ? canonical : decl;
 }
 
+static const clang::Type *stripFieldType(clang::QualType &qual_type) {
+  const clang::Type *type = qual_type.getTypePtr();
+  while (llvm::isa<clang::ElaboratedType>(type) ||
+         llvm::isa<clang::PointerType>(type) ||
+         llvm::isa<clang::ArrayType>(type)) {
+    if (auto *elaborated = llvm::dyn_cast<clang::ElaboratedType>(type)) {
+      qual_type = elaborated->getNamedType();
+    } else if (auto *ptr = llvm::dyn_cast<clang::PointerType>(type)) {
+      qual_type = ptr->getPointeeType();
+    } else if (auto *array = llvm::dyn_cast<clang::ArrayType>(type)) {
+      qual_type = array->getElementType();
+    }
+    type = qual_type.getTypePtr();
+  }
+  return type;
+}
+
+static bool isTagEmbeddedInField(clang::TagDecl *tag_decl,
+                                 clang::RecordDecl *parent_decl,
+                                 clang::SourceManager *source_manager,
+                                 bool allow_fallback_loc_compare) {
+  if (tag_decl == nullptr || parent_decl == nullptr) {
+    return false;
+  }
+
+  auto location_in_range = [&](clang::SourceLocation begin,
+                               clang::SourceLocation end,
+                               clang::SourceLocation loc) -> bool {
+    if (!begin.isValid() || !end.isValid() || !loc.isValid()) {
+      return false;
+    }
+    if (source_manager == nullptr) {
+      return allow_fallback_loc_compare ? begin == loc : false;
+    }
+    clang::SourceLocation begin_loc = source_manager->getSpellingLoc(begin);
+    clang::SourceLocation end_loc = source_manager->getSpellingLoc(end);
+    clang::SourceLocation target_loc = source_manager->getSpellingLoc(loc);
+    if (!begin_loc.isValid() || !end_loc.isValid() || !target_loc.isValid()) {
+      return false;
+    }
+    if (source_manager->getFileID(begin_loc) !=
+            source_manager->getFileID(target_loc) ||
+        source_manager->getFileID(end_loc) !=
+            source_manager->getFileID(target_loc)) {
+      return false;
+    }
+    unsigned begin_offset = source_manager->getFileOffset(begin_loc);
+    unsigned end_offset = source_manager->getFileOffset(end_loc);
+    unsigned target_offset = source_manager->getFileOffset(target_loc);
+    if (begin_offset > end_offset) {
+      std::swap(begin_offset, end_offset);
+    }
+    return target_offset >= begin_offset && target_offset <= end_offset;
+  };
+
+  clang::SourceLocation tag_begin = tag_decl->getBeginLoc();
+  for (clang::FieldDecl *field_decl : parent_decl->fields()) {
+    clang::QualType field_qual_type = field_decl->getType();
+    const clang::Type *field_type = stripFieldType(field_qual_type);
+    clang::TagDecl *field_tag = nullptr;
+    if (auto *record_type =
+            llvm::dyn_cast_or_null<clang::RecordType>(field_type)) {
+      field_tag = record_type->getDecl();
+    } else if (auto *enum_type =
+                   llvm::dyn_cast_or_null<clang::EnumType>(field_type)) {
+      field_tag = enum_type->getDecl();
+    }
+
+    if (field_tag == nullptr) {
+      continue;
+    }
+
+    clang::SourceRange field_range = field_decl->getSourceRange();
+    if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
+      clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
+      if (type_range.isValid()) {
+        field_range = type_range;
+      }
+    }
+
+    if (field_tag->getCanonicalDecl() == tag_decl->getCanonicalDecl() &&
+        location_in_range(field_range.getBegin(), field_range.getEnd(),
+                          tag_begin)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // unnamed namespace
 
 void ClangToSageTranslator::populateClassDefinition(
@@ -2321,99 +2410,9 @@ void ClangToSageTranslator::populateClassDefinition(
 
   // REX FIX: We must detect if an access specifier was explicitly written.
   bool explicit_access_context = false;
-
-  auto tag_embedded_in_field = [&](clang::TagDecl *tag_decl) -> bool {
-    if (tag_decl == nullptr) {
-      return false;
-    }
-    if (p_compiler_instance == nullptr) {
-      return false;
-    }
-    clang::RecordDecl *parent_decl = record_decl;
-    if (parent_decl == nullptr) {
-      return false;
-    }
-
-    auto location_in_range = [&](clang::SourceLocation begin,
-                                 clang::SourceLocation end,
-                                 clang::SourceLocation loc) -> bool {
-      if (!begin.isValid() || !end.isValid() || !loc.isValid()) {
-        return false;
-      }
-      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-      clang::SourceLocation begin_loc = sm.getSpellingLoc(begin);
-      clang::SourceLocation end_loc = sm.getSpellingLoc(end);
-      clang::SourceLocation target_loc = sm.getSpellingLoc(loc);
-      if (!begin_loc.isValid() || !end_loc.isValid() || !target_loc.isValid()) {
-        return false;
-      }
-      if (sm.getFileID(begin_loc) != sm.getFileID(target_loc) ||
-          sm.getFileID(end_loc) != sm.getFileID(target_loc)) {
-        return false;
-      }
-      unsigned begin_offset = sm.getFileOffset(begin_loc);
-      unsigned end_offset = sm.getFileOffset(end_loc);
-      unsigned target_offset = sm.getFileOffset(target_loc);
-      if (begin_offset > end_offset) {
-        std::swap(begin_offset, end_offset);
-      }
-      return target_offset >= begin_offset && target_offset <= end_offset;
-    };
-
-    clang::SourceLocation tag_begin = tag_decl->getBeginLoc();
-    for (clang::FieldDecl *field_decl : parent_decl->fields()) {
-      clang::QualType field_qual_type = field_decl->getType();
-      const clang::Type *field_type = field_qual_type.getTypePtr();
-      while (llvm::isa<clang::ElaboratedType>(field_type) ||
-             llvm::isa<clang::PointerType>(field_type) ||
-             llvm::isa<clang::ArrayType>(field_type)) {
-        if (auto *elaborated =
-                llvm::dyn_cast<clang::ElaboratedType>(field_type)) {
-          field_qual_type = elaborated->getNamedType();
-        } else if (auto *ptr = llvm::dyn_cast<clang::PointerType>(field_type)) {
-          field_qual_type = ptr->getPointeeType();
-        } else if (auto *array = llvm::dyn_cast<clang::ArrayType>(field_type)) {
-          field_qual_type = array->getElementType();
-        }
-        field_type = field_qual_type.getTypePtr();
-      }
-
-      if (auto *record_type =
-              llvm::dyn_cast_or_null<clang::RecordType>(field_type)) {
-        clang::RecordDecl *field_record = record_type->getDecl();
-        clang::SourceRange field_range = field_decl->getSourceRange();
-        if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
-          clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
-          if (type_range.isValid()) {
-            field_range = type_range;
-          }
-        }
-        if (field_record != nullptr &&
-            field_record->getCanonicalDecl() == tag_decl->getCanonicalDecl() &&
-            location_in_range(field_range.getBegin(), field_range.getEnd(),
-                              tag_begin)) {
-          return true;
-        }
-      } else if (auto *enum_type =
-                     llvm::dyn_cast_or_null<clang::EnumType>(field_type)) {
-        clang::EnumDecl *field_enum = enum_type->getDecl();
-        clang::SourceRange field_range = field_decl->getSourceRange();
-        if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
-          clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
-          if (type_range.isValid()) {
-            field_range = type_range;
-          }
-        }
-        if (field_enum != nullptr &&
-            field_enum->getCanonicalDecl() == tag_decl->getCanonicalDecl() &&
-            location_in_range(field_range.getBegin(), field_range.getEnd(),
-                              tag_begin)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
+  clang::SourceManager *source_manager =
+      p_compiler_instance != nullptr ? &p_compiler_instance->getSourceManager()
+                                     : nullptr;
 
   // Populate base classes for C++ records.
   if (clang::CXXRecordDecl *cxx_record =
@@ -2734,7 +2733,7 @@ void ClangToSageTranslator::populateClassDefinition(
     // embedded definition inline during unparsing.
     if (clang::TagDecl *tag_decl = llvm::dyn_cast<clang::TagDecl>(inner_decl)) {
       if (tag_decl->isEmbeddedInDeclarator() ||
-          tag_embedded_in_field(tag_decl)) {
+          isTagEmbeddedInField(tag_decl, record_decl, source_manager, false)) {
         continue;
       }
     }
@@ -6434,84 +6433,14 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     SageBuilder::popScopeStack();
   }
 
-  auto record_embedded_in_field = [&]() -> bool {
-    clang::RecordDecl *parent_decl = llvm::dyn_cast_or_null<clang::RecordDecl>(
-        record_decl->getDeclContext());
-    if (parent_decl == nullptr) {
-      return false;
-    }
-
-    auto location_in_range = [&](clang::SourceLocation begin,
-                                 clang::SourceLocation end,
-                                 clang::SourceLocation loc) -> bool {
-      if (!begin.isValid() || !end.isValid() || !loc.isValid()) {
-        return false;
-      }
-      if (p_compiler_instance == nullptr) {
-        return begin == loc;
-      }
-      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-      clang::SourceLocation begin_loc = sm.getSpellingLoc(begin);
-      clang::SourceLocation end_loc = sm.getSpellingLoc(end);
-      clang::SourceLocation target_loc = sm.getSpellingLoc(loc);
-      if (!begin_loc.isValid() || !end_loc.isValid() || !target_loc.isValid()) {
-        return false;
-      }
-      if (sm.getFileID(begin_loc) != sm.getFileID(target_loc) ||
-          sm.getFileID(end_loc) != sm.getFileID(target_loc)) {
-        return false;
-      }
-      unsigned begin_offset = sm.getFileOffset(begin_loc);
-      unsigned end_offset = sm.getFileOffset(end_loc);
-      unsigned target_offset = sm.getFileOffset(target_loc);
-      if (begin_offset > end_offset) {
-        std::swap(begin_offset, end_offset);
-      }
-      return target_offset >= begin_offset && target_offset <= end_offset;
-    };
-
-    clang::SourceLocation record_begin = record_decl->getBeginLoc();
-    for (clang::FieldDecl *field_decl : parent_decl->fields()) {
-      clang::QualType field_qual_type = field_decl->getType();
-      const clang::Type *field_type = field_qual_type.getTypePtr();
-      while (llvm::isa<clang::ElaboratedType>(field_type) ||
-             llvm::isa<clang::PointerType>(field_type) ||
-             llvm::isa<clang::ArrayType>(field_type)) {
-        if (auto *elaborated =
-                llvm::dyn_cast<clang::ElaboratedType>(field_type)) {
-          field_qual_type = elaborated->getNamedType();
-        } else if (auto *ptr = llvm::dyn_cast<clang::PointerType>(field_type)) {
-          field_qual_type = ptr->getPointeeType();
-        } else if (auto *array = llvm::dyn_cast<clang::ArrayType>(field_type)) {
-          field_qual_type = array->getElementType();
-        }
-        field_type = field_qual_type.getTypePtr();
-      }
-
-      if (auto *record_type =
-              llvm::dyn_cast_or_null<clang::RecordType>(field_type)) {
-        clang::RecordDecl *field_record = record_type->getDecl();
-        clang::SourceRange field_range = field_decl->getSourceRange();
-        if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
-          clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
-          if (type_range.isValid()) {
-            field_range = type_range;
-          }
-        }
-        if (field_record != nullptr &&
-            field_record->getCanonicalDecl() ==
-                record_decl->getCanonicalDecl() &&
-            location_in_range(field_range.getBegin(), field_range.getEnd(),
-                              record_begin)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
-
-  bool is_embedded_record =
-      record_decl->isEmbeddedInDeclarator() || record_embedded_in_field();
+  clang::RecordDecl *parent_decl =
+      llvm::dyn_cast_or_null<clang::RecordDecl>(record_decl->getDeclContext());
+  clang::SourceManager *embedded_source_manager =
+      p_compiler_instance != nullptr ? &p_compiler_instance->getSourceManager()
+                                     : nullptr;
+  bool is_embedded_record = record_decl->isEmbeddedInDeclarator() ||
+                            isTagEmbeddedInField(record_decl, parent_decl,
+                                                 embedded_source_manager, true);
   if (is_embedded_record) {
     if (sg_class_decl != nullptr) {
       sg_class_decl->set_isAutonomousDeclaration(false);
