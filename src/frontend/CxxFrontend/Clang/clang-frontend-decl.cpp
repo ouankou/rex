@@ -8713,33 +8713,33 @@ SgNode *ClangToSageTranslator::lookupUsingDeclTargetNode(clang::Decl *decl) {
 }
 
 SgNode *ClangToSageTranslator::resolveUsingDeclTargetNode(clang::Decl *decl) {
-  if (decl == nullptr) {
-    return nullptr;
-  }
-  if (SgNode *node = lookupUsingDeclTargetNode(decl)) {
-    return node;
-  }
-  if (p_decl_translation_in_progress.find(decl) ==
-          p_decl_translation_in_progress.end() &&
-      p_decl_translation_on_demand.find(decl) ==
-          p_decl_translation_on_demand.end()) {
-    if (SgNode *node = TraverseOnDemand(decl)) {
+  auto try_resolve_decl = [&](clang::Decl *target_decl) -> SgNode * {
+    if (target_decl == nullptr) {
+      return nullptr;
+    }
+    if (SgNode *node = lookupUsingDeclTargetNode(target_decl)) {
       return node;
     }
+    if (p_decl_translation_in_progress.find(target_decl) ==
+            p_decl_translation_in_progress.end() &&
+        p_decl_translation_on_demand.find(target_decl) ==
+            p_decl_translation_on_demand.end()) {
+      if (SgNode *node = TraverseOnDemand(target_decl)) {
+        return node;
+      }
+    }
+    return nullptr;
+  };
+
+  if (SgNode *node = try_resolve_decl(decl)) {
+    return node;
   }
+
   if (clang::NamedDecl *named = llvm::dyn_cast<clang::NamedDecl>(decl)) {
     if (clang::Decl *canonical = named->getCanonicalDecl()) {
       if (canonical != decl) {
-        if (SgNode *node = lookupUsingDeclTargetNode(canonical)) {
+        if (SgNode *node = try_resolve_decl(canonical)) {
           return node;
-        }
-        if (p_decl_translation_in_progress.find(canonical) ==
-                p_decl_translation_in_progress.end() &&
-            p_decl_translation_on_demand.find(canonical) ==
-                p_decl_translation_on_demand.end()) {
-          if (SgNode *node = TraverseOnDemand(canonical)) {
-            return node;
-          }
         }
       }
     }
@@ -8747,16 +8747,8 @@ SgNode *ClangToSageTranslator::resolveUsingDeclTargetNode(clang::Decl *decl) {
             llvm::dyn_cast<clang::FunctionDecl>(decl)) {
       if (clang::FunctionDecl *first = func_decl->getFirstDecl()) {
         if (first != decl) {
-          if (SgNode *node = lookupUsingDeclTargetNode(first)) {
+          if (SgNode *node = try_resolve_decl(first)) {
             return node;
-          }
-          if (p_decl_translation_in_progress.find(first) ==
-                  p_decl_translation_in_progress.end() &&
-              p_decl_translation_on_demand.find(first) ==
-                  p_decl_translation_on_demand.end()) {
-            if (SgNode *node = TraverseOnDemand(first)) {
-              return node;
-            }
           }
         }
       }
@@ -8764,16 +8756,8 @@ SgNode *ClangToSageTranslator::resolveUsingDeclTargetNode(clang::Decl *decl) {
                    llvm::dyn_cast<clang::RecordDecl>(decl)) {
       if (clang::RecordDecl *definition = record_decl->getDefinition()) {
         if (definition != decl) {
-          if (SgNode *node = lookupUsingDeclTargetNode(definition)) {
+          if (SgNode *node = try_resolve_decl(definition)) {
             return node;
-          }
-          if (p_decl_translation_in_progress.find(definition) ==
-                  p_decl_translation_in_progress.end() &&
-              p_decl_translation_on_demand.find(definition) ==
-                  p_decl_translation_on_demand.end()) {
-            if (SgNode *node = TraverseOnDemand(definition)) {
-              return node;
-            }
           }
         }
       }
