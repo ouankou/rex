@@ -5793,18 +5793,18 @@ bool ClangToSageTranslator::VisitCXXRewrittenBinaryOperator(
 
   clang::Expr *semantic_form = cxx_rewrite_binary_operator->getSemanticForm();
   if (semantic_form == nullptr) {
-    std::cerr << "Runtime error: CXXRewrittenBinaryOperator has no semantic "
-                 "form."
-              << std::endl;
+    MLOG_ERROR_C(MLOG_FRONTEND,
+                 "Runtime error: CXXRewrittenBinaryOperator has no semantic "
+                 "form.\n");
     return false;
   }
 
   SgNode *tmp_expr = Traverse(semantic_form);
   SgExpression *expr = isSgExpression(tmp_expr);
   if (expr == nullptr) {
-    std::cerr << "Runtime error: failed to translate semantic form for "
-                 "CXXRewrittenBinaryOperator."
-              << std::endl;
+    MLOG_ERROR_C(MLOG_FRONTEND,
+                 "Runtime error: failed to translate semantic form for "
+                 "CXXRewrittenBinaryOperator.\n");
     return false;
   }
 
