@@ -261,8 +261,17 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
 
       // =================== Copy incoming lattices to outgoing lattices
       // ===================
-      const vector<Lattice *> dfInfoAnte = getLatticeAnte(state);
-      const vector<Lattice *> dfInfoPost = getLatticePost(state);
+      vector<Lattice *> dfInfoAnte = getLatticeAnte(state);
+      vector<Lattice *> dfInfoPost = getLatticePost(state);
+      if (!state->isInitialized(this)) {
+        vector<Lattice *> initLats;
+        vector<NodeFact *> initFacts;
+        genInitState(func, n, *state, initLats, initFacts);
+        state->setLattices(this, initLats);
+        state->setFacts(this, initFacts);
+        dfInfoAnte = getLatticeAnte(state);
+        dfInfoPost = getLatticePost(state);
+      }
 
       // Overwrite the Lattices below this node with the lattices above this
       // node. The transfer function will then operate on these Lattices to

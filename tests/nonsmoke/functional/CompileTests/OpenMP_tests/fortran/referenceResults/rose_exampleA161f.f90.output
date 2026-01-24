@@ -1,0 +1,6 @@
+!$omp parallel  shared(x,y) private(ix_next,iy_next)
+!$omp critical (xaxis)
+!$omp end critical (xaxis)
+!$omp critical (yaxis)
+!$omp end critical (yaxis)
+!$omp end parallel

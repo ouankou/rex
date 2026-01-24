@@ -42,9 +42,9 @@
 #endif
 
 #include <algorithm>
-
+#include <cctype>
 #include <filesystem>
-
+#include <functional>
 #include <memory>
 
 // DQ (12/22/2019): I don't need this now, and it is an issue for some compilers
@@ -119,6 +119,90 @@ static std::string normalizePathIfPossible(const std::string &path) {
     return path;
   }
   return FileHelper::normalizePath(path);
+}
+
+static std::string toLowerCopy(const std::string &text) {
+  std::string lowered = text;
+  for (char &ch : lowered) {
+    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  }
+  return lowered;
+}
+
+static std::string getPathSuffix(const std::string &path) {
+  std::string::size_type dot = path.rfind('.');
+  if (dot == std::string::npos || dot + 1 >= path.size()) {
+    return std::string();
+  }
+  return path.substr(dot + 1);
+}
+
+static bool isFlangFortranSourceSuffix(const std::string &suffix) {
+  const std::string lower = toLowerCopy(suffix);
+  return lower == "f" || lower == "ff" || lower == "f90" || lower == "ff90" ||
+         lower == "f95" || lower == "ff95" || lower == "f18" ||
+         lower == "ff18" || lower == "cuf" || lower == "rmod" ||
+         lower == "rcmp";
+}
+
+static bool needsFlangFortranExtensionFix(const std::string &path) {
+  const std::string suffix = getPathSuffix(path);
+  if (suffix.empty()) {
+    return false;
+  }
+  if (!CommandlineProcessing::isFortranFileNameSuffix(suffix)) {
+    return false;
+  }
+  return !isFlangFortranSourceSuffix(suffix);
+}
+
+static bool isFixedFormFortranSource(const SgSourceFile *source,
+                                     const std::string &suffix) {
+  if (source != nullptr) {
+    if (source->get_inputFormat() == SgFile::e_fixed_form_output_format) {
+      return true;
+    }
+    if (source->get_inputFormat() == SgFile::e_unknown_output_format &&
+        source->get_F77_only()) {
+      return true;
+    }
+  }
+  const std::string lower = toLowerCopy(suffix);
+  return lower == "f" || lower == "f77";
+}
+
+static std::string findOutputDirArg(const std::vector<std::string> &argv) {
+  for (size_t i = 0; i + 1 < argv.size(); ++i) {
+    if (argv[i] == "-outputdir") {
+      return argv[i + 1];
+    }
+  }
+  return std::string();
+}
+
+static bool hasIncludeDir(const std::vector<std::string> &args,
+                          const std::string &dir) {
+  if (dir.empty()) {
+    return false;
+  }
+  const std::string normalized_dir = normalizePathIfPossible(dir);
+  for (size_t i = 0; i < args.size(); ++i) {
+    const std::string &arg = args[i];
+    if (arg == "-I") {
+      if (i + 1 < args.size()) {
+        if (normalizePathIfPossible(args[i + 1]) == normalized_dir) {
+          return true;
+        }
+      }
+      continue;
+    }
+    if (arg.rfind("-I", 0) == 0 && arg.size() > 2) {
+      if (normalizePathIfPossible(arg.substr(2)) == normalized_dir) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 static void copyLanguageSettings(SgSourceFile *target,
@@ -731,7 +815,9 @@ void SgSourceFile::initializeGlobalScope() {
   if (get_requires_C_preprocessor() == true) {
     // This must be a Fortran source file (requiring the use of CPP to process
     // its directives).
-    filename = generate_C_preprocessor_intermediate_filename(filename);
+    if (get_experimental_flang_frontend() == false) {
+      filename = generate_C_preprocessor_intermediate_filename(filename);
+    }
   }
 
   // printf ("get_requires_C_preprocessor() = %s filename = %s
@@ -1316,6 +1402,15 @@ SgSourceFile::SgSourceFile(vector<string> &argv, SgProject *project)
 
 int SgSourceFile::callFrontEnd() {
   int frontendErrorLevel = SgFile::callFrontEnd();
+  if (get_experimental_flang_frontend() == true &&
+      get_requires_C_preprocessor() == true) {
+    ASSERT_not_null(get_globalScope());
+    ASSERT_not_null(get_globalScope()->get_startOfConstruct());
+    ASSERT_not_null(get_globalScope()->get_endOfConstruct());
+    const std::string filename = get_sourceFileNameWithPath();
+    get_globalScope()->get_startOfConstruct()->set_filenameString(filename);
+    get_globalScope()->get_endOfConstruct()->set_filenameString(filename);
+  }
   // DQ (1/21/2008): This must be set for all languages
   ASSERT_not_null(get_globalScope());
   ASSERT_not_null(get_globalScope()->get_file_info());
@@ -2250,6 +2345,9 @@ void SgFile::secondaryPassOverSourceFile() {
       // Debugging code (eliminate use of CPP directives from source file so
       // that we can debug the insertion of linemarkers from first phase of CPP
       // processing.
+      const bool using_flang_frontend =
+          sourceFile->get_experimental_flang_frontend() &&
+          sourceFile->get_Fortran_only();
       if (requiresCPP == false) {
         // DQ (10/21/2019): This will be tested below, in
         // attachPreprocessingInfo(), if it is not in place then we need to do
@@ -2269,7 +2367,12 @@ void SgFile::secondaryPassOverSourceFile() {
             sourceFile, sourceFile->class_name().c_str(),
             sourceFile->getFileName().c_str());
 #endif
-        attachPreprocessingInfo(sourceFile);
+        if (!using_flang_frontend) {
+          attachPreprocessingInfo(sourceFile);
+        } else {
+          // Flang already attaches Fortran comments during AST construction.
+          sourceFile->set_processedToIncludeCppDirectivesAndComments(true);
+        }
 #if DEBUG_SECONDARY_PASS
         printf("@@@@@@@@@@@@@@ DONE: In SgFile::secondaryPassOverSourceFile(): "
                "Calling attachPreprocessingInfo(): sourceFile = %p = %s \n",
@@ -2518,11 +2621,90 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     flangCommandLine.push_back("-fexternal-builder");
     vector<string> flangArgs = argv;
     SgFile::stripRoseCommandLineOptions(flangArgs);
+
+    std::string source_path = get_sourceFileNameWithPath();
+    if (source_path.empty()) {
+      source_path = getFileName();
+    }
+    const std::string normalized_source = normalizePathIfPossible(source_path);
+    std::string source_dir;
+    if (!source_path.empty()) {
+      source_dir = std::filesystem::path(source_path).parent_path().string();
+    }
+
+    const std::string output_dir_arg = findOutputDirArg(argv);
+    std::filesystem::path temp_dir;
+    bool temp_dir_ready = false;
+    bool remove_temp_dir = false;
+    std::vector<std::string> temp_files;
+    bool replaced_source = false;
+
+    auto ensure_temp_dir = [&]() -> const std::filesystem::path & {
+      if (temp_dir_ready) {
+        return temp_dir;
+      }
+      if (!output_dir_arg.empty()) {
+        temp_dir = std::filesystem::path(output_dir_arg) / "flang-input";
+        std::error_code ec;
+        std::filesystem::create_directories(temp_dir, ec);
+        remove_temp_dir = false;
+      } else {
+        temp_dir = Rose::FileSystem::createTemporaryDirectory();
+        remove_temp_dir = true;
+      }
+      temp_dir_ready = true;
+      return temp_dir;
+    };
+
+    auto rewrite_source_arg = [&](const std::string &arg) -> std::string {
+      if (arg.empty() || arg == "-" || arg[0] == '-') {
+        return arg;
+      }
+      if (!normalized_source.empty() &&
+          normalizePathIfPossible(arg) != normalized_source) {
+        return arg;
+      }
+      if (!needsFlangFortranExtensionFix(arg)) {
+        return arg;
+      }
+      const std::string suffix = getPathSuffix(arg);
+      const bool fixed_form = isFixedFormFortranSource(this, suffix);
+      const std::string new_suffix = fixed_form ? "f" : "f90";
+      const std::filesystem::path out_dir = ensure_temp_dir();
+      const std::filesystem::path original_path(arg);
+      const std::string stem = original_path.stem().string();
+      const size_t hash_value =
+          std::hash<std::string>{}(normalizePathIfPossible(arg));
+      const std::string temp_name =
+          stem + ".rose_flang_" + std::to_string(hash_value) + "." + new_suffix;
+      const std::filesystem::path temp_path = out_dir / temp_name;
+
+      std::error_code ec;
+      std::filesystem::copy_file(
+          original_path, temp_path,
+          std::filesystem::copy_options::overwrite_existing, ec);
+      if (ec) {
+        std::cerr << "Error: failed to create flang input copy for "
+                  << original_path.string() << ": " << ec.message() << "\n";
+        ROSE_ABORT();
+      }
+      temp_files.push_back(temp_path.string());
+      replaced_source = true;
+      return temp_path.string();
+    };
+
     if (flangArgs.size() > 1) {
-      flangCommandLine.insert(flangCommandLine.end(), flangArgs.begin() + 1,
-                              flangArgs.end());
-    } else {
-      flangCommandLine.push_back(get_sourceFileNameWithPath());
+      for (size_t i = 1; i < flangArgs.size(); ++i) {
+        flangCommandLine.push_back(rewrite_source_arg(flangArgs[i]));
+      }
+    } else if (!source_path.empty()) {
+      flangCommandLine.push_back(rewrite_source_arg(source_path));
+    }
+
+    if (replaced_source && !source_dir.empty() &&
+        !hasIncludeDir(flangCommandLine, source_dir)) {
+      flangCommandLine.push_back("-I");
+      flangCommandLine.push_back(source_dir);
     }
     CommandlineProcessing::ArgvStorage flangArgvStorage(flangCommandLine);
     int flangArgc = flangArgvStorage.argc();
@@ -2535,6 +2717,14 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
 #if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
     status = experimental_fortran_main(flangArgc, flangArgv,
                                        const_cast<SgSourceFile *>(this));
+    for (const auto &path : temp_files) {
+      std::error_code ec;
+      std::filesystem::remove(path, ec);
+    }
+    if (remove_temp_dir && temp_dir_ready) {
+      std::error_code ec;
+      std::filesystem::remove_all(temp_dir, ec);
+    }
     ROSE_ASSERT(status == 0);
 #else
     ROSE_ASSERT(!"[FATAL] [ROSE] [frontend] [Fortran] "

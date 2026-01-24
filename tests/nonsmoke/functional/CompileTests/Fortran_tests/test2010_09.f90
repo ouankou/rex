@@ -1,5 +1,5 @@
 !#if 0
-!/disks/utke/Apps/rose_inst/bin/testTranslator -rose:Fortran
+!/disks/utke/Apps/rose_inst/bin/testTranslator -std=fortran
 !-rose:skipfinalCompileStep -rose:output charArrSlice.r2f.f95
 !charArrSlice.f90
 !/disks/utke/Argonne/Dev/RoseFE/OpenAD/RegressionRose/Simple/TestSources/charArrSlice.f90:1.1:

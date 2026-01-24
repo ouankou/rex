@@ -490,20 +490,21 @@ bool CommandlineProcessing::isFortranFileNameSuffix(const std::string &suffix) {
 
 #if (CASE_SENSITIVE_SYSTEM == 1)
   if (suffix == "f" || suffix == "f77" || suffix == "f90" || suffix == "f95" ||
-      suffix == "f03" || suffix == "f08" ||
+      suffix == "f03" || suffix == "f08" || suffix == "fxx" ||
       suffix == "caf"
       // For Fortran, upper case is used to indicate that CPP preprocessing is
       // required.
       || suffix == "F" || suffix == "F77" || suffix == "F90" ||
       suffix == "F95" || suffix == "F03" || suffix == "F08" ||
-      suffix == "CAF" ||
+      suffix == "FXX" || suffix == "CAF" ||
       suffix == "rmod" // FMZ 5/28/2008: for importing module declaration
   )
 #else // It is a case insensitive system
   if (suffix == "f" || suffix == "f77" || suffix == "f90" || suffix == "f95" ||
-      suffix == "f03" || suffix == "f08" || suffix == "F" || suffix == "F77" ||
-      suffix == "F90" || suffix == "F95" || suffix == "F03" ||
-      suffix == "F08" || suffix == "CAF" ||
+      suffix == "f03" || suffix == "f08" || suffix == "fxx" || suffix == "F" ||
+      suffix == "F77" || suffix == "F90" || suffix == "F95" ||
+      suffix == "F03" || suffix == "F08" || suffix == "FXX" ||
+      suffix == "CAF" ||
       suffix == "rmod" // FMZ 5/28/2008: for importing module declaration
   )
 #endif
@@ -526,8 +527,8 @@ bool CommandlineProcessing::isFortranFileNameSuffixRequiringCPP(
   // For Fortran, upper case is used to indicate that CPP preprocessing is
   // required.
   if (suffix == "f" || suffix == "f77" || suffix == "f90" || suffix == "f95" ||
-      suffix == "f03" || suffix == "f08" || suffix == "caf" ||
-      suffix == "rmod" // FMZ (10/15/2008)
+      suffix == "f03" || suffix == "f08" || suffix == "fxx" ||
+      suffix == "caf" || suffix == "rmod" // FMZ (10/15/2008)
   )
     returnValue = false;
 #else

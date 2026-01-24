@@ -45,29 +45,29 @@ void generateModFile(SgFile *sfile) {
 
     ASSERT_not_null(module_stmt);
     string outputDir = get_rmod_dir(sfile);
+    string lowerModuleName =
+        StringUtility::convertToLowerCase(module_stmt->get_name().getString());
     string outputFilename;
     if (outputDir != "")
-      outputFilename = outputDir + module_stmt->get_name() + MOD_FILE_SUFFIX;
+      outputFilename = outputDir + lowerModuleName + MOD_FILE_SUFFIX;
     else
-      outputFilename = module_stmt->get_name() + MOD_FILE_SUFFIX;
-
-    string lowerCaseOutputFilename =
-        StringUtility::convertToLowerCase(outputFilename);
+      outputFilename = lowerModuleName + MOD_FILE_SUFFIX;
 
     // Cause the output of a message with verbose level is turned on.
     if (SgProject::get_verbose() > 0) {
       printf("In generateModFile() (loop over module declarations): Generating "
              "a Fortran 90 specific module file %s for module = %s \n",
-             lowerCaseOutputFilename.c_str(), outputFilename.c_str());
+             outputFilename.c_str(),
+             module_stmt->get_name().getString().c_str());
     }
 
     // Use a lower case generate filename for the generated ROSE mod (or rmod)
     // file.
-    fstream Module_OutputFile(lowerCaseOutputFilename.c_str(), ios::out);
+    fstream Module_OutputFile(outputFilename.c_str(), ios::out);
 
     if (!Module_OutputFile) {
-      cout << "Error detected in opening file "
-           << lowerCaseOutputFilename.c_str() << "for output" << endl;
+      cout << "Error detected in opening file " << outputFilename.c_str()
+           << "for output" << endl;
       ROSE_ABORT();
     }
 

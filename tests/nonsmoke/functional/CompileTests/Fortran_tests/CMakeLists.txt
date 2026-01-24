@@ -15,24 +15,30 @@ include(Fortran_F77_Testcodes.cmake)
 include(Fortran_F03_Testcodes.cmake)
 include(Fortran_Comments_Testcodes.cmake)
 
+set(_fortran_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_fortran_output_dir})
+
 set(ROSE_FLAGS -rose:verbose 0 -rose:detect_dangling_pointers 2
                -I${CMAKE_CURRENT_SOURCE_DIR}
-               -I${CMAKE_CURRENT_BINARY_DIR})
+               -I${CMAKE_CURRENT_BINARY_DIR}
+               -I${_fortran_output_dir}
+               -outputdir ${_fortran_output_dir})
+string(JOIN " " ROSE_FLAGS_STR ${ROSE_FLAGS})
 
 function(fortran_test input_file)
   add_test(
     NAME FORTRANTEST_${input_file}_translation
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_fortran_output_dir}
     COMMAND testTranslator ${ROSE_FLAGS} ${FORTRAN_FLAGS}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   add_test(
     NAME FORTRANTEST_${input_file}_graph_generation
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_fortran_output_dir}
     COMMAND testGraphGeneration ${ROSE_FLAGS} ${FORTRAN_FLAGS}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   add_test(
     NAME FORTRANTEST_${input_file}_token_generation
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_fortran_output_dir}
     COMMAND testTokenGeneration ${ROSE_FLAGS} ${FORTRAN_FLAGS}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   set_tests_properties(FORTRANTEST_${input_file}_translation PROPERTIES LABELS FORTRANTEST)
@@ -40,12 +46,12 @@ function(fortran_test input_file)
   set_tests_properties(FORTRANTEST_${input_file}_token_generation PROPERTIES DEPENDS FORTRANTEST_${input_file}_graph_generation LABELS FORTRANTEST)
 endfunction()
 
-set(FORTRAN_FLAGS -rose:f77)
+set(FORTRAN_FLAGS -std=f77)
 foreach(F77_test ${F77_TESTCODES})
   fortran_test(${F77_test})
 endforeach()
 
-set(FORTRAN_FLAGS -rose:f90)
+set(FORTRAN_FLAGS -std=f90)
 foreach(F90_test ${F90_TESTCODES})
   fortran_test(${F90_test})
 endforeach()
@@ -55,7 +61,7 @@ foreach(F90_comment_test ${F90_COMMENTS_TESTCODES})
 endforeach()
 
 set(FORTRAN_FLAGS -rose:skip_syntax_check -rose:skipfinalCompileStep
-                  -rose:f2003)
+                  -std=f2003)
 foreach(F03_test ${F03_TESTCODES})
   fortran_test(${F03_test})
 endforeach()
@@ -69,7 +75,7 @@ add_test(
 
 add_test(
   NAME fortran_testCPP_Defines
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS} -DPS=8
     ${CMAKE_CURRENT_SOURCE_DIR}/inputUsingDefinesOnCommandline.F90
 )
@@ -83,7 +89,7 @@ foreach(testcode IN LISTS _fortran_mpi_type_tests)
   string(REPLACE "." "_" _name ${testcode})
   add_test(
     NAME fortran_testMPItypes_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_fortran_output_dir}
     COMMAND testTranslator ${ROSE_FLAGS}
       -rose:skip_syntax_check -rose:skipfinalCompileStep
       ${CMAKE_CURRENT_SOURCE_DIR}/${testcode}
@@ -92,18 +98,18 @@ endforeach()
 
 add_test(
   NAME fortran_testMultipleFortranFiles
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND ${BASH_EXECUTABLE} -c
-    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS} -rose:f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_78.f90 ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90 || cat ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90 rose_test2010_79.f90"
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_78.f90 ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90 || cat ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90 rose_test2010_79.f90"
 )
 
 set(_fortran_reference_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/referenceResults)
 add_test(
   NAME fortran_testPreprocessedOutput
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND ${BASH_EXECUTABLE} -c
-    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS} -rose:f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2007_suffixTest_07.F90 && diff <(tail -n 6 rose_test2007_suffixTest_07.F90) <(tail -n 6 ${_fortran_reference_dir}/rose_test2007_suffixTest_07.F90.output)"
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2007_suffixTest_07.F90 && diff <(tail -n 6 rose_test2007_suffixTest_07.F90) <(tail -n 6 ${_fortran_reference_dir}/rose_test2007_suffixTest_07.F90.output)"
 )
 
 set(_fortran_comment_diff_tests
@@ -115,7 +121,7 @@ foreach(testcode IN LISTS _fortran_comment_diff_tests)
   string(REPLACE "." "_" _name ${testcode})
   add_test(
     NAME fortran_comment_diff_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_fortran_output_dir}
     COMMAND ${BASH_EXECUTABLE} -c
       "$<TARGET_FILE:testTranslator> -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode} && diff <(grep -n \"!\" rose_${testcode}) <(grep -n \"!\" ${CMAKE_CURRENT_SOURCE_DIR}/${testcode}) > ${testcode}.diff"
   )
@@ -123,14 +129,14 @@ endforeach()
 
 add_test(
   NAME fortran_module_module_A_file
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/module_A_file.f90
 )
 add_test(
   NAME fortran_module_module_B_file
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/module_B_file.f90
@@ -139,14 +145,14 @@ set_tests_properties(fortran_module_module_B_file PROPERTIES DEPENDS fortran_mod
 
 add_test(
   NAME fortran_module_test2019_module_1_file
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2019_module_1_file.f90
 )
 add_test(
   NAME fortran_module_test2019_module_2_file
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2019_module_2_file.f90
@@ -155,14 +161,14 @@ set_tests_properties(fortran_module_test2019_module_2_file PROPERTIES DEPENDS fo
 
 add_test(
   NAME fortran_module_test2019_private_attribute2
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2019_private_attribute2.f90
 )
 add_test(
   NAME fortran_module_test2019_private_attribute
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2019_private_attribute.f90
@@ -171,14 +177,14 @@ set_tests_properties(fortran_module_test2019_private_attribute PROPERTIES DEPEND
 
 add_test(
   NAME fortran_module_test2020_use_iso_c_binding_3
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2020_use_iso_c_binding_3.f90
 )
 add_test(
   NAME fortran_module_test2020_use_iso_c_binding_4
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND testTranslator ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2020_use_iso_c_binding_4.f90

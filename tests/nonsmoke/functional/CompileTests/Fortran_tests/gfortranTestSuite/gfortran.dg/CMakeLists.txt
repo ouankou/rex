@@ -378,23 +378,26 @@ structure_constructor_5.f03 value_7.f03)
 set(ROSE_FLAGS -rose:verbose 0 -rose:skip_syntax_check
                -rose:skipfinalCompileStep -rose:detect_dangling_pointers 1
                -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR})
+set(_gfortran_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_gfortran_output_dir})
+list(APPEND ROSE_FLAGS -I${_gfortran_output_dir} -outputdir ${_gfortran_output_dir})
 
 foreach(file_to_test ${F90_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:f90 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -std=f90 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
 foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:f77 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -std=f77 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
 set(_gfortran_f90_disabled_tests
@@ -410,10 +413,10 @@ set(_gfortran_f90_disabled_tests
 foreach(file_to_test ${_gfortran_f90_disabled_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:f90 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -std=f90 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
 set(_gfortran_f77_disabled_tests
@@ -425,10 +428,10 @@ set(_gfortran_f77_disabled_tests
 foreach(file_to_test ${_gfortran_f77_disabled_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -rose:f77 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -std=f77 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
 set(_gfortran_untested_tests
@@ -485,7 +488,7 @@ foreach(file_to_test ${_gfortran_untested_tests})
     COMMAND testTranslator ${ROSE_FLAGS} -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
 # Note: If using gfortran version greater then 4.1, we can't call it with Fortran 2003 code since it is so buggy.
@@ -497,10 +500,10 @@ foreach(file_to_test ${F03_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
-            -rose:skipfinalCompileStep -rose:f2003 -c
+            -rose:skipfinalCompileStep -std=f2003 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
 set(_gfortran_f03_disabled_tests
@@ -514,8 +517,8 @@ foreach(file_to_test ${_gfortran_f03_disabled_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
-            -rose:skipfinalCompileStep -rose:f2003 -c
+            -rose:skipfinalCompileStep -std=f2003 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()

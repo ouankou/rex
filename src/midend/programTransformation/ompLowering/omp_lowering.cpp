@@ -7506,16 +7506,23 @@ generate_outlined_function_file(SgFunctionDeclaration *outlined_func,
   new_file->get_file_info()->set_filenameString(new_file_name);
   new_file->set_unparse_output_filename(new_file_name);
 
-  // insert REX runtime header to the new file
+  // insert REX runtime header to the new file (C/C++ only)
   SgGlobal *new_scope = new_file->get_globalScope();
-  if (file_extension == "cu") {
-    SageInterface::insertHeader("rex_nvidia.h", PreprocessingInfo::after, false,
-                                new_scope);
-  } else {
-    SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::after, false,
-                                new_scope);
-  };
-  new_file->set_processedToIncludeCppDirectivesAndComments(true);
+  bool inserted_header = false;
+  if (!new_file->get_Fortran_only()) {
+    if (file_extension == "cu") {
+      SageInterface::insertHeader("rex_nvidia.h", PreprocessingInfo::after,
+                                  false, new_scope);
+      inserted_header = true;
+    } else {
+      SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::after, false,
+                                  new_scope);
+      inserted_header = true;
+    }
+  }
+  if (inserted_header) {
+    new_file->set_processedToIncludeCppDirectivesAndComments(true);
+  }
 
   fix_storage_modifier(new_file);
   AstPostProcessing(new_file);
@@ -7601,8 +7608,10 @@ static void post_processing(SgSourceFile *file) {
     };
   };
 
-  SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::before, false,
-                              g_scope);
+  if (!file->get_Fortran_only()) {
+    SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::before, false,
+                                g_scope);
+  }
   if (new_file != NULL) {
     AstPostProcessing(new_file);
   };

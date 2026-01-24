@@ -127,6 +127,8 @@ public:
     tokens_ = new TokenStream(iss_empty_);
   }
   void setSourceFile(SgSourceFile *source) { source_ = source; }
+  SgSourceFile *getSourceFile() const { return source_; }
+  void setTokens(std::vector<Token> tokens);
 
   const TokenStream &getTokens() { return *tokens_; }
 

@@ -941,6 +941,22 @@ void SgTemplateArgument::outputTemplateArgument(bool &skip_unparsing,
     isExplicitlySpecified = true;
   }
 
+  bool skip_non_explicit = false;
+  if (!isExplicitlySpecified) {
+    if (SgTemplateInstantiationFunctionDecl *inst_func =
+            isSgTemplateInstantiationFunctionDecl(parentOfTemplateArgument)) {
+      if (inst_func->get_template_argument_list_is_explicit()) {
+        skip_non_explicit = true;
+      }
+    } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+                   isSgTemplateInstantiationMemberFunctionDecl(
+                       parentOfTemplateArgument)) {
+      if (inst_member->get_template_argument_list_is_explicit()) {
+        skip_non_explicit = true;
+      }
+    }
+  }
+
   if (isPackElement && isExplicitlySpecified) {
 #if DEBUG_OUTPUT_TEMPLATE_ARGUMENT
     printf(" !!! isPackElement && isExplicitlySpecified => isPackElement == "
@@ -992,7 +1008,7 @@ void SgTemplateArgument::outputTemplateArgument(bool &skip_unparsing,
 #endif
 
   if (isPackExpansionStart || isAnonymousClass ||
-      (isPackElement && !isExplicitlySpecified)) {
+      (isPackElement && !isExplicitlySpecified) || skip_non_explicit) {
     skip_unparsing = true;
   }
 
@@ -1092,12 +1108,27 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
     copy_iter++;
   }
 
+  bool use_compact_template_brackets = true;
+  SgSourceFile *source_file = nullptr;
+  if (!templateArgListPtr.empty()) {
+    source_file = SageInterface::getEnclosingSourceFile(
+        templateArgListPtr.front()->get_parent(), true);
+  }
+  if (source_file == nullptr) {
+    source_file = SageInterface::getEnclosingSourceFile(
+        info.get_reference_node_for_qualification(), true);
+  }
+  if (source_file != nullptr &&
+      (source_file->get_Cxx03_only() || source_file->get_Cxx03_gnu_only())) {
+    use_compact_template_brackets = false;
+  }
+
   // DQ (2/11/2019): Need to control use of empty <> in template argument list
   // handling.
   if (isEmptyTemplateArgumentList == false) {
     // DQ (2/11/2019): Moved to outside of the loop over all template
     // parameters.
-    unp->u_exprStmt->curprint("< ");
+    unp->u_exprStmt->curprint(use_compact_template_brackets ? "<" : "< ");
     // DQ (2/22/2019): Added assertion.  This fails for test2019_93.C and
     // test2019_100.C E.g. template<class ... Types> struct Tuple {}; Tuple<>
     // t0; ROSE_ASSERT(templateArgListPtr.empty() == false);
@@ -1167,8 +1198,15 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
              "unparseTemplateArgument(): *i = %p = %s \n",
              *i, (*i)->class_name().c_str());
 #endif
-      // unparseTemplateArgument(*i,info);
-      unparseTemplateArgument(*i, ninfo);
+      if (use_compact_template_brackets) {
+        SgUnparse_Info arg_info(ninfo);
+        std::string arg_text = (*i)->unparseToString(&arg_info);
+        arg_text = StringUtility::trim(arg_text);
+        unp->u_exprStmt->curprint(arg_text);
+      } else {
+        // unparseTemplateArgument(*i,info);
+        unparseTemplateArgument(*i, ninfo);
+      }
 
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
       printf("In unparseTemplateArgumentList(): DONE: Calling "
@@ -1268,7 +1306,8 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
         // isStartOfPragmaPackAtEndOfList) )
         if (true) {
           // unp->u_exprStmt->curprint(" /* output comma: part 1 */ ");
-          unp->u_exprStmt->curprint(" , ");
+          unp->u_exprStmt->curprint(use_compact_template_brackets ? ", "
+                                                                  : " , ");
         } else {
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
           printf("In unparseTemplateArgumentList(): Skipping output of a "
@@ -1287,7 +1326,7 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
     // for the template issue that Robb pointed out and that was fixed last
     // week.
     if (isEmptyTemplateArgumentList == true) {
-      unp->u_exprStmt->curprint("< > ");
+      unp->u_exprStmt->curprint(use_compact_template_brackets ? "<>" : "< > ");
     } else {
       unp->u_exprStmt->curprint(" ");
     }
@@ -1298,7 +1337,7 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
   if (isEmptyTemplateArgumentList == false) {
     // DQ (2/11/2019): Moved to outside of the loop over all template
     // parameters.
-    unp->u_exprStmt->curprint(" > ");
+    unp->u_exprStmt->curprint(use_compact_template_brackets ? ">" : " > ");
   }
 
 #if DEBUG_TEMPLATE_ARGUMENT_LIST

@@ -1,9 +1,11 @@
 set(ROSE_FLAGS -rose:verbose 0)
+set(_lanl_pop_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_lanl_pop_output_dir})
 
 function(LANL_POP_test file_to_compile)
   add_test(
     NAME ${file_to_compile}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_lanl_pop_output_dir}
     COMMAND testAnalysis ${ROSE_FLAGS}
             -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_compile})
@@ -12,7 +14,7 @@ endfunction()
 function(LANL_POP_parse_test file_to_compile)
   add_test(
     NAME lanl_pop_parse_${file_to_compile}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_lanl_pop_output_dir}
     COMMAND testParser ${ROSE_FLAGS}
             -I${CMAKE_CURRENT_SOURCE_DIR} -I${CMAKE_CURRENT_BINARY_DIR}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_compile})

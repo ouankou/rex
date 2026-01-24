@@ -14575,6 +14575,8 @@ void SageInterface::setFortranNumericLabel(
     }
   }
 
+  symbol->set_label_type(label_type);
+
   int numeric_value = symbol->get_numeric_label_value();
   if (numeric_value <= 0) {
     symbol->set_numeric_label_value(label_value);

@@ -43,9 +43,14 @@ int main( int argc, char * argv[] )
      // tests)
      AstTests::runAllTests(project);
 
-  // regenerate the source code and call the vendor 
-  // compiler, only backend error code is reported.
-  // return backend(project);
+     // regenerate the source code and call the vendor
+     // compiler, only backend error code is reported.
+#if BACKEND_FORTRAN_IS_LLVM_FLANG
+     if (project != nullptr && project->get_Fortran_only()) {
+       project->skipfinalCompileStep(true);
+       project->set_compileOnly(true);
+     }
+#endif
      int exit_status = backend(project);
 
   // DQ (6/30/2013): Compute the elapsed time to this point.

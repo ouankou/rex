@@ -10,6 +10,8 @@
 
 #include "sageBuilder.h"
 
+#include <algorithm>
+#include <cctype>
 #include <tuple>
 
 // the vector of pairs of OpenACC pragma and accparser IR.
@@ -24,6 +26,10 @@ std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *, OpenMPDirective *>>
 OpenMPDirective *ompparser_OpenMPIR;
 static bool use_ompparser = false;
 static bool use_accparser = false;
+
+void mergeEndClausesToBeginDirective(OpenMPDirective *begin_decl,
+                                     OpenMPDirective *end_decl,
+                                     OpenMPDirective *end_wrapper);
 
 using namespace std;
 using namespace SageInterface;
@@ -89,6 +95,7 @@ bool copyStartFileInfo(SgNode *src, SgNode *dest) {
 
   return result;
 }
+
 // Liao 3/11/2013, special function to copy end file info of the original
 // SgPragma or Fortran comments (src) to OpenMP node (dest) If the OpenMP node
 // is a body statement, we have to use the body's end file info as the node's
@@ -148,6 +155,250 @@ static std::list<SgPragmaDeclaration *> omp_pragma_list;
 // the vector of pairs of OpenMP pragma and Ompparser IR.
 static std::vector<std::pair<SgPragmaDeclaration *, OpenMPDirective *>>
     OpenMPIR_list;
+
+static std::string toLowerCopy(const std::string &input) {
+  std::string result = input;
+  std::transform(
+      result.begin(), result.end(), result.begin(),
+      [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+  return result;
+}
+
+static void trimLeft(std::string &text) {
+  size_t pos = 0;
+  while (pos < text.size() &&
+         std::isspace(static_cast<unsigned char>(text[pos]))) {
+    ++pos;
+  }
+  text.erase(0, pos);
+}
+
+static void trimRight(std::string &text) {
+  while (!text.empty() &&
+         std::isspace(static_cast<unsigned char>(text.back()))) {
+    text.pop_back();
+  }
+}
+
+static void trim(std::string &text) {
+  trimLeft(text);
+  trimRight(text);
+}
+
+static void stripFortranComment(std::string &text) {
+  size_t pos = text.find('!');
+  if (pos != std::string::npos) {
+    text.erase(pos);
+  }
+}
+
+static void stripFortranDirectiveSentinel(std::string &text) {
+  trimLeft(text);
+  if (text.empty()) {
+    return;
+  }
+  const char marker =
+      static_cast<char>(std::tolower(static_cast<unsigned char>(text.front())));
+  if (marker == '!' || marker == 'c' || marker == 'd' || marker == '*') {
+    size_t next = 1;
+    while (next < text.size() &&
+           std::isspace(static_cast<unsigned char>(text[next]))) {
+      ++next;
+    }
+    if (next < text.size() && text[next] == '$') {
+      text.erase(0, next + 1);
+      trimLeft(text);
+      return;
+    }
+  }
+  if (text.front() == '$') {
+    text.erase(0, 1);
+    trimLeft(text);
+  }
+}
+
+static bool hasFortranLineContinuation(const std::string &text) {
+  std::string trimmed = text;
+  trimRight(trimmed);
+  return !trimmed.empty() && trimmed.back() == '&';
+}
+
+static void stripFortranLineContinuation(std::string &text) {
+  trimRight(text);
+  if (!text.empty() && text.back() == '&') {
+    text.pop_back();
+    trimRight(text);
+  }
+}
+
+static bool startsWithCaseInsensitive(const std::string &text,
+                                      const std::string &prefix) {
+  if (text.size() < prefix.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < prefix.size(); ++i) {
+    const unsigned char lhs = static_cast<unsigned char>(text[i]);
+    const unsigned char rhs = static_cast<unsigned char>(prefix[i]);
+    if (std::tolower(lhs) != std::tolower(rhs)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static std::string stripOmpPrefix(std::string text) {
+  trimLeft(text);
+  if (startsWithCaseInsensitive(text, "omp")) {
+    text.erase(0, 3);
+    trimLeft(text);
+  }
+  return text;
+}
+
+static void stripLeadingContinuation(std::string &text) {
+  trimLeft(text);
+  if (!text.empty() && text.front() == '&') {
+    text.erase(0, 1);
+    trimLeft(text);
+  }
+}
+
+static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {
+  switch (kind) {
+  case OMPD_parallel:
+  case OMPD_do:
+  case OMPD_parallel_do:
+  case OMPD_parallel_loop:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
+  std::vector<SgNode *> all_pragmas =
+      NodeQuery::querySubTree(sageFilePtr, V_SgPragmaDeclaration);
+  std::vector<SgPragmaDeclaration *> omp_pragmas;
+  for (std::vector<SgNode *>::iterator iter = all_pragmas.begin();
+       iter != all_pragmas.end(); ++iter) {
+    SgPragmaDeclaration *pragmaDecl = isSgPragmaDeclaration(*iter);
+    ROSE_ASSERT(pragmaDecl != NULL);
+    std::string pragmaString = pragmaDecl->get_pragma()->get_pragma();
+    std::string normalized = pragmaString;
+    stripFortranDirectiveSentinel(normalized);
+    trim(normalized);
+    std::istringstream istr(normalized);
+    std::string key;
+    istr >> key;
+    if (toLowerCopy(key) == "omp") {
+      omp_pragmas.push_back(pragmaDecl);
+    }
+  }
+
+  if (omp_pragmas.empty()) {
+    return false;
+  }
+  std::vector<OpenMPDirective *> pairing_list;
+  std::vector<SgPragmaDeclaration *> pending_pragmas;
+  std::string pending;
+  SgPragmaDeclaration *prev_pragma = NULL;
+  bool prev_continuation = false;
+
+  for (size_t i = 0; i < omp_pragmas.size(); ++i) {
+    SgPragmaDeclaration *pragmaDecl = omp_pragmas[i];
+    if (prev_continuation && getNextStatement(prev_pragma) != pragmaDecl) {
+      cerr << "error: Fortran OpenMP line continuation is not contiguous\n";
+      ROSE_ABORT();
+    }
+
+    std::string line = pragmaDecl->get_pragma()->get_pragma();
+    std::string cleaned = line;
+    stripFortranDirectiveSentinel(cleaned);
+    stripFortranComment(cleaned);
+    trim(cleaned);
+    if (cleaned.empty()) {
+      prev_pragma = pragmaDecl;
+      prev_continuation = false;
+      continue;
+    }
+
+    bool has_continuation = hasFortranLineContinuation(cleaned);
+    stripFortranLineContinuation(cleaned);
+
+    if (pending_pragmas.empty()) {
+      pending = cleaned;
+      pending_pragmas.push_back(pragmaDecl);
+    } else {
+      std::string continuation = stripOmpPrefix(cleaned);
+      stripLeadingContinuation(continuation);
+      pending += continuation;
+      pending_pragmas.push_back(pragmaDecl);
+    }
+
+    prev_pragma = pragmaDecl;
+    prev_continuation = has_continuation;
+    if (has_continuation) {
+      continue;
+    }
+
+    ompparser_OpenMPIR = parseOpenMP(pending.c_str(), NULL);
+    ROSE_ASSERT(ompparser_OpenMPIR != NULL);
+
+    if (isFortranPairedDirective(ompparser_OpenMPIR)) {
+      pairing_list.push_back(ompparser_OpenMPIR);
+    }
+    if (ompparser_OpenMPIR->getKind() == OMPD_end) {
+      if (pairing_list.empty()) {
+        cerr << "error: unmatched OpenMP end directive\n";
+        ROSE_ABORT();
+      }
+      OpenMPDirective *end_directive =
+          ((OpenMPEndDirective *)ompparser_OpenMPIR)->getPairedDirective();
+      bool matched = false;
+      while (!pairing_list.empty()) {
+        OpenMPDirective *begin_directive = pairing_list.back();
+        if (end_directive->getKind() == begin_directive->getKind()) {
+          mergeEndClausesToBeginDirective(begin_directive, end_directive,
+                                          ompparser_OpenMPIR);
+          ((OpenMPEndDirective *)ompparser_OpenMPIR)
+              ->setPairedDirective(begin_directive);
+          pairing_list.pop_back();
+          matched = true;
+          break;
+        }
+        if (!allowsImplicitFortranEnd(begin_directive->getKind())) {
+          ROSE_ASSERT(end_directive->getKind() == begin_directive->getKind());
+        }
+        pairing_list.pop_back();
+      }
+      if (!matched) {
+        cerr << "error: unmatched OpenMP end directive\n";
+        ROSE_ABORT();
+      }
+    }
+
+    SgPragmaDeclaration *primary = pending_pragmas.front();
+    fortran_paired_pragma_dict[primary] = ompparser_OpenMPIR;
+    if (ompparser_OpenMPIR->getKind() != OMPD_end) {
+      OpenMPIR_list.push_back(std::make_pair(primary, ompparser_OpenMPIR));
+      omp_pragma_list.push_back(primary);
+    }
+
+    for (size_t j = 1; j < pending_pragmas.size(); ++j) {
+      removeStatement(pending_pragmas[j]);
+    }
+
+    pending_pragmas.clear();
+    pending.clear();
+  }
+
+  if (!pending_pragmas.empty()) {
+    cerr << "error: Fortran OpenMP line continuation is unterminated\n";
+    ROSE_ABORT();
+  }
+
+  return true;
+}
 
 // Clause node builders
 //----------------------------------------------------------
@@ -1275,6 +1526,10 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr) {
   list<SgPragmaDeclaration *>::reverse_iterator
       iter; // bottom up handling for nested cases
   ROSE_ASSERT(sageFilePtr != NULL);
+  const bool isFortran =
+      sageFilePtr->get_Fortran_only() || sageFilePtr->get_F77_only() ||
+      sageFilePtr->get_F90_only() || sageFilePtr->get_F95_only() ||
+      sageFilePtr->get_F2003_only();
   int OpenMPIR_index = OpenMPIR_list.size() - 1;
   int OpenACCIR_index = OpenACCIR_list.size() - 1;
   for (iter = omp_pragma_list.rbegin(); iter != omp_pragma_list.rend();
@@ -1285,6 +1540,14 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr) {
     // information matches the current file being processed Otherwise we will
     // process the same pragma declaration multiple times!!
     SgPragmaDeclaration *decl = *iter;
+    if (isFortran) {
+      if (SgScopeStatement *parent_scope =
+              isSgScopeStatement(decl->get_parent())) {
+        if (decl->get_scope() != parent_scope) {
+          decl->set_scope(parent_scope);
+        }
+      }
+    }
     // Liao, 2/8/2010
     // Some pragmas are set to "transformation generated" when we fix scopes for
     // some pragma under single statement block e.g if ()
@@ -1298,12 +1561,12 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr) {
     //     }
     // So we process a pragma if it is either within the same file or marked as
     // transformation
-    if (decl->get_file_info()->get_filename() !=
+    if (getEnclosingSourceFile(decl) != sageFilePtr)
+      continue;
+    if (!isFortran &&
+        decl->get_file_info()->get_filename() !=
             sageFilePtr->get_file_info()->get_filename() &&
         !(decl->get_file_info()->isTransformation()))
-      continue;
-
-    if (getEnclosingSourceFile(decl) != sageFilePtr)
       continue;
     if (OpenMPIR_list.size() != 0) {
       convertDirective(OpenMPIR_list[OpenMPIR_index]);
@@ -1334,6 +1597,8 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
     ROSE_ASSERT(getNextStatement(begin_decl) == result);
   } else {
     result = buildBasicBlock();
+    SgScopeStatement *new_scope = isSgScopeStatement(result);
+    ROSE_ASSERT(new_scope != NULL);
     // Have to remove them from their original scope first.
     // Otherwise they will show up twice in the unparsed code: original place
     // and under the new block I tried to merge this into appendStatement() but
@@ -1341,7 +1606,10 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
     for (std::vector<SgStatement *>::const_iterator iter = stmt_vec.begin();
          iter != stmt_vec.end(); iter++)
       removeStatement(*iter);
-    appendStatementList(stmt_vec, isSgScopeStatement(result));
+    for (std::vector<SgStatement *>::const_iterator iter = stmt_vec.begin();
+         iter != stmt_vec.end(); iter++)
+      (*iter)->set_scope(new_scope);
+    appendStatementList(stmt_vec, new_scope);
     insertStatementAfter(begin_decl, result, false);
   }
   return result;
@@ -1473,6 +1741,8 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
 
   // we record the last pragma inserted after a statement, if any
   std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_pragma_dict;
+  // Track pragmas inserted before a statement to preserve their original order.
+  std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_before_pragma_dict;
 
   std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *,
                          OpenMPDirective *>>::iterator iter;
@@ -1542,6 +1812,10 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
     PreprocessingInfo::RelativePositionType position =
         info->getRelativePosition();
     if (position == PreprocessingInfo::before) {
+      SgPragmaDeclaration *last_before = NULL;
+      if (stmt_last_before_pragma_dict.count(stmt)) {
+        last_before = stmt_last_before_pragma_dict[stmt];
+      }
       // Don't automatically move comments here!
       if (isSgBasicBlock(stmt) &&
           isSgFortranDo(
@@ -1550,9 +1824,27 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
                                      // attached before the body But we cannot
                                      // insert the pragma before the body. So we
                                      // prepend it into the body instead
-        prependStatement(p_decl, isSgBasicBlock(stmt));
-      } else
+        if (last_before) {
+          insertStatementAfter(last_before, p_decl, false);
+        } else {
+          prependStatement(p_decl, isSgBasicBlock(stmt));
+        }
+      } else if (isSgFunctionDefinition(stmt->get_parent())) {
+        SgFunctionDefinition *def = isSgFunctionDefinition(stmt->get_parent());
+        ROSE_ASSERT(def != NULL);
+        SgBasicBlock *body = def->get_body();
+        ROSE_ASSERT(body != NULL);
+        if (last_before) {
+          insertStatementAfter(last_before, p_decl, false);
+        } else {
+          prependStatement(p_decl, body);
+        }
+      } else if (last_before) {
+        insertStatementAfter(last_before, p_decl, false);
+      } else {
         insertStatementBefore(stmt, p_decl, false);
+      }
+      stmt_last_before_pragma_dict[stmt] = p_decl;
     } else if (position == PreprocessingInfo::inside) {
       SgScopeStatement *scope = isSgScopeStatement(stmt);
       ROSE_ASSERT(scope != NULL);
@@ -1569,7 +1861,15 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       // Otherwise , we will end up with reversed order of pragmas, causing
       // later pragma pair matching problem.
 
-      insertStatementAfter(last, p_decl, false);
+      if (isSgFunctionDefinition(stmt->get_parent())) {
+        SgFunctionDefinition *def = isSgFunctionDefinition(stmt->get_parent());
+        ROSE_ASSERT(def != NULL);
+        SgBasicBlock *body = def->get_body();
+        ROSE_ASSERT(body != NULL);
+        appendStatement(p_decl, body);
+      } else {
+        insertStatementAfter(last, p_decl, false);
+      }
       stmt_last_pragma_dict[stmt] = p_decl;
     } else {
       cerr << "ompAstConstruction.cpp , illegal "
@@ -1605,6 +1905,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   bool isFortran = sageFilePtr->get_Fortran_only() ||
                    sageFilePtr->get_F77_only() || sageFilePtr->get_F90_only() ||
                    sageFilePtr->get_F95_only() || sageFilePtr->get_F2003_only();
+  bool parsed_fortran_pragmas = false;
 
   // ==================================================================================================================//
   // ====== Stage 1: parse OpenMP directives using ompparser and store the
@@ -1616,7 +1917,10 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   // used by the directives/clauses For Fortran, search comments for OpenMP
   // directives
   if (isFortran) { // use ompparser to process Fortran.
-    parseOpenMPFortran(sageFilePtr);
+    parsed_fortran_pragmas = parseOpenMPFortranPragmas(sageFilePtr);
+    if (!parsed_fortran_pragmas) {
+      parseOpenMPFortran(sageFilePtr);
+    }
   } else { // For C/C++, search pragma declarations for OpenMP directives
     std::vector<SgNode *> all_pragmas =
         NodeQuery::querySubTree(sageFilePtr, V_SgPragmaDeclaration);
@@ -1667,9 +1971,13 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
 
   // Build OpenMP AST nodes based on parsing results
   if (isFortran) {
-    convert_Fortran_OMP_Comments_to_Pragmas(
-        sageFilePtr); // TODO: need to fix not sure why we still need this here
-                      // since Fortran is already parsed before.
+    if (parsed_fortran_pragmas) {
+      convert_Fortran_Pragma_Pairs(sageFilePtr);
+    } else {
+      convert_Fortran_OMP_Comments_to_Pragmas(
+          sageFilePtr); // TODO: need to fix not sure why we still need this
+                        // here since Fortran is already parsed before.
+    }
   }
   if (SgProject::get_verbose() > 1) {
     printf("Calling convert_OpenMP_pragma_to_AST() \n");

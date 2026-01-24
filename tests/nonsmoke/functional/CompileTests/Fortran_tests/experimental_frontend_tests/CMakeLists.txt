@@ -1,6 +1,10 @@
 set(_rose_flags -rose:verbose 0 -rose:experimental_fortran_frontend
   -I${CMAKE_CURRENT_SOURCE_DIR})
 set(_rose_flags_ofp ${_rose_flags} -rose:experimental_fortran_frontend_OFP_test)
+string(JOIN " " _rose_flags_str ${_rose_flags})
+string(JOIN " " _rose_flags_ofp_str ${_rose_flags_ofp})
+set(_experimental_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_experimental_output_dir})
 
 set(_f90_tests
   tiny.f90
@@ -134,9 +138,9 @@ function(_experimental_add_translator_test test_prefix specimen)
   set(_test_name ${test_prefix}_${_name})
   add_test(
     NAME ${_test_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_experimental_output_dir}
     COMMAND bash -c
-      "$<TARGET_FILE:testTranslator> ${_rose_flags_ofp} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen} && test -s rose_${specimen}"
+      "$<TARGET_FILE:testTranslator> ${_rose_flags_ofp_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen} && test -s rose_${specimen}"
   )
   set(${test_prefix}_${specimen}_name ${_test_name} PARENT_SCOPE)
 endfunction()
@@ -145,7 +149,7 @@ function(_experimental_add_frontend_test test_prefix specimen)
   _experimental_sanitize_name(${specimen} _name)
   add_test(
     NAME ${test_prefix}_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_experimental_output_dir}
     COMMAND $<TARGET_FILE:testFrontEnd>
       ${_rose_flags}
       -rose:skip_syntax_check

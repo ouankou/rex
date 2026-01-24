@@ -1888,15 +1888,28 @@ void ROSEAttributesList::generateFileIdListFromLineDirectives() {
       string directiveString = (*i)->getString();
       // Remove leading white space.
       size_t p = directiveString.find_first_not_of("# \t");
+      if (p == string::npos) {
+        continue;
+      }
       directiveString.erase(0, p);
-      // string directiveStringWithoutHash = directiveString;
-      size_t lengthOfLineKeyword = string("line").length();
 
-      string directiveStringWithoutHashAndKeyword = directiveString.substr(
-          lengthOfLineKeyword,
-          directiveString.length() - (lengthOfLineKeyword + 1));
-      // Remove white space between "#" and "line" keyword.
+      // Support both "#line <n> \"file\"" and "# <n> \"file\"" forms.
+      string directiveStringWithoutHashAndKeyword = directiveString;
+      if (directiveStringWithoutHashAndKeyword.rfind("line", 0) == 0) {
+        size_t afterLine = string("line").length();
+        if (directiveStringWithoutHashAndKeyword.size() == afterLine ||
+            isspace(static_cast<unsigned char>(
+                directiveStringWithoutHashAndKeyword[afterLine]))) {
+          directiveStringWithoutHashAndKeyword =
+              directiveStringWithoutHashAndKeyword.substr(afterLine);
+        }
+      }
+
+      // Remove white space before the line number.
       p = directiveStringWithoutHashAndKeyword.find_first_not_of(" \t");
+      if (p == string::npos) {
+        continue;
+      }
       directiveStringWithoutHashAndKeyword.erase(0, p);
       // At this point we have just '2 "toke.l"', and we can strip off the
       // number.
@@ -1904,6 +1917,9 @@ void ROSEAttributesList::generateFileIdListFromLineDirectives() {
 
       string lineNumberString =
           directiveStringWithoutHashAndKeyword.substr(0, p);
+      if (lineNumberString.empty()) {
+        continue;
+      }
       int line = atoi(lineNumberString.c_str());
       // DQ (1/7/2014): Added handling for case where filename is not present in
       // #line directive.
@@ -1916,22 +1932,31 @@ void ROSEAttributesList::generateFileIdListFromLineDirectives() {
         // Remove white space between the line number and the filename.
         p = directiveStringWithoutHashAndKeywordAndLineNumber.find_first_not_of(
             " \t");
+        if (p == string::npos) {
+          continue;
+        }
         directiveStringWithoutHashAndKeywordAndLineNumber.erase(0, p);
         string quotedFilename =
             directiveStringWithoutHashAndKeywordAndLineNumber;
         // DQ (6/1/2016): Fix for case of trailing spaces after the line number
         // (no quoted file name).  See test2016_17.c.
         // ROSE_ASSERT(quotedFilename[0] == '\"');
-        if (quotedFilename[0] == '\"') {
+        if (!quotedFilename.empty() &&
+            (quotedFilename[0] == '\"' || quotedFilename[0] == '<' ||
+             quotedFilename[0] == '\'')) {
+          char opener = quotedFilename[0];
+          char closer = (opener == '<') ? '>' : opener;
           // DQ (8/22/2020): C_tests/test2020_22.c demonstrates that this is not
           // reasonable. ROSE_ASSERT(quotedFilename[quotedFilename.length()-1]
           // == '\"');
 
           // DQ (8/22/2020): find the closing quote.
-          size_t positionOfNextQuote = quotedFilename.find("\"", 1);
+          size_t positionOfNextQuote = quotedFilename.find(closer, 1);
           // std::string filename =
           // quotedFilename.substr(1,quotedFilename.length()-2);
-          ROSE_ASSERT(positionOfNextQuote <= quotedFilename.length() - 1);
+          if (positionOfNextQuote == string::npos) {
+            continue;
+          }
           std::string filename =
               quotedFilename.substr(1, positionOfNextQuote - 1);
           // Add the new filename to the static map stored in the Sg_File_Info

@@ -35,9 +35,11 @@ void OmpSupport::transOmpTask(SgNode *node) {
   SgGlobal *g_scope = SageInterface::getGlobalScope(body);
   ROSE_ASSERT(g_scope != NULL);
 
-  // Make sure the rex_kmp.h header is included
+  // Make sure the rex_kmp.h header is included for C/C++.
   SgSourceFile *file = getEnclosingSourceFile(target);
-  insertHeader(file, "rex_kmp.h", false);
+  if (file != nullptr && !file->get_Fortran_only()) {
+    insertHeader(file, "rex_kmp.h", false);
+  }
 
   ////////////////////////////////////////////////
   //

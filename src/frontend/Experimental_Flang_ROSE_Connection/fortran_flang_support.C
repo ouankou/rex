@@ -19,6 +19,10 @@ using std::cout;
 int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
   int status{-1};
 
+  if (srcFile != nullptr) {
+    srcFile->set_experimental_flang_frontend(true);
+  }
+
   if (SgProject::get_verbose() > 0) {
     cout << "\n";
     cout << "experimental_fortran_main: calling flang parser\n";

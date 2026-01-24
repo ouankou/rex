@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SageTreeBuilder.h"
+
 #include <optional>
 
 #include <vector>
@@ -123,6 +125,7 @@ public:
   void Build(Fortran::parser::Submodule &);
   void Build(Fortran::parser::FunctionSubprogram &);
   void Build(Fortran::parser::SubroutineSubprogram &);
+  void Build(Fortran::parser::SeparateModuleSubprogram &);
   void Build(Fortran::parser::InternalSubprogramPart &);
   void Build(Fortran::parser::ModuleSubprogramPart &);
   void Build(Fortran::parser::BlockData &);
@@ -173,6 +176,9 @@ public:
   void Build(Fortran::parser::IfStmt &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::FormatStmt>> &);
+  void Build(Fortran::parser::Statement<Fortran::parser::ActionStmt> &);
+  void
+  Build(Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> &);
 
   // ActionStmt
   void Build(Fortran::parser::AllocateStmt &);
@@ -193,6 +199,7 @@ public:
   void Build(Fortran::parser::ReadStmt &);
   void Build(Fortran::parser::RewindStmt &);
   void Build(Fortran::parser::ReturnStmt &);
+  void Build(Fortran::parser::PauseStmt &);
   void Build(Fortran::parser::StopStmt &);
   void Build(Fortran::parser::WaitStmt &);
   void Build(Fortran::parser::WriteStmt &);
@@ -242,6 +249,7 @@ public:
 
 private:
   void ApplyStatementLabel(SgStatement *stmt, SgScopeStatement *scope) const;
+  void ApplyCurrentStatementSource(SgLocatedNode *node);
 
   struct LabelDoFrame {
     enum class Kind { FortranDo, While };
@@ -255,6 +263,7 @@ private:
   Fortran::parser::AllCookedSources *cooked_;
   SgType *type_; // synthesized attribute
   std::optional<Fortran::parser::Label> label_;
+  std::optional<SourcePositionPair> current_stmt_source_;
   std::vector<LabelDoFrame> label_do_stack_;
   int type_context_depth_;
 

@@ -65,6 +65,7 @@ class TokenStream {
 public:
   TokenStream() = delete;
   TokenStream(std::istringstream &);
+  TokenStream(std::vector<Token> tokens);
 
   const Token *getNextToken() const {
     if (next_ < tokens_.size()) {

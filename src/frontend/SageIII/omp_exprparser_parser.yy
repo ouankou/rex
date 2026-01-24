@@ -21,6 +21,7 @@ in the build tree
 #include <stdio.h>
 #include <assert.h>
 #include <iostream>
+#include <cctype>
 #include "sage3basic.h" // Sage Interface and Builders
 #include "sageBuilder.h"
 
@@ -562,6 +563,20 @@ void omp_exprparser_parser_init(SgNode* directive, const char* str) {
 // Grab all explicit? variables declared within a common block and add them into the omp variable list
 static void ofs_add_block_variables (const char* block_name)
 {
+  auto equals_case_insensitive = [](const std::string &left,
+                                    const std::string &right) -> bool {
+    if (left.size() != right.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < left.size(); ++i) {
+      unsigned char lhs = static_cast<unsigned char>(left[i]);
+      unsigned char rhs = static_cast<unsigned char>(right[i]);
+      if (std::tolower(lhs) != std::tolower(rhs)) {
+        return false;
+      }
+    }
+    return true;
+  };
   std::vector<SgCommonBlock*> block_vec = SageInterface::getSgNodeListFromMemoryPool<SgCommonBlock>();
   SgCommonBlockObject* found_block_object = NULL;
   for (std::vector<SgCommonBlock*>::const_iterator i = block_vec.begin();
@@ -574,7 +589,7 @@ static void ofs_add_block_variables (const char* block_name)
     while (i2 != blockList.end())
     {
       std::string name = (*i2)->get_block_name();
-      if (strcmp(block_name, name.c_str())==0)
+      if (equals_case_insensitive(block_name ? block_name : "", name))
       {
         found_block_object = *i2;
         innerbreak = true;

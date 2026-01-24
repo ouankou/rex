@@ -802,15 +802,20 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   if (!compiler_instance->hasPreprocessor())
     compiler_instance->createPreprocessor(clang::TU_Complete);
 
-  // Register pragma callback to capture pragmas as plain text (OpenMP and
-  // others)
+  // Register pragma and preprocessor callbacks (OpenMP and includes).
   RoseOpenMPPragmaCallback *omp_callback = nullptr;
+  SagePreprocessorRecord *preprocessor_recorder = nullptr;
   {
     clang::Preprocessor &PP = compiler_instance->getPreprocessor();
     auto omp_callback_owner = std::make_unique<RoseOpenMPPragmaCallback>(
         compiler_instance->getSourceManager(), PP);
     omp_callback = omp_callback_owner.get();
     PP.addPPCallbacks(std::move(omp_callback_owner));
+
+    auto preprocessor_recorder_owner = std::make_unique<SagePreprocessorRecord>(
+        &(compiler_instance->getSourceManager()));
+    preprocessor_recorder = preprocessor_recorder_owner.get();
+    PP.addPPCallbacks(std::move(preprocessor_recorder_owner));
   }
 
   if (!compiler_instance->hasASTContext())
@@ -820,7 +825,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       compiler_instance->getPreprocessor().getIdentifierTable(), lang_opts);
 
   auto translator_ptr = std::make_unique<ClangToSageTranslator>(
-      compiler_instance.get(), language, &sageFile);
+      compiler_instance.get(), language, &sageFile, preprocessor_recorder);
   ClangToSageTranslator *translator = translator_ptr.get();
 
   // Pass pragma callback to translator
@@ -1022,17 +1027,19 @@ SgGlobal *ClangToSageTranslator::getGlobalScope() const {
 
 ClangToSageTranslator::ClangToSageTranslator(
     clang::CompilerInstance *compiler_instance, Language language_,
-    SgSourceFile *sage_source_file)
+    SgSourceFile *sage_source_file,
+    SagePreprocessorRecord *preprocessor_recorder)
     : clang::ASTConsumer(), p_decl_translation_map(), p_stmt_translation_map(),
       p_type_translation_map(), p_template_decl_cache(),
       p_template_inst_cache(), p_global_scope(NULL),
       p_class_type_decl_first_see_in_type(),
       p_enum_type_decl_first_see_in_type(),
       p_compiler_instance(compiler_instance),
-      p_sage_preprocessor_recorder(std::make_unique<SagePreprocessorRecord>(
-          &(p_compiler_instance->getSourceManager()))),
+      p_sage_preprocessor_recorder(preprocessor_recorder),
       p_sage_source_file(sage_source_file), language(language_),
-      p_openmp_pragma_callback(nullptr) {}
+      p_openmp_pragma_callback(nullptr) {
+  ROSE_ASSERT(p_sage_preprocessor_recorder != nullptr);
+}
 
 ClangToSageTranslator::~ClangToSageTranslator() {}
 
@@ -1445,14 +1452,17 @@ void ClangToSageTranslator::HandleTranslationUnit(
 
 std::pair<Sg_File_Info *, PreprocessingInfo *>
 ClangToSageTranslator::preprocessor_top() {
+  ROSE_ASSERT(p_sage_preprocessor_recorder != nullptr);
   return p_sage_preprocessor_recorder->top();
 }
 
 bool ClangToSageTranslator::preprocessor_pop() {
+  ROSE_ASSERT(p_sage_preprocessor_recorder != nullptr);
   return p_sage_preprocessor_recorder->pop();
 }
 
 size_t ClangToSageTranslator::preprocessor_list_size() {
+  ROSE_ASSERT(p_sage_preprocessor_recorder != nullptr);
   return p_sage_preprocessor_recorder->size();
 }
 
@@ -1465,18 +1475,19 @@ NextPreprocessorToInsert::NextPreprocessorToInsert(
     : cursor(NULL), candidat(NULL), next_to_insert(NULL),
       translator(translator_) {}
 
-NextPreprocessorToInsert *NextPreprocessorToInsert::next() {
-  if (!translator.preprocessor_pop())
-    return NULL;
-
-  NextPreprocessorToInsert *res = new NextPreprocessorToInsert(translator);
+bool NextPreprocessorToInsert::advance() {
+  if (!translator.preprocessor_pop()) {
+    cursor = NULL;
+    next_to_insert = NULL;
+    candidat = NULL;
+    return false;
+  }
 
   std::pair<Sg_File_Info *, PreprocessingInfo *> next =
       translator.preprocessor_top();
-  res->cursor = next.first;
-  res->next_to_insert = next.second;
-  res->candidat = candidat;
-  return res;
+  cursor = next.first;
+  next_to_insert = next.second;
+  return true;
 }
 
 // class
@@ -1485,6 +1496,8 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     SgNode *astNode, NextPreprocessorToInsert *inheritedValue) {
   // Guard against null after final preprocessor insertion
   if (inheritedValue == NULL)
+    return NULL;
+  if (inheritedValue->cursor == NULL)
     return NULL;
 
   SgLocatedNode *loc_node = isSgLocatedNode(astNode);
@@ -1499,11 +1512,9 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     if (inheritedValue->next_to_insert != NULL) {
       loc_node->addToAttachedPreprocessingInfo(inheritedValue->next_to_insert);
     }
-    NextPreprocessorToInsert *next_value = inheritedValue->next();
-    if (next_value != NULL) {
-      owned_inherited_.emplace_back(next_value);
+    if (!inheritedValue->advance()) {
+      return NULL;
     }
-    return next_value;
   }
 
   return inheritedValue;
@@ -1517,144 +1528,174 @@ SagePreprocessorRecord::SagePreprocessorRecord(
 
 void SagePreprocessorRecord::InclusionDirective(
     clang::SourceLocation HashLoc, const clang::Token &IncludeTok,
-    llvm::StringRef FileName, bool IsAngled, const clang::FileEntry *File,
-    clang::SourceLocation EndLoc, llvm::StringRef SearchPath,
-    llvm::StringRef RelativePath) {
-  std::cerr << "InclusionDirective" << std::endl;
+    llvm::StringRef FileName, bool IsAngled,
+    clang::CharSourceRange FilenameRange, clang::OptionalFileEntryRef File,
+    llvm::StringRef SearchPath, llvm::StringRef RelativePath,
+    const clang::Module *SuggestedModule, bool ModuleImported,
+    clang::SrcMgr::CharacteristicKind FileType) {
+  (void)FilenameRange;
+  (void)File;
+  (void)SearchPath;
+  (void)RelativePath;
+  (void)SuggestedModule;
+  (void)ModuleImported;
+  (void)FileType;
 
-  bool inv_begin_line;
-  bool inv_begin_col;
+  bool inv_begin_line = false;
+  bool inv_begin_col = false;
 
   unsigned ls =
       p_source_manager->getSpellingLineNumber(HashLoc, &inv_begin_line);
   unsigned cs =
       p_source_manager->getSpellingColumnNumber(HashLoc, &inv_begin_col);
+  (void)inv_begin_line;
+  (void)inv_begin_col;
 
-  // In LLVM 20, getFileEntryForID still returns const FileEntry*
-  std::string file = "";
-  const clang::FileEntry *fileEntry =
-      p_source_manager->getFileEntryForID(p_source_manager->getFileID(HashLoc));
-  if (fileEntry) {
-    // In LLVM 20, FileEntry uses tryGetRealPathName() instead of getName()
-    file = fileEntry->tryGetRealPathName().str();
+  clang::FileID file_id = p_source_manager->getFileID(HashLoc);
+  if (!p_source_manager->isWrittenInMainFile(HashLoc)) {
+    return;
   }
 
-  std::cerr << "    In file  : " << file << std::endl;
-  std::cerr << "    From     : " << ls << ":" << cs << std::endl;
-  std::cerr << "    Included : " << FileName.str() << std::endl;
-  std::cerr << "    Is angled: " << (IsAngled ? "T" : "F") << std::endl;
+  std::string file;
+  const clang::FileEntry *fileEntry =
+      p_source_manager->getFileEntryForID(file_id);
+  if (fileEntry) {
+    file = fileEntry->tryGetRealPathName().str();
+  }
+  if (file.empty()) {
+    file = p_source_manager->getFilename(HashLoc).str();
+  }
+  if ((file.empty() || file == "<built-in>") &&
+      p_source_manager->isWrittenInMainFile(HashLoc)) {
+    const clang::FileEntry *main_entry =
+        p_source_manager->getFileEntryForID(p_source_manager->getMainFileID());
+    if (main_entry) {
+      file = main_entry->tryGetRealPathName().str();
+    }
+  }
+  if (file.empty()) {
+    clang::PresumedLoc ploc = p_source_manager->getPresumedLoc(HashLoc);
+    if (ploc.isValid()) {
+      file = ploc.getFilename();
+    }
+  }
+
+  PreprocessingInfo::DirectiveType directive_type =
+      PreprocessingInfo::CpreprocessorIncludeDeclaration;
+  std::string directive = "#include ";
+  clang::tok::PPKeywordKind pp_kind = clang::tok::pp_not_keyword;
+  if (const clang::IdentifierInfo *ident = IncludeTok.getIdentifierInfo()) {
+    pp_kind = ident->getPPKeywordID();
+  }
+  if (pp_kind == clang::tok::pp_include_next) {
+    directive_type = PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
+    directive = "#include_next ";
+  }
+
+  std::string include_target;
+  if (IsAngled) {
+    include_target = "<" + FileName.str() + ">";
+  } else {
+    include_target = "\"" + FileName.str() + "\"";
+  }
+
+  std::string include_text = directive + include_target + "\n";
 
   Sg_File_Info *file_info = new Sg_File_Info(file, ls, cs);
   PreprocessingInfo *preproc_info = new PreprocessingInfo(
-      PreprocessingInfo::CpreprocessorIncludeDeclaration, FileName.str(), file,
-      ls, cs, 0, PreprocessingInfo::before);
+      directive_type, include_text, file, ls, cs, 0, PreprocessingInfo::before);
 
   p_preprocessor_record_list.push_back(
       std::pair<Sg_File_Info *, PreprocessingInfo *>(file_info, preproc_info));
 }
 
-void SagePreprocessorRecord::EndOfMainFile() {
-  std::cerr << "EndOfMainFile" << std::endl;
-  ROSE_ABORT();
-}
+void SagePreprocessorRecord::EndOfMainFile() {}
 
 void SagePreprocessorRecord::Ident(clang::SourceLocation Loc,
                                    const std::string &str) {
-  std::cerr << "Ident" << std::endl;
-  ROSE_ABORT();
+  (void)Loc;
+  (void)str;
 }
 
 void SagePreprocessorRecord::PragmaComment(clang::SourceLocation Loc,
                                            const clang::IdentifierInfo *Kind,
                                            const std::string &Str) {
-  std::cerr << "PragmaComment" << std::endl;
-  ROSE_ABORT();
+  (void)Loc;
+  (void)Kind;
+  (void)Str;
 }
 
 void SagePreprocessorRecord::PragmaMessage(clang::SourceLocation Loc,
                                            llvm::StringRef Str) {
-  std::cerr << "PragmaMessage" << std::endl;
-  ROSE_ABORT();
+  (void)Loc;
+  (void)Str;
 }
 
 void SagePreprocessorRecord::PragmaDiagnosticPush(clang::SourceLocation Loc,
                                                   llvm::StringRef Namespace) {
-  std::cerr << "PragmaDiagnosticPush" << std::endl;
-  ROSE_ABORT();
+  (void)Loc;
+  (void)Namespace;
 }
 
 void SagePreprocessorRecord::PragmaDiagnosticPop(clang::SourceLocation Loc,
                                                  llvm::StringRef Namespace) {
-  std::cerr << "PragmaDiagnosticPop" << std::endl;
-  ROSE_ABORT();
+  (void)Loc;
+  (void)Namespace;
 }
 
 void SagePreprocessorRecord::PragmaDiagnostic(clang::SourceLocation Loc,
                                               llvm::StringRef Namespace,
                                               clang::diag::Severity Severity,
                                               llvm::StringRef Str) {
-  std::cerr << "PragmaDiagnostic" << std::endl;
-  ROSE_ABORT();
+  (void)Loc;
+  (void)Namespace;
+  (void)Severity;
+  (void)Str;
 }
 
 void SagePreprocessorRecord::MacroExpands(const clang::Token &MacroNameTok,
                                           const clang::MacroInfo *MI,
                                           clang::SourceRange Range) {
-  std::cerr << "MacroExpands" << std::endl;
-  ROSE_ABORT();
+  (void)MacroNameTok;
+  (void)MI;
+  (void)Range;
 }
 
 void SagePreprocessorRecord::MacroDefined(const clang::Token &MacroNameTok,
                                           const clang::MacroInfo *MI) {
-  std::cerr << "" << std::endl;
-  ROSE_ABORT();
+  (void)MacroNameTok;
+  (void)MI;
 }
 
 void SagePreprocessorRecord::MacroUndefined(const clang::Token &MacroNameTok,
                                             const clang::MacroInfo *MI) {
-  std::cerr << "MacroUndefined" << std::endl;
-  ROSE_ABORT();
+  (void)MacroNameTok;
+  (void)MI;
 }
 
 void SagePreprocessorRecord::Defined(const clang::Token &MacroNameTok) {
-  std::cerr << "Defined" << std::endl;
-  ROSE_ABORT();
+  (void)MacroNameTok;
 }
 
 void SagePreprocessorRecord::SourceRangeSkipped(clang::SourceRange Range) {
-  std::cerr << "SourceRangeSkipped" << std::endl;
-  ROSE_ABORT();
+  (void)Range;
 }
 
-void SagePreprocessorRecord::If(clang::SourceRange Range) {
-  std::cerr << "If" << std::endl;
-  ROSE_ABORT();
-}
+void SagePreprocessorRecord::If(clang::SourceRange Range) { (void)Range; }
 
-void SagePreprocessorRecord::Elif(clang::SourceRange Range) {
-  std::cerr << "Elif" << std::endl;
-  ROSE_ABORT();
-}
+void SagePreprocessorRecord::Elif(clang::SourceRange Range) { (void)Range; }
 
 void SagePreprocessorRecord::Ifdef(const clang::Token &MacroNameTok) {
-  std::cerr << "Ifdef" << std::endl;
-  ROSE_ABORT();
+  (void)MacroNameTok;
 }
 
 void SagePreprocessorRecord::Ifndef(const clang::Token &MacroNameTok) {
-  std::cerr << "Ifndef" << std::endl;
-  ROSE_ABORT();
+  (void)MacroNameTok;
 }
 
-void SagePreprocessorRecord::Else() {
-  std::cerr << "Else" << std::endl;
-  ROSE_ABORT();
-}
+void SagePreprocessorRecord::Else() {}
 
-void SagePreprocessorRecord::Endif() {
-  std::cerr << "Endif" << std::endl;
-  ROSE_ABORT();
-}
+void SagePreprocessorRecord::Endif() {}
 
 std::pair<Sg_File_Info *, PreprocessingInfo *> SagePreprocessorRecord::top() {
   return p_preprocessor_record_list.front();

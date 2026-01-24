@@ -22,8 +22,17 @@ protected:
 
   FiniteVarsExprsProductLattice *prodLat;
 
+  virtual LatticeType *fallbackLattice(const SgExpression * /*sgn*/) {
+    return NULL;
+  }
+
   LatticeType *getLattice(const SgExpression *sgn) {
-    return sgn ? getLattice(SgExpr2Var(sgn)) : NULL;
+    if (!sgn)
+      return NULL;
+    LatticeType *lat = getLattice(SgExpr2Var(sgn));
+    if (!lat)
+      lat = fallbackLattice(sgn);
+    return lat;
   }
   LatticeType *getLattice(varID var) {
     return dynamic_cast<LatticeType *>(prodLat->getVarLattice(var));
