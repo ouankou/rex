@@ -9584,11 +9584,6 @@ void ClangToSageTranslator::rehomeSymbolToScope(SgSymbol *symbol,
     if (current_table != target_table) {
       if (current_table->exists(symbol)) {
         current_table->remove(symbol);
-      } else if (SgScopeStatement *old_scope =
-                     isSgScopeStatement(current_table->get_parent())) {
-        if (old_scope->symbol_exists(symbol)) {
-          old_scope->remove_symbol(symbol);
-        }
       }
     }
   } else if (SgScopeStatement *old_scope =
