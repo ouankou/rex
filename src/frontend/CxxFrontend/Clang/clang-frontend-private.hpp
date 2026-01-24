@@ -508,6 +508,19 @@ protected:
   SgScopeStatement *resolveScopeFromDeclContext(clang::DeclContext *context,
                                                 SgScopeStatement *fallback);
 
+  SgNode *lookupUsingDeclTargetNode(clang::Decl *decl);
+  SgNode *resolveUsingDeclTargetNode(clang::Decl *decl);
+  bool extractUsingTargetFromNode(SgNode *target_node,
+                                  SgDeclarationStatement *&target_decl,
+                                  SgInitializedName *&target_init);
+  bool extractUsingTargetFromSymbol(SgSymbol *symbol,
+                                    SgDeclarationStatement *&target_decl,
+                                    SgInitializedName *&target_init);
+
+  void rehomeSymbolToScope(SgSymbol *symbol, SgScopeStatement *scope);
+  void ensureMemberFunctionScope(SgFunctionDeclaration *decl,
+                                 SgClassDefinition *parent_def);
+
   // Select a scope that can safely accept an opaque type declaration.
   SgScopeStatement *getOpaqueTypeInsertionScope(SgScopeStatement *scope) const;
 
