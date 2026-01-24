@@ -1296,10 +1296,11 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
         VisitCompoundLiteralExpr((clang::CompoundLiteralExpr *)stmt, &result);
     ROSE_ASSERT(result != nullptr);
     break;
-  // case clang::Stmt::ConceptSpecializationExprClass:
-  //     ret_status =
-  //     VisitConceptSpecializationExpr((clang::ConceptSpecializationExpr
-  //     *)stmt, &result); break;
+  case clang::Stmt::ConceptSpecializationExprClass:
+    ret_status = VisitConceptSpecializationExpr(
+        (clang::ConceptSpecializationExpr *)stmt, &result);
+    ROSE_ASSERT(result != nullptr);
+    break;
   case clang::Stmt::ConvertVectorExprClass:
     ret_status =
         VisitConvertVectorExpr((clang::ConvertVectorExpr *)stmt, &result);
@@ -1379,10 +1380,11 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
         (clang::CXXPseudoDestructorExpr *)stmt, &result);
     ROSE_ASSERT(result != nullptr);
     break;
-  // case clang::Stmt::CXXRewrittenBinaryOperatorClass:
-  //     ret_status =
-  //     VisitCXXRewrittenBinaryOperator((clang::CXXRewrittenBinaryOperator
-  //     *)stmt, &result); break;
+  case clang::Stmt::CXXRewrittenBinaryOperatorClass:
+    ret_status = VisitCXXRewrittenBinaryOperator(
+        (clang::CXXRewrittenBinaryOperator *)stmt, &result);
+    ROSE_ASSERT(result != nullptr);
+    break;
   case clang::Stmt::CXXScalarValueInitExprClass:
     ret_status = VisitCXXScalarValueInitExpr(
         (clang::CXXScalarValueInitExpr *)stmt, &result);
@@ -1649,6 +1651,10 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     // Note: Assertion removed since RecoveryExpr is a valid (though error)
     // state during parsing ROSE_ASSERT(FAIL_FIXME == 0); // There is no concept
     // of recovery expression in ROSE
+    break;
+  case clang::Stmt::RequiresExprClass:
+    ret_status = VisitRequiresExpr((clang::RequiresExpr *)stmt, &result);
+    ROSE_ASSERT(result != nullptr);
     break;
 
   default:
@@ -5113,18 +5119,32 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
   return VisitExpr(compound_literal, node);
 }
 
-// bool
-// ClangToSageTranslator::VisitConceptSpecializationExpr(clang::ConceptSpecializationExpr
-// * concept_specialization_expr, SgNode ** node) { #if DEBUG_VISIT_STMT
-//     std::cerr << "ClangToSageTranslator::VisitConceptSpecializationExpr" <<
-//     std::endl;
-// #endif
-//     bool res = true;
-//
-//     // TODO
-//
-//     return VisitExpr(concept_specialization_expr, node) && res;
-// }
+bool ClangToSageTranslator::VisitConceptSpecializationExpr(
+    clang::ConceptSpecializationExpr *concept_specialization_expr,
+    SgNode **node) {
+#if DEBUG_VISIT_STMT
+  std::cerr << "ClangToSageTranslator::VisitConceptSpecializationExpr"
+            << std::endl;
+#endif
+  bool res = true;
+
+  if (concept_specialization_expr->isValueDependent()) {
+    // Value-dependent concept checks can't be evaluated until instantiation.
+    *node = SageBuilder::buildNullExpression();
+    if (SgExpression *expr = isSgExpression(*node)) {
+      expr->get_file_info()->setCompilerGenerated();
+    }
+  } else {
+    bool is_satisfied = concept_specialization_expr->isSatisfied();
+    *node = SageBuilder::buildBoolValExp(is_satisfied);
+  }
+
+  if (SgExpression *expr = isSgExpression(*node)) {
+    applySourceRange(expr, concept_specialization_expr->getSourceRange());
+  }
+
+  return VisitExpr(concept_specialization_expr, node) && res;
+}
 
 bool ClangToSageTranslator::VisitConvertVectorExpr(
     clang::ConvertVectorExpr *convert_vector_expr, SgNode **node) {
@@ -5646,6 +5666,34 @@ bool ClangToSageTranslator::VisitCXXNoexceptExpr(
   return VisitExpr(cxx_noexcept_expr, node) && res;
 }
 
+bool ClangToSageTranslator::VisitRequiresExpr(
+    clang::RequiresExpr *requires_expr, SgNode **node) {
+#if DEBUG_VISIT_STMT
+  std::cerr << "ClangToSageTranslator::VisitRequiresExpr" << std::endl;
+#endif
+  bool res = true;
+
+  if (requires_expr->isValueDependent()) {
+    // Value-dependent requires expressions can't be evaluated until
+    // instantiation; use a placeholder expression so translation can proceed.
+    *node = SageBuilder::buildNullExpression();
+    if (SgExpression *expr = isSgExpression(*node)) {
+      expr->get_file_info()->setCompilerGenerated();
+    }
+  } else {
+    // requires-expressions are boolean prvalues that are either satisfied or
+    // not.
+    bool is_satisfied = requires_expr->isSatisfied();
+    *node = SageBuilder::buildBoolValExp(is_satisfied);
+  }
+
+  if (SgExpression *expr = isSgExpression(*node)) {
+    applySourceRange(expr, requires_expr->getSourceRange());
+  }
+
+  return VisitExpr(requires_expr, node) && res;
+}
+
 bool ClangToSageTranslator::VisitCXXNullPtrLiteralExpr(
     clang::CXXNullPtrLiteralExpr *cxx_null_ptr_literal_expr, SgNode **node) {
 #if DEBUG_VISIT_STMT
@@ -5734,18 +5782,37 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
   return VisitExpr(cxx_pseudo_destructor_expr, node) && res;
 }
 
-// bool
-// ClangToSageTranslator::VisitCXXRewrittenBinaryOperator(clang::CXXRewrittenBinaryOperator
-// * cxx_rewrite_binary_operator, SgNode ** node) { #if DEBUG_VISIT_STMT
-//     std::cerr << "ClangToSageTranslator::VisitCXXRewrittenBinaryOperator" <<
-//     std::endl;
-// #endif
-//     bool res = true;
-//
-//     // TODO
-//
-//     return VisitExpr(cxx_rewrite_binary_operator, node) && res;
-// }
+bool ClangToSageTranslator::VisitCXXRewrittenBinaryOperator(
+    clang::CXXRewrittenBinaryOperator *cxx_rewrite_binary_operator,
+    SgNode **node) {
+#if DEBUG_VISIT_STMT
+  std::cerr << "ClangToSageTranslator::VisitCXXRewrittenBinaryOperator"
+            << std::endl;
+#endif
+  bool res = true;
+
+  clang::Expr *semantic_form = cxx_rewrite_binary_operator->getSemanticForm();
+  if (semantic_form == nullptr) {
+    MLOG_ERROR_C(MLOG_FRONTEND,
+                 "Runtime error: CXXRewrittenBinaryOperator has no semantic "
+                 "form.\n");
+    return false;
+  }
+
+  SgNode *tmp_expr = Traverse(semantic_form);
+  SgExpression *expr = isSgExpression(tmp_expr);
+  if (expr == nullptr) {
+    MLOG_ERROR_C(MLOG_FRONTEND,
+                 "Runtime error: failed to translate semantic form for "
+                 "CXXRewrittenBinaryOperator.\n");
+    return false;
+  }
+
+  *node = expr;
+  applySourceRange(expr, cxx_rewrite_binary_operator->getSourceRange());
+
+  return VisitExpr(cxx_rewrite_binary_operator, node) && res;
+}
 
 bool ClangToSageTranslator::VisitCXXScalarValueInitExpr(
     clang::CXXScalarValueInitExpr *cxx_scalar_value_init_expr, SgNode **node) {
@@ -8381,7 +8448,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     sg_member_expr = SageBuilder::buildVarRefExp(var_sym);
   } else if (func_sym != nullptr) { // C++ member function
     sg_member_expr = SageBuilder::buildMemberFunctionRefExp_nfi(
-        func_sym, false, false);       // FIXME 2nd and 3rd params ?
+        func_sym, false, false);          // FIXME 2nd and 3rd params ?
   } else if (plain_func_sym != nullptr) { // Regular function treated as member
                                           // (e.g., static member or inherited)
     sg_member_expr = SageBuilder::buildFunctionRefExp(plain_func_sym);

@@ -88,6 +88,8 @@ inline constexpr char kMissingTemplateHeaderFixupAttributeName[] =
 
 #include <clang/AST/ExprCXX.h>
 
+#include <clang/AST/ExprConcepts.h>
+
 #include <clang/AST/ExprObjC.h>
 
 #include <clang/AST/NestedNameSpecifier.h>
@@ -505,6 +507,19 @@ protected:
 
   SgScopeStatement *resolveScopeFromDeclContext(clang::DeclContext *context,
                                                 SgScopeStatement *fallback);
+
+  SgNode *lookupUsingDeclTargetNode(clang::Decl *decl);
+  SgNode *resolveUsingDeclTargetNode(clang::Decl *decl);
+  bool extractUsingTargetFromNode(SgNode *target_node,
+                                  SgDeclarationStatement *&target_decl,
+                                  SgInitializedName *&target_init);
+  bool extractUsingTargetFromSymbol(SgSymbol *symbol,
+                                    SgDeclarationStatement *&target_decl,
+                                    SgInitializedName *&target_init);
+
+  void rehomeSymbolToScope(SgSymbol *symbol, SgScopeStatement *scope);
+  void ensureMemberFunctionScope(SgFunctionDeclaration *decl,
+                                 SgClassDefinition *parent_def);
 
   // Select a scope that can safely accept an opaque type declaration.
   SgScopeStatement *getOpaqueTypeInsertionScope(SgScopeStatement *scope) const;
@@ -1081,9 +1096,9 @@ public:
   virtual bool
   VisitCompoundLiteralExpr(clang::CompoundLiteralExpr *compound_literal,
                            SgNode **node);
-  //                    virtual bool
-  //                    VisitConceptSpecializationExpr(clang::ConceptSpecializationExpr
-  //                    * concept_specialization_expr, SgNode ** node);
+  virtual bool VisitConceptSpecializationExpr(
+      clang::ConceptSpecializationExpr *concept_specialization_expr,
+      SgNode **node);
   virtual bool
   VisitConvertVectorExpr(clang::ConvertVectorExpr *convert_vector_expr,
                          SgNode **node);
@@ -1128,9 +1143,9 @@ public:
   virtual bool VisitCXXPseudoDestructorExpr(
       clang::CXXPseudoDestructorExpr *cxx_pseudo_destructor_expr,
       SgNode **node);
-  //                    virtual bool
-  //                    VisitCXXRewrittenBinaryOperator(clang::CXXRewrittenBinaryOperator
-  //                    * cxx_rewrite_binary_operator, SgNode ** node);
+  virtual bool VisitCXXRewrittenBinaryOperator(
+      clang::CXXRewrittenBinaryOperator *cxx_rewrite_binary_operator,
+      SgNode **node);
   virtual bool VisitCXXScalarValueInitExpr(
       clang::CXXScalarValueInitExpr *cxx_scalar_value_init_expr, SgNode **node);
   virtual bool VisitCXXStdInitializerListExpr(
@@ -1205,6 +1220,8 @@ public:
       clang::MSPropertySubscriptExpr *ms_property_subscript_expr,
       SgNode **node);
   virtual bool VisitNoInitExpr(clang::NoInitExpr *no_init_expr, SgNode **node);
+  virtual bool VisitRequiresExpr(clang::RequiresExpr *requires_expr,
+                                 SgNode **node);
   // virtual bool VisitObjCArrayLiteral
   // virtual bool VisitObjCAvailabilityCheckExpr
   // virtual bool VisitObjCBoolLiteralExpr
