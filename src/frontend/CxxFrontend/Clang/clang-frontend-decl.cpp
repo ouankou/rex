@@ -5205,7 +5205,7 @@ bool ClangToSageTranslator::VisitConceptDecl(clang::ConceptDecl *concept_decl,
   SgDeclarationScope *decl_scope = isSgDeclarationScope(concept_scope);
   if (decl_scope == nullptr) {
     decl_scope = SageBuilder::buildDeclarationScope();
-    decl_scope->set_parent(concept_scope);
+    SageInterface::appendStatement(decl_scope, concept_scope);
   }
 
   SgNonrealDecl *nrdecl =
