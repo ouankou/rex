@@ -432,6 +432,9 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
   case V_SgOmpDoStatement:
     unparseOmpDoStatement(stmt, info);
     break;
+  case V_SgFunctionParameterList:
+    // Parameter lists are unparsed as part of the procedure header.
+    break;
   default: {
     printf(
         "FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement: "
@@ -1478,7 +1481,23 @@ void FortranCodeGeneration_locatedNode::unparseModuleStmt(
   SgModuleStatement *mod = isSgModuleStatement(stmt);
   ROSE_ASSERT(mod);
 
-  curprint("MODULE ");
+  bool isSubmodule = false;
+  std::string parentName;
+  if (AstAttribute *attr = mod->getAttribute("rose_fortran_submodule_parent")) {
+    if (auto *parentAttr =
+            dynamic_cast<AstValueAttribute<std::string> *>(attr)) {
+      parentName = parentAttr->get();
+      isSubmodule = !parentName.empty();
+    }
+  }
+
+  if (isSubmodule) {
+    curprint("SUBMODULE (");
+    curprint(parentName);
+    curprint(") ");
+  } else {
+    curprint("MODULE ");
+  }
   curprint(mod->get_name().str());
 
   // body
@@ -1488,7 +1507,15 @@ void FortranCodeGeneration_locatedNode::unparseModuleStmt(
 
   unparseStatementNumbersSupport(mod->get_end_numeric_label(), info);
 
-  curprint("END MODULE");
+  if (isSubmodule) {
+    curprint("END SUBMODULE");
+    if (!mod->get_name().getString().empty()) {
+      curprint(" ");
+      curprint(mod->get_name().str());
+    }
+  } else {
+    curprint("END MODULE");
+  }
   ASSERT_not_null(unp);
   unp->cur.insert_newline(1);
 }
@@ -2106,7 +2133,11 @@ void FortranCodeGeneration_locatedNode::unparseDoConcurrentStatement(
   ASSERT_not_null(forAllHeader);
 
   SgExpressionPtrList header = forAllHeader->get_expressions();
+  SgExpression *mask = SageInterface::forallMaskExpression(forAllStatement);
   int num_vars = header.size();
+  if (mask != nullptr && num_vars > 0) {
+    num_vars -= 1;
+  }
 
   curprint("DO CONCURRENT (");
 
@@ -2120,6 +2151,11 @@ void FortranCodeGeneration_locatedNode::unparseDoConcurrentStatement(
     unparseExpression(assignOp->get_lhs_operand_i(), info);
     curprint("=");
     unparseExpression(assignOp->get_rhs_operand_i(), info);
+  }
+
+  if (mask != nullptr) {
+    curprint(", ");
+    unparseExpression(mask, info);
   }
 
   curprint(")");
@@ -3259,8 +3295,18 @@ void FortranCodeGeneration_locatedNode::unparsePragmaDeclStmt(
   ASSERT_not_null(pragma);
 
   string txt = pragma->get_pragma();
+  string lower_txt = txt;
+  for (char &ch : lower_txt) {
+    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  }
+  size_t first = lower_txt.find_first_not_of(" \t");
+  if (first == string::npos) {
+    first = 0;
+  }
+  bool is_openmp_or_acc = lower_txt.compare(first, 3, "omp") == 0 ||
+                          lower_txt.compare(first, 3, "acc") == 0;
   AstAttribute *att = stmt->getAttribute("OmpAttributeList");
-  if (att)
+  if (att || is_openmp_or_acc)
     curprint("!$");
   else
     curprint("!pragma ");
@@ -4000,13 +4046,30 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
       }
     }
 
-    if (classdecl_stmt->get_declarationModifier()
-            .get_typeModifier()
-            .isExtends()) {
+    std::string extendsName;
+    if (SgClassDefinition *def = classdecl_stmt->get_definition()) {
+      if (!def->get_inheritances().empty()) {
+        if (SgBaseClass *base = def->get_inheritances().front()) {
+          if (SgClassDeclaration *baseDecl = base->get_base_class()) {
+            extendsName = baseDecl->get_name().str();
+          }
+        }
+      }
+    }
+
+    if (!extendsName.empty() || classdecl_stmt->get_declarationModifier()
+                                    .get_typeModifier()
+                                    .isExtends()) {
       // The EXTENDS keyword is only permitted within Modules
       if (SageInterface::getEnclosingModuleStatement(classdecl_stmt) !=
           nullptr) {
-        curprint(", EXTENDS(PARENT-TYPE-NAME-NOT-IMPLEMENTED)");
+        curprint(", EXTENDS(");
+        if (!extendsName.empty()) {
+          curprint(extendsName);
+        } else {
+          curprint("PARENT-TYPE-NAME-NOT-IMPLEMENTED");
+        }
+        curprint(")");
       } else {
         printf("Warning: statement marked as extends in non-module scope \n");
       }
@@ -4116,8 +4179,7 @@ void FortranCodeGeneration_locatedNode::unparseClassDefnStmt(
   ninfo.set_current_context(nullptr);
   ninfo.set_current_context(classDeclaration->get_type());
 
-  // For Fortran we don't have an inheritance concept, I think.
-  ROSE_ASSERT(classdefn_stmt->get_inheritances().empty());
+  // Fortran derived types may use EXTENDS to model single inheritance.
 
   // DQ (9/28/2004): Turn this back on as the only way to prevent this from
   // being unparsed! DQ (11/22/2003): Control unparsing of the {} part of the
@@ -4179,22 +4241,41 @@ void FortranCodeGeneration_locatedNode::unparseAllocateStatement(
 
   curprint("allocate( ");
 
-  // DQ (3/28/2017): Eliminate warning of overloaded virtual function in base
-  // class (from Clang). unparseExprList(exprList, info, false /*paren*/);
-  unparseExprList(exprList, info);
+  SgExpressionPtrList exprs = exprList->get_expressions();
+  bool firstIsType = false;
+  size_t startIndex = 0;
+  if (!exprs.empty()) {
+    if (isSgTypeExpression(exprs.front()) != nullptr) {
+      firstIsType = true;
+      unparseExpression(exprs.front(), info);
+      curprint(" :: ");
+      startIndex = 1;
+    }
+  }
+
+  bool needComma = false;
+  for (size_t i = startIndex; i < exprs.size(); ++i) {
+    if (needComma) {
+      curprint(", ");
+    }
+    unparseExpression(exprs[i], info);
+    needComma = true;
+  }
 
   if (s->get_stat_expression() != nullptr) {
-    curprint(", STAT = ");
+    curprint(needComma || firstIsType ? ", STAT = " : "STAT = ");
     unparseExpression(s->get_stat_expression(), info);
+    needComma = true;
   }
 
   if (s->get_errmsg_expression() != nullptr) {
-    curprint(", ERRMSG = ");
+    curprint(needComma || firstIsType ? ", ERRMSG = " : "ERRMSG = ");
     unparseExpression(s->get_errmsg_expression(), info);
+    needComma = true;
   }
 
   if (s->get_source_expression() != nullptr) {
-    curprint(", SOURCE = ");
+    curprint(needComma || firstIsType ? ", SOURCE = " : "SOURCE = ");
     unparseExpression(s->get_source_expression(), info);
   }
 
@@ -4365,10 +4446,15 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     const SgOmpClausePtrList &clause_ptr_list =
         isSgOmpClauseBodyStatement(stmt)->get_clauses();
     SgOmpClausePtrList::const_iterator i;
+    bool first_clause = true;
     for (i = clause_ptr_list.begin(); i != clause_ptr_list.end(); i++) {
       SgOmpClause *c_clause = *i;
       if (isSgOmpNowaitClause(c_clause) || isSgOmpCopyprivateClause(c_clause))
         continue;
+      if (first_clause) {
+        curprint(" ");
+        first_clause = false;
+      }
       unparseOmpClause(c_clause, info);
     }
   }
@@ -4384,11 +4470,76 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectiveClauses(
     const SgOmpClausePtrList &clause_ptr_list =
         isSgOmpClauseBodyStatement(stmt)->get_clauses();
     SgOmpClausePtrList::const_iterator i;
+    bool first_clause = true;
+    const bool single_space_nowait = isSgOmpSectionsStatement(stmt) != nullptr;
     for (i = clause_ptr_list.begin(); i != clause_ptr_list.end(); i++) {
       SgOmpClause *c_clause = *i;
-      if (isSgOmpNowaitClause(c_clause) || isSgOmpCopyprivateClause(c_clause))
+      if (isSgOmpNowaitClause(c_clause) || isSgOmpCopyprivateClause(c_clause)) {
+        if (first_clause) {
+          if (!(isSgOmpNowaitClause(c_clause) && single_space_nowait)) {
+            curprint(" ");
+          }
+          first_clause = false;
+        }
         unparseOmpClause(c_clause, info);
+      }
     }
+  }
+  unp->u_sage->curprint_newline();
+}
+
+void FortranCodeGeneration_locatedNode::unparseOmpThreadprivateStatement(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  ASSERT_not_null(stmt);
+  SgOmpThreadprivateStatement *s = isSgOmpThreadprivateStatement(stmt);
+  ASSERT_not_null(s);
+  unparseOmpDirectivePrefixAndName(stmt, info);
+  curprint(string(" ("));
+  SgVarRefExpPtrList::iterator p = s->get_variables().begin();
+  while (p != s->get_variables().end()) {
+    ASSERT_not_null((*p)->get_symbol());
+    SgInitializedName *init_name = (*p)->get_symbol()->get_declaration();
+    ROSE_ASSERT(init_name);
+    SgName tmp_name = init_name->get_name();
+    curprint(tmp_name.str());
+
+    ++p;
+    if (p != s->get_variables().end()) {
+      curprint(",");
+    }
+  }
+  curprint(string(")"));
+  unp->u_sage->curprint_newline();
+}
+
+void FortranCodeGeneration_locatedNode::unparseOmpFlushStatement(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  ASSERT_not_null(stmt);
+  SgOmpFlushStatement *s = isSgOmpFlushStatement(stmt);
+  ASSERT_not_null(s);
+
+  unparseOmpDirectivePrefixAndName(stmt, info);
+  if (s->get_clauses().size() != 0) {
+    unparseOmpBeginDirectiveClauses(stmt, info);
+  }
+  if (s->get_variables().size() > 0) {
+    curprint(string(" ("));
+  }
+  SgVarRefExpPtrList::iterator p = s->get_variables().begin();
+  while (p != s->get_variables().end()) {
+    ASSERT_not_null((*p)->get_symbol());
+    SgInitializedName *init_name = (*p)->get_symbol()->get_declaration();
+    ASSERT_not_null(init_name);
+    SgName tmp_name = init_name->get_name();
+    curprint(tmp_name.str());
+
+    ++p;
+    if (p != s->get_variables().end()) {
+      curprint(",");
+    }
+  }
+  if (s->get_variables().size() > 0) {
+    curprint(string(")"));
   }
   unp->u_sage->curprint_newline();
 }
@@ -4396,18 +4547,32 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectiveClauses(
 void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
+  switch (stmt->variantT()) {
+  case V_SgOmpParallelStatement:
+  case V_SgOmpCriticalStatement:
+  case V_SgOmpSectionsStatement:
+  case V_SgOmpMasterStatement:
+  case V_SgOmpOrderedStatement:
+  case V_SgOmpWorkshareStatement:
+  case V_SgOmpSingleStatement:
+  case V_SgOmpTaskStatement:
+  case V_SgOmpDoStatement:
+    break;
+  default:
+    return;
+  }
   unp->u_sage->curprint_newline();
   switch (stmt->variantT()) {
   case V_SgOmpParallelStatement: {
     unparseOmpPrefix(info);
-    curprint(string("end parallel "));
+    curprint(string("end parallel"));
     break;
   }
   case V_SgOmpCriticalStatement: {
     unparseOmpPrefix(info);
-    curprint(string("end critical "));
+    curprint(string("end critical"));
     if (isSgOmpCriticalStatement(stmt)->get_name().getString() != "") {
-
+      curprint(string(" "));
       curprint(string("("));
       curprint(isSgOmpCriticalStatement(stmt)->get_name().getString());
       curprint(string(")"));
@@ -4421,40 +4586,36 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
   }
   case V_SgOmpMasterStatement: {
     unparseOmpPrefix(info);
-    curprint(string("end master "));
+    curprint(string("end master"));
     break;
   }
   case V_SgOmpOrderedStatement: {
     unparseOmpPrefix(info);
-    curprint(string("end ordered "));
+    curprint(string("end ordered"));
     break;
   }
   case V_SgOmpWorkshareStatement: {
     unparseOmpPrefix(info);
-    curprint(string("end workshare "));
+    curprint(string("end workshare"));
     break;
   }
   case V_SgOmpSingleStatement: {
     unparseOmpPrefix(info);
-    curprint(string("end single "));
+    curprint(string("end single"));
     break;
   }
   case V_SgOmpTaskStatement: {
     unparseOmpPrefix(info);
-    curprint(string("end task "));
+    curprint(string("end task"));
     break;
   }
   case V_SgOmpDoStatement: {
     unparseOmpPrefix(info);
-    curprint(string("end do "));
+    curprint(string("end do"));
     break;
   }
-  default: {
-    cerr << "error: unacceptable OpenMP directive type within "
-            "unparseOmpDirectivePrefixAndName(): "
-         << stmt->class_name() << endl;
-    ROSE_ABORT();
-  }
+  default:
+    break;
   } // end switch
 }
 

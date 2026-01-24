@@ -75,7 +75,8 @@ static bool ofs_match_substr(const char *substr, bool checkTrail = true) {
   ofs_skip_whitespace();
   size_t len = strlen(substr);
   for (size_t i = 0; i < len; i++) {
-    if ((*c_char) == substr[i]) {
+    if (std::tolower(static_cast<unsigned char>(*c_char)) ==
+        std::tolower(static_cast<unsigned char>(substr[i]))) {
       c_char++;
     } else {
       result = false;
@@ -128,17 +129,115 @@ static bool isFixedSourceForm() {
 //  Two cases:
 //     fixed source form: !$omp | c$omp | *$omp , then whitespace, continuation
 //     apply to the rest free source form: !$omp only
+static bool ofs_match_omp_sentinel(char marker) {
+  const char *old_char = c_char;
+  ofs_skip_whitespace();
+  if (std::tolower(static_cast<unsigned char>(*c_char)) !=
+      std::tolower(static_cast<unsigned char>(marker))) {
+    c_char = old_char;
+    return false;
+  }
+  ++c_char;
+  ofs_skip_whitespace();
+  bool matched = ofs_match_substr("$omp");
+  if (!matched) {
+    c_char = old_char;
+  }
+  return matched;
+}
+
 static bool ofs_is_omp_sentinels() {
   bool result = false;
   // two additional case for fixed form
   if (isFixedSourceForm()) {
-    if (ofs_match_substr("c$omp") || ofs_match_substr("*$omp"))
+    if (ofs_match_omp_sentinel('c') || ofs_match_omp_sentinel('*') ||
+        ofs_match_omp_sentinel('d'))
       result = true;
   }
   // a common case for all situations
-  if (ofs_match_substr("!$omp"))
+  if (ofs_match_omp_sentinel('!'))
     result = true;
   return result;
+}
+
+static void normalizeFortranOmpSentinel(std::string &buffer) {
+  size_t pos = buffer.find_first_not_of(" \t");
+  if (pos == std::string::npos) {
+    return;
+  }
+  const char marker = buffer[pos];
+  const char marker_lower =
+      static_cast<char>(std::tolower(static_cast<unsigned char>(marker)));
+  if (marker_lower != '!' && marker_lower != 'c' && marker_lower != '*' &&
+      marker_lower != 'd') {
+    return;
+  }
+  size_t next = pos + 1;
+  while (next < buffer.size() &&
+         (buffer[next] == ' ' || buffer[next] == '\t')) {
+    ++next;
+  }
+  if (next < buffer.size() && buffer[next] == '$') {
+    buffer.erase(pos + 1, next - (pos + 1));
+  }
+}
+
+static size_t find_case_insensitive(const std::string &haystack,
+                                    const std::string &needle, size_t pos) {
+  if (needle.empty()) {
+    return pos <= haystack.size() ? pos : std::string::npos;
+  }
+  for (size_t i = pos; i + needle.size() <= haystack.size(); ++i) {
+    bool match = true;
+    for (size_t j = 0; j < needle.size(); ++j) {
+      const char a = static_cast<char>(
+          std::tolower(static_cast<unsigned char>(haystack[i + j])));
+      const char b = static_cast<char>(
+          std::tolower(static_cast<unsigned char>(needle[j])));
+      if (a != b) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return i;
+    }
+  }
+  return std::string::npos;
+}
+
+static size_t rfind_case_insensitive(const std::string &haystack,
+                                     const std::string &needle, size_t pos) {
+  if (needle.empty()) {
+    return pos <= haystack.size() ? pos : std::string::npos;
+  }
+  if (pos == std::string::npos || pos > haystack.size()) {
+    pos = haystack.size();
+  }
+  if (needle.size() > haystack.size()) {
+    return std::string::npos;
+  }
+  size_t start = (pos >= needle.size()) ? (pos - needle.size()) : 0;
+  for (size_t i = start + 1; i-- > 0;) {
+    bool match = true;
+    for (size_t j = 0; j < needle.size(); ++j) {
+      const char a = static_cast<char>(
+          std::tolower(static_cast<unsigned char>(haystack[i + j])));
+      const char b = static_cast<char>(
+          std::tolower(static_cast<unsigned char>(needle[j])));
+      if (a != b) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return i;
+    }
+    if (i == 0) {
+      break;
+    }
+  }
+  return std::string::npos;
 }
 
 //! A helper function to remove Fortran '!comments', but not '!$omp ...' from a
@@ -152,7 +251,7 @@ static void removeFortranComments(string &buffer) {
 
   pos1 = buffer.rfind("!", pos3);
   while (pos1 != string::npos) {
-    pos2 = buffer.rfind("!$omp", pos3);
+    pos2 = rfind_case_insensitive(buffer, "!$omp", pos3);
     if (pos1 != pos2) // is a real comment if not !$omp
     {
       buffer.erase(pos1);
@@ -202,7 +301,7 @@ static void postProcessingMergedContinuedLine(std::string &buffer) {
   assert(first_pos != string::npos);
 
   // locate the !$omp, must have it for OpenMP directive
-  second_pos = buffer.find("$omp", first_pos);
+  second_pos = find_case_insensitive(buffer, "$omp", first_pos);
   assert(second_pos != string::npos);
   second_pos += 3; // shift to the end 'p' of "$omp"
   // search for the optional next '&'
@@ -248,7 +347,8 @@ bool ofs_is_omp_sentinels(const char *str, SgNode *node) {
 // dowait clause:  end do, end sections, end single, end workshare
 // copyprivate clause: end single
 void mergeEndClausesToBeginDirective(OpenMPDirective *begin_decl,
-                                     OpenMPDirective *end_decl) {
+                                     OpenMPDirective *end_decl,
+                                     OpenMPDirective *end_wrapper) {
   ROSE_ASSERT(begin_decl != NULL);
   ROSE_ASSERT(end_decl != NULL);
 
@@ -259,9 +359,25 @@ void mergeEndClausesToBeginDirective(OpenMPDirective *begin_decl,
 
   map<OpenMPClauseKind, std::vector<OpenMPClause *> *> *begin_all_clauses =
       begin_decl->getAllClauses();
-  map<OpenMPClauseKind, std::vector<OpenMPClause *> *> *end_all_clauses =
-      end_decl->getAllClauses();
-  map<OpenMPClauseKind, std::vector<OpenMPClause *> *>::iterator iter;
+  auto has_clause = [](OpenMPDirective *directive,
+                       OpenMPClauseKind kind) -> bool {
+    if (directive == nullptr) {
+      return false;
+    }
+    std::vector<OpenMPClause *> *clauses = directive->getClauses(kind);
+    return clauses != nullptr && !clauses->empty();
+  };
+  auto first_clause = [](OpenMPDirective *directive,
+                         OpenMPClauseKind kind) -> OpenMPClause * {
+    if (directive == nullptr) {
+      return nullptr;
+    }
+    std::vector<OpenMPClause *> *clauses = directive->getClauses(kind);
+    if (clauses == nullptr || clauses->empty()) {
+      return nullptr;
+    }
+    return (*clauses)[0];
+  };
 
   // merge end directive's clause to the begin directive.
   // Merge possible nowait clause
@@ -270,12 +386,11 @@ void mergeEndClausesToBeginDirective(OpenMPDirective *begin_decl,
   case OMPD_sections:
   case OMPD_single:
   case OMPD_workshare: {
-    iter = begin_all_clauses->find(OMPC_nowait);
-    if (iter != begin_all_clauses->end()) {
+    if (begin_all_clauses->find(OMPC_nowait) != begin_all_clauses->end()) {
       break;
     }
-    iter = end_all_clauses->find(OMPC_nowait);
-    if (iter != end_all_clauses->end()) {
+    if (has_clause(end_decl, OMPC_nowait) ||
+        has_clause(end_wrapper, OMPC_nowait)) {
       begin_decl->addOpenMPClause(OMPC_nowait);
     }
     break;
@@ -285,11 +400,13 @@ void mergeEndClausesToBeginDirective(OpenMPDirective *begin_decl,
   }
   // Merge possible copyrpivate (list) from end single
   if (end_type == OMPD_single) {
-    iter = end_all_clauses->find(OMPC_copyprivate);
-    if (iter != end_all_clauses->end()) {
-      OpenMPClause *end_copyprivate_clause =
-          (*(end_decl->getClauses(OMPC_copyprivate)))[0];
-      iter = begin_all_clauses->find(OMPC_copyprivate);
+    OpenMPClause *end_copyprivate_clause =
+        first_clause(end_decl, OMPC_copyprivate);
+    if (end_copyprivate_clause == nullptr) {
+      end_copyprivate_clause = first_clause(end_wrapper, OMPC_copyprivate);
+    }
+    if (end_copyprivate_clause != nullptr) {
+      auto iter = begin_all_clauses->find(OMPC_copyprivate);
       OpenMPClause *begin_copyprivate_clause = NULL;
       if (iter != begin_all_clauses->end()) {
         begin_copyprivate_clause =
@@ -311,9 +428,13 @@ bool isFortranPairedDirective(OpenMPDirective *node) {
   bool result = false;
   switch (node->getKind()) {
   case OMPD_barrier:
+  case OMPD_cancel:
+  case OMPD_cancellation_point:
   case OMPD_end:
   case OMPD_flush:
   case OMPD_section:
+  case OMPD_taskwait:
+  case OMPD_taskyield:
   case OMPD_threadprivate: {
     break;
   }
@@ -324,85 +445,148 @@ bool isFortranPairedDirective(OpenMPDirective *node) {
   return result;
 }
 
+static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {
+  switch (kind) {
+  case OMPD_parallel:
+  case OMPD_do:
+  case OMPD_parallel_do:
+  case OMPD_parallel_loop:
+    return true;
+  default:
+    return false;
+  }
+}
+
 void parseOpenMPFortran(SgSourceFile *sageFilePtr) {
+  struct FortranCommentEntry {
+    SgLocatedNode *loc_node;
+    PreprocessingInfo *info;
+    int file_id;
+    int line;
+    int column;
+    size_t order;
+  };
 
   std::vector<OpenMPDirective *> ompparser_OpenMP_pairing_list;
+  std::vector<FortranCommentEntry> comment_entries;
+  size_t order = 0;
+
   std::vector<SgNode *> loc_nodes =
       NodeQuery::querySubTree(sageFilePtr, V_SgLocatedNode);
-  std::vector<SgNode *>::iterator iter;
-  for (iter = loc_nodes.begin(); iter != loc_nodes.end(); iter++) {
-    SgLocatedNode *locNode = isSgLocatedNode(*iter);
+  for (SgNode *node : loc_nodes) {
+    SgLocatedNode *locNode = isSgLocatedNode(node);
     ROSE_ASSERT(locNode);
     AttachedPreprocessingInfoType *comments =
         locNode->getAttachedPreprocessingInfo();
-    if (comments) {
-      AttachedPreprocessingInfoType::iterator iter, previter = comments->end();
-
-      for (iter = comments->begin(); iter != comments->end(); iter++) {
-        PreprocessingInfo *pinfo = *iter;
-        if (pinfo->getTypeOfDirective() ==
-            PreprocessingInfo::FortranStyleComment) {
-          string buffer = pinfo->getString();
-          // Change to lower case
-          std::transform(buffer.begin(), buffer.end(), buffer.begin(),
-                         ::tolower);
-          // We are not interested in other comments
-          if (!ofs_is_omp_sentinels(buffer.c_str(), locNode)) {
-            if (previter != comments->end()) {
-              printf("error: Found a none-OpenMP comment after a pending "
-                     "OpenMP comment with a line continuation\n");
-              ROSE_ABORT();
-            }
-            continue;
-          }
-
-          // remove possible comments also:
-          removeFortranComments(buffer);
-          // merge with possible previous line with &
-          if (previter != comments->end()) {
-            //            cout<<"previous
-            //            line:"<<(*previter)->getString()<<endl;
-            buffer = (*previter)->getString() + buffer;
-            // remove "& !omp [&]" within the merged line
-            postProcessingMergedContinuedLine(buffer);
-            //            cout<<"merged line:"<<buffer<<endl;
-            (*previter)->setString(""); // erase previous line with & at the end
-          }
-
-          pinfo->setString(buffer); // save the changed buffer back
-
-          if (hasFortranLineContinuation(buffer)) {
-            // delay the handling of the current line to the next line
-            previter = iter;
-          } else { // Now we have a line without line-continuation & , we can
-                   // proceed to parse it
-            previter =
-                comments->end(); // clear this flag for a pending line with &
-            // use ompparser to process Fortran
-            ompparser_OpenMPIR = parseOpenMP(pinfo->getString().c_str(), NULL);
-            ompparser_OpenMPIR->setLine(pinfo->getLineNumber());
-
-            // set paired directives
-            if (isFortranPairedDirective(ompparser_OpenMPIR)) {
-              ompparser_OpenMP_pairing_list.push_back(ompparser_OpenMPIR);
-            }
-            if (ompparser_OpenMPIR->getKind() == OMPD_end) {
-              OpenMPDirective *begin_directive =
-                  ompparser_OpenMP_pairing_list.back();
-              OpenMPDirective *end_directive =
-                  ((OpenMPEndDirective *)ompparser_OpenMPIR)
-                      ->getPairedDirective();
-              assert(end_directive->getKind() == begin_directive->getKind());
-              mergeEndClausesToBeginDirective(begin_directive, end_directive);
-              ((OpenMPEndDirective *)ompparser_OpenMPIR)
-                  ->setPairedDirective(begin_directive);
-              ompparser_OpenMP_pairing_list.pop_back();
-            }
-            fortran_omp_pragma_list.push_back(
-                std::make_tuple(locNode, pinfo, ompparser_OpenMPIR));
-          }
-        }
-      } // end for all preprocessing info
+    if (!comments) {
+      continue;
     }
-  } // end for located nodes
+    for (PreprocessingInfo *pinfo : *comments) {
+      if (pinfo->getTypeOfDirective() ==
+              PreprocessingInfo::FortranStyleComment ||
+          pinfo->getTypeOfDirective() == PreprocessingInfo::F90StyleComment) {
+        comment_entries.push_back({locNode, pinfo, pinfo->getFileId(),
+                                   pinfo->getLineNumber(),
+                                   pinfo->getColumnNumber(), order++});
+      }
+    }
+  }
+
+  std::stable_sort(
+      comment_entries.begin(), comment_entries.end(),
+      [](const FortranCommentEntry &lhs, const FortranCommentEntry &rhs) {
+        if (lhs.file_id != rhs.file_id) {
+          return lhs.file_id < rhs.file_id;
+        }
+        if (lhs.line != rhs.line) {
+          return lhs.line < rhs.line;
+        }
+        if (lhs.column != rhs.column) {
+          return lhs.column < rhs.column;
+        }
+        return lhs.order < rhs.order;
+      });
+
+  PreprocessingInfo *previnfo = nullptr;
+  SgLocatedNode *prev_loc_node = nullptr;
+  for (const FortranCommentEntry &entry : comment_entries) {
+    SgLocatedNode *locNode = entry.loc_node;
+    PreprocessingInfo *pinfo = entry.info;
+
+    if (previnfo != nullptr && prev_loc_node != locNode) {
+      previnfo = nullptr;
+      prev_loc_node = nullptr;
+    }
+
+    string buffer = pinfo->getString();
+    // We are not interested in other comments
+    if (!ofs_is_omp_sentinels(buffer.c_str(), locNode)) {
+      if (previnfo != nullptr && prev_loc_node == locNode) {
+        printf("error: Found a none-OpenMP comment after a pending OpenMP "
+               "comment with a line continuation\n");
+        ROSE_ABORT();
+      }
+      continue;
+    }
+
+    normalizeFortranOmpSentinel(buffer);
+    // remove possible comments also:
+    removeFortranComments(buffer);
+    // merge with possible previous line with &
+    if (previnfo != nullptr && prev_loc_node == locNode) {
+      //            cout<<"previous line:"<<previnfo->getString()<<endl;
+      buffer = previnfo->getString() + buffer;
+      // remove "& !omp [&]" within the merged line
+      postProcessingMergedContinuedLine(buffer);
+      //            cout<<"merged line:"<<buffer<<endl;
+      previnfo->setString(""); // erase previous line with & at the end
+      previnfo = nullptr;
+      prev_loc_node = nullptr;
+    }
+
+    pinfo->setString(buffer); // save the changed buffer back
+
+    if (hasFortranLineContinuation(buffer)) {
+      // delay the handling of the current line to the next line
+      previnfo = pinfo;
+      prev_loc_node = locNode;
+      continue;
+    }
+
+    // use ompparser to process Fortran
+    ompparser_OpenMPIR = parseOpenMP(pinfo->getString().c_str(), NULL);
+    ompparser_OpenMPIR->setLine(pinfo->getLineNumber());
+
+    // set paired directives
+    if (isFortranPairedDirective(ompparser_OpenMPIR)) {
+      ompparser_OpenMP_pairing_list.push_back(ompparser_OpenMPIR);
+    }
+    if (ompparser_OpenMPIR->getKind() == OMPD_end) {
+      OpenMPDirective *end_directive =
+          ((OpenMPEndDirective *)ompparser_OpenMPIR)->getPairedDirective();
+      bool matched = false;
+      while (!ompparser_OpenMP_pairing_list.empty()) {
+        OpenMPDirective *begin_directive = ompparser_OpenMP_pairing_list.back();
+        if (end_directive->getKind() == begin_directive->getKind()) {
+          mergeEndClausesToBeginDirective(begin_directive, end_directive,
+                                          ompparser_OpenMPIR);
+          ((OpenMPEndDirective *)ompparser_OpenMPIR)
+              ->setPairedDirective(begin_directive);
+          ompparser_OpenMP_pairing_list.pop_back();
+          matched = true;
+          break;
+        }
+        if (!allowsImplicitFortranEnd(begin_directive->getKind())) {
+          ROSE_ASSERT(end_directive->getKind() == begin_directive->getKind());
+        }
+        ompparser_OpenMP_pairing_list.pop_back();
+      }
+      if (!matched) {
+        cerr << "error: unmatched OpenMP end directive\n";
+        ROSE_ABORT();
+      }
+    }
+    fortran_omp_pragma_list.push_back(
+        std::make_tuple(locNode, pinfo, ompparser_OpenMPIR));
+  }
 }

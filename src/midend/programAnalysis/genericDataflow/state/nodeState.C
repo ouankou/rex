@@ -780,7 +780,11 @@ NodeState *NodeState::getNodeState(const DataflowNode &n, int index) {
   if (!nodeStateMapInit)
     initNodeStateMap(n.filter);
 
-  return nodeStateMap[n][index];
+  vector<NodeState *> &states = nodeStateMap[n];
+  while (static_cast<int>(states.size()) <= index) {
+    states.push_back(new NodeState());
+  }
+  return states[index];
 }
 
 NodeState *NodeState::getNodeState(SgNode *n, int index /*=0 */) {
@@ -799,7 +803,11 @@ const vector<NodeState *> NodeState::getNodeStates(const DataflowNode &n) {
   if (!nodeStateMapInit)
     initNodeStateMap(n.filter);
 
-  return nodeStateMap[n];
+  vector<NodeState *> &states = nodeStateMap[n];
+  if (states.empty()) {
+    states.push_back(new NodeState());
+  }
+  return states;
 }
 
 // returns the number of NodeStates associated with the given DataflowNode
@@ -808,7 +816,11 @@ int NodeState::numNodeStates(DataflowNode &n) {
   if (!nodeStateMapInit)
     initNodeStateMap(n.filter);
 
-  return nodeStateMap[n].size();
+  vector<NodeState *> &states = nodeStateMap[n];
+  if (states.empty()) {
+    states.push_back(new NodeState());
+  }
+  return states.size();
 }
 
 // initializes the nodeStateMap

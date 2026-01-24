@@ -3,6 +3,12 @@ if(NOT ENABLE-FORTRAN)
   return()
 endif()
 
+file(GLOB caf2_sources "${CMAKE_CURRENT_SOURCE_DIR}/*.caf")
+if(NOT caf2_sources)
+  message(STATUS "Skipping CAF2_tests (no .caf sources found in ${CMAKE_CURRENT_SOURCE_DIR})")
+  return()
+endif()
+
 set(files_to_test
   abarrier-1.caf
   acopy-1.caf
@@ -106,8 +112,15 @@ set(ROSE_FLAGS
   -rose:skipfinalCompileStep
 )
 
-
+set(missing_caf2_sources)
 foreach(file_to_test IN LISTS files_to_test failing_tests)
-  compile_test(${file_to_test} CAF2_tests)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}")
+    compile_test(${file_to_test} CAF2_tests)
+  else()
+    list(APPEND missing_caf2_sources "${file_to_test}")
+  endif()
 endforeach()
 
+if(missing_caf2_sources)
+  message(STATUS "CAF2_tests: missing sources: ${missing_caf2_sources}")
+endif()

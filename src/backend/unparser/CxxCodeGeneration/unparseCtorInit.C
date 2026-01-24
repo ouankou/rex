@@ -236,9 +236,8 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
     unparseExpression(init_arg, info_for_args);
 
   } else {
-    if (ctor_args->get_expressions().empty())
-      use_braces =
-          false; // FIXME not sure why? That should be okay with modern C++
+    // Preserve brace-init even for empty argument lists to avoid dropping
+    // `T t{}` to `T t;` (value-initialization vs default-initialization).
 
     bool need_paren =
         need_name || use_braces || is_ctor_within_new ||

@@ -182,6 +182,7 @@ public:
   void visit(SgCaseOptionStmt *);
   void visit(SgIfStmt *);
   void visit(SgForStatement *);
+  void visit(SgFortranDo *);
   void visit(SgWhileStmt *);
   void visit(SgDoWhileStmt *);
 };

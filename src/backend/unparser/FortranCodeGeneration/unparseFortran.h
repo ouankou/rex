@@ -101,6 +101,7 @@ public:
   virtual void unparseAssnOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparsePointerAssnOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseTypeRef(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparseTypeExpression(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseInitializerList(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseAggrInit(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseConInit(SgExpression *expr, SgUnparse_Info &info);
@@ -280,6 +281,10 @@ public:
                                                SgUnparse_Info &info) override;
   virtual void unparseOmpEndDirectiveClauses(SgStatement *stmt,
                                              SgUnparse_Info &info) override;
+  virtual void unparseOmpThreadprivateStatement(SgStatement *stmt,
+                                                SgUnparse_Info &info) override;
+  virtual void unparseOmpFlushStatement(SgStatement *stmt,
+                                        SgUnparse_Info &info) override;
   virtual void
   unparseOmpEndDirectivePrefixAndName(SgStatement *stmt,
                                       SgUnparse_Info &info) override;

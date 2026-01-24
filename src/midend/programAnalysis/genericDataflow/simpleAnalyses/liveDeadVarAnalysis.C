@@ -454,6 +454,20 @@ void LiveDeadVarsTransfer::visit(SgForStatement *sgn) {
     ROSE_ASSERT(!"statement type not handled");
   }
 }
+void LiveDeadVarsTransfer::visit(SgFortranDo *sgn) {
+  if (SgExpression *init = sgn->get_initialization()) {
+    if (SgAssignOp *assign = isSgAssignOp(init)) {
+      assignedExprs.insert(assign->get_lhs_operand());
+      used(assign->get_rhs_operand());
+    } else {
+      used(init);
+    }
+  }
+  if (sgn->get_bound())
+    used(sgn->get_bound());
+  if (sgn->get_increment())
+    used(sgn->get_increment());
+}
 void LiveDeadVarsTransfer::visit(SgWhileStmt *sgn) {
   ROSE_ASSERT(isSgExprStatement(sgn->get_condition()));
   // Dbg::dbg <<

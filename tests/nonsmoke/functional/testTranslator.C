@@ -26,9 +26,14 @@ int main(int argc, char *argv[]) {
      // translation (not required for users).
      SageBuilder::clearScopeStack();
 
-  // regenerate the source code and call the vendor 
-  // compiler, only backend error code is reported.
-  // return backend(project);
+     // regenerate the source code and call the vendor
+     // compiler, only backend error code is reported.
+#if BACKEND_FORTRAN_IS_LLVM_FLANG
+     if (project != nullptr && project->get_Fortran_only()) {
+       project->skipfinalCompileStep(true);
+       project->set_compileOnly(true);
+     }
+#endif
      int status = backend(project);
 
   // DQ (10/21/2020): Adding IR node usage statistics reporting.

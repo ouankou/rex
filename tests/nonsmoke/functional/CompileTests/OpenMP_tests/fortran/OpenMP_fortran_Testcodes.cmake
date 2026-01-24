@@ -1,7 +1,7 @@
 # Generated from legacy test lists test lists.
 set(OPENMP_FORTRAN_TESTCODES
-  allocate_predefined_modifiers.f
-  allocate_user_defined_modifiers.f
+  allocate_predefined_modifiers.f90
+  allocate_user_defined_modifiers.f90
   default.f
   exampleA251f.f
   flush.f

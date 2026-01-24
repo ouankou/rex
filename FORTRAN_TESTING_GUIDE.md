@@ -155,7 +155,7 @@ ROSE_FLAGS:
   -I${CMAKE_CURRENT_SOURCE_DIR}
 
 FORTRAN_FLAGS:
-  -rose:f77  # For fixed-format tests
+  -std=f77  # For fixed-format tests
 ```
 
 ## Recommendations

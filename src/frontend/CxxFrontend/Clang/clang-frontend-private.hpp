@@ -496,7 +496,7 @@ protected:
       p_pending_implicit_function_instantiations_set;
 
   clang::CompilerInstance *p_compiler_instance;
-  std::unique_ptr<SagePreprocessorRecord> p_sage_preprocessor_recorder;
+  SagePreprocessorRecord *p_sage_preprocessor_recorder;
   SgSourceFile *p_sage_source_file; // Parent file for connecting global scope
 
   Language language;
@@ -553,6 +553,8 @@ protected:
                                           size_t explicit_count);
   size_t countExpandedTemplateArguments(
       const clang::TemplateArgumentListInfo &arg_info);
+  size_t
+  countExplicitTemplateArgumentsFromSource(clang::SourceRange range) const;
 
   // Helper: Append translated template argument(s), flattening Clang
   // argument packs (TemplateArgument::Pack) into individual arguments.
@@ -641,7 +643,8 @@ protected:
 
 public:
   ClangToSageTranslator(clang::CompilerInstance *compiler_instance,
-                        Language language_, SgSourceFile *sage_source_file);
+                        Language language_, SgSourceFile *sage_source_file,
+                        SagePreprocessorRecord *preprocessor_recorder);
 
   virtual ~ClangToSageTranslator();
 
@@ -1440,13 +1443,14 @@ protected:
 public:
   SagePreprocessorRecord(clang::SourceManager *source_manager);
 
-  void InclusionDirective(clang::SourceLocation HashLoc,
-                          const clang::Token &IncludeTok,
-                          llvm::StringRef FileName, bool IsAngled,
-                          const clang::FileEntry *File,
-                          clang::SourceLocation EndLoc,
-                          llvm::StringRef SearchPath,
-                          llvm::StringRef RelativePath);
+  void
+  InclusionDirective(clang::SourceLocation HashLoc,
+                     const clang::Token &IncludeTok, llvm::StringRef FileName,
+                     bool IsAngled, clang::CharSourceRange FilenameRange,
+                     clang::OptionalFileEntryRef File,
+                     llvm::StringRef SearchPath, llvm::StringRef RelativePath,
+                     const clang::Module *SuggestedModule, bool ModuleImported,
+                     clang::SrcMgr::CharacteristicKind FileType) override;
   void EndOfMainFile();
   void Ident(clang::SourceLocation Loc, const std::string &str);
   void PragmaComment(clang::SourceLocation Loc,
@@ -1486,7 +1490,7 @@ struct NextPreprocessorToInsert {
 
   NextPreprocessorToInsert(ClangToSageTranslator &);
 
-  NextPreprocessorToInsert *next();
+  bool advance();
 };
 
 class PreprocessorInserter
@@ -1495,9 +1499,6 @@ public:
   NextPreprocessorToInsert *
   evaluateInheritedAttribute(SgNode *astNode,
                              NextPreprocessorToInsert *inheritedValue);
-
-private:
-  std::vector<std::unique_ptr<NextPreprocessorToInsert>> owned_inherited_;
 };
 
 #endif /* _CLANG_FRONTEND_PRIVATE_HPP_ */

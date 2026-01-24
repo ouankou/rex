@@ -11,6 +11,7 @@ TODO: the constant propagation analysis is limited to live variables at a point.
 #include "VariableStateTransfer.h"
 
 #include <memory>
+#include <vector>
 
 extern int constantPropagationAnalysisDebugLevel;
 
@@ -86,6 +87,13 @@ private:
       ConstantPropagationLattice *);
   template <typename T> void transferArith(SgBinaryOp *sgn, T transferOp);
   template <class T> void visitIntegerValue(T *sgn);
+
+  std::vector<std::unique_ptr<ConstantPropagationLattice>> tempLattices;
+  ConstantPropagationLattice *makeTempLattice();
+  void setSignedValue(ConstantPropagationLattice *lat, long long value);
+  void setUnsignedValue(ConstantPropagationLattice *lat,
+                        unsigned long long value);
+  ConstantPropagationLattice *fallbackLattice(const SgExpression *sgn) override;
 
   void transferArith(SgBinaryOp *sgn, TransferOp transferOp);
 

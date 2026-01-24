@@ -233,17 +233,22 @@ if(ENABLE-FORTRAN)
     canonicalExample.f90)
 
   foreach(file_to_test ${F90_TESTCODES_REQUIRED_TO_PASS})
+    set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    if(NOT EXISTS "${source_path}")
+      message(STATUS "Skipping testStaticCFG_f90_${file_to_test} (missing ${source_path})")
+      continue()
+    endif()
 
     add_test(
       NAME testStaticCFG_f90_${file_to_test}
-      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:f90
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+      COMMAND testStaticCFG ${ROSE_FLAGS} -std=f90
+        -c ${source_path})
     set_tests_properties(testStaticCFG_f90_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
     add_test(
       NAME testInterproceduralCFG_f90_${file_to_test}
-      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:f90
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -std=f90
+        -c ${source_path})
 
     set_tests_properties(testInterproceduralCFG_f90_${file_to_test} PROPERTIES DEPENDS testStaticCFG_f90_${file_to_test} LABELS STATICCFGTEST )
 
@@ -267,16 +272,22 @@ if(ENABLE-FORTRAN)
   )
 
   foreach(file_to_test ${_f90_disabled_tests})
+    set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    if(NOT EXISTS "${source_path}")
+      message(STATUS "Skipping testStaticCFG_f90_${file_to_test} (missing ${source_path})")
+      continue()
+    endif()
+
     add_test(
       NAME testStaticCFG_f90_${file_to_test}
-      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:f90
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+      COMMAND testStaticCFG ${ROSE_FLAGS} -std=f90
+        -c ${source_path})
     set_tests_properties(testStaticCFG_f90_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
     add_test(
       NAME testInterproceduralCFG_f90_${file_to_test}
-      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:f90
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -std=f90
+        -c ${source_path})
     set_tests_properties(testInterproceduralCFG_f90_${file_to_test} PROPERTIES DEPENDS testStaticCFG_f90_${file_to_test} LABELS STATICCFGTEST)
   endforeach()
 
@@ -296,17 +307,22 @@ if(ENABLE-FORTRAN)
     test2007_253.f test2007_259.f test2007_260.f test2007_261.f)
 
   foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
+    set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    if(NOT EXISTS "${source_path}")
+      message(STATUS "Skipping testStaticCFG_f77_${file_to_test} (missing ${source_path})")
+      continue()
+    endif()
 
     add_test(
       NAME testStaticCFG_f77_${file_to_test}
-      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:f77
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+      COMMAND testStaticCFG ${ROSE_FLAGS} -std=f77
+        -c ${source_path})
     set_tests_properties(testStaticCFG_f77_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
     add_test(
       NAME testInterproceduralCFG_f77_${file_to_test}
-      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:f77
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -std=f77
+        -c ${source_path})
 
 
     set_tests_properties(testStaticCFG_f77_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_f77_${file_to_test} LABELS STATICCFGTEST)
@@ -342,15 +358,21 @@ if(ENABLE-FORTRAN)
   )
 
   foreach(file_to_test ${_f77_disabled_tests})
+    set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    if(NOT EXISTS "${source_path}")
+      message(STATUS "Skipping testStaticCFG_f77_${file_to_test} (missing ${source_path})")
+      continue()
+    endif()
+
     add_test(
       NAME testStaticCFG_f77_${file_to_test}
-      COMMAND testStaticCFG ${ROSE_FLAGS} -rose:f77
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+      COMMAND testStaticCFG ${ROSE_FLAGS} -std=f77
+        -c ${source_path})
 
     add_test(
       NAME testInterproceduralCFG_f77_${file_to_test}
-      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:f77
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+      COMMAND testInterproceduralCFG ${ROSE_FLAGS} -std=f77
+        -c ${source_path})
     set_tests_properties(testStaticCFG_f77_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_f77_${file_to_test} LABELS STATICCFGTEST)
   endforeach()
 
@@ -361,19 +383,24 @@ if(ENABLE-FORTRAN)
     test2007_134.f03 test2007_174.f03)
 
   foreach(file_to_test ${F03_TESTCODES_REQUIRED_TO_PASS})
+    set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    if(NOT EXISTS "${source_path}")
+      message(STATUS "Skipping testStaticCFG_f03_${file_to_test} (missing ${source_path})")
+      continue()
+    endif()
 
     add_test(
       NAME testStaticCFG_f03_${file_to_test}
       COMMAND testStaticCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:f2003
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+        -rose:skipfinalCompileStep -std=f2003
+        -c ${source_path})
     set_tests_properties(testStaticCFG_f03_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
     add_test(
       NAME testInterproceduralCFG_f03_${file_to_test}
       COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:f2003
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+        -rose:skipfinalCompileStep -std=f2003
+        -c ${source_path})
 
     set_tests_properties(testStaticCFG_f03_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_f03_${file_to_test} LABELS STATICCFGTEST )
 
@@ -394,18 +421,24 @@ if(ENABLE-FORTRAN)
   )
 
   foreach(file_to_test ${_f03_disabled_tests})
+    set(source_path ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+    if(NOT EXISTS "${source_path}")
+      message(STATUS "Skipping testStaticCFG_f03_${file_to_test} (missing ${source_path})")
+      continue()
+    endif()
+
     add_test(
       NAME testStaticCFG_f03_${file_to_test}
       COMMAND testStaticCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:f2003
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+        -rose:skipfinalCompileStep -std=f2003
+        -c ${source_path})
     set_tests_properties(testStaticCFG_f03_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
     add_test(
       NAME testInterproceduralCFG_f03_${file_to_test}
       COMMAND testInterproceduralCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -rose:f2003
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/${file_to_test})
+        -rose:skipfinalCompileStep -std=f2003
+        -c ${source_path})
     set_tests_properties(testStaticCFG_f03_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_f03_${file_to_test} LABELS STATICCFGTEST)
   endforeach()
 endif()

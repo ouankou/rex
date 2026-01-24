@@ -1,2 +1,2 @@
-!$omp parallel  private(NTHREADS,TID)
+!$omp parallel  private(nthreads,tid)
 !$omp end parallel

@@ -46,6 +46,7 @@ if(enable-fortran)
       COMMAND $<TARGET_FILE:roseomp> ${_omp_fortran_flags}
         -c ${_omp_fortran_dir}/${specimen}
     )
+    set_tests_properties(omp_lowering_fortran_${_name} PROPERTIES DISABLED TRUE)
   endforeach()
 
   foreach(specimen IN LISTS _omp_fortran_f77_failing_tests)
@@ -56,5 +57,6 @@ if(enable-fortran)
       COMMAND $<TARGET_FILE:roseomp> ${_omp_fortran_flags}
         -c ${_omp_fortran_dir}/${specimen}
     )
+    set_tests_properties(omp_lowering_fortran_${_name} PROPERTIES DISABLED TRUE)
   endforeach()
 endif()

@@ -189,6 +189,15 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
     ASSERT_not_null(decl);
     return CFGNode(decl->get_definition(), 2);
   }
+  if (SgInitializedName *init_name = isSgInitializedName(n)) {
+    if (SgProcedureHeaderStatement *proc =
+            isSgProcedureHeaderStatement(parent)) {
+      if (proc->get_result_name() == init_name) {
+        ASSERT_not_null(proc->get_definition());
+        return CFGNode(proc->get_definition(), 1);
+      }
+    }
+  }
 
   if (isSgCaseOptionStmt(n)) {
     unsigned int idx = parent->cfgFindNextChildIndex(n);
@@ -300,6 +309,15 @@ static CFGNode getNodeJustBeforeInContainer(SgNode *n) {
     ASSERT_not_null(decl);
     return CFGNode(decl->get_definition(), 0);
   }
+  if (SgInitializedName *init_name = isSgInitializedName(n)) {
+    if (SgProcedureHeaderStatement *proc =
+            isSgProcedureHeaderStatement(parent)) {
+      if (proc->get_result_name() == init_name) {
+        ASSERT_not_null(proc->get_definition());
+        return CFGNode(proc->get_definition(), 0);
+      }
+    }
+  }
 
   SgLabelStatement *parentLabelStatement = isSgLabelStatement(parent);
   if (parentLabelStatement != nullptr) {
@@ -336,6 +354,9 @@ static CFGNode getNodeJustBeforeInContainer(SgNode *n) {
 //---------------------------------------
 
 unsigned int SgStatement::cfgIndexForEnd() const {
+  if (isSgFortranContinueStmt(this) != nullptr) {
+    return 0;
+  }
   std::cerr << "Bad statement case " << this->class_name()
             << " in cfgIndexForEnd()" << std::endl;
   ROSE_ABORT();
@@ -343,6 +364,9 @@ unsigned int SgStatement::cfgIndexForEnd() const {
 
 bool SgStatement::cfgIsIndexInteresting(unsigned int idx) const {
   // Default -- overridden in some cases
+  if (isSgFortranContinueStmt(this) != nullptr) {
+    return idx == 0;
+  }
   return idx == this->cfgIndexForEnd();
 }
 
@@ -359,12 +383,23 @@ unsigned int SgStatement::cfgFindNextChildIndex(SgNode *n) {
 }
 
 std::vector<CFGEdge> SgStatement::cfgOutEdges(unsigned int /*idx*/) {
+  if (isSgFortranContinueStmt(this) != nullptr) {
+    std::vector<CFGEdge> result;
+    makeEdge(CFGNode(this, 0), getNodeJustAfterInContainer(this), result);
+    return result;
+  }
   std::cerr << "Bad statement case " << this->class_name()
             << " in cfgOutEdges()" << std::endl;
   ROSE_ABORT();
 }
 
 std::vector<CFGEdge> SgStatement::cfgInEdges(unsigned int /*idx*/) {
+  if (isSgFortranContinueStmt(this) != nullptr) {
+    std::vector<CFGEdge> result;
+    addIncomingFortranGotos(this, 0, result);
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, 0), result);
+    return result;
+  }
   std::cerr << "Bad statement case " << this->class_name() << " in cfgInEdges()"
             << std::endl;
   ROSE_ABORT();
@@ -5110,7 +5145,7 @@ std::vector<CFGEdge> SgAsteriskShapeExp::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgImpliedDo::cfgIndexForEnd() const { return 4; }
+unsigned int SgImpliedDo::cfgIndexForEnd() const { return 3; }
 
 std::vector<CFGEdge> SgImpliedDo::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
@@ -5147,10 +5182,10 @@ std::vector<CFGEdge> SgImpliedDo::cfgInEdges(unsigned int idx) {
     makeEdge(this->get_do_var_initialization()->cfgForEnd(), CFGNode(this, idx),
              result);
     break;
-  case 3:
+  case 2:
     makeEdge(this->get_last_val()->cfgForEnd(), CFGNode(this, idx), result);
     break;
-  case 4:
+  case 3:
     makeEdge(this->get_increment()->cfgForEnd(), CFGNode(this, idx), result);
     break;
   default:

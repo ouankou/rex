@@ -1,2 +1,2 @@
-!$omp parallel  private(TID)
+!$omp parallel  private(tid)
 !$omp end parallel

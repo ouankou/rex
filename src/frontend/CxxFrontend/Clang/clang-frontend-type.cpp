@@ -1087,10 +1087,39 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
     *node = SageBuilder::buildUnsignedIntType();
     break; // char32_t is typically 32-bit
 
+  case clang::BuiltinType::Dependent: {
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    if (scope == nullptr) {
+      scope = getGlobalScope();
+    }
+    SgNonrealType *nrtype = nullptr;
+    if (scope != nullptr) {
+      if (SgNonrealSymbol *sym =
+              scope->lookup_nonreal_symbol(SgName("__dependent_type"))) {
+        if (SgNonrealDecl *nrdecl = sym->get_declaration()) {
+          nrtype = nrdecl->get_type();
+        }
+      }
+    }
+    if (nrtype == nullptr) {
+      nrtype = SageBuilder::buildNonrealType(SgName("__dependent_type"), scope,
+                                             nullptr);
+    }
+    if (nrtype != nullptr) {
+      if (SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration())) {
+        setCompilerGeneratedFileInfo(nrdecl);
+        suppress_unparse_output(nrdecl);
+      }
+    }
+    *node = nrtype != nullptr
+                ? static_cast<SgNode *>(nrtype)
+                : static_cast<SgNode *>(SageBuilder::buildUnknownType());
+    break;
+  }
+
   case clang::BuiltinType::ObjCId:
   case clang::BuiltinType::ObjCClass:
   case clang::BuiltinType::ObjCSel:
-  case clang::BuiltinType::Dependent:
   case clang::BuiltinType::Overload:
   case clang::BuiltinType::BoundMember:
   case clang::BuiltinType::UnknownAny:
@@ -1937,6 +1966,10 @@ namespace {
 // width.
 SgExpression *buildIntegralTemplateArgExpr(const llvm::APSInt &value,
                                            SgType *int_type) {
+  if (int_type != nullptr && isSgTypeBool(int_type)) {
+    return SageBuilder::buildBoolValExp(value.getBoolValue());
+  }
+
   const bool is_signed = value.isSigned();
   const unsigned bitwidth = value.getBitWidth();
 

@@ -2322,6 +2322,99 @@ void ClangToSageTranslator::populateClassDefinition(
   // REX FIX: We must detect if an access specifier was explicitly written.
   bool explicit_access_context = false;
 
+  auto tag_embedded_in_field = [&](clang::TagDecl *tag_decl) -> bool {
+    if (tag_decl == nullptr) {
+      return false;
+    }
+    if (p_compiler_instance == nullptr) {
+      return false;
+    }
+    clang::RecordDecl *parent_decl = record_decl;
+    if (parent_decl == nullptr) {
+      return false;
+    }
+
+    auto location_in_range = [&](clang::SourceLocation begin,
+                                 clang::SourceLocation end,
+                                 clang::SourceLocation loc) -> bool {
+      if (!begin.isValid() || !end.isValid() || !loc.isValid()) {
+        return false;
+      }
+      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+      clang::SourceLocation begin_loc = sm.getSpellingLoc(begin);
+      clang::SourceLocation end_loc = sm.getSpellingLoc(end);
+      clang::SourceLocation target_loc = sm.getSpellingLoc(loc);
+      if (!begin_loc.isValid() || !end_loc.isValid() || !target_loc.isValid()) {
+        return false;
+      }
+      if (sm.getFileID(begin_loc) != sm.getFileID(target_loc) ||
+          sm.getFileID(end_loc) != sm.getFileID(target_loc)) {
+        return false;
+      }
+      unsigned begin_offset = sm.getFileOffset(begin_loc);
+      unsigned end_offset = sm.getFileOffset(end_loc);
+      unsigned target_offset = sm.getFileOffset(target_loc);
+      if (begin_offset > end_offset) {
+        std::swap(begin_offset, end_offset);
+      }
+      return target_offset >= begin_offset && target_offset <= end_offset;
+    };
+
+    clang::SourceLocation tag_begin = tag_decl->getBeginLoc();
+    for (clang::FieldDecl *field_decl : parent_decl->fields()) {
+      clang::QualType field_qual_type = field_decl->getType();
+      const clang::Type *field_type = field_qual_type.getTypePtr();
+      while (llvm::isa<clang::ElaboratedType>(field_type) ||
+             llvm::isa<clang::PointerType>(field_type) ||
+             llvm::isa<clang::ArrayType>(field_type)) {
+        if (auto *elaborated =
+                llvm::dyn_cast<clang::ElaboratedType>(field_type)) {
+          field_qual_type = elaborated->getNamedType();
+        } else if (auto *ptr = llvm::dyn_cast<clang::PointerType>(field_type)) {
+          field_qual_type = ptr->getPointeeType();
+        } else if (auto *array = llvm::dyn_cast<clang::ArrayType>(field_type)) {
+          field_qual_type = array->getElementType();
+        }
+        field_type = field_qual_type.getTypePtr();
+      }
+
+      if (auto *record_type =
+              llvm::dyn_cast_or_null<clang::RecordType>(field_type)) {
+        clang::RecordDecl *field_record = record_type->getDecl();
+        clang::SourceRange field_range = field_decl->getSourceRange();
+        if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
+          clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
+          if (type_range.isValid()) {
+            field_range = type_range;
+          }
+        }
+        if (field_record != nullptr &&
+            field_record->getCanonicalDecl() == tag_decl->getCanonicalDecl() &&
+            location_in_range(field_range.getBegin(), field_range.getEnd(),
+                              tag_begin)) {
+          return true;
+        }
+      } else if (auto *enum_type =
+                     llvm::dyn_cast_or_null<clang::EnumType>(field_type)) {
+        clang::EnumDecl *field_enum = enum_type->getDecl();
+        clang::SourceRange field_range = field_decl->getSourceRange();
+        if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
+          clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
+          if (type_range.isValid()) {
+            field_range = type_range;
+          }
+        }
+        if (field_enum != nullptr &&
+            field_enum->getCanonicalDecl() == tag_decl->getCanonicalDecl() &&
+            location_in_range(field_range.getBegin(), field_range.getEnd(),
+                              tag_begin)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // Populate base classes for C++ records.
   if (clang::CXXRecordDecl *cxx_record =
           llvm::dyn_cast<clang::CXXRecordDecl>(record_decl)) {
@@ -2640,7 +2733,8 @@ void ClangToSageTranslator::populateClassDefinition(
     // standalone members; the owning declarator/field will already emit the
     // embedded definition inline during unparsing.
     if (clang::TagDecl *tag_decl = llvm::dyn_cast<clang::TagDecl>(inner_decl)) {
-      if (tag_decl->isEmbeddedInDeclarator()) {
+      if (tag_decl->isEmbeddedInDeclarator() ||
+          tag_embedded_in_field(tag_decl)) {
         continue;
       }
     }
@@ -5424,7 +5518,9 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
     if (SgTemplateClassDefinition *class_def =
             isSgTemplateClassDefinition(template_decl->get_definition())) {
       applySourceRange(class_def, templated_decl->getSourceRange());
-      populateClassDefinition(templated_decl, class_def);
+      if (p_record_definitions_populated.insert(class_def).second) {
+        populateClassDefinition(templated_decl, class_def);
+      }
     }
   }
 
@@ -6338,11 +6434,97 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     SageBuilder::popScopeStack();
   }
 
-  if (sg_class_decl != nullptr) {
-    sg_class_decl->set_isAutonomousDeclaration(true);
-  }
-  if (sg_first_class_decl != nullptr) {
-    sg_first_class_decl->set_isAutonomousDeclaration(true);
+  auto record_embedded_in_field = [&]() -> bool {
+    clang::RecordDecl *parent_decl = llvm::dyn_cast_or_null<clang::RecordDecl>(
+        record_decl->getDeclContext());
+    if (parent_decl == nullptr) {
+      return false;
+    }
+
+    auto location_in_range = [&](clang::SourceLocation begin,
+                                 clang::SourceLocation end,
+                                 clang::SourceLocation loc) -> bool {
+      if (!begin.isValid() || !end.isValid() || !loc.isValid()) {
+        return false;
+      }
+      if (p_compiler_instance == nullptr) {
+        return begin == loc;
+      }
+      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+      clang::SourceLocation begin_loc = sm.getSpellingLoc(begin);
+      clang::SourceLocation end_loc = sm.getSpellingLoc(end);
+      clang::SourceLocation target_loc = sm.getSpellingLoc(loc);
+      if (!begin_loc.isValid() || !end_loc.isValid() || !target_loc.isValid()) {
+        return false;
+      }
+      if (sm.getFileID(begin_loc) != sm.getFileID(target_loc) ||
+          sm.getFileID(end_loc) != sm.getFileID(target_loc)) {
+        return false;
+      }
+      unsigned begin_offset = sm.getFileOffset(begin_loc);
+      unsigned end_offset = sm.getFileOffset(end_loc);
+      unsigned target_offset = sm.getFileOffset(target_loc);
+      if (begin_offset > end_offset) {
+        std::swap(begin_offset, end_offset);
+      }
+      return target_offset >= begin_offset && target_offset <= end_offset;
+    };
+
+    clang::SourceLocation record_begin = record_decl->getBeginLoc();
+    for (clang::FieldDecl *field_decl : parent_decl->fields()) {
+      clang::QualType field_qual_type = field_decl->getType();
+      const clang::Type *field_type = field_qual_type.getTypePtr();
+      while (llvm::isa<clang::ElaboratedType>(field_type) ||
+             llvm::isa<clang::PointerType>(field_type) ||
+             llvm::isa<clang::ArrayType>(field_type)) {
+        if (auto *elaborated =
+                llvm::dyn_cast<clang::ElaboratedType>(field_type)) {
+          field_qual_type = elaborated->getNamedType();
+        } else if (auto *ptr = llvm::dyn_cast<clang::PointerType>(field_type)) {
+          field_qual_type = ptr->getPointeeType();
+        } else if (auto *array = llvm::dyn_cast<clang::ArrayType>(field_type)) {
+          field_qual_type = array->getElementType();
+        }
+        field_type = field_qual_type.getTypePtr();
+      }
+
+      if (auto *record_type =
+              llvm::dyn_cast_or_null<clang::RecordType>(field_type)) {
+        clang::RecordDecl *field_record = record_type->getDecl();
+        clang::SourceRange field_range = field_decl->getSourceRange();
+        if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
+          clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
+          if (type_range.isValid()) {
+            field_range = type_range;
+          }
+        }
+        if (field_record != nullptr &&
+            field_record->getCanonicalDecl() ==
+                record_decl->getCanonicalDecl() &&
+            location_in_range(field_range.getBegin(), field_range.getEnd(),
+                              record_begin)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  bool is_embedded_record =
+      record_decl->isEmbeddedInDeclarator() || record_embedded_in_field();
+  if (is_embedded_record) {
+    if (sg_class_decl != nullptr) {
+      sg_class_decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(sg_class_decl);
+    }
+    if (sg_first_class_decl != nullptr) {
+      sg_first_class_decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(sg_first_class_decl);
+    }
+    if (sg_def_class_decl != nullptr) {
+      sg_def_class_decl->set_isAutonomousDeclaration(false);
+      suppress_unparse_output(sg_def_class_decl);
+    }
   }
 
   ROSE_ASSERT(sg_class_decl->get_definingDeclaration() == nullptr ||
@@ -7349,13 +7531,14 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   // headers.
   if (definingDecl != nullptr && definingDecl->get_definition() != nullptr &&
       has_definition && !in_system_header) {
-    SageBuilder::pushScopeStack(
-        isSgScopeStatement(definingDecl->get_definition()));
-
-    populateClassDefinition(
-        definition_decl, isSgClassDefinition(definingDecl->get_definition()));
-
-    SageBuilder::popScopeStack();
+    if (SgClassDefinition *class_def =
+            isSgClassDefinition(definingDecl->get_definition())) {
+      if (p_record_definitions_populated.insert(class_def).second) {
+        SageBuilder::pushScopeStack(class_def);
+        populateClassDefinition(definition_decl, class_def);
+        SageBuilder::popScopeStack();
+      }
+    }
   }
 
   return true;
@@ -7506,33 +7689,10 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
     case clang::TemplateArgument::Integral: {
       llvm::APSInt value = arg.getAsIntegral();
       SgType *int_type = buildTypeFromQualifiedType(arg.getIntegralType());
-      SgExpression *value_expr = nullptr;
-      if (isSgTypeBool(int_type)) {
-        value_expr = SageBuilder::buildBoolValExp(value.getBoolValue());
-      } else {
-        value_expr = buildIntegralTemplateArgExpr(value, int_type);
+      SgExpression *value_expr = buildIntegralTemplateArgExpr(value, int_type);
+      if (value_expr != nullptr) {
+        sg_arg = new SgTemplateArgument(value_expr, false);
       }
-      std::string val_str;
-      if (isSgTypeBool(int_type)) {
-        val_str = value.getBoolValue() ? "true" : "false";
-      } else {
-        llvm::SmallString<16> Str;
-        value.toString(Str);
-        val_str = Str.c_str();
-      }
-
-      SgName arg_name = val_str;
-      SgAssignInitializer *init =
-          SageBuilder::buildAssignInitializer_nfi(value_expr, int_type);
-      SgInitializedName *init_name =
-          SageBuilder::buildInitializedName_nfi(arg_name, int_type, init);
-      init_name->set_scope(SageBuilder::topScopeStack());
-
-      // Issue 107: Construct with nullptr expression but set initializedName to
-      // satisfy both get_mangled_name and resetParentPointers.
-      sg_arg = new SgTemplateArgument(SgTemplateArgument::nontype_argument,
-                                      false, int_type, nullptr, nullptr, false);
-      sg_arg->set_initializedName(init_name);
       break;
     }
     case clang::TemplateArgument::Template: {
@@ -7674,36 +7834,11 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
       case clang::TemplateArgument::Integral: {
         llvm::APSInt value = arg.getAsIntegral();
         SgType *int_type = buildTypeFromQualifiedType(arg.getIntegralType());
-        SgExpression *value_expr = nullptr;
-        if (isSgTypeBool(int_type)) {
-          value_expr = SageBuilder::buildBoolValExp(value.getBoolValue());
-        } else {
-          value_expr = buildIntegralTemplateArgExpr(value, int_type);
+        SgExpression *value_expr =
+            buildIntegralTemplateArgExpr(value, int_type);
+        if (value_expr != nullptr) {
+          sg_arg = new SgTemplateArgument(value_expr, false);
         }
-
-        std::string val_str;
-        if (isSgTypeBool(int_type)) {
-          val_str = value.getBoolValue() ? "true" : "false";
-        } else {
-          llvm::SmallString<16> Str;
-          value.toString(Str);
-          val_str = Str.c_str();
-        }
-
-        SgName arg_name = val_str;
-        SgAssignInitializer *init =
-            SageBuilder::buildAssignInitializer_nfi(value_expr, int_type);
-        // SgInitializedName needs a valid scope, but SgTemplateArgument's init
-        // name serves as a wrapper. We set scope to nullptr or global scope?
-        // Loop 1 sets nothing (nullptr parent).
-        SgInitializedName *init_name =
-            SageBuilder::buildInitializedName_nfi(arg_name, int_type, init);
-        init_name->set_scope(SageBuilder::topScopeStack());
-
-        sg_arg =
-            new SgTemplateArgument(SgTemplateArgument::nontype_argument, false,
-                                   int_type, nullptr, nullptr, false);
-        sg_arg->set_initializedName(init_name);
         break;
       }
       case clang::TemplateArgument::Template: {
@@ -7756,9 +7891,11 @@ bool ClangToSageTranslator::VisitClassTemplatePartialSpecializationDecl(
     SgClassDefinition *def = definingDecl->get_definition();
     ROSE_ASSERT(def);
 
-    SageBuilder::pushScopeStack(def);
-    populateClassDefinition(class_tpl_spec_decl, def);
-    SageBuilder::popScopeStack();
+    if (p_record_definitions_populated.insert(def).second) {
+      SageBuilder::pushScopeStack(def);
+      populateClassDefinition(class_tpl_spec_decl, def);
+      SageBuilder::popScopeStack();
+    }
 
     // Wire relations (SageBuilder should have done it, but enforce)
     definingDecl->set_firstNondefiningDeclaration(nonDefiningDecl);
@@ -8879,6 +9016,41 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
   bool isNamedNonEmbeddedRecord = false;
   bool isAnonymousStructOrUnion = false;
 
+  auto field_has_embedded_tag = [&](clang::TagDecl *tag_decl) -> bool {
+    if (tag_decl == nullptr || p_compiler_instance == nullptr) {
+      return false;
+    }
+    clang::SourceRange field_range = field_decl->getSourceRange();
+    if (clang::TypeSourceInfo *tsi = field_decl->getTypeSourceInfo()) {
+      clang::SourceRange type_range = tsi->getTypeLoc().getSourceRange();
+      if (type_range.isValid()) {
+        field_range = type_range;
+      }
+    }
+    if (!field_range.isValid()) {
+      return false;
+    }
+    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+    clang::SourceLocation begin_loc = sm.getSpellingLoc(field_range.getBegin());
+    clang::SourceLocation end_loc = sm.getSpellingLoc(field_range.getEnd());
+    clang::SourceLocation target_loc =
+        sm.getSpellingLoc(tag_decl->getBeginLoc());
+    if (!begin_loc.isValid() || !end_loc.isValid() || !target_loc.isValid()) {
+      return false;
+    }
+    if (sm.getFileID(begin_loc) != sm.getFileID(target_loc) ||
+        sm.getFileID(end_loc) != sm.getFileID(target_loc)) {
+      return false;
+    }
+    unsigned begin_offset = sm.getFileOffset(begin_loc);
+    unsigned end_offset = sm.getFileOffset(end_loc);
+    unsigned target_offset = sm.getFileOffset(target_loc);
+    if (begin_offset > end_offset) {
+      std::swap(begin_offset, end_offset);
+    }
+    return target_offset >= begin_offset && target_offset <= end_offset;
+  };
+
   // Adding check for ElaboratedType/Pointer/Array to retrieve base type.
   while ((llvm::isa<clang::ElaboratedType>(fieldType)) ||
          (llvm::isa<clang::PointerType>(fieldType)) ||
@@ -8903,16 +9075,18 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
   if (llvm::isa<clang::EnumType>(fieldType)) {
     clang::EnumType *underlyingEnumType = (clang::EnumType *)fieldType;
     clang::EnumDecl *enumDeclaration = underlyingEnumType->getDecl();
-    isembedded = enumDeclaration->isEmbeddedInDeclarator();
+    isembedded = enumDeclaration->isEmbeddedInDeclarator() ||
+                 field_has_embedded_tag(enumDeclaration);
     iscompleteDefined = enumDeclaration->isCompleteDefinition();
   }
 
   if (llvm::isa<clang::RecordType>(fieldType)) {
     clang::RecordType *underlyingRecordType = (clang::RecordType *)fieldType;
     clang::RecordDecl *recordDeclaration = underlyingRecordType->getDecl();
-    isembedded = recordDeclaration->isEmbeddedInDeclarator();
+    isembedded = recordDeclaration->isEmbeddedInDeclarator() ||
+                 field_has_embedded_tag(recordDeclaration);
     iscompleteDefined = recordDeclaration->isCompleteDefinition();
-    isNamedNonEmbeddedRecord = !recordDeclaration->isEmbeddedInDeclarator() &&
+    isNamedNonEmbeddedRecord = !isembedded &&
                                !recordDeclaration->isAnonymousStructOrUnion() &&
                                recordDeclaration->getIdentifier() != nullptr;
   }
@@ -9034,6 +9208,16 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
     if (fieldType != enclosing_record_type && isembedded &&
         classDefDecl != nullptr &&
         !isSgDeclarationStatement(classDefDecl->get_parent())) {
+      if (SgScopeStatement *parent_scope =
+              isSgScopeStatement(classDefDecl->get_parent())) {
+        detach_decl_from_scope_child_list(classDefDecl, parent_scope);
+      }
+      if (classDecl != nullptr && classDecl != classDefDecl) {
+        if (SgScopeStatement *parent_scope =
+                isSgScopeStatement(classDecl->get_parent())) {
+          detach_decl_from_scope_child_list(classDecl, parent_scope);
+        }
+      }
       classDefDecl->set_parent(var_decl);
       // classDefDecl->set_isAutonomousDeclaration(false);
       var_decl->set_baseTypeDefiningDeclaration(classDefDecl);
@@ -9136,6 +9320,45 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
     ~TranslationGuard() { in_progress.erase(decl); }
   } translation_guard(p_decl_translation_in_progress, function_decl);
+
+  auto lookup_existing_decl =
+      [&](clang::FunctionDecl *key) -> SgFunctionDeclaration * {
+    if (key == nullptr) {
+      return nullptr;
+    }
+    auto it = p_decl_translation_map.find(key);
+    if (it == p_decl_translation_map.end()) {
+      return nullptr;
+    }
+    return isSgFunctionDeclaration(it->second);
+  };
+
+  SgFunctionDeclaration *existing_decl = lookup_existing_decl(function_decl);
+  if (existing_decl == nullptr) {
+    if (clang::FunctionDecl *canonical = function_decl->getCanonicalDecl()) {
+      existing_decl = lookup_existing_decl(canonical);
+    }
+  }
+  if (existing_decl == nullptr) {
+    if (clang::FunctionDecl *first = function_decl->getFirstDecl()) {
+      existing_decl = lookup_existing_decl(first);
+    }
+  }
+
+  if (existing_decl != nullptr) {
+    const bool needs_definition =
+        function_decl->isThisDeclarationADefinition() &&
+        existing_decl->get_definition() == nullptr;
+    if (!needs_definition) {
+      if (p_decl_translation_map.find(function_decl) ==
+          p_decl_translation_map.end()) {
+        p_decl_translation_map.insert(
+            std::make_pair(function_decl, existing_decl));
+      }
+      *node = existing_decl;
+      return true;
+    }
+  }
 
   // FIXME: There is something weird here when try to Traverse a function
   // reference in a recursive function (when first Traverse is not complete)
@@ -12837,6 +13060,81 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
     }
   }
+
+  if (SgMemberFunctionDeclaration *member_decl =
+          isSgMemberFunctionDeclaration(sg_function_decl)) {
+    if (member_decl->get_associatedClassDeclaration() == nullptr) {
+      if (clang::CXXMethodDecl *method_decl =
+              llvm::dyn_cast<clang::CXXMethodDecl>(function_decl)) {
+        clang::CXXRecordDecl *parent_decl = method_decl->getParent();
+
+        auto node_to_class_decl = [](SgNode *node) -> SgClassDeclaration * {
+          if (SgClassDeclaration *decl = isSgClassDeclaration(node)) {
+            return decl;
+          }
+          if (SgClassDefinition *def = isSgClassDefinition(node)) {
+            return isSgClassDeclaration(def->get_declaration());
+          }
+          if (SgTemplateClassDefinition *tmpl_def =
+                  isSgTemplateClassDefinition(node)) {
+            return isSgTemplateClassDeclaration(tmpl_def->get_declaration());
+          }
+          if (SgTemplateInstantiationDefn *inst_def =
+                  isSgTemplateInstantiationDefn(node)) {
+            return isSgTemplateInstantiationDecl(inst_def->get_declaration());
+          }
+          return nullptr;
+        };
+
+        auto lookup_class_decl =
+            [&](clang::CXXRecordDecl *record) -> SgClassDeclaration * {
+          if (record == nullptr) {
+            return nullptr;
+          }
+          auto it = p_decl_translation_map.find(record);
+          if (it == p_decl_translation_map.end()) {
+            return nullptr;
+          }
+          return node_to_class_decl(it->second);
+        };
+
+        SgClassDeclaration *assoc_decl = lookup_class_decl(parent_decl);
+        if (assoc_decl == nullptr && parent_decl != nullptr) {
+          if (clang::CXXRecordDecl *def = parent_decl->getDefinition()) {
+            assoc_decl = lookup_class_decl(def);
+          }
+        }
+        if (assoc_decl == nullptr && parent_decl != nullptr) {
+          if (clang::CXXRecordDecl *canonical =
+                  parent_decl->getCanonicalDecl()) {
+            assoc_decl = lookup_class_decl(canonical);
+            if (assoc_decl == nullptr) {
+              if (clang::CXXRecordDecl *def = canonical->getDefinition()) {
+                assoc_decl = lookup_class_decl(def);
+              }
+            }
+          }
+        }
+        if (assoc_decl == nullptr && parent_decl != nullptr) {
+          clang::CXXRecordDecl *to_translate = parent_decl;
+          if (clang::CXXRecordDecl *def = parent_decl->getDefinition()) {
+            to_translate = def;
+          }
+          if (p_decl_translation_map.find(to_translate) ==
+                  p_decl_translation_map.end() &&
+              p_decl_translation_in_progress.find(to_translate) ==
+                  p_decl_translation_in_progress.end()) {
+            assoc_decl = node_to_class_decl(TraverseOnDemand(to_translate));
+          }
+        }
+
+        if (assoc_decl != nullptr) {
+          member_decl->set_associatedClassDeclaration(assoc_decl);
+        }
+      }
+    }
+  }
+
   *node = sg_function_decl;
 
   bool visit_res = VisitDeclaratorDecl(function_decl, node) && res;

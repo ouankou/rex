@@ -44,6 +44,9 @@ TokenStream::TokenStream(std::istringstream &is) {
   next_ = 0;
 }
 
+TokenStream::TokenStream(std::vector<Token> tokens)
+    : tokens_(std::move(tokens)), next_(0) {}
+
 int TokenStream::getTokenElement(std::istream &is, std::string &word) {
   char c;
 

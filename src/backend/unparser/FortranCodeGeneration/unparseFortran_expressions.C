@@ -324,6 +324,9 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
   case V_SgRefExp:
     unparseTypeRef(expr, info);
     break;
+  case V_SgTypeExpression:
+    unparseTypeExpression(expr, info);
+    break;
 
   case V_SgSubscriptExpression:
     unparseSubscriptExpr(expr, info);
@@ -623,14 +626,23 @@ bool outputLogicalOperator(SgExpression *expr) {
     SgExpression *rhs = binaryOp->get_rhs_operand();
     SgType *lhs_type = lhs->get_type();
     SgType *rhs_type = rhs->get_type();
-    if (isSgTypeBool(lhs_type) != NULL) {
-      if (isSgTypeBool(rhs_type) == NULL) {
-        printf("Error: outputLogicalOperator(). Found a boolean lhs operand "
-               "paired with a non-boolean rhs operand for SgExpression:%s\n",
+    const bool lhs_is_bool = isSgTypeBool(lhs_type) != NULL;
+    const bool rhs_is_bool = isSgTypeBool(rhs_type) != NULL;
+    const bool lhs_is_unknown = isSgTypeUnknown(lhs_type) != NULL;
+    const bool rhs_is_unknown = isSgTypeUnknown(rhs_type) != NULL;
+    if (lhs_is_bool || rhs_is_bool) {
+      if (lhs_type == nullptr || rhs_type == nullptr || lhs_is_unknown ||
+          rhs_is_unknown) {
+        outputLogicalOperator = true;
+      } else if (!lhs_is_bool || !rhs_is_bool) {
+        printf("Error: outputLogicalOperator(). Found a boolean operand "
+               "paired with a non-boolean operand for SgExpression:%s\n",
                expr->class_name().c_str());
+        ASSERT_not_null(isSgTypeBool(lhs_type));
         ASSERT_not_null(isSgTypeBool(rhs_type));
+      } else {
+        outputLogicalOperator = true;
       }
-      outputLogicalOperator = true;
     }
   } else {
     printf("Error: this function only needs to handle binary operators. ");
@@ -966,6 +978,16 @@ void FortranCodeGeneration_locatedNode::unparseTypeRef(SgExpression *expr,
   ninfo.unset_PrintName();
 
   unp->u_fortran_type->unparseType(type_ref->get_type_name(), ninfo);
+}
+
+void FortranCodeGeneration_locatedNode::unparseTypeExpression(
+    SgExpression *expr, SgUnparse_Info &info) {
+  SgTypeExpression *type_expr = isSgTypeExpression(expr);
+  ASSERT_not_null(type_expr);
+
+  SgUnparse_Info ninfo(info);
+  ninfo.unset_PrintName();
+  unp->u_fortran_type->unparseType(type_expr->get_type(), ninfo);
 }
 
 void FortranCodeGeneration_locatedNode::unparseSubscriptExpr(

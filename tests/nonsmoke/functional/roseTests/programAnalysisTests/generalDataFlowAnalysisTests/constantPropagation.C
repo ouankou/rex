@@ -1,6 +1,7 @@
 #include "constantPropagation.h"
 
 #include <functional>
+#include <limits>
 
 using namespace std::placeholders;
 
@@ -301,30 +302,136 @@ void ConstantPropagationAnalysisTransfer::transferMod(
   }
 }
 
-void ConstantPropagationAnalysisTransfer::visit(SgLongLongIntVal *sgn) {}
+ConstantPropagationLattice *
+ConstantPropagationAnalysisTransfer::makeTempLattice() {
+  tempLattices.push_back(std::make_unique<ConstantPropagationLattice>());
+  return tempLattices.back().get();
+}
+
+void ConstantPropagationAnalysisTransfer::setSignedValue(
+    ConstantPropagationLattice *lat, long long value) {
+  ROSE_ASSERT(lat != NULL);
+  if (value < std::numeric_limits<int>::min() ||
+      value > std::numeric_limits<int>::max()) {
+    lat->setTop();
+    return;
+  }
+  lat->setValue(static_cast<int>(value));
+}
+
+void ConstantPropagationAnalysisTransfer::setUnsignedValue(
+    ConstantPropagationLattice *lat, unsigned long long value) {
+  ROSE_ASSERT(lat != NULL);
+  if (value >
+      static_cast<unsigned long long>(std::numeric_limits<int>::max())) {
+    lat->setTop();
+    return;
+  }
+  lat->setValue(static_cast<int>(value));
+}
+
+ConstantPropagationLattice *
+ConstantPropagationAnalysisTransfer::fallbackLattice(const SgExpression *sgn) {
+  if (!sgn)
+    return NULL;
+  const SgValueExp *valueExp = isSgValueExp(sgn);
+  if (!valueExp)
+    return NULL;
+
+  ConstantPropagationLattice *lat = makeTempLattice();
+  if (const SgIntVal *intVal = isSgIntVal(valueExp)) {
+    setSignedValue(lat, intVal->get_value());
+    return lat;
+  }
+  if (const SgLongIntVal *longVal = isSgLongIntVal(valueExp)) {
+    setSignedValue(lat, longVal->get_value());
+    return lat;
+  }
+  if (const SgLongLongIntVal *longLongVal = isSgLongLongIntVal(valueExp)) {
+    setSignedValue(lat, longLongVal->get_value());
+    return lat;
+  }
+  if (const SgShortVal *shortVal = isSgShortVal(valueExp)) {
+    setSignedValue(lat, shortVal->get_value());
+    return lat;
+  }
+  if (const SgUnsignedIntVal *uintVal = isSgUnsignedIntVal(valueExp)) {
+    setUnsignedValue(lat, uintVal->get_value());
+    return lat;
+  }
+  if (const SgUnsignedLongVal *ulongVal = isSgUnsignedLongVal(valueExp)) {
+    setUnsignedValue(lat, ulongVal->get_value());
+    return lat;
+  }
+  if (const SgUnsignedLongLongIntVal *ulongLongVal =
+          isSgUnsignedLongLongIntVal(valueExp)) {
+    setUnsignedValue(lat, ulongLongVal->get_value());
+    return lat;
+  }
+  if (const SgUnsignedShortVal *ushortVal = isSgUnsignedShortVal(valueExp)) {
+    setUnsignedValue(lat, ushortVal->get_value());
+    return lat;
+  }
+
+  // Non-integer value expressions are treated as unknown.
+  return lat;
+}
+
+void ConstantPropagationAnalysisTransfer::visit(SgLongLongIntVal *sgn) {
+  ROSE_ASSERT(sgn != NULL);
+  ConstantPropagationLattice *resLat = getLattice(sgn);
+  ROSE_ASSERT(resLat != NULL);
+  setSignedValue(resLat, sgn->get_value());
+}
 
 void ConstantPropagationAnalysisTransfer::visit(SgLongIntVal *sgn) {
-  // TODO: similar logic as visit(SgIntVal *sgn)
+  ROSE_ASSERT(sgn != NULL);
+  ConstantPropagationLattice *resLat = getLattice(sgn);
+  ROSE_ASSERT(resLat != NULL);
+  setSignedValue(resLat, sgn->get_value());
 }
 
 void ConstantPropagationAnalysisTransfer::visit(SgIntVal *sgn) {
   ROSE_ASSERT(sgn != NULL);
   ConstantPropagationLattice *resLat = getLattice(sgn);
   ROSE_ASSERT(resLat != NULL);
-  resLat->setValue(sgn->get_value());
-  resLat->setLevel(ConstantPropagationLattice::constantValue);
+  setSignedValue(resLat, sgn->get_value());
 }
 
-void ConstantPropagationAnalysisTransfer::visit(SgShortVal *sgn) {}
+void ConstantPropagationAnalysisTransfer::visit(SgShortVal *sgn) {
+  ROSE_ASSERT(sgn != NULL);
+  ConstantPropagationLattice *resLat = getLattice(sgn);
+  ROSE_ASSERT(resLat != NULL);
+  setSignedValue(resLat, sgn->get_value());
+}
 
 void ConstantPropagationAnalysisTransfer::visit(SgUnsignedLongLongIntVal *sgn) {
+  ROSE_ASSERT(sgn != NULL);
+  ConstantPropagationLattice *resLat = getLattice(sgn);
+  ROSE_ASSERT(resLat != NULL);
+  setUnsignedValue(resLat, sgn->get_value());
 }
 
-void ConstantPropagationAnalysisTransfer::visit(SgUnsignedLongVal *sgn) {}
+void ConstantPropagationAnalysisTransfer::visit(SgUnsignedLongVal *sgn) {
+  ROSE_ASSERT(sgn != NULL);
+  ConstantPropagationLattice *resLat = getLattice(sgn);
+  ROSE_ASSERT(resLat != NULL);
+  setUnsignedValue(resLat, sgn->get_value());
+}
 
-void ConstantPropagationAnalysisTransfer::visit(SgUnsignedIntVal *sgn) {}
+void ConstantPropagationAnalysisTransfer::visit(SgUnsignedIntVal *sgn) {
+  ROSE_ASSERT(sgn != NULL);
+  ConstantPropagationLattice *resLat = getLattice(sgn);
+  ROSE_ASSERT(resLat != NULL);
+  setUnsignedValue(resLat, sgn->get_value());
+}
 
-void ConstantPropagationAnalysisTransfer::visit(SgUnsignedShortVal *sgn) {}
+void ConstantPropagationAnalysisTransfer::visit(SgUnsignedShortVal *sgn) {
+  ROSE_ASSERT(sgn != NULL);
+  ConstantPropagationLattice *resLat = getLattice(sgn);
+  ROSE_ASSERT(resLat != NULL);
+  setUnsignedValue(resLat, sgn->get_value());
+}
 
 void ConstantPropagationAnalysisTransfer::visit(SgValueExp *sgn) {}
 

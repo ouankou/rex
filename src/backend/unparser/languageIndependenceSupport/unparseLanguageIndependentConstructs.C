@@ -929,6 +929,27 @@ bool UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(
     return false;
   }
 
+  if (sourceFile->get_Fortran_only() || sourceFile->get_F90_only() ||
+      sourceFile->get_CoArrayFortran_only()) {
+    if (sourceFile->get_openmp() || sourceFile->get_openacc()) {
+      // Avoid token-stream unparsing when directive comments are present.
+      return false;
+    }
+    bool isOpenMP = (isSgOmpExecStatement(stmt) != NULL) ||
+                    SageInterface::isOmpStatement(stmt);
+    if (!isOpenMP) {
+      SgPragmaDeclaration *pragmaDecl = isSgPragmaDeclaration(stmt);
+      if (pragmaDecl != NULL &&
+          pragmaDecl->getAttribute("OmpAttributeList") != NULL) {
+        isOpenMP = true;
+      }
+    }
+    if (isOpenMP) {
+      // Normalize Fortran OpenMP directive formatting via AST unparsing.
+      return false;
+    }
+  }
+
   bool canBeUnparsed = false;
 
   std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
@@ -1355,7 +1376,6 @@ bool UnparseLanguageIndependentConstructs::
   }
 
   if (prepInfoPtr != NULL) {
-
     // Traverse the container of PreprocessingInfo objects
     AttachedPreprocessingInfoType::iterator i;
     for (i = prepInfoPtr->begin(); i != prepInfoPtr->end(); ++i) {
@@ -3933,11 +3953,19 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           bool unparseExtraNewLine =
               (stmt->getAttachedPreprocessingInfo() != NULL);
           if (unparseExtraNewLine == true) {
+            bool skip_extra_newline = false;
+            if (sourceFile != nullptr && sourceFile->get_Fortran_only()) {
+              // For Fortran, avoid inserting a blank line before trailing
+              // comments when the statement already ended with a newline.
+              skip_extra_newline = (unp->cur.current_col() == 0);
+            }
 #if DEBUG_USING_CURPRINT || 0
             curprint("\n /* skipOutputOfPreprocessingInfo == false: "
                      "PreprocessingInfo::after added CR */\n");
 #endif
-            curprint("\n ");
+            if (!skip_extra_newline) {
+              curprint("\n ");
+            }
           }
 
           unparseAttachedPreprocessingInfo(stmt, info,
@@ -4762,6 +4790,25 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       return;
     }
 
+    const bool is_fixed_form_fortran =
+        (unp->currentFile != nullptr && unp->currentFile->get_Fortran_only() &&
+         unp->currentFile->get_outputFormat() ==
+             SgFile::e_fixed_form_output_format);
+    auto normalize_fortran_comment = [&](const std::string &comment) {
+      if (!is_fixed_form_fortran) {
+        return comment;
+      }
+      std::string text = comment;
+      size_t pos = text.find_first_not_of(" \t");
+      if (pos != std::string::npos) {
+        const char marker = text[pos];
+        if (marker == 'C' || marker == 'c' || marker == '*') {
+          text[pos] = '!';
+        }
+      }
+      return text;
+    };
+
     auto marker_output_eligible = [&](SgStatement *marker) -> bool {
       if (marker == NULL) {
         return false;
@@ -4946,7 +4993,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           case PreprocessingInfo::C_StyleComment:
           case PreprocessingInfo::CplusplusStyleComment:
             if (!info.SkipComments()) {
-              curprint((*i)->getString());
+              curprint(normalize_fortran_comment((*i)->getString()));
             }
             break;
 
@@ -4988,7 +5035,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           case PreprocessingInfo::C_StyleComment:
           case PreprocessingInfo::CplusplusStyleComment:
             if (!info.SkipComments()) {
-              curprint((*i)->getString());
+              curprint(normalize_fortran_comment((*i)->getString()));
             }
             break;
 
@@ -10100,216 +10147,217 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     };
     switch (stmt->variantT()) {
     case V_SgOmpAtomicStatement: {
-      curprint(string("atomic "));
+      curprint(string("atomic"));
       break;
     }
     case V_SgOmpSectionStatement: {
-      curprint(string("section "));
+      curprint(string("section"));
       break;
     }
     case V_SgOmpTaskStatement: {
-      curprint(string("task "));
+      curprint(string("task"));
       break;
     }
     case V_SgOmpTaskwaitStatement: {
-      curprint(string("taskwait "));
+      curprint(string("taskwait"));
       break;
     }
     case V_SgOmpFlushStatement: {
-      curprint(string("flush "));
+      curprint(string("flush"));
       break;
     }
     case V_SgOmpAllocateStatement: {
-      curprint(string("allocate "));
+      curprint(string("allocate"));
       break;
     }
     case V_SgOmpThreadprivateStatement: {
-      curprint(string("threadprivate "));
+      curprint(string("threadprivate"));
       break;
     }
     case V_SgOmpBarrierStatement: {
-      curprint(string("barrier "));
+      curprint(string("barrier"));
       break;
     }
     case V_SgOmpMetadirectiveStatement: {
-      curprint(string("metadirective "));
+      curprint(string("metadirective"));
       break;
     }
     case V_SgOmpParallelStatement: {
-      curprint(string("parallel "));
+      curprint(string("parallel"));
       break;
     }
     case V_SgOmpDistributeStatement: {
-      curprint(string("distribute "));
+      curprint(string("distribute"));
       break;
     }
     case V_SgOmpTeamsStatement: {
-      curprint(string("teams "));
+      curprint(string("teams"));
       break;
     }
     case V_SgOmpCancellationPointStatement: {
-      curprint(string("cancellation point "));
+      curprint(string("cancellation point"));
       break;
     }
     case V_SgOmpOrderedDependStatement: {
-      curprint(string("ordered "));
+      curprint(string("ordered"));
       break;
     }
     case V_SgOmpDeclareMapperStatement: {
-      curprint(string("declare mapper "));
+      curprint(string("declare mapper"));
       break;
     }
     case V_SgOmpCancelStatement: {
-      curprint(string("cancel "));
+      curprint(string("cancel"));
       break;
     }
     case V_SgOmpTaskgroupStatement: {
-      curprint(string("taskgroup "));
+      curprint(string("taskgroup"));
       break;
     }
     case V_SgOmpLoopStatement: {
-      curprint(string("loop "));
+      curprint(string("loop"));
       break;
     }
     case V_SgOmpScanStatement: {
-      curprint(string("scan "));
+      curprint(string("scan"));
       break;
     }
     case V_SgOmpTaskloopStatement: {
-      curprint(string("taskloop "));
+      curprint(string("taskloop"));
       break;
     }
     case V_SgOmpTargetEnterDataStatement: {
-      curprint(string("target enter data "));
+      curprint(string("target enter data"));
       break;
     }
     case V_SgOmpTargetExitDataStatement: {
-      curprint(string("target exit data "));
+      curprint(string("target exit data"));
       break;
     }
     case V_SgOmpTargetStatement: {
-      curprint(string("target "));
+      curprint(string("target"));
       break;
     }
     case V_SgOmpTargetDataStatement: {
-      curprint(string("target data "));
+      curprint(string("target data"));
       break;
     }
     case V_SgOmpTargetParallelForStatement: {
-      curprint(string("target parallel for "));
+      curprint(string("target parallel for"));
       break;
     }
     case V_SgOmpTargetParallelStatement: {
-      curprint(string("target parallel "));
+      curprint(string("target parallel"));
       break;
     }
     case V_SgOmpDistributeSimdStatement: {
-      curprint(string("distribute simd "));
+      curprint(string("distribute simd"));
       break;
     }
     case V_SgOmpDistributeParallelForStatement: {
-      curprint(string("distribute parallel for "));
+      curprint(string("distribute parallel for"));
       break;
     }
     case V_SgOmpDistributeParallelForSimdStatement: {
-      curprint(string("distribute parallel for simd "));
+      curprint(string("distribute parallel for simd"));
       break;
     }
     case V_SgOmpTaskloopSimdStatement: {
-      curprint(string("taskloop simd "));
+      curprint(string("taskloop simd"));
       break;
     }
     case V_SgOmpTargetUpdateStatement: {
-      curprint(string("target update "));
+      curprint(string("target update"));
       break;
     }
     case V_SgOmpRequiresStatement: {
-      curprint(string("requires "));
+      curprint(string("requires"));
       break;
     }
     case V_SgOmpTargetParallelForSimdStatement: {
-      curprint(string("target parallel for simd "));
+      curprint(string("target parallel for simd"));
       break;
     }
     case V_SgOmpTargetParallelLoopStatement: {
-      curprint(string("target parallel loop "));
+      curprint(string("target parallel loop"));
       break;
     }
     case V_SgOmpTargetSimdStatement: {
-      curprint(string("target simd "));
+      curprint(string("target simd"));
       break;
     }
     case V_SgOmpTargetTeamsStatement: {
-      curprint(string("target teams "));
+      curprint(string("target teams"));
       break;
     }
     case V_SgOmpTargetTeamsDistributeStatement: {
-      curprint(string("target teams distribute "));
+      curprint(string("target teams distribute"));
       break;
     }
     case V_SgOmpTargetTeamsDistributeSimdStatement: {
-      curprint(string("target teams distribute simd "));
+      curprint(string("target teams distribute simd"));
       break;
     }
     case V_SgOmpTargetTeamsLoopStatement: {
-      curprint(string("target teams loop "));
+      curprint(string("target teams loop"));
       break;
     }
     case V_SgOmpTargetTeamsDistributeParallelForStatement: {
-      curprint(string("target teams distribute parallel for "));
+      curprint(string("target teams distribute parallel for"));
       break;
     }
     case V_SgOmpTargetTeamsDistributeParallelForSimdStatement: {
-      curprint(string("target teams distribute parallel for simd "));
+      curprint(string("target teams distribute parallel for simd"));
       break;
     }
     case V_SgOmpMasterTaskloopSimdStatement: {
-      curprint(string("master taskloop simd "));
+      curprint(string("master taskloop simd"));
       break;
     }
     case V_SgOmpParallelMasterTaskloopStatement: {
-      curprint(string("parallel master taskloop "));
+      curprint(string("parallel master taskloop"));
       break;
     }
     case V_SgOmpParallelMasterTaskloopSimdStatement: {
-      curprint(string("parallel master taskloop simd "));
+      curprint(string("parallel master taskloop simd"));
       break;
     }
     case V_SgOmpTeamsDistributeStatement: {
-      curprint(string("teams distribute "));
+      curprint(string("teams distribute"));
       break;
     }
     case V_SgOmpTeamsDistributeSimdStatement: {
-      curprint(string("teams distribute simd "));
+      curprint(string("teams distribute simd"));
       break;
     }
     case V_SgOmpTeamsDistributeParallelForStatement: {
-      curprint(string("teams distribute parallel for "));
+      curprint(string("teams distribute parallel for"));
       break;
     }
     case V_SgOmpTeamsDistributeParallelForSimdStatement: {
-      curprint(string("teams distribute parallel for simd "));
+      curprint(string("teams distribute parallel for simd"));
       break;
     }
     case V_SgOmpTeamsLoopStatement: {
-      curprint(string("teams loop "));
+      curprint(string("teams loop"));
       break;
     }
     case V_SgOmpParallelMasterStatement: {
-      curprint(string("parallel master "));
+      curprint(string("parallel master"));
       break;
     }
     case V_SgOmpMasterTaskloopStatement: {
-      curprint(string("master taskloop "));
+      curprint(string("master taskloop"));
       break;
     }
     case V_SgOmpParallelLoopStatement: {
-      curprint(string("parallel loop "));
+      curprint(string("parallel loop"));
       break;
     }
     case V_SgOmpCriticalStatement: {
-      curprint(string("critical "));
+      curprint(string("critical"));
       if (isSgOmpCriticalStatement(stmt)->get_name().getString() != "") {
+        curprint(string(" "));
         curprint(string("("));
         curprint(isSgOmpCriticalStatement(stmt)->get_name().getString());
         curprint(string(")"));
@@ -10317,8 +10365,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpDepobjStatement: {
-      curprint(string("depobj "));
+      curprint(string("depobj"));
       if (isSgOmpDepobjStatement(stmt)->get_name().getString() != "") {
+        curprint(string(" "));
         curprint(string("("));
         curprint(isSgOmpDepobjStatement(stmt)->get_name().getString());
         curprint(string(")"));
@@ -10326,47 +10375,47 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpForStatement: {
-      curprint(string("for "));
+      curprint(string("for"));
       break;
     }
     case V_SgOmpSimdStatement: {
-      curprint(string("simd "));
+      curprint(string("simd"));
       break;
     }
     case V_SgOmpTileStatement: {
-      curprint(string("tile "));
+      curprint(string("tile"));
       break;
     }
     case V_SgOmpUnrollStatement: {
-      curprint(string("unroll "));
+      curprint(string("unroll"));
       break;
     }
     case V_SgOmpForSimdStatement: {
-      curprint(string("for simd "));
+      curprint(string("for simd"));
       break;
     }
     case V_SgOmpDoStatement: {
-      curprint(string("do "));
+      curprint(string("do"));
       break;
     }
     case V_SgOmpMasterStatement: {
-      curprint(string("master "));
+      curprint(string("master"));
       break;
     }
     case V_SgOmpTaskyieldStatement: {
-      curprint(string("taskyield "));
+      curprint(string("taskyield"));
       break;
     }
     case V_SgOmpOrderedStatement: {
-      curprint(string("ordered "));
+      curprint(string("ordered"));
       break;
     }
     case V_SgOmpWorkshareStatement: {
-      curprint(string("workshare "));
+      curprint(string("workshare"));
       break;
     }
     case V_SgOmpSingleStatement: {
-      curprint(string("single "));
+      curprint(string("single"));
       break;
     }
     case V_SgOmpDeclareSimdStatement: {
@@ -10374,7 +10423,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     }
     case V_SgOmpSectionsStatement: {
-      curprint(string("sections "));
+      curprint(string("sections"));
       break;
     }
     default: {

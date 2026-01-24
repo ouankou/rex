@@ -12,7 +12,7 @@
 !
 !With the current Rose  I get:
 !----------
-!/disks/utke/Apps/rose_inst/bin/testTranslator -rose:Fortran -rose:skipfinalCompileStep C_Interop/fCaller.f95
+!/disks/utke/Apps/rose_inst/bin/testTranslator -std=fortran -rose:skipfinalCompileStep C_Interop/fCaller.f95
 !/nfs/mcs-homes26/utke/HG_Main/Code/ForTests/C_Interop/fCaller.f95:2.20:
 !
 !  use iso_c_binding
