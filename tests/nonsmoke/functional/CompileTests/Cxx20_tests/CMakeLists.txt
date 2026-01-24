@@ -135,7 +135,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_11.C
   test2020_12.C
   test2020_13.C
-  test2020_14.C
   test2020_21.C
   test2020_22.C
   test2020_24.C
@@ -143,7 +142,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_26.C
   test2020_28.C
   test2020_29.C
-  test2020_31.C
   test2020_32.C
   test2020_33.C
   test2020_34.C
@@ -156,7 +154,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_44.C
   test2020_45.C
   test2020_46.C
-  test2020_47.C
   test2020_48.C
   test2020_49.C
   test2020_50.C
@@ -191,10 +188,14 @@ set(CXX20_DISABLED_TESTCODES
   test2020_117.C
   test2020_123.C
 )
+set(CXX20_EXPECTED_FAIL_TESTCODES
+  test2020_47.C
+)
 
 set(ROSE_FLAGS -w -rose:verbose 0 -std=c++20)
 
 set(ROSE_DISABLED_TESTCODES ${CXX20_DISABLED_TESTCODES})
+set(ROSE_EXPECTED_FAIL_TESTCODES ${CXX20_EXPECTED_FAIL_TESTCODES})
 
 foreach(file_to_test ${CXX20_TESTCODES})
   compile_test(${file_to_test} "Cxx20_tests")

@@ -20,12 +20,14 @@ function(compile_test input_file label)
   if(ARGV2)
     add_test(
       NAME ${test_id}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${translator}
         ${ROSE_FLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
     )
   else()
     add_test(
       NAME ${test_id}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${translator}
         ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c
         ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
@@ -33,6 +35,7 @@ function(compile_test input_file label)
   endif()
   set(_labels ${label})
   set(_disable_test FALSE)
+  set(_expected_fail FALSE)
   if(DEFINED ROSE_DISABLED_TESTCODES AND input_file IN_LIST ROSE_DISABLED_TESTCODES)
     list(APPEND _labels disabled)
     if(NOT REX_ENABLE_DISABLED_TESTS)
@@ -46,9 +49,16 @@ function(compile_test input_file label)
       set(_disable_test TRUE)
     endif()
   endif()
+  if(DEFINED ROSE_EXPECTED_FAIL_TESTCODES AND input_file IN_LIST ROSE_EXPECTED_FAIL_TESTCODES)
+    list(APPEND _labels expected_fail)
+    set(_expected_fail TRUE)
+  endif()
   list(REMOVE_DUPLICATES _labels)
   set_tests_properties(${test_id} PROPERTIES LABELS "${_labels}")
 
+  if(_expected_fail)
+    set_tests_properties(${test_id} PROPERTIES WILL_FAIL TRUE)
+  endif()
   if(_disable_test)
     set_tests_properties(${test_id} PROPERTIES DISABLED TRUE)
   endif()
@@ -119,4 +129,3 @@ if(ENABLE-C)
 endif()
 
 add_subdirectory(CAF2_tests)
-

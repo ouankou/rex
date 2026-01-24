@@ -961,7 +961,6 @@ set(CXX11_DISABLED_TESTCODES
   test2019_264.C
   test2019_265.C
   test2019_266.C
-  test2019_276.C
   test2019_277.C
   test2019_278.C
   test2019_279.C

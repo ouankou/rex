@@ -88,6 +88,8 @@ inline constexpr char kMissingTemplateHeaderFixupAttributeName[] =
 
 #include <clang/AST/ExprCXX.h>
 
+#include <clang/AST/ExprConcepts.h>
+
 #include <clang/AST/ExprObjC.h>
 
 #include <clang/AST/NestedNameSpecifier.h>
@@ -1081,9 +1083,9 @@ public:
   virtual bool
   VisitCompoundLiteralExpr(clang::CompoundLiteralExpr *compound_literal,
                            SgNode **node);
-  //                    virtual bool
-  //                    VisitConceptSpecializationExpr(clang::ConceptSpecializationExpr
-  //                    * concept_specialization_expr, SgNode ** node);
+  virtual bool VisitConceptSpecializationExpr(
+      clang::ConceptSpecializationExpr *concept_specialization_expr,
+      SgNode **node);
   virtual bool
   VisitConvertVectorExpr(clang::ConvertVectorExpr *convert_vector_expr,
                          SgNode **node);
@@ -1128,9 +1130,9 @@ public:
   virtual bool VisitCXXPseudoDestructorExpr(
       clang::CXXPseudoDestructorExpr *cxx_pseudo_destructor_expr,
       SgNode **node);
-  //                    virtual bool
-  //                    VisitCXXRewrittenBinaryOperator(clang::CXXRewrittenBinaryOperator
-  //                    * cxx_rewrite_binary_operator, SgNode ** node);
+  virtual bool VisitCXXRewrittenBinaryOperator(
+      clang::CXXRewrittenBinaryOperator *cxx_rewrite_binary_operator,
+      SgNode **node);
   virtual bool VisitCXXScalarValueInitExpr(
       clang::CXXScalarValueInitExpr *cxx_scalar_value_init_expr, SgNode **node);
   virtual bool VisitCXXStdInitializerListExpr(
@@ -1205,6 +1207,8 @@ public:
       clang::MSPropertySubscriptExpr *ms_property_subscript_expr,
       SgNode **node);
   virtual bool VisitNoInitExpr(clang::NoInitExpr *no_init_expr, SgNode **node);
+  virtual bool VisitRequiresExpr(clang::RequiresExpr *requires_expr,
+                                 SgNode **node);
   // virtual bool VisitObjCArrayLiteral
   // virtual bool VisitObjCAvailabilityCheckExpr
   // virtual bool VisitObjCBoolLiteralExpr
