@@ -3885,6 +3885,10 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
       is_binary_operator = true;
     }
   }
+  if (func_call->get_args() != nullptr &&
+      func_call->get_args()->get_expressions().size() < 2) {
+    is_binary_operator = false;
+  }
 
 #if DEBUG_FUNCTION_CALL
   printf("In Unparse_ExprStmt::unparseFuncCall(): (before test for conversion "
