@@ -38,6 +38,7 @@ jobs:
           -v "${GITHUB_WORKSPACE}:/work" \
           -w /work \
           -e LLVM_VERSION="${LLVM_VERSION}" \
+          -e QEMU_CPU=Loongson-3A4000 \
           ghcr.io/${{ github.repository_owner }}/rex:base \
           bash -lc '
             set -euo pipefail
@@ -55,8 +56,6 @@ jobs:
               -DCMAKE_INSTALL_PREFIX=/work/rex_install \
               -DENABLE-C=ON \
               -DENABLE-FORTRAN=OFF \
-              -DENABLE-FORTRAN-OFP=OFF \
-              -DENABLE-FORTRAN-FLANG=OFF \
               -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
             cmake --build build -j"$(nproc)"

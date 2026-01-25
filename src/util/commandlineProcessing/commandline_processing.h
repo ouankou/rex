@@ -67,7 +67,7 @@ public:
       : storage_(args) {
     argv_.reserve(storage_.size() + 1);
     for (auto &arg : storage_) {
-      argv_.push_back(const_cast<char *>(arg.data()));
+      argv_.push_back(const_cast<char *>(arg.c_str()));
     }
     argv_.push_back(nullptr);
   }

@@ -8,9 +8,12 @@
 
 #include <memory>
 
+<<<<<<< HEAD
 #include <sstream>
 
+#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/Path.h>
 #include <llvm/Support/Program.h>
 
 #include "clang-frontend-private.hpp"
@@ -908,34 +911,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     rtti_mode = RttiMode::Enabled;
   }
 
-  const char *cxx_config_include_dirs_array[] = CXX_INCLUDE_STRING;
-  const char *c_config_include_dirs_array[] = C_INCLUDE_STRING;
-
-  std::vector<std::string> cxx_config_include_dirs(
-      cxx_config_include_dirs_array,
-      cxx_config_include_dirs_array +
-          sizeof(cxx_config_include_dirs_array) / sizeof(const char *));
-  std::vector<std::string> c_config_include_dirs(
-      c_config_include_dirs_array,
-      c_config_include_dirs_array +
-          sizeof(c_config_include_dirs_array) / sizeof(const char *));
-
   RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
   std::string builtin_header_root = clang_paths.builtin_header_root;
 
-  dropRelativeIncludeDirs(c_config_include_dirs);
-  dropRelativeIncludeDirs(cxx_config_include_dirs);
-
   sys_dirs_list.push_back(builtin_header_root);
 
-  auto append_unique_dirs = [](std::vector<std::string> &dest,
-                               const std::vector<std::string> &src) {
-    for (const auto &entry : src) {
-      if (std::find(dest.begin(), dest.end(), entry) == dest.end()) {
-        dest.push_back(entry);
-      }
-    }
-  };
   auto is_staged_clang_resource_dir = [](const std::string &path) -> bool {
     if (path.find("_HEADERS") == std::string::npos ||
         path.find("clang") == std::string::npos) {
@@ -963,29 +943,15 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   switch (language) {
   case ClangToSageTranslator::C:
-    sys_dirs_list.insert(sys_dirs_list.begin(), c_config_include_dirs.begin(),
-                         c_config_include_dirs.end());
     inc_list.push_back("clang-builtin-c.h");
     break;
   case ClangToSageTranslator::CPLUSPLUS:
-    // Use configuration-driven cxx_config_include_dirs for portability
-    // across different platforms, architectures, and compiler versions.
-    sys_dirs_list.insert(sys_dirs_list.begin(), cxx_config_include_dirs.begin(),
-                         cxx_config_include_dirs.end());
-    // Ensure C system headers are available for libc++/libstdc++ internals
-    // that include <stdint.h> and other C headers.
-    append_unique_dirs(sys_dirs_list, c_config_include_dirs);
     inc_list.push_back("clang-builtin-cpp.hpp");
     break;
   case ClangToSageTranslator::CUDA:
-    sys_dirs_list.insert(sys_dirs_list.begin(), cxx_config_include_dirs.begin(),
-                         cxx_config_include_dirs.end());
-    append_unique_dirs(sys_dirs_list, c_config_include_dirs);
     inc_list.push_back("clang-builtin-cuda.hpp");
     break;
   case ClangToSageTranslator::OPENCL:
-    sys_dirs_list.insert(sys_dirs_list.begin(), c_config_include_dirs.begin(),
-                         c_config_include_dirs.end());
     inc_list.push_back("clang-builtin-opencl.h");
     break;
   case ClangToSageTranslator::OBJC: {
@@ -1097,14 +1063,69 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // ABI defaults) match the toolchain instead of cc1's soft-float defaults.
   std::string driver_executable;
   bool resolved_clang_driver = false;
+  auto resource_dir_has_header = [](const std::string &resource_dir,
+                                    llvm::StringRef header) -> bool {
+    if (resource_dir.empty()) {
+      return false;
+    }
+    llvm::SmallString<256> path(resource_dir);
+    llvm::sys::path::append(path, "include", header);
+    return llvm::sys::fs::exists(path);
+  };
+  auto normalize_llvm_root = [](const std::string &llvm_dir_in) -> std::string {
+    std::string llvm_dir = llvm_dir_in;
+    if (!llvm_dir.empty() && llvm_dir.back() == '/') {
+      llvm_dir.pop_back();
+    }
+    if (llvm_dir.empty()) {
+      return llvm_dir;
+    }
+    const std::string cmake_suffix = "/lib/cmake/llvm";
+    const std::string cmake_suffix_version =
+        "/lib/cmake/llvm-" + std::to_string(LLVM_VERSION_MAJOR);
+    llvm::StringRef dir_ref(llvm_dir);
+    if (dir_ref.ends_with(cmake_suffix) ||
+        dir_ref.ends_with(cmake_suffix_version)) {
+      llvm::StringRef root_ref = llvm::sys::path::parent_path(dir_ref);
+      root_ref = llvm::sys::path::parent_path(root_ref);
+      root_ref = llvm::sys::path::parent_path(root_ref);
+      return root_ref.str();
+    }
+    return llvm_dir;
+  };
+  std::string llvm_root;
+  if (const char *llvm_dir_env = std::getenv("LLVM_DIR")) {
+    llvm_root = normalize_llvm_root(llvm_dir_env);
+  }
+  auto find_clang_in_root = [&](const std::string &root) -> std::string {
+    if (root.empty()) {
+      return std::string();
+    }
+    std::string candidate =
+        root + "/bin/clang-" + std::to_string(LLVM_VERSION_MAJOR);
+    if (llvm::sys::fs::exists(candidate)) {
+      return candidate;
+    }
+    candidate = root + "/bin/clang";
+    if (llvm::sys::fs::exists(candidate)) {
+      return candidate;
+    }
+    return std::string();
+  };
+  std::string clang_driver_path;
   {
     const std::string versioned_clang =
         "clang-" + std::to_string(LLVM_VERSION_MAJOR);
-    if (auto clang_path = llvm::sys::findProgramByName(versioned_clang)) {
-      driver_executable = clang_path.get();
-      resolved_clang_driver = true;
-    } else if (auto clang_path = llvm::sys::findProgramByName("clang")) {
-      driver_executable = clang_path.get();
+    clang_driver_path = find_clang_in_root(llvm_root);
+    if (clang_driver_path.empty()) {
+      if (auto clang_path = llvm::sys::findProgramByName(versioned_clang)) {
+        clang_driver_path = clang_path.get();
+      } else if (auto clang_path = llvm::sys::findProgramByName("clang")) {
+        clang_driver_path = clang_path.get();
+      }
+    }
+    if (!clang_driver_path.empty()) {
+      driver_executable = clang_driver_path;
       resolved_clang_driver = true;
     } else if (driver_argv0 && *driver_argv0 != '\0') {
       driver_executable = driver_argv0;
@@ -1127,9 +1148,22 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                                compiler_instance->getDiagnostics());
   driver.setCheckInputsExist(false);
   driver.setTitle("clang");
-  if (resolved_clang_driver) {
-    driver.ResourceDir = clang::CompilerInvocation::GetResourcesPath(
+  std::string resource_dir_candidate;
+  if (!clang_driver_path.empty()) {
+    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
+        clang_driver_path.c_str(), (void *)&clang_main);
+  } else if (!llvm_root.empty()) {
+    const std::string llvm_fallback =
+        llvm_root + "/bin/clang-" + std::to_string(LLVM_VERSION_MAJOR);
+    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
+        llvm_fallback.c_str(), (void *)&clang_main);
+  } else if (resolved_clang_driver) {
+    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
         driver_executable.c_str(), (void *)&clang_main);
+  }
+  if (!resource_dir_candidate.empty() &&
+      resource_dir_has_header(resource_dir_candidate, "stddef.h")) {
+    driver.ResourceDir = resource_dir_candidate;
   }
 
   std::unique_ptr<clang::driver::Compilation> compilation(
@@ -1164,9 +1198,28 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   }
 
   const auto &cc1_args = cc1_command->getArguments();
-  llvm::ArrayRef<const char *> argsArrayRef(cc1_args.data(), cc1_args.size());
-  clang::CompilerInvocation::CreateFromArgs(
+  std::vector<std::string> cc1_args_storage;
+  cc1_args_storage.reserve(cc1_args.size());
+  for (const char *arg : cc1_args) {
+    if (arg) {
+      cc1_args_storage.emplace_back(arg);
+    } else {
+      cc1_args_storage.emplace_back();
+    }
+  }
+  std::vector<const char *> cc1_args_cstr;
+  cc1_args_cstr.reserve(cc1_args_storage.size());
+  for (const auto &arg : cc1_args_storage) {
+    cc1_args_cstr.push_back(arg.c_str());
+  }
+  llvm::ArrayRef<const char *> argsArrayRef(cc1_args_cstr.data(),
+                                            cc1_args_cstr.size());
+  bool invocation_ok = clang::CompilerInvocation::CreateFromArgs(
       invocation, argsArrayRef, compiler_instance->getDiagnostics());
+  if (!invocation_ok) {
+    llvm::errs() << "Failed to create Clang invocation from cc1 arguments.\n";
+    ROSE_ABORT();
+  }
   clang::TargetOptions &target_opts = invocation.getTargetOpts();
   ensureX86BaselineTargetFeatures(target_opts);
 
@@ -1195,34 +1248,50 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   clang::HeaderSearchOptions &headerSearchOpts =
       invocation.getHeaderSearchOpts();
 
-  // Enable Clang's builtin includes (provides compiler-specific headers like
-  // stddef.h)
+  // Ensure Clang's builtin and system include paths are active for both
+  // LLVM 20 and 21. Some platforms (e.g., AOSC) do not ship stddef.h under
+  // /usr/include, so the resource-dir headers must be enabled.
   headerSearchOpts.UseBuiltinIncludes = true;
   headerSearchOpts.UseStandardSystemIncludes = true;
   headerSearchOpts.UseStandardCXXIncludes = true;
 
-  auto add_header_path = [&](const std::string &path,
-                             clang::frontend::IncludeDirGroup group) {
-    auto already_present =
-        std::any_of(headerSearchOpts.UserEntries.begin(),
-                    headerSearchOpts.UserEntries.end(),
-                    [&](const clang::HeaderSearchOptions::Entry &entry) {
-                      return entry.Path == path && entry.Group == group;
-                    });
-    if (!already_present) {
-      headerSearchOpts.AddPath(path, group, false, false);
+  if (headerSearchOpts.ResourceDir.empty()) {
+    if (!driver.ResourceDir.empty()) {
+      headerSearchOpts.ResourceDir = driver.ResourceDir;
+    } else {
+      headerSearchOpts.ResourceDir =
+          clang::CompilerInvocation::GetResourcesPath(driver_executable.c_str(),
+                                                      (void *)&clang_main);
     }
-  };
-
-  for (const auto &inc_dir : inc_dirs_list) {
-    add_header_path(inc_dir, clang::frontend::Angled);
-  }
-  for (const auto &sys_dir : sys_dirs_list) {
-    add_header_path(sys_dir, clang::frontend::System);
+  } else if (!resource_dir_has_header(headerSearchOpts.ResourceDir,
+                                      "stddef.h")) {
+    if (!driver.ResourceDir.empty() &&
+        resource_dir_has_header(driver.ResourceDir, "stddef.h")) {
+      headerSearchOpts.ResourceDir = driver.ResourceDir;
+    } else if (!resource_dir_candidate.empty() &&
+               resource_dir_has_header(resource_dir_candidate, "stddef.h")) {
+      headerSearchOpts.ResourceDir = resource_dir_candidate;
+    }
   }
 
   if (std::getenv("ROSE_CLANG_DUMP_INCLUDES") != nullptr) {
     llvm::errs() << "ROSE clang header search paths:\n";
+    llvm::errs() << "  [driver-executable] " << driver_executable << "\n";
+    llvm::errs() << "  [driver-resolved] "
+                 << (resolved_clang_driver ? "yes" : "no") << "\n";
+    if (const char *llvm_dir_env = std::getenv("LLVM_DIR")) {
+      llvm::errs() << "  [env LLVM_DIR] " << llvm_dir_env << "\n";
+    }
+    llvm::errs() << "  [resource-dir] " << headerSearchOpts.ResourceDir << "\n";
+    llvm::errs() << "  [builtin-includes] "
+                 << (headerSearchOpts.UseBuiltinIncludes ? "on" : "off")
+                 << "\n";
+    llvm::errs() << "  [standard-system-includes] "
+                 << (headerSearchOpts.UseStandardSystemIncludes ? "on" : "off")
+                 << "\n";
+    llvm::errs() << "  [standard-cxx-includes] "
+                 << (headerSearchOpts.UseStandardCXXIncludes ? "on" : "off")
+                 << "\n";
     for (const auto &entry : headerSearchOpts.UserEntries) {
       llvm::StringRef group_name = "user";
       if (entry.Group == clang::frontend::System) {
