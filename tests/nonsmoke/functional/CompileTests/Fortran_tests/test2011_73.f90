@@ -1,13 +1,12 @@
-! illegal-forward-ref-type.f90
-! An illegal forward reference to a derived type causes the front end to crash.
-! Specifically, the JVM detects a SIGSEGV in libstdc++ in '__dynamic_cast'.
+! illegal-forward-ref-type.f90 (legacy OFP regression)
+! Flang requires derived types to be defined before use.
 
 program p
-
-  type(t2) :: y  ! illegal forward reference
 
   type :: t2
     real ::  x
   end type
+
+  type(t2) :: y
 
 end program

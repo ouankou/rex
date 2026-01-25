@@ -300,7 +300,7 @@ Current implementation handles `#pragma omp parallel`. Future work should add:
 
 ### Fortran Support
 
-Extend to Fortran when Clang Fortran (flang-new) frontend is integrated.
+Extend to Fortran when Clang Fortran (flang) frontend is integrated.
 
 ## References
 

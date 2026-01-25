@@ -22,16 +22,26 @@ set(OUTLINE_C_TESTS
   moreTest8.c
   print.c
   variableCloning.c
+  variables_in_header.c
   zeroParameter.c
 )
 
 set(OUTLINE_CXX_TESTS
   array2.cpp
+  moreTest2.cpp
+  moreTest3.cpp
+  moreTest4.cpp
+  moreTest5.cpp
   moreTest6.cpp
   moreTest7.cpp
   charStar.cpp
   const-global.cpp
+  polygon.cpp
   reference.cpp
+  template_function1.cpp
+  test_26_v2_2020.cpp
+  test_66_2020.cpp
+  triangle.cpp
 )
 
 set(OUTLINE_CXX2_TESTS
@@ -67,63 +77,50 @@ set(OUTLINE_FORTRAN_TESTS
   assignment.f
   assignmentmain.f
   assignmentmain2.f
+  arithmeticIf.f
   blockdo.f90
+  column72.f
+  column80.f
+  contains1.f90
   contains.f90
+  continue.f
   dimension.f
   doloop.f
+  doloop2.f
   doloop3.f90
   doloop4.f90
+  doloop5.f90
   doloop_nested.f90
   format.f
+  format2.f
   function.f
   function2.f
   hello.f
+  implicit.f90
   integer.f
   intent.f90
   lengthlimit.f
   loan.f
-  moduleParameter.f90
-  parameter.f
-  parameter2.f
-  stop.f90
-  stop1.f90
-  subroutine.f90
-  ugoto.f
-  write.f
-)
-
-set(OUTLINE_FAILING_TESTS
-  arithmeticIf.f
-  contains1.f90
-  doloop2.f
-  doloop5.f90
-  format2.f
   module.f90
   module1.f90
   module3.f90
+  moduleParameter.f90
   moduleSubprogram.f90
-  polygon.cpp
+  parameter.f
+  parameter2.f
   power.f
   print.f
   read.f
   read2.f
   real8.f
+  stop.f90
+  stop1.f90
   stop2.f90
-  triangle.cpp
-  useModule1.f90
-  variables_in_header.c
-  template_function1.cpp
-  test_66_2020.cpp
-  test_26_v2_2020.cpp
-  moreTest2.cpp
-  moreTest3.cpp
-  moreTest4.cpp
-  moreTest5.cpp
-  column72.f
-  column80.f
-  continue.f
-  implicit.f90
   subroutine1.f
+  subroutine.f90
+  ugoto.f
+  useModule1.f90
+  write.f
 )
 
 set(OUTLINE_OPENMP_C_TESTS
@@ -661,7 +658,9 @@ set(_outline_flags
   -rose:outline:parameter_wrapper
   -rose:detect_dangling_pointers 1)
 
-set(_outline_noswitch_args -rose:verbose 0 -ffixed-line-length-none)
+set(_outline_noswitch_args -rose:verbose 0)
+set(_outline_fortran_fixed_form "-ffixed-form -ffixed-line-length=0")
+set(_outline_fortran_free_form "-ffree-form")
 
 set(_outline_dlopen_header_include
   -I${CMAKE_SOURCE_DIR}/src/midend/programTransformation/astOutlining)
@@ -755,6 +754,11 @@ endforeach()
 if(enable-fortran)
   foreach(specimen IN LISTS OUTLINE_FORTRAN_TESTS)
     string(REPLACE "." "_" _name ${specimen})
+    if(specimen MATCHES "\\.f$")
+      set(_format_flags "${_outline_fortran_fixed_form}")
+    else()
+      set(_format_flags "${_outline_fortran_free_form}")
+    endif()
     set(_target noswitch_${specimen}.passed)
     add_test(
       NAME outline_noswitch_${_name}
@@ -762,7 +766,7 @@ if(enable-fortran)
       COMMAND ${_rth}
         TITLE="outline ${specimen} [${_target}]"
         USE_SUBDIR=yes
-        CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_outline_noswitch_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+        CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_outline_noswitch_str} ${_format_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
         ${_exit_status}
         ${_target}
     )
@@ -789,6 +793,11 @@ endforeach()
 if(enable-fortran)
   foreach(specimen IN LISTS OUTLINE_FORTRAN_TESTS)
     string(REPLACE "." "_" _name ${specimen})
+    if(specimen MATCHES "\\.f$")
+      set(_format_flags "${_outline_fortran_fixed_form}")
+    else()
+      set(_format_flags "${_outline_fortran_free_form}")
+    endif()
     set(_target seq7b_${specimen}.passed)
     add_test(
       NAME outline_seq7b_${_name}
@@ -796,7 +805,7 @@ if(enable-fortran)
       COMMAND ${_rth}
         TITLE="outlineSelection seq7 ${specimen} [${_target}]"
         USE_SUBDIR=yes
-        CMD="$<TARGET_FILE:outlineSelection> ${_outline_includes_str} -rose:verbose 0 -rose:outline:seq 7 -ffixed-line-length-none -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+        CMD="$<TARGET_FILE:outlineSelection> ${_outline_includes_str} -rose:verbose 0 -rose:outline:seq 7 ${_format_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
         ${_exit_status}
         ${_target}
     )
@@ -975,28 +984,6 @@ foreach(specimen IN LISTS OUTLINE_CXX6_TESTS)
   )
 endforeach()
 
-# Previously disabled specimens
-foreach(specimen IN LISTS OUTLINE_FAILING_TESTS)
-  string(REPLACE "." "_" _name ${specimen})
-  if(specimen MATCHES "\\\\.(f|f90|f03)$")
-    set(_flags "${_outline_noswitch_str}")
-  else()
-    set(_flags "${_outline_flags_str}")
-  endif()
-  set(_target failing_${specimen}.passed)
-  add_test(
-    NAME outline_failing_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="outline failing ${specimen} [${_target}]"
-      USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
-      ${_exit_status}
-      ${_target}
-  )
-  set_tests_properties(outline_failing_${_name} PROPERTIES DISABLED TRUE)
-endforeach()
-
 add_test(
   NAME outline_test_class_ODR_violation
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -1025,7 +1012,4 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=outline_classic_array1_c\;outline_classic_arrayParameter_c\;outline_classic_arrayRef_c\;outline_classic_jacobi_rose_outline_c\;outline_classic_moreTest0_c\;outline_classic_moreTest1_c\;outline_classic_moreTest8_c\;outline_classic_print_c\;outline_classic_variableCloning_c\;outline_classic_zeroParameter_c
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_astOutliningTests_check_classic PROPERTIES LABELS disabled DEPENDS "outline_classic_array1_c;outline_classic_arrayParameter_c;outline_classic_arrayRef_c;outline_classic_jacobi_rose_outline_c;outline_classic_moreTest0_c;outline_classic_moreTest1_c;outline_classic_moreTest8_c;outline_classic_print_c;outline_classic_variableCloning_c;outline_classic_zeroParameter_c" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_roseTests_astOutliningTests_check_classic PROPERTIES DISABLED TRUE)
-endif()
+set_tests_properties(nonsmoke_functional_roseTests_astOutliningTests_check_classic PROPERTIES DEPENDS "outline_classic_array1_c;outline_classic_arrayParameter_c;outline_classic_arrayRef_c;outline_classic_jacobi_rose_outline_c;outline_classic_moreTest0_c;outline_classic_moreTest1_c;outline_classic_moreTest8_c;outline_classic_print_c;outline_classic_variableCloning_c;outline_classic_zeroParameter_c" )

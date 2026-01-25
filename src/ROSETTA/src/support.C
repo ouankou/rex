@@ -1256,7 +1256,7 @@ void Grammar::setUpSupport() {
 
   // DQ (12/8/2007): Added support to control warnings in front-end
   // (specifically for Fortran support to control use of warnings mode in syntax
-  // checking pass using gfortran prior to calling OFP).
+  // checking pass prior to calling OFP).
   File.setDataPrototype("bool", "output_warnings", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
@@ -1370,10 +1370,10 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/7/2010): This permits less agressive syntax checking, but still some
-  // syntax checking. Some F90 code cannot be passed through the gfortran syntax
-  // check using "-std=f95" so we have to relax this to "-std=gnu" or skip the
-  // option altogether.
+  // DQ (4/7/2010): This permits less aggressive syntax checking, but still some
+  // syntax checking. With Flang as the backend, non-2018 dialect selection is
+  // handled by -rose:fortran_std, so relax_syntax_check skips the backend
+  // syntax pass rather than relying on GCC-specific -std flags.
   File.setDataPrototype("bool", "relax_syntax_check", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);

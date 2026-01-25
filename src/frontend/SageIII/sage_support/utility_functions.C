@@ -737,7 +737,7 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
     // with ROSE. but at least configure will work propoerly since it will have
     // a valid default. If we add state to SgProject, then we could set the
     // default, but also allow it to be overriden using -rose:C or -rose:Cxx or
-    // -rose:Fortran options.
+    // -rose:fortran options.
     language = e_cxx;
   }
 
@@ -760,11 +760,11 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
     // then there is no place to hold the default since the SgProject does not
     // have any such state to hold this information.  A better idea might be to
     // give the SgProject state so that it can hold if it is used with -rose:C
-    // or -rose:Cxx or -rose:Fortran on the command line.
+    // or -rose:Cxx or -rose:fortran on the command line.
 
     printf("Default reached in switch in "
            "backendCompilesUsingOriginalInputFile() \n");
-    printf("   Note use options: -rose:C or -rose:Cxx or -rose:Fortran to "
+    printf("   Note use options: -rose:C or -rose:Cxx or -rose:fortran to "
            "specify which language backend compiler to link object files. \n");
     ROSE_ABORT();
   }
@@ -787,6 +787,9 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
     // DQ (2/20/2010): Added filtering of options that should not be passed to
     // the vendor compiler.
     SgFile::stripRoseCommandLineOptions(originalCommandLineArgumentList);
+    if (project->get_Fortran_only() == true) {
+      SgFile::stripFortranCommandLineOptions(originalCommandLineArgumentList);
+    }
 
     SgStringList::iterator it = originalCommandLineArgumentList.begin();
 
@@ -825,22 +828,22 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
 
     // DQ (12/28/2010): If we specified to NOT compile the input code then don't
     // do so even when it is the original code. This is important for Fortran
-    // 2003 test codes that will not compile with gfortran and for which the
-    // tests/nonsmoke/functional/testTokenGeneration.C translator uses this
-    // function to generate object files. finalCombinedExitStatus = system
-    // (commandLineToGenerateObjectFile.c_str());
+    // 2003 test codes that are not compiled by the backend compiler and for
+    // which the tests/nonsmoke/functional/testTokenGeneration.C translator
+    // uses this function to generate object files. finalCombinedExitStatus =
+    // system (commandLineToGenerateObjectFile.c_str());
     if (project->get_skipfinalCompileStep() == false) {
       finalCombinedExitStatus =
           systemFromVector(commandLineToGenerateObjectFile);
     }
   } else {
-    // Note that in general it is not possible to tell whether to use gcc, g++,
-    // or gfortran to do the linking. When we just have a list of object files
-    // then we can't assume anything (and project->get_C_only() will be false).
-    // Note that commandLineToGenerateObjectFile is just the name of the backend
-    // compiler to use! JL (03/15/2018) Put in ROSE_ASSERT to verify command
-    // line is just the linker
-    // Thats all link is supposed to take
+    // Note that in general it is not possible to tell whether to use the C,
+    // C++, or Fortran backend compiler to do the linking. When we just have a
+    // list of object files then we can't assume anything (and
+    // project->get_C_only() will be false). Note that
+    // commandLineToGenerateObjectFile is just the name of the backend compiler
+    // to use! JL (03/15/2018) Put in ROSE_ASSERT to verify command line is just
+    // the linker Thats all link is supposed to take
     ROSE_ASSERT(commandLineToGenerateObjectFile.size() == 1);
     finalCombinedExitStatus = project->link(commandLineToGenerateObjectFile[0]);
   }

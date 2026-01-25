@@ -1,6 +1,3 @@
-! { dg-do run }
-! { dg-options "-std=f2003 -fall-intrinsics -cpp" }
-
 ! PR fortran/38936
 ! Check the basic semantics of the ASSOCIATE construct.
 

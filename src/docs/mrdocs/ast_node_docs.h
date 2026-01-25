@@ -2926,7 +2926,7 @@ class SgExprStatement;
  * then resolved within the AST after parsing (requires AST Fixup rule).
  * - Todo: Fortran support requires support for function call using:
  * "foo(temp=*<label>)" this might force the development of a label expression
- * to support this. Code using this compiles with gfortran, so it appears to be
+ * to support this. Code using this compiles with Flang, so it appears to be
  * F90.
  * - See also:
  * Example of using a SgExpression object

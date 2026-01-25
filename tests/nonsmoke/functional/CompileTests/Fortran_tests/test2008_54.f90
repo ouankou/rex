@@ -7,12 +7,12 @@ function foo1() result(ret)
 end function
 
 integer function foo2() result(ret)
-  ! Error checking using gfortran with -std=95 causes this to be an error
+  ! Error checking with -rose:fortran_std=f95 causes this to be an error
   ! integer ret
     ret = 1
 end function
 
-! Older F77 stype syntax
+! Older F77 style syntax
 function foo3()
     integer foo3
     foo3 = 1

@@ -1,6 +1,3 @@
-! { dg-do compile }
-! { dg-options "-std=legacy" }
-!
 ! PR fortran/34557
 !
 ! Substrings with space before '(' were not properly parsed.

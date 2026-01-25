@@ -455,47 +455,8 @@ void FortranCodeGeneration_locatedNode::unparseFortranIncludeLine(
 
   curprint("include ");
 
-  // DQ (10/3/2008): Added special case code generation to support an
-  // inconsistant behavior between gfortran 4.2 and previous versions in the
-  // Fortran include mechanism.
+  // Use the include path captured in the source.
   string includeFileName = includeLine->get_filename();
-
-#if USE_GFORTRAN_IN_ROSE
-
-  bool usingGfortran = false;
-#ifdef USE_CMAKE
-#ifdef CMAKE_COMPILER_IS_GNUG77
-  usingGfortran = true;
-#endif
-#else
-  string fortranCompilerName = BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH;
-  usingGfortran = (fortranCompilerName == "gfortran");
-#endif
-
-  if (usingGfortran) {
-    // DQ (3/17/2017): Fixed this to support GNU 5.1.
-    if ((BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER == 3) ||
-        ((BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER == 4) &&
-         (BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER <= 1))) {
-      // gfortran versions before 4.2 can not handle absolute path names in the
-      // Fortran specific include mechanism.
-
-      // Note that this fix would mistakenly strip all specified include files
-      // to their basename, even include files specified as "../sys/math.h"
-      // would become "math.h" and this could cause an error.
-      printf("Warning: gfortran versions before 4.2 can not handle absolute "
-             "path names in the Fortran specific include mechanism (using "
-             "basename)... \n");
-
-      includeFileName =
-          StringUtility::stripPathFromFileName(includeLine->get_filename());
-    }
-  } else {
-    // What is this compiler
-    printf("Default compiler behavior ... in code generation (Fortran include "
-           "uses absolute paths) \n");
-  }
-#endif
 
   curprint("\"");
   curprint(includeFileName);
@@ -707,6 +668,16 @@ bool unparseDimensionStatementForArrayVariable(
       foundArrayVariableDeclaration = (i != statementList.end());
       break;
     }
+    case V_SgFunctionParameterScope: {
+      SgFunctionParameterScope *paramScope =
+          isSgFunctionParameterScope(variableScope);
+      SgDeclarationStatementPtrList &declarationList =
+          paramScope->getDeclarationList();
+      SgDeclarationStatementPtrList::iterator i = find(
+          declarationList.begin(), declarationList.end(), variableDeclaration);
+      foundArrayVariableDeclaration = (i != declarationList.end());
+      break;
+    }
 
     default: {
       printf("Default reached, variableScope = %p = %s \n", variableScope,
@@ -727,31 +698,64 @@ bool unparseDimensionStatementForArrayVariable(
 
     SgScopeStatement *variableScope = variableName->get_scope();
 
-    SgFunctionDefinition *functionDefinition =
-        isSgFunctionDefinition(variableScope);
-    ASSERT_not_null(functionDefinition);
-
-    // SgFunctionDeclaration* functionDeclaration =
-    // functionDefinition->get_declaration();
-
-    SgBasicBlock *basicBlock = functionDefinition->get_body();
-    ASSERT_not_null(basicBlock);
-
-    SgStatementPtrList statementList = basicBlock->get_statements();
-
-    SgStatementPtrList::iterator i = statementList.begin();
-    while (i != statementList.end()) {
-      SgVariableDeclaration *variableDeclaration = isSgVariableDeclaration(*i);
-      if (variableDeclaration != nullptr) {
+    if (SgFunctionParameterScope *paramScope =
+            isSgFunctionParameterScope(variableScope)) {
+      SgDeclarationStatementPtrList &declarationList =
+          paramScope->getDeclarationList();
+      for (SgDeclarationStatement *decl : declarationList) {
+        SgVariableDeclaration *variableDeclaration =
+            isSgVariableDeclaration(decl);
+        if (variableDeclaration == nullptr) {
+          continue;
+        }
         SgInitializedNamePtrList &variableList =
             variableDeclaration->get_variables();
         SgInitializedNamePtrList::iterator i =
             find(variableList.begin(), variableList.end(), variableName);
-
         foundArrayVariableDeclaration = (i != variableList.end());
       }
+    } else {
+      SgFunctionDefinition *functionDefinition =
+          isSgFunctionDefinition(variableScope);
+      if (functionDefinition != nullptr) {
+        SgBasicBlock *basicBlock = functionDefinition->get_body();
+        ASSERT_not_null(basicBlock);
+        SgStatementPtrList statementList = basicBlock->get_statements();
 
-      i++;
+        SgStatementPtrList::iterator i = statementList.begin();
+        while (i != statementList.end()) {
+          SgVariableDeclaration *variableDeclaration =
+              isSgVariableDeclaration(*i);
+          if (variableDeclaration != nullptr) {
+            SgInitializedNamePtrList &variableList =
+                variableDeclaration->get_variables();
+            SgInitializedNamePtrList::iterator i =
+                find(variableList.begin(), variableList.end(), variableName);
+
+            foundArrayVariableDeclaration = (i != variableList.end());
+          }
+
+          i++;
+        }
+      } else if (SgBasicBlock *basicBlock = isSgBasicBlock(variableScope)) {
+        SgStatementPtrList statementList = basicBlock->get_statements();
+        for (SgStatement *stmt : statementList) {
+          SgVariableDeclaration *variableDeclaration =
+              isSgVariableDeclaration(stmt);
+          if (variableDeclaration == nullptr) {
+            continue;
+          }
+          SgInitializedNamePtrList &variableList =
+              variableDeclaration->get_variables();
+          SgInitializedNamePtrList::iterator i =
+              find(variableList.begin(), variableList.end(), variableName);
+          foundArrayVariableDeclaration = (i != variableList.end());
+        }
+      } else {
+        printf("Default reached, variableScope = %p = %s \n", variableScope,
+               variableScope->class_name().c_str());
+        ROSE_ABORT();
+      }
     }
   }
 
@@ -1637,8 +1641,46 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
       curprint("MODULE PROCEDURE ");
       curprint(functionName.str());
       unp->cur.insert_newline(1);
-    } else {
-      unparseStatement(functionDeclaration, info);
+    } else if (functionDeclaration != nullptr) {
+      SgProcedureHeaderStatement *procHeader =
+          isSgProcedureHeaderStatement(functionDeclaration);
+      if (procHeader != nullptr && procHeader->get_definition() == nullptr) {
+        SgUnparse_Info ninfo(info);
+        unparseProcHdrStmt(procHeader, ninfo);
+
+        if (SgFunctionParameterScope *paramScope =
+                procHeader->get_functionParameterScope()) {
+          constexpr const char *kFortranImplicitDeclAttr =
+              "rose_fortran_implicit_declaration";
+          for (SgStatement *specStmt : paramScope->generateStatementList()) {
+            if (auto *varDecl = isSgVariableDeclaration(specStmt)) {
+              if (varDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr) {
+                continue;
+              }
+            }
+            unparseStatement(specStmt, info);
+          }
+        }
+
+        string endKind;
+        if (procHeader->isFunction()) {
+          endKind = " FUNCTION";
+        } else if (procHeader->isSubroutine()) {
+          endKind = "SUBROUTINE";
+        } else {
+          endKind = "BLOCK DATA";
+        }
+        unparseStatementNumbersSupport(procHeader->get_end_numeric_label(),
+                                       info);
+        curprint("END " + endKind);
+        if (procHeader->get_named_in_end_statement()) {
+          curprint(" ");
+          curprint(procHeader->get_name().str());
+        }
+        unp->cur.insert_newline(1);
+      } else {
+        unparseStatement(functionDeclaration, info);
+      }
     }
   }
 
@@ -2260,6 +2302,17 @@ void FortranCodeGeneration_locatedNode::unparseDoStmt(SgStatement *stmt,
   // DQ (12/26/2007): handling cases where enddo is not in the source code and
   // not required (stmt vs. construct)
   bool output_enddo = doloop->get_has_end_statement();
+  if (output_enddo == false && doloop->get_end_numeric_label() != nullptr) {
+    SgLabelSymbol *endLabelSymbol =
+        doloop->get_end_numeric_label()->get_symbol();
+    SgStatement *endLabelStmt = endLabelSymbol != nullptr
+                                    ? endLabelSymbol->get_fortran_statement()
+                                    : nullptr;
+    if (endLabelStmt == nullptr || endLabelStmt == doloop ||
+        isSgNullStatement(endLabelStmt) != nullptr) {
+      output_enddo = true;
+    }
+  }
 
   if (output_enddo) {
     unparseStatementNumbersSupport(doloop->get_end_numeric_label(), info);
@@ -2314,14 +2367,25 @@ void FortranCodeGeneration_locatedNode::unparseWhileStmt(SgStatement *stmt,
   // loop body (must always exist)
   unparseStatement(while_stmt->get_body(), info);
 
-  unparseStatementNumbersSupport(while_stmt->get_end_numeric_label(), info);
-
   // This setting converts all non-block where statements into blocked where
   // statements. So "DO WHILE (A) B = 0" becomes: "DO WHILE (A)
   //     B = 0
   //  END DO"
+  bool output_enddo = while_stmt->get_has_end_statement();
+  if (output_enddo == false && while_stmt->get_end_numeric_label() != nullptr) {
+    SgLabelSymbol *endLabelSymbol =
+        while_stmt->get_end_numeric_label()->get_symbol();
+    SgStatement *endLabelStmt = endLabelSymbol != nullptr
+                                    ? endLabelSymbol->get_fortran_statement()
+                                    : nullptr;
+    if (endLabelStmt == nullptr || endLabelStmt == while_stmt ||
+        isSgNullStatement(endLabelStmt) != nullptr) {
+      output_enddo = true;
+    }
+  }
 
-  if (while_stmt->get_has_end_statement()) {
+  if (output_enddo) {
+    unparseStatementNumbersSupport(while_stmt->get_end_numeric_label(), info);
     curprint_keyword("END", info);
     curprint(" ");
     curprint_keyword("DO", info);
@@ -2609,18 +2673,27 @@ void FortranCodeGeneration_locatedNode::unparsePrintStatement(
 
   curprint("PRINT ");
 
+  SgExprListExp *iolist = printStatement->get_io_stmt_list();
+  const bool has_items =
+      iolist != nullptr && !iolist->get_expressions().empty();
+
   SgExpression *fmt = printStatement->get_format();
   if (fmt != nullptr) {
     unparseExpression(fmt, info);
-    curprint(", ");
+    if (has_items) {
+      curprint(", ");
+    }
   } else {
     // Default if we don't have a valid format
-    curprint("*, ");
+    curprint("*");
+    if (has_items) {
+      curprint(", ");
+    }
   }
 
-  SgExprListExp *iolist = printStatement->get_io_stmt_list();
-
-  unparseExprList(iolist, info);
+  if (has_items) {
+    unparseExprList(iolist, info);
+  }
 
   unp->cur.insert_newline(1);
 }
@@ -2633,9 +2706,8 @@ bool FortranCodeGeneration_locatedNode::unparse_IO_Support(
 
   bool isLeadingEntry = false;
   if (skipUnit == false) {
-    // DQ (12/12/2010): Also for at least the gnu gfortran version 4.2.4, we
-    // can't output the "UNIT=" string for the write statement. See
-    // test2010_144.f90 for an example of this.
+    // Some Fortran compilers require omitting the "UNIT=" keyword for WRITE.
+    // See test2010_144.f90 for an example of this behavior.
     bool skipOutputOfUnitString = (isSgWriteStatement(stmt) != nullptr);
     if (skipOutputOfUnitString == false) {
       curprint("UNIT=");
@@ -3638,6 +3710,8 @@ void FortranCodeGeneration_locatedNode::unparseVarDecl(
     SgName pointeeName = pointeeVar->get_name();
     curprint(",");
     curprint(pointeeName.str());
+    // Avoid repeating array bounds on the Cray pointer statement when the
+    // pointee is already declared with a shape.
     curprint(") ");
   } else
     unparseEntityTypeAttr(type, info, numVar == 1);

@@ -1,7 +1,5 @@
-if(NOT "${gfortran_version}" VERSION_EQUAL "4.0")
-  add_subdirectory(LANL_POP)
-  add_subdirectory(gfortranTestSuite)
-endif()
+add_subdirectory(LANL_POP)
+add_subdirectory(gfortranTestSuite)
 add_subdirectory(RiceCAF_tests)
 add_subdirectory(experimental_frontend_tests)
 
@@ -26,34 +24,46 @@ set(ROSE_FLAGS -rose:verbose 0 -rose:detect_dangling_pointers 2
 string(JOIN " " ROSE_FLAGS_STR ${ROSE_FLAGS})
 
 function(fortran_test input_file)
+  set(_fortran_flags ${FORTRAN_FLAGS} ${ARGN})
   add_test(
     NAME FORTRANTEST_${input_file}_translation
     WORKING_DIRECTORY ${_fortran_output_dir}
-    COMMAND testTranslator ${ROSE_FLAGS} ${FORTRAN_FLAGS}
+    COMMAND testTranslator ${ROSE_FLAGS} ${_fortran_flags}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   add_test(
     NAME FORTRANTEST_${input_file}_graph_generation
     WORKING_DIRECTORY ${_fortran_output_dir}
-    COMMAND testGraphGeneration ${ROSE_FLAGS} ${FORTRAN_FLAGS}
+    COMMAND testGraphGeneration ${ROSE_FLAGS} ${_fortran_flags}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   add_test(
     NAME FORTRANTEST_${input_file}_token_generation
     WORKING_DIRECTORY ${_fortran_output_dir}
-    COMMAND testTokenGeneration ${ROSE_FLAGS} ${FORTRAN_FLAGS}
+    COMMAND testTokenGeneration ${ROSE_FLAGS} ${_fortran_flags}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   set_tests_properties(FORTRANTEST_${input_file}_translation PROPERTIES LABELS FORTRANTEST)
   set_tests_properties(FORTRANTEST_${input_file}_graph_generation PROPERTIES DEPENDS FORTRANTEST_${input_file}_translation LABELS FORTRANTEST)
   set_tests_properties(FORTRANTEST_${input_file}_token_generation PROPERTIES DEPENDS FORTRANTEST_${input_file}_graph_generation LABELS FORTRANTEST)
 endfunction()
 
-set(FORTRAN_FLAGS -std=f77)
+set(FORTRAN_FLAGS -rose:fortran_std=f77)
 foreach(F77_test ${F77_TESTCODES})
   fortran_test(${F77_test})
 endforeach()
 
-set(FORTRAN_FLAGS -std=f90)
+set(FORTRAN_FLAGS -rose:fortran_std=f90)
+set(_fortran_cray_pointer_tests
+  test2007_81.f90
+  test2007_82.f90
+  test2007_83.f90
+  test2007_84.f90
+  test2011_imperial_crayPointers.f90
+)
 foreach(F90_test ${F90_TESTCODES})
-  fortran_test(${F90_test})
+  if(F90_test IN_LIST _fortran_cray_pointer_tests)
+    fortran_test(${F90_test} -fcray-pointer)
+  else()
+    fortran_test(${F90_test})
+  endif()
 endforeach()
 
 foreach(F90_comment_test ${F90_COMMENTS_TESTCODES})
@@ -61,7 +71,7 @@ foreach(F90_comment_test ${F90_COMMENTS_TESTCODES})
 endforeach()
 
 set(FORTRAN_FLAGS -rose:skip_syntax_check -rose:skipfinalCompileStep
-                  -std=f2003)
+                  -rose:fortran_std=f2003)
 foreach(F03_test ${F03_TESTCODES})
   fortran_test(${F03_test})
 endforeach()
@@ -100,7 +110,7 @@ add_test(
   NAME fortran_testMultipleFortranFiles
   WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND ${BASH_EXECUTABLE} -c
-    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_78.f90 ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90 || cat ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90 rose_test2010_79.f90"
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_78.f90 ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90 || cat ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90 rose_test2010_79.f90"
 )
 
 set(_fortran_reference_dir
@@ -109,7 +119,7 @@ add_test(
   NAME fortran_testPreprocessedOutput
   WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND ${BASH_EXECUTABLE} -c
-    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2007_suffixTest_07.F90 && diff <(tail -n 6 rose_test2007_suffixTest_07.F90) <(tail -n 6 ${_fortran_reference_dir}/rose_test2007_suffixTest_07.F90.output)"
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2007_suffixTest_07.F90 && diff <(tail -n 6 rose_test2007_suffixTest_07.F90) <(tail -n 6 ${_fortran_reference_dir}/rose_test2007_suffixTest_07.F90.output)"
 )
 
 set(_fortran_comment_diff_tests

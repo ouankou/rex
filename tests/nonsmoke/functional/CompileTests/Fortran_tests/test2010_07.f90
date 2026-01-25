@@ -1,7 +1,7 @@
 !#if 0
 !For the attached test file (assoc.f95 [below]) I get:
 !
-!/disks/utke/Apps/rose_inst/bin/testTranslator -std=fortran
+!/disks/utke/Apps/rose_inst/bin/testTranslator -rose:fortran
 !-rose:skipfinalCompileStep -rose:output assoc.r2f.f95 assoc.f95
 !testTranslator:
 !/disks/utke/Argonne/svn/CodeReps/anonymous/rose/src/frontend/OpenFortranParser_SAGE_Connection/FortranParserAc!tionROSE.C:9689:
@@ -36,5 +36,4 @@ program main
      print *, "OK"
   end if
 end program main
-
 

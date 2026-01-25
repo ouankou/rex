@@ -31,31 +31,12 @@ IF(NOT CMAKE_Fortran_COMPILER)
     SET(CMAKE_Fortran_COMPILER_LIST ${CMAKE_Fortran_COMPILER_INIT})
   ELSE(CMAKE_Fortran_COMPILER_INIT)
     # Known compilers:
-    #  f77/f90/f95: generic compiler names
-    #  g77: GNU Fortran 77 compiler
-    #  gfortran: putative GNU Fortran 95+ compiler (in progress)
-    #  fort77: legacy F77 compiler name
-    #  frt: Fujitsu F77 compiler
-    #  pgf77/pgf90/pgf95: Portland Group F77/F90/F95 compilers
-    #  xlf/xlf90/xlf95: IBM XL Fortran compilers
-    #  lf95: Lahey-Fujitsu F95 compiler
-    #  epcf90: "Edinburgh Portable Compiler" F90
-    #  fort: legacy vendor Fortran compiler name
-    #  ifc: Intel Fortran 95 compiler for Linux/x86
-    #  efc: Intel Fortran 95 compiler for IA64
-    #
-    #  The order is 95 or newer compilers first (with LLVM flang preferred when available), then 90,
-    #  then 77 or older compilers, gnu is always last in the group,
-    #  so if you paid for a compiler it is picked by default.
+    #  flang: LLVM Flang (required)
     # NOTE for testing purposes this list is DUPLICATED in
     # CMake/Source/CMakeLists.txt, IF YOU CHANGE THIS LIST,
     # PLEASE UPDATE THAT FILE AS WELL!
     SET(CMAKE_Fortran_COMPILER_LIST
-# Prefer LLVM flang family first when no explicit compiler is provided.
-      flang flang-new flang-20
-# Legacy ordering retained below (see note about duplication in CMake/Source/CMakeLists.txt).
-      gfortran ifort ifc efc f95 pgf95 lf95 xlf95 fort gfortran-4 g95 f90
-      pgf90 xlf90 epcf90 fort77 frt pgf77 xlf g77 f77
+      flang
       )
   ENDIF(CMAKE_Fortran_COMPILER_INIT)
 

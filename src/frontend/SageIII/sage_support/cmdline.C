@@ -1780,30 +1780,16 @@ void SgFile::usage() {
         "                             compile Fortran code, determining "
         "version of\n"
         "                             Fortran from file suffix)\n"
+        "     -rose:fortran_std <f77|f90|f95|f2003|f2008|f2018>\n"
+        "                             select a Fortran dialect for ROSE "
+        "(not a backend -std flag)\n"
         "     -rose:CoArrayFortran, -rose:CAF, -rose:caf\n"
         "                             compile Co-Array Fortran code "
         "(extension of Fortran 2003)\n"
         "     -rose:CAF2.0, -rose:caf2.0\n"
         "                             compile Co-Array Fortran 2.0 code "
         "(Rice CAF extension)\n"
-        "     -rose:Fortran2003, -rose:F2003, -rose:f2003\n"
-        "                             compile Fortran 2003 code\n"
-        "     -rose:Fortran95, -rose:F95, -rose:f95\n"
-        "                             compile Fortran 95 code\n"
-        "     -rose:Fortran90, -rose:F90, -rose:f90\n"
-        "                             compile Fortran 90 code\n"
-        "     -rose:Fortran77, -rose:F77, -rose:f77\n"
-        "                             compile Fortran 77 code\n"
-        "     -rose:Fortran66, -rose:F66, -rose:f66\n"
-        "                             compile Fortran 66 code\n"
-        "     -rose:FortranIV, -rose:FIV, -rose:fIV\n"
-        "                             compile Fortran IV code\n"
-        "     -rose:FortranII, -rose:FII, -rose:fII\n"
-        "                             compile Fortran II code (not "
-        "implemented yet)\n"
-        "     -rose:FortranI, -rose:FI, -rose:fI\n"
-        "                             compile Fortran I code (not "
-        "implemented yet)\n"
+        "     -rose:fortran_std is the only supported dialect selector\n"
         "     -rose:fortran:ofp:jvm_options\n"
         "                             Specifies the JVM startup options\n"
         "     -rose:fortran:ofp:classpath\n"
@@ -1828,14 +1814,8 @@ void SgFile::usage() {
         "script/graphPerformance)\n"
         "     -rose:exit_after_parser just call the parser (C, C++, and "
         "fortran only)\n"
-        "     -rose:skip_syntax_check skip Fortran syntax checking "
-        "(required for F2003 and Co-Array Fortran code\n"
-        "                             when using gfortran versions greater "
-        "than 4.1)\n"
-        "     -rose:relax_syntax_check skip Fortran syntax checking "
-        "(required for some F90 code\n"
-        "                             when using gfortran based syntax "
-        "checking)\n"
+        "     -rose:skip_syntax_check skip Fortran syntax checking\n"
+        "     -rose:relax_syntax_check relax Fortran syntax checking\n"
 
         "     -rose:skip_transformation\n"
         "                             read input file and skip all "
@@ -1990,6 +1970,8 @@ void SgFile::usage() {
         "                             select the Fortran frontend (default: "
         "flang when enabled,\n"
         "                             otherwise ofp)\n"
+        "     -rose:fortran_std <f77|f90|f95|f2003|f2008|f2018>\n"
+        "                             select a Fortran dialect for ROSE\n"
         "     -rose:cray_pointer_support\n"
         "                             turn on internal support for cray "
         "pointers\n"
@@ -2276,8 +2258,8 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
 
   //
   // Turn on warnings (turns on warnings in frontend, for Fortran support this
-  // turns on detection of warnings in initial syntax checking using gfortran
-  // before passing control to Open Fortran Parser).
+  // turns on detection of warnings in initial syntax checking using the
+  // backend compiler before passing control to the parser).
   //
   set_output_warnings(false);
   ROSE_ASSERT(get_output_warnings() == false);
@@ -2290,8 +2272,8 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
 
   //
   // Turn on warnings (turns on warnings in frontend, for Fortran support this
-  // turns on detection of warnings in initial syntax checking using gfortran
-  // before passing control to Open Fortran Parser).
+  // turns on detection of warnings in initial syntax checking using the
+  // backend compiler before passing control to the parser).
   //
   set_cray_pointer_support(false);
   ROSE_ASSERT(get_cray_pointer_support() == false);
@@ -2299,6 +2281,12 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
                                       true) == true) {
     if (SgProject::get_verbose() >= 1)
       printf("cray pointer mode ON \n");
+    set_cray_pointer_support(true);
+  }
+  if (CommandlineProcessing::isOption(argv, "-f", "cray-pointer", true) ==
+      true) {
+    if (SgProject::get_verbose() >= 1)
+      printf("cray pointer mode ON (via -fcray-pointer)\n");
     set_cray_pointer_support(true);
   }
 
@@ -2590,55 +2578,49 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
 
   // Parsing ROSE's Fortran dialect specification
 
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(f|F|Fortran)", true) ==
+  if (CommandlineProcessing::isOption(argv, "-rose:", "(fortran)", true) ==
       true) {
-    printf("WARNING: Command line option -rose:Fortran is deprecated! Use "
-           "-std=fortran instead.\n");
-
     set_Fortran_only(true);
   }
 
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(f77|F77|Fortran77)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Fortran77 is deprecated! Use "
-           "-std=f77 instead.\n");
-
-    set_F77_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(f90|F90|Fortran90)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Fortran90 is deprecated! Use "
-           "-std=f90 instead.\n");
-
-    set_F90_only();
-  }
-
-  if (CommandlineProcessing::isOption(argv, "-rose:", "(f95|F95|Fortran95)",
-                                      true) == true) {
-    printf("WARNING: Command line option -rose:Fortran95 is deprecated! Use "
-           "-std=f95 instead.\n");
-
-    set_F95_only();
-  }
-
   if (CommandlineProcessing::isOption(
-          argv, "-rose:", "(f2003|F2003|Fortran2003)", true) == true) {
-    printf("WARNING: Command line option -rose:Fortran2003 is deprecated! Use "
-           "-std=f2003 instead.\n");
-
-    set_F2003_only();
+          argv, "-rose:",
+          "(f|F|Fortran|f77|F77|Fortran77|f90|F90|Fortran90|f95|F95|Fortran95|"
+          "f2003|F2003|Fortran2003|f2008|F2008|Fortran2008)",
+          true) == true) {
+    std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+                 "error: Legacy -rose:Fortran* and -rose:fXX options are "
+                 "removed. Use -rose:fortran for language selection and "
+                 "-rose:fortran_std=<f77|f90|f95|f2003|f2008|f2018> for "
+                 "dialect selection.\n";
+    ROSE_ABORT();
   }
 
-  if (CommandlineProcessing::isOption(
-          argv, "-rose:", "(f2008|F2008|Fortran2008)", true) == true) {
-    printf("WARNING: Command line option -rose:Fortran2008 is deprecated! Use "
-           "-std=f2008 instead.\n");
-
-    set_F2008_only();
-
-    // DQ (1/25/2016): We might want to skip the syntax checking.
-    set_skip_syntax_check(true);
+  std::string fortranStandardOption;
+  if (CommandlineProcessing::isOptionWithParameter(
+          argv, "-rose:", "(fortran_std)", fortranStandardOption, true) ==
+      true) {
+    std::string value =
+        Rose::StringUtility::convertToLowerCase(fortranStandardOption);
+    if (value == "f77" || value == "fortran77") {
+      set_F77_only();
+    } else if (value == "f90" || value == "fortran90") {
+      set_F90_only();
+    } else if (value == "f95" || value == "fortran95") {
+      set_F95_only();
+    } else if (value == "f2003" || value == "f03" || value == "fortran2003") {
+      set_F2003_only();
+    } else if (value == "f2008" || value == "f08" || value == "fortran2008") {
+      set_F2008_only();
+    } else if (value == "f2018" || value == "f18" || value == "fortran2018") {
+      set_F2018_only();
+    } else {
+      std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+                   "error: Unknown Fortran standard '"
+                << fortranStandardOption
+                << "'. Use f77, f90, f95, f2003, f2008, or f2018.\n";
+      ROSE_ABORT();
+    }
   }
 
   if (CommandlineProcessing::isOption(
@@ -2689,7 +2671,12 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       set_gnu_standard();
 
     } else if (argv[i] == "-std=fortran") {
-      set_Fortran_only(true);
+      std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+                   "error: -std=fortran is no longer supported. Use "
+                   "-rose:fortran for language selection or "
+                   "-rose:fortran_std=<f77|f90|f95|f2003|f2008|f2018> "
+                   "for dialect selection.\n";
+      ROSE_ABORT();
 
     } else if (argv[i] == "-std=c89") {
       set_C89_only();
@@ -2788,26 +2775,16 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     } else if (argv[i] == "-std=gnu++26" || argv[i] == "-std=gnu++2c") {
       set_Cxx26_gnu_only();
 
-    } else if (argv[i] == "-std=f77") {
-      set_F77_only();
-
-    } else if (argv[i] == "-std=f90") {
-      set_F90_only();
-
-    } else if (argv[i] == "-std=f95") {
-      set_F95_only();
-
-    } else if (argv[i] == "-std=f2003") {
-      set_F2003_only();
-
-    } else if (argv[i] == "-std=f2008") {
-      set_F2008_only();
-
-      // DQ (1/25/2016): We might want to skip the syntax checking.
-      set_skip_syntax_check(true);
-
-    } else if (argv[i] == "-std=f2018" || argv[i] == "-std=f2008ts") {
+    } else if (argv[i] == "-std=f2018") {
       set_F2018_only();
+    } else if (argv[i].rfind("-std=f", 0) == 0) {
+      std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+                   "error: Unsupported Fortran standard flag '"
+                << argv[i]
+                << "'. Flang accepts only -std=f2018. Use "
+                   "-rose:fortran_std=<f77|f90|f95|f2003|f2008|f2018> "
+                   "to select a Fortran dialect for ROSE.\n";
+      ROSE_ABORT();
 #if BACKEND_FORTRAN_IS_INTEL_COMPILER
     } else if (argv[i] == "-std") {
       set_F2003_only();
@@ -2831,7 +2808,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     if (get_Fortran_only() &&
         get_sourceFileUsesFortranFileExtension() == false) {
       printf("WARNING: Non Fortran source file name specified with explicit "
-             "-rose:Fortran Fortran language option! \n");
+             "-rose:fortran Fortran language option! \n");
       set_Fortran_only(false);
     }
     if (get_C_only() && get_sourceFileUsesCppFileExtension() == true) {
@@ -2875,7 +2852,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   case e_f77_standard: {
     if (get_sourceFileUsesFortran77FileExtension() == false) {
       printf("WARNING: Non Fortran77 source file name specificed with explicit "
-             "-rose:Fortran77 Fortran 77 language option! \n");
+             "-rose:fortran_std=f77 Fortran 77 dialect option! \n");
       set_default_standard();
     }
     break;
@@ -2883,7 +2860,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   case e_f90_standard: {
     if (get_sourceFileUsesFortran90FileExtension() == false) {
       printf("WARNING: Non Fortran90 source file name specificed with explicit "
-             "-rose:Fortran90 Fortran 90 language option! \n");
+             "-rose:fortran_std=f90 Fortran 90 dialect option! \n");
       set_default_standard();
     }
     break;
@@ -2891,7 +2868,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   case e_f95_standard: {
     if (get_sourceFileUsesFortran95FileExtension() == false) {
       printf("WARNING: Non Fortran95 source file name specificed with explicit "
-             "-rose:Fortran95 Fortran 95 language option! \n");
+             "-rose:fortran_std=f95 Fortran 95 dialect option! \n");
       set_default_standard();
     }
     break;
@@ -2899,8 +2876,9 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   case e_f03_standard: {
     if (get_sourceFileUsesFortran2003FileExtension() == false &&
         get_sourceFileUsesCoArrayFortranFileExtension() == false) {
-      printf("WARNING: Non Fortran2003 source file name specificed with "
-             "explicit -rose:Fortran2003 Fortran 2003 language option! \n");
+      printf(
+          "WARNING: Non Fortran2003 source file name specificed with "
+          "explicit -rose:fortran_std=f2003 Fortran 2003 dialect option! \n");
       set_default_standard();
     }
     if (get_CoArrayFortran_only() == true &&
@@ -2913,8 +2891,9 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   }
   case e_f08_standard: {
     if (get_sourceFileUsesFortran2008FileExtension() == false) {
-      printf("WARNING: Non Fortran2008 source file name specificed with "
-             "explicit -rose:Fortran2008 Fortran 2008 language option! \n");
+      printf(
+          "WARNING: Non Fortran2008 source file name specificed with "
+          "explicit -rose:fortran_std=f2008 Fortran 2008 dialect option! \n");
       set_default_standard();
     }
     break;
@@ -3049,13 +3028,9 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
 
   // Fixed format v.s. free format option handling (ROSE defaults to fix or free
   // format, depending on the file extension). F77 default is fixed format, F90
-  // and later default is free format. Fortran source file format options for
-  // different compilers(for IBM/XL,Intel,Portland,GNU):
-  //     IBM/XL           Intel            Portland     GNU
-  //    -qfixed          -fixed           -Mfixed      -ffixed-form
-  //    -qfree           -free            -Mfree       -free-form
-  // GNU gfortran also supports -fno-fixed-form (we could use this to turn off
-  // all fixed form formatting independent of the input source).
+  // and later default is free format. For Flang, use -ffixed-form/-ffree-form.
+  // Fixed form line length can be set with -ffixed-line-length=<n> (use 0 for
+  // no limit).
 
   if (get_F77_only() == true) {
     // Use the setting get_F77_only() == true as a default means to set this
@@ -3891,6 +3866,7 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   Rose::Cmdline::StripRoseOptions(argv);
   CommandlineProcessing::removeArgs(argv, "-rex:clang:continue-on-error");
   CommandlineProcessing::removeArgs(argv, "-rex:clang:disable-access-control");
+  CommandlineProcessing::removeArgsWithParameters(argv, "-outputdir");
 
   //----------------------------------------------------------------------------
 
@@ -3987,11 +3963,7 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   optionCount = sla(argv, "-rose:", "($)", "(relax_syntax_check)", 1);
 
   // DQ (8/11/2007): Support for Fortran and its different flavors
-  optionCount = sla(argv, "-rose:", "($)", "(f|F|Fortran|fortran)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(f77|F77|Fortran77)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(f90|F90|Fortran90)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(f95|F95|Fortran95)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(f2003|F2003|Fortran2003)", 1);
+  optionCount = sla(argv, "-rose:", "($)", "(fortran)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(caf|CAF|CoArrayFortran)", 1);
 
   // DQ (8/27/2007):Support for Fortran language output format
@@ -4160,9 +4132,25 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   // Rasmussen (8/30/2019): Added support for experimental Flang parser for
   // Fortran
   optionCount = sla(argv, "-rose:", "($)", "(experimental_flang_frontend)", 1);
+  optionCount =
+      sla(argv, "-rose:", "($)", "(experimental_fortran_frontend)", 1);
+  optionCount =
+      sla(argv, "-rose:", "($)", "(experimental_fortran_frontend_OFP_test)", 1);
   char *fortranFrontendOption = NULL;
   optionCount = sla(argv, "-rose:", "($)^", "(fortran_frontend)",
                     fortranFrontendOption, 1);
+  char *fortranStdOption = NULL;
+  optionCount =
+      sla(argv, "-rose:", "($)^", "(fortran_std)", fortranStdOption, 1);
+  for (size_t i = 0; i < argv.size();) {
+    const std::string &arg = argv[i];
+    if (arg.rfind("-rose:fortran_std=", 0) == 0 ||
+        arg.rfind("--rose:fortran_std=", 0) == 0) {
+      argv.erase(argv.begin() + i);
+      continue;
+    }
+    ++i;
+  }
 
   // DQ (9/15/2013): Remove this from being output to the backend compiler.
   optionCount = sla(argv, "-rose:", "($)",
@@ -4249,11 +4237,56 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   }
 }
 
-void SgFile::stripFortranCommandLineOptions(vector<string> & /*argv*/) {
-  // Strip out the OFP specific commandline options the assume all
-  // other arguments are to be passed onto the vendor Fortran compiler
-
-  // No OFP options that we currently filter out.
+void SgFile::stripFortranCommandLineOptions(vector<string> &argv) {
+  // Validate Fortran-specific options that the backend compiler must accept.
+  const std::string std_prefix = "-std=";
+  std::vector<std::string> filtered;
+  filtered.reserve(argv.size());
+  for (const auto &arg : argv) {
+    if (arg == "-fcray-pointer") {
+      // Accepted as a ROSE compatibility alias; do not pass to Flang.
+      continue;
+    }
+    if (arg == "-fno-cray-pointer") {
+      std::cerr << "[FATAL] [ROSE] [backend] [Fortran] "
+                   "error: -fno-cray-pointer is not supported with Flang. "
+                   "Remove the flag or use standard Fortran pointers.\n";
+      ROSE_ABORT();
+    }
+    if (arg.rfind(std_prefix, 0) == 0) {
+      std::string value = Rose::StringUtility::convertToLowerCase(
+          arg.substr(std_prefix.size()));
+      if (value != "f2018") {
+        std::cerr << "[FATAL] [ROSE] [backend] [Fortran] "
+                     "error: Unsupported Fortran standard flag '"
+                  << arg
+                  << "'. Flang accepts only -std=f2018. Use "
+                     "-rose:fortran_std=<f77|f90|f95|f2003|f2008|f2018> "
+                     "for ROSE dialect selection.\n";
+        ROSE_ABORT();
+      }
+    } else if (arg == "-std") {
+      std::cerr << "[FATAL] [ROSE] [backend] [Fortran] "
+                   "error: -std requires an '=f2018' value for Flang. "
+                   "Use -std=f2018 or -rose:fortran_std.\n";
+      ROSE_ABORT();
+    } else if (arg == "-ffixed-line-length-none" ||
+               arg == "-ffree-line-length-none") {
+      std::cerr << "[FATAL] [ROSE] [backend] [Fortran] "
+                   "error: Unsupported line-length flag '"
+                << arg
+                << "'. Use -ffixed-line-length=0 for fixed form, or omit "
+                   "the flag for free form.\n";
+      ROSE_ABORT();
+    } else if (arg == "-fixed" || arg == "-free") {
+      std::cerr << "[FATAL] [ROSE] [backend] [Fortran] "
+                   "error: Unsupported format flag '"
+                << arg << "'. Use -ffixed-form or -ffree-form.\n";
+      ROSE_ABORT();
+    }
+    filtered.push_back(arg);
+  }
+  argv.swap(filtered);
 }
 
 Rose_STL_Container<string>
@@ -4693,48 +4726,14 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     compilerNameString[0] = BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH;
 
     if (get_backendCompileFormat() == e_fixed_form_output_format) {
-      // If backend compilation is specificed to be fixed form, then allow any
-      // line length (to simplify code generation for now) compilerNameString +=
-      // "-ffixed-form "; compilerNameString += "-ffixed-line-length- "; //
-      // -ffixed-line-length-<n>
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-      compilerNameString.push_back("-ffixed-line-length-none");
-      compilerNameString.push_back("-fixed");
-#endif
+      // Explicit fixed-form compilation; disable line-length limits.
+      compilerNameString.push_back("-ffixed-form");
+      compilerNameString.push_back("-ffixed-line-length=0");
+    } else if (get_backendCompileFormat() == e_free_form_output_format) {
+      // Explicit free-form compilation.
+      compilerNameString.push_back("-ffree-form");
     } else {
-      if (get_backendCompileFormat() == e_free_form_output_format) {
-        // If backend compilation is specificed to be free form, then
-        // allow any line length (to simplify code generation for now)
-        // compilerNameString += "-ffree-form ";
-        // compilerNameString += "-ffree-line-length-<n> "; //
-        // -ffree-line-length-<n>
-        // compilerNameString.push_back("-ffree-line-length-none");
-
-        // DQ (9/16/2009): This option is not available in gfortran
-        // version 4.0.x (wonderful).
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-        if ((BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER >= 4) &&
-            (BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER >= 1)) {
-          compilerNameString.push_back("-ffree-line-length-none");
-        }
-        compilerNameString.push_back("-free");
-#endif
-      } else {
-        // Do nothing (don't specify any option to control compilation of a
-        // specific format, assume defaults)
-
-        // Make this the default
-        if (SgProject::get_verbose() >= 1) {
-          printf("Compiling generated code using gfortran "
-                 "-ffixed-line-length-none to avoid 72 column limit in code "
-                 "generation\n");
-        }
-
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-        compilerNameString.push_back("-ffixed-line-length-none");
-        compilerNameString.push_back("-fixed");
-#endif
-      }
+      // Rely on the output filename suffix and compiler defaults.
     }
     break;
   }

@@ -86,7 +86,7 @@ fi
 mkdir -p "$BUILD_DIR" || { echo -e "${RED}Failed to create build directory${NC}"; exit 1; }
 cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 1; }
 
-# Configure with CMake (will auto-detect compilers, preferring clang-20/flang-20)
+# Configure with CMake (will auto-detect compilers, preferring clang-20/flang)
 cmake .. \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \

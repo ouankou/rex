@@ -175,14 +175,14 @@ if(ENABLE-FORTRAN)
     endif()
     add_test(
       NAME testVirtualCFG_F90_${file_to_test}
-      COMMAND testVirtualCFG ${ROSE_FLAGS} -std=f90
+      COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:fortran_std=f90
         -c ${source_path})
     set_tests_properties(testVirtualCFG_F90_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()
 
   add_test(
     NAME test2007_01.F90
-    COMMAND testVirtualCFG ${ROSE_FLAGS} -std=f90
+    COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:fortran_std=f90
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Fortran_tests/test2007_01.f90)
   set_tests_properties(test2007_01.F90 PROPERTIES DEPENDS testVirtualCFG_F90_test2007_01.f90)
   set_tests_properties(test2007_01.F90 PROPERTIES LABELS VIRTUALCFGTEST)
@@ -211,7 +211,7 @@ if(ENABLE-FORTRAN)
     endif()
     add_test(
       NAME testVirtualCFG_F90_${file_to_test}
-      COMMAND testVirtualCFG ${ROSE_FLAGS} -std=f90
+      COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:fortran_std=f90
         -c ${source_path})
     set_tests_properties(testVirtualCFG_F90_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()
@@ -239,7 +239,7 @@ if(ENABLE-FORTRAN)
     endif()
     add_test(
       NAME testVirtualCFG_F77_${file_to_test}
-      COMMAND testVirtualCFG ${ROSE_FLAGS} -std=f77
+      COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:fortran_std=f77
         -c ${source_path})
     set_tests_properties(testVirtualCFG_F77_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()
@@ -279,7 +279,7 @@ if(ENABLE-FORTRAN)
     endif()
     add_test(
       NAME testVirtualCFG_F77_${file_to_test}
-      COMMAND testVirtualCFG ${ROSE_FLAGS} -std=f77
+      COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:fortran_std=f77
         -c ${source_path})
     set_tests_properties(testVirtualCFG_F77_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()
@@ -299,7 +299,7 @@ if(ENABLE-FORTRAN)
     add_test(
       NAME testVirtualCFG_F03_${file_to_test}
       COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -std=f2003
+        -rose:skipfinalCompileStep -rose:fortran_std=f2003
         -c ${source_path})
     set_tests_properties(testVirtualCFG_F03_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()
@@ -326,7 +326,7 @@ if(ENABLE-FORTRAN)
     add_test(
       NAME testVirtualCFG_F03_${file_to_test}
       COMMAND testVirtualCFG ${ROSE_FLAGS} -rose:skip_syntax_check
-        -rose:skipfinalCompileStep -std=f2003
+        -rose:skipfinalCompileStep -rose:fortran_std=f2003
         -c ${source_path})
     set_tests_properties(testVirtualCFG_F03_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
   endforeach()

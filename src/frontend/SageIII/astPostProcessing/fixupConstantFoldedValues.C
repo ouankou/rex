@@ -46,7 +46,9 @@ static void deleteExpressionAndOriginalExpressionTree(SgNode *node) {
     }
   }
 
-  delete node;
+  // Leave the node allocated to avoid deleting memory-pooled AST nodes during
+  // post-processing; detach it instead.
+  node->set_parent(nullptr);
 }
 
 struct ReplacePointerInParent : public SimpleReferenceToPointerHandler {

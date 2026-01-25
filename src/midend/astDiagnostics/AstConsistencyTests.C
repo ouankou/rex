@@ -4028,7 +4028,30 @@ void TestMangledNames::visit(SgNode *node) {
   // easily reproduced in ROSE (at least with the gnu 4.2.4 compiler).
   ROSE_ASSERT(node != NULL);
   if (node->class_name() == "SgNode") {
-    printf("ERROR: This node = %p has been previously deleted \n", node);
+    struct PoolInspector : public SgNode {
+      using SgNode::findPoolEntry;
+    };
+    const unsigned char *raw = reinterpret_cast<const unsigned char *>(node);
+    const SgNode::PoolEntry *pool = PoolInspector::findPoolEntry(raw);
+    VariantT poolVariant = pool ? pool->variant : SgNode::variantFromPool(node);
+    fprintf(stderr,
+            "ERROR: This node = %p has been previously deleted (pool variant "
+            "%s)\n",
+            node, getVariantName(poolVariant).c_str());
+    if (pool != nullptr) {
+      size_t offset = static_cast<size_t>(raw - pool->base);
+      size_t slot_index = pool->slot_size != 0 ? offset / pool->slot_size : 0;
+      unsigned live_flag = (pool->live_flags != nullptr && pool->slot_size != 0)
+                               ? pool->live_flags[slot_index]
+                               : 0;
+      fprintf(stderr,
+              "ERROR: Pool base=%p size=%u slot_size=%zu slot_index=%zu "
+              "live_flag=%u\n",
+              pool->base, pool->size, pool->slot_size, slot_index, live_flag);
+    } else {
+      fprintf(stderr, "ERROR: Node is not in any memory pool entry\n");
+    }
+    fflush(stderr);
     ROSE_ABORT();
   }
 

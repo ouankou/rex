@@ -157,3 +157,4 @@ private:
 
 int GetOperatorVariant(SgExpression *expr);
 SgExpression *GetFirstOperand(SgExpression *expr);
+bool getOperatorFunctionName(SgExpression *expr, std::string &func_name);

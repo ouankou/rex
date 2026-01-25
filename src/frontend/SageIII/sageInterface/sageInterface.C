@@ -19,6 +19,7 @@
 #include "rose_path_resolver.h"
 
 #include <cstdlib>
+#include <set>
 
 #if ROSE_WITH_LIBHARU
 #include "AstPDFGeneration.h"
@@ -5191,6 +5192,80 @@ bool SageInterface::is_language_case_insensitive() {
   return symbol_table_case_insensitive_semantics == true;
 }
 
+void SageInterface::ensureCaseInsensitiveSymbolTable(
+    SgScopeStatement *scope, bool force_case_insensitive) {
+  if (!force_case_insensitive || scope == nullptr) {
+    return;
+  }
+  SgSymbolTable *old_table = scope->get_symbol_table();
+  if (old_table == nullptr) {
+    return;
+  }
+  if (old_table->isCaseInsensitive()) {
+    return;
+  }
+  std::set<SgNode *> symbols = old_table->get_symbols();
+  if (symbols.empty()) {
+    scope->setCaseInsensitive(true);
+    return;
+  }
+  SgSymbolTable *new_table = new SgSymbolTable();
+  ASSERT_not_null(new_table);
+  new_table->set_parent(scope);
+  scope->set_symbol_table(new_table);
+  scope->setCaseInsensitive(true);
+  for (SgNode *sym_node : symbols) {
+    SgSymbol *symbol = isSgSymbol(sym_node);
+    if (symbol == nullptr) {
+      continue;
+    }
+    scope->insert_symbol(symbol->get_name(), symbol);
+    old_table->remove(symbol);
+  }
+  old_table->set_parent(nullptr);
+}
+
+void SageInterface::transferSymbols(SgScopeStatement *from_scope,
+                                    SgScopeStatement *to_scope,
+                                    bool skip_label_symbols) {
+  if (from_scope == nullptr || to_scope == nullptr) {
+    return;
+  }
+  SgSymbolTable *symtab = from_scope->get_symbol_table();
+  if (symtab == nullptr) {
+    return;
+  }
+  std::set<SgNode *> symbols = symtab->get_symbols();
+  for (SgNode *symNode : symbols) {
+    SgSymbol *symbol = isSgSymbol(symNode);
+    if (symbol == nullptr) {
+      continue;
+    }
+    if (skip_label_symbols && isSgLabelSymbol(symbol) != nullptr) {
+      continue;
+    }
+    const SgName name = symbol->get_name();
+    if (to_scope->symbol_exists(name)) {
+      continue;
+    }
+    from_scope->remove_symbol(symbol);
+    to_scope->insert_symbol(name, symbol);
+    if (symbol->get_parent() != to_scope->get_symbol_table()) {
+      symbol->set_parent(to_scope->get_symbol_table());
+    }
+    if (auto *varSym = isSgVariableSymbol(symbol)) {
+      if (SgInitializedName *initName = varSym->get_declaration()) {
+        if (initName->get_scope() == from_scope) {
+          initName->set_scope(to_scope);
+        }
+        if (initName->get_parent() == from_scope) {
+          initName->set_parent(to_scope);
+        }
+      }
+    }
+  }
+}
+
 // Rasmussen (3/28/2020): Collecting all languages that may have scopes that
 // contain statements that are not only declarations here. For Fortran (at
 // least), function definitions may be declared at the end of other procedures.
@@ -6088,6 +6163,13 @@ SageInterface::lookupVariableSymbolInParentScopes(const SgName &name,
     // I think this will resolve SgAliasSymbols to be a SgClassSymbol where the
     // alias is of a SgClassSymbol.
     symbol = cscope->lookup_variable_symbol(name);
+    if (symbol == NULL) {
+      if (SgSymbol *alias_candidate = cscope->lookup_symbol(name)) {
+        if (SgAliasSymbol *alias_symbol = isSgAliasSymbol(alias_candidate)) {
+          symbol = isSgVariableSymbol(alias_symbol->get_alias());
+        }
+      }
+    }
 
     if (cscope->get_parent() !=
         NULL) // avoid calling get_scope when parent is not set
@@ -20406,7 +20488,8 @@ static void moveOneStatement(SgScopeStatement *sourceBlock,
           if (nondef_decl->get_file_info()->isCompilerGenerated())
             nondef_decl->set_scope(targetBlock);
         }
-      } else if (isSgTypedefDeclaration(stmt) || isSgEnumDeclaration(stmt)) {
+      } else if (isSgTypedefDeclaration(stmt) || isSgEnumDeclaration(stmt) ||
+                 isSgDerivedTypeStatement(stmt) || isSgModuleStatement(stmt)) {
         // Rasmussen 9/21/2020,10/27/2020,11/4/2020: Uncovered by issues RC-135
         // and RC-227. The issues are fixed in the switch statement below but
         // this test is needed so that the warning message immediately below is

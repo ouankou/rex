@@ -1,5 +1,5 @@
-! THIS PROGRAM IS CORRECT BUT FAILS ON GFORTRANS OLDER THAN 4.4.1
 ! Rice test
+! Use a distinct local type name to avoid host-type hiding with Flang.
 
 program forward_ref_with_sub
 
@@ -15,11 +15,11 @@ contains
         type(t2), pointer :: c
       end type
 
-      type :: t2
+      type :: t2_local
         character :: z
       end type
 
-      type(t2) :: b
+      type(t2_local) :: b
       type(t1) :: y
 
      allocate(y%c)

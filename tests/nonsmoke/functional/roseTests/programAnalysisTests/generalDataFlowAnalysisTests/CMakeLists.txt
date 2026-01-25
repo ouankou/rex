@@ -1258,7 +1258,7 @@ if(enable-fortran)
       NAME gdf_f77_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="$<TARGET_FILE:constantPropagationTest> -std=f77 -c ${_f77_test_dir}/${specimen}"
+        CMD="$<TARGET_FILE:constantPropagationTest> -rose:fortran_std=f77 -c ${_f77_test_dir}/${specimen}"
         ${_exit_status}
         f77cp_${specimen}.passed
     )
@@ -1274,7 +1274,7 @@ if(enable-fortran)
       NAME gdf_f77_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="$<TARGET_FILE:constantPropagationTest> -std=f77 -c ${_f77_test_dir}/${specimen}"
+        CMD="$<TARGET_FILE:constantPropagationTest> -rose:fortran_std=f77 -c ${_f77_test_dir}/${specimen}"
         ${_exit_status}
         f77cp_${specimen}.passed
     )
@@ -1290,7 +1290,7 @@ if(enable-fortran)
       NAME gdf_f03_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="$<TARGET_FILE:constantPropagationTest> -rose:skip_syntax_check -rose:skipfinalCompileStep -std=f2003 -c ${_f03_test_dir}/${specimen}"
+        CMD="$<TARGET_FILE:constantPropagationTest> -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c ${_f03_test_dir}/${specimen}"
         ${_exit_status}
         f03cp_${specimen}.passed
     )
@@ -1306,7 +1306,7 @@ if(enable-fortran)
       NAME gdf_f03_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="$<TARGET_FILE:constantPropagationTest> -rose:skip_syntax_check -rose:skipfinalCompileStep -std=f2003 -c ${_f03_test_dir}/${specimen}"
+        CMD="$<TARGET_FILE:constantPropagationTest> -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c ${_f03_test_dir}/${specimen}"
         ${_exit_status}
         f03cp_${specimen}.passed
     )

@@ -385,7 +385,7 @@ list(APPEND ROSE_FLAGS -I${_gfortran_output_dir} -outputdir ${_gfortran_output_d
 foreach(file_to_test ${F90_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -std=f90 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_output_dir})
@@ -394,7 +394,7 @@ endforeach()
 foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -std=f77 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f77 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_output_dir})
@@ -413,7 +413,7 @@ set(_gfortran_f90_disabled_tests
 foreach(file_to_test ${_gfortran_f90_disabled_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -std=f90 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_output_dir})
@@ -428,7 +428,7 @@ set(_gfortran_f77_disabled_tests
 foreach(file_to_test ${_gfortran_f77_disabled_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -std=f77 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f77 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_output_dir})
@@ -500,7 +500,7 @@ foreach(file_to_test ${F03_TESTCODES_REQUIRED_TO_PASS})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
-            -rose:skipfinalCompileStep -std=f2003 -c
+            -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_output_dir})
@@ -517,7 +517,7 @@ foreach(file_to_test ${_gfortran_f03_disabled_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check
-            -rose:skipfinalCompileStep -std=f2003 -c
+            -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_output_dir})

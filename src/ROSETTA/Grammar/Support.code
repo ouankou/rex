@@ -14077,12 +14077,9 @@ SgFile::initialization()
 
      p_skip_parser = false;
 
-  // DQ (1/4/2008): gFortran versions greater than 4.1 have bugs that prevent it from
-  // being used to to syntax checking on Fortran 2003 applications.  To allow Fortran
-  // 2003 applications to be processed the syntax checking step done in ROSE using
-  // that backend compiler (typically gfortran) needs to be skipped.  ROSE it self can
-  // handle the Fortran 2003 code, but can not yet do sufficent syntax checking to
-  // report errors in illegal Fortran 2003 code.
+  // DQ (1/4/2008): Some backend compilers historically rejected valid Fortran
+  // 2003 applications during syntax checking. ROSE allows skipping syntax
+  // checking when needed to process such inputs.
      p_skip_syntax_check = false;
 
   // After higher level ASTs are build optionally apply transformations

@@ -67,6 +67,11 @@ bool isHiddenType(const SgType *type) {
     return false;
   const SgType *base_type = type->findBaseType();
   if (base_type) {
+    if (isSgTemplateType(base_type) != NULL ||
+        isSgNonrealType(base_type) != NULL) {
+      // Template/dependent types are valid within templates.
+      return false;
+    }
     const SgNamedType *n = isSgNamedType(base_type);
     if (n) { // Get the declaration of a named type
       const SgDeclarationStatement *decl = n->get_declaration();
@@ -222,24 +227,36 @@ bool Outliner::isOutlineable(const SgStatement *s, bool verbose) {
     return false;
   }
 
-  // New option: C++ template is enabled or not for outlining.
-  if (!enable_template) {
-    if (isSgTemplateInstantiationFunctionDecl(decl) ||
-        isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+  const SgTemplateInstantiationFunctionDecl *inst_func =
+      isSgTemplateInstantiationFunctionDecl(decl);
+  const SgTemplateInstantiationMemberFunctionDecl *inst_mem =
+      isSgTemplateInstantiationMemberFunctionDecl(decl);
+  if (inst_func != NULL || inst_mem != NULL) {
+    const SgFunctionDeclaration *template_decl = NULL;
+    if (inst_func != NULL) {
+      template_decl = inst_func->get_templateDeclaration();
+    } else if (inst_mem != NULL) {
+      template_decl = inst_mem->get_templateDeclaration();
+    }
+
+    const SgSourceFile *stmt_file =
+        SageInterface::getEnclosingSourceFile(const_cast<SgStatement *>(s));
+    const SgSourceFile *template_file =
+        template_decl != NULL
+            ? SageInterface::getEnclosingSourceFile(
+                  const_cast<SgFunctionDeclaration *>(template_decl))
+            : NULL;
+
+    bool allow_instantiation =
+        template_decl != NULL && template_decl->get_definition() != NULL &&
+        stmt_file != NULL && template_file == stmt_file &&
+        template_decl->get_file_info() != NULL &&
+        template_decl->get_file_info()->isCompilerGenerated() == false;
+
+    if (!allow_instantiation) {
       // \todo Fix the template instantiation case (see Cxx_tests/test2004_75.C)
       if (verbose)
         cerr << "*** Can't outline template instantiations yet. ***" << endl;
-      return false;
-    }
-    // Liao 12/20/2012. New legacy frontend 4.4 version has better template
-    // support. We store original template declarations instead of
-    // instantiations in AST now
-
-    if (isSgTemplateFunctionDeclaration(decl) ||
-        isSgTemplateMemberFunctionDeclaration(decl)) {
-      // \todo Fix the template case (see Cxx_tests/test2004_75.C)
-      if (verbose)
-        cerr << "*** Can't outline things within templates yet. ***" << endl;
       return false;
     }
   }

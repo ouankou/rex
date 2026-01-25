@@ -1,4 +1,12 @@
 subroutine where_example
+    implicit none
+    integer, parameter :: nx = 1, ny = 1, nz = 1, l = 1, id = 1
+    integer, parameter :: logical_kind = kind(.true.)
+    integer, parameter :: real_kind = kind(0.0)
+    real(real_kind), parameter :: zero = 0.0_real_kind
+    real(real_kind), parameter :: zero_epsilon = 0.0_real_kind
+    real(real_kind) :: result(nx,ny,nz,l)
+    real(real_kind), external :: global_eoshift
     logical(logical_kind) :: should_set_cell(nx,ny,nz)
     logical(logical_kind) :: should_set_upwind(nx,ny,nz), should_set_downwind(nx,ny,nz), should_set_donor_volume(nx,ny,nz)
 
@@ -29,9 +37,7 @@ subroutine where_example
 
     donor_variability = donor_mass*(donor + upwind)
 
-    temperature4 = global_eoshift(donor_variability, SHIFT=1, BOUNDARY=zero, DIM=id)
+    temperature4 = global_eoshift(donor_variability, 1, zero, id)
 
     where(should_set_cell) result(:,:,:,l) = temperature2*(result(:,:,:,l)*temperature1 + (donor_variability - temperature4))
 end subroutine where_example
-
-

@@ -1,16 +1,18 @@
-INTEGER :: a
-INTEGER(KIND=4) :: b
-REAL :: c
-REAL(KIND=4) :: d
-DOUBLE PRECISION :: e
-DOUBLE PRECISION :: f
-COMPLEX :: g
-COMPLEX(KIND=4) :: h
-DOUBLE COMPLEX :: i
-DOUBLE COMPLEX :: j
-CHARACTER :: k
-CHARACTER(1) :: l
-LOGICAL :: m
-LOGICAL(KIND=1) :: n
-INTEGER :: foo
-END PROGRAM
+program r404
+  implicit none
+  integer :: a
+  integer(kind=4) :: b
+  real :: c
+  real(kind=4) :: d
+  double precision :: e
+  double precision :: f
+  complex :: g
+  complex(kind=4) :: h
+  double complex :: i
+  double complex :: j
+  character :: k
+  character(1) :: l
+  logical :: m
+  logical(kind=1) :: n
+  integer :: foo
+end program r404

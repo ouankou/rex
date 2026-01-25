@@ -45,13 +45,64 @@ using namespace Outliner;
 //! Creates a 'prototype' (forward declaration) for a function.
 static SgFunctionDeclaration *
 generatePrototype(const SgFunctionDeclaration *full_decl,
-                  SgScopeStatement *scope) {
+                  SgScopeStatement *scope, bool forceFreeFunctionScope) {
   if (!full_decl)
     return 0; // nothing to do
 
+  if (SgTemplateFunctionDeclaration *template_decl =
+          isSgTemplateFunctionDeclaration(
+              const_cast<SgFunctionDeclaration *>(full_decl))) {
+    SgFunctionType *funcType = template_decl->get_type();
+    SgType *return_type = funcType->get_return_type();
+    SgFunctionParameterList *paralist =
+        deepCopy<SgFunctionParameterList>(template_decl->get_parameterList());
+    SgTemplateParameterPtrList *template_params =
+        new SgTemplateParameterPtrList();
+    for (SgTemplateParameterPtrList::const_iterator it =
+             template_decl->get_templateParameters().begin();
+         it != template_decl->get_templateParameters().end(); ++it) {
+      if (*it == NULL)
+        continue;
+      SgTemplateParameter *param_copy =
+          isSgTemplateParameter(ASTtools::deepCopy(*it));
+      ROSE_ASSERT(param_copy != NULL);
+      template_params->push_back(param_copy);
+    }
+
+    SgTemplateFunctionDeclaration *proto =
+        SageBuilder::buildNondefiningTemplateFunctionDeclaration(
+            template_decl->get_name(), return_type, paralist, scope,
+            template_params);
+    ROSE_ASSERT(proto != NULL);
+    for (SgTemplateParameterPtrList::iterator it =
+             proto->get_templateParameters().begin();
+         it != proto->get_templateParameters().end(); ++it) {
+      if (*it != NULL)
+        (*it)->set_parent(proto);
+    }
+
+    if (full_decl->get_functionModifier().isInline())
+      proto->get_functionModifier().setInline();
+
+    proto->set_linkage(full_decl->get_linkage());
+    if (full_decl->get_declarationModifier().get_storageModifier().isExtern() ==
+        true) {
+      proto->get_declarationModifier().get_storageModifier().setExtern();
+    }
+
+    ROSE_ASSERT(proto->get_firstNondefiningDeclaration() != NULL);
+    return proto;
+  }
+
   // DQ (2/23/2009): Use this code instead.
+  SgFunctionType *funcType = full_decl->get_type();
+  SgType *return_type = funcType->get_return_type();
+  SgFunctionParameterList *paralist =
+      deepCopy<SgFunctionParameterList>(full_decl->get_parameterList());
   SgFunctionDeclaration *proto =
-      SageBuilder::buildNondefiningFunctionDeclaration(full_decl, scope);
+      SageBuilder::buildNondefiningFunctionDeclaration(
+          full_decl->get_name(), return_type, paralist, scope, false, NULL,
+          SgStorageModifier::e_default, forceFreeFunctionScope);
   ROSE_ASSERT(proto != NULL);
 
   // Inherit defining function's inline property: avoid linking error when
@@ -126,7 +177,7 @@ generateFriendPrototype(const SgFunctionDeclaration *full_decl,
     class_scope->get_file_info()->display();
   }
 
-  SgFunctionDeclaration *proto = generatePrototype(full_decl, scope);
+  SgFunctionDeclaration *proto = generatePrototype(full_decl, scope, true);
   ROSE_ASSERT(proto != NULL);
 
   // Remove any 'extern' modifiers
@@ -225,7 +276,7 @@ public:
 
   insertManually(SgFunctionDeclaration *def_decl, SgGlobal *scope,
                  SgDeclarationStatement *target) {
-    SgFunctionDeclaration *proto = generatePrototype(def_decl, scope);
+    SgFunctionDeclaration *proto = generatePrototype(def_decl, scope, false);
     ROSE_ASSERT(proto);
 
     SgDeclarationStatement *insert_point = findClosestGlobalInsertPoint(target);
@@ -734,10 +785,34 @@ static bool isProtPriv(const SgDeclarationStatement *decl) {
     ROSE_ASSERT(decl_tmp);
     const SgAccessModifier &decl_access_mod =
         decl_tmp->get_declarationModifier().get_accessModifier();
-    return decl &&
-           (decl_access_mod.isPrivate() || decl_access_mod.isProtected());
+    if (decl_access_mod.isPrivate() || decl_access_mod.isProtected())
+      return true;
+    if (decl_access_mod.isDefault()) {
+      const SgScopeStatement *decl_scope = decl_tmp->get_scope();
+      const SgClassDefinition *class_def = isSgClassDefinition(decl_scope);
+      if (class_def != NULL && class_def->get_declaration()->get_class_type() ==
+                                   SgClassDeclaration::e_class) {
+        return true;
+      }
+    }
   }
 
+  return false;
+}
+
+static bool classHasNonPublicConstructor(SgClassDefinition *cl_def) {
+  if (cl_def == NULL)
+    return false;
+  for (SgDeclarationStatement *member : cl_def->get_members()) {
+    SgMemberFunctionDeclaration *func_decl =
+        isSgMemberFunctionDeclaration(member);
+    if (func_decl == NULL)
+      continue;
+    if (!func_decl->get_specialFunctionModifier().isConstructor())
+      continue;
+    if (isProtPriv(func_decl))
+      return true;
+  }
   return false;
 }
 
@@ -947,9 +1022,12 @@ static
             continue;
           }
 
-          if (isProtPriv(fuc_decl)) {
-            if (def_cls_decl->get_definition())
-              cl_def = def_cls_decl->get_definition();
+          SgClassDefinition *class_def = def_cls_decl->get_definition();
+          if (fuc_decl != NULL) {
+            if (isProtPriv(fuc_decl))
+              cl_def = class_def;
+          } else if (classHasNonPublicConstructor(class_def)) {
+            cl_def = class_def;
           }
         }
       }
@@ -1082,11 +1160,12 @@ static
 // (SgFunctionDeclaration* func, SgGlobal* scope, SgBasicBlock*
 // target_outlined_code ) Outliner::DeferredTransformation
 SageInterface::DeferredTransformation
-Outliner::insert(SgFunctionDeclaration *func, SgGlobal *scope,
+Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
                  SgBasicBlock *target_outlined_code) {
   // Scope is the global scope of the outlined location (could be in a separate
   // file).
   ROSE_ASSERT(func != NULL && scope != NULL);
+  ROSE_ASSERT(Outliner::isValidOutliningScope(scope));
   ROSE_ASSERT(target_outlined_code != NULL);
 
   // DQ (9/26/2019): Trying to trace down where there is a
@@ -1107,8 +1186,14 @@ Outliner::insert(SgFunctionDeclaration *func, SgGlobal *scope,
 
   // The scopes are the same only if this the outlining is NOT being output to a
   // separate file.
-  ROSE_ASSERT((Outliner::useNewFile == true && scope != src_global) ||
-              (Outliner::useNewFile == false || scope == src_global));
+  if (Outliner::useNewFile) {
+    ROSE_ASSERT(scope != src_global);
+  } else {
+    const bool scope_is_module =
+        SageInterface::is_Fortran_language() &&
+        Outliner::isFortranModuleDefinitionScope(scope);
+    ROSE_ASSERT(scope == src_global || scope_is_module);
+  }
 
   // Make sure this is a defining function
   ROSE_ASSERT(func->get_definition() != NULL);
@@ -1161,7 +1246,7 @@ Outliner::insert(SgFunctionDeclaration *func, SgGlobal *scope,
   */
 
   // Put the input function into the target scope
-  scope->append_declaration(func);
+  SageInterface::appendStatement(func, scope);
   func->set_scope(scope);
   func->set_parent(scope);
 
@@ -1177,9 +1262,13 @@ Outliner::insert(SgFunctionDeclaration *func, SgGlobal *scope,
 
   // Error checking...
   if (Outliner::useNewFile == false) {
-    ROSE_ASSERT(func->get_scope() == src_global);
     ROSE_ASSERT(func->get_scope() == scope);
-    ROSE_ASSERT(scope == src_global);
+    if (!SageInterface::is_Fortran_language() || scope == src_global) {
+      ROSE_ASSERT(func->get_scope() == src_global);
+      ROSE_ASSERT(scope == src_global);
+    } else {
+      ROSE_ASSERT(Outliner::isFortranModuleDefinitionScope(scope));
+    }
   } else {
     // DQ (6/15/2019): Adding more debugging information.
     if (scope == src_global) {
@@ -1329,7 +1418,7 @@ Outliner::insert(SgFunctionDeclaration *func, SgGlobal *scope,
       firstStatement->set_containsTransformationToSurroundingWhitespace(true);
     }
     // scope->append_declaration (outlinedFileFunctionPrototype);
-    scope->prepend_declaration(outlinedFileFunctionPrototype);
+    SageInterface::prependStatement(outlinedFileFunctionPrototype, scope);
     // DQ (11/9/2019): When used in conjunction with header file unparsing we
     // need to set the physical file id on entirety of the subtree being
     // inserted.

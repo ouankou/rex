@@ -19,6 +19,7 @@ private:
   static ModuleMapType moduleNameAstMap;
   static unsigned int nestedSgFile;
   static std::vector<std::string> inputDirs;
+  static std::vector<std::string> sourceDirs;
 
 public:
   static bool isModuleFile();

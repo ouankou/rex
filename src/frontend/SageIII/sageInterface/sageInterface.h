@@ -849,6 +849,11 @@ ROSE_DLL_API bool is_mixed_Fortran_and_C_and_Cxx_language();
 
 ROSE_DLL_API bool is_language_case_insensitive();
 ROSE_DLL_API bool language_may_contain_nondeclarations_in_scope();
+ROSE_DLL_API void ensureCaseInsensitiveSymbolTable(SgScopeStatement *scope,
+                                                   bool force_case_insensitive);
+ROSE_DLL_API void transferSymbols(SgScopeStatement *from_scope,
+                                  SgScopeStatement *to_scope,
+                                  bool skip_label_symbols = true);
 
 //@}
 

@@ -13,7 +13,7 @@
 // By default, runs the supplied source files through the F18 preprocessing and
 // parsing phases, reconstitutes a Fortran program from the parse tree, and
 // passes that Fortran program to a Fortran compiler identified by the $F18_FC
-// environment variable (defaulting to gfortran).  The Fortran preprocessor is
+// environment variable (defaulting to flang).  The Fortran preprocessor is
 // always run, whatever the case of the source file extension.  Unrecognized
 // options are passed through to the underlying Fortran compiler.
 //
@@ -312,7 +312,7 @@ int main(int argc, char *const argv[]) {
 
   DriverOptions driver;
   const char *fc{getenv("F18_FC")};
-  driver.fcArgs.push_back(fc ? fc : "flang-20");
+  driver.fcArgs.push_back(fc ? fc : "flang");
 
   std::list<std::string> args{argList(argc, argv)};
   std::string prefix{args.front()};
