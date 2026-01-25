@@ -2618,6 +2618,9 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
           llvm::dyn_cast<clang::UsingType>(clang_type)) {
     clang::UsingShadowDecl *using_decl = using_type->getFoundDecl();
     std::string name_str = using_decl ? using_decl->getNameAsString() : "";
+    if (name_str.empty()) {
+      name_str = fallback_type_name(clang_type);
+    }
     ROSE_ASSERT(!name_str.empty());
     return build_with_qualifier(nullptr, name_str, nullptr);
   }
