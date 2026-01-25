@@ -29,6 +29,9 @@ help() {
     echo "        The build tree must provide a compile_commands.json file. The default"
     echo "        configuration expects it at ./build/compile_commands.json."
     echo
+    echo "        To override the output directory without editing the config, set"
+    echo "        MRDOCS_OUTPUT_DIR to a path under the project root."
+    echo
     echo "        The following command-line switches are understood:"
     echo
     echo "        --help | -h"
@@ -1100,6 +1103,14 @@ fi
 check-prerequisites
 CONFIG="$(config-file "${1-$DEFAULT_CONFIG}")"
 output_dir="$(output-dir-from-config "$CONFIG")"
+output_override="${MRDOCS_OUTPUT_DIR-}"
+if [ -n "$output_override" ]; then
+    if [[ "$output_override" = /* ]]; then
+        output_dir="$output_override"
+    else
+        output_dir="$(cd "$(rose-source)" && pwd -P)/$output_override"
+    fi
+fi
 if [ -n "$output_dir" ] && [ -d "$output_dir" ]; then
     rose_root="$(cd "$(rose-source)" && pwd -P)"
     resolved_output_dir="$(cd "$output_dir" && pwd -P)" || die "unable to resolve output directory: $output_dir"
@@ -1152,7 +1163,13 @@ docs_dir="$(mktemp -d)"
 include_overlay="$(build-include-overlay "$compiler" "$docs_dir" "$compilation_db")"
 docs_db="$(filter-compilation-db "$CONFIG" "$compilation_db" "$docs_dir" "$include_overlay")"
 
+output_args=()
+if [ -n "${MRDOCS_OUTPUT_DIR-}" ]; then
+    output_args=(--output "$output_dir")
+fi
+
 "$MRDOCS_CMD" --config "$CONFIG" --compilation-database "$docs_db" \
+    "${output_args[@]}" \
     "${stdlib_args[@]}" \
     "${libc_args[@]}"
 if [ -n "$output_dir" ]; then

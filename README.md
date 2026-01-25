@@ -59,4 +59,9 @@ and build the site.
 scripts/build-docs
 ```
 
-Output is written to `_site`.
+Output is written to `_site` and `docs/reference` by default. To keep all
+generated files under the build tree, set `DOCS_SCRATCH_DIR`, for example:
+
+```bash
+DOCS_SCRATCH_DIR=build/docs-scratch scripts/build-docs
+```

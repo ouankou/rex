@@ -11,6 +11,26 @@ TOOLS_DIR="${DOCS_TOOLS_DIR:-$root/.tools}"
 MRDOCS_ROOT="${MRDOCS_ROOT:-$TOOLS_DIR/mrdocs}"
 JOBS="${DOCS_JOBS:-32}"
 ANTLR4_EXECUTABLE="${DOCS_ANTLR4_EXECUTABLE:-}"
+DOCS_SOURCE_DIR="$root/docs"
+DOCS_DIR="$DOCS_SOURCE_DIR"
+REFERENCE_DIR="$DOCS_SOURCE_DIR/reference"
+SITE_DIR="$root/_site"
+MKDOCS_CONFIG="$root/mkdocs.yml"
+SCRATCH_DIR="${DOCS_SCRATCH_DIR-}"
+
+if [ -n "$SCRATCH_DIR" ]; then
+  if [[ "$SCRATCH_DIR" != /* ]]; then
+    SCRATCH_DIR="$root/$SCRATCH_DIR"
+  fi
+  if [ "$SCRATCH_DIR" = "$root" ] || [[ "$SCRATCH_DIR" != "$root/"* ]]; then
+    echo "$arg0: error: DOCS_SCRATCH_DIR must be under the project root: $SCRATCH_DIR" >&2
+    exit 1
+  fi
+  DOCS_DIR="$SCRATCH_DIR/docs"
+  REFERENCE_DIR="$DOCS_DIR/reference"
+  SITE_DIR="$SCRATCH_DIR/_site"
+  MKDOCS_CONFIG="$SCRATCH_DIR/mkdocs.yml"
+fi
 
 die() {
   echo "$arg0: error:" "$@" >&2
@@ -99,16 +119,64 @@ if [ ! -f "$BUILD_DIR/compile_commands.json" ]; then
     "${cmake_args[@]}"
 fi
 
-"$root/scripts/generate-api-documentation"
-python3 "$root/scripts/generate-reference-stubs.py"
-python3 "$root/scripts/fix-reference-relfileprefix.py"
-python3 "$root/scripts/link-reference-types.py"
-python3 "$root/scripts/add-signatures-to-function-tables.py"
-python3 "$root/scripts/validate-docs-output.py"
+if [ -n "$SCRATCH_DIR" ]; then
+  rm -rf "$DOCS_DIR"
+  mkdir -p "$DOCS_DIR"
+  for item in "$DOCS_SOURCE_DIR"/*; do
+    base="$(basename "$item")"
+    if [ "$base" = "reference" ]; then
+      continue
+    fi
+    cp -a "$item" "$DOCS_DIR/"
+  done
+  MRDOCS_OUTPUT_DIR="$REFERENCE_DIR" "$root/scripts/generate-api-documentation"
+else
+  "$root/scripts/generate-api-documentation"
+fi
+python3 "$root/scripts/generate-reference-stubs.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/fix-reference-relfileprefix.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/link-reference-types.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/add-signatures-to-function-tables.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/validate-docs-output.py" --reference-dir "$REFERENCE_DIR" --root "$root"
 
-"$VENV_DIR/bin/mkdocs" build -f "$root/mkdocs.yml"
-python3 "$root/scripts/generate-api-symbol-index.py" "$root/docs/reference/sections" "$root/_site/assets/api/symbols.json"
-python3 "$root/scripts/validate-reference-return-links.py"
-python3 "$root/scripts/validate-site-links.py"
+if [ -n "$SCRATCH_DIR" ]; then
+  "$VENV_DIR/bin/python" - "$root/mkdocs.yml" "$MKDOCS_CONFIG" "$DOCS_DIR" "$SITE_DIR" "$root" <<'PY'
+import sys
+from pathlib import Path
 
-echo "Docs built in $root/_site"
+import yaml
+
+src = Path(sys.argv[1]).resolve()
+dst = Path(sys.argv[2]).resolve()
+docs_dir = Path(sys.argv[3]).resolve()
+site_dir = Path(sys.argv[4]).resolve()
+root = Path(sys.argv[5]).resolve()
+
+data = yaml.safe_load(src.read_text(encoding="utf-8")) or {}
+data["docs_dir"] = str(docs_dir)
+data["site_dir"] = str(site_dir)
+
+hooks = data.get("hooks")
+if isinstance(hooks, list):
+    updated = []
+    for hook in hooks:
+        if isinstance(hook, str):
+            hook_path = Path(hook)
+            if not hook_path.is_absolute():
+                hook_path = root / hook_path
+            updated.append(str(hook_path))
+        else:
+            updated.append(hook)
+    data["hooks"] = updated
+
+dst.parent.mkdir(parents=True, exist_ok=True)
+dst.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+PY
+fi
+
+"$VENV_DIR/bin/mkdocs" build -f "$MKDOCS_CONFIG"
+python3 "$root/scripts/generate-api-symbol-index.py" "$REFERENCE_DIR/sections" "$SITE_DIR/assets/api/symbols.json"
+python3 "$root/scripts/validate-reference-return-links.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/validate-site-links.py" --site-dir "$SITE_DIR" --root "$root"
+
+echo "Docs built in $SITE_DIR"
