@@ -31,36 +31,6 @@ using namespace Rose;
 #define OUTPUT_DEBUGGING_INFORMATION 0
 
 namespace {
-bool getOperatorFunctionName(SgExpression *expr, string &func_name) {
-  if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
-    ASSERT_not_null(func_ref->get_symbol());
-    func_name = func_ref->get_symbol()->get_name().str();
-    return true;
-  }
-  if (SgTemplateFunctionRefExp *func_ref = isSgTemplateFunctionRefExp(expr)) {
-    ASSERT_not_null(func_ref->get_symbol());
-    func_name = func_ref->get_symbol()->get_name().str();
-    return true;
-  }
-  if (SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr)) {
-    ASSERT_not_null(mfunc_ref->get_symbol());
-    func_name = mfunc_ref->get_symbol()->get_name().str();
-    return true;
-  }
-  if (SgTemplateMemberFunctionRefExp *mfunc_ref =
-          isSgTemplateMemberFunctionRefExp(expr)) {
-    ASSERT_not_null(mfunc_ref->get_symbol());
-    func_name = mfunc_ref->get_symbol()->get_name().str();
-    return true;
-  }
-  if (SgNonrealRefExp *nr_ref = isSgNonrealRefExp(expr)) {
-    ASSERT_not_null(nr_ref->get_symbol());
-    func_name = nr_ref->get_symbol()->get_name().str();
-    return true;
-  }
-  return false;
-}
-
 bool isBinaryOperatorName(const string &func_name) {
   return func_name == "operator+" || func_name == "operator-" ||
          func_name == "operator*" || func_name == "operator/" ||

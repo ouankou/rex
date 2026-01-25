@@ -58,6 +58,8 @@ bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
                    static_cast<SgStatement *>(decl)) != stmts.end();
 }
 
+} // namespace
+
 bool getOperatorFunctionName(SgExpression *expr, string &func_name) {
   if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
     ASSERT_not_null(func_ref->get_symbol());
@@ -87,7 +89,6 @@ bool getOperatorFunctionName(SgExpression *expr, string &func_name) {
   }
   return false;
 }
-} // namespace
 
 // MS: temporary flag for experiments with uparsing of template instantiations
 bool Unparse_MOD_SAGE::experimentalMode = false;

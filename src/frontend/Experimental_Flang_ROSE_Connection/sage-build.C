@@ -165,43 +165,6 @@ void MarkFortranImplicitDeclaration(SgVariableDeclaration *decl) {
                         new FortranImplicitDeclAttribute());
 }
 
-void EnsureCaseInsensitiveSymbolTable(SgScopeStatement *scope) {
-  if (scope == nullptr) {
-    return;
-  }
-  if (!SageInterface::is_language_case_insensitive()) {
-    return;
-  }
-  SgSymbolTable *old_table = scope->get_symbol_table();
-  if (old_table == nullptr) {
-    return;
-  }
-  if (old_table->isCaseInsensitive()) {
-    return;
-  }
-  std::set<SgNode *> symbols = old_table->get_symbols();
-  if (symbols.empty()) {
-    scope->setCaseInsensitive(true);
-    return;
-  }
-  SgSymbolTable *new_table = new SgSymbolTable();
-  ASSERT_not_null(new_table);
-  new_table->set_parent(scope);
-  scope->set_symbol_table(new_table);
-  scope->setCaseInsensitive(true);
-  for (SgNode *sym_node : symbols) {
-    SgSymbol *symbol = isSgSymbol(sym_node);
-    if (symbol == nullptr) {
-      continue;
-    }
-    scope->insert_symbol(symbol->get_name(), symbol);
-    old_table->remove(symbol);
-  }
-  // Detach the old table to avoid leaving a parent pointer to a later-deleted
-  // scope while keeping symbols alive.
-  old_table->set_parent(nullptr);
-}
-
 void EnsureSymbolsForBlockDeclarations(SgBasicBlock *block) {
   if (block == nullptr) {
     return;
@@ -2183,45 +2146,6 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
   }
   SgBasicBlock *functionBody = functionDef->get_body();
   ASSERT_not_null(functionBody);
-  auto transfer_symbols = [&](SgScopeStatement *from_scope,
-                              SgScopeStatement *to_scope) {
-    if (from_scope == nullptr || to_scope == nullptr) {
-      return;
-    }
-    SgSymbolTable *symtab = from_scope->get_symbol_table();
-    if (symtab == nullptr) {
-      return;
-    }
-    std::set<SgNode *> symbols = symtab->get_symbols();
-    for (SgNode *symNode : symbols) {
-      SgSymbol *symbol = isSgSymbol(symNode);
-      if (symbol == nullptr) {
-        continue;
-      }
-      if (isSgLabelSymbol(symbol) != nullptr) {
-        continue;
-      }
-      SgName name = symbol->get_name();
-      if (to_scope->symbol_exists(name)) {
-        continue;
-      }
-      from_scope->remove_symbol(symbol);
-      to_scope->insert_symbol(name, symbol);
-      if (symbol->get_parent() != to_scope->get_symbol_table()) {
-        symbol->set_parent(to_scope->get_symbol_table());
-      }
-      if (auto *varSym = isSgVariableSymbol(symbol)) {
-        if (SgInitializedName *initName = varSym->get_declaration()) {
-          if (initName->get_scope() == from_scope) {
-            initName->set_scope(to_scope);
-          }
-          if (initName->get_parent() == from_scope) {
-            initName->set_parent(to_scope);
-          }
-        }
-      }
-    }
-  };
   auto fix_initnames_from_param_scope = [&](SgScopeStatement *target_scope,
                                             SgScopeStatement *old_scope) {
     if (target_scope == nullptr || old_scope == nullptr) {
@@ -2325,14 +2249,18 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
       }
     }
   };
+  const bool force_case_insensitive =
+      SageInterface::is_language_case_insensitive();
   SgName functionName = functionDecl->get_name();
   SgVariableSymbol *resultSymbol =
       paramBlock->lookup_variable_symbol(functionName);
-  EnsureCaseInsensitiveSymbolTable(paramBlock);
-  EnsureCaseInsensitiveSymbolTable(functionBody);
+  SageInterface::ensureCaseInsensitiveSymbolTable(paramBlock,
+                                                  force_case_insensitive);
+  SageInterface::ensureCaseInsensitiveSymbolTable(functionBody,
+                                                  force_case_insensitive);
   EnsureSymbolsForBlockDeclarations(paramBlock);
   SageInterface::moveStatementsBetweenBlocks(paramBlock, functionBody);
-  transfer_symbols(paramBlock, functionBody);
+  SageInterface::transferSymbols(paramBlock, functionBody);
   rehome_param_scope_statements(paramBlock, functionBody);
   fix_initnames_from_param_scope(functionBody, paramScope);
   if (paramScope != nullptr) {
@@ -2572,8 +2500,11 @@ void BuildVisitor::Build(parser::AssociateConstruct &x) {
     set_label(endStmt.label, SgLabelSymbol::e_end_label_type);
   }
 
-  EnsureCaseInsensitiveSymbolTable(associateStatement);
-  EnsureCaseInsensitiveSymbolTable(body);
+  const bool force_case_insensitive =
+      SageInterface::is_language_case_insensitive();
+  SageInterface::ensureCaseInsensitiveSymbolTable(associateStatement,
+                                                  force_case_insensitive);
+  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
 
   SageInterface::setSourcePosition(body);
   SageBuilder::pushScopeStack(body);

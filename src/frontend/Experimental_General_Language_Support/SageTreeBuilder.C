@@ -1187,78 +1187,6 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
       (language_ == LanguageEnum::Fortran) ||
       SageInterface::is_language_case_insensitive();
 
-  auto ensure_case_insensitive_symbol_table = [&](SgScopeStatement *scope) {
-    if (!force_case_insensitive || scope == nullptr) {
-      return;
-    }
-    SgSymbolTable *old_table = scope->get_symbol_table();
-    if (old_table == nullptr) {
-      return;
-    }
-    if (old_table->isCaseInsensitive()) {
-      return;
-    }
-    std::set<SgNode *> symbols = old_table->get_symbols();
-    if (symbols.empty()) {
-      scope->setCaseInsensitive(true);
-      return;
-    }
-    SgSymbolTable *new_table = new SgSymbolTable();
-    ASSERT_not_null(new_table);
-    new_table->set_parent(scope);
-    scope->set_symbol_table(new_table);
-    scope->setCaseInsensitive(true);
-    for (SgNode *sym_node : symbols) {
-      SgSymbol *symbol = isSgSymbol(sym_node);
-      if (symbol == nullptr) {
-        continue;
-      }
-      scope->insert_symbol(symbol->get_name(), symbol);
-      old_table->remove(symbol);
-    }
-    old_table->set_parent(nullptr);
-  };
-
-  auto transfer_symbols = [&](SgScopeStatement *from_scope,
-                              SgScopeStatement *to_scope) {
-    if (from_scope == nullptr || to_scope == nullptr) {
-      return;
-    }
-    SgSymbolTable *symtab = from_scope->get_symbol_table();
-    if (symtab == nullptr) {
-      return;
-    }
-    std::set<SgNode *> symbols = symtab->get_symbols();
-    for (SgNode *symNode : symbols) {
-      SgSymbol *symbol = isSgSymbol(symNode);
-      if (symbol == nullptr) {
-        continue;
-      }
-      if (isSgLabelSymbol(symbol) != nullptr) {
-        continue;
-      }
-      const SgName name = symbol->get_name();
-      if (to_scope->symbol_exists(name)) {
-        continue;
-      }
-      from_scope->remove_symbol(symbol);
-      to_scope->insert_symbol(name, symbol);
-      if (symbol->get_parent() != to_scope->get_symbol_table()) {
-        symbol->set_parent(to_scope->get_symbol_table());
-      }
-      if (auto *varSym = isSgVariableSymbol(symbol)) {
-        if (SgInitializedName *initName = varSym->get_declaration()) {
-          if (initName->get_scope() == from_scope) {
-            initName->set_scope(to_scope);
-          }
-          if (initName->get_parent() == from_scope) {
-            initName->set_parent(to_scope);
-          }
-        }
-      }
-    }
-  };
-
   auto ensure_symbols_for_block = [&](SgBasicBlock *block) {
     if (block == nullptr) {
       return;
@@ -1339,12 +1267,14 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
           has_symbols = !symtab->get_symbols().empty();
         }
         if (has_statements || has_symbols) {
-          ensure_case_insensitive_symbol_table(param_block);
-          ensure_case_insensitive_symbol_table(function_body);
+          SageInterface::ensureCaseInsensitiveSymbolTable(
+              param_block, force_case_insensitive);
+          SageInterface::ensureCaseInsensitiveSymbolTable(
+              function_body, force_case_insensitive);
           ensure_symbols_for_block(param_block);
           SageInterface::moveStatementsBetweenBlocks(param_block,
                                                      function_body);
-          transfer_symbols(param_block, function_body);
+          SageInterface::transferSymbols(param_block, function_body);
         }
       }
 
