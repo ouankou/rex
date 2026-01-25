@@ -138,6 +138,8 @@ public:
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::UseStmt>> &);
   void Build(Fortran::parser::Statement<
+             Fortran::common::Indirection<Fortran::parser::ImportStmt>> &);
+  void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::ParameterStmt>> &);
   void
   Build(Fortran::parser::Statement<
@@ -147,6 +149,7 @@ public:
   // SpecificationConstruct
   void Build(Fortran::parser::DataStmt &);
   void Build(Fortran::parser::AllocatableStmt &);
+  void Build(Fortran::parser::BasedPointerStmt &);
   void Build(Fortran::parser::ExternalStmt &);
   void Build(Fortran::parser::InterfaceBlock &);
   void Build(Fortran::parser::DerivedTypeDef &);

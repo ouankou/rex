@@ -96,7 +96,7 @@ if(enable-fortran)
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND $<TARGET_FILE:testUninitializedFields>
         ${_uninit_flags}
-        -std=f90
+        -rose:fortran_std=f90
         -c ${_uninit_fortran_dir}/${testcode}
     )
   endforeach()
@@ -108,7 +108,7 @@ if(enable-fortran)
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND $<TARGET_FILE:testUninitializedFields>
         ${_uninit_flags}
-        -std=f77
+        -rose:fortran_std=f77
         -c ${_uninit_fortran_dir}/${testcode}
     )
   endforeach()
@@ -122,7 +122,7 @@ if(enable-fortran)
         ${_uninit_flags}
         -rose:skip_syntax_check
         -rose:skipfinalCompileStep
-        -std=f2003
+        -rose:fortran_std=f2003
         -c ${_uninit_fortran_dir}/${testcode}
     )
   endforeach()

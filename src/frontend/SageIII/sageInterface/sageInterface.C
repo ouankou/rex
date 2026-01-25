@@ -6088,6 +6088,13 @@ SageInterface::lookupVariableSymbolInParentScopes(const SgName &name,
     // I think this will resolve SgAliasSymbols to be a SgClassSymbol where the
     // alias is of a SgClassSymbol.
     symbol = cscope->lookup_variable_symbol(name);
+    if (symbol == NULL) {
+      if (SgSymbol *alias_candidate = cscope->lookup_symbol(name)) {
+        if (SgAliasSymbol *alias_symbol = isSgAliasSymbol(alias_candidate)) {
+          symbol = isSgVariableSymbol(alias_symbol->get_alias());
+        }
+      }
+    }
 
     if (cscope->get_parent() !=
         NULL) // avoid calling get_scope when parent is not set
@@ -20406,7 +20413,8 @@ static void moveOneStatement(SgScopeStatement *sourceBlock,
           if (nondef_decl->get_file_info()->isCompilerGenerated())
             nondef_decl->set_scope(targetBlock);
         }
-      } else if (isSgTypedefDeclaration(stmt) || isSgEnumDeclaration(stmt)) {
+      } else if (isSgTypedefDeclaration(stmt) || isSgEnumDeclaration(stmt) ||
+                 isSgDerivedTypeStatement(stmt) || isSgModuleStatement(stmt)) {
         // Rasmussen 9/21/2020,10/27/2020,11/4/2020: Uncovered by issues RC-135
         // and RC-227. The issues are fixed in the switch statement below but
         // this test is needed so that the warning message immediately below is

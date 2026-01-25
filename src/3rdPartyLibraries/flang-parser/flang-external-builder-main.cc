@@ -13,7 +13,7 @@
 // By default, runs the supplied source files through the F18 preprocessing and
 // parsing phases, reconstitutes a Fortran program from the parse tree, and
 // passes that Fortran program to a Fortran compiler identified by the $F18_FC
-// environment variable (defaulting to flang-20).  The Fortran preprocessor is
+// environment variable (defaulting to flang).  The Fortran preprocessor is
 // always run, whatever the case of the source file extension.  Unrecognized
 // options are passed through to the underlying Fortran compiler.
 //
@@ -39,8 +39,10 @@
 #include <filesystem>
 #include <fstream>
 #include <llvm/Support/Path.h>
+#include <system_error>
 
 std::vector<std::string> filesToDelete;
+std::string includeTempDir;
 
 namespace {
 bool IsIncludeDirective(const std::string &line, size_t &headerEnd,
@@ -137,9 +139,21 @@ bool WriteIncludeFixedCopy(const std::string &path, std::string &fixedPath) {
     return false;
   }
 
-  std::filesystem::path dir = std::filesystem::path(path).parent_path();
-  if (dir.empty()) {
-    dir = ".";
+  std::filesystem::path dir;
+  if (!includeTempDir.empty()) {
+    dir = includeTempDir;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (ec) {
+      llvm::errs() << "f18-parse-demo: could not create include temp dir "
+                   << dir.string() << ": " << ec.message() << "\n";
+      std::exit(EXIT_FAILURE);
+    }
+  } else {
+    dir = std::filesystem::path(path).parent_path();
+    if (dir.empty()) {
+      dir = ".";
+    }
   }
   llvm::SmallString<256> pattern(dir.string());
   llvm::sys::path::append(pattern, "rose-f18-include-%%%%.F90");
@@ -158,6 +172,14 @@ bool WriteIncludeFixedCopy(const std::string &path, std::string &fixedPath) {
   return true;
 }
 } // namespace
+
+void flang_external_builder_set_include_tmpdir(const char *path) {
+  if (path == nullptr || *path == '\0') {
+    includeTempDir.clear();
+    return;
+  }
+  includeTempDir = path;
+}
 
 static bool IsFixedFormFile(const std::string &path) {
   auto dot = path.rfind('.');

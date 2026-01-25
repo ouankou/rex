@@ -4,19 +4,14 @@ This file outlines some of the recent work to support Fortran.
   can seamlessly handle C/C++ as well as Fortran source codes as input.  All the
   extensions (that I know of to be common for Fortran) were added.
 
-* Specific commandline options added to support fortran.  New options include:
-     * specification of fixed format input: -qfixed, -fixed, -Mfixed, -ffixed-form
-     * specification of free format input:  -qfree, -free, -Mfree, -free-form
+* Specific commandline options added to support Fortran.  New options include:
+     * specification of fixed format input: -ffixed-form
+     * specification of free format input:  -ffree-form
      * specification of fixed format code generation: -rose:fixedOutput or -rose:fixedFormatOutput
      * specification of free format code generation:  -rose:freeOutput or -rose:freeFormatOutput
-     * specification of implicit none mode using GNU gfortran option: -fimplicit_none
-     * specification of OpenMP support using GNU gfortran option: -fopenmp
+     * specification of the Fortran dialect: -rose:fortran_std=<f77|f90|f95|f2003|f2008|f2018>
 
      This table is also represented in ROSE/src/ROSETTA/Grammar/Support.code (as documentation).
-  // Fortran source file format options for different compilers(for IBM/XL,Intel,Portland,GNU):
-  //     IBM/XL           Intel            Portland     GNU
-  //    -qfixed          -fixed           -Mfixed      -ffixed-form
-  //    -qfree           -free            -Mfree       -free-form
 
 * ROSE Code generation (unparser) was reorganized and refactored to support
   multiple languages:
@@ -46,7 +41,6 @@ This file outlines some of the recent work to support Fortran.
       back from OFP to C code (c_action_ functions) is now implemented and working
       fine.
     * Very few c_actions have been implemented thus far (more to come).
-
 
 
 

@@ -16,18 +16,18 @@ At present ROSE compiles about all of the POP code.  Specific tests include:
       repeated multiple times); details below in point 1-9.
    3) Unparsing to generate new code (not tested yet)
    4) Compiling the generated (unparsed) code to verify that it will compile using the
-      gfortran compiler (not tested yet).
+      Flang backend compiler (not tested yet).
 
 Commented out parts of POP files required to compile using ROSE:
 
 1) File: mpif.h
-   ROSE calls the gfortran syntax checking which reports that REAL*8 is not standard for F90.
- This is not a ROSE specific issue, but since we use gfortran for syntax checking of input
-code it is a problem to address at some point.  This is mostly a strictness issue in
-gfortran.  We first run any input for through gfortran for syntax checking, and using
-the "-fsyntax-only -std=f95" option the following is an error:
+   ROSE runs backend syntax checking, which reports that REAL*8 is not standard
+ for strict F95 mode. This is not a ROSE-specific issue; it is a strictness
+ issue in the compiler's diagnostics. When running syntax checking with
+ "-fsyntax-only" and requesting F95 dialect (e.g., -rose:fortran_std=f95),
+ the following is an error:
 
-     ! DQ (8/5/2010): Bug in use of gfortran for syntax checking of input to ROSE.
+     ! DQ (8/5/2010): Backend compiler strictness during syntax checking of input to ROSE.
      ! REAL*8 MPI_WTIME, MPI_WTICK
      ! REAL*8 PMPI_WTIME, PMPI_WTICK
        REAL MPI_WTIME, MPI_WTICK
@@ -112,5 +112,4 @@ AND
 !            VTFB = merge( -bottom_heat_flx, VTFB,      &
 !                         k == KMT(:,:,bid) .and.       &
 !                         zw(k) >= bottom_heat_flx_depth)
-
 

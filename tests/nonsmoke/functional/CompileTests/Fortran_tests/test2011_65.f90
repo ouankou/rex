@@ -1,9 +1,6 @@
-! S08C-cant-assert-keyword-nonnull.f90
-! In 'c_action_actual_arg_spec', assertion 'keyword' != NULL is incorrect.
-! CASE C: rule for 'actual_arg_spec'.
-!
-! An alternate return specifier following a keyword argument in an
-! actual argument list causes the front end to fail an assertion.
+! Legacy OFP regression used an invalid keyword + alternate return call.
+! Flang requires positional arguments for alternate returns, so keep a valid
+! alternate-return call to exercise unparse.
 
 ! The subroutine definition for reference below is commented out because
 ! it causes front end to fail another assertion before showing this bug.
@@ -16,7 +13,7 @@ program p
     ! The following call is incorrect because F90 requires that
     ! positional arguments come before keyword arguments.
     ! However, OFP accepts it and ROSE fails an assertion on it.
-    call g(k=0, *100, *200)  ! assertion failure: 'keyword' is null
+    call g(0, *100, *200)
 100 continue
 200 continue
 end program

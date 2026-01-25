@@ -1084,7 +1084,37 @@ void FortranCodeGeneration_locatedNode::unparseAggrInit(SgExpression *expr,
   SgAggregateInitializer *aggr_init = isSgAggregateInitializer(expr);
   ASSERT_not_null(aggr_init);
 
-  unparseInitializerList(aggr_init->get_initializers(), info);
+  SgType *explicitType = aggr_init->get_type();
+  const bool hasExplicitType = explicitType != nullptr &&
+                               isSgTypeDefault(explicitType) == nullptr &&
+                               isSgTypeUnknown(explicitType) == nullptr;
+  if (!hasExplicitType) {
+    unparseInitializerList(aggr_init->get_initializers(), info);
+    return;
+  }
+
+  SgExprListExp *expr_list = aggr_init->get_initializers();
+  ASSERT_not_null(expr_list);
+
+  info.set_nested_expression();
+  curprint("(/");
+  unp->u_fortran_type->unparseType(explicitType, info, false);
+  curprint(" ::");
+
+  bool needComma = false;
+  for (SgExpression *item : expr_list->get_expressions()) {
+    if (ImpliedDoHasZeroIterations(item)) {
+      continue;
+    }
+    if (needComma) {
+      curprint(",");
+    }
+    unparseExpression(item, info);
+    needComma = true;
+  }
+
+  curprint("/)");
+  info.unset_nested_expression();
 }
 
 void FortranCodeGeneration_locatedNode::unparseConInit(SgExpression *expr,

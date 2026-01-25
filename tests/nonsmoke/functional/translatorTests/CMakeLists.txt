@@ -175,7 +175,7 @@ if(ENABLE-C)
   add_test(
     NAME Translator_testFortranProtected
     COMMAND sh -c
-      "gfortran -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03 && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null"
+      "${BACKEND_FORTRAN_COMPILER} -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03 && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null"
   )
 
 endif()

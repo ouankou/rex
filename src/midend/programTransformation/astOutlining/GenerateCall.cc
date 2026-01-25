@@ -7,6 +7,8 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
+#include "sageInterface.h"
+
 #include "sageBuilder.h"
 
 #include <iostream>
@@ -127,6 +129,117 @@ static void appendSingleWrapperArgument(const ASTtools::VarSymSet_t &syms,
   }
 }
 
+static void
+appendExplicitTemplateArguments(const SgTemplateParameterPtrList &params,
+                                SgTemplateArgumentPtrList &args) {
+  int param_index = 0;
+  for (SgTemplateParameter *param : params) {
+    if (param == NULL) {
+      ++param_index;
+      continue;
+    }
+    switch (param->get_parameterType()) {
+    case SgTemplateParameter::type_parameter: {
+      SgType *arg_type = param->get_type();
+      if (arg_type == NULL)
+        arg_type = param->get_defaultTypeParameter();
+      if (arg_type != NULL) {
+        args.push_back(new SgTemplateArgument(arg_type, true));
+      }
+      break;
+    }
+    case SgTemplateParameter::nontype_parameter: {
+      SgExpression *arg_expr = param->get_expression();
+      if (arg_expr == NULL) {
+        SgTemplateParameterVal *param_val =
+            SageBuilder::buildTemplateParameterVal_nfi(param_index, "");
+        SgType *value_type = param->get_type();
+        if (value_type == NULL && param->get_initializedName() != NULL)
+          value_type = param->get_initializedName()->get_type();
+        if (value_type != NULL)
+          param_val->set_valueType(value_type);
+        arg_expr = param_val;
+      }
+      if (arg_expr != NULL) {
+        args.push_back(new SgTemplateArgument(arg_expr, true));
+      }
+      break;
+    }
+    case SgTemplateParameter::template_parameter: {
+      SgTemplateDeclaration *template_decl =
+          isSgTemplateDeclaration(param->get_templateDeclaration());
+      if (template_decl != NULL) {
+        args.push_back(new SgTemplateArgument(template_decl, true));
+      }
+      break;
+    }
+    default:
+      break;
+    }
+    ++param_index;
+  }
+}
+
+static SgFunctionDeclaration *
+buildTemplateInstantiationForCall(SgTemplateFunctionDeclaration *template_func,
+                                  SgScopeStatement *scope) {
+  if (template_func == NULL || scope == NULL)
+    return NULL;
+
+  const SgTemplateParameterPtrList *params =
+      &(template_func->get_templateParameters());
+  SgTemplateFunctionDeclaration *template_decl = template_func;
+  if (params->empty()) {
+    if (SgTemplateFunctionDeclaration *first = isSgTemplateFunctionDeclaration(
+            template_func->get_firstNondefiningDeclaration())) {
+      params = &(first->get_templateParameters());
+      template_decl = first;
+    }
+  }
+  if (params->empty())
+    return NULL;
+
+  SgTemplateArgumentPtrList template_args;
+  appendExplicitTemplateArguments(*params, template_args);
+  if (template_args.empty())
+    return NULL;
+
+  SgFunctionParameterList *param_list =
+      SageInterface::deepCopy<SgFunctionParameterList>(
+          template_func->get_parameterList());
+  ROSE_ASSERT(param_list != NULL);
+
+  SgFunctionType *func_type = template_func->get_type();
+  ROSE_ASSERT(func_type != NULL);
+
+  SgFunctionDeclaration *inst_decl =
+      SageBuilder::buildNondefiningFunctionDeclaration(
+          template_func->get_name(), func_type->get_return_type(), param_list,
+          scope, true, &template_args,
+          template_func->get_declarationModifier()
+              .get_storageModifier()
+              .get_modifier());
+  ROSE_ASSERT(inst_decl != NULL);
+
+  SgTemplateInstantiationFunctionDecl *inst_func =
+      isSgTemplateInstantiationFunctionDecl(inst_decl);
+  ROSE_ASSERT(inst_func != NULL);
+
+  inst_func->set_templateDeclaration(template_decl);
+  inst_func->set_template_argument_list_is_explicit(true);
+
+  if (inst_func->get_startOfConstruct() != NULL) {
+    inst_func->get_startOfConstruct()->setCompilerGenerated();
+    inst_func->get_startOfConstruct()->unsetOutputInCodeGeneration();
+  }
+  if (inst_func->get_endOfConstruct() != NULL) {
+    inst_func->get_endOfConstruct()->setCompilerGenerated();
+    inst_func->get_endOfConstruct()->unsetOutputInCodeGeneration();
+  }
+
+  return inst_decl;
+}
+
 // =====================================================================
 
 //! Generate a call to the outlined function
@@ -152,14 +265,33 @@ SgStatement *Outliner::generateCall(
   // Create a reference to the function.
   SgGlobal *glob_scope = SageInterface::getGlobalScope(scope);
   ROSE_ASSERT(glob_scope != NULL);
-  SgFunctionSymbol *func_symbol =
-      glob_scope->lookup_function_symbol(out_func->get_name());
-  if (func_symbol == NULL) {
-    printf("Failed to find a function symbol in %p for function %s\n",
-           glob_scope, out_func->get_name().getString().c_str());
-    ROSE_ASSERT(func_symbol != NULL);
+  SgExpression *func_ref = NULL;
+  if (SgTemplateFunctionDeclaration *template_func =
+          isSgTemplateFunctionDeclaration(out_func)) {
+    SgFunctionDeclaration *inst_decl =
+        buildTemplateInstantiationForCall(template_func, glob_scope);
+    if (inst_decl != NULL) {
+      func_ref = SageBuilder::buildFunctionRefExp(inst_decl);
+    } else {
+      SgTemplateFunctionSymbol *template_symbol =
+          glob_scope->lookup_template_function_symbol(
+              template_func->get_name(), template_func->get_type(),
+              &(template_func->get_templateParameters()));
+      ROSE_ASSERT(template_symbol != NULL);
+      func_ref = SageBuilder::buildTemplateFunctionRefExp_nfi(template_symbol);
+    }
+  } else {
+    SgFunctionSymbol *func_symbol =
+        glob_scope->lookup_function_symbol(out_func->get_name());
+    if (func_symbol == NULL) {
+      printf("Failed to find a function symbol in %p for function %s\n",
+             glob_scope, out_func->get_name().getString().c_str());
+      ROSE_ASSERT(func_symbol != NULL);
+    }
+    ROSE_ASSERT(func_symbol);
+    func_ref = SageBuilder::buildFunctionRefExp(func_symbol);
   }
-  ROSE_ASSERT(func_symbol);
+  ROSE_ASSERT(func_ref != NULL);
 
   // Create an argument list.
   SgExprListExp *exp_list_exp = SageBuilder::buildExprListExp();
@@ -172,7 +304,7 @@ SgStatement *Outliner::generateCall(
 
   // Generate the actual call.
   SgFunctionCallExp *func_call_expr =
-      SageBuilder::buildFunctionCallExp(func_symbol, exp_list_exp);
+      SageBuilder::buildFunctionCallExp(func_ref, exp_list_exp);
   ROSE_ASSERT(func_call_expr);
 
   SgExprStatement *func_call_stmt =

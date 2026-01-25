@@ -57,6 +57,36 @@ bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
   return std::find(stmts.begin(), stmts.end(),
                    static_cast<SgStatement *>(decl)) != stmts.end();
 }
+
+bool getOperatorFunctionName(SgExpression *expr, string &func_name) {
+  if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
+    ASSERT_not_null(func_ref->get_symbol());
+    func_name = func_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  if (SgTemplateFunctionRefExp *func_ref = isSgTemplateFunctionRefExp(expr)) {
+    ASSERT_not_null(func_ref->get_symbol());
+    func_name = func_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  if (SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr)) {
+    ASSERT_not_null(mfunc_ref->get_symbol());
+    func_name = mfunc_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  if (SgTemplateMemberFunctionRefExp *mfunc_ref =
+          isSgTemplateMemberFunctionRefExp(expr)) {
+    ASSERT_not_null(mfunc_ref->get_symbol());
+    func_name = mfunc_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  if (SgNonrealRefExp *nr_ref = isSgNonrealRefExp(expr)) {
+    ASSERT_not_null(nr_ref->get_symbol());
+    func_name = nr_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  return false;
+}
 } // namespace
 
 // MS: temporary flag for experiments with uparsing of template instantiations
@@ -98,17 +128,9 @@ void Unparse_MOD_SAGE::cur_set_linewrap(int) { unp->cur.set_linewrap(-1); }
 //  overloading function
 //-----------------------------------------------------------------------------------
 bool Unparse_MOD_SAGE::isBinaryEqualsOperator(SgExpression *expr) {
-  SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr);
-  SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-  if (!func_ref && !mfunc_ref)
-    return false;
-
   string func_name;
-  if (func_ref != NULL)
-    func_name = func_ref->get_symbol()->get_name().str();
-  else
-    func_name = mfunc_ref->get_symbol()->get_name().str();
+  if (!getOperatorFunctionName(expr, func_name))
+    return false;
 
   if (func_name == "operator=")
     return true;
@@ -122,17 +144,9 @@ bool Unparse_MOD_SAGE::isBinaryEqualsOperator(SgExpression *expr) {
 //  overloading function
 //-----------------------------------------------------------------------------------
 bool Unparse_MOD_SAGE::isBinaryEqualityOperator(SgExpression *expr) {
-  SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr);
-  SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-  if (!func_ref && !mfunc_ref)
-    return false;
-
   string func_name;
-  if (func_ref != NULL)
-    func_name = func_ref->get_symbol()->get_name().str();
-  else
-    func_name = mfunc_ref->get_symbol()->get_name().str();
+  if (!getOperatorFunctionName(expr, func_name))
+    return false;
 
   if (func_name == "operator==")
     return true;
@@ -147,17 +161,9 @@ bool Unparse_MOD_SAGE::isBinaryEqualityOperator(SgExpression *expr) {
 //  overloading function
 //-----------------------------------------------------------------------------------
 bool Unparse_MOD_SAGE::isBinaryInequalityOperator(SgExpression *expr) {
-  SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr);
-  SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-  if (!func_ref && !mfunc_ref)
-    return false;
-
   string func_name;
-  if (func_ref != NULL)
-    func_name = func_ref->get_symbol()->get_name().str();
-  else
-    func_name = mfunc_ref->get_symbol()->get_name().str();
+  if (!getOperatorFunctionName(expr, func_name))
+    return false;
 
   if (func_name == "operator<=" || func_name == "operator>=" ||
       func_name == "operator<" || func_name == "operator>" ||
@@ -175,17 +181,9 @@ bool Unparse_MOD_SAGE::isBinaryInequalityOperator(SgExpression *expr) {
 //  overloading function
 //-----------------------------------------------------------------------------------
 bool Unparse_MOD_SAGE::isBinaryArithmeticOperator(SgExpression *expr) {
-  SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr);
-  SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-  if (!func_ref && !mfunc_ref)
-    return false;
-
   string func_name;
-  if (func_ref != NULL)
-    func_name = func_ref->get_symbol()->get_name().str();
-  else
-    func_name = mfunc_ref->get_symbol()->get_name().str();
+  if (!getOperatorFunctionName(expr, func_name))
+    return false;
 
   if (func_name == "operator+" || func_name == "operator-" ||
       func_name == "operator*" || func_name == "operator/" ||
@@ -204,17 +202,9 @@ bool Unparse_MOD_SAGE::isBinaryArithmeticOperator(SgExpression *expr) {
 //  overloading function
 //-----------------------------------------------------------------------------------
 bool Unparse_MOD_SAGE::isBinaryParenOperator(SgExpression *expr) {
-  SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr);
-  SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-  if (!func_ref && !mfunc_ref)
-    return false;
-
   string func_name;
-  if (func_ref != NULL)
-    func_name = func_ref->get_symbol()->get_name().str();
-  else
-    func_name = mfunc_ref->get_symbol()->get_name().str();
+  if (!getOperatorFunctionName(expr, func_name))
+    return false;
 
   if (func_name == "operator()")
     return true;
@@ -229,17 +219,9 @@ bool Unparse_MOD_SAGE::isBinaryParenOperator(SgExpression *expr) {
 //  overloading function
 //-----------------------------------------------------------------------------------
 bool Unparse_MOD_SAGE::isBinaryBracketOperator(SgExpression *expr) {
-  SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr);
-  SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-  if (!func_ref && !mfunc_ref)
-    return false;
-
   string func_name;
-  if (func_ref != NULL)
-    func_name = func_ref->get_symbol()->get_name().str();
-  else
-    func_name = mfunc_ref->get_symbol()->get_name().str();
+  if (!getOperatorFunctionName(expr, func_name))
+    return false;
 
   if (func_name == "operator[]")
     return true;
@@ -258,21 +240,9 @@ bool Unparse_MOD_SAGE::isBinaryOperator(SgExpression *expr) {
 
   bool isBinaryOperatorResult = false;
 
-  SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr);
-  SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr);
-
-  if (!func_ref && !mfunc_ref)
-    return false;
-
   string func_name;
-  if (func_ref != NULL) {
-    ASSERT_not_null(func_ref->get_symbol());
-    func_name = func_ref->get_symbol()->get_name().str();
-  } else {
-    ASSERT_not_null(mfunc_ref);
-    ASSERT_not_null(mfunc_ref->get_symbol());
-    func_name = mfunc_ref->get_symbol()->get_name().str();
-  }
+  if (!getOperatorFunctionName(expr, func_name))
+    return false;
 
   if (func_name == "operator+" || func_name == "operator-" ||
       func_name == "operator*" || func_name == "operator/" ||

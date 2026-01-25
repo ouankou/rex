@@ -2,9 +2,11 @@
 #include <array>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 
 #include "FlangModuleInfo.h"
 
+#include "Rose/StringUtility/Convert.h"
 #include "Rose/StringUtility/Replace.h"
 
 #include "sage3basic.h"
@@ -97,18 +99,151 @@ string find_existing_module_file(const string &baseName) {
 
   return "";
 }
+
+bool has_fortran_source_suffix(const std::filesystem::path &path) {
+  std::string ext = path.extension().string();
+  if (ext.empty()) {
+    return false;
+  }
+  for (const auto &suffix : kModuleSourceSuffixes) {
+    if (equals_case_insensitive(ext, suffix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool is_fixed_form_source(const std::filesystem::path &path) {
+  std::string ext = path.extension().string();
+  return equals_case_insensitive(ext, ".f");
+}
+
+std::map<std::string, std::string> module_source_index;
+bool module_source_index_built = false;
+
+void index_module_source_file(const std::filesystem::path &path) {
+  std::ifstream in(path);
+  if (!in.is_open()) {
+    return;
+  }
+
+  const bool fixed_form = is_fixed_form_source(path);
+  std::string line;
+  while (std::getline(in, line)) {
+    if (fixed_form && !line.empty()) {
+      char first = line[0];
+      if (first == 'c' || first == 'C' || first == '*' || first == '!') {
+        continue;
+      }
+    }
+
+    size_t comment_pos = line.find('!');
+    if (comment_pos != std::string::npos) {
+      line = line.substr(0, comment_pos);
+    }
+
+    std::string trimmed = Rose::StringUtility::trim(line);
+    if (trimmed.empty()) {
+      continue;
+    }
+
+    std::string lowered = Rose::StringUtility::convertToLowerCase(trimmed);
+    if (lowered.rfind("module", 0) != 0) {
+      continue;
+    }
+
+    std::string rest = Rose::StringUtility::trim(lowered.substr(6));
+    if (rest.empty()) {
+      continue;
+    }
+    if (rest.rfind("procedure", 0) == 0 || rest.rfind("function", 0) == 0 ||
+        rest.rfind("subroutine", 0) == 0) {
+      continue;
+    }
+
+    size_t end = 0;
+    while (end < rest.size() &&
+           (std::isalnum(static_cast<unsigned char>(rest[end])) ||
+            rest[end] == '_')) {
+      ++end;
+    }
+    std::string name = rest.substr(0, end);
+    if (name.empty()) {
+      continue;
+    }
+
+    if (module_source_index.find(name) == module_source_index.end()) {
+      module_source_index[name] = path.string();
+    }
+  }
+}
+
+void build_module_source_index(const std::vector<std::string> &dirs) {
+  if (module_source_index_built) {
+    return;
+  }
+  module_source_index_built = true;
+
+  for (const auto &dir : dirs) {
+    std::filesystem::path path(dir);
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec) ||
+        !std::filesystem::is_directory(path, ec)) {
+      continue;
+    }
+
+    for (const auto &entry : std::filesystem::directory_iterator(path, ec)) {
+      if (ec) {
+        break;
+      }
+      if (!entry.is_regular_file(ec)) {
+        continue;
+      }
+      const std::filesystem::path &candidate = entry.path();
+      if (!has_fortran_source_suffix(candidate)) {
+        continue;
+      }
+      index_module_source_file(candidate);
+    }
+  }
+}
+
+std::string find_module_source_by_name(const std::string &module_name,
+                                       const std::vector<std::string> &dirs) {
+  build_module_source_index(dirs);
+  std::map<std::string, std::string>::const_iterator it =
+      module_source_index.find(module_name);
+  if (it != module_source_index.end()) {
+    return it->second;
+  }
+  return "";
+}
+
+void clear_module_source_index() {
+  module_source_index.clear();
+  module_source_index_built = false;
+}
 } // namespace
 
 FlangModuleInfo::ModuleMapType FlangModuleInfo::moduleNameAstMap;
 unsigned int FlangModuleInfo::nestedSgFile;
 SgProject *FlangModuleInfo::currentProject;
 vector<string> FlangModuleInfo::inputDirs;
+vector<string> FlangModuleInfo::sourceDirs;
 
 bool FlangModuleInfo::isModuleFile() { return nestedSgFile != 0; }
 
 SgProject *FlangModuleInfo::getCurrentProject() { return currentProject; }
 
 string FlangModuleInfo::find_file_from_inputDirs(const string &basename) {
+  std::string module_name = Rose::StringUtility::convertToLowerCase(
+      std::filesystem::path(basename).filename().string());
+  std::string module_source =
+      find_module_source_by_name(module_name, sourceDirs);
+  if (!module_source.empty()) {
+    return module_source;
+  }
+
   for (const auto &dir : inputDirs) {
     string name = (std::filesystem::path(dir) / basename).string();
     string candidate = find_existing_module_file(name);
@@ -122,6 +257,8 @@ string FlangModuleInfo::find_file_from_inputDirs(const string &basename) {
 
 void FlangModuleInfo::set_inputDirs(SgProject *project) {
   inputDirs.clear();
+  sourceDirs.clear();
+  clear_module_source_index();
   vector<string> args = project->get_originalCommandLineArgumentList();
   string rmodDir;
 
@@ -148,6 +285,8 @@ void FlangModuleInfo::set_inputDirs(SgProject *project) {
       "src/3rdPartyLibraries/fortran-parser", "share/rose");
   addInputDir(inputDirs, intrinsic_src_path);
   addInputDir(inputDirs, intrinsic_install_path);
+  addInputDir(sourceDirs, intrinsic_src_path);
+  addInputDir(sourceDirs, intrinsic_install_path);
 
   // Add source file directories to find module sources in the same tree.
   for (const auto &source : project->get_sourceFileNameList()) {
@@ -156,6 +295,7 @@ void FlangModuleInfo::set_inputDirs(SgProject *project) {
                           ? source_path.parent_path().string()
                           : std::string(".");
     addInputDir(inputDirs, dir);
+    addInputDir(sourceDirs, dir);
   }
 
   int sizeArgs = args.size();

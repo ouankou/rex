@@ -4845,6 +4845,13 @@ void c_action_cray_pointer_assoc(Token_t *crayPtrId, Token_t *targetId) {
 
   ROSE_ASSERT(crayPtrId != NULL);
   ROSE_ASSERT(targetId != NULL);
+  if (OpenFortranParser_globalFilePointer == nullptr ||
+      !OpenFortranParser_globalFilePointer->get_cray_pointer_support()) {
+    std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+              << "Cray pointer construct requires -rose:cray_pointer_support "
+                 "or -fcray-pointer.\n";
+    ROSE_ABORT();
+  }
 
   ROSE_ASSERT(getTopOfScopeStack()->variantT() == V_SgBasicBlock ||
               getTopOfScopeStack()->variantT() == V_SgClassDefinition);
@@ -6344,8 +6351,8 @@ void c_action_data_ref(int numPartRef) {
         astExpressionStack.push_front(constructorInitializer);
 
         // DQ (12/29/2010): Debugging
-        // gfortranTestSuite/gfortran.dg/array_constructor_35.f90 A member
-        // function symbol might make more sense here.
+        // Fortran_tests/array_constructor_35.f90 A member function symbol
+        // might make more sense here.
         ROSE_ASSERT(classSymbol != NULL);
         SgMemberFunctionSymbol *memberFunctionSymbol =
             new SgMemberFunctionSymbol(memberfuncdecl);

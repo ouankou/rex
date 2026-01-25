@@ -62,7 +62,7 @@ static SgFunctionDeclaration *
 createFuncSkeleton(const string &name, SgType *ret_type,
                    SgFunctionParameterList *params, SgScopeStatement *scope) {
   ROSE_ASSERT(scope != NULL);
-  ROSE_ASSERT(isSgGlobal(scope) != NULL);
+  ROSE_ASSERT(Outliner::isValidOutliningScope(scope));
   SgFunctionDeclaration *func;
   SgProcedureHeaderStatement *fortranRoutine;
   // Liao 12/13/2007, generate SgProcedureHeaderStatement for Fortran code
@@ -86,6 +86,142 @@ createFuncSkeleton(const string &name, SgType *ret_type,
            func->get_name().getString().c_str());
   }
   return func;
+}
+
+static SgTemplateParameterPtrList *
+copyTemplateParameterList(const SgTemplateParameterPtrList &params) {
+  SgTemplateParameterPtrList *copy = new SgTemplateParameterPtrList();
+  for (SgTemplateParameterPtrList::const_iterator it = params.begin();
+       it != params.end(); ++it) {
+    SgTemplateParameter *param = *it;
+    if (param == NULL)
+      continue;
+    SgTemplateParameter *param_copy =
+        isSgTemplateParameter(ASTtools::deepCopy(param));
+    ROSE_ASSERT(param_copy != NULL);
+    copy->push_back(param_copy);
+  }
+  return copy;
+}
+
+static void setTemplateParameterParents(SgTemplateDeclaration *decl) {
+  if (decl == NULL)
+    return;
+
+  SgTemplateParameterPtrList &params = decl->get_templateParameters();
+  for (SgTemplateParameterPtrList::iterator it = params.begin();
+       it != params.end(); ++it) {
+    if (*it != NULL)
+      (*it)->set_parent(decl);
+  }
+}
+
+static const SgTemplateParameterPtrList *
+getTemplateParametersFromDecl(const SgFunctionDeclaration *decl) {
+  if (decl == NULL)
+    return NULL;
+
+  if (const SgTemplateFunctionDeclaration *tmpl_decl =
+          isSgTemplateFunctionDeclaration(decl)) {
+    return &(tmpl_decl->get_templateParameters());
+  }
+  if (const SgTemplateMemberFunctionDeclaration *tmpl_decl =
+          isSgTemplateMemberFunctionDeclaration(decl)) {
+    return &(tmpl_decl->get_templateParameters());
+  }
+
+  if (const SgTemplateInstantiationFunctionDecl *tmpl_inst =
+          isSgTemplateInstantiationFunctionDecl(decl)) {
+    if (const SgTemplateFunctionDeclaration *tmpl_decl =
+            tmpl_inst->get_templateDeclaration()) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+  }
+  if (const SgTemplateInstantiationMemberFunctionDecl *tmpl_inst =
+          isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+    if (const SgTemplateMemberFunctionDeclaration *tmpl_decl =
+            tmpl_inst->get_templateDeclaration()) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+  }
+
+  if (const SgFunctionDeclaration *first =
+          isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration())) {
+    if (const SgTemplateFunctionDeclaration *tmpl_decl =
+            isSgTemplateFunctionDeclaration(first)) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+    if (const SgTemplateMemberFunctionDeclaration *tmpl_decl =
+            isSgTemplateMemberFunctionDeclaration(first)) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+  }
+  if (const SgFunctionDeclaration *def =
+          isSgFunctionDeclaration(decl->get_definingDeclaration())) {
+    if (const SgTemplateFunctionDeclaration *tmpl_decl =
+            isSgTemplateFunctionDeclaration(def)) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+    if (const SgTemplateMemberFunctionDeclaration *tmpl_decl =
+            isSgTemplateMemberFunctionDeclaration(def)) {
+      return &(tmpl_decl->get_templateParameters());
+    }
+  }
+
+  return NULL;
+}
+
+static SgFunctionDeclaration *
+createTemplateFuncSkeleton(const string &name, SgType *ret_type,
+                           SgFunctionParameterList *params,
+                           SgScopeStatement *scope,
+                           const SgTemplateParameterPtrList &template_params) {
+  ROSE_ASSERT(scope != NULL);
+  ROSE_ASSERT(isSgGlobal(scope) != NULL);
+
+  SgFunctionParameterList *nondef_params =
+      deepCopy<SgFunctionParameterList>(params);
+  SgTemplateParameterPtrList *template_params_copy =
+      copyTemplateParameterList(template_params);
+
+  SgTemplateFunctionDeclaration *nondef =
+      SageBuilder::buildNondefiningTemplateFunctionDeclaration(
+          name, ret_type, nondef_params, scope, template_params_copy);
+  ROSE_ASSERT(nondef != NULL);
+  setTemplateParameterParents(nondef);
+
+  SgTemplateFunctionDeclaration *def =
+      SageBuilder::buildDefiningTemplateFunctionDeclaration(
+          name, ret_type, params, scope, nondef);
+  ROSE_ASSERT(def != NULL);
+  setTemplateParameterParents(def);
+
+  return def;
+}
+
+static void assertFunctionSymbolPresent(SgScopeStatement *scope,
+                                        const SgFunctionDeclaration *func) {
+  ROSE_ASSERT(scope != NULL);
+  ROSE_ASSERT(func != NULL);
+
+  if (scope->lookup_function_symbol(func->get_name()) != NULL)
+    return;
+
+  const SgTemplateFunctionDeclaration *template_func =
+      isSgTemplateFunctionDeclaration(func);
+  if (template_func != NULL) {
+    SgTemplateParameterPtrList *template_params =
+        const_cast<SgTemplateParameterPtrList *>(
+            &(template_func->get_templateParameters()));
+    SgTemplateFunctionSymbol *template_sym =
+        scope->lookup_template_function_symbol(template_func->get_name(),
+                                               template_func->get_type(),
+                                               template_params);
+    ROSE_ASSERT(template_sym != NULL);
+    return;
+  }
+
+  ROSE_ASSERT(!"Missing function symbol for outlined function");
 }
 
 // ===========================================================
@@ -1458,7 +1594,7 @@ SgFunctionDeclaration *Outliner::generateFunction(
         *struct_decl, // an optional wrapper structure for parameters
     SgScopeStatement *scope) {
   ROSE_ASSERT(s && scope);
-  ROSE_ASSERT(isSgGlobal(scope));
+  ROSE_ASSERT(isValidOutliningScope(scope));
 
   // step 2. Create function skeleton, 'func'.
   //  -----------------------------------------
@@ -1466,14 +1602,28 @@ SgFunctionDeclaration *Outliner::generateFunction(
   SgName func_name(func_name_str);
   SgFunctionParameterList *parameterList = buildFunctionParameterList();
 
-  SgFunctionDeclaration *func = createFuncSkeleton(
-      func_name, SgTypeVoid::createType(), parameterList, scope);
+  SgFunctionDeclaration *enclosing_func = getEnclosingFunctionDeclaration(s);
+  ROSE_ASSERT(enclosing_func != NULL);
+
+  const SgTemplateParameterPtrList *template_params =
+      getTemplateParametersFromDecl(enclosing_func);
+  bool is_template_instantiation =
+      isSgTemplateInstantiationFunctionDecl(enclosing_func) != NULL ||
+      isSgTemplateInstantiationMemberFunctionDecl(enclosing_func) != NULL;
+
+  SgFunctionDeclaration *func = NULL;
+  if (template_params != NULL && !template_params->empty() &&
+      !is_template_instantiation) {
+    func = createTemplateFuncSkeleton(func_name, SgTypeVoid::createType(),
+                                      parameterList, scope, *template_params);
+  } else {
+    func = createFuncSkeleton(func_name, SgTypeVoid::createType(),
+                              parameterList, scope);
+  }
   ROSE_ASSERT(func);
 
   // Inherit enclosing function's inline property: avoid linking error when
   // linking multiple .lib files with the outlined functions
-  SgFunctionDeclaration *enclosing_func = getEnclosingFunctionDeclaration(s);
-  ROSE_ASSERT(enclosing_func);
   if (enclosing_func->get_functionModifier().isInline()) {
     func->get_functionModifier().setInline();
   }
@@ -1487,9 +1637,12 @@ SgFunctionDeclaration *Outliner::generateFunction(
   // #endif
   // We don't choose it since the language linkage information is not explicit
   // in AST if (!SageInterface::is_Fortran_language())
-  if (SageInterface::is_Cxx_language() || is_mixed_C_and_Cxx_language() ||
-      is_mixed_Fortran_and_Cxx_language() ||
-      is_mixed_Fortran_and_C_and_Cxx_language()) {
+  bool is_template_func = (isSgTemplateFunctionDeclaration(func) != NULL ||
+                           isSgTemplateMemberFunctionDeclaration(func) != NULL);
+  if (!is_template_func &&
+      (SageInterface::is_Cxx_language() || is_mixed_C_and_Cxx_language() ||
+       is_mixed_Fortran_and_Cxx_language() ||
+       is_mixed_Fortran_and_C_and_Cxx_language())) {
     // Make function 'extern "C"'
     func->get_declarationModifier().get_storageModifier().setExtern();
     func->set_linkage("C");
@@ -1632,7 +1785,7 @@ SgFunctionDeclaration *Outliner::generateFunction(
   // func->get_definition()->get_body()->get_parent() = %p
   // \n",func->get_definition(),func->get_definition()->get_body()->get_parent());
   //
-  ROSE_ASSERT(scope->lookup_function_symbol(func->get_name()));
+  assertFunctionSymbolPresent(scope, func);
 
   // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
   // Outliner::generateFunction(): 8") == false);

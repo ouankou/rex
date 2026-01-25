@@ -104,6 +104,7 @@ namespace {
 SgExprListExp *BuildArraySpecExprList(Fortran::parser::ArraySpec &x);
 void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
                                       SgFunctionDeclaration *functionDecl);
+SgVariableSymbol *resolveUseAssociatedVariableSymbol(SgSymbol *symbol);
 SgVariableSymbol *buildUseAssociatedVariableSymbol(SgVariableSymbol *varSymbol,
                                                    const SgName &localName,
                                                    SgScopeStatement *scope);
@@ -145,6 +146,16 @@ public:
   }
 };
 
+class FlangParamScopeTransferredAttribute : public AstAttribute {
+public:
+  AstAttribute *copy() const override {
+    return new FlangParamScopeTransferredAttribute();
+  }
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+};
+
 void MarkFortranImplicitDeclaration(SgVariableDeclaration *decl) {
   ASSERT_not_null(decl);
   if (decl->getAttribute(kFortranImplicitDeclAttr) != nullptr) {
@@ -158,28 +169,37 @@ void EnsureCaseInsensitiveSymbolTable(SgScopeStatement *scope) {
   if (scope == nullptr) {
     return;
   }
-  if (!SageInterface::is_language_case_insensitive() &&
-      !scope->isCaseInsensitive()) {
+  if (!SageInterface::is_language_case_insensitive()) {
     return;
   }
   SgSymbolTable *old_table = scope->get_symbol_table();
   if (old_table == nullptr) {
     return;
   }
+  if (old_table->isCaseInsensitive()) {
+    return;
+  }
   std::set<SgNode *> symbols = old_table->get_symbols();
+  if (symbols.empty()) {
+    scope->setCaseInsensitive(true);
+    return;
+  }
   SgSymbolTable *new_table = new SgSymbolTable();
   ASSERT_not_null(new_table);
   new_table->set_parent(scope);
-  new_table->setCaseInsensitive(true);
   scope->set_symbol_table(new_table);
+  scope->setCaseInsensitive(true);
   for (SgNode *sym_node : symbols) {
     SgSymbol *symbol = isSgSymbol(sym_node);
     if (symbol == nullptr) {
       continue;
     }
     scope->insert_symbol(symbol->get_name(), symbol);
+    old_table->remove(symbol);
   }
-  delete old_table;
+  // Detach the old table to avoid leaving a parent pointer to a later-deleted
+  // scope while keeping symbols alive.
+  old_table->set_parent(nullptr);
 }
 
 void EnsureSymbolsForBlockDeclarations(SgBasicBlock *block) {
@@ -238,6 +258,13 @@ bool IsFunctionType(SgType *type) {
   type = StripPointerType(type);
   return isSgFunctionType(type) != nullptr ||
          isSgMemberFunctionType(type) != nullptr;
+}
+
+bool KindSelectorHasStar(const std::optional<parser::KindSelector> &kind) {
+  if (!kind) {
+    return false;
+  }
+  return std::holds_alternative<parser::KindSelector::StarSize>(kind->u);
 }
 
 SgFunctionType *
@@ -1645,9 +1672,12 @@ void BuildVisitor::Build(parser::SpecificationPart &x) {
   Walk(std::get<
        std::list<parser::Statement<common::Indirection<parser::UseStmt>>>>(
       x.t));
-  Walk(std::get<
-       std::list<parser::Statement<common::Indirection<parser::ImportStmt>>>>(
-      x.t));
+  auto &importStmts = std::get<
+      std::list<parser::Statement<common::Indirection<parser::ImportStmt>>>>(
+      x.t);
+  for (auto &importStmt : importStmts) {
+    Build(importStmt);
+  }
   Walk(std::get<parser::ImplicitPart>(x.t));
   Walk(std::get<std::list<parser::DeclarationConstruct>>(x.t));
 }
@@ -2153,12 +2183,223 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
   }
   SgBasicBlock *functionBody = functionDef->get_body();
   ASSERT_not_null(functionBody);
+  auto transfer_symbols = [&](SgScopeStatement *from_scope,
+                              SgScopeStatement *to_scope) {
+    if (from_scope == nullptr || to_scope == nullptr) {
+      return;
+    }
+    SgSymbolTable *symtab = from_scope->get_symbol_table();
+    if (symtab == nullptr) {
+      return;
+    }
+    std::set<SgNode *> symbols = symtab->get_symbols();
+    for (SgNode *symNode : symbols) {
+      SgSymbol *symbol = isSgSymbol(symNode);
+      if (symbol == nullptr) {
+        continue;
+      }
+      if (isSgLabelSymbol(symbol) != nullptr) {
+        continue;
+      }
+      SgName name = symbol->get_name();
+      if (to_scope->symbol_exists(name)) {
+        continue;
+      }
+      from_scope->remove_symbol(symbol);
+      to_scope->insert_symbol(name, symbol);
+      if (symbol->get_parent() != to_scope->get_symbol_table()) {
+        symbol->set_parent(to_scope->get_symbol_table());
+      }
+      if (auto *varSym = isSgVariableSymbol(symbol)) {
+        if (SgInitializedName *initName = varSym->get_declaration()) {
+          if (initName->get_scope() == from_scope) {
+            initName->set_scope(to_scope);
+          }
+          if (initName->get_parent() == from_scope) {
+            initName->set_parent(to_scope);
+          }
+        }
+      }
+    }
+  };
+  auto fix_initnames_from_param_scope = [&](SgScopeStatement *target_scope,
+                                            SgScopeStatement *old_scope) {
+    if (target_scope == nullptr || old_scope == nullptr) {
+      return;
+    }
+    SgSymbolTable *symtab = target_scope->get_symbol_table();
+    if (symtab == nullptr) {
+      return;
+    }
+    std::set<SgNode *> symbols = symtab->get_symbols();
+    for (SgNode *symNode : symbols) {
+      SgVariableSymbol *varSym = isSgVariableSymbol(symNode);
+      if (varSym == nullptr) {
+        continue;
+      }
+      SgInitializedName *initName = varSym->get_declaration();
+      if (initName == nullptr) {
+        continue;
+      }
+      if (initName->get_scope() == old_scope) {
+        initName->set_scope(target_scope);
+      }
+      if (initName->get_parent() == old_scope) {
+        initName->set_parent(target_scope);
+      }
+      if (varSym->get_parent() == old_scope) {
+        varSym->set_parent(target_scope);
+      }
+    }
+  };
+  auto rehome_param_scope_statements = [&](SgBasicBlock *old_block,
+                                           SgBasicBlock *new_block) {
+    if (old_block == nullptr || new_block == nullptr) {
+      return;
+    }
+    for (SgStatement *stmt : new_block->get_statements()) {
+      if (stmt == nullptr) {
+        continue;
+      }
+      if (stmt->get_scope() == old_block) {
+        stmt->set_scope(new_block);
+      }
+      if (stmt->get_parent() == old_block) {
+        stmt->set_parent(new_block);
+      }
+      if (auto *decl = isSgDeclarationStatement(stmt)) {
+        if (SgDeclarationStatement *nondef =
+                decl->get_firstNondefiningDeclaration()) {
+          if (nondef->get_scope() == old_block) {
+            nondef->set_scope(new_block);
+          }
+          if (nondef->get_parent() == old_block) {
+            nondef->set_parent(new_block);
+          }
+        }
+        if (SgDeclarationStatement *def = decl->get_definingDeclaration()) {
+          if (def->get_scope() == old_block) {
+            def->set_scope(new_block);
+          }
+          if (def->get_parent() == old_block) {
+            def->set_parent(new_block);
+          }
+        }
+      }
+      if (auto *varDecl = isSgVariableDeclaration(stmt)) {
+        for (SgInitializedName *initName : varDecl->get_variables()) {
+          if (initName == nullptr) {
+            continue;
+          }
+          if (initName->get_scope() == old_block) {
+            initName->set_scope(new_block);
+          }
+          if (initName->get_parent() == old_block) {
+            initName->set_parent(varDecl);
+          }
+        }
+      }
+      if (auto *classDecl = isSgClassDeclaration(stmt)) {
+        if (classDecl->get_scope() == old_block) {
+          classDecl->set_scope(new_block);
+        }
+        if (SgClassDeclaration *defDecl =
+                isSgClassDeclaration(classDecl->get_definingDeclaration())) {
+          if (defDecl->get_scope() == old_block) {
+            defDecl->set_scope(new_block);
+          }
+          if (defDecl->get_parent() == old_block) {
+            defDecl->set_parent(new_block);
+          }
+        }
+        if (SgClassDeclaration *nondefDecl = isSgClassDeclaration(
+                classDecl->get_firstNondefiningDeclaration())) {
+          if (nondefDecl->get_scope() == old_block) {
+            nondefDecl->set_scope(new_block);
+          }
+          if (nondefDecl->get_parent() == old_block) {
+            nondefDecl->set_parent(new_block);
+          }
+        }
+        SageInterface::fixStructDeclaration(classDecl, new_block);
+      }
+    }
+  };
   SgName functionName = functionDecl->get_name();
   SgVariableSymbol *resultSymbol =
       paramBlock->lookup_variable_symbol(functionName);
   EnsureCaseInsensitiveSymbolTable(paramBlock);
+  EnsureCaseInsensitiveSymbolTable(functionBody);
   EnsureSymbolsForBlockDeclarations(paramBlock);
   SageInterface::moveStatementsBetweenBlocks(paramBlock, functionBody);
+  transfer_symbols(paramBlock, functionBody);
+  rehome_param_scope_statements(paramBlock, functionBody);
+  fix_initnames_from_param_scope(functionBody, paramScope);
+  if (paramScope != nullptr) {
+    Rose_STL_Container<SgNode *> initNodes =
+        NodeQuery::querySubTree(functionDecl, V_SgInitializedName);
+    for (SgNode *node : initNodes) {
+      SgInitializedName *initName = isSgInitializedName(node);
+      if (initName == nullptr) {
+        continue;
+      }
+      if (initName->get_scope() == paramScope) {
+        initName->set_scope(functionBody);
+      }
+      if (initName->get_parent() == paramScope) {
+        initName->set_parent(functionBody);
+      }
+    }
+    Rose_STL_Container<SgNode *> stmtNodes =
+        NodeQuery::querySubTree(functionDecl, V_SgStatement);
+    for (SgNode *node : stmtNodes) {
+      SgStatement *stmt = isSgStatement(node);
+      if (stmt == nullptr || stmt == paramScope) {
+        continue;
+      }
+      if (stmt->get_scope() == paramScope) {
+        stmt->set_scope(functionBody);
+      }
+      if (stmt->get_parent() == paramScope) {
+        stmt->set_parent(functionBody);
+      }
+    }
+  }
+  {
+    VariantVector variants;
+    variants.push_back(V_SgFunctionTypeSymbol);
+    Rose_STL_Container<SgNode *> symbols = NodeQuery::queryMemoryPool(variants);
+    for (SgNode *node : symbols) {
+      SgFunctionTypeSymbol *symbol = isSgFunctionTypeSymbol(node);
+      if (symbol == nullptr) {
+        continue;
+      }
+
+      SgSymbolTable *target_table = nullptr;
+      SgType *type = symbol->get_type();
+      if (isSgFunctionType(type) != nullptr ||
+          isSgMemberFunctionType(type) != nullptr) {
+        SgFunctionTypeTable *func_table = SgNode::get_globalFunctionTypeTable();
+        if (func_table != nullptr) {
+          target_table = func_table->get_function_type_table();
+        }
+      } else {
+        SgTypeTable *type_table = SgNode::get_globalTypeTable();
+        if (type_table != nullptr) {
+          target_table = type_table->get_type_table();
+        }
+      }
+
+      if (target_table != nullptr) {
+        if (!target_table->exists(symbol)) {
+          target_table->insert(symbol->get_name(), symbol);
+        }
+        if (symbol->get_parent() != target_table) {
+          symbol->set_parent(target_table);
+        }
+      }
+    }
+  }
   auto stabilizeInterfaceBodyScopes = [&](SgScopeStatement *oldScope,
                                           SgScopeStatement *newScope) {
     if (oldScope == nullptr || newScope == nullptr) {
@@ -2247,6 +2488,11 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
     }
   };
   transfer_label_symbols(paramBlock);
+
+  if (paramScope->getAttribute(kFlangParamScopeTransferredAttr) == nullptr) {
+    paramScope->addNewAttribute(kFlangParamScopeTransferredAttr,
+                                new FlangParamScopeTransferredAttribute());
+  }
 }
 } // namespace
 
@@ -3929,24 +4175,37 @@ void Build(parser::Call &x, std::list<SgExpression *> &arg_list,
 
   // ActualArgSpec std::tuple<std::optional<Keyword>, ActualArg> t;
   for (auto &spec : std::get<std::list<ActualArgSpec>>(x.t)) {
+    const auto &keywordOpt = std::get<std::optional<Keyword>>(spec.t);
+    const bool hasKeyword = keywordOpt.has_value();
+    std::string keywordName;
+    if (hasKeyword) {
+      keywordName = keywordOpt->v.ToString();
+    }
+
+    auto append_arg = [&](SgExpression *arg) {
+      ASSERT_not_null(arg);
+      if (hasKeyword) {
+        arg = SageBuilder::buildActualArgumentExpression_nfi(
+            SgName(keywordName), arg);
+      }
+      arg_list.push_back(arg);
+    };
+
     auto &actual = std::get<ActualArg>(spec.t);
     if (auto *expr = std::get_if<common::Indirection<Expr>>(&actual.u)) {
       SgExpression *arg{nullptr};
       WalkExpr(expr->value(), arg);
-      ASSERT_not_null(arg);
-      arg_list.push_back(arg);
+      append_arg(arg);
     } else if (auto *percentVal =
                    std::get_if<ActualArg::PercentVal>(&actual.u)) {
       SgExpression *arg{nullptr};
       WalkExpr(percentVal->v, arg);
-      ASSERT_not_null(arg);
-      arg_list.push_back(arg);
+      append_arg(arg);
     } else if (auto *percentRef =
                    std::get_if<ActualArg::PercentRef>(&actual.u)) {
       SgExpression *arg{nullptr};
       WalkExpr(percentRef->v, arg);
-      ASSERT_not_null(arg);
-      arg_list.push_back(arg);
+      append_arg(arg);
     } else if (auto *altReturn = std::get_if<AltReturnSpec>(&actual.u)) {
       SgScopeStatement *currentScope = SageBuilder::topScopeStack();
       ASSERT_not_null(currentScope);
@@ -3962,7 +4221,7 @@ void Build(parser::Call &x, std::list<SgExpression *> &arg_list,
           GetOrCreateFortranLabelSymbol(labelValue, labelScope);
       SgLabelRefExp *labelRef = SageBuilder::buildLabelRefExp(labelSymbol);
       ASSERT_not_null(labelRef);
-      arg_list.push_back(labelRef);
+      append_arg(labelRef);
     } else {
       ABORT_NO_IMPL;
     }
@@ -4321,12 +4580,14 @@ void BuildImpl(parser::CommonBlockObject &x, SgExpression *&expr) {
   if (auto &opt = std::get<std::optional<parser::ArraySpec>>(x.t)) {
     SgInitializedName *initName = symbol->get_declaration();
     ASSERT_not_null(initName);
-    SgType *baseType = initName->get_type();
-    ASSERT_not_null(baseType);
-    SgType *arrayType{nullptr};
-    Build(opt.value(), arrayType, baseType);
-    ASSERT_not_null(arrayType);
-    initName->set_type(arrayType);
+    if (!IsArrayType(initName->get_type())) {
+      SgType *baseType = initName->get_type();
+      ASSERT_not_null(baseType);
+      SgType *arrayType{nullptr};
+      Build(opt.value(), arrayType, baseType);
+      ASSERT_not_null(arrayType);
+      initName->set_type(arrayType);
+    }
   }
 
   expr = ref;
@@ -4571,7 +4832,8 @@ void BuildVisitor::Build(
             SgName symbolName = symbol->get_name();
             if (!currentScope->symbol_exists(symbolName)) {
               SgSymbol *useSymbol = nullptr;
-              if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+              if (SgVariableSymbol *varSymbol =
+                      resolveUseAssociatedVariableSymbol(symbol)) {
                 useSymbol = buildUseAssociatedVariableSymbol(
                     varSymbol, symbolName, currentScope);
               } else {
@@ -4595,7 +4857,8 @@ void BuildVisitor::Build(
             SgName localName = renamePair->get_local_name();
             if (!currentScope->symbol_exists(localName)) {
               SgSymbol *aliasSymbol = nullptr;
-              if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+              if (SgVariableSymbol *varSymbol =
+                      resolveUseAssociatedVariableSymbol(symbol)) {
                 aliasSymbol = buildUseAssociatedVariableSymbol(
                     varSymbol, localName, currentScope);
               } else {
@@ -4612,7 +4875,8 @@ void BuildVisitor::Build(
             if (renamedSymbols.find(symbol) == renamedSymbols.end()) {
               SgName symbolName = symbol->get_name();
               SgSymbol *useSymbol = nullptr;
-              if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+              if (SgVariableSymbol *varSymbol =
+                      resolveUseAssociatedVariableSymbol(symbol)) {
                 useSymbol = buildUseAssociatedVariableSymbol(
                     varSymbol, symbolName, currentScope);
               } else {
@@ -4637,7 +4901,8 @@ void BuildVisitor::Build(
           SgName localName = renamePair->get_local_name();
           if (!currentScope->symbol_exists(localName)) {
             SgSymbol *aliasSymbol = nullptr;
-            if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+            if (SgVariableSymbol *varSymbol =
+                    resolveUseAssociatedVariableSymbol(symbol)) {
               aliasSymbol = buildUseAssociatedVariableSymbol(
                   varSymbol, localName, currentScope);
             } else {
@@ -4654,6 +4919,58 @@ void BuildVisitor::Build(
 
   builder.Leave(useStmt);
   use_statement_fixup(currentScope);
+}
+
+void BuildVisitor::Build(
+    parser::Statement<common::Indirection<parser::ImportStmt>> &x) {
+  using namespace Fortran::parser;
+
+  SgScopeStatement *currentScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(currentScope);
+
+  ImportStmt &importStmtNode = x.statement.value();
+  SgImportStatement *importStmt = new SgImportStatement();
+  ASSERT_not_null(importStmt);
+  importStmt->set_definingDeclaration(importStmt);
+  importStmt->set_firstNondefiningDeclaration(importStmt);
+
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  if (SgSourceFile *enclosingFile =
+          SageInterface::getEnclosingSourceFile(currentScope, true)) {
+    std::string enclosingPath =
+        NormalizeSourcePath(enclosingFile->getFileName());
+    if (!enclosingPath.empty() && srcBegin.path != enclosingPath) {
+      srcBegin.path = enclosingPath;
+    }
+    if (!enclosingPath.empty() && srcEnd.path != enclosingPath) {
+      srcEnd.path = enclosingPath;
+    }
+  }
+  builder.setSourcePosition(importStmt, srcBegin, srcEnd);
+  if (SgSourceFile *enclosingFile =
+          SageInterface::getEnclosingSourceFile(currentScope, true)) {
+    if (Sg_File_Info *startInfo = importStmt->get_startOfConstruct()) {
+      startInfo->set_file_id(enclosingFile->get_file_info()->get_file_id());
+      startInfo->set_physical_file_id(
+          enclosingFile->get_file_info()->get_physical_file_id());
+    }
+    if (Sg_File_Info *endInfo = importStmt->get_endOfConstruct()) {
+      endInfo->set_file_id(enclosingFile->get_file_info()->get_file_id());
+      endInfo->set_physical_file_id(
+          enclosingFile->get_file_info()->get_physical_file_id());
+    }
+  }
+
+  for (const auto &name : importStmtNode.names) {
+    SgVarRefExp *varRef =
+        SageBuilder::buildVarRefExp(name.ToString(), currentScope);
+    ASSERT_not_null(varRef);
+    importStmt->get_import_list().push_back(varRef);
+    varRef->set_parent(importStmt);
+  }
+
+  SageInterface::appendStatement(importStmt, currentScope);
 }
 
 void BuildVisitor::Build(parser::CommonStmt &x) {
@@ -4851,6 +5168,76 @@ void BuildVisitor::Build(parser::AllocatableStmt &x) {
   SageInterface::appendStatement(allocStmt, scope);
 }
 
+void BuildVisitor::Build(parser::BasedPointerStmt &x) {
+  using namespace Fortran::parser;
+
+  SgSourceFile *source = builder.getSourceFile();
+  if (source == nullptr || !source->get_cray_pointer_support()) {
+    std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+              << "Cray pointer construct requires -rose:cray_pointer_support "
+                 "or -fcray-pointer.\n";
+    ROSE_ABORT();
+  }
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  for (auto &based : x.v) {
+    const auto &pointerNameNode = std::get<0>(based.t);
+    const auto &targetNameNode = std::get<1>(based.t);
+    auto &arrayOpt = std::get<2>(based.t);
+    const std::string pointerName = pointerNameNode.ToString();
+    const std::string targetName = targetNameNode.ToString();
+
+    SgVariableSymbol *targetSymbol =
+        SageInterface::lookupVariableSymbolInParentScopes(targetName, scope);
+    if (targetSymbol == nullptr) {
+      SgType *implicitType = SageBuilder::buildFortranImplicitType(targetName);
+      SgVariableDeclaration *targetDecl =
+          SageBuilder::buildVariableDeclaration_nfi(
+              targetName, implicitType, /*initializer*/ nullptr, scope);
+      ASSERT_not_null(targetDecl);
+      SageInterface::setSourcePosition(targetDecl);
+      MarkFortranImplicitDeclaration(targetDecl);
+      SageInterface::appendStatement(targetDecl, scope);
+      targetSymbol =
+          SageInterface::lookupVariableSymbolInParentScopes(targetName, scope);
+    }
+    ASSERT_not_null(targetSymbol);
+
+    SgInitializedName *targetInit = targetSymbol->get_declaration();
+    ASSERT_not_null(targetInit);
+
+    if (arrayOpt) {
+      if (!IsArrayType(targetInit->get_type())) {
+        SgType *baseType = targetInit->get_type();
+        if (auto *modifier = isSgModifierType(baseType)) {
+          baseType = modifier->get_base_type();
+        }
+        if (auto *arrayType = isSgArrayType(baseType)) {
+          baseType = arrayType->get_base_type();
+        }
+        SgType *arrayType{nullptr};
+        Rose::builder::Build(arrayOpt.value(), arrayType, baseType);
+        if (arrayType != nullptr) {
+          targetInit->set_type(arrayType);
+        }
+      }
+    }
+
+    SgVariableDeclaration *ptrDecl = SageBuilder::buildVariableDeclaration_nfi(
+        pointerName, SgTypeCrayPointer::createType(),
+        /*initializer*/ nullptr, scope);
+    ASSERT_not_null(ptrDecl);
+    SageInterface::setSourcePosition(ptrDecl);
+    ptrDecl->get_declarationModifier().get_accessModifier().setUndefined();
+    SgInitializedName *ptrInit = ptrDecl->get_variables().front();
+    ASSERT_not_null(ptrInit);
+    ptrInit->set_prev_decl_item(targetInit);
+    SageInterface::appendStatement(ptrDecl, scope);
+  }
+}
+
 void BuildVisitor::Build(parser::ExternalStmt &x) {
   SgAttributeSpecificationStatement *externalStmt =
       SageBuilder::buildAttributeSpecificationStatement(
@@ -4954,10 +5341,19 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
                               : nullptr;
       if (existingDecl != nullptr &&
           existingDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr) {
-        initName->set_type(entityType);
+        SgType *mergedType = entityType;
+        SgArrayType *existingArray =
+            isSgArrayType(StripModifierType(initName->get_type()));
+        if (existingArray != nullptr && !IsArrayType(entityType)) {
+          SgExprListExp *dimInfo = existingArray->get_dim_info();
+          if (dimInfo != nullptr) {
+            mergedType = SageBuilder::buildArrayType(entityType, dimInfo);
+          }
+        }
+        initName->set_type(mergedType);
         if (initExpr != nullptr) {
           SgInitializer *initializer =
-              SageBuilder::buildAssignInitializer_nfi(initExpr, entityType);
+              SageBuilder::buildAssignInitializer_nfi(initExpr, mergedType);
           ASSERT_not_null(initializer);
           initName->set_initializer(initializer);
           initializer->set_parent(initName);
@@ -5327,6 +5723,19 @@ SgType *BuildDerivedTypeSpec(const parser::DerivedTypeSpec &derivedSpec) {
   return SgTypeDefault::createType(name);
 }
 
+SgVariableSymbol *resolveUseAssociatedVariableSymbol(SgSymbol *symbol) {
+  if (symbol == nullptr) {
+    return nullptr;
+  }
+  if (auto *varSymbol = isSgVariableSymbol(symbol)) {
+    return varSymbol;
+  }
+  if (auto *aliasSymbol = isSgAliasSymbol(symbol)) {
+    return isSgVariableSymbol(aliasSymbol->get_alias());
+  }
+  return nullptr;
+}
+
 SgVariableSymbol *buildUseAssociatedVariableSymbol(SgVariableSymbol *varSymbol,
                                                    const SgName &localName,
                                                    SgScopeStatement *scope) {
@@ -5338,17 +5747,10 @@ SgVariableSymbol *buildUseAssociatedVariableSymbol(SgVariableSymbol *varSymbol,
     varType = SageBuilder::buildUnknownType();
   }
 
-  SgInitializedName *initName = nullptr;
-  if (varSymbol->get_declaration() != nullptr) {
-    initName = SageInterface::deepCopy(varSymbol->get_declaration());
-  }
-  if (initName == nullptr) {
-    initName = SageBuilder::buildInitializedName_nfi(localName, varType,
-                                                     /*initializer*/ nullptr);
-  }
-
-  initName->set_name(localName);
-  initName->set_type(varType);
+  SgInitializedName *initName = SageBuilder::buildInitializedName_nfi(
+      localName, varType, /*initializer*/ nullptr);
+  ASSERT_not_null(initName);
+  SageInterface::setSourcePosition(initName);
   initName->set_scope(scope);
   initName->set_parent(scope);
 
@@ -5470,22 +5872,30 @@ void Build(parser::AttrSpec &x, LanguageTranslation::ExpressionKind &modifier) {
 void BuildVisitor::Build(parser::IntegerTypeSpec &x) {
   SgType *type{nullptr};
   SgExpression *expr{nullptr};
+  const bool hasKindStar = KindSelectorHasStar(x.v);
 
   if (auto &kind = x.v) { // std::optional<KindSelector>
     WalkExpr(kind.value(), expr);
   }
   type = SageBuilder::buildIntType(expr);
+  if (type != nullptr) {
+    type->set_hasTypeKindStar(hasKindStar);
+  }
   this->set(type); // synthesized attribute
 }
 
 void BuildVisitor::Build(parser::IntrinsicTypeSpec::Real &x) {
   SgType *type{nullptr};
   SgExpression *expr{nullptr};
+  const bool hasKindStar = KindSelectorHasStar(x.kind);
 
   if (x.kind) { // std::optional<KindSelector>
     WalkExpr(x.kind.value(), expr);
   }
   type = SageBuilder::buildFloatType(expr);
+  if (type != nullptr) {
+    type->set_hasTypeKindStar(hasKindStar);
+  }
   this->set(type); // synthesized attribute
 }
 
@@ -5497,13 +5907,28 @@ void BuildVisitor::Build(parser::IntrinsicTypeSpec::DoublePrecision &x) {
 void BuildVisitor::Build(parser::IntrinsicTypeSpec::Complex &x) {
   SgType *type{nullptr};
   SgExpression *expr{nullptr};
+  SgExpression *kindExpr{nullptr};
+  const bool hasKindStar = KindSelectorHasStar(x.kind);
 
   if (x.kind) { // std::optional<KindSelector>
     WalkExpr(x.kind.value(), expr);
   }
 
+  if (expr != nullptr) {
+    SgTreeCopy treeCopy;
+    kindExpr = isSgExpression(expr->copy(treeCopy));
+  }
+
   SgType *base = SageBuilder::buildFloatType(expr);
   type = SageBuilder::buildComplexType(base);
+  if (type != nullptr) {
+    if (kindExpr != nullptr) {
+      SageInterface::setSourcePosition(kindExpr);
+      type->set_type_kind(kindExpr);
+      kindExpr->set_parent(type);
+    }
+    type->set_hasTypeKindStar(hasKindStar);
+  }
   this->set(type); // synthesized attribute
 }
 
@@ -5557,11 +5982,15 @@ void BuildVisitor::Build(parser::IntrinsicTypeSpec::Character &x) {
 void BuildVisitor::Build(parser::IntrinsicTypeSpec::Logical &x) {
   SgType *type{nullptr};
   SgExpression *expr{nullptr};
+  const bool hasKindStar = KindSelectorHasStar(x.kind);
 
   if (x.kind) { // std::optional<KindSelector>
     WalkExpr(x.kind.value(), expr);
   }
   type = SageBuilder::buildBoolType(expr);
+  if (type != nullptr) {
+    type->set_hasTypeKindStar(hasKindStar);
+  }
   this->set(type); // synthesized attribute
 }
 
@@ -7869,14 +8298,6 @@ void Build(parser::CompilerDirective &x) {
   }
   std::string directive = x.source.ToString();
   if (directive.empty()) {
-    return;
-  }
-  std::string lower = directive;
-  for (char &ch : lower) {
-    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-  }
-  if (lower.find("$omp") != std::string::npos ||
-      lower.find("$acc") != std::string::npos) {
     return;
   }
   AppendPragmasFromCharBlock(x.source);

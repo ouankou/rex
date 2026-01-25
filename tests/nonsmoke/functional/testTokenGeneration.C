@@ -57,12 +57,8 @@ main( int argc, char * argv[] )
   // Use option "-rose:verbose 2" to see the report.
      timer.set_project(project);
 
-  // Skip calling the typical backend for ROSE (not required for just testing analysis)
-  // This backend calls the backend compiler using the original input source file list.
-     if (project != NULL && project->get_Fortran_only()) {
-#if BACKEND_FORTRAN_IS_LLVM_FLANG
-       return 0;
-#endif
-     }
+     // Skip calling the typical backend for ROSE (not required for just testing
+     // analysis) This backend calls the backend compiler using the original
+     // input source file list.
      return backendCompilesUsingOriginalInputFile(project);
    }

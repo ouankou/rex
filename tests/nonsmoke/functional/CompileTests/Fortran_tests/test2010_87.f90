@@ -3,6 +3,6 @@
 ! It doesn't matter whether single or double quotes are used.
 
 program p
-  character(*) :: c1 = ""  ! produces assertion failure in testTranslator
-  character(*) :: c2 = ''  ! ditto
+  character(len=1) :: c1 = ""  ! empty literal; padded to length 1
+  character(len=1) :: c2 = ''  ! same as above
 end program

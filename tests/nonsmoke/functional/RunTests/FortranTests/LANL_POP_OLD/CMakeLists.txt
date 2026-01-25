@@ -29,7 +29,6 @@ add_test(
      export HUDSON_MAKE=\"${CMAKE_MAKE_PROGRAM}\"
      export HUDSON_SED=\"$(command -v sed)\"
      export HUDSON_FC=\"${BACKEND_FORTRAN_COMPILER}\"
-     export HUDSON_FFLAGS=\"-ffree-line-length-0\"
      export HUDSON_LD=\"${BACKEND_FORTRAN_COMPILER}\"
      export HUDSON_CC=\"${CMAKE_C_COMPILER}\"
      export HUDSON_CXX=\"${CMAKE_CXX_COMPILER}\"

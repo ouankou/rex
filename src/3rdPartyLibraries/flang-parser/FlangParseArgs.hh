@@ -96,7 +96,7 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
   ctx.driver.prefix = prefix.data();
 
   const char *fc{getenv("F18_FC")};
-  ctx.driver.fcArgs.push_back(fc ? fc : "flang-20");
+  ctx.driver.fcArgs.push_back(fc ? fc : "flang");
 
   Fortran::common::IntrinsicTypeDefaultKinds defaultKinds;
 

@@ -46,6 +46,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <set>
 
 // DQ (12/22/2019): I don't need this now, and it is an issue for some compilers
 // (e.g. GNU 4.9.4). DQ (12/21/2019): Require hash table support for determining
@@ -136,6 +137,81 @@ static std::string getPathSuffix(const std::string &path) {
   }
   return path.substr(dot + 1);
 }
+
+namespace {
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+bool isFortranSourcePath(const std::string &path) {
+  std::string ext = getPathSuffix(path);
+  if (ext.empty())
+    return false;
+  ext = toLowerCopy(ext);
+  return ext == "f" || ext == "f77" || ext == "f90" || ext == "f95" ||
+         ext == "f03" || ext == "f08" || ext == "f18";
+}
+
+bool isIntrinsicModuleUse(const SgUseStatement *use_stmt) {
+  if (use_stmt == NULL)
+    return false;
+  std::string nature = toLowerCopy(use_stmt->get_module_nature());
+  return nature == "intrinsic";
+}
+
+void collectModuleSourcesFromFile(SgSourceFile *file,
+                                  std::vector<std::string> &order,
+                                  std::set<std::string> &seen,
+                                  std::set<std::string> &visiting);
+
+void collectModuleSourcesFromUse(const SgUseStatement *use_stmt,
+                                 std::vector<std::string> &order,
+                                 std::set<std::string> &seen,
+                                 std::set<std::string> &visiting) {
+  if (use_stmt == NULL || isIntrinsicModuleUse(use_stmt))
+    return;
+
+  std::string name = use_stmt->get_name().str();
+  if (name.empty())
+    return;
+
+  SgModuleStatement *mod_stmt = FlangModuleInfo::getModule(name);
+  if (mod_stmt == NULL)
+    return;
+
+  SgSourceFile *mod_file = SageInterface::getEnclosingSourceFile(mod_stmt);
+  if (mod_file == NULL)
+    return;
+
+  collectModuleSourcesFromFile(mod_file, order, seen, visiting);
+}
+
+void collectModuleSourcesFromFile(SgSourceFile *file,
+                                  std::vector<std::string> &order,
+                                  std::set<std::string> &seen,
+                                  std::set<std::string> &visiting) {
+  if (file == NULL)
+    return;
+  std::string path = file->getFileName();
+  if (!isFortranSourcePath(path))
+    return;
+  if (seen.count(path) != 0)
+    return;
+  if (visiting.count(path) != 0)
+    return;
+
+  visiting.insert(path);
+
+  Rose_STL_Container<SgNode *> uses =
+      NodeQuery::querySubTree(file, V_SgUseStatement);
+  for (Rose_STL_Container<SgNode *>::iterator it = uses.begin();
+       it != uses.end(); ++it) {
+    collectModuleSourcesFromUse(isSgUseStatement(*it), order, seen, visiting);
+  }
+
+  visiting.erase(path);
+  seen.insert(path);
+  order.push_back(path);
+}
+#endif
+} // namespace
 
 static bool isFlangFortranSourceSuffix(const std::string &suffix) {
   const std::string lower = toLowerCopy(suffix);
@@ -2638,6 +2714,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     bool remove_temp_dir = false;
     std::vector<std::string> temp_files;
     bool replaced_source = false;
+    bool include_temp_dir_set = false;
 
     auto ensure_temp_dir = [&]() -> const std::filesystem::path & {
       if (temp_dir_ready) {
@@ -2693,6 +2770,14 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       return temp_path.string();
     };
 
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+    {
+      const std::filesystem::path include_temp_dir = ensure_temp_dir();
+      set_flang_include_temp_dir(include_temp_dir.string());
+      include_temp_dir_set = true;
+    }
+#endif
+
     if (flangArgs.size() > 1) {
       for (size_t i = 1; i < flangArgs.size(); ++i) {
         flangCommandLine.push_back(rewrite_source_arg(flangArgs[i]));
@@ -2701,7 +2786,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       flangCommandLine.push_back(rewrite_source_arg(source_path));
     }
 
-    if (replaced_source && !source_dir.empty() &&
+    if ((replaced_source || include_temp_dir_set) && !source_dir.empty() &&
         !hasIncludeDir(flangCommandLine, source_dir)) {
       flangCommandLine.push_back("-I");
       flangCommandLine.push_back(source_dir);
@@ -2717,6 +2802,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
 #if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
     status = experimental_fortran_main(flangArgc, flangArgv,
                                        const_cast<SgSourceFile *>(this));
+    set_flang_include_temp_dir(std::string());
     for (const auto &path : temp_files) {
       std::error_code ec;
       std::filesystem::remove(path, ec);
@@ -2787,23 +2873,16 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
 
     vector<string> fortran_C_preprocessor_commandLine;
 
-    // Note: The `-traditional' and `-undef' flags are supplied to cpp by
-    // default [when used with cpp is used by gfortran], to help avoid
-    // unpleasant surprises.  So to simplify use of cpp and make it more
-    // consistant with gfortran we use gfortran to call cpp.
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
     fortran_C_preprocessor_commandLine.push_back(
         BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
-    fortran_C_preprocessor_commandLine.push_back(
-        BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
+    fortran_C_preprocessor_commandLine.push_back("-E");
+    fortran_C_preprocessor_commandLine.push_back("-P");
+    fortran_C_preprocessor_commandLine.push_back("-cpp");
 #if ROSE_USE_INTEL_FPP
     fortran_C_preprocessor_commandLine.push_back(INTEL_FPP_PATH);
     fortran_C_preprocessor_commandLine.push_back("-P");
     cerr << "Intel Fortran preprocessor not available! " << endl;
     ROSE_ABORT();
-#endif
-    fortran_C_preprocessor_commandLine.push_back(
-        BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
 #endif
 
     // DQ (10/23/2010): Added support for "-D" options (this will trigger CPP
@@ -2813,8 +2892,8 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     const SgStringList &macroSpecifierList =
         get_project()->get_macroSpecifierList();
     for (size_t i = 0; i < macroSpecifierList.size(); i++) {
-      // Note that gfortran will only do macro substitution of "-D" command line
-      // arguments on files with *.F or *.F?? suffix.
+      // Macro substitution applies only when preprocessing is enabled
+      // (e.g., *.F or *.F?? suffixes).
       ROSE_ASSERT(get_requires_C_preprocessor() == true);
       fortran_C_preprocessor_commandLine.push_back("-D" +
                                                    macroSpecifierList[i]);
@@ -2829,19 +2908,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       fortran_C_preprocessor_commandLine.push_back(includeList[i]);
     }
 
-    // add option to specify preprocessing only
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-    fortran_C_preprocessor_commandLine.push_back("-E");
-    // Pei-Hung (06/18/2020) gfortran option to inhibit generation of
-    // linemarkers in the output from the preprocessor.
-    fortran_C_preprocessor_commandLine.push_back("-P");
-    // Pei-Hung 12/09/2019 This is for PGI Fortran compiler, add others if
-    // necessary
-    fortran_C_preprocessor_commandLine.push_back("-Mcpp");
-    // Intel FPP adds the required flags above
-    fortran_C_preprocessor_commandLine.push_back("-E");
-    fortran_C_preprocessor_commandLine.push_back("-P");
-#endif
+    // Backend compiler options already configured above.
 
     // add source file name
     string sourceFilename = get_sourceFileNameWithPath();
@@ -2882,11 +2949,8 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
                  .c_str());
 
     // Pei-Hung 12/09/2019 the preprocess command has to be executed by all
-    // Fortran compiler
-    // #if BACKEND_FORTRAN_IS_GNU_COMPILER
-    //  Some security checking here could be helpful!!!
+    // Fortran compilers.
     errorCode = systemFromVector(fortran_C_preprocessor_commandLine);
-    // #endif
 
     // DQ (10/1/2008): Added error checking on return value from CPP.
     if (errorCode != 0) {
@@ -2903,42 +2967,20 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
   bool syntaxCheckInputCode = (get_skip_syntax_check() == false);
 
   if (syntaxCheckInputCode == true) {
-    // Note that syntax checking of Fortran 2003 code using gfortran versions
-    // greater than 4.1 can be a problem because there are a lot of bugs in the
-    // Fortran 2003 support in later versions of gfortran (not present in
-    // initial Fortran 2003 support for syntax checking only). This problem has
-    // been verified in version 4.2 and 4.3 of gfortran.
-
     // DQ (9/30/2007): Introduce tracking of performance of ROSE.
     TimingPerformance timer("Fortran syntax checking of input:");
 
-    // DQ (9/30/2007): For Fortran, we want to run gfortran up front so that we
-    // can verify that the input file is syntax error free.  First lets see what
-    // data is avilable to use to check that we have a fortran file.
+    // For Fortran, run the backend compiler up front so that we can verify
+    // that the input file is syntax error free.
     // display("Before calling OpenFortranParser, what are the values in the
     // SgFile");
 
-    // DQ (9/30/2007): Call the backend Fortran compiler (typically gfortran) to
-    // check the syntax of the input program.  When using GNU gfortran, use the
-    // "-S" option which means: "Compile only; do not assemble or link".
-
-    // DQ (11/17/2007): Note that syntax and semantics checking is turned on
-    // using -fno-backend not -S as I previously thought.  Also I have turned on
-    // all possible warnings and specified the Fortran 2003 features.  I have
-    // also specified use of cray-pointers. string syntaxCheckingCommandline =
-    // "gfortran -S " + get_sourceFileNameWithPath(); string warnings = "-Wall
-    // -Wconversion -Waliasing -Wampersand -Wimplicit-interface
-    // -Wline-truncation -Wnonstd-intrinsics -Wsurprising -Wunderflow
-    // -Wunused-labels"; DQ (12/8/2007): Added commandline control over warnings
-    // output in using gfortran sytax checking prior to use of OFP.
+    // DQ (9/30/2007): Call the backend Fortran compiler to check the syntax of
+    // the input program. Use -fsyntax-only to avoid code generation.
 
     vector<string> fortranCommandLine;
-    fortranCommandLine.push_back(ROSE_GFORTRAN_PATH);
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
+    fortranCommandLine.push_back(BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
     fortranCommandLine.push_back("-fsyntax-only");
-#elif BACKEND_FORTRAN_IS_LLVM_FLANG
-    fortranCommandLine.push_back("-fsyntax-only");
-#endif
     // DQ (5/19/2008): Added support for include paths as required for
     // relatively new Fortran specific include mechanism in OFP.
     const SgStringList &includeList =
@@ -2947,159 +2989,22 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       fortranCommandLine.push_back(includeList[i]);
     }
 
-    if (get_output_warnings() == true) {
-      // These are gfortran specific options
-      // As of 2004, -Wall implied: -Wunused-labels, -Waliasing, -Wsurprising
-      // and -Wline-truncation Additional major options include:
-      //      -fsyntax-only -pedantic -pedantic-errors -w -Wall -Waliasing
-      //      -Wconversion -Wimplicit-interface -Wsurprising -Wunderflow
-      //      -Wunused-labels -Wline-truncation -Werror -W
-      // warnings = "-Wall -Wconversion -Waliasing -Wampersand
-      // -Wimplicit-interface -Wline-truncation -Wnonstd-intrinsics -Wsurprising
-      // -Wunderflow";
-
-      // If warnings are requested (on the comandline to ROSE translator) then
-      // we want to output all possible warnings by defaul (at least for how)
-
-      // Check if we are using GNU compiler backend (if so then we are using
-      // gfortran, though we have no test in place currently for what version of
-      // gfortran (as we do for C and C++))
-      bool usingGfortran = false;
-      // string backendCompilerSystem = BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH;
-#ifdef USE_CMAKE
-#ifdef CMAKE_COMPILER_IS_GNUG77
-      usingGfortran = true;
-#endif
-      // DQ (2/1/2016): Make the behavior of ROSE independent of the exact name
-      // of the backend compiler (problem when packages name compilers such as
-      // "g++-4.8"). Note that this code assumes that if we are using the C/C++
-      // GNU compiler then we are using the GNU Fortran comiler (we need a
-      // similar BACKEND_FORTRAN_IS_GNU_COMPILER macro). usingGfortran =
-      // (backendCompilerSystem == "g++" || backendCompilerSystem == "mpicc" ||
-      // backendCompilerSystem == "mpicxx");
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-      usingGfortran = true;
-#endif
-#endif
-
-      if (usingGfortran) {
-        // Since this is specific to gfortran version 4.1.2, we will exclude it
-        // (it is also redundant since it is included in -Wall) warnings += "
-        // -Wunused-labels"; warnings = "-Wall -Wconversion -Wampersand
-        // -Wimplicit-interface -Wnonstd-intrinsics -Wunderflow";
-        fortranCommandLine.push_back("-Wall");
-
-        // Add in the gfortran extra warnings
-        fortranCommandLine.push_back("-W");
-
-        // More warnings not yet turned on.
-        fortranCommandLine.push_back("-Wconversion");
-        fortranCommandLine.push_back("-Wampersand");
-        fortranCommandLine.push_back("-Wimplicit-interface");
-        fortranCommandLine.push_back("-Wnonstd-intrinsics");
-        fortranCommandLine.push_back("-Wunderflow");
-      } else {
-        string backendCompilerSystem = BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH;
-        if (get_verbose() > 0)
-          printf("Skipping Fortran warning flags for backend compiler %s "
-                 "(GNU-specific options not applied).\n",
-                 backendCompilerSystem.c_str());
-      }
+    if (get_output_warnings() == true && get_verbose() > 0) {
+      printf("Skipping additional Fortran warning flags for backend compiler "
+             "%s.\n",
+             BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH);
     }
 
-    // Refactor the code below so that we can conditionally set the
-    // -ffree-line-length-none or -ffixed-line-length-none options (not
-    // available in all versions of gfortran).
-    string use_line_length_none_string;
-
-    bool relaxSyntaxCheckInputCode = (get_relax_syntax_check() == true);
-
-    // DQ (11/17/2007): Set the fortran mode used with gfortran.
-    if (get_F90_only() == true || get_F95_only() == true) {
-      // For now let's consider f90 to be syntax checked under f95 rules (since
-      // gfortran does not support a f90 specific mode)
-      if (relaxSyntaxCheckInputCode == false) {
-        // DQ (9/24/2010): Relaxed syntax checking would allow "REAL*8" syntax
-        // with F90 if we used "-std=legacy" instead of "-std=f95". We will
-        // implement a strict syntax checking option with a default of false so
-        // that we can by default support codes using the "REAL*8" syntax with
-        // F90 (which appear to be common).
-        // fortranCommandLine.push_back("-std=f95");
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-        fortranCommandLine.push_back("-std=legacy");
-#endif
-      }
-
-      // DQ (5/20/2008)
-      // fortranCommandLine.push_back("-ffree-line-length-none");
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-      use_line_length_none_string = "-ffree-line-length-none";
-      use_line_length_none_string = "-free";
-#endif
-    } else {
-      if (get_F2003_only() == true) {
-        // fortranCommandLine.push_back("-std=f2003");
-        if (relaxSyntaxCheckInputCode == false) {
-          // DQ (9/24/2010): We need to consider making a strict syntax checking
-          // option and allowing this to be relaxed by default.  It is however
-          // not clear that this is required for F2003 code where it does appear
-          // to be required for F90 code.  So this needs to be tested, see
-          // comments above relative to use of "-std=legacy".
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-          fortranCommandLine.push_back("-std=f2003");
-#endif
-        }
-
-        // DQ (5/20/2008)
-        // fortranCommandLine.push_back("-ffree-line-length-none");
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-        use_line_length_none_string = "-ffree-line-length-none";
-        use_line_length_none_string = "-free";
-#endif
-      } else {
-        if (get_F2008_only() == true) {
-          // fortranCommandLine.push_back("-std=f2003");
-          if (relaxSyntaxCheckInputCode == false) {
-            // DQ (1/25/2016): We need to consider making a strict syntax
-            // checking option and allowing this to be relaxed by default.  It
-            // is however not clear that this is required for F2008 code where
-            // it does appear to be required for F90 code.  So this needs to be
-            // tested, see comments above relative to use of "-std=legacy".
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-            fortranCommandLine.push_back("-std=f2008");
-#endif
-          }
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-          use_line_length_none_string = "-ffree-line-length-none";
-          use_line_length_none_string = "-free";
-#endif
-        } else {
-          // This should be the default mode (fortranMode string is empty). So
-          // is it f77?
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-          use_line_length_none_string = "-ffixed-line-length-none";
-          use_line_length_none_string = "-fixed";
-#endif
-        }
-      }
+    if (get_inputFormat() == e_fixed_form_output_format) {
+      fortranCommandLine.push_back("-ffixed-form");
+      fortranCommandLine.push_back("-ffixed-line-length=0");
+    } else if (get_inputFormat() == e_free_form_output_format) {
+      fortranCommandLine.push_back("-ffree-form");
     }
-
-// We need this #if since if gfortran is unavailable the macros for the major
-// and minor version numbers will be empty strings (blank).
-#if BACKEND_FORTRAN_IS_GNU_COMPILER
-    // DQ (9/16/2009): This option is not available in gfortran version 4.0.x
-    // (wonderful). DQ (5/20/2008): Need to select between fixed and free format
-    // fortran_C_preprocessor_commandLine.push_back("-ffree-line-length-none");
-    if ((BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER >= 4) &&
-        (BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER >= 1)) {
-      fortranCommandLine.push_back(use_line_length_none_string);
-    }
-    fortranCommandLine.push_back(use_line_length_none_string);
-#endif
 
     // DQ (12/8/2007): Added support for cray pointers from commandline.
     if (get_cray_pointer_support() == true) {
-      fortranCommandLine.push_back("-fcray-pointer");
+      // Flang accepts Cray pointer syntax without a dedicated flag.
     }
 
     // Note that "-c" is required to enforce that we only compile and not link
@@ -3123,9 +3028,8 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       // If C preprocessing was required then we have to provide the generated
       // filename of the preprocessed file!
 
-      // Note that since we are using gfortran to do the syntax checking, we
-      // could just hand the original file to gfortran instead of the one that
-      // we generate using CPP.
+      // Since we use the backend compiler for syntax checking, we could hand
+      // it the original file instead of the CPP-generated one.
       string sourceFilename = get_sourceFileNameWithPath();
       string sourceFileNameOutputFromCpp =
           generate_C_preprocessor_intermediate_filename(sourceFilename);
@@ -3260,7 +3164,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
 
     if (foundSourceDirectoryExplicitlyListedInIncludePaths == false) {
       // Add the source directory to the include list so that we reproduce
-      // the semantics of gfortran
+      // the backend compiler's include path behavior.
       OFPCommandLine.push_back("-I" + getSourceDirectory());
     }
 
@@ -3334,7 +3238,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
 
   if (foundSourceDirectoryExplicitlyListedInIncludePaths == false) {
     // Add the source directory to the include list so that we reproduce the
-    // semantics of gfortran
+    // backend compiler's include path behavior.
     frontEndCommandLine.push_back("-I" + getSourceDirectory());
   }
 
@@ -4278,6 +4182,62 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
                                                               false, false)
                  .c_str());
     }
+
+#if defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+    if (get_Fortran_only() == true &&
+        get_experimental_flang_frontend() == true) {
+      std::vector<std::string> module_sources;
+      std::set<std::string> seen;
+      std::set<std::string> visiting;
+
+      Rose_STL_Container<SgNode *> uses =
+          NodeQuery::querySubTree(this, V_SgUseStatement);
+      for (Rose_STL_Container<SgNode *>::iterator it = uses.begin();
+           it != uses.end(); ++it) {
+        collectModuleSourcesFromUse(isSgUseStatement(*it), module_sources, seen,
+                                    visiting);
+      }
+
+      if (!module_sources.empty()) {
+        std::string unparse_path = get_unparse_output_filename();
+        std::string original_path = get_sourceFileNameWithPath();
+        for (const std::string &module_path : module_sources) {
+          if (module_path.empty())
+            continue;
+          if (module_path == unparse_path || module_path == original_path)
+            continue;
+
+          std::vector<std::string> module_cmd = compilerCmdLine;
+          bool replaced = false;
+          if (!unparse_path.empty()) {
+            std::vector<std::string>::iterator it =
+                std::find(module_cmd.begin(), module_cmd.end(), unparse_path);
+            if (it != module_cmd.end()) {
+              *it = module_path;
+              replaced = true;
+            }
+          }
+          if (replaced == false && !original_path.empty()) {
+            std::vector<std::string>::iterator it =
+                std::find(module_cmd.begin(), module_cmd.end(), original_path);
+            if (it != module_cmd.end()) {
+              *it = module_path;
+              replaced = true;
+            }
+          }
+          if (replaced == false)
+            continue;
+
+          int module_rc = systemFromVector(module_cmd);
+          if (module_rc != 0) {
+            printf("Exiting with an error in the backend compilation while "
+                   "building Fortran module dependencies! \n");
+            ROSE_ASSERT(false);
+          }
+        }
+      }
+    }
+#endif
 
     // DQ (2/20/2013): The timer used in TimingPerformance is now fixed to
     // properly record elapsed wall clock time. CAVE3 double check that is

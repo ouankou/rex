@@ -69,6 +69,9 @@ using SgExpressionPtrList = std::vector<SgExpression *>;
 namespace Rose {
 namespace builder {
 
+constexpr const char *kFlangParamScopeTransferredAttr =
+    "rose_flang_param_scope_transferred";
+
 // This is similar to F18 Fortran::parser::SourcePosition
 struct SourcePosition {
   std::string path; // replaces Fortran::parser::SourceFile

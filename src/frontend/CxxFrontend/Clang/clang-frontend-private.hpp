@@ -1468,31 +1468,45 @@ public:
                      llvm::StringRef SearchPath, llvm::StringRef RelativePath,
                      const clang::Module *SuggestedModule, bool ModuleImported,
                      clang::SrcMgr::CharacteristicKind FileType) override;
-  void EndOfMainFile();
-  void Ident(clang::SourceLocation Loc, const std::string &str);
+  void EndOfMainFile() override;
+  void Ident(clang::SourceLocation Loc, llvm::StringRef Str) override;
   void PragmaComment(clang::SourceLocation Loc,
-                     const clang::IdentifierInfo *Kind, const std::string &Str);
-  void PragmaMessage(clang::SourceLocation Loc, llvm::StringRef Str);
+                     const clang::IdentifierInfo *Kind,
+                     llvm::StringRef Str) override;
+  void PragmaMessage(clang::SourceLocation Loc, llvm::StringRef Namespace,
+                     clang::PPCallbacks::PragmaMessageKind Kind,
+                     llvm::StringRef Str) override;
   void PragmaDiagnosticPush(clang::SourceLocation Loc,
-                            llvm::StringRef Namespace);
+                            llvm::StringRef Namespace) override;
   void PragmaDiagnosticPop(clang::SourceLocation Loc,
-                           llvm::StringRef Namespace);
+                           llvm::StringRef Namespace) override;
   void PragmaDiagnostic(clang::SourceLocation Loc, llvm::StringRef Namespace,
-                        clang::diag::Severity Severity, llvm::StringRef Str);
+                        clang::diag::Severity Severity,
+                        llvm::StringRef Str) override;
   void MacroExpands(const clang::Token &MacroNameTok,
-                    const clang::MacroInfo *MI, clang::SourceRange Range);
+                    const clang::MacroDefinition &MD, clang::SourceRange Range,
+                    const clang::MacroArgs *Args) override;
   void MacroDefined(const clang::Token &MacroNameTok,
-                    const clang::MacroInfo *MI);
+                    const clang::MacroDirective *MD) override;
   void MacroUndefined(const clang::Token &MacroNameTok,
-                      const clang::MacroInfo *MI);
-  void Defined(const clang::Token &MacroNameTok);
-  void SourceRangeSkipped(clang::SourceRange Range);
-  void If(clang::SourceRange Range);
-  void Elif(clang::SourceRange Range);
-  void Ifdef(const clang::Token &MacroNameTok);
-  void Ifndef(const clang::Token &MacroNameTok);
-  void Else();
-  void Endif();
+                      const clang::MacroDefinition &MD,
+                      const clang::MacroDirective *Undef) override;
+  void Defined(const clang::Token &MacroNameTok,
+               const clang::MacroDefinition &MD,
+               clang::SourceRange Range) override;
+  void SourceRangeSkipped(clang::SourceRange Range,
+                          clang::SourceLocation EndifLoc) override;
+  void If(clang::SourceLocation Loc, clang::SourceRange ConditionRange,
+          clang::PPCallbacks::ConditionValueKind ConditionValue) override;
+  void Elif(clang::SourceLocation Loc, clang::SourceRange ConditionRange,
+            clang::PPCallbacks::ConditionValueKind ConditionValue,
+            clang::SourceLocation IfLoc) override;
+  void Ifdef(clang::SourceLocation Loc, const clang::Token &MacroNameTok,
+             const clang::MacroDefinition &MD) override;
+  void Ifndef(clang::SourceLocation Loc, const clang::Token &MacroNameTok,
+              const clang::MacroDefinition &MD) override;
+  void Else(clang::SourceLocation Loc, clang::SourceLocation IfLoc) override;
+  void Endif(clang::SourceLocation Loc, clang::SourceLocation IfLoc) override;
 
   std::pair<Sg_File_Info *, PreprocessingInfo *> top();
   bool pop();

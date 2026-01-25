@@ -25,7 +25,7 @@ list(APPEND ROSE_FLAGS -I${_gfortran_torture_output_dir}
 foreach(file_to_test ${F90_TESTCODES})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -std=f90 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_torture_output_dir})
@@ -34,7 +34,7 @@ endforeach()
 foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -std=f77 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f77 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_torture_output_dir})
@@ -52,7 +52,7 @@ set(_gfortran_torture_disabled_f90
 foreach(file_to_test ${_gfortran_torture_disabled_f90})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -std=f90 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_torture_output_dir})
@@ -67,7 +67,7 @@ set(_gfortran_torture_disabled_f77
 foreach(file_to_test ${_gfortran_torture_disabled_f77})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
-    COMMAND testTranslator ${ROSE_FLAGS} -std=f77 -c
+    COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f77 -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(GFORTRANSUITE_${file_to_test} PROPERTIES LABELS GFORTRANSUITE
     WORKING_DIRECTORY ${_gfortran_torture_output_dir})

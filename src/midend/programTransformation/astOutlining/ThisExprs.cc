@@ -218,15 +218,195 @@ static void replaceThisExprs(ASTtools::ThisExprSet_t &this_exprs,
 
 // =====================================================================
 
+static SgClassSymbol *
+getClassSymbolFromMemberFunctionDecl(const SgMemberFunctionDeclaration *decl) {
+  if (decl == NULL)
+    return NULL;
+
+  SgDeclarationStatement *assoc_decl = decl->get_associatedClassDeclaration();
+  SgClassDeclaration *class_decl = isSgClassDeclaration(assoc_decl);
+  if (class_decl == NULL)
+    return NULL;
+
+  SgSymbol *sym = class_decl->get_symbol_from_symbol_table();
+  if (sym == NULL && class_decl->get_scope() != NULL) {
+    sym = class_decl->get_scope()->lookup_class_symbol(class_decl->get_name());
+  }
+
+  return isSgClassSymbol(sym);
+}
+
+static bool isNonStaticMemberFunctionDecl(const SgFunctionDeclaration *decl) {
+  if (decl == NULL)
+    return false;
+
+  if (isSgMemberFunctionDeclaration(decl) == NULL &&
+      isSgTemplateMemberFunctionDeclaration(decl) == NULL)
+    return false;
+
+  return decl->get_declarationModifier().get_storageModifier().isStatic() ==
+         false;
+}
+
+static bool isImplicitMemberFunctionCall(const SgFunctionCallExp *call) {
+  if (call == NULL)
+    return false;
+
+  SgExpression *func_expr = call->get_function();
+  if (SgMemberFunctionRefExp *mem_ref = isSgMemberFunctionRefExp(func_expr)) {
+    SgMemberFunctionSymbol *sym = mem_ref->get_symbol();
+    return isNonStaticMemberFunctionDecl(sym ? sym->get_declaration() : NULL);
+  }
+
+  if (SgTemplateMemberFunctionRefExp *mem_ref =
+          isSgTemplateMemberFunctionRefExp(func_expr)) {
+    SgTemplateMemberFunctionSymbol *sym = mem_ref->get_symbol();
+    return isNonStaticMemberFunctionDecl(sym ? sym->get_declaration() : NULL);
+  }
+
+  return false;
+}
+
+static bool isNonStaticMemberVariableDecl(const SgInitializedName *init_name) {
+  if (init_name == NULL)
+    return false;
+
+  SgVariableDeclaration *decl =
+      isSgVariableDeclaration(init_name->get_parent());
+  if (decl == NULL)
+    return false;
+
+  if (isSgClassDefinition(decl->get_parent()) == NULL)
+    return false;
+
+  return decl->get_declarationModifier().get_storageModifier().isStatic() ==
+         false;
+}
+
+static bool isImplicitMemberVarRef(const SgVarRefExp *var_ref) {
+  if (var_ref == NULL)
+    return false;
+
+  SgVariableSymbol *sym = var_ref->get_symbol();
+  if (sym == NULL)
+    return false;
+
+  if (!isNonStaticMemberVariableDecl(sym->get_declaration()))
+    return false;
+
+  SgNode *parent = var_ref->get_parent();
+  if (isSgDotExp(parent) != NULL || isSgArrowExp(parent) != NULL)
+    return false;
+
+  return true;
+}
+
+static void replaceImplicitMemberFunctionCalls(SgBasicBlock *b,
+                                               SgVariableDeclaration *decl) {
+  if (b == NULL || decl == NULL)
+    return;
+
+  SgVariableSymbol *sym = SageInterface::getFirstVarSym(decl);
+  ROSE_ASSERT(sym != NULL);
+
+  typedef Rose_STL_Container<SgNode *> NodeList_t;
+  NodeList_t calls = NodeQuery::querySubTree(const_cast<SgBasicBlock *>(b),
+                                             V_SgFunctionCallExp);
+  for (NodeList_t::iterator i = calls.begin(); i != calls.end(); ++i) {
+    SgFunctionCallExp *call = isSgFunctionCallExp(*i);
+    if (call == NULL || !isImplicitMemberFunctionCall(call))
+      continue;
+
+    SgExpression *func_expr = call->get_function();
+    if (func_expr == NULL)
+      continue;
+
+    SgVarRefExp *this_ref = SageBuilder::buildVarRefExp(sym);
+    ROSE_ASSERT(this_ref != NULL);
+
+    SgArrowExp *arrow = SageBuilder::buildArrowExp(this_ref, func_expr);
+    ROSE_ASSERT(arrow != NULL);
+
+    call->set_function(arrow);
+    arrow->set_parent(call);
+    func_expr->set_parent(arrow);
+    this_ref->set_parent(arrow);
+  }
+}
+
+static void replaceImplicitMemberVarRefs(SgBasicBlock *b,
+                                         SgVariableDeclaration *decl) {
+  if (b == NULL || decl == NULL)
+    return;
+
+  SgVariableSymbol *sym = SageInterface::getFirstVarSym(decl);
+  ROSE_ASSERT(sym != NULL);
+
+  typedef Rose_STL_Container<SgNode *> NodeList_t;
+  NodeList_t vars =
+      NodeQuery::querySubTree(const_cast<SgBasicBlock *>(b), V_SgVarRefExp);
+  for (NodeList_t::iterator i = vars.begin(); i != vars.end(); ++i) {
+    SgVarRefExp *var_ref = isSgVarRefExp(*i);
+    if (!isImplicitMemberVarRef(var_ref))
+      continue;
+
+    SgVarRefExp *this_ref = SageBuilder::buildVarRefExp(sym);
+    ROSE_ASSERT(this_ref != NULL);
+
+    SgVarRefExp *member_ref =
+        SageBuilder::buildVarRefExp(var_ref->get_symbol());
+    ROSE_ASSERT(member_ref != NULL);
+
+    SgArrowExp *arrow = SageBuilder::buildArrowExp(this_ref, member_ref);
+    ROSE_ASSERT(arrow != NULL);
+
+    SageInterface::replaceExpression(var_ref, arrow, true);
+  }
+}
+
 SgBasicBlock *Outliner::Preprocess::transformThisExprs(SgBasicBlock *b) {
 #ifdef __linux__
   if (enable_debug)
     cout << "Entering " << __PRETTY_FUNCTION__ << endl;
 #endif
+  if (b == nullptr) {
+    return b;
+  }
+  SgFile *file = getEnclosingFileNode(b);
+  SgSourceFile *source = isSgSourceFile(file);
+  if (source != nullptr && source->get_Fortran_only()) {
+    return b;
+  }
   // Find all 'this' expressions.
   ASTtools::ThisExprSet_t this_exprs;
   ASTtools::collectThisExpressions(b, this_exprs);
-  if (this_exprs.empty()) // No transformation required.
+  bool has_implicit_calls = false;
+  bool has_implicit_member_refs = false;
+  {
+    typedef Rose_STL_Container<SgNode *> NodeList_t;
+    NodeList_t calls = NodeQuery::querySubTree(const_cast<SgBasicBlock *>(b),
+                                               V_SgFunctionCallExp);
+    for (NodeList_t::iterator i = calls.begin(); i != calls.end(); ++i) {
+      if (isImplicitMemberFunctionCall(isSgFunctionCallExp(*i))) {
+        has_implicit_calls = true;
+        break;
+      }
+    }
+  }
+  {
+    typedef Rose_STL_Container<SgNode *> NodeList_t;
+    NodeList_t vars =
+        NodeQuery::querySubTree(const_cast<SgBasicBlock *>(b), V_SgVarRefExp);
+    for (NodeList_t::iterator i = vars.begin(); i != vars.end(); ++i) {
+      if (isImplicitMemberVarRef(isSgVarRefExp(*i))) {
+        has_implicit_member_refs = true;
+        break;
+      }
+    }
+  }
+
+  if (this_exprs.empty() && !has_implicit_calls &&
+      !has_implicit_member_refs) // No transformation required.
   {
 #ifdef __linux__
     if (enable_debug)
@@ -241,8 +421,20 @@ SgBasicBlock *Outliner::Preprocess::transformThisExprs(SgBasicBlock *b) {
     b->get_file_info()->display();
   }
   // Get the class symbol for the set of 'this' expressions.
-  SgClassSymbol *sym = getClassSymAndVerify(this_exprs);
-  ROSE_ASSERT(sym);
+  SgClassSymbol *sym = NULL;
+  if (!this_exprs.empty()) {
+    sym = getClassSymAndVerify(this_exprs);
+  } else {
+    const SgFunctionDefinition *func_def = ASTtools::findFirstFuncDef(b);
+    if (func_def != NULL) {
+      const SgMemberFunctionDeclaration *member_decl =
+          isSgMemberFunctionDeclaration(func_def->get_declaration());
+      if (member_decl != NULL) {
+        sym = getClassSymbolFromMemberFunctionDecl(member_decl);
+      }
+    }
+  }
+  ROSE_ASSERT(sym != NULL);
   // Liao 10/27/2009
   // we have to consider the AST changes for both #pragma rose_outline and
   // #pragma omp parallel/task They have different layout: the first one has an
@@ -262,6 +454,10 @@ SgBasicBlock *Outliner::Preprocess::transformThisExprs(SgBasicBlock *b) {
 
   // Replace instances of SgThisExp with the shadow variable.
   replaceThisExprs(this_exprs, decl);
+  if (has_implicit_calls)
+    replaceImplicitMemberFunctionCalls(b, decl);
+  if (has_implicit_member_refs)
+    replaceImplicitMemberVarRefs(b, decl);
   if (enable_debug) {
     cout << "Debug Outliner::Preprocess::transformThisExprs() output BB is:"
          << b << endl;

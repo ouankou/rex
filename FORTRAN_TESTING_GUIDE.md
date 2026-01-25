@@ -59,7 +59,7 @@ cmake -L | grep -i test
 
 **Step 2: Enable tests if needed** (during reconfiguration)
 ```bash
-cmake .. -DENABLE-FORTRAN=ON -DENABLE-FORTRAN-OFP=ON -Ddisable-tests-directory=OFF
+cmake .. -DENABLE-FORTRAN=ON -Ddisable-tests-directory=OFF
 ```
 
 **Step 3: Build test executables**
@@ -119,32 +119,18 @@ echo ""
 echo "Results: $PASSED passed, $FAILED failed"
 ```
 
-## Known Test Exclusions (from legacy test lists)
+## Known Test Exclusions (legacy notes)
 
-Based on legacy test lists, some tests are intentionally excluded:
-
-### Compiler Version Dependent
-- `test2007_263.f90` - Fails with gfortran 4.0
-- `test2010_164.f90` - Fails with gfortran 4.4+
-- `test2011_37.f90` - Fails with gfortran 4.5+
-
-### Known Issues
-- `test2010_119.f90` - Internal gfortran compiler error
-- `test2010_161.f90` - Statistical failure on some systems
-- Various alternative-return tests - Historical reliability issues
-
-### Mutually Exclusive Tests
-Some tests conflict with each other (from legacy notes):
-- test2007_103.f90, test2007_139.f90 conflict with test2010_172.f90, test2010_184.f90
+Some exclusions are carried forward from pre-Flang legacy lists and should be
+revalidated under the current Flang-based flow.
 
 ## Test Subdirectories
 
 Additional test suites in subdirectories:
 
 1. **LANL_POP/** - Los Alamos POP (Parallel Ocean Program) tests
-2. **gfortranTestSuite/** - GFortran compiler test suite
-   - Only enabled for GNU/Clang compilers
-   - Disabled for Intel compiler due to known failures
+2. **gfortranTestSuite/** - Legacy Fortran test corpus used as a broad
+   coverage set under Flang (directory name kept for history)
 
 ## Test Flags (from CMakeLists.txt)
 
@@ -155,7 +141,7 @@ ROSE_FLAGS:
   -I${CMAKE_CURRENT_SOURCE_DIR}
 
 FORTRAN_FLAGS:
-  -std=f77  # For fixed-format tests
+  -rose:fortran_std=f77  # For fixed-format tests
 ```
 
 ## Recommendations

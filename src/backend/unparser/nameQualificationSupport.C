@@ -9012,20 +9012,26 @@ NameQualificationTraversal::evaluateInheritedAttribute(
 
             // DQ (8/4/2012): We would like to refactor this
             // code (I think).
-            if (referencedNameSet.find(declarationForReferencedNameSet) ==
-                referencedNameSet.end()) {
-              // No global qualification is required.
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-              MLOG_WARN_C(MLOG_UNPARSER, "No qualification should be used for "
-                                         "this friend function. \n");
-#endif
-            } else {
+            bool requires_global_qualification =
+                (referencedNameSet.find(declarationForReferencedNameSet) !=
+                 referencedNameSet.end());
+            if (isSgGlobal(currentScope) == NULL) {
+              requires_global_qualification = true;
+            }
+
+            if (requires_global_qualification) {
               amountOfNameQualificationRequired = 1;
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
               MLOG_WARN_C(MLOG_UNPARSER,
                           "Force global qualification for friend function: "
                           "amountOfNameQualificationRequired = %d \n",
                           amountOfNameQualificationRequired);
+#endif
+            } else {
+              // No global qualification is required.
+#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
+              MLOG_WARN_C(MLOG_UNPARSER, "No qualification should be used for "
+                                         "this friend function. \n");
 #endif
             }
             setNameQualification(functionDeclaration,
@@ -14406,12 +14412,18 @@ void NameQualificationTraversal::setNameQualification(
 
   // DQ (2/18/2024): Note that there may not be a nondefining declaration,
   // and then we still don't want to output the global name qualification.
-  // Global-scope function declarations should never emit a leading "::".
-  if (outputGlobalQualification == true &&
-      isSgGlobal(functionDeclaration->get_scope()) != NULL) {
-    outputNameQualificationLength = 0;
-    outputGlobalQualification = false;
-    qualifier = "";
+  // Global/namespace-scope function declarations should never emit a leading
+  // "::".
+  if (outputGlobalQualification == true) {
+    SgScopeStatement *decl_parent =
+        isSgScopeStatement(functionDeclaration->get_parent());
+    if (decl_parent != NULL &&
+        (isSgGlobal(decl_parent) != NULL ||
+         isSgNamespaceDefinitionStatement(decl_parent) != NULL)) {
+      outputNameQualificationLength = 0;
+      outputGlobalQualification = false;
+      qualifier = "";
+    }
   }
   // DQ (2/16/2013): Note that test2013_67.C is a case where name qualification
   // of the friend function is required. I think it is because it is a non
@@ -14428,6 +14440,15 @@ void NameQualificationTraversal::setNameQualification(
       ((functionDeclaration->get_definingDeclaration() == NULL) ||
        (functionDeclaration ==
         functionDeclaration->get_definingDeclaration()))) {
+    SgScopeStatement *decl_parent =
+        isSgScopeStatement(functionDeclaration->get_parent());
+    bool allow_friend_global = true;
+    if (decl_parent != NULL &&
+        (isSgGlobal(decl_parent) != NULL ||
+         isSgNamespaceDefinitionStatement(decl_parent) != NULL)) {
+      allow_friend_global = false;
+    }
+    if (allow_friend_global == false) {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
     MLOG_WARN_C(MLOG_UNPARSER,
                 "WARNING: We can't specify global qualification of friend "
@@ -14441,6 +14462,7 @@ void NameQualificationTraversal::setNameQualification(
     // outputNameQualificationLength = 0;
     outputGlobalQualification = false;
     qualifier = "";
+    }
   }
 
   bool isFriendDecl = functionDeclaration->get_declarationModifier().isFriend();

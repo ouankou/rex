@@ -15540,8 +15540,8 @@ SgDerivedTypeStatement::get_mangled_name() const
    {
   // DQ (12/27/2010): This causes endless recursion when the type is defined locally to the
   // function and the function uses the type as a return type (which seems like a language
-  // design mistake). Testcode test2010_179.f90 demonstrates this and it is actually a part
-  // of the gfortran test suite, so I gather it is legal code.
+  // design mistake). Testcode test2010_179.f90 demonstrates this and it is part
+  // of the Fortran test suite, so I gather it is legal code.
   // To address this complexity I will make the fix in this IR node (which is fortran specific)
   // to use only the name plus the function and qualified name of the function's scope instead
   // of the generated function definition's mangled name which causes the endless recursion.

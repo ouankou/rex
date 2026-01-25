@@ -1282,7 +1282,7 @@ bool ROSEAttributesList::isFortran77Comment(const string &line) {
     // sure it is not part a number (which could be part of a Fortran label)
     if (firstCharacter >= '0' && firstCharacter <= '9') {
       // This is NOT a comment it is part of a label in the first column (see
-      // test2008_03.f) Some compilers (gfortran) can interprete a lable even if
+      // test2008_03.f) Some compilers can interpret a label even if
       // it starts in the first column (column 1 (fortran perspective) column 0
       // (C perspective)). printf ("This is not a comment, it is part of a label
       // in the first column: line = %s \n",line.c_str());
@@ -1394,9 +1394,9 @@ bool ROSEAttributesList::isCppDirective(
     // printf ("firstNonBlankCharacter = %c \n",firstNonBlankCharacter);
     bool spaceAfterHash = false;
 
-    // DQ (12/16/2008): Added support fo tabs between "#" and the directive
+    // DQ (12/16/2008): Added support for tabs between "#" and the directive
     // identifier. Note that Fortran modes of CPP should not allow any
-    // whitespace here (at least for gfortran).
+    // whitespace here.
     while ((i < lineLength && (firstNonBlankCharacter == ' ' ||
                                firstNonBlankCharacter == '\t')) ||
            firstNonBlankCharacter == '#') {

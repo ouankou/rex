@@ -114,31 +114,31 @@ private:
 
 public:
   //  void visit(SgNode *);
-  void visit(SgLongLongIntVal *sgn);
-  void visit(SgLongIntVal *sgn);
-  void visit(SgIntVal *sgn);
-  void visit(SgShortVal *sgn);
-  void visit(SgUnsignedLongLongIntVal *sgn);
-  void visit(SgUnsignedLongVal *sgn);
-  void visit(SgUnsignedIntVal *sgn);
-  void visit(SgUnsignedShortVal *sgn);
-  void visit(SgValueExp *sgn);
-  void visit(SgPlusAssignOp *sgn);
-  void visit(SgMinusAssignOp *sgn);
-  void visit(SgMultAssignOp *sgn);
-  void visit(SgDivAssignOp *sgn);
-  void visit(SgModAssignOp *sgn);
-  void visit(SgAddOp *sgn);
-  void visit(SgSubtractOp *sgn);
-  void visit(SgMultiplyOp *sgn);
-  void visit(SgDivideOp *sgn);
-  void visit(SgModOp *sgn);
-  void visit(SgPlusPlusOp *sgn);
-  void visit(SgMinusMinusOp *sgn);
-  void visit(SgUnaryAddOp *sgn);
-  void visit(SgMinusOp *sgn);
+  void visit(SgLongLongIntVal *sgn) override;
+  void visit(SgLongIntVal *sgn) override;
+  void visit(SgIntVal *sgn) override;
+  void visit(SgShortVal *sgn) override;
+  void visit(SgUnsignedLongLongIntVal *sgn) override;
+  void visit(SgUnsignedLongVal *sgn) override;
+  void visit(SgUnsignedIntVal *sgn) override;
+  void visit(SgUnsignedShortVal *sgn) override;
+  void visit(SgValueExp *sgn) override;
+  void visit(SgPlusAssignOp *sgn) override;
+  void visit(SgMinusAssignOp *sgn) override;
+  void visit(SgMultAssignOp *sgn) override;
+  void visit(SgDivAssignOp *sgn) override;
+  void visit(SgModAssignOp *sgn) override;
+  void visit(SgAddOp *sgn) override;
+  void visit(SgSubtractOp *sgn) override;
+  void visit(SgMultiplyOp *sgn) override;
+  void visit(SgDivideOp *sgn) override;
+  void visit(SgModOp *sgn) override;
+  void visit(SgPlusPlusOp *sgn) override;
+  void visit(SgMinusMinusOp *sgn) override;
+  void visit(SgUnaryAddOp *sgn) override;
+  void visit(SgMinusOp *sgn) override;
 
-  bool finish();
+  bool finish() override;
 
   ConstantPropagationAnalysisTransfer(const Function &func,
                                       const DataflowNode &n, NodeState &state,

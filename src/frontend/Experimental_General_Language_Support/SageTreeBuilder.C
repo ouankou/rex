@@ -1174,6 +1174,9 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
   SgVariableSymbol *result_symbol =
       param_scope->lookup_variable_symbol(function_decl->get_name());
   bool is_defining_decl = (isSgFunctionParameterScope(param_scope) == nullptr);
+  bool skip_param_scope_transfer =
+      is_defining_decl && param_scope != nullptr &&
+      param_scope->getAttribute(kFlangParamScopeTransferredAttr) != nullptr;
   if (result_symbol == nullptr && is_defining_decl) {
     if (SgBasicBlock *function_body =
             isSgBasicBlock(SageBuilder::topScopeStack())) {
@@ -1188,27 +1191,72 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
     if (!force_case_insensitive || scope == nullptr) {
       return;
     }
-    if (scope->isCaseInsensitive()) {
-      return;
-    }
     SgSymbolTable *old_table = scope->get_symbol_table();
     if (old_table == nullptr) {
       return;
     }
+    if (old_table->isCaseInsensitive()) {
+      return;
+    }
     std::set<SgNode *> symbols = old_table->get_symbols();
+    if (symbols.empty()) {
+      scope->setCaseInsensitive(true);
+      return;
+    }
     SgSymbolTable *new_table = new SgSymbolTable();
     ASSERT_not_null(new_table);
     new_table->set_parent(scope);
-    new_table->setCaseInsensitive(true);
     scope->set_symbol_table(new_table);
+    scope->setCaseInsensitive(true);
     for (SgNode *sym_node : symbols) {
       SgSymbol *symbol = isSgSymbol(sym_node);
       if (symbol == nullptr) {
         continue;
       }
       scope->insert_symbol(symbol->get_name(), symbol);
+      old_table->remove(symbol);
     }
-    delete old_table;
+    old_table->set_parent(nullptr);
+  };
+
+  auto transfer_symbols = [&](SgScopeStatement *from_scope,
+                              SgScopeStatement *to_scope) {
+    if (from_scope == nullptr || to_scope == nullptr) {
+      return;
+    }
+    SgSymbolTable *symtab = from_scope->get_symbol_table();
+    if (symtab == nullptr) {
+      return;
+    }
+    std::set<SgNode *> symbols = symtab->get_symbols();
+    for (SgNode *symNode : symbols) {
+      SgSymbol *symbol = isSgSymbol(symNode);
+      if (symbol == nullptr) {
+        continue;
+      }
+      if (isSgLabelSymbol(symbol) != nullptr) {
+        continue;
+      }
+      const SgName name = symbol->get_name();
+      if (to_scope->symbol_exists(name)) {
+        continue;
+      }
+      from_scope->remove_symbol(symbol);
+      to_scope->insert_symbol(name, symbol);
+      if (symbol->get_parent() != to_scope->get_symbol_table()) {
+        symbol->set_parent(to_scope->get_symbol_table());
+      }
+      if (auto *varSym = isSgVariableSymbol(symbol)) {
+        if (SgInitializedName *initName = varSym->get_declaration()) {
+          if (initName->get_scope() == from_scope) {
+            initName->set_scope(to_scope);
+          }
+          if (initName->get_parent() == from_scope) {
+            initName->set_parent(to_scope);
+          }
+        }
+      }
+    }
   };
 
   auto ensure_symbols_for_block = [&](SgBasicBlock *block) {
@@ -1281,107 +1329,114 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
     SgBasicBlock *function_body = isSgBasicBlock(SageBuilder::topScopeStack());
     ASSERT_not_null(function_body);
 
-    // Move all of the statements temporarily stored in param_scope into the
-    // scope of the function body
-    if (SgBasicBlock *param_block = isSgBasicBlock(param_scope)) {
-      bool has_statements = !param_block->get_statements().empty();
-      bool has_symbols = false;
-      if (SgSymbolTable *symtab = param_block->get_symbol_table()) {
-        has_symbols = !symtab->get_symbols().empty();
-      }
-      if (has_statements || has_symbols) {
-        ensure_case_insensitive_symbol_table(param_block);
-        ensure_symbols_for_block(param_block);
-        SageInterface::moveStatementsBetweenBlocks(param_block, function_body);
-      }
-    }
-
-    // Any symbols that originated in the parameter scope but were not tied to
-    // statements must be rebound before deleting the temporary scope.
-    fix_initnames_from_param_scope(function_body, param_scope);
-
-    if (param_scope != nullptr) {
-      Rose_STL_Container<SgNode *> init_nodes =
-          NodeQuery::querySubTree(function_decl, V_SgInitializedName);
-      for (SgNode *node : init_nodes) {
-        SgInitializedName *init_name = isSgInitializedName(node);
-        if (init_name == nullptr) {
-          continue;
+    if (!skip_param_scope_transfer) {
+      // Move all of the statements temporarily stored in param_scope into the
+      // scope of the function body
+      if (SgBasicBlock *param_block = isSgBasicBlock(param_scope)) {
+        bool has_statements = !param_block->get_statements().empty();
+        bool has_symbols = false;
+        if (SgSymbolTable *symtab = param_block->get_symbol_table()) {
+          has_symbols = !symtab->get_symbols().empty();
         }
-        if (init_name->get_scope() == param_scope) {
-          init_name->set_scope(function_body);
-        }
-        if (init_name->get_parent() == param_scope) {
-          init_name->set_parent(function_body);
+        if (has_statements || has_symbols) {
+          ensure_case_insensitive_symbol_table(param_block);
+          ensure_case_insensitive_symbol_table(function_body);
+          ensure_symbols_for_block(param_block);
+          SageInterface::moveStatementsBetweenBlocks(param_block,
+                                                     function_body);
+          transfer_symbols(param_block, function_body);
         }
       }
-    }
 
-    // Transfer any label symbols into the function definition scope before
-    // deleting the parameter scope.
-    if (isSgBasicBlock(param_scope)) {
-      SgFunctionDefinition *function_def = function_decl->get_definition();
-      ASSERT_not_null(function_def);
-      auto transfer_label_symbols = [&](SgScopeStatement *from_scope) {
-        if (from_scope == nullptr) {
-          return;
-        }
-        SgSymbolTable *symtab = from_scope->get_symbol_table();
-        if (symtab == nullptr) {
-          return;
-        }
-        std::set<SgNode *> symbols = symtab->get_symbols();
-        for (SgNode *symNode : symbols) {
-          SgLabelSymbol *labelSym = isSgLabelSymbol(symNode);
-          if (labelSym == nullptr) {
+      // Any symbols that originated in the parameter scope but were not tied to
+      // statements must be rebound before deleting the temporary scope.
+      fix_initnames_from_param_scope(function_body, param_scope);
+
+      if (param_scope != nullptr) {
+        Rose_STL_Container<SgNode *> init_nodes =
+            NodeQuery::querySubTree(function_decl, V_SgInitializedName);
+        for (SgNode *node : init_nodes) {
+          SgInitializedName *init_name = isSgInitializedName(node);
+          if (init_name == nullptr) {
             continue;
           }
-          from_scope->remove_symbol(labelSym);
-          if (function_def->lookup_label_symbol(labelSym->get_name()) ==
-              nullptr) {
-            function_def->insert_symbol(labelSym->get_name(), labelSym);
+          if (init_name->get_scope() == param_scope) {
+            init_name->set_scope(function_body);
           }
-          if (SgLabelStatement *labelStmt = labelSym->get_declaration()) {
-            labelStmt->set_scope(function_def);
+          if (init_name->get_parent() == param_scope) {
+            init_name->set_parent(function_body);
           }
-        }
-      };
-      transfer_label_symbols(param_scope);
-      transfer_label_symbols(function_body);
-    }
-
-    // Re-parent any function type symbols that still point at the temporary
-    // parameter scope (or its symbol table) before deletion.
-    VariantVector variants;
-    variants.push_back(V_SgFunctionTypeSymbol);
-    Rose_STL_Container<SgNode *> symbols = NodeQuery::queryMemoryPool(variants);
-    for (SgNode *node : symbols) {
-      SgFunctionTypeSymbol *symbol = isSgFunctionTypeSymbol(node);
-      if (symbol == nullptr) {
-        continue;
-      }
-
-      SgSymbolTable *target_table = nullptr;
-      SgType *type = symbol->get_type();
-      if (isSgFunctionType(type) != nullptr ||
-          isSgMemberFunctionType(type) != nullptr) {
-        SgFunctionTypeTable *func_table = SgNode::get_globalFunctionTypeTable();
-        if (func_table != nullptr) {
-          target_table = func_table->get_function_type_table();
-        }
-      } else {
-        SgTypeTable *type_table = SgNode::get_globalTypeTable();
-        if (type_table != nullptr) {
-          target_table = type_table->get_type_table();
         }
       }
 
-      if (target_table != nullptr) {
-        if (!target_table->exists(symbol)) {
-          target_table->insert(symbol->get_name(), symbol);
+      // Transfer any label symbols into the function definition scope before
+      // deleting the parameter scope.
+      if (isSgBasicBlock(param_scope)) {
+        SgFunctionDefinition *function_def = function_decl->get_definition();
+        ASSERT_not_null(function_def);
+        auto transfer_label_symbols = [&](SgScopeStatement *from_scope) {
+          if (from_scope == nullptr) {
+            return;
+          }
+          SgSymbolTable *symtab = from_scope->get_symbol_table();
+          if (symtab == nullptr) {
+            return;
+          }
+          std::set<SgNode *> symbols = symtab->get_symbols();
+          for (SgNode *symNode : symbols) {
+            SgLabelSymbol *labelSym = isSgLabelSymbol(symNode);
+            if (labelSym == nullptr) {
+              continue;
+            }
+            from_scope->remove_symbol(labelSym);
+            if (function_def->lookup_label_symbol(labelSym->get_name()) ==
+                nullptr) {
+              function_def->insert_symbol(labelSym->get_name(), labelSym);
+            }
+            if (SgLabelStatement *labelStmt = labelSym->get_declaration()) {
+              labelStmt->set_scope(function_def);
+            }
+          }
+        };
+        transfer_label_symbols(param_scope);
+        transfer_label_symbols(function_body);
+      }
+
+      // Re-parent any function type symbols that still point at the temporary
+      // parameter scope (or its symbol table) before deletion.
+      VariantVector variants;
+      variants.push_back(V_SgFunctionTypeSymbol);
+      Rose_STL_Container<SgNode *> symbols =
+          NodeQuery::queryMemoryPool(variants);
+      for (SgNode *node : symbols) {
+        SgFunctionTypeSymbol *symbol = isSgFunctionTypeSymbol(node);
+        if (symbol == nullptr) {
+          continue;
         }
-        if (symbol->get_parent() != target_table) {
-          symbol->set_parent(target_table);
+
+        SgSymbolTable *target_table = nullptr;
+        SgType *type = symbol->get_type();
+        if (isSgFunctionType(type) != nullptr ||
+            isSgMemberFunctionType(type) != nullptr) {
+          SgFunctionTypeTable *func_table =
+              SgNode::get_globalFunctionTypeTable();
+          if (func_table != nullptr) {
+            target_table = func_table->get_function_type_table();
+          }
+        } else {
+          SgTypeTable *type_table = SgNode::get_globalTypeTable();
+          if (type_table != nullptr) {
+            target_table = type_table->get_type_table();
+          }
+        }
+
+        if (target_table != nullptr) {
+          if (!target_table->exists(symbol)) {
+            target_table->insert(symbol->get_name(), symbol);
+          }
+          if (symbol->get_parent() != target_table) {
+            symbol->set_parent(target_table);
+          }
         }
       }
     }
@@ -1426,10 +1481,9 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
       ASSERT_not_null(function_body->lookup_symbol(function_name));
     }
 
-    // The param_scope (SgBasicBlock) is still connected, so try to set its
-    // parent to nullptr and delete it.
+    // The param_scope (SgBasicBlock) is still connected, so detach it from the
+    // AST without deleting pooled nodes.
     param_scope->set_parent(nullptr);
-    delete param_scope;
 
     SageBuilder::popScopeStack(); // function body
     SageBuilder::popScopeStack(); // function definition
@@ -3068,10 +3122,7 @@ void SageTreeBuilder::reset_forward_type_refs(const std::string &type_name,
     SgPointerType *new_pointer = SageBuilder::buildPointerType(type);
     init_name->set_type(new_pointer);
 
-    // Delete the placeholder type and its base type
-    if (ptr->get_base_type())
-      delete ptr->get_base_type();
-    delete ptr;
+    // Leave placeholder types alive; AST nodes are memory-pooled.
   }
 
   // Remove the type name from the multimap

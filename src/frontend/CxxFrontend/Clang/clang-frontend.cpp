@@ -1612,22 +1612,25 @@ void SagePreprocessorRecord::InclusionDirective(
 void SagePreprocessorRecord::EndOfMainFile() {}
 
 void SagePreprocessorRecord::Ident(clang::SourceLocation Loc,
-                                   const std::string &str) {
+                                   llvm::StringRef Str) {
   (void)Loc;
-  (void)str;
+  (void)Str;
 }
 
 void SagePreprocessorRecord::PragmaComment(clang::SourceLocation Loc,
                                            const clang::IdentifierInfo *Kind,
-                                           const std::string &Str) {
+                                           llvm::StringRef Str) {
   (void)Loc;
   (void)Kind;
   (void)Str;
 }
 
-void SagePreprocessorRecord::PragmaMessage(clang::SourceLocation Loc,
-                                           llvm::StringRef Str) {
+void SagePreprocessorRecord::PragmaMessage(
+    clang::SourceLocation Loc, llvm::StringRef Namespace,
+    clang::PPCallbacks::PragmaMessageKind Kind, llvm::StringRef Str) {
   (void)Loc;
+  (void)Namespace;
+  (void)Kind;
   (void)Str;
 }
 
@@ -1654,48 +1657,88 @@ void SagePreprocessorRecord::PragmaDiagnostic(clang::SourceLocation Loc,
 }
 
 void SagePreprocessorRecord::MacroExpands(const clang::Token &MacroNameTok,
-                                          const clang::MacroInfo *MI,
-                                          clang::SourceRange Range) {
+                                          const clang::MacroDefinition &MD,
+                                          clang::SourceRange Range,
+                                          const clang::MacroArgs *Args) {
   (void)MacroNameTok;
-  (void)MI;
+  (void)MD;
   (void)Range;
+  (void)Args;
 }
 
 void SagePreprocessorRecord::MacroDefined(const clang::Token &MacroNameTok,
-                                          const clang::MacroInfo *MI) {
+                                          const clang::MacroDirective *MD) {
   (void)MacroNameTok;
-  (void)MI;
+  (void)MD;
 }
 
-void SagePreprocessorRecord::MacroUndefined(const clang::Token &MacroNameTok,
-                                            const clang::MacroInfo *MI) {
+void SagePreprocessorRecord::MacroUndefined(
+    const clang::Token &MacroNameTok, const clang::MacroDefinition &MD,
+    const clang::MacroDirective *Undef) {
   (void)MacroNameTok;
-  (void)MI;
+  (void)MD;
+  (void)Undef;
 }
 
-void SagePreprocessorRecord::Defined(const clang::Token &MacroNameTok) {
+void SagePreprocessorRecord::Defined(const clang::Token &MacroNameTok,
+                                     const clang::MacroDefinition &MD,
+                                     clang::SourceRange Range) {
   (void)MacroNameTok;
-}
-
-void SagePreprocessorRecord::SourceRangeSkipped(clang::SourceRange Range) {
+  (void)MD;
   (void)Range;
 }
 
-void SagePreprocessorRecord::If(clang::SourceRange Range) { (void)Range; }
-
-void SagePreprocessorRecord::Elif(clang::SourceRange Range) { (void)Range; }
-
-void SagePreprocessorRecord::Ifdef(const clang::Token &MacroNameTok) {
-  (void)MacroNameTok;
+void SagePreprocessorRecord::SourceRangeSkipped(
+    clang::SourceRange Range, clang::SourceLocation EndifLoc) {
+  (void)Range;
+  (void)EndifLoc;
 }
 
-void SagePreprocessorRecord::Ifndef(const clang::Token &MacroNameTok) {
-  (void)MacroNameTok;
+void SagePreprocessorRecord::If(
+    clang::SourceLocation Loc, clang::SourceRange ConditionRange,
+    clang::PPCallbacks::ConditionValueKind ConditionValue) {
+  (void)Loc;
+  (void)ConditionRange;
+  (void)ConditionValue;
 }
 
-void SagePreprocessorRecord::Else() {}
+void SagePreprocessorRecord::Elif(
+    clang::SourceLocation Loc, clang::SourceRange ConditionRange,
+    clang::PPCallbacks::ConditionValueKind ConditionValue,
+    clang::SourceLocation IfLoc) {
+  (void)Loc;
+  (void)ConditionRange;
+  (void)ConditionValue;
+  (void)IfLoc;
+}
 
-void SagePreprocessorRecord::Endif() {}
+void SagePreprocessorRecord::Ifdef(clang::SourceLocation Loc,
+                                   const clang::Token &MacroNameTok,
+                                   const clang::MacroDefinition &MD) {
+  (void)Loc;
+  (void)MacroNameTok;
+  (void)MD;
+}
+
+void SagePreprocessorRecord::Ifndef(clang::SourceLocation Loc,
+                                    const clang::Token &MacroNameTok,
+                                    const clang::MacroDefinition &MD) {
+  (void)Loc;
+  (void)MacroNameTok;
+  (void)MD;
+}
+
+void SagePreprocessorRecord::Else(clang::SourceLocation Loc,
+                                  clang::SourceLocation IfLoc) {
+  (void)Loc;
+  (void)IfLoc;
+}
+
+void SagePreprocessorRecord::Endif(clang::SourceLocation Loc,
+                                   clang::SourceLocation IfLoc) {
+  (void)Loc;
+  (void)IfLoc;
+}
 
 std::pair<Sg_File_Info *, PreprocessingInfo *> SagePreprocessorRecord::top() {
   return p_preprocessor_record_list.front();

@@ -1207,7 +1207,9 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
   bool is_friend = funcdecl_stmt->get_declarationModifier().isFriend();
   bool is_1st_decl =
       funcdecl_stmt == funcdecl_stmt->get_firstNondefiningDeclaration();
-  bool need_qualifier = !(is_friend && is_1st_decl);
+  bool has_qualifier = funcdecl_stmt->get_name_qualification_length() > 0 ||
+                       funcdecl_stmt->get_global_qualification_required();
+  bool need_qualifier = !(is_friend && is_1st_decl) || has_qualifier;
   if (need_qualifier) {
     SgName nameQualifier = funcdecl_stmt->get_qualified_name_prefix();
 #if DEBUG_unparse_helper

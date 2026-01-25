@@ -6,7 +6,7 @@ AXPY example working end-to-end with the experimental Clang frontend in REX.
 ## Toolchain & Build
 
 - Configured a fresh `build-clang` tree with `clang-20`, `clang++-20`, and
-  `flang-20` as the backend compilers:
+  `flang` as the backend compilers:
   ```sh
   cmake -S . -B build-clang \
     -DCMAKE_BUILD_TYPE=Release \

@@ -39,6 +39,32 @@ class SgPragmaDeclaration;
 //@}
 
 namespace Outliner {
+inline bool isFortranModuleDefinitionScope(const SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return false;
+  }
+  const SgClassDefinition *class_def = isSgClassDefinition(scope);
+  if (class_def == nullptr) {
+    return false;
+  }
+  const SgClassDeclaration *decl = class_def->get_declaration();
+  if (decl == nullptr) {
+    return false;
+  }
+  return isSgModuleStatement(decl) != nullptr;
+}
+
+inline bool isValidOutliningScope(const SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return false;
+  }
+  if (isSgGlobal(scope) != nullptr) {
+    return true;
+  }
+  return SageInterface::is_Fortran_language() &&
+         isFortranModuleDefinitionScope(scope);
+}
+
 //! A set of flags to control the internal behavior of the outliner
 //
 // Default behavior
@@ -429,15 +455,15 @@ generatePackingStatements(SgStatement *target, ASTtools::VarSymSet_t &syms,
                           SgClassDeclaration *struct_decl = NULL);
 
 /*!
- *  \brief Inserts an outlined-function declaration into global scope.
+ *  \brief Inserts an outlined-function declaration into the target scope.
  *
- *  The caller specifies the global scope into which this routine will
- *  insert the declaration. This is needed since we support inserting into
- *  the original global scope and a global scope in a new file.
+ *  The caller specifies the scope into which this routine will insert the
+ *  declaration. This is needed since we support inserting into the original
+ *  global scope, a global scope in a new file, and Fortran module definitions.
  *
- *  The caller also provides the original target to be outlined
- *  This information is used to insert the prototypes into the correct places in
- *  the AST.
+ *  The caller also provides the original target to be outlined. This
+ *  information is used to insert the prototypes into the correct places in the
+ *  AST.
  */
 // DQ (11/19/2020): DeferredTransformation support was moved to the
 // SageInterface namespace to support more general usage. DQ (8/15/2019): Adding
@@ -447,7 +473,7 @@ generatePackingStatements(SgStatement *target, ASTtools::VarSymSet_t &syms,
 // (SgFunctionDeclaration* func, SgGlobal* scope, SgBasicBlock* outlining_target
 // );
 ROSE_DLL_API SageInterface::DeferredTransformation
-insert(SgFunctionDeclaration *func, SgGlobal *scope,
+insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
        SgBasicBlock *outlining_target);
 
 /*!

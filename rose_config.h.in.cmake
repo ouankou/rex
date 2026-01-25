@@ -262,9 +262,6 @@
 /* Minor version number of backend Fortran compiler. */
 #define BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER ${BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER}
 
-#cmakedefine BACKEND_FORTRAN_IS_GNU_COMPILER @BACKEND_FORTRAN_IS_GNU_COMPILER@
-
-
 /* REX: legacy frontend-specific consistency tests removed - not applicable to Clang frontend */
 
 /* Include path for backend C++ compiler. */
@@ -517,9 +514,6 @@
 
 /* Define to 1 if your <sys/time.h> declares `struct tm'. */
 #cmakedefine TM_IN_SYS_TIME 1
-
-/* Mark that GFORTRAN is available */
-#cmakedefine USE_GFORTRAN_IN_ROSE 1
 
 /* Controls use of ROSE support for bddbddb (Binary decision diagrams (BDD)
    BDD-Based Deductive DataBase. */

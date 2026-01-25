@@ -14,11 +14,17 @@
 
 #include <list>
 
+#include <set>
+
 #include <string>
+
+#include "Rose/StringUtility/Convert.h"
 
 #include "ASTtools.hh"
 
 #include "Outliner.hh"
+
+#include "RoseAst.h"
 
 #include "PreprocessingInfo.hh"
 
@@ -30,6 +36,249 @@ using namespace Rose;
 using namespace SageBuilder;
 using namespace SageInterface;
 // =====================================================================
+
+static void assertFunctionSymbolPresent(SgScopeStatement *scope,
+                                        SgFunctionDeclaration *func) {
+  ROSE_ASSERT(scope != NULL);
+  ROSE_ASSERT(func != NULL);
+  ROSE_ASSERT(Outliner::isValidOutliningScope(scope));
+
+  if (scope->lookup_function_symbol(func->get_name()) != NULL)
+    return;
+
+  SgTemplateFunctionDeclaration *template_func =
+      isSgTemplateFunctionDeclaration(func);
+  if (template_func != NULL) {
+    SgTemplateFunctionSymbol *template_sym =
+        scope->lookup_template_function_symbol(
+            template_func->get_name(), template_func->get_type(),
+            &(template_func->get_templateParameters()));
+    ROSE_ASSERT(template_sym != NULL);
+    return;
+  }
+
+  if (SageInterface::is_Fortran_language()) {
+    SgFunctionSymbol *symbol = new SgFunctionSymbol(func);
+    scope->insert_symbol(func->get_name(), symbol);
+    return;
+  }
+
+  ROSE_ASSERT(!"Missing function symbol for outlined function");
+}
+
+static std::string extractIncludeKey(const std::string &text) {
+  std::string trimmed = Rose::StringUtility::trim(text);
+  if (trimmed.empty())
+    return trimmed;
+
+  size_t start = trimmed.find_first_of("<\"");
+  if (start != std::string::npos) {
+    char end_char = (trimmed[start] == '<') ? '>' : '"';
+    size_t end = trimmed.find(end_char, start + 1);
+    if (end != std::string::npos) {
+      return trimmed.substr(start + 1, end - start - 1);
+    }
+  }
+
+  return trimmed;
+}
+
+static void
+collectIncludeKeysFromInfo(const AttachedPreprocessingInfoType *infos,
+                           std::set<std::string> &keys) {
+  if (infos == NULL)
+    return;
+
+  for (AttachedPreprocessingInfoType::const_iterator it = infos->begin();
+       it != infos->end(); ++it) {
+    const PreprocessingInfo *info = *it;
+    if (info == NULL)
+      continue;
+
+    PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+    if (type != PreprocessingInfo::CpreprocessorIncludeDeclaration &&
+        type != PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
+      continue;
+    }
+
+    std::string key = extractIncludeKey(info->getString());
+    if (!key.empty())
+      keys.insert(key);
+  }
+}
+
+static void collectIncludeKeysFromStatement(SgStatement *stmt,
+                                            std::set<std::string> &keys) {
+  if (stmt == NULL)
+    return;
+
+  if (SgIncludeDirectiveStatement *include_stmt =
+          isSgIncludeDirectiveStatement(stmt)) {
+    std::string directive = include_stmt->get_directiveString();
+    if (directive.empty()) {
+      directive = include_stmt->get_name_used_in_include_directive();
+    }
+    std::string key = extractIncludeKey(directive);
+    if (!key.empty())
+      keys.insert(key);
+  }
+
+  collectIncludeKeysFromInfo(stmt->getAttachedPreprocessingInfo(), keys);
+}
+
+static void fixFriendClassDeclarations(SgProject *project) {
+  if (project == NULL)
+    return;
+
+  RoseAst ast(project);
+  for (RoseAst::iterator it = ast.begin(); it != ast.end(); ++it) {
+    SgClassDeclaration *decl = isSgClassDeclaration(*it);
+    if (decl == NULL)
+      continue;
+    if (decl->get_declarationModifier().isFriend() == false)
+      continue;
+
+    SgClassDefinition *parent_def = isSgClassDefinition(decl->get_parent());
+    if (parent_def == NULL)
+      continue;
+
+    if (decl->isForward() || decl->get_definition() == NULL)
+      continue;
+
+    SgClassDeclaration *defining =
+        isSgClassDeclaration(decl->get_definingDeclaration());
+    if (defining == NULL)
+      defining = decl;
+
+    SgScopeStatement *friend_scope = defining->get_scope();
+    if (friend_scope == NULL && parent_def->get_declaration() != NULL) {
+      friend_scope = parent_def->get_declaration()->get_scope();
+    }
+    if (friend_scope == NULL)
+      continue;
+
+    SgClassDeclaration *friend_decl =
+        SageBuilder::buildNondefiningClassDeclaration_nfi(
+            defining->get_name(), defining->get_class_type(), friend_scope,
+            false, NULL);
+    ROSE_ASSERT(friend_decl != NULL);
+    friend_decl->get_declarationModifier().setFriend();
+    friend_decl->setForward();
+    SageInterface::setOneSourcePositionForTransformation(friend_decl);
+    friend_decl->set_parent(parent_def);
+    friend_decl->set_scope(friend_scope);
+
+    SgClassDeclaration *first_nondef =
+        isSgClassDeclaration(defining->get_firstNondefiningDeclaration());
+    if (first_nondef == NULL || first_nondef == defining ||
+        first_nondef == decl) {
+      defining->set_firstNondefiningDeclaration(friend_decl);
+      first_nondef = friend_decl;
+    }
+    friend_decl->set_firstNondefiningDeclaration(first_nondef);
+    friend_decl->set_definingDeclaration(defining);
+
+    defining->get_declarationModifier().unsetFriend();
+
+    SgDeclarationStatementPtrList &members = parent_def->get_members();
+    for (SgDeclarationStatementPtrList::iterator mit = members.begin();
+         mit != members.end(); ++mit) {
+      if (*mit == decl) {
+        *mit = friend_decl;
+        break;
+      }
+    }
+  }
+}
+
+static void normalizeGlobalClassAccess(SgProject *project) {
+  if (project == NULL)
+    return;
+
+  RoseAst ast(project);
+  for (RoseAst::iterator it = ast.begin(); it != ast.end(); ++it) {
+    SgClassDeclaration *decl = isSgClassDeclaration(*it);
+    if (decl == NULL)
+      continue;
+    SgScopeStatement *scope = decl->get_scope();
+    if (scope == NULL)
+      continue;
+    if (isSgClassDefinition(scope) != NULL)
+      continue;
+
+    SgAccessModifier &access =
+        decl->get_declarationModifier().get_accessModifier();
+    if (access.isPrivate() || access.isProtected() || access.isPublic()) {
+      access.setDefault();
+      access.set_is_explicit(false);
+    }
+  }
+}
+
+static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
+  if (glob_scope == NULL)
+    return;
+
+  std::set<std::string> seen;
+
+  auto prune_info = [&](SgStatement *stmt) {
+    if (stmt == NULL)
+      return;
+    AttachedPreprocessingInfoType *infos = stmt->getAttachedPreprocessingInfo();
+    if (infos == NULL)
+      return;
+
+    AttachedPreprocessingInfoType filtered;
+    filtered.reserve(infos->size());
+    for (AttachedPreprocessingInfoType::iterator it = infos->begin();
+         it != infos->end(); ++it) {
+      PreprocessingInfo *info = *it;
+      if (info == NULL)
+        continue;
+      PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+      bool is_include =
+          (type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+           type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration);
+      if (is_include) {
+        std::string key = extractIncludeKey(info->getString());
+        if (!key.empty() && seen.count(key) != 0) {
+          delete info;
+          continue;
+        }
+        if (!key.empty())
+          seen.insert(key);
+      }
+      filtered.push_back(info);
+    }
+    infos->swap(filtered);
+  };
+
+  prune_info(glob_scope);
+
+  SgDeclarationStatementPtrList &decls = glob_scope->get_declarations();
+  for (SgDeclarationStatementPtrList::iterator it = decls.begin();
+       it != decls.end();) {
+    SgDeclarationStatement *decl = *it;
+    if (SgIncludeDirectiveStatement *include_stmt =
+            isSgIncludeDirectiveStatement(decl)) {
+      std::string key = extractIncludeKey(include_stmt->get_directiveString());
+      if (key.empty()) {
+        key = extractIncludeKey(
+            include_stmt->get_name_used_in_include_directive());
+      }
+      if (!key.empty() && seen.count(key) != 0) {
+        ++it;
+        SageInterface::removeStatement(include_stmt);
+        continue;
+      }
+      if (!key.empty())
+        seen.insert(key);
+    }
+
+    prune_info(decl);
+    ++it;
+  }
+}
 // ! create a struct to contain data members for variables to be passed as
 // parameters A wrapper struct for variables passed to the outlined function
 // Each variable (e.g a) has two choices
@@ -322,12 +571,22 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
   // grab target scope first
   SgGlobal *glob_scope =
       const_cast<SgGlobal *>(SageInterface::getGlobalScope(s));
+  SgScopeStatement *outlining_scope = glob_scope;
+  if (!Outliner::useNewFile && SageInterface::is_Fortran_language()) {
+    if (SgModuleStatement *module =
+            SageInterface::getEnclosingModuleStatement(s)) {
+      if (SgClassDefinition *module_def = module->get_definition()) {
+        outlining_scope = module_def;
+      }
+    }
+  }
 
   SgGlobal *src_scope = glob_scope;
   if (Outliner::useNewFile) // change scope to the one within the new source
                             // file
   {
     glob_scope = new_file->get_globalScope();
+    outlining_scope = glob_scope;
   }
 
   //-------Step 2. Generate outlined
@@ -360,11 +619,14 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
     calculateVariableUsingAddressOf(syms, readOnlyVars, pdSyms);
   }
 
-  SgFunctionDeclaration *func = generateFunction(
-      s, func_name_str, syms, pdSyms, restoreVars, struct_decl, glob_scope);
+  SgFunctionDeclaration *func =
+      generateFunction(s, func_name_str, syms, pdSyms, restoreVars, struct_decl,
+                       outlining_scope);
 
   ROSE_ASSERT(func != NULL);
-  ROSE_ASSERT(glob_scope->lookup_function_symbol(func->get_name()));
+  if (!Outliner::isFortranModuleDefinitionScope(outlining_scope)) {
+    assertFunctionSymbolPresent(outlining_scope, func);
+  }
 
   // DQ (2/26/2009): At this point "s" has been reduced to an empty block.
   ROSE_ASSERT(s->get_statements().empty() == true);
@@ -380,13 +642,12 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
   //-----------Step 3. Insert the outlined function -------------
   // DQ (2/16/2009): Added (with Liao) the target block which the outlined
   // function will replace. Insert the function and its prototype as necessary
-  ROSE_ASSERT(glob_scope->lookup_function_symbol(func->get_name()));
-
   // DQ (8/15/2019): Adding support to defere the transformations in header
   // files (a performance improvement). insert (func, glob_scope, s);
   // //Outliner::insert()
   DeferredTransformation headerFileTransformation =
-      insert(func, glob_scope, s); // Outliner::insert()
+      insert(func, outlining_scope, s); // Outliner::insert()
+  assertFunctionSymbolPresent(outlining_scope, func);
 
   // Liao 2/4/2020
   // Some comments and #include directives may be attached after the global
@@ -398,13 +659,52 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
   if (first_func_decl != NULL) // we expect that the first statement is a
                                // prototype func of an outlined function.
   {
+    std::set<std::string> include_keys;
+    collectIncludeKeysFromStatement(glob_scope, include_keys);
+    const SgDeclarationStatementPtrList &global_decls =
+        glob_scope->get_declarations();
+    for (SgDeclarationStatementPtrList::const_iterator it =
+             global_decls.begin();
+         it != global_decls.end(); ++it) {
+      collectIncludeKeysFromStatement(*it, include_keys);
+    }
+    collectIncludeKeysFromStatement(first_func_decl, include_keys);
+
     AttachedPreprocessingInfoType save_buf;
     cutPreprocessingInfo(glob_scope, PreprocessingInfo::after, save_buf);
-    pastePreprocessingInfo(first_func_decl, PreprocessingInfo::before,
-                           save_buf);
+    if (!save_buf.empty()) {
+      AttachedPreprocessingInfoType filtered;
+      filtered.reserve(save_buf.size());
+      for (AttachedPreprocessingInfoType::iterator i = save_buf.begin();
+           i != save_buf.end(); ++i) {
+        PreprocessingInfo *info = *i;
+        if (info == NULL)
+          continue;
+        PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+        bool is_include =
+            (type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
+             type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration);
+        if (is_include) {
+          std::string key = extractIncludeKey(info->getString());
+          if (!key.empty() && include_keys.count(key) != 0) {
+            delete info;
+            continue;
+          }
+          if (!key.empty())
+            include_keys.insert(key);
+        }
+        filtered.push_back(info);
+      }
+      save_buf.swap(filtered);
+    }
+
+    if (!save_buf.empty()) {
+      pastePreprocessingInfo(first_func_decl, PreprocessingInfo::before,
+                             save_buf);
+    }
   }
 
-  ROSE_ASSERT(glob_scope->lookup_function_symbol(func->get_name()));
+  assertFunctionSymbolPresent(glob_scope, func);
   //
   // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
@@ -632,30 +932,26 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
   // possible so that all transformations are complete before running
   // AstPostProcessing()
 
-  // This fails for moreTest3.cpp
-  // Run the AST fixup on the AST for the source file.
-  SgSourceFile *originalSourceFile =
-      SageInterface::getEnclosingSourceFile(src_scope);
-  //     printf ("##### Calling AstPostProcessing() on SgFile = %s
-  //     \n",originalSourceFile->getFileName().c_str());
-  AstPostProcessing(originalSourceFile);
-  //     printf ("##### DONE: Calling AstPostProcessing() on SgFile = %s
-  //     \n",originalSourceFile->getFileName().c_str());
+  // Run the AST fixup on the project to avoid per-file duplication.
+  SgProject *project = SageInterface::getProject();
+  if (project != NULL) {
+    AstPostProcessing(project);
+    fixFriendClassDeclarations(project);
+    normalizeGlobalClassAccess(project);
+  } else {
+    SgSourceFile *originalSourceFile =
+        SageInterface::getEnclosingSourceFile(src_scope);
+    if (originalSourceFile != NULL) {
+      AstPostProcessing(originalSourceFile);
+      fixFriendClassDeclarations(SageInterface::getProject());
+      normalizeGlobalClassAccess(SageInterface::getProject());
+    }
+  }
+
+  dedupeIncludeDirectives(glob_scope);
 
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
-
-  if (useNewFile == true) {
-    // This fails for moreTest3.cpp
-    // Run the AST fixup on the AST for the separate file of outlined code.
-    SgSourceFile *separateOutlinedSourceFile =
-        SageInterface::getEnclosingSourceFile(glob_scope);
-    // printf ("##### Calling AstPostProcessing() on SgFile = %s
-    // \n",separateOutlinedSourceFile->getFileName().c_str());
-    AstPostProcessing(separateOutlinedSourceFile);
-    // printf ("##### DONE: Calling AstPostProcessing() on SgFile = %s
-    // \n",separateOutlinedSourceFile->getFileName().c_str());
-  }
 
   // DQ (7/12/2021): Testing the AST for a specific node marked as a
   // transformation.

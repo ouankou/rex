@@ -30,6 +30,58 @@ using namespace Rose;
 #define OUTPUT_HIDDEN_LIST_DATA 0
 #define OUTPUT_DEBUGGING_INFORMATION 0
 
+namespace {
+bool getOperatorFunctionName(SgExpression *expr, string &func_name) {
+  if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
+    ASSERT_not_null(func_ref->get_symbol());
+    func_name = func_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  if (SgTemplateFunctionRefExp *func_ref = isSgTemplateFunctionRefExp(expr)) {
+    ASSERT_not_null(func_ref->get_symbol());
+    func_name = func_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  if (SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(expr)) {
+    ASSERT_not_null(mfunc_ref->get_symbol());
+    func_name = mfunc_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  if (SgTemplateMemberFunctionRefExp *mfunc_ref =
+          isSgTemplateMemberFunctionRefExp(expr)) {
+    ASSERT_not_null(mfunc_ref->get_symbol());
+    func_name = mfunc_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  if (SgNonrealRefExp *nr_ref = isSgNonrealRefExp(expr)) {
+    ASSERT_not_null(nr_ref->get_symbol());
+    func_name = nr_ref->get_symbol()->get_name().str();
+    return true;
+  }
+  return false;
+}
+
+bool isBinaryOperatorName(const string &func_name) {
+  return func_name == "operator+" || func_name == "operator-" ||
+         func_name == "operator*" || func_name == "operator/" ||
+         func_name == "operator%" || func_name == "operator^" ||
+         func_name == "operator&" || func_name == "operator|" ||
+         func_name == "operator=" || func_name == "operator<" ||
+         func_name == "operator>" || func_name == "operator+=" ||
+         func_name == "operator-=" || func_name == "operator*=" ||
+         func_name == "operator/=" || func_name == "operator%=" ||
+         func_name == "operator^=" || func_name == "operator&=" ||
+         func_name == "operator|=" || func_name == "operator<<" ||
+         func_name == "operator>>" || func_name == "operator>>=" ||
+         func_name == "operator<<=" || func_name == "operator==" ||
+         func_name == "operator!=" || func_name == "operator<=" ||
+         func_name == "operator>=" || func_name == "operator&&" ||
+         func_name == "operator||" || func_name == "operator," ||
+         func_name == "operator->*" || func_name == "operator->" ||
+         func_name == "operator()" || func_name == "operator[]";
+}
+} // namespace
+
 #ifdef _MSC_VER
 #include "Cxx_Grammar.h"
 #endif
@@ -568,6 +620,21 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
   SgNonrealRefExp *nr_refexp = isSgNonrealRefExp(expr);
   ASSERT_not_null(nr_refexp);
 
+  bool uses_operator_syntax = false;
+  if (SgFunctionCallExp *call_exp =
+          isSgFunctionCallExp(nr_refexp->get_parent())) {
+    uses_operator_syntax = call_exp->get_uses_operator_syntax();
+  } else if (SgBinaryOp *member_access =
+                 isSgBinaryOp(nr_refexp->get_parent())) {
+    if (isSgDotExp(member_access) != nullptr ||
+        isSgArrowExp(member_access) != nullptr) {
+      if (SgFunctionCallExp *call_exp =
+              isSgFunctionCallExp(member_access->get_parent())) {
+        uses_operator_syntax = call_exp->get_uses_operator_syntax();
+      }
+    }
+  }
+
   SgName nameQualifier = nr_refexp->get_qualified_name_prefix();
   curprint(nameQualifier.str());
 
@@ -577,7 +644,22 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
   SgNonrealDecl *nrdecl = nrsym->get_declaration();
   ASSERT_not_null(nrdecl);
 
-  curprint(nrsym->get_name().str());
+  string func_name = nrsym->get_name().str();
+  if (!unp->opt.get_overload_opt() && uses_operator_syntax &&
+      func_name.compare(0, 8, "operator") == 0) {
+    const bool is_new_operator = func_name.compare(0, 12, "operator new") == 0;
+    const bool is_delete_operator =
+        func_name.compare(0, 15, "operator delete") == 0;
+    if (!is_new_operator && !is_delete_operator && func_name.size() > 8) {
+      string tail = func_name.substr(8);
+      size_t first_non_space = tail.find_first_not_of(' ');
+      if (first_non_space != string::npos) {
+        tail = tail.substr(first_non_space);
+      }
+      func_name = tail;
+    }
+  }
+  curprint(func_name);
 
   SgTemplateArgumentPtrList &tpl_args = nrdecl->get_tpl_args();
   if (!tpl_args.empty()) {
@@ -3824,6 +3906,15 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
   // defaulted to the generation of the operator syntax (e.g. "x+y"), see
   // test2013_100.C for an example of where this is required.
   bool uses_operator_syntax = func_call->get_uses_operator_syntax();
+  bool is_binary_operator =
+      unp->u_sage->isBinaryOperator(func_call->get_function());
+  if (uses_operator_syntax == true && is_binary_operator == false) {
+    string op_name;
+    if (getOperatorFunctionName(func_call->get_function(), op_name) &&
+        isBinaryOperatorName(op_name)) {
+      is_binary_operator = true;
+    }
+  }
 
 #if DEBUG_FUNCTION_CALL
   printf("In Unparse_ExprStmt::unparseFuncCall(): (before test for conversion "
@@ -4144,8 +4235,7 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
   // !(isSgDotExp(func_call->get_function())) &&
   // !(isSgArrowExp(func_call->get_function())))
   if (!unp->opt.get_overload_opt() && (uses_operator_syntax == true) &&
-      unp->u_sage->isBinaryOperator(func_call->get_function()) &&
-      !(isSgDotExp(func_call->get_function())) &&
+      is_binary_operator && !(isSgDotExp(func_call->get_function())) &&
       !(isSgArrowExp(func_call->get_function()))) {
     unp->u_debug->printDebugInfo("in FIRST PART of unparseFuncCall", true);
 #if DEBUG_FUNCTION_CALL

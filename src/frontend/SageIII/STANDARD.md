@@ -65,30 +65,23 @@ ROSE recognizes the following standard specification. If more than one specifica
  * -std=c++20
  * -std=c++2a
 
-#### F77
+#### Fortran (ROSE dialect selection)
 
- * -std=f77
+ROSE uses a dedicated option for Fortran dialect selection; these are not
+passed through as backend `-std` flags:
 
-#### F90
+ * -rose:fortran_std=f77
+ * -rose:fortran_std=f90
+ * -rose:fortran_std=f95
+ * -rose:fortran_std=f2003
+ * -rose:fortran_std=f2008
+ * -rose:fortran_std=f2018
 
- * -std=f90
+#### Fortran backend `-std`
 
-#### F95
-
- * -std=f95
-
-#### F2003
-
- * -std=f2003
-
-#### F2008
-
- * -std=f2008
-
-#### F2018
+Flang accepts only the following backend `-std` value:
 
  * -std=f2018
- * -std=f2008ts
 
 ### GNU
 
@@ -102,7 +95,6 @@ ROSE also recognize:
  * -std=gnu
  * -std=c++
  * -std=gnu++
- * -std=fortran
 
 #### Proposed?
 
