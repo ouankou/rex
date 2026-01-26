@@ -3886,9 +3886,9 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
     }
   }
   if (is_binary_operator) {
+    SgFunctionDeclaration *decl = func_call->getAssociatedFunctionDeclaration();
     string op_name;
-    if (SgFunctionDeclaration *decl =
-            func_call->getAssociatedFunctionDeclaration()) {
+    if (decl != nullptr) {
       op_name = decl->get_name().getString();
     } else {
       getOperatorFunctionName(func_call->get_function(), op_name);
@@ -3897,14 +3897,13 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
     if (op_name == "operator()" || op_name == "operator[]") {
       is_binary_operator = false;
     } else {
-      size_t arg_count = 0;
-      if (func_call->get_args() != nullptr) {
-        arg_count = func_call->get_args()->get_expressions().size();
-      }
+      const size_t arg_count =
+          func_call->get_args()
+              ? func_call->get_args()->get_expressions().size()
+              : 0;
 
       bool is_member_operator = false;
-      if (SgFunctionDeclaration *decl =
-              func_call->getAssociatedFunctionDeclaration()) {
+      if (decl != nullptr) {
         is_member_operator = (isSgMemberFunctionDeclaration(decl) != nullptr);
       } else {
         SgExpression *function = func_call->get_function();
