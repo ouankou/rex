@@ -3886,35 +3886,48 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
     }
   }
   if (is_binary_operator) {
-    size_t arg_count = 0;
-    if (func_call->get_args() != nullptr) {
-      arg_count = func_call->get_args()->get_expressions().size();
-    }
-
-    bool is_member_operator = false;
+    string op_name;
     if (SgFunctionDeclaration *decl =
             func_call->getAssociatedFunctionDeclaration()) {
-      is_member_operator = (isSgMemberFunctionDeclaration(decl) != nullptr);
+      op_name = decl->get_name().getString();
     } else {
-      SgExpression *function = func_call->get_function();
-      if (isSgMemberFunctionRefExp(function) != nullptr) {
-        is_member_operator = true;
-      } else if (SgDotExp *dot = isSgDotExp(function)) {
-        is_member_operator =
-            (isSgMemberFunctionRefExp(dot->get_rhs_operand()) != nullptr);
-      } else if (SgArrowExp *arrow = isSgArrowExp(function)) {
-        is_member_operator =
-            (isSgMemberFunctionRefExp(arrow->get_rhs_operand()) != nullptr);
-      } else if (isSgDotStarOp(function) != nullptr ||
-                 isSgArrowStarOp(function) != nullptr) {
-        is_member_operator = true;
-      }
+      getOperatorFunctionName(func_call->get_function(), op_name);
     }
 
-    // Member binary operators have one explicit argument; non-members have two.
-    const size_t expected_args = is_member_operator ? 1 : 2;
-    if (arg_count != expected_args) {
+    if (op_name == "operator()" || op_name == "operator[]") {
       is_binary_operator = false;
+    } else {
+      size_t arg_count = 0;
+      if (func_call->get_args() != nullptr) {
+        arg_count = func_call->get_args()->get_expressions().size();
+      }
+
+      bool is_member_operator = false;
+      if (SgFunctionDeclaration *decl =
+              func_call->getAssociatedFunctionDeclaration()) {
+        is_member_operator = (isSgMemberFunctionDeclaration(decl) != nullptr);
+      } else {
+        SgExpression *function = func_call->get_function();
+        if (isSgMemberFunctionRefExp(function) != nullptr) {
+          is_member_operator = true;
+        } else if (SgDotExp *dot = isSgDotExp(function)) {
+          is_member_operator =
+              (isSgMemberFunctionRefExp(dot->get_rhs_operand()) != nullptr);
+        } else if (SgArrowExp *arrow = isSgArrowExp(function)) {
+          is_member_operator =
+              (isSgMemberFunctionRefExp(arrow->get_rhs_operand()) != nullptr);
+        } else if (isSgDotStarOp(function) != nullptr ||
+                   isSgArrowStarOp(function) != nullptr) {
+          is_member_operator = true;
+        }
+      }
+
+      // Member binary operators have one explicit argument; non-members have
+      // two.
+      const size_t expected_args = is_member_operator ? 1 : 2;
+      if (arg_count != expected_args) {
+        is_binary_operator = false;
+      }
     }
   }
 
