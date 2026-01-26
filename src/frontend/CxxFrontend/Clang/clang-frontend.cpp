@@ -137,8 +137,6 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
       if (tok.is(clang::tok::greatergreater)) {
         if (angle_depth >= 2) {
           angle_depth -= 2;
-        } else {
-          angle_depth = 0;
         }
         continue;
       }
