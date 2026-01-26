@@ -15,6 +15,19 @@ function(compile_test input_file label)
   string(REPLACE "/" "_" _test_key "${_test_key}")
   string(REPLACE "." "_" _test_key "${_test_key}")
   set(test_id ${label}_${_test_key})
+  set(_rose_flags ${ROSE_FLAGS})
+  if(DEFINED ROSE_OUTPUT_TO_BUILD_TESTCODES AND
+     input_file IN_LIST ROSE_OUTPUT_TO_BUILD_TESTCODES)
+    set(_output_dir "${ROSE_TEST_OUTPUT_DIR}")
+    if(_output_dir STREQUAL "")
+      set(_output_dir "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
+    file(MAKE_DIRECTORY "${_output_dir}")
+    set(_output_base "${input_file}")
+    string(REPLACE "/" "_" _output_base "${_output_base}")
+    list(APPEND _rose_flags "-rose:output"
+         "${_output_dir}/rose_${_output_base}")
+  endif()
 
   # optional argument to omit include directories
   if(ARGV2)
@@ -22,14 +35,14 @@ function(compile_test input_file label)
       NAME ${test_id}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${translator}
-        ${ROSE_FLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
+        ${_rose_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
     )
   else()
     add_test(
       NAME ${test_id}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${translator}
-        ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c
+        ${_rose_flags} ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR} -c
         ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
     )
   endif()

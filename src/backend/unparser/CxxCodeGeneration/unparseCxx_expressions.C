@@ -50,6 +50,26 @@ bool isBinaryOperatorName(const string &func_name) {
          func_name == "operator->*" || func_name == "operator->" ||
          func_name == "operator()" || func_name == "operator[]";
 }
+
+bool isMemberOperatorCall(SgFunctionCallExp *func_call,
+                          SgFunctionDeclaration *decl) {
+  if (decl != nullptr) {
+    return isSgMemberFunctionDeclaration(decl) != nullptr;
+  }
+
+  SgExpression *function = func_call->get_function();
+  if (isSgMemberFunctionRefExp(function) != nullptr) {
+    return true;
+  }
+  if (SgDotExp *dot = isSgDotExp(function)) {
+    return isSgMemberFunctionRefExp(dot->get_rhs_operand()) != nullptr;
+  }
+  if (SgArrowExp *arrow = isSgArrowExp(function)) {
+    return isSgMemberFunctionRefExp(arrow->get_rhs_operand()) != nullptr;
+  }
+  return isSgDotStarOp(function) != nullptr ||
+         isSgArrowStarOp(function) != nullptr;
+}
 } // namespace
 
 #ifdef _MSC_VER
@@ -3883,6 +3903,33 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
     if (getOperatorFunctionName(func_call->get_function(), op_name) &&
         isBinaryOperatorName(op_name)) {
       is_binary_operator = true;
+    }
+  }
+  if (is_binary_operator) {
+    SgFunctionDeclaration *decl = func_call->getAssociatedFunctionDeclaration();
+    string op_name;
+    if (decl != nullptr) {
+      op_name = decl->get_name().getString();
+    } else {
+      getOperatorFunctionName(func_call->get_function(), op_name);
+    }
+
+    if (op_name == "operator()" || op_name == "operator[]") {
+      is_binary_operator = false;
+    } else {
+      const size_t arg_count =
+          func_call->get_args()
+              ? func_call->get_args()->get_expressions().size()
+              : 0;
+
+      bool is_member_operator = isMemberOperatorCall(func_call, decl);
+
+      // Member binary operators have one explicit argument; non-members have
+      // two.
+      const size_t expected_args = is_member_operator ? 1 : 2;
+      if (arg_count != expected_args) {
+        is_binary_operator = false;
+      }
     }
   }
 

@@ -105,6 +105,7 @@ _site/
 # compiled python files
 *.pyc
 *.pyo
+__pycache__/
 
 # Jupyter temporary files
 **/.ipynb_checkpoints/
@@ -115,7 +116,10 @@ _site/
 
 # CMake build directory
 /build/
+/build-*/
 /.venv-docs/
 /.tools/
+
+.trae/
 
 .vscode/

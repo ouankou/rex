@@ -1,20 +1,29 @@
-# REX Documentation
+# REX Developer Documentation
 
-REX is a modernization of the ROSE compiler infrastructure using the Clang/LLVM
-frontend for C/C++ analysis.
+This site documents the REX source tree for developers: build notes and a generated API reference (including private members).
 
-## Local documentation build
+## Jump To
 
-1. Build REX so the compilation database exists:
+| What | Where |
+| --- | --- |
+| Find an API by name | [API Quick Lookup](api-lookup.md) |
+| Browse API by category | [API Reference Index](reference/index.adoc) |
+| Browse namespaces | [Namespaces](reference/sections/namespaces.adoc) |
+| Browse types | [Types](reference/sections/types.adoc) |
+| Browse functions | [Functions](reference/sections/functions.adoc) |
+
+## Build Metadata
+
+- [docs-build-manifest.json](/docs-build-manifest.json)
+
+## Build Locally
 
 ```bash
-./build-rex.sh $HOME/rex-install Release
+bash scripts/ci-docs-build
 ```
 
-2. Build the docs (creates `.venv-docs`, downloads the latest MrDocs, and runs MkDocs):
+Serve the generated website to your LAN on port 8080:
 
 ```bash
-scripts/build-docs
+bash scripts/serve-docs
 ```
-
-The output site is written to `_site`.

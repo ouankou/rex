@@ -15,14 +15,13 @@
  * to optionally reference the original user's file, which helps debuggers map
  * generated code back to the original source.
  *
- * The primary user-facing entry point is @ref SgProject::unparse, which
+ * The primary user-facing entry point is @ref unparseProject, which
  * generates source code associated with the internal AST. If the AST was
  * transformed, those transformations appear as differences between generated
  * code and the original input.
  *
- * Additional related functions are available from the SgNode interface (@ref
- * SgNode::unparseToString) and the SgFile interface
- * (@ref SgFile::unparse).
+ * Additional related functions are available from the SgNode interface
+ * (`SgNode::unparseToString`) and the SgFile interface (@ref unparseFile).
  *
  * See @ref rose_backend.
  */

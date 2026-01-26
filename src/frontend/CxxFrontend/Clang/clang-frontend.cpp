@@ -64,6 +64,54 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
     return nullptr;
   }
 
+  auto find_prev_significant = [&](size_t index, size_t *out) -> bool {
+    if (out == nullptr) {
+      return false;
+    }
+    for (size_t i = index; i-- > 0;) {
+      if (!tokens[i].token.is(clang::tok::comment)) {
+        *out = i;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  auto is_block_brace = [&](size_t index) -> bool {
+    size_t prev_index = 0;
+    if (!find_prev_significant(index, &prev_index)) {
+      return false;
+    }
+    const clang::Token &prev = tokens[prev_index].token;
+    if (prev.is(clang::tok::r_paren)) {
+      return true;
+    }
+    return prev.isOneOf(clang::tok::kw_do, clang::tok::kw_try,
+                        clang::tok::kw_else);
+  };
+
+  std::vector<bool> inside_block(tokens.size(), false);
+  std::vector<bool> block_stack;
+  block_stack.reserve(8);
+  int block_depth = 0;
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    inside_block[i] = block_depth > 0;
+    if (tokens[i].token.is(clang::tok::l_brace)) {
+      bool is_block = is_block_brace(i);
+      block_stack.push_back(is_block);
+      if (is_block) {
+        ++block_depth;
+      }
+    } else if (tokens[i].token.is(clang::tok::r_brace)) {
+      if (!block_stack.empty()) {
+        if (block_stack.back()) {
+          --block_depth;
+        }
+        block_stack.pop_back();
+      }
+    }
+  }
+
   auto is_boundary = [](const clang::Token &tok) {
     return tok.isOneOf(clang::tok::semi, clang::tok::l_brace,
                        clang::tok::r_brace);
@@ -92,6 +140,9 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
     }
     if (!tokens[i - 1].token.isOneOf(clang::tok::greater,
                                      clang::tok::greatergreater)) {
+      continue;
+    }
+    if (inside_block[i]) {
       continue;
     }
 

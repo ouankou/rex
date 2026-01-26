@@ -8,11 +8,9 @@
  * Generates Fortran source code from the AST using a design similar to the C
  * and C++ code generator.
  *
- * Note: There are no user level functions within the backend. The only three
- * related functions are available from the SgNode interface (@ref
- * SgNode::unparseToString) and the SgFile and SgProject interfaces (@ref
- * SgFile::unparse and
- * @ref SgProject::unparse, respectively).
+ * Note: There are no user level functions within the backend. Related entry
+ * points include `SgNode::unparseToString`, @ref unparseFile, and
+ * @ref unparseProject.
  *
  * Note: This code was developed in collaboration with Rice University (initial
  * pieces were developed by Nathan Tallent and Gina Goff).

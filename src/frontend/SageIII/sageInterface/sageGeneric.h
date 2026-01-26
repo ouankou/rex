@@ -779,7 +779,7 @@ _dispatch(RoseVisitor &&rv, SgNode *n) {
 ///           - Counter counts the number of all expression and statement nodes.
 ///             It implements handlers for @ref SgNode (not interesting nodes),
 ///             for @ref SgExpression and @ref SgStatement (to count the nodes).
-///           - Traversal inherits from @ref ASTTraversal and contains a
+///           - Traversal inherits from ASTTraversal and contains a
 ///           counter.
 ///             The dispatch function is invoked using a Counter object and
 ///             a pointer to an AST node. Since the counter object is passed

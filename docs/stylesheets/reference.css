@@ -1,0 +1,88 @@
+.md-typeset .md-typeset__table {
+  overflow-x: auto;
+}
+
+.md-typeset .md-typeset__table table.tableblock {
+  display: table !important;
+  overflow: visible !important;
+  width: 100%;
+}
+
+.md-typeset .md-typeset__table table.tableblock.ref-two-col {
+  table-layout: fixed !important;
+}
+
+.md-typeset .md-typeset__table table.tableblock colgroup col {
+  width: auto !important;
+}
+
+.md-typeset .md-typeset__table table.tableblock.ref-two-col colgroup col:first-child {
+  width: var(--ref-name-col, 18ch) !important;
+}
+
+.md-typeset .md-typeset__table table.tableblock td:first-child,
+.md-typeset .md-typeset__table table.tableblock th:first-child {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.md-typeset .md-typeset__table table.tableblock td:last-child,
+.md-typeset .md-typeset__table table.tableblock th:last-child {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.md-typeset .md-typeset__table table.tableblock td:first-child code,
+.md-typeset .md-typeset__table table.tableblock th:first-child code {
+  white-space: normal;
+}
+
+.md-typeset .ref-signature {
+  display: block;
+  font-size: .85em;
+  opacity: .9;
+  margin-top: .15rem;
+}
+
+.md-typeset .api-lookup-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 1rem 0;
+}
+
+.md-typeset .api-lookup-input {
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .4rem;
+  color: var(--md-default-fg-color);
+  flex: 1;
+  min-width: 18rem;
+  padding: .6rem .8rem;
+}
+
+.md-typeset .api-lookup-meta {
+  font-size: .9em;
+  opacity: .75;
+}
+
+.md-typeset .api-lookup-row {
+  align-items: baseline;
+  display: flex;
+  gap: .75rem;
+  margin: .35rem 0;
+}
+
+.md-typeset .api-lookup-link {
+  font-weight: 600;
+}
+
+.md-typeset .api-lookup-kind {
+  font-size: .85em;
+  opacity: .65;
+}
+
+.md-typeset .api-lookup-limit {
+  opacity: .75;
+}

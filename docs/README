@@ -8,6 +8,10 @@ Rose:
    sources for the entire ROSE project. API documentation is generated
    with MrDocs into docs/reference and published with MkDocs into _site.
    Use scripts/build-docs to set up the docs venv and build locally.
+   The docs build will generate required headers in the build tree (for example,
+   rosePublicConfig.h and Cxx_Grammar.h) if they are missing.
+   To keep generated output under the build tree, set DOCS_SCRATCH_DIR,
+   e.g. DOCS_SCRATCH_DIR=build/docs-scratch scripts/build-docs.
 
 Rosetta:
    This directory contains documentation specific to ROSETTA.
