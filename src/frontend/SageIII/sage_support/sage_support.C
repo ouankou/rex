@@ -2830,26 +2830,9 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
   // pass the SgFile (so that the parser c_action functions can build the Fotran
   // AST using the existing SgFile.
 
-  // FMZ(7/27/2010): check command line options for Rice CAF syntax
-  //  -rose:CoArrayFortran, -rose:CAF, -rose:caf
-
   // SG (7/9/2015) In case of a mixed language project, force case
   // insensitivity here.
   SageBuilder::symbol_table_case_insensitive_semantics = true;
-
-  bool using_rice_caf = false;
-  vector<string> ArgTmp = get_project()->get_originalCommandLineArgumentList();
-  int sizeArgs = ArgTmp.size();
-
-  for (int i = 0; i < sizeArgs; i++) {
-    if (ArgTmp[i].find("-rose:caf", 0) == 0 ||
-        ArgTmp[i].find("-rose:CAF2.0", 0) == 0 ||
-        ArgTmp[i].find("-rose:CAF2.0", 0) == 0) {
-
-      using_rice_caf = true;
-      break;
-    }
-  }
 
   extern SgSourceFile *OpenFortranParser_globalFilePointer;
 
@@ -3214,10 +3197,6 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
   frontEndCommandLine.push_back("--class");
   frontEndCommandLine.push_back(
       "fortran.ofp.parser.c.jni.FortranParserActionJNI");
-
-  // FMZ (7/26/2010)  added an option for using rice CAF.
-  if (using_rice_caf == true)
-    frontEndCommandLine.push_back("--RiceCAF");
 
   const SgStringList &includeList =
       get_project()->get_includeDirectorySpecifierList();

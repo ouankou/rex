@@ -2213,6 +2213,8 @@ void FortranCodeGeneration_locatedNode::unparseForAllStatement(
                                    info);
     curprint("END FORALL");
   }
+
+  unp->cur.insert_newline(1);
 }
 
 void FortranCodeGeneration_locatedNode::unparseDoConcurrentStatement(

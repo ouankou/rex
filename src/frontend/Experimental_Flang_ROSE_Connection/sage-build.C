@@ -2650,6 +2650,15 @@ void BuildVisitor::Build(parser::AssignmentStmt &x) {
   builder.Leave(stmt, labels);
 }
 
+void BuildVisitor::Build(parser::ForallAssignmentStmt &x) {
+  using namespace Fortran::parser;
+
+  common::visit(
+      common::visitors{[&](AssignmentStmt &stmt) { Build(stmt); },
+                       [&](PointerAssignmentStmt &stmt) { Build(stmt); }},
+      x.u);
+}
+
 void BuildVisitor::Build(parser::AssociateConstruct &x) {
   using namespace Fortran::parser;
 
@@ -2819,8 +2828,7 @@ SgExpression *BuildScalarIntExpr(parser::ScalarIntExpr &expr) {
   return result;
 }
 
-SgExprListExp *BuildConcurrentHeader(parser::LoopControl::Concurrent &control) {
-  auto &header = std::get<parser::ConcurrentHeader>(control.t);
+SgExprListExp *BuildConcurrentHeader(parser::ConcurrentHeader &header) {
   auto &controls = std::get<std::list<parser::ConcurrentControl>>(header.t);
 
   SgExprListExp *exprList = SageBuilder::buildExprListExp_nfi();
@@ -2858,6 +2866,11 @@ SgExprListExp *BuildConcurrentHeader(parser::LoopControl::Concurrent &control) {
   }
 
   return exprList;
+}
+
+SgExprListExp *BuildConcurrentHeader(parser::LoopControl::Concurrent &control) {
+  auto &header = std::get<parser::ConcurrentHeader>(control.t);
+  return BuildConcurrentHeader(header);
 }
 } // namespace
 
@@ -3027,6 +3040,406 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
   }
 }
 
+void BuildVisitor::Build(parser::CaseConstruct &x) {
+  using namespace Fortran::parser;
+
+  auto &selectStmt = std::get<Statement<SelectCaseStmt>>(x.t);
+  auto &cases = std::get<std::list<CaseConstruct::Case>>(x.t);
+  auto &endStmt = std::get<Statement<EndSelectStmt>>(x.t);
+
+  SgScopeStatement *outerScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(outerScope);
+
+  SgExpression *selectorExpr{nullptr};
+  auto &caseExpr = std::get<Scalar<Expr>>(selectStmt.statement.t);
+  WalkExpr(caseExpr.thing, selectorExpr);
+  ASSERT_not_null(selectorExpr);
+
+  SgExprStatement *selectorStmt =
+      SageBuilder::buildExprStatement_nfi(selectorExpr);
+  ASSERT_not_null(selectorStmt);
+
+  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
+  ASSERT_not_null(body);
+  body->set_scope(outerScope);
+
+  SgSwitchStatement *switchStmt =
+      SageBuilder::buildSwitchStatement_nfi(selectorStmt, body);
+  ASSERT_not_null(switchStmt);
+
+  if (outerScope->isCaseInsensitive()) {
+    switchStmt->setCaseInsensitive(true);
+    body->setCaseInsensitive(true);
+  }
+
+  if (auto &optName = std::get<std::optional<Name>>(selectStmt.statement.t)) {
+    switchStmt->set_string_label(optName->ToString());
+  }
+
+  SourcePosition srcBegin{BuildSourcePosition(selectStmt, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(endStmt, Order::end)};
+  builder.setSourcePosition(switchStmt, srcBegin, srcEnd);
+
+  SageInterface::appendStatement(switchStmt, outerScope);
+
+  auto set_label = [&](const std::optional<Label> &label,
+                       SgLabelSymbol::label_type_enum label_type) {
+    if (!label) {
+      return;
+    }
+    const int labelValue = static_cast<int>(label.value());
+    if (labelValue <= 0) {
+      return;
+    }
+    SgScopeStatement *labelScope =
+        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
+    if (labelScope == nullptr) {
+      labelScope = SageInterface::getEnclosingScope(outerScope, true);
+    }
+    ASSERT_not_null(labelScope);
+    SageInterface::setFortranNumericLabel(switchStmt, labelValue, label_type,
+                                          labelScope);
+  };
+
+  set_label(selectStmt.label, SgLabelSymbol::e_start_label_type);
+  if (switchStmt->has_end_numeric_label()) {
+    set_label(endStmt.label, SgLabelSymbol::e_end_label_type);
+  }
+
+  const bool force_case_insensitive =
+      SageInterface::is_language_case_insensitive();
+  SageInterface::ensureCaseInsensitiveSymbolTable(switchStmt,
+                                                  force_case_insensitive);
+  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
+
+  for (auto &caseEntry : cases) {
+    auto &caseStmt = std::get<Statement<CaseStmt>>(caseEntry.t);
+    auto &caseBlock = std::get<Block>(caseEntry.t);
+    auto &selector = std::get<CaseSelector>(caseStmt.statement.t);
+
+    SgBasicBlock *caseBody = SageBuilder::buildBasicBlock_nfi();
+    ASSERT_not_null(caseBody);
+    caseBody->set_scope(body);
+    if (outerScope->isCaseInsensitive()) {
+      caseBody->setCaseInsensitive(true);
+    }
+
+    SgStatement *caseNode{nullptr};
+    if (std::holds_alternative<Default>(selector.u)) {
+      SgDefaultOptionStmt *defaultStmt =
+          SageBuilder::buildDefaultOptionStmt_nfi(caseBody);
+      ASSERT_not_null(defaultStmt);
+      if (auto &caseName =
+              std::get<std::optional<Name>>(caseStmt.statement.t)) {
+        defaultStmt->set_default_construct_name(caseName->ToString());
+      }
+      caseNode = defaultStmt;
+    } else {
+      std::list<SgExpression *> case_list;
+      Rose::builder::Build(caseStmt.statement, case_list);
+
+      SgExprListExp *key = SageBuilder::buildExprListExp_nfi();
+      ASSERT_not_null(key);
+      for (SgExpression *expr : case_list) {
+        SageInterface::appendExpression(key, expr);
+      }
+
+      SgCaseOptionStmt *caseOption =
+          SageBuilder::buildCaseOptionStmt_nfi(key, caseBody);
+      ASSERT_not_null(caseOption);
+      if (auto &caseName =
+              std::get<std::optional<Name>>(caseStmt.statement.t)) {
+        caseOption->set_case_construct_name(caseName->ToString());
+      }
+      caseNode = caseOption;
+    }
+    ASSERT_not_null(caseNode);
+
+    caseBody->set_parent(caseNode);
+    SourcePosition caseBegin{BuildSourcePosition(caseStmt, Order::begin)};
+    SourcePosition caseEnd{BuildSourcePosition(caseStmt, Order::end)};
+    builder.setSourcePosition(caseNode, caseBegin, caseEnd);
+
+    SageInterface::appendStatement(caseNode, body);
+    PopulateBlock(*this, caseBlock, caseBody);
+  }
+}
+
+void BuildVisitor::Build(parser::WhereConstruct &x) {
+  using namespace Fortran::parser;
+
+  auto &whereStmt = std::get<Statement<WhereConstructStmt>>(x.t);
+  auto &bodyConstructs = std::get<std::list<WhereBodyConstruct>>(x.t);
+  auto &maskedElsewheres =
+      std::get<std::list<WhereConstruct::MaskedElsewhere>>(x.t);
+  auto &optElsewhere = std::get<std::optional<WhereConstruct::Elsewhere>>(x.t);
+  auto &endStmt = std::get<Statement<EndWhereStmt>>(x.t);
+
+  SgScopeStatement *outerScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(outerScope);
+
+  SgExpression *condition{nullptr};
+  WalkExpr(std::get<LogicalExpr>(whereStmt.statement.t), condition);
+  ASSERT_not_null(condition);
+
+  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
+  ASSERT_not_null(body);
+  body->set_scope(outerScope);
+
+  SgWhereStatement *whereStatement =
+      new SgWhereStatement(condition, body, nullptr);
+  ASSERT_not_null(whereStatement);
+
+  whereStatement->set_has_end_statement(true);
+  if (outerScope->isCaseInsensitive()) {
+    body->setCaseInsensitive(true);
+  }
+  if (auto &optName = std::get<std::optional<Name>>(whereStmt.statement.t)) {
+    whereStatement->set_string_label(optName->ToString());
+  }
+
+  condition->set_parent(whereStatement);
+  body->set_parent(whereStatement);
+
+  SourcePosition srcBegin{BuildSourcePosition(whereStmt, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(endStmt, Order::end)};
+  builder.setSourcePosition(whereStatement, srcBegin, srcEnd);
+
+  SageInterface::appendStatement(whereStatement, outerScope);
+
+  auto set_label = [&](SgStatement *stmt, const std::optional<Label> &label,
+                       SgLabelSymbol::label_type_enum label_type) {
+    if (!label || stmt == nullptr) {
+      return;
+    }
+    const int labelValue = static_cast<int>(label.value());
+    if (labelValue <= 0) {
+      return;
+    }
+    SgScopeStatement *labelScope =
+        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
+    if (labelScope == nullptr) {
+      labelScope = SageInterface::getEnclosingScope(outerScope, true);
+    }
+    ASSERT_not_null(labelScope);
+    SageInterface::setFortranNumericLabel(stmt, labelValue, label_type,
+                                          labelScope);
+  };
+
+  set_label(whereStatement, whereStmt.label, SgLabelSymbol::e_start_label_type);
+  if (whereStatement->has_end_numeric_label()) {
+    set_label(whereStatement, endStmt.label, SgLabelSymbol::e_end_label_type);
+  }
+
+  const bool force_case_insensitive =
+      SageInterface::is_language_case_insensitive();
+  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
+
+  auto populate_where_body = [&](std::list<WhereBodyConstruct> &constructs,
+                                 SgBasicBlock *target) {
+    ASSERT_not_null(target);
+    SageInterface::setSourcePosition(target);
+    SageBuilder::pushScopeStack(target);
+    for (auto &construct : constructs) {
+      common::visit(
+          common::visitors{[&](Statement<AssignmentStmt> &stmt) { Walk(stmt); },
+                           [&](Statement<WhereStmt> &stmt) { Walk(stmt); },
+                           [&](common::Indirection<WhereConstruct> &where) {
+                             Walk(where.value());
+                           }},
+          construct.u);
+    }
+    SageBuilder::popScopeStack();
+  };
+
+  populate_where_body(bodyConstructs, body);
+
+  SgElseWhereStatement *currentElse = nullptr;
+  for (auto &masked : maskedElsewheres) {
+    auto &maskedStmt = std::get<Statement<MaskedElsewhereStmt>>(masked.t);
+    auto &maskedBody = std::get<std::list<WhereBodyConstruct>>(masked.t);
+
+    SgExpression *mask{nullptr};
+    WalkExpr(std::get<LogicalExpr>(maskedStmt.statement.t), mask);
+    ASSERT_not_null(mask);
+
+    SgBasicBlock *elseBody = SageBuilder::buildBasicBlock_nfi();
+    ASSERT_not_null(elseBody);
+    elseBody->set_scope(outerScope);
+    if (outerScope->isCaseInsensitive()) {
+      elseBody->setCaseInsensitive(true);
+    }
+
+    SgElseWhereStatement *elseStmt =
+        new SgElseWhereStatement(mask, elseBody, nullptr);
+    ASSERT_not_null(elseStmt);
+    if (auto &optName = std::get<std::optional<Name>>(maskedStmt.statement.t)) {
+      (void)optName;
+    }
+
+    mask->set_parent(elseStmt);
+    elseBody->set_parent(elseStmt);
+
+    SourcePosition elseBegin{BuildSourcePosition(maskedStmt, Order::begin)};
+    SourcePosition elseEnd{BuildSourcePosition(maskedStmt, Order::end)};
+    builder.setSourcePosition(elseStmt, elseBegin, elseEnd);
+
+    set_label(elseStmt, maskedStmt.label, SgLabelSymbol::e_start_label_type);
+
+    if (currentElse == nullptr) {
+      whereStatement->set_elsewhere(elseStmt);
+      elseStmt->set_parent(whereStatement);
+    } else {
+      currentElse->set_elsewhere(elseStmt);
+      elseStmt->set_parent(currentElse);
+    }
+    currentElse = elseStmt;
+
+    populate_where_body(maskedBody, elseBody);
+  }
+
+  if (optElsewhere) {
+    auto &elsewhereStmt = std::get<Statement<ElsewhereStmt>>(optElsewhere->t);
+    auto &elsewhereBody =
+        std::get<std::list<WhereBodyConstruct>>(optElsewhere->t);
+
+    SgExpression *nullExpr = SageBuilderCpp17::buildNullExpression_nfi();
+    ASSERT_not_null(nullExpr);
+
+    SgBasicBlock *elseBody = SageBuilder::buildBasicBlock_nfi();
+    ASSERT_not_null(elseBody);
+    elseBody->set_scope(outerScope);
+    if (outerScope->isCaseInsensitive()) {
+      elseBody->setCaseInsensitive(true);
+    }
+
+    SgElseWhereStatement *elseStmt =
+        new SgElseWhereStatement(nullExpr, elseBody, nullptr);
+    ASSERT_not_null(elseStmt);
+    if (auto &optName = elsewhereStmt.statement.v) {
+      (void)optName;
+    }
+
+    nullExpr->set_parent(elseStmt);
+    elseBody->set_parent(elseStmt);
+
+    SourcePosition elseBegin{BuildSourcePosition(elsewhereStmt, Order::begin)};
+    SourcePosition elseEnd{BuildSourcePosition(elsewhereStmt, Order::end)};
+    builder.setSourcePosition(elseStmt, elseBegin, elseEnd);
+
+    set_label(elseStmt, elsewhereStmt.label, SgLabelSymbol::e_start_label_type);
+
+    if (currentElse == nullptr) {
+      whereStatement->set_elsewhere(elseStmt);
+      elseStmt->set_parent(whereStatement);
+    } else {
+      currentElse->set_elsewhere(elseStmt);
+      elseStmt->set_parent(currentElse);
+    }
+    currentElse = elseStmt;
+
+    populate_where_body(elsewhereBody, elseBody);
+  }
+}
+
+void BuildVisitor::Build(parser::ForallConstruct &x) {
+  using namespace Fortran::parser;
+
+  auto &forallStmt = std::get<Statement<ForallConstructStmt>>(x.t);
+  auto &bodyConstructs = std::get<std::list<ForallBodyConstruct>>(x.t);
+  auto &endStmt = std::get<Statement<EndForallStmt>>(x.t);
+
+  SgScopeStatement *outerScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(outerScope);
+
+  auto &header =
+      std::get<common::Indirection<ConcurrentHeader>>(forallStmt.statement.t)
+          .value();
+  SgExprListExp *headerExprList = BuildConcurrentHeader(header);
+  ASSERT_not_null(headerExprList);
+
+  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
+  ASSERT_not_null(body);
+  body->set_scope(outerScope);
+
+  SgForAllStatement *forallStatement =
+      new SgForAllStatement(headerExprList, body);
+  ASSERT_not_null(forallStatement);
+
+  forallStatement->set_forall_statement_kind(
+      SgForAllStatement::e_forall_statement);
+  forallStatement->set_has_end_statement(true);
+  if (outerScope->isCaseInsensitive()) {
+    forallStatement->setCaseInsensitive(true);
+    body->setCaseInsensitive(true);
+  }
+  if (auto &optName = std::get<std::optional<Name>>(forallStmt.statement.t)) {
+    forallStatement->set_string_label(optName->ToString());
+  }
+
+  forallStatement->set_body(body);
+  body->set_parent(forallStatement);
+  headerExprList->set_parent(forallStatement);
+
+  SourcePosition srcBegin{BuildSourcePosition(forallStmt, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(endStmt, Order::end)};
+  builder.setSourcePosition(forallStatement, srcBegin, srcEnd);
+
+  SageInterface::appendStatement(forallStatement, outerScope);
+
+  auto set_label = [&](const std::optional<Label> &label,
+                       SgLabelSymbol::label_type_enum label_type) {
+    if (!label) {
+      return;
+    }
+    const int labelValue = static_cast<int>(label.value());
+    if (labelValue <= 0) {
+      return;
+    }
+    SgScopeStatement *labelScope =
+        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
+    if (labelScope == nullptr) {
+      labelScope = SageInterface::getEnclosingScope(outerScope, true);
+    }
+    ASSERT_not_null(labelScope);
+    SageInterface::setFortranNumericLabel(forallStatement, labelValue,
+                                          label_type, labelScope);
+  };
+
+  set_label(forallStmt.label, SgLabelSymbol::e_start_label_type);
+  if (forallStatement->has_end_numeric_label()) {
+    set_label(endStmt.label, SgLabelSymbol::e_end_label_type);
+  }
+
+  const bool force_case_insensitive =
+      SageInterface::is_language_case_insensitive();
+  SageInterface::ensureCaseInsensitiveSymbolTable(forallStatement,
+                                                  force_case_insensitive);
+  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
+
+  auto populate_forall_body = [&](std::list<ForallBodyConstruct> &constructs,
+                                  SgBasicBlock *target) {
+    ASSERT_not_null(target);
+    SageInterface::setSourcePosition(target);
+    SageBuilder::pushScopeStack(target);
+    for (auto &construct : constructs) {
+      common::visit(
+          common::visitors{
+              [&](Statement<ForallAssignmentStmt> &stmt) { Walk(stmt); },
+              [&](Statement<WhereStmt> &stmt) { Walk(stmt); },
+              [&](WhereConstruct &where) { Walk(where); },
+              [&](common::Indirection<ForallConstruct> &forall) {
+                Walk(forall.value());
+              },
+              [&](Statement<ForallStmt> &stmt) { Walk(stmt); }},
+          construct.u);
+    }
+    SageBuilder::popScopeStack();
+  };
+
+  populate_forall_body(bodyConstructs, body);
+}
+
 void BuildVisitor::Build(parser::IfStmt &x) {
   using namespace Fortran::parser;
 
@@ -3062,6 +3475,96 @@ void BuildVisitor::Build(parser::IfStmt &x) {
   SageBuilder::popScopeStack();
 }
 
+void BuildVisitor::Build(parser::WhereStmt &x) {
+  using namespace Fortran::parser;
+
+  SgScopeStatement *outerScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(outerScope);
+
+  SgExpression *condition{nullptr};
+  WalkExpr(std::get<LogicalExpr>(x.t), condition);
+  ASSERT_not_null(condition);
+
+  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
+  ASSERT_not_null(body);
+  body->set_scope(outerScope);
+
+  SgWhereStatement *whereStatement =
+      new SgWhereStatement(condition, body, nullptr);
+  ASSERT_not_null(whereStatement);
+
+  whereStatement->set_has_end_statement(false);
+  if (outerScope->isCaseInsensitive()) {
+    body->setCaseInsensitive(true);
+  }
+
+  condition->set_parent(whereStatement);
+  body->set_parent(whereStatement);
+
+  ApplyCurrentStatementSource(whereStatement);
+  ApplyStatementLabel(whereStatement, outerScope);
+  SageInterface::appendStatement(whereStatement, outerScope);
+
+  const bool force_case_insensitive =
+      SageInterface::is_language_case_insensitive();
+  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
+
+  auto saved_label = label_;
+  label_ = std::nullopt;
+  SageBuilder::pushScopeStack(body);
+  Walk(std::get<AssignmentStmt>(x.t));
+  SageBuilder::popScopeStack();
+  label_ = saved_label;
+}
+
+void BuildVisitor::Build(parser::ForallStmt &x) {
+  using namespace Fortran::parser;
+
+  SgScopeStatement *outerScope = SageBuilder::topScopeStack();
+  ASSERT_not_null(outerScope);
+
+  auto &header = std::get<common::Indirection<ConcurrentHeader>>(x.t).value();
+  SgExprListExp *headerExprList = BuildConcurrentHeader(header);
+  ASSERT_not_null(headerExprList);
+
+  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
+  ASSERT_not_null(body);
+  body->set_scope(outerScope);
+
+  SgForAllStatement *forallStatement =
+      new SgForAllStatement(headerExprList, body);
+  ASSERT_not_null(forallStatement);
+
+  forallStatement->set_forall_statement_kind(
+      SgForAllStatement::e_forall_statement);
+  forallStatement->set_has_end_statement(false);
+  if (outerScope->isCaseInsensitive()) {
+    forallStatement->setCaseInsensitive(true);
+    body->setCaseInsensitive(true);
+  }
+
+  forallStatement->set_body(body);
+  body->set_parent(forallStatement);
+  headerExprList->set_parent(forallStatement);
+
+  ApplyCurrentStatementSource(forallStatement);
+  ApplyStatementLabel(forallStatement, outerScope);
+  SageInterface::appendStatement(forallStatement, outerScope);
+
+  const bool force_case_insensitive =
+      SageInterface::is_language_case_insensitive();
+  SageInterface::ensureCaseInsensitiveSymbolTable(forallStatement,
+                                                  force_case_insensitive);
+  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
+
+  auto saved_label = label_;
+  label_ = std::nullopt;
+  SageBuilder::pushScopeStack(body);
+  Walk(std::get<UnlabeledStatement<ForallAssignmentStmt>>(x.t));
+  SageBuilder::popScopeStack();
+  label_ = saved_label;
+}
+
 void BuildVisitor::Build(parser::Statement<parser::ActionStmt> &x) {
   SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
@@ -3071,6 +3574,39 @@ void BuildVisitor::Build(parser::Statement<parser::ActionStmt> &x) {
 }
 
 void BuildVisitor::Build(parser::UnlabeledStatement<parser::ActionStmt> &x) {
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  current_stmt_source_.emplace(srcBegin, srcEnd);
+  Walk(x.statement);
+  current_stmt_source_.reset();
+}
+
+void BuildVisitor::Build(parser::Statement<parser::WhereStmt> &x) {
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  current_stmt_source_.emplace(srcBegin, srcEnd);
+  Walk(x.statement);
+  current_stmt_source_.reset();
+}
+
+void BuildVisitor::Build(parser::Statement<parser::ForallStmt> &x) {
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  current_stmt_source_.emplace(srcBegin, srcEnd);
+  Walk(x.statement);
+  current_stmt_source_.reset();
+}
+
+void BuildVisitor::Build(parser::Statement<parser::ForallAssignmentStmt> &x) {
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  current_stmt_source_.emplace(srcBegin, srcEnd);
+  Walk(x.statement);
+  current_stmt_source_.reset();
+}
+
+void BuildVisitor::Build(
+    parser::UnlabeledStatement<parser::ForallAssignmentStmt> &x) {
   SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
   current_stmt_source_.emplace(srcBegin, srcEnd);
@@ -8618,13 +9154,47 @@ void Build(parser::CaseConstruct::Case &x, SgStatement *&stmt) {
 
 void Build(parser::CaseStmt &x, std::list<SgExpression *> &case_list) {
   //  std::tuple<CaseSelector, std::optional<Name>> t;
-  info(x, "Rose::builder::Build(CaseStmt)");
-  ABORT_NO_IMPL;
+  auto &selector = std::get<parser::CaseSelector>(x.t);
+  if (std::holds_alternative<parser::Default>(selector.u)) {
+    return;
+  }
+  auto &ranges = std::get<std::list<parser::CaseValueRange>>(selector.u);
+  for (auto &rangeItem : ranges) {
+    SgExpression *expr{nullptr};
+    common::visit(
+        common::visitors{
+            [&](parser::CaseValue &value) { WalkExpr(value.thing, expr); },
+            [&](parser::CaseValueRange::Range &range) { Build(range, expr); }},
+        rangeItem.u);
+    ASSERT_not_null(expr);
+    case_list.push_back(expr);
+  }
 }
 
 void Build(parser::CaseValueRange::Range &x, SgExpression *&range) {
-  std::cout << "Rose::builder::Build(Range)\n";
-  ABORT_NO_IMPL;
+  SgExpression *lower{nullptr};
+  SgExpression *upper{nullptr};
+  if (x.lower) {
+    WalkExpr(x.lower.value().thing, lower);
+  }
+  if (x.upper) {
+    WalkExpr(x.upper.value().thing, upper);
+  }
+
+  if (lower == nullptr && upper == nullptr) {
+    std::cerr << "CaseValueRange::Range missing bounds.\n";
+    ROSE_ABORT();
+  }
+  if (lower == nullptr) {
+    lower = SageBuilderCpp17::buildNullExpression_nfi();
+  }
+  if (upper == nullptr) {
+    upper = SageBuilderCpp17::buildNullExpression_nfi();
+  }
+
+  SgExpression *stride = SageBuilderCpp17::buildNullExpression_nfi();
+  range = SageBuilder::buildRangeExp(lower, upper, stride);
+  ASSERT_not_null(range);
 }
 
 void Build(parser::ChangeTeamConstruct &x) {
