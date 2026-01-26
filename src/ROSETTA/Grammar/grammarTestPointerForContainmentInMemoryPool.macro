@@ -11,6 +11,7 @@ $CLASSNAME::isInMemoryPool ()
      ROSE_ASSERT(p_freepointer == AST_FileIO::IS_VALID_POINTER());
 
      TestType tested = (TestType) ( this ) ;
+     uintptr_t tested_addr = reinterpret_cast<uintptr_t>(tested);
 
      std::vector < unsigned char* > :: const_iterator block = $CLASSNAME::pools.begin();
 
@@ -18,7 +19,9 @@ $CLASSNAME::isInMemoryPool ()
   // while (found == false && block < Memory_Block_List.end())
      while ( (found == false) && (block != $CLASSNAME::pools.end()) )
         {
-          found = ( ( (*block) <= tested ) && ( tested  < (*block) + $CLASSNAME::pool_size * sizeof($CLASSNAME) ) ) ;
+          uintptr_t base_addr = reinterpret_cast<uintptr_t>(*block);
+          uintptr_t end_addr = base_addr + $CLASSNAME::pool_size * sizeof($CLASSNAME);
+          found = (tested_addr >= base_addr) && (tested_addr < end_addr);
           ++block;
         }
 

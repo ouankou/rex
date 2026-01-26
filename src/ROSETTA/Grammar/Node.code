@@ -17,6 +17,9 @@ HEADER_NODE_PREDECLARATION_START
 #include <functional>
 
 
+#include <cstdint>
+
+
 #include <sstream>
 
 
@@ -2299,16 +2302,17 @@ void SgNode::releaseAllPools() {
 
 const SgNode::PoolEntry* SgNode::findPoolEntry(const unsigned char* ptr) {
   auto &pools = allPools();
+  std::uintptr_t ptr_addr = reinterpret_cast<std::uintptr_t>(ptr);
   size_t lo = 0;
   size_t hi = pools.size();
   while (lo < hi) {
     size_t mid = lo + (hi - lo) / 2;
     const SgNode::PoolEntry &pool = pools[mid];
-    const unsigned char* base = pool.base;
-    const unsigned char* end = base + pool.size;
-    if (ptr < base) {
+    std::uintptr_t base = reinterpret_cast<std::uintptr_t>(pool.base);
+    std::uintptr_t end = base + pool.size;
+    if (ptr_addr < base) {
       hi = mid;
-    } else if (ptr >= end) {
+    } else if (ptr_addr >= end) {
       lo = mid + 1;
     } else {
       return &pool;
