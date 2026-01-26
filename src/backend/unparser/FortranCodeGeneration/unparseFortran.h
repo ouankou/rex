@@ -109,6 +109,7 @@ public:
 
   // Fortran specific member functions
   virtual void unparseExpOp(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparseRangeExp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseSubscriptExpr(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseColonShapeExp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseAsteriskShapeExp(SgExpression *expr,

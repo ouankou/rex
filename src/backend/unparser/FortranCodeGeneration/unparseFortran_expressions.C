@@ -328,6 +328,9 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
     unparseTypeExpression(expr, info);
     break;
 
+  case V_SgRangeExp:
+    unparseRangeExp(expr, info);
+    break;
   case V_SgSubscriptExpression:
     unparseSubscriptExpr(expr, info);
     break;
@@ -988,6 +991,30 @@ void FortranCodeGeneration_locatedNode::unparseTypeExpression(
   SgUnparse_Info ninfo(info);
   ninfo.unset_PrintName();
   unp->u_fortran_type->unparseType(type_expr->get_type(), ninfo);
+}
+
+void FortranCodeGeneration_locatedNode::unparseRangeExp(SgExpression *expr,
+                                                        SgUnparse_Info &info) {
+  SgRangeExp *rangeExp = isSgRangeExp(expr);
+  ASSERT_not_null(rangeExp);
+
+  SgExpression *start = rangeExp->get_start();
+  SgExpression *end = rangeExp->get_end();
+  SgExpression *stride = rangeExp->get_stride();
+  ASSERT_not_null(start);
+  ASSERT_not_null(end);
+
+  if (isSgNullExpression(start) == nullptr) {
+    unparseExpression(start, info);
+  }
+  curprint(":");
+  if (isSgNullExpression(end) == nullptr) {
+    unparseExpression(end, info);
+  }
+
+  if (stride != nullptr && isSgNullExpression(stride) == nullptr) {
+    ROSE_ASSERT(!"Fortran range expressions do not support stride");
+  }
 }
 
 void FortranCodeGeneration_locatedNode::unparseSubscriptExpr(

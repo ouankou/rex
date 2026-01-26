@@ -9192,8 +9192,8 @@ void Build(parser::CaseValueRange::Range &x, SgExpression *&range) {
     upper = SageBuilderCpp17::buildNullExpression_nfi();
   }
 
-  SgExpression *stride = SageBuilder::buildIntVal_nfi(std::string("1"));
-  range = SageBuilderCpp17::buildSubscriptExpression_nfi(lower, upper, stride);
+  SgExpression *stride = SageBuilderCpp17::buildNullExpression_nfi();
+  range = SageBuilder::buildRangeExp(lower, upper, stride);
   ASSERT_not_null(range);
 }
 

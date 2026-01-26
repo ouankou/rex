@@ -11236,8 +11236,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       }
     }
 
-    if (isSgSubscriptExpression(expr) != NULL || isSgDotExp(expr) ||
-        isSgCAFCoExpression(expr) || isSgPntrArrRefExp(expr)) {
+    if (isSgSubscriptExpression(expr) != NULL || isSgRangeExp(expr) ||
+        isSgDotExp(expr) || isSgCAFCoExpression(expr) ||
+        isSgPntrArrRefExp(expr)) {
 #if DEBUG_PARENTHESIS_PLACEMENT
       printf("In requiresParentheses(): Case 1: Output false \n");
       curprint("/* In requiresParentheses(): Case 1: Output false */ \n");
