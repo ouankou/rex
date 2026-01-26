@@ -263,8 +263,8 @@ public:
  *  This attribute container stores one non-null, heap-allocated attribute per
  * user-specified name.  All values are derived from @ref AstAttribute.  Any
  * object can have an attribute container data member. For example, each AST
- * node (@ref SgNode) contains one attribute container named @ref
- * SgNode::get_attributeMechanism.
+ * node (@ref SgNode) contains one attribute container accessible via
+ * `SgNode::get_attributeMechanism`.
  *
  *  The value class's @ref AstAttribute::getOwnershipPolicy "getOwnershipPolicy"
  * method indicates whether the container owns the heap-allocated attribute and
@@ -289,10 +289,10 @@ public:
  * effect, operating on a completely different, unintended attribute.
  *
  *  The @ref AstAttributeMechanism is used by AST nodes (@ref SgNode) and is
- * available via @ref SgNode::get_attributeMechanism, although that is not the
+ * available via `SgNode::get_attributeMechanism`, although that is not the
  * preferred API.  Instead, @ref SgNode provides an additional methods that
  * contain "attribute" as part of their name. These "attribute" methods are
- * mostly just wrappers around @ref SgNode::get_attributeMechanism.
+ * mostly just wrappers around `SgNode::get_attributeMechanism`.
  *
  *  For additional information, including examples, see @ref attributes. */
 class ROSE_DLL_API AstAttributeMechanism {

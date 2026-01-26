@@ -2,14 +2,11 @@
 source-root: ..
 input:
   - ../src
-  - ../build/src/frontend/SageIII
 recursive: true
 exclude:
   - ../src/frontend/SageIII/ompparser
   - ../src/frontend/SageIII/accparser
   - ../src/ROSETTA
-  - ../build/src/frontend/SageIII/ompparser
-  - ../build/src/frontend/SageIII/accparser
 exclude-patterns:
   - "*/tests/*"
   - "*/external/*"
@@ -33,6 +30,7 @@ output: reference
 multipage: true
 inherit-base-members: never
 auto-function-metadata: true
+extract-private: true
 # Use system libc and C++ standard library headers to match the toolchain.
 use-system-libc: true
 use-system-stdlib: true

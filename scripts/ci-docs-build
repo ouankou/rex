@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+arg0="${0##*/}"
+dir0="${0%/*}"
+root="$(cd "$dir0/.." && pwd)"
+
+BUILD_DIR="${DOCS_BUILD_DIR:-$root/build}"
+VENV_DIR="${DOCS_VENV_DIR:-$root/.venv-docs}"
+TOOLS_DIR="${DOCS_TOOLS_DIR:-$root/.tools}"
+MRDOCS_ROOT="${MRDOCS_ROOT:-$TOOLS_DIR/mrdocs}"
+JOBS="${DOCS_JOBS:-32}"
+ANTLR4_EXECUTABLE="${DOCS_ANTLR4_EXECUTABLE:-}"
+DOCS_SOURCE_DIR="$root/docs"
+DOCS_DIR="$DOCS_SOURCE_DIR"
+REFERENCE_DIR="$DOCS_SOURCE_DIR/reference"
+SITE_DIR="$root/_site"
+MKDOCS_CONFIG="$root/mkdocs.yml"
+SCRATCH_DIR="${DOCS_SCRATCH_DIR-}"
+
+if [ -n "$SCRATCH_DIR" ]; then
+  if [[ "$SCRATCH_DIR" != /* ]]; then
+    SCRATCH_DIR="$root/$SCRATCH_DIR"
+  fi
+  if [ "$SCRATCH_DIR" = "$root" ] || [[ "$SCRATCH_DIR" != "$root/"* ]]; then
+    echo "$arg0: error: DOCS_SCRATCH_DIR must be under the project root: $SCRATCH_DIR" >&2
+    exit 1
+  fi
+  DOCS_DIR="$SCRATCH_DIR/docs"
+  REFERENCE_DIR="$DOCS_DIR/reference"
+  SITE_DIR="$SCRATCH_DIR/_site"
+  MKDOCS_CONFIG="$SCRATCH_DIR/mkdocs.yml"
+fi
+
+die() {
+  echo "$arg0: error:" "$@" >&2
+  exit 1
+}
+
+install_mrdocs() {
+  local mrdocs_version="v0.8.0"
+  local mrdocs_asset="MrDocs-0.8.0-Linux.tar.xz"
+  local mrdocs_sha256="75f5b703e2230d7574eecc1640d16de668bd6aeb11713296e748d3378bb509f2"
+  local mrdocs_url="https://github.com/cppalliance/mrdocs/releases/download/${mrdocs_version}/${mrdocs_asset}"
+
+  if [ -f "$MRDOCS_ROOT/.version" ] && [ "$(cat "$MRDOCS_ROOT/.version")" = "$mrdocs_version" ] \
+    && [ -x "$MRDOCS_ROOT/current/bin/mrdocs" ]; then
+    echo "$MRDOCS_ROOT/current/bin/mrdocs"
+    return 0
+  fi
+
+  rm -rf "$MRDOCS_ROOT"
+  mkdir -p "$MRDOCS_ROOT"
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+
+  local tarball_path="$tmp_dir/mrdocs.tar.xz"
+  curl -fL "$mrdocs_url" -o "$tarball_path" || die "failed to download MrDocs"
+  printf '%s  %s\n' "$mrdocs_sha256" "$tarball_path" | sha256sum --check --status \
+    || die "MrDocs tarball checksum mismatch"
+  tar -xf "$tarball_path" -C "$MRDOCS_ROOT"
+  local top_dir
+  top_dir="$(tar -tf "$tarball_path" | sed -n '1p' | cut -d/ -f1)"
+  if [ -z "$top_dir" ] || [ ! -d "$MRDOCS_ROOT/$top_dir" ]; then
+    die "failed to unpack MrDocs archive"
+  fi
+  ln -sfn "$MRDOCS_ROOT/$top_dir" "$MRDOCS_ROOT/current"
+  echo "$mrdocs_version" > "$MRDOCS_ROOT/.version"
+  echo "$MRDOCS_ROOT/current/bin/mrdocs"
+}
+
+if [ ! -d "$VENV_DIR" ]; then
+  python3 -m venv "$VENV_DIR"
+fi
+
+"$VENV_DIR/bin/python" -m pip install --upgrade pip
+"$VENV_DIR/bin/python" -m pip install --upgrade -r "$root/docs/requirements.txt"
+
+if ! command -v asciidoctor >/dev/null 2>&1; then
+  die "asciidoctor is required (install the asciidoctor package or gem)"
+fi
+
+MRDOCS_BIN="$(install_mrdocs)"
+export MRDOCS_BIN
+
+if [ ! -f "$BUILD_DIR/compile_commands.json" ]; then
+  cmake_args=()
+  if [ -n "$ANTLR4_EXECUTABLE" ]; then
+    cmake_args+=("-DANTLR4_EXECUTABLE=$ANTLR4_EXECUTABLE")
+  elif [ -x "$root/.tools/antlr4/antlr4" ]; then
+    cmake_args+=("-DANTLR4_EXECUTABLE=$root/.tools/antlr4/antlr4")
+  fi
+
+  cmake -S "$root" -B "$BUILD_DIR" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DENABLE-C=ON \
+    -DENABLE-FORTRAN=OFF \
+    -DENABLE-FORTRAN-OFP=OFF \
+    -DENABLE-TESTS-DIRECTORY=OFF \
+    -DENABLE-TUTORIAL-DIRECTORY=OFF \
+    "${cmake_args[@]}"
+fi
+
+if [ ! -f "$BUILD_DIR/src/frontend/SageIII/license_string.h" ] || \
+  [ ! -f "$BUILD_DIR/rosePublicConfig.h" ] || \
+  [ ! -f "$BUILD_DIR/src/frontend/SageIII/Cxx_Grammar.h" ]; then
+  cmake --build "$BUILD_DIR" --target sage3 --parallel "$JOBS"
+fi
+
+if [ -n "$SCRATCH_DIR" ]; then
+  rm -rf "$DOCS_DIR"
+  mkdir -p "$DOCS_DIR"
+  for item in "$DOCS_SOURCE_DIR"/*; do
+    base="$(basename "$item")"
+    if [ "$base" = "reference" ]; then
+      continue
+    fi
+    cp -a "$item" "$DOCS_DIR/"
+  done
+  MRDOCS_OUTPUT_DIR="$REFERENCE_DIR" "$root/scripts/generate-api-documentation"
+else
+  "$root/scripts/generate-api-documentation"
+fi
+python3 "$root/scripts/generate-reference-stubs.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/fix-reference-relfileprefix.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/link-reference-types.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/add-signatures-to-function-tables.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/validate-docs-output.py" --reference-dir "$REFERENCE_DIR" --root "$root"
+
+if [ -n "$SCRATCH_DIR" ]; then
+  "$VENV_DIR/bin/python" "$root/scripts/prepare-mkdocs-config.py" \
+    --input "$root/mkdocs.yml" \
+    --output "$MKDOCS_CONFIG" \
+    --docs-dir "$DOCS_DIR" \
+    --site-dir "$SITE_DIR" \
+    --root "$root"
+fi
+
+"$VENV_DIR/bin/mkdocs" build -f "$MKDOCS_CONFIG"
+python3 "$root/scripts/generate-api-symbol-index.py" "$REFERENCE_DIR/sections" "$SITE_DIR/assets/api/symbols.json"
+python3 "$root/scripts/validate-reference-return-links.py" --reference-dir "$REFERENCE_DIR"
+python3 "$root/scripts/validate-site-links.py" --site-dir "$SITE_DIR" --root "$root"
+
+echo "Docs built in $SITE_DIR"

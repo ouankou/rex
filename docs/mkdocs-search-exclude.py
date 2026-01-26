@@ -41,9 +41,9 @@ def on_files(files, config):
 
 def _should_keep_leaf(page):
     src_path = getattr(page.file, "src_path", "")
-    if src_path == "index.adoc":
+    if src_path == "reference/index.adoc":
         return True
-    if src_path.startswith("sections/"):
+    if src_path.startswith("reference/sections/"):
         return True
     return False
 

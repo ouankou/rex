@@ -1055,7 +1055,7 @@ private:
      * by a given operation.
      *
      * @param node The node being evaluated.
-     * @param attr The attributes from the child nodes.
+     * @param attrs The attributes from the child nodes.
      * @return The attribute at this node.
      */
     virtual ChildUses

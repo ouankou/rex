@@ -35,6 +35,7 @@ jobs:
             cmake \
             curl \
             flex \
+            libflang-20-dev \
             libclang-20-dev \
             libantlr4-runtime-dev \
             libhpdf-dev \
@@ -56,67 +57,21 @@ jobs:
           SH
           chmod +x .tools/antlr4/antlr4
 
-      - name: Install MrDocs (latest)
-        run: |
-          set -euo pipefail
-          MRDOCS_URL="$(python - <<'PY'
-          import json, urllib.request
-          url = 'https://api.github.com/repos/cppalliance/mrdocs/releases/latest'
-          release = json.loads(urllib.request.urlopen(url, timeout=10).read().decode('utf-8'))
-          assets = {a['name']: a['browser_download_url'] for a in release.get('assets', [])}
-          linux_xz = next((u for n, u in assets.items() if n.endswith('Linux.tar.xz')), '')
-          linux_gz = next((u for n, u in assets.items() if n.endswith('Linux.tar.gz')), '')
-          print(linux_xz or linux_gz or '')
-          PY
-          )"
-          if [ -z "$MRDOCS_URL" ]; then
-            echo "MrDocs Linux release asset not found" >&2
-            exit 1
-          fi
-          curl -L "$MRDOCS_URL" -o mrdocs.tar.xz
-          tar -xf mrdocs.tar.xz
-          MRDOCS_DIR="$(tar -tf mrdocs.tar.xz | sed -n '1p' | cut -d/ -f1)"
-          echo "$PWD/$MRDOCS_DIR/bin" >> "$GITHUB_PATH"
-          echo "MRDOCS_BIN=$PWD/$MRDOCS_DIR/bin/mrdocs" >> "$GITHUB_ENV"
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install MkDocs dependencies (venv)
-        run: |
-          python -m venv .venv-docs
-          . .venv-docs/bin/activate
-          python -m pip install --upgrade pip
-          python -m pip install -r docs/requirements.txt
-
-      - name: Configure build (compile_commands.json)
+      - name: Build docs (shared script)
         env:
           PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
           CMAKE_PREFIX_PATH: /usr/lib/llvm-20
           LLVM_DIR: /usr/lib/llvm-20
           CC: clang-20
           CXX: clang++-20
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            -DANTLR4_EXECUTABLE="$PWD/.tools/antlr4/antlr4" \
-            -DENABLE-C=ON \
-            -DENABLE-FORTRAN=OFF \
-            -DENABLE-FORTRAN-OFP=OFF \
-            -DENABLE-TESTS-DIRECTORY=OFF \
-            -DENABLE-TUTORIAL-DIRECTORY=OFF
-          cmake --build build -j"$(nproc)"
-
-      - name: Build MrDocs API reference
-        run: scripts/generate-api-documentation
-
-      - name: Build MkDocs site
-        run: |
-          .venv-docs/bin/mkdocs build -f mkdocs.yml
-          .venv-docs/bin/mkdocs build -f mkdocs-reference.yml
+          DOCS_ANTLR4_EXECUTABLE: ${{ github.workspace }}/.tools/antlr4/antlr4
+          DOCS_JOBS: 32
+        run: bash scripts/ci-docs-build
 
       - name: Deploy to GitHub Pages
         if: ${{ !env.ACT }}
