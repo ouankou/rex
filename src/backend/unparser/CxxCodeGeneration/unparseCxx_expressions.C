@@ -50,6 +50,26 @@ bool isBinaryOperatorName(const string &func_name) {
          func_name == "operator->*" || func_name == "operator->" ||
          func_name == "operator()" || func_name == "operator[]";
 }
+
+bool isMemberOperatorCall(SgFunctionCallExp *func_call,
+                          SgFunctionDeclaration *decl) {
+  if (decl != nullptr) {
+    return isSgMemberFunctionDeclaration(decl) != nullptr;
+  }
+
+  SgExpression *function = func_call->get_function();
+  if (isSgMemberFunctionRefExp(function) != nullptr) {
+    return true;
+  }
+  if (SgDotExp *dot = isSgDotExp(function)) {
+    return isSgMemberFunctionRefExp(dot->get_rhs_operand()) != nullptr;
+  }
+  if (SgArrowExp *arrow = isSgArrowExp(function)) {
+    return isSgMemberFunctionRefExp(arrow->get_rhs_operand()) != nullptr;
+  }
+  return isSgDotStarOp(function) != nullptr ||
+         isSgArrowStarOp(function) != nullptr;
+}
 } // namespace
 
 #ifdef _MSC_VER
@@ -3902,24 +3922,7 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
               ? func_call->get_args()->get_expressions().size()
               : 0;
 
-      bool is_member_operator = false;
-      if (decl != nullptr) {
-        is_member_operator = (isSgMemberFunctionDeclaration(decl) != nullptr);
-      } else {
-        SgExpression *function = func_call->get_function();
-        if (isSgMemberFunctionRefExp(function) != nullptr) {
-          is_member_operator = true;
-        } else if (SgDotExp *dot = isSgDotExp(function)) {
-          is_member_operator =
-              (isSgMemberFunctionRefExp(dot->get_rhs_operand()) != nullptr);
-        } else if (SgArrowExp *arrow = isSgArrowExp(function)) {
-          is_member_operator =
-              (isSgMemberFunctionRefExp(arrow->get_rhs_operand()) != nullptr);
-        } else if (isSgDotStarOp(function) != nullptr ||
-                   isSgArrowStarOp(function) != nullptr) {
-          is_member_operator = true;
-        }
-      }
+      bool is_member_operator = isMemberOperatorCall(func_call, decl);
 
       // Member binary operators have one explicit argument; non-members have
       // two.
