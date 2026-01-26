@@ -939,7 +939,7 @@ bool ScopeHasPragmaAtSource(SgScopeStatement *scope,
       continue;
     }
     Sg_File_Info *info = pragmaStmt->get_file_info();
-    if (info != nullptr && info->get_line() != startPos.line) {
+    if (info == nullptr || info->get_line() != startPos.line) {
       continue;
     }
     SgPragma *pragma = pragmaStmt->get_pragma();
