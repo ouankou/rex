@@ -16,7 +16,7 @@ _XREF_INLINE = re.compile(r"\bxref:[^\[]+\[([^\]]*)\]")
 
 def _extract_first_signature(target_adoc: Path) -> str | None:
     try:
-        lines = target_adoc.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines = target_adoc.read_text(encoding="utf-8").splitlines()
     except OSError:
         return None
 
@@ -54,7 +54,7 @@ def _extract_first_signature(target_adoc: Path) -> str | None:
 
 
 def _process_file(path: Path, reference_dir: Path) -> int:
-    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
     out: list[str] = []
     changed = 0
     i = 0

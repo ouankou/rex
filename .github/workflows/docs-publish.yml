@@ -35,6 +35,7 @@ jobs:
             cmake \
             curl \
             flex \
+            libflang-20-dev \
             libclang-20-dev \
             libantlr4-runtime-dev \
             libhpdf-dev \

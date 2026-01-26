@@ -9,7 +9,7 @@ _XREF_RE = re.compile(r"xref:[^\[]+\[([^\]]*)\]")
 
 def _extract_adoc_title(src_path: str) -> str | None:
     try:
-        with open(src_path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(src_path, "r", encoding="utf-8") as f:
             for _ in range(80):
                 line = f.readline()
                 if not line:

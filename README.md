@@ -59,6 +59,9 @@ and build the site.
 scripts/build-docs
 ```
 
+The docs build will generate required headers in the build tree (for example,
+`rosePublicConfig.h` and `Cxx_Grammar.h`) if they are missing.
+
 Output is written to `_site` and `docs/reference` by default. To keep all
 generated files under the build tree, set `DOCS_SCRATCH_DIR`, for example:
 

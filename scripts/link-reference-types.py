@@ -141,7 +141,7 @@ def main() -> int:
         if rel == "index.adoc" or rel.startswith("sections/"):
             continue
 
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         out_lines: list[str] = []
         i = 0
         rewrites = 0

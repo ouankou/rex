@@ -19,6 +19,7 @@ def main() -> int:
         return 2
 
     renamed = 0
+    removed = 0
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
@@ -28,10 +29,13 @@ def main() -> int:
             head = path.read_bytes()[:8192]
         except Exception:
             continue
-        if b":mrdocs:" not in head:
+        probe = head.replace(b"\x00", b"")
+        if b":mrdocs:" not in probe:
             continue
         new_path = path.with_name(path.name + ".adoc")
         if new_path.exists():
+            path.unlink()
+            removed += 1
             continue
         path.rename(new_path)
         renamed += 1
@@ -44,7 +48,7 @@ def main() -> int:
         if rel.parts and rel.parts[0] == "sections":
             continue
 
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         out = []
         updated = False
 
@@ -67,7 +71,10 @@ def main() -> int:
             path.write_text("".join(out), encoding="utf-8")
             changed += 1
 
-    print(f"renamed {renamed} files and fixed relfileprefix in {changed} files")
+    print(
+        f"renamed {renamed} files, removed {removed} duplicates, "
+        f"and fixed relfileprefix in {changed} files"
+    )
     return 0
 
 

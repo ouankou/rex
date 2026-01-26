@@ -100,7 +100,7 @@ def main() -> int:
         if base.startswith("2constructor") or base.startswith("2destructor"):
             continue
 
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
         i = 0
         while i < len(lines):
             line = lines[i]

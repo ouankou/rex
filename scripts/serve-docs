@@ -4,7 +4,16 @@ set -euo pipefail
 dir0="${0%/*}"
 root="$(cd "$dir0/.." && pwd)"
 
+SITE_DIR="$root/_site"
+if [ -n "${DOCS_SCRATCH_DIR-}" ]; then
+  SCRATCH_DIR="$DOCS_SCRATCH_DIR"
+  if [[ "$SCRATCH_DIR" != /* ]]; then
+    SCRATCH_DIR="$root/$SCRATCH_DIR"
+  fi
+  SITE_DIR="$SCRATCH_DIR/_site"
+fi
+
 bash "$root/scripts/ci-docs-build"
 
-cd "$root/_site"
+cd "$SITE_DIR"
 exec python3 -m http.server 8080 --bind 0.0.0.0

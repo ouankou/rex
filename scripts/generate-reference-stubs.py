@@ -30,7 +30,7 @@ def _collect_missing_return_types(reference_dir: Path, pages: set[str]) -> set[s
         rel = p.relative_to(reference_dir).as_posix()
         if rel == "index.adoc" or rel.startswith("sections/"):
             continue
-        lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines = p.read_text(encoding="utf-8").splitlines()
         i = 0
         while i < len(lines):
             if _CODE_START.match(lines[i]) and i + 1 < len(lines) and lines[i + 1].strip() == _DELIM:

@@ -44,7 +44,7 @@ def main() -> int:
     entries: dict[tuple[str, str], dict] = {}
     for section in sorted(sections_dir.glob("*.adoc")):
         kind = section.stem
-        text = section.read_text(encoding="utf-8", errors="ignore")
+        text = section.read_text(encoding="utf-8")
         for m in _XREF_RE.finditer(text):
             target = m.group(1).strip()
             label = _normalize_label(m.group(2))

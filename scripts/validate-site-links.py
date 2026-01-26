@@ -73,7 +73,7 @@ def main() -> int:
     checked = 0
 
     for html in sorted(site_dir.rglob("*.html")):
-        text = html.read_text(encoding="utf-8", errors="ignore")
+        text = html.read_text(encoding="utf-8")
         parser = _LinkParser()
         parser.feed(text)
         base_dir = _page_url_dir(site_dir, html)

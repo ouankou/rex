@@ -49,7 +49,7 @@ def main() -> int:
     checked = 0
 
     for path in sorted(reference_dir.rglob("*.adoc")):
-        text = path.read_text(encoding="utf-8", errors="ignore")
+        text = path.read_text(encoding="utf-8")
         m = _DECLARED_RE.search(text)
         if not m:
             continue

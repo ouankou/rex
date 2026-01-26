@@ -10,7 +10,7 @@ def _run(cmd: list[str]) -> str:
     try:
         out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True)
         return out.splitlines()[0].strip()
-    except Exception:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return ""
 
 
@@ -30,7 +30,7 @@ def on_post_build(config):
         import mkdocs  # type: ignore
 
         mkdocs_version = f"mkdocs {mkdocs.__version__}"
-    except Exception:
+    except (ImportError, AttributeError):
         mkdocs_version = _run(["mkdocs", "--version"])
 
     clang_version = _run(["clang++", "--version"])
