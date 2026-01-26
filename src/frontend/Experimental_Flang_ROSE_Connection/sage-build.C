@@ -132,6 +132,10 @@ void ApplyCloseSpec(const Fortran::parser::CloseStmt::CloseSpec &x,
                     SgCloseStatement *stmt);
 void ApplyPositionOrFlushSpec(const Fortran::parser::PositionOrFlushSpec &x,
                               SgIOStatement *stmt);
+SgFunctionCallExp *
+BuildFunctionCallFromSymbolIfFound(const std::string &func_name,
+                                   SgScopeStatement *scope,
+                                   SgExprListExp *param_list);
 
 constexpr const char *kFortranImplicitDeclAttr =
     "rose_fortran_implicit_declaration";
@@ -595,14 +599,8 @@ void BuildExprVisitor::Build(Fortran::parser::FunctionReference &x) {
     }
 
     if (call_expr == nullptr) {
-      if (SgFunctionSymbol *func_sym =
-              SageInterface::lookupFunctionSymbolInParentScopes(func_name,
-                                                                scope)) {
-        SgFunctionRefExp *func_ref =
-            SageBuilder::buildFunctionRefExp_nfi(func_sym);
-        ASSERT_not_null(func_ref);
-        call_expr = SageBuilder::buildFunctionCallExp_nfi(func_ref, param_list);
-      }
+      call_expr =
+          BuildFunctionCallFromSymbolIfFound(func_name, scope, param_list);
     }
 
     if (call_expr == nullptr) {
@@ -4368,14 +4366,8 @@ void Build(parser::FunctionReference &x, SgExpression *&expr) {
       }
     }
     if (call_expr == nullptr) {
-      if (SgFunctionSymbol *func_sym =
-              SageInterface::lookupFunctionSymbolInParentScopes(func_name,
-                                                                scope)) {
-        SgFunctionRefExp *func_ref =
-            SageBuilder::buildFunctionRefExp_nfi(func_sym);
-        ASSERT_not_null(func_ref);
-        call_expr = SageBuilder::buildFunctionCallExp_nfi(func_ref, param_list);
-      }
+      call_expr =
+          BuildFunctionCallFromSymbolIfFound(func_name, scope, param_list);
     }
     if (call_expr == nullptr) {
       call_expr = SageBuilder::buildFunctionCallExp(
@@ -7322,6 +7314,23 @@ void AppendExpr(SgExprListExp *list, SgExpression *expr) {
   ASSERT_not_null(expr);
   list->get_expressions().push_back(expr);
   expr->set_parent(list);
+}
+
+SgFunctionCallExp *
+BuildFunctionCallFromSymbolIfFound(const std::string &func_name,
+                                   SgScopeStatement *scope,
+                                   SgExprListExp *param_list) {
+  if (scope == nullptr || param_list == nullptr) {
+    return nullptr;
+  }
+  SgFunctionSymbol *func_sym =
+      SageInterface::lookupFunctionSymbolInParentScopes(func_name, scope);
+  if (func_sym == nullptr) {
+    return nullptr;
+  }
+  SgFunctionRefExp *func_ref = SageBuilder::buildFunctionRefExp_nfi(func_sym);
+  ASSERT_not_null(func_ref);
+  return SageBuilder::buildFunctionCallExp_nfi(func_ref, param_list);
 }
 
 SgExpression *BuildIoUnitExpr(const parser::IoUnit &x) {
