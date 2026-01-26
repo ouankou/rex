@@ -1361,6 +1361,16 @@ bool FortranCodeGeneration_locatedNode::isSubroutineCall(
     SgFunctionCallExp *fcall) {
   // Returns true if this is a subroutine call (as opposed to a function call)
 
+  // Subroutine calls appear as standalone expression statements; anything
+  // nested in a larger expression must be treated as a function call.
+  if (SgExprStatement *exprStmt = isSgExprStatement(fcall->get_parent())) {
+    if (exprStmt->get_expression() != fcall) {
+      return false;
+    }
+  } else {
+    return false;
+  }
+
   // Note that the function declaration is explicitly marked and I think this is
   // better than getting the return type.
 

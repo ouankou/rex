@@ -354,7 +354,8 @@ static CFGNode getNodeJustBeforeInContainer(SgNode *n) {
 //---------------------------------------
 
 unsigned int SgStatement::cfgIndexForEnd() const {
-  if (isSgFortranContinueStmt(this) != nullptr) {
+  if (isSgFortranContinueStmt(this) != nullptr ||
+      isSgStatementFunctionStatement(this) != nullptr) {
     return 0;
   }
   std::cerr << "Bad statement case " << this->class_name()
@@ -364,7 +365,8 @@ unsigned int SgStatement::cfgIndexForEnd() const {
 
 bool SgStatement::cfgIsIndexInteresting(unsigned int idx) const {
   // Default -- overridden in some cases
-  if (isSgFortranContinueStmt(this) != nullptr) {
+  if (isSgFortranContinueStmt(this) != nullptr ||
+      isSgStatementFunctionStatement(this) != nullptr) {
     return idx == 0;
   }
   return idx == this->cfgIndexForEnd();
@@ -383,7 +385,8 @@ unsigned int SgStatement::cfgFindNextChildIndex(SgNode *n) {
 }
 
 std::vector<CFGEdge> SgStatement::cfgOutEdges(unsigned int /*idx*/) {
-  if (isSgFortranContinueStmt(this) != nullptr) {
+  if (isSgFortranContinueStmt(this) != nullptr ||
+      isSgStatementFunctionStatement(this) != nullptr) {
     std::vector<CFGEdge> result;
     makeEdge(CFGNode(this, 0), getNodeJustAfterInContainer(this), result);
     return result;
@@ -394,7 +397,8 @@ std::vector<CFGEdge> SgStatement::cfgOutEdges(unsigned int /*idx*/) {
 }
 
 std::vector<CFGEdge> SgStatement::cfgInEdges(unsigned int /*idx*/) {
-  if (isSgFortranContinueStmt(this) != nullptr) {
+  if (isSgFortranContinueStmt(this) != nullptr ||
+      isSgStatementFunctionStatement(this) != nullptr) {
     std::vector<CFGEdge> result;
     addIncomingFortranGotos(this, 0, result);
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, 0), result);
