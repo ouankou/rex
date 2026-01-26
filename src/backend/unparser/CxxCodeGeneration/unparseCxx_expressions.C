@@ -3905,6 +3905,9 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
       } else if (SgArrowExp *arrow = isSgArrowExp(function)) {
         is_member_operator =
             (isSgMemberFunctionRefExp(arrow->get_rhs_operand()) != nullptr);
+      } else if (isSgDotStarOp(function) != nullptr ||
+                 isSgArrowStarOp(function) != nullptr) {
+        is_member_operator = true;
       }
     }
 
