@@ -3885,9 +3885,34 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
       is_binary_operator = true;
     }
   }
-  if (func_call->get_args() != nullptr &&
-      func_call->get_args()->get_expressions().size() < 2) {
-    is_binary_operator = false;
+  if (is_binary_operator) {
+    size_t arg_count = 0;
+    if (func_call->get_args() != nullptr) {
+      arg_count = func_call->get_args()->get_expressions().size();
+    }
+
+    bool is_member_operator = false;
+    if (SgFunctionDeclaration *decl =
+            func_call->getAssociatedFunctionDeclaration()) {
+      is_member_operator = (isSgMemberFunctionDeclaration(decl) != nullptr);
+    } else {
+      SgExpression *function = func_call->get_function();
+      if (isSgMemberFunctionRefExp(function) != nullptr) {
+        is_member_operator = true;
+      } else if (SgDotExp *dot = isSgDotExp(function)) {
+        is_member_operator =
+            (isSgMemberFunctionRefExp(dot->get_rhs_operand()) != nullptr);
+      } else if (SgArrowExp *arrow = isSgArrowExp(function)) {
+        is_member_operator =
+            (isSgMemberFunctionRefExp(arrow->get_rhs_operand()) != nullptr);
+      }
+    }
+
+    // Member binary operators have one explicit argument; non-members have two.
+    const size_t expected_args = is_member_operator ? 1 : 2;
+    if (arg_count != expected_args) {
+      is_binary_operator = false;
+    }
   }
 
 #if DEBUG_FUNCTION_CALL
