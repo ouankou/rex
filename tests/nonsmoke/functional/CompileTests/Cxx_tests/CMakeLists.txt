@@ -2688,7 +2688,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_71.C
   test2007_73.C
   test2007_74.C
-  test2007_76.C
   test2007_79.C
   test2007_80.C
   test2007_86.C
@@ -2761,7 +2760,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2011_12.C
   test2011_130.C
   test2011_131.C
-  test2011_132.C
   test2011_134.C
   test2011_13.C
   test2011_144.C
@@ -2799,9 +2797,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2012_68.C
   test2012_79.C
   test2012_86.C
-  test2013_13.C
   test2013_14.C
-  test2013_15.C
   test2013_185.C
   test2013_197.C
   test2013_19.C
@@ -2815,7 +2811,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2013_245.C
   test2013_248.C
   test2013_249.C
-  test2013_24.C
   test2013_254.C
   test2013_257.C
   test2013_260.C
@@ -2826,10 +2821,8 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2013_266.C
   test2013_267.C
   test2013_268.C
-  test2013_269.C
   test2013_270.C
   test2013_309.C
-  test2013_30.C
   test2013_321.C
   test2013_322.C
   test2013_323.C
@@ -2905,7 +2898,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2017_08.C
   test2017_12.C
   test2017_20.C
-  test2017_24.C
   test2017_33.C
   test2017_34.C
   test2017_67.C
@@ -3058,7 +3050,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_71.C
   test2007_73.C
   test2007_74.C
-  test2007_76.C
   test2007_79.C
   test2007_80.C
   test2007_86.C
@@ -3134,7 +3125,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2011_13.C
   test2011_130.C
   test2011_131.C
-  test2011_132.C
   test2011_134.C
   test2011_14.C
   test2011_141.C
@@ -3178,9 +3168,7 @@ set(TESTCODE_CURRENTLY_FAILING
   test2012_81.C
   test2012_86.C
   test2012_90.C
-  test2013_13.C
   test2013_14.C
-  test2013_15.C
   test2013_16.C
   test2013_164.C
   test2013_17.C
@@ -3188,7 +3176,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_19.C
   test2013_195.C
   test2013_197.C
-  test2013_24.C
   test2013_243.C
   test2013_245.C
   test2013_248.C
@@ -3203,8 +3190,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_266.C
   test2013_267.C
   test2013_268.C
-  test2013_269.C
-  test2013_30.C
   test2013_304.C
   test2013_309.C
   test2013_321.C
@@ -3273,7 +3258,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2017_08.C
   test2017_12.C
   test2017_20.C
-  test2017_24.C
   test2017_31.C
   test2017_32.C
   test2017_33.C
@@ -3365,6 +3349,14 @@ set(CXX_TESTCODES_ALWAYS_RUN
 list(APPEND CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_ALWAYS_RUN})
 list(REMOVE_DUPLICATES CXX_TESTCODES_TO_RUN)
 
+set(CXX_TESTCODES_GNUXX14
+  test2013_13.C
+  test2013_15.C
+  test2013_24.C
+  test2013_30.C
+)
+list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX14})
+
 set(ROSE_DISABLED_TESTCODES ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED})
 set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
 
@@ -3400,6 +3392,17 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
   set_tests_properties(${_test_name} PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
+
+set(_rose_flags_default ${ROSE_FLAGS})
+set(ROSE_FLAGS ${_rose_flags_default} -std=gnu++14)
+foreach(file_to_test ${CXX_TESTCODES_GNUXX14})
+  compile_test(${file_to_test} "Cxx_tests")
+  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
+  rex_lock_test_for_input(${_test_name} ${file_to_test})
+  set_tests_properties(${_test_name} PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endforeach()
+set(ROSE_FLAGS ${_rose_flags_default})
 
 foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")

@@ -77,45 +77,114 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
     return false;
   };
 
+  auto is_boundary = [](const clang::Token &tok) {
+    return tok.isOneOf(clang::tok::semi, clang::tok::l_brace,
+                       clang::tok::r_brace);
+  };
+
+  auto find_statement_start = [&](size_t index) -> size_t {
+    size_t boundary = index;
+    while (boundary > 0 && !is_boundary(tokens[boundary - 1].token)) {
+      --boundary;
+    }
+    return boundary;
+  };
+
   auto is_block_brace = [&](size_t index) -> bool {
     size_t prev_index = 0;
     if (!find_prev_significant(index, &prev_index)) {
       return false;
     }
     const clang::Token &prev = tokens[prev_index].token;
-    if (prev.is(clang::tok::r_paren)) {
+    if (prev.isOneOf(clang::tok::kw_do, clang::tok::kw_try,
+                     clang::tok::kw_else)) {
       return true;
     }
-    return prev.isOneOf(clang::tok::kw_do, clang::tok::kw_try,
-                        clang::tok::kw_else);
+    size_t start = find_statement_start(index);
+    for (size_t i = index; i-- > start;) {
+      if (tokens[i].token.isOneOf(clang::tok::r_paren, clang::tok::r_square)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  auto is_namespace_brace = [&](size_t index) -> bool {
+    size_t start = find_statement_start(index);
+    for (size_t i = start; i < index; ++i) {
+      if (tokens[i].token.is(clang::tok::kw_namespace)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  auto is_record_brace = [&](size_t index) -> bool {
+    size_t start = find_statement_start(index);
+    int angle_depth = 0;
+    for (size_t i = start; i < index; ++i) {
+      const clang::Token &tok = tokens[i].token;
+      if (tok.is(clang::tok::less)) {
+        ++angle_depth;
+        continue;
+      }
+      if (tok.is(clang::tok::greater)) {
+        if (angle_depth > 0) {
+          --angle_depth;
+        }
+        continue;
+      }
+      if (tok.is(clang::tok::greatergreater)) {
+        if (angle_depth >= 2) {
+          angle_depth -= 2;
+        }
+        continue;
+      }
+      if (angle_depth != 0) {
+        continue;
+      }
+      if (tok.isOneOf(clang::tok::kw_class, clang::tok::kw_struct,
+                      clang::tok::kw_union, clang::tok::kw_enum)) {
+        return true;
+      }
+    }
+    return false;
   };
 
   std::vector<bool> inside_block(tokens.size(), false);
-  std::vector<bool> block_stack;
-  block_stack.reserve(8);
+  std::vector<bool> inside_record(tokens.size(), false);
+  enum class BraceKind { kBlock, kRecord, kOther };
+  std::vector<BraceKind> brace_stack;
+  brace_stack.reserve(8);
   int block_depth = 0;
+  int record_depth = 0;
   for (size_t i = 0; i < tokens.size(); ++i) {
     inside_block[i] = block_depth > 0;
+    inside_record[i] = record_depth > 0;
     if (tokens[i].token.is(clang::tok::l_brace)) {
-      bool is_block = is_block_brace(i);
-      block_stack.push_back(is_block);
-      if (is_block) {
+      BraceKind kind = BraceKind::kOther;
+      if (is_namespace_brace(i)) {
+        kind = BraceKind::kOther;
+      } else if (is_record_brace(i)) {
+        kind = BraceKind::kRecord;
+        ++record_depth;
+      } else if (is_block_brace(i)) {
+        kind = BraceKind::kBlock;
         ++block_depth;
       }
+      brace_stack.push_back(kind);
     } else if (tokens[i].token.is(clang::tok::r_brace)) {
-      if (!block_stack.empty()) {
-        if (block_stack.back()) {
+      if (!brace_stack.empty()) {
+        BraceKind kind = brace_stack.back();
+        if (kind == BraceKind::kBlock) {
           --block_depth;
+        } else if (kind == BraceKind::kRecord) {
+          --record_depth;
         }
-        block_stack.pop_back();
+        brace_stack.pop_back();
       }
     }
   }
-
-  auto is_boundary = [](const clang::Token &tok) {
-    return tok.isOneOf(clang::tok::semi, clang::tok::l_brace,
-                       clang::tok::r_brace);
-  };
   auto is_identifier_like = [](const clang::Token &tok) {
     return tok.isOneOf(clang::tok::identifier, clang::tok::raw_identifier);
   };
@@ -142,7 +211,7 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
                                      clang::tok::greatergreater)) {
       continue;
     }
-    if (inside_block[i]) {
+    if (inside_block[i] || inside_record[i]) {
       continue;
     }
 
@@ -197,6 +266,17 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
     size_t boundary = i;
     while (boundary > 0 && !is_boundary(tokens[boundary - 1].token)) {
       --boundary;
+    }
+
+    bool has_assignment_or_return = false;
+    for (size_t j = boundary; j < i; ++j) {
+      if (tokens[j].token.isOneOf(clang::tok::equal, clang::tok::kw_return)) {
+        has_assignment_or_return = true;
+        break;
+      }
+    }
+    if (has_assignment_or_return) {
+      continue;
     }
 
     bool has_template_keyword = false;
@@ -389,12 +469,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       passthrough_args.push_back(current_arg);
     } else if (current_arg == "-fno-exceptions" ||
                current_arg == "-fno-cxx-exceptions") {
-      exception_mode = ExceptionMode::Disabled;
-      passthrough_args.push_back(current_arg);
+      // Treat as backend-only: the Clang frontend must see exceptions enabled
+      // to build a complete C++ AST, and -fno-exceptions is not a cc1 flag.
     } else if (current_arg == "-frtti") {
       rtti_mode = RttiMode::Enabled;
     } else if (current_arg == "-fno-rtti") {
-      rtti_mode = RttiMode::Disabled;
+      // Treat as backend-only: disabling RTTI breaks C++ AST features.
     } else if (current_arg == "-rex:clang:continue-on-error") {
       continue_on_error = true;
     } else if (current_arg == "-rex:clang:disable-access-control") {

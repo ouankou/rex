@@ -6,6 +6,7 @@ struct A {
      A(A&&) noexcept;
      ~A();
    };
+   struct Y {};
    struct B {
      B() throw();
      B(const B&) = default;  // implicit exception specification is noexcept(true)
@@ -20,4 +21,3 @@ struct A {
      // D::D(D&&) potentially-throwing, as the default argument for B's constructor may throw
      // D::~D() potentially-throwing
    };
-

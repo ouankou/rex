@@ -106,8 +106,6 @@ set(CXX17_DISABLED_TESTCODES
   test2018_36.C
   test2018_37.C
   test2018_38.C
-  test2018_39.C
-  test2018_40.C
   test2018_41.C
   test2018_42.C
   test2018_43.C
