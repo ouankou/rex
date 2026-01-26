@@ -840,6 +840,53 @@ bool GetSourceRangeForCharBlock(const Fortran::parser::CharBlock &source,
   return false;
 }
 
+struct OmpPragmaLine {
+  int line;
+  int column;
+  size_t length;
+  std::string text;
+};
+
+std::vector<OmpPragmaLine>
+CollectOmpPragmaLines(const std::string &directive,
+                      const SourcePosition &startPos) {
+  std::vector<OmpPragmaLine> lines;
+  int line = startPos.line;
+  int column = startPos.column;
+  size_t line_start = 0;
+  bool emitted = false;
+  while (line_start < directive.size()) {
+    size_t line_end = directive.find('\n', line_start);
+    const bool has_newline = line_end != std::string::npos;
+    const size_t line_len =
+        has_newline ? (line_end - line_start) : (directive.size() - line_start);
+    std::string line_text = directive.substr(line_start, line_len);
+    if (!line_text.empty() && line_text.back() == '\r') {
+      line_text.pop_back();
+    }
+    if (!line_text.empty() && !IsAllWhitespace(line_text)) {
+      std::string trimmed = line_text;
+      TrimLeft(trimmed);
+      bool is_continuation =
+          !trimmed.empty() && trimmed.front() == '&' && emitted;
+      bool is_directive_line =
+          IsOpenMpOrAccDirectiveLine(line_text) || is_continuation;
+      if (is_directive_line || !emitted) {
+        lines.push_back(OmpPragmaLine{line, column, line_text.size(),
+                                      NormalizeOmpDirectiveLine(line_text)});
+        emitted = true;
+      }
+    }
+    if (!has_newline) {
+      break;
+    }
+    line_start = line_end + 1;
+    ++line;
+    column = 1;
+  }
+  return lines;
+}
+
 void AppendPragmasFromCharBlock(const Fortran::parser::CharBlock &source) {
   if (source.empty()) {
     return;
@@ -865,45 +912,18 @@ void AppendPragmasFromCharBlock(const Fortran::parser::CharBlock &source) {
     return;
   }
 
-  int line = startPos.line;
-  int column = startPos.column;
-  size_t line_start = 0;
-  bool emitted = false;
-  while (line_start < directive.size()) {
-    size_t line_end = directive.find('\n', line_start);
-    const bool has_newline = line_end != std::string::npos;
-    const size_t line_len =
-        has_newline ? (line_end - line_start) : (directive.size() - line_start);
-    std::string line_text = directive.substr(line_start, line_len);
-    if (!line_text.empty() && line_text.back() == '\r') {
-      line_text.pop_back();
-    }
-    if (!line_text.empty() && !IsAllWhitespace(line_text)) {
-      std::string trimmed = line_text;
-      TrimLeft(trimmed);
-      bool is_continuation =
-          !trimmed.empty() && trimmed.front() == '&' && emitted;
-      bool is_directive_line =
-          IsOpenMpOrAccDirectiveLine(line_text) || is_continuation;
-      if (is_directive_line || !emitted) {
-        std::string pragma_text = NormalizeOmpDirectiveLine(line_text);
-        SgPragmaDeclaration *pragma =
-            SageBuilder::buildPragmaDeclaration(pragma_text, scope);
-        ASSERT_not_null(pragma);
-        SourcePosition line_start_pos{startPos.path, line, column};
-        SourcePosition line_end_pos{
-            startPos.path, line, column + static_cast<int>(line_text.size())};
-        builder.setSourcePosition(pragma, line_start_pos, line_end_pos);
-        SageInterface::appendStatement(pragma, scope);
-        emitted = true;
-      }
-    }
-    if (!has_newline) {
-      break;
-    }
-    line_start = line_end + 1;
-    ++line;
-    column = 1;
+  std::vector<OmpPragmaLine> lines = CollectOmpPragmaLines(directive, startPos);
+  for (const auto &line_info : lines) {
+    SgPragmaDeclaration *pragma =
+        SageBuilder::buildPragmaDeclaration(line_info.text, scope);
+    ASSERT_not_null(pragma);
+    SourcePosition line_start_pos{startPos.path, line_info.line,
+                                  line_info.column};
+    SourcePosition line_end_pos{startPos.path, line_info.line,
+                                line_info.column +
+                                    static_cast<int>(line_info.length)};
+    builder.setSourcePosition(pragma, line_start_pos, line_end_pos);
+    SageInterface::appendStatement(pragma, scope);
   }
 }
 
@@ -939,16 +959,26 @@ void AppendPragmasFromCharBlockIfMissing(
   if (directive.empty()) {
     return;
   }
-  if (directive.find('\n') == std::string::npos) {
-    SourcePosition startPos{};
-    SourcePosition endPos{};
-    if (GetSourceRangeForCharBlock(source, startPos, endPos)) {
-      std::string pragmaText = NormalizeOmpDirectiveLine(directive);
-      if (!pragmaText.empty() &&
-          ScopeHasPragmaAtSource(SageBuilder::topScopeStack(), startPos,
-                                 pragmaText)) {
-        return;
+  SourcePosition startPos{};
+  SourcePosition endPos{};
+  if (GetSourceRangeForCharBlock(source, startPos, endPos)) {
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    ASSERT_not_null(scope);
+    std::vector<OmpPragmaLine> lines =
+        CollectOmpPragmaLines(directive, startPos);
+    if (lines.empty()) {
+      return;
+    }
+    bool all_present = true;
+    for (const auto &line_info : lines) {
+      SourcePosition line_pos{startPos.path, line_info.line, line_info.column};
+      if (!ScopeHasPragmaAtSource(scope, line_pos, line_info.text)) {
+        all_present = false;
+        break;
       }
+    }
+    if (all_present) {
+      return;
     }
   }
   AppendPragmasFromCharBlock(source);
