@@ -365,7 +365,8 @@ unsigned int SgStatement::cfgIndexForEnd() const {
 
 bool SgStatement::cfgIsIndexInteresting(unsigned int idx) const {
   // Default -- overridden in some cases
-  if (isSgFortranContinueStmt(this) != nullptr) {
+  if (isSgFortranContinueStmt(this) != nullptr ||
+      isSgStatementFunctionStatement(this) != nullptr) {
     return idx == 0;
   }
   return idx == this->cfgIndexForEnd();

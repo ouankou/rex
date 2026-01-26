@@ -1029,20 +1029,23 @@ void SageTreeBuilder::Leave(SgFunctionParameterList *param_list,
         param_scope->isCaseInsensitive();
     SgVariableSymbol *symbol =
         SageInterface::lookupVariableSymbolInParentScopes(name, param_scope);
+    SgInitializedName *decl_init = nullptr;
     if (symbol == nullptr) {
-      if (SgInitializedName *decl_init = findInitializedNameInStatements(
-              param_scope, name, case_insensitive)) {
+      decl_init =
+          findInitializedNameInStatements(param_scope, name, case_insensitive);
+      if (decl_init != nullptr) {
         symbol = isSgVariableSymbol(decl_init->get_symbol_from_symbol_table());
         if (symbol == nullptr) {
-          symbol = new SgVariableSymbol(decl_init);
-        }
-        if (param_scope->lookup_variable_symbol(decl_init->get_name()) ==
-            nullptr) {
-          param_scope->insert_symbol(decl_init->get_name(), symbol);
+          if (SgVariableDeclaration *varDecl =
+                  isSgVariableDeclaration(decl_init->get_parent())) {
+            SageInterface::fixVariableDeclaration(varDecl, param_scope);
+          }
+          symbol = SageInterface::lookupVariableSymbolInParentScopes(
+              name, param_scope);
         }
       }
     }
-    if (symbol == nullptr) {
+    if (symbol == nullptr && decl_init == nullptr) {
       SgType *implicitType = SageBuilder::buildFortranImplicitType(name);
       SgVariableDeclaration *varDecl =
           SageBuilder::buildVariableDeclaration_nfi(name, implicitType,
@@ -1054,8 +1057,8 @@ void SageTreeBuilder::Leave(SgFunctionParameterList *param_list,
       symbol =
           SageInterface::lookupVariableSymbolInParentScopes(name, param_scope);
     }
-    ASSERT_not_null(symbol);
-    SgInitializedName *init_name = symbol->get_declaration();
+    SgInitializedName *init_name =
+        symbol != nullptr ? symbol->get_declaration() : decl_init;
     ASSERT_not_null(init_name);
     SgType *type = init_name->get_type();
     SgInitializedName *new_init_name = SageBuilder::buildInitializedName_nfi(
@@ -1501,15 +1504,15 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
           SageInterface::lookupVariableSymbolInParentScopes(result_name, body);
     }
     if (result_symbol == nullptr) {
-      if (SgInitializedName *decl_init = findInitializedNameInStatements(
-              body, result_name, case_insensitive)) {
+      SgInitializedName *decl_init =
+          findInitializedNameInStatements(body, result_name, case_insensitive);
+      if (decl_init != nullptr) {
         result_symbol =
             isSgVariableSymbol(decl_init->get_symbol_from_symbol_table());
         if (result_symbol == nullptr) {
-          result_symbol = new SgVariableSymbol(decl_init);
-        }
-        if (body->lookup_variable_symbol(decl_init->get_name()) == nullptr) {
-          body->insert_symbol(decl_init->get_name(), result_symbol);
+          SageInterface::rebuildSymbolTable(body);
+          result_symbol = SageInterface::lookupVariableSymbolInParentScopes(
+              result_name, body);
         }
       }
     }
@@ -1529,10 +1532,6 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
         isSgProcedureHeaderStatement(function_decl);
     ASSERT_not_null(proc_header_stmt);
 
-    if (body->lookup_variable_symbol(result_name) == nullptr) {
-      body->insert_symbol(result_name, result_symbol);
-    }
-
     // If result is named but not declared, need to fix up initialized name
     // created earlier for it
     SgNode *parent = init_name->get_parent();
@@ -1543,7 +1542,7 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
       init_name->set_scope(body);
     }
     if (body->lookup_variable_symbol(result_name) == nullptr) {
-      body->insert_symbol(result_name, result_symbol);
+      SageInterface::rebuildSymbolTable(body);
     }
 
     // Reset the result name to the correct initialized name

@@ -969,17 +969,23 @@ void AppendPragmasFromCharBlockIfMissing(
     if (lines.empty()) {
       return;
     }
-    bool all_present = true;
     for (const auto &line_info : lines) {
       SourcePosition line_pos{startPos.path, line_info.line, line_info.column};
-      if (!ScopeHasPragmaAtSource(scope, line_pos, line_info.text)) {
-        all_present = false;
-        break;
+      if (ScopeHasPragmaAtSource(scope, line_pos, line_info.text)) {
+        continue;
       }
+      SgPragmaDeclaration *pragma =
+          SageBuilder::buildPragmaDeclaration(line_info.text, scope);
+      ASSERT_not_null(pragma);
+      SourcePosition line_start_pos{startPos.path, line_info.line,
+                                    line_info.column};
+      SourcePosition line_end_pos{startPos.path, line_info.line,
+                                  line_info.column +
+                                      static_cast<int>(line_info.length)};
+      builder.setSourcePosition(pragma, line_start_pos, line_end_pos);
+      SageInterface::appendStatement(pragma, scope);
     }
-    if (all_present) {
-      return;
-    }
+    return;
   }
   AppendPragmasFromCharBlock(source);
 }
@@ -2276,10 +2282,6 @@ void DeclareFortranDummyArguments(SgScopeStatement *paramScope,
       if (initName->get_parent() == nullptr) {
         initName->set_parent(varDecl);
       }
-      if (paramScope->lookup_variable_symbol(initName->get_name()) == nullptr) {
-        SgVariableSymbol *varSym = new SgVariableSymbol(initName);
-        paramScope->insert_symbol(initName->get_name(), varSym);
-      }
     }
   }
 }
@@ -2402,6 +2404,55 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
       }
     }
   };
+  auto move_param_scope_statements = [&](SgBasicBlock *old_block,
+                                         SgBasicBlock *new_block) {
+    if (old_block == nullptr || new_block == nullptr) {
+      return;
+    }
+    std::vector<SgStatement *> stmts(old_block->get_statements().begin(),
+                                     old_block->get_statements().end());
+    std::vector<SgStatement *> use_import;
+    std::vector<SgStatement *> implicit;
+    std::vector<SgStatement *> other_spec;
+    std::vector<SgStatement *> non_spec;
+    for (SgStatement *stmt : stmts) {
+      if (stmt == nullptr) {
+        continue;
+      }
+      if (isSgUseStatement(stmt) != nullptr ||
+          isSgImportStatement(stmt) != nullptr) {
+        use_import.push_back(stmt);
+      } else if (isSgImplicitStatement(stmt) != nullptr) {
+        implicit.push_back(stmt);
+      } else if (IsFortranSpecificationStatement(stmt)) {
+        other_spec.push_back(stmt);
+      } else {
+        non_spec.push_back(stmt);
+      }
+    }
+    for (SgStatement *stmt : stmts) {
+      if (stmt != nullptr) {
+        SageInterface::removeStatement(stmt);
+      }
+    }
+    auto append_spec = [&](const std::vector<SgStatement *> &spec_stmts) {
+      for (SgStatement *stmt : spec_stmts) {
+        if (stmt == nullptr) {
+          continue;
+        }
+        InsertFortranSpecificationStatement(stmt, new_block);
+      }
+    };
+    append_spec(use_import);
+    append_spec(implicit);
+    append_spec(other_spec);
+    for (SgStatement *stmt : non_spec) {
+      if (stmt == nullptr) {
+        continue;
+      }
+      SageInterface::appendStatement(stmt, new_block);
+    }
+  };
   const bool force_case_insensitive =
       SageInterface::is_language_case_insensitive();
   SgName functionName = functionDecl->get_name();
@@ -2412,7 +2463,7 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
   SageInterface::ensureCaseInsensitiveSymbolTable(functionBody,
                                                   force_case_insensitive);
   EnsureSymbolsForBlockDeclarations(paramBlock);
-  SageInterface::moveStatementsBetweenBlocks(paramBlock, functionBody);
+  move_param_scope_statements(paramBlock, functionBody);
   SageInterface::transferSymbols(paramBlock, functionBody);
   rehome_param_scope_statements(paramBlock, functionBody);
   fix_initnames_from_param_scope(functionBody, paramScope);
@@ -5625,14 +5676,13 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
         builder.Leave(existingDecl, modifiers);
         existingDecl->removeAttribute(kFortranImplicitDeclAttr);
         existingDecl->removeAttribute(kFortranEmitImplicitDeclAttr);
-        if (auto *block = isSgBasicBlock(scope)) {
-          auto &stmts = block->get_statements();
-          auto it = std::find(stmts.begin(), stmts.end(), existingDecl);
-          if (it != stmts.end()) {
-            stmts.erase(it);
-            stmts.push_back(existingDecl);
-          }
+        SageInterface::removeStatement(existingDecl);
+        existingDecl->set_scope(scope);
+        existingDecl->set_parent(scope);
+        if (auto *varDecl = isSgVariableDeclaration(existingDecl)) {
+          SageInterface::fixVariableDeclaration(varDecl, scope);
         }
+        InsertFortranSpecificationStatement(existingDecl, scope);
         reusedImplicitDecl = true;
       }
     }
