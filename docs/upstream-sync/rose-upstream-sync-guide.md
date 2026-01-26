@@ -249,7 +249,6 @@ pending tests/nonsmoke/functional/CompileTests/C++Code
 pending tests/nonsmoke/functional/CompileTests/C11_tests
 pending tests/nonsmoke/functional/CompileTests/C89_std_c89_tests
 pending tests/nonsmoke/functional/CompileTests/C99_tests
-pending tests/nonsmoke/functional/CompileTests/CAF2_tests
 pending tests/nonsmoke/functional/CompileTests/C_subset_of_Cxx_tests
 in-progress tests/nonsmoke/functional/CompileTests/C_tests
 pending tests/nonsmoke/functional/CompileTests/CudaTests
@@ -274,7 +273,6 @@ pending tests/nonsmoke/functional/CompileTests/ElsaTestCases/std
 pending tests/nonsmoke/functional/CompileTests/ExpressionTemplateExample_tests
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests/LANL_POP
-pending tests/nonsmoke/functional/CompileTests/Fortran_tests/RiceCAF_tests
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests/experimental_frontend_tests
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests/gfortranTestSuite
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests/gfortranTestSuite/gfortran.dg

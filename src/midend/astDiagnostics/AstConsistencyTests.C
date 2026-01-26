@@ -5477,7 +5477,7 @@ void TestForReferencesToDeletedNodes::visit(SgNode *node) {
   // \n",node->class_name().c_str());
 
   // Only output information about this test if set to value greater than zero
-  // (this avoids anoying output for existing translators, e.g. CAF2 work).
+  // (this avoids anoying output for existing translators).
   if (detect_dangling_pointers > 0) {
     vector<pair<SgNode *, string>> v = node->returnDataMemberPointers();
 

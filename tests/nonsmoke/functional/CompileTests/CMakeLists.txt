@@ -140,5 +140,3 @@ if(ENABLE-C)
     add_subdirectory(staticCFG_tests)
   endif()
 endif()
-
-add_subdirectory(CAF2_tests)

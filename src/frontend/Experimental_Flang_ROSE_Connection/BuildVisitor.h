@@ -180,6 +180,12 @@ public:
   void Build(Fortran::parser::LabelDoStmt &);
   void Build(Fortran::parser::IfConstruct &);
   void Build(Fortran::parser::IfStmt &);
+  void Build(Fortran::parser::CaseConstruct &);
+  void Build(Fortran::parser::WhereConstruct &);
+  void Build(Fortran::parser::ForallConstruct &);
+  void Build(Fortran::parser::WhereStmt &);
+  void Build(Fortran::parser::ForallStmt &);
+  void Build(Fortran::parser::ForallAssignmentStmt &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::FormatStmt>> &);
   void
@@ -188,6 +194,13 @@ public:
   void Build(Fortran::parser::Statement<Fortran::parser::ActionStmt> &);
   void
   Build(Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> &);
+  void Build(Fortran::parser::Statement<Fortran::parser::WhereStmt> &);
+  void Build(Fortran::parser::Statement<Fortran::parser::ForallStmt> &);
+  void
+  Build(Fortran::parser::Statement<Fortran::parser::ForallAssignmentStmt> &);
+  void Build(
+      Fortran::parser::UnlabeledStatement<Fortran::parser::ForallAssignmentStmt>
+          &);
 
   // ActionStmt
   void Build(Fortran::parser::AllocateStmt &);

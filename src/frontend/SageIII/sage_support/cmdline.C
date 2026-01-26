@@ -1783,12 +1783,9 @@ void SgFile::usage() {
         "     -rose:fortran_std <f77|f90|f95|f2003|f2008|f2018>\n"
         "                             select a Fortran dialect for ROSE "
         "(not a backend -std flag)\n"
-        "     -rose:CoArrayFortran, -rose:CAF, -rose:caf\n"
+        "     -rose:CoArrayFortran\n"
         "                             compile Co-Array Fortran code "
         "(extension of Fortran 2003)\n"
-        "     -rose:CAF2.0, -rose:caf2.0\n"
-        "                             compile Co-Array Fortran 2.0 code "
-        "(Rice CAF extension)\n"
         "     -rose:fortran_std is the only supported dialect selector\n"
         "     -rose:fortran:ofp:jvm_options\n"
         "                             Specifies the JVM startup options\n"
@@ -2623,18 +2620,15 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     }
   }
 
-  if (CommandlineProcessing::isOption(
-          argv, "-rose:", "(caf|CAF|CoArrayFortran)", true) == true) {
+  if (CommandlineProcessing::isOption(argv, "-rose:", "(CoArrayFortran)",
+                                      true) == true) {
     set_CoArrayFortran_only(true);
 
     // Set this as also being F2003 code since Co-Array Fortran is an extension
     // of Fortran 2003
     set_F2003_only();
 
-    // DQ (12/2/2010): I agree with setting this to true.
-    // It is requested (by Laksono at Rice) that CoArray Fortran defaults be to
-    // skip the syntax checking Laksono 2009.01.27: I think we should put the
-    // boolean to 'true' instead of 'false'
+    // CoArray Fortran defaults to skipping syntax checking.
     set_skip_syntax_check(true);
   }
 
@@ -3964,7 +3958,7 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
 
   // DQ (8/11/2007): Support for Fortran and its different flavors
   optionCount = sla(argv, "-rose:", "($)", "(fortran)", 1);
-  optionCount = sla(argv, "-rose:", "($)", "(caf|CAF|CoArrayFortran)", 1);
+  optionCount = sla(argv, "-rose:", "($)", "(CoArrayFortran)", 1);
 
   // DQ (8/27/2007):Support for Fortran language output format
 
