@@ -155,6 +155,9 @@ public:
   void Build(Fortran::parser::DerivedTypeDef &);
   void Build(Fortran::parser::DimensionStmt &);
   void Build(Fortran::parser::NamelistStmt &);
+  void Build(Fortran::parser::CompilerDirective &);
+  void Build(Fortran::parser::OmpBeginBlockDirective &);
+  void Build(Fortran::parser::OmpBeginLoopDirective &);
 
   void Build(Fortran::parser::IntegerTypeSpec &);
   void Build(Fortran::parser::IntrinsicTypeSpec::Real &);
@@ -179,6 +182,9 @@ public:
   void Build(Fortran::parser::IfStmt &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::FormatStmt>> &);
+  void
+  Build(Fortran::parser::Statement<
+        Fortran::common::Indirection<Fortran::parser::StmtFunctionStmt>> &);
   void Build(Fortran::parser::Statement<Fortran::parser::ActionStmt> &);
   void
   Build(Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> &);
@@ -255,7 +261,7 @@ private:
   void ApplyCurrentStatementSource(SgLocatedNode *node);
 
   struct LabelDoFrame {
-    enum class Kind { FortranDo, While };
+    enum class Kind { FortranDo, While, DoConcurrent };
     Fortran::parser::Label end_label;
     Kind kind;
     SgStatement *stmt;
