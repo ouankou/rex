@@ -2448,12 +2448,89 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
         elab->getNamedType().getTypePtrOrNull(), scope);
   }
 
+  if (const clang::SubstTemplateTypeParmType *subst =
+          llvm::dyn_cast<clang::SubstTemplateTypeParmType>(clang_type)) {
+    clang::QualType replacement = subst->getReplacementType();
+    return buildNonrealTypeForNestedNameSpecifierType(
+        replacement.getTypePtrOrNull(), scope);
+  }
+
+  if (const clang::SubstTemplateTypeParmPackType *pack =
+          llvm::dyn_cast<clang::SubstTemplateTypeParmPackType>(clang_type)) {
+    std::string name_str;
+    if (const clang::TemplateTypeParmDecl *decl =
+            pack->getReplacedParameter()) {
+      if (decl->getDeclName().isIdentifier()) {
+        name_str = decl->getNameAsString();
+      }
+      if (name_str.empty()) {
+        name_str = "template_type_param_" + std::to_string(decl->getDepth()) +
+                   "_" + std::to_string(decl->getIndex());
+      }
+    }
+    if (name_str.empty()) {
+      if (const clang::IdentifierInfo *id = pack->getIdentifier()) {
+        name_str = id->getName().str();
+      }
+    }
+    if (name_str.empty()) {
+      name_str = "template_type_param_" + std::to_string(pack->getIndex());
+    }
+    ROSE_ASSERT(!name_str.empty());
+
+    SgNonrealType *nrtype =
+        SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+    if (SgNonrealDecl *nrdecl =
+            isSgNonrealDecl(nrtype ? nrtype->get_declaration() : nullptr)) {
+      nrdecl->set_is_template_param(true);
+    }
+    return nrtype;
+  }
+
+  auto build_with_qualifier =
+      [&](clang::NestedNameSpecifier *qualifier, const std::string &name,
+          const SgTemplateArgumentPtrList *tpl_args) -> SgNonrealType * {
+    ROSE_ASSERT(!name.empty());
+    if (qualifier != nullptr) {
+      return buildNonrealTypeFromNestedNameSpecifier(qualifier, scope,
+                                                     SgName(name), tpl_args);
+    }
+    return SageBuilder::buildNonrealType(SgName(name), scope, tpl_args);
+  };
+  auto fallback_type_name = [&](const clang::Type *type) -> std::string {
+    if (type == nullptr) {
+      return "";
+    }
+    clang::PrintingPolicy policy(p_compiler_instance
+                                     ? p_compiler_instance->getLangOpts()
+                                     : clang::LangOptions());
+    std::string printed = clang::QualType(type, 0).getAsString(policy);
+    printed = trimWhitespace(printed);
+    if (!printed.empty()) {
+      return printed;
+    }
+    const char *class_name = type->getTypeClassName();
+    if (class_name != nullptr && class_name[0] != '\0') {
+      return std::string("__") + class_name;
+    }
+    return "";
+  };
+
+  if (const clang::UnresolvedUsingType *uut =
+          llvm::dyn_cast<clang::UnresolvedUsingType>(clang_type)) {
+    const clang::UnresolvedUsingTypenameDecl *decl = uut->getDecl();
+    std::string name_str = decl ? decl->getNameAsString() : "";
+    ROSE_ASSERT(!name_str.empty());
+    return build_with_qualifier(decl ? decl->getQualifier() : nullptr, name_str,
+                                nullptr);
+  }
+
   if (const clang::DependentNameType *dnt =
           llvm::dyn_cast<clang::DependentNameType>(clang_type)) {
     const clang::IdentifierInfo *id = dnt->getIdentifier();
     ROSE_ASSERT(id != nullptr);
-    return SageBuilder::buildNonrealType(SgName(id->getName().str()), scope,
-                                         nullptr);
+    return build_with_qualifier(dnt->getQualifier(), id->getName().str(),
+                                nullptr);
   }
 
   if (const clang::DependentTemplateSpecializationType *dts =
@@ -2467,8 +2544,15 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
       appendTemplateArguments(tpl_args, arg, false);
     }
 
-    return SageBuilder::buildNonrealType(SgName(name_info.base_name), scope,
-                                         &tpl_args);
+    SgNonrealType *nrtype = build_with_qualifier(
+        name_info.qualifier, name_info.base_name, &tpl_args);
+    if (SgNonrealDecl *nrdecl =
+            isSgNonrealDecl(nrtype ? nrtype->get_declaration() : nullptr)) {
+      if (name_info.has_template_keyword) {
+        nrdecl->set_has_template_keyword(true);
+      }
+    }
+    return nrtype;
   }
 
   if (const clang::TemplateSpecializationType *tst =
@@ -2478,7 +2562,26 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
     ROSE_ASSERT(!base_name.empty());
 
     SgTemplateArgumentPtrList tpl_args = buildTemplateArguments(tst);
-    return SageBuilder::buildNonrealType(SgName(base_name), scope, &tpl_args);
+    clang::NestedNameSpecifier *qualifier = nullptr;
+    bool has_template_keyword = false;
+    if (const clang::QualifiedTemplateName *qtn =
+            tname.getAsQualifiedTemplateName()) {
+      qualifier = qtn->getQualifier();
+      has_template_keyword = qtn->hasTemplateKeyword();
+    } else if (const clang::DependentTemplateName *dtn =
+                   tname.getAsDependentTemplateName()) {
+      qualifier = dtn->getQualifier();
+      has_template_keyword = true;
+    }
+    SgNonrealType *nrtype =
+        build_with_qualifier(qualifier, base_name, &tpl_args);
+    if (SgNonrealDecl *nrdecl =
+            isSgNonrealDecl(nrtype ? nrtype->get_declaration() : nullptr)) {
+      if (has_template_keyword) {
+        nrdecl->set_has_template_keyword(true);
+      }
+    }
+    return nrtype;
   }
 
   if (const clang::TemplateTypeParmType *ttp =
@@ -2508,28 +2611,54 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
           llvm::dyn_cast<clang::TypedefType>(clang_type)) {
     std::string name_str = tdef->getDecl()->getNameAsString();
     ROSE_ASSERT(!name_str.empty());
-    return SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+    return build_with_qualifier(nullptr, name_str, nullptr);
+  }
+
+  if (const clang::UsingType *using_type =
+          llvm::dyn_cast<clang::UsingType>(clang_type)) {
+    clang::UsingShadowDecl *using_decl = using_type->getFoundDecl();
+    std::string name_str = using_decl ? using_decl->getNameAsString() : "";
+    if (name_str.empty()) {
+      name_str = fallback_type_name(clang_type);
+    }
+    ROSE_ASSERT(!name_str.empty());
+    return build_with_qualifier(nullptr, name_str, nullptr);
   }
 
   if (const clang::TagType *tag = llvm::dyn_cast<clang::TagType>(clang_type)) {
     std::string name_str = tag->getDecl()->getNameAsString();
+    if (name_str.empty()) {
+      name_str = tag->getDecl()->getQualifiedNameAsString();
+    }
+    if (name_str.empty()) {
+      name_str = fallback_type_name(clang_type);
+    }
     ROSE_ASSERT(!name_str.empty());
-    return SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+    return build_with_qualifier(nullptr, name_str, nullptr);
   }
 
   if (const clang::InjectedClassNameType *inj =
           llvm::dyn_cast<clang::InjectedClassNameType>(clang_type)) {
     std::string name_str = inj->getDecl()->getNameAsString();
+    if (name_str.empty()) {
+      name_str = fallback_type_name(clang_type);
+    }
     ROSE_ASSERT(!name_str.empty());
-    return SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+    return build_with_qualifier(nullptr, name_str, nullptr);
   }
 
   std::string name_str;
   if (const clang::TypeDecl *decl = clang_type->getAsTagDecl()) {
     name_str = decl->getNameAsString();
+    if (name_str.empty()) {
+      name_str = decl->getQualifiedNameAsString();
+    }
+  }
+  if (name_str.empty()) {
+    name_str = fallback_type_name(clang_type);
   }
   ROSE_ASSERT(!name_str.empty());
-  return SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+  return build_with_qualifier(nullptr, name_str, nullptr);
 }
 
 SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
