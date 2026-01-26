@@ -1835,8 +1835,7 @@ string SageInterface::get_name(const SgDeclarationStatement *declaration) {
       name = function->get_name().str();
     } else {
       name = "_fortran_statement_function_";
-      name += StringUtility::numberToString(
-          const_cast<SgStatementFunctionStatement *>(stmt));
+      name += StringUtility::numberToString(stmt);
     }
     break;
   }
