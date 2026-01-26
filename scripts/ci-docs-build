@@ -38,30 +38,12 @@ die() {
 }
 
 install_mrdocs() {
-  local info version url
-  info="$(python3 - <<'PY'
-import json
-import urllib.request
+  local mrdocs_version="v0.8.0"
+  local mrdocs_asset="MrDocs-0.8.0-Linux.tar.xz"
+  local mrdocs_sha256="75f5b703e2230d7574eecc1640d16de668bd6aeb11713296e748d3378bb509f2"
+  local mrdocs_url="https://github.com/cppalliance/mrdocs/releases/download/${mrdocs_version}/${mrdocs_asset}"
 
-release = json.loads(urllib.request.urlopen(
-    "https://api.github.com/repos/cppalliance/mrdocs/releases/latest",
-    timeout=10,
-).read().decode("utf-8"))
-tag = release.get("tag_name", "")
-assets = {a.get("name", ""): a.get("browser_download_url", "") for a in release.get("assets", [])}
-linux_xz = next((u for n, u in assets.items() if n.endswith("Linux.tar.xz")), "")
-linux_gz = next((u for n, u in assets.items() if n.endswith("Linux.tar.gz")), "")
-url = linux_xz or linux_gz
-print(f"{tag}\n{url}")
-PY
-)"
-  version="$(printf '%s\n' "$info" | head -n 1)"
-  url="$(printf '%s\n' "$info" | sed -n '2p')"
-  if [ -z "$version" ] || [ -z "$url" ]; then
-    die "unable to resolve latest MrDocs release"
-  fi
-
-  if [ -f "$MRDOCS_ROOT/.version" ] && [ "$(cat "$MRDOCS_ROOT/.version")" = "$version" ] \
+  if [ -f "$MRDOCS_ROOT/.version" ] && [ "$(cat "$MRDOCS_ROOT/.version")" = "$mrdocs_version" ] \
     && [ -x "$MRDOCS_ROOT/current/bin/mrdocs" ]; then
     echo "$MRDOCS_ROOT/current/bin/mrdocs"
     return 0
@@ -74,15 +56,18 @@ PY
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "$tmp_dir"' RETURN
 
-  curl -L "$url" -o "$tmp_dir/mrdocs.tar.xz"
-  tar -xf "$tmp_dir/mrdocs.tar.xz" -C "$MRDOCS_ROOT"
+  local tarball_path="$tmp_dir/mrdocs.tar.xz"
+  curl -fL "$mrdocs_url" -o "$tarball_path" || die "failed to download MrDocs"
+  printf '%s  %s\n' "$mrdocs_sha256" "$tarball_path" | sha256sum --check --status \
+    || die "MrDocs tarball checksum mismatch"
+  tar -xf "$tarball_path" -C "$MRDOCS_ROOT"
   local top_dir
-  top_dir="$(tar -tf "$tmp_dir/mrdocs.tar.xz" | sed -n '1p' | cut -d/ -f1)"
+  top_dir="$(tar -tf "$tarball_path" | sed -n '1p' | cut -d/ -f1)"
   if [ -z "$top_dir" ] || [ ! -d "$MRDOCS_ROOT/$top_dir" ]; then
     die "failed to unpack MrDocs archive"
   fi
   ln -sfn "$MRDOCS_ROOT/$top_dir" "$MRDOCS_ROOT/current"
-  echo "$version" > "$MRDOCS_ROOT/.version"
+  echo "$mrdocs_version" > "$MRDOCS_ROOT/.version"
   echo "$MRDOCS_ROOT/current/bin/mrdocs"
 }
 

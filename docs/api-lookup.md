@@ -25,17 +25,26 @@ This page loads a compact symbol index and lets you jump directly to the generat
   }[c]));
 
   const normalize = (s) => String(s || "").toLowerCase();
+  const isSafeUrl = (url) => typeof url === "string" && url.startsWith("/") && !url.startsWith("//");
 
   const render = (items, total) => {
-    meta.textContent = state.loaded ? `${items.length}/${total}` : "loading…";
+    const safeItems = [];
+    for (const s of items) {
+      if (isSafeUrl(s?.url)) {
+        safeItems.push(s);
+      } else {
+        console.error("Skipping invalid symbol URL:", s?.url);
+      }
+    }
+    meta.textContent = state.loaded ? `${safeItems.length}/${total}` : "loading…";
     if (!state.loaded) return;
 
-    if (!items.length) {
+    if (!safeItems.length) {
       results.innerHTML = "<p>No matches.</p>";
       return;
     }
 
-    const rows = items.slice(0, 200).map((s) => {
+    const rows = safeItems.slice(0, 200).map((s) => {
       const name = escapeHtml(s.name);
       const url = escapeHtml(s.url);
       const kind = escapeHtml(s.kind);
