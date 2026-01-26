@@ -1024,8 +1024,24 @@ void SageTreeBuilder::Leave(SgFunctionParameterList *param_list,
 
     // TODO: deal with fortran functions when the dummy argument is not declared
     // and implicitly typed.
+    const bool case_insensitive =
+        SageInterface::is_language_case_insensitive() ||
+        param_scope->isCaseInsensitive();
     SgVariableSymbol *symbol =
         SageInterface::lookupVariableSymbolInParentScopes(name, param_scope);
+    if (symbol == nullptr) {
+      if (SgInitializedName *decl_init = findInitializedNameInStatements(
+              param_scope, name, case_insensitive)) {
+        symbol = isSgVariableSymbol(decl_init->get_symbol_from_symbol_table());
+        if (symbol == nullptr) {
+          symbol = new SgVariableSymbol(decl_init);
+        }
+        if (param_scope->lookup_variable_symbol(decl_init->get_name()) ==
+            nullptr) {
+          param_scope->insert_symbol(decl_init->get_name(), symbol);
+        }
+      }
+    }
     if (symbol == nullptr) {
       SgType *implicitType = SageBuilder::buildFortranImplicitType(name);
       SgVariableDeclaration *varDecl =

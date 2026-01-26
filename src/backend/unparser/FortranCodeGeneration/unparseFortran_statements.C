@@ -1241,8 +1241,37 @@ void FortranCodeGeneration_locatedNode::unparseBlockDataStmt(SgStatement *,
 }
 
 void FortranCodeGeneration_locatedNode::unparseStatementFunctionStmt(
-    SgStatement *, SgUnparse_Info &) {
-  printf("Sorry, unparseStatementFunctionStmt() not implemented \n");
+    SgStatement *stmt, SgUnparse_Info &info) {
+  SgStatementFunctionStatement *stmtFunc = isSgStatementFunctionStatement(stmt);
+  ASSERT_not_null(stmtFunc);
+
+  SgFunctionDeclaration *funcDecl = stmtFunc->get_function();
+  ASSERT_not_null(funcDecl);
+
+  curprint(funcDecl->get_name().str());
+  curprint("(");
+
+  SgFunctionParameterList *params = funcDecl->get_parameterList();
+  bool needComma = false;
+  if (params != nullptr) {
+    for (SgInitializedName *arg : params->get_args()) {
+      if (arg == nullptr) {
+        continue;
+      }
+      if (needComma) {
+        curprint(", ");
+      }
+      curprint(arg->get_name().str());
+      needComma = true;
+    }
+  }
+  curprint(") = ");
+
+  SgExpression *expr = stmtFunc->get_expression();
+  ASSERT_not_null(expr);
+  unparseExpression(expr, info);
+
+  unp->cur.insert_newline(1);
 }
 
 void FortranCodeGeneration_locatedNode::unparseWhereStmt(SgStatement *stmt,
@@ -1652,9 +1681,13 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
                 procHeader->get_functionParameterScope()) {
           constexpr const char *kFortranImplicitDeclAttr =
               "rose_fortran_implicit_declaration";
+          constexpr const char *kFortranEmitImplicitDeclAttr =
+              "rose_fortran_emit_implicit_declaration";
           for (SgStatement *specStmt : paramScope->generateStatementList()) {
             if (auto *varDecl = isSgVariableDeclaration(specStmt)) {
-              if (varDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr) {
+              if (varDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr &&
+                  varDecl->getAttribute(kFortranEmitImplicitDeclAttr) ==
+                      nullptr) {
                 continue;
               }
             }
@@ -1904,8 +1937,24 @@ void FortranCodeGeneration_locatedNode::unparseBasicBlockStmt(
   // least).
   unp->cur.format(block, info, FORMAT_BEFORE_BASIC_BLOCK1);
 
+  constexpr const char *kFortranImplicitDeclAttr =
+      "rose_fortran_implicit_declaration";
+  constexpr const char *kFortranEmitImplicitDeclAttr =
+      "rose_fortran_emit_implicit_declaration";
   for (auto stmt : block->get_statements()) {
     ASSERT_not_null(stmt);
+    if (auto *varDecl = isSgVariableDeclaration(stmt)) {
+      if (varDecl->getAttribute(kFortranImplicitDeclAttr) != nullptr &&
+          varDecl->getAttribute(kFortranEmitImplicitDeclAttr) == nullptr) {
+        unparseAttachedPreprocessingInfo(varDecl, info,
+                                         PreprocessingInfo::before);
+        unparseAttachedPreprocessingInfo(varDecl, info,
+                                         PreprocessingInfo::inside);
+        unparseAttachedPreprocessingInfo(varDecl, info,
+                                         PreprocessingInfo::after);
+        continue;
+      }
+    }
     // FMZ: for module file, only output the variable declarations (not
     // definitions) Pei-Hung (05/23/2019) Need to add SgUseStatement,
     // SgimplicitStatement and SgDerivedTypeStatement into rmod file
@@ -2174,6 +2223,10 @@ void FortranCodeGeneration_locatedNode::unparseDoConcurrentStatement(
   SgExprListExp *forAllHeader = forAllStatement->get_forall_header();
   ASSERT_not_null(forAllHeader);
 
+  if (forAllStatement->get_string_label().empty() == false) {
+    curprint(forAllStatement->get_string_label() + ": ");
+  }
+
   SgExpressionPtrList header = forAllHeader->get_expressions();
   SgExpression *mask = SageInterface::forallMaskExpression(forAllStatement);
   int num_vars = header.size();
@@ -2181,7 +2234,16 @@ void FortranCodeGeneration_locatedNode::unparseDoConcurrentStatement(
     num_vars -= 1;
   }
 
-  curprint("DO CONCURRENT (");
+  curprint("DO ");
+  if (forAllStatement->get_end_numeric_label() != nullptr) {
+    SgLabelSymbol *endLabelSymbol =
+        forAllStatement->get_end_numeric_label()->get_symbol();
+    ASSERT_not_null(endLabelSymbol->get_fortran_statement());
+    int loopEndLabel = endLabelSymbol->get_numeric_label_value();
+    string numeric_label_string = StringUtility::numberToString(loopEndLabel);
+    curprint(numeric_label_string + " ");
+  }
+  curprint("CONCURRENT (");
 
   for (int i = 0; i < num_vars; i++) {
     if (i != 0)
@@ -2229,6 +2291,9 @@ void FortranCodeGeneration_locatedNode::unparseDoConcurrentStatement(
     unparseStatementNumbersSupport(forAllStatement->get_end_numeric_label(),
                                    info);
     curprint("END DO");
+    if (forAllStatement->get_string_label().empty() == false) {
+      curprint(" " + forAllStatement->get_string_label());
+    }
     unp->cur.insert_newline(1);
   }
 }

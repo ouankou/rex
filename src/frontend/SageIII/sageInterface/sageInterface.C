@@ -1827,6 +1827,20 @@ string SageInterface::get_name(const SgDeclarationStatement *declaration) {
     break;
   }
 
+  case V_SgStatementFunctionStatement: {
+    const SgStatementFunctionStatement *stmt =
+        isSgStatementFunctionStatement(declaration);
+    ROSE_ASSERT(stmt != NULL);
+    if (SgFunctionDeclaration *function = stmt->get_function()) {
+      name = function->get_name().str();
+    } else {
+      name = "_fortran_statement_function_";
+      name += StringUtility::numberToString(
+          const_cast<SgStatementFunctionStatement *>(stmt));
+    }
+    break;
+  }
+
     // DQ (1/23/2008): Added case for SgAttributeSpecificationStatement
   case V_SgAttributeSpecificationStatement: {
     name = "_fortran_attribute_specification_stmt_";
@@ -4559,6 +4573,10 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
         // YYH (12/07/2022). Not declaration, but preprocessing directive,
         //  and preprocessing directives are all declaration statement, check
         //  ROSETTA/src/statement.C.
+        break;
+      }
+      case V_SgEmptyDeclaration: {
+        // No symbols needed for empty declarations.
         break;
       }
 
@@ -20595,9 +20613,16 @@ static void moveOneStatement(SgScopeStatement *sourceBlock,
     case V_SgEquivalenceStatement:
     case V_SgCommonBlock:
     case V_SgImportStatement:
-    case V_SgFormatStatement: {
+    case V_SgFormatStatement:
+    case V_SgStatementFunctionStatement: {
       declaration->set_parent(targetBlock);
       declaration->set_scope(targetBlock);
+      if (SgStatementFunctionStatement *stmtFunc =
+              isSgStatementFunctionStatement(declaration)) {
+        if (SgFunctionDeclaration *func = stmtFunc->get_function()) {
+          func->set_scope(targetBlock);
+        }
+      }
       break;
     }
     // needed to move record into definition of C++ namespace
