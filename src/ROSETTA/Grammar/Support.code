@@ -7200,6 +7200,7 @@ SgSymbolTable::get_name( const SgNode* node) const
           case V_SgFunctionDeclaration:
           case V_SgProgramHeaderStatement:
           case V_SgProcedureHeaderStatement:
+          case V_SgEntryStatement:
           case V_SgMemberFunctionDeclaration:
              {
                const SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(node);

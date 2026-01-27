@@ -14781,7 +14781,8 @@ void SageInterface::fixFunctionDeclaration(SgFunctionDeclaration *stmt,
     assert(progfunc->variantT() == V_SgProgramHeaderStatement);
   else if (func != NULL)
     assert(func->variantT() == V_SgFunctionDeclaration ||
-           func->variantT() == V_SgTemplateInstantiationFunctionDecl);
+           func->variantT() == V_SgTemplateInstantiationFunctionDecl ||
+           func->variantT() == V_SgEntryStatement);
   else
     ROSE_ABORT();
 
