@@ -1456,9 +1456,16 @@ void FortranCodeGeneration_locatedNode::unparseArithmeticIfStmt(
   unp->cur.insert_newline(1);
 }
 
-void FortranCodeGeneration_locatedNode::unparseAssignStmt(SgStatement *,
-                                                          SgUnparse_Info &) {
-  printf("Sorry, unparseAssignStmt() not implemented \n");
+void FortranCodeGeneration_locatedNode::unparseAssignStmt(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  SgAssignStatement *assignStmt = isSgAssignStatement(stmt);
+  ASSERT_not_null(assignStmt);
+
+  curprint("ASSIGN ");
+  unparseLabel(assignStmt->get_label());
+  curprint(" TO ");
+  unparseExpression(assignStmt->get_value(), info);
+  unp->cur.insert_newline(1);
 }
 
 void FortranCodeGeneration_locatedNode::unparseComputedGotoStmt(
@@ -1499,8 +1506,32 @@ void FortranCodeGeneration_locatedNode::unparseComputedGotoStmt(
 }
 
 void FortranCodeGeneration_locatedNode::unparseAssignedGotoStmt(
-    SgStatement *, SgUnparse_Info &) {
-  printf("Sorry, unparseAssignedGotoStmt() not implemented \n");
+    SgStatement *stmt, SgUnparse_Info &info) {
+  SgAssignedGotoStatement *assignedGoto = isSgAssignedGotoStatement(stmt);
+  ASSERT_not_null(assignedGoto);
+
+  SgExprListExp *targets = assignedGoto->get_targets();
+  ASSERT_not_null(targets);
+  SgExpressionPtrList &exprs = targets->get_expressions();
+  ROSE_ASSERT(!exprs.empty());
+
+  curprint("GO TO ");
+  unparseExpression(exprs.front(), info);
+
+  if (exprs.size() > 1) {
+    curprint(", (");
+    for (auto it = std::next(exprs.begin()); it != exprs.end(); ++it) {
+      SgLabelRefExp *labelRef = isSgLabelRefExp(*it);
+      ASSERT_not_null(labelRef);
+      unparseLabel(labelRef);
+      if (std::next(it) != exprs.end()) {
+        curprint(", ");
+      }
+    }
+    curprint(")");
+  }
+
+  unp->cur.insert_newline(1);
 }
 
 //----------------------------------------------------------------------------

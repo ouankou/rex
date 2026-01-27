@@ -136,6 +136,12 @@ SgFunctionCallExp *
 BuildFunctionCallFromSymbolIfFound(const std::string &func_name,
                                    SgScopeStatement *scope,
                                    SgExprListExp *param_list);
+SgLabelRefExp *BuildLabelRef(const Fortran::parser::Label &label);
+SgAssignStatement *BuildAssignStatement(const Fortran::parser::AssignStmt &x);
+SgAssignedGotoStatement *
+BuildAssignedGotoStatement(const Fortran::parser::AssignedGotoStmt &x);
+SgComputedGotoStatement *
+BuildComputedGotoStatement(const Fortran::parser::ComputedGotoStmt &x);
 
 constexpr const char *kFortranImplicitDeclAttr =
     "rose_fortran_implicit_declaration";
@@ -2008,6 +2014,20 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
     SageBuilderCpp17::fixUndeclaredResultName(resultName, paramScope,
                                               returnType);
   }
+  if (returnType == nullptr) {
+    const std::string lookupName = resultName.empty() ? name : resultName;
+    if (paramScope != nullptr) {
+      if (SgVariableSymbol *symbol =
+              paramScope->lookup_variable_symbol(lookupName)) {
+        if (SgInitializedName *decl = symbol->get_declaration()) {
+          returnType = decl->get_type();
+        }
+      }
+    }
+    if (returnType == nullptr) {
+      returnType = SageBuilder::buildFortranImplicitType(lookupName);
+    }
+  }
 
   // Leave SageTreeBuilder for SgFunctionParameterList
   builder.Leave(paramList, paramScope, dummyArgs);
@@ -3649,6 +3669,30 @@ void BuildVisitor::Build(parser::ArithmeticIfStmt &x) {
   builder.Leave(stmt, labels);
 }
 
+void BuildVisitor::Build(parser::AssignStmt &x) {
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  SgAssignStatement *stmt = BuildAssignStatement(x);
+  ASSERT_not_null(stmt);
+
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, scope);
+  SageInterface::appendStatement(stmt, scope);
+}
+
+void BuildVisitor::Build(parser::AssignedGotoStmt &x) {
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  SgAssignedGotoStatement *stmt = BuildAssignedGotoStatement(x);
+  ASSERT_not_null(stmt);
+
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, scope);
+  SageInterface::appendStatement(stmt, scope);
+}
+
 void BuildVisitor::Build(parser::LabelDoStmt &x) {
   // LabelDoStmt std::tuple<Label, std::optional<LoopControl>> t;
   const auto endLabel = std::get<parser::Label>(x.t);
@@ -3939,6 +3983,72 @@ void ApplyStatOrErrmsg(parser::StatOrErrmsg &x, SgExpression *&statExpr,
           }},
       x.u);
 }
+
+SgLabelRefExp *BuildLabelRef(const parser::Label &label) {
+  SgExpression *expr{nullptr};
+  Rose::builder::Build(label, expr);
+  SgLabelRefExp *labelRef = isSgLabelRefExp(expr);
+  ASSERT_not_null(labelRef);
+  return labelRef;
+}
+
+SgAssignStatement *BuildAssignStatement(const parser::AssignStmt &x) {
+  SgLabelRefExp *labelRef = BuildLabelRef(std::get<parser::Label>(x.t));
+  std::string valueName = std::get<parser::Name>(x.t).ToString();
+  SgExpression *value = SageBuilderCpp17::buildVarRefExp_nfi(valueName);
+  ASSERT_not_null(value);
+
+  SgAssignStatement *stmt = new SgAssignStatement(labelRef, value);
+  ASSERT_not_null(stmt);
+  labelRef->set_parent(stmt);
+  value->set_parent(stmt);
+  return stmt;
+}
+
+SgAssignedGotoStatement *
+BuildAssignedGotoStatement(const parser::AssignedGotoStmt &x) {
+  SgExprListExp *targets = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(targets);
+
+  std::string selectorName = std::get<parser::Name>(x.t).ToString();
+  SgExpression *selector = SageBuilderCpp17::buildVarRefExp_nfi(selectorName);
+  ASSERT_not_null(selector);
+  SageInterface::appendExpression(targets, selector);
+
+  for (auto &label : std::get<std::list<parser::Label>>(x.t)) {
+    SgLabelRefExp *labelRef = BuildLabelRef(label);
+    SageInterface::appendExpression(targets, labelRef);
+  }
+
+  SgAssignedGotoStatement *stmt = new SgAssignedGotoStatement(targets);
+  ASSERT_not_null(stmt);
+  targets->set_parent(stmt);
+  return stmt;
+}
+
+SgComputedGotoStatement *
+BuildComputedGotoStatement(const parser::ComputedGotoStmt &x) {
+  SgExprListExp *labelList = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(labelList);
+
+  for (auto &label : std::get<std::list<parser::Label>>(x.t)) {
+    SgLabelRefExp *labelRef = BuildLabelRef(label);
+    SageInterface::appendExpression(labelList, labelRef);
+  }
+
+  auto &index =
+      const_cast<parser::ScalarIntExpr &>(std::get<parser::ScalarIntExpr>(x.t));
+  SgExpression *indexExpr{nullptr};
+  WalkExpr(index, indexExpr);
+  ASSERT_not_null(indexExpr);
+
+  SgComputedGotoStatement *stmt =
+      new SgComputedGotoStatement(labelList, indexExpr);
+  ASSERT_not_null(stmt);
+  labelList->set_parent(stmt);
+  indexExpr->set_parent(stmt);
+  return stmt;
+}
 } // namespace
 
 // ActionStmt(s)
@@ -4222,6 +4332,23 @@ void BuildVisitor::Build(
 
   ApplyStatementLabel(stmt, scope);
   SageInterface::appendStatement(stmt, scope);
+}
+
+void BuildVisitor::Build(
+    parser::Statement<common::Indirection<parser::EntryStmt>> &x) {
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  SgStatement *previous = SageInterface::getLastStatement(scope);
+  BuildImpl(x.statement.value());
+  SgStatement *current = SageInterface::getLastStatement(scope);
+
+  if (current != nullptr && current != previous) {
+    SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+    SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+    builder.setSourcePosition(current, srcBegin, srcEnd);
+    ApplyStatementLabel(current, scope);
+  }
 }
 
 void BuildVisitor::Build(
@@ -7482,6 +7609,18 @@ void BuildVisitor::Build(parser::GotoStmt &x) {
   builder.Leave(stmt, getLabels());
 }
 
+void BuildVisitor::Build(parser::ComputedGotoStmt &x) {
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  SgComputedGotoStatement *stmt = BuildComputedGotoStatement(x);
+  ASSERT_not_null(stmt);
+
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, scope);
+  SageInterface::appendStatement(stmt, scope);
+}
+
 void Build(parser::IfStmt &x) {
   //  std::tuple<ScalarLogicalExpr, UnlabeledStatement<ActionStmt>> t;
   std::cout << "Rose::builder::Build(IfStmt)\n";
@@ -8533,14 +8672,34 @@ void BuildImpl(parser::ArithmeticIfStmt &x) {
   SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
 }
 
+void Build(parser::ComputedGotoStmt &x) {
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  SgComputedGotoStatement *stmt = BuildComputedGotoStatement(x);
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+  SageInterface::appendStatement(stmt, scope);
+}
+
 void BuildImpl(parser::AssignStmt &x) {
-  std::cout << "BuildImpl(AssignStmt)\n";
-  ABORT_NO_IMPL;
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  SgAssignStatement *stmt = BuildAssignStatement(x);
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+  SageInterface::appendStatement(stmt, scope);
 }
 
 void BuildImpl(parser::AssignedGotoStmt &x) {
-  std::cout << "BuildImpl(AssignedGotoStmt)\n";
-  ABORT_NO_IMPL;
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  SgAssignedGotoStatement *stmt = BuildAssignedGotoStatement(x);
+  ASSERT_not_null(stmt);
+  SageInterface::setSourcePosition(stmt);
+  SageInterface::appendStatement(stmt, scope);
 }
 
 void BuildImpl(parser::PauseStmt &x) {

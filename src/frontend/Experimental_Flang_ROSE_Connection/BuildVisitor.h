@@ -188,6 +188,8 @@ public:
   void Build(Fortran::parser::ForallAssignmentStmt &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::FormatStmt>> &);
+  void Build(Fortran::parser::Statement<
+             Fortran::common::Indirection<Fortran::parser::EntryStmt>> &);
   void
   Build(Fortran::parser::Statement<
         Fortran::common::Indirection<Fortran::parser::StmtFunctionStmt>> &);
@@ -212,6 +214,7 @@ public:
   void Build(Fortran::parser::EndfileStmt &);
   void Build(Fortran::parser::ExitStmt &);
   void Build(Fortran::parser::GotoStmt &);
+  void Build(Fortran::parser::ComputedGotoStmt &);
   void Build(Fortran::parser::FailImageStmt &);
   void Build(Fortran::parser::FlushStmt &);
   void Build(Fortran::parser::InquireStmt &);
@@ -222,6 +225,8 @@ public:
   void Build(Fortran::parser::RewindStmt &);
   void Build(Fortran::parser::ReturnStmt &);
   void Build(Fortran::parser::PauseStmt &);
+  void Build(Fortran::parser::AssignStmt &);
+  void Build(Fortran::parser::AssignedGotoStmt &);
   void Build(Fortran::parser::StopStmt &);
   void Build(Fortran::parser::WaitStmt &);
   void Build(Fortran::parser::WriteStmt &);

@@ -401,7 +401,7 @@ EdgeConditionKind CFGEdge::condition() const {
     if (tgtNode == srcNode) {
       return eckDefault;
     } else {
-      return eckCaseLabel;
+      return eckComputedGotoCaseLabel;
     }
   } else if (isSgConditionalExp(srcNode) && srcIndex == 1) {
     SgConditionalExp *ce = isSgConditionalExp(srcNode);

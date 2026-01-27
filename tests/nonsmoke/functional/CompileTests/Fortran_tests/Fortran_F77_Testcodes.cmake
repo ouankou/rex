@@ -82,6 +82,7 @@ set(F77_TESTCODES
   test2011_Rice_char-star1-function.f
   test2011_Rice_char-star2-function.f
   test2011_Rice_computed-goto.f
+  rex_test2026_assign_assigned_goto_entry.f
   test2011_Rice_continuation-spits-token.f
   test2011_Rice_initial-tab.f
   test2011_Rice_intrinsic-mixup.f
