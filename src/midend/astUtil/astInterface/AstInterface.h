@@ -6,6 +6,7 @@
 
 #include "rosedll.h"
 
+#include <cstdint>
 #include <functional>
 
 #include <iostream>
@@ -110,7 +111,8 @@ public:
         return sig_ < that.sig_;
       return nodetype_ < that.nodetype_;
     }
-    return std::less<BaseType *>()(repr_, that.repr_);
+    return reinterpret_cast<std::uintptr_t>(repr_) <
+           reinterpret_cast<std::uintptr_t>(that.repr_);
   }
   BaseType *operator->() const { return repr_; }
   BaseType *get_ptr() const { return repr_; }

@@ -2734,6 +2734,9 @@ bool AstInterface::IsMemoryAccess(const AstNodePtr &_s) {
 bool AstInterface::IsArrayAccess(const AstNodePtr &_s, AstNodePtr *array,
                                  AstList *index) {
   SgNode *s = AstNodePtrImpl(_s).get_ptr();
+  if (s == nullptr) {
+    return false;
+  }
   if (s->variantT() == V_SgDotExp) {
     SgDotExp *dot = isSgDotExp(s);
     if (!IsVarRef(AstNodePtrImpl(dot->get_rhs_operand())))
@@ -3066,6 +3069,9 @@ bool AstInterface::IsBlock(const AstNodePtr &_exp) {
 //! Check if $s$ is a function call; if yes, return the function and arguments
 bool AstInterfaceImpl::IsFunctionCall(SgNode *s, SgNode **func,
                                       AstNodeList *args) {
+  if (s == nullptr) {
+    return false;
+  }
   SgNode *exp = s;
   SgNode *f = 0;
   SgExprListExp *argexp = 0;
