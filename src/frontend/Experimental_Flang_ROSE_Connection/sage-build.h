@@ -58,48 +58,55 @@ void Build(Fortran::parser::FunctionStmt &, std::list<std::string> &,
 void Build(Fortran::parser::SubroutineStmt &, std::list<std::string> &,
            std::string &, LanguageTranslation::FunctionModifierList &);
 
-void Build(Fortran::parser::Substring &, SgExpression *&);
-void Build(Fortran::parser::FunctionReference &, SgExpression *&);
-void Build(Fortran::parser::Call &, std::list<SgExpression *> &arg_list,
+void Build(const Fortran::parser::Substring &, SgExpression *&);
+void Build(const Fortran::parser::FunctionReference &, SgExpression *&);
+void Build(const Fortran::parser::Call &, std::list<SgExpression *> &arg_list,
            std::string &name, SgExpression *&designator);
-inline void Build(Fortran::parser::Call &x, std::list<SgExpression *> &arg_list,
-                  std::string &name) {
+inline void Build(const Fortran::parser::Call &x,
+                  std::list<SgExpression *> &arg_list, std::string &name) {
   SgExpression *designator = nullptr;
   Build(x, arg_list, name, designator);
 }
-void Build(Fortran::parser::ProcComponentRef &, SgExpression *&);
+void Build(const Fortran::parser::ProcComponentRef &, SgExpression *&);
 
-void Build(Fortran::parser::ActualArgSpec &, SgExpression *&);
+void Build(const Fortran::parser::ActualArgSpec &, SgExpression *&);
 
-void Build(Fortran::parser::Keyword &, SgExpression *&);
-void Build(Fortran::parser::NamedConstant &, SgExpression *&);
-void Build(Fortran::parser::Expr::IntrinsicBinary &, SgExpression *&);
+void Build(const Fortran::parser::Keyword &, SgExpression *&);
+void Build(const Fortran::parser::NamedConstant &, SgExpression *&);
+void Build(const Fortran::parser::Expr::IntrinsicBinary &, SgExpression *&);
 
 // LiteralConstant
-void BuildImpl(Fortran::parser::HollerithLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::IntLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::UnsignedLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::SignedIntLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::RealLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::SignedRealLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::ComplexLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::SignedComplexLiteralConstant &,
+void BuildImpl(const Fortran::parser::HollerithLiteralConstant &,
                SgExpression *&);
-void BuildImpl(Fortran::parser::BOZLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::CharLiteralConstant &, SgExpression *&);
-void BuildImpl(Fortran::parser::LogicalLiteralConstant &, SgExpression *&);
+void BuildImpl(const Fortran::parser::IntLiteralConstant &, SgExpression *&);
+void BuildImpl(const Fortran::parser::UnsignedLiteralConstant &,
+               SgExpression *&);
+void BuildImpl(const Fortran::parser::SignedIntLiteralConstant &,
+               SgExpression *&);
+void BuildImpl(const Fortran::parser::RealLiteralConstant &, SgExpression *&);
+void BuildImpl(const Fortran::parser::SignedRealLiteralConstant &,
+               SgExpression *&);
+void BuildImpl(const Fortran::parser::ComplexLiteralConstant &,
+               SgExpression *&);
+void BuildImpl(const Fortran::parser::SignedComplexLiteralConstant &,
+               SgExpression *&);
+void BuildImpl(const Fortran::parser::BOZLiteralConstant &, SgExpression *&);
+void BuildImpl(const Fortran::parser::CharLiteralConstant &, SgExpression *&);
+void BuildImpl(const Fortran::parser::LogicalLiteralConstant &,
+               SgExpression *&);
 
-void BuildImpl(Fortran::parser::KindSelector::StarSize &, SgExpression *&);
-void BuildImpl(Fortran::parser::CharLength &, SgExpression *&);
-void BuildImpl(Fortran::parser::TypeParamValue &, SgExpression *&);
+void BuildImpl(const Fortran::parser::KindSelector::StarSize &,
+               SgExpression *&);
+void BuildImpl(const Fortran::parser::CharLength &, SgExpression *&);
+void BuildImpl(const Fortran::parser::TypeParamValue &, SgExpression *&);
 
 // CommonBlockObject
-void BuildImpl(Fortran::parser::CommonBlockObject &, SgExpression *&);
+void BuildImpl(const Fortran::parser::CommonBlockObject &, SgExpression *&);
 
 // ArraySpec ...
-void BuildImpl(Fortran::parser::AssumedImpliedSpec &, SgExpression *&);
-void BuildImpl(Fortran::parser::ExplicitShapeSpec &, SgExpression *&);
-void BuildImpl(Fortran::parser::AssumedShapeSpec &, SgExpression *&);
+void BuildImpl(const Fortran::parser::AssumedImpliedSpec &, SgExpression *&);
+void BuildImpl(const Fortran::parser::ExplicitShapeSpec &, SgExpression *&);
+void BuildImpl(const Fortran::parser::AssumedShapeSpec &, SgExpression *&);
 
 // KindParam
 void BuildImpl(const std::optional<Fortran::parser::KindParam> &,
@@ -149,11 +156,11 @@ void EntityDecls(std::list<Fortran::parser::EntityDecl> &,
 
 void Build(Fortran::parser::AttrSpec &,
            LanguageTranslation::ExpressionKind &modifier_enum);
-void Build(Fortran::parser::ArraySpec &, SgType *&, SgType *);
+void Build(const Fortran::parser::ArraySpec &, SgType *&, SgType *);
 void Build(Fortran::parser::CoarraySpec &, SgType *&, SgType *);
 void Build(Fortran::parser::IntegerTypeSpec &, SgType *&);
 #if USE_DEPRECATED
-void Build(Fortran::parser::CharLength &, SgExpression *&);
+void Build(const Fortran::parser::CharLength &, SgExpression *&);
 #endif
 void Build(Fortran::parser::Initialization &, SgExpression *&);
 
@@ -241,33 +248,34 @@ void Build(Fortran::parser::NamelistStmt &);
 
 // Expr
 //
-void Build(Fortran::parser::CharLiteralConstantSubstring &, SgExpression *&);
-void Build(Fortran::parser::SubstringInquiry &, SgExpression *&);
-void Build(Fortran::parser::Substring &, SgExpression *&);
-void Build(Fortran::parser::Designator &, SgExpression *&);
-void Build(Fortran::parser::DataRef &, SgExpression *&);
+void Build(const Fortran::parser::CharLiteralConstantSubstring &,
+           SgExpression *&);
+void Build(const Fortran::parser::SubstringInquiry &, SgExpression *&);
+void Build(const Fortran::parser::Substring &, SgExpression *&);
+void Build(const Fortran::parser::Designator &, SgExpression *&);
+void Build(const Fortran::parser::DataRef &, SgExpression *&);
 
-void Build(Fortran::parser::ArrayConstructor &, SgExpression *&);
-void Build(Fortran::parser::AcSpec &, SgExpression *&);
-void Build(Fortran::parser::AcValue &, SgExpression *&);
-void Build(Fortran::parser::AcImpliedDo &, SgExpression *&);
-void Build(Fortran::parser::StructureConstructor &, SgExpression *&);
-void Build(Fortran::parser::Expr::DefinedUnary &, SgExpression *&);
-void Build(Fortran::parser::Expr::DefinedBinary &, SgExpression *&);
-void Build(Fortran::parser::Expr::ComplexConstructor &, SgExpression *&);
-void Build(Fortran::parser::Expr::Parentheses &, SgExpression *&);
-void Build(Fortran::parser::Expr::UnaryPlus &, SgExpression *&);
-void Build(Fortran::parser::Expr::Negate &, SgExpression *&);
-void Build(Fortran::parser::Expr::NOT &, SgExpression *&);
-void Build(Fortran::parser::Expr::PercentLoc &, SgExpression *&);
+void Build(const Fortran::parser::ArrayConstructor &, SgExpression *&);
+void Build(const Fortran::parser::AcSpec &, SgExpression *&);
+void Build(const Fortran::parser::AcValue &, SgExpression *&);
+void Build(const Fortran::parser::AcImpliedDo &, SgExpression *&);
+void Build(const Fortran::parser::StructureConstructor &, SgExpression *&);
+void Build(const Fortran::parser::Expr::DefinedUnary &, SgExpression *&);
+void Build(const Fortran::parser::Expr::DefinedBinary &, SgExpression *&);
+void Build(const Fortran::parser::Expr::ComplexConstructor &, SgExpression *&);
+void Build(const Fortran::parser::Expr::Parentheses &, SgExpression *&);
+void Build(const Fortran::parser::Expr::UnaryPlus &, SgExpression *&);
+void Build(const Fortran::parser::Expr::Negate &, SgExpression *&);
+void Build(const Fortran::parser::Expr::NOT &, SgExpression *&);
+void Build(const Fortran::parser::Expr::PercentLoc &, SgExpression *&);
 
-void Build(Fortran::parser::StructureComponent &, SgExpression *&);
-void Build(Fortran::parser::ArrayElement &, SgExpression *&);
-void Build(Fortran::parser::CoindexedNamedObject &, SgExpression *&);
-void Build(Fortran::parser::ImageSelector &, SgExpression *&);
-void Build(Fortran::parser::ImageSelectorSpec &, SgExpression *&);
-void Build(Fortran::parser::SectionSubscript &, SgExpression *&);
-void Build(Fortran::parser::SubscriptTriplet &, SgExpression *&);
+void Build(const Fortran::parser::StructureComponent &, SgExpression *&);
+void Build(const Fortran::parser::ArrayElement &, SgExpression *&);
+void Build(const Fortran::parser::CoindexedNamedObject &, SgExpression *&);
+void Build(const Fortran::parser::ImageSelector &, SgExpression *&);
+void Build(const Fortran::parser::ImageSelectorSpec &, SgExpression *&);
+void Build(const Fortran::parser::SectionSubscript &, SgExpression *&);
+void Build(const Fortran::parser::SubscriptTriplet &, SgExpression *&);
 
 // ExecutableConstruct
 void Build(Fortran::parser::AssociateConstruct &);

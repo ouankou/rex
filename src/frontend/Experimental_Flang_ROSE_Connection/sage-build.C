@@ -98,10 +98,10 @@ using namespace Fortran;
 enum class Order { begin, end };
 
 // Why is this needed?
-template <typename T> void WalkExpr(T &root, SgExpression *&expr);
+template <typename T> void WalkExpr(const T &root, SgExpression *&expr);
 
 namespace {
-SgExprListExp *BuildArraySpecExprList(Fortran::parser::ArraySpec &x);
+SgExprListExp *BuildArraySpecExprList(const Fortran::parser::ArraySpec &x);
 void DeclareFortranDummyArguments(SgScopeStatement *paramScope,
                                   const std::list<std::string> &dummyArgs);
 void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
@@ -443,14 +443,14 @@ void getComponentAttrSpec(
     SgType *&baseType);
 
 template <typename T>
-void BuildExprVisitor::BuildExpressions(T &x, SgExpression *&lhs,
+void BuildExprVisitor::BuildExpressions(const T &x, SgExpression *&lhs,
                                         SgExpression *&rhs) {
   WalkExpr(std::get<0>(x.t).value(), lhs); // lhs Expr
   WalkExpr(std::get<1>(x.t).value(), rhs); // rhs Expr
 }
 
 // Name
-void BuildExprVisitor::Build(Fortran::parser::Name &x) {
+void BuildExprVisitor::Build(const Fortran::parser::Name &x) {
   std::string name{x.ToString()};
   SgExpression *expr = nullptr;
   if (SgScopeStatement *scope = SageBuilder::topScopeStack()) {
@@ -465,42 +465,43 @@ void BuildExprVisitor::Build(Fortran::parser::Name &x) {
   this->set(expr);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::Designator &x) {
+void BuildExprVisitor::Build(const Fortran::parser::Designator &x) {
   SgExpression *expr{nullptr};
   Rose::builder::Build(x, expr);
   ASSERT_not_null(expr);
   this->set(expr);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::Substring &x) {
+void BuildExprVisitor::Build(const Fortran::parser::Substring &x) {
   SgExpression *expr{nullptr};
   Rose::builder::Build(x, expr);
   ASSERT_not_null(expr);
   this->set(expr);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::CharLiteralConstantSubstring &x) {
+void BuildExprVisitor::Build(
+    const Fortran::parser::CharLiteralConstantSubstring &x) {
   SgExpression *expr{nullptr};
   Rose::builder::Build(x, expr);
   ASSERT_not_null(expr);
   this->set(expr);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::SubstringInquiry &x) {
+void BuildExprVisitor::Build(const Fortran::parser::SubstringInquiry &x) {
   SgExpression *expr{nullptr};
   Rose::builder::Build(x, expr);
   ASSERT_not_null(expr);
   this->set(expr);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::StructureConstructor &x) {
+void BuildExprVisitor::Build(const Fortran::parser::StructureConstructor &x) {
   SgExpression *expr{nullptr};
   Rose::builder::Build(x, expr);
   ASSERT_not_null(expr);
   this->set(expr);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::Expr::DefinedUnary &x) {
+void BuildExprVisitor::Build(const Fortran::parser::Expr::DefinedUnary &x) {
   SgExpression *arg{nullptr};
   WalkExpr(std::get<1>(x.t).value(), arg);
   ASSERT_not_null(arg);
@@ -515,7 +516,7 @@ void BuildExprVisitor::Build(Fortran::parser::Expr::DefinedUnary &x) {
   this->set(call);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::Expr::DefinedBinary &x) {
+void BuildExprVisitor::Build(const Fortran::parser::Expr::DefinedBinary &x) {
   SgExpression *lhs{nullptr};
   SgExpression *rhs{nullptr};
   WalkExpr(std::get<1>(x.t).value(), lhs);
@@ -533,7 +534,8 @@ void BuildExprVisitor::Build(Fortran::parser::Expr::DefinedBinary &x) {
   this->set(call);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::Expr::ComplexConstructor &x) {
+void BuildExprVisitor::Build(
+    const Fortran::parser::Expr::ComplexConstructor &x) {
   SgExpression *lhs{nullptr};
   SgExpression *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
@@ -549,7 +551,7 @@ void BuildExprVisitor::Build(Fortran::parser::Expr::ComplexConstructor &x) {
   this->set(call);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::Expr::Parentheses &x) {
+void BuildExprVisitor::Build(const Fortran::parser::Expr::Parentheses &x) {
   SgExpression *operand{nullptr};
   WalkExpr(x.v.value(), operand);
   ASSERT_not_null(operand);
@@ -557,7 +559,7 @@ void BuildExprVisitor::Build(Fortran::parser::Expr::Parentheses &x) {
   this->set(operand);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::Expr::PercentLoc &x) {
+void BuildExprVisitor::Build(const Fortran::parser::Expr::PercentLoc &x) {
   SgExpression *arg{nullptr};
   WalkExpr(x.v.value(), arg);
   ASSERT_not_null(arg);
@@ -571,7 +573,7 @@ void BuildExprVisitor::Build(Fortran::parser::Expr::PercentLoc &x) {
   this->set(call);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::FunctionReference &x) {
+void BuildExprVisitor::Build(const Fortran::parser::FunctionReference &x) {
   std::list<SgExpression *> arg_list;
   std::string func_name;
 
@@ -620,7 +622,7 @@ void BuildExprVisitor::Build(Fortran::parser::FunctionReference &x) {
   this->set(call_expr);
 }
 
-void BuildExprVisitor::Build(Fortran::parser::ArrayConstructor &x) {
+void BuildExprVisitor::Build(const Fortran::parser::ArrayConstructor &x) {
   SgExpression *expr{nullptr};
   Rose::builder::Build(x, expr);
   ASSERT_not_null(expr);
@@ -2200,7 +2202,7 @@ void BuildFunctionReturnType(const parser::SpecificationPart &x,
                           common::Indirection<TypeDeclarationStmt>> &stmt) {
                         const auto &typeDecl = stmt.statement.value();
                         SgType *baseType{nullptr};
-                        auto &declType =
+                        const auto &declType =
                             std::get<DeclarationTypeSpec>(typeDecl.t);
                         Build(const_cast<DeclarationTypeSpec &>(declType),
                               baseType);
@@ -2219,13 +2221,12 @@ void BuildFunctionReturnType(const parser::SpecificationPart &x,
                           }
 
                           SgType *entityBase = baseType;
-                          if (auto &lenOpt =
+                          if (const auto &lenOpt =
                                   std::get<std::optional<CharLength>>(
                                       entity.t)) {
                             SgExpression *lenExpr{nullptr};
-                            auto &lenRef = lenOpt.value();
-                            BuildImpl(const_cast<CharLength &>(lenRef),
-                                      lenExpr);
+                            const auto &lenRef = lenOpt.value();
+                            BuildImpl(lenRef, lenExpr);
                             if (lenExpr != nullptr) {
                               if (auto *stringType =
                                       isSgTypeString(entityBase)) {
@@ -2242,12 +2243,11 @@ void BuildFunctionReturnType(const parser::SpecificationPart &x,
                           }
 
                           SgType *entityType = entityBase;
-                          if (auto &arrayOpt =
+                          if (const auto &arrayOpt =
                                   std::get<std::optional<ArraySpec>>(
                                       entity.t)) {
-                            auto &arrayRef = arrayOpt.value();
-                            Build(const_cast<ArraySpec &>(arrayRef), entityType,
-                                  entityBase);
+                            const auto &arrayRef = arrayOpt.value();
+                            Build(arrayRef, entityType, entityBase);
                           }
 
                           return_type =
@@ -3867,16 +3867,17 @@ void BuildVisitor::ApplyCurrentStatementSource(SgLocatedNode *node) {
 }
 
 namespace {
-SgType *BuildTypeSpec(parser::TypeSpec &x);
+SgType *BuildTypeSpec(const parser::TypeSpec &x);
 
 SgExpression *BuildAllocateObjectExpr(parser::AllocateObject &x) {
   SgExpression *expr{nullptr};
   common::visit(
-      common::visitors{[&](parser::Name &y) {
-                         std::string name = y.ToString();
-                         expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
-                       },
-                       [&](parser::StructureComponent &y) { Build(y, expr); }},
+      common::visitors{
+          [&](const parser::Name &y) {
+            std::string name = y.ToString();
+            expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
+          },
+          [&](const parser::StructureComponent &y) { Build(y, expr); }},
       x.u);
   ASSERT_not_null(expr);
   return expr;
@@ -4036,8 +4037,7 @@ BuildComputedGotoStatement(const parser::ComputedGotoStmt &x) {
     SageInterface::appendExpression(labelList, labelRef);
   }
 
-  auto &index =
-      const_cast<parser::ScalarIntExpr &>(std::get<parser::ScalarIntExpr>(x.t));
+  const auto &index = std::get<parser::ScalarIntExpr>(x.t);
   SgExpression *indexExpr{nullptr};
   WalkExpr(index, indexExpr);
   ASSERT_not_null(indexExpr);
@@ -4942,7 +4942,7 @@ void BuildVisitor::Build(parser::NullifyStmt &x) {
                            std::string name = y.ToString();
                            expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
                          },
-                         [&](parser::StructureComponent &y) {
+                         [&](const parser::StructureComponent &y) {
                            Rose::builder::Build(y, expr);
                          }},
         obj.u);
@@ -5019,9 +5019,9 @@ void BuildSuffix(parser::Suffix &x, std::string &resultName) {
   // TODO: handle LanguageBindingSpec in suffix when needed.
 }
 
-void Build(parser::Substring &x, SgExpression *&expr) {
-  auto &dataRef = std::get<parser::DataRef>(x.t);
-  auto &range = std::get<parser::SubstringRange>(x.t);
+void Build(const parser::Substring &x, SgExpression *&expr) {
+  const auto &dataRef = std::get<parser::DataRef>(x.t);
+  const auto &range = std::get<parser::SubstringRange>(x.t);
 
   SgExpression *base{nullptr};
   Build(dataRef, base);
@@ -5050,31 +5050,33 @@ void Build(parser::Substring &x, SgExpression *&expr) {
   expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(base, subscript);
 }
 
-void Build(parser::Designator &x, SgExpression *&expr) {
-  common::visit(common::visitors{[&](parser::DataRef &y) { Build(y, expr); },
-                                 [&](parser::Substring &y) { Build(y, expr); }},
-                x.u);
+void Build(const parser::Designator &x, SgExpression *&expr) {
+  common::visit(
+      common::visitors{[&](const parser::DataRef &y) { Build(y, expr); },
+                       [&](const parser::Substring &y) { Build(y, expr); }},
+      x.u);
 }
 
-void Build(parser::DataRef &x, SgExpression *&expr) {
-  common::visit(common::visitors{
-                    [&](parser::Name &y) {
-                      std::string name = y.ToString();
-                      expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
-                    },
-                    [&](common::Indirection<parser::StructureComponent> &y) {
-                      Build(y.value(), expr);
-                    },
-                    [&](common::Indirection<parser::ArrayElement> &y) {
-                      Build(y.value(), expr);
-                    },
-                    [&](common::Indirection<parser::CoindexedNamedObject> &y) {
-                      Build(y.value(), expr);
-                    }},
-                x.u);
+void Build(const parser::DataRef &x, SgExpression *&expr) {
+  common::visit(
+      common::visitors{
+          [&](const parser::Name &y) {
+            std::string name = y.ToString();
+            expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
+          },
+          [&](const common::Indirection<parser::StructureComponent> &y) {
+            Build(y.value(), expr);
+          },
+          [&](const common::Indirection<parser::ArrayElement> &y) {
+            Build(y.value(), expr);
+          },
+          [&](const common::Indirection<parser::CoindexedNamedObject> &y) {
+            Build(y.value(), expr);
+          }},
+      x.u);
 }
 
-void Build(parser::FunctionReference &x, SgExpression *&expr) {
+void Build(const parser::FunctionReference &x, SgExpression *&expr) {
 #if PRINT_FLANG_TRAVERSAL
   std::cout << "Rose::builder::Build(FunctionReference)\n";
 #endif
@@ -5123,25 +5125,25 @@ void Build(parser::FunctionReference &x, SgExpression *&expr) {
   expr = call_expr;
 }
 
-void Build(parser::Call &x, std::list<SgExpression *> &arg_list,
+void Build(const parser::Call &x, std::list<SgExpression *> &arg_list,
            std::string &name, SgExpression *&designator) {
   using namespace Fortran::parser;
 
   designator = nullptr;
 
   // ProcedureDesignator std::variant<Name, ProcComponentRef> u;
-  common::visit(common::visitors{[&](Name &procName) {
+  common::visit(common::visitors{[&](const Name &procName) {
                                    name = procName.ToString();
                                    designator = nullptr;
                                  },
-                                 [&](ProcComponentRef &procRef) {
+                                 [&](const ProcComponentRef &procRef) {
                                    name.clear();
                                    Build(procRef, designator);
                                  }},
                 std::get<ProcedureDesignator>(x.t).u);
 
   // ActualArgSpec std::tuple<std::optional<Keyword>, ActualArg> t;
-  for (auto &spec : std::get<std::list<ActualArgSpec>>(x.t)) {
+  for (const auto &spec : std::get<std::list<ActualArgSpec>>(x.t)) {
     const auto &keywordOpt = std::get<std::optional<Keyword>>(spec.t);
     const bool hasKeyword = keywordOpt.has_value();
     std::string keywordName;
@@ -5158,8 +5160,8 @@ void Build(parser::Call &x, std::list<SgExpression *> &arg_list,
       arg_list.push_back(arg);
     };
 
-    auto &actual = std::get<ActualArg>(spec.t);
-    if (auto *expr = std::get_if<common::Indirection<Expr>>(&actual.u)) {
+    const auto &actual = std::get<ActualArg>(spec.t);
+    if (const auto *expr = std::get_if<common::Indirection<Expr>>(&actual.u)) {
       SgExpression *arg{nullptr};
       WalkExpr(expr->value(), arg);
       append_arg(arg);
@@ -5195,32 +5197,32 @@ void Build(parser::Call &x, std::list<SgExpression *> &arg_list,
   }
 }
 
-void Build(parser::ProcComponentRef &x, SgExpression *&expr) {
+void Build(const parser::ProcComponentRef &x, SgExpression *&expr) {
   Build(x.v.thing, expr);
 }
 
-void Build(parser::ActualArgSpec &x, SgExpression *&expr) {
+void Build(const parser::ActualArgSpec &x, SgExpression *&expr) {
   std::cout << "Rose::builder::Build(ActualArgSpec)\n";
   ABORT_NO_IMPL;
 }
 
-void Build(parser::Keyword &x, SgExpression *&expr) {
+void Build(const parser::Keyword &x, SgExpression *&expr) {
   info(x, "Rose::builder::Build(Keyword)");
   ABORT_NO_IMPL;
 }
 
-void Build(parser::NamedConstant &x, SgExpression *&expr) {
+void Build(const parser::NamedConstant &x, SgExpression *&expr) {
   std::string name = x.v.ToString();
   expr = SageBuilderCpp17::buildVarRefExp_nfi(name);
 }
 
-void Build(parser::Expr::IntrinsicBinary &x, SgExpression *&expr) {
+void Build(const parser::Expr::IntrinsicBinary &x, SgExpression *&expr) {
   std::cout << "Rose::builder::Build(IntrinsicBinary)\n";
   ABORT_NO_IMPL;
 }
 
 // LiteralConstant(s)
-void BuildImpl(parser::HollerithLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::HollerithLiteralConstant &x, SgExpression *&expr) {
   expr = SageBuilder::buildStringVal_nfi(x.GetString());
 }
 
@@ -5244,7 +5246,7 @@ void BuildImpl(const std::optional<Fortran::parser::KindParam> &x,
   }
 }
 
-void BuildImpl(Fortran::parser::KindParam &x, SgExpression *&expr) {
+void BuildImpl(const Fortran::parser::KindParam &x, SgExpression *&expr) {
   // std::variant<> = std::uint64_t, Scalar<Integer<Constant<Name>>>
   using namespace Fortran::parser;
 
@@ -5267,7 +5269,7 @@ void BuildImpl(Fortran::parser::KindParam &x, SgExpression *&expr) {
       x.u);
 }
 
-void BuildImpl(parser::IntLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::IntLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<> - CharBlock, std::optional<KindParam>
   using namespace Fortran::parser;
 
@@ -5296,7 +5298,7 @@ void BuildImpl(parser::IntLiteralConstant &x, SgExpression *&expr) {
   expr = SageBuilder::buildLongLongIntVal_nfi(llVal, strVal);
 }
 
-void BuildImpl(parser::UnsignedLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::UnsignedLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<> - CharBlock, std::optional<KindParam>
   using namespace Fortran::parser;
 
@@ -5323,7 +5325,7 @@ void BuildImpl(parser::UnsignedLiteralConstant &x, SgExpression *&expr) {
   expr = SageBuilder::buildUnsignedLongLongIntVal_nfi(ullVal, strVal);
 }
 
-void BuildImpl(parser::SignedIntLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::SignedIntLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<> - CharBlock, std::optional<KindParam>
   std::string strVal = std::get<0>(x.t).ToString();
   std::string parsedVal;
@@ -5369,11 +5371,12 @@ std::string FormatRealLiteralConstant(const parser::RealLiteralConstant &x) {
 }
 } // namespace
 
-void BuildImpl(parser::RealLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::RealLiteralConstant &x, SgExpression *&expr) {
   expr = SageBuilder::buildFloatVal_nfi(FormatRealLiteralConstant(x));
 }
 
-void BuildImpl(parser::SignedRealLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::SignedRealLiteralConstant &x,
+               SgExpression *&expr) {
   // std::tuple<std::optional<Sign>, RealLiteralConstant> t;
   std::string value = FormatRealLiteralConstant(std::get<1>(x.t));
   if (std::get<0>(x.t)) {
@@ -5384,18 +5387,20 @@ void BuildImpl(parser::SignedRealLiteralConstant &x, SgExpression *&expr) {
   expr = SageBuilder::buildFloatVal_nfi(value);
 }
 
-void BuildImpl(parser::ComplexLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::ComplexLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<ComplexPart, ComplexPart> t;
-  auto buildComplexPart = [](parser::ComplexPart &part) -> SgExpression * {
+  auto buildComplexPart =
+      [](const parser::ComplexPart &part) -> SgExpression * {
     SgExpression *partExpr{nullptr};
     common::visit(
-        common::visitors{[&](parser::SignedIntLiteralConstant &y) {
-                           BuildImpl(y, partExpr);
-                         },
-                         [&](parser::SignedRealLiteralConstant &y) {
-                           BuildImpl(y, partExpr);
-                         },
-                         [&](parser::NamedConstant &y) { Build(y, partExpr); }},
+        common::visitors{
+            [&](const parser::SignedIntLiteralConstant &y) {
+              BuildImpl(y, partExpr);
+            },
+            [&](const parser::SignedRealLiteralConstant &y) {
+              BuildImpl(y, partExpr);
+            },
+            [&](const parser::NamedConstant &y) { Build(y, partExpr); }},
         part.u);
     return partExpr;
   };
@@ -5417,7 +5422,8 @@ void BuildImpl(parser::ComplexLiteralConstant &x, SgExpression *&expr) {
       SageBuilder::topScopeStack());
 }
 
-void BuildImpl(parser::SignedComplexLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::SignedComplexLiteralConstant &x,
+               SgExpression *&expr) {
   // std::tuple<Sign, ComplexLiteralConstant> t;
   SgExpression *complexExpr{nullptr};
   BuildImpl(std::get<1>(x.t), complexExpr);
@@ -5429,7 +5435,7 @@ void BuildImpl(parser::SignedComplexLiteralConstant &x, SgExpression *&expr) {
   }
 }
 
-void BuildImpl(parser::BOZLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::BOZLiteralConstant &x, SgExpression *&expr) {
   std::string value = x.v;
   int base = 10;
   if (!value.empty()) {
@@ -5459,7 +5465,7 @@ void BuildImpl(parser::BOZLiteralConstant &x, SgExpression *&expr) {
   expr = SageBuilder::buildLongLongIntVal_nfi(llVal, value);
 }
 
-void BuildImpl(parser::CharLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::CharLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<std::optional<KindParam>, std::string> t;
   std::string value = x.GetString();
   std::string escaped;
@@ -5482,7 +5488,7 @@ void BuildImpl(parser::CharLiteralConstant &x, SgExpression *&expr) {
   }
 }
 
-void BuildImpl(parser::LogicalLiteralConstant &x, SgExpression *&expr) {
+void BuildImpl(const parser::LogicalLiteralConstant &x, SgExpression *&expr) {
   // std::tuple<> bool, std::optional<KindParam>
   expr = SageBuilder::buildBoolValExp_nfi(std::get<0>(x.t));
   if (std::get<1>(x.t)) {
@@ -5491,48 +5497,50 @@ void BuildImpl(parser::LogicalLiteralConstant &x, SgExpression *&expr) {
   }
 }
 
-void BuildImpl(parser::KindSelector::StarSize &x, SgExpression *&expr) {
+void BuildImpl(const parser::KindSelector::StarSize &x, SgExpression *&expr) {
   // StarSize std::uint64_t v
   uint64_t kind{x.v};
   std::string strVal{std::to_string(kind)};
   expr = SageBuilder::buildLongLongIntVal_nfi(kind, strVal);
 }
 
-void BuildImpl(parser::TypeParamValue &x, SgExpression *&expr) {
+void BuildImpl(const parser::TypeParamValue &x, SgExpression *&expr) {
   // TypeParamValue std::variant<ScalarIntExpr, Star, Deferred> u;
   // Star is "*", Deferred is ":"
-  common::visit(common::visitors{[&](parser::ScalarIntExpr &y) {
-                                   // Walking inside of a visitor not fully
-                                   // explored, for now make sure no previous
-                                   // value for expr
-                                   ASSERT_require(expr == nullptr);
-                                   WalkExpr(y, expr);
-                                 },
-                                 [&](parser::Star &y) {
-                                   expr = new SgAsteriskShapeExp();
-                                   SageInterface::setSourcePosition(expr);
-                                 },
-                                 [&](parser::TypeParamValue::Deferred &y) {
-                                   expr = new SgColonShapeExp();
-                                   SageInterface::setSourcePosition(expr);
-                                 }},
-                x.u);
+  common::visit(
+      common::visitors{[&](const parser::ScalarIntExpr &y) {
+                         // Walking inside of a visitor not fully
+                         // explored, for now make sure no previous
+                         // value for expr
+                         ASSERT_require(expr == nullptr);
+                         WalkExpr(y, expr);
+                       },
+                       [&](const parser::Star &y) {
+                         expr = new SgAsteriskShapeExp();
+                         SageInterface::setSourcePosition(expr);
+                       },
+                       [&](const parser::TypeParamValue::Deferred &y) {
+                         expr = new SgColonShapeExp();
+                         SageInterface::setSourcePosition(expr);
+                       }},
+      x.u);
 }
 
-void BuildImpl(parser::CharLength &x, SgExpression *&expr) {
+void BuildImpl(const parser::CharLength &x, SgExpression *&expr) {
   // CharLength std::variant<TypeParamValue, std::uint64_t> u;
   using namespace Fortran;
 
   common::visit(
-      common::visitors{[&](std::uint64_t &y) {
-                         std::string strVal{std::to_string(y)};
-                         expr = SageBuilder::buildLongLongIntVal_nfi(y, strVal);
-                       },
-                       [&](parser::TypeParamValue &y) { WalkExpr(y, expr); }},
+      common::visitors{
+          [&](const std::uint64_t &y) {
+            std::string strVal{std::to_string(y)};
+            expr = SageBuilder::buildLongLongIntVal_nfi(y, strVal);
+          },
+          [&](const parser::TypeParamValue &y) { WalkExpr(y, expr); }},
       x.u);
 }
 
-void BuildImpl(parser::CommonBlockObject &x, SgExpression *&expr) {
+void BuildImpl(const parser::CommonBlockObject &x, SgExpression *&expr) {
   // CommonBlockObject std::tuple<Name, std::optional<ArraySpec>> t;
 
   std::string name{std::get<parser::Name>(x.t).ToString()};
@@ -5544,7 +5552,7 @@ void BuildImpl(parser::CommonBlockObject &x, SgExpression *&expr) {
   ASSERT_not_null(symbol);
 
   // ArraySpec acts like a DIMENSION specification; update the declaration type.
-  if (auto &opt = std::get<std::optional<parser::ArraySpec>>(x.t)) {
+  if (const auto &opt = std::get<std::optional<parser::ArraySpec>>(x.t)) {
     SgInitializedName *initName = symbol->get_declaration();
     ASSERT_not_null(initName);
     if (!IsArrayType(initName->get_type())) {
@@ -5560,7 +5568,7 @@ void BuildImpl(parser::CommonBlockObject &x, SgExpression *&expr) {
   expr = ref;
 }
 
-void BuildImpl(parser::AssumedImpliedSpec &x, SgExpression *&expr) {
+void BuildImpl(const parser::AssumedImpliedSpec &x, SgExpression *&expr) {
   // is [ lower-bound : ] *
   // AssumedImpliedSpec std::optional<SpecificationExpr> v;
   SgExpression *ub{SageBuilderCpp17::buildAsteriskShapeExp_nfi()};
@@ -5576,7 +5584,7 @@ void BuildImpl(parser::AssumedImpliedSpec &x, SgExpression *&expr) {
   }
 }
 
-void BuildImpl(parser::AssumedShapeSpec &x, SgExpression *&expr) {
+void BuildImpl(const parser::AssumedShapeSpec &x, SgExpression *&expr) {
   // is [ lower-bound ] :
   // AssumedShapeSpec std::optional<SpecificationExpr> v;
   SgExpression *lb{nullptr};                                // maybe lower-bound
@@ -5590,7 +5598,7 @@ void BuildImpl(parser::AssumedShapeSpec &x, SgExpression *&expr) {
   expr = SageBuilder::buildSubscriptExpression_nfi(lb, ub, stride);
 }
 
-void BuildImpl(parser::ExplicitShapeSpec &x, SgExpression *&expr) {
+void BuildImpl(const parser::ExplicitShapeSpec &x, SgExpression *&expr) {
   // is [ lower-bound : ] upper-bound
   // ExplicitShapeSpec std::tuple<std::optional<SpecificationExpr>,
   // SpecificationExpr> t;
@@ -7067,60 +7075,62 @@ void EntityDecls(std::list<Fortran::parser::EntityDecl> &x,
 }
 
 namespace {
-SgExprListExp *BuildArraySpecExprList(Fortran::parser::ArraySpec &x) {
+SgExprListExp *BuildArraySpecExprList(const Fortran::parser::ArraySpec &x) {
   using namespace Fortran::parser;
 
   SgExpression *expr{nullptr};
   SgExprListExp *dimInfo{SageBuilder::buildExprListExp_nfi()};
 
   common::visit(
-      common::visitors{
-          [&](std::list<ExplicitShapeSpec> &y) {
-            for (ExplicitShapeSpec &spec :
-                 y) { // is [ lower-bound : ] upper-bound
-              BuildImpl(spec, expr = nullptr);
-              ASSERT_not_null(expr);
-              SageInterface::appendExpression(dimInfo, expr);
-            }
-          },
-          [&](std::list<AssumedShapeSpec> &y) {
-            for (AssumedShapeSpec &spec : y) { // is [ lower-bound ]:
-              BuildImpl(spec, expr = nullptr);
-              ASSERT_not_null(expr);
-              SageInterface::appendExpression(dimInfo, expr);
-            }
-          },
-          [&](DeferredShapeSpecList &y) {
-            for (int ii{0}; ii < y.v; ii++) { // is :
-              SageInterface::appendExpression(
-                  dimInfo, SageBuilder::buildColonShapeExp_nfi());
-            }
-          },
-          [&](AssumedSizeSpec &y) {
-            // std::tuple<std::list<ExplicitShapeSpec>, AssumedImpliedSpec> t;
-            for (ExplicitShapeSpec &spec :
-                 std::get<0>(y.t)) { // is [ lower-bound : ] upper-bound
-              BuildImpl(spec, expr = nullptr);
-              ASSERT_not_null(expr);
-              SageInterface::appendExpression(dimInfo, expr);
-            }
-            AssumedImpliedSpec &spec{std::get<1>(y.t)};
-            BuildImpl(spec, expr = nullptr);
-            ASSERT_not_null(expr);
-            SageInterface::appendExpression(dimInfo, expr);
-          },
-          [&](ImpliedShapeSpec &y) {
-            for (AssumedImpliedSpec &spec : y.v) { // is [ lower-bound : ] *
-              BuildImpl(spec, expr = nullptr);
-              ASSERT_not_null(expr);
-              SageInterface::appendExpression(dimInfo, expr);
-            }
-          },
-          [&](AssumedRankSpec &y) {
-            // is ..
-            // TODO: Need new expression type in ROSE
-            ABORT_NO_IMPL;
-          }},
+      common::visitors{[&](const std::list<ExplicitShapeSpec> &y) {
+                         for (const ExplicitShapeSpec &spec :
+                              y) { // is [ lower-bound : ] upper-bound
+                           BuildImpl(spec, expr = nullptr);
+                           ASSERT_not_null(expr);
+                           SageInterface::appendExpression(dimInfo, expr);
+                         }
+                       },
+                       [&](const std::list<AssumedShapeSpec> &y) {
+                         for (const AssumedShapeSpec &spec :
+                              y) { // is [ lower-bound ]:
+                           BuildImpl(spec, expr = nullptr);
+                           ASSERT_not_null(expr);
+                           SageInterface::appendExpression(dimInfo, expr);
+                         }
+                       },
+                       [&](const DeferredShapeSpecList &y) {
+                         for (int ii{0}; ii < y.v; ii++) { // is :
+                           SageInterface::appendExpression(
+                               dimInfo, SageBuilder::buildColonShapeExp_nfi());
+                         }
+                       },
+                       [&](const AssumedSizeSpec &y) {
+                         // std::tuple<std::list<ExplicitShapeSpec>,
+                         // AssumedImpliedSpec> t;
+                         for (const ExplicitShapeSpec &spec : std::get<0>(
+                                  y.t)) { // is [ lower-bound : ] upper-bound
+                           BuildImpl(spec, expr = nullptr);
+                           ASSERT_not_null(expr);
+                           SageInterface::appendExpression(dimInfo, expr);
+                         }
+                         const AssumedImpliedSpec &spec{std::get<1>(y.t)};
+                         BuildImpl(spec, expr = nullptr);
+                         ASSERT_not_null(expr);
+                         SageInterface::appendExpression(dimInfo, expr);
+                       },
+                       [&](const ImpliedShapeSpec &y) {
+                         for (const AssumedImpliedSpec &spec :
+                              y.v) { // is [ lower-bound : ] *
+                           BuildImpl(spec, expr = nullptr);
+                           ASSERT_not_null(expr);
+                           SageInterface::appendExpression(dimInfo, expr);
+                         }
+                       },
+                       [&](const AssumedRankSpec &y) {
+                         // is ..
+                         // TODO: Need new expression type in ROSE
+                         ABORT_NO_IMPL;
+                       }},
       x.u);
 
   return dimInfo;
@@ -7191,7 +7201,7 @@ SgExprListExp *BuildCoarraySpecExprList(Fortran::parser::CoarraySpec &x) {
 } // namespace
 
 // ArraySpec
-void Build(parser::ArraySpec &x, SgType *&type, SgType *baseType) {
+void Build(const parser::ArraySpec &x, SgType *&type, SgType *baseType) {
   // std::variant<> - std::list<ExplicitShapeSpec>, std::list<AssumedShapeSpec>,
   //                  DeferredShapeSpecList, AssumedSizeSpec, ImpliedShapeSpec,
   //                  AssumedRankSpec
@@ -7224,7 +7234,9 @@ void Build(parser::CoarraySpec &x, SgType *&type, SgType *baseType) {
   type = arrayType;
 }
 
-void Build(parser::CharLength &x, SgExpression *&expr) { WalkExpr(x, expr); }
+void Build(const parser::CharLength &x, SgExpression *&expr) {
+  WalkExpr(x, expr);
+}
 
 void Build(parser::Initialization &x, SgExpression *&expr) {
   using namespace Fortran::parser;
@@ -7434,11 +7446,10 @@ void BuildDataImpliedDoBounds(
         &bounds,
     SgExpression *&init, SgExpression *&upper, SgExpression *&step) {
   SgExpression *lower{nullptr};
-  WalkExpr(const_cast<parser::ScalarIntConstantExpr &>(bounds.lower), lower);
-  WalkExpr(const_cast<parser::ScalarIntConstantExpr &>(bounds.upper), upper);
+  WalkExpr(bounds.lower, lower);
+  WalkExpr(bounds.upper, upper);
   if (bounds.step) {
-    WalkExpr(const_cast<parser::ScalarIntConstantExpr &>(bounds.step.value()),
-             step);
+    WalkExpr(bounds.step.value(), step);
   } else {
     step = SageBuilder::buildIntVal_nfi(std::string("1"));
   }
@@ -7699,10 +7710,10 @@ void BuildLoopBounds(
     const parser::LoopBounds<parser::DoVariable, parser::ScalarIntExpr> &bounds,
     SgExpression *&init, SgExpression *&upper, SgExpression *&step) {
   SgExpression *lower{nullptr};
-  WalkExpr(const_cast<parser::ScalarIntExpr &>(bounds.lower), lower);
-  WalkExpr(const_cast<parser::ScalarIntExpr &>(bounds.upper), upper);
+  WalkExpr(bounds.lower, lower);
+  WalkExpr(bounds.upper, upper);
   if (bounds.step) {
-    WalkExpr(const_cast<parser::ScalarIntExpr &>(bounds.step.value()), step);
+    WalkExpr(bounds.step.value(), step);
   } else {
     step = SageBuilder::buildIntVal_nfi(std::string("1"));
   }
@@ -8724,12 +8735,12 @@ void BuildImpl(parser::OldParameterStmt &x) {
 
 // Expr
 //
-void Build(parser::CharLiteralConstantSubstring &x, SgExpression *&expr) {
+void Build(const parser::CharLiteralConstantSubstring &x, SgExpression *&expr) {
   SgExpression *base{nullptr};
   WalkExpr(std::get<parser::CharLiteralConstant>(x.t), base);
   ASSERT_not_null(base);
 
-  auto &range = std::get<parser::SubstringRange>(x.t);
+  const auto &range = std::get<parser::SubstringRange>(x.t);
   SgExpression *lower{nullptr};
   SgExpression *upper{nullptr};
   if (std::get<0>(range.t)) {
@@ -8752,27 +8763,28 @@ void Build(parser::CharLiteralConstantSubstring &x, SgExpression *&expr) {
   expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(base, subscript);
 }
 
-void Build(parser::SubstringInquiry &x, SgExpression *&expr) {
+void Build(const parser::SubstringInquiry &x, SgExpression *&expr) {
   Build(x.v, expr);
 }
 
 namespace {
-SgType *BuildIntrinsicTypeSpec(parser::IntrinsicTypeSpec &x) {
-  if (auto *intSpec = std::get_if<parser::IntegerTypeSpec>(&x.u)) {
+SgType *BuildIntrinsicTypeSpec(const parser::IntrinsicTypeSpec &x) {
+  if (const auto *intSpec = std::get_if<parser::IntegerTypeSpec>(&x.u)) {
     SgExpression *expr{nullptr};
     if (intSpec->v) {
       WalkExpr(intSpec->v.value(), expr);
     }
     return SageBuilder::buildIntType(expr);
   }
-  if (auto *unsignedSpec = std::get_if<parser::UnsignedTypeSpec>(&x.u)) {
+  if (const auto *unsignedSpec = std::get_if<parser::UnsignedTypeSpec>(&x.u)) {
     SgExpression *expr{nullptr};
     if (unsignedSpec->v) {
       WalkExpr(unsignedSpec->v.value(), expr);
     }
     return SageBuilder::buildUnsignedIntType(expr);
   }
-  if (auto *realSpec = std::get_if<parser::IntrinsicTypeSpec::Real>(&x.u)) {
+  if (const auto *realSpec =
+          std::get_if<parser::IntrinsicTypeSpec::Real>(&x.u)) {
     SgExpression *expr{nullptr};
     if (realSpec->kind) {
       WalkExpr(realSpec->kind.value(), expr);
@@ -8782,7 +8794,7 @@ SgType *BuildIntrinsicTypeSpec(parser::IntrinsicTypeSpec &x) {
   if (std::get_if<parser::IntrinsicTypeSpec::DoublePrecision>(&x.u)) {
     return SageBuilder::buildDoubleType();
   }
-  if (auto *complexSpec =
+  if (const auto *complexSpec =
           std::get_if<parser::IntrinsicTypeSpec::Complex>(&x.u)) {
     SgExpression *expr{nullptr};
     if (complexSpec->kind) {
@@ -8791,19 +8803,20 @@ SgType *BuildIntrinsicTypeSpec(parser::IntrinsicTypeSpec &x) {
     SgType *base = SageBuilder::buildFloatType(expr);
     return SageBuilder::buildComplexType(base);
   }
-  if (auto *charSpec =
+  if (const auto *charSpec =
           std::get_if<parser::IntrinsicTypeSpec::Character>(&x.u)) {
     if (charSpec->selector) {
       SgExpression *len{nullptr};
       SgExpression *kind{nullptr};
       common::visit(
-          common::visitors{[&](parser::LengthSelector &z) { WalkExpr(z, len); },
-                           [&](parser::CharSelector::LengthAndKind &z) {
-                             if (z.length) {
-                               WalkExpr(z.length, len);
-                             }
-                             WalkExpr(z.kind, kind);
-                           }},
+          common::visitors{
+              [&](const parser::LengthSelector &z) { WalkExpr(z, len); },
+              [&](const parser::CharSelector::LengthAndKind &z) {
+                if (z.length) {
+                  WalkExpr(z.length, len);
+                }
+                WalkExpr(z.kind, kind);
+              }},
           charSpec->selector->u);
       if (len == nullptr) {
         len = SageBuilder::buildIntVal_nfi(1, "1");
@@ -8832,22 +8845,22 @@ SgType *BuildIntrinsicTypeSpec(parser::IntrinsicTypeSpec &x) {
   return nullptr;
 }
 
-SgType *BuildTypeSpec(parser::TypeSpec &x) {
-  if (auto *intrinsic = std::get_if<parser::IntrinsicTypeSpec>(&x.u)) {
+SgType *BuildTypeSpec(const parser::TypeSpec &x) {
+  if (const auto *intrinsic = std::get_if<parser::IntrinsicTypeSpec>(&x.u)) {
     return BuildIntrinsicTypeSpec(*intrinsic);
   }
-  if (auto *derived = std::get_if<parser::DerivedTypeSpec>(&x.u)) {
+  if (const auto *derived = std::get_if<parser::DerivedTypeSpec>(&x.u)) {
     return BuildDerivedTypeSpec(*derived);
   }
   return nullptr;
 }
 } // namespace
 
-void Build(parser::AcValue &x, SgExpression *&expr);
+void Build(const parser::AcValue &x, SgExpression *&expr);
 
-void Build(parser::AcImpliedDo &x, SgExpression *&expr) {
+void Build(const parser::AcImpliedDo &x, SgExpression *&expr) {
   std::list<SgExpression *> object_items;
-  for (auto &value : std::get<0>(x.t)) {
+  for (const auto &value : std::get<0>(x.t)) {
     SgExpression *itemExpr{nullptr};
     Build(value, itemExpr);
     ASSERT_not_null(itemExpr);
@@ -8862,8 +8875,8 @@ void Build(parser::AcImpliedDo &x, SgExpression *&expr) {
     }
   }
 
-  auto &control = std::get<1>(x.t);
-  auto &bounds = std::get<parser::AcImpliedDoControl::Bounds>(control.t);
+  const auto &control = std::get<1>(x.t);
+  const auto &bounds = std::get<parser::AcImpliedDoControl::Bounds>(control.t);
   SgExpression *init{nullptr};
   SgExpression *upper{nullptr};
   SgExpression *step{nullptr};
@@ -8882,9 +8895,9 @@ void Build(parser::AcImpliedDo &x, SgExpression *&expr) {
   expr = impliedDo;
 }
 
-void Build(parser::AcValue &x, SgExpression *&expr) {
+void Build(const parser::AcValue &x, SgExpression *&expr) {
   common::visit(common::visitors{
-                    [&](parser::AcValue::Triplet &y) {
+                    [&](const parser::AcValue::Triplet &y) {
                       SgExpression *lower{nullptr};
                       SgExpression *upper{nullptr};
                       SgExpression *step{nullptr};
@@ -8898,22 +8911,22 @@ void Build(parser::AcValue &x, SgExpression *&expr) {
                       expr = SageBuilder::buildSubscriptExpression_nfi(
                           lower, upper, step);
                     },
-                    [&](common::Indirection<parser::Expr> &y) {
+                    [&](const common::Indirection<parser::Expr> &y) {
                       WalkExpr(y.value(), expr);
                     },
-                    [&](common::Indirection<parser::AcImpliedDo> &y) {
+                    [&](const common::Indirection<parser::AcImpliedDo> &y) {
                       Build(y.value(), expr);
                     }},
                 x.u);
 }
 
-void Build(parser::ArrayConstructor &x, SgExpression *&expr) {
+void Build(const parser::ArrayConstructor &x, SgExpression *&expr) {
   Build(x.v, expr);
 }
 
-void Build(parser::AcSpec &x, SgExpression *&expr) {
+void Build(const parser::AcSpec &x, SgExpression *&expr) {
   std::list<SgExpression *> values;
-  for (auto &value : x.values) {
+  for (const auto &value : x.values) {
     SgExpression *valueExpr{nullptr};
     Build(value, valueExpr);
     ASSERT_not_null(valueExpr);
@@ -8933,15 +8946,15 @@ void Build(parser::AcSpec &x, SgExpression *&expr) {
   expr = SageBuilder::buildAggregateInitializer_nfi(exprList, explicitType);
 }
 
-void Build(parser::StructureConstructor &x, SgExpression *&expr) {
-  auto &derivedSpec = std::get<parser::DerivedTypeSpec>(x.t);
-  auto &components = std::get<std::list<parser::ComponentSpec>>(x.t);
+void Build(const parser::StructureConstructor &x, SgExpression *&expr) {
+  const auto &derivedSpec = std::get<parser::DerivedTypeSpec>(x.t);
+  const auto &components = std::get<std::list<parser::ComponentSpec>>(x.t);
 
   SgType *type = BuildDerivedTypeSpec(derivedSpec);
   std::string typeName = std::get<parser::Name>(derivedSpec.t).ToString();
 
   std::list<SgExpression *> args;
-  for (auto &component : components) {
+  for (const auto &component : components) {
     SgExpression *value{nullptr};
     WalkExpr(std::get<parser::ComponentDataSource>(component.t).v.value(),
              value);
@@ -8957,142 +8970,144 @@ void Build(parser::StructureConstructor &x, SgExpression *&expr) {
   ASSERT_not_null(expr);
 }
 
-void Build(parser::Expr::Parentheses &x, SgExpression *&expr) {
+void Build(const parser::Expr::Parentheses &x, SgExpression *&expr) {
   WalkExpr(x.v.value(), expr);
   if (expr != nullptr) {
     SageBuilderCpp17::set_need_paren(expr);
   }
 }
 
-void Build(parser::Expr::UnaryPlus &x, SgExpression *&expr) {
+void Build(const parser::Expr::UnaryPlus &x, SgExpression *&expr) {
   WalkExpr(x.v.value(), expr);
 }
 
-void Build(parser::Expr::Negate &x, SgExpression *&expr) {
+void Build(const parser::Expr::Negate &x, SgExpression *&expr) {
   SgExpression *operand{nullptr};
   WalkExpr(x.v.value(), operand);
   ASSERT_not_null(operand);
   expr = SageBuilderCpp17::buildMinusOp_nfi(operand, /*is_prefix*/ true);
 }
 
-void BuildExprVisitor::Build(parser::Expr::NOT &x /*, SgExpression* &expr*/) {
+void BuildExprVisitor::Build(
+    const parser::Expr::NOT &x /*, SgExpression* &expr*/) {
   SgExpression *operand{nullptr};
   WalkExpr(x.v.value(), operand);
   ASSERT_not_null(operand);
   this->set(SageBuilder::buildNotOp_nfi(operand));
 }
 
-void BuildExprVisitor::Build(parser::Expr::UnaryPlus &x) {
+void BuildExprVisitor::Build(const parser::Expr::UnaryPlus &x) {
   SgExpression *operand{nullptr};
   WalkExpr(x.v.value(), operand);
   ASSERT_not_null(operand);
   this->set(SageBuilder::buildUnaryAddOp_nfi(operand));
 }
 
-void BuildExprVisitor::Build(parser::Expr::Negate &x) {
+void BuildExprVisitor::Build(const parser::Expr::Negate &x) {
   SgExpression *operand{nullptr};
   WalkExpr(x.v.value(), operand);
   ASSERT_not_null(operand);
   this->set(SageBuilder::buildMinusOp_nfi(operand));
 }
 
-void BuildExprVisitor::Build(parser::Expr::Power &x /*, SgExpression* &expr*/) {
+void BuildExprVisitor::Build(
+    const parser::Expr::Power &x /*, SgExpression* &expr*/) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildExponentiationOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::Multiply &x) {
+void BuildExprVisitor::Build(const parser::Expr::Multiply &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildMultiplyOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::Divide &x) {
+void BuildExprVisitor::Build(const parser::Expr::Divide &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildDivideOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::Add &x) {
+void BuildExprVisitor::Build(const parser::Expr::Add &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildAddOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::Subtract &x) {
+void BuildExprVisitor::Build(const parser::Expr::Subtract &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildSubtractOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::Concat &x) {
+void BuildExprVisitor::Build(const parser::Expr::Concat &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildConcatenationOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::LT &x) {
+void BuildExprVisitor::Build(const parser::Expr::LT &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildLessThanOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::LE &x) {
+void BuildExprVisitor::Build(const parser::Expr::LE &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildLessOrEqualOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::EQ &x) {
+void BuildExprVisitor::Build(const parser::Expr::EQ &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildEqualityOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::NE &x) {
+void BuildExprVisitor::Build(const parser::Expr::NE &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildNotEqualOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::GE &x) {
+void BuildExprVisitor::Build(const parser::Expr::GE &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildGreaterOrEqualOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::GT &x) {
+void BuildExprVisitor::Build(const parser::Expr::GT &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildGreaterThanOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::AND &x) {
+void BuildExprVisitor::Build(const parser::Expr::AND &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildAndOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::OR &x) {
+void BuildExprVisitor::Build(const parser::Expr::OR &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildOrOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::EQV &x) {
+void BuildExprVisitor::Build(const parser::Expr::EQV &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildEqualityOp_nfi(lhs, rhs));
 }
 
-void BuildExprVisitor::Build(parser::Expr::NEQV &x) {
+void BuildExprVisitor::Build(const parser::Expr::NEQV &x) {
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   BuildExpressions(x, lhs, rhs);
   this->set(SageBuilder::buildNotEqualOp_nfi(lhs, rhs));
 }
 
-void Build(parser::Expr::DefinedBinary &x, SgExpression *&expr) {
+void Build(const parser::Expr::DefinedBinary &x, SgExpression *&expr) {
   SgExpression *lhs{nullptr};
   SgExpression *rhs{nullptr};
   WalkExpr(std::get<1>(x.t).value(), lhs);
@@ -9109,7 +9124,7 @@ void Build(parser::Expr::DefinedBinary &x, SgExpression *&expr) {
   ASSERT_not_null(expr);
 }
 
-void Build(parser::Expr::DefinedUnary &x, SgExpression *&expr) {
+void Build(const parser::Expr::DefinedUnary &x, SgExpression *&expr) {
   SgExpression *arg{nullptr};
   WalkExpr(std::get<1>(x.t).value(), arg);
   ASSERT_not_null(arg);
@@ -9123,7 +9138,7 @@ void Build(parser::Expr::DefinedUnary &x, SgExpression *&expr) {
   ASSERT_not_null(expr);
 }
 
-void Build(parser::Expr::PercentLoc &x, SgExpression *&expr) {
+void Build(const parser::Expr::PercentLoc &x, SgExpression *&expr) {
   SgExpression *arg{nullptr};
   WalkExpr(x.v.value(), arg);
   ASSERT_not_null(arg);
@@ -9136,7 +9151,7 @@ void Build(parser::Expr::PercentLoc &x, SgExpression *&expr) {
   ASSERT_not_null(expr);
 }
 
-void Build(parser::Expr::NOT &x, SgExpression *&expr) {
+void Build(const parser::Expr::NOT &x, SgExpression *&expr) {
   SgExpression *operand{nullptr};
   WalkExpr(x.v.value(), operand);
   ASSERT_not_null(operand);
@@ -9144,7 +9159,7 @@ void Build(parser::Expr::NOT &x, SgExpression *&expr) {
   ASSERT_not_null(expr);
 }
 
-void Build(parser::Expr::ComplexConstructor &x, SgExpression *&expr) {
+void Build(const parser::Expr::ComplexConstructor &x, SgExpression *&expr) {
   SgExpression *lhs{nullptr};
   SgExpression *rhs{nullptr};
   WalkExpr(std::get<0>(x.t).value(), lhs);
@@ -9160,7 +9175,7 @@ void Build(parser::Expr::ComplexConstructor &x, SgExpression *&expr) {
   ASSERT_not_null(expr);
 }
 
-void Build(parser::StructureComponent &x, SgExpression *&expr) {
+void Build(const parser::StructureComponent &x, SgExpression *&expr) {
   SgExpression *base{nullptr};
   Build(x.base, base);
   ASSERT_not_null(base);
@@ -9190,14 +9205,14 @@ void Build(parser::StructureComponent &x, SgExpression *&expr) {
   ASSERT_not_null(expr);
 }
 
-void Build(parser::ArrayElement &x, SgExpression *&expr) {
+void Build(const parser::ArrayElement &x, SgExpression *&expr) {
   SgExpression *base{nullptr};
   Build(x.base, base);
   ASSERT_not_null(base);
 
   SgExprListExp *subscripts = SageBuilder::buildExprListExp_nfi();
   ASSERT_not_null(subscripts);
-  for (auto &subscript : x.subscripts) {
+  for (const auto &subscript : x.subscripts) {
     SgExpression *subExpr{nullptr};
     Build(subscript, subExpr);
     ASSERT_not_null(subExpr);
@@ -9209,7 +9224,7 @@ void Build(parser::ArrayElement &x, SgExpression *&expr) {
   ASSERT_not_null(expr);
 }
 
-void Build(parser::CoindexedNamedObject &x, SgExpression *&expr) {
+void Build(const parser::CoindexedNamedObject &x, SgExpression *&expr) {
   SgExpression *base{nullptr};
   Build(x.base, base);
   ASSERT_not_null(base);
@@ -9229,10 +9244,10 @@ void Build(parser::CoindexedNamedObject &x, SgExpression *&expr) {
   expr = coExpr;
 }
 
-void Build(parser::ImageSelector &x, SgExpression *&expr) {
+void Build(const parser::ImageSelector &x, SgExpression *&expr) {
   SgExprListExp *exprList = SageBuilder::buildExprListExp_nfi();
   ASSERT_not_null(exprList);
-  for (auto &cosubscript : std::get<0>(x.t)) {
+  for (const auto &cosubscript : std::get<0>(x.t)) {
     SgExpression *item{nullptr};
     WalkExpr(cosubscript.thing, item);
     ASSERT_not_null(item);
@@ -9246,18 +9261,18 @@ void Build(parser::ImageSelector &x, SgExpression *&expr) {
   expr = exprList;
 }
 
-void Build(parser::ImageSelectorSpec &x, SgExpression *&expr) {
+void Build(const parser::ImageSelectorSpec &x, SgExpression *&expr) {
   expr = SageBuilderCpp17::buildNullExpression_nfi();
 }
 
-void Build(parser::SectionSubscript &x, SgExpression *&expr) {
-  common::visit(
-      common::visitors{[&](parser::IntExpr &y) { WalkExpr(y, expr); },
-                       [&](parser::SubscriptTriplet &y) { Build(y, expr); }},
-      x.u);
+void Build(const parser::SectionSubscript &x, SgExpression *&expr) {
+  common::visit(common::visitors{
+                    [&](const parser::IntExpr &y) { WalkExpr(y, expr); },
+                    [&](const parser::SubscriptTriplet &y) { Build(y, expr); }},
+                x.u);
 }
 
-void Build(parser::SubscriptTriplet &x, SgExpression *&expr) {
+void Build(const parser::SubscriptTriplet &x, SgExpression *&expr) {
   SgExpression *lower{nullptr};
   SgExpression *upper{nullptr};
   SgExpression *stride{nullptr};
