@@ -2062,6 +2062,15 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
   template_decl->get_file_info()->setCompilerGenerated();
   template_decl->get_file_info()->unsetOutputInCodeGeneration();
 
+  // Ensure the template declaration scope matches the enclosing scope so
+  // symbol insertion does not mismatch the declaration's scope.
+  if (scope != nullptr) {
+    template_decl->set_scope(scope);
+    if (template_decl->get_parent() == nullptr) {
+      template_decl->set_parent(scope);
+    }
+  }
+
   // Do not manually insert a SgClassSymbol here.
   // SageBuilder::buildNondefiningTemplateClassDeclaration_nfi() installs the
   // appropriate SgTemplateClassSymbol; inserting a SgClassSymbol for a

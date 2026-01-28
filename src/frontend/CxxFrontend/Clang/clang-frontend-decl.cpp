@@ -3036,12 +3036,15 @@ void ClangToSageTranslator::populateClassDefinition(
         }
 
         SgSymbol *symbol = old_scope->find_symbol_from_declaration(decl);
+        bool removed_symbol = false;
         if (symbol != nullptr) {
           if (old_scope->symbol_exists(symbol)) {
             old_scope->remove_symbol(symbol);
+            removed_symbol = true;
           } else if (SgSymbolTable *table = old_scope->get_symbol_table()) {
             if (table->exists(symbol)) {
               table->remove(symbol);
+              removed_symbol = true;
             }
           }
         }
@@ -3053,6 +3056,8 @@ void ClangToSageTranslator::populateClassDefinition(
           if (symbol != nullptr && !new_scope->symbol_exists(symbol)) {
             new_scope->insert_symbol(symbol->get_name(), symbol);
           }
+        } else if (removed_symbol) {
+          move_symbol_to_orphan_table(symbol);
         }
       };
 
@@ -5681,6 +5686,25 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
     result_decl = template_decl;
   }
 
+  auto apply_template_scope = [&](SgTemplateClassDeclaration *decl_stmt) {
+    if (decl_stmt == nullptr) {
+      return;
+    }
+    if (symbol_scope != nullptr) {
+      decl_stmt->set_scope(symbol_scope);
+    }
+    if (decl_stmt->get_parent() == nullptr) {
+      if (lexical_parent != nullptr) {
+        decl_stmt->set_parent(lexical_parent);
+      } else if (symbol_scope != nullptr) {
+        decl_stmt->set_parent(symbol_scope);
+      }
+    }
+  };
+
+  apply_template_scope(nondefining_decl);
+  apply_template_scope(template_decl);
+
   // REX FIX: Handle AS_none for ClassTemplateDecl
   clang::AccessSpecifier access = class_template_decl->getAccess();
   if (access == clang::AS_public) {
@@ -6730,14 +6754,17 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
         return;
       }
       SgSymbol *symbol = nullptr;
+      bool removed_symbol = false;
       if (decl_scope != nullptr) {
         symbol = decl_scope->find_symbol_from_declaration(decl);
         if (symbol != nullptr) {
           if (decl_scope->symbol_exists(symbol)) {
             decl_scope->remove_symbol(symbol);
+            removed_symbol = true;
           } else if (SgSymbolTable *table = decl_scope->get_symbol_table()) {
             if (table->exists(symbol)) {
               table->remove(symbol);
+              removed_symbol = true;
             }
           }
         }
@@ -6750,6 +6777,8 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
         if (symbol != nullptr && !correct_scope->symbol_exists(symbol)) {
           correct_scope->insert_symbol(symbol->get_name(), symbol);
         }
+      } else if (removed_symbol) {
+        move_symbol_to_orphan_table(symbol);
       }
     };
 
@@ -10058,6 +10087,7 @@ void ClangToSageTranslator::registerDeclarationSymbol(
   if (scope == nullptr) {
     return;
   }
+
   SgScopeStatement *normalized_scope = normalizeNamespaceScope(scope);
   if (normalized_scope != nullptr) {
     scope = normalized_scope;
