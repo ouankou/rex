@@ -307,7 +307,9 @@ BuildProcedureInterfaceType(std::optional<parser::ProcInterface> &optInterface,
 bool IsFortranSpecificationStatement(const SgStatement *stmt) {
   return isSgDeclarationStatement(stmt) != nullptr ||
          isSgUseStatement(stmt) != nullptr || isSgImplicitStatement(stmt) ||
-         isSgAttributeSpecificationStatement(stmt) != nullptr;
+         isSgAttributeSpecificationStatement(stmt) != nullptr ||
+         isSgEquivalenceStatement(stmt) != nullptr ||
+         isSgFortranIncludeLine(stmt) != nullptr;
 }
 
 SgScopeStatement *FindFortranImplicitDeclScope(SgScopeStatement *scope) {
@@ -715,6 +717,156 @@ void TrimLeft(std::string &text) {
     ++pos;
   }
   text.erase(0, pos);
+}
+
+bool EndsWith(const std::string &text, const std::string &suffix) {
+  if (suffix.size() > text.size()) {
+    return false;
+  }
+  return text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+std::string StripTrailingNewlines(std::string text) {
+  while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+    text.pop_back();
+  }
+  return text;
+}
+
+std::string ExtractIncludeFilenameFromDirective(const std::string &directive) {
+  std::string line = StripTrailingNewlines(directive);
+  TrimLeft(line);
+  if (line.empty()) {
+    return std::string();
+  }
+  if (line.front() == '#') {
+    line.erase(0, 1);
+    TrimLeft(line);
+  }
+  std::string lower = StringUtility::convertToLowerCase(line);
+  const std::string kInclude = "include";
+  if (lower.rfind(kInclude, 0) != 0) {
+    return std::string();
+  }
+  line.erase(0, kInclude.size());
+  TrimLeft(line);
+  if (line.empty()) {
+    return std::string();
+  }
+  const char opener = line.front();
+  char closer = opener;
+  if (opener == '<') {
+    closer = '>';
+  }
+  if (opener != '\'' && opener != '"' && opener != '<') {
+    return std::string();
+  }
+  const size_t end_pos = line.find(closer, 1);
+  if (end_pos == std::string::npos || end_pos <= 1) {
+    return std::string();
+  }
+  return line.substr(1, end_pos - 1);
+}
+
+std::string
+ExtractIncludeFilenameFromRange(const Fortran::parser::AllSources &sources,
+                                const Fortran::parser::ProvenanceRange &range) {
+  if (range.size() == 0) {
+    return std::string();
+  }
+  const char *text = sources.GetSource(range);
+  if (text == nullptr) {
+    return std::string();
+  }
+  std::string directive(text, range.size());
+  return ExtractIncludeFilenameFromDirective(directive);
+}
+
+bool IsFortranModuleFilePath(const std::string &path) {
+  if (path.empty()) {
+    return false;
+  }
+  const std::string lower = StringUtility::convertToLowerCase(path);
+  return EndsWith(lower, ".rmod") || EndsWith(lower, ".rcmp");
+}
+
+std::optional<SourcePosition> BuildSourcePositionFromProvenance(
+    const Fortran::parser::AllSources &sources,
+    const Fortran::parser::Provenance provenance) {
+  if (auto pos = sources.GetSourcePosition(provenance)) {
+    return SourcePosition{NormalizeSourcePath(pos->path.get()), pos->line,
+                          pos->column};
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string>
+GetSourceFilePathForProvenance(const Fortran::parser::AllSources &sources,
+                               const Fortran::parser::Provenance provenance,
+                               bool topLevel) {
+  if (const Fortran::parser::SourceFile *file =
+          sources.GetSourceFile(provenance, nullptr, topLevel)) {
+    if (!file->path().empty()) {
+      return file->path();
+    }
+  }
+  return std::nullopt;
+}
+
+std::string GetIncludedPathForSource(const Fortran::parser::CharBlock &source,
+                                     const Fortran::parser::SourcePosition &pos,
+                                     bool useStart) {
+  if (cooked_ == nullptr) {
+    return pos.sourceFile->path();
+  }
+  auto stmtRange = cooked_->GetProvenanceRange(source);
+  if (!stmtRange) {
+    return pos.sourceFile->path();
+  }
+  const auto &sources = cooked_->allSources();
+  const Fortran::parser::Provenance provenance =
+      useStart ? stmtRange->start() : stmtRange->Last();
+  if (auto path = GetSourceFilePathForProvenance(sources, provenance,
+                                                 /*topLevel=*/false)) {
+    return *path;
+  }
+  return pos.sourceFile->path();
+}
+
+bool IsFromIncludedFile(const Fortran::parser::CharBlock &source) {
+  if (cooked_ == nullptr || source.empty()) {
+    return false;
+  }
+  auto stmtRange = cooked_->GetProvenanceRange(source);
+  if (!stmtRange) {
+    return false;
+  }
+  const Fortran::parser::AllSources &sources = cooked_->allSources();
+  if (sources.GetInclusionInfo(stmtRange).has_value()) {
+    return true;
+  }
+  std::optional<std::string> actualPath =
+      GetSourceFilePathForProvenance(sources, stmtRange->start(),
+                                     /*topLevel=*/false);
+  std::optional<std::string> topLevelPath =
+      GetSourceFilePathForProvenance(sources, stmtRange->start(),
+                                     /*topLevel=*/true);
+  if (actualPath && topLevelPath && *actualPath != *topLevelPath) {
+    return true;
+  }
+  return false;
+}
+
+SourcePosition ChooseCommentAnchor(const std::optional<SourcePosition> &begin,
+                                   const std::optional<SourcePosition> &body,
+                                   const SourcePosition &end) {
+  if (begin && begin->line > 0) {
+    return *begin;
+  }
+  if (body && body->line > 0) {
+    return *body;
+  }
+  return end;
 }
 
 bool StartsWithOmp(const std::string &text) {
@@ -1185,8 +1337,15 @@ SourcePosition BuildSourcePosition(const Fortran::parser::Statement<T> &x,
   if (cooked_ == nullptr || x.source.empty()) {
     pos.emplace(SourcePosition{});
   } else if (auto sourceInfo{cooked_->GetSourcePositionRange(x.source)}) {
-    const std::string startPath = NormalizeSourcePath(sourceInfo->first.path);
-    const std::string endPath = NormalizeSourcePath(sourceInfo->second.path);
+    const bool fromInclude = IsFromIncludedFile(x.source);
+    const std::string startPath =
+        fromInclude ? GetIncludedPathForSource(x.source, sourceInfo->first,
+                                               /*useStart=*/true)
+                    : NormalizeSourcePath(sourceInfo->first.path.get());
+    const std::string endPath =
+        fromInclude ? GetIncludedPathForSource(x.source, sourceInfo->second,
+                                               /*useStart=*/false)
+                    : NormalizeSourcePath(sourceInfo->second.path.get());
     if (from == Order::begin)
       pos.emplace(SourcePosition{startPath, sourceInfo->first.line,
                                  sourceInfo->first.column});
@@ -1209,8 +1368,15 @@ BuildSourcePosition(const Fortran::parser::UnlabeledStatement<T> &x,
   if (cooked_ == nullptr || x.source.empty()) {
     pos.emplace(SourcePosition{});
   } else if (auto sourceInfo{cooked_->GetSourcePositionRange(x.source)}) {
-    const std::string startPath = NormalizeSourcePath(sourceInfo->first.path);
-    const std::string endPath = NormalizeSourcePath(sourceInfo->second.path);
+    const bool fromInclude = IsFromIncludedFile(x.source);
+    const std::string startPath =
+        fromInclude ? GetIncludedPathForSource(x.source, sourceInfo->first,
+                                               /*useStart=*/true)
+                    : NormalizeSourcePath(sourceInfo->first.path.get());
+    const std::string endPath =
+        fromInclude ? GetIncludedPathForSource(x.source, sourceInfo->second,
+                                               /*useStart=*/false)
+                    : NormalizeSourcePath(sourceInfo->second.path.get());
     if (from == Order::begin)
       pos.emplace(SourcePosition{startPath, sourceInfo->first.line,
                                  sourceInfo->first.column});
@@ -1664,6 +1830,11 @@ void BuildVisitor::Build(parser::MainProgram &x) {
   if (!srcPosBegin) {
     srcPosBegin.emplace(*srcPosBody);
   }
+  SourcePosition comment_pos =
+      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
+  builder.consumePrecedingComments(
+      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
+                        comment_pos.column});
 
   // Build the SgProgramHeaderStatement node
   //
@@ -1794,6 +1965,11 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
       srcPosBody.emplace(srcPosEnd);
     }
   }
+  SourcePosition comment_pos =
+      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
+  builder.consumePrecedingComments(
+      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
+                        comment_pos.column});
   Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
   SgFunctionParameterList *paramList{nullptr};
@@ -1865,6 +2041,11 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
   if (!srcPosBegin) {
     srcPosBegin.emplace(*srcPosBody);
   }
+  SourcePosition comment_pos =
+      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
+  builder.consumePrecedingComments(
+      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
+                        comment_pos.column});
   Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
   std::string name = stmt.statement.v.ToString();
@@ -1933,6 +2114,7 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   std::optional<SourcePosition> srcPosBegin{
       BuildSourcePosition(stmt, Order::begin)};
   SourcePosition srcPosEnd{BuildSourcePosition(end, Order::end)};
+  std::vector<Rose::builder::Token> comments{};
 
   // There need not be any statements
   if (!srcPosBody) {
@@ -1942,6 +2124,11 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
       srcPosBody.emplace(srcPosEnd);
     }
   }
+  SourcePosition comment_pos =
+      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
+  builder.consumePrecedingComments(
+      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
+                        comment_pos.column});
   Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
   SgFunctionParameterList *paramList{nullptr};
@@ -1949,7 +2136,6 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   SgFunctionDeclaration *functionDecl{nullptr};
   SgType *returnType{nullptr};
   LanguageTranslation::FunctionModifierList modifiers;
-  std::vector<Rose::builder::Token> comments{};
   std::string resultName;
   bool isDefDecl{true};
 
@@ -2144,6 +2330,7 @@ void BuildVisitor::Build(parser::BlockData &x) {
   std::optional<SourcePosition> srcPosBegin{
       BuildSourcePosition(stmt, Order::begin)};
   SourcePosition srcPosEnd{BuildSourcePosition(end, Order::end)};
+  std::vector<Rose::builder::Token> comments{};
   if (!srcPosBody) {
     if (srcPosBegin) {
       srcPosBody.emplace(*srcPosBegin);
@@ -2151,6 +2338,11 @@ void BuildVisitor::Build(parser::BlockData &x) {
       srcPosBody.emplace(srcPosEnd);
     }
   }
+  SourcePosition comment_pos =
+      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
+  builder.consumePrecedingComments(
+      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
+                        comment_pos.column});
   Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
   SgFunctionParameterList *paramList{nullptr};
@@ -2158,7 +2350,6 @@ void BuildVisitor::Build(parser::BlockData &x) {
   SgFunctionDeclaration *functionDecl{nullptr};
   std::list<std::string> dummyArgs;
   LanguageTranslation::FunctionModifierList modifiers;
-  std::vector<Rose::builder::Token> comments{};
   bool isDefDecl{true};
 
   builder.Enter(paramList, paramScope, name, /*function_type*/ nullptr,
@@ -2452,7 +2643,8 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
     }
     for (SgStatement *stmt : stmts) {
       if (stmt != nullptr) {
-        SageInterface::removeStatement(stmt);
+        SageInterface::removeStatement(stmt,
+                                       /*autoRelocatePreprocessingInfo*/ false);
       }
     }
     auto append_spec = [&](const std::vector<SgStatement *> &spec_stmts) {
@@ -2473,6 +2665,58 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
       SageInterface::appendStatement(stmt, new_block);
     }
   };
+  auto move_leading_function_comments = [&](SgFunctionDeclaration *func_decl,
+                                            SgBasicBlock *body) {
+    if (func_decl == nullptr || body == nullptr) {
+      return;
+    }
+    Sg_File_Info *info = func_decl->get_startOfConstruct();
+    if (info == nullptr || info->get_line() <= 0) {
+      return;
+    }
+    const int decl_line = info->get_line();
+    AttachedPreprocessingInfoType to_move;
+    for (SgStatement *stmt : body->get_statements()) {
+      if (stmt == nullptr) {
+        continue;
+      }
+      AttachedPreprocessingInfoType *info_list =
+          stmt->getAttachedPreprocessingInfo();
+      if (info_list == nullptr || info_list->empty()) {
+        continue;
+      }
+      for (auto it = info_list->begin(); it != info_list->end();) {
+        PreprocessingInfo *pi = *it;
+        if (pi != nullptr &&
+            (pi->getTypeOfDirective() ==
+                 PreprocessingInfo::FortranStyleComment ||
+             pi->getTypeOfDirective() == PreprocessingInfo::F90StyleComment ||
+             pi->getTypeOfDirective() == PreprocessingInfo::C_StyleComment ||
+             pi->getTypeOfDirective() ==
+                 PreprocessingInfo::CplusplusStyleComment) &&
+            pi->getLineNumber() < decl_line) {
+          to_move.push_back(pi);
+          it = info_list->erase(it);
+          continue;
+        }
+        ++it;
+      }
+    }
+    if (to_move.empty()) {
+      return;
+    }
+    PreprocessingInfo *prev = nullptr;
+    for (PreprocessingInfo *pi : to_move) {
+      if (prev == nullptr) {
+        func_decl->addToAttachedPreprocessingInfo(pi,
+                                                  PreprocessingInfo::before);
+      } else {
+        func_decl->insertToAttachedPreprocessingInfo(pi, prev);
+      }
+      pi->setRelativePosition(PreprocessingInfo::before);
+      prev = pi;
+    }
+  };
   const bool force_case_insensitive =
       SageInterface::is_language_case_insensitive();
   SgName functionName = functionDecl->get_name();
@@ -2486,6 +2730,7 @@ void TransferParamScopeToFunctionBody(SgScopeStatement *paramScope,
   move_param_scope_statements(paramBlock, functionBody);
   SageInterface::transferSymbols(paramBlock, functionBody);
   rehome_param_scope_statements(paramBlock, functionBody);
+  move_leading_function_comments(functionDecl, functionBody);
   fix_initnames_from_param_scope(functionBody, paramScope);
   if (paramScope != nullptr) {
     Rose_STL_Container<SgNode *> initNodes =
@@ -3586,52 +3831,28 @@ void BuildVisitor::Build(parser::ForallStmt &x) {
 }
 
 void BuildVisitor::Build(parser::Statement<parser::ActionStmt> &x) {
-  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
-  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
-  current_stmt_source_.emplace(srcBegin, srcEnd);
   Walk(x.statement);
-  current_stmt_source_.reset();
 }
 
 void BuildVisitor::Build(parser::UnlabeledStatement<parser::ActionStmt> &x) {
-  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
-  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
-  current_stmt_source_.emplace(srcBegin, srcEnd);
   Walk(x.statement);
-  current_stmt_source_.reset();
 }
 
 void BuildVisitor::Build(parser::Statement<parser::WhereStmt> &x) {
-  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
-  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
-  current_stmt_source_.emplace(srcBegin, srcEnd);
   Walk(x.statement);
-  current_stmt_source_.reset();
 }
 
 void BuildVisitor::Build(parser::Statement<parser::ForallStmt> &x) {
-  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
-  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
-  current_stmt_source_.emplace(srcBegin, srcEnd);
   Walk(x.statement);
-  current_stmt_source_.reset();
 }
 
 void BuildVisitor::Build(parser::Statement<parser::ForallAssignmentStmt> &x) {
-  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
-  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
-  current_stmt_source_.emplace(srcBegin, srcEnd);
   Walk(x.statement);
-  current_stmt_source_.reset();
 }
 
 void BuildVisitor::Build(
     parser::UnlabeledStatement<parser::ForallAssignmentStmt> &x) {
-  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
-  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
-  current_stmt_source_.emplace(srcBegin, srcEnd);
   Walk(x.statement);
-  current_stmt_source_.reset();
 }
 
 void BuildVisitor::Build(parser::ArithmeticIfStmt &x) {
@@ -3826,6 +4047,116 @@ void BuildVisitor::CloseLabelDoLoops(const parser::Label &label) {
       builder.Leave(whileStmt, /*hasEndDo*/ false);
     }
   }
+}
+
+void BuildVisitor::BeginStatementSource(
+    const Fortran::parser::CharBlock &source) {
+  stmt_source_stack_.push_back(current_stmt_source_);
+  current_stmt_source_.reset();
+
+  MaybeInsertIncludeLine(source);
+
+  if (cooked_ == nullptr || source.empty()) {
+    return;
+  }
+
+  if (auto sourceInfo = cooked_->GetSourcePositionRange(source)) {
+    const bool fromInclude = IsFromIncludedFile(source);
+    const std::string startPath =
+        fromInclude ? GetIncludedPathForSource(source, sourceInfo->first,
+                                               /*useStart=*/true)
+                    : NormalizeSourcePath(sourceInfo->first.path.get());
+    const std::string endPath =
+        fromInclude ? GetIncludedPathForSource(source, sourceInfo->second,
+                                               /*useStart=*/false)
+                    : NormalizeSourcePath(sourceInfo->second.path.get());
+    current_stmt_source_.emplace(
+        SourcePosition{startPath, sourceInfo->first.line,
+                       sourceInfo->first.column},
+        SourcePosition{endPath, sourceInfo->second.line,
+                       sourceInfo->second.column});
+  }
+}
+
+void BuildVisitor::EndStatementSource() {
+  if (stmt_source_stack_.empty()) {
+    current_stmt_source_.reset();
+    return;
+  }
+  current_stmt_source_ = stmt_source_stack_.back();
+  stmt_source_stack_.pop_back();
+}
+
+void BuildVisitor::MaybeInsertIncludeLine(
+    const Fortran::parser::CharBlock &source) {
+  if (cooked_ == nullptr || source.empty()) {
+    return;
+  }
+
+  std::optional<Fortran::parser::ProvenanceRange> stmtRange =
+      cooked_->GetProvenanceRange(source);
+  if (!stmtRange) {
+    return;
+  }
+
+  const Fortran::parser::AllSources &sources = cooked_->allSources();
+  std::optional<Fortran::parser::ProvenanceRange> includeRange =
+      sources.GetInclusionInfo(stmtRange);
+  if (!includeRange) {
+    return;
+  }
+  if (includeRange->size() == 0) {
+    include_ranges_.push_back(includeRange.value());
+    return;
+  }
+
+  for (const auto &range : include_ranges_) {
+    if (range == includeRange.value()) {
+      return;
+    }
+  }
+
+  std::string includedPath;
+  if (auto path = GetSourceFilePathForProvenance(sources, stmtRange->start(),
+                                                 /*topLevel=*/false)) {
+    includedPath = *path;
+  } else if (auto sourceInfo = cooked_->GetSourcePositionRange(source)) {
+    includedPath = sourceInfo->first.sourceFile->path();
+  }
+
+  if (IsFortranModuleFilePath(includedPath)) {
+    include_ranges_.push_back(includeRange.value());
+    return;
+  }
+
+  std::string includeFilename =
+      ExtractIncludeFilenameFromRange(sources, includeRange.value());
+  if (includeFilename.empty()) {
+    includeFilename = includedPath;
+  }
+  if (includeFilename.empty()) {
+    include_ranges_.push_back(includeRange.value());
+    return;
+  }
+
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+  SgFortranIncludeLine *includeLine =
+      SageBuilder::buildFortranIncludeLine(includeFilename);
+  ASSERT_not_null(includeLine);
+
+  std::optional<SourcePosition> startPos =
+      BuildSourcePositionFromProvenance(sources, includeRange->start());
+  std::optional<SourcePosition> endPos =
+      BuildSourcePositionFromProvenance(sources, includeRange->Last());
+  if (startPos && endPos) {
+    builder.setSourcePosition(includeLine, *startPos, *endPos);
+  } else {
+    SageInterface::setSourcePosition(includeLine);
+  }
+
+  SageInterface::appendStatement(includeLine, scope);
+  include_ranges_.push_back(includeRange.value());
 }
 
 void BuildVisitor::ApplyStatementLabel(SgStatement *stmt,
@@ -5701,6 +6032,7 @@ void BuildVisitor::Build(parser::ImplicitStmt &x) {
             SgImplicitStatement *stmt{nullptr};
             builder.Enter(stmt, implicit_spec_list);
             builder.Leave(stmt);
+            ApplyCurrentStatementSource(stmt);
           },
           [&](const std::list<ImplicitStmt::ImplicitNoneNameSpec> &y) {
             // ENUM_CLASS(ImplicitNoneNameSpec, External, Type) // R866
@@ -5718,6 +6050,7 @@ void BuildVisitor::Build(parser::ImplicitStmt &x) {
     SgImplicitStatement *stmt{nullptr};
     builder.Enter(stmt, implicitExternal, implicitType);
     builder.Leave(stmt);
+    ApplyCurrentStatementSource(stmt);
   }
 }
 
@@ -5981,6 +6314,36 @@ void BuildVisitor::Build(parser::CommonStmt &x) {
   SgCommonBlock *blockStmt{nullptr};
   builder.Enter(blockStmt, commonBlocks);
   builder.Leave(blockStmt);
+  ApplyCurrentStatementSource(blockStmt);
+}
+
+void BuildVisitor::Build(parser::EquivalenceStmt &x) {
+  SgScopeStatement *scope = SageBuilder::topScopeStack();
+  ASSERT_not_null(scope);
+
+  SgEquivalenceStatement *stmt = new SgEquivalenceStatement();
+  ASSERT_not_null(stmt);
+
+  SgExprListExp *setList = SageBuilder::buildExprListExp_nfi();
+  ASSERT_not_null(setList);
+  stmt->set_equivalence_set_list(setList);
+  setList->set_parent(stmt);
+
+  for (const auto &eqSet : x.v) {
+    SgExprListExp *tuple = SageBuilder::buildExprListExp_nfi();
+    ASSERT_not_null(tuple);
+    for (const auto &obj : eqSet) {
+      SgExpression *expr{nullptr};
+      ::Rose::builder::Build(obj.v.value(), expr);
+      ASSERT_not_null(expr);
+      AppendExpr(tuple, expr);
+    }
+    AppendExpr(setList, tuple);
+  }
+
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, scope);
+  InsertFortranSpecificationStatement(stmt, scope);
 }
 
 void BuildVisitor::Build(parser::DataStmt &x) {
@@ -5998,6 +6361,7 @@ void BuildVisitor::Build(parser::DataStmt &x) {
       SageBuilder::buildAttributeSpecificationStatement(
           SgAttributeSpecificationStatement::e_dataStatement);
   ASSERT_not_null(dataStmt);
+  ApplyCurrentStatementSource(dataStmt);
   SageInterface::appendStatement(dataStmt, SageBuilder::topScopeStack());
 
   // An SgDataStatementGroup corresponds to a DataStmtSet
@@ -6076,7 +6440,7 @@ void BuildVisitor::Build(parser::AllocatableStmt &x) {
       SageBuilder::buildAttributeSpecificationStatement(
           SgAttributeSpecificationStatement::e_allocatableStatement);
   ASSERT_not_null(allocStmt);
-  SageInterface::setSourcePosition(allocStmt);
+  ApplyCurrentStatementSource(allocStmt);
 
   SgExprListExp *paramList = allocStmt->get_parameter_list();
   if (paramList == nullptr) {
@@ -6229,7 +6593,7 @@ void BuildVisitor::Build(parser::ExternalStmt &x) {
       SageBuilder::buildAttributeSpecificationStatement(
           SgAttributeSpecificationStatement::e_externalStatement);
   ASSERT_not_null(externalStmt);
-  SageInterface::setSourcePosition(externalStmt);
+  ApplyCurrentStatementSource(externalStmt);
 
   SgExprListExp *paramList = externalStmt->get_parameter_list();
   if (paramList == nullptr) {
@@ -6354,6 +6718,7 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
           SageInterface::fixVariableDeclaration(varDecl, scope);
         }
         InsertFortranSpecificationStatement(existingDecl, scope);
+        ApplyCurrentStatementSource(existingDecl);
         reusedImplicitDecl = true;
       }
     }
@@ -6363,6 +6728,7 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
       SgVariableDeclaration *varDecl{nullptr};
       builder.Enter(varDecl, type, singleInitInfo);
       builder.Leave(varDecl, modifiers);
+      ApplyCurrentStatementSource(varDecl);
     }
   }
 }
@@ -6515,6 +6881,7 @@ void BuildVisitor::Build(parser::DimensionStmt &x) {
       SageBuilder::buildAttributeSpecificationStatement(
           SgAttributeSpecificationStatement::e_dimensionStatement);
   ASSERT_not_null(dimStmt);
+  ApplyCurrentStatementSource(dimStmt);
   SageInterface::appendStatement(dimStmt, SageBuilder::topScopeStack());
 
   SgExprListExp *paramList = dimStmt->get_parameter_list();

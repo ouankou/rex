@@ -7211,18 +7211,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   const bool is_definition_decl =
       class_tpl_spec_decl->isThisDeclarationADefinition();
 
-  // Determine the template name from the specialized template
-  std::string template_name_str;
   clang::TemplateDecl *specialized_template =
       class_tpl_spec_decl->getSpecializedTemplate();
-  if (specialized_template) {
-    template_name_str = specialized_template->getNameAsString();
-  } else {
-    template_name_str =
-        "__anon_template_spec_" +
-        generate_source_position_string(class_tpl_spec_decl->getBeginLoc());
-  }
-  SgName name(template_name_str);
 
   // Resolve class kind early so fallback template declarations can use it.
   SgClassDeclaration::class_types class_kind = SgClassDeclaration::e_class;
@@ -7259,11 +7249,27 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
 
   if (specialized_template == nullptr) {
     auto specialized = class_tpl_spec_decl->getSpecializedTemplateOrPartial();
-    if (clang::ClassTemplateDecl *class_template =
+    if (auto *class_template =
             specialized.dyn_cast<clang::ClassTemplateDecl *>()) {
       specialized_template = class_template;
+    } else if (auto *partial =
+                   specialized.dyn_cast<
+                       clang::ClassTemplatePartialSpecializationDecl *>()) {
+      specialized_template = partial->getSpecializedTemplate();
     }
   }
+
+  // Determine the template name from the specialized template
+  std::string template_name_str;
+  if (specialized_template != nullptr) {
+    template_name_str = specialized_template->getNameAsString();
+  }
+  if (template_name_str.empty()) {
+    template_name_str =
+        "__anon_template_spec_" +
+        generate_source_position_string(class_tpl_spec_decl->getBeginLoc());
+  }
+  SgName name(template_name_str);
 
   SgTemplateClassDeclaration *primary_template_decl = nullptr;
   if (specialized_template) {
@@ -7372,7 +7378,10 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   // instantiations always link to a valid primary template.
   if (primary_template_decl == nullptr) {
     clang::ClassTemplateDecl *class_template =
-        class_tpl_spec_decl->getSpecializedTemplate();
+        llvm::dyn_cast_or_null<clang::ClassTemplateDecl>(specialized_template);
+    if (class_template == nullptr) {
+      class_template = class_tpl_spec_decl->getSpecializedTemplate();
+    }
     if (class_template != nullptr) {
       std::string qualified_name = class_template->getQualifiedNameAsString();
       if (qualified_name.empty()) {
@@ -7559,6 +7568,72 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   if (parent_scope == nullptr) {
     parent_scope = scope;
   }
+
+  auto recover_template_decl =
+      [&](SgTemplateInstantiationDecl *decl) -> SgTemplateClassDeclaration * {
+    if (decl == nullptr) {
+      return nullptr;
+    }
+    SgName template_name = decl->get_templateName();
+    if (template_name.getString().empty()) {
+      template_name = name;
+    }
+    if (template_name.getString().empty()) {
+      return nullptr;
+    }
+
+    SgScopeStatement *lookup_scope = isSgScopeStatement(decl->get_parent());
+    if (lookup_scope == nullptr) {
+      lookup_scope = decl->get_scope();
+    }
+    if (lookup_scope == nullptr) {
+      lookup_scope = scope;
+    }
+    if (lookup_scope == nullptr) {
+      lookup_scope = parent_scope;
+    }
+    if (lookup_scope == nullptr) {
+      lookup_scope = getGlobalScope();
+    }
+
+    SgTemplateClassSymbol *tmpl_sym =
+        lookup_scope->lookup_template_class_symbol(template_name, nullptr,
+                                                   nullptr);
+    if (tmpl_sym == nullptr) {
+      tmpl_sym = SageInterface::lookupTemplateClassSymbolInParentScopes(
+          template_name, nullptr, nullptr, lookup_scope);
+    }
+    if (tmpl_sym != nullptr) {
+      return isSgTemplateClassDeclaration(tmpl_sym->get_declaration());
+    }
+
+    if (SgClassSymbol *class_sym =
+            lookup_scope->lookup_class_symbol(template_name)) {
+      return isSgTemplateClassDeclaration(class_sym->get_declaration());
+    }
+    if (SgClassSymbol *class_sym =
+            SageInterface::lookupClassSymbolInParentScopes(template_name,
+                                                           lookup_scope)) {
+      return isSgTemplateClassDeclaration(class_sym->get_declaration());
+    }
+
+    SgTemplateParameterPtrList empty_params;
+    SgTemplateArgumentPtrList empty_args;
+    SgTemplateClassDeclaration *stub =
+        SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
+            template_name, instantiation_kind, lookup_scope, &empty_params,
+            &empty_args);
+    if (stub != nullptr) {
+      stub->setForward();
+      stub->set_firstNondefiningDeclaration(stub);
+      stub->set_definingDeclaration(nullptr);
+      if (stub->get_file_info() != nullptr) {
+        stub->get_file_info()->setCompilerGenerated();
+        stub->get_file_info()->unsetOutputInCodeGeneration();
+      }
+    }
+    return stub;
+  };
 
   bool use_instantiation_args = false;
   auto specialized_or_partial =
@@ -7811,6 +7886,12 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       instantiationDecl->set_templateDeclaration(primary_template_decl);
     }
   }
+  if (instantiationDecl->get_templateDeclaration() == nullptr) {
+    if (SgTemplateClassDeclaration *recovered =
+            recover_template_decl(instantiationDecl)) {
+      instantiationDecl->set_templateDeclaration(recovered);
+    }
+  }
 
   // Ensure a defining declaration exists when Clang has a definition, even if
   // this specialization is emitted as an explicit instantiation directive.
@@ -7853,6 +7934,12 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
 
       definingDecl->set_templateDeclaration(
           firstNondefiningDeclaration->get_templateDeclaration());
+      if (definingDecl->get_templateDeclaration() == nullptr) {
+        if (SgTemplateClassDeclaration *recovered =
+                recover_template_decl(definingDecl)) {
+          definingDecl->set_templateDeclaration(recovered);
+        }
+      }
     } else {
       definingDecl->set_firstNondefiningDeclaration(
           firstNondefiningDeclaration);
@@ -7872,6 +7959,12 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       if (definingDecl->get_templateDeclaration() == nullptr) {
         definingDecl->set_templateDeclaration(
             firstNondefiningDeclaration->get_templateDeclaration());
+      }
+      if (definingDecl->get_templateDeclaration() == nullptr) {
+        if (SgTemplateClassDeclaration *recovered =
+                recover_template_decl(definingDecl)) {
+          definingDecl->set_templateDeclaration(recovered);
+        }
       }
       if (definingDecl->get_templateName().getString().empty()) {
         definingDecl->set_templateName(name);

@@ -6408,6 +6408,21 @@ template <class T> void SageInterface::setSourcePositionToDefault(T *node) {
   // position.
   ROSE_ASSERT(node != NULL);
 
+  auto ensure_default_file_info = [](Sg_File_Info *fi) {
+    if (fi == NULL) {
+      return;
+    }
+    const int file_id = fi->get_file_id();
+    if (file_id != Sg_File_Info::NULL_FILE_ID &&
+        file_id != Sg_File_Info::COPY_FILE_ID) {
+      return;
+    }
+    if (fi->isSourcePositionUnavailableInFrontend() == false) {
+      fi->setSourcePositionUnavailableInFrontend();
+      fi->setOutputInCodeGeneration();
+    }
+  };
+
   // We have to support this being called where the Sg_File_Info have previously
   // been set.
   if (node->get_endOfConstruct() == NULL &&
@@ -6451,6 +6466,9 @@ template <class T> void SageInterface::setSourcePositionToDefault(T *node) {
     ROSE_ASSERT(node->get_endOfConstruct() != NULL);
     ROSE_ASSERT(node->get_endOfConstruct() != NULL &&
                 node->get_startOfConstruct() != NULL);
+
+    ensure_default_file_info(node->get_startOfConstruct());
+    ensure_default_file_info(node->get_endOfConstruct());
   }
 
   // DQ (11/2/2012): This is an important fix to support the new legacy
@@ -6490,6 +6508,8 @@ template <class T> void SageInterface::setSourcePositionToDefault(T *node) {
       operator_fileInfo->set_parent(expression);
       ROSE_ASSERT(expression->get_operatorPosition()->get_parent() ==
                   expression);
+    } else {
+      ensure_default_file_info(expression->get_operatorPosition());
     }
   }
 }

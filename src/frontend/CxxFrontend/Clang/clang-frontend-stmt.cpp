@@ -2898,6 +2898,9 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
       applySourceRange(for_init_stmt, for_stmt->getInit()->getSourceRange());
     else
       setCompilerGeneratedFileInfo(for_init_stmt, true);
+    if (for_init_stmt->get_startOfConstruct() == nullptr) {
+      setCompilerGeneratedFileInfo(for_init_stmt, true);
+    }
 
     // Ensure for-init statements are parented by the SgForInitStatement while
     // keeping their scope on the enclosing for-statement.

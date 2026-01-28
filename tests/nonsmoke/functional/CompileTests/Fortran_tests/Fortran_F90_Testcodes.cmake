@@ -198,6 +198,8 @@ set(F90_TESTCODES
   test2010_163.f90
   test2010_165.f90
   test2010_166.f90
+  rex_test2026_equivalence.f90
+  rex_test2026_include.f90
   test2010_167.f90
   test2010_168.f90
   test2010_172.f90

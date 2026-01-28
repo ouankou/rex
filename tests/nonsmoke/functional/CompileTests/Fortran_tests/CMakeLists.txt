@@ -121,6 +121,20 @@ add_test(
     "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/test2007_suffixTest_07.F90 && diff <(tail -n 6 rose_test2007_suffixTest_07.F90) <(tail -n 6 ${_fortran_reference_dir}/rose_test2007_suffixTest_07.F90.output)"
 )
 
+add_test(
+  NAME fortran_rex_test2026_equivalence_unparse
+  WORKING_DIRECTORY ${_fortran_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_equivalence.f90 && grep -qi 'equivalence' rose_rex_test2026_equivalence.f90"
+)
+
+add_test(
+  NAME fortran_rex_test2026_include_unparse
+  WORKING_DIRECTORY ${_fortran_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_include.f90 && awk 'tolower($0) ~ /include/ && $0 ~ /rex_test2026_include\\.inc/ {found=1} END {exit !found}' rose_rex_test2026_include.f90"
+)
+
 set(_fortran_comment_diff_tests
   test2020_comment_1.f90
   test2020_comment_2.f90

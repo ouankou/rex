@@ -12511,6 +12511,26 @@ Sg_File_Info::post_construction_initialization()
 
   // ROSE-1499 check that p_file_id is valid
      check_file_id("Sg_File_Info::post_construction_initialization");
+
+  // Ensure default/null file infos are consistently flagged as having
+  // unavailable source positions. Some constructors initialize file info
+  // eagerly, so setSourcePositionToDefault() may not run.
+     if ( (p_file_id == NULL_FILE_ID || p_file_id == COPY_FILE_ID) &&
+          p_classificationBitField == 0 )
+        {
+          setSourcePositionUnavailableInFrontend();
+          setOutputInCodeGeneration();
+        }
+
+  // Keep classification bits consistent with special file IDs.
+     if (p_file_id == COMPILER_GENERATED_FILE_ID && isCompilerGenerated() == false)
+        {
+          setCompilerGenerated();
+        }
+     if (p_file_id == TRANSFORMATION_FILE_ID && isTransformation() == false)
+        {
+          setTransformation();
+        }
    }
 
 // ROSE-1499, ROSE-1639 (added const to char*)
