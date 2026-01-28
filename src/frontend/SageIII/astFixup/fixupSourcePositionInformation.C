@@ -96,6 +96,23 @@ FixupSourcePositionInformationSynthesizedAttribute::
 void FixupSourcePositionInformation::
     fixupCompilerGeneratedNodesToBeUniformlyMarked(SgLocatedNode *locatedNode) {
   SgExpression *expression = isSgExpression(locatedNode);
+  auto mark_compiler_generated = [](Sg_File_Info *fi) {
+    if (fi == NULL) {
+      return;
+    }
+    if (fi->get_file_id() == Sg_File_Info::COMPILER_GENERATED_FILE_ID &&
+        fi->isCompilerGenerated() == false) {
+      fi->setCompilerGenerated();
+    }
+  };
+
+  mark_compiler_generated(locatedNode->get_file_info());
+  mark_compiler_generated(locatedNode->get_startOfConstruct());
+  mark_compiler_generated(locatedNode->get_endOfConstruct());
+  if (expression != NULL) {
+    mark_compiler_generated(expression->get_operatorPosition());
+  }
+
   if (locatedNode->get_startOfConstruct()->isCompilerGenerated() == true) {
     if (locatedNode->get_endOfConstruct()->isCompilerGenerated() == false) {
       printf(
@@ -151,7 +168,28 @@ void FixupSourcePositionInformation::
   // were the ending position in unavailable even if the starting position is
   // known.
 
+  auto mark_unavailable_if_default = [](Sg_File_Info *fi) {
+    if (fi == NULL) {
+      return;
+    }
+    int file_id = fi->get_file_id();
+    if (file_id != Sg_File_Info::NULL_FILE_ID &&
+        file_id != Sg_File_Info::COPY_FILE_ID) {
+      return;
+    }
+    if (fi->isSourcePositionUnavailableInFrontend() == false) {
+      fi->setSourcePositionUnavailableInFrontend();
+      fi->setOutputInCodeGeneration();
+    }
+  };
+
   SgExpression *expression = isSgExpression(locatedNode);
+  mark_unavailable_if_default(locatedNode->get_startOfConstruct());
+  mark_unavailable_if_default(locatedNode->get_endOfConstruct());
+  if (expression != NULL) {
+    mark_unavailable_if_default(expression->get_operatorPosition());
+  }
+
   if (locatedNode->get_startOfConstruct()
           ->isSourcePositionUnavailableInFrontend() == true) {
     if (locatedNode->get_endOfConstruct()

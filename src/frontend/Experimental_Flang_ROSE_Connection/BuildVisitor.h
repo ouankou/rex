@@ -32,12 +32,21 @@ public:
         label_ = x.label;
       }
     }
+    BeginStatementSource(x.source);
   }
   template <typename T> void Post(Fortran::parser::Statement<T> &x) {
     if (label_) {
       CloseLabelDoLoops(label_.value());
     }
     label_ = std::nullopt;
+    EndStatementSource();
+  }
+  template <typename T> void Before(Fortran::parser::UnlabeledStatement<T> &x) {
+    BeginStatementSource(x.source);
+  }
+  template <typename T>
+  void Post(Fortran::parser::UnlabeledStatement<T> & /*x*/) {
+    EndStatementSource();
   }
 
   template <typename T> bool Pre(T &x) {
@@ -135,6 +144,7 @@ public:
   void Build(Fortran::parser::SpecificationPart &);
   void Build(Fortran::parser::ImplicitStmt &);
   void Build(Fortran::parser::CommonStmt &);
+  void Build(Fortran::parser::EquivalenceStmt &);
   void Build(Fortran::parser::Statement<
              Fortran::common::Indirection<Fortran::parser::UseStmt>> &);
   void Build(Fortran::parser::Statement<
@@ -275,6 +285,9 @@ public:
   }
 
 private:
+  void BeginStatementSource(const Fortran::parser::CharBlock &source);
+  void EndStatementSource();
+  void MaybeInsertIncludeLine(const Fortran::parser::CharBlock &source);
   void ApplyStatementLabel(SgStatement *stmt, SgScopeStatement *scope) const;
   void ApplyCurrentStatementSource(SgLocatedNode *node);
 
@@ -291,6 +304,8 @@ private:
   SgType *type_; // synthesized attribute
   std::optional<Fortran::parser::Label> label_;
   std::optional<SourcePositionPair> current_stmt_source_;
+  std::vector<std::optional<SourcePositionPair>> stmt_source_stack_;
+  std::vector<Fortran::parser::ProvenanceRange> include_ranges_;
   std::vector<LabelDoFrame> label_do_stack_;
   int type_context_depth_;
 

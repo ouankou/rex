@@ -8927,10 +8927,19 @@ SgForStatement::post_construction_initialization()
          // DQ (12/17/2006): Fixup the parents of Sg_File_Info objects
             forInitStatement->get_startOfConstruct()->set_parent(forInitStatement);
             forInitStatement->get_endOfConstruct()->set_parent(forInitStatement);
-          }
+         }
          else
           {
-            forInitStatement = new SgForInitStatement();
+            Sg_File_Info *start_fi =
+                Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
+            Sg_File_Info *end_fi =
+                Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
+            start_fi->setCompilerGenerated();
+            end_fi->setCompilerGenerated();
+            forInitStatement = new SgForInitStatement(start_fi);
+            forInitStatement->set_endOfConstruct(end_fi);
+            start_fi->set_parent(forInitStatement);
+            end_fi->set_parent(forInitStatement);
           }
 
        ROSE_ASSERT(forInitStatement != NULL);
@@ -10829,6 +10838,10 @@ SgVariableDeclaration::initializeData(Sg_File_Info *info, SgInitializedName* c_i
 
   // DQ(10/10/2007): Added initialization of another data member.
      p_baseTypeDefiningDeclaration = NULL; // non list case
+
+ // DQ (02/10/2026): Ensure requires clause pointer is initialized for
+ // all constructors that delegate to this helper.
+    p_requiresClause = NULL;
 
   // DQ(10/10/2007): Added initialization of another data member.
      p_specialization = SgDeclarationStatement::e_no_specialization;

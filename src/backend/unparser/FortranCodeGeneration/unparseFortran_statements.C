@@ -1968,6 +1968,51 @@ void FortranCodeGeneration_locatedNode::unparseBasicBlockStmt(
   // least).
   unp->cur.format(block, info, FORMAT_BEFORE_BASIC_BLOCK1);
 
+  SgStatement *first_stmt = nullptr;
+  int first_line = -1;
+  for (SgStatement *stmt : block->get_statements()) {
+    if (stmt == nullptr) {
+      continue;
+    }
+    Sg_File_Info *stmt_info = stmt->get_file_info();
+    if (stmt_info == nullptr || stmt_info->get_line() <= 0) {
+      continue;
+    }
+    if (first_line < 0 || stmt_info->get_line() < first_line) {
+      first_line = stmt_info->get_line();
+      first_stmt = stmt;
+    }
+  }
+  if (first_stmt != nullptr && first_line > 0) {
+    AttachedPreprocessingInfoType *block_info =
+        block->getAttachedPreprocessingInfo();
+    if (block_info != nullptr && !block_info->empty()) {
+      AttachedPreprocessingInfoType to_move;
+      for (auto it = block_info->begin(); it != block_info->end();) {
+        PreprocessingInfo *pi = *it;
+        if (pi != nullptr &&
+            pi->getRelativePosition() == PreprocessingInfo::inside &&
+            pi->getLineNumber() > 0 && pi->getLineNumber() < first_line) {
+          to_move.push_back(pi);
+          it = block_info->erase(it);
+          continue;
+        }
+        ++it;
+      }
+      PreprocessingInfo *prev = nullptr;
+      for (PreprocessingInfo *pi : to_move) {
+        if (prev == nullptr) {
+          first_stmt->addToAttachedPreprocessingInfo(pi,
+                                                     PreprocessingInfo::before);
+        } else {
+          first_stmt->insertToAttachedPreprocessingInfo(pi, prev);
+        }
+        pi->setRelativePosition(PreprocessingInfo::before);
+        prev = pi;
+      }
+    }
+  }
+
   constexpr const char *kFortranImplicitDeclAttr =
       "rose_fortran_implicit_declaration";
   constexpr const char *kFortranEmitImplicitDeclAttr =
@@ -4051,12 +4096,23 @@ void FortranCodeGeneration_locatedNode::unparseFuncDefnStmt(
   info.set_declstatement_ptr(nullptr);
   info.set_declstatement_ptr(funcdefn_stmt->get_declaration());
 
+  SgUnparse_Info commentInfo(info);
+  commentInfo.unset_SkipFunctionDefinition();
+  unparseAttachedPreprocessingInfo(declstmt, commentInfo,
+                                   PreprocessingInfo::before);
+
+  // Emit numeric labels after leading comments for Fortran defining
+  // declarations.
+  unparseStatementNumbers(declstmt, info);
   if (isSgProgramHeaderStatement(declstmt) != nullptr) {
     unparseProgHdrStmt(declstmt, info);
   } else {
     ASSERT_not_null(isSgProcedureHeaderStatement(declstmt));
     unparseProcHdrStmt(declstmt, info);
   }
+
+  unparseAttachedPreprocessingInfo(declstmt, commentInfo,
+                                   PreprocessingInfo::after);
 
   // Un-mark that we are unparsing a function declaration (or member function
   // declaration)

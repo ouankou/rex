@@ -2472,6 +2472,25 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     //   10) then trailing comments and CPP directives are output on the body,
     //   the function definition, and the function declaration (in that order).
     bool skipOutputOfPreprocessingInfo = (isSgFunctionDefinition(stmt) != NULL);
+    bool skipStatementNumbers = false;
+    if (skipOutputOfPreprocessingInfo == false) {
+      if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(stmt)) {
+        SgSourceFile *source_file = info.get_current_source_file();
+        const bool is_fortran_file =
+            source_file != NULL &&
+            (source_file->get_Fortran_only() || source_file->get_F90_only() ||
+             source_file->get_CoArrayFortran_only());
+        if (is_fortran_file && func_decl->get_definition() != NULL &&
+            !func_decl->isForward() && !info.SkipFunctionDefinition()) {
+          // For Fortran defining declarations, unparseFuncDefnStmt will emit
+          // attached comments, so avoid printing them twice here.
+          skipOutputOfPreprocessingInfo = true;
+          // Delay numeric labels until unparseFuncDefnStmt so they appear
+          // after leading comments.
+          skipStatementNumbers = true;
+        }
+      }
+    }
     // This is the other part of the accumulation of the compiler-generated
     // statements into compilerGeneratedStatementQueue so that they can be
     // unparsed after any CPP directives or comments are unparsed (above).
@@ -3278,7 +3297,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         // DQ (7/19/2007): This only applies to Fortran where every statement
         // can have a statement number (numeric label, different from
         // SgLabelStatement)
-        unparseStatementNumbers(stmt, info);
+        if (!skipStatementNumbers) {
+          unparseStatementNumbers(stmt, info);
+        }
 
 #if DEBUG_UNPARSE_STATEMENT
         printf("In UnparseLanguageIndependentConstructs::unparseStatement(): "

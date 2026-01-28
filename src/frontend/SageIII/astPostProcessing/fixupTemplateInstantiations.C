@@ -19,6 +19,57 @@ void fixupTemplateInstantiations(SgNode *node) {
 void FixupTemplateInstantiations::visit(SgNode *node) {
   ROSE_ASSERT(node != NULL);
 
+  // Ensure template instantiations reference a valid template declaration.
+  if (SgTemplateInstantiationDecl *inst = isSgTemplateInstantiationDecl(node)) {
+    if (inst->get_templateDeclaration() == nullptr) {
+      SgName template_name = inst->get_templateName();
+      if (template_name.getString().empty()) {
+        template_name = inst->get_name();
+      }
+      if (!template_name.getString().empty()) {
+        SgScopeStatement *lookup_scope = isSgScopeStatement(inst->get_parent());
+        if (lookup_scope == nullptr) {
+          lookup_scope = inst->get_scope();
+        }
+        if (lookup_scope == nullptr) {
+          lookup_scope = SageBuilder::topScopeStack();
+        }
+        if (lookup_scope == nullptr) {
+          lookup_scope = SageInterface::getGlobalScope(node);
+        }
+
+        SgTemplateClassSymbol *tmpl_sym =
+            lookup_scope->lookup_template_class_symbol(template_name, nullptr,
+                                                       nullptr);
+        if (tmpl_sym == nullptr) {
+          tmpl_sym = SageInterface::lookupTemplateClassSymbolInParentScopes(
+              template_name, nullptr, nullptr, lookup_scope);
+        }
+        if (tmpl_sym != nullptr) {
+          inst->set_templateDeclaration(
+              isSgTemplateClassDeclaration(tmpl_sym->get_declaration()));
+        } else {
+          SgTemplateParameterPtrList empty_params;
+          SgTemplateArgumentPtrList empty_args;
+          SgTemplateClassDeclaration *stub =
+              SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
+                  template_name, inst->get_class_type(), lookup_scope,
+                  &empty_params, &empty_args);
+          if (stub != nullptr) {
+            stub->setForward();
+            stub->set_firstNondefiningDeclaration(stub);
+            stub->set_definingDeclaration(nullptr);
+            if (stub->get_file_info() != nullptr) {
+              stub->get_file_info()->setCompilerGenerated();
+              stub->get_file_info()->unsetOutputInCodeGeneration();
+            }
+            inst->set_templateDeclaration(stub);
+          }
+        }
+      }
+    }
+  }
+
   // Take care of marking the whole subtree of any declarations
   // that the legacy frontend/Sage connection marked as compiler generated.
   SgDeclarationStatement *declaration = isSgDeclarationStatement(node);
