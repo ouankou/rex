@@ -38,6 +38,20 @@ bool IsCommentInfo(const PreprocessingInfo *info) {
          type == PreprocessingInfo::CplusplusStyleComment;
 }
 
+std::string BuildCommentKey(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return {};
+  }
+  std::string key =
+      std::to_string(static_cast<int>(info->getTypeOfDirective())) + ":" +
+      std::to_string(static_cast<int>(info->getRelativePosition())) + ":" +
+      info->getString();
+  if (info->getLineNumber() > 0) {
+    key = std::to_string(info->getLineNumber()) + ":" + key;
+  }
+  return key;
+}
+
 void DedupAttachedPreprocessingInfo(SgLocatedNode *node) {
   if (node == nullptr) {
     return;
@@ -48,29 +62,19 @@ void DedupAttachedPreprocessingInfo(SgLocatedNode *node) {
     return;
   }
 
-  std::set<std::string> seen;
-  std::set<std::string> seen_text;
+  std::set<std::string> seen_keys;
   for (auto it = info_list->begin(); it != info_list->end();) {
     PreprocessingInfo *info = *it;
     if (!IsCommentInfo(info)) {
       ++it;
       continue;
     }
-    const std::string text_key =
-        std::to_string(static_cast<int>(info->getTypeOfDirective())) + ":" +
-        std::to_string(static_cast<int>(info->getRelativePosition())) + ":" +
-        info->getString();
-    std::string line_key = text_key;
-    if (info->getLineNumber() > 0) {
-      line_key = std::to_string(info->getLineNumber()) + ":" + text_key;
-    }
-    if (seen.find(line_key) != seen.end() ||
-        seen_text.find(text_key) != seen_text.end()) {
+    const std::string key = BuildCommentKey(info);
+    if (seen_keys.count(key) > 0) {
       it = info_list->erase(it);
       continue;
     }
-    seen.insert(line_key);
-    seen_text.insert(text_key);
+    seen_keys.insert(key);
     ++it;
   }
 }
@@ -90,22 +94,12 @@ void RemoveDuplicateComments(SgLocatedNode *target, SgLocatedNode *reference) {
     return;
   }
 
-  std::set<std::string> seen;
-  std::set<std::string> seen_text;
+  std::set<std::string> ref_keys;
   for (const PreprocessingInfo *info : *ref_list) {
     if (!IsCommentInfo(info)) {
       continue;
     }
-    const std::string text_key =
-        std::to_string(static_cast<int>(info->getTypeOfDirective())) + ":" +
-        std::to_string(static_cast<int>(info->getRelativePosition())) + ":" +
-        info->getString();
-    std::string line_key = text_key;
-    if (info->getLineNumber() > 0) {
-      line_key = std::to_string(info->getLineNumber()) + ":" + text_key;
-    }
-    seen.insert(line_key);
-    seen_text.insert(text_key);
+    ref_keys.insert(BuildCommentKey(info));
   }
 
   for (auto it = target_list->begin(); it != target_list->end();) {
@@ -114,16 +108,8 @@ void RemoveDuplicateComments(SgLocatedNode *target, SgLocatedNode *reference) {
       ++it;
       continue;
     }
-    const std::string text_key =
-        std::to_string(static_cast<int>(info->getTypeOfDirective())) + ":" +
-        std::to_string(static_cast<int>(info->getRelativePosition())) + ":" +
-        info->getString();
-    std::string line_key = text_key;
-    if (info->getLineNumber() > 0) {
-      line_key = std::to_string(info->getLineNumber()) + ":" + text_key;
-    }
-    if (seen.find(line_key) != seen.end() ||
-        seen_text.find(text_key) != seen_text.end()) {
+    const std::string key = BuildCommentKey(info);
+    if (ref_keys.count(key) > 0) {
       it = target_list->erase(it);
       continue;
     }
@@ -1025,28 +1011,14 @@ void SageTreeBuilder::Leave(SgScopeStatement *scope) {
                  type == PreprocessingInfo::C_StyleComment ||
                  type == PreprocessingInfo::CplusplusStyleComment;
         };
-        auto comment_key = [&](const PreprocessingInfo *info) {
-          return std::to_string(info->getLineNumber()) + ":" +
-                 std::to_string(static_cast<int>(info->getTypeOfDirective())) +
-                 ":" + info->getString();
-        };
-        auto comment_text_key = [&](const PreprocessingInfo *info) {
-          return std::to_string(static_cast<int>(info->getTypeOfDirective())) +
-                 ":" + info->getString();
-        };
-        std::set<std::string> seen;
-        std::set<std::string> seen_text;
+        std::set<std::string> seen_keys;
         if (AttachedPreprocessingInfoType *first_info =
                 first_stmt->getAttachedPreprocessingInfo()) {
           for (const PreprocessingInfo *info : *first_info) {
             if (!is_comment_info(info)) {
               continue;
             }
-            if (info->getLineNumber() > 0) {
-              seen.insert(comment_key(info));
-            } else {
-              seen_text.insert(comment_text_key(info));
-            }
+            seen_keys.insert(BuildCommentKey(info));
           }
         }
         AttachedPreprocessingInfoType to_move;
@@ -1054,15 +1026,12 @@ void SageTreeBuilder::Leave(SgScopeStatement *scope) {
           PreprocessingInfo *info = *it;
           if (info != nullptr && is_comment_info(info) &&
               (first_line <= 0 || info->getLineNumber() <= first_line)) {
-            const std::string text_key = comment_text_key(info);
-            const std::string key = comment_key(info);
-            if (seen.find(key) != seen.end() ||
-                seen_text.find(text_key) != seen_text.end()) {
+            const std::string key = BuildCommentKey(info);
+            if (seen_keys.count(key) > 0) {
               it = info_list->erase(it);
               continue;
             }
-            seen.insert(key);
-            seen_text.insert(text_key);
+            seen_keys.insert(key);
             to_move.push_back(info);
             it = info_list->erase(it);
             continue;
