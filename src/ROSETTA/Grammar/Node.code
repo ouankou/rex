@@ -304,6 +304,9 @@ typedef SgInterfaceBodyPtrList*              SgInterfaceBodyPtrListPtr;
 // Liao, 5/30/2009 types for OpenMP support
 typedef Rose_STL_Container<SgOmpClause*>   SgOmpClausePtrList;
 typedef SgOmpClausePtrList*                SgOmpClausePtrListPtr;
+// OpenACC clause list support
+typedef Rose_STL_Container<SgAccClause*>   SgAccClausePtrList;
+typedef SgAccClausePtrList*                SgAccClausePtrListPtr;
 
 typedef Rose_STL_Container<SgOmpSectionStatement*>   SgOmpSectionStatementPtrList;
 typedef SgOmpSectionStatementPtrList*                SgOmpSectionStatementPtrListPtr;

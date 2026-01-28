@@ -46,7 +46,8 @@ typedef std::map<int, ROSEAttributesList *> AttributeMapType;
 // main function DQ: Now called by the SgFile constructor body (I think) void
 // attachPreprocessingInfo(SgSourceFile *sageFilePtr)
 void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
-                             const std::string &new_filename) {
+                             const std::string &new_filename,
+                             bool attach_to_ast) {
   ROSE_ASSERT(sageFilePtr != NULL);
 
   // DQ (02/20/2021): Using the performance tracking within ROSE.
@@ -165,42 +166,46 @@ void attachPreprocessingInfo(SgSourceFile *sageFilePtr,
   // DQ (7/6/2005): Introduce tracking of performance of ROSE.
   TimingPerformance timer_2("AST Comment and CPP Directive Processing:");
 
-  // Dummy attribute (nothing is done here since this is an empty class)
-  AttachPreprocessingInfoTreeTraversalInheritedAttrribute inh;
+  if (attach_to_ast) {
+    // Dummy attribute (nothing is done here since this is an empty class)
+    AttachPreprocessingInfoTreeTraversalInheritedAttrribute inh;
 
-  // DQ (4/19/2006): Now supporting either the collection or ALL comments and
-  // CPP directives into header file AST nodes or just the collection of the
-  // comments and CPP directives into the source file. printf
-  // ("sageFilePtr->get_collectAllCommentsAndDirectives() = %s
-  // \n",sageFilePtr->get_collectAllCommentsAndDirectives() ? "true" : "false");
+    // DQ (4/19/2006): Now supporting either the collection or ALL comments and
+    // CPP directives into header file AST nodes or just the collection of the
+    // comments and CPP directives into the source file. printf
+    // ("sageFilePtr->get_collectAllCommentsAndDirectives() = %s
+    // \n",sageFilePtr->get_collectAllCommentsAndDirectives() ? "true" :
+    // "false");
 
-  // bool processAllFiles = sageFilePtr->get_collectAllCommentsAndDirectives();
+    // bool processAllFiles =
+    // sageFilePtr->get_collectAllCommentsAndDirectives();
 
 #if DEBUG_ATTACH_PREPROCESSOR_INFO
-  // DQ (4/24/2021): Trying to debug the header file optimization support.
-  printf("In attachPreprocessingInfo(): Skipping "
-         "header_file_unparsing_optimization preamble \n");
+    // DQ (4/24/2021): Trying to debug the header file optimization support.
+    printf("In attachPreprocessingInfo(): Skipping "
+           "header_file_unparsing_optimization preamble \n");
 #endif
 
-  // DQ (6/2/2020): Change the API to pass in the CPP directives and comments
-  // list. Also disable boolean processAllFiles since these are no longer
-  // processed in the traversal (adding CPP directives and comments from each
-  // file is a seperate). AttachPreprocessingInfoTreeTrav
-  // tt(sageFilePtr,processAllFiles);
-  AttachPreprocessingInfoTreeTrav tt(sageFilePtr, commentAndCppDirectiveList);
+    // DQ (6/2/2020): Change the API to pass in the CPP directives and comments
+    // list. Also disable boolean processAllFiles since these are no longer
+    // processed in the traversal (adding CPP directives and comments from each
+    // file is a seperate). AttachPreprocessingInfoTreeTrav
+    // tt(sageFilePtr,processAllFiles);
+    AttachPreprocessingInfoTreeTrav tt(sageFilePtr, commentAndCppDirectiveList);
 
-  // DQ (12/19/2008): Added support for Fortran CPP files.
-  // If this is a Fortran file requiring CPP processing then we want to call
-  // traverse, instead of traverseWithinFile, so that the whole AST will be
-  // processed (which is in a SgSourceFile using a name without the
-  // "_preprocessed" suffix, though the statements in the file are marked with a
-  // source position from the filename with the "_preprocessed" suffix).
+    // DQ (12/19/2008): Added support for Fortran CPP files.
+    // If this is a Fortran file requiring CPP processing then we want to call
+    // traverse, instead of traverseWithinFile, so that the whole AST will be
+    // processed (which is in a SgSourceFile using a name without the
+    // "_preprocessed" suffix, though the statements in the file are marked with
+    // a source position from the filename with the "_preprocessed" suffix).
 
-  // DQ (4/24/2021): This is not used and generates a compiler warning.
-  // bool requiresCPP = sageFilePtr->get_requires_C_preprocessor();
+    // DQ (4/24/2021): This is not used and generates a compiler warning.
+    // bool requiresCPP = sageFilePtr->get_requires_C_preprocessor();
 
-  // DQ (6/29/2020): This is now a simple traversal over the whole of the AST.
-  tt.traverse(sageFilePtr, inh);
+    // DQ (6/29/2020): This is now a simple traversal over the whole of the AST.
+    tt.traverse(sageFilePtr, inh);
+  }
 
   // endif for ifndef  CXX_IS_ROSE_CODE_GENERATION
 #endif

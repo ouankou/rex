@@ -10,7 +10,7 @@ extern int omp_exprparser_parse();
 extern SgExpression *parseExpression(SgNode *, bool, const char *);
 extern SgExpression *parseArraySectionExpression(SgNode *, bool, const char *);
 extern void omp_exprparser_parser_init(SgNode *aNode, const char *str);
-static void buildVariableList(SgOmpVariablesClause *);
+static void buildVariableList(SgAccVariablesClause *);
 
 extern bool copyStartFileInfo(SgNode *, SgNode *);
 extern bool copyEndFileInfo(SgNode *, SgNode *);
@@ -62,7 +62,7 @@ convertOpenACCDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   copyStartFileInfo(pdecl, result);
   copyEndFileInfo(pdecl, result);
 
-  //! For C/C++ replace OpenMP pragma declaration with an SgOmpxxStatement
+  //! For C/C++ replace OpenACC pragma declaration with an SgAccxxStatement
   SgScopeStatement *scope = pdecl->get_scope();
   ROSE_ASSERT(scope != NULL);
   SageInterface::moveUpPreprocessingInfo(
@@ -72,7 +72,7 @@ convertOpenACCDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   return result;
 }
 
-SgOmpBodyStatement *
+SgAccClauseBodyStatement *
 convertOpenACCBodyDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
                                 current_OpenACCIR_to_SageIII) {
 
@@ -83,19 +83,19 @@ convertOpenACCBodyDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   SgStatement *body =
       SageInterface::getNextStatement(current_OpenACCIR_to_SageIII.first);
   SageInterface::removeStatement(body, false);
-  SgOmpBodyStatement *result = NULL;
+  SgAccClauseBodyStatement *result = NULL;
   OpenACCClauseKind clause_kind;
 
   switch (directive_kind) {
-  // TODO: insert SgOmpTargetStatement first
+  // TODO: insert SgAccTargetStatement first when available.
   case ACCD_parallel: {
-    result = new SgOmpParallelStatement(NULL, body);
+    result = new SgAccParallelStatement(NULL, body);
     // not correct
     // should be target teams + parallel
     break;
   }
   case ACCD_parallel_loop: {
-    result = new SgOmpTargetTeamsDistributeParallelForStatement(NULL, body);
+    result = new SgAccParallelLoopStatement(NULL, body);
     break;
   }
   default: {
@@ -117,7 +117,7 @@ convertOpenACCBodyDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
     case ACCC_num_gangs:
     case ACCC_num_workers:
     case ACCC_vector_length: {
-      convertOpenACCExpressionClause(isSgOmpClauseBodyStatement(result),
+      convertOpenACCExpressionClause(isSgAccClauseBodyStatement(result),
                                      current_OpenACCIR_to_SageIII,
                                      *clause_iter);
       break;
@@ -125,7 +125,7 @@ convertOpenACCBodyDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
     case ACCC_copyin:
     case ACCC_copyout:
     case ACCC_copy: {
-      convertOpenACCClause(isSgOmpClauseBodyStatement(result),
+      convertOpenACCClause(isSgAccClauseBodyStatement(result),
                            current_OpenACCIR_to_SageIII, *clause_iter);
       break;
     }
@@ -139,13 +139,13 @@ convertOpenACCBodyDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   return result;
 }
 
-SgOmpExpressionClause *convertOpenACCExpressionClause(
+SgAccExpressionClause *convertOpenACCExpressionClause(
     SgStatement *directive,
     std::pair<SgPragmaDeclaration *, OpenACCDirective *>
         current_OpenACCIR_to_SageIII,
     OpenACCClause *current_acc_clause) {
   printf("accparser expression clause is ready.\n");
-  SgOmpExpressionClause *result = NULL;
+  SgAccExpressionClause *result = NULL;
   SgExpression *clause_expression = NULL;
   OpenACCClauseKind clause_kind = current_acc_clause->getKind();
   std::vector<OpenACCExpressionItem> *current_expressions =
@@ -170,22 +170,22 @@ SgOmpExpressionClause *convertOpenACCExpressionClause(
 
   switch (clause_kind) {
   case ACCC_collapse: {
-    result = new SgOmpCollapseClause(clause_expression);
+    result = new SgAccCollapseClause(clause_expression);
     printf("collapse Clause added!\n");
     break;
   }
   case ACCC_num_gangs: {
-    result = new SgOmpNumTeamsClause(clause_expression);
+    result = new SgAccNumGangsClause(clause_expression);
     printf("num_gangs Clause added!\n");
     break;
   }
   case ACCC_num_workers: {
-    result = new SgOmpNumThreadsClause(clause_expression);
+    result = new SgAccNumWorkersClause(clause_expression);
     printf("num_units Clause added!\n");
     break;
   }
   case ACCC_vector_length: {
-    result = new SgOmpSimdlenClause(clause_expression);
+    result = new SgAccVectorLengthClause(clause_expression);
     printf("simdlen Clause added!\n");
     break;
   }
@@ -195,22 +195,24 @@ SgOmpExpressionClause *convertOpenACCExpressionClause(
   }
   SageInterface::setOneSourcePositionForTransformation(result);
 
-  SgOmpClause *sg_clause = result;
-  ((SgOmpClauseBodyStatement *)directive)->get_clauses().push_back(sg_clause);
+  SgAccClause *sg_clause = result;
+  SgAccClauseBodyStatement *acc_stmt = isSgAccClauseBodyStatement(directive);
+  ROSE_ASSERT(acc_stmt != NULL);
+  acc_stmt->get_clauses().push_back(sg_clause);
 
   sg_clause->set_parent(directive);
 
   return result;
 }
 
-SgOmpClause *
+SgAccClause *
 convertOpenACCClause(SgStatement *directive,
                      std::pair<SgPragmaDeclaration *, OpenACCDirective *>
                          current_OpenACCIR_to_SageIII,
                      OpenACCClause *current_acc_clause) {
   printf("accparser variables clause is ready.\n");
-  SgOmpClause *result = NULL;
-  SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(directive);
+  SgAccClause *result = NULL;
+  SgAccClauseBodyStatement *target = isSgAccClauseBodyStatement(directive);
   ROSE_ASSERT(target != NULL);
 
   OpenACCClauseKind clause_kind = current_acc_clause->getKind();
@@ -223,22 +225,16 @@ convertOpenACCClause(SgStatement *directive,
     }
   }
 
-  SgOmpClause::upir_data_mapping_enum data_mapping_type =
-      SgOmpClause::e_upir_data_mapping_unspecified;
-
   switch (clause_kind) {
   case ACCC_copy: {
-    data_mapping_type = SgOmpClause::e_upir_data_mapping_tofrom;
     printf("copy Clause added!\n");
     break;
   }
   case ACCC_copyin: {
-    data_mapping_type = SgOmpClause::e_upir_data_mapping_to;
     printf("copyin Clause added!\n");
     break;
   }
   case ACCC_copyout: {
-    data_mapping_type = SgOmpClause::e_upir_data_mapping_from;
     printf("copyout Clause added!\n");
     break;
   }
@@ -248,68 +244,34 @@ convertOpenACCClause(SgStatement *directive,
   }
   }
 
-  std::vector<SgVariableSymbol *> variables;
+  SgExprListExp *var_list = SageBuilder::buildExprListExp();
 
-  for (std::vector<std::pair<std::string, SgNode *>>::iterator iter =
-           acc_variable_list->begin();
-       iter != acc_variable_list->end(); iter++) {
-    SgInitializedName *symbol = isSgInitializedName((*iter).second);
-    ROSE_ASSERT(symbol != NULL);
-    SgVariableSymbol *variable_symbol =
-        isSgVariableSymbol(symbol->get_symbol_from_symbol_table());
-    variables.push_back(variable_symbol);
+  switch (clause_kind) {
+  case ACCC_copy: {
+    result = new SgAccCopyClause(var_list);
+    break;
+  }
+  case ACCC_copyin: {
+    result = new SgAccCopyinClause(var_list);
+    break;
+  }
+  case ACCC_copyout: {
+    result = new SgAccCopyoutClause(var_list);
+    break;
+  }
+  default: {
+    ROSE_ABORT();
+  }
   }
 
-  /*
-  Rose_STL_Container<SgOmpClause *> data_fields =
-      OmpSupport::getClause(target, V_SgUpirDataField);
+  ROSE_ASSERT(result != NULL);
+  buildVariableList(isSgAccVariablesClause(result));
+  var_list->set_parent(result);
 
-  SgUpirDataField *upir_data = NULL;
-  if (data_fields.size() == 0) {
-    upir_data = new SgUpirDataField();
-    std::list<SgUpirDataItemField *> data_items = upir_data->get_data();
-    SageInterface::setOneSourcePositionForTransformation(upir_data);
-    target->get_clauses().push_back(upir_data);
-    upir_data->set_parent(target);
-  } else {
-    ROSE_ASSERT(data_fields.size() == 1);
-    upir_data = isSgUpirDataField(data_fields[0]);
-    if (isInUpirDataList(upir_data, data_item->get_symbol())) {
-      ROSE_ABORT();
-      return upir_data;
-    }
-  };
-  std::list<SgUpirDataItemField *> data_items = upir_data->get_data();
+  SageInterface::setOneSourcePositionForTransformation(result);
+  target->get_clauses().push_back(result);
+  result->set_parent(target);
 
-  for (size_t i = 0; i < variables.size(); i++) {
-    SgVariableSymbol *variable_symbol = isSgVariableSymbol(variables[i]);
-    assert(variable_symbol != NULL);
-    SgUpirDataItemField *upir_data_item =
-        new SgUpirDataItemField(variable_symbol);
-    std::list<std::list<SgExpression *>> upir_section =
-        upir_data_item->get_section();
-    std::vector<std::pair<SgExpression *, SgExpression *>> sections =
-        array_dimensions[variable_symbol];
-    for (size_t j = 0; j < sections.size(); j++) {
-      SgExpression *lower_bound = sections[j].first;
-      SgExpression *length = sections[j].second;
-      // ROSE/REX doesn't support stride yet, it is always set to 1 for now.
-      SgExpression *stride = SageBuilder::buildIntVal(1);
-      std::list<SgExpression *> section = {lower_bound, length, stride};
-      upir_section.push_back(section);
-    }
-    upir_data_item->set_section(upir_section);
-    upir_data_item->set_mapping_property(data_mapping_type);
-    upir_data_item->set_sharing_property(
-        SgOmpClause::e_upir_data_sharing_shared);
-    data_items.push_back(upir_data_item);
-    SageInterface::setOneSourcePositionForTransformation(upir_data_item);
-    upir_data_item->set_parent(upir_data);
-  }
-  upir_data->set_data(data_items);
-
-  result = upir_data;
-  */
   acc_variable_list->clear();
   array_dimensions.clear();
   return result;
@@ -350,25 +312,36 @@ parseAccArraySection(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
   return sg_expression;
 }
 
-void buildVariableList(SgOmpVariablesClause *current_omp_clause) {
+void buildVariableList(SgAccVariablesClause *current_acc_clause) {
 
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
+    if (current_acc_clause == NULL) {
+      break;
+    }
+    if (current_acc_clause->get_variables() == NULL) {
+      current_acc_clause->set_variables(SageBuilder::buildExprListExp());
+    }
+    SgExprListExp *var_list = current_acc_clause->get_variables();
     if (SgInitializedName *iname = isSgInitializedName((*iter).second)) {
       SgVarRefExp *var_ref = SageBuilder::buildVarRefExp(iname);
-      current_omp_clause->get_variables()->get_expressions().push_back(var_ref);
-      var_ref->set_parent(current_omp_clause);
+      var_list->get_expressions().push_back(var_ref);
+      var_ref->set_parent(var_list);
     } else if (SgPntrArrRefExp *aref = isSgPntrArrRefExp((*iter).second)) {
-      current_omp_clause->get_variables()->get_expressions().push_back(aref);
-      aref->set_parent(current_omp_clause);
+      var_list->get_expressions().push_back(aref);
+      aref->set_parent(var_list);
     } else if (SgVarRefExp *vref = isSgVarRefExp((*iter).second)) {
-      current_omp_clause->get_variables()->get_expressions().push_back(vref);
-      vref->set_parent(current_omp_clause);
+      var_list->get_expressions().push_back(vref);
+      vref->set_parent(var_list);
     } else {
       std::cerr << "error: unhandled type of variable within a list:"
                 << ((*iter).second)->class_name();
     }
+  }
+  if (current_acc_clause != NULL &&
+      current_acc_clause->get_variables() != NULL) {
+    current_acc_clause->get_variables()->set_parent(current_acc_clause);
   }
 }
 

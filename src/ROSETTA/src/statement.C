@@ -520,6 +520,24 @@ void Grammar::setUpStatements() {
 
 #endif
 
+  // ***********************************************************************
+  // ***********************************************************************
+  //                       OpenACC Nodes
+  // ***********************************************************************
+  // ***********************************************************************
+
+  NEW_TERMINAL_MACRO(AccParallelStatement, "AccParallelStatement",
+                     "ACC_PARALLEL_STMT");
+  NEW_TERMINAL_MACRO(AccParallelLoopStatement, "AccParallelLoopStatement",
+                     "ACC_PARALLEL_LOOP_STMT");
+
+  NEW_NONTERMINAL_MACRO(AccClauseBodyStatement,
+                        AccParallelStatement | AccParallelLoopStatement,
+                        "AccClauseBodyStatement", "ACC_CLAUSEBODY_STMT", false);
+
+  NEW_NONTERMINAL_MACRO(AccBodyStatement, AccClauseBodyStatement,
+                        "AccBodyStatement", "ACC_BODY_STMT", false);
+
   // DQ (8/21/2007): More IR nodes required for Fortran support
   NEW_TERMINAL_MACRO(BlockDataStatement, "BlockDataStatement",
                      "TEMP_Block_Data_Statement");
@@ -826,7 +844,7 @@ void Grammar::setUpStatements() {
           ElseWhereStatement | NullifyStatement | ArithmeticIfStatement |
           AssignStatement | ComputedGotoStatement | AssignedGotoStatement |
           AllocateStatement | DeallocateStatement | SequenceStatement |
-          OmpExecStatement | ImageControlStatement,
+          AccBodyStatement | OmpExecStatement | ImageControlStatement,
       "Statement", "StatementTag", false);
 
   // DQ (11/24/2007): These have been moved to be declarations, so they can
@@ -1410,6 +1428,10 @@ void Grammar::setUpStatements() {
   FunctionDeclaration.setDataPrototype(
       "SgTypePtrList", "exceptionSpecification", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  FunctionDeclaration.setDataPrototype(
+      "SgExpression*", "trailingRequiresClause", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE);
 
   // DQ (9/3/2007): In Fortran, the function name has been used in the end
   // statement.
@@ -1808,6 +1830,10 @@ void Grammar::setUpStatements() {
   VariableDeclaration.setDataPrototype(
       "SgDeclarationStatement*", "baseTypeDefiningDeclaration", "= NULL",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+
+  VariableDeclaration.setDataPrototype(
+      "SgExpression*", "requiresClause", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   VariableDeclaration.setDataPrototype(
       "SgInitializedNamePtrList", "variables", "", NO_CONSTRUCTOR_PARAMETER,
@@ -2289,6 +2315,9 @@ void Grammar::setUpStatements() {
       "SgTemplateParameterPtrList", "templateParameters",
       "= SgTemplateParameterPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateDeclaration.setDataPrototype(
+      "SgExpression*", "requiresClause", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   // DQ (11/15/2004): class declarations for nested classes can appear outside
   // the scope of the class to which they belong, thus the parent information is
@@ -2336,6 +2365,9 @@ void Grammar::setUpStatements() {
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TemplateClassDeclaration.setDataPrototype(
+      "SgExpression*", "requiresClause", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  TemplateClassDeclaration.setDataPrototype(
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -2372,6 +2404,9 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateSpecializationArguments",
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateFunctionDeclaration.setDataPrototype(
+      "SgExpression*", "requiresClause", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   TemplateFunctionDeclaration.setDataPrototype(
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2413,6 +2448,9 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateSpecializationArguments",
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateMemberFunctionDeclaration.setDataPrototype(
+      "SgExpression*", "requiresClause", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   TemplateMemberFunctionDeclaration.setDataPrototype(
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2479,6 +2517,9 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateSpecializationArguments",
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateTypedefDeclaration.setDataPrototype(
+      "SgExpression*", "requiresClause", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   TemplateTypedefDeclaration.setDataPrototype(
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2766,6 +2807,9 @@ void Grammar::setUpStatements() {
       "SgTemplateParameterPtrList", "tpl_params",
       "= SgTemplateParameterPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  NonrealDecl.setDataPrototype("SgExpression*", "conceptConstraint", "= NULL",
+                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                               DEF_TRAVERSAL, NO_DELETE);
 
   NonrealDecl.setDataPrototype("bool", "is_class_member", "= false",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
@@ -2786,6 +2830,9 @@ void Grammar::setUpStatements() {
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
   NonrealDecl.setDataPrototype("bool", "is_nonreal_template", "= false",
+                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                               NO_TRAVERSAL, NO_DELETE);
+  NonrealDecl.setDataPrototype("bool", "is_concept", "= false",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
   NonrealDecl.setDataPrototype("bool", "is_nonreal_function", "= false",
@@ -5516,6 +5563,24 @@ void Grammar::setUpStatements() {
 
 //    OmpClauseBodyStatement.setAutomaticGenerationOfDestructor(false);
 #endif
+
+  AccParallelStatement.setFunctionSource("SOURCE_ACC_PARALLEL_STATEMENT",
+                                         "../Grammar/Statement.code");
+  AccParallelLoopStatement.setFunctionSource(
+      "SOURCE_ACC_PARALLEL_LOOP_STATEMENT", "../Grammar/Statement.code");
+  AccBodyStatement.setFunctionPrototype("HEADER_ACC_BODY_STATEMENT",
+                                        "../Grammar/Statement.code");
+  AccBodyStatement.setFunctionSource("SOURCE_ACC_BODY_STATEMENT",
+                                     "../Grammar/Statement.code");
+  AccClauseBodyStatement.setFunctionSource("SOURCE_ACC_CLAUSEBODY_STATEMENT",
+                                           "../Grammar/Statement.code");
+
+  AccBodyStatement.setDataPrototype(
+      "SgStatement*", "body", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  AccClauseBodyStatement.setDataPrototype(
+      "SgAccClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   MicrosoftAttributeDeclaration.setFunctionSource(
       "SOURCE_MICROSOFT_ATTRIBUTE_DECLARATION_STATEMENT",

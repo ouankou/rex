@@ -850,6 +850,56 @@ std::string extractOpenMPDirective(const std::string &pragma_text) {
 
 } // namespace
 
+SgExpression *
+ClangToSageTranslator::buildFallbackExpression(const clang::Expr *expr) {
+  SgType *type = nullptr;
+  if (expr != nullptr) {
+    type = buildTypeFromQualifiedType(expr->getType());
+  }
+  return buildFallbackExpression(type);
+}
+
+SgExpression *ClangToSageTranslator::buildFallbackExpression(SgType *type) {
+  SgExpression *expr = nullptr;
+  if (type == nullptr) {
+    expr = SageBuilder::buildIntVal(0);
+  } else {
+    SgType *stripped = type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                       SgType::STRIP_TYPEDEF_TYPE);
+    if (isSgTypeNullptr(stripped) != nullptr) {
+      expr = SageBuilder::buildNullptrValExp();
+    } else if (SgReferenceType *ref_type = isSgReferenceType(stripped)) {
+      SgType *base_type = ref_type->get_base_type();
+      if (base_type == nullptr) {
+        base_type = SageBuilder::buildUnknownType();
+      }
+      SgType *ptr_type = SageBuilder::buildPointerType(base_type);
+      SgExpression *zero = SageBuilder::buildIntVal(0);
+      SgExpression *cast = SageBuilder::buildCastExp(zero, ptr_type);
+      expr = SageBuilder::buildPointerDerefExp(cast);
+    } else if (isSgTypeUnknown(stripped) != nullptr) {
+      expr = SageBuilder::buildIntVal(0);
+    } else if (SageInterface::isScalarType(stripped) ||
+               SageInterface::isPointerType(stripped) ||
+               isSgEnumType(stripped)) {
+      expr = SageBuilder::buildCastExp(SageBuilder::buildIntVal(0), type);
+    } else {
+      bool class_unknown = false;
+      if (isSgTypedefType(type) == nullptr && isSgClassType(type) == nullptr) {
+        class_unknown = true;
+      }
+      SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
+      expr = SageBuilder::buildConstructorInitializer_nfi(
+          nullptr, args, type, false, false, false, class_unknown);
+    }
+  }
+
+  if (expr != nullptr) {
+    setCompilerGeneratedFileInfo(expr, false);
+  }
+  return expr;
+}
+
 size_t ClangToSageTranslator::countExplicitTemplateArgumentsFromSource(
     clang::SourceRange range) const {
   if (p_compiler_instance == nullptr) {
@@ -893,8 +943,17 @@ ClangToSageTranslator::buildNonrealRefExpFromNestedNameSpecifier(
   SgNonrealSymbol *sym =
       isSgNonrealSymbol(nrdecl->get_symbol_from_symbol_table());
   ROSE_ASSERT(sym != nullptr);
-
-  return SageBuilder::buildNonrealRefExp_nfi(sym);
+  SgNonrealRefExp *ref = SageBuilder::buildNonrealRefExp_nfi(sym);
+  if (ref != nullptr && terminalTemplateArgs != nullptr &&
+      !terminalTemplateArgs->empty()) {
+    ref->get_templateArguments() = *terminalTemplateArgs;
+    for (SgTemplateArgument *arg : ref->get_templateArguments()) {
+      if (arg != nullptr) {
+        arg->set_parent(ref);
+      }
+    }
+  }
+  return ref;
 }
 
 SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
@@ -1642,12 +1701,11 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::RecoveryExprClass:
-    // CLANG FRONTEND FIX: Use SgNullExpression instead of SgIntVal(42) for
-    // RecoveryExpr WHY: Clang creates RecoveryExpr during parse errors or
-    // incomplete template instantiations. Using SgIntVal(42) causes downstream
-    // errors when it appears as a function in function calls. SgNullExpression
-    // is better semantically as it represents a missing/unknown expression.
-    result = SageBuilder::buildNullExpression();
+    // CLANG FRONTEND FIX: Use a typed fallback expression instead of
+    // SgIntVal(42) for RecoveryExpr. Clang creates RecoveryExpr during parse
+    // errors or incomplete template instantiations; a compiler-generated
+    // fallback keeps translation moving without inventing a real value.
+    result = buildFallbackExpression(static_cast<clang::RecoveryExpr *>(stmt));
     // Note: Assertion removed since RecoveryExpr is a valid (though error)
     // state during parsing ROSE_ASSERT(FAIL_FIXME == 0); // There is no concept
     // of recovery expression in ROSE
@@ -2374,6 +2432,31 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
   ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
   SageBuilder::pushScopeStack(sg_for_stmt);
 
+  auto translate_for_init_child =
+      [&](clang::Stmt *clang_stmt) -> SgStatement * {
+    if (clang_stmt == nullptr) {
+      return nullptr;
+    }
+    bool prev_in_for_init = p_in_for_init_translation;
+    p_in_for_init_translation = true;
+    SgNode *tmp = Traverse(clang_stmt);
+    p_in_for_init_translation = prev_in_for_init;
+
+    SgStatement *stmt = isSgStatement(tmp);
+    if (stmt == nullptr) {
+      if (SgExpression *expr = isSgExpression(tmp)) {
+        stmt = SageBuilder::buildExprStatement(expr);
+        applySourceRange(stmt, clang_stmt->getSourceRange());
+      } else if (tmp != nullptr) {
+        std::cerr << "Runtime error: for-range init child did not translate "
+                     "to a statement ("
+                  << tmp->class_name() << ")" << std::endl;
+        res = false;
+      }
+    }
+    return stmt;
+  };
+
   // ROOT CAUSE FIX: C++11 range-based for loop: `for (auto x : container) { ...
   // }`.
   //
@@ -2385,29 +2468,19 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
   // Get the desugared components from Clang.
   // Range stmt declares the internal `__range` variable.
   SgStatement *range_stmt = nullptr;
-  if (cxx_for_range_stmt->getRangeStmt() != nullptr) {
-    SgNode *tmp_range_stmt = Traverse(cxx_for_range_stmt->getRangeStmt());
-    range_stmt = isSgStatement(tmp_range_stmt);
-  }
+  range_stmt = translate_for_init_child(cxx_for_range_stmt->getRangeStmt());
 
   // Begin/end iterator setup - must be included in init_stmts
   // The condition and increment expressions reference __begin/__end variables
   // created here
-  SgNode *tmp_begin = cxx_for_range_stmt->getBeginStmt() != nullptr
-                          ? Traverse(cxx_for_range_stmt->getBeginStmt())
-                          : nullptr;
-  SgStatement *begin_stmt = isSgStatement(tmp_begin);
-
-  SgNode *tmp_end = cxx_for_range_stmt->getEndStmt() != nullptr
-                        ? Traverse(cxx_for_range_stmt->getEndStmt())
-                        : nullptr;
-  SgStatement *end_stmt = isSgStatement(tmp_end);
+  SgStatement *begin_stmt =
+      translate_for_init_child(cxx_for_range_stmt->getBeginStmt());
+  SgStatement *end_stmt =
+      translate_for_init_child(cxx_for_range_stmt->getEndStmt());
 
   // Loop variable declaration
-  SgNode *tmp_loop_var = cxx_for_range_stmt->getLoopVarStmt() != nullptr
-                             ? Traverse(cxx_for_range_stmt->getLoopVarStmt())
-                             : nullptr;
-  SgStatement *loop_var_decl = isSgStatement(tmp_loop_var);
+  SgStatement *loop_var_decl =
+      translate_for_init_child(cxx_for_range_stmt->getLoopVarStmt());
 
   // Condition, increment, and body
   clang::Expr *clang_cond = cxx_for_range_stmt->getCond();
@@ -2487,19 +2560,33 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
     init_stmts.push_back(nullStmt);
   }
 
-  SgForInitStatement *for_init =
-      SageBuilder::buildForInitStatement_nfi(init_stmts);
+  SgForInitStatement *for_init = sg_for_stmt->get_for_init_stmt();
+  ROSE_ASSERT(for_init != nullptr);
+  for_init->get_init_stmt().clear();
+  for (SgStatement *init_stmt : init_stmts) {
+    if (init_stmt == nullptr) {
+      continue;
+    }
+    for_init->append_init_stmt(init_stmt);
+    if (SgDeclarationStatement *decl = isSgDeclarationStatement(init_stmt)) {
+      if (decl->get_scope() == nullptr) {
+        decl->set_scope(sg_for_stmt);
+      }
+      if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(decl)) {
+        for (SgInitializedName *init_name : var_decl->get_variables()) {
+          if (init_name != nullptr && init_name->get_scope() == nullptr) {
+            init_name->set_scope(sg_for_stmt);
+          }
+        }
+      }
+    }
+  }
 
   SageBuilder::popScopeStack();
 
-  for_init->set_parent(sg_for_stmt);
-  if (SgForInitStatement *old_init = sg_for_stmt->get_for_init_stmt()) {
-    sg_for_stmt->set_for_init_stmt(nullptr);
-    old_init->set_parent(nullptr);
-    SageInterface::deleteAST(
-        old_init, SageInterface::DeleteAstMode::kSkipExternalReferences);
+  if (for_init->get_parent() == nullptr) {
+    for_init->set_parent(sg_for_stmt);
   }
-  sg_for_stmt->set_for_init_stmt(for_init);
 
   if (test_stmt != nullptr) {
     test_stmt->set_parent(sg_for_stmt);
@@ -2611,6 +2698,9 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
         std::cerr << "    class = " << child->class_name() << std::endl;
         res = false;
         continue;
+      }
+      if (sub_decl_stmt == nullptr) {
+        continue;
       } else if (child != nullptr) {
         // FIXME This is a hack to avoid autonomous decl of unnamed type to
         // being added to the global scope....
@@ -2629,8 +2719,10 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
             continue;
         }
       }
-      scope->append_statement(sub_decl_stmt);
-      sub_decl_stmt->set_parent(scope);
+      if (scope != nullptr && !p_in_for_init_translation) {
+        scope->append_statement(sub_decl_stmt);
+        sub_decl_stmt->set_parent(scope);
+      }
     }
     // last declaration in scope
     it = decl_stmt->decl_end();
@@ -2736,21 +2828,51 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
 
   {
     SgStatementPtrList for_init_stmt_list;
-    SgNode *tmp_init = Traverse(for_stmt->getInit());
-    SgStatement *init_stmt = isSgStatement(tmp_init);
-    SgExpression *init_expr = isSgExpression(tmp_init);
-    if (tmp_init != nullptr && init_stmt == nullptr && init_expr == nullptr) {
-      std::cerr
-          << "Runtime error: tmp_init != nullptr && init_stmt == nullptr && "
-             "init_expr == nullptr ("
-          << tmp_init->class_name() << ")" << std::endl;
-      res = false;
-    } else if (init_expr != nullptr) {
-      init_stmt = SageBuilder::buildExprStatement(init_expr);
-      applySourceRange(init_stmt, for_stmt->getInit()->getSourceRange());
+    clang::Stmt *clang_init = for_stmt->getInit();
+    bool prev_in_for_init = p_in_for_init_translation;
+    p_in_for_init_translation = true;
+
+    if (clang::DeclStmt *decl_stmt =
+            llvm::dyn_cast_or_null<clang::DeclStmt>(clang_init)) {
+      for (auto it = decl_stmt->decl_begin(); it != decl_stmt->decl_end();
+           ++it) {
+        clang::Decl *decl = *it;
+        if (decl == nullptr) {
+          continue;
+        }
+        SgNode *child = Traverse(decl);
+        SgStatement *stmt = isSgStatement(child);
+        if (child != nullptr && stmt == nullptr) {
+          std::cerr << "Runtime error: decl in for-init did not translate to "
+                       "SgStatement ("
+                    << child->class_name() << ")" << std::endl;
+          res = false;
+          continue;
+        }
+        if (stmt != nullptr) {
+          for_init_stmt_list.push_back(stmt);
+        }
+      }
+    } else if (clang_init != nullptr) {
+      SgNode *tmp_init = Traverse(clang_init);
+      SgStatement *init_stmt = isSgStatement(tmp_init);
+      SgExpression *init_expr = isSgExpression(tmp_init);
+      if (tmp_init != nullptr && init_stmt == nullptr && init_expr == nullptr) {
+        std::cerr
+            << "Runtime error: tmp_init != nullptr && init_stmt == nullptr && "
+               "init_expr == nullptr ("
+            << tmp_init->class_name() << ")" << std::endl;
+        res = false;
+      } else if (init_expr != nullptr) {
+        init_stmt = SageBuilder::buildExprStatement(init_expr);
+        applySourceRange(init_stmt, clang_init->getSourceRange());
+      }
+      if (init_stmt != nullptr) {
+        for_init_stmt_list.push_back(init_stmt);
+      }
     }
-    if (init_stmt != nullptr)
-      for_init_stmt_list.push_back(init_stmt);
+
+    p_in_for_init_translation = prev_in_for_init;
 
     if (for_init_stmt_list.size() == 0) {
       SgNullStatement *nullStmt = SageBuilder::buildNullStatement_nfi();
@@ -2758,7 +2880,15 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
       for_init_stmt_list.push_back(nullStmt);
     }
 
-    for_init_stmt = SageBuilder::buildForInitStatement_nfi(for_init_stmt_list);
+    for_init_stmt = sg_for_stmt->get_for_init_stmt();
+    ROSE_ASSERT(for_init_stmt != nullptr);
+    for_init_stmt->get_init_stmt().clear();
+    for (SgStatement *init_stmt : for_init_stmt_list) {
+      if (init_stmt == nullptr) {
+        continue;
+      }
+      for_init_stmt->append_init_stmt(init_stmt);
+    }
 
 #if DEBUG_VISIT_STMT
     printf("In VisitForStmt(): for_init_stmt = %p  \n");
@@ -2768,6 +2898,26 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
       applySourceRange(for_init_stmt, for_stmt->getInit()->getSourceRange());
     else
       setCompilerGeneratedFileInfo(for_init_stmt, true);
+
+    // Ensure for-init statements are parented by the SgForInitStatement while
+    // keeping their scope on the enclosing for-statement.
+    for (SgStatement *init_stmt : for_init_stmt_list) {
+      if (init_stmt == nullptr) {
+        continue;
+      }
+      if (SgDeclarationStatement *decl = isSgDeclarationStatement(init_stmt)) {
+        if (decl->get_scope() == nullptr) {
+          decl->set_scope(sg_for_stmt);
+        }
+        if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(decl)) {
+          for (SgInitializedName *init_name : var_decl->get_variables()) {
+            if (init_name != nullptr && init_name->get_scope() == nullptr) {
+              init_name->set_scope(sg_for_stmt);
+            }
+          }
+        }
+      }
+    }
   }
 
   // Condition
@@ -2873,14 +3023,9 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
 
   // Attach sub trees to the for statement
 
-  for_init_stmt->set_parent(sg_for_stmt);
-  if (SgForInitStatement *old_init = sg_for_stmt->get_for_init_stmt()) {
-    sg_for_stmt->set_for_init_stmt(nullptr);
-    old_init->set_parent(nullptr);
-    SageInterface::deleteAST(
-        old_init, SageInterface::DeleteAstMode::kSkipExternalReferences);
+  if (for_init_stmt->get_parent() == nullptr) {
+    for_init_stmt->set_parent(sg_for_stmt);
   }
-  sg_for_stmt->set_for_init_stmt(for_init_stmt);
 
   if (cond_stmt != nullptr) {
     cond_stmt->set_parent(sg_for_stmt);
@@ -4559,6 +4704,31 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
       // remain as the first argument so it can emit `obj[idx]`. Do not convert
       // the implicit object into a dot/arrow callee for this operator.
       if (cxx_operator_call_expr->getOperator() == clang::OO_Subscript) {
+        // Prefer the canonical array-ref AST for operator[] so the unparser
+        // emits `obj[idx]` reliably (ROSE expects this shape).
+        if (cxx_operator_call_expr->getNumArgs() == 2) {
+          SgNode *tmp_base = Traverse(cxx_operator_call_expr->getArg(0));
+          SgExpression *base = isSgExpression(tmp_base);
+          if (tmp_base != nullptr && base == nullptr) {
+            std::cerr << "Runtime error: tmp_base != nullptr && base == nullptr"
+                      << std::endl;
+            res = false;
+          }
+
+          SgNode *tmp_idx = Traverse(cxx_operator_call_expr->getArg(1));
+          SgExpression *idx = isSgExpression(tmp_idx);
+          if (tmp_idx != nullptr && idx == nullptr) {
+            std::cerr << "Runtime error: tmp_idx != nullptr && idx == nullptr"
+                      << std::endl;
+            res = false;
+          }
+
+          if (base != nullptr && idx != nullptr) {
+            *node = SageBuilder::buildPntrArrRefExp(base, idx);
+            return VisitExpr(cxx_operator_call_expr, node) && res;
+          }
+        }
+
         SgNode *tmp_decl = nullptr;
         auto it_decl = p_decl_translation_map.find(direct_callee);
         if (it_decl != p_decl_translation_map.end()) {
@@ -5128,16 +5298,67 @@ bool ClangToSageTranslator::VisitConceptSpecializationExpr(
 #endif
   bool res = true;
 
-  if (concept_specialization_expr->isValueDependent()) {
-    // Value-dependent concept checks can't be evaluated until instantiation.
-    *node = SageBuilder::buildNullExpression();
-    if (SgExpression *expr = isSgExpression(*node)) {
-      expr->get_file_info()->setCompilerGenerated();
+  SgTemplateArgumentPtrList template_args;
+  if (const clang::ASTTemplateArgumentListInfo *args_written =
+          concept_specialization_expr->getTemplateArgsAsWritten()) {
+    for (const clang::TemplateArgumentLoc &arg_loc :
+         args_written->arguments()) {
+      appendTemplateArguments(template_args, arg_loc.getArgument(), false);
     }
   } else {
-    bool is_satisfied = concept_specialization_expr->isSatisfied();
-    *node = SageBuilder::buildBoolValExp(is_satisfied);
+    for (const clang::TemplateArgument &arg :
+         concept_specialization_expr->getTemplateArguments()) {
+      appendTemplateArguments(template_args, arg, false);
+    }
   }
+
+  SgNonrealRefExp *ref = nullptr;
+  clang::ConceptDecl *concept_decl =
+      concept_specialization_expr->getNamedConcept();
+  if (concept_decl != nullptr) {
+    auto it = p_decl_translation_map.find(concept_decl);
+    if (it == p_decl_translation_map.end() &&
+        p_decl_translation_in_progress.find(concept_decl) ==
+            p_decl_translation_in_progress.end() &&
+        p_decl_translation_on_demand.find(concept_decl) ==
+            p_decl_translation_on_demand.end()) {
+      TraverseOnDemand(concept_decl);
+      it = p_decl_translation_map.find(concept_decl);
+    }
+    if (it != p_decl_translation_map.end()) {
+      if (SgNonrealDecl *nrdecl = isSgNonrealDecl(it->second)) {
+        if (SgNonrealSymbol *sym =
+                isSgNonrealSymbol(nrdecl->get_symbol_from_symbol_table())) {
+          ref = SageBuilder::buildNonrealRefExp_nfi(sym);
+        }
+      }
+    }
+  }
+
+  if (ref == nullptr) {
+    std::string name =
+        concept_decl != nullptr ? concept_decl->getNameAsString() : "__concept";
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    if (scope == nullptr) {
+      scope = getGlobalScope();
+    }
+    ref = buildNonrealRefExpFromNestedNameSpecifier(
+        nullptr, scope, SgName(name), false,
+        template_args.empty() ? nullptr : &template_args);
+  }
+
+  if (ref != nullptr && !template_args.empty()) {
+    ref->get_templateArguments() = template_args;
+    for (SgTemplateArgument *arg : ref->get_templateArguments()) {
+      if (arg != nullptr) {
+        arg->set_parent(ref);
+      }
+    }
+  }
+
+  *node = ref != nullptr ? static_cast<SgNode *>(ref)
+                         : static_cast<SgNode *>(buildFallbackExpression(
+                               concept_specialization_expr));
 
   if (SgExpression *expr = isSgExpression(*node)) {
     applySourceRange(expr, concept_specialization_expr->getSourceRange());
@@ -5371,8 +5592,8 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
 
     *node = ctor_init;
   } else {
-    // No constructor available, create a null expression
-    *node = SageBuilder::buildNullExpression();
+    // No constructor available, create a fallback expression
+    *node = buildFallbackExpression(cxx_construct_expr);
   }
 
   return VisitExpr(cxx_construct_expr, node) && res;
@@ -5419,17 +5640,17 @@ bool ClangToSageTranslator::VisitCXXDefaultArgExpr(
       std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
                 << std::endl;
       res = false;
-      *node = SageBuilder::buildNullExpression();
+      *node = buildFallbackExpression(cxx_default_arg_expr);
     } else if (expr != nullptr) {
       SgExpression *expr_copy = SageInterface::deepCopy(expr);
       ROSE_ASSERT(expr_copy != nullptr);
       *node = expr_copy;
     } else {
-      *node = SageBuilder::buildNullExpression();
+      *node = buildFallbackExpression(cxx_default_arg_expr);
     }
   } else {
-    // No expression available, use null expression as placeholder
-    *node = SageBuilder::buildNullExpression();
+    // No expression available, use a fallback expression
+    *node = buildFallbackExpression(cxx_default_arg_expr);
   }
 
   return VisitExpr(cxx_default_arg_expr, node) && res;
@@ -5467,12 +5688,13 @@ bool ClangToSageTranslator::VisitCXXDeleteExpr(
   // Examples: delete ptr; or delete[] array;
 
   // Get the expression being deleted
-  SgNode *tmp_arg = Traverse(cxx_delete_expr->getArgument());
+  clang::Expr *arg_expr = cxx_delete_expr->getArgument();
+  SgNode *tmp_arg = arg_expr ? Traverse(arg_expr) : nullptr;
   SgExpression *arg = isSgExpression(tmp_arg);
 
   if (arg == nullptr) {
-    // If we can't get the argument, create a null expression as placeholder
-    arg = SageBuilder::buildNullExpression();
+    // If we can't get the argument, create a fallback expression
+    arg = buildFallbackExpression(arg_expr);
   }
 
   // Check if this is array delete (delete[]) or single object delete (delete)
@@ -5566,7 +5788,7 @@ bool ClangToSageTranslator::VisitCXXFoldExpr(clang::CXXFoldExpr *cxx_fold_expr,
 
   // CXXFoldExpr represents C++17 fold expressions like (... && args)
   // These are template-dependent, use placeholder for now
-  *node = SageBuilder::buildNullExpression();
+  *node = buildFallbackExpression(cxx_fold_expr);
 
   return VisitExpr(cxx_fold_expr, node) && res;
 }
@@ -5648,10 +5870,7 @@ bool ClangToSageTranslator::VisitCXXNoexceptExpr(
   if (cxx_noexcept_expr->isValueDependent()) {
     // Value-dependent noexcept results can't be evaluated until instantiation
     // Create a placeholder expression so translation can proceed
-    *node = SageBuilder::buildNullExpression();
-    if (SgExpression *expr = isSgExpression(*node)) {
-      expr->get_file_info()->setCompilerGenerated();
-    }
+    *node = buildFallbackExpression(cxx_noexcept_expr);
   } else {
     // noexcept operator evaluates at compile-time whether an expression can
     // throw
@@ -5673,19 +5892,12 @@ bool ClangToSageTranslator::VisitRequiresExpr(
 #endif
   bool res = true;
 
-  if (requires_expr->isValueDependent()) {
-    // Value-dependent requires expressions can't be evaluated until
-    // instantiation; use a placeholder expression so translation can proceed.
-    *node = SageBuilder::buildNullExpression();
-    if (SgExpression *expr = isSgExpression(*node)) {
-      expr->get_file_info()->setCompilerGenerated();
-    }
-  } else {
-    // requires-expressions are boolean prvalues that are either satisfied or
-    // not.
-    bool is_satisfied = requires_expr->isSatisfied();
-    *node = SageBuilder::buildBoolValExp(is_satisfied);
+  std::string text = getSourceText(requires_expr->getSourceRange());
+  if (text.empty()) {
+    text = "requires";
   }
+  SgRequiresExpr *req_expr = SageBuilder::buildRequiresExpr_nfi(text);
+  *node = req_expr;
 
   if (SgExpression *expr = isSgExpression(*node)) {
     applySourceRange(expr, requires_expr->getSourceRange());
@@ -6041,7 +6253,7 @@ bool ClangToSageTranslator::VisitCXXTypeidExpr(
     SgNode *tmp_expr = Traverse(cxx_typeid_expr->getExprOperand());
     SgExpression *expr = isSgExpression(tmp_expr);
     if (expr == nullptr) {
-      expr = SageBuilder::buildNullExpression();
+      expr = buildFallbackExpression(cxx_typeid_expr->getExprOperand());
     }
     SgTypeIdOp *typeid_op =
         SageBuilder::buildTypeIdOp(expr, nullptr, expression_type);
@@ -7959,7 +8171,7 @@ bool ClangToSageTranslator::VisitImplicitValueInitExpr(
   SgExpression *expr = nullptr;
 
   if (type == nullptr) {
-    expr = SageBuilder::buildNullExpression();
+    expr = buildFallbackExpression(type);
   } else if (SageInterface::isScalarType(type) ||
              SageInterface::isPointerType(type) ||
              SageInterface::isReferenceType(type) || isSgEnumType(type) ||
@@ -9075,9 +9287,9 @@ bool ClangToSageTranslator::VisitOpaqueValueExpr(
     *node = Traverse(source_expr);
   } else {
     // No source expression - OpaqueValueExpr is used as a placeholder
-    // Create a null expression placeholder for ROSE
+    // Create a fallback expression for ROSE
     // This happens in range-based for loops and other desugared constructs
-    *node = SageBuilder::buildNullExpression();
+    *node = buildFallbackExpression(opaque_value_expr);
   }
 
   return VisitExpr(opaque_value_expr, node) && res;
@@ -9235,7 +9447,7 @@ bool ClangToSageTranslator::VisitPackExpansionExpr(
   }
 
   // Fallback if pattern can't be traversed
-  *node = SageBuilder::buildNullExpression();
+  *node = buildFallbackExpression(pack_expansion_expr);
 
   return VisitExpr(pack_expansion_expr, node) && res;
 }

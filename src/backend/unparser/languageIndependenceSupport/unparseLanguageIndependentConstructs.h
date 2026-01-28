@@ -34,6 +34,9 @@ class SgLocatedNode;
 class SgNamespaceDefinitionStatement;
 class SgNode;
 class SgOmpClause;
+class SgAccClause;
+class SgAccExpressionClause;
+class SgAccVariablesClause;
 class SgSourceFile;
 class SgStatement;
 class SgThisExp;
@@ -352,6 +355,20 @@ public:
   virtual void unparseOmpEndDirectiveClauses(SgStatement *stmt,
                                              SgUnparse_Info &info);
   virtual void unparseOmpGenericStatement(SgStatement *stmt,
+                                          SgUnparse_Info &info);
+
+  // OpenACC support
+  virtual void unparseAccPrefix(SgUnparse_Info &info);
+  virtual void unparseAccClause(SgAccClause *clause, SgUnparse_Info &info);
+  virtual void unparseAccExpressionClause(SgAccExpressionClause *clause,
+                                          SgUnparse_Info &info);
+  virtual void unparseAccVariablesClause(SgAccVariablesClause *clause,
+                                         SgUnparse_Info &info);
+  virtual void unparseAccDirectivePrefixAndName(SgStatement *stmt,
+                                                SgUnparse_Info &info);
+  virtual void unparseAccBeginDirectiveClauses(SgStatement *stmt,
+                                               SgUnparse_Info &info);
+  virtual void unparseAccGenericStatement(SgStatement *stmt,
                                           SgUnparse_Info &info);
 
   virtual void unparseMapDistDataPoliciesToString(

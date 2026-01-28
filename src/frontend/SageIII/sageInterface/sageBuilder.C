@@ -9932,6 +9932,24 @@ SgChooseExpression *SageBuilder::buildChooseExpression_nfi() {
   return result;
 }
 
+SgRequiresExpr *
+SageBuilder::buildRequiresExpr(const std::string &expression_string) {
+  SgRequiresExpr *result = new SgRequiresExpr(NULL, expression_string);
+  ROSE_ASSERT(result != NULL);
+
+  setOneSourcePositionForTransformation(result);
+  return result;
+}
+
+SgRequiresExpr *
+SageBuilder::buildRequiresExpr_nfi(const std::string &expression_string) {
+  SgRequiresExpr *result = new SgRequiresExpr(NULL, expression_string);
+  ROSE_ASSERT(result != NULL);
+
+  setOneSourcePositionNull(result);
+  return result;
+}
+
 SgNamespaceDefinitionStatement *
 SageBuilder::buildNamespaceDefinition(SgNamespaceDeclarationStatement *d) {
   SgNamespaceDefinitionStatement *result = NULL;

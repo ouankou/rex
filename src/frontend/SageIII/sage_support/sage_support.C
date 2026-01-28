@@ -112,6 +112,27 @@ static bool shouldBuildTokenMapping(const SgSourceFile *sourceFile) {
               true);
 }
 
+static bool hasAttachedPreprocessingInfo(SgNode *root) {
+  if (root == nullptr) {
+    return false;
+  }
+
+  Rose_STL_Container<SgNode *> nodes =
+      NodeQuery::querySubTree(root, V_SgLocatedNode);
+  for (SgNode *node : nodes) {
+    SgLocatedNode *located = isSgLocatedNode(node);
+    if (located == nullptr) {
+      continue;
+    }
+    AttachedPreprocessingInfoType *info =
+        located->getAttachedPreprocessingInfo();
+    if (info != nullptr && !info->empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static std::string normalizePathIfPossible(const std::string &path) {
   if (path.empty()) {
     return path;
@@ -2424,6 +2445,12 @@ void SgFile::secondaryPassOverSourceFile() {
       const bool using_flang_frontend =
           sourceFile->get_experimental_flang_frontend() &&
           sourceFile->get_Fortran_only();
+      SgNode *preproc_root = sourceFile->get_globalScope();
+      if (preproc_root == nullptr) {
+        preproc_root = sourceFile;
+      }
+      const bool preproc_already_attached =
+          hasAttachedPreprocessingInfo(preproc_root);
       if (requiresCPP == false) {
         // DQ (10/21/2019): This will be tested below, in
         // attachPreprocessingInfo(), if it is not in place then we need to do
@@ -2444,7 +2471,7 @@ void SgFile::secondaryPassOverSourceFile() {
             sourceFile->getFileName().c_str());
 #endif
         if (!using_flang_frontend) {
-          attachPreprocessingInfo(sourceFile);
+          attachPreprocessingInfo(sourceFile, "", !preproc_already_attached);
         } else {
           // Flang already attaches Fortran comments during AST construction.
           sourceFile->set_processedToIncludeCppDirectivesAndComments(true);

@@ -66,20 +66,32 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // For base level grammar use prefix "Sg" to be compatable with SAGE
-  Grammar sageGrammar(/* name of grammar */ "Cxx_Grammar",
-                      /* Prefix to names */ "Sg",
-                      /* Parent Grammar  */ "ROSE_BaseGrammar",
-                      /* No parent Grammar */ NULL, target_directory,
-                      smallHeadersDir);
+  // Build the header files and source files representing the grammar's
+  // implementation.
+  std::string documentedConstructorPrototypes;
+  try {
+    // For base level grammar use prefix "Sg" to be compatable with SAGE
+    Grammar sageGrammar(/* name of grammar */ "Cxx_Grammar",
+                        /* Prefix to names */ "Sg",
+                        /* Parent Grammar  */ "ROSE_BaseGrammar",
+                        /* No parent Grammar */ NULL, target_directory,
+                        smallHeadersDir);
 
-  // Build the header files and source files representing the
-  // grammar's implementation
-  sageGrammar.buildCode();
+    sageGrammar.buildCode();
 
-  // Support for output of constructors as part of generated documentation
-  string documentedConstructorPrototypes =
-      sageGrammar.staticContructorPrototypeString;
+    // Support for output of constructors as part of generated documentation
+    documentedConstructorPrototypes =
+        sageGrammar.staticContructorPrototypeString;
+  } catch (const std::runtime_error &error) {
+    std::cerr << "CxxGrammarMetaProgram: " << error.what() << std::endl;
+    return 1;
+  } catch (const std::string &error) {
+    std::cerr << "CxxGrammarMetaProgram: " << error << std::endl;
+    return 1;
+  } catch (...) {
+    std::cerr << "CxxGrammarMetaProgram: unknown error" << std::endl;
+    return 1;
+  }
 
   if (verbose) {
     printf("documentedConstructorPrototypes = %s \n",

@@ -1530,8 +1530,14 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr) {
       sageFilePtr->get_Fortran_only() || sageFilePtr->get_F77_only() ||
       sageFilePtr->get_F90_only() || sageFilePtr->get_F95_only() ||
       sageFilePtr->get_F2003_only();
-  int OpenMPIR_index = OpenMPIR_list.size() - 1;
-  int OpenACCIR_index = OpenACCIR_list.size() - 1;
+  std::map<SgPragmaDeclaration *, OpenMPDirective *> omp_lookup;
+  std::map<SgPragmaDeclaration *, OpenACCDirective *> acc_lookup;
+  for (const auto &entry : OpenMPIR_list) {
+    omp_lookup[entry.first] = entry.second;
+  }
+  for (const auto &entry : OpenACCIR_list) {
+    acc_lookup[entry.first] = entry.second;
+  }
   for (iter = omp_pragma_list.rbegin(); iter != omp_pragma_list.rend();
        iter++) {
     // Liao, 11/18/2009
@@ -1568,13 +1574,16 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr) {
             sageFilePtr->get_file_info()->get_filename() &&
         !(decl->get_file_info()->isTransformation()))
       continue;
-    if (OpenMPIR_list.size() != 0) {
-      convertDirective(OpenMPIR_list[OpenMPIR_index]);
-      OpenMPIR_index--;
-    } else {
-      convertOpenACCDirective(OpenACCIR_list[OpenACCIR_index]);
-      OpenACCIR_index--;
-    };
+    auto omp_it = omp_lookup.find(decl);
+    if (omp_it != omp_lookup.end()) {
+      convertDirective(std::make_pair(decl, omp_it->second));
+      continue;
+    }
+    auto acc_it = acc_lookup.find(decl);
+    if (acc_it != acc_lookup.end()) {
+      convertOpenACCDirective(std::make_pair(decl, acc_it->second));
+      continue;
+    }
 
   } // end for (omp_pragma_list)
 }
@@ -1890,11 +1899,27 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   // transformation (e.g. declaration of private variables will add variables
   // to the local scope).  So this function has side-effects for all languages.
 
+  if (sageFilePtr == NULL) {
+    return;
+  }
+  if (sageFilePtr->get_openmp_processed()) {
+    return;
+  }
+
+  auto mark_processed = [&](SgSourceFile *file) {
+    if (file == nullptr) {
+      return;
+    }
+    if (file->get_openmp_processed()) {
+      return;
+    }
+    file->set_openmp_processed(true);
+  };
+
   if (SgProject::get_verbose() > 1) {
     printf("Processing OpenMP directives ... \n");
   }
 
-  ROSE_ASSERT(sageFilePtr != NULL);
   if (sageFilePtr->get_openmp() == false) {
     if (SgProject::get_verbose() > 1) {
       printf("Stop processing OpenMP directives since no OpenMP found. \n");
@@ -1966,6 +1991,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_parse_only() = %s \n",
              sageFilePtr->get_openmp_parse_only() ? "true" : "false");
     }
+    mark_processed(sageFilePtr);
     return;
   }
 
@@ -1992,6 +2018,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_ast_only() = %s \n",
              sageFilePtr->get_openmp_ast_only() ? "true" : "false");
     }
+    mark_processed(sageFilePtr);
     return;
   }
 
@@ -2005,10 +2032,12 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_analyzing() = %s \n",
              sageFilePtr->get_openmp_analyzing() ? "true" : "false");
     }
+    mark_processed(sageFilePtr);
     return;
   }
 
   lower_omp(sageFilePtr);
+  mark_processed(sageFilePtr);
 }
 
 } // namespace OmpSupport

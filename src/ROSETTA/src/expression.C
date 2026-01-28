@@ -1992,6 +1992,20 @@ void Grammar::setUpExpressions() {
                               DEF_TRAVERSAL, NO_DELETE);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  NEW_TERMINAL_MACRO(RequiresExpr, "RequiresExpr", "REQUIRES_EXPR");
+  RequiresExpr.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  RequiresExpr.setFunctionPrototype("HEADER_REQUIRES_EXPRESSION",
+                                    "../Grammar/Expression.code");
+  RequiresExpr.setFunctionSource("SOURCE_GET_TYPE_GENERIC",
+                                 "../Grammar/Expression.code");
+  RequiresExpr.editSubstitute("GENERIC_TYPE", "SgTypeBool");
+  RequiresExpr.setDataPrototype("std::string", "expressionString", "= \"\"",
+                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                NO_TRAVERSAL, NO_DELETE);
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(NonrealRefExp, "NonrealRefExp", "NONREAL_REF");
   NonrealRefExp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
@@ -2019,6 +2033,10 @@ void Grammar::setUpExpressions() {
   NonrealRefExp.setDataPrototype(
       "SgStringList", "explicit_name_qualification_tokens", "",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  NonrealRefExp.setDataPrototype(
+      "SgTemplateArgumentPtrList", "templateArguments",
+      "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   NonrealRefExp.setFunctionSource("SOURCE_GET_TYPE_FROM_SYMBOL",
                                   "../Grammar/Expression.code");
 
@@ -3565,8 +3583,8 @@ void Grammar::setUpExpressions() {
           LambdaRefExp | TemplateFunctionRefExp | TemplateMemberFunctionRefExp |
           AlignOfOp | RangeExp | TypeTraitBuiltinOperator | CompoundLiteralExp |
           TypeExpression | ClassExp | FunctionParameterRefExp | LambdaExp |
-          NoexceptOp | NonrealRefExp | FoldExpression | AwaitExpression |
-          ChooseExpression,
+          NoexceptOp | RequiresExpr | NonrealRefExp | FoldExpression |
+          AwaitExpression | ChooseExpression,
       "Expression", "ExpressionTag", false);
 
   // DQ (5/20/2004): Add need_paren to all expression objects so that we can

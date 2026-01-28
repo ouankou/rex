@@ -541,6 +541,11 @@ void Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression *expr,
     break;
   }
 
+  case REQUIRES_EXPR: {
+    unparseRequiresExpr(expr, info);
+    break;
+  }
+
     // DQ (2/14/2019): Adding support for C++14 void values.
   case VOID_VAL: {
     unparseVoidValue(expr, info);
@@ -588,6 +593,18 @@ void Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression *expr,
 void Unparse_ExprStmt::unparseVoidValue(SgExpression *, SgUnparse_Info &) {
   // DQ (2/14/2019): Not clear what to output here.
   curprint(" /* void value unparsed */ ");
+}
+
+void Unparse_ExprStmt::unparseRequiresExpr(SgExpression *expr,
+                                           SgUnparse_Info &) {
+  SgRequiresExpr *requires_expr = isSgRequiresExpr(expr);
+  ASSERT_not_null(requires_expr);
+  const std::string &text = requires_expr->get_expressionString();
+  if (!text.empty()) {
+    curprint(text);
+  } else {
+    curprint("requires");
+  }
 }
 
 void Unparse_ExprStmt::unparseLabelRefExpression(SgExpression *expr,
@@ -651,7 +668,10 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
   }
   curprint(func_name);
 
-  SgTemplateArgumentPtrList &tpl_args = nrdecl->get_tpl_args();
+  SgTemplateArgumentPtrList &expr_args = nr_refexp->get_templateArguments();
+  SgTemplateArgumentPtrList &decl_args = nrdecl->get_tpl_args();
+  SgTemplateArgumentPtrList &tpl_args =
+      !expr_args.empty() ? expr_args : decl_args;
   if (!tpl_args.empty()) {
     unparseTemplateArgumentList(tpl_args, info);
   }
@@ -1096,6 +1116,41 @@ void SgTemplateArgument::outputTemplateArgument(bool &skip_unparsing,
 void Unparse_ExprStmt::unparseTemplateArgumentList(
     const SgTemplateArgumentPtrList &input_templateArgListPtr,
     SgUnparse_Info &info) {
+  auto compact_scope_operators = [](const std::string &input) -> std::string {
+    std::string out;
+    out.reserve(input.size());
+    size_t i = 0;
+    while (i < input.size()) {
+      unsigned char ch = static_cast<unsigned char>(input[i]);
+      if (std::isspace(ch) != 0) {
+        size_t j = i;
+        while (j < input.size() &&
+               std::isspace(static_cast<unsigned char>(input[j])) != 0) {
+          ++j;
+        }
+        bool remove_space = false;
+        if (!out.empty() && out.back() == ':') {
+          remove_space = true;
+        }
+        if (j + 1 < input.size() && input[j] == ':' && input[j + 1] == ':') {
+          remove_space = true;
+        }
+        if (!remove_space) {
+          out.append(input.substr(i, j - i));
+        }
+        i = j;
+        continue;
+      }
+      if (input[i] == ':' && i + 1 < input.size() && input[i + 1] == ':') {
+        out.append("::");
+        i += 2;
+        continue;
+      }
+      out.push_back(input[i]);
+      ++i;
+    }
+    return out;
+  };
   // DQ (7/23/2012): This is one of three locations where the template arguments
   // are assembled and where the name generated identically (in each case) is
   // critical.  Not clear how to best refactor this code. The other two are:
@@ -1200,7 +1255,7 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
   if (isEmptyTemplateArgumentList == false) {
     // DQ (2/11/2019): Moved to outside of the loop over all template
     // parameters.
-    unp->u_exprStmt->curprint(use_compact_template_brackets ? "<" : "< ");
+    unp->u_exprStmt->curprint("<");
     // DQ (2/22/2019): Added assertion.  This fails for test2019_93.C and
     // test2019_100.C E.g. template<class ... Types> struct Tuple {}; Tuple<>
     // t0; ROSE_ASSERT(templateArgListPtr.empty() == false);
@@ -1209,6 +1264,8 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
     ROSE_ASSERT(templateArgListPtr.empty() == true);
   }
 
+  std::string last_arg_text;
+  bool emitted_arg = false;
   if (templateArgListPtr.empty() == false) {
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
     printf("In unparseTemplateArgumentList(): templateArgListPtr.empty() NOT "
@@ -1270,15 +1327,17 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
              "unparseTemplateArgument(): *i = %p = %s \n",
              *i, (*i)->class_name().c_str());
 #endif
-      if (use_compact_template_brackets) {
-        SgUnparse_Info arg_info(ninfo);
-        std::string arg_text = (*i)->unparseToString(&arg_info);
-        arg_text = StringUtility::trim(arg_text);
-        unp->u_exprStmt->curprint(arg_text);
-      } else {
-        // unparseTemplateArgument(*i,info);
-        unparseTemplateArgument(*i, ninfo);
-      }
+      SgUnparse_Info arg_info(ninfo);
+      arg_info.set_reference_node_for_qualification(*i);
+      arg_info.set_SkipClassDefinition();
+      arg_info.set_SkipEnumDefinition();
+      arg_info.set_use_generated_name_for_template_arguments(true);
+      std::string arg_text = (*i)->unparseToString(&arg_info);
+      arg_text = StringUtility::trim(arg_text);
+      arg_text = compact_scope_operators(arg_text);
+      unp->u_exprStmt->curprint(arg_text);
+      last_arg_text = arg_text;
+      emitted_arg = true;
 
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
       printf("In unparseTemplateArgumentList(): DONE: Calling "
@@ -1378,8 +1437,7 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
         // isStartOfPragmaPackAtEndOfList) )
         if (true) {
           // unp->u_exprStmt->curprint(" /* output comma: part 1 */ ");
-          unp->u_exprStmt->curprint(use_compact_template_brackets ? ", "
-                                                                  : " , ");
+          unp->u_exprStmt->curprint(", ");
         } else {
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
           printf("In unparseTemplateArgumentList(): Skipping output of a "
@@ -1409,7 +1467,15 @@ void Unparse_ExprStmt::unparseTemplateArgumentList(
   if (isEmptyTemplateArgumentList == false) {
     // DQ (2/11/2019): Moved to outside of the loop over all template
     // parameters.
-    unp->u_exprStmt->curprint(use_compact_template_brackets ? ">" : " > ");
+    bool needs_space_before_close = false;
+    if (!use_compact_template_brackets && emitted_arg) {
+      size_t last_non_space = last_arg_text.find_last_not_of(" \t\r\n");
+      if (last_non_space != std::string::npos &&
+          last_arg_text[last_non_space] == '>') {
+        needs_space_before_close = true;
+      }
+    }
+    unp->u_exprStmt->curprint(needs_space_before_close ? " >" : ">");
   }
 
 #if DEBUG_TEMPLATE_ARGUMENT_LIST
@@ -1461,13 +1527,22 @@ void Unparse_ExprStmt::unparseTemplateParameter(
     }
 
     if (is_template_header) {
-      std::string kw =
-          SageInterface::getTemplateParameterKeyword(templateParameter);
-      if (kw.empty()) {
-        kw = "typename";
+      SgExpression *constraint = templateParameter->get_typeConstraint();
+      if (constraint != NULL) {
+        SgUnparse_Info cinfo(info);
+        cinfo.set_SkipClassDefinition();
+        cinfo.set_SkipEnumDefinition();
+        unparseExpression(constraint, cinfo);
+        curprint(" ");
+      } else {
+        std::string kw =
+            SageInterface::getTemplateParameterKeyword(templateParameter);
+        if (kw.empty()) {
+          kw = "typename";
+        }
+        curprint(kw);
+        curprint(" ");
       }
-      curprint(kw);
-      curprint(" ");
       if (is_pack) {
         curprint("... ");
       }
@@ -1509,6 +1584,14 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       // unp->u_type->outputType<SgInitializedName>(templateParameter->get_initializedName(),type,info);
       // TV (03/20/2018) only if it is a template header (not a specialization)
       if (is_template_header) {
+        SgExpression *constraint = templateParameter->get_typeConstraint();
+        if (constraint != NULL) {
+          SgUnparse_Info cinfo(info);
+          cinfo.set_SkipClassDefinition();
+          cinfo.set_SkipEnumDefinition();
+          unparseExpression(constraint, cinfo);
+          curprint(" ");
+        }
         SgUnparse_Info ninfo(info);
         unp->u_type->unparseType(type, ninfo);
         if (is_pack) {
@@ -1697,6 +1780,22 @@ void Unparse_ExprStmt::unparseTemplateArgument(
     ASSERT_not_null(templateArgument->get_type());
 
     SgType *templateArgumentType = templateArgument->get_type();
+    // If name qualification data is missing for a namespaced type argument,
+    // fall back to fully qualified output to avoid unqualified symbols.
+    if (templateArgument->get_name_qualification_length() == 0 &&
+        templateArgument->get_qualified_name_prefix_for_type().is_null()) {
+      if (SgNamedType *namedType = isSgNamedType(templateArgumentType)) {
+        SgDeclarationStatement *decl = namedType->get_declaration();
+        SgScopeStatement *declScope =
+            decl != nullptr ? decl->get_scope() : nullptr;
+        if (declScope != nullptr &&
+            isSgNamespaceDefinitionStatement(declScope) != nullptr &&
+            isSgGlobal(declScope) == nullptr) {
+          newInfo.set_reference_node_for_qualification(NULL);
+          newInfo.set_global_qualification_required(true);
+        }
+      }
+    }
     // DQ (1/21/2018): Check if this is an unnamed class (used as a template
     // argument, which is not alloweded, so we should not unparse it).
     bool isAnonymous = isAnonymousClass(templateArgumentType);
@@ -3914,7 +4013,7 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
       getOperatorFunctionName(func_call->get_function(), op_name);
     }
 
-    if (op_name == "operator()" || op_name == "operator[]") {
+    if (op_name == "operator()") {
       is_binary_operator = false;
     } else {
       const size_t arg_count =

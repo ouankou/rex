@@ -15908,6 +15908,18 @@ SgOmpForStatement::post_construction_initialization()
    {}
 SOURCE_OMP_FOR_STATEMENT_END
 
+SOURCE_ACC_PARALLEL_STATEMENT_START
+void
+SgAccParallelStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_PARALLEL_STATEMENT_END
+
+SOURCE_ACC_PARALLEL_LOOP_STATEMENT_START
+void
+SgAccParallelLoopStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_PARALLEL_LOOP_STATEMENT_END
+
 SOURCE_OMP_CANCELLATION_POINT_STATEMENT_START
 void
 SgOmpCancellationPointStatement::post_construction_initialization()
@@ -16430,6 +16442,10 @@ HEADER_OMP_BODY_STATEMENT_START
 
 HEADER_OMP_BODY_STATEMENT_END
 
+HEADER_ACC_BODY_STATEMENT_START
+      virtual bool replace_child(SgStatement *,SgStatement *, bool extractListFromBasicBlock = false) override;
+HEADER_ACC_BODY_STATEMENT_END
+
 HEADER_OMP_CLAUSE_STATEMENT_START
 HEADER_OMP_CLAUSE_STATEMENT_END
 
@@ -16451,6 +16467,18 @@ SgOmpBodyStatement::replace_child(SgStatement *target,SgStatement *newstmt, bool
    }
 SOURCE_OMP_BODY_STATEMENT_END
 
+SOURCE_ACC_BODY_STATEMENT_START
+void
+SgAccBodyStatement::post_construction_initialization()
+   {}
+
+bool
+SgAccBodyStatement::replace_child(SgStatement *target,SgStatement *newstmt, bool extractBasicBlock)
+   {
+     return ( StatementReplace(this, p_body, target, newstmt) == true );
+   }
+SOURCE_ACC_BODY_STATEMENT_END
+
 
 HEADER_OMP_CLAUSEBODY_STATEMENT_START
       public:
@@ -16468,6 +16496,12 @@ void
 SgOmpClauseBodyStatement::post_construction_initialization()
    {}
 SOURCE_OMP_CLAUSEBODY_STATEMENT_END
+
+SOURCE_ACC_CLAUSEBODY_STATEMENT_START
+void
+SgAccClauseBodyStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_CLAUSEBODY_STATEMENT_END
 
 
 SOURCE_OMP_BARRIER_STATEMENT_START

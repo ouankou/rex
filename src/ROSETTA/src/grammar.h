@@ -322,7 +322,8 @@ public:
   // generateNumberOfSuccessorsComputation(std::vector<GrammarString*>&
   // traverseDataMemberList, std::string successorContainerName);
   std::string generateNumberOfSuccessorsComputation(
-      std::vector<GrammarString *> &traverseDataMemberList);
+      std::vector<GrammarString *> &traverseDataMemberList,
+      const std::string &nodeName);
   std::string generateTraverseSuccessor(GrammarString *gs,
                                         std::string successorContainerName);
   std::string generateTraverseSuccessorNamesForLoopSource(
