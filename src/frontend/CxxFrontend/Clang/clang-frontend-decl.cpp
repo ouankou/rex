@@ -7913,6 +7913,22 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     node_decl = definingDecl;
   }
 
+  if (specialization_kind == clang::TSK_ImplicitInstantiation) {
+    auto suppress_instantiation = [&](SgTemplateInstantiationDecl *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      mark_compiler_generated_and_suppress_unparse(decl);
+      if (SgClassDefinition *class_def = decl->get_definition()) {
+        mark_compiler_generated_and_suppress_unparse(class_def);
+      }
+    };
+    suppress_instantiation(nondef_decl);
+    if (definingDecl != nullptr) {
+      suppress_instantiation(definingDecl);
+    }
+  }
+
   p_decl_translation_map.insert(
       std::pair<clang::Decl *, SgNode *>(class_tpl_spec_decl, node_decl));
   if (definition_decl != nullptr && definition_decl != class_tpl_spec_decl) {

@@ -2048,6 +2048,37 @@ void SagePreprocessorRecord::recordDirective(
     content.push_back('\n');
   }
 
+  auto requires_hash = [](PreprocessingInfo::DirectiveType type) -> bool {
+    switch (type) {
+    case PreprocessingInfo::CpreprocessorIncludeDeclaration:
+    case PreprocessingInfo::CpreprocessorIncludeNextDeclaration:
+    case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+    case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+    case PreprocessingInfo::CpreprocessorIfDeclaration:
+    case PreprocessingInfo::CpreprocessorDeadIfDeclaration:
+    case PreprocessingInfo::CpreprocessorElseDeclaration:
+    case PreprocessingInfo::CpreprocessorElifDeclaration:
+    case PreprocessingInfo::CpreprocessorEndifDeclaration:
+    case PreprocessingInfo::CpreprocessorLineDeclaration:
+    case PreprocessingInfo::CpreprocessorWarningDeclaration:
+    case PreprocessingInfo::CpreprocessorErrorDeclaration:
+    case PreprocessingInfo::CpreprocessorEmptyDeclaration:
+    case PreprocessingInfo::CpreprocessorDefineDeclaration:
+    case PreprocessingInfo::CpreprocessorUndefDeclaration:
+    case PreprocessingInfo::CpreprocessorIdentDeclaration:
+      return true;
+    default:
+      return false;
+    }
+  };
+
+  if (requires_hash(directive_type)) {
+    size_t first_nonspace = content.find_first_not_of(" \t");
+    if (first_nonspace != std::string::npos && content[first_nonspace] != '#') {
+      content.insert(first_nonspace, "#");
+    }
+  }
+
   Sg_File_Info *file_info = new Sg_File_Info(file, ls, cs);
   PreprocessingInfo *preproc_info = new PreprocessingInfo(
       directive_type, content, file, ls, cs, 0, PreprocessingInfo::before);
