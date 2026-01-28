@@ -31,7 +31,8 @@ ROSEAttributesList *getPreprocessorDirectives(std::string fileName,
 // within the codeSegregation tool. void attachPreprocessingInfo(SgSourceFile
 // *sageFile);
 void attachPreprocessingInfo(SgSourceFile *sageFile,
-                             const std::string &new_filename = "");
+                             const std::string &new_filename = "",
+                             bool attach_to_ast = true);
 
 #endif
 

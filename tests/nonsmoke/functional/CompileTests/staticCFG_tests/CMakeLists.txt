@@ -13,6 +13,13 @@ set(rex_test2025_issue148_system_header_dir
   ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)
 
 set(ROSE_FLAGS  -w -rose:verbose 0 )
+set(ROSE_TEST_CFG_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/rose_cfg_output)
+file(MAKE_DIRECTORY ${ROSE_TEST_CFG_OUTPUT_DIR})
+
+function(rex_set_cfg_output test_name)
+  set_tests_properties(${test_name} PROPERTIES
+    ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${ROSE_TEST_CFG_OUTPUT_DIR}")
+endfunction()
 
 function(rex_lock_test_for_input test_name input_file)
   get_filename_component(lock_base ${input_file} NAME_WE)
@@ -42,6 +49,7 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
   rex_lock_test_for_input(testStaticCFG_Cxx_failing_${file_to_test} ${file_to_test})
+  rex_set_cfg_output(testStaticCFG_Cxx_failing_${file_to_test})
 
   add_test(
     NAME testInterproceduralCFG_Cxx_failing_${file_to_test}
@@ -50,6 +58,7 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
   rex_lock_test_for_input(testInterproceduralCFG_Cxx_failing_${file_to_test} ${file_to_test})
+  rex_set_cfg_output(testInterproceduralCFG_Cxx_failing_${file_to_test})
 
   set(_labels STATICCFGTEST_FAILING known_fail)
   if(NOT REX_ENABLE_FAILING_TESTS)
@@ -79,6 +88,7 @@ foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES} ${extra_frontend_flags}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
   rex_lock_test_for_input(testStaticCFG_Cxx_${file_to_test} ${file_to_test})
+  rex_set_cfg_output(testStaticCFG_Cxx_${file_to_test})
   set_tests_properties(testStaticCFG_Cxx_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
   add_test(
@@ -88,6 +98,7 @@ foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES} ${extra_frontend_flags}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test})
   rex_lock_test_for_input(testInterproceduralCFG_Cxx_${file_to_test} ${file_to_test})
+  rex_set_cfg_output(testInterproceduralCFG_Cxx_${file_to_test})
 
   set_tests_properties(testInterproceduralCFG_Cxx_${file_to_test} PROPERTIES DEPENDS testStaticCFG_Cxx_${file_to_test} LABELS STATICCFGTEST)
 
@@ -142,6 +153,7 @@ foreach(input_file ${EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS})
     COMMAND testStaticCFG ${ROSE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
+  rex_set_cfg_output(testStaticCFG_C_${file_to_test})
   set_tests_properties(testStaticCFG_C_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
   add_test(
@@ -149,6 +161,7 @@ foreach(input_file ${EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS})
     COMMAND testInterproceduralCFG ${ROSE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
+  rex_set_cfg_output(testInterproceduralCFG_C_${file_to_test})
 
   set_tests_properties(testStaticCFG_C_${file_to_test} PROPERTIES DEPENDS testInterproceduralCFG_C_${file_to_test} LABELS STATICCFGTEST)
 
@@ -174,6 +187,7 @@ foreach(input_file ${C99_TESTCODES_REQUIRED_TO_PASS})
     COMMAND testStaticCFG ${ROSE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}/../C99_tests ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
+  rex_set_cfg_output(testStaticCFG_C99_${file_to_test})
   set_tests_properties(testStaticCFG_C99_${file_to_test} PROPERTIES LABELS STATICCFGTEST)
 
   add_test(
@@ -181,6 +195,7 @@ foreach(input_file ${C99_TESTCODES_REQUIRED_TO_PASS})
     COMMAND testInterproceduralCFG ${ROSE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}/../C99_tests ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
+  rex_set_cfg_output(testInterproceduralCFG_C99_${file_to_test})
 
   set_tests_properties(testInterproceduralCFG_C99_${file_to_test} PROPERTIES DEPENDS testStaticCFG_C99_${file_to_test} LABELS STATICCFGTEST)
 
@@ -197,6 +212,7 @@ add_test(
   COMMAND testInterproceduralCFG ${ROSE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}/../C99_tests ${TESTCODE_INCLUDES}
     -c ${_c99_int_file})
+rex_set_cfg_output(test2008_01.C99-INT)
 set_tests_properties(test2008_01.C99-INT PROPERTIES LABELS STATICCFGTEST)
 
 

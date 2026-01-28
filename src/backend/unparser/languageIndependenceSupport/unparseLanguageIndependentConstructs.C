@@ -3479,6 +3479,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         case V_SgOmpAtomicStatement: // Atomic may have clause now
           unparseOmpGenericStatement(stmt, info);
           break;
+        case V_SgAccParallelStatement:
+        case V_SgAccParallelLoopStatement:
+          unparseAccGenericStatement(stmt, info);
+          break;
         default:
           // DQ (11/4/2008): This is a bug for the case of a SgFortranDo
           // statement, unclear what to do about this. Call the derived class
@@ -4368,7 +4372,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
   void UnparseLanguageIndependentConstructs::unparseNullExpression(
       SgExpression * expr, SgUnparse_Info & info) {
-    // Nothing to do here! (unless we need a ";" or something)
+    if (expr == nullptr) {
+      return;
+    }
+    // Nothing to do here for an intentionally empty expression.
   }
 
   bool UnparseLanguageIndependentConstructs::isTransformed(SgStatement * stmt) {
@@ -10500,6 +10507,150 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
   } // end unparseOmpGenericStatement
 
+  // OpenACC support
+  void UnparseLanguageIndependentConstructs::unparseAccPrefix(SgUnparse_Info &
+                                                              info) {
+    cerr << "Error: UnparseLanguageIndependentConstructs::unparseAccPrefix() "
+            "should not be called directly!"
+         << endl;
+    cerr << "Individual languages should have implemented their own OpenACC "
+            "prefixes."
+         << endl;
+    ROSE_ABORT();
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseAccExpressionClause(
+      SgAccExpressionClause * clause, SgUnparse_Info & info) {
+    ASSERT_not_null(clause);
+    switch (clause->variantT()) {
+    case V_SgAccCollapseClause:
+      curprint(string(" collapse("));
+      break;
+    case V_SgAccNumGangsClause:
+      curprint(string(" num_gangs("));
+      break;
+    case V_SgAccNumWorkersClause:
+      curprint(string(" num_workers("));
+      break;
+    case V_SgAccVectorLengthClause:
+      curprint(string(" vector_length("));
+      break;
+    default:
+      cerr << "Unhandled OpenACC expression clause type in "
+              "UnparseLanguageIndependentConstructs::"
+              "unparseAccExpressionClause():"
+           << clause->class_name() << endl;
+      ROSE_ABORT();
+    }
+
+    if (clause->get_expression() != NULL) {
+      unparseExpression(clause->get_expression(), info);
+    }
+    curprint(string(")"));
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseAccVariablesClause(
+      SgAccVariablesClause * clause, SgUnparse_Info & info) {
+    ASSERT_not_null(clause);
+    switch (clause->variantT()) {
+    case V_SgAccCopyClause:
+      curprint(string(" copy("));
+      break;
+    case V_SgAccCopyinClause:
+      curprint(string(" copyin("));
+      break;
+    case V_SgAccCopyoutClause:
+      curprint(string(" copyout("));
+      break;
+    default:
+      cerr << "Unhandled OpenACC variables clause type in "
+              "UnparseLanguageIndependentConstructs::unparseAccVariablesClause("
+              "):"
+           << clause->class_name() << endl;
+      ROSE_ABORT();
+    }
+
+    SgExprListExp *var_list = clause->get_variables();
+    if (var_list != NULL) {
+      const SgExpressionPtrList &exprs = var_list->get_expressions();
+      bool first = true;
+      for (SgExpressionPtrList::const_iterator it = exprs.begin();
+           it != exprs.end(); ++it) {
+        if (!first) {
+          curprint(string(", "));
+        }
+        first = false;
+        unparseExpression(*it, info);
+      }
+    }
+    curprint(string(")"));
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseAccClause(
+      SgAccClause * clause, SgUnparse_Info & info) {
+    ASSERT_not_null(clause);
+    switch (clause->variantT()) {
+    case V_SgAccCollapseClause:
+    case V_SgAccNumGangsClause:
+    case V_SgAccNumWorkersClause:
+    case V_SgAccVectorLengthClause:
+      unparseAccExpressionClause(isSgAccExpressionClause(clause), info);
+      break;
+    case V_SgAccCopyClause:
+    case V_SgAccCopyinClause:
+    case V_SgAccCopyoutClause:
+      unparseAccVariablesClause(isSgAccVariablesClause(clause), info);
+      break;
+    default:
+      cerr << "Unhandled OpenACC clause type in "
+              "UnparseLanguageIndependentConstructs::unparseAccClause():"
+           << clause->class_name() << endl;
+      ROSE_ABORT();
+    }
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseAccDirectivePrefixAndName(
+      SgStatement * stmt, SgUnparse_Info & info) {
+    ROSE_ASSERT(stmt != NULL);
+    unp->u_sage->curprint_newline();
+    unparseAccPrefix(info);
+    switch (stmt->variantT()) {
+    case V_SgAccParallelStatement:
+      curprint(string("parallel"));
+      break;
+    case V_SgAccParallelLoopStatement:
+      curprint(string("parallel loop"));
+      break;
+    default:
+      cerr << "error: unacceptable OpenACC directive type within "
+              "unparseAccDirectivePrefixAndName(): "
+           << stmt->class_name() << endl;
+      ROSE_ABORT();
+    }
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseAccBeginDirectiveClauses(
+      SgStatement * stmt, SgUnparse_Info & info) {
+    cerr << "Error: "
+            "UnparseLanguageIndependentConstructs::"
+            "unparseAccBeginDirectiveClauses() should not be called directly"
+         << endl;
+    ROSE_ABORT();
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseAccGenericStatement(
+      SgStatement * stmt, SgUnparse_Info & info) {
+    ASSERT_not_null(stmt);
+    unparseAccDirectivePrefixAndName(stmt, info);
+    unparseAccBeginDirectiveClauses(stmt, info);
+    unp->u_sage->curprint_newline();
+
+    if (SgAccBodyStatement *b_stmt = isSgAccBodyStatement(stmt)) {
+      SgUnparse_Info ninfo(info);
+      unparseStatement(b_stmt->get_body(), ninfo);
+    }
+  }
+
   PrecedenceSpecifier UnparseLanguageIndependentConstructs::getPrecedence(
       SgExpression * expr) {
     // DQ (11/24/2007): This is a redundant mechanism for computing the
@@ -10937,6 +11088,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       precedence_value = 0;
       break;
     case V_SgNonrealRefExp:
+      precedence_value = 0;
+      break;
+    case V_SgRequiresExpr:
       precedence_value = 0;
       break;
 

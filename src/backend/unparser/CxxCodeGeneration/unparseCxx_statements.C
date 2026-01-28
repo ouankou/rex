@@ -4259,6 +4259,15 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
       curprint(string("\")"));
     }
 
+    if (SgExpression *requires_clause =
+            funcdecl_stmt->get_trailingRequiresClause()) {
+      SgUnparse_Info rinfo(info);
+      rinfo.set_SkipClassDefinition();
+      rinfo.set_SkipEnumDefinition();
+      curprint(" requires ");
+      unparseExpression(requires_clause, rinfo);
+    }
+
     const bool is_function_try_block =
         info.SkipFunctionDefinition() && !funcdecl_stmt->isForward() &&
         getFunctionTryStmt(funcdecl_stmt->get_definition()) != NULL;
@@ -5063,6 +5072,15 @@ void Unparse_ExprStmt::unparseTrailingFunctionModifiers(
         mfuncdecl_stmt->get_exceptionSpecification();
     // unparseExceptionSpecification(exceptionSpecifierList,ninfo);
     unparseExceptionSpecification(exceptionSpecifierList, info);
+  }
+
+  if (SgExpression *requires_clause =
+          mfuncdecl_stmt->get_trailingRequiresClause()) {
+    SgUnparse_Info rinfo(info);
+    rinfo.set_SkipClassDefinition();
+    rinfo.set_SkipEnumDefinition();
+    curprint(" requires ");
+    unparseExpression(requires_clause, rinfo);
   }
 
   // if (mfuncdecl_stmt->isPure())
@@ -7901,6 +7919,14 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
     curprint("template ");
     SgTemplateParameterPtrList tlist = decl->get_templateParameters();
     Unparse_ExprStmt::unparseTemplateParameterList(tlist, info, true);
+    if (SgExpression *requires_clause = decl->get_requiresClause()) {
+      curprint("requires ");
+      SgUnparse_Info rinfo(info);
+      rinfo.set_SkipClassDefinition();
+      rinfo.set_SkipEnumDefinition();
+      unparseExpression(requires_clause, rinfo);
+      curprint(" ");
+    }
     curprint("\n");
   }
 }
@@ -8218,6 +8244,11 @@ void Unparse_ExprStmt::unparseOmpPrefix(SgUnparse_Info &) {
   curprint(string("#pragma omp "));
 }
 
+// OpenACC support
+void Unparse_ExprStmt::unparseAccPrefix(SgUnparse_Info &) {
+  curprint(string("#pragma acc "));
+}
+
 void Unparse_ExprStmt::unparseOmpForStatement(SgStatement *stmt,
                                               SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
@@ -8275,6 +8306,18 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
     for (i = clause_ptr_list.begin(); i != clause_ptr_list.end(); i++) {
       SgOmpClause *c_clause = *i;
       unparseOmpClause(c_clause, info);
+    }
+  }
+}
+
+void Unparse_ExprStmt::unparseAccBeginDirectiveClauses(SgStatement *stmt,
+                                                       SgUnparse_Info &info) {
+  ASSERT_not_null(stmt);
+  SgAccClauseBodyStatement *bodystmt = isSgAccClauseBodyStatement(stmt);
+  if (bodystmt != NULL) {
+    const SgAccClausePtrList &clause_ptr_list = bodystmt->get_clauses();
+    for (SgAccClause *c_clause : clause_ptr_list) {
+      unparseAccClause(c_clause, info);
     }
   }
 }

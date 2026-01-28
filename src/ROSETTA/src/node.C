@@ -259,6 +259,38 @@ void Grammar::setUpNodes() {
       "OmpClause", "OmpClauseTag", false);
 #endif
 
+  // ***********************************************************************
+  // ***********************************************************************
+  //                       OpenACC Clauses
+  // ***********************************************************************
+  // ***********************************************************************
+
+  NEW_TERMINAL_MACRO(AccCollapseClause, "AccCollapseClause",
+                     "AccCollapseClauseTag");
+  NEW_TERMINAL_MACRO(AccNumGangsClause, "AccNumGangsClause",
+                     "AccNumGangsClauseTag");
+  NEW_TERMINAL_MACRO(AccNumWorkersClause, "AccNumWorkersClause",
+                     "AccNumWorkersClauseTag");
+  NEW_TERMINAL_MACRO(AccVectorLengthClause, "AccVectorLengthClause",
+                     "AccVectorLengthClauseTag");
+
+  NEW_NONTERMINAL_MACRO(AccExpressionClause,
+                        AccCollapseClause | AccNumGangsClause |
+                            AccNumWorkersClause | AccVectorLengthClause,
+                        "AccExpressionClause", "AccExpressionClauseTag", false);
+
+  NEW_TERMINAL_MACRO(AccCopyClause, "AccCopyClause", "AccCopyClauseTag");
+  NEW_TERMINAL_MACRO(AccCopyinClause, "AccCopyinClause", "AccCopyinClauseTag");
+  NEW_TERMINAL_MACRO(AccCopyoutClause, "AccCopyoutClause",
+                     "AccCopyoutClauseTag");
+
+  NEW_NONTERMINAL_MACRO(AccVariablesClause,
+                        AccCopyClause | AccCopyinClause | AccCopyoutClause,
+                        "AccVariablesClause", "AccVariablesClauseTag", false);
+
+  NEW_NONTERMINAL_MACRO(AccClause, AccExpressionClause | AccVariablesClause,
+                        "AccClause", "AccClauseTag", false);
+
   // DQ (10/3/2008): Support for the Fortran "USE" statement and its rename list
   // option.
   NEW_TERMINAL_MACRO(RenamePair, "RenamePair", "TEMP_Rename_Pair");
@@ -301,7 +333,7 @@ void Grammar::setUpNodes() {
   NEW_NONTERMINAL_MACRO(LocatedNodeSupport,
                         CommonBlockObject | InitializedName | InterfaceBody |
                             HeaderFileBody | RenamePair | OmpClause |
-                            LambdaCapture | LambdaCaptureList,
+                            AccClause | LambdaCapture | LambdaCaptureList,
                         "LocatedNodeSupport", "LocatedNodeSupportTag", false);
 
   // DQ (3/24/2007): Added support for tokens in the IR (to support threading of
@@ -1515,5 +1547,19 @@ void Grammar::setUpNodes() {
       "=e_omp_depobj_modifier_unknown", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 #endif
+
+  // ***********************************************************************
+  // ***********************************************************************
+  //                       OpenACC Clauses
+  // ***********************************************************************
+  // ***********************************************************************
+
+  AccExpressionClause.setDataPrototype(
+      "SgExpression*", "expression", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+
+  AccVariablesClause.setDataPrototype(
+      "SgExprListExp*", "variables", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
 
 } // end

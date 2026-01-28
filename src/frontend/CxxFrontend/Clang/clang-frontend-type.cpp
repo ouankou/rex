@@ -1219,8 +1219,46 @@ bool ClangToSageTranslator::VisitDeducedTemplateSpecializationType(
             << std::endl;
 #endif
   bool res = true;
+  if (deduced_template_specialization_type == nullptr) {
+    *node = nullptr;
+    return false;
+  }
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  clang::QualType deduced =
+      deduced_template_specialization_type->getDeducedType();
+  if (!deduced.isNull()) {
+    *node = buildTypeFromQualifiedType(deduced);
+    return VisitDeducedType(deduced_template_specialization_type, node) && res;
+  }
+
+  clang::TemplateName tname =
+      deduced_template_specialization_type->getTemplateName();
+  std::string base_name = getTemplateNameBase(tname);
+  if (base_name.empty()) {
+    base_name = "__deduced_template";
+  }
+
+  SgScopeStatement *base_scope = SageBuilder::topScopeStack();
+  if (base_scope == nullptr) {
+    base_scope = getGlobalScope();
+  }
+
+  clang::NestedNameSpecifier *qualifier = nullptr;
+  if (const clang::QualifiedTemplateName *qtn =
+          tname.getAsQualifiedTemplateName()) {
+    qualifier = qtn->getQualifier();
+  } else if (const clang::DependentTemplateName *dtn =
+                 tname.getAsDependentTemplateName()) {
+    qualifier = dtn->getQualifier();
+  }
+
+  if (qualifier != nullptr) {
+    *node = buildNonrealTypeFromNestedNameSpecifier(qualifier, base_scope,
+                                                    SgName(base_name), nullptr);
+  } else {
+    *node =
+        SageBuilder::buildNonrealType(SgName(base_name), base_scope, nullptr);
+  }
 
   return VisitDeducedType(deduced_template_specialization_type, node) && res;
 }
@@ -1445,8 +1483,11 @@ bool ClangToSageTranslator::VisitPackExpansionType(
     // level
     *node = pattern_type;
   } else {
-    // Fallback: use opaque type if pattern translation fails
-    *node = SageBuilder::buildOpaqueType("pack_expansion", getGlobalScope());
+    // Fallback: create a packed template type to preserve template context
+    SgTemplateType *pack_type =
+        SageBuilder::buildTemplateType(SgName("pack_expansion"));
+    pack_type->set_packed(true);
+    *node = pack_type;
   }
 
   return VisitType(pack_expansion_type, node) && res;
@@ -1651,24 +1692,96 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
     SgSymbol *sym = GetSymbolFromSymbolTable(lookup_decl);
     class_sym = isSgClassSymbol(sym);
 
+    if (class_sym != NULL && is_specialization) {
+      SgClassDeclaration *sym_decl = class_sym->get_declaration();
+      if (isSgTemplateInstantiationDecl(sym_decl) == NULL) {
+        // Avoid binding specializations to primary-template symbols.
+        class_sym = NULL;
+      }
+    }
+
     if (class_sym == NULL) {
       if (!is_specialization) {
         *node = getTypeFromTraversedRecordDecl(this, lookup_decl);
       }
       if (*node == NULL) {
-        std::string qualified_name = lookup_decl->getQualifiedNameAsString();
-        if (qualified_name.empty()) {
-          qualified_name = "__anonymous_record";
-        }
-        // std::isalnum expects values representable as unsigned char; cast to
-        // avoid UB for negative char.
-        for (char &ch : qualified_name) {
-          if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')) {
-            ch = '_';
+        if (is_specialization) {
+          if (clang::ClassTemplateSpecializationDecl *spec_decl =
+                  llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(
+                      record_decl)) {
+            std::string base_name =
+                spec_decl->getSpecializedTemplate() != nullptr
+                    ? spec_decl->getSpecializedTemplate()->getNameAsString()
+                    : spec_decl->getNameAsString();
+            if (base_name.empty()) {
+              base_name = "__template_specialization";
+            }
+
+            SgTemplateArgumentPtrList tpl_args;
+            const clang::TemplateArgumentList &args =
+                spec_decl->getTemplateArgs();
+            for (unsigned i = 0; i < args.size(); ++i) {
+              appendTemplateArguments(tpl_args, args.get(i), false);
+            }
+
+            SgScopeStatement *tmpl_scope = nullptr;
+            if (clang::DeclContext *ctx = spec_decl->getDeclContext()) {
+              tmpl_scope = resolveScopeFromDeclContext(
+                  ctx, SageBuilder::topScopeStack());
+            }
+            if (tmpl_scope == nullptr) {
+              tmpl_scope = SageBuilder::topScopeStack();
+            }
+            if (tmpl_scope == nullptr) {
+              tmpl_scope = getGlobalScope();
+            }
+            *node = SageBuilder::buildNonrealType(SgName(base_name), tmpl_scope,
+                                                  &tpl_args);
+            if (*node == NULL) {
+              SgTemplateType *tmpl_type =
+                  SageBuilder::buildTemplateType(SgName(base_name));
+              if (tmpl_type != nullptr) {
+                tmpl_type->get_tpl_args() = tpl_args;
+                for (SgTemplateArgument *arg : tmpl_type->get_tpl_args()) {
+                  if (arg != nullptr) {
+                    arg->set_parent(tmpl_type);
+                  }
+                }
+                *node = tmpl_type;
+              }
+            }
           }
         }
-        SgScopeStatement *scope = getSafeOpaqueTypeInsertionScope();
-        *node = SageBuilder::buildOpaqueType(qualified_name, scope);
+
+        if (*node == NULL && is_specialization) {
+          std::string base_name = record_decl != nullptr
+                                      ? record_decl->getNameAsString()
+                                      : std::string();
+          if (base_name.empty()) {
+            base_name = "__template_specialization";
+          }
+          SgTemplateType *tmpl_type =
+              SageBuilder::buildTemplateType(SgName(base_name));
+          if (tmpl_type != nullptr) {
+            *node = tmpl_type;
+          }
+        }
+
+        if (*node == NULL && !is_specialization) {
+          std::string qualified_name = lookup_decl->getQualifiedNameAsString();
+          if (qualified_name.empty()) {
+            qualified_name = "__anonymous_record";
+          }
+          // std::isalnum expects values representable as unsigned char; cast to
+          // avoid UB for negative char.
+          for (char &ch : qualified_name) {
+            if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')) {
+              ch = '_';
+            }
+          }
+          SgScopeStatement *scope = getSafeOpaqueTypeInsertionScope();
+          *node = SageBuilder::buildOpaqueType(qualified_name, scope);
+        }
       }
     } else {
       *node = class_sym->get_type();
@@ -1948,6 +2061,15 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
   template_decl->set_isUnNamed(false);
   template_decl->get_file_info()->setCompilerGenerated();
   template_decl->get_file_info()->unsetOutputInCodeGeneration();
+
+  // Ensure the template declaration scope matches the enclosing scope so
+  // symbol insertion does not mismatch the declaration's scope.
+  if (scope != nullptr) {
+    template_decl->set_scope(scope);
+    if (template_decl->get_parent() == nullptr) {
+      template_decl->set_parent(scope);
+    }
+  }
 
   // Do not manually insert a SgClassSymbol here.
   // SageBuilder::buildNondefiningTemplateClassDeclaration_nfi() installs the
@@ -2330,6 +2452,22 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
     break;
   }
 
+  if (sg_arg != nullptr && sg_arg->get_parent() == nullptr) {
+    SgNode *fallback_parent = nullptr;
+    if (p_sage_source_file != nullptr) {
+      fallback_parent = p_sage_source_file;
+    }
+    if (fallback_parent == nullptr) {
+      fallback_parent = SageBuilder::topScopeStack();
+    }
+    if (fallback_parent == nullptr) {
+      fallback_parent = getGlobalScope();
+    }
+    if (fallback_parent != nullptr) {
+      sg_arg->set_parent(fallback_parent);
+    }
+  }
+
   return sg_arg;
 }
 
@@ -2346,6 +2484,9 @@ void ClangToSageTranslator::appendTemplateArguments(
   if (SgTemplateArgument *sg_arg =
           translateTemplateArgument(arg, explicitlySpecified)) {
     arg_list.push_back(sg_arg);
+    if (sg_arg->get_parent() == nullptr) {
+      ensureTemplateArgumentParents(arg_list);
+    }
   }
 }
 
@@ -2972,16 +3113,8 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   class_type = SgClassType::createType(inst_decl);
   inst_decl->set_type(class_type);
 
-  // Create symbol and insert into symbol table
-  // ROOT CAUSE FIX: Insert symbol into the same scope as the declaration
-  // (inst_scope) not getGlobalScope(). This fixes ROSETTA warnings:
-  // "SgScopeStatement::insert_symbol(): class_declaration->get_scope() != this"
-  // Use the declaration name so symbol lookups/removals stay consistent.
-  SgName symbol_name = inst_decl->get_name();
-  if (!inst_scope->symbol_exists(symbol_name)) {
-    SgClassSymbol *class_symbol = new SgClassSymbol(inst_decl);
-    inst_scope->insert_symbol(symbol_name, class_symbol);
-  }
+  // Insert symbol via the unified registration path to avoid duplicates.
+  registerDeclarationSymbol(inst_decl);
 
   // Cache it with full name
   p_template_inst_cache[inst_name_full] = inst_decl;

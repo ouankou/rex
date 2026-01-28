@@ -1,3 +1,17 @@
+SgAccBodyStatement
+SgAccClause
+SgAccClauseBodyStatement
+SgAccCollapseClause
+SgAccCopyClause
+SgAccCopyinClause
+SgAccCopyoutClause
+SgAccExpressionClause
+SgAccNumGangsClause
+SgAccNumWorkersClause
+SgAccParallelLoopStatement
+SgAccParallelStatement
+SgAccVariablesClause
+SgAccVectorLengthClause
 SgAccessModifier
 SgActualArgumentExpression
 SgAddOp
@@ -249,6 +263,7 @@ SgNamespaceSymbol
 SgNewExp
 SgNode
 SgNoexceptOp
+SgRequiresExpr
 SgNotEqualOp
 SgNotOp
 SgNonrealDecl

@@ -3,6 +3,8 @@
 
 set(_rose_cxx_var_file
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/cxx/Makefile_variables)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${_rose_cxx_var_file}")
 set(ROSE__CXX_TESTS)
 if(EXISTS ${_rose_cxx_var_file})
   file(STRINGS ${_rose_cxx_var_file} _rose_cxx_lines)
@@ -36,7 +38,20 @@ if(EXISTS ${_rose_cxx_var_file})
   endforeach()
 endif()
 list(REMOVE_DUPLICATES ROSE__CXX_TESTS)
-set(ROSE__CXX_TESTS "${ROSE__CXX_TESTS}" CACHE INTERNAL "")
+set(_rose_cxx_tests_existing)
+set(_rose_cxx_tests_missing)
+foreach(_test IN LISTS ROSE__CXX_TESTS)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/${_test}")
+    list(APPEND _rose_cxx_tests_existing "${_test}")
+  else()
+    list(APPEND _rose_cxx_tests_missing "${_test}")
+  endif()
+endforeach()
+if(_rose_cxx_tests_missing)
+  message(WARNING "ROSE__CXX_TESTS entries missing from Cxx_tests: ${_rose_cxx_tests_missing}")
+endif()
+set(ROSE__CXX_TESTS "${_rose_cxx_tests_existing}")
+set(ROSE__CXX_TESTS "${ROSE__CXX_TESTS}" CACHE INTERNAL "" FORCE)
 
 set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   Area-01.C
@@ -54,6 +69,12 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_member_template_call.cpp
   rex_test2025_variadic_template_params.cpp
   rex_test2025_template_argument_pack.cpp
+  rex_test2026_template_instantiation_basic.cpp
+  rex_test2026_template_features.cpp
+  rex_test2026_for_init_scope.cpp
+  rex_test2026_axpy_system_headers.cpp
+  rex_test2026_stl_incremental.cpp
+  rex_test2026_extern_c_brace_roundtrip.cpp
   rex_test2025_issue88.cpp
   rex_test2025_issue89_alias.cpp
   rex_test2025_issue90_array_dim.cpp

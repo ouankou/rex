@@ -12568,7 +12568,7 @@ Sg_File_Info::get_file_id () const
                     }
 #endif
                  // ROSE-1499: check that p_file_id is valid
-                    ROSE_ASSERT(p_file_id == COMPILER_GENERATED_FILE_ID || p_fileidtoname_map.count(p_file_id) > 0);
+                    ROSE_ASSERT(p_file_id == COMPILER_GENERATED_FILE_ID || p_file_id == TRANSFORMATION_FILE_ID || p_fileidtoname_map.count(p_file_id) > 0);
                  // In this case return the file_id of the specific file which indicates this properly ("rose_required_macros_and_functions.h").
                     returnValue = p_file_id;
                   }
@@ -12592,7 +12592,7 @@ Sg_File_Info::get_file_id () const
                }
 #endif
             // ROSE-1499: check that p_file_id is valid
-               ROSE_ASSERT(p_file_id == NULL_FILE_ID || p_file_id == COMPILER_GENERATED_FILE_ID || p_fileidtoname_map.count(p_file_id) > 0);
+               ROSE_ASSERT(p_file_id == NULL_FILE_ID || p_file_id == COMPILER_GENERATED_FILE_ID || p_file_id == TRANSFORMATION_FILE_ID || p_fileidtoname_map.count(p_file_id) > 0);
                returnValue = p_file_id;
              }
         }
@@ -14066,6 +14066,7 @@ SgFile::initialization()
      p_openmp_ast_only         = false;
      p_openmp_lowering         = false;
      p_openmp_analyzing        = false;
+     p_openmp_processed        = false;
 
   // DQ (12/8/2007): Added commandline support for cray pointers.
      p_cray_pointer_support = false;
@@ -14732,6 +14733,7 @@ SgFile::display ( const std::string & label ) const
 
      printf ("     p_fortran_implicit_none                     = %s \n",(p_fortran_implicit_none == true) ? "true" : "false");
      printf ("     p_openmp                                    = %s \n",(p_openmp == true) ? "true" : "false");
+     printf ("     p_openmp_processed                          = %s \n",(p_openmp_processed == true) ? "true" : "false");
      printf ("     p_cray_pointer_support                      = %s \n",(p_cray_pointer_support == true) ? "true" : "false");
      printf ("     p_output_parser_actions                     = %s \n",(p_output_parser_actions == true) ? "true" : "false");
      printf ("     p_exit_after_parser                         = %s \n",(p_exit_after_parser == true) ? "true" : "false");

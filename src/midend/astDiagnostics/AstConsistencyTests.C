@@ -1679,7 +1679,8 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
     // SgDeclarationStatement::e_no_specialization.
     SgClassDeclaration *classDeclaration = isSgClassDeclaration(astNode);
     if (classDeclaration != NULL) {
-      if (isSgTemplateInstantiationDecl(classDeclaration) == NULL) {
+      if (isSgTemplateInstantiationDecl(classDeclaration) == NULL &&
+          isSgTemplateClassDeclaration(classDeclaration) == NULL) {
         // this is NOT a data member of the templated class (or nested class of
         // a templated class)
         if (classDeclaration->get_specialization() !=

@@ -5,12 +5,12 @@
 bool checkOpenACCIR(OpenACCDirective *);
 SgStatement *convertOpenACCDirective(
     std::pair<SgPragmaDeclaration *, OpenACCDirective *>);
-SgOmpBodyStatement *convertOpenACCBodyDirective(
+SgAccClauseBodyStatement *convertOpenACCBodyDirective(
     std::pair<SgPragmaDeclaration *, OpenACCDirective *>);
-SgOmpExpressionClause *convertOpenACCExpressionClause(
+SgAccExpressionClause *convertOpenACCExpressionClause(
     SgStatement *, std::pair<SgPragmaDeclaration *, OpenACCDirective *>,
     OpenACCClause *);
-SgOmpClause *
+SgAccClause *
 convertOpenACCClause(SgStatement *,
                      std::pair<SgPragmaDeclaration *, OpenACCDirective *>,
                      OpenACCClause *);

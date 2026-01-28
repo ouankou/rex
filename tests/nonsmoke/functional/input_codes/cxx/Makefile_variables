@@ -1336,4 +1336,10 @@ ROSE__CXX_TESTS = \
 	test2005_08.C \
 	test2012_57.C \
 	test2012_59.C \
-        test2013_milind_01.C
+        test2013_milind_01.C \
+	rex_test2026_template_instantiation_basic.cpp \
+	rex_test2026_template_features.cpp \
+	rex_test2026_for_init_scope.cpp \
+	rex_test2026_axpy_system_headers.cpp \
+	rex_test2026_stl_incremental.cpp \
+	rex_test2026_extern_c_brace_roundtrip.cpp

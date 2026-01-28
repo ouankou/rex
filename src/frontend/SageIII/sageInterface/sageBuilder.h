@@ -1035,6 +1035,10 @@ ROSE_DLL_API SgAwaitExpression *buildAwaitExpression_nfi();
 // DQ (7/25/2020): Adding C++20 support
 ROSE_DLL_API SgChooseExpression *buildChooseExpression();
 ROSE_DLL_API SgChooseExpression *buildChooseExpression_nfi();
+ROSE_DLL_API SgRequiresExpr *
+buildRequiresExpr(const std::string &expression_string);
+ROSE_DLL_API SgRequiresExpr *
+buildRequiresExpr_nfi(const std::string &expression_string);
 
 //@}
 

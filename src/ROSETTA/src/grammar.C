@@ -3554,6 +3554,9 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
         nodeName == "SgOmpExecStatement" || nodeName == "SgOmpForStatement" ||
         nodeName == "SgOmpClauseBodyStatement" ||
         nodeName == "SgOmpClauseStatement" ||
+        nodeName == "SgAccClauseBodyStatement" ||
+        nodeName == "SgAccParallelStatement" ||
+        nodeName == "SgAccParallelLoopStatement" ||
         nodeName == "SgOmpMetadirectiveStatement" ||
         nodeName == "SgOmpParallelStatement" ||
         nodeName == "SgOmpTeamsStatement" ||
@@ -3756,7 +3759,8 @@ void Grammar::buildTreeTraversalFunctions(
           // DQ (9/28/2022): Fixing compiler warning for argument not used.
           // << generateNumberOfSuccessorsComputation(traverseDataMemberList,
           // successorContainerName)
-          << generateNumberOfSuccessorsComputation(traverseDataMemberList)
+          << generateNumberOfSuccessorsComputation(traverseDataMemberList,
+                                                   node.getName())
           << ");\n";
     }
     for (vector<GrammarString *>::iterator iter =
@@ -3837,7 +3841,8 @@ void Grammar::buildTreeTraversalFunctions(
           // DQ (9/28/2022): Fixing compiler warning for argument not used.
           // << generateNumberOfSuccessorsComputation(traverseDataMemberList,
           // successorContainerName)
-          << generateNumberOfSuccessorsComputation(traverseDataMemberList)
+          << generateNumberOfSuccessorsComputation(traverseDataMemberList,
+                                                   node.getName())
           << ";\n";
     } else {
       outputFile << "return 0;\n";
@@ -3860,7 +3865,8 @@ void Grammar::buildTreeTraversalFunctions(
           string(node.getName()) == "SgTemplateVariableDeclaration") {
         outputFile
             << "if (idx == 0) return compute_baseTypeDefiningDeclaration();\n"
-            << "else return p_variables[idx-1];\n";
+            << "else if (idx == 1) return p_requiresClause;\n"
+            << "else return p_variables[idx-2];\n";
       }
       // Liao, 5/30/2009
       // More exceptional cases for SgOmpClauseBodyStatement and its derived
@@ -3868,6 +3874,9 @@ void Grammar::buildTreeTraversalFunctions(
       // We allow them to have mixed members (simple member and container
       // member)
       else if (string(node.getName()) == "SgOmpClauseBodyStatement" ||
+               string(node.getName()) == "SgAccClauseBodyStatement" ||
+               string(node.getName()) == "SgAccParallelStatement" ||
+               string(node.getName()) == "SgAccParallelLoopStatement" ||
                string(node.getName()) == "SgOmpMetadirectiveStatement" ||
                string(node.getName()) == "SgOmpParallelStatement" ||
                string(node.getName()) == "SgOmpTeamsStatement" ||
@@ -4026,13 +4035,28 @@ void Grammar::buildTreeTraversalFunctions(
           string(node.getName()) == "SgTemplateVariableDeclaration") {
         outputFile
             << "if (child == compute_baseTypeDefiningDeclaration()) return 0;\n"
+            << "else if (child == p_requiresClause) return 1;\n"
             << "else {\n"
             << "SgInitializedNamePtrList::const_iterator itr = "
                "find(p_variables.begin(), p_variables.end(), child);\n"
             << "if (itr != p_variables.end()) return (itr - "
-               "p_variables.begin()) + 1;\n"
+               "p_variables.begin()) + 2;\n"
             << "else return (size_t) -1;\n"
             << "}\n";
+      }
+      // More exceptional cases for OpenACC clause-body statements and their
+      // derived classes (mixed members).
+      else if (string(node.getName()) == "SgAccClauseBodyStatement" ||
+               string(node.getName()) == "SgAccParallelStatement" ||
+               string(node.getName()) == "SgAccParallelLoopStatement") {
+        outputFile << "if (child == p_body) return 0;\n"
+                   << "else {\n"
+                   << "SgAccClausePtrList::const_iterator itr = "
+                      "find(p_clauses.begin(), p_clauses.end(), child);\n"
+                   << "if (itr != p_clauses.end()) return (itr - "
+                      "p_clauses.begin()) + 1;\n"
+                   << "else return (size_t) -1;\n"
+                   << "}\n";
       }
       // More exceptional cases for SgOmpClauseBodyStatement and its derived
       // classes
@@ -4313,7 +4337,8 @@ string Grammar::generateTraverseSuccessorForLoopSource(
 // vector<GrammarString*>& traverseDataMemberList, string
 // successorContainerName)
 string Grammar::generateNumberOfSuccessorsComputation(
-    vector<GrammarString *> &traverseDataMemberList) {
+    vector<GrammarString *> &traverseDataMemberList,
+    const std::string &nodeName) {
   stringstream travSuccSource;
   if (!traverseDataMemberList.empty()) {
     vector<GrammarString *>::iterator iter;
@@ -4333,15 +4358,16 @@ string Grammar::generateNumberOfSuccessorsComputation(
         // If this is a single successor, no container may come before
         // it as that would break the traversal successor enums.
         if (containerSuccessors > 0) {
-          cout << "Error: traversal successor " << memberVariableName
-               << " is preceded by a container that is also "
+          cout << "Error: traversal successor " << memberVariableName << " in "
+               << nodeName << " is preceded by a container that is also "
                << "traversed; this is not allowed";
           ROSE_ASSERT((singleSuccessors > 0 ? containerSuccessors == 0 : true));
         }
       }
       if (containerSuccessors > 1) {
-        cout << "Error: traversal successor (" << memberVariableName
-             << ") is a container preceded by another container that is "
+        cout << "Error: traversal successor (" << memberVariableName << ") in "
+             << nodeName
+             << " is a container preceded by another container that is "
              << "also traversed; this is not allowed";
         ROSE_ASSERT(containerSuccessors <= 1);
       }

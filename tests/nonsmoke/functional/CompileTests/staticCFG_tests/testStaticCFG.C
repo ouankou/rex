@@ -4,6 +4,7 @@
 #include "rose.h"
 
 #include <algorithm>
+#include <cstdlib>
 using namespace std;
 using namespace VirtualCFG;
 
@@ -26,7 +27,26 @@ void testCFG(SgFunctionDefinition *stmt) {
 
   // Dump graph of CFG
   {
-    std::ofstream graph("graph.dot");
+    std::string graph_path = "graph.dot";
+    if (const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+        output_dir != nullptr && output_dir[0] != '\0') {
+      std::string dir(output_dir);
+      if (!dir.empty() && dir.back() != '/' && dir.back() != '\\') {
+        dir.push_back('/');
+      }
+      std::string file_stem = "graph";
+      if (Sg_File_Info *info = stmt->get_file_info()) {
+        std::string base = Rose::StringUtility::stripPathFromFileName(
+            info->get_filenameString());
+        base = Rose::StringUtility::stripFileSuffixFromFileName(base);
+        if (!base.empty()) {
+          file_stem = base + "_line" +
+                      Rose::StringUtility::numberToString(info->get_line());
+        }
+      }
+      graph_path = dir + file_stem + "_cfg_graph.dot";
+    }
+    std::ofstream graph(graph_path.c_str());
     cfgToDotForDebugging(graph, "dotGraph", stmt->cfgForBeginning());
   }
 

@@ -1335,6 +1335,10 @@ void Grammar::setUpSupport() {
   File.setDataPrototype("bool", "openmp_analyzing", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
+  // Track whether OpenMP AST construction has already run for this file.
+  File.setDataPrototype("bool", "openmp_processed", "= false",
+                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
+                        NO_TRAVERSAL, NO_DELETE);
   // Liao, 3/12/2020: options to support OpenACC
   File.setDataPrototype("bool", "openacc", "= false", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2933,6 +2937,9 @@ void Grammar::setUpSupport() {
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TemplateParameter.setDataPrototype(
       "SgExpression*", "expression", "= nullptr", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  TemplateParameter.setDataPrototype(
+      "SgExpression*", "typeConstraint", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   TemplateParameter.setDataPrototype(
       "SgExpression*", "defaultExpressionParameter", "= nullptr",

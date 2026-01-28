@@ -279,8 +279,11 @@ private:
     if (pos + 6 > text.size() || text.compare(pos, 6, "pragma") != 0)
       return false;
     pos = skipWS(text, pos + 6);
-    // "omp"
-    return (pos + 3 <= text.size() && text.compare(pos, 3, "omp") == 0);
+    // "omp" or "acc"
+    if (pos + 3 <= text.size() && text.compare(pos, 3, "omp") == 0) {
+      return true;
+    }
+    return (pos + 3 <= text.size() && text.compare(pos, 3, "acc") == 0);
   }
 
 public:
@@ -445,6 +448,8 @@ public:
    */
   void applySourceRangeWithTrailingSemicolon(SgNode *rose_node,
                                              const clang::Stmt *clang_stmt);
+  // Extract spelling source text for a clang source range.
+  std::string getSourceText(clang::SourceRange range) const;
 
 protected:
   std::map<clang::Decl *, SgNode *> p_decl_translation_map;
@@ -488,6 +493,9 @@ protected:
   // Track class definitions already populated to avoid duplicate member
   // insertion during on-demand/re-entrant translation.
   std::set<const SgClassDefinition *> p_record_definitions_populated;
+  // Track when we are translating a for-init so we avoid appending decls
+  // directly into the enclosing scope statement list.
+  bool p_in_for_init_translation = false;
 
   // Deferred translation queue for implicit function template
   // instantiations. These instantiations are discovered while traversing
@@ -520,6 +528,9 @@ protected:
   void rehomeSymbolToScope(SgSymbol *symbol, SgScopeStatement *scope);
   void ensureMemberFunctionScope(SgFunctionDeclaration *decl,
                                  SgClassDefinition *parent_def);
+  SgSymbol *buildSymbolForDeclaration(SgDeclarationStatement *decl);
+  void registerDeclarationSymbol(SgDeclarationStatement *decl);
+  void reconcileOnDemandTranslation(SgNode *node);
 
   // Select a scope that can safely accept an opaque type declaration.
   SgScopeStatement *getOpaqueTypeInsertionScope(SgScopeStatement *scope) const;
@@ -529,6 +540,8 @@ protected:
   SgScopeStatement *getSafeOpaqueTypeInsertionScope() const;
 
   SgType *buildTypeFromQualifiedType(const clang::QualType &qual_type);
+  SgExpression *buildFallbackExpression(const clang::Expr *expr);
+  SgExpression *buildFallbackExpression(SgType *type);
 
   // Helper: Build nonreal return type for member typedefs of template
   // specializations (e.g., Spec::value_type) when needed for unparsing.
@@ -656,6 +669,9 @@ protected:
   buildNonrealTypeForNestedNameSpecifierType(const clang::Type *clang_type,
                                              SgScopeStatement *scope);
 
+  // Helper: Translate a constraint expression into a ROSE expression.
+  SgExpression *translateConstraintExpression(const clang::Expr *expr);
+
 public:
   ClangToSageTranslator(clang::CompilerInstance *compiler_instance,
                         Language language_, SgSourceFile *sage_source_file,
@@ -664,6 +680,7 @@ public:
   virtual ~ClangToSageTranslator();
 
   SgGlobal *getGlobalScope() const;
+  void sortPreprocessorList();
 
   void setOpenMPPragmaCallback(const RoseOpenMPPragmaCallback *callback) {
     p_openmp_pragma_callback = callback;
@@ -1449,16 +1466,26 @@ public:
 
 void finishSageAST(ClangToSageTranslator &translator);
 
-class SagePreprocessorRecord : public clang::PPCallbacks {
+class SagePreprocessorRecord : public clang::PPCallbacks,
+                               public clang::CommentHandler {
 public:
 protected:
   clang::SourceManager *p_source_manager;
 
   std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
       p_preprocessor_record_list;
+  bool p_preprocessor_record_list_sorted;
+
+  bool shouldRecordDirective(clang::SourceLocation loc) const;
+  std::string getFilenameForLocation(clang::SourceLocation loc) const;
+  std::string collectDirectiveText(clang::SourceLocation loc) const;
+  void recordDirective(clang::SourceLocation loc,
+                       PreprocessingInfo::DirectiveType directive_type,
+                       const std::string &text);
 
 public:
   SagePreprocessorRecord(clang::SourceManager *source_manager);
+  void sortRecordedDirectives();
 
   void
   InclusionDirective(clang::SourceLocation HashLoc,
@@ -1486,6 +1513,8 @@ public:
   void MacroExpands(const clang::Token &MacroNameTok,
                     const clang::MacroDefinition &MD, clang::SourceRange Range,
                     const clang::MacroArgs *Args) override;
+  bool HandleComment(clang::Preprocessor &PP,
+                     clang::SourceRange Comment) override;
   void MacroDefined(const clang::Token &MacroNameTok,
                     const clang::MacroDirective *MD) override;
   void MacroUndefined(const clang::Token &MacroNameTok,

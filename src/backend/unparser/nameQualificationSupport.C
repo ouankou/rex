@@ -16659,6 +16659,12 @@ string NameQualificationTraversal::setNameQualificationSupport(
       SgUnparse_Info *unparseInfoPointer = new SgUnparse_Info();
       ASSERT_not_null(unparseInfoPointer);
       unparseInfoPointer->set_outputCompilerGeneratedStatements();
+      // Ensure template arguments in scope names are fully qualified.
+      unparseInfoPointer->set_language(SgFile::e_Cxx_language);
+      unparseInfoPointer->set_SkipClassDefinition();
+      unparseInfoPointer->set_SkipEnumDefinition();
+      unparseInfoPointer->set_use_generated_name_for_template_arguments(true);
+      unparseInfoPointer->set_requiresGlobalNameQualification();
 
       // templateClassDeclaration->get_file_info()->display("SgTemplateInstantiationDecl
       // trying to generate the qualified name: debug");
