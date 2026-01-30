@@ -9663,20 +9663,137 @@ bool ClangToSageTranslator::VisitUsingPackDecl(
 #endif
   bool res = true;
 
-  if (using_pack_decl != nullptr) {
-    for (clang::NamedDecl *expansion : using_pack_decl->expansions()) {
-      if (expansion == nullptr) {
-        continue;
+  if (using_pack_decl == nullptr) {
+    *node = nullptr;
+    return false;
+  }
+
+  SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+  clang::DeclContext *decl_context = using_pack_decl->getDeclContext();
+  clang::DeclContext *scope_context = decl_context;
+  while (scope_context != nullptr &&
+         llvm::isa<clang::LinkageSpecDecl>(scope_context)) {
+    scope_context = scope_context->getParent();
+  }
+  if (scope_context != nullptr) {
+    if (scope_context->isTranslationUnit()) {
+      current_scope = getGlobalScope();
+    } else if (clang::Decl *context_decl =
+                   llvm::dyn_cast<clang::Decl>(scope_context)) {
+      if (is_declaration_scope_context(scope_context) &&
+          !llvm::isa<clang::NamespaceDecl>(context_decl) &&
+          p_decl_translation_map.find(context_decl) ==
+              p_decl_translation_map.end() &&
+          p_decl_translation_in_progress.find(context_decl) ==
+              p_decl_translation_in_progress.end() &&
+          p_decl_translation_on_demand.find(context_decl) ==
+              p_decl_translation_on_demand.end()) {
+        TraverseOnDemand(context_decl);
       }
-      SgNode *translated = Traverse(expansion);
-      if (*node == nullptr && translated != nullptr) {
-        *node = translated;
+      if (SgScopeStatement *resolved =
+              resolveScopeFromDeclContext(scope_context, current_scope)) {
+        current_scope = resolved;
       }
     }
   }
+  if (current_scope == nullptr) {
+    current_scope = getGlobalScope();
+  }
 
-  return (*node != nullptr) ? VisitNamedDecl(using_pack_decl, node) && res
-                            : false;
+  std::vector<SgUsingDeclarationStatement *> using_statements;
+
+  auto apply_using_scope = [&](SgUsingDeclarationStatement *using_stmt) {
+    if (using_stmt == nullptr || current_scope == nullptr) {
+      return;
+    }
+    if (using_stmt->get_scope() == nullptr) {
+      using_stmt->set_scope(current_scope);
+    }
+    if (using_stmt->get_parent() == nullptr) {
+      using_stmt->set_parent(current_scope);
+    }
+  };
+
+  auto build_using_stmt_from_target =
+      [&](clang::NamedDecl *target,
+          clang::SourceRange range) -> SgUsingDeclarationStatement * {
+    if (target == nullptr) {
+      return nullptr;
+    }
+    if (clang::NamedDecl *underlying = target->getUnderlyingDecl()) {
+      target = underlying;
+    }
+    clang::Decl *target_decl = llvm::dyn_cast<clang::Decl>(target);
+    if (target_decl == nullptr) {
+      return nullptr;
+    }
+
+    SgDeclarationStatement *sg_target_decl = nullptr;
+    SgInitializedName *sg_init_name = nullptr;
+    SgNode *target_node = resolveUsingDeclTargetNode(target_decl);
+    bool resolved =
+        extractUsingTargetFromNode(target_node, sg_target_decl, sg_init_name);
+    if (!resolved) {
+      if (SgSymbol *symbol = GetSymbolFromSymbolTable(target)) {
+        resolved =
+            extractUsingTargetFromSymbol(symbol, sg_target_decl, sg_init_name);
+      }
+    }
+    if (!resolved) {
+      return nullptr;
+    }
+
+    SgUsingDeclarationStatement *using_stmt =
+        new SgUsingDeclarationStatement(sg_target_decl, sg_init_name);
+    using_stmt->set_definingDeclaration(using_stmt);
+    using_stmt->set_firstNondefiningDeclaration(using_stmt);
+    apply_using_scope(using_stmt);
+    if (sg_init_name != nullptr && sg_init_name->get_parent() == nullptr) {
+      sg_init_name->set_parent(using_stmt);
+    }
+    if (range.isValid()) {
+      applySourceRange(using_stmt, range);
+    } else {
+      applySourceRange(using_stmt, using_pack_decl->getSourceRange());
+    }
+    return using_stmt;
+  };
+
+  for (clang::NamedDecl *expansion : using_pack_decl->expansions()) {
+    if (expansion == nullptr) {
+      continue;
+    }
+    if (clang::UsingShadowDecl *shadow =
+            llvm::dyn_cast<clang::UsingShadowDecl>(expansion)) {
+      if (SgUsingDeclarationStatement *using_stmt =
+              build_using_stmt_from_target(shadow->getTargetDecl(),
+                                           shadow->getSourceRange())) {
+        using_statements.push_back(using_stmt);
+      }
+      continue;
+    }
+
+    SgNode *translated = Traverse(expansion);
+    if (SgUsingDeclarationStatement *using_stmt =
+            isSgUsingDeclarationStatement(translated)) {
+      apply_using_scope(using_stmt);
+      using_statements.push_back(using_stmt);
+    }
+  }
+
+  if (using_statements.empty()) {
+    *node = nullptr;
+    return false;
+  }
+
+  SgUsingDeclarationStatement *primary_stmt = using_statements.front();
+  for (size_t i = 1; i < using_statements.size(); ++i) {
+    ensure_decl_in_scope_child_list(using_statements[i], current_scope,
+                                    "UsingPackDecl:expansion");
+  }
+
+  *node = primary_stmt;
+  return VisitNamedDecl(using_pack_decl, node) && res;
 }
 
 bool ClangToSageTranslator::VisitUsingShadowDecl(
