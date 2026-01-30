@@ -284,7 +284,6 @@ if(ENABLE-FORTRAN)
     test2007_168.f90
     test2007_219.f90
     test2007_263.f90
-    lastTest.f90
   )
 
   foreach(file_to_test ${_f90_disabled_tests})
@@ -370,7 +369,6 @@ if(ENABLE-FORTRAN)
     test2007_227.f
     test2007_256.f
     test2007_258.f
-    lastCode.f
   )
 
   foreach(file_to_test ${_f77_disabled_tests})
@@ -433,7 +431,6 @@ if(ENABLE-FORTRAN)
     test2007_130.f03
     test2007_133.f03
     test2007_176.f03
-    lastTest.f03
   )
 
   foreach(file_to_test ${_f03_disabled_tests})

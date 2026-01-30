@@ -2497,8 +2497,8 @@ trace_back_through_parent_scopes_lookup_member_variable_symbol(
       if (structureScope == NULL) {
         // This should be the last iteration!
         if (i != (qualifiedNameList.size() - 1)) {
-          printf("WARNING: i != (qualifiedNameList.size() - 1) for LANL_POP "
-                 "code only! (i = %" PRIuPTR
+          printf("WARNING: i != (qualifiedNameList.size() - 1) in Fortran "
+                 "member lookup (i = %" PRIuPTR
                  " qualifiedNameList.size() = %" PRIuPTR ") \n",
                  i, qualifiedNameList.size());
 

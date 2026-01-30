@@ -5377,21 +5377,6 @@ def _explicit_name_mapping(
         if name == "test_unparseProject_template":
             return "unparseProject_test2017_01"
 
-    if origin_path.endswith("RunTests/FortranTests/LANL_POP/netcdf-4.1.1/Makefile.am"):
-        if name == "check_nc_config":
-            return "netcdf_check_nc_config"
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_test_prog."
-        if name.startswith(prefix):
-            ext = name[len(prefix):]
-            return f"netcdf_test_prog_{ext.replace('.', '_')}"
-
-    if "netcdf-4.1.1/nc_test4/Makefile.am" in origin_path:
-        if name.startswith("netcdf_nc_test4_"):
-            return None
-        marker = "nc_test4_"
-        if marker in name:
-            name = name.split(marker, 1)[1]
-        return f"netcdf_nc_test4_{_cmake_sanitize_name(name)}"
 
     if origin_path.endswith("CompileTests/staticCFG_tests/Makefile.am"):
         base_name = Path(name).name
@@ -5978,69 +5963,6 @@ def _explicit_name_mapping(
         if "F90_TESTCODES" in origin_notes:
             return f"experimental_frontend_f90_{suffix}"
 
-    if "netcdf-4.1.1/cxx/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_cxx_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_cxx_{_cmake_sanitize_name(suffix)}"
-
-    if "netcdf-4.1.1/examples/CDL/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_examples_CDL_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_examples_cdl_{_cmake_sanitize_name(suffix)}"
-
-    if "netcdf-4.1.1/examples/CXX/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_examples_CXX_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_examples_cxx_{_cmake_sanitize_name(suffix)}"
-
-    if "netcdf-4.1.1/examples/CXX4/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_examples_CXX4_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_examples_cxx4_{_cmake_sanitize_name(suffix)}"
-
-    if "netcdf-4.1.1/examples/F77/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_examples_F77_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_examples_f77_{_cmake_sanitize_name(suffix)}"
-
-    if "netcdf-4.1.1/examples/F90/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_examples_F90_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_examples_f90_{_cmake_sanitize_name(suffix)}"
-
-    if "netcdf-4.1.1/libcf/src/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_libcf_src_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_libcf_src_{_cmake_sanitize_name(suffix)}"
-        if not name.startswith("netcdf_libcf_src_"):
-            return f"netcdf_libcf_src_{_cmake_sanitize_name(name)}"
-
-    if "netcdf-4.1.1/libcf/cfcheck/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_libcf_cfcheck_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_libcf_cfcheck_{_cmake_sanitize_name(suffix)}"
-
-    if "netcdf-4.1.1/libcf/gridspec/tools/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_libcf_gridspec_tools_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_gridspec_tools_{_cmake_sanitize_name(suffix)}"
-
-    if "netcdf-4.1.1/libsrc4/Makefile.am" in origin_path:
-        prefix = "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_libsrc4_"
-        if name.startswith(prefix):
-            suffix = name[len(prefix):]
-            return f"netcdf_libsrc4_{_cmake_sanitize_name(suffix)}"
-        if not name.startswith("netcdf_libsrc4_"):
-            return f"netcdf_libsrc4_{_cmake_sanitize_name(name)}"
 
     return None
 

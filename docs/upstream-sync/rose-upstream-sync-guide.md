@@ -272,7 +272,6 @@ pending tests/nonsmoke/functional/CompileTests/ElsaTestCases/notCompilable/std
 pending tests/nonsmoke/functional/CompileTests/ElsaTestCases/std
 pending tests/nonsmoke/functional/CompileTests/ExpressionTemplateExample_tests
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests
-pending tests/nonsmoke/functional/CompileTests/Fortran_tests/LANL_POP
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests/experimental_frontend_tests
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests/gfortranTestSuite
 pending tests/nonsmoke/functional/CompileTests/Fortran_tests/gfortranTestSuite/gfortran.dg

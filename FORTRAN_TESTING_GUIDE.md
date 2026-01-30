@@ -128,9 +128,9 @@ revalidated under the current Flang-based flow.
 
 Additional test suites in subdirectories:
 
-1. **LANL_POP/** - Los Alamos POP (Parallel Ocean Program) tests
-2. **gfortranTestSuite/** - Legacy Fortran test corpus used as a broad
+1. **gfortranTestSuite/** - Legacy Fortran test corpus used as a broad
    coverage set under Flang (directory name kept for history)
+2. **experimental_frontend_tests/** - Focused front-end regression tests
 
 ## Test Flags (from CMakeLists.txt)
 
