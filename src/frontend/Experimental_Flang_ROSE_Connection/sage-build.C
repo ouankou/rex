@@ -28,6 +28,8 @@
 
 #include <unordered_map>
 
+#include <llvm/Config/llvm-config.h>
+
 #include "type-parsers.h"
 
 // Controls debugging information output
@@ -8498,6 +8500,17 @@ BuildFunctionCallFromSymbolIfFound(const std::string &func_name,
 
 SgExpression *BuildIoUnitExpr(const parser::IoUnit &x) {
   SgExpression *expr{nullptr};
+#if LLVM_VERSION_MAJOR >= 21
+  common::visit(
+      common::visitors{[&](const parser::Variable &y) { WalkExpr(y, expr); },
+                       [&](const common::Indirection<parser::Expr> &y) {
+                         WalkExpr(y.value(), expr);
+                       },
+                       [&](const parser::Star &) {
+                         expr = SageBuilderCpp17::buildAsteriskShapeExp_nfi();
+                       }},
+      x.u);
+#else
   common::visit(
       common::visitors{
           [&](const parser::Variable &y) { WalkExpr(y, expr); },
@@ -8506,6 +8519,7 @@ SgExpression *BuildIoUnitExpr(const parser::IoUnit &x) {
             expr = SageBuilderCpp17::buildAsteriskShapeExp_nfi();
           }},
       x.u);
+#endif
   ASSERT_not_null(expr);
   return expr;
 }

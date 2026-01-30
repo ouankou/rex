@@ -8,7 +8,6 @@
 
 #include <memory>
 
-<<<<<<< HEAD
 #include <sstream>
 
 #include <llvm/Support/FileSystem.h>

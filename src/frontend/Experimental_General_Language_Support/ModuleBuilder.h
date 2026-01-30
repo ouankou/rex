@@ -23,8 +23,10 @@ SgProject *getProject();
 
 // Need std=c++11
 //
+#if __cplusplus < 201103L
 #ifndef nullptr
 #define nullptr NULL
+#endif
 #endif
 
 namespace Rose {

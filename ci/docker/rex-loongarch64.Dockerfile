@@ -21,6 +21,7 @@ RUN apt-get update \
       libantlr4-runtime-dev \
       libclang-${LLVM_VERSION}-dev \
       libclang-cpp${LLVM_VERSION}-dev \
+      libflang-${LLVM_VERSION}-dev \
       libhpdf-dev \
       libtool \
       llvm-${LLVM_VERSION} \

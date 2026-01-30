@@ -29,9 +29,15 @@
 
 #include <flang/Parser/unparse.h>
 
-#include <flang/Common/Fortran.h>
+#include <llvm/Config/llvm-config.h>
 
+#if LLVM_VERSION_MAJOR >= 21
+#include <flang/Support/Fortran.h>
+#include <flang/Support/LangOptions.h>
+#else
+#include <flang/Common/Fortran.h>
 #include <flang/Common/LangOptions.h>
+#endif
 
 #include <llvm/Support/raw_ostream.h>
 
@@ -1898,6 +1904,25 @@ public:
             [&](const std::list<CompilerDirective::NameValue> &names) {
               Walk("!DIR$ ", names, " ");
             },
+#if LLVM_VERSION_MAJOR >= 21
+            [&](const CompilerDirective::Unroll &unroll) {
+              Word("!DIR$ UNROLL");
+              Walk(" ", unroll.v);
+            },
+            [&](const CompilerDirective::UnrollAndJam &unroll) {
+              Word("!DIR$ UNROLL_AND_JAM");
+              Walk(" ", unroll.v);
+            },
+            [&](const CompilerDirective::NoVector &) {
+              Word("!DIR$ NOVECTOR");
+            },
+            [&](const CompilerDirective::NoUnroll &) {
+              Word("!DIR$ NOUNROLL");
+            },
+            [&](const CompilerDirective::NoUnrollAndJam &) {
+              Word("!DIR$ NOUNROLL_AND_JAM");
+            },
+#endif
             [&](const CompilerDirective::Unrecognized &) {
               Word("!DIR$ ");
               Word(x.source.ToString());
@@ -2121,17 +2146,58 @@ public:
   void Unparse(const llvm::omp::Directive &x) {
     Word(llvm::omp::getOpenMPDirectiveName(x).str());
   }
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OmpDirectiveName &x) { Unparse(x.v); }
+  void Unparse(const OmpArgument &x) {
+    common::visit(common::visitors{
+                      [&](const OmpLocator &y) { Walk(y); },
+                      [&](const OmpMapperSpecifier &y) { Walk(y); },
+                      [&](const OmpReductionSpecifier &y) { Walk(y); },
+                  },
+                  x.u);
+  }
+  void Unparse(const OmpArgumentList &x) { Walk(x.v, ", "); }
+  void Unparse(const OmpDirectiveSpecification &x) {
+    Walk(x.DirName());
+    if (const auto &args = std::get<std::optional<OmpArgumentList>>(x.t)) {
+      Put("(");
+      Walk(*args);
+      Put(")");
+    }
+    Walk(std::get<std::optional<OmpClauseList>>(x.t));
+  }
+#endif
   void Unparse(const OmpTraitScore &x) {
     Word("SCORE(");
     Walk(x.v);
     Put(")");
   }
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OmpTraitPropertyExtension &x) {
+    common::visit(
+        common::visitors{
+            [&](const OmpTraitPropertyName &name) { Walk(name); },
+            [&](const ScalarExpr &expr) { Walk(expr); },
+            [&](const OmpTraitPropertyExtension::Complex &complex) {
+              Walk(std::get<OmpTraitPropertyName>(complex.t));
+              Put("(");
+              Walk(std::get<std::list<
+                       common::Indirection<OmpTraitPropertyExtension>>>(
+                       complex.t),
+                   ",");
+              Put(")");
+            },
+        },
+        x.u);
+  }
+#else
   void Unparse(const OmpTraitPropertyExtension &x) {
     Walk(std::get<OmpTraitPropertyName>(x.t));
     Put("(");
     Walk(std::get<OmpTraitPropertyExtension::ExtensionList>(x.t), ",");
     Put(")");
   }
+#endif
   void Unparse(const OmpTraitSelector &x) {
     Walk(std::get<OmpTraitSelectorName>(x.t));
     Walk(std::get<std::optional<OmpTraitSelector::Properties>>(x.t));
@@ -2157,9 +2223,11 @@ public:
                   },
                   x.u);
   }
+#if LLVM_VERSION_MAJOR < 21
   void Unparse(const OmpDirectiveNameModifier &x) {
     Word(llvm::omp::getOpenMPDirectiveName(x.v));
   }
+#endif
   void Unparse(const OmpIteratorSpecifier &x) {
     Walk(std::get<TypeDeclarationStmt>(x.t));
     Put(" = ");
@@ -2458,6 +2526,7 @@ public:
     }
   }
   void Unparse(const OmpObjectList &x) { Walk(x.v, ","); }
+#if LLVM_VERSION_MAJOR < 21
   void Unparse(const OmpSimpleStandaloneDirective &x) {
     switch (x.v) {
     case llvm::omp::Directive::OMPD_barrier:
@@ -2489,6 +2558,7 @@ public:
       break;
     }
   }
+#endif
   void Unparse(const OmpBlockDirective &x) {
     switch (x.v) {
     case llvm::omp::Directive::OMPD_masked:
@@ -2552,6 +2622,24 @@ public:
     Word(ToUpperCaseLetters(common::EnumToString(x.v)));
   }
 
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OpenMPAtomicConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(std::get<OmpDirectiveSpecification>(x.t));
+    Put("\n");
+    EndOpenMP();
+    Walk(std::get<Block>(x.t), "");
+    if (const auto &end =
+            std::get<std::optional<OmpDirectiveSpecification>>(x.t)) {
+      BeginOpenMP();
+      Word("!$OMP END ");
+      Walk(*end);
+      Put("\n");
+      EndOpenMP();
+    }
+  }
+#else
   void Unparse(const OmpAtomicClauseList &x) { Walk(" ", x.v, " "); }
 
   void Unparse(const OmpAtomic &x) {
@@ -2629,6 +2717,7 @@ public:
     Walk(std::get<std::optional<OmpEndAtomic>>(x.t), "!$OMP END ATOMIC\n");
     EndOpenMP();
   }
+#endif
   void Unparse(const OpenMPExecutableAllocate &x) {
     const auto &fields =
         std::get<std::optional<std::list<parser::OpenMPDeclarativeAllocate>>>(
@@ -2656,6 +2745,24 @@ public:
     Put("\n");
     EndOpenMP();
   }
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OpenMPAllocatorsConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(std::get<OmpDirectiveSpecification>(x.t));
+    Put("\n");
+    EndOpenMP();
+    Walk(std::get<Block>(x.t), "");
+    if (const auto &end =
+            std::get<std::optional<OmpDirectiveSpecification>>(x.t)) {
+      BeginOpenMP();
+      Word("!$OMP END ");
+      Walk(*end);
+      Put("\n");
+      EndOpenMP();
+    }
+  }
+#else
   void Unparse(const OmpEndAllocators &x) {
     BeginOpenMP();
     Word("!$OMP END ALLOCATE");
@@ -2673,6 +2780,7 @@ public:
       Walk(*end);
     }
   }
+#endif
   void Unparse(const OmpCriticalDirective &x) {
     BeginOpenMP();
     Word("!$OMP CRITICAL");
@@ -2696,6 +2804,36 @@ public:
   void Unparse(const OmpDeclareTargetWithList &x) {
     Put("("), Walk(x.v), Put(")");
   }
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OmpInitializerProc &x) {
+    const auto &pd = std::get<ProcedureDesignator>(x.t);
+    const auto &args = std::get<std::list<ActualArgSpec>>(x.t);
+    Walk(pd);
+    if (args.empty()) {
+      if (std::holds_alternative<ProcComponentRef>(pd.u)) {
+        Put("()");
+      }
+    } else {
+      Walk("(", args, ", ", ")");
+    }
+  }
+  void Unparse(const OmpInitializerClause &x) {
+    Word(" INITIALIZER(");
+    common::visit(common::visitors{
+                      [&](const OmpInitializerProc &proc) { Walk(proc); },
+                      [&](const AssignmentStmt &stmt) { Walk(stmt); },
+                  },
+                  x.u);
+    Put(")");
+  }
+  void Unparse(const OmpReductionCombiner &x) {
+    common::visit(common::visitors{
+                      [&](const AssignmentStmt &stmt) { Walk(stmt); },
+                      [&](const FunctionReference &ref) { Walk(ref); },
+                  },
+                  x.u);
+  }
+#else
   void Unparse(const OmpReductionInitializerClause &x) {
     Word(" INITIALIZER(OMP_PRIV = ");
     Walk(x.v);
@@ -2713,6 +2851,45 @@ public:
       Walk("(", args, ", ", ")");
     }
   }
+#endif
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OpenMPDeclareReductionConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP DECLARE REDUCTION ");
+    const auto &spec =
+        std::get<common::Indirection<OmpReductionSpecifier>>(x.t).value();
+    Put("(");
+    Walk(std::get<OmpReductionIdentifier>(spec.t)), Put(" : ");
+    Walk(std::get<OmpTypeNameList>(spec.t)), Put(" : ");
+    if (const auto &combiner =
+            std::get<std::optional<OmpReductionCombiner>>(spec.t)) {
+      Walk(*combiner);
+    }
+    Put(")");
+    Walk(std::get<std::optional<OmpClauseList>>(x.t));
+    Put("\n");
+    EndOpenMP();
+  }
+
+  void Unparse(const OpenMPDeclareMapperConstruct &z) {
+    BeginOpenMP();
+    Word("!$OMP DECLARE MAPPER (");
+    const auto &spec{std::get<OmpMapperSpecifier>(z.t)};
+    const auto &mapper_id = std::get<std::string>(spec.t);
+    if (!mapper_id.empty()) {
+      Word(mapper_id);
+      Put(":");
+    }
+    Walk(std::get<TypeSpec>(spec.t));
+    Put("::");
+    Walk(std::get<Name>(spec.t));
+    Put(")");
+
+    Walk(std::get<OmpClauseList>(z.t));
+    Put("\n");
+    EndOpenMP();
+  }
+#else
   void Unparse(const OpenMPDeclareReductionConstruct &x) {
     BeginOpenMP();
     Word("!$OMP DECLARE REDUCTION ");
@@ -2742,6 +2919,7 @@ public:
     Put("\n");
     EndOpenMP();
   }
+#endif
   void Unparse(const OpenMPDeclareSimdConstruct &y) {
     BeginOpenMP();
     Word("!$OMP DECLARE SIMD ");
@@ -2776,6 +2954,24 @@ public:
     Walk(x.v);
     return false;
   }
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OpenMPDispatchConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(std::get<OmpDirectiveSpecification>(x.t));
+    Put("\n");
+    EndOpenMP();
+    Walk(std::get<Block>(x.t), "");
+    if (const auto &end =
+            std::get<std::optional<OmpDirectiveSpecification>>(x.t)) {
+      BeginOpenMP();
+      Word("!$OMP END ");
+      Walk(*end);
+      Put("\n");
+      EndOpenMP();
+    }
+  }
+#else
   void Unparse(const OmpDispatchDirective &x) {
     Word("!$OMP DISPATCH");
     Walk(x.t);
@@ -2785,6 +2981,7 @@ public:
     Word("!$OMP END DISPATCH");
     Put("\n");
   }
+#endif
   void Unparse(const OmpErrorDirective &x) {
     Word("!$OMP ERROR ");
     Walk(x.t);
@@ -2830,6 +3027,22 @@ public:
     Put("\n");
     EndOpenMP();
   }
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OpenMPCancellationPointConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(x.v);
+    Put("\n");
+    EndOpenMP();
+  }
+  void Unparse(const OpenMPCancelConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(x.v);
+    Put("\n");
+    EndOpenMP();
+  }
+#else
   void Unparse(const OpenMPCancellationPointConstruct &x) {
     BeginOpenMP();
     Word("!$OMP CANCELLATION POINT ");
@@ -2845,12 +3058,14 @@ public:
     Put("\n");
     EndOpenMP();
   }
+#endif
   void Unparse(const OmpFailClause &x) {
     Word("FAIL(");
     Walk(x.v);
     Put(")");
   }
   void Unparse(const OmpMemoryOrderClause &x) { Walk(x.v); }
+#if LLVM_VERSION_MAJOR < 21
   void Unparse(const OmpAtomicClause &x) {
     common::visit(common::visitors{
                       [&](const OmpMemoryOrderClause &y) { Walk(y); },
@@ -2859,6 +3074,23 @@ public:
                   },
                   x.u);
   }
+#endif
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OpenMPDepobjConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(x.v);
+    Put("\n");
+    EndOpenMP();
+  }
+  void Unparse(const OpenMPFlushConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(x.v);
+    Put("\n");
+    EndOpenMP();
+  }
+#else
   void Unparse(const OpenMPDepobjConstruct &x) {
     BeginOpenMP();
     Word("!$OMP DEPOBJ");
@@ -2877,6 +3109,7 @@ public:
     Put("\n");
     EndOpenMP();
   }
+#endif
   void Unparse(const OmpEndLoopDirective &x) {
     BeginOpenMP();
     Word("!$OMP END ");
@@ -2886,6 +3119,15 @@ public:
     EndOpenMP();
   }
   void Unparse(const OmpClauseList &x) { Walk(" ", x.v, " "); }
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OpenMPSimpleStandaloneConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(x.v);
+    Put("\n");
+    EndOpenMP();
+  }
+#else
   void Unparse(const OpenMPSimpleStandaloneConstruct &x) {
     BeginOpenMP();
     Word("!$OMP ");
@@ -2894,6 +3136,7 @@ public:
     Put("\n");
     EndOpenMP();
   }
+#endif
   void Unparse(const OpenMPBlockConstruct &x) {
     BeginOpenMP();
     Word("!$OMP ");
@@ -2907,6 +3150,26 @@ public:
     Put("\n");
     EndOpenMP();
   }
+#if LLVM_VERSION_MAJOR >= 21
+  void Unparse(const OpenMPLoopConstruct &x) {
+    BeginOpenMP();
+    Word("!$OMP ");
+    Walk(std::get<OmpBeginLoopDirective>(x.t));
+    Put("\n");
+    EndOpenMP();
+    if (const auto &nested = std::get<std::optional<NestedConstruct>>(x.t)) {
+      common::visit(
+          common::visitors{
+              [&](const DoConstruct &loop) { Walk(loop); },
+              [&](const common::Indirection<OpenMPLoopConstruct> &loop) {
+                Walk(loop.value());
+              },
+          },
+          *nested);
+    }
+    Walk(std::get<std::optional<OmpEndLoopDirective>>(x.t));
+  }
+#else
   void Unparse(const OpenMPLoopConstruct &x) {
     BeginOpenMP();
     Word("!$OMP ");
@@ -2916,6 +3179,7 @@ public:
     Walk(std::get<std::optional<DoConstruct>>(x.t));
     Walk(std::get<std::optional<OmpEndLoopDirective>>(x.t));
   }
+#endif
   void Unparse(/*const*/ BasedPointer &x) {
     Put('('), Walk(std::get<0>(x.t)), Put(","), Walk(std::get<1>(x.t));
     Walk("(", std::get<std::optional<ArraySpec>>(x.t), ")"), Put(')');
@@ -3002,7 +3266,9 @@ public:
                    DeviceTypeDescription)       // OMP device_type
   WALK_NESTED_ENUM(OmpReductionModifier, Value) // OMP reduction-modifier
   WALK_NESTED_ENUM(OmpExpectation, Value)       // OMP motion-expectation
+#if LLVM_VERSION_MAJOR < 21
   WALK_NESTED_ENUM(OmpCancelType, Type)         // OMP cancel-type
+#endif
   WALK_NESTED_ENUM(OmpOrderClause, Ordering)    // OMP ordering
   WALK_NESTED_ENUM(OmpOrderModifier, Value)     // OMP order-modifier
   WALK_NESTED_ENUM(OmpPrescriptiveness, Value)  // OMP prescriptiveness

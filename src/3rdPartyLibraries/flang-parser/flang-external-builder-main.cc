@@ -38,6 +38,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/Support/Path.h>
 #include <system_error>
 
@@ -331,9 +332,16 @@ std::string CompileFortran(const std::string &path,
     return {};
   }
   if (driver.dumpUnparse) {
+#if LLVM_VERSION_MAJOR >= 21
+    Unparse(llvm::outs(), parseTree, driver.langOpts, driver.encoding,
+            true /*capitalize*/,
+            options.features.IsEnabled(
+                Fortran::common::LanguageFeature::BackslashEscapes));
+#else
     Unparse(llvm::outs(), parseTree, driver.encoding, true /*capitalize*/,
             options.features.IsEnabled(
                 Fortran::common::LanguageFeature::BackslashEscapes));
+#endif
     return {};
   }
   if (driver.syntaxOnly) {
@@ -362,9 +370,16 @@ std::string CompileFortran(const std::string &path,
     }
     filesToDelete.push_back(tmpPath);
     llvm::raw_fd_ostream tmpSource(fd, /*shouldClose*/ true);
+#if LLVM_VERSION_MAJOR >= 21
+    Unparse(tmpSource, parseTree, driver.langOpts, driver.encoding,
+            true /*capitalize*/,
+            options.features.IsEnabled(
+                Fortran::common::LanguageFeature::BackslashEscapes));
+#else
     Unparse(tmpSource, parseTree, driver.encoding, true /*capitalize*/,
             options.features.IsEnabled(
                 Fortran::common::LanguageFeature::BackslashEscapes));
+#endif
     unparsedPath = tmpPath;
   }
 
