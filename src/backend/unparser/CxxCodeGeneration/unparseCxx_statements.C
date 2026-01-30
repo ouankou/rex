@@ -8300,10 +8300,6 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
   SgOmpClauseBodyStatement *bodystmt = isSgOmpClauseBodyStatement(stmt);
   SgOmpDeclareSimdStatement *simdstmt = isSgOmpDeclareSimdStatement(stmt);
   SgOmpClauseStatement *clausestmt = isSgOmpClauseStatement(stmt);
-  SgOmpTaskwaitStatement *taskwaitstmt = isSgOmpTaskwaitStatement(stmt);
-  SgOmpRequiresStatement *requiresstmt = isSgOmpRequiresStatement(stmt);
-  SgOmpOrderedDependStatement *ordereddependstmt =
-      isSgOmpOrderedDependStatement(stmt);
   const SgOmpClausePtrList *clause_ptr_list = nullptr;
   bool add_leading_space = false;
   if (bodystmt != nullptr) {
@@ -8313,15 +8309,6 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
     clause_ptr_list = &simdstmt->get_clauses();
   } else if (clausestmt != nullptr) {
     clause_ptr_list = &clausestmt->get_clauses();
-    add_leading_space = true;
-  } else if (taskwaitstmt != nullptr) {
-    clause_ptr_list = &taskwaitstmt->get_clauses();
-    add_leading_space = true;
-  } else if (requiresstmt != nullptr) {
-    clause_ptr_list = &requiresstmt->get_clauses();
-    add_leading_space = true;
-  } else if (ordereddependstmt != nullptr) {
-    clause_ptr_list = &ordereddependstmt->get_clauses();
     add_leading_space = true;
   }
   if (clause_ptr_list != nullptr && !clause_ptr_list->empty()) {
