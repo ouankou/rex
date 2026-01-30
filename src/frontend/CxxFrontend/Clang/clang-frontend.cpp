@@ -323,6 +323,259 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
                                               buffer_or->getBufferIdentifier());
 }
 
+struct SuppressedIncludeDirective {
+  size_t hash_offset;
+  size_t line_start;
+  size_t line_end;
+  PreprocessingInfo::DirectiveType directive_type;
+  std::string text;
+};
+
+static bool isDirectiveLine(llvm::StringRef line, size_t *hash_col) {
+  size_t pos = 0;
+  while (pos < line.size() &&
+         (line[pos] == ' ' || line[pos] == '\t' || line[pos] == '\f')) {
+    ++pos;
+  }
+  if (pos >= line.size() || line[pos] != '#') {
+    return false;
+  }
+  if (hash_col != nullptr) {
+    *hash_col = pos;
+  }
+  return true;
+}
+
+static bool parseIncludeDirective(llvm::StringRef line, size_t hash_col,
+                                  PreprocessingInfo::DirectiveType *type_out,
+                                  std::string *text_out) {
+  size_t pos = hash_col + 1;
+  while (pos < line.size() &&
+         (line[pos] == ' ' || line[pos] == '\t' || line[pos] == '\f')) {
+    ++pos;
+  }
+  auto is_word_boundary = [&](size_t idx) -> bool {
+    if (idx >= line.size()) {
+      return true;
+    }
+    char c = line[idx];
+    return c == ' ' || c == '\t' || c == '\f' || c == '<' || c == '"' ||
+           c == '\r';
+  };
+  PreprocessingInfo::DirectiveType directive_type =
+      PreprocessingInfo::CpreprocessorIncludeDeclaration;
+  if (line.substr(pos).starts_with("include_next")) {
+    if (!is_word_boundary(pos + strlen("include_next"))) {
+      return false;
+    }
+    directive_type = PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
+  } else if (line.substr(pos).starts_with("include")) {
+    if (!is_word_boundary(pos + strlen("include"))) {
+      return false;
+    }
+    directive_type = PreprocessingInfo::CpreprocessorIncludeDeclaration;
+  } else {
+    return false;
+  }
+  if (type_out != nullptr) {
+    *type_out = directive_type;
+  }
+  if (text_out != nullptr) {
+    std::string text = line.str();
+    while (!text.empty() && (text.back() == ' ' || text.back() == '\t' ||
+                             text.back() == '\f' || text.back() == '\r')) {
+      text.pop_back();
+    }
+    *text_out = std::move(text);
+  }
+  return true;
+}
+
+std::unique_ptr<llvm::MemoryBuffer> maybeSuppressMisplacedIncludes(
+    clang::SourceManager &source_manager, clang::FileID file_id,
+    std::vector<SuppressedIncludeDirective> *suppressed_out) {
+  if (suppressed_out == nullptr) {
+    return nullptr;
+  }
+  auto buffer_or = source_manager.getBufferOrNone(file_id);
+  if (!buffer_or) {
+    return nullptr;
+  }
+  llvm::StringRef content = buffer_or->getBuffer();
+  if (content.empty()) {
+    return nullptr;
+  }
+
+  bool pending_body = false;
+  std::vector<SuppressedIncludeDirective> pending_includes;
+  std::vector<SuppressedIncludeDirective> suppressed;
+  pending_includes.reserve(4);
+
+  bool in_block_comment = false;
+  bool in_line_comment = false;
+  bool in_string = false;
+  bool in_char = false;
+  bool escape = false;
+  int brace_depth = 0;
+  int paren_depth = 0;
+
+  auto commit_pending = [&]() {
+    if (!pending_includes.empty()) {
+      suppressed.insert(suppressed.end(), pending_includes.begin(),
+                        pending_includes.end());
+      pending_includes.clear();
+    }
+    pending_body = false;
+  };
+
+  size_t pos = 0;
+  while (pos < content.size()) {
+    size_t line_end = content.find_first_of("\r\n", pos);
+    if (line_end == llvm::StringRef::npos) {
+      line_end = content.size();
+    }
+    size_t next_pos = line_end;
+    if (next_pos < content.size()) {
+      if (content[next_pos] == '\r' && next_pos + 1 < content.size() &&
+          content[next_pos + 1] == '\n') {
+        next_pos += 2;
+      } else {
+        next_pos += 1;
+      }
+    }
+
+    llvm::StringRef line = content.slice(pos, line_end);
+    size_t hash_col = 0;
+    bool is_directive = isDirectiveLine(line, &hash_col);
+    if (is_directive) {
+      PreprocessingInfo::DirectiveType directive_type;
+      std::string directive_text;
+      if (parseIncludeDirective(line, hash_col, &directive_type,
+                                &directive_text) &&
+          pending_body) {
+        SuppressedIncludeDirective entry;
+        entry.hash_offset = pos + hash_col;
+        entry.line_start = pos;
+        entry.line_end = line_end;
+        entry.directive_type = directive_type;
+        entry.text = std::move(directive_text);
+        pending_includes.push_back(std::move(entry));
+      }
+      in_line_comment = false;
+      pos = next_pos;
+      continue;
+    }
+
+    for (size_t i = pos; i < line_end; ++i) {
+      char c = content[i];
+      if (in_line_comment) {
+        continue;
+      }
+      if (in_block_comment) {
+        if (c == '*' && i + 1 < line_end && content[i + 1] == '/') {
+          in_block_comment = false;
+          ++i;
+        }
+        continue;
+      }
+      if (in_string) {
+        if (escape) {
+          escape = false;
+        } else if (c == '\\') {
+          escape = true;
+        } else if (c == '"') {
+          in_string = false;
+        }
+        continue;
+      }
+      if (in_char) {
+        if (escape) {
+          escape = false;
+        } else if (c == '\\') {
+          escape = true;
+        } else if (c == '\'') {
+          in_char = false;
+        }
+        continue;
+      }
+
+      if (c == '/' && i + 1 < line_end && content[i + 1] == '/') {
+        in_line_comment = true;
+        continue;
+      }
+      if (c == '/' && i + 1 < line_end && content[i + 1] == '*') {
+        in_block_comment = true;
+        ++i;
+        continue;
+      }
+      if (c == '"') {
+        in_string = true;
+        escape = false;
+        continue;
+      }
+      if (c == '\'') {
+        in_char = true;
+        escape = false;
+        continue;
+      }
+      if (c == '(') {
+        ++paren_depth;
+        continue;
+      }
+      if (c == ')') {
+        if (paren_depth > 0) {
+          --paren_depth;
+        }
+        if (paren_depth == 0 && brace_depth == 0) {
+          pending_body = true;
+          pending_includes.clear();
+        }
+        continue;
+      }
+      if (c == '{') {
+        if (brace_depth == 0 && pending_body) {
+          commit_pending();
+        }
+        ++brace_depth;
+        continue;
+      }
+      if (c == '}') {
+        if (brace_depth > 0) {
+          --brace_depth;
+        }
+        continue;
+      }
+      if (c == ';') {
+        if (brace_depth == 0 && pending_body) {
+          pending_body = false;
+          pending_includes.clear();
+        }
+        continue;
+      }
+    }
+    in_line_comment = false;
+    pos = next_pos;
+  }
+
+  if (suppressed.empty()) {
+    return nullptr;
+  }
+  *suppressed_out = suppressed;
+
+  std::string updated = content.str();
+  for (const auto &entry : suppressed) {
+    for (size_t i = entry.line_start; i < entry.line_end; ++i) {
+      char &ch = updated[i];
+      if (ch != '\n' && ch != '\r') {
+        ch = ' ';
+      }
+    }
+  }
+
+  return llvm::MemoryBuffer::getMemBufferCopy(updated,
+                                              buffer_or->getBufferIdentifier());
+}
+
 } // namespace
 
 // DQ (11/28/2020): Use this for testing the DOT graph generator.
@@ -965,6 +1218,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // In LLVM 20, createFileID takes FileEntryRef instead of const FileEntry*
   clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(
       input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
+  std::vector<SuppressedIncludeDirective> suppressed_includes;
   if (language == ClangToSageTranslator::CPLUSPLUS ||
       language == ClangToSageTranslator::CUDA) {
     std::vector<unsigned> missing_template_offsets;
@@ -990,6 +1244,17 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
               std::move(file_name), std::move(missing_template_offsets)));
     }
   }
+  if (openmp_ast_mode) {
+    if (auto fixed_buffer = maybeSuppressMisplacedIncludes(
+            compiler_instance->getSourceManager(), mainFileID,
+            &suppressed_includes)) {
+      compiler_instance->getSourceManager().overrideFileContents(
+          input_file_entry, std::move(fixed_buffer));
+      // The token stream no longer reflects the on-disk source. Force
+      // AST-based unparsing so preprocessing info can be reinserted.
+      sageFile.set_unparse_tokens(false);
+    }
+  }
 
   compiler_instance->getSourceManager().setMainFileID(mainFileID);
 
@@ -1011,6 +1276,16 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     preprocessor_recorder = preprocessor_recorder_owner.get();
     PP.addPPCallbacks(std::move(preprocessor_recorder_owner));
     PP.addCommentHandler(preprocessor_recorder);
+  }
+  if (preprocessor_recorder != nullptr && !suppressed_includes.empty()) {
+    clang::SourceLocation file_start =
+        compiler_instance->getSourceManager().getLocForStartOfFile(mainFileID);
+    for (const auto &entry : suppressed_includes) {
+      clang::SourceLocation loc =
+          file_start.getLocWithOffset(entry.hash_offset);
+      preprocessor_recorder->recordInjectedDirective(loc, entry.directive_type,
+                                                     entry.text);
+    }
   }
 
   if (!compiler_instance->hasASTContext())
@@ -2212,6 +2487,12 @@ void SagePreprocessorRecord::recordDirective(
   p_preprocessor_record_list.push_back(
       std::pair<Sg_File_Info *, PreprocessingInfo *>(file_info, preproc_info));
   p_preprocessor_record_list_sorted = false;
+}
+
+void SagePreprocessorRecord::recordInjectedDirective(
+    clang::SourceLocation loc, PreprocessingInfo::DirectiveType directive_type,
+    const std::string &text) {
+  recordDirective(loc, directive_type, text);
 }
 
 void SagePreprocessorRecord::InclusionDirective(

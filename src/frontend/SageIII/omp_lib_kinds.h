@@ -1,5 +1,4 @@
-!OpenMP Fortran API kinds(fixed / free form) integer omp_lock_kind
-    parameter(omp_lock_kind = 8) integer omp_nest_lock_kind
+integer omp_lock_kind parameter(omp_lock_kind = 8) integer omp_nest_lock_kind
     parameter(omp_nest_lock_kind = 8) integer omp_sched_kind
     parameter(omp_sched_kind = 4) integer omp_sched_static
     parameter(omp_sched_static = 1) integer omp_sched_dynamic

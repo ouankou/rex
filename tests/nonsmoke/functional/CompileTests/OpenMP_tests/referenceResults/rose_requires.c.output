@@ -1,1 +1,1 @@
-#pragma omp requires  reverse_offload
+#pragma omp requires

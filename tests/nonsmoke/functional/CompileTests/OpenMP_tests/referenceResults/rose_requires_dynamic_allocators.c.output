@@ -1,1 +1,1 @@
-#pragma omp requires  dynamic_allocators
+#pragma omp requires

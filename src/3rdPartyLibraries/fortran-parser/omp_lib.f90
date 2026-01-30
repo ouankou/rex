@@ -58,8 +58,8 @@ module omp_lib_kinds
   integer (kind=omp_pause_resource_kind), parameter :: omp_pause_soft = 1
   integer (kind=omp_pause_resource_kind), parameter :: omp_pause_hard = 2
 
-  integer, parameter ( omp_initial_device = -1 )
-  integer, parameter ( omp_invalid_device = -42 )
+  integer, parameter :: omp_initial_device = -1
+  integer, parameter :: omp_invalid_device = -42
 
   integer, parameter :: omp_event_handle_kind = selected_int_kind( 8 )
 

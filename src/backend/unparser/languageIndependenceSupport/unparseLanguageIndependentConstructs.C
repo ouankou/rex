@@ -9467,12 +9467,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         c->get_uses_allocators_defination();
     std::list<SgOmpUsesAllocatorsDefination *>::iterator iter;
     size_t total = uses_allocators_definations.size();
-    size_t index = 0;
-    bool last_has_traits = false;
     for (iter = uses_allocators_definations.begin();
          iter != uses_allocators_definations.end(); iter++) {
-      ++index;
-      bool is_last = (index == total);
       SgOmpClause::omp_uses_allocators_allocator_enum allocator =
           (*iter)->get_allocator();
       if (allocator != SgOmpClause::e_omp_uses_allocators_allocator_unknown) {
@@ -9485,28 +9481,20 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         }
       }
       if (((*iter)->get_allocator_traits_array()) != NULL) {
-        curprint(string(" ( "));
+        curprint(string("("));
         SgExpression *allocator_traits_array =
             (*iter)->get_allocator_traits_array();
         SgUnparse_Info ninfo(info);
         unparseExpression(allocator_traits_array, ninfo);
-        if (is_last) {
-          curprint(string(" )"));
-          last_has_traits = true;
-        } else {
-          curprint(string(" ) "));
-        }
+        curprint(string(")"));
       }
-      if (!is_last)
-        curprint(string(" , "));
+      auto next = iter;
+      ++next;
+      if (next != uses_allocators_definations.end()) {
+        curprint(string(", "));
+      }
     }
-    if (total == 0) {
-      curprint(string(" )"));
-    } else if (last_has_traits) {
-      curprint(string("  )"));
-    } else {
-      curprint(string(" )"));
-    }
+    curprint(string(")"));
   }
 
   // Generate dist_data(p1, p2, p3)

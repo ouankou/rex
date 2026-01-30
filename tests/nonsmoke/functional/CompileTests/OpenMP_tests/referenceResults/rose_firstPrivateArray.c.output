@@ -1,1 +1,1 @@
-#pragma omp parallel  firstprivate(array)
+#pragma omp parallel firstprivate(array)

@@ -1,1 +1,1 @@
-#pragma omp task  firstprivate(A)
+#pragma omp task firstprivate(A)

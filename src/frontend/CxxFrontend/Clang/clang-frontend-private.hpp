@@ -1560,6 +1560,9 @@ protected:
 public:
   SagePreprocessorRecord(clang::SourceManager *source_manager);
   void sortRecordedDirectives();
+  void recordInjectedDirective(clang::SourceLocation loc,
+                               PreprocessingInfo::DirectiveType directive_type,
+                               const std::string &text);
 
   void
   InclusionDirective(clang::SourceLocation HashLoc,

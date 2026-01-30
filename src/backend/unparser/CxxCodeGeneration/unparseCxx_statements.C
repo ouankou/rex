@@ -8301,25 +8301,14 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
   SgOmpDeclareSimdStatement *simdstmt = isSgOmpDeclareSimdStatement(stmt);
   SgOmpClauseStatement *clausestmt = isSgOmpClauseStatement(stmt);
   const SgOmpClausePtrList *clause_ptr_list = nullptr;
-  bool add_leading_space = false;
   if (bodystmt != nullptr) {
     clause_ptr_list = &bodystmt->get_clauses();
-    add_leading_space = true;
   } else if (simdstmt != nullptr) {
     clause_ptr_list = &simdstmt->get_clauses();
   } else if (clausestmt != nullptr) {
     clause_ptr_list = &clausestmt->get_clauses();
-    add_leading_space = true;
   }
   if (clause_ptr_list != nullptr && !clause_ptr_list->empty()) {
-    if (add_leading_space) {
-      if (isSgOmpCriticalStatement(stmt) || isSgOmpDepobjStatement(stmt)) {
-        add_leading_space = false;
-      }
-    }
-    if (add_leading_space) {
-      curprint(string(" "));
-    }
     for (SgOmpClause *c_clause : *clause_ptr_list) {
       unparseOmpClause(c_clause, info);
     }

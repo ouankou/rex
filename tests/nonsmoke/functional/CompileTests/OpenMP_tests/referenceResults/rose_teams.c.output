@@ -1,1 +1,1 @@
-#pragma omp teams  num_teams(n) reduction(+ : res)
+#pragma omp teams num_teams(n) reduction(+ : res)

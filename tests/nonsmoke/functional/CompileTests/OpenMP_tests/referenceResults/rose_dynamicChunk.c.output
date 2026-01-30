@@ -1,1 +1,1 @@
-#pragma omp for  schedule(dynamic , 50)
+#pragma omp for schedule(dynamic , 50)
