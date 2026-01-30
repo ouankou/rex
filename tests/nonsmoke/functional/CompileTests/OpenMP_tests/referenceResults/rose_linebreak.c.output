@@ -1,1 +1,1 @@
-#pragma omp parallel  private(j) shared(a)
+#pragma omp parallel private(j) shared(a)

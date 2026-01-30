@@ -1,1 +1,1 @@
-#pragma omp parallel  private(x)
+#pragma omp parallel private(x)

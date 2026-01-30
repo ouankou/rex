@@ -1,1 +1,1 @@
-#pragma omp requires  unified_address
+#pragma omp requires

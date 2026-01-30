@@ -1,12 +1,16 @@
 #include "clang-frontend-private.hpp"
 
+#include "fixupTemplateArguments.h"
 #include "sage3basic.h"
+#include "unparser.h"
 
 #include <cctype>
 
 #include <algorithm>
 
 #include <clang/Lex/Lexer.h>
+
+#include <clang/Sema/Template.h>
 
 #include <llvm/ADT/SmallString.h>
 
@@ -68,6 +72,36 @@ static void mark_compiler_generated_frontend_specific(SgNode *n) {
   }
 }
 
+static bool isClangOpenMPDecl(const clang::Decl *decl) {
+  if (decl == nullptr) {
+    return false;
+  }
+  switch (decl->getKind()) {
+  case clang::Decl::OMPCapturedExpr:
+  case clang::Decl::OMPDeclareMapper:
+  case clang::Decl::OMPDeclareReduction:
+  case clang::Decl::OMPAllocate:
+  case clang::Decl::OMPRequires:
+  case clang::Decl::OMPThreadPrivate:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static void rejectClangOpenMPDecl(const clang::Decl *decl) {
+  std::cerr
+      << "Error: OpenMP/OpenACC declarations must be handled via pragma "
+         "capture and omp/accAstConstructor. Clang OpenMP AST declarations "
+         "should not be translated. Ensure -fopenmp is not passed to Clang."
+      << std::endl;
+  if (decl != nullptr) {
+    std::cerr << "Clang decl kind: " << decl->getDeclKindName() << std::endl;
+    decl->dump();
+  }
+  ROSE_ABORT();
+}
+
 namespace {
 static std::string trimWhitespace(std::string s) {
   size_t first = 0;
@@ -96,6 +130,55 @@ static void cleanup_unused_param_list(SgFunctionDeclaration *decl,
   }
   if (candidate->get_parent() == nullptr) {
     delete candidate;
+  }
+}
+
+static void ensureFunctionParameterSymbols(SgFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return;
+  }
+
+  std::set<SgFunctionDeclaration *> visited;
+  std::vector<SgFunctionDeclaration *> worklist;
+  worklist.push_back(decl);
+  if (SgFunctionDeclaration *def_decl =
+          isSgFunctionDeclaration(decl->get_definingDeclaration())) {
+    worklist.push_back(def_decl);
+  }
+
+  for (SgFunctionDeclaration *current : worklist) {
+    if (current == nullptr || !visited.insert(current).second) {
+      continue;
+    }
+
+    SgFunctionDefinition *def = current->get_definition();
+    if (def == nullptr) {
+      continue;
+    }
+
+    SgFunctionParameterList *params = current->get_parameterList();
+    if (params == nullptr) {
+      continue;
+    }
+
+    SgScopeStatement *scope = def;
+    for (SgInitializedName *param : params->get_args()) {
+      if (param == nullptr) {
+        continue;
+      }
+      if (param->get_name().getString().empty()) {
+        continue;
+      }
+      param->set_declptr(current);
+      param->set_scope(scope);
+      SgVariableSymbol *symbol =
+          isSgVariableSymbol(param->get_symbol_from_symbol_table());
+      if (symbol == nullptr) {
+        symbol = new SgVariableSymbol(param);
+        scope->insert_symbol(param->get_name(), symbol);
+        symbol->set_parent(scope->get_symbol_table());
+      }
+    }
   }
 }
 
@@ -3431,6 +3514,10 @@ SgNode *ClangToSageTranslator::Traverse(clang::Decl *decl) {
   if (decl == nullptr)
     return nullptr;
 
+  if (isClangOpenMPDecl(decl)) {
+    rejectClangOpenMPDecl(decl);
+  }
+
   if (clang::NamedDecl *nd = llvm::dyn_cast<clang::NamedDecl>(decl)) {
     std::string name = getDeclNameSafe(nd);
     if (name == "dep" || name == "pack" || name == "a" || name == "ms") {
@@ -3711,11 +3798,6 @@ translate_decl:
         VisitImplicitParamDecl((clang::ImplicitParamDecl *)decl, &result);
     ROSE_ASSERT(ret_status == false || result != nullptr);
     break;
-  case clang::Decl::OMPCapturedExpr:
-    ret_status =
-        VisitOMPCaptureExprDecl((clang::OMPCapturedExprDecl *)decl, &result);
-    ROSE_ASSERT(ret_status == false || result != nullptr);
-    break;
   case clang::Decl::ParmVar:
     ret_status = VisitParmVarDecl((clang::ParmVarDecl *)decl, &result);
     ROSE_ASSERT(ret_status == false || result != nullptr);
@@ -3740,32 +3822,9 @@ translate_decl:
         VisitIndirectFieldDecl((clang::IndirectFieldDecl *)decl, &result);
     ROSE_ASSERT(ret_status == false || result != nullptr);
     break;
-  case clang::Decl::OMPDeclareMapper:
-    ret_status =
-        VisitOMPDeclareMapperDecl((clang::OMPDeclareMapperDecl *)decl, &result);
-    ROSE_ASSERT(ret_status == false || result != nullptr);
-    break;
-  case clang::Decl::OMPDeclareReduction:
-    ret_status = VisitOMPDeclareReductionDecl(
-        (clang::OMPDeclareReductionDecl *)decl, &result);
-    ROSE_ASSERT(ret_status == false || result != nullptr);
-    break;
   case clang::Decl::UnresolvedUsingValue:
     ret_status = VisitUnresolvedUsingValueDecl(
         (clang::UnresolvedUsingValueDecl *)decl, &result);
-    ROSE_ASSERT(ret_status == false || result != nullptr);
-    break;
-  case clang::Decl::OMPAllocate:
-    ret_status = VisitOMPAllocateDecl((clang::OMPAllocateDecl *)decl, &result);
-    ROSE_ASSERT(ret_status == false || result != nullptr);
-    break;
-  case clang::Decl::OMPRequires:
-    ret_status = VisitOMPRequiresDecl((clang::OMPRequiresDecl *)decl, &result);
-    ROSE_ASSERT(ret_status == false || result != nullptr);
-    break;
-  case clang::Decl::OMPThreadPrivate:
-    ret_status =
-        VisitOMPThreadPrivateDecl((clang::OMPThreadPrivateDecl *)decl, &result);
     ROSE_ASSERT(ret_status == false || result != nullptr);
     break;
   case clang::Decl::PragmaComment:
@@ -5341,14 +5400,8 @@ bool ClangToSageTranslator::VisitConceptDecl(clang::ConceptDecl *concept_decl,
     pushed_scope = true;
   }
 
-  SgDeclarationScope *decl_scope = isSgDeclarationScope(concept_scope);
-  if (decl_scope == nullptr) {
-    decl_scope = SageBuilder::buildDeclarationScope();
-    SageInterface::appendStatement(decl_scope, concept_scope);
-  }
-
   SgNonrealDecl *nrdecl =
-      SageBuilder::buildNonrealDecl(SgName(name_str), decl_scope);
+      SageBuilder::buildNonrealDecl(SgName(name_str), nullptr);
   if (pushed_scope) {
     SageBuilder::popScopeStack();
   }
@@ -7660,6 +7713,33 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   SgName name_with_template_args(
       buildTemplateInstantiationName(name.getString(), args));
 
+  ConstraintSatisfactionResult constraint_result;
+  if (specialization_kind == clang::TSK_ImplicitInstantiation ||
+      specialization_kind == clang::TSK_ExplicitInstantiationDefinition ||
+      specialization_kind == clang::TSK_ExplicitInstantiationDeclaration) {
+    llvm::SmallVector<const clang::Expr *, 4> constraints;
+    const clang::NamedDecl *constraint_owner = nullptr;
+    if (const clang::ClassTemplatePartialSpecializationDecl *partial =
+            llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
+                class_tpl_spec_decl)) {
+      partial->getAssociatedConstraints(constraints);
+      constraint_owner = partial;
+    } else if (clang::ClassTemplateDecl *primary =
+                   class_tpl_spec_decl->getSpecializedTemplate()) {
+      if (clang::TemplateParameterList *params =
+              primary->getTemplateParameters()) {
+        params->getAssociatedConstraints(constraints);
+      }
+      constraint_owner = primary;
+    }
+
+    if (constraint_owner != nullptr && !constraints.empty()) {
+      constraint_result =
+          evaluateConstraintSatisfaction(constraint_owner, constraints, args,
+                                         class_tpl_spec_decl->getSourceRange());
+    }
+  }
+
   // Helper lambda to build args (to avoid code duplication)
   auto build_args = [&](SgTemplateArgumentPtrList &target_list) {
     for (unsigned i = 0; i < args.size(); ++i) {
@@ -8019,6 +8099,19 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     suppress_instantiation(nondef_decl);
     if (definingDecl != nullptr) {
       suppress_instantiation(definingDecl);
+    }
+  }
+
+  if (constraint_result.evaluated) {
+    attachConstraintSatisfaction(nondef_decl, constraint_result);
+    if (definingDecl != nullptr && definingDecl != nondef_decl) {
+      attachConstraintSatisfaction(definingDecl, constraint_result);
+    }
+    if (nondef_decl != nullptr) {
+      pruneSymbolsForConstraints(nondef_decl);
+    }
+    if (definingDecl != nullptr && definingDecl != nondef_decl) {
+      pruneSymbolsForConstraints(definingDecl);
     }
   }
 
@@ -9570,8 +9663,136 @@ bool ClangToSageTranslator::VisitUsingPackDecl(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  if (using_pack_decl == nullptr) {
+    *node = nullptr;
+    return false;
+  }
 
+  SgScopeStatement *current_scope = SageBuilder::topScopeStack();
+  clang::DeclContext *decl_context = using_pack_decl->getDeclContext();
+  clang::DeclContext *scope_context = decl_context;
+  while (scope_context != nullptr &&
+         llvm::isa<clang::LinkageSpecDecl>(scope_context)) {
+    scope_context = scope_context->getParent();
+  }
+  if (scope_context != nullptr) {
+    if (scope_context->isTranslationUnit()) {
+      current_scope = getGlobalScope();
+    } else if (clang::Decl *context_decl =
+                   llvm::dyn_cast<clang::Decl>(scope_context)) {
+      if (is_declaration_scope_context(scope_context) &&
+          !llvm::isa<clang::NamespaceDecl>(context_decl) &&
+          p_decl_translation_map.find(context_decl) ==
+              p_decl_translation_map.end() &&
+          p_decl_translation_in_progress.find(context_decl) ==
+              p_decl_translation_in_progress.end() &&
+          p_decl_translation_on_demand.find(context_decl) ==
+              p_decl_translation_on_demand.end()) {
+        TraverseOnDemand(context_decl);
+      }
+      if (SgScopeStatement *resolved =
+              resolveScopeFromDeclContext(scope_context, current_scope)) {
+        current_scope = resolved;
+      }
+    }
+  }
+  if (current_scope == nullptr) {
+    current_scope = getGlobalScope();
+  }
+
+  std::vector<SgUsingDeclarationStatement *> using_statements;
+
+  auto apply_using_scope = [&](SgUsingDeclarationStatement *using_stmt) {
+    if (using_stmt == nullptr || current_scope == nullptr) {
+      return;
+    }
+    if (using_stmt->get_scope() == nullptr) {
+      using_stmt->set_scope(current_scope);
+    }
+    if (using_stmt->get_parent() == nullptr) {
+      using_stmt->set_parent(current_scope);
+    }
+  };
+
+  auto build_using_stmt_from_target =
+      [&](clang::NamedDecl *target,
+          clang::SourceRange range) -> SgUsingDeclarationStatement * {
+    if (target == nullptr) {
+      return nullptr;
+    }
+    if (clang::NamedDecl *underlying = target->getUnderlyingDecl()) {
+      target = underlying;
+    }
+    clang::Decl *target_decl = llvm::dyn_cast<clang::Decl>(target);
+    if (target_decl == nullptr) {
+      return nullptr;
+    }
+
+    SgDeclarationStatement *sg_target_decl = nullptr;
+    SgInitializedName *sg_init_name = nullptr;
+    SgNode *target_node = resolveUsingDeclTargetNode(target_decl);
+    bool resolved =
+        extractUsingTargetFromNode(target_node, sg_target_decl, sg_init_name);
+    if (!resolved) {
+      if (SgSymbol *symbol = GetSymbolFromSymbolTable(target)) {
+        resolved =
+            extractUsingTargetFromSymbol(symbol, sg_target_decl, sg_init_name);
+      }
+    }
+    if (!resolved) {
+      return nullptr;
+    }
+
+    SgUsingDeclarationStatement *using_stmt =
+        new SgUsingDeclarationStatement(sg_target_decl, sg_init_name);
+    using_stmt->set_definingDeclaration(using_stmt);
+    using_stmt->set_firstNondefiningDeclaration(using_stmt);
+    apply_using_scope(using_stmt);
+    if (sg_init_name != nullptr && sg_init_name->get_parent() == nullptr) {
+      sg_init_name->set_parent(using_stmt);
+    }
+    if (range.isValid()) {
+      applySourceRange(using_stmt, range);
+    } else {
+      applySourceRange(using_stmt, using_pack_decl->getSourceRange());
+    }
+    return using_stmt;
+  };
+
+  for (clang::NamedDecl *expansion : using_pack_decl->expansions()) {
+    if (expansion == nullptr) {
+      continue;
+    }
+    if (clang::UsingShadowDecl *shadow =
+            llvm::dyn_cast<clang::UsingShadowDecl>(expansion)) {
+      if (SgUsingDeclarationStatement *using_stmt =
+              build_using_stmt_from_target(shadow->getTargetDecl(),
+                                           shadow->getSourceRange())) {
+        using_statements.push_back(using_stmt);
+      }
+      continue;
+    }
+
+    SgNode *translated = Traverse(expansion);
+    if (SgUsingDeclarationStatement *using_stmt =
+            isSgUsingDeclarationStatement(translated)) {
+      apply_using_scope(using_stmt);
+      using_statements.push_back(using_stmt);
+    }
+  }
+
+  if (using_statements.empty()) {
+    *node = nullptr;
+    return false;
+  }
+
+  SgUsingDeclarationStatement *primary_stmt = using_statements.front();
+  for (size_t i = 1; i < using_statements.size(); ++i) {
+    ensure_decl_in_scope_child_list(using_statements[i], current_scope,
+                                    "UsingPackDecl:expansion");
+  }
+
+  *node = primary_stmt;
   return VisitNamedDecl(using_pack_decl, node) && res;
 }
 
@@ -9599,9 +9820,8 @@ bool ClangToSageTranslator::VisitConstructorUsingShadowDecl(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
-  return VisitNamedDecl(constructor_using_shadow_decl, node) && res;
+  *node = nullptr;
+  return false;
 }
 
 bool ClangToSageTranslator::VisitValueDecl(clang::ValueDecl *value_decl,
@@ -9610,8 +9830,6 @@ bool ClangToSageTranslator::VisitValueDecl(clang::ValueDecl *value_decl,
   std::cerr << "ClangToSageTranslator::VisitValueDecl" << std::endl;
 #endif
   bool res = true;
-
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
   return VisitNamedDecl(value_decl, node) && res;
 }
@@ -10188,6 +10406,10 @@ void ClangToSageTranslator::registerDeclarationSymbol(
   if (decl == nullptr) {
     return;
   }
+  if (shouldSkipSymbolForConstraints(decl)) {
+    pruneSymbolsForConstraints(decl);
+    return;
+  }
 
   SgScopeStatement *scope = decl->get_scope();
   if (scope == nullptr) {
@@ -10348,6 +10570,12 @@ void ClangToSageTranslator::reconcileOnDemandTranslation(SgNode *node) {
   }
 
   SageInterface::fixVariableReferences(node, /*cleanUnusedSymbols=*/false);
+  fixupTemplateArguments(node);
+
+  if (SgSourceFile *source_file = SageInterface::getEnclosingSourceFile(
+          node, /*includingSelf=*/false)) {
+    Unparser::computeNameQualification(source_file);
+  }
 }
 
 void ClangToSageTranslator::ensureMemberFunctionScope(
@@ -10409,6 +10637,122 @@ ClangToSageTranslator::translateConstraintExpression(const clang::Expr *expr) {
   }
 
   return buildFallbackExpression(expr);
+}
+
+ConstraintSatisfactionResult
+ClangToSageTranslator::evaluateConstraintSatisfaction(
+    const clang::NamedDecl *constraint_owner,
+    llvm::ArrayRef<const clang::Expr *> constraints,
+    llvm::ArrayRef<clang::TemplateArgument> template_args,
+    clang::SourceRange template_id_range) {
+  ConstraintSatisfactionResult result;
+  if (constraint_owner == nullptr || constraints.empty()) {
+    return result;
+  }
+  if (p_compiler_instance == nullptr || !p_compiler_instance->hasSema()) {
+    return result;
+  }
+
+  clang::Sema &sema = p_compiler_instance->getSema();
+  clang::ConstraintSatisfaction satisfaction(constraint_owner, template_args);
+  clang::MultiLevelTemplateArgumentList arg_list(
+      const_cast<clang::Decl *>(llvm::dyn_cast<clang::Decl>(constraint_owner)),
+      template_args, /*Final=*/true);
+
+  bool error = sema.CheckConstraintSatisfaction(
+      constraint_owner, constraints, arg_list, template_id_range, satisfaction);
+  result.evaluated = true;
+  result.contains_errors = error || satisfaction.ContainsErrors;
+  result.substitution_failure = satisfaction.HasSubstitutionFailure();
+  result.satisfied = !result.contains_errors && satisfaction.IsSatisfied;
+  return result;
+}
+
+ConstraintSatisfactionResult
+ClangToSageTranslator::evaluateConstraintSatisfaction(
+    const clang::NamedDecl *constraint_owner,
+    llvm::ArrayRef<const clang::Expr *> constraints,
+    const clang::TemplateArgumentList &template_args,
+    clang::SourceRange template_id_range) {
+  return evaluateConstraintSatisfaction(constraint_owner, constraints,
+                                        template_args.asArray(),
+                                        template_id_range);
+}
+
+void ClangToSageTranslator::attachConstraintSatisfaction(
+    SgNode *node, const ConstraintSatisfactionResult &result) {
+  if (node == nullptr || !result.evaluated) {
+    return;
+  }
+  node->setAttribute(kConstraintSatisfactionAttributeName,
+                     new ConstraintSatisfactionAttribute(result));
+}
+
+bool ClangToSageTranslator::shouldSkipSymbolForConstraints(
+    const SgDeclarationStatement *decl) const {
+  if (decl == nullptr) {
+    return false;
+  }
+  const ConstraintSatisfactionAttribute *attr =
+      getConstraintSatisfactionAttribute(decl);
+  if (attr == nullptr) {
+    return false;
+  }
+  const ConstraintSatisfactionResult &result = attr->result();
+  if (!result.evaluated) {
+    return false;
+  }
+  return !result.satisfied || result.contains_errors ||
+         result.substitution_failure;
+}
+
+void ClangToSageTranslator::pruneSymbolsForConstraints(
+    SgDeclarationStatement *decl) {
+  if (decl == nullptr || !shouldSkipSymbolForConstraints(decl)) {
+    return;
+  }
+
+  auto remove_symbol = [&](SgSymbol *symbol) {
+    if (symbol == nullptr) {
+      return;
+    }
+    if (SgSymbolTable *table = isSgSymbolTable(symbol->get_parent())) {
+      if (table->exists(symbol)) {
+        table->remove(symbol);
+      }
+    } else if (SgScopeStatement *scope =
+                   isSgScopeStatement(symbol->get_parent())) {
+      if (scope->symbol_exists(symbol)) {
+        scope->remove_symbol(symbol);
+      }
+    }
+    move_symbol_to_orphan_table(symbol);
+  };
+
+  if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(decl)) {
+    for (SgInitializedName *init_name : var_decl->get_variables()) {
+      if (init_name == nullptr) {
+        continue;
+      }
+      remove_symbol(init_name->get_symbol_from_symbol_table());
+    }
+  }
+
+  if (SgSymbol *symbol = decl->get_symbol_from_symbol_table()) {
+    remove_symbol(symbol);
+  }
+
+  if (SgDeclarationStatement *first_nondef =
+          decl->get_firstNondefiningDeclaration()) {
+    if (SgSymbol *symbol = first_nondef->get_symbol_from_symbol_table()) {
+      remove_symbol(symbol);
+    }
+  }
+
+  suppress_unparse_output(decl);
+  if (SgLocatedNode *located = isSgLocatedNode(decl)) {
+    suppress_unparse_output(located);
+  }
 }
 
 bool ClangToSageTranslator::translateFunctionDeclCommon(
@@ -10765,15 +11109,15 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           // Cxx_Grammar.C:116211-116268 Supported: SgGlobal,
           // SgNamespaceDefinitionStatement, SgClassDefinition,
           //            SgTemplateClassDefinition, SgTemplateInstantiationDefn,
-          //            SgFunctionParameterScope
-          // NOT supported: SgBasicBlock, SgDeclarationScope,
-          // SgForInitStatement, etc.
+          //            SgFunctionParameterScope, SgDeclarationScope
+          // NOT supported: SgBasicBlock, SgForInitStatement, etc.
           if (isSgGlobal(definitionEnclosingScope) ||
               isSgNamespaceDefinitionStatement(definitionEnclosingScope) ||
               isSgClassDefinition(definitionEnclosingScope) ||
               isSgTemplateClassDefinition(definitionEnclosingScope) ||
               isSgTemplateInstantiationDefn(definitionEnclosingScope) ||
-              isSgFunctionParameterScope(definitionEnclosingScope)) {
+              isSgFunctionParameterScope(definitionEnclosingScope) ||
+              isSgDeclarationScope(definitionEnclosingScope)) {
             SgDeclarationStatementPtrList &declList =
                 definitionEnclosingScope->getDeclarationList();
             if (std::find(declList.begin(), declList.end(),
@@ -12108,6 +12452,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   // the same (unmangled) name and signature. Represent implicit instantiations
   // as template instantiations with explicit template arguments so each
   // instantiation has a unique name in the class scope.
+  ConstraintSatisfactionResult constraint_result;
   bool handled_template_instantiation = false;
   SgTemplateInstantiationDirectiveStatement *explicit_instantiation_directive =
       nullptr;
@@ -12133,6 +12478,39 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         explicit_arg_count = clang_args->size();
       }
       const bool has_explicit_args = explicit_arg_count > 0;
+
+      if (specialization_kind == clang::TSK_ImplicitInstantiation ||
+          specialization_kind == clang::TSK_ExplicitInstantiationDefinition ||
+          specialization_kind == clang::TSK_ExplicitInstantiationDeclaration) {
+        llvm::SmallVector<const clang::Expr *, 4> constraints;
+        const clang::NamedDecl *constraint_owner = nullptr;
+        clang::FunctionTemplateDecl *primary =
+            function_decl->getPrimaryTemplate();
+        if (primary == nullptr) {
+          primary = function_decl->getDescribedFunctionTemplate();
+        }
+        if (primary != nullptr) {
+          if (clang::TemplateParameterList *params =
+                  primary->getTemplateParameters()) {
+            params->getAssociatedConstraints(constraints);
+          }
+          constraint_owner = primary;
+        }
+
+        llvm::SmallVector<const clang::Expr *, 4> trailing_constraints;
+        function_decl->getAssociatedConstraints(trailing_constraints);
+        constraints.append(trailing_constraints.begin(),
+                           trailing_constraints.end());
+        if (constraint_owner == nullptr) {
+          constraint_owner = function_decl;
+        }
+
+        if (constraint_owner != nullptr && !constraints.empty()) {
+          constraint_result = evaluateConstraintSatisfaction(
+              constraint_owner, constraints, *clang_args,
+              function_decl->getSourceRange());
+        }
+      }
 
       // Ensure template argument declarations are translated before SageBuilder
       // needs to unparse them (e.g., for nameWithTemplateArguments). This
@@ -12415,6 +12793,20 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
 
         handled_template_instantiation = true;
+
+        if (constraint_result.evaluated) {
+          attachConstraintSatisfaction(inst_symbol_decl, constraint_result);
+          if (sg_function_decl != nullptr &&
+              sg_function_decl != inst_symbol_decl) {
+            attachConstraintSatisfaction(sg_function_decl, constraint_result);
+          }
+
+          pruneSymbolsForConstraints(inst_symbol_decl);
+          if (sg_function_decl != nullptr &&
+              sg_function_decl != inst_symbol_decl) {
+            pruneSymbolsForConstraints(sg_function_decl);
+          }
+        }
       }
     }
   }
@@ -14378,6 +14770,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
+  ensureFunctionParameterSymbols(sg_function_decl);
+
   *node = sg_function_decl;
 
   bool visit_res = VisitDeclaratorDecl(function_decl, node) && res;
@@ -15114,6 +15508,34 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
       use_instantiation_args
           ? var_template_specialization_decl->getTemplateInstantiationArgs()
           : var_template_specialization_decl->getTemplateArgs();
+
+  ConstraintSatisfactionResult constraint_result;
+  if (specialization_kind == clang::TSK_ImplicitInstantiation ||
+      specialization_kind == clang::TSK_ExplicitInstantiationDeclaration ||
+      specialization_kind == clang::TSK_ExplicitInstantiationDefinition) {
+    llvm::SmallVector<const clang::Expr *, 4> constraints;
+    const clang::NamedDecl *constraint_owner = nullptr;
+    if (const clang::VarTemplatePartialSpecializationDecl *partial =
+            llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(
+                var_template_specialization_decl)) {
+      partial->getAssociatedConstraints(constraints);
+      constraint_owner = partial;
+    } else if (clang::VarTemplateDecl *primary =
+                   var_template_specialization_decl->getSpecializedTemplate()) {
+      if (clang::TemplateParameterList *params =
+              primary->getTemplateParameters()) {
+        params->getAssociatedConstraints(constraints);
+      }
+      constraint_owner = primary;
+    }
+
+    if (constraint_owner != nullptr && !constraints.empty()) {
+      constraint_result = evaluateConstraintSatisfaction(
+          constraint_owner, constraints, args,
+          var_template_specialization_decl->getSourceRange());
+    }
+  }
+
   SgTemplateArgumentPtrList tpl_args;
   for (unsigned i = 0; i < args.size(); ++i) {
     appendTemplateArguments(tpl_args, args.get(i), false);
@@ -15169,6 +15591,11 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
 
   applySourceRange(var_decl,
                    var_template_specialization_decl->getSourceRange());
+
+  if (constraint_result.evaluated) {
+    attachConstraintSatisfaction(var_decl, constraint_result);
+    pruneSymbolsForConstraints(var_decl);
+  }
 
   *node = var_decl;
 

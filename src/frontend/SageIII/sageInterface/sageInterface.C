@@ -837,13 +837,6 @@ bool SageInterface::isPrototypeInScope(
   ROSE_ASSERT(functionDeclaration != NULL);
   ROSE_ASSERT(startingAtDeclaration != NULL);
 
-  // TV (09/17/2018): ROSE-1378
-  if (isSgDeclarationScope(scope)) {
-    printf("TODO: SgDeclarationScope handling in "
-           "SageInterface::isPrototypeInScope see ROSE-1378\n");
-    return false;
-  }
-
   // These are the scopes for which get_declarationList() is properly defined.
   ROSE_ASSERT(scope->containsOnlyDeclarations() == true);
 
@@ -3377,25 +3370,23 @@ bool SageInterface::isOverloaded(SgFunctionDeclaration *functionDeclaration) {
     SgScopeStatement *scope = memberFunctionDeclaration->get_scope();
     ROSE_ASSERT(scope != NULL);
 
-    // TV (09/17/2018): ROSE-1378
-    if (isSgDeclarationScope(scope)) {
-      printf("TODO SageInterface::isOverloaded case when scope is "
-             "SgDeclarationScope. See ROSE-1378.\n");
+    SgDeclarationStatementPtrList *memberListPtr = nullptr;
+    if (SgClassDefinition *classDefinition = isSgClassDefinition(scope)) {
+      // Get the class declaration associated with the class definition
+      SgClassDeclaration *classDeclaration =
+          isSgClassDeclaration(classDefinition->get_declaration());
+      ROSE_ASSERT(classDeclaration != NULL);
+      memberListPtr = &classDefinition->get_members();
+    } else if (SgDeclarationScope *declScope = isSgDeclarationScope(scope)) {
+      memberListPtr = &declScope->getDeclarationList();
+    } else if (scope->containsOnlyDeclarations()) {
+      memberListPtr = &scope->getDeclarationList();
+    } else {
       return false;
     }
 
-    // Get the class definition
-    SgClassDefinition *classDefinition =
-        isSgClassDefinition(memberFunctionDeclaration->get_scope());
-    ROSE_ASSERT(classDefinition != NULL);
-
-    // Get the class declaration associated with the class definition
-    SgClassDeclaration *classDeclaration =
-        isSgClassDeclaration(classDefinition->get_declaration());
-    ROSE_ASSERT(classDeclaration != NULL);
-
-    // Get the list of member declarations in the class
-    SgDeclarationStatementPtrList &memberList = classDefinition->get_members();
+    // Get the list of member declarations in the scope
+    SgDeclarationStatementPtrList &memberList = *memberListPtr;
     for (SgDeclarationStatementPtrList::iterator i = memberList.begin();
          i != memberList.end(); i++) {
       SgMemberFunctionDeclaration *tempMemberFunction =
@@ -17590,27 +17581,42 @@ SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(
   }
 
   if (nodevec.size() != sortedNode.size()) {
-    cerr << "Fatal error in sortSgNodeListBasedOnAppearanceOrderInSource(): "
-            "nodevec.size() != sortedNode.size()"
-         << endl;
-    cerr << "nodevec() have " << nodevec.size()
-         << " elements. They are:" << endl;
+    // ROOT CAUSE FIX: Some declarations (e.g., compiler-generated or hidden
+    // decls) are not visited during traversal, so they never appear in
+    // sortedNode. Append any unmatched declarations in their original order to
+    // preserve determinism while keeping all inputs.
     for (vector<SgDeclarationStatement *>::const_iterator iter =
              nodevec.begin();
-         iter != nodevec.end(); iter++) {
-      cerr << (*iter) << " " << (*iter)->class_name() << " "
-           << (*iter)->unparseToString() << endl;
-    }
-    cerr << "sortedNode() have " << sortedNode.size()
-         << " elements. They are:" << endl;
-    for (vector<SgDeclarationStatement *>::const_iterator iter =
-             sortedNode.begin();
-         iter != sortedNode.end(); iter++) {
-      cerr << (*iter) << " " << (*iter)->class_name() << " "
-           << (*iter)->unparseToString() << endl;
+         iter != nodevec.end(); ++iter) {
+      if (std::find(sortedNode.begin(), sortedNode.end(), *iter) ==
+          sortedNode.end()) {
+        sortedNode.push_back(*iter);
+      }
     }
 
-    ROSE_ASSERT(nodevec.size() == sortedNode.size());
+    if (nodevec.size() != sortedNode.size()) {
+      cerr << "Fatal error in sortSgNodeListBasedOnAppearanceOrderInSource(): "
+              "nodevec.size() != sortedNode.size() after reconciliation"
+           << endl;
+      cerr << "nodevec() have " << nodevec.size()
+           << " elements. They are:" << endl;
+      for (vector<SgDeclarationStatement *>::const_iterator iter =
+               nodevec.begin();
+           iter != nodevec.end(); iter++) {
+        cerr << (*iter) << " " << (*iter)->class_name() << " "
+             << (*iter)->unparseToString() << endl;
+      }
+      cerr << "sortedNode() have " << sortedNode.size()
+           << " elements. They are:" << endl;
+      for (vector<SgDeclarationStatement *>::const_iterator iter =
+               sortedNode.begin();
+           iter != sortedNode.end(); iter++) {
+        cerr << (*iter) << " " << (*iter)->class_name() << " "
+             << (*iter)->unparseToString() << endl;
+      }
+
+      ROSE_ASSERT(nodevec.size() == sortedNode.size());
+    }
   }
   return sortedNode;
 }

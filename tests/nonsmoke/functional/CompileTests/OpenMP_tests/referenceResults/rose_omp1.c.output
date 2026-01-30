@@ -1,1 +1,1 @@
-#pragma omp parallel  private(c) firstprivate(a)
+#pragma omp parallel private(c) firstprivate(a)

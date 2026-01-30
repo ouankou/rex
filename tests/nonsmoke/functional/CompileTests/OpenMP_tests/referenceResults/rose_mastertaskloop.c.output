@@ -1,1 +1,1 @@
-#pragma omp master taskloop  if(1)
+#pragma omp master taskloop if(1)

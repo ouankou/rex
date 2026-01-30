@@ -1,2 +1,2 @@
-#pragma omp parallel  private(i,j)
+#pragma omp parallel private(i,j)
 #pragma omp for

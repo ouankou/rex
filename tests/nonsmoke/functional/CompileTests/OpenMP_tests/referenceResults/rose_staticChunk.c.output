@@ -1,1 +1,1 @@
-#pragma omp for  schedule(static)
+#pragma omp for schedule(static)

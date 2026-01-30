@@ -75,6 +75,122 @@ static bool is_ompparser_expression = false;
 static bool addOmpVariable(const char*);
 std::vector<std::pair<std::string, SgNode*> > omp_variable_list;
 std::map<SgSymbol*,  std::vector < std::pair <SgExpression*, SgExpression*> > >  array_dimensions;  
+
+static SgFunctionDeclaration* findNextDeclareSimdFunction(SgStatement* pragma_stmt) {
+    if (pragma_stmt == NULL) {
+        return NULL;
+    }
+
+    SgScopeStatement* scope = pragma_stmt->get_scope();
+    if (scope == NULL) {
+        return NULL;
+    }
+
+    std::string pragma_file;
+    int pragma_line = 0;
+    if (Sg_File_Info* fi = pragma_stmt->get_file_info()) {
+        pragma_file = fi->get_filenameString();
+        pragma_line = fi->get_line();
+    }
+
+    auto matches_pragma_file = [&](SgStatement* stmt) -> bool {
+        if (stmt == NULL) {
+            return false;
+        }
+        if (pragma_file.empty()) {
+            return true;
+        }
+        Sg_File_Info* stmt_fi = stmt->get_file_info();
+        if (stmt_fi == NULL) {
+            return false;
+        }
+        if (stmt_fi->get_filenameString() != pragma_file) {
+            return false;
+        }
+        if (pragma_line > 0 && stmt_fi->get_line() <= pragma_line) {
+            return false;
+        }
+        return true;
+    };
+
+    auto scan_stmt_list = [&](const SgStatementPtrList& stmts)
+        -> SgFunctionDeclaration* {
+        bool seen = false;
+        for (SgStatement* stmt : stmts) {
+            if (!seen) {
+                if (stmt == pragma_stmt) {
+                    seen = true;
+                }
+                continue;
+            }
+
+            if (isSgPragmaDeclaration(stmt)) {
+                continue;
+            }
+
+            if (!matches_pragma_file(stmt)) {
+                continue;
+            }
+
+            if (SgFunctionDeclaration* func = isSgFunctionDeclaration(stmt)) {
+                return func;
+            }
+        }
+        return NULL;
+    };
+
+    auto scan_decl_list =
+        [&](const SgDeclarationStatementPtrList& decls)
+            -> SgFunctionDeclaration* {
+        bool seen = false;
+        for (SgDeclarationStatement* decl : decls) {
+            SgStatement* stmt = isSgStatement(decl);
+            if (!seen) {
+                if (stmt == pragma_stmt) {
+                    seen = true;
+                }
+                continue;
+            }
+
+            if (isSgPragmaDeclaration(stmt)) {
+                continue;
+            }
+
+            if (!matches_pragma_file(stmt)) {
+                continue;
+            }
+
+            if (SgFunctionDeclaration* func = isSgFunctionDeclaration(stmt)) {
+                return func;
+            }
+        }
+        return NULL;
+    };
+
+    if (SgGlobal* global = isSgGlobal(scope)) {
+        return scan_decl_list(global->get_declarations());
+    }
+    if (SgNamespaceDefinitionStatement* ns_def =
+            isSgNamespaceDefinitionStatement(scope)) {
+        return scan_decl_list(ns_def->get_declarations());
+    }
+    if (SgClassDefinition* class_def = isSgClassDefinition(scope)) {
+        return scan_decl_list(class_def->get_members());
+    }
+    if (SgTemplateClassDefinition* template_def =
+            isSgTemplateClassDefinition(scope)) {
+        return scan_decl_list(template_def->get_members());
+    }
+    if (SgTemplateInstantiationDefn* inst_def =
+            isSgTemplateInstantiationDefn(scope)) {
+        return scan_decl_list(inst_def->get_members());
+    }
+    if (scope->containsOnlyDeclarations()) {
+        return scan_decl_list(scope->getDeclarationList());
+    }
+
+    return scan_stmt_list(scope->getStatementList());
+}
 %}
 
 %locations
@@ -644,6 +760,7 @@ static bool addOmpVariable(const char* var)  {
     SgInitializedName* sgvar = NULL;
     SgVariableSymbol* symbol = NULL;
     SgScopeStatement* scope = NULL;
+    SgFunctionDeclaration* func = NULL;
 
     if (omp_exprparser_look_forward != true) {
         scope = SageInterface::getScope(omp_directive_node);
@@ -653,26 +770,76 @@ static bool addOmpVariable(const char* var)  {
         ROSE_ASSERT (isSgPragmaDeclaration(cur_stmt));
 
         // omp declare simd may show up several times before the impacted function declaration.
-        SgStatement* nstmt = getNextStatement(cur_stmt);
-        ROSE_ASSERT (nstmt); // must have next statement followed.
-        // skip possible multiple pragma declarations
-        while (!isSgFunctionDeclaration(nstmt)) {
-            nstmt = getNextStatement (nstmt);
-            ROSE_ASSERT (nstmt);
-        };
-        // At this point, it must be a function declaration
-        SgFunctionDeclaration* func = isSgFunctionDeclaration(nstmt);
+        func = findNextDeclareSimdFunction(cur_stmt);
+        if (func == NULL) {
+            std::string pragma_file;
+            int pragma_line = 0;
+            if (Sg_File_Info* fi = cur_stmt->get_file_info()) {
+                pragma_file = fi->get_filenameString();
+                pragma_line = fi->get_line();
+            }
+
+            SgStatement* nstmt = getNextStatement(cur_stmt);
+            ROSE_ASSERT (nstmt); // must have next statement followed.
+            while (nstmt != NULL) {
+                if (SgFunctionDeclaration* cand = isSgFunctionDeclaration(nstmt)) {
+                    if (!pragma_file.empty()) {
+                        Sg_File_Info* stmt_fi = cand->get_file_info();
+                        if (stmt_fi != NULL) {
+                            if (stmt_fi->get_filenameString() != pragma_file ||
+                                (pragma_line > 0 && stmt_fi->get_line() <= pragma_line)) {
+                                nstmt = getNextStatement(nstmt);
+                                continue;
+                            }
+                        }
+                    }
+                    func = cand;
+                    break;
+                }
+                nstmt = getNextStatement (nstmt);
+            }
+        }
         ROSE_ASSERT (func);
         SgFunctionDefinition* def = func->get_definition();
-        scope = def->get_body();
+        if (def == NULL) {
+            if (SgFunctionDeclaration* def_decl =
+                    isSgFunctionDeclaration(func->get_definingDeclaration())) {
+                def = def_decl->get_definition();
+            }
+        }
+        if (def != NULL) {
+            scope = def->get_body();
+        } else {
+            scope = func->get_scope();
+        }
     };
 
     ROSE_ASSERT(scope != NULL);
-    symbol = lookupVariableSymbolInParentScopes(var, scope);
-    sgvar = symbol->get_declaration();
-    if (sgvar != NULL) {
-        symbol = isSgVariableSymbol(sgvar->get_symbol_from_symbol_table());
-    };
+    if (func != NULL) {
+        SgFunctionParameterList* params = func->get_parameterList();
+        if (params != NULL) {
+            const SgInitializedNamePtrList& args = params->get_args();
+            for (SgInitializedName* arg : args) {
+                if (arg != NULL && arg->get_name() == var) {
+                    sgvar = arg;
+                    symbol = isSgVariableSymbol(arg->get_symbol_from_symbol_table());
+                    break;
+                }
+            }
+        }
+    }
+    if (sgvar == NULL) {
+        symbol = lookupVariableSymbolInParentScopes(var, scope);
+        if (symbol != NULL) {
+            sgvar = symbol->get_declaration();
+            if (sgvar != NULL) {
+                symbol = isSgVariableSymbol(sgvar->get_symbol_from_symbol_table());
+            }
+        }
+    }
+    if (sgvar == NULL) {
+        return false;
+    }
     omp_variable_list.push_back(std::make_pair(var, sgvar));
     array_symbol = symbol;
     return true;

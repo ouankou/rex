@@ -1,2 +1,2 @@
-#pragma omp task  shared(x) mergeable
+#pragma omp task shared(x) mergeable
 #pragma omp taskwait

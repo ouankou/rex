@@ -2,4 +2,4 @@
 #pragma omp critical
 #pragma omp critical
 #pragma omp critical
-#pragma omp parallel  private(b)
+#pragma omp parallel private(b)

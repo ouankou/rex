@@ -1,2 +1,2 @@
 #pragma omp parallel
-#pragma omp for  lastprivate(j)
+#pragma omp for lastprivate(j)

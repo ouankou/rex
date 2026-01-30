@@ -1,7 +1,5 @@
-C OpenMP Fortran API(fixed form) include
-    'omp_lib_kinds.h' integer openmp_version parameter(openmp_version = 200805)
-
-        C Thread management routines external omp_set_num_threads integer
+include 'omp_lib_kinds.h' integer openmp_version
+parameter(openmp_version = 200805) external omp_set_num_threads integer
     omp_get_num_threads external omp_get_num_threads integer omp_get_max_threads
     external omp_get_max_threads integer omp_get_thread_num external
     omp_get_thread_num integer omp_get_num_procs external
@@ -13,15 +11,11 @@ C OpenMP Fortran API(fixed form) include
     omp_get_max_active_levels external omp_get_max_active_levels integer
     omp_get_level external omp_get_level integer omp_get_ancestor_thread_num
     external omp_get_ancestor_thread_num integer omp_get_team_size external
-    omp_get_team_size integer omp_get_active_level external omp_get_active_level
-
-    C Lock routines external omp_init_lock external omp_destroy_lock external
-    omp_set_lock external omp_unset_lock logical omp_test_lock external
-    omp_test_lock
-
-    external omp_init_nest_lock external omp_destroy_nest_lock external
-    omp_set_nest_lock external omp_unset_nest_lock integer
-    omp_test_nest_lock external omp_test_nest_lock
-
-    C Timing routines double precision omp_get_wtick external omp_get_wtick
+    omp_get_team_size integer omp_get_active_level external
+    omp_get_active_level external omp_init_lock external
+    omp_destroy_lock external omp_set_lock external omp_unset_lock logical
+    omp_test_lock external omp_test_lock external omp_init_nest_lock external
+    omp_destroy_nest_lock external omp_set_nest_lock external
+    omp_unset_nest_lock logical omp_test_nest_lock external omp_test_nest_lock
+    double precision omp_get_wtick external omp_get_wtick
     double precision omp_get_wtime external omp_get_wtime

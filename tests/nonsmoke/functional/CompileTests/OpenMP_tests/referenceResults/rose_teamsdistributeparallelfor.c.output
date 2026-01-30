@@ -1,1 +1,1 @@
-#pragma omp teams distribute parallel for  num_teams(n) reduction(+ : res)
+#pragma omp teams distribute parallel for num_teams(n) reduction(+ : res)

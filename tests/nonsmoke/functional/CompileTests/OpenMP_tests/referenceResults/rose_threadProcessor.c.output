@@ -1,1 +1,1 @@
-#pragma omp parallel  private(tid,procid)
+#pragma omp parallel private(tid,procid)

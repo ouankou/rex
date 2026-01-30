@@ -12968,7 +12968,13 @@ traverseNonrealDeclForCorrectScope(SgDeclarationStatement *declaration) {
     if (nrdecl->get_templateDeclaration() == NULL) {
       SgDeclarationScope *decl_scope =
           isSgDeclarationScope(nrdecl->get_scope());
-      ASSERT_not_null(decl_scope);
+      if (decl_scope == NULL) {
+        // Nonreal declarations can live directly in regular scopes (e.g.
+        // concept declarations). In that case, use the current scope.
+        scope = nrdecl->get_scope();
+        ASSERT_not_null(scope);
+        break;
+      }
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_TRAVERSE_NONREAL_FOR_SCOPE
       MLOG_WARN_C(MLOG_UNPARSER, " --- decl_scope = %p (%s)\n", decl_scope,
                   decl_scope->class_name().c_str());
@@ -14450,18 +14456,18 @@ void NameQualificationTraversal::setNameQualification(
     }
     if (allow_friend_global == false) {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || 0
-    MLOG_WARN_C(MLOG_UNPARSER,
-                "WARNING: We can't specify global qualification of friend "
-                "function (qualifier reset to be empty string) \n");
+      MLOG_WARN_C(MLOG_UNPARSER,
+                  "WARNING: We can't specify global qualification of friend "
+                  "function (qualifier reset to be empty string) \n");
 #endif
-    // Note that I think this might only be an issue where
-    // outputNameQualificationLength == 0.
-    ROSE_ASSERT(outputNameQualificationLength == 0);
+      // Note that I think this might only be an issue where
+      // outputNameQualificationLength == 0.
+      ROSE_ASSERT(outputNameQualificationLength == 0);
 
-    // Reset the values (and the qualifier string).
-    // outputNameQualificationLength = 0;
-    outputGlobalQualification = false;
-    qualifier = "";
+      // Reset the values (and the qualifier string).
+      // outputNameQualificationLength = 0;
+      outputGlobalQualification = false;
+      qualifier = "";
     }
   }
 
