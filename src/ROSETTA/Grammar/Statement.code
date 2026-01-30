@@ -1294,6 +1294,12 @@ HEADER_DECLARATION_SCOPE_START
        // DQ (7/19/2017): Added to support general name qualification
           virtual SgName get_qualified_name() const override;
 
+HEADER_LIST_DECLARATIONS
+
+  protected:
+    virtual bool replace_child(SgStatement *,SgStatement *, bool extractListFromBasicBlock = false) override;
+    virtual bool insert_child(SgStatement*, SgStatement*, bool inFront = true, bool extractListFromBasicBlock = false) override;
+
 HEADER_DECLARATION_SCOPE_END
 
 
@@ -5778,9 +5784,13 @@ SgScopeStatement::getDeclarationList ()
           case V_SgNonrealDecl:
           case V_SgDeclarationScope:
              {
-            // TV (09/16/2018): (ROSE-1378) TODO
-            // CLANG FRONTEND FIX: Return empty list for SgDeclarationScope instead of asserting
-            // This is a temporary workaround for C++ template processing until full support is implemented
+               SgDeclarationScope* declScope = isSgDeclarationScope(currentScope);
+               if (declScope != NULL) {
+                 currentStatementList = &(declScope->get_declarations());
+                 break;
+               }
+               SgNonrealDecl* nonrealDecl = isSgNonrealDecl(currentScope);
+               ROSE_ASSERT(nonrealDecl == NULL);
                static SgDeclarationStatementPtrList empty_list;
                return empty_list;
              }
@@ -5855,9 +5865,13 @@ SgScopeStatement::getDeclarationList () const
           case V_SgNonrealDecl:
           case V_SgDeclarationScope:
              {
-            // TV (09/16/2018): (ROSE-1378) TODO
-            // CLANG FRONTEND FIX: Return empty list for SgDeclarationScope instead of asserting
-            // This is a temporary workaround for C++ template processing until full support is implemented
+               const SgDeclarationScope* declScope =
+                   isSgDeclarationScope(currentScope);
+               if (declScope != NULL) {
+                 return declScope->get_declarations();
+               }
+               const SgNonrealDecl* nonrealDecl = isSgNonrealDecl(currentScope);
+               ROSE_ASSERT(nonrealDecl == NULL);
                static SgDeclarationStatementPtrList empty_list;
                return empty_list;
              }
@@ -9373,6 +9387,32 @@ SgDeclarationScope::get_qualified_name() const
        std::string globalScopeDelimiter = "";
        return SgName (globalScopeDelimiter);
      }
+   }
+
+void
+SgDeclarationScope::append_declaration(SgDeclarationStatement * what)
+   {
+     get_declarations().push_back(what);
+     what->set_parent(this);
+   }
+
+void
+SgDeclarationScope::prepend_declaration(SgDeclarationStatement * what)
+   {
+     get_declarations().insert(get_declarations().begin(), what);
+     what->set_parent(this);
+   }
+
+bool
+SgDeclarationScope::insert_child(SgStatement* target, SgStatement* newstmt, bool inFront, bool extractBasicBlock)
+   {
+     return StatementListInsertChild( this, get_declarations(), target, newstmt, inFront, extractBasicBlock, false);
+   }
+
+bool
+SgDeclarationScope::replace_child(SgStatement *target ,SgStatement * newstmt, bool extractBasicBlock)
+   {
+     return StatementListInsertChild( this, get_declarations(), target, newstmt, true, extractBasicBlock, true);
    }
 
 SOURCE_DECLARATION_SCOPE_END

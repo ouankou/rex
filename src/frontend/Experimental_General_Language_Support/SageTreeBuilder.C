@@ -157,6 +157,24 @@ std::string resolveCommentFilename(const SgSourceFile *source) {
   return filename;
 }
 
+bool isInSourceFileForComments(const SgLocatedNode *node,
+                               const SgSourceFile *source) {
+  if (node == nullptr || source == nullptr) {
+    return true;
+  }
+  const Sg_File_Info *node_info = node->get_file_info();
+  const Sg_File_Info *source_info = source->get_file_info();
+  if (node_info == nullptr || source_info == nullptr) {
+    return true;
+  }
+  if (node_info->get_physical_file_id() == Sg_File_Info::NULL_FILE_ID ||
+      node_info->get_physical_file_id() == Sg_File_Info::COPY_FILE_ID) {
+    return true;
+  }
+  return node_info->get_physical_file_id() ==
+         source_info->get_physical_file_id();
+}
+
 std::string buildFortranCommentText(PreprocessingInfo::DirectiveType style,
                                     const std::string &content) {
   switch (style) {
@@ -488,11 +506,14 @@ SgVariableDeclaration *BuildFunctionTypeVarDecl(const std::string &name,
 
 void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
                                      bool at_end) {
+  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
+                                   SageInterface::is_Fortran_language();
+  if (is_fortran_language && !isInSourceFileForComments(node, source_)) {
+    return;
+  }
   // Attach comments at end of a statement or expression
   if (at_end && (isSgStatement(node) || isSgExpression(node))) {
     const Token *token = nullptr;
-    const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
-                                     SageInterface::is_Fortran_language();
 
     // If a scope, some comments should be attached to last statement in scope
     SgStatement *last{nullptr};
@@ -515,6 +536,9 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
         SgStatement *best_stmt = nullptr;
         auto consider_stmt = [&](SgStatement *stmt) {
           if (stmt == nullptr) {
+            return;
+          }
+          if (!isInSourceFileForComments(stmt, source_)) {
             return;
           }
           PosInfo stmt_pos{stmt};
@@ -572,6 +596,9 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
               << "attach leading comment to first stmt: " << first->class_name()
               << ": " << *token;
         }
+        if (!isInSourceFileForComments(first, source_)) {
+          break;
+        }
         attachCommentFromToken(first, *token, PreprocessingInfo::before,
                                source_);
       } else if (last &&
@@ -582,12 +609,18 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
               << "attach end comment to last stmt: " << last->class_name()
               << ": " << *token;
         }
+        if (!isInSourceFileForComments(last, source_)) {
+          break;
+        }
         attachCommentFromToken(last, *token, PreprocessingInfo::after, source_);
       } else {
         if (TRACE_ATTACH_COMMENT)
           MLOG_TRACE_CXX(MLOG_FRONTEND)
               << "---> attach end comment to: " << node->class_name() << ": "
               << *token;
+        if (!isInSourceFileForComments(node, source_)) {
+          break;
+        }
         attachCommentFromToken(node, *token, PreprocessingInfo::after, source_);
       }
       tokens_->consumeNextToken();
@@ -597,8 +630,6 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
 
   if (isSgScopeStatement(node)) {
     const Token *token = nullptr;
-    const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
-                                     SageInterface::is_Fortran_language();
     SgStatement *first_stmt = nullptr;
     if (is_fortran_language) {
       if (auto scope = isSgScopeStatement(node)) {
@@ -606,6 +637,9 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
         SgStatement *best_stmt = nullptr;
         auto consider_stmt = [&](SgStatement *stmt) {
           if (stmt == nullptr) {
+            return;
+          }
+          if (!isInSourceFileForComments(stmt, source_)) {
             return;
           }
           PosInfo stmt_pos{stmt};
@@ -632,9 +666,15 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
             << "attach comment before scoping unit: " << *token;
       }
       if (is_fortran_language && first_stmt != nullptr) {
+        if (!isInSourceFileForComments(first_stmt, source_)) {
+          break;
+        }
         attachCommentFromToken(first_stmt, *token, PreprocessingInfo::before,
                                source_);
       } else {
+        if (!isInSourceFileForComments(node, source_)) {
+          break;
+        }
         attachCommentFromToken(node, *token, PreprocessingInfo::before,
                                source_);
       }
@@ -710,6 +750,11 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
 void SageTreeBuilder::attachComments(SgLocatedNode *node,
                                      const std::vector<Token> &tokens,
                                      bool at_end) {
+  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
+                                   SageInterface::is_Fortran_language();
+  if (is_fortran_language && !isInSourceFileForComments(node, source_)) {
+    return;
+  }
   auto commentPosition{PreprocessingInfo::before};
   if (at_end) {
     commentPosition = PreprocessingInfo::after;
@@ -731,6 +776,9 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node,
                                      const PosInfo &pos) {
   const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
                                    SageInterface::is_Fortran_language();
+  if (is_fortran_language && !isInSourceFileForComments(node, source_)) {
+    return;
+  }
   SgStatement *first_stmt{nullptr};
   int first_stmt_line = pos.getStartLine();
   if (is_fortran_language) {
@@ -739,6 +787,9 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node,
       SgStatement *best_stmt = nullptr;
       auto consider_stmt = [&](SgStatement *stmt) {
         if (stmt == nullptr) {
+          return;
+        }
+        if (!isInSourceFileForComments(stmt, source_)) {
           return;
         }
         PosInfo stmt_pos{stmt};
@@ -774,9 +825,15 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node,
       }
       if (is_fortran_language && first_stmt &&
           token.getStartLine() <= first_stmt_line) {
+        if (!isInSourceFileForComments(first_stmt, source_)) {
+          break;
+        }
         attachCommentFromToken(first_stmt, token, PreprocessingInfo::before,
                                source_);
       } else {
+        if (!isInSourceFileForComments(node, source_)) {
+          break;
+        }
         attachCommentFromToken(node, token, PreprocessingInfo::before, source_);
       }
       count += 1;
@@ -788,6 +845,11 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node,
 
 /** Attach any left over comments to end of node */
 void SageTreeBuilder::attachRemainingComments(SgLocatedNode *node) {
+  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
+                                   SageInterface::is_Fortran_language();
+  if (is_fortran_language && !isInSourceFileForComments(node, source_)) {
+    return;
+  }
   const Token *token = nullptr;
   while ((token = tokens_->getNextToken())) {
     if (TRACE_ATTACH_COMMENT) {

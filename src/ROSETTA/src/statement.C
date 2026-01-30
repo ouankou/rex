@@ -1361,6 +1361,20 @@ void Grammar::setUpStatements() {
   // declarations (required for more sophisticated level of template useage).
   DeclarationScope.setFunctionPrototype("HEADER_DECLARATION_SCOPE",
                                         "../Grammar/Statement.code");
+  DeclarationScope.editSubstitute("HEADER_LIST_DECLARATIONS",
+                                  "HEADER_LIST_DECLARATIONS",
+                                  "../Grammar/Statement.code");
+  DeclarationScope.editSubstitute("LIST_DATA_TYPE",
+                                  "SgDeclarationStatementPtrList");
+  DeclarationScope.editSubstitute("LIST_NAME", "declarations");
+  DeclarationScope.editSubstitute("LIST_FUNCTION_RETURN_TYPE", "void");
+  DeclarationScope.editSubstitute("LIST_FUNCTION_NAME", "declaration");
+  DeclarationScope.editSubstitute("LIST_ELEMENT_DATA_TYPE",
+                                  "SgDeclarationStatement*");
+  DeclarationScope.setDataPrototype(
+      "SgDeclarationStatementPtrList", "declarations", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE);
 
   FunctionDeclaration.setFunctionPrototype(
       "HEADER_FUNCTION_DECLARATION_STATEMENT", "../Grammar/Statement.code");

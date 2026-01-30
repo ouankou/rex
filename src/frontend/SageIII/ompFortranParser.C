@@ -182,6 +182,17 @@ static void normalizeFortranOmpSentinel(std::string &buffer) {
   }
 }
 
+static void trimLeft(std::string &buffer) {
+  size_t pos = buffer.find_first_not_of(" \t");
+  if (pos == std::string::npos) {
+    buffer.clear();
+    return;
+  }
+  if (pos > 0) {
+    buffer.erase(0, pos);
+  }
+}
+
 static size_t find_case_insensitive(const std::string &haystack,
                                     const std::string &needle, size_t pos) {
   if (needle.empty()) {
@@ -507,6 +518,7 @@ void parseOpenMPFortran(SgSourceFile *sageFilePtr) {
         return lhs.order < rhs.order;
       });
 
+  setLang(Lang_Fortran);
   PreprocessingInfo *previnfo = nullptr;
   SgLocatedNode *prev_loc_node = nullptr;
   for (const FortranCommentEntry &entry : comment_entries) {
@@ -554,7 +566,10 @@ void parseOpenMPFortran(SgSourceFile *sageFilePtr) {
     }
 
     // use ompparser to process Fortran
-    ompparser_OpenMPIR = parseOpenMP(pinfo->getString().c_str(), NULL);
+    std::string parse_buffer = buffer;
+    trimLeft(parse_buffer);
+    ompparser_OpenMPIR = parseOpenMP(parse_buffer.c_str(), NULL);
+    ROSE_ASSERT(ompparser_OpenMPIR != NULL);
     ompparser_OpenMPIR->setLine(pinfo->getLineNumber());
 
     // set paired directives
@@ -589,4 +604,6 @@ void parseOpenMPFortran(SgSourceFile *sageFilePtr) {
     fortran_omp_pragma_list.push_back(
         std::make_tuple(locNode, pinfo, ompparser_OpenMPIR));
   }
+
+  setLang(Lang_unknown);
 }

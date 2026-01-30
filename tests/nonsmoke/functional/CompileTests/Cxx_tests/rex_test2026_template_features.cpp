@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <type_traits>
 
 template <typename T, typename U> struct Pair {
   static constexpr int tag = 0;
@@ -21,6 +22,16 @@ auto sfinae_probe(int) -> decltype((void)T::member, int{}) {
 
 template <typename T> int sfinae_probe(...) { return 0; }
 
+template <typename T>
+std::enable_if_t<std::is_integral_v<T>, int> enable_if_probe(T) {
+  return 1;
+}
+
+template <typename T>
+std::enable_if_t<!std::is_integral_v<T>, int> enable_if_probe(T) {
+  return 0;
+}
+
 struct HasMember {
   static constexpr int member = 1;
 };
@@ -38,5 +49,6 @@ int main() {
   Pair<char, int> partial{3};
   Box deduced(7);
   return partial.field + Pair<char, int>::tag + value_of<int> +
-         sfinae_probe<HasMember>(0) + sfinae_probe<NoMember>(0) + deduced.value;
+         sfinae_probe<HasMember>(0) + sfinae_probe<NoMember>(0) +
+         enable_if_probe(1) + enable_if_probe(1.5) + deduced.value;
 }

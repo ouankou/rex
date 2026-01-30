@@ -62,6 +62,55 @@ private:
 inline constexpr char kMissingTemplateHeaderFixupAttributeName[] =
     "rex_missing_template_header_fixups";
 
+struct ConstraintSatisfactionResult {
+  bool evaluated = false;
+  bool satisfied = true;
+  bool contains_errors = false;
+  bool substitution_failure = false;
+  std::string summary;
+};
+
+class ConstraintSatisfactionAttribute : public AstAttribute {
+public:
+  explicit ConstraintSatisfactionAttribute(
+      const ConstraintSatisfactionResult &result)
+      : result_(result) {}
+
+  const ConstraintSatisfactionResult &result() const { return result_; }
+
+  AstAttribute *copy() const override {
+    return new ConstraintSatisfactionAttribute(*this);
+  }
+
+  std::string toString() override {
+    std::string text = result_.satisfied ? "satisfied" : "unsatisfied";
+    if (result_.contains_errors) {
+      text += " (errors)";
+    } else if (result_.substitution_failure) {
+      text += " (substitution failure)";
+    }
+    if (!result_.summary.empty()) {
+      text += ": " + result_.summary;
+    }
+    return text;
+  }
+
+private:
+  ConstraintSatisfactionResult result_;
+};
+
+inline constexpr char kConstraintSatisfactionAttributeName[] =
+    "rex_constraint_satisfaction";
+
+inline const ConstraintSatisfactionAttribute *
+getConstraintSatisfactionAttribute(const SgNode *node) {
+  if (node == nullptr) {
+    return nullptr;
+  }
+  AstAttribute *attr = node->getAttribute(kConstraintSatisfactionAttributeName);
+  return dynamic_cast<ConstraintSatisfactionAttribute *>(attr);
+}
+
 #include <clang/AST/AST.h>
 
 #include <clang/AST/ASTConsumer.h>
@@ -416,6 +465,11 @@ public:
     return openmp_lines.count(std::make_pair(file_id, line)) > 0;
   }
 
+  const std::map<std::pair<clang::FileID, unsigned>, std::string> &
+  getPragmaMap() const {
+    return line_to_pragma;
+  }
+
   bool isContinuationLine(clang::FileID file_id, unsigned line) const {
     return pragma_continuation_lines.count(std::make_pair(file_id, line)) > 0;
   }
@@ -463,6 +517,7 @@ protected:
   std::map<SgEnumType *, bool> p_enum_type_decl_first_see_in_type;
 
   const RoseOpenMPPragmaCallback *p_openmp_pragma_callback;
+  std::set<std::pair<clang::FileID, unsigned>> p_consumed_openmp_lines;
 
   // Template declaration cache - maps template name to
   // SgTemplateClassDeclaration Key: mangled template name (e.g., "std::array")
@@ -672,6 +727,23 @@ protected:
   // Helper: Translate a constraint expression into a ROSE expression.
   SgExpression *translateConstraintExpression(const clang::Expr *expr);
 
+  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
+      const clang::NamedDecl *constraint_owner,
+      llvm::ArrayRef<const clang::Expr *> constraints,
+      llvm::ArrayRef<clang::TemplateArgument> template_args,
+      clang::SourceRange template_id_range);
+
+  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
+      const clang::NamedDecl *constraint_owner,
+      llvm::ArrayRef<const clang::Expr *> constraints,
+      const clang::TemplateArgumentList &template_args,
+      clang::SourceRange template_id_range);
+
+  void attachConstraintSatisfaction(SgNode *node,
+                                    const ConstraintSatisfactionResult &result);
+  bool shouldSkipSymbolForConstraints(const SgDeclarationStatement *decl) const;
+  void pruneSymbolsForConstraints(SgDeclarationStatement *decl);
+
 public:
   ClangToSageTranslator(clang::CompilerInstance *compiler_instance,
                         Language language_, SgSourceFile *sage_source_file,
@@ -685,6 +757,8 @@ public:
   void setOpenMPPragmaCallback(const RoseOpenMPPragmaCallback *callback) {
     p_openmp_pragma_callback = callback;
   }
+
+  void appendUnattachedOpenMPPragmas();
 
   /* ASTConsumer's methods overload */
 

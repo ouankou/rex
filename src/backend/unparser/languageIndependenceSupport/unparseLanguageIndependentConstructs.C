@@ -546,6 +546,15 @@ bool UnparseLanguageIndependentConstructs::statementFromFile(
            stmt->get_file_info()->get_physical_file_id())) {
         statementInFile = true;
       }
+      if (statementInFile == false &&
+          info.get_language() == SgFile::e_Fortran_language &&
+          sourceFile != NULL && sourceFile->get_file_info() != NULL) {
+        const std::string sourceLogical =
+            sourceFile->get_file_info()->get_filenameString();
+        if (!sourceLogical.empty() && statementfilename == sourceLogical) {
+          statementInFile = true;
+        }
+      }
 
 #if DEBUG_STATEMENT_FROM_FILE
       printf(
@@ -950,6 +959,23 @@ bool UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(
     }
   }
 
+  if (AttachedPreprocessingInfoType *prepInfo =
+          stmt->getAttachedPreprocessingInfo()) {
+    for (PreprocessingInfo *info : *prepInfo) {
+      if (info == NULL) {
+        continue;
+      }
+      PreprocessingInfo::DirectiveType dtype = info->getTypeOfDirective();
+      if (dtype == PreprocessingInfo::CplusplusStyleComment ||
+          dtype == PreprocessingInfo::C_StyleComment) {
+        const std::string &text = info->getString();
+        if (text.find("#pragma") != std::string::npos) {
+          return false;
+        }
+      }
+    }
+  }
+
   bool canBeUnparsed = false;
 
   std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
@@ -1306,6 +1332,7 @@ bool UnparseLanguageIndependentConstructs::
   // token stream, unless we detect a transformation or this is a shared token
   // stream. bool unparseUsingTokenStream = false;
   bool unparseUsingTokenStream = true;
+  bool token_stream_available = true;
 
 #if DEBUG_USING_CURPRINT
   string position =
@@ -1338,43 +1365,58 @@ bool UnparseLanguageIndependentConstructs::
   if (sourceFile != NULL) {
     std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
         &tokenStreamSequenceMap = sourceFile->get_tokenSubsequenceMap();
-    if (stmt->get_containsTransformationToSurroundingWhitespace() == false) {
-      if (tokenStreamSequenceMap.find(stmt) != tokenStreamSequenceMap.end()) {
-        TokenStreamSequenceToNodeMapping *tokenSubsequence =
-            tokenStreamSequenceMap[stmt];
-        if (tokenSubsequence != NULL) {
-          if (tokenSubsequence->shared == true) {
-            ROSE_ASSERT(tokenSubsequence->nodeVector.empty() == false);
+    bool has_token_mapping = false;
+    if (!tokenStreamSequenceMap.empty()) {
+      if (stmt->get_containsTransformationToSurroundingWhitespace() == false) {
+        if (tokenStreamSequenceMap.find(stmt) != tokenStreamSequenceMap.end()) {
+          TokenStreamSequenceToNodeMapping *tokenSubsequence =
+              tokenStreamSequenceMap[stmt];
+          if (tokenSubsequence != NULL) {
+            has_token_mapping = true;
+            if (tokenSubsequence->shared == true) {
+              ROSE_ASSERT(tokenSubsequence->nodeVector.empty() == false);
 
-            SgStatement *last_shared_statement = isSgStatement(
-                tokenSubsequence
-                    ->nodeVector[tokenSubsequence->nodeVector.size() - 1]);
-            ASSERT_not_null(last_shared_statement);
-            if (last_shared_statement == stmt) {
-              // return true;
-              unparseUsingTokenStream = true;
-            } else {
-              unparseUsingTokenStream = false;
+              SgStatement *last_shared_statement = isSgStatement(
+                  tokenSubsequence
+                      ->nodeVector[tokenSubsequence->nodeVector.size() - 1]);
+              ASSERT_not_null(last_shared_statement);
+              if (last_shared_statement == stmt) {
+                // return true;
+                unparseUsingTokenStream = true;
+              } else {
+                unparseUsingTokenStream = false;
+                token_stream_available = false;
+              }
             }
           }
         }
+        if (!has_token_mapping) {
+          unparseUsingTokenStream = false;
+          token_stream_available = false;
+        }
+      } else {
+#if DEBUG_USING_CURPRINT || 0
+        curprint("/* In "
+                 "UnparseLanguageIndependentConstructs::"
+                 "unparseAttachedPreprocessingInfoUsingTokenStream(): "
+                 "containsTransformationToSurroundingWhitespace == true */");
+#endif
+        // This is set below.
+        // unparseUsingTokenStream = false;
       }
     } else {
-#if DEBUG_USING_CURPRINT || 0
-      curprint("/* In "
-               "UnparseLanguageIndependentConstructs::"
-               "unparseAttachedPreprocessingInfoUsingTokenStream(): "
-               "containsTransformationToSurroundingWhitespace == true */");
-#endif
-      // This is set below.
-      // unparseUsingTokenStream = false;
+      unparseUsingTokenStream = false;
+      token_stream_available = false;
     }
   } else {
     printf("NOTE: In "
            "Unparse_ExprStmt::unparseAttachedPreprocessingInfoUsingTokenStream("
            "): isolated case where info.get_current_source_file() == NULL \n");
+    token_stream_available = false;
   }
 
+  bool has_transformation_preproc = false;
+  bool has_directive_comment = false;
   if (prepInfoPtr != NULL) {
     // Traverse the container of PreprocessingInfo objects
     AttachedPreprocessingInfoType::iterator i;
@@ -1389,7 +1431,25 @@ bool UnparseLanguageIndependentConstructs::
                   (*i)->getRelativePosition() == PreprocessingInfo::after ||
                   (*i)->getRelativePosition() == PreprocessingInfo::inside);
       if ((*i)->getRelativePosition() == whereToUnparse) {
-        unparseUsingTokenStream = true;
+        if (token_stream_available) {
+          unparseUsingTokenStream = true;
+        }
+        if (!has_directive_comment) {
+          PreprocessingInfo::DirectiveType dtype = (*i)->getTypeOfDirective();
+          if (dtype == PreprocessingInfo::CplusplusStyleComment ||
+              dtype == PreprocessingInfo::C_StyleComment) {
+            const std::string &text = (*i)->getString();
+            if (text.find("#pragma") != std::string::npos) {
+              has_directive_comment = true;
+            }
+          }
+        }
+      }
+      if (!has_transformation_preproc) {
+        Sg_File_Info *info = (*i)->get_file_info();
+        if (info != NULL && info->isTransformation()) {
+          has_transformation_preproc = true;
+        }
       }
     }
   }
@@ -1398,6 +1458,15 @@ bool UnparseLanguageIndependentConstructs::
   // the comments and CPP directives on a statement will triger a mode to
   // unparse the comments and CPP directives from the AST and not from the token
   // stream.
+  if (has_transformation_preproc) {
+    unparseUsingTokenStream = false;
+  }
+  if (has_directive_comment) {
+    unparseUsingTokenStream = false;
+  }
+  if (!token_stream_available) {
+    unparseUsingTokenStream = false;
+  }
   if (stmt->get_containsTransformationToSurroundingWhitespace() == true) {
     unparseUsingTokenStream = false;
 #if DEBUG_USING_CURPRINT || 0
@@ -4396,7 +4465,98 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     if (expr == nullptr) {
       return;
     }
-    // Nothing to do here for an intentionally empty expression.
+    if (info.get_language() == SgFile::e_Fortran_language) {
+      return;
+    }
+
+    auto is_compiler_generated = [](const SgLocatedNode *node) {
+      if (node == nullptr) {
+        return false;
+      }
+      if (Sg_File_Info *fi = node->get_file_info()) {
+        if (fi->isCompilerGenerated()) {
+          return true;
+        }
+      }
+      if (Sg_File_Info *fi = node->get_startOfConstruct()) {
+        if (fi->isCompilerGenerated()) {
+          return true;
+        }
+      }
+      if (Sg_File_Info *fi = node->get_endOfConstruct()) {
+        if (fi->isCompilerGenerated()) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (is_compiler_generated(expr)) {
+      return;
+    }
+
+    auto is_optional_context = [&](const SgExpression *null_expr) -> bool {
+      if (null_expr == nullptr) {
+        return true;
+      }
+      SgNode *parent = null_expr->get_parent();
+      if (isSgExprStatement(parent) != nullptr) {
+        return true;
+      }
+      if (SgForStatement *for_stmt = isSgForStatement(parent)) {
+        if (for_stmt->get_increment() == null_expr) {
+          return true;
+        }
+      }
+      if (SgExprListExp *list = isSgExprListExp(parent)) {
+        if (isSgArrayType(list->get_parent()) != nullptr) {
+          return true;
+        }
+        if (isSgSubscriptExpression(list->get_parent()) != nullptr) {
+          return true;
+        }
+      }
+      if (SgReturnStmt *ret = isSgReturnStmt(parent)) {
+        if (SgFunctionDeclaration *decl =
+                SageInterface::getEnclosingFunctionDeclaration(ret)) {
+          if (SgFunctionType *func_type = decl->get_type()) {
+            SgType *ret_type = func_type->get_return_type();
+            if (ret_type != nullptr) {
+              SgType *stripped = ret_type->stripType(
+                  SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE);
+              if (isSgTypeVoid(stripped) != nullptr) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    };
+
+    if (is_optional_context(expr)) {
+      return;
+    }
+
+    SgType *type = expr->get_type();
+    SgType *stripped = nullptr;
+    if (type != nullptr) {
+      stripped = type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                 SgType::STRIP_TYPEDEF_TYPE);
+    }
+
+    if (stripped != nullptr && isSgTypeDefault(stripped) == nullptr &&
+        isSgTypeUnknown(stripped) == nullptr) {
+      SgUnparse_Info type_info(info);
+      type_info.unset_SkipBaseType();
+      type_info.set_SkipClassDefinition();
+      type_info.set_SkipEnumDefinition();
+      curprint("(");
+      unp->u_type->unparseType(type, type_info);
+      curprint(")0");
+    } else {
+      curprint("0");
+    }
   }
 
   bool UnparseLanguageIndependentConstructs::isTransformed(SgStatement * stmt) {
@@ -4836,6 +4996,271 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       }
       return text;
     };
+    auto normalize_directive_comment = [&](const std::string &comment) {
+      size_t start = comment.find_first_not_of(" \t");
+      if (start == std::string::npos) {
+        return comment;
+      }
+      if (comment.compare(start, 2, "//") != 0) {
+        return comment;
+      }
+      size_t after_slashes = start + 2;
+      if (after_slashes + 1 < comment.size() && comment[after_slashes] == ' ' &&
+          comment[after_slashes + 1] == '#') {
+        std::string text = comment;
+        text.erase(after_slashes, 1);
+        return text;
+      }
+      return comment;
+    };
+    auto trim_left = [](const std::string &text) {
+      size_t start = 0;
+      while (start < text.size() &&
+             std::isspace(static_cast<unsigned char>(text[start]))) {
+        ++start;
+      }
+      return text.substr(start);
+    };
+    auto trim = [&](const std::string &text) {
+      size_t start = 0;
+      while (start < text.size() &&
+             std::isspace(static_cast<unsigned char>(text[start]))) {
+        ++start;
+      }
+      if (start >= text.size()) {
+        return std::string();
+      }
+      size_t end = text.size();
+      while (end > start &&
+             std::isspace(static_cast<unsigned char>(text[end - 1]))) {
+        --end;
+      }
+      return text.substr(start, end - start);
+    };
+    auto strip_line_comment = [&](const std::string &line) {
+      size_t pos = line.find("//");
+      if (pos == std::string::npos) {
+        return std::string();
+      }
+      return line.substr(pos + 2);
+    };
+    auto block_comment_prefix = [&](const std::string &line) {
+      size_t pos = 0;
+      while (pos < line.size() &&
+             std::isspace(static_cast<unsigned char>(line[pos]))) {
+        ++pos;
+      }
+      if (pos < line.size() && line[pos] == '*') {
+        ++pos;
+        if (pos < line.size() && line[pos] == ' ') {
+          ++pos;
+        }
+      }
+      return line.substr(0, pos);
+    };
+    auto strip_block_comment_prefix = [&](const std::string &line) {
+      size_t pos = 0;
+      while (pos < line.size() &&
+             std::isspace(static_cast<unsigned char>(line[pos]))) {
+        ++pos;
+      }
+      if (pos < line.size() && line[pos] == '*') {
+        if (pos + 1 < line.size() && line[pos + 1] == '/') {
+          return line.substr(pos);
+        }
+        ++pos;
+        if (pos < line.size() && line[pos] == ' ') {
+          ++pos;
+        }
+      }
+      return line.substr(pos);
+    };
+    auto normalize_block_directive_comment = [&](const std::string &comment) {
+      if (comment.find("#pragma") == std::string::npos) {
+        return comment;
+      }
+      std::string normalized = comment;
+      size_t close_pos = normalized.find("*/");
+      if (close_pos != std::string::npos) {
+        size_t first_newline = normalized.find('\n');
+        if (first_newline == std::string::npos || first_newline > close_pos) {
+          return normalized;
+        }
+      }
+      size_t opener = normalized.find("/*");
+      if (opener != std::string::npos) {
+        size_t newline = normalized.find('\n', opener);
+        if (newline != std::string::npos) {
+          size_t first = newline + 1;
+          while (first < normalized.size() &&
+                 (normalized[first] == ' ' || normalized[first] == '\t')) {
+            ++first;
+          }
+          if (normalized.compare(first, 7, "#pragma") == 0) {
+            bool only_space = true;
+            for (size_t idx = opener + 2; idx < newline; ++idx) {
+              if (!std::isspace(static_cast<unsigned char>(normalized[idx]))) {
+                only_space = false;
+                break;
+              }
+            }
+            if (only_space) {
+              size_t erase_len = 1;
+              if (normalized[newline] == '\r' &&
+                  newline + 1 < normalized.size() &&
+                  normalized[newline + 1] == '\n') {
+                erase_len = 2;
+              }
+              normalized.erase(newline, erase_len);
+            }
+          }
+        }
+      }
+      if (normalized.find('\n') == std::string::npos) {
+        return normalized;
+      }
+      std::vector<std::string> lines;
+      size_t start = 0;
+      for (size_t idx = 0; idx < normalized.size(); ++idx) {
+        if (normalized[idx] == '\n') {
+          lines.push_back(normalized.substr(start, idx - start + 1));
+          start = idx + 1;
+        }
+      }
+      if (start < normalized.size()) {
+        lines.push_back(normalized.substr(start));
+      }
+
+      std::vector<std::string> out;
+      auto strip_trailing_newline = [&](std::string line) {
+        if (!line.empty() && line.back() == '\n') {
+          line.pop_back();
+          if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+          }
+        }
+        return line;
+      };
+      auto is_block_comment_opener_line = [&](const std::string &line) {
+        std::string text = strip_trailing_newline(line);
+        return trim(text) == "/*";
+      };
+      for (size_t idx = 0; idx < lines.size(); ++idx) {
+        std::string line = lines[idx];
+        bool has_newline = false;
+        if (!line.empty() && line.back() == '\n') {
+          has_newline = true;
+          line.pop_back();
+          if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+          }
+        }
+
+        size_t pragma_pos = line.find("#pragma");
+        if (pragma_pos == std::string::npos) {
+          out.push_back(lines[idx]);
+          continue;
+        }
+
+        std::string prefix = line.substr(0, pragma_pos);
+        std::string suffix = line.substr(pragma_pos);
+        std::string carry_prefix;
+        if (!out.empty() && is_block_comment_opener_line(out.back())) {
+          carry_prefix = strip_trailing_newline(out.back());
+          out.pop_back();
+        }
+        if (!carry_prefix.empty()) {
+          prefix = carry_prefix + prefix;
+        }
+        std::string prefix_trim = trim(prefix);
+        std::string directive_prefix = block_comment_prefix(prefix);
+
+        bool prefix_has_block_opener = (prefix.find("/*") != std::string::npos);
+
+        if (prefix_has_block_opener) {
+          line = prefix + suffix;
+        } else if (!carry_prefix.empty()) {
+          line = prefix + suffix;
+        } else if (!prefix_trim.empty()) {
+          std::string prefix_line = prefix;
+          prefix_line.push_back('\n');
+          out.push_back(prefix_line);
+          line = directive_prefix + suffix;
+        } else if (!prefix.empty()) {
+          line = prefix + " " + suffix;
+        }
+
+        std::string directive_line = line;
+        size_t lookahead = idx + 1;
+        while (lookahead < lines.size()) {
+          std::string next_line = lines[lookahead];
+          bool next_has_newline = false;
+          if (!next_line.empty() && next_line.back() == '\n') {
+            next_has_newline = true;
+            next_line.pop_back();
+            if (!next_line.empty() && next_line.back() == '\r') {
+              next_line.pop_back();
+            }
+          }
+
+          if (next_line.find("#pragma") != std::string::npos) {
+            break;
+          }
+
+          std::string trimmed_next = trim_left(next_line);
+          if (trimmed_next.rfind("*/", 0) == 0) {
+            break;
+          }
+
+          std::string continuation =
+              trim(strip_block_comment_prefix(next_line));
+          if (continuation.empty()) {
+            break;
+          }
+          if (continuation.rfind("*/", 0) == 0) {
+            break;
+          }
+
+          directive_line += " " + continuation;
+          ++lookahead;
+          if (!next_has_newline) {
+            break;
+          }
+        }
+
+        if (has_newline) {
+          directive_line.push_back('\n');
+        }
+        out.push_back(directive_line);
+        if (lookahead > idx + 1) {
+          idx = lookahead - 1;
+        }
+      }
+
+      std::string result;
+      for (const std::string &line : out) {
+        result += line;
+      }
+      return result;
+    };
+
+    std::string pending_directive_comment;
+    int pending_directive_line = -1;
+    bool pending_directive_continuation = false;
+    auto flush_pending_directive_comment = [&](SgLocatedNode *owner) {
+      if (pending_directive_comment.empty()) {
+        return;
+      }
+      unp->cur.format(owner, info, FORMAT_BEFORE_DIRECTIVE);
+      std::string output = pending_directive_comment;
+      if (output.back() != '\n') {
+        output.push_back('\n');
+      }
+      curprint(normalize_fortran_comment(output));
+      pending_directive_comment.clear();
+      pending_directive_line = -1;
+      pending_directive_continuation = false;
+    };
 
     auto marker_output_eligible = [&](SgStatement *marker) -> bool {
       if (marker == NULL) {
@@ -5021,7 +5446,15 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           case PreprocessingInfo::C_StyleComment:
           case PreprocessingInfo::CplusplusStyleComment:
             if (!info.SkipComments()) {
-              curprint(normalize_fortran_comment((*i)->getString()));
+              std::string text = (*i)->getString();
+              if ((*i)->getTypeOfDirective() ==
+                      PreprocessingInfo::C_StyleComment &&
+                  text.find("#pragma") != std::string::npos) {
+                text = normalize_block_directive_comment(text);
+              } else {
+                text = normalize_directive_comment(text);
+              }
+              curprint(normalize_fortran_comment(text));
             }
             break;
 
@@ -5042,7 +5475,94 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           }
         } else {
           // DQ (1/28/2013): Fixed indentation of code block.
-          switch ((*i)->getTypeOfDirective()) {
+          PreprocessingInfo::DirectiveType dtype = (*i)->getTypeOfDirective();
+          if (dtype == PreprocessingInfo::CplusplusStyleComment) {
+            if (!info.SkipComments()) {
+              std::string raw = (*i)->getString();
+              auto has_directive_continuation = [&](const std::string &text) {
+                size_t end = text.size();
+                while (end > 0 && std::isspace(static_cast<unsigned char>(
+                                      text[end - 1]))) {
+                  --end;
+                }
+                if (end == 0) {
+                  return false;
+                }
+                char last = text[end - 1];
+                return (last == '\\' || last == ',' || last == ':' ||
+                        last == '(');
+              };
+              bool has_newline = false;
+              if (!raw.empty() && raw.back() == '\n') {
+                has_newline = true;
+                raw.pop_back();
+                if (!raw.empty() && raw.back() == '\r') {
+                  raw.pop_back();
+                }
+              }
+
+              std::string content = strip_line_comment(raw);
+              size_t pragma_pos = content.find("#pragma");
+              std::string before;
+              std::string directive;
+              if (pragma_pos != std::string::npos) {
+                before = trim(content.substr(0, pragma_pos));
+                directive = trim(content.substr(pragma_pos));
+              }
+
+              int line = (*i)->getLineNumber();
+              bool adjacent = (!pending_directive_comment.empty() &&
+                               pending_directive_line >= 0 &&
+                               line == pending_directive_line + 1);
+
+              if (!pending_directive_comment.empty()) {
+                if (pragma_pos != std::string::npos) {
+                  if (adjacent && !before.empty()) {
+                    pending_directive_comment += " " + before;
+                    before.clear();
+                  }
+                  flush_pending_directive_comment(stmt);
+                } else if (pending_directive_continuation) {
+                  std::string continuation = trim(content);
+                  if (!continuation.empty()) {
+                    pending_directive_comment += " " + continuation;
+                    pending_directive_line = line;
+                    pending_directive_continuation =
+                        has_directive_continuation(pending_directive_comment);
+                  }
+                  continue;
+                } else {
+                  flush_pending_directive_comment(stmt);
+                }
+              }
+
+              if (pragma_pos != std::string::npos) {
+                if (!before.empty()) {
+                  unp->cur.format(stmt, info, FORMAT_BEFORE_DIRECTIVE);
+                  std::string prefix_line = "// " + before;
+                  if (has_newline) {
+                    prefix_line.push_back('\n');
+                  }
+                  curprint(normalize_fortran_comment(prefix_line));
+                }
+                if (!directive.empty()) {
+                  pending_directive_comment = "//" + directive;
+                  pending_directive_line = line;
+                  pending_directive_continuation =
+                      has_directive_continuation(pending_directive_comment);
+                }
+                continue;
+              }
+
+              flush_pending_directive_comment(stmt);
+              std::string text = normalize_directive_comment((*i)->getString());
+              curprint(normalize_fortran_comment(text));
+            }
+            continue;
+          }
+
+          flush_pending_directive_comment(stmt);
+          switch (dtype) {
             // All #include directives are unparsed so that we can make the
             // output codes as similar as possible to the input codes. This also
             // simplifies the debugging. On the down side it sets up a chain of
@@ -5061,9 +5581,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           case PreprocessingInfo::FortranStyleComment:
           case PreprocessingInfo::F90StyleComment:
           case PreprocessingInfo::C_StyleComment:
-          case PreprocessingInfo::CplusplusStyleComment:
             if (!info.SkipComments()) {
-              curprint(normalize_fortran_comment((*i)->getString()));
+              std::string text = (*i)->getString();
+              if (dtype == PreprocessingInfo::C_StyleComment &&
+                  text.find("#pragma") != std::string::npos) {
+                text = normalize_block_directive_comment(text);
+              }
+              curprint(normalize_fortran_comment(text));
             }
             break;
 
@@ -5225,6 +5749,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       // DQ (7/19/2008): Moved to previous nested scope level
       // unp->cur.format(stmt, info, FORMAT_AFTER_DIRECTIVE);
     }
+    flush_pending_directive_comment(stmt);
   }
 
   void UnparseLanguageIndependentConstructs::unparseUnaryExpr(
@@ -8941,9 +9466,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     std::list<SgOmpUsesAllocatorsDefination *> uses_allocators_definations =
         c->get_uses_allocators_defination();
     std::list<SgOmpUsesAllocatorsDefination *>::iterator iter;
-    int count = 0;
+    size_t total = uses_allocators_definations.size();
+    size_t index = 0;
+    bool last_has_traits = false;
     for (iter = uses_allocators_definations.begin();
          iter != uses_allocators_definations.end(); iter++) {
+      ++index;
+      bool is_last = (index == total);
       SgOmpClause::omp_uses_allocators_allocator_enum allocator =
           (*iter)->get_allocator();
       if (allocator != SgOmpClause::e_omp_uses_allocators_allocator_unknown) {
@@ -8961,13 +9490,23 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             (*iter)->get_allocator_traits_array();
         SgUnparse_Info ninfo(info);
         unparseExpression(allocator_traits_array, ninfo);
-        curprint(string(" ) "));
+        if (is_last) {
+          curprint(string(" )"));
+          last_has_traits = true;
+        } else {
+          curprint(string(" ) "));
+        }
       }
-      count++;
-      if (count != uses_allocators_definations.size())
+      if (!is_last)
         curprint(string(" , "));
     }
-    curprint(string(" ) "));
+    if (total == 0) {
+      curprint(string(" )"));
+    } else if (last_has_traits) {
+      curprint(string("  )"));
+    } else {
+      curprint(string(" )"));
+    }
   }
 
   // Generate dist_data(p1, p2, p3)
@@ -10060,11 +10599,19 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     ASSERT_not_null(s);
 
     unparseOmpDirectivePrefixAndName(stmt, info);
-    if (s->get_clauses().size() != 0) {
+    SgOmpClauseStatement *clause_stmt = isSgOmpClauseStatement(stmt);
+    bool has_clauses =
+        (clause_stmt != NULL && clause_stmt->get_clauses().size() != 0);
+    if (has_clauses) {
       unparseOmpBeginDirectiveClauses(stmt, info);
     }
-    if (s->get_variables().size() > 0)
-      curprint(string("("));
+    if (s->get_variables().size() > 0) {
+      if (has_clauses) {
+        curprint(string("("));
+      } else {
+        curprint(string(" ("));
+      }
+    }
     // unparse variable list then
     SgVarRefExpPtrList::iterator p = s->get_variables().begin();
     while (p != s->get_variables().end()) {
@@ -10095,7 +10642,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
     unparseOmpDirectivePrefixAndName(stmt, info);
     if (s->get_variables().size() > 0)
-      curprint(string("("));
+      curprint(string(" ("));
     // unparse variable list then
     SgVarRefExpPtrList::iterator p = s->get_variables().begin();
     while (p != s->get_variables().end()) {
@@ -10115,8 +10662,11 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
     if (s->get_variables().size() > 0)
       curprint(string(")"));
-    if (s->get_clauses().size() != 0) {
-      unparseOmpBeginDirectiveClauses(stmt, info);
+    SgOmpClauseStatement *clause_stmt = isSgOmpClauseStatement(stmt);
+    if (clause_stmt != NULL && !clause_stmt->get_clauses().empty()) {
+      for (SgOmpClause *c_clause : clause_stmt->get_clauses()) {
+        unparseOmpClause(c_clause, info);
+      }
     }
     unp->u_sage->curprint_newline();
   }
@@ -10139,7 +10689,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     SgOmpThreadprivateStatement *s = isSgOmpThreadprivateStatement(stmt);
     ASSERT_not_null(s);
     unparseOmpDirectivePrefixAndName(stmt, info);
-    curprint(string("("));
+    curprint(string(" ("));
     // unparse variable list then
     SgVarRefExpPtrList::iterator p = s->get_variables().begin();
     while (p != s->get_variables().end()) {

@@ -10,6 +10,8 @@
 
 #include <iomanip>
 
+#include <limits>
+
 #include <regex>
 
 #include <sstream>
@@ -94,6 +96,18 @@ static clang::SourceLocation findMatchingLParen(clang::SourceLocation rparen,
   }
 
   return clang::SourceLocation();
+}
+
+static void rejectClangOpenMPStmt(const clang::Stmt *stmt) {
+  std::cerr
+      << "Error: OpenMP/OpenACC constructs must be handled via pragma capture "
+         "and omp/accAstConstructor. Clang OpenMP AST nodes should not be "
+         "translated. Ensure -fopenmp is not passed to Clang."
+      << std::endl;
+  if (stmt != nullptr) {
+    stmt->dump();
+  }
+  ROSE_ABORT();
 }
 
 static size_t
@@ -960,6 +974,11 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   if (stmt == nullptr)
     return nullptr;
 
+  if (isa<clang::OMPExecutableDirective>(stmt) ||
+      isa<clang::ArraySectionExpr>(stmt)) {
+    rejectClangOpenMPStmt(stmt);
+  }
+
   std::map<clang::Stmt *, SgNode *>::iterator it =
       p_stmt_translation_map.find(stmt);
   if (it != p_stmt_translation_map.end())
@@ -1041,158 +1060,6 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     break;
   case clang::Stmt::NullStmtClass:
     ret_status = VisitNullStmt((clang::NullStmt *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPAtomicDirectiveClass:
-    ret_status =
-        VisitOMPAtomicDirective((clang::OMPAtomicDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPBarrierDirectiveClass:
-    ret_status =
-        VisitOMPBarrierDirective((clang::OMPBarrierDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPCancellationPointDirectiveClass:
-    ret_status = VisitOMPCancellationPointDirective(
-        (clang::OMPCancellationPointDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPCriticalDirectiveClass:
-    ret_status =
-        VisitOMPCriticalDirective((clang::OMPCriticalDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPFlushDirectiveClass:
-    ret_status =
-        VisitOMPFlushDirective((clang::OMPFlushDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPDistributeDirectiveClass:
-    ret_status = VisitOMPDistributeDirective(
-        (clang::OMPDistributeDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPDistributeParallelForDirectiveClass:
-    ret_status = VisitOMPDistributeParallelForDirective(
-        (clang::OMPDistributeParallelForDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPDistributeParallelForSimdDirectiveClass:
-    ret_status = VisitOMPDistributeParallelForSimdDirective(
-        (clang::OMPDistributeParallelForSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPDistributeSimdDirectiveClass:
-    ret_status = VisitOMPDistributeSimdDirective(
-        (clang::OMPDistributeSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPForDirectiveClass:
-    ret_status = VisitOMPForDirective((clang::OMPForDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPForSimdDirectiveClass:
-    ret_status =
-        VisitOMPForSimdDirective((clang::OMPForSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  // case clang::Stmt::OMPMasterTaskLoopDirectiveClass:
-  //     ret_status =
-  //     VisitOMPMasterTaskLoopDirective((clang::OMPMasterTaskLoopDirective
-  //     *)stmt, &result); break;
-  // case clang::Stmt::OMPMasterTaskLoopSimdDirectiveClass:
-  //     ret_status =
-  //     VisitOMPMasterTaskLoopSimdDirective((clang::OMPMasterTaskLoopSimdDirective
-  //     *)stmt, &result); break;
-  case clang::Stmt::OMPParallelForDirectiveClass:
-    ret_status = VisitOMPParallelForDirective(
-        (clang::OMPParallelForDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPParallelForSimdDirectiveClass:
-    ret_status = VisitOMPParallelForSimdDirective(
-        (clang::OMPParallelForSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  // case clang::Stmt::OMPParallelMasterTaskLoopDirectiveClass:
-  //     ret_status =
-  //     VisitOMPParallelMasterTaskLoopDirective((clang::OMPParallelMasterTaskLoopDirective
-  //     *)stmt, &result); break;
-  case clang::Stmt::OMPSimdDirectiveClass:
-    ret_status =
-        VisitOMPSimdDirective((clang::OMPSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPTargetParallelForDirectiveClass:
-    ret_status = VisitOMPTargetParallelForDirective(
-        (clang::OMPTargetParallelForDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPTargetParallelForSimdDirectiveClass:
-    ret_status = VisitOMPTargetParallelForSimdDirective(
-        (clang::OMPTargetParallelForSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPTargetSimdDirectiveClass:
-    ret_status = VisitOMPTargetSimdDirective(
-        (clang::OMPTargetSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPTargetTeamsDistributeDirectiveClass:
-    ret_status = VisitOMPTargetTeamsDistributeDirective(
-        (clang::OMPTargetTeamsDistributeDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  // case clang::Stmt::OMPTargetTeamsDistributeParallelForSimdDirectiveClass:
-  //     ret_status =
-  //     VisitOMPTargetTeamsDistributeParallelForSimdDirective((clang::OMPTargetTeamsDistributeParallelForSimdDirective
-  //     *)stmt, &result); break;
-  case clang::Stmt::OMPTargetTeamsDistributeSimdDirectiveClass:
-    ret_status = VisitOMPTargetTeamsDistributeSimdDirective(
-        (clang::OMPTargetTeamsDistributeSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPTaskLoopDirectiveClass:
-    ret_status =
-        VisitOMPTaskLoopDirective((clang::OMPTaskLoopDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPTaskLoopSimdDirectiveClass:
-    ret_status = VisitOMPTaskLoopSimdDirective(
-        (clang::OMPTaskLoopSimdDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  // case clang::Stmt::OMPTeamDistributeDirectiveClass:
-  //     ret_status =
-  //     VisitOMPTeamDistributeDirective((clang::OMPTeamDistributeDirective
-  //     *)stmt, &result); break;
-  // case clang::Stmt::OMPTeamDistributeParallelForSimdDirectiveClass:
-  //     ret_status =
-  //     VisitOMPTeamDistributeParallelForSimdDirective((clang::OMPTeamDistributeParallelForSimdDirective
-  //     *)stmt, &result); break;
-  // case clang::Stmt::OMPTeamDistributeSimdDirectiveClass:
-  //     ret_status =
-  //     VisitOMPTeamDistributeSimdDirective((clang::OMPTeamDistributeSimdDirective
-  //     *)stmt, &result); break;
-  case clang::Stmt::OMPMasterDirectiveClass:
-    ret_status =
-        VisitOMPMasterDirective((clang::OMPMasterDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPOrderedDirectiveClass:
-    ret_status =
-        VisitOMPOrderedDirective((clang::OMPOrderedDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPParallelDirectiveClass:
-    ret_status =
-        VisitOMPParallelDirective((clang::OMPParallelDirective *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::OMPParallelSectionsDirectiveClass:
-    ret_status = VisitOMPParallelSectionsDirective(
-        (clang::OMPParallelSectionsDirective *)stmt, &result);
     ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::ReturnStmtClass:
@@ -1588,11 +1455,6 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     break;
   case clang::Stmt::OffsetOfExprClass:
     ret_status = VisitOffsetOfExpr((clang::OffsetOfExpr *)stmt, &result);
-    ROSE_ASSERT(result != nullptr);
-    break;
-  case clang::Stmt::ArraySectionExprClass:
-    ret_status =
-        VisitOMPArraySectionExpr((clang::ArraySectionExpr *)stmt, &result);
     ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::OpaqueValueExprClass:
@@ -2090,6 +1952,10 @@ bool ClangToSageTranslator::collectOpenMPPragmas(
                                                   pragma_text)) {
       bool is_openmp =
           p_openmp_pragma_callback->isOpenMPPragmaAtLine(file_id, search_line);
+      if (is_openmp && p_consumed_openmp_lines.count(
+                           std::make_pair(file_id, search_line)) != 0) {
+        break;
+      }
       std::string directive_text = pragma_text;
       if (is_openmp) {
         std::string extracted = extractOpenMPDirective(pragma_text);
@@ -2097,6 +1963,7 @@ bool ClangToSageTranslator::collectOpenMPPragmas(
           continue;
         }
         directive_text = extracted;
+        p_consumed_openmp_lines.insert(std::make_pair(file_id, search_line));
       }
       pragmas.push_back({search_line, directive_text, is_openmp});
       found_any = true;
@@ -2145,6 +2012,359 @@ bool ClangToSageTranslator::collectOpenMPPragmas(
   return found_any;
 }
 
+namespace {
+static SgDeclarationStatementPtrList *
+getScopeDeclarationListForPragma(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    return &global->get_declarations();
+  }
+  if (SgNamespaceDefinitionStatement *ns_def =
+          isSgNamespaceDefinitionStatement(scope)) {
+    return &ns_def->get_declarations();
+  }
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return &class_def->get_members();
+  }
+  if (SgTemplateClassDefinition *template_def =
+          isSgTemplateClassDefinition(scope)) {
+    return &template_def->get_members();
+  }
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return &inst_def->get_members();
+  }
+  if (scope->containsOnlyDeclarations()) {
+    return &scope->getDeclarationList();
+  }
+  return nullptr;
+}
+
+static unsigned getLineForStatement(const SgStatement *stmt) {
+  if (stmt == nullptr) {
+    return 0;
+  }
+  if (Sg_File_Info *info = stmt->get_file_info()) {
+    if (info->get_line() > 0) {
+      return info->get_line();
+    }
+  }
+  if (Sg_File_Info *info = stmt->get_startOfConstruct()) {
+    return info->get_line();
+  }
+  return 0;
+}
+
+static bool filenamesMatch(const std::string &lhs, const std::string &rhs) {
+  if (lhs.empty() || rhs.empty()) {
+    return true;
+  }
+  if (lhs == rhs) {
+    return true;
+  }
+  return Rose::StringUtility::stripPathFromFileName(lhs) ==
+         Rose::StringUtility::stripPathFromFileName(rhs);
+}
+
+static std::string normalizeFilenameForPragma(const std::string &name) {
+  if (name.empty()) {
+    return name;
+  }
+  return Rose::StringUtility::stripPathFromFileName(name);
+}
+
+static bool isOpenMPPragmaString(const std::string &pragma) {
+  std::string trimmed = trimWhitespace(pragma);
+  if (trimmed.empty()) {
+    return false;
+  }
+  auto lower_at = [](char c) -> char {
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  };
+  if (trimmed.size() >= 3) {
+    std::string prefix;
+    prefix.push_back(lower_at(trimmed[0]));
+    prefix.push_back(lower_at(trimmed[1]));
+    prefix.push_back(lower_at(trimmed[2]));
+    return (prefix == "omp" || prefix == "acc");
+  }
+  return false;
+}
+
+static bool getLocatedNodeFilenameAndLine(const SgLocatedNode *node,
+                                          std::string &filename,
+                                          unsigned &line) {
+  if (node == nullptr) {
+    return false;
+  }
+  if (Sg_File_Info *info = node->get_file_info()) {
+    if (info->get_line() > 0) {
+      line = info->get_line();
+      filename = info->get_filenameString();
+      return true;
+    }
+  }
+  if (Sg_File_Info *info = node->get_startOfConstruct()) {
+    if (info->get_line() > 0) {
+      line = info->get_line();
+      filename = info->get_filenameString();
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool
+statementBeginsAtLineStart(const clang::SourceManager &source_manager,
+                           clang::SourceLocation loc) {
+  if (!loc.isValid()) {
+    return true;
+  }
+
+  clang::FileID file_id = source_manager.getFileID(loc);
+  if (file_id.isInvalid()) {
+    return true;
+  }
+
+  unsigned line = source_manager.getPresumedLineNumber(loc);
+  if (line == 0) {
+    return true;
+  }
+
+  unsigned column = source_manager.getPresumedColumnNumber(loc);
+  if (column <= 1) {
+    return true;
+  }
+
+  std::string line_content;
+  if (!getLineContent(source_manager, file_id, line, line_content)) {
+    return true;
+  }
+
+  unsigned prefix_len = column - 1;
+  if (prefix_len > line_content.size()) {
+    prefix_len = static_cast<unsigned>(line_content.size());
+  }
+  for (unsigned i = 0; i < prefix_len; ++i) {
+    if (!std::isspace(static_cast<unsigned char>(line_content[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+} // namespace
+
+void ClangToSageTranslator::appendUnattachedOpenMPPragmas() {
+  if (p_openmp_pragma_callback == nullptr || p_compiler_instance == nullptr ||
+      p_global_scope == nullptr || p_sage_source_file == nullptr) {
+    return;
+  }
+
+  const auto &pragma_map = p_openmp_pragma_callback->getPragmaMap();
+  if (pragma_map.empty()) {
+    return;
+  }
+
+  struct PragmaEntry {
+    clang::FileID file_id;
+    unsigned line;
+    std::string directive;
+    std::string filename;
+  };
+
+  clang::SourceManager &source_manager =
+      p_compiler_instance->getSourceManager();
+
+  std::vector<PragmaEntry> entries;
+  entries.reserve(pragma_map.size());
+
+  for (const auto &entry : pragma_map) {
+    const clang::FileID file_id = entry.first.first;
+    const unsigned line = entry.first.second;
+    if (!p_openmp_pragma_callback->isOpenMPPragmaAtLine(file_id, line)) {
+      continue;
+    }
+    if (p_consumed_openmp_lines.count(entry.first) != 0) {
+      continue;
+    }
+    std::string directive = extractOpenMPDirective(entry.second);
+    if (directive.empty()) {
+      continue;
+    }
+    std::string filename;
+    if (auto file_entry = source_manager.getFileEntryRefForID(file_id)) {
+      filename = file_entry->getName().str();
+    } else {
+      filename = p_sage_source_file->getFileName();
+    }
+    entries.push_back({file_id, line, directive, filename});
+  }
+
+  if (entries.empty()) {
+    return;
+  }
+
+  std::set<std::pair<std::string, unsigned>> existing_openmp_lines;
+  {
+    Rose_STL_Container<SgNode *> pragmas =
+        NodeQuery::querySubTree(p_global_scope, V_SgPragmaDeclaration);
+    for (SgNode *node : pragmas) {
+      SgPragmaDeclaration *pragma_decl = isSgPragmaDeclaration(node);
+      if (pragma_decl == nullptr) {
+        continue;
+      }
+      SgPragma *pragma = pragma_decl->get_pragma();
+      if (pragma == nullptr) {
+        continue;
+      }
+      if (!isOpenMPPragmaString(pragma->get_pragma())) {
+        continue;
+      }
+      std::string filename;
+      unsigned line = 0;
+      if (!getLocatedNodeFilenameAndLine(pragma_decl, filename, line)) {
+        continue;
+      }
+      existing_openmp_lines.insert(
+          std::make_pair(normalizeFilenameForPragma(filename), line));
+    }
+
+    Rose_STL_Container<SgNode *> stmts =
+        NodeQuery::querySubTree(p_global_scope, V_SgStatement);
+    for (SgNode *node : stmts) {
+      SgStatement *stmt = isSgStatement(node);
+      if (stmt == nullptr || !SageInterface::isOmpStatement(stmt)) {
+        continue;
+      }
+      std::string filename;
+      unsigned line = 0;
+      if (!getLocatedNodeFilenameAndLine(stmt, filename, line)) {
+        continue;
+      }
+      existing_openmp_lines.insert(
+          std::make_pair(normalizeFilenameForPragma(filename), line));
+    }
+  }
+
+  std::sort(entries.begin(), entries.end(),
+            [](const PragmaEntry &a, const PragmaEntry &b) {
+              if (a.filename != b.filename) {
+                return a.filename < b.filename;
+              }
+              return a.line < b.line;
+            });
+
+  Rose_STL_Container<SgNode *> scopes =
+      NodeQuery::querySubTree(p_global_scope, V_SgScopeStatement);
+
+  auto find_scope_for_line = [&](const std::string &filename,
+                                 unsigned line) -> SgScopeStatement * {
+    SgScopeStatement *best = p_global_scope;
+    unsigned best_span = std::numeric_limits<unsigned>::max();
+    for (SgNode *node : scopes) {
+      SgScopeStatement *scope = isSgScopeStatement(node);
+      if (scope == nullptr) {
+        continue;
+      }
+      Sg_File_Info *start = scope->get_startOfConstruct();
+      if (start == nullptr || start->get_line() == 0) {
+        continue;
+      }
+      if (!filenamesMatch(start->get_filenameString(), filename)) {
+        continue;
+      }
+      unsigned start_line = start->get_line();
+      unsigned end_line = std::numeric_limits<unsigned>::max();
+      if (Sg_File_Info *end = scope->get_endOfConstruct()) {
+        if (end->get_line() > 0) {
+          end_line = end->get_line();
+        }
+      }
+      if (line < start_line || line > end_line) {
+        continue;
+      }
+      unsigned span = end_line - start_line;
+      if (span < best_span) {
+        best_span = span;
+        best = scope;
+      }
+    }
+    return best;
+  };
+
+  auto insert_pragma_in_scope = [&](SgPragmaDeclaration *pragma_decl,
+                                    SgScopeStatement *scope, unsigned line) {
+    if (pragma_decl == nullptr || scope == nullptr) {
+      return;
+    }
+    if (SgDeclarationStatementPtrList *decls =
+            getScopeDeclarationListForPragma(scope)) {
+      auto it = decls->begin();
+      for (; it != decls->end(); ++it) {
+        SgDeclarationStatement *decl = *it;
+        if (decl == nullptr) {
+          continue;
+        }
+        unsigned decl_line = getLineForStatement(decl);
+        if (decl_line == 0) {
+          continue;
+        }
+        if (decl_line > line) {
+          break;
+        }
+      }
+      decls->insert(it, pragma_decl);
+      pragma_decl->set_parent(scope);
+      pragma_decl->set_scope(scope);
+      return;
+    }
+
+    SgStatementPtrList &stmts = scope->getStatementList();
+    auto it = stmts.begin();
+    for (; it != stmts.end(); ++it) {
+      SgStatement *stmt = *it;
+      if (stmt == nullptr) {
+        continue;
+      }
+      unsigned stmt_line = getLineForStatement(stmt);
+      if (stmt_line == 0) {
+        continue;
+      }
+      if (stmt_line > line) {
+        break;
+      }
+    }
+    stmts.insert(it, pragma_decl);
+    pragma_decl->set_parent(scope);
+    pragma_decl->set_scope(scope);
+  };
+
+  for (const auto &entry : entries) {
+    SgScopeStatement *scope = find_scope_for_line(entry.filename, entry.line);
+    if (scope == nullptr) {
+      scope = p_global_scope;
+    }
+
+    std::string normalized_name = normalizeFilenameForPragma(entry.filename);
+    if (!normalized_name.empty() && existing_openmp_lines.count(std::make_pair(
+                                        normalized_name, entry.line)) > 0) {
+      p_consumed_openmp_lines.insert(std::make_pair(entry.file_id, entry.line));
+      continue;
+    }
+
+    SgPragmaDeclaration *pragma_decl =
+        buildOpenMPPragmaDeclaration(entry.directive, entry.line, scope);
+    if (pragma_decl == nullptr) {
+      continue;
+    }
+    insert_pragma_in_scope(pragma_decl, scope, entry.line);
+    p_consumed_openmp_lines.insert(std::make_pair(entry.file_id, entry.line));
+  }
+}
+
 SgPragmaDeclaration *ClangToSageTranslator::buildOpenMPPragmaDeclaration(
     const std::string &directive, unsigned pragma_line,
     SgScopeStatement *scope) {
@@ -2176,6 +2396,14 @@ void ClangToSageTranslator::appendOpenMPPragmasBefore(clang::Stmt *stmt,
                                                       SgScopeStatement *scope) {
   if (scope == nullptr) {
     return;
+  }
+
+  if (p_compiler_instance != nullptr && stmt != nullptr) {
+    clang::SourceManager &source_manager =
+        p_compiler_instance->getSourceManager();
+    if (!statementBeginsAtLineStart(source_manager, stmt->getBeginLoc())) {
+      return;
+    }
   }
 
   std::vector<CapturedPragma> pragmas;
@@ -2216,6 +2444,14 @@ ClangToSageTranslator::wrapStatementWithOpenMPPragmas(clang::Stmt *stmt,
                                                       SgStatement *statement) {
   if (statement == nullptr) {
     return nullptr;
+  }
+
+  if (p_compiler_instance != nullptr && stmt != nullptr) {
+    clang::SourceManager &source_manager =
+        p_compiler_instance->getSourceManager();
+    if (!statementBeginsAtLineStart(source_manager, stmt->getBeginLoc())) {
+      return statement;
+    }
   }
 
   std::vector<CapturedPragma> pragmas;
@@ -5357,6 +5593,16 @@ bool ClangToSageTranslator::VisitConceptSpecializationExpr(
         arg->set_parent(ref);
       }
     }
+  }
+
+  if (ref != nullptr && !concept_specialization_expr->isValueDependent()) {
+    const clang::ASTConstraintSatisfaction &satisfaction =
+        concept_specialization_expr->getSatisfaction();
+    ConstraintSatisfactionResult result;
+    result.evaluated = true;
+    result.contains_errors = satisfaction.ContainsErrors;
+    result.satisfied = satisfaction.IsSatisfied && !result.contains_errors;
+    attachConstraintSatisfaction(ref, result);
   }
 
   *node = ref != nullptr ? static_cast<SgNode *>(ref)

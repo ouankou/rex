@@ -842,9 +842,6 @@ bool IsFromIncludedFile(const Fortran::parser::CharBlock &source) {
     return false;
   }
   const Fortran::parser::AllSources &sources = cooked_->allSources();
-  if (sources.GetInclusionInfo(stmtRange).has_value()) {
-    return true;
-  }
   std::optional<std::string> actualPath =
       GetSourceFilePathForProvenance(sources, stmtRange->start(),
                                      /*topLevel=*/false);
@@ -852,6 +849,12 @@ bool IsFromIncludedFile(const Fortran::parser::CharBlock &source) {
       GetSourceFilePathForProvenance(sources, stmtRange->start(),
                                      /*topLevel=*/true);
   if (actualPath && topLevelPath && *actualPath != *topLevelPath) {
+    return true;
+  }
+  if (actualPath && topLevelPath && *actualPath == *topLevelPath) {
+    return false;
+  }
+  if (sources.GetInclusionInfo(stmtRange).has_value()) {
     return true;
   }
   return false;
@@ -1412,6 +1415,9 @@ std::optional<SourcePosition> BuildSourcePosition(const std::variant<T> &u,
 template <typename T>
 std::optional<SourcePosition>
 TryBuildStatementPosition(const Fortran::parser::Statement<T> &stmt) {
+  if (IsFromIncludedFile(stmt.source)) {
+    return std::nullopt;
+  }
   return BuildSourcePosition(stmt, Order::begin);
 }
 
@@ -4113,6 +4119,30 @@ void BuildVisitor::MaybeInsertIncludeLine(
   for (const auto &range : include_ranges_) {
     if (range == includeRange.value()) {
       return;
+    }
+  }
+
+  std::string includerPath;
+  if (auto path = GetSourceFilePathForProvenance(sources, includeRange->start(),
+                                                 /*topLevel=*/false)) {
+    includerPath = *path;
+  }
+  if (!includerPath.empty()) {
+    SgSourceFile *sourceFile = builder.getSourceFile();
+    if (sourceFile != nullptr) {
+      std::string sourcePath = sourceFile->get_sourceFileNameWithPath();
+      if (sourcePath.empty()) {
+        sourcePath = sourceFile->getFileName();
+      }
+      const std::string sourceAbs =
+          StringUtility::getAbsolutePathFromRelativePath(sourcePath);
+      const std::string includerAbs =
+          StringUtility::getAbsolutePathFromRelativePath(includerPath);
+      if (!sourceAbs.empty() && !includerAbs.empty() &&
+          sourceAbs != includerAbs) {
+        include_ranges_.push_back(includeRange.value());
+        return;
+      }
     }
   }
 

@@ -8299,12 +8299,41 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
   // optional clauses
   SgOmpClauseBodyStatement *bodystmt = isSgOmpClauseBodyStatement(stmt);
   SgOmpDeclareSimdStatement *simdstmt = isSgOmpDeclareSimdStatement(stmt);
-  if (bodystmt || simdstmt) {
-    const SgOmpClausePtrList &clause_ptr_list =
-        bodystmt ? bodystmt->get_clauses() : simdstmt->get_clauses();
-    SgOmpClausePtrList::const_iterator i;
-    for (i = clause_ptr_list.begin(); i != clause_ptr_list.end(); i++) {
-      SgOmpClause *c_clause = *i;
+  SgOmpClauseStatement *clausestmt = isSgOmpClauseStatement(stmt);
+  SgOmpTaskwaitStatement *taskwaitstmt = isSgOmpTaskwaitStatement(stmt);
+  SgOmpRequiresStatement *requiresstmt = isSgOmpRequiresStatement(stmt);
+  SgOmpOrderedDependStatement *ordereddependstmt =
+      isSgOmpOrderedDependStatement(stmt);
+  const SgOmpClausePtrList *clause_ptr_list = nullptr;
+  bool add_leading_space = false;
+  if (bodystmt != nullptr) {
+    clause_ptr_list = &bodystmt->get_clauses();
+    add_leading_space = true;
+  } else if (simdstmt != nullptr) {
+    clause_ptr_list = &simdstmt->get_clauses();
+  } else if (clausestmt != nullptr) {
+    clause_ptr_list = &clausestmt->get_clauses();
+    add_leading_space = true;
+  } else if (taskwaitstmt != nullptr) {
+    clause_ptr_list = &taskwaitstmt->get_clauses();
+    add_leading_space = true;
+  } else if (requiresstmt != nullptr) {
+    clause_ptr_list = &requiresstmt->get_clauses();
+    add_leading_space = true;
+  } else if (ordereddependstmt != nullptr) {
+    clause_ptr_list = &ordereddependstmt->get_clauses();
+    add_leading_space = true;
+  }
+  if (clause_ptr_list != nullptr && !clause_ptr_list->empty()) {
+    if (add_leading_space) {
+      if (isSgOmpCriticalStatement(stmt) || isSgOmpDepobjStatement(stmt)) {
+        add_leading_space = false;
+      }
+    }
+    if (add_leading_space) {
+      curprint(string(" "));
+    }
+    for (SgOmpClause *c_clause : *clause_ptr_list) {
       unparseOmpClause(c_clause, info);
     }
   }

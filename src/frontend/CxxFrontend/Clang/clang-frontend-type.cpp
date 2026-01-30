@@ -767,7 +767,12 @@ bool ClangToSageTranslator::VisitAdjustedType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  clang::QualType adjusted = adjusted_type->getAdjustedType();
+  if (!adjusted.isNull()) {
+    *node = buildTypeFromQualifiedType(adjusted);
+  } else {
+    *node = buildTypeFromQualifiedType(adjusted_type->getOriginalType());
+  }
 
   return VisitType(adjusted_type, node) && res;
 }
@@ -783,8 +788,6 @@ bool ClangToSageTranslator::VisitDecayedType(clang::DecayedType *decayed_type,
   //    buildTypeFromQualifiedType(decayed_type->getDecayedType ());
   SgType *pointeeType =
       buildTypeFromQualifiedType(decayed_type->getPointeeType());
-
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
   //    *node = pointeeType;
   // Pei-Hung (04/08/2022) Building SgArrayyType to represent the DecayedType in
@@ -919,8 +922,6 @@ bool ClangToSageTranslator::VisitVariableArrayType(
   // DQ (11/28/2020): Added assertion.
   ROSE_ASSERT(*node != NULL);
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
   return VisitArrayType(variable_array_type, node) && res;
 }
 
@@ -931,7 +932,11 @@ bool ClangToSageTranslator::VisitAtomicType(clang::AtomicType *atomic_type,
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  SgType *base_type = buildTypeFromQualifiedType(atomic_type->getValueType());
+  if (base_type == nullptr) {
+    base_type = SageBuilder::buildUnknownType();
+  }
+  *node = base_type;
 
   return VisitType(atomic_type, node) && res;
 }
@@ -995,7 +1000,12 @@ bool ClangToSageTranslator::VisitBlockPointerType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  SgType *pointee_type =
+      buildTypeFromQualifiedType(block_pointer_type->getPointeeType());
+  if (pointee_type == nullptr) {
+    pointee_type = SageBuilder::buildUnknownType();
+  }
+  *node = SageBuilder::buildPointerType(pointee_type);
 
   return VisitType(block_pointer_type, node) && res;
 }
@@ -1180,8 +1190,6 @@ bool ClangToSageTranslator::VisitDependentDecltypeType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
   return VisitDecltypeType(dependent_decltype_type, node) && res;
 }
 
@@ -1192,7 +1200,12 @@ bool ClangToSageTranslator::VisitDeducedType(clang::DeducedType *deduced_type,
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  clang::QualType deduced = deduced_type->getDeducedType();
+  if (!deduced.isNull()) {
+    *node = buildTypeFromQualifiedType(deduced);
+  } else if (*node == nullptr) {
+    *node = SageBuilder::buildAutoType();
+  }
 
   return VisitType(deduced_type, node) && res;
 }
@@ -1272,7 +1285,15 @@ bool ClangToSageTranslator::VisitDependentAddressSpaceType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  SgType *pointee_type = buildTypeFromQualifiedType(
+      dependent_address_space_type->getPointeeType());
+  if (pointee_type == nullptr) {
+    pointee_type = SageBuilder::buildUnknownType();
+  }
+  SgModifierType *modified_type = new SgModifierType(pointee_type);
+  SgTypeModifier &modifier = modified_type->get_typeModifier();
+  modifier.setAddressSpace();
+  *node = SgModifierType::insertModifierTypeIntoTypeTable(modified_type);
 
   return VisitType(dependent_address_space_type, node) && res;
 }
@@ -1286,7 +1307,22 @@ bool ClangToSageTranslator::VisitDependentSizedExtVectorType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  SgType *elem_type = buildTypeFromQualifiedType(
+      dependent_sized_ext_vector_type->getElementType());
+  if (elem_type == nullptr) {
+    elem_type = SageBuilder::buildUnknownType();
+  }
+  SgModifierType *modified_type = new SgModifierType(elem_type);
+  SgTypeModifier &modifier = modified_type->get_typeModifier();
+  modifier.setVectorType();
+  if (const clang::Expr *size_expr =
+          dependent_sized_ext_vector_type->getSizeExpr()) {
+    if (const clang::IntegerLiteral *int_lit =
+            llvm::dyn_cast<clang::IntegerLiteral>(size_expr)) {
+      modifier.set_vector_size(int_lit->getValue().getSExtValue());
+    }
+  }
+  *node = SgModifierType::insertModifierTypeIntoTypeTable(modified_type);
 
   return VisitType(dependent_sized_ext_vector_type, node) && res;
 }
@@ -1298,7 +1334,21 @@ bool ClangToSageTranslator::VisitDependentVectorType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  SgType *elem_type =
+      buildTypeFromQualifiedType(dependent_vector_type->getElementType());
+  if (elem_type == nullptr) {
+    elem_type = SageBuilder::buildUnknownType();
+  }
+  SgModifierType *modified_type = new SgModifierType(elem_type);
+  SgTypeModifier &modifier = modified_type->get_typeModifier();
+  modifier.setVectorType();
+  if (const clang::Expr *size_expr = dependent_vector_type->getSizeExpr()) {
+    if (const clang::IntegerLiteral *int_lit =
+            llvm::dyn_cast<clang::IntegerLiteral>(size_expr)) {
+      modifier.set_vector_size(int_lit->getValue().getSExtValue());
+    }
+  }
+  *node = SgModifierType::insertModifierTypeIntoTypeTable(modified_type);
 
   return VisitType(dependent_vector_type, node) && res;
 }
@@ -1310,7 +1360,13 @@ bool ClangToSageTranslator::VisitFunctionType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  SgFunctionParameterTypeList *param_type_list =
+      new SgFunctionParameterTypeList();
+  SgType *ret_type = buildTypeFromQualifiedType(function_type->getReturnType());
+  if (ret_type == nullptr) {
+    ret_type = SageBuilder::buildUnknownType();
+  }
+  *node = SageBuilder::buildFunctionType(ret_type, param_type_list);
 
   return VisitType(function_type, node) && res;
 }
@@ -1405,7 +1461,11 @@ bool ClangToSageTranslator::VisitMacroQualifiedType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  clang::QualType desugared = macro_qualified_type->desugar();
+  if (desugared.isNull()) {
+    desugared = macro_qualified_type->getUnderlyingType();
+  }
+  *node = buildTypeFromQualifiedType(desugared);
 
   return VisitType(macro_qualified_type, node) && res;
 }
@@ -1515,7 +1575,11 @@ bool ClangToSageTranslator::VisitPipeType(clang::PipeType *pipe_type,
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  SgType *elem_type = buildTypeFromQualifiedType(pipe_type->getElementType());
+  if (elem_type == nullptr) {
+    elem_type = SageBuilder::buildUnknownType();
+  }
+  *node = SageBuilder::buildPointerType(elem_type);
 
   return VisitType(pipe_type, node) && res;
 }
@@ -1578,7 +1642,41 @@ bool ClangToSageTranslator::VisitSubstTemplateTypeParmPackType(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  std::string name;
+  if (const clang::TemplateTypeParmDecl *decl =
+          subst_template_type->getReplacedParameter()) {
+    name = decl->getNameAsString();
+  }
+  if (name.empty()) {
+    if (const clang::IdentifierInfo *id =
+            subst_template_type->getIdentifier()) {
+      name = id->getName().str();
+    }
+  }
+  if (name.empty()) {
+    name = "__template_pack";
+  }
+
+  SgTemplateType *pack_type = SageBuilder::buildTemplateType(SgName(name));
+  if (pack_type != nullptr) {
+    pack_type->set_packed(true);
+    clang::TemplateArgument pack_arg = subst_template_type->getArgumentPack();
+    if (pack_arg.getKind() == clang::TemplateArgument::Pack) {
+      for (const clang::TemplateArgument &arg : pack_arg.pack_elements()) {
+        appendTemplateArguments(pack_type->get_tpl_args(), arg, false);
+      }
+    } else {
+      appendTemplateArguments(pack_type->get_tpl_args(), pack_arg, false);
+    }
+    for (SgTemplateArgument *arg : pack_type->get_tpl_args()) {
+      if (arg != nullptr) {
+        arg->set_parent(pack_type);
+      }
+    }
+    *node = pack_type;
+  } else {
+    *node = SageBuilder::buildUnknownType();
+  }
 
   return VisitType(subst_template_type, node) && res;
 }
@@ -1607,7 +1705,27 @@ bool ClangToSageTranslator::VisitTagType(clang::TagType *tag_type,
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  if (clang::RecordType *record_type =
+          llvm::dyn_cast<clang::RecordType>(tag_type)) {
+    return VisitRecordType(record_type, node) && res;
+  }
+  if (clang::EnumType *enum_type = llvm::dyn_cast<clang::EnumType>(tag_type)) {
+    return VisitEnumType(enum_type, node) && res;
+  }
+
+  if (clang::TagDecl *tag_decl = tag_type->getDecl()) {
+    if (SgNode *decl_node = Traverse(tag_decl)) {
+      if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl_node)) {
+        *node = class_decl->get_type();
+      } else if (SgEnumDeclaration *enum_decl =
+                     isSgEnumDeclaration(decl_node)) {
+        *node = enum_decl->get_type();
+      }
+    }
+  }
+  if (*node == nullptr) {
+    *node = SageBuilder::buildUnknownType();
+  }
 
   return VisitType(tag_type, node) && res;
 }
@@ -3489,8 +3607,6 @@ bool ClangToSageTranslator::VisitTypeOfExprType(
 
   *node = type;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
   return VisitType(type_of_expr_type, node) && res;
 }
 
@@ -3501,8 +3617,6 @@ bool ClangToSageTranslator::VisitDependentTypeOfExprType(
   std::cerr << "ClangToSageTranslator::DependentTypeOfExprType" << std::endl;
 #endif
   bool res = true;
-
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
   return VisitTypeOfExprType(dependent_type_of_expr_type, node) && res;
 }
@@ -3522,8 +3636,6 @@ bool ClangToSageTranslator::VisitTypeOfType(clang::TypeOfType *type_of_type,
 
   *node = type;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
   return VisitType(type_of_type, node) && res;
 }
 
@@ -3534,7 +3646,23 @@ bool ClangToSageTranslator::VisitTypeWithKeyword(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
+  if (*node == nullptr) {
+    clang::QualType desugared;
+    if (const clang::ElaboratedType *elaborated =
+            llvm::dyn_cast<clang::ElaboratedType>(type_with_keyword)) {
+      desugared = elaborated->getNamedType();
+    }
+    if (desugared.isNull()) {
+      clang::QualType qt(type_with_keyword, 0);
+      desugared = qt.getCanonicalType();
+    }
+
+    if (!desugared.isNull() && desugared.getTypePtr() != type_with_keyword) {
+      *node = buildTypeFromQualifiedType(desugared);
+    } else {
+      *node = SageBuilder::buildUnknownType();
+    }
+  }
 
   return VisitType(type_with_keyword, node) && res;
 }
@@ -3836,8 +3964,6 @@ bool ClangToSageTranslator::VisitExtVectorType(
   std::cerr << "ClangToSageTranslator::VisitExtVectorType" << std::endl;
 #endif
   bool res = true;
-
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME Is it anything to be done here?
 
   return VisitVectorType(ext_vector_type, node) && res;
 }

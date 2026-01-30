@@ -298,7 +298,14 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   if (omp_pragmas.empty()) {
     return false;
   }
+  setLang(Lang_Fortran);
   std::vector<OpenMPDirective *> pairing_list;
+  std::vector<std::pair<SgPragmaDeclaration *, OpenMPDirective *>>
+      local_OpenMPIR_list;
+  std::vector<SgPragmaDeclaration *> local_omp_pragma_list;
+  std::map<SgPragmaDeclaration *, OpenMPDirective *>
+      local_fortran_paired_pragma_dict;
+  std::vector<SgPragmaDeclaration *> pragmas_to_remove;
   std::vector<SgPragmaDeclaration *> pending_pragmas;
   std::string pending;
   SgPragmaDeclaration *prev_pragma = NULL;
@@ -342,7 +349,13 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
     }
 
     ompparser_OpenMPIR = parseOpenMP(pending.c_str(), NULL);
-    ROSE_ASSERT(ompparser_OpenMPIR != NULL);
+    if (ompparser_OpenMPIR == NULL) {
+      for (const auto &entry : local_OpenMPIR_list) {
+        delete entry.second;
+      }
+      setLang(Lang_unknown);
+      return false;
+    }
 
     if (isFortranPairedDirective(ompparser_OpenMPIR)) {
       pairing_list.push_back(ompparser_OpenMPIR);
@@ -378,14 +391,15 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
     }
 
     SgPragmaDeclaration *primary = pending_pragmas.front();
-    fortran_paired_pragma_dict[primary] = ompparser_OpenMPIR;
+    local_fortran_paired_pragma_dict[primary] = ompparser_OpenMPIR;
     if (ompparser_OpenMPIR->getKind() != OMPD_end) {
-      OpenMPIR_list.push_back(std::make_pair(primary, ompparser_OpenMPIR));
-      omp_pragma_list.push_back(primary);
+      local_OpenMPIR_list.push_back(
+          std::make_pair(primary, ompparser_OpenMPIR));
+      local_omp_pragma_list.push_back(primary);
     }
 
     for (size_t j = 1; j < pending_pragmas.size(); ++j) {
-      removeStatement(pending_pragmas[j]);
+      pragmas_to_remove.push_back(pending_pragmas[j]);
     }
 
     pending_pragmas.clear();
@@ -397,6 +411,19 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
     ROSE_ABORT();
   }
 
+  for (const auto &entry : local_OpenMPIR_list) {
+    OpenMPIR_list.push_back(entry);
+  }
+  for (SgPragmaDeclaration *decl : local_omp_pragma_list) {
+    omp_pragma_list.push_back(decl);
+  }
+  for (const auto &entry : local_fortran_paired_pragma_dict) {
+    fortran_paired_pragma_dict[entry.first] = entry.second;
+  }
+  for (SgPragmaDeclaration *decl : pragmas_to_remove) {
+    removeStatement(decl);
+  }
+  setLang(Lang_unknown);
   return true;
 }
 
@@ -470,8 +497,12 @@ SgExpression *replace_expression_with_macro_value(std::string define_macro,
         ROSE_ASSERT(!macroValue.empty() && it == macroValue.end());
 
         newExp = buildIntVal(atoi(macroValue.c_str()));
-        if (!isSgPragmaDeclaration(old_exp->get_parent()))
+        SgNode *parent = old_exp->get_parent();
+        bool replaced = false;
+        if (parent != NULL && !isSgPragmaDeclaration(parent)) {
           replaceExpression(old_exp, newExp);
+          replaced = true;
+        }
         macro_replaced = true;
       }
     }
@@ -1567,8 +1598,9 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr) {
     //     }
     // So we process a pragma if it is either within the same file or marked as
     // transformation
-    if (getEnclosingSourceFile(decl) != sageFilePtr)
+    if (getEnclosingSourceFile(decl) != sageFilePtr) {
       continue;
+    }
     if (!isFortran &&
         decl->get_file_info()->get_filename() !=
             sageFilePtr->get_file_info()->get_filename() &&
@@ -2188,6 +2220,10 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   SgPragmaDeclaration *pdecl = current_OpenMPIR_to_SageIII.first;
   copyStartFileInfo(pdecl, result);
   copyEndFileInfo(pdecl, result);
+  if (SgLocatedNode *located_result = isSgLocatedNode(result)) {
+    located_result->setTransformation();
+    located_result->setOutputInCodeGeneration();
+  }
 
   //! For C/C++ replace OpenMP pragma declaration with an SgOmpxxStatement
   SgScopeStatement *scope = pdecl->get_scope();
@@ -2376,13 +2412,14 @@ convertSimpleClause(SgStatement *directive,
         ->get_clauses()
         .push_back(sg_clause);
   } else if (current_OpenMPIR_to_SageIII.second->getKind() ==
-                 OMPD_target_update ||
-             current_OpenMPIR_to_SageIII.second->getKind() == OMPD_cancel ||
-             current_OpenMPIR_to_SageIII.second->getKind() ==
-                 OMPD_cancellation_point) {
+             OMPD_target_update) {
     ((SgOmpTargetUpdateStatement *)directive)
         ->get_clauses()
         .push_back(sg_clause);
+  } else if (current_OpenMPIR_to_SageIII.second->getKind() == OMPD_cancel ||
+             current_OpenMPIR_to_SageIII.second->getKind() ==
+                 OMPD_cancellation_point) {
+    addOmpClause(directive, sg_clause);
   } else if (current_OpenMPIR_to_SageIII.second->getKind() == OMPD_requires) {
     ((SgOmpRequiresStatement *)directive)->get_clauses().push_back(sg_clause);
   } else if (current_OpenMPIR_to_SageIII.second->getKind() == OMPD_flush) {
@@ -3370,9 +3407,11 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
     SgExpression *allocator_traits_array = NULL;
     std::string allocator_array =
         ((usesAllocatorParameter *)(*iter))->getAllocatorTraitsArray();
-    allocator_traits_array =
-        parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                           current_omp_clause->getKind(), allocator_array);
+    if (!allocator_array.empty()) {
+      allocator_traits_array =
+          parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                             current_omp_clause->getKind(), allocator_array);
+    }
 
     uses_allocators_defination = new SgOmpUsesAllocatorsDefination();
     uses_allocators_defination->set_allocator_traits_array(
@@ -4975,11 +5014,17 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
 
   copyStartFileInfo(current_OpenMPIR_to_SageIII.first, second_stmt);
   copyEndFileInfo(current_OpenMPIR_to_SageIII.first, second_stmt);
+  if (SgLocatedNode *located_second = isSgLocatedNode(second_stmt)) {
+    located_second->setTransformation();
+    located_second->setOutputInCodeGeneration();
+  }
   SgOmpParallelStatement *first_stmt =
       new SgOmpParallelStatement(NULL, second_stmt);
   setOneSourcePositionForTransformation(first_stmt);
   copyStartFileInfo(current_OpenMPIR_to_SageIII.first, first_stmt);
   copyEndFileInfo(current_OpenMPIR_to_SageIII.first, first_stmt);
+  first_stmt->setTransformation();
+  first_stmt->setOutputInCodeGeneration();
   second_stmt->set_parent(first_stmt);
 
   OpenMPClauseKind clause_kind;
