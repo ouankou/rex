@@ -1,4 +1,3 @@
-add_subdirectory(LANL_POP)
 add_subdirectory(gfortranTestSuite)
 add_subdirectory(experimental_frontend_tests)
 

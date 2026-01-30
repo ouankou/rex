@@ -94,8 +94,8 @@ keepStripping:
     goto keepStripping;
   }
 
-    // DQ (9/12/2010): Added SgTypeFloat support to handle Fortran support (in
-    // file LANL_POP/grid.F90).
+    // DQ (9/12/2010): Added SgTypeFloat support to handle Fortran array
+    // support.
   case V_SgTypeFloat: {
     // DQ (8/17/2010): I think that this is the correct handling of the return
     // value generation.

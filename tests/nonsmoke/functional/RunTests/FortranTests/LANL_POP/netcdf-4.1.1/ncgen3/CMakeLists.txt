@@ -1,7 +1,0 @@
-
-
-rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncgen3_run_nc4_tests.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_nc4_tests.sh)
-set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncgen3_run_nc4_tests.sh" PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-
-rex_add_disabled_test(NAME "nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncgen3_run_tests.sh" COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh)
-set_tests_properties("nonsmoke_functional_RunTests_FortranTests_LANL_POP_netcdf-4.1.1_ncgen3_run_tests.sh" PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

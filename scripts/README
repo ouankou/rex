@@ -84,8 +84,8 @@ if missing:
         print(' -', name, exe)
 PY
 Note: this check ignores whether tests are disabled and will also flag
-executables that are created during test execution (e.g., netcdf test_prog),
-so a nonzero count can be expected.
+executables that are created during test execution, so a nonzero count can
+be expected.
 
 Common ways to reduce missing_executable (optional)
 - Example translators (KeepGoingTranslator, identityTranslator):
@@ -97,10 +97,6 @@ Common ways to reduce missing_executable (optional)
   `-DREX_ENABLE_DISABLED_TESTS=ON`.
 - HPCToolkit tests:
   install HPCToolkit so `hpcrun` is on `PATH`.
-- LANL_POP/netcdf tests:
-  configure with `-DENABLE-FORTRAN=ON`, ensure netcdf subdir builds, and
-  run disabled tests with `-DREX_ENABLE_DISABLED_TESTS=ON`. These tests
-  compile `test_prog` during execution, so it may be missing before runs.
 
 Make-target wrapper example (runs dependencies in CTest)
 ctest --test-dir build -R nonsmoke_functional_check-local
