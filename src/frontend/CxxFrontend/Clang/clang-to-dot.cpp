@@ -9,6 +9,8 @@
 
 #include "clang-frontend-utils.hpp"
 
+#include "clang-nns-utils.hpp"
+
 #include "sage3basic.h"
 
 #include "clang_paths.h"
@@ -16,32 +18,6 @@
 #include "rose_config.h"
 // DQ (11/1/2020): Added to resolve types (e.g string)
 using namespace std;
-
-namespace {
-bool nestedNameSpecifierHasTemplateKeyword(
-    const clang::NestedNameSpecifier *nns) {
-  if (nns == nullptr) {
-    return false;
-  }
-#if LLVM_VERSION_MAJOR < 21
-  return nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate;
-#else
-  if (nns->getKind() != clang::NestedNameSpecifier::TypeSpec) {
-    return false;
-  }
-  const clang::Type *type = nns->getAsType();
-  if (const auto *elab = llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
-    type = elab->getNamedType().getTypePtr();
-  }
-  if (const auto *dependent =
-          llvm::dyn_cast_or_null<clang::DependentTemplateSpecializationType>(
-              type)) {
-    return dependent->getDependentTemplateName().hasTemplateKeyword();
-  }
-  return false;
-#endif
-}
-} // namespace
 
 // File for output for generated graph.
 std::ofstream CLANG_ROSE_Graph::file;

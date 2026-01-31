@@ -1,4 +1,5 @@
 #include "clang-frontend-private.hpp"
+#include "clang-nns-utils.hpp"
 
 #include "clang-to-rose-support.hpp"
 
@@ -502,30 +503,6 @@ std::string normalizeQualifierToken(std::string token) {
   }
   token = trimWhitespace(token);
   return token;
-}
-
-static bool
-nestedNameSpecifierHasTemplateKeyword(const clang::NestedNameSpecifier *nns) {
-  if (nns == nullptr) {
-    return false;
-  }
-#if LLVM_VERSION_MAJOR < 21
-  return nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate;
-#else
-  if (nns->getKind() != clang::NestedNameSpecifier::TypeSpec) {
-    return false;
-  }
-  const clang::Type *type = nns->getAsType();
-  if (const auto *elab = llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
-    type = elab->getNamedType().getTypePtr();
-  }
-  if (const auto *dependent =
-          llvm::dyn_cast_or_null<clang::DependentTemplateSpecializationType>(
-              type)) {
-    return dependent->getDependentTemplateName().hasTemplateKeyword();
-  }
-  return false;
-#endif
 }
 
 std::string
