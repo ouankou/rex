@@ -2844,12 +2844,6 @@ string SageInterface::generateUniqueNameForUseAsIdentifier_support(
     if (SgFunctionDeclaration *parentDecl =
             isSgFunctionDeclaration(param_parent)) {
       functionDeclaration = parentDecl;
-    } else if (SgTemplateFunctionDeclaration *tmplDecl =
-                   isSgTemplateFunctionDeclaration(param_parent)) {
-      functionDeclaration = isSgFunctionDeclaration(tmplDecl);
-    } else if (SgTemplateMemberFunctionDeclaration *tmplMember =
-                   isSgTemplateMemberFunctionDeclaration(param_parent)) {
-      functionDeclaration = isSgFunctionDeclaration(tmplMember);
     } else if (SgFunctionDefinition *functionDef =
                    isSgFunctionDefinition(param_parent)) {
       functionDeclaration = functionDef->get_declaration();
