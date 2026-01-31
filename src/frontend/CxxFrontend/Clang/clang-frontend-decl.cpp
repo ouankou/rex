@@ -8698,6 +8698,7 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
     if (scope != nullptr &&
         scope->find_symbol_from_declaration(enumerator) == nullptr) {
       SgEnumFieldSymbol *field_symbol = new SgEnumFieldSymbol(enumerator);
+      field_symbol->set_parent(enumerator);
       scope->insert_symbol(enumerator->get_name(), field_symbol);
     }
   };
