@@ -7131,9 +7131,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     // Pei-Hung (04/07/2022) sym can be nullptr in the case for C99 VLA
     if (sym == nullptr && isSgInitializedName(tmp_decl) != nullptr) {
       SgInitializedName *init_name = isSgInitializedName(tmp_decl);
-      if (init_name == nullptr) {
-        return false;
-      }
 
       if (llvm::isa<clang::EnumConstantDecl>(decl_ref_expr->getDecl())) {
         SgScopeStatement *init_scope =
