@@ -2846,10 +2846,10 @@ string SageInterface::generateUniqueNameForUseAsIdentifier_support(
       functionDeclaration = parentDecl;
     } else if (SgTemplateFunctionDeclaration *tmplDecl =
                    isSgTemplateFunctionDeclaration(param_parent)) {
-      functionDeclaration = tmplDecl;
+      functionDeclaration = isSgFunctionDeclaration(tmplDecl);
     } else if (SgTemplateMemberFunctionDeclaration *tmplMember =
                    isSgTemplateMemberFunctionDeclaration(param_parent)) {
-      functionDeclaration = tmplMember;
+      functionDeclaration = isSgFunctionDeclaration(tmplMember);
     } else if (SgFunctionDefinition *functionDef =
                    isSgFunctionDefinition(param_parent)) {
       functionDeclaration = functionDef->get_declaration();
