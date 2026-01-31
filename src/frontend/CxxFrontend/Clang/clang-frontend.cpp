@@ -1248,8 +1248,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       invocation.getHeaderSearchOpts();
 
   // Ensure Clang's builtin and system include paths are active for both
-  // LLVM 20 and 21. Some platforms (e.g., AOSC) do not ship stddef.h under
-  // /usr/include, so the resource-dir headers must be enabled.
+  // LLVM 20 and 21 so the resource-dir headers are always available.
   headerSearchOpts.UseBuiltinIncludes = true;
   headerSearchOpts.UseStandardSystemIncludes = true;
   headerSearchOpts.UseStandardCXXIncludes = true;

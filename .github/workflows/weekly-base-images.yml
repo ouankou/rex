@@ -24,20 +24,16 @@ jobs:
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
       BASE_TAG: base
-      PACKAGE_NAME: rex
-      TMP_RISCV_TAG: tmp-${{ github.run_id }}-riscv64
-      TMP_LOONG_TAG: tmp-${{ github.run_id }}-loongarch64
-      TMP_MIPS_TAG: tmp-${{ github.run_id }}-mips64el
 
     steps:
     - uses: actions/checkout@v4
       with:
         persist-credentials: false
 
-    - name: Set up QEMU (riscv64, loong64, mips64le)
+    - name: Set up QEMU (riscv64, loong64)
       uses: docker/setup-qemu-action@v3
       with:
-        platforms: riscv64,loong64,mips64le
+        platforms: riscv64,loong64
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -57,20 +53,12 @@ jobs:
           --platform linux/riscv64 \
           --pull \
           -f ci/docker/rex-riscv64.Dockerfile \
-          -t "${IMAGE_REPO}:${TMP_RISCV_TAG}" \
+          --output=type=registry,name="${IMAGE_REPO}",push-by-digest=true \
+          --provenance=false \
           --metadata-file "${metadata_file}" \
-          --push \
           .
         export METADATA_FILE="${metadata_file}"
-        riscv_digest="$(python3 - <<'PY'
-import json
-import os
-
-with open(os.environ["METADATA_FILE"], "r", encoding="utf-8") as handle:
-    data = json.load(handle)
-print(data["containerimage.digest"])
-PY
-)"
+        riscv_digest="$(python3 -c 'import json, os; print(json.load(open(os.environ["METADATA_FILE"], "r", encoding="utf-8"))["containerimage.digest"])')"
         echo "RISCV_DIGEST=${riscv_digest}" >> "${GITHUB_ENV}"
 
     - name: Build and push base image (loong64)
@@ -81,45 +69,13 @@ PY
           --platform linux/loong64 \
           --pull \
           -f ci/docker/rex-loongarch64.Dockerfile \
-          -t "${IMAGE_REPO}:${TMP_LOONG_TAG}" \
+          --output=type=registry,name="${IMAGE_REPO}",push-by-digest=true \
+          --provenance=false \
           --metadata-file "${metadata_file}" \
-          --push \
           .
         export METADATA_FILE="${metadata_file}"
-        loong_digest="$(python3 - <<'PY'
-import json
-import os
-
-with open(os.environ["METADATA_FILE"], "r", encoding="utf-8") as handle:
-    data = json.load(handle)
-print(data["containerimage.digest"])
-PY
-)"
+        loong_digest="$(python3 -c 'import json, os; print(json.load(open(os.environ["METADATA_FILE"], "r", encoding="utf-8"))["containerimage.digest"])')"
         echo "LOONG_DIGEST=${loong_digest}" >> "${GITHUB_ENV}"
-
-    - name: Build and push base image (mips64el)
-      run: |
-        set -euo pipefail
-        metadata_file="${RUNNER_TEMP}/mips64el-metadata.json"
-        docker buildx build \
-          --platform linux/mips64le \
-          --pull \
-          -f ci/docker/rex-mips64el.Dockerfile \
-          -t "${IMAGE_REPO}:${TMP_MIPS_TAG}" \
-          --metadata-file "${metadata_file}" \
-          --push \
-          .
-        export METADATA_FILE="${metadata_file}"
-        mips_digest="$(python3 - <<'PY'
-import json
-import os
-
-with open(os.environ["METADATA_FILE"], "r", encoding="utf-8") as handle:
-    data = json.load(handle)
-print(data["containerimage.digest"])
-PY
-)"
-        echo "MIPS_DIGEST=${mips_digest}" >> "${GITHUB_ENV}"
 
     - name: Publish multi-arch manifest (base tag only)
       run: |
@@ -127,32 +83,5 @@ PY
         docker buildx imagetools create \
           -t "${IMAGE_REPO}:${BASE_TAG}" \
           "${IMAGE_REPO}@${RISCV_DIGEST}" \
-          "${IMAGE_REPO}@${LOONG_DIGEST}" \
-          "${IMAGE_REPO}@${MIPS_DIGEST}"
+          "${IMAGE_REPO}@${LOONG_DIGEST}"
         docker buildx imagetools inspect "${IMAGE_REPO}:${BASE_TAG}"
-
-    - name: Delete temporary tags
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        set -euo pipefail
-        owner="${{ github.repository_owner }}"
-        if gh api "/orgs/${owner}" >/dev/null 2>&1; then
-          owner_path="orgs/${owner}"
-        else
-          owner_path="users/${owner}"
-        fi
-
-        if ! gh api "/${owner_path}/packages/container/${PACKAGE_NAME}" >/dev/null 2>&1; then
-          echo "GHCR package ${PACKAGE_NAME} not found; skipping tag cleanup."
-          exit 0
-        fi
-
-        version_ids="$(gh api --paginate "/${owner_path}/packages/container/${PACKAGE_NAME}/versions?per_page=100" \
-          --jq '.[] | select((.metadata.container.tags // []) | index(env.TMP_RISCV_TAG) or index(env.TMP_LOONG_TAG) or index(env.TMP_MIPS_TAG)) | .id')"
-
-        if [ -n "${version_ids}" ]; then
-          for version_id in ${version_ids}; do
-            gh api -X DELETE "/${owner_path}/packages/container/${PACKAGE_NAME}/versions/${version_id}"
-          done
-        fi

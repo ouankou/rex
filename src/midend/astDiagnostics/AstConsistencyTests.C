@@ -2186,7 +2186,6 @@ void TestAstForUniqueNodesInAST::visit(SgNode *node) {
     // still can't enforce this everywhere. These tests: test2013_234.C
     // test2013_240.C
     // test2013_242.C
-    // test2013_246.C
     // test2013_241.C
 
     // DQ (10/16/2013): Now that we have the token stream support

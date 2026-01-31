@@ -1,4 +1,5 @@
 FROM debian:sid
+LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
 ARG LLVM_VERSION=21
 ENV DEBIAN_FRONTEND=noninteractive
@@ -15,6 +16,7 @@ RUN apt-get update \
       flang-${LLVM_VERSION} \
       flex \
       g++ \
+      gdb \
       ghostscript \
       git \
       graphviz \
@@ -24,6 +26,7 @@ RUN apt-get update \
       libflang-${LLVM_VERSION}-dev \
       libhpdf-dev \
       libtool \
+      lldb-${LLVM_VERSION} \
       llvm-${LLVM_VERSION} \
       llvm-${LLVM_VERSION}-dev \
       openjdk-25-jdk \

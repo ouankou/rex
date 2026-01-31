@@ -1,4 +1,5 @@
 FROM ghcr.io/loong64/debian:sid
+LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
 ARG LLVM_VERSION=21
 ENV DEBIAN_FRONTEND=noninteractive
@@ -24,6 +25,7 @@ RUN apt-get update \
       libflang-${LLVM_VERSION}-dev \
       libhpdf-dev \
       libtool \
+      lldb-${LLVM_VERSION} \
       llvm-${LLVM_VERSION} \
       llvm-${LLVM_VERSION}-dev \
       openjdk-21-jdk \

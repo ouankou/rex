@@ -422,7 +422,7 @@ elif [ ! -r "$rose_system_cdefs_h" ]; then
 #include </.../cdefs.h> in the ROSE-specific cdefs.h is wrong, so try to fix it.
     # CLANG FRONTEND FIX: Exclude newlib paths and prefer glibc sys/cdefs.h.
     # Look for arch-specific sys/cdefs.h first (e.g., x86_64-linux-gnu,
-    # aarch64-linux-gnu, loongarch64-linux-gnu, mips64el-aosc-linux-gnuabi64).
+    # aarch64-linux-gnu, loongarch64-linux-gnu).
     real_system_cdefs_h=$(find /usr/include -follow -path '*/sys/cdefs.h' \
         -path '*-linux-gnu*/sys/cdefs.h' | head -n1)
     # Prefer the canonical glibc location if present.

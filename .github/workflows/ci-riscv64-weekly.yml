@@ -55,8 +55,5 @@ jobs:
 
             ./build-rex.sh /work/rex_install Debug
 
-            cd /work/build
-            ctest -R astInterface
-            ctest -R testQuery
-            ctest -R rex
+            ctest --test-dir /work/build -R "rex|astInterface|testQuery" -j32
           '

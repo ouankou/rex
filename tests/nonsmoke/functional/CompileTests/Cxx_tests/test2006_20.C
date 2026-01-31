@@ -12,7 +12,7 @@ class BoolAttribute {};
 
 // DQ (7/3/2013): This is part of a temporary fix to work around a bug in
 // legacy frontend 4.7, forcing us to tell legacy frontend we are an legacy
-// frontend 4.2 compiler to avoid a third-party header bug (see test2013_246.C).
+// frontend 4.2 compiler to avoid a third-party header bug.
 // DQ (9/12/2009): std::__uninitialized_copy_aux is not present in GNU g++
 // version 4.3. #if (
 // (__GNUC__ == 3) || (__GNUC__ == 4) && (__GNUC_MINOR__ < 3) ) #if ( (__GNUC__
