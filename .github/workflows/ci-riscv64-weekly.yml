@@ -55,5 +55,5 @@ jobs:
 
             ./build-rex.sh /work/rex_install Debug
 
-            ctest --test-dir /work/build -R "rex|astInterface|testQuery" -j32
+            ctest --test-dir /work/build -R "rex|astInterface|testQuery" -j"$(nproc)"
           '

@@ -1405,9 +1405,16 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
   }
   case clang::Decl::EnumConstant: {
     name = SgName(((clang::EnumConstantDecl *)decl)->getName().str());
+    std::unordered_set<SgScopeStatement *> visited;
     it = SageBuilder::ScopeStack.rbegin();
     while (it != SageBuilder::ScopeStack.rend() && sym == nullptr) {
-      sym = (*it)->lookup_enum_field_symbol(name);
+      SgScopeStatement *scope = *it;
+      if (SgScopeStatement *normalized = normalizeNamespaceScope(scope)) {
+        scope = normalized;
+      }
+      if (scope != nullptr && visited.insert(scope).second) {
+        sym = scope->lookup_enum_field_symbol(name);
+      }
       it++;
     }
     break;
@@ -8670,6 +8677,32 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
     }
   }
 
+  auto ensure_enum_field_symbol = [&](SgInitializedName *enumerator,
+                                      SgScopeStatement *scope,
+                                      SgEnumDeclaration *owner) {
+    if (enumerator == nullptr) {
+      return;
+    }
+    if (scope == nullptr) {
+      scope = getGlobalScope();
+    }
+    if (SgScopeStatement *normalized = normalizeNamespaceScope(scope)) {
+      scope = normalized;
+    }
+    if (enumerator->get_scope() != scope) {
+      enumerator->set_scope(scope);
+    }
+    if (enumerator->get_parent() == nullptr && owner != nullptr) {
+      enumerator->set_parent(owner);
+    }
+    if (scope != nullptr &&
+        scope->find_symbol_from_declaration(enumerator) == nullptr) {
+      SgEnumFieldSymbol *field_symbol = new SgEnumFieldSymbol(enumerator);
+      field_symbol->set_parent(enumerator);
+      scope->insert_symbol(enumerator->get_name(), field_symbol);
+    }
+  };
+
   if (sg_prev_enum_decl == nullptr ||
       sg_prev_enum_decl->get_enumerators().size() == 0) {
     SgScopeStatement *enum_scope = symbol_scope;
@@ -8685,14 +8718,8 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
 
       ROSE_ASSERT(enumerator);
 
-      if (enum_scope != nullptr) {
-        enumerator->set_scope(enum_scope);
-        if (enum_scope->find_symbol_from_declaration(enumerator) == nullptr) {
-          SgEnumFieldSymbol *field_symbol = new SgEnumFieldSymbol(enumerator);
-          enum_scope->insert_symbol(enumerator->get_name(), field_symbol);
-        }
-      }
       sg_enum_decl->append_enumerator(enumerator);
+      ensure_enum_field_symbol(enumerator, enum_scope, sg_enum_decl);
 
       // CLANG FRONTEND FIX: Set declptr for enum constant's SgInitializedName
       // declptr should point to the enum declaration that contains this
@@ -8703,6 +8730,13 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
     sg_enum_decl->set_definingDeclaration(sg_prev_enum_decl);
     sg_enum_decl->set_firstNondefiningDeclaration(
         sg_prev_enum_decl->get_firstNondefiningDeclaration());
+    SgScopeStatement *enum_scope = symbol_scope;
+    if (enum_scope == nullptr) {
+      enum_scope = getGlobalScope();
+    }
+    for (SgInitializedName *enumerator : sg_prev_enum_decl->get_enumerators()) {
+      ensure_enum_field_symbol(enumerator, enum_scope, sg_prev_enum_decl);
+    }
   }
 
   // REX FIX: Handle AS_none for EnumDecl

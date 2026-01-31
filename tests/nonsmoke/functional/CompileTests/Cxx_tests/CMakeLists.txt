@@ -74,6 +74,10 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2026_for_init_scope.cpp
   rex_test2026_axpy_system_headers.cpp
   rex_test2026_stl_incremental.cpp
+  rex_test2026_stl_map.cpp
+  rex_test2026_stl_meta.cpp
+  rex_test2026_sfinae.cpp
+  rex_test2026_dependent_qualification.cpp
   rex_test2026_extern_c_brace_roundtrip.cpp
   rex_test2025_issue88.cpp
   rex_test2025_issue89_alias.cpp
@@ -3377,6 +3381,7 @@ set(CXX_TESTCODES_GNUXX14
 )
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX14})
 
+
 set(ROSE_DISABLED_TESTCODES ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED})
 set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
 
@@ -3423,6 +3428,7 @@ foreach(file_to_test ${CXX_TESTCODES_GNUXX14})
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 set(ROSE_FLAGS ${_rose_flags_default})
+
 
 foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
@@ -4757,6 +4763,45 @@ set_tests_properties(Cxx_tests_rex_test2025_issue90_array_dim_template_param PRO
 rex_lock_test_for_input(
   Cxx_tests_rex_test2025_issue90_array_dim_template_param
   rex_test2025_issue90_array_dim.cpp)
+
+# rex_test2026: concepts/constraints should unparse and compile under C++20.
+add_test(
+  NAME Cxx_tests_rex_test2026_concepts_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2026_concepts.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -std=c++20
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_concepts.cpp
+)
+set_tests_properties(Cxx_tests_rex_test2026_concepts_unparse PROPERTIES
+  LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_concepts_unparse
+  rex_test2026_concepts.cpp)
+
+# rex_test2026: dependent template qualification should round-trip.
+add_test(
+  NAME Cxx_tests_rex_test2026_dependent_qualification_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && ${CMAKE_CXX_COMPILER} -std=c++17 -c rose_rex_test2026_dependent_qualification.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_dependent_qualification.cpp
+)
+set_tests_properties(Cxx_tests_rex_test2026_dependent_qualification_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_dependent_qualification_unparse
+  rex_test2026_dependent_qualification.cpp)
 
 # Makefile check targets.
 set(_cxx_check_local_tests)

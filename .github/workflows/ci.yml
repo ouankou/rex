@@ -85,11 +85,12 @@ jobs:
         LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
       run: |
         cd $GITHUB_WORKSPACE/build
+        CTEST_JOBS="$(nproc)"
         # astInterface exercises Clang frontend
-        ctest -R astInterface
+        ctest -R astInterface -j"${CTEST_JOBS}"
         # translatorTests (excluding two known disabled cases in CTest)
         # ctest -R "Translator_"
         # astQuery exercises query helpers
-        ctest -R "testQuery"
+        ctest -R "testQuery" -j"${CTEST_JOBS}"
         # Run all rex-prefixed regression tests
-        ctest -R rex
+        ctest -R rex -j"${CTEST_JOBS}"
