@@ -7717,7 +7717,11 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   if (specialization_kind == clang::TSK_ImplicitInstantiation ||
       specialization_kind == clang::TSK_ExplicitInstantiationDefinition ||
       specialization_kind == clang::TSK_ExplicitInstantiationDeclaration) {
+#if LLVM_VERSION_MAJOR >= 21
+    llvm::SmallVector<clang::AssociatedConstraint, 4> constraints;
+#else
     llvm::SmallVector<const clang::Expr *, 4> constraints;
+#endif
     const clang::NamedDecl *constraint_owner = nullptr;
     if (const clang::ClassTemplatePartialSpecializationDecl *partial =
             llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
@@ -10639,6 +10643,47 @@ ClangToSageTranslator::translateConstraintExpression(const clang::Expr *expr) {
   return buildFallbackExpression(expr);
 }
 
+#if LLVM_VERSION_MAJOR >= 21
+ConstraintSatisfactionResult
+ClangToSageTranslator::evaluateConstraintSatisfaction(
+    const clang::NamedDecl *constraint_owner,
+    llvm::ArrayRef<clang::AssociatedConstraint> constraints,
+    llvm::ArrayRef<clang::TemplateArgument> template_args,
+    clang::SourceRange template_id_range) {
+  ConstraintSatisfactionResult result;
+  if (constraint_owner == nullptr || constraints.empty()) {
+    return result;
+  }
+  if (p_compiler_instance == nullptr || !p_compiler_instance->hasSema()) {
+    return result;
+  }
+
+  clang::Sema &sema = p_compiler_instance->getSema();
+  clang::ConstraintSatisfaction satisfaction(constraint_owner, template_args);
+  clang::MultiLevelTemplateArgumentList arg_list(
+      const_cast<clang::Decl *>(llvm::dyn_cast<clang::Decl>(constraint_owner)),
+      template_args, /*Final=*/true);
+
+  bool error = sema.CheckConstraintSatisfaction(
+      constraint_owner, constraints, arg_list, template_id_range, satisfaction);
+  result.evaluated = true;
+  result.contains_errors = error || satisfaction.ContainsErrors;
+  result.substitution_failure = satisfaction.HasSubstitutionFailure();
+  result.satisfied = !result.contains_errors && satisfaction.IsSatisfied;
+  return result;
+}
+
+ConstraintSatisfactionResult
+ClangToSageTranslator::evaluateConstraintSatisfaction(
+    const clang::NamedDecl *constraint_owner,
+    llvm::ArrayRef<clang::AssociatedConstraint> constraints,
+    const clang::TemplateArgumentList &template_args,
+    clang::SourceRange template_id_range) {
+  return evaluateConstraintSatisfaction(constraint_owner, constraints,
+                                        template_args.asArray(),
+                                        template_id_range);
+}
+#else
 ConstraintSatisfactionResult
 ClangToSageTranslator::evaluateConstraintSatisfaction(
     const clang::NamedDecl *constraint_owner,
@@ -10678,6 +10723,7 @@ ClangToSageTranslator::evaluateConstraintSatisfaction(
                                         template_args.asArray(),
                                         template_id_range);
 }
+#endif
 
 void ClangToSageTranslator::attachConstraintSatisfaction(
     SgNode *node, const ConstraintSatisfactionResult &result) {
@@ -12482,7 +12528,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       if (specialization_kind == clang::TSK_ImplicitInstantiation ||
           specialization_kind == clang::TSK_ExplicitInstantiationDefinition ||
           specialization_kind == clang::TSK_ExplicitInstantiationDeclaration) {
+#if LLVM_VERSION_MAJOR >= 21
+        llvm::SmallVector<clang::AssociatedConstraint, 4> constraints;
+#else
         llvm::SmallVector<const clang::Expr *, 4> constraints;
+#endif
         const clang::NamedDecl *constraint_owner = nullptr;
         clang::FunctionTemplateDecl *primary =
             function_decl->getPrimaryTemplate();
@@ -12497,7 +12547,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           constraint_owner = primary;
         }
 
+#if LLVM_VERSION_MAJOR >= 21
+        llvm::SmallVector<clang::AssociatedConstraint, 4> trailing_constraints;
+#else
         llvm::SmallVector<const clang::Expr *, 4> trailing_constraints;
+#endif
         function_decl->getAssociatedConstraints(trailing_constraints);
         constraints.append(trailing_constraints.begin(),
                            trailing_constraints.end());
@@ -14741,6 +14795,37 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
+#if LLVM_VERSION_MAJOR >= 21
+  const clang::AssociatedConstraint &trailing_requires =
+      function_decl->getTrailingRequiresClause();
+  if (trailing_requires && trailing_requires.ConstraintExpr != nullptr) {
+    if (SgExpression *sg_trailing =
+            translateConstraintExpression(trailing_requires.ConstraintExpr)) {
+      auto attach_trailing = [&](SgFunctionDeclaration *decl,
+                                 SgExpression *expr) {
+        if (decl == nullptr || expr == nullptr) {
+          return;
+        }
+        decl->set_trailingRequiresClause(expr);
+        expr->set_parent(decl);
+      };
+
+      attach_trailing(sg_function_decl, sg_trailing);
+      if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+              sg_function_decl->get_firstNondefiningDeclaration())) {
+        if (first_nondef != sg_function_decl) {
+          attach_trailing(first_nondef, clone_constraint_expr(sg_trailing));
+        }
+      }
+      if (SgFunctionDeclaration *def_decl = isSgFunctionDeclaration(
+              sg_function_decl->get_definingDeclaration())) {
+        if (def_decl != sg_function_decl) {
+          attach_trailing(def_decl, clone_constraint_expr(sg_trailing));
+        }
+      }
+    }
+  }
+#else
   if (const clang::Expr *trailing_requires =
           function_decl->getTrailingRequiresClause()) {
     if (SgExpression *sg_trailing =
@@ -14769,6 +14854,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
     }
   }
+#endif
 
   ensureFunctionParameterSymbols(sg_function_decl);
 
@@ -15513,7 +15599,11 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
   if (specialization_kind == clang::TSK_ImplicitInstantiation ||
       specialization_kind == clang::TSK_ExplicitInstantiationDeclaration ||
       specialization_kind == clang::TSK_ExplicitInstantiationDefinition) {
+#if LLVM_VERSION_MAJOR >= 21
+    llvm::SmallVector<clang::AssociatedConstraint, 4> constraints;
+#else
     llvm::SmallVector<const clang::Expr *, 4> constraints;
+#endif
     const clang::NamedDecl *constraint_owner = nullptr;
     if (const clang::VarTemplatePartialSpecializationDecl *partial =
             llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(

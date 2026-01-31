@@ -19,7 +19,13 @@
 
 #include <iosfwd>
 
+#include <llvm/Config/llvm-config.h>
+
+#if LLVM_VERSION_MAJOR >= 21
+#include <flang/Support/LangOptions.h>
+#else
 #include <flang/Common/LangOptions.h>
+#endif
 namespace llvm {
 class raw_ostream;
 }

@@ -727,6 +727,19 @@ protected:
   // Helper: Translate a constraint expression into a ROSE expression.
   SgExpression *translateConstraintExpression(const clang::Expr *expr);
 
+#if LLVM_VERSION_MAJOR >= 21
+  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
+      const clang::NamedDecl *constraint_owner,
+      llvm::ArrayRef<clang::AssociatedConstraint> constraints,
+      llvm::ArrayRef<clang::TemplateArgument> template_args,
+      clang::SourceRange template_id_range);
+
+  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
+      const clang::NamedDecl *constraint_owner,
+      llvm::ArrayRef<clang::AssociatedConstraint> constraints,
+      const clang::TemplateArgumentList &template_args,
+      clang::SourceRange template_id_range);
+#else
   ConstraintSatisfactionResult evaluateConstraintSatisfaction(
       const clang::NamedDecl *constraint_owner,
       llvm::ArrayRef<const clang::Expr *> constraints,
@@ -738,6 +751,7 @@ protected:
       llvm::ArrayRef<const clang::Expr *> constraints,
       const clang::TemplateArgumentList &template_args,
       clang::SourceRange template_id_range);
+#endif
 
   void attachConstraintSatisfaction(SgNode *node,
                                     const ConstraintSatisfactionResult &result);

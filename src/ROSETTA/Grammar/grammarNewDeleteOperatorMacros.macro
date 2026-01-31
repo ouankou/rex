@@ -21,6 +21,8 @@
 #    endif
 #endif
 
+#include <cstdint>
+
 #ifndef ROSE_ALLOC_TRACE
 #  define ROSE_ALLOC_TRACE 0
 #endif
@@ -135,8 +137,14 @@ void *$CLASSNAME::operator new ( size_t Size )
                                   V_$CLASSNAME,
                                   &SgNode::PoolResetter<$CLASSNAME>::reset};
           size_t insert_pos = 0;
-          while (insert_pos < all_pools.size() &&
-                 all_pools[insert_pos].base < entry.base) {
+          std::uintptr_t entry_base =
+              reinterpret_cast<std::uintptr_t>(entry.base);
+          while (insert_pos < all_pools.size()) {
+            std::uintptr_t pool_base =
+                reinterpret_cast<std::uintptr_t>(all_pools[insert_pos].base);
+            if (pool_base >= entry_base) {
+              break;
+            }
             ++insert_pos;
           }
           all_pools.insert(all_pools.begin() + insert_pos, entry);
@@ -226,12 +234,18 @@ void $CLASSNAME::operator delete(void *Pointer, size_t Size)
     size_t pool_index = 0;
     size_t slot_index = 0;
     bool found_pool = false;
+    std::uintptr_t object_addr =
+        reinterpret_cast<std::uintptr_t>(object_bytes);
     for (size_t i = 0; i < $CLASSNAME::pools.size(); ++i) {
       unsigned char * base = $CLASSNAME::pools[i];
-      unsigned char * end = base + $CLASSNAME::pool_size * sizeof($CLASSNAME);
-      if (object_bytes >= base && object_bytes < end) {
+      std::uintptr_t base_addr =
+          reinterpret_cast<std::uintptr_t>(base);
+      std::uintptr_t end_addr =
+          base_addr + $CLASSNAME::pool_size * sizeof($CLASSNAME);
+      if (object_addr >= base_addr && object_addr < end_addr) {
         pool_index = i;
-        slot_index = static_cast<size_t>(object_bytes - base) / sizeof($CLASSNAME);
+        slot_index =
+            static_cast<size_t>((object_addr - base_addr) / sizeof($CLASSNAME));
         found_pool = true;
         break;
       }

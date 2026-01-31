@@ -1,4 +1,5 @@
 #include "clang-frontend-private.hpp"
+#include "clang-nns-utils.hpp"
 
 #include "clang-to-rose-support.hpp"
 
@@ -21,6 +22,10 @@
 #include <vector>
 
 #include "sageInterface.h"
+
+#if LLVM_VERSION_MAJOR >= 21
+#include <clang/AST/APValue.h>
+#endif
 
 #include <clang/AST/LambdaCapture.h>
 
@@ -628,7 +633,10 @@ ExplicitQualifierInfo getExplicitQualifierInfo(
         break;
       }
       case clang::NestedNameSpecifier::TypeSpec:
-      case clang::NestedNameSpecifier::TypeSpecWithTemplate: {
+#if LLVM_VERSION_MAJOR < 21
+      case clang::NestedNameSpecifier::TypeSpecWithTemplate:
+#endif
+      {
         const clang::Type *type = nns->getAsType();
         if (const clang::ElaboratedType *elab =
                 llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
@@ -672,7 +680,7 @@ ExplicitQualifierInfo getExplicitQualifierInfo(
       token_from_source = !token.empty();
     }
     if (!token.empty() && !token_from_source &&
-        nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate) {
+        nestedNameSpecifierHasTemplateKeyword(nns)) {
       token = "template " + token;
     }
     if (!token.empty()) {
@@ -8502,7 +8510,6 @@ bool ClangToSageTranslator::VisitIntegerLiteral(
   if (builtin_type != nullptr) {
     switch (builtin_type->getKind()) {
     case clang::BuiltinType::UChar:
-    case clang::BuiltinType::Char_U:
       if (has_spelling) {
         value_exp = SageBuilder::buildUnsignedCharVal_nfi(
             static_cast<unsigned char>(value.getLimitedValue()), spelling);
@@ -8555,6 +8562,15 @@ bool ClangToSageTranslator::VisitIntegerLiteral(
       } else {
         value_exp =
             SageBuilder::buildCharVal(static_cast<char>(value.getSExtValue()));
+      }
+      break;
+    case clang::BuiltinType::Char_U:
+      if (has_spelling) {
+        value_exp = SageBuilder::buildCharVal_nfi(
+            static_cast<char>(value.getZExtValue()), spelling);
+      } else {
+        value_exp =
+            SageBuilder::buildCharVal(static_cast<char>(value.getZExtValue()));
       }
       break;
     case clang::BuiltinType::Short:
@@ -10109,7 +10125,19 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
 
   if (!type_trait->isValueDependent()) {
     // Non-dependent: get the compile-time result and create a bool literal
-    bool trait_value = type_trait->getValue();
+    bool trait_value = false;
+#if LLVM_VERSION_MAJOR >= 21
+    if (type_trait->isStoredAsBoolean()) {
+      trait_value = type_trait->getBoolValue();
+    } else {
+      const clang::APValue &value = type_trait->getAPValue();
+      if (value.isInt()) {
+        trait_value = value.getInt().getBoolValue();
+      }
+    }
+#else
+    trait_value = type_trait->getValue();
+#endif
     *node = SageBuilder::buildBoolValExp(trait_value);
   } else {
     // Value-dependent (template parameter dependent): create an opaque type

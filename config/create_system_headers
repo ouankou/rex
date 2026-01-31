@@ -420,12 +420,26 @@ elif [ ! -r "$rose_system_cdefs_h" ]; then
     # The "
 
 #include </.../cdefs.h> in the ROSE-specific cdefs.h is wrong, so try to fix it.
-    # CLANG FRONTEND FIX: Exclude newlib paths and prefer architecture-specific paths.
-    # Look for arch-specific cdefs.h first (e.g., x86_64-linux-gnu, aarch64-linux-gnu, loongarch64-linux-gnu).
-    real_system_cdefs_h=$(find /usr/include -follow -name cdefs.h -path '*-linux-gnu/sys/cdefs.h' | head -n1)
-    # Fallback to generic search if arch-specific not found, but exclude newlib.
+    # CLANG FRONTEND FIX: Exclude newlib paths and prefer glibc sys/cdefs.h.
+    # Look for arch-specific sys/cdefs.h first (e.g., x86_64-linux-gnu,
+    # aarch64-linux-gnu, loongarch64-linux-gnu).
+    real_system_cdefs_h=$(find /usr/include -follow -path '*/sys/cdefs.h' \
+        -path '*-linux-gnu*/sys/cdefs.h' | head -n1)
+    # Prefer the canonical glibc location if present.
     if [ -z "$real_system_cdefs_h" ] || [ ! -r "$real_system_cdefs_h" ]; then
-        real_system_cdefs_h=$(find /usr/include -follow -name cdefs.h -not -path '*/newlib/*' | head -n1)
+        if [ -r /usr/include/sys/cdefs.h ]; then
+            real_system_cdefs_h=/usr/include/sys/cdefs.h
+        fi
+    fi
+    # Fallback to any sys/cdefs.h (excluding newlib and libbsd).
+    if [ -z "$real_system_cdefs_h" ] || [ ! -r "$real_system_cdefs_h" ]; then
+        real_system_cdefs_h=$(find /usr/include -follow -path '*/sys/cdefs.h' \
+            -not -path '*/newlib/*' -not -path '*/bsd/*' | head -n1)
+    fi
+    # Last resort: any cdefs.h except newlib.
+    if [ -z "$real_system_cdefs_h" ] || [ ! -r "$real_system_cdefs_h" ]; then
+        real_system_cdefs_h=$(find /usr/include -follow -name cdefs.h \
+            -not -path '*/newlib/*' | head -n1)
     fi
 
     if [ ! -r "$real_system_cdefs_h" ]; then

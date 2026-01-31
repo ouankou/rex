@@ -9,6 +9,8 @@
 
 #include "clang-frontend-utils.hpp"
 
+#include "clang-nns-utils.hpp"
+
 #include "sage3basic.h"
 
 #include "clang_paths.h"
@@ -137,6 +139,15 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
 
   inc_dirs_list.push_back(builtin_include_path);
 
+  auto append_unique_dirs = [](std::vector<std::string> &dest,
+                               const std::vector<std::string> &src) {
+    for (const auto &entry : src) {
+      if (std::find(dest.begin(), dest.end(), entry) == dest.end()) {
+        dest.push_back(entry);
+      }
+    }
+  };
+
   // FIXME add ROSE path to gcc headers...
   switch (language) {
   case ClangToDotTranslator::C:
@@ -147,11 +158,13 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
   case ClangToDotTranslator::CPLUSPLUS:
     inc_dirs_list.insert(inc_dirs_list.begin(), cxx_config_include_dirs.begin(),
                          cxx_config_include_dirs.end());
+    append_unique_dirs(inc_dirs_list, c_config_include_dirs);
     inc_list.push_back("clang-builtin-cpp.hpp");
     break;
   case ClangToDotTranslator::CUDA:
     inc_dirs_list.insert(inc_dirs_list.begin(), cxx_config_include_dirs.begin(),
                          cxx_config_include_dirs.end());
+    append_unique_dirs(inc_dirs_list, c_config_include_dirs);
     inc_list.push_back("clang-builtin-cuda.hpp");
     break;
   case ClangToDotTranslator::OPENCL:
@@ -204,14 +217,22 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
 
   llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs =
       llvm::vfs::createPhysicalFileSystem();
+#if LLVM_VERSION_MAJOR >= 21
+  auto diag_opts = std::make_shared<clang::DiagnosticOptions>();
+#else
   llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_opts =
       llvm::makeIntrusiveRefCnt<clang::DiagnosticOptions>();
+#endif
   auto compiler_instance = std::make_unique<clang::CompilerInstance>();
 
   // Create diagnostics with instance-specific filesystem (avoid global
   // singleton lifetime issues).
   auto diag_printer = std::make_unique<clang::TextDiagnosticPrinter>(
+#if LLVM_VERSION_MAJOR >= 21
+      llvm::errs(), *diag_opts);
+#else
       llvm::errs(), diag_opts.get());
+#endif
   compiler_instance->createDiagnostics(*vfs, diag_printer.release(), true);
 
   // Parse command-line arguments to populate invocation (including
@@ -749,15 +770,18 @@ void ClangToDotTranslator::VisitNestedNameSpecifier(
         Traverse(nested_name_specifier->getAsNamespaceAlias())));
     break;
   case clang::NestedNameSpecifier::TypeSpec:
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        prefix + " type_specifier",
-        Traverse(nested_name_specifier->getAsType())));
-    break;
+#if LLVM_VERSION_MAJOR < 21
   case clang::NestedNameSpecifier::TypeSpecWithTemplate:
+#endif
+  {
+    const char *label =
+        nestedNameSpecifierHasTemplateKeyword(nested_name_specifier)
+            ? "type_specifier_with_template"
+            : "type_specifier";
     node_desc.successors.push_back(std::pair<std::string, std::string>(
-        prefix + " type_specifier_with_template",
-        Traverse(nested_name_specifier->getAsType())));
+        prefix + " " + label, Traverse(nested_name_specifier->getAsType())));
     break;
+  }
   case clang::NestedNameSpecifier::Super:
     node_desc.attributes.push_back(
         std::pair<std::string, std::string>(prefix, "super"));

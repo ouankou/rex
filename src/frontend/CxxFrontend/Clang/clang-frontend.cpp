@@ -2,18 +2,18 @@
 #include <algorithm>
 
 #include <cctype>
-
 #include <cstdlib>
-
 #include <cstring>
-
 #include <iostream>
 
 #include <memory>
 
 #include <sstream>
 
+#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/Path.h>
+#include <llvm/Support/Program.h>
 
 #include "clang-frontend-private.hpp"
 
@@ -27,6 +27,9 @@
 
 #include "ompAstConstruction.h"
 
+#include <clang/Driver/Compilation.h>
+#include <clang/Driver/Driver.h>
+#include <clang/Driver/Job.h>
 #include <clang/Lex/Lexer.h>
 
 #include "rose_config.h"
@@ -907,47 +910,47 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     rtti_mode = RttiMode::Enabled;
   }
 
-  const char *cxx_config_include_dirs_array[] = CXX_INCLUDE_STRING;
-  const char *c_config_include_dirs_array[] = C_INCLUDE_STRING;
-
-  std::vector<std::string> cxx_config_include_dirs(
-      cxx_config_include_dirs_array,
-      cxx_config_include_dirs_array +
-          sizeof(cxx_config_include_dirs_array) / sizeof(const char *));
-  std::vector<std::string> c_config_include_dirs(
-      c_config_include_dirs_array,
-      c_config_include_dirs_array +
-          sizeof(c_config_include_dirs_array) / sizeof(const char *));
-
   RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
   std::string builtin_header_root = clang_paths.builtin_header_root;
 
-  dropRelativeIncludeDirs(c_config_include_dirs);
-  dropRelativeIncludeDirs(cxx_config_include_dirs);
-
   sys_dirs_list.push_back(builtin_header_root);
+
+  auto is_staged_clang_resource_dir = [](const std::string &path) -> bool {
+    if (path.find("_HEADERS") == std::string::npos ||
+        path.find("clang") == std::string::npos) {
+      return false;
+    }
+    std::string candidate = path;
+    if (!candidate.empty() && candidate.back() != '/') {
+      candidate += '/';
+    }
+    candidate += "stdint.h";
+    std::unique_ptr<char, decltype(&free)> resolved(
+        realpath(candidate.c_str(), NULL), &free);
+    if (!resolved) {
+      return false;
+    }
+    return std::string(resolved.get()).find("/lib/clang/") != std::string::npos;
+  };
+  auto filter_staged_resource_dirs = [&](std::vector<std::string> &dirs) {
+    dirs.erase(std::remove_if(dirs.begin(), dirs.end(),
+                              [&](const std::string &path) {
+                                return is_staged_clang_resource_dir(path);
+                              }),
+               dirs.end());
+  };
 
   switch (language) {
   case ClangToSageTranslator::C:
-    sys_dirs_list.insert(sys_dirs_list.begin(), c_config_include_dirs.begin(),
-                         c_config_include_dirs.end());
     inc_list.push_back("clang-builtin-c.h");
     break;
   case ClangToSageTranslator::CPLUSPLUS:
-    // Use configuration-driven cxx_config_include_dirs for portability
-    // across different platforms, architectures, and compiler versions
-    sys_dirs_list.insert(sys_dirs_list.begin(), cxx_config_include_dirs.begin(),
-                         cxx_config_include_dirs.end());
     inc_list.push_back("clang-builtin-cpp.hpp");
     break;
   case ClangToSageTranslator::CUDA:
-    sys_dirs_list.insert(sys_dirs_list.begin(), cxx_config_include_dirs.begin(),
-                         cxx_config_include_dirs.end());
     inc_list.push_back("clang-builtin-cuda.hpp");
     break;
   case ClangToSageTranslator::OPENCL:
-    sys_dirs_list.insert(sys_dirs_list.begin(), c_config_include_dirs.begin(),
-                         c_config_include_dirs.end());
     inc_list.push_back("clang-builtin-opencl.h");
     break;
   case ClangToSageTranslator::OBJC: {
@@ -963,6 +966,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // FIXME should be handle by Clang ?
   define_list.push_back("__I__=_Complex_I");
 
+  // Avoid staged Clang resource headers that cause include_next loops.
+  filter_staged_resource_dirs(sys_dirs_list);
+
   // If user explicitly provided -D_OPENMP=value on command line, honor it
   // Otherwise, when -fopenmp is passed to Clang (enable_openmp=true), Clang
   // will automatically define _OPENMP with the correct version for its OpenMP
@@ -972,8 +978,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // plain text and Clang's omp.h expects OpenMP-enabled parsing semantics.
 
   const size_t estimated_argc = 1 + define_list.size() + inc_dirs_list.size() +
-                                sys_dirs_list.size() + inc_list.size() +
-                                passthrough_args.size();
+                                (sys_dirs_list.size() * 2) +
+                                (inc_list.size() * 2) + passthrough_args.size();
   std::vector<std::string> args_storage;
   args_storage.reserve(estimated_argc);
   args_storage.push_back(language_arg);
@@ -984,10 +990,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     args_storage.push_back("-I" + inc_dir);
   }
   for (const auto &sys_dir : sys_dirs_list) {
-    args_storage.push_back("-isystem" + sys_dir);
+    args_storage.push_back("-isystem");
+    args_storage.push_back(sys_dir);
   }
   for (const auto &inc : inc_list) {
-    args_storage.push_back("-include" + inc);
+    args_storage.push_back("-include");
+    args_storage.push_back(inc);
   }
   for (const auto &pass : passthrough_args) {
     args_storage.push_back(pass);
@@ -998,6 +1006,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   for (const auto &arg : args_storage) {
     args.push_back(arg.c_str());
   }
+  if (std::getenv("ROSE_CLANG_DUMP_INCLUDES") != nullptr) {
+    std::cerr << "ROSE clang invocation args:\n";
+    for (const auto &arg : args_storage) {
+      std::cerr << "  " << arg << '\n';
+    }
+  }
 #if DEBUG_ARGS
   for (size_t index = 0; index < args.size(); ++index) {
     std::cerr << "args[" << index << "] = " << args[index] << std::endl;
@@ -1005,6 +1019,13 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 #endif
 
   // 2 - Create a compiler instance
+
+#if LLVM_VERSION_MAJOR >= 21
+  auto diag_opts = std::make_shared<clang::DiagnosticOptions>();
+#else
+  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_opts =
+      llvm::makeIntrusiveRefCnt<clang::DiagnosticOptions>();
+#endif
 
   auto compiler_instance = std::make_unique<clang::CompilerInstance>();
 
@@ -1022,28 +1043,191 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs =
       llvm::vfs::createPhysicalFileSystem();
 
-  // Use IntrusiveRefCntPtr for DiagnosticOptions to manage lifetime properly.
-  // TextDiagnosticPrinter stores a pointer to DiagOpts, so it must outlive the
-  // function scope. IntrusiveRefCntPtr ensures proper reference counting and
-  // cleanup.
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts =
-      llvm::makeIntrusiveRefCnt<clang::DiagnosticOptions>();
+  // TextDiagnosticPrinter keeps a reference to DiagnosticOptions; ensure it
+  // outlives the diagnostics engine for both LLVM 20 and LLVM 21+.
   clang::TextDiagnosticPrinter *diag_printer =
-      new clang::TextDiagnosticPrinter(llvm::errs(), DiagOpts.get());
+#if LLVM_VERSION_MAJOR >= 21
+      new clang::TextDiagnosticPrinter(llvm::errs(), *diag_opts);
+#else
+      new clang::TextDiagnosticPrinter(llvm::errs(), diag_opts.get());
+#endif
 
   // LLVM 20+ API - requires VFS as first parameter
   compiler_instance->createDiagnostics(*vfs, diag_printer, true);
 
   clang::CompilerInvocation &invocation = compiler_instance->getInvocation();
+  const std::string default_triple = llvm::sys::getDefaultTargetTriple();
 
-  // Parse command-line arguments to populate invocation (including
-  // FileSystemOptions like -working-directory, -sysroot)
-  llvm::ArrayRef<const char *> argsArrayRef(args.data(), args.size());
-  clang::CompilerInvocation::CreateFromArgs(
+  // Use Clang's driver to build cc1 arguments so target options (e.g. RISC-V
+  // ABI defaults) match the toolchain instead of cc1's soft-float defaults.
+  std::string driver_executable;
+  bool resolved_clang_driver = false;
+  auto resource_dir_has_header = [](const std::string &resource_dir,
+                                    llvm::StringRef header) -> bool {
+    if (resource_dir.empty()) {
+      return false;
+    }
+    llvm::SmallString<256> path(resource_dir);
+    llvm::sys::path::append(path, "include", header);
+    return llvm::sys::fs::exists(path);
+  };
+  auto normalize_llvm_root = [](const std::string &llvm_dir_in) -> std::string {
+    std::string llvm_dir = llvm_dir_in;
+    if (!llvm_dir.empty() && llvm_dir.back() == '/') {
+      llvm_dir.pop_back();
+    }
+    if (llvm_dir.empty()) {
+      return llvm_dir;
+    }
+    const std::string cmake_suffix = "/lib/cmake/llvm";
+    const std::string cmake_suffix_version =
+        "/lib/cmake/llvm-" + std::to_string(LLVM_VERSION_MAJOR);
+    llvm::StringRef dir_ref(llvm_dir);
+    if (dir_ref.ends_with(cmake_suffix) ||
+        dir_ref.ends_with(cmake_suffix_version)) {
+      llvm::StringRef root_ref = llvm::sys::path::parent_path(dir_ref);
+      root_ref = llvm::sys::path::parent_path(root_ref);
+      root_ref = llvm::sys::path::parent_path(root_ref);
+      return root_ref.str();
+    }
+    return llvm_dir;
+  };
+  std::string llvm_root;
+  if (const char *llvm_dir_env = std::getenv("LLVM_DIR")) {
+    llvm_root = normalize_llvm_root(llvm_dir_env);
+  }
+  auto find_clang_in_root = [&](const std::string &root) -> std::string {
+    if (root.empty()) {
+      return std::string();
+    }
+    std::string candidate =
+        root + "/bin/clang-" + std::to_string(LLVM_VERSION_MAJOR);
+    if (llvm::sys::fs::exists(candidate)) {
+      return candidate;
+    }
+    candidate = root + "/bin/clang";
+    if (llvm::sys::fs::exists(candidate)) {
+      return candidate;
+    }
+    return std::string();
+  };
+  std::string clang_driver_path;
+  {
+    const std::string versioned_clang =
+        "clang-" + std::to_string(LLVM_VERSION_MAJOR);
+    clang_driver_path = find_clang_in_root(llvm_root);
+    if (clang_driver_path.empty()) {
+      if (auto clang_path = llvm::sys::findProgramByName(versioned_clang)) {
+        clang_driver_path = clang_path.get();
+      } else if (auto clang_path = llvm::sys::findProgramByName("clang")) {
+        clang_driver_path = clang_path.get();
+      }
+    }
+    if (!clang_driver_path.empty()) {
+      driver_executable = clang_driver_path;
+      resolved_clang_driver = true;
+    } else if (driver_argv0 && *driver_argv0 != '\0') {
+      driver_executable = driver_argv0;
+    } else {
+      driver_executable = "clang";
+    }
+  }
+
+  std::vector<const char *> driver_args;
+  driver_args.reserve(args_storage.size() + 2);
+  driver_args.push_back(driver_executable.c_str());
+  for (const auto &arg : args_storage) {
+    driver_args.push_back(arg.c_str());
+  }
+  if (!input_file.empty()) {
+    driver_args.push_back(input_file.c_str());
+  }
+
+  clang::driver::Driver driver(driver_executable, default_triple,
+                               compiler_instance->getDiagnostics());
+  driver.setCheckInputsExist(false);
+  driver.setTitle("clang");
+  std::string resource_dir_candidate;
+  if (!clang_driver_path.empty()) {
+    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
+        clang_driver_path.c_str(), (void *)&clang_main);
+  } else if (!llvm_root.empty()) {
+    const std::string llvm_fallback =
+        llvm_root + "/bin/clang-" + std::to_string(LLVM_VERSION_MAJOR);
+    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
+        llvm_fallback.c_str(), (void *)&clang_main);
+  } else if (resolved_clang_driver) {
+    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
+        driver_executable.c_str(), (void *)&clang_main);
+  }
+  if (!resource_dir_candidate.empty() &&
+      resource_dir_has_header(resource_dir_candidate, "stddef.h")) {
+    driver.ResourceDir = resource_dir_candidate;
+  }
+
+  std::unique_ptr<clang::driver::Compilation> compilation(
+      driver.BuildCompilation(driver_args));
+  if (!compilation) {
+    llvm::errs() << "Failed to build Clang driver compilation for frontend.\n";
+    ROSE_ABORT();
+  }
+
+  const clang::driver::Command *cc1_command = nullptr;
+  for (const auto &job : compilation->getJobs()) {
+    const auto *command = llvm::dyn_cast<clang::driver::Command>(&job);
+    if (!command) {
+      continue;
+    }
+    const auto &command_args = command->getArguments();
+    for (const char *arg : command_args) {
+      if (arg && std::strcmp(arg, "-cc1") == 0) {
+        cc1_command = command;
+        break;
+      }
+    }
+    if (cc1_command) {
+      break;
+    }
+  }
+
+  if (!cc1_command) {
+    llvm::errs()
+        << "Failed to locate Clang cc1 command for frontend invocation.\n";
+    ROSE_ABORT();
+  }
+
+  const auto &cc1_args = cc1_command->getArguments();
+  std::vector<std::string> cc1_args_storage;
+  cc1_args_storage.reserve(cc1_args.size());
+  for (const char *arg : cc1_args) {
+    if (arg) {
+      cc1_args_storage.emplace_back(arg);
+    } else {
+      cc1_args_storage.emplace_back();
+    }
+  }
+  std::vector<const char *> cc1_args_cstr;
+  cc1_args_cstr.reserve(cc1_args_storage.size());
+  for (const auto &arg : cc1_args_storage) {
+    cc1_args_cstr.push_back(arg.c_str());
+  }
+  llvm::ArrayRef<const char *> argsArrayRef(cc1_args_cstr.data(),
+                                            cc1_args_cstr.size());
+  bool invocation_ok = clang::CompilerInvocation::CreateFromArgs(
       invocation, argsArrayRef, compiler_instance->getDiagnostics());
+  if (!invocation_ok) {
+    llvm::errs() << "Failed to create Clang invocation from cc1 arguments.\n";
+    ROSE_ABORT();
+  }
   clang::TargetOptions &target_opts = invocation.getTargetOpts();
   ensureX86BaselineTargetFeatures(target_opts);
-  llvm::Triple target_triple(target_opts.Triple);
+
+  std::string invocation_triple = target_opts.Triple;
+  if (invocation_triple.empty()) {
+    invocation_triple = default_triple;
+    target_opts.Triple = invocation_triple;
+  }
+  const llvm::Triple target_triple(invocation_triple);
 
   // CLANG FRONTEND FIX: Configure header search paths properly
   // WHY: Default paths may point to incorrect locations (e.g.,
@@ -1063,11 +1247,61 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   clang::HeaderSearchOptions &headerSearchOpts =
       invocation.getHeaderSearchOpts();
 
-  // Enable Clang's builtin includes (provides compiler-specific headers like
-  // stddef.h)
+  // Ensure Clang's builtin and system include paths are active for both
+  // LLVM 20 and 21 so the resource-dir headers are always available.
   headerSearchOpts.UseBuiltinIncludes = true;
   headerSearchOpts.UseStandardSystemIncludes = true;
   headerSearchOpts.UseStandardCXXIncludes = true;
+
+  if (headerSearchOpts.ResourceDir.empty()) {
+    if (!driver.ResourceDir.empty()) {
+      headerSearchOpts.ResourceDir = driver.ResourceDir;
+    } else {
+      headerSearchOpts.ResourceDir =
+          clang::CompilerInvocation::GetResourcesPath(driver_executable.c_str(),
+                                                      (void *)&clang_main);
+    }
+  } else if (!resource_dir_has_header(headerSearchOpts.ResourceDir,
+                                      "stddef.h")) {
+    if (!driver.ResourceDir.empty() &&
+        resource_dir_has_header(driver.ResourceDir, "stddef.h")) {
+      headerSearchOpts.ResourceDir = driver.ResourceDir;
+    } else if (!resource_dir_candidate.empty() &&
+               resource_dir_has_header(resource_dir_candidate, "stddef.h")) {
+      headerSearchOpts.ResourceDir = resource_dir_candidate;
+    }
+  }
+
+  if (std::getenv("ROSE_CLANG_DUMP_INCLUDES") != nullptr) {
+    llvm::errs() << "ROSE clang header search paths:\n";
+    llvm::errs() << "  [driver-executable] " << driver_executable << "\n";
+    llvm::errs() << "  [driver-resolved] "
+                 << (resolved_clang_driver ? "yes" : "no") << "\n";
+    if (const char *llvm_dir_env = std::getenv("LLVM_DIR")) {
+      llvm::errs() << "  [env LLVM_DIR] " << llvm_dir_env << "\n";
+    }
+    llvm::errs() << "  [resource-dir] " << headerSearchOpts.ResourceDir << "\n";
+    llvm::errs() << "  [builtin-includes] "
+                 << (headerSearchOpts.UseBuiltinIncludes ? "on" : "off")
+                 << "\n";
+    llvm::errs() << "  [standard-system-includes] "
+                 << (headerSearchOpts.UseStandardSystemIncludes ? "on" : "off")
+                 << "\n";
+    llvm::errs() << "  [standard-cxx-includes] "
+                 << (headerSearchOpts.UseStandardCXXIncludes ? "on" : "off")
+                 << "\n";
+    for (const auto &entry : headerSearchOpts.UserEntries) {
+      llvm::StringRef group_name = "user";
+      if (entry.Group == clang::frontend::System) {
+        group_name = "system";
+      } else if (entry.Group == clang::frontend::CXXSystem) {
+        group_name = "cxx-system";
+      } else if (entry.Group == clang::frontend::CSystem) {
+        group_name = "c-system";
+      }
+      llvm::errs() << "  [" << group_name << "] " << entry.Path << "\n";
+    }
+  }
 
   // ResourceDir and system include paths are already correctly set by
   // CreateFromArgs() based on the Clang installation and target triple. Do NOT

@@ -85,7 +85,10 @@ public:
   static void set_arrayInfo(ArrayAbstractionInterface *array) {
     arrayInfo = array;
   }
+  static ArrayAbstractionInterface *get_arrayInfo() { return arrayInfo; }
   static void set_astInterface(AstInterface &_fa);
+  static AstInterface *get_astInterface() { return fa; }
+  static void set_astInterfacePtr(AstInterface *fa_ptr) { fa = fa_ptr; }
   static void set_tuningInterface(AutoTuningInterface *_tuning);
   static void cmdline_configure(std::vector<std::string> &argv);
 

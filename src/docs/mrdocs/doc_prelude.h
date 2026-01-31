@@ -55,10 +55,6 @@
 
 #include "docs/mrdocs/rose/ast_properties.h"
 
-#include "docs/mrdocs/rose/binary_analysis_mainpage.h"
-
-#include "docs/mrdocs/rose/binary_tutorial.h"
-
 #include "docs/mrdocs/rose/commit_messages.h"
 
 #include "docs/mrdocs/rose/default_constructor_destructor.h"

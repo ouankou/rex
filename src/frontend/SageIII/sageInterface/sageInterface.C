@@ -21153,18 +21153,26 @@ bool SageInterface::collectReadWriteRefs(
   AstInterfaceImpl faImpl(funcBody);
   AstInterface fa(&faImpl);
   ArrayAnnotation *annot = ArrayAnnotation::get_inst();
+  ArrayAbstractionInterface *saved_array_info =
+      LoopTransformInterface::get_arrayInfo();
+  AstInterface *saved_ast = LoopTransformInterface::get_astInterface();
+  FunctionSideEffectInterface *saved_side =
+      LoopTransformInterface::getSideEffectInterface();
+  ArrayInterface *array_info = nullptr;
+  ArrayInterface local_array_interface(*annot);
+  bool observing_array_info = false;
   if (useCachedDefUse) {
-    ArrayInterface *array_interface =
+    array_info =
         ArrayInterface::get_inst(*annot, fa, funcDef, AstNodePtrImpl(funcDef));
-    LoopTransformInterface::set_arrayInfo(array_interface);
   } else {
-    ArrayInterface array_interface(*annot);
     // Alias analysis and value propagation are called in initialize(). Turn
     // both off for now.
     //    array_interface.initialize(fa, AstNodePtrImpl(funcDef));
-    array_interface.observe(fa);
-    LoopTransformInterface::set_arrayInfo(&array_interface);
+    local_array_interface.observe(fa);
+    observing_array_info = true;
+    array_info = &local_array_interface;
   }
+  LoopTransformInterface::set_arrayInfo(array_info);
   LoopTransformInterface::set_astInterface(fa);
   // Liao, 3/27/2015. connect to annotations for function side effect
   LoopTransformInterface::set_sideEffectInfo(annot);
@@ -21207,6 +21215,13 @@ bool SageInterface::collectReadWriteRefs(
     //  cout<<"write reference:"<<sgRef->unparseToString()<<" address "<<sgRef<<
     //      " sage type:"<< sgRef->class_name()<< endl;
   }
+
+  if (observing_array_info) {
+    local_array_interface.stop_observe(fa);
+  }
+  LoopTransformInterface::set_arrayInfo(saved_array_info);
+  LoopTransformInterface::set_astInterfacePtr(saved_ast);
+  LoopTransformInterface::set_sideEffectInfo(saved_side);
 
 #endif
 

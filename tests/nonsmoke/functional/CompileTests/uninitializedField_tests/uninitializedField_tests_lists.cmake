@@ -2130,7 +2130,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test2014_71.C
   test2014_111.C
   test2013_63.C
-  test2013_246.C
   test2013_235.C
   test2014_187.C
   test2014_187_work_around.C

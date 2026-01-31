@@ -2611,7 +2611,11 @@ bool AstInterface::IsAddressOfOp(const AstNodePtr &_s) {
 bool AstInterface::IsMemoryAllocation(const AstNodePtr &s, AstNodeType *exptype,
                                       AstNodePtr *init) {
   AstNodePtrImpl s1 = SkipCasting(s.get_ptr()), f;
-  if (s1.get_ptr() == nullptr) {
+  SgNode *node = s1.get_ptr();
+  if (node == nullptr) {
+    return false;
+  }
+  if (isSgExpression(node) == nullptr && isSgExprStatement(node) == nullptr) {
     return false;
   }
   AstInterfaceImpl astImpl(s1.get_ptr());
@@ -2649,7 +2653,11 @@ bool AstInterface::IsMemoryFree(const AstNodePtr &s, AstNodeType *exptype,
                                 AstNodePtr *variable) {
   AstNodePtrImpl s1 = SkipCasting(s.get_ptr()), f;
   AstNodeList params;
-  if (s1.get_ptr() == nullptr) {
+  SgNode *node = s1.get_ptr();
+  if (node == nullptr) {
+    return false;
+  }
+  if (isSgExpression(node) == nullptr && isSgExprStatement(node) == nullptr) {
     return false;
   }
   AstInterfaceImpl astImpl(s1.get_ptr());
@@ -2726,6 +2734,9 @@ bool AstInterface::IsMemoryAccess(const AstNodePtr &_s) {
 bool AstInterface::IsArrayAccess(const AstNodePtr &_s, AstNodePtr *array,
                                  AstList *index) {
   SgNode *s = AstNodePtrImpl(_s).get_ptr();
+  if (s == nullptr) {
+    return false;
+  }
   if (s->variantT() == V_SgDotExp) {
     SgDotExp *dot = isSgDotExp(s);
     if (!IsVarRef(AstNodePtrImpl(dot->get_rhs_operand())))
@@ -3058,6 +3069,9 @@ bool AstInterface::IsBlock(const AstNodePtr &_exp) {
 //! Check if $s$ is a function call; if yes, return the function and arguments
 bool AstInterfaceImpl::IsFunctionCall(SgNode *s, SgNode **func,
                                       AstNodeList *args) {
+  if (s == nullptr) {
+    return false;
+  }
   SgNode *exp = s;
   SgNode *f = 0;
   SgExprListExp *argexp = 0;
@@ -3251,7 +3265,7 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
     if (outargs != 0) {
       AstNodeList::const_iterator p1 = args->begin();
       for (AstTypeList::const_iterator p = paramtypes->begin();
-           p != paramtypes->end(); ++p, ++p1) {
+           p != paramtypes->end() && p1 != args->end(); ++p, ++p1) {
         SgType *t = AstNodeTypeImpl(*p).get_ptr();
         if (t != 0 && t->variantT() == V_SgReferenceType) {
           auto *modifier = isSgConstVolatileModifier(t->get_modifiers());

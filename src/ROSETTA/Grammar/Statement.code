@@ -10879,8 +10879,8 @@ SgVariableDeclaration::initializeData(Sg_File_Info *info, SgInitializedName* c_i
   // DQ(10/10/2007): Added initialization of another data member.
      p_baseTypeDefiningDeclaration = NULL; // non list case
 
- // DQ (02/10/2026): Ensure requires clause pointer is initialized for
- // all constructors that delegate to this helper.
+  // Ensure requires clause pointer is initialized for all constructors
+  // that delegate to this helper.
     p_requiresClause = NULL;
 
   // DQ(10/10/2007): Added initialization of another data member.

@@ -527,8 +527,23 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   list(REMOVE_DUPLICATES FLANG_INCLUDE_DIRS)
   set(FLANG_INCLUDE_DIRS "${FLANG_INCLUDE_DIRS}" CACHE INTERNAL "Flang include dirs")
 
-  set(_flang_lib_names FortranCommon FortranParser FortranSemantics
-    FortranEvaluate FortranLower FortranRuntime FortranDecimal)
+  if(NOT DEFINED LLVM_VERSION_MAJOR)
+    if(LLVM_PACKAGE_VERSION)
+      string(REPLACE "." ";" _rose_llvm_version_parts "${LLVM_PACKAGE_VERSION}")
+      list(GET _rose_llvm_version_parts 0 LLVM_VERSION_MAJOR)
+      unset(_rose_llvm_version_parts)
+    endif()
+  endif()
+
+  set(_flang_lib_names FortranParser FortranSemantics
+    FortranEvaluate FortranLower FortranDecimal)
+  if(LLVM_VERSION_MAJOR GREATER_EQUAL 21)
+    list(APPEND _flang_lib_names FortranSupport)
+    set(_flang_optional_lib_names FortranCommon FortranRuntime)
+  else()
+    list(APPEND _flang_lib_names FortranCommon FortranRuntime)
+    set(_flang_optional_lib_names FortranSupport)
+  endif()
   set(FLANG_LIBS "")
   set(_flang_missing "")
   foreach(_flang_lib ${_flang_lib_names})
@@ -545,6 +560,27 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   endforeach()
   if(_flang_missing)
     message(FATAL_ERROR "Flang libraries not found: ${_flang_missing}. Set -DFLANG_ROOT=... or disable ENABLE-FORTRAN-FLANG.")
+  endif()
+
+  foreach(_flang_lib ${_flang_optional_lib_names})
+    unset(_flang_lib_path CACHE)
+    find_library(_flang_lib_path NAMES ${_flang_lib} PATHS ${_flang_search_dirs} NO_DEFAULT_PATH)
+    if(NOT _flang_lib_path)
+      find_library(_flang_lib_path NAMES ${_flang_lib})
+    endif()
+    if(_flang_lib_path)
+      list(APPEND FLANG_LIBS ${_flang_lib_path})
+    endif()
+  endforeach()
+
+  if(LLVM_VERSION_MAJOR GREATER_EQUAL 21 AND LLVM_LIBRARY_DIRS)
+    file(GLOB _rose_flang_rt_candidates
+      "${LLVM_LIBRARY_DIRS}/clang/*/lib/*/libflang_rt.runtime*"
+      "${LLVM_LIBRARY_DIRS}/clang/*/lib/libflang_rt.runtime*")
+    if(_rose_flang_rt_candidates)
+      list(APPEND FLANG_LIBS ${_rose_flang_rt_candidates})
+    endif()
+    unset(_rose_flang_rt_candidates)
   endif()
 
   include(TestBigEndian)
@@ -696,6 +732,17 @@ if(CLANG_VERSION_MAJOR GREATER_EQUAL 16)
 endif()
 if(CLANG_VERSION_MAJOR GREATER_EQUAL 18)
   list(APPEND CLANG_LIBS clangAPINotes clangTooling)
+endif()
+
+if(CLANG_VERSION_MAJOR GREATER_EQUAL 21)
+  # Some distributions do not ship clangARCMigrate; drop it when unavailable.
+  find_library(CLANG_ARCMIGRATE_LIB
+    NAMES clangARCMigrate
+    HINTS ${CLANG_LIBRARY_DIRS} ${LLVM_LIBRARY_DIRS})
+  if(NOT CLANG_ARCMIGRATE_LIB)
+    list(REMOVE_ITEM CLANG_LIBS clangARCMigrate)
+    message(WARNING "clangARCMigrate not found; disabling ARC migration support.")
+  endif()
 endif()
 
 set(_rose_clang_cpp_candidates

@@ -3493,8 +3493,7 @@ void SageTreeBuilder::Enter(SgTypedefDeclaration *&type_def,
       << "SageTreeBuilder::Enter(SgTypedefDeclaration*) \n";
   SgScopeStatement *scope = SageBuilder::topScopeStack();
 
-  type_def =
-      SageBuilder::buildTypedefDeclaration_nfi(name, type, scope, nullptr);
+  type_def = SageBuilder::buildTypedefDeclaration_nfi(name, type, scope, false);
 
   // These things should be setup properly in SageBuilder?
   SgTypedefSymbol *symbol =
