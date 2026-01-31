@@ -58,6 +58,8 @@ set(noinst_programs
   normalizeArrowExpWithAddressOfLeftOperand
   templateQualification
   rex_test2026_getDependentDecls
+  rex_test2026_template_symbol_table
+  rex_test2026_null_expression_unparse
 )
 
 # Fortran-specific executables (only build when ENABLE-FORTRAN=ON)
@@ -131,6 +133,8 @@ set(group1_tests
   buildUsingDirectiveStatement
   normalizeArrowExpWithAddressOfLeftOperand
   rex_test2026_getDependentDecls
+  rex_test2026_template_symbol_table
+  rex_test2026_null_expression_unparse
 )
 
 foreach(test ${group1_tests})

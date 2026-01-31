@@ -2840,18 +2840,29 @@ string SageInterface::generateUniqueNameForUseAsIdentifier_support(
     ROSE_ASSERT(parameterList != NULL);
 
     SgFunctionDeclaration *functionDeclaration = NULL;
+    SgNode *param_parent = parameterList->get_parent();
     if (SgFunctionDeclaration *parentDecl =
-            isSgFunctionDeclaration(parameterList->get_parent())) {
+            isSgFunctionDeclaration(param_parent)) {
       functionDeclaration = parentDecl;
+    } else if (SgTemplateFunctionDeclaration *tmplDecl =
+                   isSgTemplateFunctionDeclaration(param_parent)) {
+      functionDeclaration = tmplDecl;
+    } else if (SgTemplateMemberFunctionDeclaration *tmplMember =
+                   isSgTemplateMemberFunctionDeclaration(param_parent)) {
+      functionDeclaration = tmplMember;
     } else if (SgFunctionDefinition *functionDef =
-                   isSgFunctionDefinition(parameterList->get_parent())) {
+                   isSgFunctionDefinition(param_parent)) {
       functionDeclaration = functionDef->get_declaration();
     }
 
     if (functionDeclaration != NULL) {
       string function_name =
-          generateUniqueNameForUseAsIdentifier_support(functionDeclaration);
-      s = function_name + "__params";
+          functionDeclaration->get_mangled_name().getString();
+      if (function_name.empty()) {
+        function_name =
+            generateUniqueNameForUseAsIdentifier_support(functionDeclaration);
+      }
+      s = function_name + "_params";
     } else {
       s = "params";
     }

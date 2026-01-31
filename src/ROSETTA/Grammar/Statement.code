@@ -3800,17 +3800,6 @@ SgStatement::get_scope(void) const
                break;
              }
 
-       // TV (05/28/2018): It can happen for SgDeclarationScope created to hold non-real declarations to be missing their parent...
-          case V_SgDeclarationScope:
-             {
-               SgStatement * pstmt = isSgStatement(get_parent());
-               returnScope = isSgScopeStatement(pstmt);
-               if (returnScope == NULL && pstmt != NULL) {
-                 returnScope = pstmt->get_scope();
-               }
-               return returnScope; // Skipping assert at the end
-               break;
-             }
        // DQ (11/7/03): If we are a ScopeStatment then reset the starting point for the search
        //               for the scopeStatement to the parent of the current node.
           default:

@@ -7130,10 +7130,32 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
     // Pei-Hung (04/07/2022) sym can be nullptr in the case for C99 VLA
     if (sym == nullptr && isSgInitializedName(tmp_decl) != nullptr) {
-      sym = new SgVariableSymbol(isSgInitializedName(tmp_decl));
-      sym->set_parent(tmp_decl);
-      SageBuilder::topScopeStack()->insert_symbol(
-          isSgInitializedName(tmp_decl)->get_name(), sym);
+      SgInitializedName *init_name = isSgInitializedName(tmp_decl);
+      if (init_name == nullptr) {
+        return false;
+      }
+
+      if (llvm::isa<clang::EnumConstantDecl>(decl_ref_expr->getDecl())) {
+        SgScopeStatement *init_scope =
+            normalizeNamespaceScope(init_name->get_scope());
+        if (init_scope == nullptr) {
+          init_scope = normalizeNamespaceScope(SageBuilder::topScopeStack());
+        }
+        if (init_scope != nullptr) {
+          SgEnumFieldSymbol *enum_sym =
+              init_scope->lookup_enum_field_symbol(init_name->get_name());
+          if (enum_sym == nullptr) {
+            enum_sym = new SgEnumFieldSymbol(init_name);
+            enum_sym->set_parent(init_name);
+            init_scope->insert_symbol(init_name->get_name(), enum_sym);
+          }
+          sym = enum_sym;
+        }
+      } else {
+        sym = new SgVariableSymbol(init_name);
+        sym->set_parent(tmp_decl);
+        SageBuilder::topScopeStack()->insert_symbol(init_name->get_name(), sym);
+      }
     }
   }
 

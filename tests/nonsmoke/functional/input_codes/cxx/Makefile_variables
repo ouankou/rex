@@ -1342,4 +1342,8 @@ ROSE__CXX_TESTS = \
 	rex_test2026_for_init_scope.cpp \
 	rex_test2026_axpy_system_headers.cpp \
 	rex_test2026_stl_incremental.cpp \
+	rex_test2026_stl_map.cpp \
+	rex_test2026_stl_meta.cpp \
+	rex_test2026_sfinae.cpp \
+	rex_test2026_dependent_qualification.cpp \
 	rex_test2026_extern_c_brace_roundtrip.cpp
