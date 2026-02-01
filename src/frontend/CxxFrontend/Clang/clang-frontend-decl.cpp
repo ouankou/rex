@@ -16749,6 +16749,13 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
   }
 
   resolvePendingSpecializedTemplateLinks();
+  if (!p_pending_specialized_template_links.empty()) {
+    std::cerr << "FATAL: " << p_pending_specialized_template_links.size()
+              << " unresolved specialized template links after translation "
+                 "unit processing"
+              << std::endl;
+    ROSE_ABORT();
+  }
 
   SageBuilder::popScopeStack();
 

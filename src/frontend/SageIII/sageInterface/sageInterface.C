@@ -7206,6 +7206,14 @@ bool SageInterface::templateArgumentEquivalence(SgTemplateArgument *arg1,
         return static_cast<SgIntVal *>(expr1)->get_value() ==
                static_cast<SgIntVal *>(expr2)->get_value();
       }
+      case V_SgShortVal: {
+        return static_cast<SgShortVal *>(expr1)->get_value() ==
+               static_cast<SgShortVal *>(expr2)->get_value();
+      }
+      case V_SgUnsignedShortVal: {
+        return static_cast<SgUnsignedShortVal *>(expr1)->get_value() ==
+               static_cast<SgUnsignedShortVal *>(expr2)->get_value();
+      }
       case V_SgLongLongIntVal: {
         return static_cast<SgLongLongIntVal *>(expr1)->get_value() ==
                static_cast<SgLongLongIntVal *>(expr2)->get_value();
@@ -7213,6 +7221,30 @@ bool SageInterface::templateArgumentEquivalence(SgTemplateArgument *arg1,
       case V_SgUnsignedIntVal: {
         return static_cast<SgUnsignedIntVal *>(expr1)->get_value() ==
                static_cast<SgUnsignedIntVal *>(expr2)->get_value();
+      }
+      case V_SgCharVal: {
+        return static_cast<SgCharVal *>(expr1)->get_value() ==
+               static_cast<SgCharVal *>(expr2)->get_value();
+      }
+      case V_SgSignedCharVal: {
+        return static_cast<SgSignedCharVal *>(expr1)->get_value() ==
+               static_cast<SgSignedCharVal *>(expr2)->get_value();
+      }
+      case V_SgUnsignedCharVal: {
+        return static_cast<SgUnsignedCharVal *>(expr1)->get_value() ==
+               static_cast<SgUnsignedCharVal *>(expr2)->get_value();
+      }
+      case V_SgWcharVal: {
+        return static_cast<SgWcharVal *>(expr1)->get_value() ==
+               static_cast<SgWcharVal *>(expr2)->get_value();
+      }
+      case V_SgChar16Val: {
+        return static_cast<SgChar16Val *>(expr1)->get_value() ==
+               static_cast<SgChar16Val *>(expr2)->get_value();
+      }
+      case V_SgChar32Val: {
+        return static_cast<SgChar32Val *>(expr1)->get_value() ==
+               static_cast<SgChar32Val *>(expr2)->get_value();
       }
       case V_SgUnsignedLongLongIntVal: {
         return static_cast<SgUnsignedLongLongIntVal *>(expr1)->get_value() ==
@@ -7225,8 +7257,8 @@ bool SageInterface::templateArgumentEquivalence(SgTemplateArgument *arg1,
         // DQ (7/21/2024): Adding support for another type (from processing
         // nlohmann/json.hpp with ROSE)
       case V_SgUnsignedLongVal: {
-        return ((SgUnsignedLongVal *)expr1)->get_value() ==
-               ((SgUnsignedLongVal *)expr2)->get_value();
+        return static_cast<SgUnsignedLongVal *>(expr1)->get_value() ==
+               static_cast<SgUnsignedLongVal *>(expr2)->get_value();
       }
         // PP (4/10/2025): Adding support for another type (from processing ROSE
         // with ROSE)
