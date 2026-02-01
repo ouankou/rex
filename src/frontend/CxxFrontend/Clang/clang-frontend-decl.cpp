@@ -13155,8 +13155,10 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         propagate_explicit_template_args(inst_symbol_decl);
 
         SgNode *primary_template_node = nullptr;
-        if (function_decl->getPrimaryTemplate() != nullptr) {
-          primary_template_node = Traverse(function_decl->getPrimaryTemplate());
+        if (clang::FunctionTemplateDecl *primary_template =
+                function_decl->getPrimaryTemplate()) {
+          primary_template_node = lookupSgDeclarationForClangDecl(
+              primary_template, /*allow_on_demand=*/true);
         }
         auto apply_template_instantiation_info =
             [&](SgFunctionDeclaration *decl, bool preserve_existing_explicit) {
@@ -16177,12 +16179,14 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
   if (clang::VarTemplatePartialSpecializationDecl *partial =
           llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(
               var_template_specialization_decl)) {
-    specialized_template_decl = lookup_template_decl(partial);
+    specialized_template_decl =
+        lookupSgDeclarationForClangDecl(partial, /*allow_on_demand=*/true);
   }
   if (specialized_template_decl == nullptr) {
     if (clang::VarTemplateDecl *primary =
             var_template_specialization_decl->getSpecializedTemplate()) {
-      specialized_template_decl = lookup_template_decl(primary);
+      specialized_template_decl =
+          lookupSgDeclarationForClangDecl(primary, /*allow_on_demand=*/true);
     }
   }
   if (specialized_template_decl != nullptr) {
