@@ -16,16 +16,7 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
-  if (target == nullptr) {
-    for (SgNode *node : nonreal_nodes) {
-      SgNonrealDecl *nr = isSgNonrealDecl(node);
-      if (nr != nullptr && nr->get_nonreal_decl_scope() != nullptr) {
-        target = nr;
-        break;
-      }
-    }
-  }
-  ROSE_ASSERT(target != nullptr);
+  ROSE_ASSERT(target != nullptr && "Could not find SgNonrealDecl for 'TT'");
 
   SgDeclarationScope *decl_scope = target->get_nonreal_decl_scope();
   ROSE_ASSERT(decl_scope != nullptr);

@@ -9988,62 +9988,12 @@ SgDeclarationScope *SageBuilder::buildDeclarationScope() {
   return nonreal_decl_scope;
 }
 
-namespace {
-template <typename Fn>
-bool dispatchNonrealDeclScopeOwner(SgDeclarationStatement *owner, Fn &&fn) {
-  if (auto *tmpl_class = isSgTemplateClassDeclaration(owner)) {
-    fn(tmpl_class);
-    return true;
-  }
-  if (auto *tmpl_func = isSgTemplateFunctionDeclaration(owner)) {
-    fn(tmpl_func);
-    return true;
-  }
-  if (auto *tmpl_member = isSgTemplateMemberFunctionDeclaration(owner)) {
-    fn(tmpl_member);
-    return true;
-  }
-  if (auto *tmpl_typedef = isSgTemplateTypedefDeclaration(owner)) {
-    fn(tmpl_typedef);
-    return true;
-  }
-  if (auto *tmpl_var = isSgTemplateVariableDeclaration(owner)) {
-    fn(tmpl_var);
-    return true;
-  }
-  if (auto *tmpl = isSgTemplateDeclaration(owner)) {
-    fn(tmpl);
-    return true;
-  }
-  if (auto *var_decl = isSgVariableDeclaration(owner)) {
-    fn(var_decl);
-    return true;
-  }
-  if (auto *nrdecl = isSgNonrealDecl(owner)) {
-    fn(nrdecl);
-    return true;
-  }
-  return false;
-}
-
-bool isNonrealDeclScopeOwner(SgDeclarationStatement *owner) {
-  if (owner == nullptr) {
-    return false;
-  }
-  return dispatchNonrealDeclScopeOwner(owner, [](auto *) {});
-}
-} // namespace
-
 SgDeclarationScope *
 SageBuilder::getNonrealDeclarationScope(SgDeclarationStatement *owner) {
   if (owner == nullptr) {
     return nullptr;
   }
-
-  SgDeclarationScope *scope = nullptr;
-  dispatchNonrealDeclScopeOwner(
-      owner, [&](auto *decl) { scope = decl->get_nonreal_decl_scope(); });
-  return scope;
+  return owner->get_nonreal_decl_scope();
 }
 
 bool SageBuilder::setNonrealDeclarationScope(SgDeclarationStatement *owner,
@@ -10051,9 +10001,8 @@ bool SageBuilder::setNonrealDeclarationScope(SgDeclarationStatement *owner,
   if (owner == nullptr || scope == nullptr) {
     return false;
   }
-
-  return dispatchNonrealDeclScopeOwner(
-      owner, [&](auto *decl) { decl->set_nonreal_decl_scope(scope); });
+  owner->set_nonreal_decl_scope(scope);
+  return true;
 }
 
 SgDeclarationScope *
@@ -10061,15 +10010,10 @@ SageBuilder::getOrCreateNonrealDeclarationScope(SgDeclarationStatement *owner) {
   if (owner == nullptr) {
     return nullptr;
   }
-
-  if (!isNonrealDeclScopeOwner(owner)) {
-    return nullptr;
-  }
-
-  SgDeclarationScope *scope = getNonrealDeclarationScope(owner);
+  SgDeclarationScope *scope = owner->get_nonreal_decl_scope();
   if (scope == nullptr) {
     scope = SageBuilder::buildDeclarationScope();
-    setNonrealDeclarationScope(owner, scope);
+    owner->set_nonreal_decl_scope(scope);
   }
 
   if (scope != nullptr && scope->get_parent() != owner) {

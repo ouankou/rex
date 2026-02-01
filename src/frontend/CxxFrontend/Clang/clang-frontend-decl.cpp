@@ -1730,7 +1730,7 @@ void attach_nonreal_template_parameters(
     return;
   }
 
-  SgNonrealDecl *first_nrdecl = nullptr;
+  std::vector<SgNonrealDecl *> nrdecls;
   for (SgTemplateParameter *param : params) {
     if (param == nullptr) {
       continue;
@@ -1738,13 +1738,13 @@ void attach_nonreal_template_parameters(
     if (param->get_parameterType() != SgTemplateParameter::template_parameter) {
       continue;
     }
-    first_nrdecl = isSgNonrealDecl(param->get_templateDeclaration());
-    if (first_nrdecl != nullptr) {
-      break;
+    if (SgNonrealDecl *nrdecl =
+            isSgNonrealDecl(param->get_templateDeclaration())) {
+      nrdecls.push_back(nrdecl);
     }
   }
 
-  if (first_nrdecl == nullptr) {
+  if (nrdecls.empty()) {
     return;
   }
 
@@ -1752,7 +1752,7 @@ void attach_nonreal_template_parameters(
       SageBuilder::getNonrealDeclarationScope(owner);
   if (decl_scope == nullptr) {
     SgDeclarationScope *candidate_scope =
-        isSgDeclarationScope(first_nrdecl->get_scope());
+        isSgDeclarationScope(nrdecls.front()->get_scope());
     if (candidate_scope != nullptr) {
       decl_scope = candidate_scope;
       SageBuilder::setNonrealDeclarationScope(owner, decl_scope);
@@ -1770,18 +1770,7 @@ void attach_nonreal_template_parameters(
     decl_scope->set_parent(owner);
   }
 
-  for (SgTemplateParameter *param : params) {
-    if (param == nullptr) {
-      continue;
-    }
-    if (param->get_parameterType() != SgTemplateParameter::template_parameter) {
-      continue;
-    }
-    SgNonrealDecl *nrdecl = isSgNonrealDecl(param->get_templateDeclaration());
-    if (nrdecl == nullptr) {
-      continue;
-    }
-
+  for (SgNonrealDecl *nrdecl : nrdecls) {
     if (SgScopeStatement *prev_scope = nrdecl->get_scope()) {
       if (prev_scope != decl_scope) {
         detach_decl_from_scope_child_list(nrdecl, prev_scope);
