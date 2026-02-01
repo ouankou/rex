@@ -10844,11 +10844,8 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
     return;
   }
 
-  std::vector<std::pair<SgTemplateInstantiationDecl *, clang::Decl *>>
-      remaining_links;
-  remaining_links.reserve(p_pending_specialized_template_links.size());
-
-  for (const auto &entry : p_pending_specialized_template_links) {
+  auto links_to_process = std::move(p_pending_specialized_template_links);
+  for (const auto &entry : links_to_process) {
     SgTemplateInstantiationDecl *inst_decl = entry.first;
     clang::Decl *specialized_decl = entry.second;
     if (inst_decl == nullptr || specialized_decl == nullptr) {
@@ -10864,10 +10861,9 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
       continue;
     }
 
-    remaining_links.emplace_back(inst_decl, specialized_decl);
+    p_pending_specialized_template_links.emplace_back(inst_decl,
+                                                      specialized_decl);
   }
-
-  p_pending_specialized_template_links.swap(remaining_links);
 }
 
 void ClangToSageTranslator::ensureMemberFunctionScope(
