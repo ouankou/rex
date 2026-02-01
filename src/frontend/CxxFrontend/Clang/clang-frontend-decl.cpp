@@ -16731,16 +16731,9 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
   }
 
   while (!p_pending_specialized_template_links.empty()) {
-    const size_t num_pending_before =
-        p_pending_specialized_template_links.size();
     const size_t resolved = resolvePendingSpecializedTemplateLinks();
-    const size_t num_pending_after =
-        p_pending_specialized_template_links.size();
-    if (num_pending_after == 0) {
-      break;
-    }
     if (resolved == 0) {
-      std::cerr << "FATAL: " << num_pending_after
+      std::cerr << "FATAL: " << p_pending_specialized_template_links.size()
                 << " unresolved specialized template links after translation "
                    "unit processing; resolution is not progressing."
                 << std::endl;
