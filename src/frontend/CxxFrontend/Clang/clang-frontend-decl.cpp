@@ -13237,13 +13237,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               }
 
               size_t limit = existing_args->size();
-              if (template_args.size() < limit) {
-                limit = template_args.size();
+              if (deduced_template_args.size() < limit) {
+                limit = deduced_template_args.size();
               }
 
               for (size_t i = 0; i < limit; ++i) {
                 SgTemplateArgument *src_arg = (*existing_args)[i];
-                SgTemplateArgument *dst_arg = template_args[i];
+                SgTemplateArgument *dst_arg = deduced_template_args[i];
                 if (src_arg != nullptr && dst_arg != nullptr &&
                     src_arg->get_explicitlySpecified()) {
                   dst_arg->set_explicitlySpecified(true);
