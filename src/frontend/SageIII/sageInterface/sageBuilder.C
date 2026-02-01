@@ -1220,20 +1220,21 @@ void SageBuilder::setTemplateArgumentParents(SgDeclarationStatement *decl) {
   }
 
   // REX: Also fix parents for deduced template arguments, if present.
-  if (SgTemplateInstantiationDecl *inst = isSgTemplateInstantiationDecl(decl)) {
-    set_parents_for_list(inst->get_deducedTemplateArguments());
+  if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+          isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+    set_parents_for_list(inst_member->get_deducedTemplateArguments());
   } else if (SgTemplateInstantiationFunctionDecl *inst_func =
                  isSgTemplateInstantiationFunctionDecl(decl)) {
     set_parents_for_list(inst_func->get_deducedTemplateArguments());
-  } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
-                 isSgTemplateInstantiationMemberFunctionDecl(decl)) {
-    set_parents_for_list(inst_member->get_deducedTemplateArguments());
   } else if (SgTemplateInstantiationTypedefDeclaration *inst_typedef =
                  isSgTemplateInstantiationTypedefDeclaration(decl)) {
     set_parents_for_list(inst_typedef->get_deducedTemplateArguments());
   } else if (SgTemplateVariableDeclaration *tmpl_var =
                  isSgTemplateVariableDeclaration(decl)) {
     set_parents_for_list(tmpl_var->get_deducedTemplateArguments());
+  } else if (SgTemplateInstantiationDecl *inst =
+                 isSgTemplateInstantiationDecl(decl)) {
+    set_parents_for_list(inst->get_deducedTemplateArguments());
   }
 
   testTemplateArgumentParents(decl);

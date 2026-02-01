@@ -11015,15 +11015,11 @@ bool visitConstraintTargets(NodeT *node, Fn &&fn) {
   if (node == nullptr) {
     return false;
   }
-  if (auto *decl = isSgTemplateInstantiationDecl(node)) {
+  if (auto *decl = isSgTemplateInstantiationMemberFunctionDecl(node)) {
     fn(decl);
     return true;
   }
   if (auto *decl = isSgTemplateInstantiationFunctionDecl(node)) {
-    fn(decl);
-    return true;
-  }
-  if (auto *decl = isSgTemplateInstantiationMemberFunctionDecl(node)) {
     fn(decl);
     return true;
   }
@@ -11032,6 +11028,10 @@ bool visitConstraintTargets(NodeT *node, Fn &&fn) {
     return true;
   }
   if (auto *decl = isSgTemplateVariableDeclaration(node)) {
+    fn(decl);
+    return true;
+  }
+  if (auto *decl = isSgTemplateInstantiationDecl(node)) {
     fn(decl);
     return true;
   }
