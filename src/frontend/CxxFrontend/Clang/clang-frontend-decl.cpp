@@ -7833,67 +7833,18 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     }
   };
 
-  auto lookup_specialized_template =
-      [&](clang::Decl *key) -> SgDeclarationStatement * {
-    if (key == nullptr) {
-      return nullptr;
-    }
-    auto lookup = [&](clang::Decl *lookup_key) -> SgDeclarationStatement * {
-      if (lookup_key == nullptr) {
-        return nullptr;
-      }
-      auto it = p_decl_translation_map.find(lookup_key);
-      if (it != p_decl_translation_map.end()) {
-        return isSgDeclarationStatement(it->second);
-      }
-      return nullptr;
-    };
-
-    if (SgDeclarationStatement *decl = lookup(key)) {
-      return decl;
-    }
-    if (auto *tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(key)) {
-      if (clang::ClassTemplateDecl *canonical = tmpl->getCanonicalDecl()) {
-        if (SgDeclarationStatement *decl = lookup(canonical)) {
-          return decl;
-        }
-      }
-      if (clang::CXXRecordDecl *templated = tmpl->getTemplatedDecl()) {
-        if (SgDeclarationStatement *decl = lookup(templated)) {
-          return decl;
-        }
-      }
-    }
-    if (auto *partial =
-            llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
-                key)) {
-      if (clang::CXXRecordDecl *canonical = partial->getCanonicalDecl()) {
-        if (SgDeclarationStatement *decl = lookup(canonical)) {
-          return decl;
-        }
-      }
-    }
-
-    if (p_decl_translation_in_progress.find(key) !=
-            p_decl_translation_in_progress.end() ||
-        p_decl_translation_on_demand.find(key) !=
-            p_decl_translation_on_demand.end()) {
-      return nullptr;
-    }
-    SgNode *translated = TraverseOnDemand(key);
-    return isSgDeclarationStatement(translated);
-  };
-
   SgDeclarationStatement *specialized_template_decl = nullptr;
   if (auto *partial =
           specialized_or_partial
               .dyn_cast<clang::ClassTemplatePartialSpecializationDecl *>()) {
-    specialized_template_decl = lookup_specialized_template(partial);
+    specialized_template_decl =
+        lookupSgDeclarationForClangDecl(partial, /*allow_on_demand=*/true);
   }
   if (specialized_template_decl == nullptr) {
     if (clang::ClassTemplateDecl *primary =
             class_tpl_spec_decl->getSpecializedTemplate()) {
-      specialized_template_decl = lookup_specialized_template(primary);
+      specialized_template_decl =
+          lookupSgDeclarationForClangDecl(primary, /*allow_on_demand=*/true);
     }
   }
   auto link_specialized_template = [&](SgTemplateInstantiationDecl *decl) {
@@ -10820,35 +10771,23 @@ void ClangToSageTranslator::reconcileOnDemandTranslation(SgNode *node) {
   resolvePendingSpecializedTemplateLinks();
 }
 
-void ClangToSageTranslator::queueSpecializedTemplateLink(
-    SgTemplateInstantiationDecl *inst_decl, clang::Decl *specialized_decl) {
-  if (inst_decl == nullptr || specialized_decl == nullptr) {
-    return;
+SgDeclarationStatement *
+ClangToSageTranslator::lookupSgDeclarationForClangDecl(clang::Decl *key,
+                                                       bool allow_on_demand) {
+  if (key == nullptr) {
+    return nullptr;
   }
-  p_pending_specialized_template_links.emplace_back(inst_decl,
-                                                    specialized_decl);
-}
-
-void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
-  if (p_pending_specialized_template_links.empty()) {
-    return;
-  }
-
-  auto lookup = [&](clang::Decl *key) -> SgDeclarationStatement * {
-    if (key == nullptr) {
+  auto lookup_map = [&](clang::Decl *lookup_key) -> SgDeclarationStatement * {
+    if (lookup_key == nullptr) {
       return nullptr;
     }
-    auto lookup_map = [&](clang::Decl *lookup_key) -> SgDeclarationStatement * {
-      if (lookup_key == nullptr) {
-        return nullptr;
-      }
-      auto it = p_decl_translation_map.find(lookup_key);
-      if (it != p_decl_translation_map.end()) {
-        return isSgDeclarationStatement(it->second);
-      }
-      return nullptr;
-    };
-
+    auto it = p_decl_translation_map.find(lookup_key);
+    if (it != p_decl_translation_map.end()) {
+      return isSgDeclarationStatement(it->second);
+    }
+    return nullptr;
+  };
+  auto lookup_cached = [&]() -> SgDeclarationStatement * {
     if (SgDeclarationStatement *decl = lookup_map(key)) {
       return decl;
     }
@@ -10876,6 +10815,39 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
     return nullptr;
   };
 
+  if (SgDeclarationStatement *decl = lookup_cached()) {
+    return decl;
+  }
+  if (!allow_on_demand) {
+    return nullptr;
+  }
+  if (p_decl_translation_in_progress.find(key) !=
+          p_decl_translation_in_progress.end() ||
+      p_decl_translation_on_demand.find(key) !=
+          p_decl_translation_on_demand.end()) {
+    return nullptr;
+  }
+  SgNode *translated = TraverseOnDemand(key);
+  if (SgDeclarationStatement *decl = isSgDeclarationStatement(translated)) {
+    return decl;
+  }
+  return lookup_cached();
+}
+
+void ClangToSageTranslator::queueSpecializedTemplateLink(
+    SgTemplateInstantiationDecl *inst_decl, clang::Decl *specialized_decl) {
+  if (inst_decl == nullptr || specialized_decl == nullptr) {
+    return;
+  }
+  p_pending_specialized_template_links.emplace_back(inst_decl,
+                                                    specialized_decl);
+}
+
+void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
+  if (p_pending_specialized_template_links.empty()) {
+    return;
+  }
+
   std::vector<std::pair<SgTemplateInstantiationDecl *, clang::Decl *>>
       remaining_links;
   remaining_links.reserve(p_pending_specialized_template_links.size());
@@ -10889,21 +10861,11 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
     if (inst_decl->get_specializedTemplateDeclaration() != nullptr) {
       continue;
     }
-    if (SgDeclarationStatement *resolved = lookup(specialized_decl)) {
+    if (SgDeclarationStatement *resolved =
+            lookupSgDeclarationForClangDecl(specialized_decl,
+                                            /*allow_on_demand=*/true)) {
       inst_decl->set_specializedTemplateDeclaration(resolved);
       continue;
-    }
-
-    if (p_decl_translation_in_progress.find(specialized_decl) ==
-            p_decl_translation_in_progress.end() &&
-        p_decl_translation_on_demand.find(specialized_decl) ==
-            p_decl_translation_on_demand.end()) {
-      SgNode *translated = TraverseOnDemand(specialized_decl);
-      if (SgDeclarationStatement *resolved =
-              isSgDeclarationStatement(translated)) {
-        inst_decl->set_specializedTemplateDeclaration(resolved);
-        continue;
-      }
     }
 
     remaining_links.emplace_back(inst_decl, specialized_decl);
@@ -13095,31 +13057,13 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
       };
 
-      auto resolve_primary_template = [&]() -> SgDeclarationStatement * {
-        clang::FunctionTemplateDecl *primary =
-            function_decl->getPrimaryTemplate();
-        if (primary == nullptr) {
-          primary = function_decl->getDescribedFunctionTemplate();
-        }
-        if (primary == nullptr) {
-          return nullptr;
-        }
-        auto it = p_decl_translation_map.find(primary);
-        if (it != p_decl_translation_map.end()) {
-          return isSgDeclarationStatement(it->second);
-        }
-        if (p_decl_translation_in_progress.find(primary) !=
-                p_decl_translation_in_progress.end() ||
-            p_decl_translation_on_demand.find(primary) !=
-                p_decl_translation_on_demand.end()) {
-          return nullptr;
-        }
-        SgNode *translated = TraverseOnDemand(primary);
-        return isSgDeclarationStatement(translated);
-      };
-
+      clang::FunctionTemplateDecl *primary =
+          function_decl->getPrimaryTemplate();
+      if (primary == nullptr) {
+        primary = function_decl->getDescribedFunctionTemplate();
+      }
       SgDeclarationStatement *specialized_template_decl =
-          resolve_primary_template();
+          lookupSgDeclarationForClangDecl(primary, /*allow_on_demand=*/true);
 
       const bool needs_defining_instantiation =
           function_decl->isThisDeclarationADefinition() &&

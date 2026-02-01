@@ -599,6 +599,8 @@ protected:
   void queueSpecializedTemplateLink(SgTemplateInstantiationDecl *inst_decl,
                                     clang::Decl *specialized_decl);
   void resolvePendingSpecializedTemplateLinks();
+  SgDeclarationStatement *lookupSgDeclarationForClangDecl(clang::Decl *key,
+                                                          bool allow_on_demand);
 
   // Select a scope that can safely accept an opaque type declaration.
   SgScopeStatement *getOpaqueTypeInsertionScope(SgScopeStatement *scope) const;
