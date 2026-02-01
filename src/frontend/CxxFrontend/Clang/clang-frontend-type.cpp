@@ -3249,7 +3249,6 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   inst_decl->set_specializedTemplateDeclaration(template_decl);
 
   inst_decl->get_templateArguments() = args;
-  SageBuilder::setTemplateArgumentParents(inst_decl);
 
   // Set file info and mark as compiler generated
   // Create synthetic file info since this is a compiler-generated node
@@ -3261,6 +3260,7 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   inst_decl->setForward();
   inst_decl->set_definingDeclaration(nullptr);
   inst_decl->set_firstNondefiningDeclaration(inst_decl);
+  SageBuilder::setTemplateArgumentParents(inst_decl);
 
   if (inst_decl->get_templateDeclaration() == NULL) {
     std::cerr << "CRITICAL ERROR: inst_decl->get_templateDeclaration() is NULL "
