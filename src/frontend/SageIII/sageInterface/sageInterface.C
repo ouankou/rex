@@ -7202,6 +7202,22 @@ bool SageInterface::templateArgumentEquivalence(SgTemplateArgument *arg1,
              expr1->class_name().c_str());
 #endif
       switch (expr1->variantT()) {
+      case V_SgIntVal: {
+        return static_cast<SgIntVal *>(expr1)->get_value() ==
+               static_cast<SgIntVal *>(expr2)->get_value();
+      }
+      case V_SgLongLongIntVal: {
+        return static_cast<SgLongLongIntVal *>(expr1)->get_value() ==
+               static_cast<SgLongLongIntVal *>(expr2)->get_value();
+      }
+      case V_SgUnsignedIntVal: {
+        return static_cast<SgUnsignedIntVal *>(expr1)->get_value() ==
+               static_cast<SgUnsignedIntVal *>(expr2)->get_value();
+      }
+      case V_SgUnsignedLongLongIntVal: {
+        return static_cast<SgUnsignedLongLongIntVal *>(expr1)->get_value() ==
+               static_cast<SgUnsignedLongLongIntVal *>(expr2)->get_value();
+      }
       case V_SgLongIntVal: {
         return ((SgLongIntVal *)expr1)->get_value() ==
                ((SgLongIntVal *)expr2)->get_value();
