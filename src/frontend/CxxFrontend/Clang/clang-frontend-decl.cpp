@@ -13026,6 +13026,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         function_decl->getTemplateSpecializationArgs();
     if (clang_args != nullptr) {
       size_t explicit_arg_count = 0;
+      SgTemplateArgumentPtrList explicit_template_args;
       if (const clang::ASTTemplateArgumentListInfo *args_as_written =
               function_decl->getTemplateSpecializationArgsAsWritten()) {
         clang::TemplateArgumentListInfo arg_info(
@@ -13035,6 +13036,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           arg_info.addArgument(loc);
         }
         explicit_arg_count = countExpandedTemplateArguments(arg_info);
+        explicit_template_args = buildTemplateArguments(arg_info, true);
       }
       if (explicit_arg_count == 0 && is_explicit_instantiation) {
         explicit_arg_count = clang_args->size();
@@ -13100,9 +13102,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
       }
 
-      SgTemplateArgumentPtrList template_args =
+      SgTemplateArgumentPtrList deduced_template_args =
           buildTemplateArguments(*clang_args, explicit_arg_count);
-      SgTemplateArgumentPtrList *template_args_ptr = &template_args;
+      SgTemplateArgumentPtrList *template_args_ptr = &deduced_template_args;
+      SgTemplateArgumentPtrList *explicit_template_args_ptr =
+          &explicit_template_args;
 
       auto apply_deduced_args = [&](SgDeclarationStatement *decl) {
         if (decl == nullptr) {
@@ -13110,11 +13114,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         }
         if (SgTemplateInstantiationFunctionDecl *inst_func =
                 isSgTemplateInstantiationFunctionDecl(decl)) {
-          inst_func->get_deducedTemplateArguments() = template_args;
+          inst_func->get_deducedTemplateArguments() = deduced_template_args;
           SageBuilder::setTemplateArgumentParents(inst_func);
         } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
                        isSgTemplateInstantiationMemberFunctionDecl(decl)) {
-          inst_member->get_deducedTemplateArguments() = template_args;
+          inst_member->get_deducedTemplateArguments() = deduced_template_args;
           SageBuilder::setTemplateArgumentParents(inst_member);
         }
       };
@@ -13266,7 +13270,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                               has_explicit_args
                         : has_explicit_args);
                 SageBuilder::setTemplateArgumentsInDeclaration(
-                    inst_func, template_args_ptr);
+                    inst_func, explicit_template_args_ptr);
                 apply_deduced_args(inst_func);
                 if (SgTemplateFunctionDeclaration *tmpl_decl =
                         isSgTemplateFunctionDeclaration(
@@ -13292,7 +13296,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                               has_explicit_args
                         : has_explicit_args);
                 SageBuilder::setTemplateArgumentsInDeclaration(
-                    inst_member, template_args_ptr);
+                    inst_member, explicit_template_args_ptr);
                 apply_deduced_args(inst_member);
                 if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                         isSgTemplateMemberFunctionDeclaration(
