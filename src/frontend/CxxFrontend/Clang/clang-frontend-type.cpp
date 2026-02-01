@@ -3220,17 +3220,7 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
       if (inst_decl->get_specializedTemplateDeclaration() == nullptr) {
         inst_decl->set_specializedTemplateDeclaration(template_decl);
       }
-      for (SgTemplateArgument *arg : inst_decl->get_templateArguments()) {
-        if (arg != nullptr) {
-          arg->set_parent(inst_decl);
-        }
-      }
-      for (SgTemplateArgument *arg :
-           inst_decl->get_deducedTemplateArguments()) {
-        if (arg != nullptr) {
-          arg->set_parent(inst_decl);
-        }
-      }
+      SageBuilder::setTemplateArgumentParents(inst_decl);
       if (!inst_decl->get_nameResetFromMangledForm()) {
         inst_decl->set_nameResetFromMangledForm(true);
       }
@@ -3259,16 +3249,7 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   inst_decl->set_specializedTemplateDeclaration(template_decl);
 
   inst_decl->get_templateArguments() = args;
-  for (SgTemplateArgument *arg : inst_decl->get_templateArguments()) {
-    if (arg != nullptr) {
-      arg->set_parent(inst_decl);
-    }
-  }
-  for (SgTemplateArgument *arg : inst_decl->get_deducedTemplateArguments()) {
-    if (arg != nullptr) {
-      arg->set_parent(inst_decl);
-    }
-  }
+  SageBuilder::setTemplateArgumentParents(inst_decl);
 
   // Set file info and mark as compiler generated
   // Create synthetic file info since this is a compiler-generated node

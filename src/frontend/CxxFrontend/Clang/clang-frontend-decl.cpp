@@ -8031,9 +8031,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     instantiationDecl->set_scope(scope);
     instantiationDecl->set_parent(parent_scope);
 
-    for (SgTemplateArgument *arg : instantiationDecl->get_templateArguments()) {
-      arg->set_parent(instantiationDecl);
-    }
+    SageBuilder::setTemplateArgumentParents(instantiationDecl);
 
     link_specialized_template(instantiationDecl);
 
@@ -8104,17 +8102,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       build_deduced_args(recovered_deduced);
       instantiationDecl->get_deducedTemplateArguments() = recovered_deduced;
     }
-    for (SgTemplateArgument *arg : instantiationDecl->get_templateArguments()) {
-      if (arg != nullptr) {
-        arg->set_parent(instantiationDecl);
-      }
-    }
-    for (SgTemplateArgument *arg :
-         instantiationDecl->get_deducedTemplateArguments()) {
-      if (arg != nullptr) {
-        arg->set_parent(instantiationDecl);
-      }
-    }
+    SageBuilder::setTemplateArgumentParents(instantiationDecl);
     if (instantiationDecl->get_scope() == nullptr) {
       instantiationDecl->set_scope(scope);
     }
@@ -8187,17 +8175,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       definingDecl->set_scope(scope);
       definingDecl->set_parent(parent_scope);
 
-      for (SgTemplateArgument *arg : definingDecl->get_templateArguments()) {
-        if (arg != nullptr) {
-          arg->set_parent(definingDecl);
-        }
-      }
-      for (SgTemplateArgument *arg :
-           definingDecl->get_deducedTemplateArguments()) {
-        if (arg != nullptr) {
-          arg->set_parent(definingDecl);
-        }
-      }
+      SageBuilder::setTemplateArgumentParents(definingDecl);
 
       definingDecl->set_templateDeclaration(
           firstNondefiningDeclaration->get_templateDeclaration());
@@ -8218,11 +8196,6 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
         SgTemplateArgumentPtrList defining_args;
         build_args(defining_args);
         definingDecl->get_templateArguments() = defining_args;
-      }
-      for (SgTemplateArgument *arg : definingDecl->get_templateArguments()) {
-        if (arg != nullptr) {
-          arg->set_parent(definingDecl);
-        }
       }
       if (definingDecl->get_templateDeclaration() == nullptr) {
         definingDecl->set_templateDeclaration(
@@ -8249,12 +8222,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
         build_deduced_args(defining_deduced_args);
         definingDecl->get_deducedTemplateArguments() = defining_deduced_args;
       }
-      for (SgTemplateArgument *arg :
-           definingDecl->get_deducedTemplateArguments()) {
-        if (arg != nullptr) {
-          arg->set_parent(definingDecl);
-        }
-      }
+      SageBuilder::setTemplateArgumentParents(definingDecl);
       link_specialized_template(definingDecl);
       if (definingDecl->get_scope() == nullptr) {
         definingDecl->set_scope(scope);
@@ -10936,11 +10904,6 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
         inst_decl->set_specializedTemplateDeclaration(resolved);
         continue;
       }
-    }
-
-    if (SgDeclarationStatement *resolved = lookup(specialized_decl)) {
-      inst_decl->set_specializedTemplateDeclaration(resolved);
-      continue;
     }
 
     remaining_links.emplace_back(inst_decl, specialized_decl);
@@ -16237,11 +16200,7 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
     appendTemplateArguments(deduced_args, instantiation_args.get(i), false);
   }
   var_decl->get_deducedTemplateArguments() = deduced_args;
-  for (SgTemplateArgument *arg : var_decl->get_deducedTemplateArguments()) {
-    if (arg != nullptr) {
-      arg->set_parent(var_decl);
-    }
-  }
+  SageBuilder::setTemplateArgumentParents(var_decl);
 
   auto lookup_template_decl =
       [&](clang::Decl *key) -> SgTemplateVariableDeclaration * {
