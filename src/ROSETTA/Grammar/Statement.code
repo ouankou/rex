@@ -1368,8 +1368,6 @@ HEADER_LIST_DECLARATIONS
       //! This function generates the qualified name prefix to be used with the return type.
           SgName get_qualified_name_prefix_for_return_type() const;
 
-       // DQ (10/11/2014): Adding support for aterm translation to ROSE AST.
-       // Rasmussen (04/17/2019): Support for ATerms has been deprecated.
        // static SgFunctionDeclaration* build_node_from_nonlist_children(SgType* return_type, SgFunctionParameterList* parameterList, SgScopeStatement* scope, Sg_File_Info* startOfConstruct, SgName name, SgFunctionType* type, SgFunctionDefinition* definition);
 
        // DQ (12/22/2014): Adding support for legacy frontend normalized template member and non-member functions.
@@ -2534,8 +2532,6 @@ HEADER_TEMPLATE_INSTANTIATION_DECLARATION_STATEMENT_START
        // to it being a part of a template.
           void set_definition( SgTemplateInstantiationDefn* definition );
 
-       // DQ (10/10/2014): Implemented to support Aterm constructor functions.
-       // Rasmussen (04/17/2019): Support for ATerms has been deprecated. But this may be used elsewhere.
           void set_definition( SgClassDefinition* definition );
 
        // DQ (2/11/2007): Add this to the derived class so that the SgSymbolTable::find() function will work properly
@@ -2629,8 +2625,6 @@ HEADER_TEMPLATE_VARIABLE_DECLARATION_STATEMENT_START
        // DQ (12/28/2011): We need a constructor similar to the base class.
           $CLASSNAME ( const SgName& var_name, SgType *type, SgInitializer *initializer );
 
-// DQ (10/5/2014): This is now wrong because we now include rose_config.h before processing the
-// files generated from this file.  This change was required to support the ATerm libraries.
 // BH (11/13/2015) this caused incosistent defines of this
 // so that it was not defined in the .h but used in the cxx file
      private:
@@ -11306,8 +11300,7 @@ SgVariableDeclaration::set_baseTypeDefiningDeclaration(SgDeclarationStatement* d
   // defining declaration in a SgVariableDeclaration (if such a thing is defined).  An example of where this
   // happens is in: "struct { int x; } y;", here the structure declaration is in the variable declaration for "y".
 
-  // DQ (10/11/2014): We need to handle the case where the input in NULL, required for more general processing
-  // for ROSETTA generated ATerm support.
+  // DQ (10/11/2014): We need to handle the case where the input in NULL.
   // ROSE_ASSERT(d != NULL);
      if (d != NULL)
         {
@@ -12098,7 +12091,6 @@ SgTemplateInstantiationDecl::set_definition( SgTemplateInstantiationDefn* defini
 void
 SgTemplateInstantiationDecl::set_definition( SgClassDefinition* definition )
    {
-  // DQ (10/10/2014): Implemented to support Aterm constructor functions.
   // We need a way for the automatically generated code to set the
   // definition data member in the base class.
 

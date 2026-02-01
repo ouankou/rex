@@ -593,8 +593,7 @@ public:
       AstNodeClass *, std::vector<GrammarSynthesizedAttribute>);
   // filtered member variables are all those that are not required to create a
   // vailid AST (or can computed by other means) this function is used by the
-  // ATerm grammar generation and when generating constructors for all data
-  // members (excluding filtered vars)
+  // constructor generation for all data members (excluding filtered vars)
   bool isFilteredMemberVariable(std::string varName);
   // MS: type hierarchy traversal
   GrammarSynthesizedAttribute

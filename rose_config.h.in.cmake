@@ -406,9 +406,6 @@
 /* Prefix path for use of IDA. */
 #define IDA_PRO_PATH "${with_ida}"
 
-/* Path to JVM executable used by the Fortran OFP frontend */
-#define OFP_JVM_PATH "${OFP_JAVA_RUNTIME}"
-
 /* Define if the OS needs help to load dependent libraries for dlopen(). */
 //AS Don't know what to do with this
 #undef LTDL_DLOPEN_DEPLIBS
@@ -559,9 +556,6 @@
 /* Location (unquoted) of the LLVM OpenMP runtime library. */
 #cmakedefine LLVM_OPENMP_LIB_PATH "@LLVM_OPENMP_LIB_PATH@"
 
-/* Controls use of ROSE Open Fortran Parser (OFP) support. */
-#cmakedefine USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT
-
 /* Version number of package */
 //AS Don't know what to do with this
 
@@ -607,15 +601,6 @@
 
 /* Define to `unsigned int' if <sys/types.h> does not define. */
 #undef size_t
-
-/* DQ (10/16/2010): Added OFP required macros as part of move to exclude
- * rose_config.h from the ROSE header files.
- */
-#define ROSE_OFP_MAJOR_VERSION_NUMBER 0
-#define ROSE_OFP_MINOR_VERSION_NUMBER 8
-#define ROSE_OFP_PATCH_VERSION_NUMBER 3
-
-#define ROSE_OFP_VERSION_NUMBER "@ROSE_OFP_VERSION_NUMBER@"
 
 /* REX: legacy frontend version numbers removed - Clang/LLVM is now the only frontend */
 

@@ -279,10 +279,10 @@ void FlangModuleInfo::set_inputDirs(SgProject *project) {
 
   // Add path to intrinsic modules (ISO_C_BINDING, OMP_LIB, etc.).
   const std::string intrinsic_src_path =
-      findRoseSupportPathFromSource("src/3rdPartyLibraries/fortran-parser",
-                                    "src/3rdPartyLibraries/fortran-parser");
+      findRoseSupportPathFromSource("src/3rdPartyLibraries/fortran-intrinsics",
+                                    "src/3rdPartyLibraries/fortran-intrinsics");
   const std::string intrinsic_install_path = findRoseSupportPathFromSource(
-      "src/3rdPartyLibraries/fortran-parser", "share/rose");
+      "src/3rdPartyLibraries/fortran-intrinsics", "share/rose");
   addInputDir(inputDirs, intrinsic_src_path);
   addInputDir(inputDirs, intrinsic_install_path);
   addInputDir(sourceDirs, intrinsic_src_path);

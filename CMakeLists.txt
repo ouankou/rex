@@ -1,4 +1,4 @@
-﻿################################################################################################ -*- cmake -*- #########
+################################################################################################ -*- cmake -*- #########
 # General warnings, instructions, and style guide.
 ########################################################################################################################
 
@@ -369,9 +369,6 @@ endif()
 # Fortran (disabled by default to avoid requiring a Fortran toolchain for basic builds)
 option(ENABLE-FORTRAN "Enable Fortran analysis." OFF)
 
-# JVM-based Open Fortran Parser (OFP) dependency (legacy frontend)
-option(ENABLE-FORTRAN-OFP "Enable JVM-based Open Fortran Parser (OFP) support." OFF)
-
 # Flang frontend (LLVM 20)
 option(ENABLE-FORTRAN-FLANG "Enable Flang frontend support (LLVM 20)." ON)
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
@@ -379,116 +376,8 @@ set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 # Legacy tests still reference enable-fortran (lowercase).
 set(enable-fortran "${ENABLE-FORTRAN}")
 
-if(ENABLE-FORTRAN AND NOT (ENABLE-FORTRAN-OFP OR ENABLE-FORTRAN-FLANG))
-  message(FATAL_ERROR "Fortran analysis requires at least one frontend: OFP or Flang. Set -DENABLE-FORTRAN-OFP=ON or -DENABLE-FORTRAN-FLANG=ON, or disable Fortran.")
-endif()
-
-if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
-  message(STATUS "Looking for JVM (Fortran OFP dependency) ...")
-  # The FindJava script is different than all our others--it doesn't consult JAVA_ROOT. Therefore, the only
-  # value of JAVA_ROOT that we can support is the empty string.
-  if("${JAVA_ROOT}" STREQUAL "")
-  elseif("${JAVA_ROOT}" STREQUAL "no")
-    message(FATAL_ERROR "Fortran OFP cannot be enabled when JAVA_ROOT is disabled (-DJAVA_ROOT=FALSE).")
-  else()
-    message(FATAL_ERROR "Java location cannot be explicit (-DJAVA_ROOT=...)")
-  endif()
-
-  find_package(Java REQUIRED)
-  set(_rose_java_home "")
-  if(NOT "$ENV{JAVA_HOME}" STREQUAL "")
-    set(_rose_java_home "$ENV{JAVA_HOME}")
-  endif()
-  if(_rose_java_home STREQUAL "" AND Java_JAVA_EXECUTABLE)
-    get_filename_component(_rose_java_real "${Java_JAVA_EXECUTABLE}" REALPATH)
-    get_filename_component(_rose_java_bin "${_rose_java_real}" DIRECTORY)
-    get_filename_component(_rose_java_home "${_rose_java_bin}" DIRECTORY)
-  endif()
-  if(_rose_java_home STREQUAL "" AND EXISTS "/usr/lib/jvm/default-java")
-    set(_rose_java_home "/usr/lib/jvm/default-java")
-  endif()
-  if(_rose_java_home)
-    set(ENV{JAVA_HOME} "${_rose_java_home}")
-  endif()
-
-  find_package(JNI REQUIRED)
-  if(_rose_java_home)
-    set(_rose_jvm_candidate "")
-    set(_rose_jvm_name "libjvm${CMAKE_SHARED_LIBRARY_SUFFIX}")
-    foreach(_rose_jvm_dir
-      "${_rose_java_home}/lib/server"
-      "${_rose_java_home}/jre/lib/server")
-      if(EXISTS "${_rose_jvm_dir}/${_rose_jvm_name}")
-        set(_rose_jvm_candidate "${_rose_jvm_dir}/${_rose_jvm_name}")
-        break()
-      endif()
-    endforeach()
-    if(_rose_jvm_candidate)
-      set(_rose_jvm_is_stale FALSE)
-      if(JAVA_JVM_LIBRARY AND EXISTS "${JAVA_JVM_LIBRARY}")
-        foreach(_rose_prefix IN ITEMS "${CMAKE_INSTALL_PREFIX}" "${ROSE_TOP_BINARY_DIR}")
-          if(_rose_prefix)
-            string(FIND "${JAVA_JVM_LIBRARY}" "${_rose_prefix}" _rose_prefix_index)
-            if(_rose_prefix_index EQUAL 0)
-              set(_rose_jvm_is_stale TRUE)
-            endif()
-          endif()
-        endforeach()
-      endif()
-      if(NOT JAVA_JVM_LIBRARY OR _rose_jvm_is_stale)
-        set(JAVA_JVM_LIBRARY "${_rose_jvm_candidate}" CACHE FILEPATH "Path to Java JVM library" FORCE)
-      endif()
-      unset(_rose_prefix)
-      unset(_rose_prefix_index)
-      unset(_rose_jvm_is_stale)
-    endif()
-  endif()
-  if(NOT JAVA_JVM_LIBRARY OR NOT EXISTS "${JAVA_JVM_LIBRARY}")
-    message(FATAL_ERROR "Fortran OFP requires libjvm; set JAVA_HOME to a JDK with libjvm.so.")
-  endif()
-
-  set(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT 1)
-  set(OFP_JAVA_RUNTIME "${Java_JAVA_EXECUTABLE}")
-
-  # Ensure CTest inherits a usable JAVA_HOME and libjvm path even when shell
-  # init scripts are not sourced (e.g., Codex sandboxes).
-  if(JAVA_JVM_LIBRARY)
-    get_filename_component(_rose_jvm_dir "${JAVA_JVM_LIBRARY}" DIRECTORY)
-    if(_rose_jvm_dir)
-      set(ROSE_JVM_LIBRARY_DIR "${_rose_jvm_dir}")
-    endif()
-    set(_rose_ctest_env "${CMAKE_BINARY_DIR}/CTestFortranOFPEnv.cmake")
-    set(_rose_ctest_env_content "")
-    if(_rose_java_home)
-      string(APPEND _rose_ctest_env_content
-        "if(\"\$ENV{JAVA_HOME}\" STREQUAL \"\")\n"
-        "  set(ENV{JAVA_HOME} \"${_rose_java_home}\")\n"
-        "endif()\n")
-    endif()
-    string(APPEND _rose_ctest_env_content
-      "if(\"\$ENV{LD_LIBRARY_PATH}\" STREQUAL \"\")\n"
-      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_jvm_dir}\")\n"
-      "elseif(NOT \"\$ENV{LD_LIBRARY_PATH}\" MATCHES \"(^|:)${_rose_jvm_dir}(:|$)\")\n"
-      "  set(ENV{LD_LIBRARY_PATH} \"${_rose_jvm_dir}:\$ENV{LD_LIBRARY_PATH}\")\n"
-      "endif()\n")
-    if(ENABLE-SANITIZER)
-      list(FIND ROSE_SANITIZERS "leak" _rose_lsan_index)
-      set(_rose_lsan_suppressions
-          "${CMAKE_SOURCE_DIR}/scripts/rose-suppressions-for-lsan")
-      if(NOT _rose_lsan_index EQUAL -1 AND EXISTS "${_rose_lsan_suppressions}")
-        string(APPEND _rose_ctest_env_content
-          "if(\"\$ENV{LSAN_OPTIONS}\" STREQUAL \"\")\n"
-          "  set(ENV{LSAN_OPTIONS} \"suppressions=${_rose_lsan_suppressions}\")\n"
-          "elseif(NOT \"\$ENV{LSAN_OPTIONS}\" MATCHES \"suppressions=\")\n"
-          "  set(ENV{LSAN_OPTIONS} \"suppressions=${_rose_lsan_suppressions}:\$ENV{LSAN_OPTIONS}\")\n"
-          "endif()\n")
-      endif()
-      unset(_rose_lsan_index)
-      unset(_rose_lsan_suppressions)
-    endif()
-    file(WRITE "${_rose_ctest_env}" "${_rose_ctest_env_content}")
-    set_property(DIRECTORY PROPERTY TEST_INCLUDE_FILE "${_rose_ctest_env}")
-  endif()
+if(ENABLE-FORTRAN AND NOT ENABLE-FORTRAN-FLANG)
+  message(FATAL_ERROR "Fortran analysis requires the Flang frontend. Set -DENABLE-FORTRAN-FLANG=ON, or disable Fortran (-DENABLE-FORTRAN=OFF).")
 endif()
 
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
@@ -951,12 +840,6 @@ set(WITH-VALGRIND-LIB "" CACHE PATH "Valgrind library directory")
 set(WITH-GOMP-OMP-RUNTIME-LIBRARY "" CACHE PATH "GCC GOMP OpenMP runtime library directory")
 set(WITH-OMNI-OMP-RUNTIME-SUPPORT "" CACHE PATH "Omni OpenMP runtime library directory")
 set(WITH-LLVM-OMP-RUNTIME-LIBRARY "" CACHE PATH "LLVM OpenMP runtime library directory")
-
-if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
-  set(enable-ofp-version "20200819-JDK8" CACHE STRING "version number for OFP")
-  set(ROSE_OFP_VERSION_NUMBER "${enable-ofp-version}")
-  set(ENV{CLASSPATH} "${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/antlr-jars/antlr-3.5.2-complete.jar:${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/fortran-parser/OpenFortranParser-${enable-ofp-version}.jar")
-endif()
 
 # To use Bison, set BISON_ROOT to the Bison installation prefix. To avoid Bison, use BISON_ROOT=no
 include(FindBison)
@@ -1427,7 +1310,6 @@ set(ROSE_SOURCE_INCLUDES
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/virtualCFG
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astTokenStream
   ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astHiddenTypeAndDeclarationLists
-  ${ROSE_TOP_SRC_DIR}/src/frontend/OpenFortranParser_SAGE_Connection
   ${ROSE_TOP_SRC_DIR}/src/frontend/Experimental_Flang_ROSE_Connection
   ${ROSE_TOP_SRC_DIR}/src/frontend/Experimental_General_Language_Support
   ${ROSE_TOP_SRC_DIR}/src/frontend

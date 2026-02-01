@@ -35,7 +35,6 @@ ROSE_UTIL_API extern const std::string ROSE_BUILD_LIB_DIR;
 ROSE_UTIL_API extern const std::string ROSE_CONFIGURE_DATE;
 ROSE_UTIL_API extern const std::string ROSE_BUILD_OS;
 ROSE_UTIL_API extern const std::string ROSE_BUILD_CPU;
-ROSE_UTIL_API extern const std::string ROSE_OFP_VERSION_STRING;
 
 /** Numeric form of ROSE version.
  *

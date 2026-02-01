@@ -98,7 +98,6 @@ if [ ! -f "$BUILD_DIR/compile_commands.json" ]; then
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DENABLE-C=ON \
     -DENABLE-FORTRAN=OFF \
-    -DENABLE-FORTRAN-OFP=OFF \
     -DENABLE-TESTS-DIRECTORY=OFF \
     -DENABLE-TUTORIAL-DIRECTORY=OFF \
     "${cmake_args[@]}"

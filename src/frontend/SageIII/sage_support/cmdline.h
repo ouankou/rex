@@ -50,15 +50,6 @@ NormalizeIncludePathOptions(std::vector<std::string> &argv);
 
 /** Removes "-rose:" options, or transforms them into their associated
  *  compiler options.
- *
- *  For example,
- *
- *      -rose:fortran:ofp:classpath "/some/class/path"
- *
- *      becomes
- *
- *      -classpath "/some/class/path"
- *
  *  Whereas, this ROSE-only option is completely removed:
  *
  *      -rose:verose 3
@@ -99,38 +90,6 @@ void Process(SgProject *project, std::vector<std::string> &argv);
 
 // -rose:fortran
 void ProcessFortranOnly(SgProject *project, std::vector<std::string> &argv);
-
-/** Targeted for src/frontend/OpenFortranParser_SAGE_Connection/jserver.C,
- */
-namespace Ofp {
-extern ROSE_DLL_API std::list<std::string> jvm_options;
-extern ROSE_DLL_API std::list<std::string> classpath_entries;
-
-ROSE_DLL_API void StripRoseOptions(std::vector<std::string> &argv);
-
-ROSE_DLL_API std::string GetRoseClasspath();
-
-ROSE_DLL_API std::string
-GetRoseClasspath(const std::list<std::string> &classpath_entries);
-
-ROSE_DLL_API void Process(SgProject *project, std::vector<std::string> &argv);
-
-/** -rose:fortran:ofp:jvm_options
- */
-ROSE_DLL_API void ProcessJvmOptions(SgProject *project,
-                                    std::vector<std::string> &argv);
-
-/** -rose:fortran:ofp:classpath
- */
-ROSE_DLL_API void ProcessClasspath(SgProject *project,
-                                   std::vector<std::string> &argv);
-
-/** -rose:fortran:ofp:enable_remote_debugging
- *  Enable remote debugging of the OFP JVM.
- */
-ROSE_DLL_API void ProcessEnableRemoteDebugging(SgProject *project,
-                                               std::vector<std::string> &argv);
-} // namespace Ofp
 } // namespace Fortran
 
 namespace Gnu {

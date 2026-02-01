@@ -156,7 +156,6 @@ pending src/frontend/CxxFrontend
 in-progress src/frontend/CxxFrontend/Clang
 synced src/frontend/Experimental_Flang_ROSE_Connection
 in-progress src/frontend/Experimental_General_Language_Support
-synced src/frontend/Experimental_General_Language_Support/ATerm
 pending src/frontend/OpenFortranParser_SAGE_Connection
 in-progress src/frontend/SageIII
 pending src/frontend/SageIII/GENERATED_CODE_DIRECTORY_Cxx_Grammar

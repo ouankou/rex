@@ -136,11 +136,6 @@ namespace SageInterface {
 template <class T> void setSourcePositionToDefault(T *node);
 }
 
-// We need this so that USE_CMAKE will be seen (set via configure).
-#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
-#include "jserver.h"
-#endif
-
 #include "rose_config.h"
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
 #endif
@@ -4908,7 +4903,6 @@ std::vector<SgFile *> SageInterface::generateFileList() {
 
   // TV (06/24/2013): This fail when calling
   // SageBuilder::buildVariableDeclaration(...) without any file created. DQ
-  // (10/11/2014): This is allowed to be empty (required for new aterm support).
   // ROSE_ASSERT(fileTraversal.fileList.empty() == false);
 
   return fileTraversal.fileList;
@@ -20340,9 +20334,6 @@ SgProject *findAnyLiveProject() {
 
 void tearDownAstAtExit() {
   if (g_astTeardownComplete) {
-#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
-    Rose::Frontend::Fortran::Ofp::jserver_finish();
-#endif
     return;
   }
   SgProject *project = g_astTeardownProject;
@@ -20420,10 +20411,6 @@ void SageInterface::tearDownAst(SgProject *project) {
   }
 
   clearTokenStreamGlobalMaps();
-
-#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
-  Rose::Frontend::Fortran::Ofp::jserver_finish();
-#endif
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
   clearAnalysisSingletons();

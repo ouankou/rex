@@ -4689,7 +4689,6 @@ HEADER_INITIALIZED_NAME_START
                SgInitializedName *prev_decl_item = 0 );
 #endif
 
-       // DQ (10/13/2014): Adding a default constructor for compatability with what was previously the API before the newer aterm support.
           SgInitializedName() ROSE_DEPRECATED_FUNCTION;
 
           SgInitializedName(const SgInitializedName& ptr);
@@ -10636,7 +10635,6 @@ SgInitializedName::search_for_symbol_from_symbol_table() const
      return symbol;
    }
 
-// DQ (10/13/2014): Adding a default constructor for compatability with what was previously the API before the newer aterm support.
 SgInitializedName::SgInitializedName() ROSE_DEPRECATED_FUNCTION
    : p_name(""),
      p_microsoft_uuid_string(""),
@@ -14818,7 +14816,6 @@ SgFile::display ( const std::string & label ) const
 
      printf ("     p_skipAstConsistancyTests                   = %s \n",(p_skipAstConsistancyTests == true) ? "true" : "false");
 
-  // Rasmussen (9/10/2022): Replaced experimental_fortran_frontend with experimental_flang_frontend (removing ATerm usage).
      printf ("     p_experimental_flang_frontend               = %s \n",(p_experimental_flang_frontend == true) ? "true" : "false");
 
   // DQ (4/17/2015): Adding multifile handling support for commandline generation.
