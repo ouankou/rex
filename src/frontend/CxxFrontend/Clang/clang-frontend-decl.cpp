@@ -13316,9 +13316,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         // Mark explicit argument list on the instantiation decl and connect to
         // the primary template declaration when available.
-        apply_template_instantiation_info(inst_symbol_decl,
-                                          /*preserve_existing_explicit=*/true);
-
         if (function_decl->isVariadic()) {
           inst_nondef_decl->hasEllipses();
         }
@@ -13410,6 +13407,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               }
             }
           }
+        }
+
+        apply_template_instantiation_info(inst_symbol_decl,
+                                          /*preserve_existing_explicit=*/true);
+        if (sg_function_decl != nullptr &&
+            sg_function_decl != inst_symbol_decl) {
+          apply_template_instantiation_info(
+              sg_function_decl, /*preserve_existing_explicit=*/false);
         }
 
         handled_template_instantiation = true;
