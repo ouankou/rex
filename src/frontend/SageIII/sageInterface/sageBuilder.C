@@ -1200,13 +1200,15 @@ void SageBuilder::setTemplateArgumentParents(SgDeclarationStatement *decl) {
             continue;
           }
           SgNode *parent = arg->get_parent();
-          if (parent == NULL) {
-            arg->set_parent(first_decl);
+          if (parent == first_decl) {
             continue;
           }
-          if (isSgScopeStatement(parent) != NULL || isSgFile(parent) != NULL) {
-            // Template arguments initially parented to a scope or file should
-            // be attached to the owning declaration once it exists.
+
+          // Reparent if there is no parent, or if the parent is a temporary
+          // home (like a scope or file), or if it's another declaration.
+          if (parent == nullptr || isSgScopeStatement(parent) != nullptr ||
+              isSgFile(parent) != nullptr ||
+              isSgDeclarationStatement(parent) != nullptr) {
             arg->set_parent(first_decl);
           }
         }
