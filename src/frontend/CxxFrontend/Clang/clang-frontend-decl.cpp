@@ -10849,6 +10849,24 @@ size_t ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
     return resolved_links;
   }
 
+  auto specialized_decl_is_set = [&](SgDeclarationStatement *target) {
+    bool is_set = false;
+    visitTemplateInstantiationDecls(target, [&](auto *decl) {
+      is_set = decl->get_specializedTemplateDeclaration() != nullptr;
+    });
+    return is_set;
+  };
+
+  auto set_specialized_decl = [&](SgDeclarationStatement *target,
+                                  SgDeclarationStatement *resolved) {
+    bool was_set = false;
+    visitTemplateInstantiationDecls(target, [&](auto *decl) {
+      decl->set_specializedTemplateDeclaration(resolved);
+      was_set = true;
+    });
+    return was_set;
+  };
+
   for (auto it = p_pending_specialized_template_links.begin();
        it != p_pending_specialized_template_links.end();) {
     SgDeclarationStatement *decl = it->first;
@@ -10858,54 +10876,6 @@ size_t ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
       ++resolved_links;
       continue;
     }
-
-    auto specialized_decl_is_set = [&](SgDeclarationStatement *target) {
-      if (auto *inst_member =
-              isSgTemplateInstantiationMemberFunctionDecl(target)) {
-        return inst_member->get_specializedTemplateDeclaration() != nullptr;
-      }
-      if (auto *inst_func = isSgTemplateInstantiationFunctionDecl(target)) {
-        return inst_func->get_specializedTemplateDeclaration() != nullptr;
-      }
-      if (auto *inst_typedef =
-              isSgTemplateInstantiationTypedefDeclaration(target)) {
-        return inst_typedef->get_specializedTemplateDeclaration() != nullptr;
-      }
-      if (auto *tmpl_var = isSgTemplateVariableDeclaration(target)) {
-        return tmpl_var->get_specializedTemplateDeclaration() != nullptr;
-      }
-      if (auto *inst_decl = isSgTemplateInstantiationDecl(target)) {
-        return inst_decl->get_specializedTemplateDeclaration() != nullptr;
-      }
-      return false;
-    };
-
-    auto set_specialized_decl = [&](SgDeclarationStatement *target,
-                                    SgDeclarationStatement *resolved) {
-      if (auto *inst_member =
-              isSgTemplateInstantiationMemberFunctionDecl(target)) {
-        inst_member->set_specializedTemplateDeclaration(resolved);
-        return true;
-      }
-      if (auto *inst_func = isSgTemplateInstantiationFunctionDecl(target)) {
-        inst_func->set_specializedTemplateDeclaration(resolved);
-        return true;
-      }
-      if (auto *inst_typedef =
-              isSgTemplateInstantiationTypedefDeclaration(target)) {
-        inst_typedef->set_specializedTemplateDeclaration(resolved);
-        return true;
-      }
-      if (auto *tmpl_var = isSgTemplateVariableDeclaration(target)) {
-        tmpl_var->set_specializedTemplateDeclaration(resolved);
-        return true;
-      }
-      if (auto *inst_decl = isSgTemplateInstantiationDecl(target)) {
-        inst_decl->set_specializedTemplateDeclaration(resolved);
-        return true;
-      }
-      return false;
-    };
 
     if (specialized_decl_is_set(decl)) {
       it = p_pending_specialized_template_links.erase(it);
@@ -11094,6 +11064,30 @@ bool visitConstraintTargets(NodeT *node, Fn &&fn) {
     return true;
   } else if (auto *ref = isSgNonrealRefExp(node)) {
     fn(ref);
+    return true;
+  }
+  return false;
+}
+
+template <typename NodeT, typename Fn>
+bool visitTemplateInstantiationDecls(NodeT *node, Fn &&fn) {
+  if (node == nullptr) {
+    return false;
+  }
+  if (auto *decl = isSgTemplateInstantiationMemberFunctionDecl(node)) {
+    fn(decl);
+    return true;
+  } else if (auto *decl = isSgTemplateInstantiationFunctionDecl(node)) {
+    fn(decl);
+    return true;
+  } else if (auto *decl = isSgTemplateInstantiationTypedefDeclaration(node)) {
+    fn(decl);
+    return true;
+  } else if (auto *decl = isSgTemplateVariableDeclaration(node)) {
+    fn(decl);
+    return true;
+  } else if (auto *decl = isSgTemplateInstantiationDecl(node)) {
+    fn(decl);
     return true;
   }
   return false;
