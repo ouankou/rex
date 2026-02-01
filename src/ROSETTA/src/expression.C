@@ -2,6 +2,8 @@
 
 #include "ROSETTA_macros.h"
 
+#include "rosetta_template_prototype_helpers.h"
+
 #include "grammar.h"
 
 // DQ (3/22/2018): Revert back to the previous implementation and pursue
@@ -2037,6 +2039,9 @@ void Grammar::setUpExpressions() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Constraint satisfaction + SFINAE results.
+  addConstraintSatisfactionPrototypes(NonrealRefExp);
+  addSFINAEPrototypes(NonrealRefExp);
   NonrealRefExp.setFunctionSource("SOURCE_GET_TYPE_FROM_SYMBOL",
                                   "../Grammar/Expression.code");
 

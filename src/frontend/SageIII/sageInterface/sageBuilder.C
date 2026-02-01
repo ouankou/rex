@@ -977,8 +977,8 @@ SageBuilder::getTemplateArgumentList(SgDeclarationStatement *decl) {
   }
 
   case V_SgTemplateInstantiationDecl: {
-    templateArgumentsList =
-        &(isSgTemplateInstantiationDecl(decl)->get_templateArguments());
+    SgTemplateInstantiationDecl *inst = isSgTemplateInstantiationDecl(decl);
+    templateArgumentsList = &(inst->get_templateArguments());
     break;
   }
 
@@ -989,8 +989,9 @@ SageBuilder::getTemplateArgumentList(SgDeclarationStatement *decl) {
   }
 
   case V_SgTemplateInstantiationFunctionDecl: {
-    templateArgumentsList =
-        &(isSgTemplateInstantiationFunctionDecl(decl)->get_templateArguments());
+    SgTemplateInstantiationFunctionDecl *inst =
+        isSgTemplateInstantiationFunctionDecl(decl);
+    templateArgumentsList = &(inst->get_templateArguments());
     break;
   }
 
@@ -1001,8 +1002,9 @@ SageBuilder::getTemplateArgumentList(SgDeclarationStatement *decl) {
   }
 
   case V_SgTemplateInstantiationMemberFunctionDecl: {
-    templateArgumentsList = &(isSgTemplateInstantiationMemberFunctionDecl(decl)
-                                  ->get_templateArguments());
+    SgTemplateInstantiationMemberFunctionDecl *inst =
+        isSgTemplateInstantiationMemberFunctionDecl(decl);
+    templateArgumentsList = &(inst->get_templateArguments());
     break;
   }
 
@@ -1013,8 +1015,9 @@ SageBuilder::getTemplateArgumentList(SgDeclarationStatement *decl) {
   }
 
   case V_SgTemplateVariableDeclaration: {
-    templateArgumentsList = &(isSgTemplateVariableDeclaration(decl)
-                                  ->get_templateSpecializationArguments());
+    SgTemplateVariableDeclaration *tmpl_var =
+        isSgTemplateVariableDeclaration(decl);
+    templateArgumentsList = &(tmpl_var->get_templateSpecializationArguments());
     break;
   }
 
@@ -1027,8 +1030,9 @@ SageBuilder::getTemplateArgumentList(SgDeclarationStatement *decl) {
 
     // DQ (11/10/2014): Added support for template typedef declarations.
   case V_SgTemplateInstantiationTypedefDeclaration: {
-    templateArgumentsList = &(isSgTemplateInstantiationTypedefDeclaration(decl)
-                                  ->get_templateArguments());
+    SgTemplateInstantiationTypedefDeclaration *inst =
+        isSgTemplateInstantiationTypedefDeclaration(decl);
+    templateArgumentsList = &(inst->get_templateArguments());
     break;
   }
 
@@ -1169,41 +1173,84 @@ void SageBuilder::setTemplateArgumentParents(SgDeclarationStatement *decl) {
 
   ROSE_ASSERT(decl != NULL);
 
+  if (!(isSgTemplateInstantiationDecl(decl) ||
+        isSgTemplateInstantiationFunctionDecl(decl) ||
+        isSgTemplateInstantiationMemberFunctionDecl(decl) ||
+        isSgTemplateInstantiationTypedefDeclaration(decl) ||
+        isSgTemplateClassDeclaration(decl) ||
+        isSgTemplateFunctionDeclaration(decl) ||
+        isSgTemplateMemberFunctionDeclaration(decl) ||
+        isSgTemplateVariableDeclaration(decl) ||
+        isSgTemplateTypedefDeclaration(decl) || isSgNonrealDecl(decl))) {
+    return;
+  }
+
+  auto set_parents_for_list =
+      [&](SgTemplateArgumentPtrList &templateArgumentsList) {
+        if (templateArgumentsList.empty()) {
+          return;
+        }
+
+        SgDeclarationStatement *first_decl =
+            decl->get_firstNondefiningDeclaration();
+        ROSE_ASSERT(first_decl != NULL);
+
+        for (SgTemplateArgument *arg : templateArgumentsList) {
+          if (arg == nullptr) {
+            continue;
+          }
+          SgNode *parent = arg->get_parent();
+          if (parent == first_decl) {
+            continue;
+          }
+
+          // Reparent if there is no parent, or if the parent is a temporary
+          // home (like a scope or file), or if it's another declaration.
+          if (parent == nullptr || isSgScopeStatement(parent) != nullptr ||
+              isSgFile(parent) != nullptr ||
+              isSgDeclarationStatement(parent) != nullptr) {
+            arg->set_parent(first_decl);
+          }
+        }
+      };
+
   SgTemplateArgumentPtrList *templateArgumentsList =
       getTemplateArgumentList(decl);
 
   if (templateArgumentsList != NULL) {
-    SgDeclarationStatement *first_decl =
-        decl->get_firstNondefiningDeclaration();
-    ROSE_ASSERT(first_decl != NULL);
+    set_parents_for_list(*templateArgumentsList);
+  }
 
-    SgTemplateArgumentPtrList::iterator i = templateArgumentsList->begin();
-    while (i != templateArgumentsList->end()) {
-      SgNode *parent = (*i)->get_parent();
-      if (parent == NULL) {
-        // (*i)->set_parent(decl);
-        (*i)->set_parent(first_decl);
-      } else {
-        SgScopeStatement *scope = isSgScopeStatement(parent);
-        SgFile *file = isSgFile(parent);
-        if (scope != NULL || file != NULL) {
-          // Template arguments initially parented to a scope or file should be
-          // attached to the owning declaration once it exists.
-          (*i)->set_parent(first_decl);
-        } else {
-          SgDeclarationStatement *declaration =
-              isSgDeclarationStatement(parent);
-          if (declaration != NULL) {
-          } else {
-          }
-        }
-      }
-
-      i++;
-    }
+  // REX: Also fix parents for deduced template arguments, if present.
+  if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+          isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+    set_parents_for_list(inst_member->get_deducedTemplateArguments());
+  } else if (SgTemplateInstantiationFunctionDecl *inst_func =
+                 isSgTemplateInstantiationFunctionDecl(decl)) {
+    set_parents_for_list(inst_func->get_deducedTemplateArguments());
+  } else if (SgTemplateInstantiationTypedefDeclaration *inst_typedef =
+                 isSgTemplateInstantiationTypedefDeclaration(decl)) {
+    set_parents_for_list(inst_typedef->get_deducedTemplateArguments());
+  } else if (SgTemplateVariableDeclaration *tmpl_var =
+                 isSgTemplateVariableDeclaration(decl)) {
+    set_parents_for_list(tmpl_var->get_deducedTemplateArguments());
+  } else if (SgTemplateInstantiationDecl *inst =
+                 isSgTemplateInstantiationDecl(decl)) {
+    set_parents_for_list(inst->get_deducedTemplateArguments());
   }
 
   testTemplateArgumentParents(decl);
+}
+
+void SageBuilder::setTemplateArgumentParents(SgNonrealRefExp *ref) {
+  if (ref == nullptr) {
+    return;
+  }
+  for (SgTemplateArgument *arg : ref->get_templateArguments()) {
+    if (arg != nullptr && arg->get_parent() != ref) {
+      arg->set_parent(ref);
+    }
+  }
 }
 
 void SageBuilder::setTemplateParameterParents(SgDeclarationStatement *decl) {
@@ -1250,6 +1297,18 @@ void SageBuilder::testTemplateArgumentParents(SgDeclarationStatement *decl) {
   // set, to the first non-defining declaration).
 
   ROSE_ASSERT(decl != NULL);
+
+  if (!(isSgTemplateInstantiationDecl(decl) ||
+        isSgTemplateInstantiationFunctionDecl(decl) ||
+        isSgTemplateInstantiationMemberFunctionDecl(decl) ||
+        isSgTemplateInstantiationTypedefDeclaration(decl) ||
+        isSgTemplateClassDeclaration(decl) ||
+        isSgTemplateFunctionDeclaration(decl) ||
+        isSgTemplateMemberFunctionDeclaration(decl) ||
+        isSgTemplateVariableDeclaration(decl) ||
+        isSgTemplateTypedefDeclaration(decl) || isSgNonrealDecl(decl))) {
+    return;
+  }
 
   SgTemplateArgumentPtrList *templateArgumentsList =
       getTemplateArgumentList(decl);

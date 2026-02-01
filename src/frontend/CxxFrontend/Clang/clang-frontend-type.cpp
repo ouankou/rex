@@ -2617,8 +2617,16 @@ void ClangToSageTranslator::appendTemplateArguments(
     SgTemplateArgumentPtrList &arg_list, const clang::TemplateArgument &arg,
     bool explicitlySpecified) {
   if (arg.getKind() == clang::TemplateArgument::Pack) {
-    for (const clang::TemplateArgument &pack_arg : arg.pack_elements()) {
-      appendTemplateArguments(arg_list, pack_arg, explicitlySpecified);
+    auto elements = arg.pack_elements();
+    if (elements.empty()) {
+      SgTemplateArgument *pack_marker = new SgTemplateArgument();
+      pack_marker->set_argumentType(
+          SgTemplateArgument::start_of_pack_expansion_argument);
+      arg_list.push_back(pack_marker);
+    } else {
+      for (const clang::TemplateArgument &pack_arg : elements) {
+        appendTemplateArguments(arg_list, pack_arg, explicitlySpecified);
+      }
     }
     return;
   }
@@ -2640,6 +2648,27 @@ SgTemplateArgumentPtrList ClangToSageTranslator::buildTemplateArguments(
   auto args = clang_type->template_arguments();
   for (const clang::TemplateArgument &arg : args) {
     appendTemplateArguments(arg_list, arg, false);
+  }
+  if (arg_list.empty()) {
+    if (clang::TemplateDecl *tmpl_decl =
+            clang_type->getTemplateName().getAsTemplateDecl()) {
+      if (clang::TemplateParameterList *params =
+              tmpl_decl->getTemplateParameters()) {
+        bool has_pack = false;
+        for (clang::NamedDecl *param : *params) {
+          if (param != nullptr && param->isParameterPack()) {
+            has_pack = true;
+            break;
+          }
+        }
+        if (has_pack) {
+          SgTemplateArgument *pack_marker = new SgTemplateArgument();
+          pack_marker->set_argumentType(
+              SgTemplateArgument::start_of_pack_expansion_argument);
+          arg_list.push_back(pack_marker);
+        }
+      }
+    }
   }
 
   ensureTemplateArgumentParents(arg_list);
@@ -3184,11 +3213,14 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
       if (inst_decl->get_templateArguments().empty()) {
         inst_decl->get_templateArguments() = buildTemplateArguments(clang_type);
       }
-      for (SgTemplateArgument *arg : inst_decl->get_templateArguments()) {
-        if (arg != nullptr) {
-          arg->set_parent(inst_decl);
-        }
+      if (inst_decl->get_deducedTemplateArguments().empty()) {
+        inst_decl->get_deducedTemplateArguments() =
+            buildTemplateArguments(clang_type);
       }
+      if (inst_decl->get_specializedTemplateDeclaration() == nullptr) {
+        inst_decl->set_specializedTemplateDeclaration(template_decl);
+      }
+      SageBuilder::setTemplateArgumentParents(inst_decl);
       if (!inst_decl->get_nameResetFromMangledForm()) {
         inst_decl->set_nameResetFromMangledForm(true);
       }
@@ -3199,6 +3231,7 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
 
   // Build template arguments
   SgTemplateArgumentPtrList args = buildTemplateArguments(clang_type);
+  SgTemplateArgumentPtrList deduced_args = buildTemplateArguments(clang_type);
 
   // Create class type first (will be set on instantiation)
   SgClassType *class_type = nullptr;
@@ -3212,13 +3245,10 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
       class_type, // type (initially nullptr, will be set)
       nullptr,    // definition
       template_decl, args);
+  inst_decl->get_deducedTemplateArguments() = deduced_args;
+  inst_decl->set_specializedTemplateDeclaration(template_decl);
 
   inst_decl->get_templateArguments() = args;
-  for (SgTemplateArgument *arg : inst_decl->get_templateArguments()) {
-    if (arg != nullptr) {
-      arg->set_parent(inst_decl);
-    }
-  }
 
   // Set file info and mark as compiler generated
   // Create synthetic file info since this is a compiler-generated node
@@ -3230,6 +3260,7 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   inst_decl->setForward();
   inst_decl->set_definingDeclaration(nullptr);
   inst_decl->set_firstNondefiningDeclaration(inst_decl);
+  SageBuilder::setTemplateArgumentParents(inst_decl);
 
   if (inst_decl->get_templateDeclaration() == NULL) {
     std::cerr << "CRITICAL ERROR: inst_decl->get_templateDeclaration() is NULL "
@@ -3280,6 +3311,80 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
   // Don't desugar or use canonical type for template specializations
   // We want to create proper SgTemplateInstantiationDecl nodes with template
   // arguments Desugaring would lose the template argument information
+
+  if (template_specialization_type->isTypeAlias()) {
+    clang::TemplateName tname = template_specialization_type->getTemplateName();
+    clang::TemplateDecl *clang_template_decl = tname.getAsTemplateDecl();
+    clang::TypeAliasTemplateDecl *alias_decl =
+        llvm::dyn_cast_or_null<clang::TypeAliasTemplateDecl>(
+            clang_template_decl);
+
+    SgTemplateTypedefDeclaration *alias_sg_decl = nullptr;
+    if (alias_decl != nullptr) {
+      if (SgDeclarationStatement *found_decl =
+              lookupSgDeclarationForClangDecl(alias_decl,
+                                              /*allow_on_demand=*/true)) {
+        alias_sg_decl = isSgTemplateTypedefDeclaration(found_decl);
+      }
+    }
+
+    SgTemplateArgumentPtrList template_args =
+        buildTemplateArguments(template_specialization_type);
+    SgTemplateArgumentPtrList deduced_args =
+        buildTemplateArguments(template_specialization_type);
+
+    SgType *aliased_type = buildTypeFromQualifiedType(
+        template_specialization_type->getAliasedType());
+
+    SgScopeStatement *scope = nullptr;
+    if (alias_sg_decl != nullptr) {
+      scope = alias_sg_decl->get_scope();
+    }
+    if (scope == nullptr) {
+      scope = SageBuilder::topScopeStack();
+    }
+    if (scope == nullptr) {
+      scope = getGlobalScope();
+    }
+
+    if (alias_sg_decl != nullptr && aliased_type != nullptr &&
+        scope != nullptr) {
+      SgName alias_name = alias_sg_decl->get_name();
+      SgTemplateInstantiationTypedefDeclaration *inst_decl =
+          SageBuilder::buildTemplateInstantiationTypedefDeclaration_nfi(
+              alias_name, aliased_type, scope, /*has_defining_base=*/false,
+              alias_sg_decl, template_args);
+      if (inst_decl != nullptr) {
+        inst_decl->get_templateArguments() = template_args;
+        inst_decl->get_deducedTemplateArguments() = deduced_args;
+        inst_decl->set_nameResetFromMangledForm(true);
+        SageBuilder::setTemplateArgumentParents(inst_decl);
+        if (inst_decl->get_specializedTemplateDeclaration() == nullptr) {
+          inst_decl->set_specializedTemplateDeclaration(alias_sg_decl);
+        }
+        registerDeclarationSymbol(inst_decl);
+        *node = inst_decl->get_type();
+        return VisitType(template_specialization_type, node);
+      }
+    }
+
+    // Fallback: preserve alias spelling as a nonreal type.
+    std::string alias_name =
+        alias_decl != nullptr ? alias_decl->getNameAsString() : std::string();
+    if (alias_name.empty()) {
+      alias_name = getTemplateNameBase(tname);
+    }
+    if (alias_name.empty()) {
+      alias_name = "__alias_template";
+    }
+    SgScopeStatement *base_scope = SageBuilder::topScopeStack();
+    if (base_scope == nullptr) {
+      base_scope = getGlobalScope();
+    }
+    *node = SageBuilder::buildNonrealType(SgName(alias_name), base_scope,
+                                          &template_args);
+    return VisitType(template_specialization_type, node);
+  }
 
   if (template_specialization_type->isDependentType()) {
     clang::TemplateName tname = template_specialization_type->getTemplateName();

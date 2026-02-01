@@ -3,6 +3,8 @@
 
 #include "ROSETTA_macros.h"
 
+#include "rosetta_template_prototype_helpers.h"
+
 #include "grammar.h"
 
 /*
@@ -2486,6 +2488,7 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateSpecializationArguments",
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  addTemplateInstantiationPrototypes(TemplateVariableDeclaration);
   TemplateVariableDeclaration.setDataPrototype(
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2531,6 +2534,7 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  addTemplateInstantiationPrototypes(TemplateInstantiationTypedefDeclaration);
   TemplateInstantiationTypedefDeclaration.setDataPrototype(
       "bool", "nameResetFromMangledForm", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2652,6 +2656,7 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  addTemplateInstantiationPrototypes(TemplateInstantiationDecl);
 
   // DQ (10/11/2004): instantiated template names must be reset once the
   // template parameters are known We want to use names like "ABC<int>"
@@ -2688,6 +2693,7 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  addTemplateInstantiationPrototypes(TemplateInstantiationFunctionDecl);
 
   // DQ (2/15/2005): instantiated function template names must be reset once the
   // template parameters are known We want to use names like "ABC<int>" instead
@@ -2732,6 +2738,7 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  addTemplateInstantiationPrototypes(TemplateInstantiationMemberFunctionDecl);
 
   // DQ (2/15/2005): instantiated member function template names must be reset
   // once the template parameters are known We want to use names like "ABC<int>"
