@@ -3810,6 +3810,10 @@ void Grammar::buildTreeTraversalFunctions(
       else if ((gs->getTypeNameString() == "static $CLASSNAME*") &&
                memberVariableName == "builtin_type") {
         outputFile << "  // suppress handling of builtin_type date members \n";
+      } else if (memberVariableName == "nonreal_decl_scope") {
+        outputFile << "if (p_nonreal_decl_scope != NULL) "
+                   << successorContainerName
+                   << ".push_back(p_nonreal_decl_scope);\n";
       } else {
         // normal case
         outputFile << generateTraverseSuccessor(*iter, successorContainerName);
