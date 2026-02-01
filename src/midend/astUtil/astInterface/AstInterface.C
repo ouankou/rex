@@ -2974,6 +2974,16 @@ bool AstInterface::IsBlock(const AstNodePtr &_n, std::string *blockname,
     }
     return true;
   case V_SgDeclarationScope:
+    if (_stmts != 0) {
+      SgDeclarationScope *declScope = isSgDeclarationScope(n);
+      if (declScope != 0) {
+        SgDeclarationStatementPtrList &decls = declScope->get_declarations();
+        for (SgDeclarationStatementPtrList::iterator p = decls.begin();
+             p != decls.end(); ++p) {
+          _stmts->push_back(*p);
+        }
+      }
+    }
     if (blockname != 0) {
       *blockname = isSgDeclarationScope(n)->get_qualified_name();
     }

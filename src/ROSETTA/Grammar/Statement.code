@@ -10871,6 +10871,7 @@ SgVariableDeclaration::initializeData(Sg_File_Info *info, SgInitializedName* c_i
   // Ensure requires clause pointer is initialized for all constructors
   // that delegate to this helper.
     p_requiresClause = NULL;
+    p_nonreal_decl_scope = NULL;
 
   // DQ(10/10/2007): Added initialization of another data member.
      p_specialization = SgDeclarationStatement::e_no_specialization;
@@ -14065,7 +14066,7 @@ SgTemplateVariableDeclaration::post_construction_initialization()
 
 
 SgTemplateVariableDeclaration::SgTemplateVariableDeclaration( const SgName& var_name, SgType *type, SgInitializer *initializer)
-   : SgVariableDeclaration(var_name,type,initializer), p_nonreal_decl_scope(NULL)
+   : SgVariableDeclaration(var_name,type,initializer)
    {
   // DQ (11/10/2006): Ultimately, i think this constructor should be eliminated since it will be
   // redundant with a higher level interface which is planned and it is not automatically generated.

@@ -3866,7 +3866,8 @@ void Grammar::buildTreeTraversalFunctions(
         outputFile
             << "if (idx == 0) return compute_baseTypeDefiningDeclaration();\n"
             << "else if (idx == 1) return p_requiresClause;\n"
-            << "else return p_variables[idx-2];\n";
+            << "else if (idx == 2) return p_nonreal_decl_scope;\n"
+            << "else return p_variables[idx-3];\n";
       }
       // Liao, 5/30/2009
       // More exceptional cases for SgOmpClauseBodyStatement and its derived
@@ -4036,11 +4037,12 @@ void Grammar::buildTreeTraversalFunctions(
         outputFile
             << "if (child == compute_baseTypeDefiningDeclaration()) return 0;\n"
             << "else if (child == p_requiresClause) return 1;\n"
+            << "else if (child == p_nonreal_decl_scope) return 2;\n"
             << "else {\n"
             << "SgInitializedNamePtrList::const_iterator itr = "
                "find(p_variables.begin(), p_variables.end(), child);\n"
             << "if (itr != p_variables.end()) return (itr - "
-               "p_variables.begin()) + 2;\n"
+               "p_variables.begin()) + 3;\n"
             << "else return (size_t) -1;\n"
             << "}\n";
       }

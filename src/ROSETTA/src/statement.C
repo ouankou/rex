@@ -1849,6 +1849,14 @@ void Grammar::setUpStatements() {
       "SgExpression*", "requiresClause", "= NULL", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
+  // TV (04/11/2018): Introducing representation for non-real "stuff" (template
+  // parameters) on variable declarations. Used by template variable
+  // declarations, but stored on the base class to preserve traversal ordering.
+  VariableDeclaration.setDataPrototype(
+      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      DEF_DELETE);
+
   VariableDeclaration.setDataPrototype(
       "SgInitializedNamePtrList", "variables", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
@@ -2345,7 +2353,7 @@ void Grammar::setUpStatements() {
 
   TemplateDeclaration.setDataPrototype(
       "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       DEF_DELETE);
 
   // DQ (6/10/2011): Added support for template class declaration, also template
@@ -2395,7 +2403,7 @@ void Grammar::setUpStatements() {
   // parameters)
   TemplateClassDeclaration.setDataPrototype(
       "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       DEF_DELETE);
 
   // **************************************************************************************************
@@ -2439,7 +2447,7 @@ void Grammar::setUpStatements() {
   // parameters)
   TemplateFunctionDeclaration.setDataPrototype(
       "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       DEF_DELETE);
 
   // **************************************************************************************************************
@@ -2483,7 +2491,7 @@ void Grammar::setUpStatements() {
   // parameters)
   TemplateMemberFunctionDeclaration.setDataPrototype(
       "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       DEF_DELETE);
 
   // **************************************************************************************************************************
@@ -2508,13 +2516,6 @@ void Grammar::setUpStatements() {
   TemplateVariableDeclaration.setDataPrototype(
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // TV (04/11/2018): Introducing representation for non-real "stuff" (template
-  // parameters)
-  TemplateVariableDeclaration.setDataPrototype(
-      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      DEF_DELETE);
 
   // *******************************************************************************
 
@@ -2542,7 +2543,7 @@ void Grammar::setUpStatements() {
   // parameters)
   TemplateTypedefDeclaration.setDataPrototype(
       "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       DEF_DELETE);
 
   // DQ (11/4/2014): Adding IR support for the instantiation of a template
@@ -2795,7 +2796,7 @@ void Grammar::setUpStatements() {
                                NO_TRAVERSAL, NO_DELETE);
   NonrealDecl.setDataPrototype("SgDeclarationScope*", "nonreal_decl_scope",
                                "= NULL", NO_CONSTRUCTOR_PARAMETER,
-                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                               BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
                                DEF_DELETE);
   NonrealDecl.setDataPrototype("SgNonrealType*", "type", "= NULL",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,

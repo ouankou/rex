@@ -1599,6 +1599,10 @@ buildDeleteExp_nfi(SgExpression *target, bool is_array = false,
 //! Build a scope statement. Used to build SgNonrealDecl and SgNonrealType
 ROSE_DLL_API SgDeclarationScope *buildDeclarationScope();
 
+//! Get or create the nonreal declaration scope associated with a declaration.
+ROSE_DLL_API SgDeclarationScope *
+getOrCreateNonrealDeclarationScope(SgDeclarationStatement *owner);
+
 //! Build a class definition scope statement
 // SgClassDefinition* buildClassDefinition(SgClassDeclaration *d = NULL);
 ROSE_DLL_API SgClassDefinition *
