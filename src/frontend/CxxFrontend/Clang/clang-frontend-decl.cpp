@@ -8188,7 +8188,9 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       definingDecl->set_parent(parent_scope);
 
       for (SgTemplateArgument *arg : definingDecl->get_templateArguments()) {
-        arg->set_parent(definingDecl);
+        if (arg != nullptr) {
+          arg->set_parent(definingDecl);
+        }
       }
       for (SgTemplateArgument *arg :
            definingDecl->get_deducedTemplateArguments()) {
@@ -10906,6 +10908,10 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
     return nullptr;
   };
 
+  std::vector<std::pair<SgTemplateInstantiationDecl *, clang::Decl *>>
+      remaining_links;
+  remaining_links.reserve(p_pending_specialized_template_links.size());
+
   for (const auto &entry : p_pending_specialized_template_links) {
     SgTemplateInstantiationDecl *inst_decl = entry.first;
     clang::Decl *specialized_decl = entry.second;
@@ -10934,10 +10940,13 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
 
     if (SgDeclarationStatement *resolved = lookup(specialized_decl)) {
       inst_decl->set_specializedTemplateDeclaration(resolved);
+      continue;
     }
+
+    remaining_links.emplace_back(inst_decl, specialized_decl);
   }
 
-  p_pending_specialized_template_links.clear();
+  p_pending_specialized_template_links.swap(remaining_links);
 }
 
 void ClangToSageTranslator::ensureMemberFunctionScope(
