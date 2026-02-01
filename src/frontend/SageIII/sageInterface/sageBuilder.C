@@ -9996,14 +9996,8 @@ SageBuilder::getOrCreateNonrealDeclarationScope(SgDeclarationStatement *owner) {
 
   SgDeclarationScope *scope = nullptr;
 
-  if (SgTemplateDeclaration *tmpl = isSgTemplateDeclaration(owner)) {
-    scope = tmpl->get_nonreal_decl_scope();
-    if (scope == nullptr) {
-      scope = SageBuilder::buildDeclarationScope();
-      tmpl->set_nonreal_decl_scope(scope);
-    }
-  } else if (SgTemplateClassDeclaration *tmpl_class =
-                 isSgTemplateClassDeclaration(owner)) {
+  if (SgTemplateClassDeclaration *tmpl_class =
+          isSgTemplateClassDeclaration(owner)) {
     scope = tmpl_class->get_nonreal_decl_scope();
     if (scope == nullptr) {
       scope = SageBuilder::buildDeclarationScope();
@@ -10029,6 +10023,12 @@ SageBuilder::getOrCreateNonrealDeclarationScope(SgDeclarationStatement *owner) {
     if (scope == nullptr) {
       scope = SageBuilder::buildDeclarationScope();
       tmpl_typedef->set_nonreal_decl_scope(scope);
+    }
+  } else if (SgTemplateDeclaration *tmpl = isSgTemplateDeclaration(owner)) {
+    scope = tmpl->get_nonreal_decl_scope();
+    if (scope == nullptr) {
+      scope = SageBuilder::buildDeclarationScope();
+      tmpl->set_nonreal_decl_scope(scope);
     }
   } else if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(owner)) {
     scope = var_decl->get_nonreal_decl_scope();

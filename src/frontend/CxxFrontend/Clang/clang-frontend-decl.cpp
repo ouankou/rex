@@ -1866,11 +1866,10 @@ void attach_nonreal_template_parameters(
     if (nrdecl->get_scope() != decl_scope) {
       nrdecl->set_scope(decl_scope);
     }
-    if (nrdecl->get_parent() != decl_scope) {
-      nrdecl->set_parent(decl_scope);
-    }
     if (!decl_scope->statementExistsInScope(nrdecl)) {
       decl_scope->insertStatementInScope(nrdecl, false);
+    }
+    if (nrdecl->get_parent() != decl_scope) {
       nrdecl->set_parent(decl_scope);
     }
     if (decl_scope->lookup_nonreal_symbol(nrdecl->get_name(), nullptr,
