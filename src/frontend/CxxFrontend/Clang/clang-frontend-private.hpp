@@ -536,7 +536,7 @@ protected:
   std::map<std::string, SgTemplateInstantiationDecl *> p_template_inst_cache;
   // Pending specialized-template links for instantiations encountered before
   // the specialized template declaration has been translated.
-  std::vector<std::pair<SgTemplateInstantiationDecl *, clang::Decl *>>
+  std::map<SgTemplateInstantiationDecl *, clang::Decl *>
       p_pending_specialized_template_links;
   struct CapturedPragma {
     unsigned line;

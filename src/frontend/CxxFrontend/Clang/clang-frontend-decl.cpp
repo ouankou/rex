@@ -10835,8 +10835,7 @@ void ClangToSageTranslator::queueSpecializedTemplateLink(
   if (inst_decl == nullptr || specialized_decl == nullptr) {
     return;
   }
-  p_pending_specialized_template_links.emplace_back(inst_decl,
-                                                    specialized_decl);
+  p_pending_specialized_template_links[inst_decl] = specialized_decl;
 }
 
 void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
@@ -10844,25 +10843,26 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
     return;
   }
 
-  auto links_to_process = std::move(p_pending_specialized_template_links);
-  for (const auto &entry : links_to_process) {
-    SgTemplateInstantiationDecl *inst_decl = entry.first;
-    clang::Decl *specialized_decl = entry.second;
+  for (auto it = p_pending_specialized_template_links.begin();
+       it != p_pending_specialized_template_links.end();) {
+    SgTemplateInstantiationDecl *inst_decl = it->first;
+    clang::Decl *specialized_decl = it->second;
     if (inst_decl == nullptr || specialized_decl == nullptr) {
+      it = p_pending_specialized_template_links.erase(it);
       continue;
     }
     if (inst_decl->get_specializedTemplateDeclaration() != nullptr) {
+      it = p_pending_specialized_template_links.erase(it);
       continue;
     }
     if (SgDeclarationStatement *resolved =
             lookupSgDeclarationForClangDecl(specialized_decl,
                                             /*allow_on_demand=*/true)) {
       inst_decl->set_specializedTemplateDeclaration(resolved);
-      continue;
+      it = p_pending_specialized_template_links.erase(it);
+    } else {
+      ++it;
     }
-
-    p_pending_specialized_template_links.emplace_back(inst_decl,
-                                                      specialized_decl);
   }
 }
 
