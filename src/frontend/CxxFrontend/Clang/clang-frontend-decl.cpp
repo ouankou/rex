@@ -11018,24 +11018,19 @@ bool visitConstraintTargets(NodeT *node, Fn &&fn) {
   if (auto *decl = isSgTemplateInstantiationMemberFunctionDecl(node)) {
     fn(decl);
     return true;
-  }
-  if (auto *decl = isSgTemplateInstantiationFunctionDecl(node)) {
+  } else if (auto *decl = isSgTemplateInstantiationFunctionDecl(node)) {
     fn(decl);
     return true;
-  }
-  if (auto *decl = isSgTemplateInstantiationTypedefDeclaration(node)) {
+  } else if (auto *decl = isSgTemplateInstantiationTypedefDeclaration(node)) {
     fn(decl);
     return true;
-  }
-  if (auto *decl = isSgTemplateVariableDeclaration(node)) {
+  } else if (auto *decl = isSgTemplateVariableDeclaration(node)) {
     fn(decl);
     return true;
-  }
-  if (auto *decl = isSgTemplateInstantiationDecl(node)) {
+  } else if (auto *decl = isSgTemplateInstantiationDecl(node)) {
     fn(decl);
     return true;
-  }
-  if (auto *ref = isSgNonrealRefExp(node)) {
+  } else if (auto *ref = isSgNonrealRefExp(node)) {
     fn(ref);
     return true;
   }
