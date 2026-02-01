@@ -1721,83 +1721,6 @@ void diagnose_null_scope(SgDeclarationStatement *ds, const char *context) {
               ds->class_name().c_str(), ds, context);
 }
 
-SgDeclarationScope *
-get_nonreal_decl_scope_for_owner(SgDeclarationStatement *owner) {
-  if (owner == nullptr) {
-    return nullptr;
-  }
-
-  if (SgTemplateClassDeclaration *tmpl_class =
-          isSgTemplateClassDeclaration(owner)) {
-    return tmpl_class->get_nonreal_decl_scope();
-  }
-  if (SgTemplateFunctionDeclaration *tmpl_func =
-          isSgTemplateFunctionDeclaration(owner)) {
-    return tmpl_func->get_nonreal_decl_scope();
-  }
-  if (SgTemplateMemberFunctionDeclaration *tmpl_member =
-          isSgTemplateMemberFunctionDeclaration(owner)) {
-    return tmpl_member->get_nonreal_decl_scope();
-  }
-  if (SgTemplateTypedefDeclaration *tmpl_typedef =
-          isSgTemplateTypedefDeclaration(owner)) {
-    return tmpl_typedef->get_nonreal_decl_scope();
-  }
-  if (SgTemplateDeclaration *tmpl = isSgTemplateDeclaration(owner)) {
-    return tmpl->get_nonreal_decl_scope();
-  }
-  if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(owner)) {
-    return var_decl->get_nonreal_decl_scope();
-  }
-  if (SgNonrealDecl *nrdecl = isSgNonrealDecl(owner)) {
-    return nrdecl->get_nonreal_decl_scope();
-  }
-
-  return nullptr;
-}
-
-bool set_nonreal_decl_scope_for_owner(SgDeclarationStatement *owner,
-                                      SgDeclarationScope *scope) {
-  if (owner == nullptr || scope == nullptr) {
-    return false;
-  }
-
-  if (SgTemplateClassDeclaration *tmpl_class =
-          isSgTemplateClassDeclaration(owner)) {
-    tmpl_class->set_nonreal_decl_scope(scope);
-    return true;
-  }
-  if (SgTemplateFunctionDeclaration *tmpl_func =
-          isSgTemplateFunctionDeclaration(owner)) {
-    tmpl_func->set_nonreal_decl_scope(scope);
-    return true;
-  }
-  if (SgTemplateMemberFunctionDeclaration *tmpl_member =
-          isSgTemplateMemberFunctionDeclaration(owner)) {
-    tmpl_member->set_nonreal_decl_scope(scope);
-    return true;
-  }
-  if (SgTemplateTypedefDeclaration *tmpl_typedef =
-          isSgTemplateTypedefDeclaration(owner)) {
-    tmpl_typedef->set_nonreal_decl_scope(scope);
-    return true;
-  }
-  if (SgTemplateDeclaration *tmpl = isSgTemplateDeclaration(owner)) {
-    tmpl->set_nonreal_decl_scope(scope);
-    return true;
-  }
-  if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(owner)) {
-    var_decl->set_nonreal_decl_scope(scope);
-    return true;
-  }
-  if (SgNonrealDecl *nrdecl = isSgNonrealDecl(owner)) {
-    nrdecl->set_nonreal_decl_scope(scope);
-    return true;
-  }
-
-  return false;
-}
-
 bool detach_decl_from_scope_child_list(SgDeclarationStatement *decl,
                                        SgScopeStatement *scope);
 
@@ -1825,13 +1748,14 @@ void attach_nonreal_template_parameters(
     return;
   }
 
-  SgDeclarationScope *decl_scope = get_nonreal_decl_scope_for_owner(owner);
+  SgDeclarationScope *decl_scope =
+      SageBuilder::getNonrealDeclarationScope(owner);
   if (decl_scope == nullptr) {
     SgDeclarationScope *candidate_scope =
         isSgDeclarationScope(first_nrdecl->get_scope());
     if (candidate_scope != nullptr) {
       decl_scope = candidate_scope;
-      set_nonreal_decl_scope_for_owner(owner, decl_scope);
+      SageBuilder::setNonrealDeclarationScope(owner, decl_scope);
     }
   }
 

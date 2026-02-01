@@ -9988,62 +9988,84 @@ SgDeclarationScope *SageBuilder::buildDeclarationScope() {
   return nonreal_decl_scope;
 }
 
+namespace {
+template <typename Fn>
+bool dispatchNonrealDeclScopeOwner(SgDeclarationStatement *owner, Fn &&fn) {
+  if (auto *tmpl_class = isSgTemplateClassDeclaration(owner)) {
+    fn(tmpl_class);
+    return true;
+  }
+  if (auto *tmpl_func = isSgTemplateFunctionDeclaration(owner)) {
+    fn(tmpl_func);
+    return true;
+  }
+  if (auto *tmpl_member = isSgTemplateMemberFunctionDeclaration(owner)) {
+    fn(tmpl_member);
+    return true;
+  }
+  if (auto *tmpl_typedef = isSgTemplateTypedefDeclaration(owner)) {
+    fn(tmpl_typedef);
+    return true;
+  }
+  if (auto *tmpl = isSgTemplateDeclaration(owner)) {
+    fn(tmpl);
+    return true;
+  }
+  if (auto *var_decl = isSgVariableDeclaration(owner)) {
+    fn(var_decl);
+    return true;
+  }
+  if (auto *nrdecl = isSgNonrealDecl(owner)) {
+    fn(nrdecl);
+    return true;
+  }
+  return false;
+}
+
+bool isNonrealDeclScopeOwner(SgDeclarationStatement *owner) {
+  if (owner == nullptr) {
+    return false;
+  }
+  return dispatchNonrealDeclScopeOwner(owner, [](auto *) {});
+}
+} // namespace
+
+SgDeclarationScope *
+SageBuilder::getNonrealDeclarationScope(SgDeclarationStatement *owner) {
+  if (owner == nullptr) {
+    return nullptr;
+  }
+
+  SgDeclarationScope *scope = nullptr;
+  dispatchNonrealDeclScopeOwner(
+      owner, [&](auto *decl) { scope = decl->get_nonreal_decl_scope(); });
+  return scope;
+}
+
+bool SageBuilder::setNonrealDeclarationScope(SgDeclarationStatement *owner,
+                                             SgDeclarationScope *scope) {
+  if (owner == nullptr || scope == nullptr) {
+    return false;
+  }
+
+  return dispatchNonrealDeclScopeOwner(
+      owner, [&](auto *decl) { decl->set_nonreal_decl_scope(scope); });
+}
+
 SgDeclarationScope *
 SageBuilder::getOrCreateNonrealDeclarationScope(SgDeclarationStatement *owner) {
   if (owner == nullptr) {
     return nullptr;
   }
 
-  SgDeclarationScope *scope = nullptr;
-
-  if (SgTemplateClassDeclaration *tmpl_class =
-          isSgTemplateClassDeclaration(owner)) {
-    scope = tmpl_class->get_nonreal_decl_scope();
-    if (scope == nullptr) {
-      scope = SageBuilder::buildDeclarationScope();
-      tmpl_class->set_nonreal_decl_scope(scope);
-    }
-  } else if (SgTemplateFunctionDeclaration *tmpl_func =
-                 isSgTemplateFunctionDeclaration(owner)) {
-    scope = tmpl_func->get_nonreal_decl_scope();
-    if (scope == nullptr) {
-      scope = SageBuilder::buildDeclarationScope();
-      tmpl_func->set_nonreal_decl_scope(scope);
-    }
-  } else if (SgTemplateMemberFunctionDeclaration *tmpl_member =
-                 isSgTemplateMemberFunctionDeclaration(owner)) {
-    scope = tmpl_member->get_nonreal_decl_scope();
-    if (scope == nullptr) {
-      scope = SageBuilder::buildDeclarationScope();
-      tmpl_member->set_nonreal_decl_scope(scope);
-    }
-  } else if (SgTemplateTypedefDeclaration *tmpl_typedef =
-                 isSgTemplateTypedefDeclaration(owner)) {
-    scope = tmpl_typedef->get_nonreal_decl_scope();
-    if (scope == nullptr) {
-      scope = SageBuilder::buildDeclarationScope();
-      tmpl_typedef->set_nonreal_decl_scope(scope);
-    }
-  } else if (SgTemplateDeclaration *tmpl = isSgTemplateDeclaration(owner)) {
-    scope = tmpl->get_nonreal_decl_scope();
-    if (scope == nullptr) {
-      scope = SageBuilder::buildDeclarationScope();
-      tmpl->set_nonreal_decl_scope(scope);
-    }
-  } else if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(owner)) {
-    scope = var_decl->get_nonreal_decl_scope();
-    if (scope == nullptr) {
-      scope = SageBuilder::buildDeclarationScope();
-      var_decl->set_nonreal_decl_scope(scope);
-    }
-  } else if (SgNonrealDecl *nrdecl = isSgNonrealDecl(owner)) {
-    scope = nrdecl->get_nonreal_decl_scope();
-    if (scope == nullptr) {
-      scope = SageBuilder::buildDeclarationScope();
-      nrdecl->set_nonreal_decl_scope(scope);
-    }
-  } else {
+  if (!isNonrealDeclScopeOwner(owner)) {
     return nullptr;
+  }
+
+  SgDeclarationScope *scope = getNonrealDeclarationScope(owner);
+  if (scope == nullptr) {
+    scope = SageBuilder::buildDeclarationScope();
+    setNonrealDeclarationScope(owner, scope);
   }
 
   if (scope != nullptr && scope->get_parent() != owner) {
