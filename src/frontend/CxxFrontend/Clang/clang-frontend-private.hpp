@@ -534,9 +534,9 @@ protected:
   // SgTemplateInstantiationDecl Key: mangled instantiation name (e.g.,
   // "std::array<double, 1024>") Value: Template instantiation declaration
   std::map<std::string, SgTemplateInstantiationDecl *> p_template_inst_cache;
-  // Pending specialized-template links for instantiations encountered before
+  // Pending specialized-template links for declarations encountered before
   // the specialized template declaration has been translated.
-  std::map<SgTemplateInstantiationDecl *, clang::Decl *>
+  std::map<SgDeclarationStatement *, clang::Decl *>
       p_pending_specialized_template_links;
   struct CapturedPragma {
     unsigned line;
@@ -596,7 +596,7 @@ protected:
   SgSymbol *buildSymbolForDeclaration(SgDeclarationStatement *decl);
   void registerDeclarationSymbol(SgDeclarationStatement *decl);
   void reconcileOnDemandTranslation(SgNode *node);
-  void queueSpecializedTemplateLink(SgTemplateInstantiationDecl *inst_decl,
+  void queueSpecializedTemplateLink(SgDeclarationStatement *decl,
                                     clang::Decl *specialized_decl);
   size_t resolvePendingSpecializedTemplateLinks();
   SgDeclarationStatement *lookupSgDeclarationForClangDecl(clang::Decl *key,

@@ -10831,11 +10831,16 @@ ClangToSageTranslator::lookupSgDeclarationForClangDecl(clang::Decl *key,
 }
 
 void ClangToSageTranslator::queueSpecializedTemplateLink(
-    SgTemplateInstantiationDecl *inst_decl, clang::Decl *specialized_decl) {
-  if (inst_decl == nullptr || specialized_decl == nullptr) {
+    SgDeclarationStatement *decl, clang::Decl *specialized_decl) {
+  if (decl == nullptr || specialized_decl == nullptr) {
     return;
   }
-  p_pending_specialized_template_links[inst_decl] = specialized_decl;
+  ROSE_ASSERT(isSgTemplateInstantiationMemberFunctionDecl(decl) != nullptr ||
+              isSgTemplateInstantiationFunctionDecl(decl) != nullptr ||
+              isSgTemplateInstantiationTypedefDeclaration(decl) != nullptr ||
+              isSgTemplateInstantiationDecl(decl) != nullptr ||
+              isSgTemplateVariableDeclaration(decl) != nullptr);
+  p_pending_specialized_template_links[decl] = specialized_decl;
 }
 
 size_t ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
@@ -10846,14 +10851,63 @@ size_t ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
 
   for (auto it = p_pending_specialized_template_links.begin();
        it != p_pending_specialized_template_links.end();) {
-    SgTemplateInstantiationDecl *inst_decl = it->first;
+    SgDeclarationStatement *decl = it->first;
     clang::Decl *specialized_decl = it->second;
-    if (inst_decl == nullptr || specialized_decl == nullptr) {
+    if (decl == nullptr || specialized_decl == nullptr) {
       it = p_pending_specialized_template_links.erase(it);
       ++resolved_links;
       continue;
     }
-    if (inst_decl->get_specializedTemplateDeclaration() != nullptr) {
+
+    auto specialized_decl_is_set = [&](SgDeclarationStatement *target) {
+      if (auto *inst_member =
+              isSgTemplateInstantiationMemberFunctionDecl(target)) {
+        return inst_member->get_specializedTemplateDeclaration() != nullptr;
+      }
+      if (auto *inst_func = isSgTemplateInstantiationFunctionDecl(target)) {
+        return inst_func->get_specializedTemplateDeclaration() != nullptr;
+      }
+      if (auto *inst_typedef =
+              isSgTemplateInstantiationTypedefDeclaration(target)) {
+        return inst_typedef->get_specializedTemplateDeclaration() != nullptr;
+      }
+      if (auto *tmpl_var = isSgTemplateVariableDeclaration(target)) {
+        return tmpl_var->get_specializedTemplateDeclaration() != nullptr;
+      }
+      if (auto *inst_decl = isSgTemplateInstantiationDecl(target)) {
+        return inst_decl->get_specializedTemplateDeclaration() != nullptr;
+      }
+      return false;
+    };
+
+    auto set_specialized_decl = [&](SgDeclarationStatement *target,
+                                    SgDeclarationStatement *resolved) {
+      if (auto *inst_member =
+              isSgTemplateInstantiationMemberFunctionDecl(target)) {
+        inst_member->set_specializedTemplateDeclaration(resolved);
+        return true;
+      }
+      if (auto *inst_func = isSgTemplateInstantiationFunctionDecl(target)) {
+        inst_func->set_specializedTemplateDeclaration(resolved);
+        return true;
+      }
+      if (auto *inst_typedef =
+              isSgTemplateInstantiationTypedefDeclaration(target)) {
+        inst_typedef->set_specializedTemplateDeclaration(resolved);
+        return true;
+      }
+      if (auto *tmpl_var = isSgTemplateVariableDeclaration(target)) {
+        tmpl_var->set_specializedTemplateDeclaration(resolved);
+        return true;
+      }
+      if (auto *inst_decl = isSgTemplateInstantiationDecl(target)) {
+        inst_decl->set_specializedTemplateDeclaration(resolved);
+        return true;
+      }
+      return false;
+    };
+
+    if (specialized_decl_is_set(decl)) {
       it = p_pending_specialized_template_links.erase(it);
       ++resolved_links;
       continue;
@@ -10861,9 +10915,12 @@ size_t ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
     if (SgDeclarationStatement *resolved =
             lookupSgDeclarationForClangDecl(specialized_decl,
                                             /*allow_on_demand=*/true)) {
-      inst_decl->set_specializedTemplateDeclaration(resolved);
-      it = p_pending_specialized_template_links.erase(it);
-      ++resolved_links;
+      if (set_specialized_decl(decl, resolved)) {
+        it = p_pending_specialized_template_links.erase(it);
+        ++resolved_links;
+      } else {
+        ROSE_ASSERT(!"Unsupported declaration for specialized template link");
+      }
     } else {
       ++it;
     }
@@ -16158,21 +16215,25 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
 
   // Record the specialized template declaration chosen by Clang.
   SgDeclarationStatement *specialized_template_decl = nullptr;
-  if (clang::VarTemplatePartialSpecializationDecl *partial =
-          llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(
-              var_template_specialization_decl)) {
-    specialized_template_decl =
-        lookupSgDeclarationForClangDecl(partial, /*allow_on_demand=*/true);
+  clang::Decl *specialized_key = nullptr;
+  auto specialized =
+      var_template_specialization_decl->getSpecializedTemplateOrPartial();
+  if (auto *partial =
+          specialized
+              .dyn_cast<clang::VarTemplatePartialSpecializationDecl *>()) {
+    specialized_key = partial;
+  } else if (auto *primary = specialized.dyn_cast<clang::VarTemplateDecl *>()) {
+    specialized_key = primary;
   }
-  if (specialized_template_decl == nullptr) {
-    if (clang::VarTemplateDecl *primary =
-            var_template_specialization_decl->getSpecializedTemplate()) {
-      specialized_template_decl =
-          lookupSgDeclarationForClangDecl(primary, /*allow_on_demand=*/true);
-    }
+  if (specialized_key != nullptr) {
+    specialized_template_decl =
+        lookupSgDeclarationForClangDecl(specialized_key,
+                                        /*allow_on_demand=*/true);
   }
   if (specialized_template_decl != nullptr) {
     var_decl->set_specializedTemplateDeclaration(specialized_template_decl);
+  } else if (specialized_key != nullptr) {
+    queueSpecializedTemplateLink(var_decl, specialized_key);
   }
 
   applySourceRange(var_decl,
