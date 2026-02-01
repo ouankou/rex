@@ -13149,12 +13149,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         propagate_explicit_template_args(inst_symbol_decl);
 
-        SgNode *primary_template_node = nullptr;
-        if (clang::FunctionTemplateDecl *primary_template =
-                function_decl->getPrimaryTemplate()) {
-          primary_template_node = lookupSgDeclarationForClangDecl(
-              primary_template, /*allow_on_demand=*/true);
-        }
         auto apply_template_instantiation_info =
             [&](SgFunctionDeclaration *decl, bool preserve_existing_explicit) {
               if (decl == nullptr) {
@@ -13172,16 +13166,10 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 apply_deduced_args(inst_func);
                 if (SgTemplateFunctionDeclaration *tmpl_decl =
                         isSgTemplateFunctionDeclaration(
-                            primary_template_node)) {
+                            specialized_template_decl)) {
                   inst_func->set_templateDeclaration(tmpl_decl);
                   inst_func->set_templateName(tmpl_decl->get_name());
                   inst_func->set_specializedTemplateDeclaration(tmpl_decl);
-                }
-                if (inst_func->get_specializedTemplateDeclaration() ==
-                        nullptr &&
-                    specialized_template_decl != nullptr) {
-                  inst_func->set_specializedTemplateDeclaration(
-                      specialized_template_decl);
                 }
               } else if (SgTemplateInstantiationMemberFunctionDecl
                              *inst_member =
@@ -13198,16 +13186,10 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 apply_deduced_args(inst_member);
                 if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                         isSgTemplateMemberFunctionDeclaration(
-                            primary_template_node)) {
+                            specialized_template_decl)) {
                   inst_member->set_templateDeclaration(tmpl_decl);
                   inst_member->set_templateName(tmpl_decl->get_name());
                   inst_member->set_specializedTemplateDeclaration(tmpl_decl);
-                }
-                if (inst_member->get_specializedTemplateDeclaration() ==
-                        nullptr &&
-                    specialized_template_decl != nullptr) {
-                  inst_member->set_specializedTemplateDeclaration(
-                      specialized_template_decl);
                 }
               }
             };
