@@ -10830,6 +10830,11 @@ ClangToSageTranslator::lookupSgDeclarationForClangDecl(clang::Decl *key,
   return lookup_cached();
 }
 
+namespace {
+template <typename NodeT, typename Fn>
+bool visitTemplateInstantiationDecls(NodeT *node, Fn &&fn);
+} // namespace
+
 void ClangToSageTranslator::queueSpecializedTemplateLink(
     SgDeclarationStatement *decl, clang::Decl *specialized_decl) {
   if (decl == nullptr || specialized_decl == nullptr) {
