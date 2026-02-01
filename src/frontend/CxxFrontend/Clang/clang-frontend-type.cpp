@@ -3343,6 +3343,12 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
       if (SgNode *alias_node = TraverseOnDemand(alias_decl)) {
         alias_sg_decl = isSgTemplateTypedefDeclaration(alias_node);
       }
+      if (alias_sg_decl == nullptr) {
+        auto it = p_decl_translation_map.find(alias_decl);
+        if (it != p_decl_translation_map.end()) {
+          alias_sg_decl = isSgTemplateTypedefDeclaration(it->second);
+        }
+      }
     }
 
     SgTemplateArgumentPtrList template_args =
