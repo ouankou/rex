@@ -4639,7 +4639,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     if (direct_sym == nullptr ||
         isSgTemplateFunctionSymbol(direct_sym) != nullptr ||
         isSgTemplateMemberFunctionSymbol(direct_sym) != nullptr) {
-      Traverse(direct_callee);
+      TraverseOnDemand(direct_callee);
       direct_sym = GetSymbolFromSymbolTable(direct_callee);
     }
 
@@ -9586,7 +9586,64 @@ bool ClangToSageTranslator::VisitOverloadExpr(
 #endif
   bool res = true;
 
-  // TODO
+  if (overload_expr != nullptr) {
+    if (*node == nullptr) {
+      std::string name = overload_expr->getName().getAsString();
+      SgTemplateArgumentPtrList template_args;
+      const SgTemplateArgumentPtrList *template_args_ptr = nullptr;
+      if (overload_expr->hasExplicitTemplateArgs()) {
+        clang::TemplateArgumentListInfo arg_info(overload_expr->getLAngleLoc(),
+                                                 overload_expr->getRAngleLoc());
+        overload_expr->copyTemplateArgumentsInto(arg_info);
+        template_args = buildTemplateArguments(arg_info, true);
+        if (!template_args.empty()) {
+          template_args_ptr = &template_args;
+        }
+      }
+
+      SgScopeStatement *scope = SageBuilder::topScopeStack();
+      if (scope == nullptr) {
+        scope = getGlobalScope();
+      }
+      ROSE_ASSERT(scope != nullptr);
+
+      *node = buildNonrealRefExpFromNestedNameSpecifier(
+          overload_expr->getQualifier(), scope, SgName(name),
+          overload_expr->hasTemplateKeyword(), template_args_ptr);
+    }
+
+    if (SgNonrealRefExp *ref = isSgNonrealRefExp(*node)) {
+      if (overload_expr->hasExplicitTemplateArgs() &&
+          ref->get_templateArguments().empty()) {
+        clang::TemplateArgumentListInfo arg_info(overload_expr->getLAngleLoc(),
+                                                 overload_expr->getRAngleLoc());
+        overload_expr->copyTemplateArgumentsInto(arg_info);
+        ref->get_templateArguments() = buildTemplateArguments(arg_info, true);
+      }
+      for (SgTemplateArgument *arg : ref->get_templateArguments()) {
+        if (arg != nullptr && arg->get_parent() != ref) {
+          arg->set_parent(ref);
+        }
+      }
+    }
+
+    for (auto it = overload_expr->decls_begin();
+         it != overload_expr->decls_end(); ++it) {
+      clang::NamedDecl *named_decl = it.getDecl();
+      if (named_decl == nullptr) {
+        continue;
+      }
+      if (clang::UsingShadowDecl *shadow =
+              llvm::dyn_cast<clang::UsingShadowDecl>(named_decl)) {
+        named_decl = shadow->getTargetDecl();
+      }
+      clang::Decl *decl = llvm::dyn_cast<clang::Decl>(named_decl);
+      if (decl == nullptr) {
+        continue;
+      }
+      TraverseOnDemand(decl);
+    }
+  }
 
   return VisitExpr(overload_expr, node) && res;
 }

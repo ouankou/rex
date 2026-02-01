@@ -2037,6 +2037,37 @@ void Grammar::setUpExpressions() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Constraint satisfaction results as core IR (e.g., concept checks).
+  NonrealRefExp.setDataPrototype("bool", "constraintSatisfactionEvaluated",
+                                 "= false", NO_CONSTRUCTOR_PARAMETER,
+                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                 NO_DELETE);
+  NonrealRefExp.setDataPrototype("bool", "constraintSatisfactionSatisfied",
+                                 "= true", NO_CONSTRUCTOR_PARAMETER,
+                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                 NO_DELETE);
+  NonrealRefExp.setDataPrototype("bool", "constraintSatisfactionContainsErrors",
+                                 "= false", NO_CONSTRUCTOR_PARAMETER,
+                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                 NO_DELETE);
+  NonrealRefExp.setDataPrototype(
+      "bool", "constraintSatisfactionSubstitutionFailure", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  NonrealRefExp.setDataPrototype("std::string", "constraintSatisfactionSummary",
+                                 "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                 NO_DELETE);
+  // REX: SFINAE (non-constraint) substitution failure results.
+  NonrealRefExp.setDataPrototype(
+      "bool", "sfinaeEvaluated", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  NonrealRefExp.setDataPrototype(
+      "bool", "sfinaeSubstitutionFailure", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  NonrealRefExp.setDataPrototype(
+      "std::string", "sfinaeSummary", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   NonrealRefExp.setFunctionSource("SOURCE_GET_TYPE_FROM_SYMBOL",
                                   "../Grammar/Expression.code");
 

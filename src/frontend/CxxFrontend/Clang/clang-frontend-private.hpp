@@ -70,6 +70,12 @@ struct ConstraintSatisfactionResult {
   std::string summary;
 };
 
+struct SFINAEFailureResult {
+  bool evaluated = false;
+  bool substitution_failure = false;
+  std::string summary;
+};
+
 class ConstraintSatisfactionAttribute : public AstAttribute {
 public:
   explicit ConstraintSatisfactionAttribute(
@@ -528,6 +534,10 @@ protected:
   // SgTemplateInstantiationDecl Key: mangled instantiation name (e.g.,
   // "std::array<double, 1024>") Value: Template instantiation declaration
   std::map<std::string, SgTemplateInstantiationDecl *> p_template_inst_cache;
+  // Pending specialized-template links for instantiations encountered before
+  // the specialized template declaration has been translated.
+  std::vector<std::pair<SgTemplateInstantiationDecl *, clang::Decl *>>
+      p_pending_specialized_template_links;
   struct CapturedPragma {
     unsigned line;
     std::string text;
@@ -586,6 +596,9 @@ protected:
   SgSymbol *buildSymbolForDeclaration(SgDeclarationStatement *decl);
   void registerDeclarationSymbol(SgDeclarationStatement *decl);
   void reconcileOnDemandTranslation(SgNode *node);
+  void queueSpecializedTemplateLink(SgTemplateInstantiationDecl *inst_decl,
+                                    clang::Decl *specialized_decl);
+  void resolvePendingSpecializedTemplateLinks();
 
   // Select a scope that can safely accept an opaque type declaration.
   SgScopeStatement *getOpaqueTypeInsertionScope(SgScopeStatement *scope) const;
@@ -751,10 +764,14 @@ protected:
       llvm::ArrayRef<const clang::Expr *> constraints,
       const clang::TemplateArgumentList &template_args,
       clang::SourceRange template_id_range);
+  // Evaluate non-constraint SFINAE for a template instantiation.
+  SFINAEFailureResult
+  evaluateSFINAEFailure(const clang::FunctionDecl *function_decl);
 #endif
 
   void attachConstraintSatisfaction(SgNode *node,
                                     const ConstraintSatisfactionResult &result);
+  void attachSFINAEFailure(SgNode *node, const SFINAEFailureResult &result);
   bool shouldSkipSymbolForConstraints(const SgDeclarationStatement *decl) const;
   void pruneSymbolsForConstraints(SgDeclarationStatement *decl);
 

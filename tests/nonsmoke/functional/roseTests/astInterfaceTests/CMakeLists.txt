@@ -61,6 +61,8 @@ set(noinst_programs
   rex_test2026_declaration_scope
   rex_test2026_template_symbol_table
   rex_test2026_null_expression_unparse
+  rex_test2026_template_constraints_ir
+  rex_test2026_deduction_ordering
 )
 
 # Fortran-specific executables (only build when ENABLE-FORTRAN=ON)
@@ -137,6 +139,7 @@ set(group1_tests
   rex_test2026_declaration_scope
   rex_test2026_template_symbol_table
   rex_test2026_null_expression_unparse
+  rex_test2026_deduction_ordering
 )
 
 foreach(test ${group1_tests})
@@ -185,6 +188,11 @@ add_test(
 add_test(
   NAME astInterface_attachComment
   COMMAND attachComment ${TEST_CXXFLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/inputAttachComment.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_template_constraints_ir
+  COMMAND rex_test2026_template_constraints_ir ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_template_constraints_ir.C
 )
 
 add_test(

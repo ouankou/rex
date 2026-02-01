@@ -2486,6 +2486,47 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateSpecializationArguments",
       "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Store deduced template arguments (distinct from written/pattern args).
+  TemplateVariableDeclaration.setDataPrototype(
+      "SgTemplateArgumentPtrList", "deducedTemplateArguments",
+      "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Track the specialized template (primary or partial) chosen by Clang.
+  TemplateVariableDeclaration.setDataPrototype(
+      "SgDeclarationStatement*", "specializedTemplateDeclaration", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: Constraint satisfaction results as core IR.
+  TemplateVariableDeclaration.setDataPrototype(
+      "bool", "constraintSatisfactionEvaluated", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateVariableDeclaration.setDataPrototype(
+      "bool", "constraintSatisfactionSatisfied", "= true",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateVariableDeclaration.setDataPrototype(
+      "bool", "constraintSatisfactionContainsErrors", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateVariableDeclaration.setDataPrototype(
+      "bool", "constraintSatisfactionSubstitutionFailure", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateVariableDeclaration.setDataPrototype(
+      "std::string", "constraintSatisfactionSummary", "= \"\"",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: SFINAE (non-constraint) substitution failure results.
+  TemplateVariableDeclaration.setDataPrototype(
+      "bool", "sfinaeEvaluated", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateVariableDeclaration.setDataPrototype(
+      "bool", "sfinaeSubstitutionFailure", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateVariableDeclaration.setDataPrototype(
+      "std::string", "sfinaeSummary", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TemplateVariableDeclaration.setDataPrototype(
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2531,6 +2572,47 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Store deduced template arguments (distinct from written/pattern args).
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "SgTemplateArgumentPtrList", "deducedTemplateArguments",
+      "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Track the specialized template (primary or partial) chosen by Clang.
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "SgDeclarationStatement*", "specializedTemplateDeclaration", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: Constraint satisfaction results as core IR.
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "bool", "constraintSatisfactionEvaluated", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "bool", "constraintSatisfactionSatisfied", "= true",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "bool", "constraintSatisfactionContainsErrors", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "bool", "constraintSatisfactionSubstitutionFailure", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "std::string", "constraintSatisfactionSummary", "= \"\"",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: SFINAE (non-constraint) substitution failure results.
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "bool", "sfinaeEvaluated", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "bool", "sfinaeSubstitutionFailure", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateInstantiationTypedefDeclaration.setDataPrototype(
+      "std::string", "sfinaeSummary", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TemplateInstantiationTypedefDeclaration.setDataPrototype(
       "bool", "nameResetFromMangledForm", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2652,6 +2734,47 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Store deduced template arguments (distinct from written/pattern args).
+  TemplateInstantiationDecl.setDataPrototype(
+      "SgTemplateArgumentPtrList", "deducedTemplateArguments",
+      "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Track the specialized template (primary or partial) chosen by Clang.
+  TemplateInstantiationDecl.setDataPrototype(
+      "SgDeclarationStatement*", "specializedTemplateDeclaration", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: Constraint satisfaction results as core IR.
+  TemplateInstantiationDecl.setDataPrototype(
+      "bool", "constraintSatisfactionEvaluated", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationDecl.setDataPrototype(
+      "bool", "constraintSatisfactionSatisfied", "= true",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationDecl.setDataPrototype(
+      "bool", "constraintSatisfactionContainsErrors", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationDecl.setDataPrototype(
+      "bool", "constraintSatisfactionSubstitutionFailure", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationDecl.setDataPrototype(
+      "std::string", "constraintSatisfactionSummary", "= \"\"",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: SFINAE (non-constraint) substitution failure results.
+  TemplateInstantiationDecl.setDataPrototype(
+      "bool", "sfinaeEvaluated", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateInstantiationDecl.setDataPrototype(
+      "bool", "sfinaeSubstitutionFailure", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateInstantiationDecl.setDataPrototype(
+      "std::string", "sfinaeSummary", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (10/11/2004): instantiated template names must be reset once the
   // template parameters are known We want to use names like "ABC<int>"
@@ -2688,6 +2811,47 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Store deduced template arguments (distinct from written/pattern args).
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "SgTemplateArgumentPtrList", "deducedTemplateArguments",
+      "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Track the specialized template (primary) chosen by Clang.
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "SgDeclarationStatement*", "specializedTemplateDeclaration", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: Constraint satisfaction results as core IR.
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "bool", "constraintSatisfactionEvaluated", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "bool", "constraintSatisfactionSatisfied", "= true",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "bool", "constraintSatisfactionContainsErrors", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "bool", "constraintSatisfactionSubstitutionFailure", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "std::string", "constraintSatisfactionSummary", "= \"\"",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: SFINAE (non-constraint) substitution failure results.
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "bool", "sfinaeEvaluated", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "bool", "sfinaeSubstitutionFailure", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateInstantiationFunctionDecl.setDataPrototype(
+      "std::string", "sfinaeSummary", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (2/15/2005): instantiated function template names must be reset once the
   // template parameters are known We want to use names like "ABC<int>" instead
@@ -2732,6 +2896,47 @@ void Grammar::setUpStatements() {
       "SgTemplateArgumentPtrList", "templateArguments",
       "= SgTemplateArgumentPtrList()", CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Store deduced template arguments (distinct from written/pattern args).
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "SgTemplateArgumentPtrList", "deducedTemplateArguments",
+      "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // REX: Track the specialized template (primary) chosen by Clang.
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "SgDeclarationStatement*", "specializedTemplateDeclaration", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: Constraint satisfaction results as core IR.
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "bool", "constraintSatisfactionEvaluated", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "bool", "constraintSatisfactionSatisfied", "= true",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "bool", "constraintSatisfactionContainsErrors", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "bool", "constraintSatisfactionSubstitutionFailure", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "std::string", "constraintSatisfactionSummary", "= \"\"",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  // REX: SFINAE (non-constraint) substitution failure results.
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "bool", "sfinaeEvaluated", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "bool", "sfinaeSubstitutionFailure", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  TemplateInstantiationMemberFunctionDecl.setDataPrototype(
+      "std::string", "sfinaeSummary", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // DQ (2/15/2005): instantiated member function template names must be reset
   // once the template parameters are known We want to use names like "ABC<int>"
