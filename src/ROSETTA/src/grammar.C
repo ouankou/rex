@@ -3527,7 +3527,8 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
     // having both single and container members will be allowed temporarily, but
     // only for SgVariableDeclaration. (SgTypedefDeclaration was also involved
     // in the traversal island issue, but it does not have a container member,
-    // so we need not mention it in this code.)
+    // so we need not mention it in this code.) This has since been generalized
+    // to permit declarations with a dedicated nonreal declaration scope.
     std::string nodeName = grammarnode->getName();
 
     // DQ (2/7/2011): Added message to report which nodes are in violation of
@@ -3546,7 +3547,18 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
     // has already been changed accordingly.
     //    std::cout << "both single and container members in node " << nodeName
     //    << std::endl;
+    auto isDerivedFrom = [](AstNodeClass *node, const std::string &base_name) {
+      for (AstNodeClass *current = node; current != nullptr;
+           current = current->getBaseClass()) {
+        if (current->getName() == base_name) {
+          return true;
+        }
+      }
+      return false;
+    };
+    bool is_declaration = isDerivedFrom(grammarnode, "SgDeclarationStatement");
     ROSE_ASSERT(
+        is_declaration ||
         nodeName == "SgVariableDeclaration"
         // DQ (12/21/2011): Added exception for SgTemplateVariableDeclaration
         // derived from SgVariableDeclaration.
@@ -3743,6 +3755,15 @@ void Grammar::buildTreeTraversalFunctions(
         traverseDataMemberList.push_back(*stringListIterator);
       }
     }
+    int nonreal_index = -1;
+    for (size_t i = 0; i < traverseDataMemberList.size(); ++i) {
+      if (traverseDataMemberList[i]->getVariableNameString() ==
+          "nonreal_decl_scope") {
+        nonreal_index = static_cast<int>(i);
+        break;
+      }
+    }
+    bool has_nonreal_decl_scope = nonreal_index >= 0;
     // start: generate get_traversalSuccessorContainer() method
     outputFile << "vector<" << grammarPrefixName << "Node*>\n"
                << node.getName()
@@ -3798,6 +3819,10 @@ void Grammar::buildTreeTraversalFunctions(
       else if ((gs->getTypeNameString() == "static $CLASSNAME*") &&
                memberVariableName == "builtin_type") {
         outputFile << "  // suppress handling of builtin_type date members \n";
+      } else if (memberVariableName == "nonreal_decl_scope") {
+        outputFile << "if (p_nonreal_decl_scope != NULL) "
+                   << successorContainerName
+                   << ".push_back(p_nonreal_decl_scope);\n";
       } else {
         // normal case
         outputFile << generateTraverseSuccessor(*iter, successorContainerName);
@@ -3823,8 +3848,16 @@ void Grammar::buildTreeTraversalFunctions(
     for (vector<GrammarString *>::iterator iter =
              traverseDataMemberList.begin();
          iter != traverseDataMemberList.end(); iter++) {
-      outputFile << generateTraverseSuccessorNames(*iter,
-                                                   successorContainerName);
+      GrammarString *gs = *iter;
+      string memberVariableName = gs->getVariableNameString();
+      if (memberVariableName == "nonreal_decl_scope") {
+        outputFile << "if (p_nonreal_decl_scope != NULL) "
+                   << successorContainerName
+                   << ".push_back(\"p_nonreal_decl_scope\");\n";
+      } else {
+        outputFile << generateTraverseSuccessorNames(gs,
+                                                     successorContainerName);
+      }
     }
     outputFile << "return " << successorContainerName
                << ";\n}\n"; // end of function
@@ -3855,99 +3888,96 @@ void Grammar::buildTreeTraversalFunctions(
     outputFile << "SgNode *\n"
                << node.getName()
                << "::get_traversalSuccessorByIndex(size_t idx) const {\n";
+    if (has_nonreal_decl_scope) {
+      outputFile << "if (p_nonreal_decl_scope == NULL && idx >= "
+                 << StringUtility::numberToString(nonreal_index)
+                 << ") idx++;\n";
+    }
     if (traverseDataMemberList.size() > 0) {
       GrammarString *gs = traverseDataMemberList.front();
       string typeString = gs->getTypeNameString();
+      int container_index = -1;
+      bool container_is_ptr = false;
+      GrammarString *container_gs = nullptr;
+      for (size_t i = 0; i < traverseDataMemberList.size(); ++i) {
+        GrammarString *member = traverseDataMemberList[i];
+        string member_type = member->getTypeNameString();
+        if (isSTLContainerPtr(member_type.c_str())) {
+          container_index = static_cast<int>(i);
+          container_is_ptr = true;
+          container_gs = member;
+          break;
+        }
+        if (isSTLContainer(member_type.c_str())) {
+          container_index = static_cast<int>(i);
+          container_is_ptr = false;
+          container_gs = member;
+          break;
+        }
+      }
       // Exceptional case first: SgVariableDeclaration, which has a fixed member
       // (that we compute using a special function) followed by a container. if
       // (string(node.getName()) == "SgVariableDeclaration")
       if (string(node.getName()) == "SgVariableDeclaration" ||
           string(node.getName()) == "SgTemplateVariableDeclaration") {
-        outputFile
-            << "if (idx == 0) return compute_baseTypeDefiningDeclaration();\n"
-            << "else if (idx == 1) return p_requiresClause;\n"
-            << "else return p_variables[idx-2];\n";
-      }
-      // Liao, 5/30/2009
-      // More exceptional cases for SgOmpClauseBodyStatement and its derived
-      // classes
-      // We allow them to have mixed members (simple member and container
-      // member)
-      else if (string(node.getName()) == "SgOmpClauseBodyStatement" ||
-               string(node.getName()) == "SgAccClauseBodyStatement" ||
-               string(node.getName()) == "SgAccParallelStatement" ||
-               string(node.getName()) == "SgAccParallelLoopStatement" ||
-               string(node.getName()) == "SgOmpMetadirectiveStatement" ||
-               string(node.getName()) == "SgOmpParallelStatement" ||
-               string(node.getName()) == "SgOmpTeamsStatement" ||
-               string(node.getName()) == "SgOmpCancellationPointStatement" ||
-               string(node.getName()) == "SgOmpDeclareMapperStatement" ||
-               string(node.getName()) == "SgOmpCancelStatement" ||
-               string(node.getName()) == "SgOmpTaskgroupStatement" ||
-               string(node.getName()) == "SgOmpDepobjStatement" ||
-               string(node.getName()) == "SgOmpDistributeStatement" ||
-               string(node.getName()) == "SgOmpLoopStatement" ||
-               string(node.getName()) == "SgOmpOrderedStatement" ||
-               string(node.getName()) == "SgOmpOrderedDependStatement" ||
-               string(node.getName()) == "SgOmpScanStatement" ||
-               string(node.getName()) == "SgOmpTaskloopStatement" ||
-               string(node.getName()) == "SgOmpTargetEnterDataStatement" ||
-               string(node.getName()) == "SgOmpTargetExitDataStatement" ||
-               string(node.getName()) == "SgOmpCriticalStatement" ||
-               string(node.getName()) == "SgOmpSingleStatement" ||
-               string(node.getName()) == "SgOmpSimdStatement" ||
-               string(node.getName()) == "SgOmpTaskStatement" ||
-               string(node.getName()) == "SgOmpSectionsStatement" ||
-               string(node.getName()) == "SgOmpTargetStatement" ||
-               string(node.getName()) == "SgOmpTargetDataStatement" ||
-               string(node.getName()) == "SgOmpTargetParallelForStatement" ||
-               string(node.getName()) == "SgOmpTargetUpdateStatement" ||
-               string(node.getName()) == "SgOmpTargetParallelStatement" ||
-               string(node.getName()) == "SgOmpDistributeSimdStatement" ||
-               string(node.getName()) ==
-                   "SgOmpDistributeParallelForStatement" ||
-               string(node.getName()) ==
-                   "SgOmpDistributeParallelForSimdStatement" ||
-               string(node.getName()) == "SgOmpTaskloopSimdStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetParallelForSimdStatement" ||
-               string(node.getName()) == "SgOmpTargetParallelLoopStatement" ||
-               string(node.getName()) == "SgOmpTargetSimdStatement" ||
-               string(node.getName()) == "SgOmpTargetTeamsStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetTeamsDistributeStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetTeamsDistributeSimdStatement" ||
-               string(node.getName()) == "SgOmpTargetTeamsLoopStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetTeamsDistributeParallelForStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetTeamsDistributeParallelForSimdStatement" ||
-               string(node.getName()) == "SgOmpMasterTaskloopSimdStatement" ||
-               string(node.getName()) ==
-                   "SgOmpParallelMasterTaskloopStatement" ||
-               string(node.getName()) ==
-                   "SgOmpParallelMasterTaskloopSimdStatement" ||
-               string(node.getName()) == "SgOmpTeamsDistributeStatement" ||
-               string(node.getName()) == "SgOmpTeamsDistributeSimdStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTeamsDistributeParallelForStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTeamsDistributeParallelForSimdStatement" ||
-               string(node.getName()) == "SgOmpTeamsLoopStatement" ||
-               string(node.getName()) == "SgOmpParallelMasterStatement" ||
-               string(node.getName()) == "SgOmpMasterTaskloopStatement" ||
-               string(node.getName()) == "SgOmpParallelLoopStatement" ||
-               string(node.getName()) == "SgOmpForSimdStatement" ||
-               string(node.getName()) == "SgOmpUnrollStatement" ||
-               string(node.getName()) == "SgOmpTileStatement" ||
-               string(node.getName()) == "SgOmpDoStatement" ||
-               string(node.getName()) == "SgOmpExecStatement" ||
-               string(node.getName()) == "SgOmpForStatement" ||
-               string(node.getName()) == "SgOmpClauseStatement" ||
-               string(node.getName()) == "SgOmpAtomicStatement") {
-        outputFile << "if (idx == 0) return p_body;\n"
-                   << "else return p_clauses[idx-1];\n";
+        outputFile << "if (idx == 0) return p_nonreal_decl_scope;\n"
+                   << "else if (idx == 1) return "
+                      "compute_baseTypeDefiningDeclaration();\n"
+                   << "else if (idx == 2) return p_requiresClause;\n"
+                   << "else return p_variables[idx-3];\n";
+      } else if (container_gs != nullptr && container_index > 0) {
+        outputFile << "if (idx < "
+                   << StringUtility::numberToString(container_index) << ") {\n"
+                   << "switch (idx) {\n";
+        vector<GrammarString *>::iterator iter;
+        size_t counter = 0;
+        for (iter = traverseDataMemberList.begin();
+             iter != traverseDataMemberList.end() &&
+             counter < static_cast<size_t>(container_index);
+             ++iter, ++counter) {
+          string memberVariableName = (*iter)->getVariableNameString();
+          if (string(node.getName()) == "SgTypedefDeclaration" &&
+              memberVariableName == "declaration") {
+            outputFile << "case " << StringUtility::numberToString(counter)
+                       << ": "
+                       << "return compute_baseTypeDefiningDeclaration();\n";
+          } else if ((string(node.getName()) == "SgClassDeclaration" ||
+                      string(node.getName()) ==
+                          "SgTemplateInstantiationDecl") &&
+                     memberVariableName == "definition") {
+            outputFile << "case " << StringUtility::numberToString(counter)
+                       << ": "
+                       << "return compute_classDefinition();\n";
+          } else {
+            outputFile << "case " << StringUtility::numberToString(counter)
+                       << ": "
+                       << "ROSE_ASSERT(p_" << memberVariableName
+                       << " == NULL || p_" << memberVariableName
+                       << " != NULL); return p_" << memberVariableName << ";\n";
+          }
+        }
+        outputFile << "default: cout << \"invalid index \" << idx << "
+                   << "\" in get_traversalSuccessorByIndex()\" << "
+                      "endl;\n"
+                   << "ROSE_ABORT();\n"
+                   << "return NULL;\n"
+                   << "}\n"
+                   << "} else {\n"
+                   << "size_t container_idx = idx - "
+                   << StringUtility::numberToString(container_index) << ";\n";
+        string memberVariableName = container_gs->getVariableNameString();
+        if (container_is_ptr) {
+          outputFile << "ROSE_ASSERT(container_idx < p_" << memberVariableName
+                     << "->size());\n"
+                     << "return (*p_" << memberVariableName
+                     << ")[container_idx];\n";
+        } else {
+          outputFile << "ROSE_ASSERT(container_idx < p_" << memberVariableName
+                     << ".size());\n"
+                     << "return p_" << memberVariableName
+                     << "[container_idx];\n";
+        }
+        outputFile << "}\n";
       } else if (isSTLContainerPtr(typeString.c_str())) {
         outputFile << "ROSE_ASSERT(idx < p_" << gs->getVariableNameString()
                    << "->size());\n";
@@ -4025,138 +4055,125 @@ void Grammar::buildTreeTraversalFunctions(
     // GB (09/25/2007): Added this method.
     outputFile << "size_t\n"
                << node.getName() << "::get_childIndex(SgNode *child) const {\n";
+    if (has_nonreal_decl_scope) {
+      outputFile << "auto adjust_index = [&](size_t idx) -> size_t {\n"
+                 << "  if (idx == static_cast<size_t>(-1)) return idx;\n"
+                 << "  if (p_nonreal_decl_scope == NULL && idx > "
+                 << StringUtility::numberToString(nonreal_index)
+                 << ") return idx - 1;\n"
+                 << "  return idx;\n"
+                 << "};\n";
+    }
+    string childIndexReturnPrefix =
+        has_nonreal_decl_scope ? "return adjust_index(" : "return ";
+    string childIndexReturnSuffix = has_nonreal_decl_scope ? ");\n" : ";\n";
     if (traverseDataMemberList.size() > 0) {
       GrammarString *gs = traverseDataMemberList.front();
       string typeString = gs->getTypeNameString();
+      int container_index = -1;
+      bool container_is_ptr = false;
+      GrammarString *container_gs = nullptr;
+      for (size_t i = 0; i < traverseDataMemberList.size(); ++i) {
+        GrammarString *member = traverseDataMemberList[i];
+        string member_type = member->getTypeNameString();
+        if (isSTLContainerPtr(member_type.c_str())) {
+          container_index = static_cast<int>(i);
+          container_is_ptr = true;
+          container_gs = member;
+          break;
+        }
+        if (isSTLContainer(member_type.c_str())) {
+          container_index = static_cast<int>(i);
+          container_is_ptr = false;
+          container_gs = member;
+          break;
+        }
+      }
       // Exceptional case first: SgVariableDeclaration, which has a fixed member
       // (that we compute using a special function) followed by a container. if
       // (string(node.getName()) == "SgVariableDeclaration")
       if (string(node.getName()) == "SgVariableDeclaration" ||
           string(node.getName()) == "SgTemplateVariableDeclaration") {
-        outputFile
-            << "if (child == compute_baseTypeDefiningDeclaration()) return 0;\n"
-            << "else if (child == p_requiresClause) return 1;\n"
-            << "else {\n"
-            << "SgInitializedNamePtrList::const_iterator itr = "
-               "find(p_variables.begin(), p_variables.end(), child);\n"
-            << "if (itr != p_variables.end()) return (itr - "
-               "p_variables.begin()) + 2;\n"
-            << "else return (size_t) -1;\n"
-            << "}\n";
-      }
-      // More exceptional cases for OpenACC clause-body statements and their
-      // derived classes (mixed members).
-      else if (string(node.getName()) == "SgAccClauseBodyStatement" ||
-               string(node.getName()) == "SgAccParallelStatement" ||
-               string(node.getName()) == "SgAccParallelLoopStatement") {
-        outputFile << "if (child == p_body) return 0;\n"
+        outputFile << "if (child == p_nonreal_decl_scope) "
+                   << childIndexReturnPrefix << "0" << childIndexReturnSuffix
+                   << "else if (child == "
+                      "compute_baseTypeDefiningDeclaration()) "
+                   << childIndexReturnPrefix << "1" << childIndexReturnSuffix
+                   << "else if (child == p_requiresClause) "
+                   << childIndexReturnPrefix << "2" << childIndexReturnSuffix
                    << "else {\n"
-                   << "SgAccClausePtrList::const_iterator itr = "
-                      "find(p_clauses.begin(), p_clauses.end(), child);\n"
-                   << "if (itr != p_clauses.end()) return (itr - "
-                      "p_clauses.begin()) + 1;\n"
-                   << "else return (size_t) -1;\n"
-                   << "}\n";
-      }
-      // More exceptional cases for SgOmpClauseBodyStatement and its derived
-      // classes
-      // We allow them to have mixed members
-      else if (string(node.getName()) == "SgOmpClauseBodyStatement" ||
-               string(node.getName()) == "SgOmpMetadirectiveStatement" ||
-               string(node.getName()) == "SgOmpParallelStatement" ||
-               string(node.getName()) == "SgOmpTeamsStatement" ||
-               string(node.getName()) == "SgOmpCancellationPointStatement" ||
-               string(node.getName()) == "SgOmpDeclareMapperStatement" ||
-               string(node.getName()) == "SgOmpCancelStatement" ||
-               string(node.getName()) == "SgOmpTaskgroupStatement" ||
-               string(node.getName()) == "SgOmpDepobjStatement" ||
-               string(node.getName()) == "SgOmpCriticalStatement" ||
-               string(node.getName()) == "SgOmpDistributeStatement" ||
-               string(node.getName()) == "SgOmpLoopStatement" ||
-               string(node.getName()) == "SgOmpOrderedStatement" ||
-               string(node.getName()) == "SgOmpOrderedDependStatement" ||
-               string(node.getName()) == "SgOmpScanStatement" ||
-               string(node.getName()) == "SgOmpTaskloopStatement" ||
-               string(node.getName()) == "SgOmpTargetEnterDataStatement" ||
-               string(node.getName()) == "SgOmpTargetExitDataStatement" ||
-               string(node.getName()) == "SgOmpSingleStatement" ||
-               string(node.getName()) == "SgOmpSimdStatement" ||
-               string(node.getName()) == "SgOmpTaskStatement" ||
-               string(node.getName()) == "SgOmpSectionsStatement" ||
-               string(node.getName()) == "SgOmpTargetStatement" ||
-               string(node.getName()) == "SgOmpTargetDataStatement" ||
-               string(node.getName()) == "SgOmpTargetUpdateStatement" ||
-               string(node.getName()) == "SgOmpTargetParallelForStatement" ||
-               string(node.getName()) == "SgOmpTargetParallelStatement" ||
-               string(node.getName()) == "SgOmpDistributeSimdStatement" ||
-               string(node.getName()) ==
-                   "SgOmpDistributeParallelForStatement" ||
-               string(node.getName()) ==
-                   "SgOmpDistributeParallelForSimdStatement" ||
-               string(node.getName()) == "SgOmpTaskloopSimdStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetParallelForSimdStatement" ||
-               string(node.getName()) == "SgOmpTargetParallelLoopStatement" ||
-               string(node.getName()) == "SgOmpTargetSimdStatement" ||
-               string(node.getName()) == "SgOmpTargetTeamsStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetTeamsDistributeStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetTeamsDistributeSimdStatement" ||
-               string(node.getName()) == "SgOmpTargetTeamsLoopStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetTeamsDistributeParallelForStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTargetTeamsDistributeParallelForSimdStatement" ||
-               string(node.getName()) == "SgOmpMasterTaskloopSimdStatement" ||
-               string(node.getName()) ==
-                   "SgOmpParallelMasterTaskloopStatement" ||
-               string(node.getName()) ==
-                   "SgOmpParallelMasterTaskloopSimdStatement" ||
-               string(node.getName()) == "SgOmpTeamsDistributeStatement" ||
-               string(node.getName()) == "SgOmpTeamsDistributeSimdStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTeamsDistributeParallelForStatement" ||
-               string(node.getName()) ==
-                   "SgOmpTeamsDistributeParallelForSimdStatement" ||
-               string(node.getName()) == "SgOmpTeamsLoopStatement" ||
-               string(node.getName()) == "SgOmpParallelMasterStatement" ||
-               string(node.getName()) == "SgOmpMasterTaskloopStatement" ||
-               string(node.getName()) == "SgOmpParallelLoopStatement" ||
-               string(node.getName()) == "SgOmpForSimdStatement" ||
-               string(node.getName()) == "SgOmpUnrollStatement" ||
-               string(node.getName()) == "SgOmpTileStatement" ||
-               string(node.getName()) == "SgOmpDoStatement" ||
-               string(node.getName()) == "SgOmpExecStatement" ||
-               string(node.getName()) == "SgOmpForStatement" ||
-               string(node.getName()) == "SgOmpClauseStatement" ||
-               string(node.getName()) == "SgOmpAtomicStatement") {
-        outputFile << "if (child == p_body) return 0;\n"
-                   << "else {\n"
-                   << "SgOmpClausePtrList::const_iterator itr = "
-                      "find(p_clauses.begin(), p_clauses.end(), child);\n"
-                   << "if (itr != p_clauses.end()) return (itr - "
-                      "p_clauses.begin()) + 1;\n"
-                   << "else return (size_t) -1;\n"
-                   << "}\n";
+                   << "SgInitializedNamePtrList::const_iterator itr = "
+                      "find(p_variables.begin(), p_variables.end(), child);\n"
+                   << "if (itr != p_variables.end()) " << childIndexReturnPrefix
+                   << "(itr - p_variables.begin()) + 3"
+                   << childIndexReturnSuffix << "else "
+                   << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix << "}\n";
+      } else if (container_gs != nullptr && container_index > 0) {
+        vector<GrammarString *>::iterator iter;
+        size_t counter = 0;
+        for (iter = traverseDataMemberList.begin();
+             iter != traverseDataMemberList.end() &&
+             counter < static_cast<size_t>(container_index);
+             ++iter, ++counter) {
+          string memberVariableName = (*iter)->getVariableNameString();
+          if (string(node.getName()) == "SgTypedefDeclaration" &&
+              memberVariableName == "declaration") {
+            outputFile << "if (child == compute_baseTypeDefiningDeclaration()) "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter)
+                       << childIndexReturnSuffix << "else ";
+          } else if ((string(node.getName()) == "SgClassDeclaration" ||
+                      string(node.getName()) ==
+                          "SgTemplateInstantiationDecl") &&
+                     memberVariableName == "definition") {
+            outputFile << "if (child == compute_classDefinition()) "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter)
+                       << childIndexReturnSuffix << "else ";
+          } else {
+            outputFile << "if (child == p_" << memberVariableName << ") "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter)
+                       << childIndexReturnSuffix << "else ";
+          }
+        }
+        string memberVariableName = container_gs->getVariableNameString();
+        string begin = container_is_ptr
+                           ? "p_" + memberVariableName + "->begin()"
+                           : "p_" + memberVariableName + ".begin()";
+        string end = container_is_ptr ? "p_" + memberVariableName + "->end()"
+                                      : "p_" + memberVariableName + ".end()";
+        outputFile << "{\n"
+                   << getIteratorString(
+                          container_gs->getTypeNameString().c_str())
+                   << " itr = find(" << begin << ", " << end << ", child);\n"
+                   << "if (itr != " << end << ") " << childIndexReturnPrefix
+                   << "(itr - " << begin << ") + "
+                   << StringUtility::numberToString(container_index)
+                   << childIndexReturnSuffix << "else "
+                   << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix << "}\n";
       } else if (isSTLContainerPtr(typeString.c_str())) {
         string memberVariableName = gs->getVariableNameString();
         string begin = "p_" + memberVariableName + "->begin()";
         string end = "p_" + memberVariableName + "->end()";
         outputFile << getIteratorString(typeString.c_str()) << " itr = find("
                    << begin << ", " << end << ", child);\n"
-                   << "if (itr != " << end << ") return itr - " << begin
-                   << ";\n"
-                   << "else return (size_t) -1;\n";
+                   << "if (itr != " << end << ") " << childIndexReturnPrefix
+                   << "itr - " << begin << childIndexReturnSuffix << "else "
+                   << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix;
       } else if (isSTLContainer(typeString.c_str())) {
         string memberVariableName = gs->getVariableNameString();
         string begin = "p_" + memberVariableName + ".begin()";
         string end = "p_" + memberVariableName + ".end()";
         outputFile << getIteratorString(typeString.c_str()) << " itr = find("
                    << begin << ", " << end << ", child);\n"
-                   << "if (itr != " << end << ") return itr - " << begin
-                   << ";\n"
-                   << "else return (size_t) -1;\n";
+                   << "if (itr != " << end << ") " << childIndexReturnPrefix
+                   << "itr - " << begin << childIndexReturnSuffix << "else "
+                   << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix;
       } else {
         // Fixed members, generate an if-else ladder.
         vector<GrammarString *>::iterator iter;
@@ -4168,27 +4185,30 @@ void Grammar::buildTreeTraversalFunctions(
           // using a special function.
           if (string(node.getName()) == "SgTypedefDeclaration" &&
               memberVariableName == "declaration") {
-            outputFile
-                << "if (child == compute_baseTypeDefiningDeclaration()) return "
-                << StringUtility::numberToString(counter++) << ";\n"
-                << "else ";
+            outputFile << "if (child == compute_baseTypeDefiningDeclaration()) "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter++)
+                       << childIndexReturnSuffix << "else ";
           }
           // Special case: SgClassDeclaration has a member that is computed
           // using a special function.
           if ((string(node.getName()) == "SgClassDeclaration" ||
                string(node.getName()) == "SgTemplateInstantiationDecl") &&
               memberVariableName == "definition") {
-            outputFile << "if (child == compute_classDefinition()) return "
-                       << StringUtility::numberToString(counter++) << ";\n"
-                       << "else ";
+            outputFile << "if (child == compute_classDefinition()) "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter++)
+                       << childIndexReturnSuffix << "else ";
           } else {
-            outputFile << "if (child == p_" << memberVariableName << ") return "
-                       << StringUtility::numberToString(counter++) << ";\n"
-                       << "else ";
+            outputFile << "if (child == p_" << memberVariableName << ") "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter++)
+                       << childIndexReturnSuffix << "else ";
           }
         }
         // If execution reaches this point, it's not my child.
-        outputFile << "return (size_t) -1;\n";
+        outputFile << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix;
       }
     } else {
       // There are no successors, so calling this function was an error.
@@ -4353,6 +4373,8 @@ string Grammar::generateNumberOfSuccessorsComputation(
       } else if (isSTLContainer(typeString)) {
         containerSuccessors++;
         travSuccSource << "p_" << memberVariableName << ".size() + ";
+      } else if (memberVariableName == "nonreal_decl_scope") {
+        travSuccSource << "(p_nonreal_decl_scope != NULL ? 1 : 0) + ";
       } else {
         singleSuccessors++;
         // If this is a single successor, no container may come before

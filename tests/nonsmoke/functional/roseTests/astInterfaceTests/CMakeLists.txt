@@ -58,6 +58,7 @@ set(noinst_programs
   normalizeArrowExpWithAddressOfLeftOperand
   templateQualification
   rex_test2026_getDependentDecls
+  rex_test2026_declaration_scope
   rex_test2026_template_symbol_table
   rex_test2026_null_expression_unparse
 )
@@ -133,6 +134,7 @@ set(group1_tests
   buildUsingDirectiveStatement
   normalizeArrowExpWithAddressOfLeftOperand
   rex_test2026_getDependentDecls
+  rex_test2026_declaration_scope
   rex_test2026_template_symbol_table
   rex_test2026_null_expression_unparse
 )

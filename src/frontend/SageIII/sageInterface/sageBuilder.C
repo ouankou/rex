@@ -6063,6 +6063,12 @@ SgNonrealDecl *SageBuilder::buildNonrealDecl(const SgName &name,
   attachScopeAndParent(nrdecl, effective_scope,
                        "SageBuilder::buildNonrealDecl");
 
+  if (effective_scope != nullptr &&
+      !effective_scope->statementExistsInScope(nrdecl)) {
+    effective_scope->insertStatementInScope(nrdecl, false);
+    nrdecl->set_parent(effective_scope);
+  }
+
   if (scope != NULL && scope->get_parent() == NULL &&
       scope != effective_scope) {
     scope->set_parent(effective_scope);
@@ -9980,6 +9986,41 @@ SgDeclarationScope *SageBuilder::buildDeclarationScope() {
     nonreal_decl_scope->set_parent(parent_scope);
   }
   return nonreal_decl_scope;
+}
+
+SgDeclarationScope *
+SageBuilder::getNonrealDeclarationScope(SgDeclarationStatement *owner) {
+  if (owner == nullptr) {
+    return nullptr;
+  }
+  return owner->get_nonreal_decl_scope();
+}
+
+bool SageBuilder::setNonrealDeclarationScope(SgDeclarationStatement *owner,
+                                             SgDeclarationScope *scope) {
+  if (owner == nullptr || scope == nullptr) {
+    return false;
+  }
+  owner->set_nonreal_decl_scope(scope);
+  return true;
+}
+
+SgDeclarationScope *
+SageBuilder::getOrCreateNonrealDeclarationScope(SgDeclarationStatement *owner) {
+  if (owner == nullptr) {
+    return nullptr;
+  }
+  SgDeclarationScope *scope = owner->get_nonreal_decl_scope();
+  if (scope == nullptr) {
+    scope = SageBuilder::buildDeclarationScope();
+    owner->set_nonreal_decl_scope(scope);
+  }
+
+  if (scope != nullptr && scope->get_parent() != owner) {
+    scope->set_parent(owner);
+  }
+
+  return scope;
 }
 
 SgClassDefinition *

@@ -1615,6 +1615,10 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
     unparseNonrealDecl(stmt, info);
     break;
 
+  case V_SgDeclarationScope:
+    // Nonreal scope container for template parameters; no direct code output.
+    break;
+
   default: {
     printf("CxxCodeGeneration_locatedNode::unparseLanguageSpecificStatement: "
            "Error: No handler for %s (variant: %d)\n",

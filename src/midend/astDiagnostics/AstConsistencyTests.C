@@ -1970,8 +1970,6 @@ void TestAstForUniqueStatementsInScopes::visit(SgNode *node) {
 
       break;
     }
-    case V_SgDeclarationScope:
-      break;
     default:
       statementList = scope->generateStatementList();
     }

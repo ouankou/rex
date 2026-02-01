@@ -1138,6 +1138,13 @@ void Grammar::setUpStatements() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
+  // TV (04/11/2018): Introducing representation for non-real "stuff" (template
+  // parameters) on declarations that need a dedicated nonreal scope.
+  DeclarationStatement.setDataPrototype(
+      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      DEF_DELETE);
+
   // DQ (10/26/2020): Adding support to unparse the templates from the AST on a
   // declaration by declaration basis.
   DeclarationStatement.setDataPrototype(
@@ -2343,11 +2350,6 @@ void Grammar::setUpStatements() {
       "SgScopeStatement*", "scope", "= NULL", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  TemplateDeclaration.setDataPrototype(
-      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      DEF_DELETE);
-
   // DQ (6/10/2011): Added support for template class declaration, also template
   // function declaration, and template member function declaration.  Might also
   // want a TemplateVariableDeclaration (using a TemplateDeclaration for now).
@@ -2391,13 +2393,6 @@ void Grammar::setUpStatements() {
       "SgName", "templateName", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // TV (04/11/2018): Introducing representation for non-real "stuff" (template
-  // parameters)
-  TemplateClassDeclaration.setDataPrototype(
-      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      DEF_DELETE);
-
   // **************************************************************************************************
   // **************************************************************************************************
 
@@ -2434,13 +2429,6 @@ void Grammar::setUpStatements() {
       "bool", "string_represents_function_body", "= false",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-
-  // TV (04/11/2018): Introducing representation for non-real "stuff" (template
-  // parameters)
-  TemplateFunctionDeclaration.setDataPrototype(
-      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      DEF_DELETE);
 
   // **************************************************************************************************************
   // **************************************************************************************************************
@@ -2479,13 +2467,6 @@ void Grammar::setUpStatements() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // TV (04/11/2018): Introducing representation for non-real "stuff" (template
-  // parameters)
-  TemplateMemberFunctionDeclaration.setDataPrototype(
-      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      DEF_DELETE);
-
   // **************************************************************************************************************************
   // **************************************************************************************************************************
 
@@ -2509,13 +2490,6 @@ void Grammar::setUpStatements() {
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // TV (04/11/2018): Introducing representation for non-real "stuff" (template
-  // parameters)
-  TemplateVariableDeclaration.setDataPrototype(
-      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      DEF_DELETE);
-
   // *******************************************************************************
 
   // DQ (10/14/2014): Adding template typedef for C++11 support.
@@ -2537,13 +2511,6 @@ void Grammar::setUpStatements() {
   TemplateTypedefDeclaration.setDataPrototype(
       "SgName", "string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // TV (04/11/2018): Introducing representation for non-real "stuff" (template
-  // parameters)
-  TemplateTypedefDeclaration.setDataPrototype(
-      "SgDeclarationScope*", "nonreal_decl_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      DEF_DELETE);
 
   // DQ (11/4/2014): Adding IR support for the instantiation of a template
   // typedef (for C++11 support). All of these data members are generally
@@ -2793,10 +2760,6 @@ void Grammar::setUpStatements() {
   NonrealDecl.setDataPrototype("SgName", "name", "= \"\"",
                                CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
-  NonrealDecl.setDataPrototype("SgDeclarationScope*", "nonreal_decl_scope",
-                               "= NULL", NO_CONSTRUCTOR_PARAMETER,
-                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                               DEF_DELETE);
   NonrealDecl.setDataPrototype("SgNonrealType*", "type", "= NULL",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
