@@ -10007,6 +10007,10 @@ bool dispatchNonrealDeclScopeOwner(SgDeclarationStatement *owner, Fn &&fn) {
     fn(tmpl_typedef);
     return true;
   }
+  if (auto *tmpl_var = isSgTemplateVariableDeclaration(owner)) {
+    fn(tmpl_var);
+    return true;
+  }
   if (auto *tmpl = isSgTemplateDeclaration(owner)) {
     fn(tmpl);
     return true;
