@@ -2623,9 +2623,6 @@ void ClangToSageTranslator::appendTemplateArguments(
       pack_marker->set_argumentType(
           SgTemplateArgument::start_of_pack_expansion_argument);
       arg_list.push_back(pack_marker);
-      if (pack_marker->get_parent() == nullptr) {
-        ensureTemplateArgumentParents(arg_list);
-      }
     } else {
       for (const clang::TemplateArgument &pack_arg : elements) {
         appendTemplateArguments(arg_list, pack_arg, explicitlySpecified);
