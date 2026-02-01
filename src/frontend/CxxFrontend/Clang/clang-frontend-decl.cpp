@@ -7891,6 +7891,18 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       specialized_template_decl = lookup_specialized_template(primary);
     }
   }
+  auto link_specialized_template = [&](SgTemplateInstantiationDecl *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+    if (decl->get_specializedTemplateDeclaration() == nullptr &&
+        specialized_template_decl != nullptr) {
+      decl->set_specializedTemplateDeclaration(specialized_template_decl);
+    } else if (decl->get_specializedTemplateDeclaration() == nullptr &&
+               specialized_key != nullptr) {
+      queueSpecializedTemplateLink(decl, specialized_key);
+    }
+  };
 
   auto rehome_instantiation_symbol = [&](SgTemplateInstantiationDecl *decl,
                                          SgScopeStatement *desired_scope) {
@@ -8018,15 +8030,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       arg->set_parent(instantiationDecl);
     }
 
-    if (instantiationDecl->get_specializedTemplateDeclaration() == nullptr &&
-        specialized_template_decl != nullptr) {
-      instantiationDecl->set_specializedTemplateDeclaration(
-          specialized_template_decl);
-    } else if (instantiationDecl->get_specializedTemplateDeclaration() ==
-                   nullptr &&
-               specialized_key != nullptr) {
-      queueSpecializedTemplateLink(instantiationDecl, specialized_key);
-    }
+    link_specialized_template(instantiationDecl);
 
     // Insert symbol (for the forward decl/type)
     // Use the declaration name so symbol lookups/removals stay consistent.
@@ -8116,15 +8120,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     if (!instantiationDecl->get_nameResetFromMangledForm()) {
       instantiationDecl->set_nameResetFromMangledForm(true);
     }
-    if (instantiationDecl->get_specializedTemplateDeclaration() == nullptr &&
-        specialized_template_decl != nullptr) {
-      instantiationDecl->set_specializedTemplateDeclaration(
-          specialized_template_decl);
-    } else if (instantiationDecl->get_specializedTemplateDeclaration() ==
-                   nullptr &&
-               specialized_key != nullptr) {
-      queueSpecializedTemplateLink(instantiationDecl, specialized_key);
-    }
+    link_specialized_template(instantiationDecl);
     // setStatementSourcePosition(instantiationDecl, class_tpl_spec_decl); //
     // Don't reset position of reused decl
   }
@@ -8204,15 +8200,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
           definingDecl->set_templateDeclaration(recovered);
         }
       }
-      if (definingDecl->get_specializedTemplateDeclaration() == nullptr &&
-          specialized_template_decl != nullptr) {
-        definingDecl->set_specializedTemplateDeclaration(
-            specialized_template_decl);
-      } else if (definingDecl->get_specializedTemplateDeclaration() ==
-                     nullptr &&
-                 specialized_key != nullptr) {
-        queueSpecializedTemplateLink(definingDecl, specialized_key);
-      }
+      link_specialized_template(definingDecl);
     } else {
       definingDecl->set_firstNondefiningDeclaration(
           firstNondefiningDeclaration);
@@ -8260,15 +8248,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
           arg->set_parent(definingDecl);
         }
       }
-      if (definingDecl->get_specializedTemplateDeclaration() == nullptr &&
-          specialized_template_decl != nullptr) {
-        definingDecl->set_specializedTemplateDeclaration(
-            specialized_template_decl);
-      } else if (definingDecl->get_specializedTemplateDeclaration() ==
-                     nullptr &&
-                 specialized_key != nullptr) {
-        queueSpecializedTemplateLink(definingDecl, specialized_key);
-      }
+      link_specialized_template(definingDecl);
       if (definingDecl->get_scope() == nullptr) {
         definingDecl->set_scope(scope);
       }
@@ -13264,54 +13244,71 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         propagate_explicit_template_args(inst_symbol_decl);
 
+        SgNode *primary_template_node = nullptr;
+        if (function_decl->getPrimaryTemplate() != nullptr) {
+          primary_template_node = Traverse(function_decl->getPrimaryTemplate());
+        }
+        auto apply_template_instantiation_info =
+            [&](SgFunctionDeclaration *decl, bool preserve_existing_explicit) {
+              if (decl == nullptr) {
+                return;
+              }
+              if (SgTemplateInstantiationFunctionDecl *inst_func =
+                      isSgTemplateInstantiationFunctionDecl(decl)) {
+                inst_func->set_template_argument_list_is_explicit(
+                    preserve_existing_explicit
+                        ? inst_func->get_template_argument_list_is_explicit() ||
+                              has_explicit_args
+                        : has_explicit_args);
+                SageBuilder::setTemplateArgumentsInDeclaration(
+                    inst_func, template_args_ptr);
+                apply_deduced_args(inst_func);
+                if (SgTemplateFunctionDeclaration *tmpl_decl =
+                        isSgTemplateFunctionDeclaration(
+                            primary_template_node)) {
+                  inst_func->set_templateDeclaration(tmpl_decl);
+                  inst_func->set_templateName(tmpl_decl->get_name());
+                  inst_func->set_specializedTemplateDeclaration(tmpl_decl);
+                }
+                if (inst_func->get_specializedTemplateDeclaration() ==
+                        nullptr &&
+                    specialized_template_decl != nullptr) {
+                  inst_func->set_specializedTemplateDeclaration(
+                      specialized_template_decl);
+                }
+              } else if (SgTemplateInstantiationMemberFunctionDecl
+                             *inst_member =
+                                 isSgTemplateInstantiationMemberFunctionDecl(
+                                     decl)) {
+                inst_member->set_template_argument_list_is_explicit(
+                    preserve_existing_explicit
+                        ? inst_member
+                                  ->get_template_argument_list_is_explicit() ||
+                              has_explicit_args
+                        : has_explicit_args);
+                SageBuilder::setTemplateArgumentsInDeclaration(
+                    inst_member, template_args_ptr);
+                apply_deduced_args(inst_member);
+                if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                        isSgTemplateMemberFunctionDeclaration(
+                            primary_template_node)) {
+                  inst_member->set_templateDeclaration(tmpl_decl);
+                  inst_member->set_templateName(tmpl_decl->get_name());
+                  inst_member->set_specializedTemplateDeclaration(tmpl_decl);
+                }
+                if (inst_member->get_specializedTemplateDeclaration() ==
+                        nullptr &&
+                    specialized_template_decl != nullptr) {
+                  inst_member->set_specializedTemplateDeclaration(
+                      specialized_template_decl);
+                }
+              }
+            };
+
         // Mark explicit argument list on the instantiation decl and connect to
         // the primary template declaration when available.
-        if (SgTemplateInstantiationFunctionDecl *inst_func =
-                isSgTemplateInstantiationFunctionDecl(inst_symbol_decl)) {
-          inst_func->set_template_argument_list_is_explicit(
-              inst_func->get_template_argument_list_is_explicit() ||
-              has_explicit_args);
-          SageBuilder::setTemplateArgumentsInDeclaration(inst_func,
-                                                         template_args_ptr);
-          apply_deduced_args(inst_func);
-          if (SgNode *tmpl_node =
-                  Traverse(function_decl->getPrimaryTemplate())) {
-            if (SgTemplateFunctionDeclaration *tmpl_decl =
-                    isSgTemplateFunctionDeclaration(tmpl_node)) {
-              inst_func->set_templateDeclaration(tmpl_decl);
-              inst_func->set_templateName(tmpl_decl->get_name());
-              inst_func->set_specializedTemplateDeclaration(tmpl_decl);
-            }
-          }
-          if (inst_func->get_specializedTemplateDeclaration() == nullptr &&
-              specialized_template_decl != nullptr) {
-            inst_func->set_specializedTemplateDeclaration(
-                specialized_template_decl);
-          }
-        } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
-                       isSgTemplateInstantiationMemberFunctionDecl(
-                           inst_symbol_decl)) {
-          inst_member->set_template_argument_list_is_explicit(
-              inst_member->get_template_argument_list_is_explicit() ||
-              has_explicit_args);
-          SageBuilder::setTemplateArgumentsInDeclaration(inst_member,
-                                                         template_args_ptr);
-          apply_deduced_args(inst_member);
-          if (SgNode *tmpl_node =
-                  Traverse(function_decl->getPrimaryTemplate())) {
-            if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                    isSgTemplateMemberFunctionDeclaration(tmpl_node)) {
-              inst_member->set_templateDeclaration(tmpl_decl);
-              inst_member->set_templateName(tmpl_decl->get_name());
-              inst_member->set_specializedTemplateDeclaration(tmpl_decl);
-            }
-          }
-          if (inst_member->get_specializedTemplateDeclaration() == nullptr &&
-              specialized_template_decl != nullptr) {
-            inst_member->set_specializedTemplateDeclaration(
-                specialized_template_decl);
-          }
-        }
+        apply_template_instantiation_info(inst_symbol_decl,
+                                          /*preserve_existing_explicit=*/true);
 
         if (function_decl->isVariadic()) {
           inst_nondef_decl->hasEllipses();
@@ -13363,50 +13360,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             }
           }
 
-          if (SgTemplateInstantiationFunctionDecl *inst_func =
-                  isSgTemplateInstantiationFunctionDecl(sg_function_decl)) {
-            inst_func->set_template_argument_list_is_explicit(
-                has_explicit_args);
-            SageBuilder::setTemplateArgumentsInDeclaration(inst_func,
-                                                           template_args_ptr);
-            apply_deduced_args(inst_func);
-            if (SgNode *tmpl_node =
-                    Traverse(function_decl->getPrimaryTemplate())) {
-              if (SgTemplateFunctionDeclaration *tmpl_decl =
-                      isSgTemplateFunctionDeclaration(tmpl_node)) {
-                inst_func->set_templateDeclaration(tmpl_decl);
-                inst_func->set_templateName(tmpl_decl->get_name());
-                inst_func->set_specializedTemplateDeclaration(tmpl_decl);
-              }
-            }
-            if (inst_func->get_specializedTemplateDeclaration() == nullptr &&
-                specialized_template_decl != nullptr) {
-              inst_func->set_specializedTemplateDeclaration(
-                  specialized_template_decl);
-            }
-          } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
-                         isSgTemplateInstantiationMemberFunctionDecl(
-                             sg_function_decl)) {
-            inst_member->set_template_argument_list_is_explicit(
-                has_explicit_args);
-            SageBuilder::setTemplateArgumentsInDeclaration(inst_member,
-                                                           template_args_ptr);
-            apply_deduced_args(inst_member);
-            if (SgNode *tmpl_node =
-                    Traverse(function_decl->getPrimaryTemplate())) {
-              if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                      isSgTemplateMemberFunctionDeclaration(tmpl_node)) {
-                inst_member->set_templateDeclaration(tmpl_decl);
-                inst_member->set_templateName(tmpl_decl->get_name());
-                inst_member->set_specializedTemplateDeclaration(tmpl_decl);
-              }
-            }
-            if (inst_member->get_specializedTemplateDeclaration() == nullptr &&
-                specialized_template_decl != nullptr) {
-              inst_member->set_specializedTemplateDeclaration(
-                  specialized_template_decl);
-            }
-          }
+          apply_template_instantiation_info(
+              sg_function_decl, /*preserve_existing_explicit=*/false);
 
           register_function_translation(function_decl, sg_function_decl);
           res = translate_function_body(sg_function_decl) && res;
