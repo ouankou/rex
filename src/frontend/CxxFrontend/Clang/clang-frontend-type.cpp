@@ -3321,14 +3321,10 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
 
     SgTemplateTypedefDeclaration *alias_sg_decl = nullptr;
     if (alias_decl != nullptr) {
-      if (SgNode *alias_node = TraverseOnDemand(alias_decl)) {
-        alias_sg_decl = isSgTemplateTypedefDeclaration(alias_node);
-      }
-      if (alias_sg_decl == nullptr) {
-        auto it = p_decl_translation_map.find(alias_decl);
-        if (it != p_decl_translation_map.end()) {
-          alias_sg_decl = isSgTemplateTypedefDeclaration(it->second);
-        }
+      if (SgDeclarationStatement *found_decl =
+              lookupSgDeclarationForClangDecl(alias_decl,
+                                              /*allow_on_demand=*/true)) {
+        alias_sg_decl = isSgTemplateTypedefDeclaration(found_decl);
       }
     }
 

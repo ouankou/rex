@@ -969,11 +969,7 @@ ClangToSageTranslator::buildNonrealRefExpFromNestedNameSpecifier(
   if (ref != nullptr && terminalTemplateArgs != nullptr &&
       !terminalTemplateArgs->empty()) {
     ref->get_templateArguments() = *terminalTemplateArgs;
-    for (SgTemplateArgument *arg : ref->get_templateArguments()) {
-      if (arg != nullptr) {
-        arg->set_parent(ref);
-      }
-    }
+    SageBuilder::setTemplateArgumentParents(ref);
   }
   return ref;
 }
@@ -5596,11 +5592,7 @@ bool ClangToSageTranslator::VisitConceptSpecializationExpr(
 
   if (ref != nullptr && !template_args.empty()) {
     ref->get_templateArguments() = template_args;
-    for (SgTemplateArgument *arg : ref->get_templateArguments()) {
-      if (arg != nullptr) {
-        arg->set_parent(ref);
-      }
-    }
+    SageBuilder::setTemplateArgumentParents(ref);
   }
 
   if (ref != nullptr && !concept_specialization_expr->isValueDependent()) {
@@ -9620,11 +9612,7 @@ bool ClangToSageTranslator::VisitOverloadExpr(
         overload_expr->copyTemplateArgumentsInto(arg_info);
         ref->get_templateArguments() = buildTemplateArguments(arg_info, true);
       }
-      for (SgTemplateArgument *arg : ref->get_templateArguments()) {
-        if (arg != nullptr && arg->get_parent() != ref) {
-          arg->set_parent(ref);
-        }
-      }
+      SageBuilder::setTemplateArgumentParents(ref);
     }
 
     for (auto it = overload_expr->decls_begin();

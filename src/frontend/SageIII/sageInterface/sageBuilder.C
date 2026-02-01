@@ -1239,6 +1239,17 @@ void SageBuilder::setTemplateArgumentParents(SgDeclarationStatement *decl) {
   testTemplateArgumentParents(decl);
 }
 
+void SageBuilder::setTemplateArgumentParents(SgNonrealRefExp *ref) {
+  if (ref == nullptr) {
+    return;
+  }
+  for (SgTemplateArgument *arg : ref->get_templateArguments()) {
+    if (arg != nullptr && arg->get_parent() != ref) {
+      arg->set_parent(ref);
+    }
+  }
+}
+
 void SageBuilder::setTemplateParameterParents(SgDeclarationStatement *decl) {
   // DQ (9/13/2012): Set the parents of the template arguments (if not already
   // set, to the first non-defining declaration).

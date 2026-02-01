@@ -10742,11 +10742,7 @@ void ClangToSageTranslator::reconcileOnDemandTranslation(SgNode *node) {
       if (ref == nullptr) {
         continue;
       }
-      for (SgTemplateArgument *arg : ref->get_templateArguments()) {
-        if (arg != nullptr && arg->get_parent() != ref) {
-          arg->set_parent(ref);
-        }
-      }
+      SageBuilder::setTemplateArgumentParents(ref);
     }
   };
 

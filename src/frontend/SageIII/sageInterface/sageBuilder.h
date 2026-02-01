@@ -1205,6 +1205,7 @@ setTemplateNameInTemplateInstantiations(SgFunctionDeclaration *func,
 // DQ (9/13/2012): Need to set the parents of SgTemplateArgument IR nodes now
 // that they are passed in as part of the SageBuilder API.
 ROSE_DLL_API void setTemplateArgumentParents(SgDeclarationStatement *decl);
+ROSE_DLL_API void setTemplateArgumentParents(SgNonrealRefExp *ref);
 ROSE_DLL_API void testTemplateArgumentParents(SgDeclarationStatement *decl);
 ROSE_DLL_API SgTemplateArgumentPtrList *
 getTemplateArgumentList(SgDeclarationStatement *decl);
