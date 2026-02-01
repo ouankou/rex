@@ -1154,8 +1154,12 @@ unsigned int SgVariableDeclaration::cfgIndexForEnd() const {
 unsigned int SgVariableDeclaration::cfgFindChildIndex(SgNode *n) {
   size_t idx = this->get_childIndex(n);
   ROSE_ASSERT(idx != Rose::INVALID_INDEX); // Not found
-  ROSE_ASSERT(idx > 2); // Skip base type + requires clause + nonreal scope
-  return idx - 3;
+  size_t offset = 2;                       // base type + requires clause
+  if (this->get_nonreal_decl_scope() != nullptr) {
+    offset += 1;
+  }
+  ROSE_ASSERT(idx >= offset);
+  return idx - offset;
 }
 
 std::vector<CFGEdge> SgVariableDeclaration::cfgOutEdges(unsigned int idx) {

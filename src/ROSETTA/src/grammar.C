@@ -3755,6 +3755,15 @@ void Grammar::buildTreeTraversalFunctions(
         traverseDataMemberList.push_back(*stringListIterator);
       }
     }
+    int nonreal_index = -1;
+    for (size_t i = 0; i < traverseDataMemberList.size(); ++i) {
+      if (traverseDataMemberList[i]->getVariableNameString() ==
+          "nonreal_decl_scope") {
+        nonreal_index = static_cast<int>(i);
+        break;
+      }
+    }
+    bool has_nonreal_decl_scope = nonreal_index >= 0;
     // start: generate get_traversalSuccessorContainer() method
     outputFile << "vector<" << grammarPrefixName << "Node*>\n"
                << node.getName()
@@ -3839,8 +3848,16 @@ void Grammar::buildTreeTraversalFunctions(
     for (vector<GrammarString *>::iterator iter =
              traverseDataMemberList.begin();
          iter != traverseDataMemberList.end(); iter++) {
-      outputFile << generateTraverseSuccessorNames(*iter,
-                                                   successorContainerName);
+      GrammarString *gs = *iter;
+      string memberVariableName = gs->getVariableNameString();
+      if (memberVariableName == "nonreal_decl_scope") {
+        outputFile << "if (p_nonreal_decl_scope != NULL) "
+                   << successorContainerName
+                   << ".push_back(\"p_nonreal_decl_scope\");\n";
+      } else {
+        outputFile << generateTraverseSuccessorNames(gs,
+                                                     successorContainerName);
+      }
     }
     outputFile << "return " << successorContainerName
                << ";\n}\n"; // end of function
@@ -3871,6 +3888,11 @@ void Grammar::buildTreeTraversalFunctions(
     outputFile << "SgNode *\n"
                << node.getName()
                << "::get_traversalSuccessorByIndex(size_t idx) const {\n";
+    if (has_nonreal_decl_scope) {
+      outputFile << "if (p_nonreal_decl_scope == NULL && idx >= "
+                 << StringUtility::numberToString(nonreal_index)
+                 << ") idx++;\n";
+    }
     if (traverseDataMemberList.size() > 0) {
       GrammarString *gs = traverseDataMemberList.front();
       string typeString = gs->getTypeNameString();
@@ -4033,6 +4055,18 @@ void Grammar::buildTreeTraversalFunctions(
     // GB (09/25/2007): Added this method.
     outputFile << "size_t\n"
                << node.getName() << "::get_childIndex(SgNode *child) const {\n";
+    if (has_nonreal_decl_scope) {
+      outputFile << "auto adjust_index = [&](size_t idx) -> size_t {\n"
+                 << "  if (idx == static_cast<size_t>(-1)) return idx;\n"
+                 << "  if (p_nonreal_decl_scope == NULL && idx > "
+                 << StringUtility::numberToString(nonreal_index)
+                 << ") return idx - 1;\n"
+                 << "  return idx;\n"
+                 << "};\n";
+    }
+    string childIndexReturnPrefix =
+        has_nonreal_decl_scope ? "return adjust_index(" : "return ";
+    string childIndexReturnSuffix = has_nonreal_decl_scope ? ");\n" : ";\n";
     if (traverseDataMemberList.size() > 0) {
       GrammarString *gs = traverseDataMemberList.front();
       string typeString = gs->getTypeNameString();
@@ -4060,17 +4094,21 @@ void Grammar::buildTreeTraversalFunctions(
       // (string(node.getName()) == "SgVariableDeclaration")
       if (string(node.getName()) == "SgVariableDeclaration" ||
           string(node.getName()) == "SgTemplateVariableDeclaration") {
-        outputFile << "if (child == p_nonreal_decl_scope) return 0;\n"
+        outputFile << "if (child == p_nonreal_decl_scope) "
+                   << childIndexReturnPrefix << "0" << childIndexReturnSuffix
                    << "else if (child == "
-                      "compute_baseTypeDefiningDeclaration()) return 1;\n"
-                   << "else if (child == p_requiresClause) return 2;\n"
+                      "compute_baseTypeDefiningDeclaration()) "
+                   << childIndexReturnPrefix << "1" << childIndexReturnSuffix
+                   << "else if (child == p_requiresClause) "
+                   << childIndexReturnPrefix << "2" << childIndexReturnSuffix
                    << "else {\n"
                    << "SgInitializedNamePtrList::const_iterator itr = "
                       "find(p_variables.begin(), p_variables.end(), child);\n"
-                   << "if (itr != p_variables.end()) return (itr - "
-                      "p_variables.begin()) + 3;\n"
-                   << "else return (size_t) -1;\n"
-                   << "}\n";
+                   << "if (itr != p_variables.end()) " << childIndexReturnPrefix
+                   << "(itr - p_variables.begin()) + 3"
+                   << childIndexReturnSuffix << "else "
+                   << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix << "}\n";
       } else if (container_gs != nullptr && container_index > 0) {
         vector<GrammarString *>::iterator iter;
         size_t counter = 0;
@@ -4081,21 +4119,23 @@ void Grammar::buildTreeTraversalFunctions(
           string memberVariableName = (*iter)->getVariableNameString();
           if (string(node.getName()) == "SgTypedefDeclaration" &&
               memberVariableName == "declaration") {
-            outputFile
-                << "if (child == compute_baseTypeDefiningDeclaration()) return "
-                << StringUtility::numberToString(counter) << ";\n"
-                << "else ";
+            outputFile << "if (child == compute_baseTypeDefiningDeclaration()) "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter)
+                       << childIndexReturnSuffix << "else ";
           } else if ((string(node.getName()) == "SgClassDeclaration" ||
                       string(node.getName()) ==
                           "SgTemplateInstantiationDecl") &&
                      memberVariableName == "definition") {
-            outputFile << "if (child == compute_classDefinition()) return "
-                       << StringUtility::numberToString(counter) << ";\n"
-                       << "else ";
+            outputFile << "if (child == compute_classDefinition()) "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter)
+                       << childIndexReturnSuffix << "else ";
           } else {
-            outputFile << "if (child == p_" << memberVariableName << ") return "
-                       << StringUtility::numberToString(counter) << ";\n"
-                       << "else ";
+            outputFile << "if (child == p_" << memberVariableName << ") "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter)
+                       << childIndexReturnSuffix << "else ";
           }
         }
         string memberVariableName = container_gs->getVariableNameString();
@@ -4108,29 +4148,32 @@ void Grammar::buildTreeTraversalFunctions(
                    << getIteratorString(
                           container_gs->getTypeNameString().c_str())
                    << " itr = find(" << begin << ", " << end << ", child);\n"
-                   << "if (itr != " << end << ") return (itr - " << begin
-                   << ") + " << StringUtility::numberToString(container_index)
-                   << ";\n"
-                   << "else return (size_t) -1;\n"
-                   << "}\n";
+                   << "if (itr != " << end << ") " << childIndexReturnPrefix
+                   << "(itr - " << begin << ") + "
+                   << StringUtility::numberToString(container_index)
+                   << childIndexReturnSuffix << "else "
+                   << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix << "}\n";
       } else if (isSTLContainerPtr(typeString.c_str())) {
         string memberVariableName = gs->getVariableNameString();
         string begin = "p_" + memberVariableName + "->begin()";
         string end = "p_" + memberVariableName + "->end()";
         outputFile << getIteratorString(typeString.c_str()) << " itr = find("
                    << begin << ", " << end << ", child);\n"
-                   << "if (itr != " << end << ") return itr - " << begin
-                   << ";\n"
-                   << "else return (size_t) -1;\n";
+                   << "if (itr != " << end << ") " << childIndexReturnPrefix
+                   << "itr - " << begin << childIndexReturnSuffix << "else "
+                   << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix;
       } else if (isSTLContainer(typeString.c_str())) {
         string memberVariableName = gs->getVariableNameString();
         string begin = "p_" + memberVariableName + ".begin()";
         string end = "p_" + memberVariableName + ".end()";
         outputFile << getIteratorString(typeString.c_str()) << " itr = find("
                    << begin << ", " << end << ", child);\n"
-                   << "if (itr != " << end << ") return itr - " << begin
-                   << ";\n"
-                   << "else return (size_t) -1;\n";
+                   << "if (itr != " << end << ") " << childIndexReturnPrefix
+                   << "itr - " << begin << childIndexReturnSuffix << "else "
+                   << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix;
       } else {
         // Fixed members, generate an if-else ladder.
         vector<GrammarString *>::iterator iter;
@@ -4142,27 +4185,30 @@ void Grammar::buildTreeTraversalFunctions(
           // using a special function.
           if (string(node.getName()) == "SgTypedefDeclaration" &&
               memberVariableName == "declaration") {
-            outputFile
-                << "if (child == compute_baseTypeDefiningDeclaration()) return "
-                << StringUtility::numberToString(counter++) << ";\n"
-                << "else ";
+            outputFile << "if (child == compute_baseTypeDefiningDeclaration()) "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter++)
+                       << childIndexReturnSuffix << "else ";
           }
           // Special case: SgClassDeclaration has a member that is computed
           // using a special function.
           if ((string(node.getName()) == "SgClassDeclaration" ||
                string(node.getName()) == "SgTemplateInstantiationDecl") &&
               memberVariableName == "definition") {
-            outputFile << "if (child == compute_classDefinition()) return "
-                       << StringUtility::numberToString(counter++) << ";\n"
-                       << "else ";
+            outputFile << "if (child == compute_classDefinition()) "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter++)
+                       << childIndexReturnSuffix << "else ";
           } else {
-            outputFile << "if (child == p_" << memberVariableName << ") return "
-                       << StringUtility::numberToString(counter++) << ";\n"
-                       << "else ";
+            outputFile << "if (child == p_" << memberVariableName << ") "
+                       << childIndexReturnPrefix
+                       << StringUtility::numberToString(counter++)
+                       << childIndexReturnSuffix << "else ";
           }
         }
         // If execution reaches this point, it's not my child.
-        outputFile << "return (size_t) -1;\n";
+        outputFile << childIndexReturnPrefix << "(size_t) -1"
+                   << childIndexReturnSuffix;
       }
     } else {
       // There are no successors, so calling this function was an error.
@@ -4327,6 +4373,8 @@ string Grammar::generateNumberOfSuccessorsComputation(
       } else if (isSTLContainer(typeString)) {
         containerSuccessors++;
         travSuccSource << "p_" << memberVariableName << ".size() + ";
+      } else if (memberVariableName == "nonreal_decl_scope") {
+        travSuccSource << "(p_nonreal_decl_scope != NULL ? 1 : 0) + ";
       } else {
         singleSuccessors++;
         // If this is a single successor, no container may come before
