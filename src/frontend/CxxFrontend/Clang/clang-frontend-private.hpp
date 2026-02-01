@@ -598,7 +598,7 @@ protected:
   void reconcileOnDemandTranslation(SgNode *node);
   void queueSpecializedTemplateLink(SgTemplateInstantiationDecl *inst_decl,
                                     clang::Decl *specialized_decl);
-  void resolvePendingSpecializedTemplateLinks();
+  size_t resolvePendingSpecializedTemplateLinks();
   SgDeclarationStatement *lookupSgDeclarationForClangDecl(clang::Decl *key,
                                                           bool allow_on_demand);
 

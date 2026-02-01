@@ -10838,9 +10838,10 @@ void ClangToSageTranslator::queueSpecializedTemplateLink(
   p_pending_specialized_template_links[inst_decl] = specialized_decl;
 }
 
-void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
+size_t ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
+  size_t resolved_links = 0;
   if (p_pending_specialized_template_links.empty()) {
-    return;
+    return resolved_links;
   }
 
   for (auto it = p_pending_specialized_template_links.begin();
@@ -10849,10 +10850,12 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
     clang::Decl *specialized_decl = it->second;
     if (inst_decl == nullptr || specialized_decl == nullptr) {
       it = p_pending_specialized_template_links.erase(it);
+      ++resolved_links;
       continue;
     }
     if (inst_decl->get_specializedTemplateDeclaration() != nullptr) {
       it = p_pending_specialized_template_links.erase(it);
+      ++resolved_links;
       continue;
     }
     if (SgDeclarationStatement *resolved =
@@ -10860,10 +10863,12 @@ void ClangToSageTranslator::resolvePendingSpecializedTemplateLinks() {
                                             /*allow_on_demand=*/true)) {
       inst_decl->set_specializedTemplateDeclaration(resolved);
       it = p_pending_specialized_template_links.erase(it);
+      ++resolved_links;
     } else {
       ++it;
     }
   }
+  return resolved_links;
 }
 
 void ClangToSageTranslator::ensureMemberFunctionScope(
@@ -16725,13 +16730,22 @@ bool ClangToSageTranslator::VisitTranslationUnitDecl(
     p_pending_implicit_function_instantiations_set.erase(pending);
   }
 
-  resolvePendingSpecializedTemplateLinks();
-  if (!p_pending_specialized_template_links.empty()) {
-    std::cerr << "FATAL: " << p_pending_specialized_template_links.size()
-              << " unresolved specialized template links after translation "
-                 "unit processing"
-              << std::endl;
-    ROSE_ABORT();
+  while (!p_pending_specialized_template_links.empty()) {
+    const size_t num_pending_before =
+        p_pending_specialized_template_links.size();
+    const size_t resolved = resolvePendingSpecializedTemplateLinks();
+    const size_t num_pending_after =
+        p_pending_specialized_template_links.size();
+    if (num_pending_after == 0) {
+      break;
+    }
+    if (resolved == 0) {
+      std::cerr << "FATAL: " << num_pending_after
+                << " unresolved specialized template links after translation "
+                   "unit processing; resolution is not progressing."
+                << std::endl;
+      ROSE_ABORT();
+    }
   }
 
   SageBuilder::popScopeStack();

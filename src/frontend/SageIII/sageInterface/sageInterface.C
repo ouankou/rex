@@ -7246,6 +7246,18 @@ bool SageInterface::templateArgumentEquivalence(SgTemplateArgument *arg1,
         return static_cast<SgChar32Val *>(expr1)->get_value() ==
                static_cast<SgChar32Val *>(expr2)->get_value();
       }
+      case V_SgFloatVal: {
+        return static_cast<SgFloatVal *>(expr1)->get_value() ==
+               static_cast<SgFloatVal *>(expr2)->get_value();
+      }
+      case V_SgDoubleVal: {
+        return static_cast<SgDoubleVal *>(expr1)->get_value() ==
+               static_cast<SgDoubleVal *>(expr2)->get_value();
+      }
+      case V_SgLongDoubleVal: {
+        return static_cast<SgLongDoubleVal *>(expr1)->get_value() ==
+               static_cast<SgLongDoubleVal *>(expr2)->get_value();
+      }
       case V_SgUnsignedLongLongIntVal: {
         return static_cast<SgUnsignedLongLongIntVal *>(expr1)->get_value() ==
                static_cast<SgUnsignedLongLongIntVal *>(expr2)->get_value();
