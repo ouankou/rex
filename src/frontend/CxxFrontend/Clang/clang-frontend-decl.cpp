@@ -7858,6 +7858,11 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
           return decl;
         }
       }
+      if (clang::CXXRecordDecl *templated = tmpl->getTemplatedDecl()) {
+        if (SgDeclarationStatement *decl = lookup(templated)) {
+          return decl;
+        }
+      }
     }
     if (auto *partial =
             llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
