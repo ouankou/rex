@@ -7219,8 +7219,8 @@ bool SageInterface::templateArgumentEquivalence(SgTemplateArgument *arg1,
                static_cast<SgUnsignedLongLongIntVal *>(expr2)->get_value();
       }
       case V_SgLongIntVal: {
-        return ((SgLongIntVal *)expr1)->get_value() ==
-               ((SgLongIntVal *)expr2)->get_value();
+        return static_cast<SgLongIntVal *>(expr1)->get_value() ==
+               static_cast<SgLongIntVal *>(expr2)->get_value();
       }
         // DQ (7/21/2024): Adding support for another type (from processing
         // nlohmann/json.hpp with ROSE)

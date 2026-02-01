@@ -11009,6 +11009,40 @@ ClangToSageTranslator::evaluateConstraintSatisfaction(
 }
 #endif
 
+namespace {
+template <typename NodeT, typename Fn>
+bool visitConstraintTargets(NodeT *node, Fn &&fn) {
+  if (node == nullptr) {
+    return false;
+  }
+  if (auto *decl = isSgTemplateInstantiationDecl(node)) {
+    fn(decl);
+    return true;
+  }
+  if (auto *decl = isSgTemplateInstantiationFunctionDecl(node)) {
+    fn(decl);
+    return true;
+  }
+  if (auto *decl = isSgTemplateInstantiationMemberFunctionDecl(node)) {
+    fn(decl);
+    return true;
+  }
+  if (auto *decl = isSgTemplateInstantiationTypedefDeclaration(node)) {
+    fn(decl);
+    return true;
+  }
+  if (auto *decl = isSgTemplateVariableDeclaration(node)) {
+    fn(decl);
+    return true;
+  }
+  if (auto *ref = isSgNonrealRefExp(node)) {
+    fn(ref);
+    return true;
+  }
+  return false;
+}
+} // namespace
+
 void ClangToSageTranslator::attachConstraintSatisfaction(
     SgNode *node, const ConstraintSatisfactionResult &result) {
   if (node == nullptr || !result.evaluated) {
@@ -11024,23 +11058,7 @@ void ClangToSageTranslator::attachConstraintSatisfaction(
     target->set_constraintSatisfactionSummary(result.summary);
   };
 
-  if (SgTemplateInstantiationDecl *decl = isSgTemplateInstantiationDecl(node)) {
-    apply(decl);
-  } else if (SgTemplateInstantiationFunctionDecl *decl =
-                 isSgTemplateInstantiationFunctionDecl(node)) {
-    apply(decl);
-  } else if (SgTemplateInstantiationMemberFunctionDecl *decl =
-                 isSgTemplateInstantiationMemberFunctionDecl(node)) {
-    apply(decl);
-  } else if (SgTemplateInstantiationTypedefDeclaration *decl =
-                 isSgTemplateInstantiationTypedefDeclaration(node)) {
-    apply(decl);
-  } else if (SgTemplateVariableDeclaration *decl =
-                 isSgTemplateVariableDeclaration(node)) {
-    apply(decl);
-  } else if (SgNonrealRefExp *ref = isSgNonrealRefExp(node)) {
-    apply(ref);
-  }
+  visitConstraintTargets(node, apply);
 
   // Preserve the attribute for diagnostics/debugging, but do not rely on it
   // for semantic decisions.
@@ -11060,23 +11078,7 @@ void ClangToSageTranslator::attachSFINAEFailure(
     target->set_sfinaeSummary(result.summary);
   };
 
-  if (SgTemplateInstantiationDecl *decl = isSgTemplateInstantiationDecl(node)) {
-    apply(decl);
-  } else if (SgTemplateInstantiationFunctionDecl *decl =
-                 isSgTemplateInstantiationFunctionDecl(node)) {
-    apply(decl);
-  } else if (SgTemplateInstantiationMemberFunctionDecl *decl =
-                 isSgTemplateInstantiationMemberFunctionDecl(node)) {
-    apply(decl);
-  } else if (SgTemplateInstantiationTypedefDeclaration *decl =
-                 isSgTemplateInstantiationTypedefDeclaration(node)) {
-    apply(decl);
-  } else if (SgTemplateVariableDeclaration *decl =
-                 isSgTemplateVariableDeclaration(node)) {
-    apply(decl);
-  } else if (SgNonrealRefExp *ref = isSgNonrealRefExp(node)) {
-    apply(ref);
-  }
+  visitConstraintTargets(node, apply);
 }
 
 SFINAEFailureResult ClangToSageTranslator::evaluateSFINAEFailure(
@@ -11165,20 +11167,11 @@ bool ClangToSageTranslator::shouldSkipSymbolForConstraints(
     return false;
   };
 
-  if (auto *inst = isSgTemplateInstantiationDecl(decl)) {
-    return should_skip(inst);
-  }
-  if (auto *inst = isSgTemplateInstantiationFunctionDecl(decl)) {
-    return should_skip(inst);
-  }
-  if (auto *inst = isSgTemplateInstantiationMemberFunctionDecl(decl)) {
-    return should_skip(inst);
-  }
-  if (auto *inst = isSgTemplateInstantiationTypedefDeclaration(decl)) {
-    return should_skip(inst);
-  }
-  if (auto *tmpl_var = isSgTemplateVariableDeclaration(decl)) {
-    return should_skip(tmpl_var);
+  bool skip = false;
+  bool handled = visitConstraintTargets(
+      decl, [&](auto *node) { skip = should_skip(node); });
+  if (handled) {
+    return skip;
   }
 
   // Fallback to attributes if present (legacy).
