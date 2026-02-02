@@ -792,11 +792,6 @@ void Grammar::setUpStatements() {
   NEW_TERMINAL_MACRO(OmpThreadprivateStatement, "OmpThreadprivateStatement",
                      "OMP_THREADPRIVATE_STMT");
 
-  // DQ (8/16/2014): Adding support for Microsoft attributes (e.g. "[repeatable]
-  // int x;")
-  NEW_TERMINAL_MACRO(MicrosoftAttributeDeclaration,
-                     "MicrosoftAttributeDeclaration", "MS_ATTRIBUTE_DECL_STMT");
-
   // DQ (3/22/2019): Adding EmptyDeclaration to support addition of comments and
   // CPP directives that will permit token-based unparsing to work with greater
   // precision. For example, used to add an include directive with greater
@@ -822,9 +817,9 @@ void Grammar::setUpStatements() {
           C_PreprocessorDirectiveStatement | OmpThreadprivateStatement |
           OmpRequiresStatement | FortranIncludeLine | OmpTaskwaitStatement |
           StmtDeclarationStatement | StaticAssertionDeclaration |
-          OmpDeclareSimdStatement | MicrosoftAttributeDeclaration |
-          NonrealDecl | EmptyDeclaration | OmpDeclareMapperStatement |
-          OmpDeclareTargetStatement | OmpEndDeclareTargetStatement,
+          OmpDeclareSimdStatement | NonrealDecl | EmptyDeclaration |
+          OmpDeclareMapperStatement | OmpDeclareTargetStatement |
+          OmpEndDeclareTargetStatement,
       "DeclarationStatement", "DECL_STMT", false);
 
   NEW_NONTERMINAL_MACRO(OmpExecStatement,
@@ -4719,13 +4714,6 @@ void Grammar::setUpStatements() {
       "std::string", "languageSpecifier", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  MicrosoftAttributeDeclaration.setFunctionPrototype(
-      "HEADER_MICROSOFT_ATTRIBUTE_DECLARATION_STATEMENT",
-      "../Grammar/Statement.code");
-  MicrosoftAttributeDeclaration.setDataPrototype(
-      "SgName", "attribute_string", "= \"\"", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // Support for C preprocessor declarations within the AST (does not solve the
   // problem of not knowing where they might be expanded within source code
   // (something we can't see). This support allows transformations to introduce
@@ -5565,8 +5553,4 @@ void Grammar::setUpStatements() {
   AccClauseBodyStatement.setDataPrototype(
       "SgAccClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
-
-  MicrosoftAttributeDeclaration.setFunctionSource(
-      "SOURCE_MICROSOFT_ATTRIBUTE_DECLARATION_STATEMENT",
-      "../Grammar/Statement.code");
 }

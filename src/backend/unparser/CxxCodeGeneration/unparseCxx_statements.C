@@ -872,91 +872,6 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
   // initializedName.get_storageModifier().display("New storage modifiers in
   // unparseFunctionParameterDeclaration()");
 
-#define MS_DECLSPEC_DEBUG 0
-
-  if (initializedName->is_ms_declspec_parameter_appdomain()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(appdomain) \n");
-#endif
-    curprint("__declspec(appdomain) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_deprecated()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(deprecated) \n");
-#endif
-    curprint("__declspec(deprecated) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_dllimport()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(dllimport) \n");
-#endif
-    curprint("__declspec(dllimport) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_dllexport()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(dllexport) \n");
-#endif
-    curprint("__declspec(dllexport) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_novtable()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(novtable) \n");
-#endif
-    curprint("__declspec(novtable) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_process()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(process) \n");
-#endif
-    curprint("__declspec(process) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_restrict()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(restrict) \n");
-#endif
-    curprint("__declspec(restrict) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_selectany()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(selectany) \n");
-#endif
-    curprint("__declspec(selectany) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_thread()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(thread) \n");
-#endif
-    curprint("__declspec(thread) ");
-  }
-
-  if (initializedName->is_ms_declspec_parameter_uuid()) {
-#if MS_DECLSPEC_DEBUG
-    printf("In Unparse_ExprStmt::unparseFunctionParameterDeclaration(): Output "
-           "the Microsoft __declspec(uuid) \n");
-#endif
-    // curprint("__declspec(uuid) ");
-    curprint("__declspec(uuid(\"");
-    curprint(initializedName->get_microsoft_uuid_string());
-    curprint("\")) ");
-  }
-
   SgStorageModifier &storage = initializedName->get_storageModifier();
   if (storage.isExtern()) {
     curprint("extern ");
@@ -1599,11 +1514,6 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
     // DQ (7/25/2014): Adding support for C11 static assertions.
   case V_SgStaticAssertionDeclaration:
     unparseStaticAssertionDeclaration(stmt, info);
-    break;
-
-    // DQ (8/17/2014): Adding support for Microsoft attributes.
-  case V_SgMicrosoftAttributeDeclaration:
-    unparseMicrosoftAttributeDeclaration(stmt, info);
     break;
 
     // DQ 11/3/2014): Adding C++11 templated typedef declaration support.
@@ -6758,8 +6668,7 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
   }
 
   // Output the "asm" keyword.
-  // DQ (8/31/2013): We have to output either "__asm__" or "asm" (for MSVisual
-  // C++ I think we might need "__asm").
+  // DQ (8/31/2013): We have to output either "__asm__" or "asm".
 
 // DQ (2/25/2014): Note that the 4.2.4 compiler will define both
 // BACKEND_C_COMPILER_SUPPORTS_ASM and
@@ -6773,7 +6682,6 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
 //    #error "Error: BACKEND_C_COMPILER_SUPPORTS_ASM and
 //    BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM are both defined!"
 // #endif
-#ifndef _MSC_VER
 #if (defined(BACKEND_C_COMPILER_SUPPORTS_LONG_STRING_ASM) &&                   \
      defined(BACKEND_C_COMPILER_SUPPORTS_UNDERSCORE_ASM))
   // DQ (2/26/2014): Allow the CMake tests to pass for now.
@@ -6795,10 +6703,6 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
   // the GNU compiler specific version or "__asm__".
   curprint("__asm__ ");
 #endif
-#endif
-#else
-  // DQ (2/26/2014): I assume that MSVC would use the C standard representation.
-  curprint("asm ");
 #endif
 
   curprint("(");
@@ -8355,18 +8259,6 @@ void Unparse_ExprStmt::unparseStaticAssertionDeclaration(SgStatement *stmt,
   curprint(",\"");
   curprint(staticAssertionDeclaration->get_string_literal());
   curprint("\");");
-}
-
-void Unparse_ExprStmt::unparseMicrosoftAttributeDeclaration(SgStatement *stmt,
-                                                            SgUnparse_Info &) {
-  // DQ (8/17/2014): Adding support for Microsoft attributes.
-  SgMicrosoftAttributeDeclaration *microsoftAttributeDeclaration =
-      isSgMicrosoftAttributeDeclaration(stmt);
-  ASSERT_not_null(microsoftAttributeDeclaration);
-
-  curprint("[");
-  curprint(microsoftAttributeDeclaration->get_attribute_string());
-  curprint("]");
 }
 
 // EOF

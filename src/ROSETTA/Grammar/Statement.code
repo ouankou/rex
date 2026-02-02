@@ -3498,15 +3498,6 @@ HEADER_CLINKAGE_DECLARATION_STATEMENT_START
 HEADER_CLINKAGE_DECLARATION_STATEMENT_END
 
 
-HEADER_MICROSOFT_ATTRIBUTE_DECLARATION_STATEMENT_START
-
-       // We need this to be defined to avoid calling the base class version (which is an error).
-          SgName get_mangled_name() const override;
-
-          bool hasExplicitScope() const override;
-
-HEADER_MICROSOFT_ATTRIBUTE_DECLARATION_STATEMENT_END
-
 // #########################################################
 // #########################################################
 //                      SOURCE CODE
@@ -3522,7 +3513,6 @@ SgStatement::get_symbol_from_symbol_table() const
    {
      printf ("Error: virtual function SgStatement::get_symbol_from_symbol_table() called on base class SgStatement = %p = %s \n",this,this->class_name().c_str());
      ROSE_ASSERT(false);
-  // tps (12/9/2009) : MSC requires a return value
      return NULL;
    }
 
@@ -13934,7 +13924,7 @@ SgTemplateDeclaration::get_type()
    {
   // DQ (12/12/2011): Added function to support "get_type()" on the derived IR nodes.  Maybe
   // this should be a virtual function, but no, because the return types at the derived classes
-  // are different and some compilers (MS Visual Studio) do not support covariant return types.
+  // are different and some compilers do not support covariant return types.
 
      SgType* returnType = NULL;
 
@@ -16562,30 +16552,3 @@ void
 SgOmpSimdStatement::post_construction_initialization()
    {}
 SOURCE_OMP_SIMD_STATEMENT_END
-
-
-SOURCE_MICROSOFT_ATTRIBUTE_DECLARATION_STATEMENT_START
-
-void
-SgMicrosoftAttributeDeclaration::post_construction_initialization()
-   {
-  // Not sure we have to do anything here!
-   }
-
-// We need this to be defined to avoid calling the base class version (which is an error).
-SgName
-SgMicrosoftAttributeDeclaration::get_mangled_name() const
-   {
-  // Not sure we have to do anything here!
-
-
-     return "microsoft_attribute";
-   }
-
-bool
-SgMicrosoftAttributeDeclaration::hasExplicitScope() const
-   {
-  // This function reports that this IR node does NOT store its scope explicitly.
-     return false;
-   }
-SOURCE_MICROSOFT_ATTRIBUTE_DECLARATION_STATEMENT_END

@@ -292,7 +292,7 @@ add_custom_command(
   TARGET check-core
   POST_BUILD
   COMMENT "  TEST     whether a trivial ROSE program runs [rose-compiler]"
-  COMMAND /bin/sh -c "if ! ${PROJECT_BINARY_DIR}/bin/rose-compiler --version ; then echo \"error: You cannot run a program linked with ROSE. Please be sure that your\" >&2; echo \"error: LD_LIBRARY_PATH (Linux) or DYLD_LIBRARY_PATH (Mac OSX) contains the\" >&2; echo \"error: correct libraries (JVM, librose.so, etc.)\" >&2; exit 1; fi;"
+  COMMAND /bin/sh -c "if ! ${PROJECT_BINARY_DIR}/bin/rose-compiler --version ; then echo \"error: You cannot run a program linked with ROSE. Please be sure that your\" >&2; echo \"error: LD_LIBRARY_PATH contains the correct libraries (JVM, librose.so, etc.)\" >&2; exit 1; fi;"
   VERBATIM)
 
 #Check that rose-config works
@@ -407,7 +407,7 @@ function(resolve_compiler_names)
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     set(cc_name "gcc" PARENT_SCOPE)
     set(cxx_name "g++" PARENT_SCOPE)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(cc_name "clang" PARENT_SCOPE)
     set(cxx_name "clang++" PARENT_SCOPE)
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")

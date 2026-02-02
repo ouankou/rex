@@ -15,9 +15,6 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
-#ifdef _MSC_VER
-#define strncasecmp _strnicmp
-#endif
 
 using namespace std;
 using namespace Rose;
@@ -906,9 +903,6 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
     // This define is copied from OFP actionEnum.h This needs to be better
     // handled later (using a proper enum type).
 #define IntentSpecBase 600
-#ifndef _MSC_VER
-    // tps (02/02/2010) : error C2513: 'const int' : no variable declared before
-    // '='
     const int IN = IntentSpecBase + 0;
     const int OUT = IntentSpecBase + 1;
     const int INOUT = IntentSpecBase + 2;
@@ -934,7 +928,6 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
     }
 
     curprint("(" + intentString + ")");
-#endif
   }
 
   // The parameter statement is a bit different from the other attribute

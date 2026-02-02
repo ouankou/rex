@@ -239,7 +239,6 @@ SgMemberFunctionDeclaration
 SgMemberFunctionRefExp
 SgMemberFunctionSymbol
 SgMemberFunctionType
-SgMicrosoftAttributeDeclaration
 SgMinusAssignOp
 SgMinusMinusOp
 SgMinusOp

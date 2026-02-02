@@ -35,11 +35,7 @@ char *getDateTime() {
   struct tm timeinfo;
 
   curtime = time(NULL);
-#ifdef _WIN32
-  if (localtime_s(&timeinfo, &curtime) != 0) {
-#else
   if (localtime_r(&curtime, &timeinfo) == nullptr) {
-#endif
     return buffer.data();
   }
 

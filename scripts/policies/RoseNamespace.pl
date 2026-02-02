@@ -143,7 +143,7 @@ my @policies = (
 	'The #include search paths are implementation defined. The standard
 	says that the quoted variety does extra things compared to the angle
 	bracket variety. C++ compilers do an assortment of extra things for the
-	quoted version, some of which are quite compilicated (e.g., MSVC).
+	quoted version, some of which are quite compilicated.
         A side effect of requiring bracket-includes is that we can check at
 	compile time that ROSE headers always include other ROSE headers by
  	using file paths that are relative to the installed "include" directory.

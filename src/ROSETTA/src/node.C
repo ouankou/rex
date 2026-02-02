@@ -741,11 +741,6 @@ void Grammar::setUpNodes() {
   InitializedName.setDataPrototype(
       "SgName", "name", "= NULL", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
       NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/18/2014): Added Microsoft specific extension for the uuid string
-  // option.
-  InitializedName.setDataPrototype(
-      "std::string", "microsoft_uuid_string", "=\"\"", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // FMZ (4/7/2009): Added for Cray pointer declaration
 
