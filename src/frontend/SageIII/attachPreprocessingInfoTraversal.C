@@ -1027,14 +1027,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // Sg_File_Info::getFilenameFromID(currentFileNameId) );
       // getFortranFixedFormatPreprocessorDirectives(
       // Sg_File_Info::getFilenameFromID(currentFileNameId) );
-      // LexTokenStreamTypePointer lex_token_stream =
-      // getFortranFixedFormatPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) );
-      LexTokenStreamTypePointer lex_token_stream = new LexTokenStreamType();
-      ROSE_ASSERT(lex_token_stream != NULL);
-
-      // Attach the token stream to the AST
-      returnListOfAttributes->set_rawTokenStream(lex_token_stream);
       // DQ (11/23/2008): This is the new support to collect CPP directives and
       // comments from Fortran applications. printf ("Calling
       // collectPreprocessorDirectivesAndCommentsForAST() to collect CPP
@@ -1057,15 +1049,8 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // fileNameForTokenStream =
       // Sg_File_Info::getFilenameFromID(currentFileNameId);
 
-      LexTokenStreamTypePointer lex_token_stream = new LexTokenStreamType();
-      ROSE_ASSERT(lex_token_stream != NULL);
-
       // DQ (12/3/2019): Added test to support debugging Fortran support.
       ROSE_ASSERT(returnListOfAttributes != NULL);
-
-      // Attach the token stream to the AST
-      returnListOfAttributes->set_rawTokenStream(lex_token_stream);
-      ROSE_ASSERT(returnListOfAttributes->get_rawTokenStream() != NULL);
       // DQ (11/23/2008): This is the new support to collect CPP directives and
       // comments from Fortran applications. printf ("Calling
       // collectPreprocessorDirectivesAndCommentsForAST() to collect CPP
