@@ -1796,6 +1796,42 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
 #endif
           SgName nameQualifier = unp->u_name->lookup_generated_qualified_name(
               info.get_reference_node_for_qualification());
+          if (nameQualifier.getString().empty()) {
+            std::string fallbackQualifier;
+            for (SgScopeStatement *scope = decl->get_scope();
+                 scope != nullptr && isSgGlobal(scope) == nullptr;
+                 scope = scope->get_scope()) {
+              if (SgNamespaceDefinitionStatement *ns_def =
+                      isSgNamespaceDefinitionStatement(scope)) {
+                SgNamespaceDeclarationStatement *ns_decl =
+                    ns_def->get_namespaceDeclaration();
+                if (ns_decl != nullptr) {
+                  fallbackQualifier = ns_decl->get_name().getString() +
+                                      "::" + fallbackQualifier;
+                }
+              } else if (SgClassDefinition *class_def =
+                             isSgClassDefinition(scope)) {
+                SgClassDeclaration *class_decl = class_def->get_declaration();
+                if (class_decl != nullptr) {
+                  fallbackQualifier = class_decl->get_name().getString() +
+                                      "::" + fallbackQualifier;
+                }
+              }
+            }
+            if (!fallbackQualifier.empty()) {
+              nameQualifier = SgName(fallbackQualifier);
+            } else {
+              const std::string qualified =
+                  class_type->get_qualified_name().getString();
+              const std::string name = class_type->get_name().getString();
+              if (!qualified.empty() && qualified.size() > name.size() &&
+                  qualified.compare(qualified.size() - name.size(), name.size(),
+                                    name) == 0) {
+                nameQualifier =
+                    SgName(qualified.substr(0, qualified.size() - name.size()));
+              }
+            }
+          }
 
 #if DEBUG_UNPARSE_CLASS_TYPE
           printf("nameQualifier (from "
@@ -3326,13 +3362,84 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
       unparseNonrealType(nrparent_nrscope->get_type(), info, false);
       curprint("::");
     } else {
+      std::string fallbackQualifier;
+      if (is_first_in_nonreal_chain) {
+        SgScopeStatement *scope = isSgScopeStatement(nrscope->get_parent());
+        for (; scope != nullptr && isSgGlobal(scope) == nullptr;
+             scope = scope->get_scope()) {
+          if (SgNamespaceDefinitionStatement *ns_def =
+                  isSgNamespaceDefinitionStatement(scope)) {
+            SgNamespaceDeclarationStatement *ns_decl =
+                ns_def->get_namespaceDeclaration();
+            if (ns_decl != nullptr) {
+              fallbackQualifier =
+                  ns_decl->get_name().getString() + "::" + fallbackQualifier;
+            }
+          } else if (SgClassDefinition *class_def =
+                         isSgClassDefinition(scope)) {
+            SgClassDeclaration *class_decl = class_def->get_declaration();
+            if (class_decl != nullptr) {
+              fallbackQualifier =
+                  class_decl->get_name().getString() + "::" + fallbackQualifier;
+            }
+          }
+        }
+      }
       if (has_global_qualifier)
         curprint("::");
+      if (!fallbackQualifier.empty())
+        curprint(fallbackQualifier);
     }
 
   } else if (info.get_reference_node_for_qualification()) {
     SgName nameQualifier = unp->u_name->lookup_generated_qualified_name(
         info.get_reference_node_for_qualification());
+    if (nameQualifier.getString().empty()) {
+      std::string fallbackQualifier;
+      SgScopeStatement *scope = nullptr;
+      if (nrdecl->get_templateDeclaration() != nullptr) {
+        scope = nrdecl->get_templateDeclaration()->get_scope();
+      } else {
+        scope = nrdecl->get_scope();
+      }
+      while (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+        SgNode *parent = decl_scope->get_parent();
+        scope = isSgScopeStatement(parent);
+        if (scope == nullptr || scope == decl_scope) {
+          break;
+        }
+      }
+      for (; scope != nullptr && isSgGlobal(scope) == nullptr;
+           scope = scope->get_scope()) {
+        if (SgNamespaceDefinitionStatement *ns_def =
+                isSgNamespaceDefinitionStatement(scope)) {
+          SgNamespaceDeclarationStatement *ns_decl =
+              ns_def->get_namespaceDeclaration();
+          if (ns_decl != nullptr) {
+            fallbackQualifier =
+                ns_decl->get_name().getString() + "::" + fallbackQualifier;
+          }
+        } else if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+          SgClassDeclaration *class_decl = class_def->get_declaration();
+          if (class_decl != nullptr) {
+            fallbackQualifier =
+                class_decl->get_name().getString() + "::" + fallbackQualifier;
+          }
+        }
+      }
+      if (!fallbackQualifier.empty()) {
+        nameQualifier = SgName(fallbackQualifier);
+      } else {
+        const std::string qualified = nrtype->get_qualified_name().getString();
+        const std::string name = nrtype->get_name().getString();
+        if (!qualified.empty() && qualified.size() > name.size() &&
+            qualified.compare(qualified.size() - name.size(), name.size(),
+                              name) == 0) {
+          nameQualifier =
+              SgName(qualified.substr(0, qualified.size() - name.size()));
+        }
+      }
+    }
 #if DEBUG_UNPARSE_NONREAL_TYPE
     printf(" --- nameQualifier = %s\n", nameQualifier.str());
 #endif

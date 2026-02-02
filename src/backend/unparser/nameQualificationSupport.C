@@ -780,6 +780,12 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
   ASSERT_not_null(currentScope);
   ASSERT_not_null(positionStatement);
 
+  SgScopeStatement *qualificationScope = currentScope;
+  if (SgScopeStatement *positionScope =
+          SageInterface::getScope(positionStatement)) {
+    qualificationScope = positionScope;
+  }
+
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
   MLOG_WARN_C(MLOG_UNPARSER, "1111111111111111111111111111111111111111111111111"
                              "1111111111111111111 \n");
@@ -879,7 +885,7 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
       // Evaluate all template arguments.
       evaluateNameQualificationForTemplateArgumentList(
           templateInstantiationDeclaration->get_templateArguments(),
-          currentScope, positionStatement);
+          qualificationScope, positionStatement);
       break;
     }
 
@@ -897,7 +903,7 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
       // Evaluate all template arguments.
       evaluateNameQualificationForTemplateArgumentList(
           templateInstantiationFunctionDeclaration->get_templateArguments(),
-          currentScope, positionStatement);
+          qualificationScope, positionStatement);
       break;
     }
 
@@ -920,7 +926,7 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
           templateInstantiationMemberFunctionDeclaration
               ->get_templateArguments();
       evaluateNameQualificationForTemplateArgumentList(
-          templateArgumentList, currentScope, positionStatement);
+          templateArgumentList, qualificationScope, positionStatement);
       break;
     }
 
@@ -948,7 +954,7 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
       // Evaluate all template arguments.
       evaluateNameQualificationForTemplateArgumentList(
           templateInstantiationTypedefDeclaration->get_templateArguments(),
-          currentScope, positionStatement);
+          qualificationScope, positionStatement);
       break;
     }
 
@@ -959,7 +965,7 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
       MLOG_WARN_C(MLOG_UNPARSER, "$$$$$$$$$ --- nrdecl = %p \n", nrdecl);
 #endif
       evaluateNameQualificationForTemplateArgumentList(
-          nrdecl->get_tpl_args(), currentScope, positionStatement);
+          nrdecl->get_tpl_args(), qualificationScope, positionStatement);
 
       break;
     }
@@ -4438,6 +4444,14 @@ void NameQualificationTraversal::
       "evaluateNameQualificationForTemplateArgumentList()");
 #endif
 
+  SgScopeStatement *effectiveScope = currentScope;
+  if (positionStatement != nullptr) {
+    if (SgScopeStatement *positionScope =
+            SageInterface::getScope(positionStatement)) {
+      effectiveScope = positionScope;
+    }
+  }
+
   SgTemplateArgumentPtrList::iterator i = templateArgumentList.begin();
   while (i != templateArgumentList.end()) {
     SgTemplateArgument *templateArgument = *i;
@@ -4600,7 +4614,7 @@ void NameQualificationTraversal::
               evaluateNameQualificationForTemplateArgumentList(
                   templateClassInstantiationDeclaration
                       ->get_templateArguments(),
-                  currentScope, positionStatement);
+                  effectiveScope, positionStatement);
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
               recursiveDepth--;
 #endif
@@ -4633,7 +4647,7 @@ void NameQualificationTraversal::
               recursiveDepth++;
 #endif
               evaluateNameQualificationForTemplateArgumentList(
-                  nrdecl->get_tpl_args(), currentScope, positionStatement);
+                  nrdecl->get_tpl_args(), effectiveScope, positionStatement);
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
               recursiveDepth--;
 #endif
@@ -4652,7 +4666,7 @@ void NameQualificationTraversal::
 #endif
                 int amountOfNameQualificationRequired =
                     nameQualificationDepth(nrdecl->get_templateDeclaration(),
-                                           currentScope, positionStatement);
+                                           effectiveScope, positionStatement);
                 setNameQualification(templateArgument,
                                      nrdecl->get_templateDeclaration(),
                                      amountOfNameQualificationRequired);
@@ -4676,7 +4690,7 @@ void NameQualificationTraversal::
 
           } else {
             int amountOfNameQualificationRequiredForTemplateArgument =
-                nameQualificationDepth(namedType, currentScope,
+                nameQualificationDepth(namedType, effectiveScope,
                                        positionStatement);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) ||                                    \
@@ -4697,7 +4711,7 @@ void NameQualificationTraversal::
 
             // TV (10/09/2018): FIXME ROSE-1511
             SgNamespaceDefinitionStatement *nsp_defn =
-                isSgNamespaceDefinitionStatement(currentScope);
+                isSgNamespaceDefinitionStatement(effectiveScope);
             if (nsp_defn != NULL) {
               SgNamespaceDeclarationStatement *nsp_decl =
                   nsp_defn->get_namespaceDeclaration();
@@ -4706,6 +4720,74 @@ void NameQualificationTraversal::
                   (namedType->get_name().getString().find("allocator") == 0 ||
                    namedType->get_name().getString().find("less") == 0)) {
                 amountOfNameQualificationRequiredForTemplateArgument = 1;
+              }
+            }
+
+            if (amountOfNameQualificationRequiredForTemplateArgument == 0 &&
+                templateArgumentTypeDeclaration != nullptr) {
+              SgScopeStatement *declScope =
+                  templateArgumentTypeDeclaration->get_scope();
+              bool currentInDeclScope = false;
+              for (SgScopeStatement *scope = effectiveScope; scope != nullptr;
+                   scope = scope->get_scope()) {
+                if (scope == declScope) {
+                  currentInDeclScope = true;
+                  break;
+                }
+                if (scope == scope->get_scope()) {
+                  break;
+                }
+              }
+              if (!currentInDeclScope && declScope != nullptr) {
+                int forcedAmount = 0;
+                for (SgScopeStatement *scope = declScope;
+                     scope != nullptr && isSgGlobal(scope) == nullptr;
+                     scope = scope->get_scope()) {
+                  if (isSgNamespaceDefinitionStatement(scope) != nullptr ||
+                      isSgClassDefinition(scope) != nullptr) {
+                    ++forcedAmount;
+                  }
+                  if (scope == scope->get_scope()) {
+                    break;
+                  }
+                }
+                if (forcedAmount > 0) {
+                  amountOfNameQualificationRequiredForTemplateArgument =
+                      forcedAmount;
+                }
+              }
+            }
+
+            if (amountOfNameQualificationRequiredForTemplateArgument == 0) {
+              if (SgNonrealType *nr_type = isSgNonrealType(namedType)) {
+                SgNamespaceSymbol *std_symbol =
+                    SageInterface::lookupNamespaceSymbolInParentScopes(
+                        "std", effectiveScope);
+                if (std_symbol != nullptr) {
+                  SgNamespaceDeclarationStatement *ns_decl =
+                      std_symbol->get_declaration();
+                  SgNamespaceDefinitionStatement *ns_def =
+                      ns_decl != nullptr ? ns_decl->get_definition() : nullptr;
+                  if (ns_def != nullptr &&
+                      ns_def->lookup_symbol(nr_type->get_name()) != nullptr) {
+                    int forcedAmount = 0;
+                    for (SgScopeStatement *scope = ns_def;
+                         scope != nullptr && isSgGlobal(scope) == nullptr;
+                         scope = scope->get_scope()) {
+                      if (isSgNamespaceDefinitionStatement(scope) != nullptr ||
+                          isSgClassDefinition(scope) != nullptr) {
+                        ++forcedAmount;
+                      }
+                      if (scope == scope->get_scope()) {
+                        break;
+                      }
+                    }
+                    if (forcedAmount > 0) {
+                      amountOfNameQualificationRequiredForTemplateArgument =
+                          forcedAmount;
+                    }
+                  }
+                }
               }
             }
 
@@ -4726,7 +4808,7 @@ void NameQualificationTraversal::
       // If this was not a SgNamedType (and even if it is, see test2011_117.C),
       // it still might be a type where name qualification is required (might be
       // a SgArrayType with an index requiring qualification).
-      processNameQualificationForPossibleArrayType(type, currentScope);
+      processNameQualificationForPossibleArrayType(type, effectiveScope);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) ||                                    \
     DEBUG_NAME_QUALIFICATION_LEVEL_FOR_TEMPLATE_ARGUMENTS
@@ -4768,7 +4850,7 @@ void NameQualificationTraversal::
 #endif
       // DQ (3/15/2019): Added Comment: This is required because the expression
       // can be a subtree that would have to be seperately traversed.
-      generateNestedTraversalWithExplicitScope(expression, currentScope);
+      generateNestedTraversalWithExplicitScope(expression, effectiveScope);
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) ||                                    \
     DEBUG_NAME_QUALIFICATION_LEVEL_FOR_TEMPLATE_ARGUMENTS
@@ -4802,7 +4884,7 @@ void NameQualificationTraversal::
                   tpldecl, tpldecl->class_name().c_str());
 #endif
       int amountOfNameQualificationRequiredForTemplateArgument =
-          nameQualificationDepth(tpldecl, currentScope, positionStatement);
+          nameQualificationDepth(tpldecl, effectiveScope, positionStatement);
       setNameQualification(
           templateArgument, tpldecl,
           amountOfNameQualificationRequiredForTemplateArgument);
@@ -7240,19 +7322,29 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       AstPerformance::
           numberOfStatementsProcessedInNameQualificationUsingTraverseInputFile++;
 
-      // if (statement->get_file_info()->get_filenameString() !=
-      // "compilerGenerated") if (statement->isCompilerGenerated() == true)
-      if (locatedNode->isCompilerGenerated() == false) {
-        // We could just check is the nearest parent statement is compiler
-        // generated. Or we could see if this is from a header file...(let's not
-        // do that).
-        SgStatement *statement =
-            SageInterface::getEnclosingStatement(locatedNode);
-        if (statement->isCompilerGenerated() == false) {
-        } else {
+      const bool locatedIsGenerated = locatedNode->isCompilerGenerated();
+      const bool locatedIsOutput =
+          locatedNode->get_file_info() != nullptr &&
+          locatedNode->get_file_info()->isOutputInCodeGeneration();
+
+      // We could just check is the nearest parent statement is compiler
+      // generated. Or we could see if this is from a header file...(let's not
+      // do that).
+      SgStatement *statement =
+          SageInterface::getEnclosingStatement(locatedNode);
+      if (statement != nullptr) {
+        const bool statementIsGenerated = statement->isCompilerGenerated();
+        const bool statementIsOutput =
+            statement->get_file_info() != nullptr &&
+            statement->get_file_info()->isOutputInCodeGeneration();
+        if (locatedIsGenerated && !locatedIsOutput && statementIsGenerated &&
+            !statementIsOutput) {
           return NameQualificationInheritedAttribute(inheritedAttribute);
         }
-      } else {
+        if (!locatedIsGenerated && statementIsGenerated && !statementIsOutput) {
+          return NameQualificationInheritedAttribute(inheritedAttribute);
+        }
+      } else if (locatedIsGenerated && !locatedIsOutput) {
         return NameQualificationInheritedAttribute(inheritedAttribute);
       }
     }
@@ -10107,8 +10199,12 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     if (currentStatement != NULL) {
       SgScopeStatement *currentScope = currentStatement->get_scope();
 
-      evaluateNameQualificationForTemplateArgumentList(
-          nrdecl->get_tpl_args(), currentScope, currentStatement);
+      SgTemplateArgumentPtrList &expr_args = nrRefExp->get_templateArguments();
+      SgTemplateArgumentPtrList &decl_args = nrdecl->get_tpl_args();
+      SgTemplateArgumentPtrList &tpl_args =
+          !expr_args.empty() ? expr_args : decl_args;
+      evaluateNameQualificationForTemplateArgumentList(tpl_args, currentScope,
+                                                       currentStatement);
 
       SgDeclarationStatement *declstmt = nrdecl;
       if (nrdecl->get_templateDeclaration() != NULL) {

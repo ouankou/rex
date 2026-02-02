@@ -1776,22 +1776,10 @@ void Unparse_ExprStmt::unparseTemplateArgument(
     ASSERT_not_null(templateArgument->get_type());
 
     SgType *templateArgumentType = templateArgument->get_type();
-    // If name qualification data is missing for a namespaced type argument,
-    // fall back to fully qualified output to avoid unqualified symbols.
-    if (templateArgument->get_name_qualification_length() == 0 &&
-        templateArgument->get_qualified_name_prefix_for_type().is_null()) {
-      if (SgNamedType *namedType = isSgNamedType(templateArgumentType)) {
-        SgDeclarationStatement *decl = namedType->get_declaration();
-        SgScopeStatement *declScope =
-            decl != nullptr ? decl->get_scope() : nullptr;
-        if (declScope != nullptr &&
-            isSgNamespaceDefinitionStatement(declScope) != nullptr &&
-            isSgGlobal(declScope) == nullptr) {
-          newInfo.set_reference_node_for_qualification(NULL);
-          newInfo.set_global_qualification_required(true);
-        }
-      }
-    }
+    const bool missingQualification =
+        templateArgument->get_qualified_name_prefix_for_type()
+            .getString()
+            .empty();
     // DQ (1/21/2018): Check if this is an unnamed class (used as a template
     // argument, which is not alloweded, so we should not unparse it).
     bool isAnonymous = isAnonymousClass(templateArgumentType);
@@ -1810,6 +1798,17 @@ void Unparse_ExprStmt::unparseTemplateArgument(
     // qualification support be computed using the unparsable_type_alias.
     if (templateArgument->get_unparsable_type_alias() != NULL) {
       templateArgumentType = templateArgument->get_unparsable_type_alias();
+    }
+
+    if (missingQualification) {
+      if (SgNamedType *namedType = isSgNamedType(templateArgumentType)) {
+        const std::string qualified =
+            namedType->get_qualified_name().getString();
+        if (!qualified.empty() && qualified.find("::") != std::string::npos) {
+          // Force full qualification when no name-qualification data exists.
+          newInfo.set_reference_node_for_qualification(NULL);
+        }
+      }
     }
 
 #if OUTPUT_DEBUGGING_INFORMATION
