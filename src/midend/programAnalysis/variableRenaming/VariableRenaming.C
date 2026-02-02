@@ -265,6 +265,17 @@ bool VariableRenaming::isFromLibrary(SgFunctionDeclaration *node) {
   return false;
 }
 
+bool VariableRenaming::isFromLibraryFile(const Sg_File_Info *info) {
+  if (info == NULL) {
+    return false;
+  }
+  if (info->isCompilerGenerated()) {
+    return true;
+  }
+  const std::string filename = info->get_filenameString();
+  return (filename.find("include") != std::string::npos);
+}
+
 bool VariableRenaming::isBuiltinVar(const VarName &var) {
   string name = var[0]->get_name().getString();
   if (name == "__func__" || name == "__FUNCTION__" ||
@@ -388,15 +399,19 @@ void VariableRenaming::insertDefsForExternalVariables(
 
     SgScopeStatement *varScope = SageInterface::getScope(rootName[0]);
     SgScopeStatement *functionScope = function->get_definition();
+    const bool is_library_var = isFromLibraryFile(rootName[0]->get_file_info());
 
     // If it is a local variable, there should be a def somewhere inside the
     // function
     if (varScope == functionScope ||
         SageInterface::isAncestor(functionScope, varScope)) {
       // We still need to insert defs for compiler-generated variables (e.g.
-      // __func__), since they don't have defs in the AST
-      if (!isBuiltinVar(rootName))
+      // __func__), since they don't have defs in the AST. Variables declared
+      // in library headers can also lack defs because we skip traversing those
+      // functions.
+      if (!isBuiltinVar(rootName) && !is_library_var) {
         continue;
+      }
     } else if (isSgGlobal(varScope)) {
       // Handle the case of declaring "extern int x" inside the function
       // Then, x has global scope but it actually has a definition inside the
@@ -425,7 +440,8 @@ void VariableRenaming::insertDefsForExternalVariables(
     }
 
     // Are there any other types of external vars?
-    ROSE_ASSERT(isBuiltinVar(rootName) || isSgClassDefinition(varScope) ||
+    ROSE_ASSERT(isBuiltinVar(rootName) || is_library_var ||
+                isSgClassDefinition(varScope) ||
                 isSgNamespaceDefinitionStatement(varScope) ||
                 isSgDeclarationScope(varScope) || isSgGlobal(varScope));
 
@@ -1688,6 +1704,13 @@ bool VariableRenaming::insertExpandedDefsForUse(cfgNode curNode, VarName name,
           SageInterface::getEnclosingFunctionDefinition(node);
       ROSE_ASSERT(func);
 
+      firstDefList[rootName] = func;
+    } else if (isFromLibraryFile(rootName[0]->get_file_info())) {
+      // Variables from library headers can be referenced without local defs,
+      // since library functions are skipped by the def-use traversal.
+      SgFunctionDefinition *func =
+          SageInterface::getEnclosingFunctionDefinition(node);
+      ROSE_ASSERT(func);
       firstDefList[rootName] = func;
     } else {
       cout << "Error: Found variable with no firstDef point that is not a "
