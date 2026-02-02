@@ -1832,6 +1832,9 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
               }
             }
           }
+          if (nameQualifier.getString() == "::") {
+            nameQualifier = SgName();
+          }
 
 #if DEBUG_UNPARSE_CLASS_TYPE
           printf("nameQualifier (from "
