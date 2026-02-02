@@ -2955,6 +2955,11 @@ void SageInterface::computeUniqueNameForUseAsIdentifier(SgNode *astNode) {
           local_node_to_name_map.insert(pair<SgNode *, string>(decl, s));
         }
       }
+      if (SgFunctionParameterList *params = isSgFunctionParameterList(node)) {
+        string s = generateUniqueNameForUseAsIdentifier_support(params);
+        local_name_to_node_map.insert(pair<string, SgNode *>(s, params));
+        local_node_to_name_map.insert(pair<SgNode *, string>(params, s));
+      }
     }
   };
 

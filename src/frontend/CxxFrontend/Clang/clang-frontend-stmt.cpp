@@ -9,6 +9,8 @@
 
 #include <cctype>
 
+#include <functional>
+
 #include <iomanip>
 
 #include <limits>
@@ -10171,7 +10173,46 @@ bool ClangToSageTranslator::VisitSubstNonTypeTemplateParmPackExpr(
 #endif
   bool res = true;
 
-  // TODO
+  auto build_expr_from_template_arg =
+      [&](const clang::TemplateArgument &arg) -> SgExpression * {
+    if (SgTemplateArgument *sg_arg = translateTemplateArgument(arg, false)) {
+      if (SgExpression *expr = sg_arg->get_expression()) {
+        return expr;
+      }
+      if (SgInitializedName *init_name = sg_arg->get_initializedName()) {
+        return SageBuilder::buildVarRefExp(init_name);
+      }
+    }
+    return nullptr;
+  };
+
+  std::function<void(const clang::TemplateArgument &, SgExprListExp *)>
+      append_pack_expr;
+  append_pack_expr = [&](const clang::TemplateArgument &arg,
+                         SgExprListExp *list) {
+    if (arg.getKind() == clang::TemplateArgument::Pack) {
+      for (const clang::TemplateArgument &pack_arg : arg.pack_elements()) {
+        append_pack_expr(pack_arg, list);
+      }
+      return;
+    }
+    if (SgExpression *expr = build_expr_from_template_arg(arg)) {
+      list->get_expressions().push_back(expr);
+      expr->set_parent(list);
+    }
+  };
+
+  SgExprListExp *pack_list = SageBuilder::buildExprListExp();
+  clang::TemplateArgument pack_arg =
+      subst_non_type_template_parm_pack_expr->getArgumentPack();
+  append_pack_expr(pack_arg, pack_list);
+
+  if (!pack_list->get_expressions().empty()) {
+    *node = pack_list;
+    return VisitExpr(subst_non_type_template_parm_pack_expr, node) && res;
+  }
+
+  *node = buildFallbackExpression(subst_non_type_template_parm_pack_expr);
 
   return VisitExpr(subst_non_type_template_parm_pack_expr, node) && res;
 }
@@ -10204,11 +10245,21 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
 #endif
     *node = SageBuilder::buildBoolValExp(trait_value);
   } else {
-    // Value-dependent (template parameter dependent): create an opaque type
-    // expression The actual value will be determined at template instantiation
-    // time
-    *node = SageBuilder::buildOpaqueVarRefExp("__type_trait_dependent",
-                                              getGlobalScope());
+    const char *trait_name = clang::getTraitName(type_trait->getTrait());
+    if (trait_name == nullptr) {
+      trait_name = "__type_trait";
+    }
+    SgNodePtrList args;
+    for (unsigned i = 0; i < type_trait->getNumArgs(); ++i) {
+      if (clang::TypeSourceInfo *arg_info = type_trait->getArg(i)) {
+        if (SgType *arg_type =
+                buildTypeFromQualifiedType(arg_info->getType())) {
+          args.push_back(arg_type);
+        }
+      }
+    }
+    ROSE_ASSERT(!args.empty());
+    *node = SageBuilder::buildTypeTraitBuiltinOperator(trait_name, args);
   }
 
   return VisitExpr(type_trait, node) && res;

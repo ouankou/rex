@@ -63,6 +63,7 @@ set(noinst_programs
   rex_test2026_null_expression_unparse
   rex_test2026_template_constraints_ir
   rex_test2026_deduction_ordering
+  rex_test2026_param_list_unique_name
 )
 
 # Fortran-specific executables (only build when ENABLE-FORTRAN=ON)
@@ -140,6 +141,7 @@ set(group1_tests
   rex_test2026_template_symbol_table
   rex_test2026_null_expression_unparse
   rex_test2026_deduction_ordering
+  rex_test2026_param_list_unique_name
 )
 
 foreach(test ${group1_tests})

@@ -76,6 +76,11 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2026_stl_incremental.cpp
   rex_test2026_stl_map.cpp
   rex_test2026_stl_meta.cpp
+  rex_test2026_stl_regex.cpp
+  rex_test2026_stl_tuple.cpp
+  rex_test2026_stl_type_traits.cpp
+  rex_test2026_stl_variant.cpp
+  rex_test2026_stl_vector.cpp
   rex_test2026_sfinae.cpp
   rex_test2026_dependent_qualification.cpp
   rex_test2026_extern_c_brace_roundtrip.cpp
