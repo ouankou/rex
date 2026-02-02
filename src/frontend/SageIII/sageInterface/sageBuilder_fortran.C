@@ -63,9 +63,6 @@ bool matchesImplicitRange(const std::string &range, char letter) {
 } // namespace
 
 //! Put Fortran-specific builders here
-// Many of them share the same implementations as those in
-// src/frontend/OpenFortranParser_SAGE_Connection/fortran_support.C
-//
 // Liao 12/6/2010
 
 // Rasmussen (8/07/2018): created a function to build an implicit type
