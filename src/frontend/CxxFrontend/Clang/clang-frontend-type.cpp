@@ -2588,6 +2588,17 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
     break;
   }
 
+  case clang::TemplateArgument::Pack: {
+    SgTemplateArgument *pack_marker = new SgTemplateArgument();
+    pack_marker->set_argumentType(
+        SgTemplateArgument::start_of_pack_expansion_argument);
+    sg_arg = pack_marker;
+    break;
+  }
+
+  case clang::TemplateArgument::Null:
+    return nullptr;
+
   default:
     std::cerr << "Warning: Unsupported template argument kind: "
               << arg.getKind() << "\n";
@@ -3428,7 +3439,6 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
         alias_sg_decl = isSgTemplateTypedefDeclaration(found_decl);
       }
     }
-
     SgTemplateArgumentPtrList template_args =
         buildTemplateArguments(template_specialization_type);
     SgTemplateArgumentPtrList deduced_args =
@@ -3464,9 +3474,36 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
           inst_decl->set_specializedTemplateDeclaration(alias_sg_decl);
         }
         registerDeclarationSymbol(inst_decl);
+        bool scope_reachable = true;
+        if (SgNamespaceDefinitionStatement *ns_def =
+                isSgNamespaceDefinitionStatement(scope)) {
+          SgNamespaceDeclarationStatement *ns_decl =
+              ns_def->get_namespaceDeclaration();
+          SgScopeStatement *parent_scope =
+              isSgScopeStatement(ns_def->get_parent());
+          scope_reachable = ns_decl != nullptr && parent_scope != nullptr &&
+                            parent_scope->statementExistsInScope(ns_decl);
+        }
+        if (!scope_reachable) {
+          if (SgGlobal *global_scope = getGlobalScope()) {
+            ensureDeclInScopeChildListPreserveScope(
+                inst_decl, global_scope, "VisitTemplateSpecializationType");
+          } else {
+            ensureDeclInScopeChildList(inst_decl, scope,
+                                       "VisitTemplateSpecializationType");
+          }
+        } else {
+          ensureDeclInScopeChildList(inst_decl, scope,
+                                     "VisitTemplateSpecializationType");
+        }
         *node = inst_decl->get_type();
         return VisitType(template_specialization_type, node);
       }
+    }
+
+    if (aliased_type != nullptr) {
+      *node = aliased_type;
+      return VisitType(template_specialization_type, node);
     }
 
     // Fallback: preserve alias spelling as a nonreal type.

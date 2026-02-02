@@ -170,6 +170,26 @@ void Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression *expr,
     unparseRecRef(expr, info);
     break;
   }
+  case SUBSCRIPT_EXPR: {
+    SgSubscriptExpression *sub_expr = isSgSubscriptExpression(expr);
+    ROSE_ASSERT(sub_expr != NULL);
+    SgExpression *lower = sub_expr->get_lowerBound();
+    SgExpression *upper = sub_expr->get_upperBound();
+    SgExpression *stride = sub_expr->get_stride();
+
+    if (isSgNullExpression(lower) == NULL) {
+      unparseExpression(lower, info);
+    }
+    curprint(":");
+    if (isSgNullExpression(upper) == NULL) {
+      unparseExpression(upper, info);
+    }
+    if (stride != NULL && isSgNullExpression(stride) == NULL) {
+      curprint(":");
+      unparseExpression(stride, info);
+    }
+    break;
+  }
   case DOTSTAR_OP: {
     unparseDotStarOp(expr, info);
     break;
@@ -5015,7 +5035,11 @@ void Unparse_ExprStmt::unparseSizeOfOp(SgExpression *expr,
   bool outputTypeDefinition =
       sizeof_op->get_sizeOfContainsBaseTypeDefiningDeclaration();
 
-  curprint("sizeof(");
+  if (sizeof_op->get_is_sizeof_pack()) {
+    curprint("sizeof...(");
+  } else {
+    curprint("sizeof(");
+  }
 
   SgExpression *sizeofExpression = sizeof_op->get_operand_expr();
   // if (sizeof_op->get_operand_expr() != NULL)

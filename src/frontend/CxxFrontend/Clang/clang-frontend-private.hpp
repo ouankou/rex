@@ -595,6 +595,13 @@ protected:
                                  SgClassDefinition *parent_def);
   SgSymbol *buildSymbolForDeclaration(SgDeclarationStatement *decl);
   void registerDeclarationSymbol(SgDeclarationStatement *decl);
+  void
+  ensureDeclInScopeChildList(SgDeclarationStatement *decl,
+                             SgScopeStatement *scope,
+                             const char *context = "ClangToSageTranslator");
+  void ensureDeclInScopeChildListPreserveScope(
+      SgDeclarationStatement *decl, SgScopeStatement *scope,
+      const char *context = "ClangToSageTranslator");
   void reconcileOnDemandTranslation(SgNode *node);
   void queueSpecializedTemplateLink(SgDeclarationStatement *decl,
                                     clang::Decl *specialized_decl);

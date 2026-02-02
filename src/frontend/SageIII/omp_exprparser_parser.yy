@@ -73,6 +73,7 @@ static bool is_ompparser_variable = false;
 static bool is_ompparser_expression = false;
 // add ompparser var
 static bool addOmpVariable(const char*);
+static bool addOmpVariableExpr(SgExpression*);
 std::vector<std::pair<std::string, SgNode*> > omp_variable_list;
 std::map<SgSymbol*,  std::vector < std::pair <SgExpression*, SgExpression*> > >  array_dimensions;  
 
@@ -602,31 +603,47 @@ postfix_expr:primary_expr {
              }
             | postfix_expr '[' expression ':' expression ']'
              {
-               arraySection= true; // array section // TODO; BEST solution: still need a tree here!!
-               // only add  symbol to the attribute for this first time 
+               arraySection= true; // array section expression
                // postfix_expr should be ID_EXPRESSION
-               if (!array_symbol)
+               if (array_symbol == NULL)
                {  
-                 SgVarRefExp* vref = isSgVarRefExp((SgExpression*)($1));
-                 assert (vref);
-                 //array_symbol = ompattribute->addVariable(omptype, vref->unparseToString());
+                 if (SgVarRefExp* vref = isSgVarRefExp((SgExpression*)($1))) {
+                   array_symbol = isSgVariableSymbol(vref->get_symbol());
+                 }
                }
-               lower_exp= NULL; 
-               length_exp= NULL; 
                lower_exp = (SgExpression*)($3);
                length_exp = (SgExpression*)($5);
-               assert (array_symbol != NULL);
-               SgType* t = array_symbol->get_type();
-               bool isPointer= (isSgPointerType(t) != NULL );
-               bool isArray= (isSgArrayType(t) != NULL);
-               if (!isPointer && ! isArray )
+               if (array_symbol != NULL)
                {
-                 std::cerr<<"Error. ompparser.yy expects a pointer or array type."<<std::endl;
-                 std::cerr<<"while seeing "<<t->class_name()<<std::endl;
+                 SgType* t = array_symbol->get_type();
+                 bool isPointer= (isSgPointerType(t) != NULL );
+                 bool isArray= (isSgArrayType(t) != NULL);
+                 if (!isPointer && ! isArray )
+                 {
+                   std::cerr<<"Error. ompparser.yy expects a pointer or array type."<<std::endl;
+                   std::cerr<<"while seeing "<<t->class_name()<<std::endl;
+                 }
                }
                assert (lower_exp && length_exp);
-               //ompattribute->array_dimensions[array_symbol].push_back( std::make_pair (lower_exp, length_exp));
+               SgSubscriptExpression* subscript =
+                 SageBuilder::buildSubscriptExpression_nfi(lower_exp, length_exp, NULL);
+               current_exp = SageBuilder::buildPntrArrRefExp((SgExpression*)($1), subscript);
+               $$ = current_exp;
              }  
+            | postfix_expr '.' ID_EXPRESSION {
+                SgExpression* base = (SgExpression*)($1);
+                SgVarRefExp* member = SageBuilder::buildOpaqueVarRefExp(
+                    (const char*)($3), SageInterface::getScope(omp_directive_node));
+                current_exp = SageBuilder::buildDotExp(base, member);
+                $$ = current_exp;
+              }
+             | postfix_expr PTR_TO ID_EXPRESSION {
+                SgExpression* base = (SgExpression*)($1);
+                SgVarRefExp* member = SageBuilder::buildOpaqueVarRefExp(
+                    (const char*)($3), SageInterface::getScope(omp_directive_node));
+                current_exp = SageBuilder::buildArrowExp(base, member);
+                $$ = current_exp;
+             }
             | postfix_expr PLUSPLUS {
                   current_exp = SageBuilder::buildPlusPlusOp(
                     (SgExpression*)($1),
@@ -651,13 +668,11 @@ variable-list : identifier
 */
 
 /* in C++ (we use the C++ version) */ 
-variable_list : ID_EXPRESSION {
-                std::cout << "Got expression: " << $1 << "\n";
-                addOmpVariable((const char*)$1);
+variable_list : postfix_expr {
+                if (!addOmpVariableExpr((SgExpression*)($1))) YYABORT;
               }
-              | variable_list ',' ID_EXPRESSION {
-                std::cout << "Got expression: " << $3 << "\n";
-                addOmpVariable((const char*)$3);
+              | variable_list ',' postfix_expr {
+                if (!addOmpVariableExpr((SgExpression*)($3))) YYABORT;
               }
 
 %%
@@ -842,6 +857,24 @@ static bool addOmpVariable(const char* var)  {
     }
     omp_variable_list.push_back(std::make_pair(var, sgvar));
     array_symbol = symbol;
+    return true;
+}
+
+static bool addOmpVariableExpr(SgExpression* expr) {
+    if (expr == NULL) {
+        return false;
+    }
+
+    if (SgVarRefExp* vref = isSgVarRefExp(expr)) {
+        if (SgVariableSymbol* sym = isSgVariableSymbol(vref->get_symbol())) {
+            std::string name = sym->get_name().getString();
+            if (!name.empty() && addOmpVariable(name.c_str())) {
+                return true;
+            }
+        }
+    }
+
+    omp_variable_list.push_back(std::make_pair(expr->unparseToString(), expr));
     return true;
 }
 

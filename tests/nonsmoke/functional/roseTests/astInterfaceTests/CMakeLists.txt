@@ -64,6 +64,12 @@ set(noinst_programs
   rex_test2026_template_constraints_ir
   rex_test2026_deduction_ordering
   rex_test2026_param_list_unique_name
+  rex_test2026_fold_pack_expr
+  rex_test2026_stl_vector
+  rex_test2026_stl_tuple
+  rex_test2026_stl_type_traits
+  rex_test2026_stl_variant
+  rex_test2026_stl_regex
 )
 
 # Fortran-specific executables (only build when ENABLE-FORTRAN=ON)
@@ -195,6 +201,36 @@ add_test(
 add_test(
   NAME astInterface_rex_test2026_template_constraints_ir
   COMMAND rex_test2026_template_constraints_ir ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_template_constraints_ir.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_fold_pack_expr
+  COMMAND rex_test2026_fold_pack_expr ${TEST_CXXFLAGS} -std=c++17 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_fold_pack_expr.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_stl_vector
+  COMMAND rex_test2026_stl_vector ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_stl_vector.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_stl_tuple
+  COMMAND rex_test2026_stl_tuple ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_stl_tuple.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_stl_type_traits
+  COMMAND rex_test2026_stl_type_traits ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_stl_type_traits.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_stl_variant
+  COMMAND rex_test2026_stl_variant ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_stl_variant.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_stl_regex
+  COMMAND rex_test2026_stl_regex ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_stl_regex.C
 )
 
 add_test(

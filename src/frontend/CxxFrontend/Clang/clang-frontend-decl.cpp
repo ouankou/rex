@@ -6183,6 +6183,12 @@ bool ClangToSageTranslator::VisitTypeAliasTemplateDecl(
 
   SgName name(type_alias_template_decl->getNameAsString());
   clang::QualType underlyingQualType = type_alias_decl->getUnderlyingType();
+  if (clang::TypeSourceInfo *type_info = type_alias_decl->getTypeSourceInfo()) {
+    clang::QualType written_type = type_info->getType();
+    if (!written_type.isNull()) {
+      underlyingQualType = written_type;
+    }
+  }
   SgType *base_type = buildTypeFromQualifiedType(underlyingQualType);
 
   SgScopeStatement *scope = SageBuilder::topScopeStack();
@@ -9262,6 +9268,29 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
 #endif
   bool res = true;
 
+  if (clang::TypeAliasTemplateDecl *alias_template =
+          type_alias_decl->getDescribedAliasTemplate()) {
+    SgTemplateTypedefDeclaration *tmpl_decl = nullptr;
+    if (SgDeclarationStatement *found_decl =
+            lookupSgDeclarationForClangDecl(alias_template,
+                                            /*allow_on_demand=*/true)) {
+      tmpl_decl = isSgTemplateTypedefDeclaration(found_decl);
+    }
+    if (tmpl_decl == nullptr &&
+        p_decl_translation_in_progress.find(alias_template) ==
+            p_decl_translation_in_progress.end() &&
+        p_decl_translation_on_demand.find(alias_template) ==
+            p_decl_translation_on_demand.end()) {
+      if (SgNode *translated = TraverseOnDemand(alias_template)) {
+        tmpl_decl = isSgTemplateTypedefDeclaration(translated);
+      }
+    }
+    ROSE_ASSERT(tmpl_decl != nullptr);
+    p_decl_translation_map[type_alias_decl] = tmpl_decl;
+    *node = tmpl_decl;
+    return true;
+  }
+
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   clang::DeclContext *decl_context = type_alias_decl->getDeclContext();
   clang::DeclContext *scope_context = decl_context;
@@ -9301,6 +9330,12 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
 
   SgName name(type_alias_decl->getNameAsString());
   clang::QualType underlyingQualType = type_alias_decl->getUnderlyingType();
+  if (clang::TypeSourceInfo *type_info = type_alias_decl->getTypeSourceInfo()) {
+    clang::QualType written_type = type_info->getType();
+    if (!written_type.isNull()) {
+      underlyingQualType = written_type;
+    }
+  }
   SgType *type = nullptr;
 
   // Prefer explicit template specialization type to preserve template
@@ -9325,6 +9360,9 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
           }
         }
       }
+    }
+    if (spec->isTypeAlias()) {
+      (void)buildTypeFromQualifiedType(spec->getAliasedType());
     }
   }
 
@@ -10719,6 +10757,18 @@ void ClangToSageTranslator::registerDeclarationSymbol(
   }
 }
 
+void ClangToSageTranslator::ensureDeclInScopeChildList(
+    SgDeclarationStatement *decl, SgScopeStatement *scope,
+    const char *context) {
+  ensure_decl_in_scope_child_list(decl, scope, context);
+}
+
+void ClangToSageTranslator::ensureDeclInScopeChildListPreserveScope(
+    SgDeclarationStatement *decl, SgScopeStatement *scope,
+    const char *context) {
+  ensure_decl_in_scope_child_list_preserve_scope(decl, scope, context);
+}
+
 void ClangToSageTranslator::reconcileOnDemandTranslation(SgNode *node) {
   if (node == nullptr) {
     return;
@@ -10787,6 +10837,13 @@ ClangToSageTranslator::lookupSgDeclarationForClangDecl(clang::Decl *key,
     if (SgDeclarationStatement *decl = lookup_map(key)) {
       return decl;
     }
+    if (clang::Decl *canonical = key->getCanonicalDecl()) {
+      if (canonical != key) {
+        if (SgDeclarationStatement *decl = lookup_map(canonical)) {
+          return decl;
+        }
+      }
+    }
     if (auto *tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(key)) {
       if (clang::ClassTemplateDecl *canonical = tmpl->getCanonicalDecl()) {
         if (SgDeclarationStatement *decl = lookup_map(canonical)) {
@@ -10799,10 +10856,64 @@ ClangToSageTranslator::lookupSgDeclarationForClangDecl(clang::Decl *key,
         }
       }
     }
+    if (auto *tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(key)) {
+      if (clang::FunctionTemplateDecl *canonical = tmpl->getCanonicalDecl()) {
+        if (SgDeclarationStatement *decl = lookup_map(canonical)) {
+          return decl;
+        }
+      }
+      if (clang::FunctionDecl *templated = tmpl->getTemplatedDecl()) {
+        if (SgDeclarationStatement *decl = lookup_map(templated)) {
+          return decl;
+        }
+      }
+    }
+    if (auto *tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(key)) {
+      if (clang::VarTemplateDecl *canonical = tmpl->getCanonicalDecl()) {
+        if (SgDeclarationStatement *decl = lookup_map(canonical)) {
+          return decl;
+        }
+      }
+      if (clang::VarDecl *templated = tmpl->getTemplatedDecl()) {
+        if (SgDeclarationStatement *decl = lookup_map(templated)) {
+          return decl;
+        }
+      }
+    }
+    if (auto *tmpl = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(key)) {
+      if (clang::TypeAliasTemplateDecl *canonical = tmpl->getCanonicalDecl()) {
+        if (SgDeclarationStatement *decl = lookup_map(canonical)) {
+          return decl;
+        }
+      }
+      if (clang::TypeAliasDecl *templated = tmpl->getTemplatedDecl()) {
+        if (SgDeclarationStatement *decl = lookup_map(templated)) {
+          if (isSgTemplateTypedefDeclaration(decl)) {
+            return decl;
+          }
+        }
+      }
+    }
     if (auto *partial =
             llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
                 key)) {
       if (clang::CXXRecordDecl *canonical = partial->getCanonicalDecl()) {
+        if (SgDeclarationStatement *decl = lookup_map(canonical)) {
+          return decl;
+        }
+      }
+    }
+    if (auto *partial =
+            llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(key)) {
+      if (clang::VarDecl *canonical = partial->getCanonicalDecl()) {
+        if (SgDeclarationStatement *decl = lookup_map(canonical)) {
+          return decl;
+        }
+      }
+    }
+    if (auto *spec =
+            llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(key)) {
+      if (clang::CXXRecordDecl *canonical = spec->getCanonicalDecl()) {
         if (SgDeclarationStatement *decl = lookup_map(canonical)) {
           return decl;
         }

@@ -2336,6 +2336,11 @@ void Grammar::setUpExpressions() {
                             "= false", NO_CONSTRUCTOR_PARAMETER,
                             BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
+  // REX: Support sizeof...(pack) via an explicit flag on SizeOfOp.
+  SizeOfOp.setDataPrototype("bool", "is_sizeof_pack", "= false",
+                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            NO_TRAVERSAL, NO_DELETE);
+
   // DQ (4/15/2019): Let's demonstrate this is possible in the language before
   // we add support for it (see Cxx11_test/test2019_379.C). DQ (4/15/2019): This
   // is needed to support pointers to member type specified to the sizeof

@@ -19,6 +19,61 @@ using namespace SageInterface;
 using namespace SageBuilder;
 using namespace OmpSupport;
 
+namespace {
+SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
+  if (expr == nullptr) {
+    return nullptr;
+  }
+  if (SgVarRefExp *vref = isSgVarRefExp(expr)) {
+    return vref;
+  }
+  if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(expr)) {
+    return extractVarRefFromExpression(aref->get_lhs_operand());
+  }
+  if (SgDotExp *dot = isSgDotExp(expr)) {
+    if (SgVarRefExp *rhs =
+            extractVarRefFromExpression(dot->get_rhs_operand())) {
+      return rhs;
+    }
+    return extractVarRefFromExpression(dot->get_lhs_operand());
+  }
+  if (SgArrowExp *arrow = isSgArrowExp(expr)) {
+    if (SgVarRefExp *rhs =
+            extractVarRefFromExpression(arrow->get_rhs_operand())) {
+      return rhs;
+    }
+    return extractVarRefFromExpression(arrow->get_lhs_operand());
+  }
+  if (SgPointerDerefExp *deref = isSgPointerDerefExp(expr)) {
+    return extractVarRefFromExpression(deref->get_operand());
+  }
+  if (SgAddressOfOp *addr = isSgAddressOfOp(expr)) {
+    return extractVarRefFromExpression(addr->get_operand());
+  }
+  if (SgCastExp *cast = isSgCastExp(expr)) {
+    return extractVarRefFromExpression(cast->get_operand());
+  }
+  if (SgCommaOpExp *comma = isSgCommaOpExp(expr)) {
+    if (SgVarRefExp *rhs =
+            extractVarRefFromExpression(comma->get_rhs_operand())) {
+      return rhs;
+    }
+    return extractVarRefFromExpression(comma->get_lhs_operand());
+  }
+  if (SgExprListExp *list = isSgExprListExp(expr)) {
+    for (SgExpression *elem : list->get_expressions()) {
+      if (SgVarRefExp *vref = extractVarRefFromExpression(elem)) {
+        return vref;
+      }
+    }
+  }
+  if (SgUnaryOp *unary = isSgUnaryOp(expr)) {
+    return extractVarRefFromExpression(unary->get_operand());
+  }
+  return nullptr;
+}
+} // namespace
+
 // This is a hack to pass the number of CUDA loop iteration count around
 // When translating "omp target" , we need to calculate the number of thread
 // blocks needed. To do that, we need to know how many CUDA threads are needed.
@@ -3469,7 +3524,7 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
   // tofrom), so there should be up to 4 SgOmpMapClause.
   //    SgOmpClause::omp_map_operator_enum
   // each map clause has
-  //   a variable list (SgVarRefExp), accessible through get_variables()
+  //   a variable list (SgExpression), accessible through get_variables()
   //   a pointer to array_dimensions, accessible through get_array_dimensions().
   //   the array_dimensions is identical among all map clause of a same "omp
   //   target"
@@ -5641,9 +5696,13 @@ void transOmpThreadprivate(SgNode *node) {
   SgOmpThreadprivateStatement *target = isSgOmpThreadprivateStatement(node);
   ROSE_ASSERT(target != NULL);
 
-  SgVarRefExpPtrList nameList = target->get_variables();
+  SgExpressionPtrList nameList = target->get_variables();
   for (size_t i = 0; i < nameList.size(); i++) {
-    SgInitializedName *init_name = nameList[i]->get_symbol()->get_declaration();
+    SgVarRefExp *vref = extractVarRefFromExpression(nameList[i]);
+    if (vref == nullptr) {
+      continue;
+    }
+    SgInitializedName *init_name = vref->get_symbol()->get_declaration();
     ROSE_ASSERT(init_name != NULL);
     SgVariableDeclaration *decl =
         isSgVariableDeclaration(init_name->get_declaration());

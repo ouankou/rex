@@ -27,7 +27,18 @@ int main(int argc, char *argv[]) {
   ROSE_ASSERT(!omp_flush.empty());
   SgOmpFlushStatement *flush_stmt = isSgOmpFlushStatement(omp_flush.front());
   ROSE_ASSERT(flush_stmt != nullptr);
-  ROSE_ASSERT(flush_stmt->get_variables().size() == 2);
+  ROSE_ASSERT(flush_stmt->get_variables().size() == 5);
+  bool flush_has_dot = false;
+  bool flush_has_array = false;
+  for (SgExpression *expr : flush_stmt->get_variables()) {
+    if (isSgDotExp(expr) != nullptr) {
+      flush_has_dot = true;
+    } else if (isSgPntrArrRefExp(expr) != nullptr) {
+      flush_has_array = true;
+    }
+  }
+  ROSE_ASSERT(flush_has_dot);
+  ROSE_ASSERT(flush_has_array);
 
   Rose_STL_Container<SgNode *> omp_allocate =
       NodeQuery::querySubTree(project, V_SgOmpAllocateStatement);
@@ -35,7 +46,18 @@ int main(int argc, char *argv[]) {
   SgOmpAllocateStatement *allocate_stmt =
       isSgOmpAllocateStatement(omp_allocate.front());
   ROSE_ASSERT(allocate_stmt != nullptr);
-  ROSE_ASSERT(allocate_stmt->get_variables().size() == 1);
+  ROSE_ASSERT(allocate_stmt->get_variables().size() == 2);
+  bool allocate_has_dot = false;
+  bool allocate_has_array = false;
+  for (SgExpression *expr : allocate_stmt->get_variables()) {
+    if (isSgDotExp(expr) != nullptr) {
+      allocate_has_dot = true;
+    } else if (isSgPntrArrRefExp(expr) != nullptr) {
+      allocate_has_array = true;
+    }
+  }
+  ROSE_ASSERT(allocate_has_dot);
+  ROSE_ASSERT(allocate_has_array);
 
   Rose_STL_Container<SgNode *> omp_threadprivate =
       NodeQuery::querySubTree(project, V_SgOmpThreadprivateStatement);
@@ -44,6 +66,8 @@ int main(int argc, char *argv[]) {
       isSgOmpThreadprivateStatement(omp_threadprivate.front());
   ROSE_ASSERT(threadprivate_stmt != nullptr);
   ROSE_ASSERT(threadprivate_stmt->get_variables().size() == 1);
+  ROSE_ASSERT(isSgVarRefExp(threadprivate_stmt->get_variables().front()) !=
+              nullptr);
 
   Rose_STL_Container<SgNode *> omp_target =
       NodeQuery::querySubTree(project, V_SgOmpTargetStatement);
@@ -65,19 +89,66 @@ int main(int argc, char *argv[]) {
   Rose_STL_Container<SgNode *> acc_parallel_loop =
       NodeQuery::querySubTree(project, V_SgAccParallelLoopStatement);
   ROSE_ASSERT(acc_parallel_loop.size() >= 2);
+  bool any_parallel_loop_dot = false;
+  bool any_parallel_loop_array = false;
   for (SgNode *node : acc_parallel_loop) {
     SgAccParallelLoopStatement *acc_stmt = isSgAccParallelLoopStatement(node);
     ROSE_ASSERT(acc_stmt != nullptr);
     bool found_variables = false;
+    bool acc_has_dot = false;
+    bool acc_has_array = false;
     for (SgAccClause *clause : acc_stmt->get_clauses()) {
       if (SgAccVariablesClause *vars = isSgAccVariablesClause(clause)) {
         found_variables = true;
         ROSE_ASSERT(vars->get_variables() != nullptr);
         ROSE_ASSERT(!vars->get_variables()->get_expressions().empty());
+        for (SgExpression *expr : vars->get_variables()->get_expressions()) {
+          if (isSgDotExp(expr) != nullptr) {
+            acc_has_dot = true;
+          } else if (isSgPntrArrRefExp(expr) != nullptr) {
+            acc_has_array = true;
+          }
+        }
       }
     }
     ROSE_ASSERT(found_variables);
+    any_parallel_loop_dot = any_parallel_loop_dot || acc_has_dot;
+    any_parallel_loop_array = any_parallel_loop_array || acc_has_array;
   }
+  ROSE_ASSERT(any_parallel_loop_dot);
+  ROSE_ASSERT(any_parallel_loop_array);
+
+  Rose_STL_Container<SgNode *> acc_parallel =
+      NodeQuery::querySubTree(project, V_SgAccParallelStatement);
+  ROSE_ASSERT(!acc_parallel.empty());
+  bool any_parallel_dot = false;
+  bool any_parallel_array = false;
+  for (SgNode *node : acc_parallel) {
+    SgAccParallelStatement *acc_stmt = isSgAccParallelStatement(node);
+    ROSE_ASSERT(acc_stmt != nullptr);
+    bool found_variables = false;
+    bool acc_has_dot = false;
+    bool acc_has_array = false;
+    for (SgAccClause *clause : acc_stmt->get_clauses()) {
+      if (SgAccVariablesClause *vars = isSgAccVariablesClause(clause)) {
+        found_variables = true;
+        ROSE_ASSERT(vars->get_variables() != nullptr);
+        ROSE_ASSERT(!vars->get_variables()->get_expressions().empty());
+        for (SgExpression *expr : vars->get_variables()->get_expressions()) {
+          if (isSgDotExp(expr) != nullptr) {
+            acc_has_dot = true;
+          } else if (isSgPntrArrRefExp(expr) != nullptr) {
+            acc_has_array = true;
+          }
+        }
+      }
+    }
+    ROSE_ASSERT(found_variables);
+    any_parallel_dot = any_parallel_dot || acc_has_dot;
+    any_parallel_array = any_parallel_array || acc_has_array;
+  }
+  ROSE_ASSERT(any_parallel_dot);
+  ROSE_ASSERT(any_parallel_array);
 
   Rose_STL_Container<SgNode *> pragmas =
       NodeQuery::querySubTree(project, V_SgPragmaDeclaration);

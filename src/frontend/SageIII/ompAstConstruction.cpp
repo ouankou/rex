@@ -37,72 +37,6 @@ using namespace SageBuilder;
 using namespace OmpSupport;
 
 namespace {
-SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
-  if (expr == nullptr) {
-    return nullptr;
-  }
-  if (SgVarRefExp *vref = isSgVarRefExp(expr)) {
-    return vref;
-  }
-  if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(expr)) {
-    return extractVarRefFromExpression(aref->get_lhs_operand());
-  }
-  if (SgDotExp *dot = isSgDotExp(expr)) {
-    if (SgVarRefExp *rhs =
-            extractVarRefFromExpression(dot->get_rhs_operand())) {
-      return rhs;
-    }
-    return extractVarRefFromExpression(dot->get_lhs_operand());
-  }
-  if (SgArrowExp *arrow = isSgArrowExp(expr)) {
-    if (SgVarRefExp *rhs =
-            extractVarRefFromExpression(arrow->get_rhs_operand())) {
-      return rhs;
-    }
-    return extractVarRefFromExpression(arrow->get_lhs_operand());
-  }
-  if (SgPointerDerefExp *deref = isSgPointerDerefExp(expr)) {
-    return extractVarRefFromExpression(deref->get_operand());
-  }
-  if (SgAddressOfOp *addr = isSgAddressOfOp(expr)) {
-    return extractVarRefFromExpression(addr->get_operand());
-  }
-  if (SgCastExp *cast = isSgCastExp(expr)) {
-    return extractVarRefFromExpression(cast->get_operand());
-  }
-  if (SgCommaOpExp *comma = isSgCommaOpExp(expr)) {
-    if (SgVarRefExp *rhs =
-            extractVarRefFromExpression(comma->get_rhs_operand())) {
-      return rhs;
-    }
-    return extractVarRefFromExpression(comma->get_lhs_operand());
-  }
-  if (SgExprListExp *list = isSgExprListExp(expr)) {
-    for (SgExpression *elem : list->get_expressions()) {
-      if (SgVarRefExp *vref = extractVarRefFromExpression(elem)) {
-        return vref;
-      }
-    }
-  }
-  if (SgUnaryOp *unary = isSgUnaryOp(expr)) {
-    return extractVarRefFromExpression(unary->get_operand());
-  }
-  return nullptr;
-}
-
-SgVarRefExp *buildOmpVarRefFromNode(SgNode *node) {
-  if (SgInitializedName *iname = isSgInitializedName(node)) {
-    return SageBuilder::buildVarRefExp(iname);
-  }
-  if (SgVarRefExp *vref = isSgVarRefExp(node)) {
-    return vref;
-  }
-  if (SgExpression *expr = isSgExpression(node)) {
-    return extractVarRefFromExpression(expr);
-  }
-  return nullptr;
-}
-
 SgExpression *buildOmpVarExprFromNode(SgNode *node) {
   if (SgInitializedName *iname = isSgInitializedName(node)) {
     return SageBuilder::buildVarRefExp(iname);
@@ -3158,9 +3092,9 @@ convertOmpFlushDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
-    if (SgVarRefExp *vref = buildOmpVarRefFromNode((*iter).second)) {
-      statement->get_variables().push_back(vref);
-      vref->set_parent(statement);
+    if (SgExpression *expr = buildOmpVarExprFromNode((*iter).second)) {
+      statement->get_variables().push_back(expr);
+      expr->set_parent(statement);
     } else {
       cerr << "error: unhandled type of variable within a list:"
            << ((*iter).second)->class_name();
@@ -3211,9 +3145,9 @@ convertOmpAllocateDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
-    if (SgVarRefExp *vref = buildOmpVarRefFromNode((*iter).second)) {
-      statement->get_variables().push_back(vref);
-      vref->set_parent(statement);
+    if (SgExpression *expr = buildOmpVarExprFromNode((*iter).second)) {
+      statement->get_variables().push_back(expr);
+      expr->set_parent(statement);
     } else {
       cerr << "error: unhandled type of variable within a list:"
            << ((*iter).second)->class_name();
@@ -3248,9 +3182,9 @@ SgStatement *convertOmpThreadprivateStatement(
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
-    if (SgVarRefExp *vref = buildOmpVarRefFromNode((*iter).second)) {
-      statement->get_variables().push_back(vref);
-      vref->set_parent(statement);
+    if (SgExpression *expr = buildOmpVarExprFromNode((*iter).second)) {
+      statement->get_variables().push_back(expr);
+      expr->set_parent(statement);
     } else {
       cerr << "error: unhandled type of variable within a list:"
            << ((*iter).second)->class_name();
