@@ -3700,6 +3700,9 @@ std::vector<CFGEdge> SgFormatStatement::cfgInEdges(unsigned int idx) {
 }
 
 unsigned int SgExpression::cfgIndexForEnd() const {
+  if (isSgFoldExpression(this) != nullptr) {
+    return 1;
+  }
   std::cerr << "Bad expression case " << this->class_name()
             << " in cfgIndexForEnd()" << std::endl;
   ROSE_ABORT();
@@ -3743,13 +3746,48 @@ unsigned int SgExpression::cfgFindNextChildIndex(SgNode *n) {
   return this->cfgFindChildIndex(n) + 1;
 }
 
-std::vector<CFGEdge> SgExpression::cfgOutEdges(unsigned int) {
+std::vector<CFGEdge> SgExpression::cfgOutEdges(unsigned int idx) {
+  if (SgFoldExpression *fold = isSgFoldExpression(this)) {
+    std::vector<CFGEdge> result;
+    switch (idx) {
+    case 0:
+      if (fold->get_operands())
+        makeEdge(CFGNode(this, idx), fold->get_operands()->cfgForBeginning(),
+                 result);
+      else
+        makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
+      break;
+    case 1:
+      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+      break;
+    default:
+      ROSE_ASSERT(!"Bad index for SgFoldExpression");
+    }
+    return result;
+  }
   std::cerr << "Bad expression case " << this->class_name()
             << " in cfgOutEdges()" << std::endl;
   ROSE_ABORT();
 }
 
-std::vector<CFGEdge> SgExpression::cfgInEdges(unsigned int /*idx*/) {
+std::vector<CFGEdge> SgExpression::cfgInEdges(unsigned int idx) {
+  if (SgFoldExpression *fold = isSgFoldExpression(this)) {
+    std::vector<CFGEdge> result;
+    switch (idx) {
+    case 0:
+      makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+      break;
+    case 1:
+      if (fold->get_operands())
+        makeEdge(fold->get_operands()->cfgForEnd(), CFGNode(this, idx), result);
+      else
+        makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
+      break;
+    default:
+      ROSE_ASSERT(!"Bad index for SgFoldExpression");
+    }
+    return result;
+  }
   std::cerr << "Bad expression case " << this->class_name()
             << " in cfgInEdges()" << std::endl;
   ROSE_ABORT();
