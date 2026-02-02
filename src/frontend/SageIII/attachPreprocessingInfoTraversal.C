@@ -1017,16 +1017,9 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
     // if (currentFilePtr->get_fixedFormat() == true)
     if (sourceFile->get_inputFormat() == SgFile::e_fixed_form_output_format) {
       if (SgProject::get_verbose() > 1) {
-        printf("Fortran code assumed to be in fixed format form (skipping "
-               "translation of tokens) \n");
+        printf("Fortran code assumed to be in fixed format form \n");
       }
 
-      // For now we call the lexical pass on the fortran file, but we don't yet
-      // translate the tokens. returnListOfAttributes       =
-      // getPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) );
-      // getFortranFixedFormatPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) );
       // DQ (11/23/2008): This is the new support to collect CPP directives and
       // comments from Fortran applications. printf ("Calling
       // collectPreprocessorDirectivesAndCommentsForAST() to collect CPP
@@ -1039,16 +1032,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // to collect CPP directives for fileNameForDirectivesAndComments = %s
       // \n",fileNameForDirectivesAndComments.c_str());
     } else {
-      // int currentFileNameId = currentFilePtr->get_file_info()->get_file_id();
-      // For now we call the lexical pass on the fortran file, but we don't yet
-      // translate the tokens. returnListOfAttributes       =
-      // getPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) );
-      // getFortranFreeFormatPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) ); string
-      // fileNameForTokenStream =
-      // Sg_File_Info::getFilenameFromID(currentFileNameId);
-
       // DQ (12/3/2019): Added test to support debugging Fortran support.
       ROSE_ASSERT(returnListOfAttributes != NULL);
       // DQ (11/23/2008): This is the new support to collect CPP directives and
