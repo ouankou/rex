@@ -52,25 +52,20 @@ cmake --build . -- -j"$(nproc)" || {
 
 run_ctest_regex() {
   local regex=$1
-  echo "Running ctest -R \"${regex}\"..."
+  local exclude_regex=$2
+  echo "Running ctest -R \"${regex}\" --exclude-regex \"${exclude_regex}\"..."
   local count
-  count=$(ctest -N -R "${regex}" | awk '/Total Tests:/ {print $3}')
+  count=$(ctest -N -R "${regex}" --exclude-regex "${exclude_regex}" | awk '/Total Tests:/ {print $3}')
   if [[ -n "${count:-}" ]] && (( count == 0 )); then
-    echo "ctest -R \"${regex}\" found zero matching tests. Ensure the build matches CI configuration." >&2
+    echo "ctest selection found zero matching tests. Ensure the build matches CI configuration." >&2
     return 1
   fi
-  ctest -R "${regex}" -j"$(nproc)" --output-on-failure
+  ctest -R "${regex}" --exclude-regex "${exclude_regex}" -j"$(nproc)" --output-on-failure
 }
 
-ci_regexes=(
-  "astInterface"
-  "testQuery"
-  "rex"
-)
-
-for regex in "${ci_regexes[@]}"; do
-  run_ctest_regex "$regex"
-done
+run_ctest_regex \
+  "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" \
+  "omp_lowering"
 EOF
 
 chmod +x "$hook_path"
