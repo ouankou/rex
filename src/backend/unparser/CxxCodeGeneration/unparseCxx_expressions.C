@@ -72,10 +72,6 @@ bool isMemberOperatorCall(SgFunctionCallExp *func_call,
 }
 } // namespace
 
-#ifdef _MSC_VER
-#include "Cxx_Grammar.h"
-#endif
-
 // DQ (10/14/2010):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
@@ -2967,9 +2963,6 @@ bool partOfArrowOperatorChain(SgExpression *expr) {
 template <class T>
 void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
                                               SgUnparse_Info &info) {
-  // CH (4/7/2010): This issue is because of using a MSVC keyword 'cdecl' as a
-  // variable name
-
 #define MFuncRefSupport_DEBUG 0
 
   T *mfunc_ref = dynamic_cast<T *>(expr);

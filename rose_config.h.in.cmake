@@ -629,7 +629,6 @@
 #cmakedefine ROSE_USE_UNIFORM_ADVANCED_WARNINGS_SUPPORT
 
 #cmakedefine ROSE_SUPPORT_GNU_EXTENSIONS
-#cmakedefine ROSE_SUPPORT_MICROSOFT_EXTENSIONS
 
 /* Detect whether our compilers are GNU or not */
 #cmakedefine CMAKE_COMPILER_IS_GNUCC

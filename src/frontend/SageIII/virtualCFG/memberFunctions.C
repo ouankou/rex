@@ -883,9 +883,7 @@ unsigned int SgForAllStatement::cfgFindChildIndex(SgNode *tgt) {
   } else if (tgt == this->get_body()) {
     return 4;
   } else {
-    ROSE_ASSERT(
-        !"Bad child in SgForAllStatement::cfgFindChildIndex()"); /* avoid MSVC
-                                                                    warning. */
+    ROSE_ASSERT(!"Bad child in SgForAllStatement::cfgFindChildIndex()");
     return 0;
   }
 }

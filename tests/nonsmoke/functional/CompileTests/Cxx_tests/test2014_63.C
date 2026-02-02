@@ -15,8 +15,8 @@ namespace test
      class Derived: public Base<Interval<T> > 
         {
        // Is "Interval" test::Interval or test::Base::Interval
-          typedef Interval<T> Test1; // Fails for Microsoft Visual Studio 2013
-          typedef Interval Test2;    // Fails for GCC 4.4.5
+       typedef Interval<T> Test1;
+       typedef Interval Test2; // Fails for GCC 4.4.5
         };
 
    } // namespace

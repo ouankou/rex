@@ -1833,10 +1833,6 @@ ROSE_DLL_API SgStaticAssertionDeclaration *
 buildStaticAssertionDeclaration(SgExpression *condition,
                                 const SgName &string_literal);
 
-//! DQ (8/17/2014): Adding support for MS-style attribute declarations.
-ROSE_DLL_API SgMicrosoftAttributeDeclaration *
-buildMicrosoftAttributeDeclaration(const SgName &name);
-
 //! Build a using directive statement
 ROSE_DLL_API SgUsingDirectiveStatement *
 buildUsingDirectiveStatement(SgNamespaceDeclarationStatement *ns_decl);

@@ -3,7 +3,7 @@
 rose upstream github repo: https://github.com/rose-compiler/rose
 
 ## Support target (REX)
-- Platform: Linux only (Windows/mac/other OS dropped).
+- Platform: Linux only (non-Linux platforms dropped).
 - Languages/features: C/C++, Fortran, OpenMP, OpenACC, OpenCL, CUDA.
 - Frontend: Clang/LLVM for C/C++ (LLVM 20); Fortran via OFP with experimental Flang frontend in scope (imported; keep synced).
 - Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, Java (source language), UPC, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, and other legacy frontends/tools (excluding experimental Flang).
@@ -572,7 +572,7 @@ Docs/scripts/tools/tutorial/tests dropped from upstream:
 
 Dropped languages/platforms (any upstream paths related to these are dropped by default):
 - PHP, JavaScript, Python, Java, UPC, Ada, Jovial, Matlab, X10, C#, YAML/mini-yaml.
-- Windows/mac-specific code or tests.
+- Non-Linux platform-specific code or tests.
 
 ## Manual sync workflow (no batch processing)
 1) Start from `origin/main` with a clean working tree, then `git fetch rose` to ensure the upstream range is local.
@@ -586,7 +586,7 @@ Dropped languages/platforms (any upstream paths related to these are dropped by 
      - Record the decision immediately in the commit log below.
    - Mark the directory status as `synced` only after all its commits are handled.
 4) While applying changes:
-   - Never reintroduce dropped subsystems or platforms (EDG, Sawyer, Windows/mac, etc.).
+   - Never reintroduce dropped subsystems or platforms (EDG, Sawyer, etc.).
    - Preserve REX C++ modernization work (no deprecated template reintroductions).
    - Treat Autotools/Tup edits as inventory only (record in notes, do not port).
 5) After each logical chunk (e.g., a directory or feature area), build and spot-check the affected tests if applicable.

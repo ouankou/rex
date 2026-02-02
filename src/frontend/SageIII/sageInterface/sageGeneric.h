@@ -427,7 +427,6 @@ struct VisitDispatcher : ROSE_VisitorPatternDefaultBase {
   GEN_VISIT(SgMemberFunctionRefExp)
   GEN_VISIT(SgMemberFunctionSymbol)
   GEN_VISIT(SgMemberFunctionType)
-  GEN_VISIT(SgMicrosoftAttributeDeclaration)
   GEN_VISIT(SgMinusAssignOp)
   GEN_VISIT(SgMinusMinusOp)
   GEN_VISIT(SgMinusOp)

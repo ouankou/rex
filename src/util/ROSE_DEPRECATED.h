@@ -11,8 +11,6 @@
 #define ROSE_DEPRECATED(WHY) __attribute__((deprecated(WHY)))
 #elif defined(__GNUC__)
 #define ROSE_DEPRECATED(WHY) __attribute__((deprecated))
-#elif defined(_MSC_VER)
-#define ROSE_DEPRECATED(WHY) /*deprecated*/
 #else
 #define ROSE_DEPRECATED(WHY) /*deprecated*/
 #endif
@@ -58,14 +56,6 @@
 // const ROSE_DEPRECATED_FUNCTION;
 #define ROSE_DEPRECATED_FUNCTION __attribute__((deprecated))
 #define ROSE_DEPRECATED_VARIABLE __attribute__((deprecated))
-#elif defined(_MSC_VER)
-// Microsoft Visual C++ needs "__declspec(deprecated)" before the declaration.
-// We don't really want to put ROSE_DEPRECATED_FUNCTION both before and after
-// functions, so we just don't worry about advertising deprecation when using
-// Microsoft compilers.  Use MinGW instead if you want a real C++ compiler on
-// Windows.
-#define ROSE_DEPRECATED_FUNCTION /*deprecated*/
-#define ROSE_DEPRECATED_VARIABLE /*deprecated*/
 #else
 // No portable way to mark C++ functions as deprecated.
 #define ROSE_DEPRECATED_FUNCTION /*deprecated*/

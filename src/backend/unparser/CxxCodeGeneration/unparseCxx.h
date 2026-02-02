@@ -366,10 +366,6 @@ public:
   virtual void unparseStaticAssertionDeclaration(SgStatement *stmt,
                                                  SgUnparse_Info &info);
 
-  // DQ (8/17/2014): Adding support for Microsoft attributes.
-  virtual void unparseMicrosoftAttributeDeclaration(SgStatement *stmt,
-                                                    SgUnparse_Info &info);
-
   // DQ (12/26/2011): New unparse functions for new template declaration IR
   // nodes (new design for template declarations).
   virtual void unparseTemplateClassDeclStmt(SgStatement *stmt,

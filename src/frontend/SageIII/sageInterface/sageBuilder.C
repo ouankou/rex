@@ -8994,25 +8994,6 @@ SageBuilder::buildStaticAssertionDeclaration(SgExpression *condition,
   return result;
 }
 
-// DQ (8/17/2014): Adding support for MS-style attributes.
-SgMicrosoftAttributeDeclaration *
-SageBuilder::buildMicrosoftAttributeDeclaration(
-    const SgName &attribute_string) {
-  SgMicrosoftAttributeDeclaration *result =
-      new SgMicrosoftAttributeDeclaration(attribute_string);
-  ROSE_ASSERT(result != NULL);
-
-  // DQ (8/17/2014): It is enforced that at least the
-  // firstNondefiningDeclaration be set.
-  ROSE_ASSERT(result->get_firstNondefiningDeclaration() == NULL);
-  result->set_firstNondefiningDeclaration(result);
-  ROSE_ASSERT(result->get_firstNondefiningDeclaration() != NULL);
-
-  setOneSourcePositionForTransformation(result);
-
-  return result;
-}
-
 SgPointerType *SageBuilder::buildPointerType(SgType *base_type /*= NULL*/) {
   // DQ (7/26/2010): This needs to call the SgPointerType::createType() function
   // so that we can properly abstract the creation of types into the type table.

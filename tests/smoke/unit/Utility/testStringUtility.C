@@ -518,7 +518,6 @@ static void test_fixLineTermination() {
   check(fixLineTermination("\na\nb") == "\na\nb");
   check(fixLineTermination("\na\nb\n") == "\na\nb\n");
 
-  // Microsoft and most other early OS neither Unix nor IBM
   check(fixLineTermination("") == "");
   check(fixLineTermination("\r\n") == "\n");
   check(fixLineTermination("\r\n\r\n") == "\n\n");

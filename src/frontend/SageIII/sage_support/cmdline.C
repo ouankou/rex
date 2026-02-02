@@ -2697,9 +2697,7 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     } else if (get_Cxx_only()) {
 #if defined(BACKEND_CXX_IS_GNU_COMPILER)
       // PL (10/06/2025): Enable GNU extensions without forcing a C++ standard.
-#if !defined(ROSE_USE_MICROSOFT_EXTENSIONS)
       set_gnu_standard();
-#endif
 #endif
     } else if (get_Fortran_only()) {
       set_F2003_only();

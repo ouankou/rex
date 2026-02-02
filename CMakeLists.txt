@@ -757,6 +757,17 @@ if(ENABLE-ADVANCED-WARNINGS)
   set(ROSE_USE_UNIFORM_ADVANCED_WARNINGS_SUPPORT 1)
 endif()
 
+option(REX_WARNINGS_AS_ERRORS "Treat C/C++ compiler warnings as errors" ON)
+if(REX_WARNINGS_AS_ERRORS)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(
+      $<$<COMPILE_LANGUAGE:C>:-Werror>
+      $<$<COMPILE_LANGUAGE:CXX>:-Werror>)
+  else()
+    message(WARNING "REX_WARNINGS_AS_ERRORS requested but compiler does not support warning-as-error flags")
+  endif()
+endif()
+
 set(ROSE_SANITIZERS "" CACHE STRING "Semicolon-separated list of sanitizers to enable (address;leak;undefined)")
 option(ENABLE-SANITIZER "Enable sanitizer instrumentation for ROSE development" OFF)
 set(_rose_requested_sanitizers "")
@@ -823,11 +834,6 @@ endif()
 option(ENABLE-GNU-EXTENSIONS "Enable internal support in ROSE for GNU language extensions" OFF)
 if(ENABLE-GNU-EXTENSIONS)
   set(ROSE_SUPPORT_GNU_EXTENSIONS TRUE)
-endif()
-
-option(ENABLE-MICROSOFT-EXTENSIONS "Enable internal support in ROSE for GNU language extensions" OFF)
-if(ENABLE-MICROSOFT-EXTENSIONS)
-  set(ROSE_SUPPORT_MICROSOFT_EXTENSIONS TRUE)
 endif()
 
 option(ENABLE-SMALLER-GENERATED-FILES "Build smaller generated Sage III IR files" OFF)
@@ -1138,6 +1144,7 @@ if(WITH-ALT-BACKEND-FORTRAN-COMPILER)
 endif()
 
 # define a global variable to collect all common linked third-party libraries for rose (Linux-only)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 set(link_with_libraries Threads::Threads)
 if(M_LIB)
