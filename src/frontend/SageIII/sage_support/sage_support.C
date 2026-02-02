@@ -2671,6 +2671,23 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     flangCommandLine.push_back("-fexternal-builder");
     vector<string> flangArgs = argv;
     SgFile::stripRoseCommandLineOptions(flangArgs);
+    bool needs_compile_only = false;
+    if (SgProject *project = get_project()) {
+      needs_compile_only =
+          project->get_compileOnly() || project->get_skipfinalCompileStep();
+    }
+    if (needs_compile_only) {
+      bool has_compile_only = false;
+      for (const auto &arg : flangArgs) {
+        if (arg == "-c") {
+          has_compile_only = true;
+          break;
+        }
+      }
+      if (!has_compile_only) {
+        flangCommandLine.push_back("-c");
+      }
+    }
 
     std::string source_path = get_sourceFileNameWithPath();
     if (source_path.empty()) {

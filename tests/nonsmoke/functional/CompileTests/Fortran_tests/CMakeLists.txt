@@ -134,6 +134,13 @@ add_test(
     "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_include.f90 && awk 'tolower($0) ~ /include/ && $0 ~ /rex_test2026_include\\.inc/ {found=1} END {exit !found}' rose_rex_test2026_include.f90"
 )
 
+add_test(
+  NAME fortran_rex_issue487_compile_only
+  WORKING_DIRECTORY ${_fortran_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -f a.out && $<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_issue487_compile_only.f90 && test ! -e a.out"
+)
+
 set(_fortran_comment_diff_tests
   test2020_comment_1.f90
   test2020_comment_2.f90
