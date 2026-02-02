@@ -184,26 +184,6 @@ std::string frontendVersionString() {
   return frontend_version;
 }
 
-// DQ (4/17/2010): Added OFP version number support.
-// DQ (2/12/2010): When we have a mechanism to get the version number of OFP,
-// put it here.
-std::string ofpVersionString() {
-  // Need to make sure that ROSE can get a version number independent of Fortran
-  // support being installed or include information in the return string when
-  // OFP is not installed. return "unknown";
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-  string ofp_version =
-      string("ofp-") +
-      StringUtility::numberToString(ROSE_OFP_MAJOR_VERSION_NUMBER) + "." +
-      StringUtility::numberToString(ROSE_OFP_MINOR_VERSION_NUMBER) + "." +
-      StringUtility::numberToString(ROSE_OFP_PATCH_VERSION_NUMBER);
-#else
-  string ofp_version = "unknown (OFP is disabled)";
-#endif
-
-  return ofp_version;
-}
-
 // DQ (11/1/2009): replaced "version()" with separate "version_number()" and
 // "version_message()" functions.
 std::string version_message() {
@@ -298,9 +278,7 @@ std::string version_message() {
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
   ss << "  --- Fortran analysis:           enabled\n";
 
-  // How is this different than ROSE_EXPERIMENTAL_OFP_ROSE_CONNECTION below?
-  extern string ofpVersionString();
-  ss << "  ---   OFP Fortran parser:       " << ofpVersionString() << "\n";
+  ss << "  ---   Fortran frontend:         Flang\n";
 
   ss << "  ---   Fortran back-end:         "
      << BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER << "."

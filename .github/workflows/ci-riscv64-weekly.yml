@@ -55,5 +55,5 @@ jobs:
 
             ./build-rex.sh /work/rex_install Debug
 
-            ctest --test-dir /work/build -R "rex|astInterface|testQuery" -j"$(nproc)"
+            ctest --test-dir /work/build -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering" --output-on-failure -j"$(nproc)"
           '

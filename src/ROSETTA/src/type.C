@@ -381,7 +381,7 @@ void Grammar::setUpTypes() {
   // data member used within the management of types to define the required
   // sharing that we seek for all types independent (but related to) the global
   // type table support added 2 years ago.  Fixing this might be a better way to
-  // support the ATerm support in ROSE and eliminate the special case handling
+  // eliminate the special case handling
   // to exclude this from the successor containers that are computed in the
   // grammar.C file in the Grammar::buildTreeTraversalFunctions() function.  I
   // wish to discuss this internally before making the change.

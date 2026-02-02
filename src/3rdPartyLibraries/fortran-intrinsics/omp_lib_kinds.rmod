@@ -28,4 +28,3 @@ INTEGER(kind=omp_lock_hint_kind), PARAMETER :: omp_lock_hint_speculative = 8
 INTEGER(kind=omp_pause_resource_kind), PARAMETER :: omp_pause_soft = 1
 INTEGER(kind=omp_pause_resource_kind), PARAMETER :: omp_pause_hard = 2
 END MODULE omp_lib_kinds
-

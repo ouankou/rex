@@ -24,16 +24,8 @@ add_custom_target(
 # ROSETTA
 ########################################################################################################################
 
-# Header files needed to build ROSETTA
-set(ROSE_JNI_INCLUDES "")
-if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
-  list(APPEND ROSE_JNI_INCLUDES ${JNI_INCLUDE_DIRS})
-endif()
-
 include_directories(
   ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/transformationTracking
-  ${CMAKE_BINARY_DIR}/src/3rdPartyLibraries/fortran-parser
-  ${ROSE_JNI_INCLUDES}
   ${CMAKE_SOURCE_DIR}/src/util
   ${CMAKE_SOURCE_DIR}/src/frontend
   ${ROSE_INCLUDES})
@@ -246,18 +238,6 @@ endif()
 
 set(LINK_FILES
   ${CMAKE_DL_LIBS})
-
-# Depending on which language analysis (frontend) features are enabled in ROSE, we may need some additional libraries.
-if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP)
-  list(APPEND LINK_FILES roseFortran)
-endif()
-
-if(ENABLE-FORTRAN AND ENABLE-FORTRAN-OFP AND JAVA_JVM_LIBRARY)
-  get_filename_component(ROSE_JVM_LIBRARY_DIR "${JAVA_JVM_LIBRARY}" DIRECTORY)
-  if(ROSE_JVM_LIBRARY_DIR)
-    set_property(TARGET ROSE_DLL APPEND PROPERTY INSTALL_RPATH "${ROSE_JVM_LIBRARY_DIR}")
-  endif()
-endif()
 
 # link ANTLR 4 C++ runtime
 # On Ubuntu 20.04, it is installed to /usr/lib

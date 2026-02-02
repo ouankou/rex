@@ -37,9 +37,6 @@ const char *licenseText =
  *  Variable Definitions
  *---------------------------------------------------------------------------*/
 ROSE_DLL_API int Rose::Cmdline::verbose = 0;
-ROSE_DLL_API std::list<std::string> Rose::Cmdline::Fortran::Ofp::jvm_options;
-ROSE_DLL_API std::list<std::string>
-    Rose::Cmdline::Fortran::Ofp::classpath_entries;
 
 /*-----------------------------------------------------------------------------
  *  namespace Rose::Cmdline {
@@ -299,8 +296,7 @@ bool CommandlineProcessing::isOptionTakingSecondParameter(string argument) {
       argument == "-annot" || argument == "-bs" ||
       isOptionTakingThirdParameter(argument) ||
 
-      // DQ (9/30/2008): Added support for JVM class specification required
-      // for Fortran use of OFP.
+      // DQ (9/30/2008): Added support for JVM class specification.
       argument == "--class" ||
 
       // AS (02/20/08):  When used with -M or -MM, -MF specifies a file to
@@ -1387,10 +1383,7 @@ void Rose::Cmdline::Unparser::ProcessClobberInputFile(
 //------------------------------------------------------------------------------
 
 bool Rose::Cmdline::Fortran::OptionRequiresArgument(const std::string &option) {
-  return
-      // ROSE Options
-      option == "-rose:fortran:ofp:jvm_options" ||
-      option == "-rose:fortran:ofp:classpath";
+  return false;
 } // Cmdline:Fortran:::OptionRequiresArgument
 
 void Rose::Cmdline::Fortran::StripRoseOptions(std::vector<std::string> &argv) {
@@ -1406,12 +1399,6 @@ void Rose::Cmdline::Fortran::StripRoseOptions(std::vector<std::string> &argv) {
 
   // Remove Fortran options with ROSE-Fortran prefix; option arguments removed
   // by generateOptionWithNameParameterList.
-  //
-  // For example,
-  //
-  //    BEFORE: argv = [-rose:fortran:ofp:jvm_options, "-Xss3m", -rose:verbose,
-  //    "3"] AFTER:  argv = [-rose:verbose, "3"]
-  //            fortran_options = [-ofp:jvm_options, "-Xss3m"]
   std::vector<std::string> fortran_options =
       CommandlineProcessing::generateOptionWithNameParameterList(
           argv, // Remove ROSE-Fortran options from here
@@ -1430,91 +1417,6 @@ void Rose::Cmdline::Fortran::StripRoseOptions(std::vector<std::string> &argv) {
     // else
     argv.push_back(fortran_option);
   }
-
-  Cmdline::Fortran::Ofp::StripRoseOptions(argv);
-} // Cmdline::Fortran::StripRoseOptions
-
-std::string Rose::Cmdline::Fortran::Ofp::GetRoseClasspath() {
-  return GetRoseClasspath(Cmdline::Fortran::Ofp::classpath_entries);
-}
-
-std::string Rose::Cmdline::Fortran::Ofp::GetRoseClasspath(
-    const std::list<std::string> &classpath_entries) {
-  string classpath = "-Djava.class.path=";
-
-  // Rasmussen (2/12/2019): Added support for OFP version 0.8.5 requiring
-  // antlr-3.5.2-complete.jar.
-  ROSE_ASSERT(ROSE_OFP_MAJOR_VERSION_NUMBER >= 0);
-  ROSE_ASSERT(ROSE_OFP_MINOR_VERSION_NUMBER >= 8);
-
-  // Pei-Hung (4/3/2022): Only one antlr jar file, antlr-3.5.2-complete.jar, is
-  // kept in ROSE.
-  classpath += findRoseSupportPathFromSource(
-      "src/3rdPartyLibraries/antlr-jars/antlr-3.5.2-complete.jar",
-      "lib/antlr-3.5.2-complete.jar");
-  classpath += ":";
-
-  // Open Fortran Parser (OFP) support (this is the jar file)
-  // Rasmussen (10/4/2011): Switched to using date-based version for OFP jar
-  // file.
-  //
-  string ofp_jar_file_name =
-      string("OpenFortranParser-") + ROSE_OFP_VERSION_STRING + string(".jar");
-  string ofp_class_path =
-      "src/3rdPartyLibraries/fortran-parser/" + ofp_jar_file_name;
-  classpath += findRoseSupportPathFromBuild(
-                   ofp_class_path, string("lib/") + ofp_jar_file_name) +
-               ":";
-
-  for (const std::string &entry : classpath_entries) {
-    if (!entry.empty()) {
-      classpath += entry;
-      classpath += ":";
-    }
-  }
-
-  // Everything else?
-  classpath += ".";
-
-  return classpath;
-}
-
-// -rose:fortran:ofp options have already been transformed by
-// Cmdline::Fortran::StripRoseOptions. Therefore, for example,
-//
-//    -rose:fortran:ofp:jvm_options
-//
-//    is now actually:
-//
-//    -ofp:jvm_options
-//
-void Rose::Cmdline::Fortran::Ofp::StripRoseOptions(
-    std::vector<std::string> &argv) {
-  if (SgProject::get_verbose() > 1) {
-    std::cout << "[INFO] "
-              << "Stripping ROSE Fortran OFP commandline options" << std::endl;
-  }
-
-  // Remove OFP options with ROSE-OFP prefix; option arguments removed
-  // by generateOptionWithNameParameterList.
-  std::vector<std::string> ofp_options =
-      CommandlineProcessing::generateOptionWithNameParameterList(
-          argv,    // Remove ROSE-Fortran options from here
-          "-ofp:", // Current prefix
-          "-");    // New prefix
-
-  // TOO1 (2/13/2014): Skip ALL ROSE-specific OFP options;
-  //                   at this stage, we only have
-  //                   "-rose:fortran:ofp:jvm_options" and
-  //                   "-rose:fortran:ofp:classpath", and these are only inteded
-  //                   for the OFP frontend's JVM.
-  for (std::string ofp_option : ofp_options) {
-    if (SgProject::get_verbose() > 1) {
-      std::cout << "[INFO] "
-                << "Stripping OFP JVM commandline argument '" << ofp_option
-                << "'" << std::endl;
-    }
-  }
 } // Cmdline::Fortran::StripRoseOptions
 
 void Rose::Cmdline::Fortran::Process(SgProject *project,
@@ -1523,8 +1425,6 @@ void Rose::Cmdline::Fortran::Process(SgProject *project,
     std::cout << "[INFO] Processing Fortran commandline options" << std::endl;
 
   ProcessFortranOnly(project, argv);
-
-  Cmdline::Fortran::Ofp::Process(project, argv);
 }
 
 void Rose::Cmdline::Fortran::ProcessFortranOnly(
@@ -1537,114 +1437,6 @@ void Rose::Cmdline::Fortran::ProcessFortranOnly(
       std::cout << "[INFO] Turning on Fortran only mode" << std::endl;
 
     project->set_Fortran_only(true);
-  }
-}
-
-void Rose::Cmdline::Fortran::Ofp::Process(SgProject *project,
-                                          std::vector<std::string> &argv) {
-  if (SgProject::get_verbose() > 1)
-    std::cout << "[INFO] Processing Fortran's OFP frontend commandline options"
-              << std::endl;
-
-  ProcessJvmOptions(project, argv);
-  ProcessClasspath(project, argv);
-  ProcessEnableRemoteDebugging(project, argv);
-}
-
-void Rose::Cmdline::Fortran::Ofp::ProcessJvmOptions(
-    SgProject *project, std::vector<std::string> &argv) {
-  if (SgProject::get_verbose() > 1)
-    std::cout
-        << "[INFO] Processing Fortran's ofp frontend JVM commandline options"
-        << std::endl;
-
-  std::string ofp_jvm_options = "";
-
-  bool has_ofp_jvm_options =
-      // -rose:fortran:ofp:jvm_options
-      CommandlineProcessing::isOptionWithParameter(
-          argv, Fortran::option_prefix, "ofp:jvm_options", ofp_jvm_options,
-          Cmdline::REMOVE_OPTION_FROM_ARGV);
-
-  if (has_ofp_jvm_options) {
-    if (SgProject::get_verbose() > 1) {
-      std::cout << "[INFO] Processing ofp JVM options: "
-                << "'" << ofp_jvm_options << "'" << std::endl;
-    }
-
-    std::list<std::string> ofp_jvm_options_list =
-        StringUtility::tokenize(ofp_jvm_options, ' ');
-
-    project->set_Fortran_ofp_jvm_options(ofp_jvm_options_list);
-
-    Cmdline::Fortran::Ofp::jvm_options.insert(
-        Cmdline::Fortran::Ofp::jvm_options.begin(),
-        ofp_jvm_options_list.begin(), ofp_jvm_options_list.end());
-  } // has_ofp_jvm_options
-} // Cmdline::Fortran::ProcessJvmOptions
-
-void Rose::Cmdline::Fortran::Ofp::ProcessClasspath(
-    SgProject *project, std::vector<std::string> &argv) {
-  if (SgProject::get_verbose() > 1)
-    std::cout << "[INFO] Processing Fortran's OFP classpath options"
-              << std::endl;
-
-  Cmdline::Fortran::Ofp::classpath_entries.clear();
-  std::list<std::string> project_classpath_entries =
-      project->get_Fortran_ofp_classpath();
-  if (!project_classpath_entries.empty()) {
-    Cmdline::Fortran::Ofp::classpath_entries.insert(
-        Cmdline::Fortran::Ofp::classpath_entries.end(),
-        project_classpath_entries.begin(), project_classpath_entries.end());
-  }
-
-  std::string ofp_classpath = "";
-
-  bool has_ofp_classpath =
-      // -rose:fortran:ofp:classpath
-      CommandlineProcessing::isOptionWithParameter(
-          argv, Fortran::option_prefix, "ofp:classpath", ofp_classpath,
-          Cmdline::REMOVE_OPTION_FROM_ARGV);
-
-  if (has_ofp_classpath) {
-    if (SgProject::get_verbose() > 1) {
-      std::cout << "[INFO] Processing OFP classpath: "
-                << "'" << ofp_classpath << "'" << std::endl;
-    }
-
-    std::list<std::string> ofp_classpath_entries =
-        StringUtility::tokenize(ofp_classpath, ':');
-
-    project->set_Fortran_ofp_classpath(ofp_classpath_entries);
-
-    Cmdline::Fortran::Ofp::classpath_entries.clear();
-    Cmdline::Fortran::Ofp::classpath_entries.insert(
-        Cmdline::Fortran::Ofp::classpath_entries.end(),
-        ofp_classpath_entries.begin(), ofp_classpath_entries.end());
-  } // has_ofp_classpath
-} // Cmdline::Fortran::ProcessClasspath
-
-void Rose::Cmdline::Fortran::Ofp::ProcessEnableRemoteDebugging(
-    SgProject * /*project*/, std::vector<std::string> &argv) {
-  bool has_fortran_remote_debug =
-      // -rose:fortran:remoteDebug
-      CommandlineProcessing::isOption(argv, Fortran::option_prefix,
-                                      "ofp:enable_remote_debugging",
-                                      Cmdline::REMOVE_OPTION_FROM_ARGV);
-
-  if (has_fortran_remote_debug) {
-    if (SgProject::get_verbose() > 1)
-      std::cout << "[INFO] Processing Fortran remote debugging option"
-                << std::endl;
-
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-    Cmdline::Fortran::Ofp::jvm_options.push_back(
-        "-agentlib:jdwp=transport=dt_socket,server=y,address=8000");
-    std::cout << "[FATAL] "
-              << "JVM remote debugging cannot be enabled since ROSE-Fortran "
-              << "support is turned off" << std::endl;
-    ROSE_ABORT();
-#endif
   }
 }
 
@@ -1787,11 +1579,6 @@ void SgFile::usage() {
         "                             compile Co-Array Fortran code "
         "(extension of Fortran 2003)\n"
         "     -rose:fortran_std is the only supported dialect selector\n"
-        "     -rose:fortran:ofp:jvm_options\n"
-        "                             Specifies the JVM startup options\n"
-        "     -rose:fortran:ofp:classpath\n"
-        "                             Additional JVM classpath entries for "
-        "OFP\n"
         "     -rose:strict            strict enforcement of ANSI/ISO "
         "standards\n"
         "     -rose:compilationPerformance\n"
@@ -1962,20 +1749,17 @@ void SgFile::usage() {
         "\n"
 
         "\n"
-        "Control Fortran frontend processing:\n"
-        "     -rose:fortran_frontend <flang|ofp>\n"
+        "     -rose:fortran_frontend <flang>\n"
         "                             select the Fortran frontend (default: "
-        "flang when enabled,\n"
-        "                             otherwise ofp)\n"
+        "flang)\n"
         "     -rose:fortran_std <f77|f90|f95|f2003|f2008|f2018>\n"
         "                             select a Fortran dialect for ROSE\n"
         "     -rose:cray_pointer_support\n"
         "                             turn on internal support for cray "
         "pointers\n"
         "                             (Note: not implemented in front-end "
-        "(OFP) yet.)\n"
+        "yet.)\n"
         "     -fortran:XXX            pass -XXX to independent semantic "
-        "analysis\n"
         "                             (useful for turning on specific "
         "warnings in front-end)\n"
         "\n"
@@ -3656,22 +3440,11 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
                    "error: ROSE was not configured to support the Flang "
                    "frontend.");
 #endif
-    } else if (frontend == "ofp") {
-#if defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
-      if (SgProject::get_verbose() > 0) {
-        std::cout << "Using OFP Fortran frontend (explicitly set: ON)\n";
-      }
-      set_experimental_flang_frontend(false);
-#else
-      ROSE_ASSERT(!"[FATAL] [ROSE] [frontend] [Fortran] "
-                   "error: ROSE was not configured to support the OFP "
-                   "frontend.");
-#endif
     } else {
       std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
                    "error: Unknown Fortran frontend '"
                 << fortranFrontendOption
-                << "'. Use -rose:fortran_frontend <flang|ofp>.\n";
+                << "'. Use -rose:fortran_frontend <flang>.\n";
       ROSE_ABORT();
     }
   }
@@ -4128,8 +3901,6 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   optionCount = sla(argv, "-rose:", "($)", "(experimental_flang_frontend)", 1);
   optionCount =
       sla(argv, "-rose:", "($)", "(experimental_fortran_frontend)", 1);
-  optionCount =
-      sla(argv, "-rose:", "($)", "(experimental_fortran_frontend_OFP_test)", 1);
   char *fortranFrontendOption = NULL;
   optionCount = sla(argv, "-rose:", "($)^", "(fortran_frontend)",
                     fortranFrontendOption, 1);

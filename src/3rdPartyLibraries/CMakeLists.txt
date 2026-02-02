@@ -1,3 +1,2 @@
-add_subdirectory(antlr-jars)
-add_subdirectory(fortran-parser)
+add_subdirectory(fortran-intrinsics)
 add_subdirectory(flang-parser)

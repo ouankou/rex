@@ -1,8 +1,6 @@
 set(_rose_flags -rose:verbose 0 -rose:experimental_fortran_frontend
   -I${CMAKE_CURRENT_SOURCE_DIR})
-set(_rose_flags_ofp ${_rose_flags} -rose:experimental_fortran_frontend_OFP_test)
 string(JOIN " " _rose_flags_str ${_rose_flags})
-string(JOIN " " _rose_flags_ofp_str ${_rose_flags_ofp})
 set(_experimental_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_experimental_output_dir})
 
@@ -140,7 +138,7 @@ function(_experimental_add_translator_test test_prefix specimen)
     NAME ${_test_name}
     WORKING_DIRECTORY ${_experimental_output_dir}
     COMMAND bash -c
-      "$<TARGET_FILE:testTranslator> ${_rose_flags_ofp_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen} && test -s rose_${specimen}"
+      "$<TARGET_FILE:testTranslator> ${_rose_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen} && test -s rose_${specimen}"
   )
   set(${test_prefix}_${specimen}_name ${_test_name} PARENT_SCOPE)
 endfunction()

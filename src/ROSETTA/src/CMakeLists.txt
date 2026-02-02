@@ -4,11 +4,6 @@ include_directories( ${ROSE_INCLUDES} )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
 
-# Rasmussen (04/17/2019): Support for ATerms has been deprecated as it is no longer needed
-# and likely never fully implemented nor tested.  Files remain in the src tree but are no
-# longer built. Files buildAtermSupport.C and grammarAtermConstructorDefinitionMacros.macro
-# has been removed.
-
 # source files for the code generator
 set(CxxGrammarMetaProgram_SRCS
   CxxGrammarMetaProgram.C

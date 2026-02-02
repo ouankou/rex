@@ -793,19 +793,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
   isRecursiveCall = true;
 
   // Liao 4/26/2010 support --enable-only-c
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-  // DQ (12/10/2007): Declare Fortran specific lexical pass function explicitly.
-  // extern int getFortranFixedFormatPreprocessorDirectives( std::string
-  // fileName ); extern int getFortranFreeFormatPreprocessorDirectives (
-  // std::string fileName );
-  // #ifdef USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT
-  extern std::list<stream_element *> *
-  getFortranFixedFormatPreprocessorDirectives(std::string fileName);
-  extern std::list<stream_element *> *
-  getFortranFreeFormatPreprocessorDirectives(std::string fileName);
-// #endif
-#endif
-
   ROSE_ASSERT(sourceFile != NULL);
   string fileNameForTokenStream = fileNameForDirectivesAndComments;
 
@@ -1018,8 +1005,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
     ROSE_ASSERT(returnListOfAttributes != NULL);
 
 #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-
-    // #ifdef USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT
     // This is either of two different kinds of Fortran programs: fixed format
     // or free format
     //    * fix format is generally used for older Fortran code, F77 and
@@ -1032,32 +1017,9 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
     // if (currentFilePtr->get_fixedFormat() == true)
     if (sourceFile->get_inputFormat() == SgFile::e_fixed_form_output_format) {
       if (SgProject::get_verbose() > 1) {
-        printf("Fortran code assumed to be in fixed format form (skipping "
-               "translation of tokens) \n");
+        printf("Fortran code assumed to be in fixed format form \n");
       }
 
-      // For now we call the lexical pass on the fortran file, but we don't yet
-      // translate the tokens. returnListOfAttributes       =
-      // getPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) );
-      // getFortranFixedFormatPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) );
-      // LexTokenStreamTypePointer lex_token_stream =
-      // getFortranFixedFormatPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) );
-      LexTokenStreamTypePointer lex_token_stream = NULL;
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-      lex_token_stream =
-          getFortranFixedFormatPreprocessorDirectives(fileNameForTokenStream);
-#endif
-      ROSE_ASSERT(lex_token_stream != NULL);
-
-      if (SgProject::get_verbose() > 1) {
-        printf("DONE: getFortranFixedFormatPreprocessorDirectives() \n");
-      }
-
-      // Attach the token stream to the AST
-      returnListOfAttributes->set_rawTokenStream(lex_token_stream);
       // DQ (11/23/2008): This is the new support to collect CPP directives and
       // comments from Fortran applications. printf ("Calling
       // collectPreprocessorDirectivesAndCommentsForAST() to collect CPP
@@ -1070,29 +1032,8 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // to collect CPP directives for fileNameForDirectivesAndComments = %s
       // \n",fileNameForDirectivesAndComments.c_str());
     } else {
-      // int currentFileNameId = currentFilePtr->get_file_info()->get_file_id();
-      // For now we call the lexical pass on the fortran file, but we don't yet
-      // translate the tokens. returnListOfAttributes       =
-      // getPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) );
-      // getFortranFreeFormatPreprocessorDirectives(
-      // Sg_File_Info::getFilenameFromID(currentFileNameId) ); string
-      // fileNameForTokenStream =
-      // Sg_File_Info::getFilenameFromID(currentFileNameId);
-
-      LexTokenStreamTypePointer lex_token_stream = NULL;
-#ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
-      lex_token_stream =
-          getFortranFreeFormatPreprocessorDirectives(fileNameForTokenStream);
-#endif
-      ROSE_ASSERT(lex_token_stream != NULL);
-
       // DQ (12/3/2019): Added test to support debugging Fortran support.
       ROSE_ASSERT(returnListOfAttributes != NULL);
-
-      // Attach the token stream to the AST
-      returnListOfAttributes->set_rawTokenStream(lex_token_stream);
-      ROSE_ASSERT(returnListOfAttributes->get_rawTokenStream() != NULL);
       // DQ (11/23/2008): This is the new support to collect CPP directives and
       // comments from Fortran applications. printf ("Calling
       // collectPreprocessorDirectivesAndCommentsForAST() to collect CPP
@@ -1102,11 +1043,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
           fileNameForDirectivesAndComments,
           ROSEAttributesList::e_Fortran9x_language);
     }
-
-// #else // for !USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT
-//               fprintf(stderr, "Fortran parser not enabled \n");
-//               ROSE_ABORT();
-// #endif // USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT
 #endif // for #ifdef ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT
   } else {
     // Else we assume this is a C or C++ program (for which the lexical analysis

@@ -66,7 +66,6 @@ jobs:
     - name: Build and Install (Debug)
       env:
         # Set up LLVM 20 paths so "clang" command resolves to clang-20.
-        # Keep the JVM path available for the Fortran OFP frontend.
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
         CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
@@ -86,11 +85,4 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE/build
         CTEST_JOBS="$(nproc)"
-        # astInterface exercises Clang frontend
-        ctest -R astInterface -j"${CTEST_JOBS}"
-        # translatorTests (excluding two known disabled cases in CTest)
-        # ctest -R "Translator_"
-        # astQuery exercises query helpers
-        ctest -R "testQuery" -j"${CTEST_JOBS}"
-        # Run all rex-prefixed regression tests
-        ctest -R rex -j"${CTEST_JOBS}"
+        ctest -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering" --output-on-failure -j"${CTEST_JOBS}"

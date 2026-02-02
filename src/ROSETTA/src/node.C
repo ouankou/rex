@@ -738,8 +738,6 @@ void Grammar::setUpNodes() {
   //      NO_DELETE);
   // DQ (10/9/2007): Use the ROSETTA generated version to test failure
 
-  // DQ (10/10/2014): Modified to make this more suitable for support via Aterm
-  // to AST generation.
   InitializedName.setDataPrototype(
       "SgName", "name", "= NULL", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
       NO_TRAVERSAL, NO_DELETE);
@@ -751,8 +749,6 @@ void Grammar::setUpNodes() {
 
   // FMZ (4/7/2009): Added for Cray pointer declaration
 
-  // DQ (10/10/2014): Modified to make this more suitable for support via Aterm
-  // to AST generation.
   InitializedName.setDataPrototype(
       "SgType*", "typeptr", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);

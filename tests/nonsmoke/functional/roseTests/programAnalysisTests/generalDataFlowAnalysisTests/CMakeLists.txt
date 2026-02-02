@@ -1343,7 +1343,7 @@ endforeach()
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
@@ -1353,7 +1353,7 @@ add_test(
 set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-cxx-constprop-local PROPERTIES DEPENDS "gdf_f03_constprop_test2007_37_f03;gdf_f77_constprop_test2007_222_f" )
 add_test(
   NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
@@ -1363,7 +1363,7 @@ add_test(
 set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop PROPERTIES DEPENDS gdf_f03_constprop_test2007_37_f03 )
 add_test(
   NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f77-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}

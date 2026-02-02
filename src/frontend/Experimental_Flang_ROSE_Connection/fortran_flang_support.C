@@ -103,7 +103,6 @@ void set_flang_include_temp_dir(const std::string &path) {
   flang_external_builder_set_include_tmpdir(path.c_str());
 }
 
-#if !defined(USE_ROSE_OPEN_FORTRAN_PARSER_SUPPORT)
 SgScopeStatement *getTopOfScopeStack() {
   ROSE_ASSERT(SageBuilder::emptyScopeStack() == false);
   SgScopeStatement *topOfStack = SageBuilder::topScopeStack();
@@ -120,4 +119,3 @@ SgScopeStatement *getTopOfScopeStack() {
 bool emptyFortranStateStack() { return SageBuilder::emptyScopeStack(); }
 
 bool emptyFortranScopeStack() { return SageBuilder::emptyScopeStack(); }
-#endif
