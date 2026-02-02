@@ -51,8 +51,6 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
     }
   }
 
-  std::vector<std::string> arg_storage;
-  std::vector<char *> arg_ptrs;
   bool needs_compile_only = false;
   if (srcFile != nullptr) {
     if (SgProject *project = srcFile->get_project()) {
@@ -70,23 +68,14 @@ int experimental_fortran_main(int argc, char *argv[], SgSourceFile *srcFile) {
       }
     }
     if (!has_compile_only) {
-      arg_storage.reserve(argc + 1);
-      arg_ptrs.reserve(argc + 1);
-      for (int i = 0; i < argc; ++i) {
-        arg_storage.emplace_back(argv[i] != nullptr ? argv[i] : "");
-      }
-      arg_storage.emplace_back("-c");
-      for (auto &arg : arg_storage) {
-        arg_ptrs.push_back(arg.data());
-      }
-      status = flang_external_builder_main(static_cast<int>(arg_ptrs.size()),
-                                           arg_ptrs.data(), srcFile);
-    } else {
-      status = flang_external_builder_main(argc, argv, srcFile);
+      std::cerr << "[FATAL] [ROSE] [frontend] [Fortran] "
+                   "error: Flang frontend requires -c when ROSE is in "
+                   "compile-only mode.\n";
+      ROSE_ABORT();
     }
-  } else {
-    status = flang_external_builder_main(argc, argv, srcFile);
   }
+
+  status = flang_external_builder_main(argc, argv, srcFile);
 
   if (SgProject::get_verbose() > 0) {
     cout << "FINISHED parsing with status " << status << "\n";
