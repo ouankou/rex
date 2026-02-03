@@ -31,8 +31,9 @@ set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 
 set(_callgraph_test01_enabled FALSE)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
-   AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.2")
+if((CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+    AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.2")
+   OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(_callgraph_test01_enabled TRUE)
 endif()
 
@@ -48,12 +49,16 @@ set(_test01_sources
   ${_test01_spec_dir}/f1.C
   ${_test01_spec_dir}/f2.C
 )
+string(JOIN " " _test01_sources_arg ${_test01_sources})
+set(_test01_cmd
+  "$<TARGET_FILE:testCG> -I. -I${_test01_spec_dir} ${_test01_sources_arg} -o Callgraph"
+)
 
 add_test(
   NAME callgraph_test01
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
-    CMD="$<TARGET_FILE:testCG> -I. -I${_test01_spec_dir} ${_test01_sources} -o Callgraph"
+    CMD=${_test01_cmd}
     ${_exit_status}
     test01.passed
 )
