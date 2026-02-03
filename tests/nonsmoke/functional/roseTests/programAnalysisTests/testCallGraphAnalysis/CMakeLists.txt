@@ -49,7 +49,11 @@ set(_test01_sources
   ${_test01_spec_dir}/f1.C
   ${_test01_spec_dir}/f2.C
 )
-string(JOIN " " _test01_sources_arg ${_test01_sources})
+set(_quoted_sources "")
+foreach(source IN LISTS _test01_sources)
+  list(APPEND _quoted_sources "\"${source}\"")
+endforeach()
+string(JOIN " " _test01_sources_arg ${_quoted_sources})
 set(_test01_cmd
   "$<TARGET_FILE:testCG> -I. -I${_test01_spec_dir} ${_test01_sources_arg} -o Callgraph"
 )
