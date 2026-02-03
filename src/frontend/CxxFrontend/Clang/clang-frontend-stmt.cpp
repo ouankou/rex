@@ -6246,13 +6246,16 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
           cxx_pseudo_destructor_expr->getDestroyedTypeInfo()) {
     destroyed_type = buildTypeFromQualifiedType(type_info->getType());
   } else {
-    clang::QualType qual_type = cxx_pseudo_destructor_expr->getDestroyedType();
-    if (!qual_type.isNull()) {
-      destroyed_type = buildTypeFromQualifiedType(qual_type);
-    } else if (const clang::IdentifierInfo *id =
-                   cxx_pseudo_destructor_expr->getDestroyedTypeIdentifier()) {
+    if (const clang::IdentifierInfo *id =
+            cxx_pseudo_destructor_expr->getDestroyedTypeIdentifier()) {
       destroyed_type =
           SageBuilder::buildTemplateType(SgName(id->getName().str()));
+    } else {
+      clang::QualType qual_type =
+          cxx_pseudo_destructor_expr->getDestroyedType();
+      if (!qual_type.isNull()) {
+        destroyed_type = buildTypeFromQualifiedType(qual_type);
+      }
     }
   }
   ROSE_ASSERT(destroyed_type != nullptr);
