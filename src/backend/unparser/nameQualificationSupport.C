@@ -967,6 +967,25 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
       evaluateNameQualificationForTemplateArgumentList(
           nrdecl->get_tpl_args(), qualificationScope, positionStatement);
 
+      // If this nonreal decl is part of a nested nonreal chain, make sure
+      // template arguments on the parent links are also qualified relative
+      // to the current use site.
+      SgNode *parent = nrdecl->get_parent();
+      while (parent != nullptr) {
+        SgDeclarationScope *nrscope = isSgDeclarationScope(parent);
+        if (nrscope == nullptr) {
+          break;
+        }
+        SgNonrealDecl *parent_nrdecl = isSgNonrealDecl(nrscope->get_parent());
+        if (parent_nrdecl == nullptr) {
+          break;
+        }
+        evaluateNameQualificationForTemplateArgumentList(
+            parent_nrdecl->get_tpl_args(), qualificationScope,
+            positionStatement);
+        parent = parent_nrdecl->get_parent();
+      }
+
       break;
     }
 
@@ -4451,6 +4470,82 @@ void NameQualificationTraversal::
       effectiveScope = positionScope;
     }
   }
+  if (isSgNamespaceDefinitionStatement(effectiveScope) != nullptr) {
+    SgNode *global_anchor =
+        positionStatement != nullptr
+            ? static_cast<SgNode *>(positionStatement)
+            : (currentScope != nullptr ? static_cast<SgNode *>(currentScope)
+                                       : static_cast<SgNode *>(effectiveScope));
+    if (SgGlobal *global_scope = SageInterface::getGlobalScope(global_anchor)) {
+      effectiveScope = global_scope;
+    }
+  }
+  if (SgClassDefinition *class_def = isSgClassDefinition(effectiveScope)) {
+    if (Sg_File_Info *fi = class_def->get_file_info()) {
+      if (fi->isCompilerGenerated()) {
+        if (SgClassDeclaration *class_decl = class_def->get_declaration()) {
+          if (SgScopeStatement *decl_scope = class_decl->get_scope()) {
+            effectiveScope = decl_scope;
+          }
+        }
+      }
+    }
+  }
+  if (!templateArgumentList.empty()) {
+    SgTemplateArgument *first_arg = templateArgumentList.front();
+    if (first_arg != nullptr &&
+        isSgNonrealDecl(first_arg->get_parent()) != nullptr) {
+      SgNode *global_anchor =
+          positionStatement != nullptr
+              ? static_cast<SgNode *>(positionStatement)
+              : (currentScope != nullptr ? static_cast<SgNode *>(currentScope)
+                                         : static_cast<SgNode *>(first_arg));
+      SgGlobal *global_scope = SageInterface::getGlobalScope(global_anchor);
+      if (global_scope == nullptr) {
+        if (SgType *arg_type = first_arg->get_type()) {
+          if (SgDeclarationStatement *type_decl =
+                  getDeclarationAssociatedWithType(arg_type)) {
+            global_scope = SageInterface::getGlobalScope(type_decl);
+          }
+        }
+      }
+      if (global_scope != nullptr) {
+        effectiveScope = global_scope;
+      }
+    }
+  }
+  if (!templateArgumentList.empty()) {
+    SgTemplateArgument *first_arg = templateArgumentList.front();
+    SgDeclarationStatement *parent_decl = nullptr;
+    for (SgNode *parent = first_arg->get_parent(); parent != nullptr;
+         parent = parent->get_parent()) {
+      if ((parent_decl = isSgDeclarationStatement(parent)) != nullptr) {
+        break;
+      }
+      if (parent == parent->get_parent()) {
+        break;
+      }
+    }
+    if (parent_decl != nullptr) {
+      SgScopeStatement *decl_scope = parent_decl->get_scope();
+      bool saw_namespace = false;
+      for (SgScopeStatement *scope_iter = decl_scope; scope_iter != nullptr;
+           scope_iter = scope_iter->get_scope()) {
+        if (isSgNamespaceDefinitionStatement(scope_iter) != nullptr) {
+          saw_namespace = true;
+        }
+        if (SgGlobal *global_scope = isSgGlobal(scope_iter)) {
+          if (saw_namespace) {
+            effectiveScope = global_scope;
+          }
+          break;
+        }
+        if (scope_iter == scope_iter->get_scope()) {
+          break;
+        }
+      }
+    }
+  }
 
   SgTemplateArgumentPtrList::iterator i = templateArgumentList.begin();
   while (i != templateArgumentList.end()) {
@@ -4692,6 +4787,24 @@ void NameQualificationTraversal::
             int amountOfNameQualificationRequiredForTemplateArgument =
                 nameQualificationDepth(namedType, effectiveScope,
                                        positionStatement);
+            auto templateDeclForInstantiation =
+                [](SgDeclarationStatement *decl) -> SgDeclarationStatement * {
+              if (auto *inst = isSgTemplateInstantiationDecl(decl)) {
+                return inst->get_templateDeclaration();
+              }
+              if (auto *inst =
+                      isSgTemplateInstantiationTypedefDeclaration(decl)) {
+                return inst->get_templateDeclaration();
+              }
+              if (auto *inst = isSgTemplateInstantiationFunctionDecl(decl)) {
+                return inst->get_templateDeclaration();
+              }
+              if (auto *inst =
+                      isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+                return inst->get_templateDeclaration();
+              }
+              return nullptr;
+            };
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) ||                                    \
     DEBUG_NAME_QUALIFICATION_LEVEL_FOR_TEMPLATE_ARGUMENTS
@@ -4709,24 +4822,32 @@ void NameQualificationTraversal::
                         templateArgument);
 #endif
 
-            // TV (10/09/2018): FIXME ROSE-1511
-            SgNamespaceDefinitionStatement *nsp_defn =
-                isSgNamespaceDefinitionStatement(effectiveScope);
-            if (nsp_defn != NULL) {
-              SgNamespaceDeclarationStatement *nsp_decl =
-                  nsp_defn->get_namespaceDeclaration();
-              ASSERT_not_null(nsp_decl);
-              if (nsp_decl->get_name() == "std" &&
-                  (namedType->get_name().getString().find("allocator") == 0 ||
-                   namedType->get_name().getString().find("less") == 0)) {
-                amountOfNameQualificationRequiredForTemplateArgument = 1;
+            SgDeclarationStatement *qualificationDeclaration =
+                templateArgumentTypeDeclaration;
+            if (templateArgumentTypeDeclaration != nullptr) {
+              if (SgDeclarationStatement *templateDecl =
+                      templateDeclForInstantiation(
+                          templateArgumentTypeDeclaration)) {
+                if (templateDecl->get_scope() != nullptr) {
+                  qualificationDeclaration = templateDecl;
+                  if (amountOfNameQualificationRequiredForTemplateArgument ==
+                      0) {
+                    int templateDeclAmount = nameQualificationDepth(
+                        templateDecl, effectiveScope, positionStatement);
+                    if (templateDeclAmount >
+                        amountOfNameQualificationRequiredForTemplateArgument) {
+                      amountOfNameQualificationRequiredForTemplateArgument =
+                          templateDeclAmount;
+                    }
+                  }
+                }
               }
             }
 
             if (amountOfNameQualificationRequiredForTemplateArgument == 0 &&
-                templateArgumentTypeDeclaration != nullptr) {
+                qualificationDeclaration != nullptr) {
               SgScopeStatement *declScope =
-                  templateArgumentTypeDeclaration->get_scope();
+                  qualificationDeclaration->get_scope();
               bool currentInDeclScope = false;
               for (SgScopeStatement *scope = effectiveScope; scope != nullptr;
                    scope = scope->get_scope()) {
@@ -4758,39 +4879,6 @@ void NameQualificationTraversal::
               }
             }
 
-            if (amountOfNameQualificationRequiredForTemplateArgument == 0) {
-              if (SgNonrealType *nr_type = isSgNonrealType(namedType)) {
-                SgNamespaceSymbol *std_symbol =
-                    SageInterface::lookupNamespaceSymbolInParentScopes(
-                        "std", effectiveScope);
-                if (std_symbol != nullptr) {
-                  SgNamespaceDeclarationStatement *ns_decl =
-                      std_symbol->get_declaration();
-                  SgNamespaceDefinitionStatement *ns_def =
-                      ns_decl != nullptr ? ns_decl->get_definition() : nullptr;
-                  if (ns_def != nullptr &&
-                      ns_def->lookup_symbol(nr_type->get_name()) != nullptr) {
-                    int forcedAmount = 0;
-                    for (SgScopeStatement *scope = ns_def;
-                         scope != nullptr && isSgGlobal(scope) == nullptr;
-                         scope = scope->get_scope()) {
-                      if (isSgNamespaceDefinitionStatement(scope) != nullptr ||
-                          isSgClassDefinition(scope) != nullptr) {
-                        ++forcedAmount;
-                      }
-                      if (scope == scope->get_scope()) {
-                        break;
-                      }
-                    }
-                    if (forcedAmount > 0) {
-                      amountOfNameQualificationRequiredForTemplateArgument =
-                          forcedAmount;
-                    }
-                  }
-                }
-              }
-            }
-
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) ||                                    \
     DEBUG_NAME_QUALIFICATION_LEVEL_FOR_TEMPLATE_ARGUMENTS
             MLOG_WARN_C(MLOG_UNPARSER,
@@ -4799,7 +4887,7 @@ void NameQualificationTraversal::
                         templateArgumentTypeDeclaration->class_name().c_str());
 #endif
             setNameQualification(
-                templateArgument, templateArgumentTypeDeclaration,
+                templateArgument, qualificationDeclaration,
                 amountOfNameQualificationRequiredForTemplateArgument);
           }
         }
@@ -5606,8 +5694,11 @@ void NameQualificationTraversal::addToNameMap(SgNode *reference_node,
   // if (isTemplateName == true || isPointerMemberType == true)
   // if (isTemplateName == true || isPointerMemberType == true ||
   // isInitializedName == true)
+  bool isConstructorInitializer =
+      (isSgConstructorInitializer(reference_node) != NULL);
   if (isTemplateName == true || isPointerMemberType == true ||
-      isInitializedName == true || isTypedefDeclaration == true) {
+      isInitializedName == true || isTypedefDeclaration == true ||
+      isConstructorInitializer == true) {
     SgNode *contextKey = (context_node != NULL) ? context_node : reference_node;
     if (type_node != NULL) {
       NameQualificationMapType &scopedTypeNameMap =
@@ -6039,6 +6130,19 @@ void NameQualificationTraversal::traverseType(SgType *type,
     // class instantiations.
     if (isContainedInTemplateInstantiationDefn == false) {
       typeNameString = globalUnparseToString(type, unparseInfoPointer);
+    }
+
+    // Ensure constructor initializer types keep namespace qualification even
+    // before the name-qualification map is populated (e.g., std::string).
+    if (constructorInitializer != NULL &&
+        typeNameString.find("::") == std::string::npos &&
+        typeNameString.find('<') == std::string::npos) {
+      if (SgNamedType *named = isSgNamedType(strippedType)) {
+        std::string qualified = named->get_qualified_name().getString();
+        if (!qualified.empty() && qualified != typeNameString) {
+          typeNameString = qualified;
+        }
+      }
     }
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) || DEBUG_TRAVERSE_TYPE || 0
@@ -14206,7 +14310,7 @@ void NameQualificationTraversal::setNameQualification(
 #endif
     // I think I can do this!
     // *i = std::pair<SgNode*,std::string>(templateArgument,qualifier);
-    if (i->second != qualifier) {
+    if (i->second.empty() || qualifier.size() > i->second.size()) {
       MLOG_WARN_C(MLOG_UNPARSER, "Error: name in qualifiedNameMapForNames "
                                  "already exists and is different...\n");
       MLOG_WARN_C(MLOG_UNPARSER, ">>>> %s\n", i->second.c_str());
@@ -15833,6 +15937,26 @@ void NameQualificationTraversal::setNameQualification(
   // These may not be important under the newest version of name qualification
   // that uses the qualified name string map to IR nodes that reference the
   // construct using the name qualification.
+  const int existingQualificationLength =
+      templateArgument->get_name_qualification_length();
+  const bool existingGlobalQualification =
+      templateArgument->get_global_qualification_required();
+  const bool existingTypeElaboration =
+      templateArgument->get_type_elaboration_required();
+  bool replaceQualification = false;
+  if (outputNameQualificationLength > existingQualificationLength) {
+    replaceQualification = true;
+  } else if (outputNameQualificationLength == existingQualificationLength &&
+             outputGlobalQualification && !existingGlobalQualification) {
+    replaceQualification = true;
+  } else if (outputTypeEvaluation && !existingTypeElaboration) {
+    replaceQualification = true;
+  }
+  if (!replaceQualification) {
+    outputNameQualificationLength = existingQualificationLength;
+    outputGlobalQualification = existingGlobalQualification;
+    outputTypeEvaluation = existingTypeElaboration;
+  }
   templateArgument->set_global_qualification_required(
       outputGlobalQualification);
   templateArgument->set_name_qualification_length(
@@ -15877,7 +16001,8 @@ void NameQualificationTraversal::setNameQualification(
   //       non-defining and defining declarations. I think I would like to share
   //       the SgTemplateArgument (this this problem would take care of itself).
 
-  // TV (04/04/2018): Look for matching defining template argument.
+  // TV (04/04/2018): Look for matching template argument in the peer
+  // declaration (defining vs. nondefining).
   // For non-real template instantiation, i.e. member of a template parameter:
   // "T0::template T1<A>", the template argument
   // ("A") parent is the global scope (FIXME or is it the scope of the template
@@ -15908,81 +16033,38 @@ void NameQualificationTraversal::setNameQualification(
     MLOG_WARN_C(MLOG_UNPARSER, "firstNondefining_associatedDeclaration = %p \n",
                 firstNondefining_associatedDeclaration);
 #endif
-    SgTemplateInstantiationDecl
-        *firstDefining_classTemplateInstantiationDeclaration =
-            isSgTemplateInstantiationDecl(
-                firstNondefining_associatedDeclaration);
+    SgTemplateInstantiationDecl *nondefining_instantiation =
+        isSgTemplateInstantiationDecl(firstNondefining_associatedDeclaration);
+    SgTemplateInstantiationDecl *defining_instantiation =
+        isSgTemplateInstantiationDecl(defining_associatedDeclaration);
 
-    // SgTemplateArgument* nondefining_templateArgument = templateArgument;
-
-    int nondefiningDeclaration_templateArgument_position = 0;
-    int definingDeclaration_templateArgument_position = 0;
-
-    bool found = false;
-    if (firstDefining_classTemplateInstantiationDeclaration != NULL) {
-      // Find the index position of the current template argument.
-      SgTemplateArgumentPtrList &l =
-          firstDefining_classTemplateInstantiationDeclaration
-              ->get_templateArguments();
-      for (SgTemplateArgumentPtrList::iterator i = l.begin(); i != l.end();
-           i++) {
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-        MLOG_WARN_C(MLOG_UNPARSER, "--- template argument = %p = %s \n", *i,
-                    (*i)->class_name().c_str());
-#endif
-        if (found == false) {
-          if (*i == templateArgument)
-            found = true;
-          else
-            nondefiningDeclaration_templateArgument_position++;
+    auto find_template_arg_index = [](const SgTemplateArgumentPtrList &list,
+                                      SgTemplateArgument *arg) -> int {
+      int index = 0;
+      for (SgTemplateArgumentPtrList::const_iterator i = list.begin();
+           i != list.end(); ++i, ++index) {
+        if (*i == arg) {
+          return index;
         }
       }
-    }
+      return -1;
+    };
 
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-    MLOG_WARN_C(MLOG_UNPARSER,
-                "defining_associatedDeclaration                   = %p \n",
-                defining_associatedDeclaration);
-    MLOG_WARN_C(MLOG_UNPARSER,
-                "nondefiningDeclaration_templateArgument_position = %d \n",
-                nondefiningDeclaration_templateArgument_position);
-    MLOG_WARN_C(MLOG_UNPARSER,
-                "definingDeclaration_templateArgument_position    = %d \n",
-                definingDeclaration_templateArgument_position);
-#endif
+    if (nondefining_instantiation != NULL && defining_instantiation != NULL) {
+      SgTemplateArgumentPtrList &nondef_args =
+          nondefining_instantiation->get_templateArguments();
+      SgTemplateArgumentPtrList &def_args =
+          defining_instantiation->get_templateArguments();
 
-    SgTemplateInstantiationDecl
-        *defining_classTemplateInstantiationDeclaration =
-            isSgTemplateInstantiationDecl(defining_associatedDeclaration);
-    if (defining_classTemplateInstantiationDeclaration != NULL) {
-      // Find the associated template argument (matching position) in the
-      // template argument list of the defining declaration. This code is better
-      // tested and works well.
-      SgTemplateArgumentPtrList &l =
-          defining_classTemplateInstantiationDeclaration
-              ->get_templateArguments();
-      for (SgTemplateArgumentPtrList::iterator i = l.begin(); i != l.end();
-           i++) {
-#if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
-        MLOG_WARN_C(MLOG_UNPARSER, "--- template argument = %p = %s \n", *i,
-                    (*i)->class_name().c_str());
-        MLOG_WARN_C(
-            MLOG_UNPARSER,
-            "In loop: nondefiningDeclaration_templateArgument_position = %d \n",
-            nondefiningDeclaration_templateArgument_position);
-        MLOG_WARN_C(
-            MLOG_UNPARSER,
-            "In loop: definingDeclaration_templateArgument_position    = %d \n",
-            definingDeclaration_templateArgument_position);
-#endif
-        if (definingDeclaration_templateArgument_position ==
-            nondefiningDeclaration_templateArgument_position) {
-          // This is the template argument in the coresponding defining
-          // declaration.
-          defining_templateArgument = *i;
+      int index = find_template_arg_index(nondef_args, templateArgument);
+      if (index >= 0 && static_cast<size_t>(index) < def_args.size()) {
+        defining_templateArgument = def_args[index];
+      }
+      if (defining_templateArgument == NULL) {
+        index = find_template_arg_index(def_args, templateArgument);
+        if (index >= 0 && static_cast<size_t>(index) < nondef_args.size()) {
+          defining_templateArgument = nondef_args[index];
         }
-
-        definingDeclaration_templateArgument_position++;
       }
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -15993,10 +16075,9 @@ void NameQualificationTraversal::setNameQualification(
       // This is false when the template arguments are shared (which appears to
       // happen sometimes, see test2004_38.C).
       // ASSERT_not_null(defining_templateArgument);
-      // if (defining_templateArgument != NULL)
       if (defining_templateArgument != NULL &&
           defining_templateArgument != templateArgument) {
-        // Mark the associated template argument in the defining declaration so
+        // Mark the associated template argument in the peer declaration so
         // that it can be output with qualification (see test2012_220.C).
         defining_templateArgument->set_global_qualification_required(
             outputGlobalQualification);
@@ -16043,8 +16124,15 @@ void NameQualificationTraversal::setNameQualification(
           "Insert qualified name = %s for defining_templateArgument = %p \n",
           qualifier.c_str(), defining_templateArgument);
 #endif
-      qualifiedNameMapForTypes.insert(std::pair<SgNode *, std::string>(
-          defining_templateArgument, qualifier));
+      NameQualificationMapType::iterator def_iter =
+          qualifiedNameMapForTypes.find(defining_templateArgument);
+      if (def_iter == qualifiedNameMapForTypes.end()) {
+        qualifiedNameMapForTypes.insert(std::pair<SgNode *, std::string>(
+            defining_templateArgument, qualifier));
+      } else if (def_iter->second.empty() ||
+                 qualifier.size() > def_iter->second.size()) {
+        def_iter->second = qualifier;
+      }
     } else {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
       MLOG_WARN_C(MLOG_UNPARSER,
@@ -16070,7 +16158,7 @@ void NameQualificationTraversal::setNameQualification(
 #endif
     // I think I can do this!
     // *i = std::pair<SgNode*,std::string>(templateArgument,qualifier);
-    if (i->second != qualifier) {
+    if (i->second.empty() || qualifier.size() > i->second.size()) {
       i->second = qualifier;
 
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
@@ -16103,7 +16191,7 @@ void NameQualificationTraversal::setNameQualification(
 #endif
         // ROSE_ASSERT(j->second != qualifier);
 
-        if (j->second != qualifier) {
+        if (j->second.empty() || qualifier.size() > j->second.size()) {
           j->second = qualifier;
         }
 
@@ -16129,10 +16217,9 @@ void NameQualificationTraversal::setNameQualification(
             qualifiedNameMapForTypes.find(defining_templateArgument);
         ROSE_ASSERT(j != qualifiedNameMapForTypes.end());
         // ROSE_ASSERT(j->second == qualifier);
-        if (j->second != qualifier) {
+        if (j->second.empty() || qualifier.size() > j->second.size()) {
           j->second = qualifier;
         }
-        ROSE_ASSERT(j->second == qualifier);
       }
     }
   }

@@ -5831,6 +5831,7 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
   if (result_decl != nullptr) {
     attach_nonreal_template_parameters(result_decl,
                                        result_decl->get_templateParameters());
+    registerDeclarationSymbol(result_decl);
   }
 
   // REX FIX: Handle AS_none for ClassTemplateDecl
@@ -8980,6 +8981,23 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
   if (scope == nullptr) {
     scope = getGlobalScope();
   }
+  if (isSgGlobal(scope) != nullptr) {
+    clang::DeclContext *ctx = scope_context;
+    while (ctx != nullptr && !ctx->isTranslationUnit()) {
+      if (clang::NamespaceDecl *ns_ctx =
+              llvm::dyn_cast<clang::NamespaceDecl>(ctx)) {
+        if (SgNamespaceDeclarationStatement *ns_decl =
+                ensureNamespaceDeclaration(ns_ctx)) {
+          if (SgNamespaceDefinitionStatement *ns_def =
+                  ns_decl->get_definition()) {
+            scope = ns_def;
+          }
+        }
+        break;
+      }
+      ctx = ctx->getParent();
+    }
+  }
   scope = normalizeNamespaceScope(scope);
 
   SgTypedefDeclaration *sg_typedef_decl = nullptr;
@@ -9761,6 +9779,19 @@ ClangToSageTranslator::ensureNamespaceDeclaration(
     return nullptr;
 
   clang::NamespaceDecl *canonical_ns = getCanonicalNamespaceDecl(ns_decl);
+
+  // Inline namespaces are transparent for name lookup; map them to their
+  // enclosing namespace to keep qualification stable.
+  if (ns_decl->isInline()) {
+    if (clang::NamespaceDecl *parent_ns =
+            llvm::dyn_cast<clang::NamespaceDecl>(ns_decl->getDeclContext())) {
+      if (SgNamespaceDeclarationStatement *parent_sg_decl =
+              ensureNamespaceDeclaration(parent_ns)) {
+        p_decl_translation_map[canonical_ns] = parent_sg_decl;
+        return parent_sg_decl;
+      }
+    }
+  }
 
   // Check if already translated
   std::map<clang::Decl *, SgNode *>::iterator it =

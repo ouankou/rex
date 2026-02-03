@@ -180,9 +180,6 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
 #endif
   if (need_name) {
     SgUnparse_Info info_for_typename(info);
-    const bool missingQualification =
-        con_init->get_name_qualification_length() == 0 &&
-        con_init->get_qualified_name_prefix().is_null();
     if (ctor_class || ctor_decl) {
       std::string qualifier = con_init->get_qualified_name_prefix().str();
 #if DEBUG__unparseCtorInit
@@ -206,11 +203,7 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
         SgTemplateInstantiationMemberFunctionDecl *tpl_ctor_decl =
             isSgTemplateInstantiationMemberFunctionDecl(ctor_decl);
         if (ctor_class) {
-          if (missingQualification) {
-            info_for_typename.set_reference_node_for_qualification(NULL);
-          } else {
-            info_for_typename.set_reference_node_for_qualification(con_init);
-          }
+          info_for_typename.set_reference_node_for_qualification(con_init);
           info_for_typename.set_SkipClassSpecifier();
           unp->u_type->unparseType(ctor_class->get_type(), info_for_typename);
         } else if (tpl_ctor_decl != nullptr &&
@@ -223,11 +216,7 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
     } else {
       info_for_typename.unset_isWithType();
       info_for_typename.unset_SkipBaseType();
-      if (missingQualification) {
-        info_for_typename.set_reference_node_for_qualification(NULL);
-      } else {
-        info_for_typename.set_reference_node_for_qualification(con_init);
-      }
+      info_for_typename.set_reference_node_for_qualification(con_init);
       unp->u_type->unparseType(ctor_type, info_for_typename);
     }
   }

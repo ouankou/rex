@@ -1461,9 +1461,7 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
         isSgTemplateInstantiationTypedefDeclaration(stmt);
     ASSERT_not_null(inst);
     const Sg_File_Info *file_info = inst->get_file_info();
-    const std::string name = inst->get_name().getString();
-    if ((file_info != nullptr && file_info->isCompilerGenerated()) ||
-        name.find('<') != std::string::npos) {
+    if (file_info != nullptr && file_info->isCompilerGenerated()) {
       break;
     }
     unparseTypeDefStmt(inst, info);
@@ -5309,9 +5307,6 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       // want, but we need to test this. DQ (6/5/2011): Newest refactored
       // support for name qualification.
       SgName nameQualifier = classdecl_stmt->get_qualified_name_prefix();
-      if (nameQualifier.getString() == "::") {
-        nameQualifier = SgName();
-      }
 
       // DQ (6/9/2013): Further restrict this to the special case of un-named
       // unions. bool isAnonymousName =

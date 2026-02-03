@@ -88,6 +88,9 @@ DependentTemplateSpecializationNameInfo getDependentTemplateSpecializationName(
   return info;
 }
 
+// Forward declaration to keep helper ordering simple.
+std::string getTemplateNameBase(const clang::TemplateName &tname);
+
 // Generate unique name for template declaration with full namespace
 // qualification
 std::string mangleTemplateName(const clang::TemplateName &tname) {
@@ -96,6 +99,56 @@ std::string mangleTemplateName(const clang::TemplateName &tname) {
     // Get qualified name from the declaration (includes namespace)
     std::string result = template_decl->getQualifiedNameAsString();
     return result;
+  }
+
+  auto qualifierToString =
+      [](clang::NestedNameSpecifier *qualifier) -> std::string {
+    if (qualifier == nullptr) {
+      return "";
+    }
+    std::string result;
+    llvm::raw_string_ostream stream(result);
+    clang::LangOptions opts;
+    clang::PrintingPolicy policy(opts);
+    qualifier->print(stream, policy);
+    stream.flush();
+    return result;
+  };
+
+  auto appendQualifier = [](std::string qualifier,
+                            const std::string &base) -> std::string {
+    if (qualifier.empty()) {
+      return base;
+    }
+    if (qualifier.size() < 2 ||
+        qualifier.substr(qualifier.size() - 2) != "::") {
+      qualifier += "::";
+    }
+    return qualifier + base;
+  };
+
+  if (const clang::QualifiedTemplateName *qtn =
+          tname.getAsQualifiedTemplateName()) {
+    std::string base = getTemplateNameBase(qtn->getUnderlyingTemplate());
+    clang::NestedNameSpecifier *qualifier = qtn->getQualifier();
+    if (qualifier != nullptr && !base.empty()) {
+      std::string qualifier_str = qualifierToString(qualifier);
+      if (!qualifier_str.empty()) {
+        return appendQualifier(qualifier_str, base);
+      }
+    }
+  }
+
+  if (const clang::DependentTemplateName *dtn =
+          tname.getAsDependentTemplateName()) {
+    std::string base = getTemplateNameBase(tname);
+    clang::NestedNameSpecifier *qualifier = dtn->getQualifier();
+    if (qualifier != nullptr && !base.empty()) {
+      std::string qualifier_str = qualifierToString(qualifier);
+      if (!qualifier_str.empty()) {
+        return appendQualifier(qualifier_str, base);
+      }
+    }
   }
 
   // Fallback: just use the template name without qualification
@@ -1828,6 +1881,16 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
   // (Issue 126).
   if (is_specialization) {
     *node = getTypeFromTraversedRecordDecl(this, record_decl);
+    if (*node == NULL) {
+      if (SgDeclarationStatement *resolved =
+              lookupSgDeclarationForClangDecl(record_decl,
+                                              /*allow_on_demand=*/true)) {
+        if (SgClassDeclaration *sg_decl = isSgClassDeclaration(resolved)) {
+          ROSE_ASSERT(sg_decl->get_firstNondefiningDeclaration() != NULL);
+          *node = sg_decl->get_type();
+        }
+      }
+    }
   }
 
   if (*node == NULL) {
@@ -2902,72 +2965,36 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
     if (qualifier != nullptr) {
       nrtype = build_with_qualifier(qualifier, base_name, &tpl_args);
     } else {
-      std::string qualified_name;
+      SgScopeStatement *template_scope = scope;
       if (template_decl != nullptr) {
-        qualified_name = template_decl->getQualifiedNameAsString();
-      }
-      if (!qualified_name.empty() &&
-          qualified_name.find("::") != std::string::npos) {
-        std::vector<std::string> segments;
-        size_t start = 0;
-        while (start < qualified_name.size()) {
-          size_t pos = qualified_name.find("::", start);
-          if (pos == std::string::npos) {
-            segments.emplace_back(qualified_name.substr(start));
-            break;
-          }
-          segments.emplace_back(qualified_name.substr(start, pos - start));
-          start = pos + 2;
-        }
-        SgScopeStatement *chain_scope = getGlobalScope();
-        for (size_t i = 0; i + 1 < segments.size(); ++i) {
-          if (segments[i].empty()) {
-            continue;
-          }
-          SgNonrealType *segment_type = SageBuilder::buildNonrealType(
-              SgName(segments[i]), chain_scope, nullptr);
-          if (SgNonrealDecl *segment_decl = isSgNonrealDecl(
-                  segment_type ? segment_type->get_declaration() : nullptr)) {
-            chain_scope = segment_decl->get_nonreal_decl_scope();
-          }
-        }
-        const std::string &terminal =
-            segments.empty() ? base_name : segments.back();
-        nrtype = SageBuilder::buildNonrealType(SgName(terminal), chain_scope,
-                                               &tpl_args);
-      } else {
-        SgScopeStatement *template_scope = scope;
-        if (template_decl != nullptr) {
-          if (clang::DeclContext *decl_context =
-                  template_decl->getDeclContext()) {
-            if (SgScopeStatement *resolved_scope =
-                    resolveScopeFromDeclContext(decl_context, nullptr)) {
-              template_scope = resolved_scope;
-            } else {
-              clang::DeclContext *scope_ctx = decl_context;
-              while (scope_ctx != nullptr && !scope_ctx->isNamespace() &&
-                     !scope_ctx->isTranslationUnit()) {
-                scope_ctx = scope_ctx->getParent();
-              }
-              if (clang::NamespaceDecl *ns_decl =
-                      llvm::dyn_cast_or_null<clang::NamespaceDecl>(
-                          llvm::dyn_cast_or_null<clang::Decl>(scope_ctx))) {
-                if (SgNamespaceDeclarationStatement *ns_stmt =
-                        ensureNamespaceDeclaration(ns_decl)) {
-                  if (ns_stmt->get_definition() != nullptr) {
-                    template_scope = ns_stmt->get_definition();
-                  }
+        if (clang::DeclContext *decl_context =
+                template_decl->getDeclContext()) {
+          if (SgScopeStatement *resolved_scope =
+                  resolveScopeFromDeclContext(decl_context, nullptr)) {
+            template_scope = resolved_scope;
+          } else {
+            clang::DeclContext *scope_ctx = decl_context;
+            while (scope_ctx != nullptr && !scope_ctx->isNamespace() &&
+                   !scope_ctx->isTranslationUnit()) {
+              scope_ctx = scope_ctx->getParent();
+            }
+            if (clang::NamespaceDecl *ns_decl =
+                    llvm::dyn_cast_or_null<clang::NamespaceDecl>(
+                        llvm::dyn_cast_or_null<clang::Decl>(scope_ctx))) {
+              if (SgNamespaceDeclarationStatement *ns_stmt =
+                      ensureNamespaceDeclaration(ns_decl)) {
+                if (ns_stmt->get_definition() != nullptr) {
+                  template_scope = ns_stmt->get_definition();
                 }
-              } else if (scope_ctx != nullptr &&
-                         scope_ctx->isTranslationUnit()) {
-                template_scope = getGlobalScope();
               }
+            } else if (scope_ctx != nullptr && scope_ctx->isTranslationUnit()) {
+              template_scope = getGlobalScope();
             }
           }
         }
-        nrtype = SageBuilder::buildNonrealType(SgName(base_name),
-                                               template_scope, &tpl_args);
       }
+      nrtype = SageBuilder::buildNonrealType(SgName(base_name), template_scope,
+                                             &tpl_args);
     }
     if (SgNonrealDecl *nrdecl =
             isSgNonrealDecl(nrtype ? nrtype->get_declaration() : nullptr)) {
@@ -3451,11 +3478,18 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     if (alias_sg_decl != nullptr) {
       scope = alias_sg_decl->get_scope();
     }
+    if (scope == nullptr && alias_decl != nullptr) {
+      scope = resolveScopeFromDeclContext(alias_decl->getDeclContext(),
+                                          SageBuilder::topScopeStack());
+    }
     if (scope == nullptr) {
       scope = SageBuilder::topScopeStack();
     }
     if (scope == nullptr) {
       scope = getGlobalScope();
+    }
+    if (scope == nullptr && p_sage_source_file != nullptr) {
+      scope = p_sage_source_file->get_globalScope();
     }
 
     if (alias_sg_decl != nullptr && aliased_type != nullptr &&
@@ -3469,6 +3503,10 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
         inst_decl->get_templateArguments() = template_args;
         inst_decl->get_deducedTemplateArguments() = deduced_args;
         inst_decl->set_nameResetFromMangledForm(true);
+        inst_decl->setCompilerGenerated();
+        if (Sg_File_Info *fi = inst_decl->get_file_info()) {
+          fi->unsetOutputInCodeGeneration();
+        }
         SageBuilder::setTemplateArgumentParents(inst_decl);
         if (inst_decl->get_specializedTemplateDeclaration() == nullptr) {
           inst_decl->set_specializedTemplateDeclaration(alias_sg_decl);
