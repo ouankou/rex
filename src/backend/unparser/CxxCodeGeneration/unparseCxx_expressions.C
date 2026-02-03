@@ -170,6 +170,26 @@ void Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression *expr,
     unparseRecRef(expr, info);
     break;
   }
+  case SUBSCRIPT_EXPR: {
+    SgSubscriptExpression *sub_expr = isSgSubscriptExpression(expr);
+    ROSE_ASSERT(sub_expr != NULL);
+    SgExpression *lower = sub_expr->get_lowerBound();
+    SgExpression *upper = sub_expr->get_upperBound();
+    SgExpression *stride = sub_expr->get_stride();
+
+    if (isSgNullExpression(lower) == NULL) {
+      unparseExpression(lower, info);
+    }
+    curprint(":");
+    if (isSgNullExpression(upper) == NULL) {
+      unparseExpression(upper, info);
+    }
+    if (stride != NULL && isSgNullExpression(stride) == NULL) {
+      curprint(":");
+      unparseExpression(stride, info);
+    }
+    break;
+  }
   case DOTSTAR_OP: {
     unparseDotStarOp(expr, info);
     break;
@@ -1776,22 +1796,6 @@ void Unparse_ExprStmt::unparseTemplateArgument(
     ASSERT_not_null(templateArgument->get_type());
 
     SgType *templateArgumentType = templateArgument->get_type();
-    // If name qualification data is missing for a namespaced type argument,
-    // fall back to fully qualified output to avoid unqualified symbols.
-    if (templateArgument->get_name_qualification_length() == 0 &&
-        templateArgument->get_qualified_name_prefix_for_type().is_null()) {
-      if (SgNamedType *namedType = isSgNamedType(templateArgumentType)) {
-        SgDeclarationStatement *decl = namedType->get_declaration();
-        SgScopeStatement *declScope =
-            decl != nullptr ? decl->get_scope() : nullptr;
-        if (declScope != nullptr &&
-            isSgNamespaceDefinitionStatement(declScope) != nullptr &&
-            isSgGlobal(declScope) == nullptr) {
-          newInfo.set_reference_node_for_qualification(NULL);
-          newInfo.set_global_qualification_required(true);
-        }
-      }
-    }
     // DQ (1/21/2018): Check if this is an unnamed class (used as a template
     // argument, which is not alloweded, so we should not unparse it).
     bool isAnonymous = isAnonymousClass(templateArgumentType);
@@ -5016,7 +5020,11 @@ void Unparse_ExprStmt::unparseSizeOfOp(SgExpression *expr,
   bool outputTypeDefinition =
       sizeof_op->get_sizeOfContainsBaseTypeDefiningDeclaration();
 
-  curprint("sizeof(");
+  if (sizeof_op->get_is_sizeof_pack()) {
+    curprint("sizeof...(");
+  } else {
+    curprint("sizeof(");
+  }
 
   SgExpression *sizeofExpression = sizeof_op->get_operand_expr();
   // if (sizeof_op->get_operand_expr() != NULL)

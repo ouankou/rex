@@ -1453,11 +1453,19 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
     unparseTemplateInstantiationDirectiveStmt(stmt, info);
     break;
 
-    // DQ (5/12/2024): This statement does not appear to be supported yet.
+    // Template instantiation typedefs can be compiler-generated (e.g., alias
+    // template instantiations) and may not correspond to a valid source-level
+    // typedef declaration. Skip those; otherwise fall back to typedef unparse.
   case V_SgTemplateInstantiationTypedefDeclaration: {
-    printf("ERROR: This SgTemplateInstantiationTypedefDeclaration is not "
-           "supported in the unparser! \n");
-    ROSE_ASSERT(false);
+    SgTemplateInstantiationTypedefDeclaration *inst =
+        isSgTemplateInstantiationTypedefDeclaration(stmt);
+    ASSERT_not_null(inst);
+    const Sg_File_Info *file_info = inst->get_file_info();
+    if (file_info != nullptr && file_info->isCompilerGenerated()) {
+      break;
+    }
+    unparseTypeDefStmt(inst, info);
+    break;
   }
 
   case V_SgForInitStatement:

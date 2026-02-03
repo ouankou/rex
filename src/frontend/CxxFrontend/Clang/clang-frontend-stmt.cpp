@@ -9,6 +9,8 @@
 
 #include <cctype>
 
+#include <functional>
+
 #include <iomanip>
 
 #include <limits>
@@ -20,6 +22,8 @@
 #include <utility>
 
 #include <vector>
+
+#include <clang/Basic/OperatorKinds.h>
 
 #include "sageInterface.h"
 
@@ -6036,8 +6040,51 @@ bool ClangToSageTranslator::VisitCXXFoldExpr(clang::CXXFoldExpr *cxx_fold_expr,
   bool res = true;
 
   // CXXFoldExpr represents C++17 fold expressions like (... && args)
-  // These are template-dependent, use placeholder for now
-  *node = buildFallbackExpression(cxx_fold_expr);
+  clang::Expr *lhs = cxx_fold_expr->getLHS();
+  clang::Expr *rhs = cxx_fold_expr->getRHS();
+  clang::Expr *pattern = cxx_fold_expr->getPattern();
+
+  SgExpression *lhs_expr = nullptr;
+  if (lhs != nullptr) {
+    lhs_expr = isSgExpression(Traverse(lhs));
+  }
+
+  SgExpression *rhs_expr = nullptr;
+  if (rhs != nullptr) {
+    rhs_expr = isSgExpression(Traverse(rhs));
+  }
+
+  SgExpression *pattern_expr = nullptr;
+  if (pattern != nullptr) {
+    pattern_expr = isSgExpression(Traverse(pattern));
+  }
+
+  SgExpression *operands = nullptr;
+  if (lhs_expr != nullptr && rhs_expr != nullptr) {
+    SgExprListExp *list = SageBuilder::buildExprListExp();
+    list->append_expression(lhs_expr);
+    list->append_expression(rhs_expr);
+    operands = list;
+  } else if (lhs_expr != nullptr) {
+    operands = lhs_expr;
+  } else if (rhs_expr != nullptr) {
+    operands = rhs_expr;
+  } else if (pattern_expr != nullptr) {
+    operands = pattern_expr;
+  }
+
+  ROSE_ASSERT(operands != nullptr);
+
+  clang::StringRef op_spelling =
+      clang::BinaryOperator::getOpcodeStr(cxx_fold_expr->getOperator());
+  std::string op_token = op_spelling.str();
+
+  SgFoldExpression *fold_expr = SageBuilder::buildFoldExpression_nfi(
+      operands, op_token, cxx_fold_expr->isLeftFold());
+  if (operands->get_parent() == nullptr) {
+    operands->set_parent(fold_expr);
+  }
+  *node = fold_expr;
 
   return VisitExpr(cxx_fold_expr, node) && res;
 }
@@ -6116,16 +6163,20 @@ bool ClangToSageTranslator::VisitCXXNoexceptExpr(
 #endif
   bool res = true;
 
-  if (cxx_noexcept_expr->isValueDependent()) {
-    // Value-dependent noexcept results can't be evaluated until instantiation
-    // Create a placeholder expression so translation can proceed
-    *node = buildFallbackExpression(cxx_noexcept_expr);
-  } else {
-    // noexcept operator evaluates at compile-time whether an expression can
-    // throw
-    bool can_throw = cxx_noexcept_expr->getValue();
-    *node = SageBuilder::buildBoolValExp(can_throw);
+  SgExpression *operand = nullptr;
+  if (clang::Expr *arg = cxx_noexcept_expr->getOperand()) {
+    SgNode *tmp = Traverse(arg);
+    operand = isSgExpression(tmp);
   }
+  if (operand == nullptr) {
+    operand = buildFallbackExpression(cxx_noexcept_expr);
+  }
+
+  SgNoexceptOp *noexcept_op = SageBuilder::buildNoexceptOp_nfi(operand);
+  if (operand->get_parent() == nullptr) {
+    operand->set_parent(noexcept_op);
+  }
+  *node = noexcept_op;
 
   if (SgExpression *expr = isSgExpression(*node)) {
     applySourceRange(expr, cxx_noexcept_expr->getSourceRange());
@@ -9541,7 +9592,50 @@ bool ClangToSageTranslator::VisitOMPArraySectionExpr(
 #endif
   bool res = true;
 
-  // TODO
+  SgExpression *base = nullptr;
+  SgExpression *lower = nullptr;
+  SgExpression *length = nullptr;
+  SgExpression *stride = nullptr;
+
+  if (clang::Expr *base_expr = omp_array_section_expr->getBase()) {
+    base = isSgExpression(Traverse(base_expr));
+  }
+  if (clang::Expr *lower_expr = omp_array_section_expr->getLowerBound()) {
+    lower = isSgExpression(Traverse(lower_expr));
+  }
+  if (clang::Expr *length_expr = omp_array_section_expr->getLength()) {
+    length = isSgExpression(Traverse(length_expr));
+  }
+  if (omp_array_section_expr->isOMPArraySection()) {
+    if (clang::Expr *stride_expr = omp_array_section_expr->getStride()) {
+      stride = isSgExpression(Traverse(stride_expr));
+    }
+  }
+
+  if (base != nullptr) {
+    if (length == nullptr) {
+      length = SageBuilder::buildNullExpression_nfi();
+    }
+    SgSubscriptExpression *subscript =
+        SageBuilder::buildSubscriptExpression_nfi(lower, length, stride);
+    if (lower != nullptr) {
+      lower->set_parent(subscript);
+    }
+    if (length != nullptr) {
+      length->set_parent(subscript);
+    }
+    if (stride != nullptr) {
+      stride->set_parent(subscript);
+    }
+    SgPntrArrRefExp *arr_ref = SageBuilder::buildPntrArrRefExp(base, subscript);
+    *node = arr_ref;
+  } else {
+    *node = buildFallbackExpression(omp_array_section_expr);
+  }
+
+  if (SgExpression *expr = isSgExpression(*node)) {
+    applySourceRange(expr, omp_array_section_expr->getSourceRange());
+  }
 
   return VisitExpr(omp_array_section_expr, node) && res;
 }
@@ -9962,16 +10056,33 @@ bool ClangToSageTranslator::VisitSizeOfPackExpr(
   // elements However, for template-dependent packs, the size isn't known until
   // instantiation
 
-  if (!size_of_pack_expr->isValueDependent()) {
-    // Non-dependent: get the pack length and create an integer literal
-    unsigned pack_length = size_of_pack_expr->getPackLength();
-    *node = SageBuilder::buildUnsignedIntVal(pack_length);
-  } else {
-    // Value-dependent: create an opaque expression placeholder
-    // The actual size will be determined at template instantiation time
-    *node = SageBuilder::buildOpaqueVarRefExp("__sizeof_pack_dependent",
-                                              getGlobalScope());
+  SgExpression *pack_expr = nullptr;
+  if (clang::NamedDecl *pack_decl = size_of_pack_expr->getPack()) {
+    std::string pack_name = pack_decl->getNameAsString();
+    if (!pack_name.empty()) {
+      SgScopeStatement *scope = SageBuilder::topScopeStack();
+      if (scope == nullptr) {
+        scope = getGlobalScope();
+      }
+      pack_expr = buildNonrealRefExpFromNestedNameSpecifier(
+          nullptr, scope, SgName(pack_name), false, nullptr);
+    }
   }
+  if (pack_expr == nullptr) {
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    if (scope == nullptr) {
+      scope = getGlobalScope();
+    }
+    pack_expr = buildNonrealRefExpFromNestedNameSpecifier(
+        nullptr, scope, SgName("__pack"), false, nullptr);
+  }
+
+  SgSizeOfOp *sizeof_op = SageBuilder::buildSizeOfOp_nfi(pack_expr);
+  sizeof_op->set_is_sizeof_pack(true);
+  if (pack_expr->get_parent() == nullptr) {
+    pack_expr->set_parent(sizeof_op);
+  }
+  *node = sizeof_op;
 
   return VisitExpr(size_of_pack_expr, node) && res;
 }
@@ -10171,7 +10282,46 @@ bool ClangToSageTranslator::VisitSubstNonTypeTemplateParmPackExpr(
 #endif
   bool res = true;
 
-  // TODO
+  auto build_expr_from_template_arg =
+      [&](const clang::TemplateArgument &arg) -> SgExpression * {
+    if (SgTemplateArgument *sg_arg = translateTemplateArgument(arg, false)) {
+      if (SgExpression *expr = sg_arg->get_expression()) {
+        return expr;
+      }
+      if (SgInitializedName *init_name = sg_arg->get_initializedName()) {
+        return SageBuilder::buildVarRefExp(init_name);
+      }
+    }
+    return nullptr;
+  };
+
+  std::function<void(const clang::TemplateArgument &, SgExprListExp *)>
+      append_pack_expr;
+  append_pack_expr = [&](const clang::TemplateArgument &arg,
+                         SgExprListExp *list) {
+    if (arg.getKind() == clang::TemplateArgument::Pack) {
+      for (const clang::TemplateArgument &pack_arg : arg.pack_elements()) {
+        append_pack_expr(pack_arg, list);
+      }
+      return;
+    }
+    if (SgExpression *expr = build_expr_from_template_arg(arg)) {
+      list->get_expressions().push_back(expr);
+      expr->set_parent(list);
+    }
+  };
+
+  SgExprListExp *pack_list = SageBuilder::buildExprListExp();
+  clang::TemplateArgument pack_arg =
+      subst_non_type_template_parm_pack_expr->getArgumentPack();
+  append_pack_expr(pack_arg, pack_list);
+
+  if (!pack_list->get_expressions().empty()) {
+    *node = pack_list;
+    return VisitExpr(subst_non_type_template_parm_pack_expr, node) && res;
+  }
+
+  *node = buildFallbackExpression(subst_non_type_template_parm_pack_expr);
 
   return VisitExpr(subst_non_type_template_parm_pack_expr, node) && res;
 }
@@ -10204,11 +10354,21 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
 #endif
     *node = SageBuilder::buildBoolValExp(trait_value);
   } else {
-    // Value-dependent (template parameter dependent): create an opaque type
-    // expression The actual value will be determined at template instantiation
-    // time
-    *node = SageBuilder::buildOpaqueVarRefExp("__type_trait_dependent",
-                                              getGlobalScope());
+    const char *trait_name = clang::getTraitName(type_trait->getTrait());
+    if (trait_name == nullptr) {
+      trait_name = "__type_trait";
+    }
+    SgNodePtrList args;
+    for (unsigned i = 0; i < type_trait->getNumArgs(); ++i) {
+      if (clang::TypeSourceInfo *arg_info = type_trait->getArg(i)) {
+        if (SgType *arg_type =
+                buildTypeFromQualifiedType(arg_info->getType())) {
+          args.push_back(arg_type);
+        }
+      }
+    }
+    ROSE_ASSERT(!args.empty());
+    *node = SageBuilder::buildTypeTraitBuiltinOperator(trait_name, args);
   }
 
   return VisitExpr(type_trait, node) && res;

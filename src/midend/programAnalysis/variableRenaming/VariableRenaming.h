@@ -898,6 +898,7 @@ public:
    * @return true if initName is from a library, false if otherwise.
    */
   static bool isFromLibrary(SgFunctionDeclaration *node);
+  static bool isFromLibraryFile(const Sg_File_Info *info);
 
   /** Get an AST fragment containing the appropriate varRefs and Dot/Arrow ops
    * to access the given variable.

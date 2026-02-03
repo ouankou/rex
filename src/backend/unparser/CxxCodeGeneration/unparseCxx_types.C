@@ -530,7 +530,16 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
                                     : "null");
 #endif
 
-  if (nodeReferenceToType != NULL) {
+  bool allowGeneratedTypeName = true;
+  if (SgTemplateArgument *tpl_arg = isSgTemplateArgument(nodeReferenceToType)) {
+    if (tpl_arg->get_name_qualification_length() > 0 ||
+        tpl_arg->get_global_qualification_required() ||
+        tpl_arg->get_type_elaboration_required()) {
+      allowGeneratedTypeName = false;
+    }
+  }
+
+  if (nodeReferenceToType != NULL && allowGeneratedTypeName) {
 #if DEBUG_GENERATED_STRING_USE
     printf("rrrrrrrrrrrr In unparseType() output type generated name: "
            "nodeReferenceToType = %p = %s "

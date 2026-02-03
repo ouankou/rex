@@ -36,6 +36,18 @@ using namespace SageInterface;
 using namespace SageBuilder;
 using namespace OmpSupport;
 
+namespace {
+SgExpression *buildOmpVarExprFromNode(SgNode *node) {
+  if (SgInitializedName *iname = isSgInitializedName(node)) {
+    return SageBuilder::buildVarRefExp(iname);
+  }
+  if (SgExpression *expr = isSgExpression(node)) {
+    return expr;
+  }
+  return nullptr;
+}
+} // namespace
+
 // Liao 4/23/2011, special function to copy file info of the original SgPragma
 // or Fortran comments
 bool copyStartFileInfo(SgNode *src, SgNode *dest) {
@@ -3080,13 +3092,9 @@ convertOmpFlushDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
-    if (SgInitializedName *iname = isSgInitializedName((*iter).second)) {
-      SgVarRefExp *var_ref = buildVarRefExp(iname);
-      statement->get_variables().push_back(var_ref);
-      var_ref->set_parent(statement);
-    } else if (SgVarRefExp *vref = isSgVarRefExp((*iter).second)) {
-      statement->get_variables().push_back(vref);
-      vref->set_parent(statement);
+    if (SgExpression *expr = buildOmpVarExprFromNode((*iter).second)) {
+      statement->get_variables().push_back(expr);
+      expr->set_parent(statement);
     } else {
       cerr << "error: unhandled type of variable within a list:"
            << ((*iter).second)->class_name();
@@ -3137,13 +3145,9 @@ convertOmpAllocateDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
-    if (SgInitializedName *iname = isSgInitializedName((*iter).second)) {
-      SgVarRefExp *var_ref = buildVarRefExp(iname);
-      statement->get_variables().push_back(var_ref);
-      var_ref->set_parent(statement);
-    } else if (SgVarRefExp *vref = isSgVarRefExp((*iter).second)) {
-      statement->get_variables().push_back(vref);
-      vref->set_parent(statement);
+    if (SgExpression *expr = buildOmpVarExprFromNode((*iter).second)) {
+      statement->get_variables().push_back(expr);
+      expr->set_parent(statement);
     } else {
       cerr << "error: unhandled type of variable within a list:"
            << ((*iter).second)->class_name();
@@ -3178,13 +3182,9 @@ SgStatement *convertOmpThreadprivateStatement(
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
-    if (SgInitializedName *iname = isSgInitializedName((*iter).second)) {
-      SgVarRefExp *var_ref = buildVarRefExp(iname);
-      statement->get_variables().push_back(var_ref);
-      var_ref->set_parent(statement);
-    } else if (SgVarRefExp *vref = isSgVarRefExp((*iter).second)) {
-      statement->get_variables().push_back(vref);
-      vref->set_parent(statement);
+    if (SgExpression *expr = buildOmpVarExprFromNode((*iter).second)) {
+      statement->get_variables().push_back(expr);
+      expr->set_parent(statement);
     } else {
       cerr << "error: unhandled type of variable within a list:"
            << ((*iter).second)->class_name();
@@ -4951,16 +4951,9 @@ void buildVariableList(SgOmpVariablesClause *current_omp_clause) {
   std::vector<std::pair<std::string, SgNode *>>::iterator iter;
   for (iter = omp_variable_list.begin(); iter != omp_variable_list.end();
        iter++) {
-    if (SgInitializedName *iname = isSgInitializedName((*iter).second)) {
-      SgVarRefExp *var_ref = buildVarRefExp(iname);
-      current_omp_clause->get_variables()->get_expressions().push_back(var_ref);
-      var_ref->set_parent(current_omp_clause);
-    } else if (SgPntrArrRefExp *aref = isSgPntrArrRefExp((*iter).second)) {
-      current_omp_clause->get_variables()->get_expressions().push_back(aref);
-      aref->set_parent(current_omp_clause);
-    } else if (SgVarRefExp *vref = isSgVarRefExp((*iter).second)) {
-      current_omp_clause->get_variables()->get_expressions().push_back(vref);
-      vref->set_parent(current_omp_clause);
+    if (SgExpression *expr = buildOmpVarExprFromNode((*iter).second)) {
+      current_omp_clause->get_variables()->get_expressions().push_back(expr);
+      expr->set_parent(current_omp_clause);
     } else {
       cerr << "error: unhandled type of variable within a list:"
            << ((*iter).second)->class_name();

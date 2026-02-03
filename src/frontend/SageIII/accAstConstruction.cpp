@@ -35,6 +35,18 @@ static SgExpression *
     parseAccArraySection(std::pair<SgPragmaDeclaration *, OpenACCDirective *>,
                          OpenACCClauseKind, std::string);
 
+namespace {
+SgExpression *buildAccVarExprFromNode(SgNode *node) {
+  if (SgInitializedName *iname = isSgInitializedName(node)) {
+    return SageBuilder::buildVarRefExp(iname);
+  }
+  if (SgExpression *expr = isSgExpression(node)) {
+    return expr;
+  }
+  return nullptr;
+}
+} // namespace
+
 SgStatement *
 convertOpenACCDirective(std::pair<SgPragmaDeclaration *, OpenACCDirective *>
                             current_OpenACCIR_to_SageIII) {
@@ -216,12 +228,17 @@ convertOpenACCClause(SgStatement *directive,
   ROSE_ASSERT(target != NULL);
 
   OpenACCClauseKind clause_kind = current_acc_clause->getKind();
-  std::vector<OpenACCExpressionItem> *current_expressions =
-      current_acc_clause->getExpressions();
+  const std::vector<OpenACCExpressionItem> *current_expressions = nullptr;
+  if (OpenACCVarListClause *var_clause =
+          dynamic_cast<OpenACCVarListClause *>(current_acc_clause)) {
+    current_expressions = &var_clause->getVars();
+  } else {
+    current_expressions = current_acc_clause->getExpressions();
+  }
   if (current_expressions != NULL && !current_expressions->empty()) {
     for (const auto &expr_item : *current_expressions) {
-      parseAccArraySection(current_OpenACCIR_to_SageIII,
-                           current_acc_clause->getKind(), expr_item.text);
+      parseAccVariable(current_OpenACCIR_to_SageIII,
+                       current_acc_clause->getKind(), expr_item.text);
     }
   }
 
@@ -324,16 +341,9 @@ void buildVariableList(SgAccVariablesClause *current_acc_clause) {
       current_acc_clause->set_variables(SageBuilder::buildExprListExp());
     }
     SgExprListExp *var_list = current_acc_clause->get_variables();
-    if (SgInitializedName *iname = isSgInitializedName((*iter).second)) {
-      SgVarRefExp *var_ref = SageBuilder::buildVarRefExp(iname);
-      var_list->get_expressions().push_back(var_ref);
-      var_ref->set_parent(var_list);
-    } else if (SgPntrArrRefExp *aref = isSgPntrArrRefExp((*iter).second)) {
-      var_list->get_expressions().push_back(aref);
-      aref->set_parent(var_list);
-    } else if (SgVarRefExp *vref = isSgVarRefExp((*iter).second)) {
-      var_list->get_expressions().push_back(vref);
-      vref->set_parent(var_list);
+    if (SgExpression *expr = buildAccVarExprFromNode((*iter).second)) {
+      var_list->get_expressions().push_back(expr);
+      expr->set_parent(var_list);
     } else {
       std::cerr << "error: unhandled type of variable within a list:"
                 << ((*iter).second)->class_name();

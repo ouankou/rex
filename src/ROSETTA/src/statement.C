@@ -5478,14 +5478,14 @@ void Grammar::setUpStatements() {
   //         DEF_TRAVERSAL, NO_DELETE);
   // directives with variable lists
   // omp flush [(var-list)]
-  // Liao 9/27/2010, per user's report, modeling the variable reference use
-  // SgVarRefExp
+  // Model list items as expressions to support array sections, members, and
+  // template-dependent references.
   OmpFlushStatement.setDataPrototype(
-      "SgVarRefExpPtrList", "variables", "", NO_CONSTRUCTOR_PARAMETER,
+      "SgExpressionPtrList", "variables", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   OmpAllocateStatement.setDataPrototype(
-      "SgVarRefExpPtrList", "variables", "", NO_CONSTRUCTOR_PARAMETER,
+      "SgExpressionPtrList", "variables", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   OmpDeclareSimdStatement.setDataPrototype(
@@ -5506,7 +5506,7 @@ void Grammar::setUpStatements() {
 
   // omp threadprivate [(var-list)]
   OmpThreadprivateStatement.setDataPrototype(
-      "SgVarRefExpPtrList", "variables", "", NO_CONSTRUCTOR_PARAMETER,
+      "SgExpressionPtrList", "variables", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   // Directives with a statement/ structured body

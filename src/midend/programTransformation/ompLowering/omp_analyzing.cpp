@@ -6,6 +6,61 @@ using namespace SageInterface;
 
 namespace OmpSupport {
 
+namespace {
+SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
+  if (expr == nullptr) {
+    return nullptr;
+  }
+  if (SgVarRefExp *vref = isSgVarRefExp(expr)) {
+    return vref;
+  }
+  if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(expr)) {
+    return extractVarRefFromExpression(aref->get_lhs_operand());
+  }
+  if (SgDotExp *dot = isSgDotExp(expr)) {
+    if (SgVarRefExp *rhs =
+            extractVarRefFromExpression(dot->get_rhs_operand())) {
+      return rhs;
+    }
+    return extractVarRefFromExpression(dot->get_lhs_operand());
+  }
+  if (SgArrowExp *arrow = isSgArrowExp(expr)) {
+    if (SgVarRefExp *rhs =
+            extractVarRefFromExpression(arrow->get_rhs_operand())) {
+      return rhs;
+    }
+    return extractVarRefFromExpression(arrow->get_lhs_operand());
+  }
+  if (SgPointerDerefExp *deref = isSgPointerDerefExp(expr)) {
+    return extractVarRefFromExpression(deref->get_operand());
+  }
+  if (SgAddressOfOp *addr = isSgAddressOfOp(expr)) {
+    return extractVarRefFromExpression(addr->get_operand());
+  }
+  if (SgCastExp *cast = isSgCastExp(expr)) {
+    return extractVarRefFromExpression(cast->get_operand());
+  }
+  if (SgCommaOpExp *comma = isSgCommaOpExp(expr)) {
+    if (SgVarRefExp *rhs =
+            extractVarRefFromExpression(comma->get_rhs_operand())) {
+      return rhs;
+    }
+    return extractVarRefFromExpression(comma->get_lhs_operand());
+  }
+  if (SgExprListExp *list = isSgExprListExp(expr)) {
+    for (SgExpression *elem : list->get_expressions()) {
+      if (SgVarRefExp *vref = extractVarRefFromExpression(elem)) {
+        return vref;
+      }
+    }
+  }
+  if (SgUnaryOp *unary = isSgUnaryOp(expr)) {
+    return extractVarRefFromExpression(unary->get_operand());
+  }
+  return nullptr;
+}
+} // namespace
+
 Rose_STL_Container<SgNode *>
 mergeSgNodeList(Rose_STL_Container<SgNode *> node_list1,
                 Rose_STL_Container<SgNode *> node_list2) {
@@ -184,10 +239,12 @@ std::set<SgInitializedName *> collectThreadprivateVariables() {
       getSgNodeListFromMemoryPool<SgOmpThreadprivateStatement>();
   std::vector<SgOmpThreadprivateStatement *>::const_iterator c_iter;
   for (c_iter = tp_stmts.begin(); c_iter != tp_stmts.end(); c_iter++) {
-    SgVarRefExpPtrList refs = (*c_iter)->get_variables();
+    SgExpressionPtrList refs = (*c_iter)->get_variables();
     SgInitializedNamePtrList var_list; // = (*c_iter)->get_variables();
     for (size_t j = 0; j < refs.size(); j++)
-      var_list.push_back(refs[j]->get_symbol()->get_declaration());
+      if (SgVarRefExp *vref = extractVarRefFromExpression(refs[j])) {
+        var_list.push_back(vref->get_symbol()->get_declaration());
+      }
     std::copy(var_list.begin(), var_list.end(),
               std::inserter(result, result.end()));
   }

@@ -10601,13 +10601,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       }
     }
     // unparse variable list then
-    SgVarRefExpPtrList::iterator p = s->get_variables().begin();
+    SgExpressionPtrList::iterator p = s->get_variables().begin();
     while (p != s->get_variables().end()) {
-      ASSERT_not_null((*p)->get_symbol());
-      SgInitializedName *init_name = (*p)->get_symbol()->get_declaration();
-      ASSERT_not_null(init_name);
-      SgName tmp_name = init_name->get_name();
-      curprint(tmp_name.str());
+      ASSERT_not_null(*p);
+      unparseExpression(*p, info);
 
       // Move to the next argument
       p++;
@@ -10632,13 +10629,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     if (s->get_variables().size() > 0)
       curprint(string(" ("));
     // unparse variable list then
-    SgVarRefExpPtrList::iterator p = s->get_variables().begin();
+    SgExpressionPtrList::iterator p = s->get_variables().begin();
     while (p != s->get_variables().end()) {
-      ASSERT_not_null((*p)->get_symbol());
-      SgInitializedName *init_name = (*p)->get_symbol()->get_declaration();
-      ASSERT_not_null(init_name);
-      SgName tmp_name = init_name->get_name();
-      curprint(tmp_name.str());
+      ASSERT_not_null(*p);
+      unparseExpression(*p, info);
 
       // Move to the next argument
       p++;
@@ -10679,13 +10673,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     unparseOmpDirectivePrefixAndName(stmt, info);
     curprint(string(" ("));
     // unparse variable list then
-    SgVarRefExpPtrList::iterator p = s->get_variables().begin();
+    SgExpressionPtrList::iterator p = s->get_variables().begin();
     while (p != s->get_variables().end()) {
-      ASSERT_not_null((*p)->get_symbol());
-      SgInitializedName *init_name = (*p)->get_symbol()->get_declaration();
-      ROSE_ASSERT(init_name);
-      SgName tmp_name = init_name->get_name();
-      curprint(tmp_name.str());
+      ASSERT_not_null(*p);
+      unparseExpression(*p, info);
 
       // Move to the next argument
       p++;

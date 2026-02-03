@@ -2955,6 +2955,11 @@ void SageInterface::computeUniqueNameForUseAsIdentifier(SgNode *astNode) {
           local_node_to_name_map.insert(pair<SgNode *, string>(decl, s));
         }
       }
+      if (SgFunctionParameterList *params = isSgFunctionParameterList(node)) {
+        string s = generateUniqueNameForUseAsIdentifier_support(params);
+        local_name_to_node_map.insert(pair<string, SgNode *>(s, params));
+        local_node_to_name_map.insert(pair<SgNode *, string>(params, s));
+      }
     }
   };
 
@@ -17194,6 +17199,8 @@ SgDeclarationStatement *getAssociatedDeclaration(SgScopeStatement *scope) {
 
 class CollectDependentDeclarationsTraversal : public SgSimpleProcessing {
 public:
+  explicit CollectDependentDeclarationsTraversal(int target_physical_file_id)
+      : target_physical_file_id_(target_physical_file_id) {}
   // Accumulate a list of copies of associated declarations referenced in the
   // AST subtree (usually of the outlined functions) to insert in the separate
   // file to support outlining.
@@ -17212,6 +17219,7 @@ public:
 
 private:
   void addDeclaration(SgDeclarationStatement *decl);
+  int target_physical_file_id_;
 };
 
 SgDeclarationStatement *
@@ -17281,6 +17289,15 @@ void CollectDependentDeclarationsTraversal::addDeclaration(
     // in the global scope.
     SgDeclarationStatement *dependentDeclaration =
         getGlobalScopeDeclaration(declaration);
+
+    if (target_physical_file_id_ >= 0) {
+      Sg_File_Info *info = dependentDeclaration->get_file_info();
+      if (info != NULL && info->isCompilerGenerated() == false &&
+          info->get_physical_file_id() >= 0 &&
+          info->get_physical_file_id() != target_physical_file_id_) {
+        return;
+      }
+    }
 
     // This declaration is in global scope so we just copy the declaration
     // For namespace declarations: they may have the save name but they have to
@@ -17522,7 +17539,11 @@ getDependentDeclarations(SgStatement *stmt,
   // statement. Dependent declaration are functions called, types referenced in
   // variable declarations, etc.
   visitedDeclMap[stmt] = true;
-  CollectDependentDeclarationsTraversal t;
+  int target_physical_file_id = -1;
+  if (stmt != NULL && stmt->get_file_info() != NULL) {
+    target_physical_file_id = stmt->get_file_info()->get_physical_file_id();
+  }
+  CollectDependentDeclarationsTraversal t(target_physical_file_id);
   t.traverse(stmt, preorder);
   // Merge to the parent level list
   copy(t.declarationList.begin(), t.declarationList.end(),
