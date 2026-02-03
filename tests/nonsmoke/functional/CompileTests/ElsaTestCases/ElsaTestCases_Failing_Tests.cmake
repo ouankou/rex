@@ -481,7 +481,6 @@ set(START_OF_FAILED_TESTS_USING_ROSE
   t0478.cc
   t0479.cc
   t0480.cc
-  t0481.cc
   t0482.cc
   t0483.cc
   t0484.cc
