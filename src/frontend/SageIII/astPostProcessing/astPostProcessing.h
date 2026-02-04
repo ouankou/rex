@@ -3,6 +3,9 @@
 
 #define AST_POST_PROCESSING_VERBOSE_LEVEL DIAGNOSTICS_VERBOSE_LEVEL + 1
 
+class SgSymbol;
+class SgSymbolTable;
+
 #include "AstFixup.h"
 
 #include "fixupSymbolTables.h"
@@ -143,5 +146,8 @@ void postProcessingSupport(SgNode *node);
 
  */
 ROSE_DLL_API void AstPostProcessing(SgNode *node);
+
+ROSE_DLL_API SgSymbolTable &get_orphan_symbol_table();
+ROSE_DLL_API void move_symbol_to_orphan_table(SgSymbol *symbol);
 
 #endif

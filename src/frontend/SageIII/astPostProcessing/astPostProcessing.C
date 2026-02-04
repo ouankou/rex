@@ -19,6 +19,26 @@ using namespace std;
 // DQ (8/20/2005): Make this local so that it can't be called externally!
 void postProcessingSupport(SgNode *node);
 
+SgSymbolTable &get_orphan_symbol_table() {
+  static std::unique_ptr<SgSymbolTable> orphan_table;
+  if (!orphan_table) {
+    orphan_table.reset(new SgSymbolTable());
+  }
+  return *orphan_table;
+}
+
+void move_symbol_to_orphan_table(SgSymbol *symbol) {
+  if (symbol == nullptr) {
+    return;
+  }
+  if (SgSymbolTable *parent_table = isSgSymbolTable(symbol->get_parent())) {
+    if (parent_table->exists(symbol)) {
+      return;
+    }
+  }
+  get_orphan_symbol_table().insert(symbol->get_name(), symbol);
+}
+
 namespace {
 // Global hook to let memory-pool traversals ignore unwanted nodes (e.g., Clang
 // system-header template instantiations that are not part of the user AST).
@@ -78,26 +98,6 @@ bool usesClangFrontend(SgNode *node) {
   }
 
   return false;
-}
-
-SgSymbolTable &get_orphan_symbol_table() {
-  static std::unique_ptr<SgSymbolTable> orphan_table;
-  if (!orphan_table) {
-    orphan_table.reset(new SgSymbolTable());
-  }
-  return *orphan_table;
-}
-
-void move_symbol_to_orphan_table(SgSymbol *symbol) {
-  if (symbol == nullptr) {
-    return;
-  }
-  if (SgSymbolTable *parent_table = isSgSymbolTable(symbol->get_parent())) {
-    if (parent_table->exists(symbol)) {
-      return;
-    }
-  }
-  get_orphan_symbol_table().insert(symbol->get_name(), symbol);
 }
 
 bool constraintFailureOnNode(SgNode *node) {
