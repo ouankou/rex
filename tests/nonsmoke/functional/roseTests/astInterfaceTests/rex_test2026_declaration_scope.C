@@ -22,6 +22,13 @@ int main(int argc, char *argv[]) {
   ROSE_ASSERT(decl_scope != nullptr);
   ROSE_ASSERT(decl_scope->get_parent() == target);
 
+  SgDeclarationScope *owner_scope = isSgDeclarationScope(target->get_scope());
+  ROSE_ASSERT(owner_scope != nullptr);
+  ROSE_ASSERT(owner_scope->statementExistsInScope(target));
+  ROSE_ASSERT(target->get_parent() == owner_scope);
+  ROSE_ASSERT(owner_scope->lookup_nonreal_symbol(target->get_name(), nullptr,
+                                                 nullptr) != nullptr);
+
   SgName scope_mangled = decl_scope->get_mangled_name();
   std::string scope_mangled_str = scope_mangled.getString();
   ROSE_ASSERT(scope_mangled_str.find("__declaration_scope__") !=

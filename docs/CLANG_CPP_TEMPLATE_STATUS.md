@@ -308,7 +308,7 @@ if (isSgNullExpression(expr)) {
 
 4. **`src/ROSETTA/Grammar/Statement.code`**
    - Line 17210-17230: SgFunctionDefinition::insert_child() implemented
-   - Line 6287-6296: ROSE-1378 workaround (pre-existing)
+   - SgDeclarationScope now sets scope/parent for contained declarations (ROSE-1378 resolved)
 
 5. **`build/src/frontend/SageIII/Cxx_Grammar.C`**
    - Line 120136-120150: Generated insert_child() implementation
@@ -455,7 +455,7 @@ if (p_decl_translation_map.find(decl) != p_decl_translation_map.end()) {
 - ClassTemplateDecl: clang/AST/DeclTemplate.h
 
 ### Related Issues
-- ROSE-1378: SgDeclarationScope not implemented (2018)
+- ROSE-1378: SgDeclarationScope implemented (2026)
 - October 2025: insert_child, RecoveryExpr, AccessSpecDecl fixes
 
 ## Conclusion
