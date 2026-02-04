@@ -3411,6 +3411,13 @@ SgTemplateParameter *ClangToSageTranslator::translateTemplateParameter(
     SgInitializedName *init_name =
         SageBuilder::buildInitializedName(SgName(name_str), type);
     applySourceRange(init_name, non_type_param->getSourceRange());
+    if (owning_template != nullptr) {
+      if (SgScopeStatement *param_scope =
+              SageBuilder::getOrCreateNonrealDeclarationScope(
+                  owning_template)) {
+        init_name->set_scope(param_scope);
+      }
+    }
 
     SgTemplateParameter *param = SageBuilder::buildTemplateParameter(
         SgTemplateParameter::nontype_parameter, type);
