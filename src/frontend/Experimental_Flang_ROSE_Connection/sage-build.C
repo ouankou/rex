@@ -29,6 +29,7 @@
 #include <unordered_map>
 
 #include <llvm/Config/llvm-config.h>
+#include <llvm/Frontend/OpenACC/ACC.h.inc>
 
 #include "type-parsers.h"
 
@@ -101,6 +102,13 @@ enum class Order { begin, end };
 
 // Why is this needed?
 template <typename T> void WalkExpr(const T &root, SgExpression *&expr);
+
+void CollectCudaSubprogramAttrs(
+    const std::list<parser::PrefixSpec> &prefixes,
+    std::list<common::CUDASubprogramAttrs> &cudaAttrs);
+void ApplyCudaSubprogramAttrs(
+    SgFunctionDeclaration *decl,
+    const std::list<common::CUDASubprogramAttrs> &cudaAttrs);
 
 namespace {
 SgExprListExp *BuildArraySpecExprList(const Fortran::parser::ArraySpec &x);
@@ -647,6 +655,7 @@ void setSgSourceFile(SgSourceFile *sg_file) { builder.setSourceFile(sg_file); }
 
 // TODO: change this to a reference
 Fortran::parser::AllCookedSources *cooked_{nullptr};
+BuildVisitor *current_build_visitor{nullptr};
 
 namespace {
 class CookedSourcesGuard {
@@ -664,6 +673,26 @@ private:
   Fortran::parser::AllCookedSources *&slot_;
   Fortran::parser::AllCookedSources *prev_;
 };
+
+class BuildVisitorGuard {
+public:
+  BuildVisitorGuard(BuildVisitor *&slot, BuildVisitor *next)
+      : slot_(slot), prev_(slot) {
+    slot_ = next;
+  }
+  BuildVisitorGuard(const BuildVisitorGuard &) = delete;
+  BuildVisitorGuard &operator=(const BuildVisitorGuard &) = delete;
+  ~BuildVisitorGuard() { slot_ = prev_; }
+
+private:
+  BuildVisitor *&slot_;
+  BuildVisitor *prev_;
+};
+
+BuildVisitor &CurrentBuildVisitor() {
+  ASSERT_not_null(current_build_visitor);
+  return *current_build_visitor;
+}
 
 bool IsFixedFormSource(const SgSourceFile *source) {
   if (source == nullptr) {
@@ -892,6 +921,15 @@ bool StartsWithAcc(const std::string &text) {
          std::tolower(static_cast<unsigned char>(text[2])) == 'c';
 }
 
+bool StartsWithCuf(const std::string &text) {
+  if (text.size() < 3) {
+    return false;
+  }
+  return std::tolower(static_cast<unsigned char>(text[0])) == 'c' &&
+         std::tolower(static_cast<unsigned char>(text[1])) == 'u' &&
+         std::tolower(static_cast<unsigned char>(text[2])) == 'f';
+}
+
 size_t FindFortranDirectivePayloadStart(const std::string &text) {
   if (text.empty()) {
     return std::string::npos;
@@ -937,11 +975,12 @@ bool IsOpenMpOrAccDirectiveLine(const std::string &line) {
   const size_t payload = FindFortranDirectivePayloadStart(lower);
   if (payload != std::string::npos) {
     if (lower.compare(payload, 3, "omp") == 0 ||
-        lower.compare(payload, 3, "acc") == 0) {
+        lower.compare(payload, 3, "acc") == 0 ||
+        lower.compare(payload, 3, "cuf") == 0) {
       return true;
     }
   }
-  if (StartsWithOmp(lower) || StartsWithAcc(lower)) {
+  if (StartsWithOmp(lower) || StartsWithAcc(lower) || StartsWithCuf(lower)) {
     return true;
   }
   return false;
@@ -960,7 +999,8 @@ std::string NormalizeOmpDirectiveLine(const std::string &line) {
     text.erase(0, payload);
     TrimLeft(text);
   }
-  if (text.empty() || StartsWithOmp(text) || StartsWithAcc(text)) {
+  if (text.empty() || StartsWithOmp(text) || StartsWithAcc(text) ||
+      StartsWithCuf(text)) {
     return text;
   }
   if (had_sentinel) {
@@ -985,6 +1025,9 @@ bool IsOpenMpOrAccCommentText(const std::string &text) {
     return true;
   }
   if (first == 'a' && second == 'c' && third == 'c') {
+    return true;
+  }
+  if (first == 'c' && second == 'u' && third == 'f') {
     return true;
   }
   return false;
@@ -1765,6 +1808,7 @@ void Build(parser::Program &x, parser::AllCookedSources &cooked) {
 
   // TODO: make go away
   CookedSourcesGuard cooked_guard{cooked_, &cooked};
+  BuildVisitorGuard visitor_guard{current_build_visitor, &visitor};
   // TODO: make go away
   common::LangOptions langOpts{};
 
@@ -1986,6 +2030,9 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
 
   std::list<std::string> dummyArgs;
   LanguageTranslation::FunctionModifierList modifiers;
+  std::list<common::CUDASubprogramAttrs> cudaAttrs;
+  CollectCudaSubprogramAttrs(
+      std::get<std::list<parser::PrefixSpec>>(stmt.statement.t), cudaAttrs);
   getSubroutineStmt(stmt.statement, dummyArgs, modifiers, *this);
 
   // Enter SageTreeBuilder for SgFunctionParameterList
@@ -2004,6 +2051,7 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
   // Begin SageTreeBuilder for SgFunctionDeclaration
   builder.Enter(funcDecl, name, /*return_type*/ nullptr, paramList, modifiers,
                 isDefDecl, sources, comments);
+  ApplyCudaSubprogramAttrs(funcDecl, cudaAttrs);
   TransferParamScopeToFunctionBody(paramScope, funcDecl);
 
   // ExecutionPart
@@ -2144,6 +2192,7 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   SgFunctionDeclaration *functionDecl{nullptr};
   SgType *returnType{nullptr};
   LanguageTranslation::FunctionModifierList modifiers;
+  std::list<common::CUDASubprogramAttrs> cudaAttrs;
   std::string resultName;
   bool isDefDecl{true};
 
@@ -2155,8 +2204,9 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   }
 
   // PrefixSpec
-  BuildPrefix(std::get<std::list<parser::PrefixSpec>>(stmt.statement.t),
-              modifiers, returnType);
+  auto &prefixSpecs = std::get<std::list<parser::PrefixSpec>>(stmt.statement.t);
+  CollectCudaSubprogramAttrs(prefixSpecs, cudaAttrs);
+  BuildPrefix(prefixSpecs, modifiers, returnType);
 
   // Suffix
   bool undeclaredResultName{false};
@@ -2231,6 +2281,7 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   // Begin SageTreeBuilder for SgFunctionDeclaration
   builder.Enter(functionDecl, name, returnType, paramList, modifiers, isDefDecl,
                 sources, comments);
+  ApplyCudaSubprogramAttrs(functionDecl, cudaAttrs);
   TransferParamScopeToFunctionBody(paramScope, functionDecl);
 
   // ExecutionPart
@@ -4441,33 +4492,44 @@ void BuildVisitor::Build(parser::AllocateStmt &x) {
   SgExpression *statExpr{nullptr};
   SgExpression *errmsgExpr{nullptr};
   SgExpression *sourceExpr{nullptr};
+  SgExpression *moldExpr{nullptr};
+  SgExpression *streamExpr{nullptr};
+  SgExpression *pinnedExpr{nullptr};
 
   for (auto &opt : std::get<std::list<parser::AllocOpt>>(x.t)) {
-    common::visit(
-        common::visitors{
-            [&](parser::AllocOpt::Mold &) {
-              std::cerr << "Allocate MOLD option not supported yet.\n";
-              ROSE_ABORT();
-            },
-            [&](parser::AllocOpt::Source &y) {
-              if (sourceExpr != nullptr) {
-                std::cerr << "Duplicate SOURCE spec in allocate.\n";
-                ROSE_ABORT();
-              }
-              WalkExpr(y.v.value(), sourceExpr);
-            },
-            [&](parser::StatOrErrmsg &y) {
-              ApplyStatOrErrmsg(y, statExpr, errmsgExpr);
-            },
-            [&](parser::AllocOpt::Stream &) {
-              std::cerr << "Allocate STREAM option not supported yet.\n";
-              ROSE_ABORT();
-            },
-            [&](parser::AllocOpt::Pinned &) {
-              std::cerr << "Allocate PINNED option not supported yet.\n";
-              ROSE_ABORT();
-            }},
-        opt.u);
+    common::visit(common::visitors{
+                      [&](parser::AllocOpt::Mold &y) {
+                        if (moldExpr != nullptr) {
+                          std::cerr << "Duplicate MOLD spec in allocate.\n";
+                          ROSE_ABORT();
+                        }
+                        WalkExpr(y.v.value(), moldExpr);
+                      },
+                      [&](parser::AllocOpt::Source &y) {
+                        if (sourceExpr != nullptr) {
+                          std::cerr << "Duplicate SOURCE spec in allocate.\n";
+                          ROSE_ABORT();
+                        }
+                        WalkExpr(y.v.value(), sourceExpr);
+                      },
+                      [&](parser::StatOrErrmsg &y) {
+                        ApplyStatOrErrmsg(y, statExpr, errmsgExpr);
+                      },
+                      [&](parser::AllocOpt::Stream &y) {
+                        if (streamExpr != nullptr) {
+                          std::cerr << "Duplicate STREAM spec in allocate.\n";
+                          ROSE_ABORT();
+                        }
+                        WalkExpr(y.v.value(), streamExpr);
+                      },
+                      [&](parser::AllocOpt::Pinned &y) {
+                        if (pinnedExpr != nullptr) {
+                          std::cerr << "Duplicate PINNED spec in allocate.\n";
+                          ROSE_ABORT();
+                        }
+                        WalkExpr(y.v.value(), pinnedExpr);
+                      }},
+                  opt.u);
   }
 
   if (statExpr != nullptr) {
@@ -4481,6 +4543,18 @@ void BuildVisitor::Build(parser::AllocateStmt &x) {
   if (sourceExpr != nullptr) {
     stmt->set_source_expression(sourceExpr);
     sourceExpr->set_parent(stmt);
+  }
+  if (moldExpr != nullptr) {
+    stmt->set_mold_expression(moldExpr);
+    moldExpr->set_parent(stmt);
+  }
+  if (streamExpr != nullptr) {
+    stmt->set_stream_expression(streamExpr);
+    streamExpr->set_parent(stmt);
+  }
+  if (pinnedExpr != nullptr) {
+    stmt->set_pinned_expression(pinnedExpr);
+    pinnedExpr->set_parent(stmt);
   }
 
   ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
@@ -4839,10 +4913,6 @@ void BuildVisitor::Build(parser::CallStmt &x) {
   std::list<SgExpression *> arg_list;
   SgExpression *designator{nullptr};
 
-  if (x.chevrons) {
-    ABORT_NO_IMPL;
-  }
-
   Rose::builder::Build(x.call, arg_list, proc_name, designator);
 
   SgExprListExp *param_list = SageBuilderCpp17::buildExprListExp_nfi(arg_list);
@@ -4850,6 +4920,52 @@ void BuildVisitor::Build(parser::CallStmt &x) {
 
   SgExprStatement *stmt{nullptr};
   auto labels = getLabels();
+  if (x.chevrons) {
+    const auto &chevrons = x.chevrons.value();
+    SgExpression *gridExpr{nullptr};
+    SgExpression *blockExpr{nullptr};
+    SgExpression *bytesExpr{nullptr};
+    SgExpression *streamExpr{nullptr};
+
+    WalkExpr(std::get<0>(chevrons.t), gridExpr);
+    WalkExpr(std::get<1>(chevrons.t), blockExpr);
+    if (std::get<2>(chevrons.t)) {
+      WalkExpr(std::get<2>(chevrons.t).value(), bytesExpr);
+    }
+    if (std::get<3>(chevrons.t)) {
+      WalkExpr(std::get<3>(chevrons.t).value(), streamExpr);
+    }
+
+    ASSERT_not_null(gridExpr);
+    ASSERT_not_null(blockExpr);
+
+    SgCudaKernelExecConfig *config = SageBuilder::buildCudaKernelExecConfig_nfi(
+        gridExpr, blockExpr, bytesExpr, streamExpr);
+    ASSERT_not_null(config);
+
+    SgExpression *kernelExpr = designator;
+    if (kernelExpr == nullptr) {
+      SgScopeStatement *scope = SageBuilder::topScopeStack();
+      ASSERT_not_null(scope);
+      if (SgFunctionSymbol *symbol =
+              SageInterface::lookupFunctionSymbolInParentScopes(proc_name,
+                                                                scope)) {
+        kernelExpr = SageBuilder::buildFunctionRefExp(symbol);
+      } else {
+        kernelExpr = SageBuilder::buildFunctionRefExp(SgName(proc_name), scope);
+      }
+    }
+    ASSERT_not_null(kernelExpr);
+
+    SgCudaKernelCallExp *call_expr =
+        SageBuilder::buildCudaKernelCallExp_nfi(kernelExpr, param_list, config);
+    ASSERT_not_null(call_expr);
+    stmt = SageBuilder::buildExprStatement_nfi(call_expr);
+    ApplyCurrentStatementSource(stmt);
+    builder.Leave(stmt, labels);
+    return;
+  }
+
   if (designator != nullptr) {
     SgFunctionCallExp *call_expr =
         SageBuilder::buildFunctionCallExp_nfi(designator, param_list);
@@ -5373,6 +5489,126 @@ void BuildVisitor::BuildPrefix(
         prefix.u);
   }
 }
+
+void CollectCudaSubprogramAttrs(
+    const std::list<parser::PrefixSpec> &prefixes,
+    std::list<common::CUDASubprogramAttrs> &cudaAttrs) {
+  for (const auto &prefix : prefixes) {
+    if (auto *attrs = std::get_if<parser::PrefixSpec::Attributes>(&prefix.u)) {
+      for (const auto &attr : attrs->v) {
+        cudaAttrs.push_back(attr);
+      }
+    }
+  }
+}
+
+void ApplyCudaSubprogramAttrs(
+    SgFunctionDeclaration *decl,
+    const std::list<common::CUDASubprogramAttrs> &cudaAttrs) {
+  ASSERT_not_null(decl);
+  SgFunctionModifier &mod = decl->get_functionModifier();
+  for (const auto &attr : cudaAttrs) {
+    switch (attr) {
+    case common::CUDASubprogramAttrs::Host:
+      mod.setCudaHost();
+      break;
+    case common::CUDASubprogramAttrs::Device:
+      mod.setCudaDevice();
+      break;
+    case common::CUDASubprogramAttrs::HostDevice:
+      mod.setCudaHost();
+      mod.setCudaDevice();
+      break;
+    case common::CUDASubprogramAttrs::Global:
+      mod.setCudaKernel();
+      mod.setCudaGlobalFunction();
+      break;
+    case common::CUDASubprogramAttrs::Grid_Global:
+      mod.setCudaKernel();
+      mod.setCudaGridGlobal();
+      break;
+    }
+  }
+}
+
+namespace {
+std::string TrimWhitespace(const std::string &text) {
+  const auto start = text.find_first_not_of(" \t\r\n");
+  if (start == std::string::npos) {
+    return std::string{};
+  }
+  const auto end = text.find_last_not_of(" \t\r\n");
+  return text.substr(start, end - start + 1);
+}
+
+std::string NormalizeDirectiveText(const parser::CharBlock &source) {
+  std::string text = TrimWhitespace(source.ToString());
+  if (text.rfind("!$", 0) == 0) {
+    text = TrimWhitespace(text.substr(2));
+  }
+  return text;
+}
+
+std::string BuildAccClauseList(const parser::AccClauseList &clauses) {
+  std::string clauseText;
+  for (const auto &clause : clauses.v) {
+    std::string text = TrimWhitespace(clause.source.ToString());
+    if (text.empty()) {
+      continue;
+    }
+    if (!clauseText.empty()) {
+      clauseText += " ";
+    }
+    clauseText += text;
+  }
+  return clauseText;
+}
+
+std::string BuildAccDirectiveText(llvm::acc::Directive directive,
+                                  const parser::AccClauseList &clauses,
+                                  bool isEnd = false) {
+  std::string text = "acc ";
+  if (isEnd) {
+    text += "end ";
+  }
+  text += llvm::acc::getOpenACCDirectiveName(directive).str();
+  std::string clauseText = BuildAccClauseList(clauses);
+  if (!clauseText.empty()) {
+    text += " ";
+    text += clauseText;
+  }
+  return text;
+}
+
+std::string BuildAccEndDirectiveText(llvm::acc::Directive directive) {
+  std::string text = "acc end ";
+  text += llvm::acc::getOpenACCDirectiveName(directive).str();
+  return text;
+}
+
+const parser::CharBlock *
+SelectAccDirectiveSource(const parser::CharBlock &primary,
+                         const parser::Verbatim *verbatim) {
+  if (!primary.empty()) {
+    return &primary;
+  }
+  if (verbatim != nullptr && !verbatim->source.empty()) {
+    return &verbatim->source;
+  }
+  return nullptr;
+}
+
+void AppendPragmaStatement(const std::string &text, SgScopeStatement *scope) {
+  if (text.empty()) {
+    return;
+  }
+  SgPragmaDeclaration *pragma =
+      SageBuilder::buildPragmaDeclaration(text, scope);
+  ASSERT_not_null(pragma);
+  SageInterface::setSourcePosition(pragma);
+  SageInterface::appendStatement(pragma, scope);
+}
+} // namespace
 
 void BuildSuffix(parser::Suffix &x, std::string &resultName) {
   if (x.resultName) {
@@ -7481,55 +7717,56 @@ SgExprListExp *BuildArraySpecExprList(const Fortran::parser::ArraySpec &x) {
   SgExprListExp *dimInfo{SageBuilder::buildExprListExp_nfi()};
 
   common::visit(
-      common::visitors{[&](const std::list<ExplicitShapeSpec> &y) {
-                         for (const ExplicitShapeSpec &spec :
-                              y) { // is [ lower-bound : ] upper-bound
-                           BuildImpl(spec, expr = nullptr);
-                           ASSERT_not_null(expr);
-                           SageInterface::appendExpression(dimInfo, expr);
-                         }
-                       },
-                       [&](const std::list<AssumedShapeSpec> &y) {
-                         for (const AssumedShapeSpec &spec :
-                              y) { // is [ lower-bound ]:
-                           BuildImpl(spec, expr = nullptr);
-                           ASSERT_not_null(expr);
-                           SageInterface::appendExpression(dimInfo, expr);
-                         }
-                       },
-                       [&](const DeferredShapeSpecList &y) {
-                         for (int ii{0}; ii < y.v; ii++) { // is :
-                           SageInterface::appendExpression(
-                               dimInfo, SageBuilder::buildColonShapeExp_nfi());
-                         }
-                       },
-                       [&](const AssumedSizeSpec &y) {
-                         // std::tuple<std::list<ExplicitShapeSpec>,
-                         // AssumedImpliedSpec> t;
-                         for (const ExplicitShapeSpec &spec : std::get<0>(
-                                  y.t)) { // is [ lower-bound : ] upper-bound
-                           BuildImpl(spec, expr = nullptr);
-                           ASSERT_not_null(expr);
-                           SageInterface::appendExpression(dimInfo, expr);
-                         }
-                         const AssumedImpliedSpec &spec{std::get<1>(y.t)};
-                         BuildImpl(spec, expr = nullptr);
-                         ASSERT_not_null(expr);
-                         SageInterface::appendExpression(dimInfo, expr);
-                       },
-                       [&](const ImpliedShapeSpec &y) {
-                         for (const AssumedImpliedSpec &spec :
-                              y.v) { // is [ lower-bound : ] *
-                           BuildImpl(spec, expr = nullptr);
-                           ASSERT_not_null(expr);
-                           SageInterface::appendExpression(dimInfo, expr);
-                         }
-                       },
-                       [&](const AssumedRankSpec &y) {
-                         // is ..
-                         // TODO: Need new expression type in ROSE
-                         ABORT_NO_IMPL;
-                       }},
+      common::visitors{
+          [&](const std::list<ExplicitShapeSpec> &y) {
+            for (const ExplicitShapeSpec &spec :
+                 y) { // is [ lower-bound : ] upper-bound
+              BuildImpl(spec, expr = nullptr);
+              ASSERT_not_null(expr);
+              SageInterface::appendExpression(dimInfo, expr);
+            }
+          },
+          [&](const std::list<AssumedShapeSpec> &y) {
+            for (const AssumedShapeSpec &spec : y) { // is [ lower-bound ]:
+              BuildImpl(spec, expr = nullptr);
+              ASSERT_not_null(expr);
+              SageInterface::appendExpression(dimInfo, expr);
+            }
+          },
+          [&](const DeferredShapeSpecList &y) {
+            for (int ii{0}; ii < y.v; ii++) { // is :
+              SageInterface::appendExpression(
+                  dimInfo, SageBuilder::buildColonShapeExp_nfi());
+            }
+          },
+          [&](const AssumedSizeSpec &y) {
+            // std::tuple<std::list<ExplicitShapeSpec>,
+            // AssumedImpliedSpec> t;
+            for (const ExplicitShapeSpec &spec :
+                 std::get<0>(y.t)) { // is [ lower-bound : ] upper-bound
+              BuildImpl(spec, expr = nullptr);
+              ASSERT_not_null(expr);
+              SageInterface::appendExpression(dimInfo, expr);
+            }
+            const AssumedImpliedSpec &spec{std::get<1>(y.t)};
+            BuildImpl(spec, expr = nullptr);
+            ASSERT_not_null(expr);
+            SageInterface::appendExpression(dimInfo, expr);
+          },
+          [&](const ImpliedShapeSpec &y) {
+            for (const AssumedImpliedSpec &spec :
+                 y.v) { // is [ lower-bound : ] *
+              BuildImpl(spec, expr = nullptr);
+              ASSERT_not_null(expr);
+              SageInterface::appendExpression(dimInfo, expr);
+            }
+          },
+          [&](const AssumedRankSpec &y) {
+            // is ..
+            SgExpression *shape = SageBuilderCpp17::buildAssumedRankExp_nfi();
+            ASSERT_not_null(shape);
+            SageInterface::appendExpression(dimInfo, shape);
+          }},
       x.u);
 
   return dimInfo;
@@ -7591,6 +7828,9 @@ SgExprListExp *BuildCoarraySpecExprList(Fortran::parser::CoarraySpec &x) {
               expr = SageBuilder::buildSubscriptExpression_nfi(lb, ub, stride);
               ASSERT_not_null(expr);
               SageInterface::appendExpression(dimInfo, expr);
+            } else {
+              SageInterface::appendExpression(
+                  dimInfo, SageBuilderCpp17::buildAsteriskShapeExp_nfi());
             }
           }},
       x.u);
@@ -9665,11 +9905,55 @@ void Build(const parser::ImageSelector &x, SgExpression *&expr) {
     exprList->get_expressions().push_back(item);
     item->set_parent(exprList);
   }
-  if (!std::get<1>(x.t).empty()) {
-    std::cerr << "[FATAL] Image selector specs (STAT/TEAM) not supported.\n";
-    ROSE_ABORT();
+
+  SgExpression *statExpr{nullptr};
+  SgExpression *teamExpr{nullptr};
+  SgExpression *teamNumberExpr{nullptr};
+
+  for (const auto &spec : std::get<1>(x.t)) {
+    common::visit(
+        common::visitors{
+            [&](const parser::ImageSelectorSpec::Stat &y) {
+              if (statExpr != nullptr) {
+                std::cerr << "Duplicate STAT spec in image selector.\n";
+                ROSE_ABORT();
+              }
+              WalkExpr(y.v, statExpr);
+            },
+            [&](const parser::TeamValue &y) {
+              if (teamExpr != nullptr) {
+                std::cerr << "Duplicate TEAM spec in image selector.\n";
+                ROSE_ABORT();
+              }
+              WalkExpr(y.v, teamExpr);
+            },
+            [&](const parser::ImageSelectorSpec::Team_Number &y) {
+              if (teamNumberExpr != nullptr) {
+                std::cerr << "Duplicate TEAM_NUMBER spec in image selector.\n";
+                ROSE_ABORT();
+              }
+              WalkExpr(y.v, teamNumberExpr);
+            }},
+        spec.u);
   }
-  expr = exprList;
+
+  SgCAFImageSelectorExp *selector =
+      new SgCAFImageSelectorExp(exprList, statExpr, teamExpr, teamNumberExpr);
+  ASSERT_not_null(selector);
+  SageInterface::setSourcePosition(selector);
+
+  exprList->set_parent(selector);
+  if (statExpr != nullptr) {
+    statExpr->set_parent(selector);
+  }
+  if (teamExpr != nullptr) {
+    teamExpr->set_parent(selector);
+  }
+  if (teamNumberExpr != nullptr) {
+    teamNumberExpr->set_parent(selector);
+  }
+
+  expr = selector;
 }
 
 void Build(const parser::ImageSelectorSpec &x, SgExpression *&expr) {
@@ -9854,8 +10138,198 @@ void Build(parser::OpenMPConstruct &x) {
 }
 
 void Build(parser::OpenACCConstruct &x) {
-  std::cerr << "[WARN] Rose::builder::Build(OpenACCConstruct) unimplemented\n";
-  ABORT_NO_IMPL;
+  BuildVisitor &visitor = CurrentBuildVisitor();
+
+  auto appendDirectiveFromSourceOrText =
+      [&](const parser::CharBlock &source, const parser::Verbatim *verbatim,
+          llvm::acc::Directive directive, const parser::AccClauseList *clauses,
+          bool isEnd) {
+        if (const auto *selected = SelectAccDirectiveSource(source, verbatim)) {
+          AppendPragmasFromCharBlock(*selected);
+          return;
+        }
+
+        std::string text;
+        if (clauses != nullptr) {
+          text = BuildAccDirectiveText(directive, *clauses, isEnd);
+        } else if (isEnd) {
+          text = BuildAccEndDirectiveText(directive);
+        } else {
+          text = std::string("acc ") +
+                 llvm::acc::getOpenACCDirectiveName(directive).str();
+        }
+        AppendPragmaStatement(text, SageBuilder::topScopeStack());
+      };
+
+  common::visit(
+      common::visitors{
+          [&](parser::OpenACCBlockConstruct &y) {
+            auto &begin = std::get<parser::AccBeginBlockDirective>(y.t);
+            appendDirectiveFromSourceOrText(
+                begin.source, nullptr,
+                std::get<parser::AccBlockDirective>(begin.t).v,
+                &std::get<parser::AccClauseList>(begin.t), /*isEnd=*/false);
+
+            visitor.Walk(std::get<parser::Block>(y.t));
+
+            auto &end = std::get<parser::AccEndBlockDirective>(y.t);
+            appendDirectiveFromSourceOrText(end.source, nullptr, end.v.v,
+                                            nullptr, /*isEnd=*/true);
+          },
+          [&](parser::OpenACCCombinedConstruct &y) {
+            auto &begin = std::get<parser::AccBeginCombinedDirective>(y.t);
+            appendDirectiveFromSourceOrText(
+                begin.source, nullptr,
+                std::get<parser::AccCombinedDirective>(begin.t).v,
+                &std::get<parser::AccClauseList>(begin.t), /*isEnd=*/false);
+
+            if (auto &doConstruct =
+                    std::get<std::optional<parser::DoConstruct>>(y.t)) {
+              visitor.Walk(doConstruct.value());
+            }
+
+            if (auto &end =
+                    std::get<std::optional<parser::AccEndCombinedDirective>>(
+                        y.t)) {
+              appendDirectiveFromSourceOrText(end->source, nullptr, end->v.v,
+                                              nullptr, /*isEnd=*/true);
+            }
+          },
+          [&](parser::OpenACCLoopConstruct &y) {
+            auto &begin = std::get<parser::AccBeginLoopDirective>(y.t);
+            appendDirectiveFromSourceOrText(
+                begin.source, nullptr,
+                std::get<parser::AccLoopDirective>(begin.t).v,
+                &std::get<parser::AccClauseList>(begin.t), /*isEnd=*/false);
+
+            if (auto &doConstruct =
+                    std::get<std::optional<parser::DoConstruct>>(y.t)) {
+              visitor.Walk(doConstruct.value());
+            }
+
+            if (std::get<std::optional<parser::AccEndLoop>>(y.t)) {
+              AppendPragmaStatement(
+                  BuildAccEndDirectiveText(llvm::acc::Directive::ACCD_loop),
+                  SageBuilder::topScopeStack());
+            }
+          },
+          [&](parser::OpenACCStandaloneConstruct &y) {
+            appendDirectiveFromSourceOrText(
+                y.source, nullptr,
+                std::get<parser::AccStandaloneDirective>(y.t).v,
+                &std::get<parser::AccClauseList>(y.t), /*isEnd=*/false);
+          },
+          [&](parser::OpenACCCacheConstruct &y) {
+            const auto &verbatim = std::get<parser::Verbatim>(y.t);
+            if (const auto *selected =
+                    SelectAccDirectiveSource(y.source, &verbatim)) {
+              AppendPragmasFromCharBlock(*selected);
+              return;
+            }
+            std::cerr
+                << "OpenACCCacheConstruct missing directive source text.\n";
+            ROSE_ABORT();
+          },
+          [&](parser::OpenACCWaitConstruct &y) {
+            const auto &verbatim = std::get<parser::Verbatim>(y.t);
+            if (const auto *selected =
+                    SelectAccDirectiveSource(y.source, &verbatim)) {
+              AppendPragmasFromCharBlock(*selected);
+              return;
+            }
+            std::cerr
+                << "OpenACCWaitConstruct missing directive source text.\n";
+            ROSE_ABORT();
+          },
+          [&](parser::OpenACCAtomicConstruct &y) {
+            auto appendAtomicEnd = [&]() {
+              AppendPragmaStatement(
+                  BuildAccEndDirectiveText(llvm::acc::Directive::ACCD_atomic),
+                  SageBuilder::topScopeStack());
+            };
+
+            common::visit(
+                common::visitors{
+                    [&](parser::AccAtomicRead &atom) {
+                      const auto &verbatim = std::get<parser::Verbatim>(atom.t);
+                      if (const auto *selected =
+                              SelectAccDirectiveSource(y.source, &verbatim)) {
+                        AppendPragmasFromCharBlock(*selected);
+                      } else {
+                        std::cerr << "OpenACC atomic read missing directive "
+                                     "source.\n";
+                        ROSE_ABORT();
+                      }
+                      visitor.Walk(
+                          std::get<parser::Statement<parser::AssignmentStmt>>(
+                              atom.t));
+                      if (std::get<std::optional<parser::AccEndAtomic>>(
+                              atom.t)) {
+                        appendAtomicEnd();
+                      }
+                    },
+                    [&](parser::AccAtomicWrite &atom) {
+                      const auto &verbatim = std::get<parser::Verbatim>(atom.t);
+                      if (const auto *selected =
+                              SelectAccDirectiveSource(y.source, &verbatim)) {
+                        AppendPragmasFromCharBlock(*selected);
+                      } else {
+                        std::cerr << "OpenACC atomic write missing directive "
+                                     "source.\n";
+                        ROSE_ABORT();
+                      }
+                      visitor.Walk(
+                          std::get<parser::Statement<parser::AssignmentStmt>>(
+                              atom.t));
+                      if (std::get<std::optional<parser::AccEndAtomic>>(
+                              atom.t)) {
+                        appendAtomicEnd();
+                      }
+                    },
+                    [&](parser::AccAtomicUpdate &atom) {
+                      const auto &verbatimOpt =
+                          std::get<std::optional<parser::Verbatim>>(atom.t);
+                      const auto *verbatim =
+                          verbatimOpt ? &verbatimOpt.value() : nullptr;
+                      if (const auto *selected =
+                              SelectAccDirectiveSource(y.source, verbatim)) {
+                        AppendPragmasFromCharBlock(*selected);
+                      } else {
+                        std::cerr << "OpenACC atomic update missing directive "
+                                     "source.\n";
+                        ROSE_ABORT();
+                      }
+                      visitor.Walk(
+                          std::get<parser::Statement<parser::AssignmentStmt>>(
+                              atom.t));
+                      if (std::get<std::optional<parser::AccEndAtomic>>(
+                              atom.t)) {
+                        appendAtomicEnd();
+                      }
+                    },
+                    [&](parser::AccAtomicCapture &atom) {
+                      const auto &verbatim = std::get<parser::Verbatim>(atom.t);
+                      if (const auto *selected =
+                              SelectAccDirectiveSource(y.source, &verbatim)) {
+                        AppendPragmasFromCharBlock(*selected);
+                      } else {
+                        std::cerr << "OpenACC atomic capture missing directive "
+                                     "source.\n";
+                        ROSE_ABORT();
+                      }
+                      visitor.Walk(
+                          std::get<parser::AccAtomicCapture::Stmt1>(atom.t).v);
+                      visitor.Walk(
+                          std::get<parser::AccAtomicCapture::Stmt2>(atom.t).v);
+                      appendAtomicEnd();
+                    }},
+                y.u);
+          },
+          [&](parser::OpenACCEndConstruct &y) {
+            appendDirectiveFromSourceOrText(y.source, nullptr, y.v, nullptr,
+                                            /*isEnd=*/true);
+          }},
+      x.u);
 }
 
 void BuildVisitor::Build(parser::CompilerDirective &x) {
@@ -9884,16 +10358,29 @@ void BuildVisitor::Build(parser::OmpBeginLoopDirective &x) {
 }
 
 void Build(parser::AccEndCombinedDirective &x) {
-  std::cerr
-      << "[WARN] Rose::builder::Build(AccEndCombinedDirective) unimplemented\n";
-  ABORT_NO_IMPL;
+  if (const auto *selected = SelectAccDirectiveSource(x.source, nullptr)) {
+    AppendPragmasFromCharBlock(*selected);
+    return;
+  }
+  AppendPragmaStatement(BuildAccEndDirectiveText(x.v.v),
+                        SageBuilder::topScopeStack());
 }
 
 // CUFKernelDoConstruct
 void Build(parser::CUFKernelDoConstruct &x) {
-  std::cerr
-      << "[WARN] Rose::builder::Build(CUFKernelDoConstruct) unimplemented\n";
-  ABORT_NO_IMPL;
+  BuildVisitor &visitor = CurrentBuildVisitor();
+  auto &directive = std::get<parser::CUFKernelDoConstruct::Directive>(x.t);
+  if (const auto *selected =
+          SelectAccDirectiveSource(directive.source, nullptr)) {
+    AppendPragmasFromCharBlock(*selected);
+  } else {
+    std::cerr << "CUF kernel do construct missing directive source text.\n";
+    ROSE_ABORT();
+  }
+
+  if (auto &doConstruct = std::get<std::optional<parser::DoConstruct>>(x.t)) {
+    visitor.Walk(doConstruct.value());
+  }
 }
 
 void Build(parser::OmpEndLoopDirective &x) {
@@ -10367,6 +10854,18 @@ void Build(parser::ProcedureDeclarationStmt &x) {
   visitor.Build(x);
 }
 
+void Build(parser::OpenACCRoutineConstruct &x) {
+  const auto &verbatim = std::get<parser::Verbatim>(x.t);
+  if (const auto *selected = SelectAccDirectiveSource(x.source, &verbatim)) {
+    AppendPragmasFromCharBlock(*selected);
+    return;
+  }
+  AppendPragmaStatement(
+      BuildAccDirectiveText(llvm::acc::Directive::ACCD_routine,
+                            std::get<parser::AccClauseList>(x.t)),
+      SageBuilder::topScopeStack());
+}
+
 // OpenACCDeclarativeConstruct
 void Build(parser::OpenMPDeclarativeConstruct &x) {
   std::cout << "Rose::builder::Build(OpenMPDeclarativeConstruct)\n";
@@ -10375,8 +10874,21 @@ void Build(parser::OpenMPDeclarativeConstruct &x) {
 
 // OpenACCDeclarativeConstruct
 void Build(parser::OpenACCDeclarativeConstruct &x) {
-  std::cout << "Rose::builder::Build(OpenACCDeclarativeConstruct)\n";
-  ABORT_NO_IMPL;
+  common::visit(common::visitors{
+                    [&](parser::OpenACCStandaloneDeclarativeConstruct &y) {
+                      if (const auto *selected =
+                              SelectAccDirectiveSource(y.source, nullptr)) {
+                        AppendPragmasFromCharBlock(*selected);
+                        return;
+                      }
+                      AppendPragmaStatement(
+                          BuildAccDirectiveText(
+                              std::get<parser::AccDeclarativeDirective>(y.t).v,
+                              std::get<parser::AccClauseList>(y.t)),
+                          SageBuilder::topScopeStack());
+                    },
+                    [&](parser::OpenACCRoutineConstruct &y) { Build(y); }},
+                x.u);
 }
 
 // AccessSpec
@@ -10414,6 +10926,35 @@ void getModifiers(const parser::IntentSpec &x,
 void getModifiers(const parser::LanguageBindingSpec &x,
                   LanguageTranslation::ExpressionKind &m) {
   m = LanguageTranslation::ExpressionKind::e_type_modifier_bind_c;
+}
+
+void appendCudaDataAttr(
+    const common::CUDADataAttr &attr,
+    std::list<LanguageTranslation::ExpressionKind> &modifiers) {
+  using namespace LanguageTranslation;
+  switch (attr) {
+  case common::CUDADataAttr::Constant:
+    modifiers.push_back(ExpressionKind::e_storage_modifier_cuda_constant);
+    break;
+  case common::CUDADataAttr::Device:
+    modifiers.push_back(ExpressionKind::e_storage_modifier_cuda_device);
+    break;
+  case common::CUDADataAttr::Managed:
+    modifiers.push_back(ExpressionKind::e_storage_modifier_cuda_managed);
+    break;
+  case common::CUDADataAttr::Pinned:
+    modifiers.push_back(ExpressionKind::e_storage_modifier_cuda_pinned);
+    break;
+  case common::CUDADataAttr::Shared:
+    modifiers.push_back(ExpressionKind::e_storage_modifier_cuda_shared);
+    break;
+  case common::CUDADataAttr::Texture:
+    modifiers.push_back(ExpressionKind::e_storage_modifier_cuda_texture);
+    break;
+  case common::CUDADataAttr::Unified:
+    modifiers.push_back(ExpressionKind::e_storage_modifier_cuda_unified);
+    break;
+  }
 }
 
 // TypeAttrSpec
@@ -10471,7 +11012,9 @@ void getComponentAttrSpec(
           [&](const Pointer &) {
             modifiers.push_back(ExpressionKind::e_type_modifier_pointer);
           },
-          [&](const common::CUDADataAttr &) { ABORT_NO_IMPL; },
+          [&](const common::CUDADataAttr &y) {
+            appendCudaDataAttr(y, modifiers);
+          },
           [&](const ErrorRecovery &) { ABORT_NO_IMPL; }},
       x.u);
 }
@@ -10517,8 +11060,8 @@ void getAttrSpec(parser::AttrSpec &x,
             getModifiers(y, m);
             modifiers.push_back(m);
           },
-          [&](const common::CUDADataAttr &) {
-            ABORT_NO_IMPL; /*CUDADataAttr*/
+          [&](const common::CUDADataAttr &y) {
+            appendCudaDataAttr(y, modifiers);
           },
           [&](const Allocatable &) {
             modifiers.push_back(ExpressionKind::e_type_modifier_allocatable);

@@ -4568,6 +4568,15 @@ void Grammar::setUpStatements() {
   AllocateStatement.setDataPrototype(
       "SgExpression*", "source_expression", "= NULL", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  AllocateStatement.setDataPrototype(
+      "SgExpression*", "mold_expression", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  AllocateStatement.setDataPrototype(
+      "SgExpression*", "stream_expression", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  AllocateStatement.setDataPrototype(
+      "SgExpression*", "pinned_expression", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   // DQ (1/29/2009): I think we want an expression list and not a name list,
   // also the F2003 case is more complex (and not yet supported in ROSE).

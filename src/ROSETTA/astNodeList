@@ -32,6 +32,7 @@ SgAssignOp
 SgAssignStatement
 SgAssignedGotoStatement
 SgAssociateStatement
+SgAssumedRankExp
 SgAsteriskShapeExp
 SgAttribute
 SgAttributeSpecificationStatement
@@ -638,6 +639,7 @@ Sg_File_Info
 SgTypeCAFTeam
 SgCAFWithTeamStatement
 SgCAFCoExpression
+SgCAFImageSelectorExp
 SgCallExpression
 SgTypeCrayPointer
 SgClassExp

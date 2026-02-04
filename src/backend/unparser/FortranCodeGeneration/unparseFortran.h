@@ -272,7 +272,10 @@ public:
 
   // unparsing for Rice Coarray Fortran 2.0
   void unparseWithTeamStatement(SgStatement *stmt, SgUnparse_Info &info);
+  void unparseCAFImageSelectorExp(SgExpression *expr, SgUnparse_Info &info);
   void unparseCoArrayExpression(SgExpression *expr, SgUnparse_Info &info);
+  void unparseCudaKernelCall(SgExpression *expr, SgUnparse_Info &info);
+  void unparseCudaKernelExecConfig(SgExpression *expr, SgUnparse_Info &info);
   void curprint(const std::string &) const;
 
   // unparsing for OpenMP AST

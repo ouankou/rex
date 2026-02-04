@@ -3986,6 +3986,7 @@ void TestLValues::visit(SgNode *node) {
     case V_SgSubscriptExpression:
     case V_SgColonShapeExp:
     case V_SgAsteriskShapeExp:
+    case V_SgAssumedRankExp:
     case V_SgImpliedDo:
     case V_SgIOItemExpression:
     case V_SgStatementExpression:
@@ -3994,6 +3995,7 @@ void TestLValues::visit(SgNode *node) {
     case V_SgActualArgumentExpression:
     case V_SgUnknownArrayOrFunctionReference:
     case V_SgPseudoDestructorRefExp:
+    case V_SgCAFImageSelectorExp:
     case V_SgCudaKernelCallExp:
     case V_SgCudaKernelExecConfig:
       break;

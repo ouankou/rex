@@ -411,6 +411,7 @@ SgExpression *buildPntrArrRefExp_nfi(SgExpression *lhs, SgExpression *rhs);
 SgExpression *buildAggregateInitializer_nfi(SgExprListExp *initializers,
                                             SgType *type = nullptr);
 SgExpression *buildAsteriskShapeExp_nfi();
+SgExpression *buildAssumedRankExp_nfi();
 SgExpression *buildNullExpression_nfi();
 SgExpression *buildFunctionCallExp(SgFunctionCallExp *);
 SgExprListExp *buildExprListExp_nfi(const std::list<SgExpression *> &);

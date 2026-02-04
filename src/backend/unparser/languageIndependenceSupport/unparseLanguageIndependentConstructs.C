@@ -11550,11 +11550,17 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgCAFCoExpression: // return 16;
       precedence_value = 16;
       break;
+    case V_SgCAFImageSelectorExp:
+      precedence_value = 16;
+      break;
 
     case V_SgNullExpression:       // return 0;
                                    // TV (04/26/2010): CUDA nodes
     case V_SgCudaKernelExecConfig: // return 0;
     case V_SgCudaKernelCallExp:    // return 0;
+      precedence_value = 0;
+      break;
+    case V_SgAssumedRankExp:
       precedence_value = 0;
       break;
 
@@ -11938,6 +11944,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       if (parent_cast->cast_type() != SgCastExp::e_C_style_cast) {
         return false;
       }
+    }
+
+    if (isSgAssumedRankExp(expr) != NULL) {
+      return false;
     }
 
     if (isSgSubscriptExpression(expr) != NULL || isSgRangeExp(expr) ||

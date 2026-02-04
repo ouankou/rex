@@ -367,6 +367,11 @@ void Grammar::setUpExpressions() {
   AsteriskShapeExp.editSubstitute("PRECEDENCE_VALUE", " 2");
   AsteriskShapeExp.setFunctionPrototype("HEADER_ASTERISK_SHAPE_EXPRESSION",
                                         "../Grammar/Expression.code");
+
+  NEW_TERMINAL_MACRO(AssumedRankExp, "AssumedRankExp", "TEMP_AssumedRankExp");
+  AssumedRankExp.editSubstitute("PRECEDENCE_VALUE", " 2");
+  AssumedRankExp.setFunctionPrototype("HEADER_ASSUMED_RANK_EXPRESSION",
+                                      "../Grammar/Expression.code");
 #endif
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -480,6 +485,26 @@ void Grammar::setUpExpressions() {
       "SgExpression*", "referData", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   CAFCoExpression.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+
+  // OpenACC/CAF image selector expression for coarray references
+  NEW_TERMINAL_MACRO(CAFImageSelectorExp, "CAFImageSelectorExp",
+                     "COARRAY_IMAGE_SELECTOR");
+  CAFImageSelectorExp.editSubstitute("PRECEDENCE_VALUE", " 16");
+  CAFImageSelectorExp.setDataPrototype(
+      "SgExprListExp*", "cosubscripts", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  CAFImageSelectorExp.setDataPrototype(
+      "SgExpression*", "stat_expression", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  CAFImageSelectorExp.setDataPrototype(
+      "SgExpression*", "team_expression", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  CAFImageSelectorExp.setDataPrototype(
+      "SgExpression*", "team_number_expression", "= NULL",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  CAFImageSelectorExp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
 #endif
@@ -3581,11 +3606,12 @@ void Grammar::setUpExpressions() {
           ThisExp | RefExp | Initializer | VarArgStartOp | VarArgOp |
           VarArgEndOp | VarArgCopyOp | VarArgStartOneOperandOp |
           NullExpression | VariantExpression | SubscriptExpression |
-          ColonShapeExp | AsteriskShapeExp | /*UseOnlyExpression |*/ ImpliedDo |
-          IOItemExpression | /* UseRenameExpression   | */ StatementExpression |
-          AsmOp | LabelRefExp | ActualArgumentExpression |
+          ColonShapeExp | AsteriskShapeExp | AssumedRankExp |
+          /*UseOnlyExpression |*/ ImpliedDo | IOItemExpression |
+          /* UseRenameExpression   | */ StatementExpression | AsmOp |
+          LabelRefExp | ActualArgumentExpression |
           UnknownArrayOrFunctionReference | PseudoDestructorRefExp |
-          CAFCoExpression |
+          CAFCoExpression | CAFImageSelectorExp |
           CudaKernelExecConfig | /* TV (04/22/2010): CUDA support */
           LambdaRefExp | TemplateFunctionRefExp | TemplateMemberFunctionRefExp |
           AlignOfOp | RangeExp | TypeTraitBuiltinOperator | CompoundLiteralExp |

@@ -200,6 +200,12 @@ set(F90_TESTCODES
   test2010_166.f90
   rex_test2026_equivalence.f90
   rex_test2026_include.f90
+  rex_test2026_assumed_rank.f90
+  rex_test2026_coarray_image_selector.f90
+  rex_test2026_coarray_remote_call.f90
+  rex_test2026_allocate_specs.f90
+  rex_test2026_openacc_constructs.f90
+  rex_test2026_cuf_kernel_do.f90
   test2010_167.f90
   test2010_168.f90
   test2010_172.f90

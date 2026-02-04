@@ -56,9 +56,14 @@ set(_fortran_cray_pointer_tests
   test2007_84.f90
   test2011_imperial_crayPointers.f90
 )
+set(_fortran_skip_final_compile_tests
+  rex_test2026_coarray_image_selector.f90
+)
 foreach(F90_test ${F90_TESTCODES})
   if(F90_test IN_LIST _fortran_cray_pointer_tests)
     fortran_test(${F90_test} -fcray-pointer)
+  elseif(F90_test IN_LIST _fortran_skip_final_compile_tests)
+    fortran_test(${F90_test} -rose:skipfinalCompileStep)
   else()
     fortran_test(${F90_test})
   endif()

@@ -3512,7 +3512,8 @@ void FortranCodeGeneration_locatedNode::unparsePragmaDeclStmt(
     first = 0;
   }
   bool is_openmp_or_acc = lower_txt.compare(first, 3, "omp") == 0 ||
-                          lower_txt.compare(first, 3, "acc") == 0;
+                          lower_txt.compare(first, 3, "acc") == 0 ||
+                          lower_txt.compare(first, 3, "cuf") == 0;
   AstAttribute *att = stmt->getAttribute("OmpAttributeList");
   if (att || is_openmp_or_acc)
     curprint("!$");
@@ -3717,6 +3718,11 @@ void FortranCodeGeneration_locatedNode::unparseVarDecl(
             .get_storageModifier()
             .isCudaManaged()) {
       curprint(", managed");
+    }
+    if (variableDeclaration->get_declarationModifier()
+            .get_storageModifier()
+            .isCudaUnified()) {
+      curprint(", unified");
     }
     if (variableDeclaration->get_declarationModifier()
             .get_storageModifier()
@@ -4498,6 +4504,24 @@ void FortranCodeGeneration_locatedNode::unparseAllocateStatement(
   if (s->get_source_expression() != nullptr) {
     curprint(needComma || firstIsType ? ", SOURCE = " : "SOURCE = ");
     unparseExpression(s->get_source_expression(), info);
+    needComma = true;
+  }
+
+  if (s->get_mold_expression() != nullptr) {
+    curprint(needComma || firstIsType ? ", MOLD = " : "MOLD = ");
+    unparseExpression(s->get_mold_expression(), info);
+    needComma = true;
+  }
+
+  if (s->get_stream_expression() != nullptr) {
+    curprint(needComma || firstIsType ? ", STREAM = " : "STREAM = ");
+    unparseExpression(s->get_stream_expression(), info);
+    needComma = true;
+  }
+
+  if (s->get_pinned_expression() != nullptr) {
+    curprint(needComma || firstIsType ? ", PINNED = " : "PINNED = ");
+    unparseExpression(s->get_pinned_expression(), info);
   }
 
   curprint(" )");
