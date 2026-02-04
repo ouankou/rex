@@ -71,6 +71,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_template_argument_pack.cpp
   rex_test2026_template_instantiation_basic.cpp
   rex_test2026_template_features.cpp
+  rex_test2026_template_decl_wrapper.cpp
   rex_test2026_for_init_scope.cpp
   rex_test2026_axpy_system_headers.cpp
   rex_test2026_stl_incremental.cpp

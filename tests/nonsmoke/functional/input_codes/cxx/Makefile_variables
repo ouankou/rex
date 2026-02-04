@@ -1339,6 +1339,7 @@ ROSE__CXX_TESTS = \
         test2013_milind_01.C \
 	rex_test2026_template_instantiation_basic.cpp \
 	rex_test2026_template_features.cpp \
+	rex_test2026_template_decl_wrapper.cpp \
 	rex_test2026_for_init_scope.cpp \
 	rex_test2026_axpy_system_headers.cpp \
 	rex_test2026_stl_incremental.cpp \

@@ -7963,8 +7963,13 @@ std::vector<SgTemplateArgument*> getTemplateParametersOrArgumentsList<SgTemplate
 
           case V_SgTemplateSymbol:
              {
-               MLOG_INFO_C("ROSETTA", "Case of SgTemplateSymbol not handled yet in SgSymbolTable::getTemplateParametersOrArgumentsList<SgTemplateArgument>() \n");
-               ROSE_ASSERT(false);
+               SgTemplateSymbol * tmplSymbol = isSgTemplateSymbol(symbol);
+               ROSE_ASSERT(tmplSymbol != NULL);
+
+               SgTemplateDeclaration * tmplDecl = tmplSymbol->get_declaration();
+               ROSE_ASSERT(tmplDecl != NULL);
+
+            // SgTemplateDeclaration does not carry specialization arguments.
                break;
              }
 
@@ -8097,8 +8102,13 @@ std::vector<SgTemplateParameter*> getTemplateParametersOrArgumentsList<SgTemplat
 
           case V_SgTemplateSymbol:
              {
-               MLOG_INFO_C("ROSETTA", "Case of SgTemplateSymbol not handled yet in SgSymbolTable::getTemplateParametersOrArgumentsList<SgTemplateParameter>() \n");
-               ROSE_ASSERT(false);
+               SgTemplateSymbol * tmplSymbol = isSgTemplateSymbol(symbol);
+               ROSE_ASSERT(tmplSymbol != NULL);
+
+               SgTemplateDeclaration * tmplDecl = tmplSymbol->get_declaration();
+               ROSE_ASSERT(tmplDecl != NULL);
+
+               returnList = tmplDecl->get_templateParameters();
                break;
              }
 

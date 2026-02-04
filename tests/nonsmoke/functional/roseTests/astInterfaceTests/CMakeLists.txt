@@ -64,6 +64,7 @@ set(noinst_programs
   rex_test2026_template_constraints_ir
   rex_test2026_deduction_ordering
   rex_test2026_param_list_unique_name
+  rex_test2026_template_decl_wrapper
   rex_test2026_sfinae_prune
   rex_test2026_on_demand_qualification
   rex_test2026_fold_pack_expr
@@ -150,6 +151,7 @@ set(group1_tests
   rex_test2026_null_expression_unparse
   rex_test2026_deduction_ordering
   rex_test2026_param_list_unique_name
+  rex_test2026_template_decl_wrapper
   rex_test2026_on_demand_qualification
 )
 
