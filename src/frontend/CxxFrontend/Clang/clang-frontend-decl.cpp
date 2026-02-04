@@ -119,6 +119,35 @@ static std::string trimWhitespace(std::string s) {
   return s;
 }
 
+SgTemplateDeclaration::template_type_enum
+classify_template_kind(const clang::Decl *templated_decl) {
+  if (templated_decl == nullptr) {
+    return SgTemplateDeclaration::e_template_none;
+  }
+  if (const auto *func = llvm::dyn_cast<clang::FunctionDecl>(templated_decl)) {
+    return func->isCXXClassMember()
+               ? SgTemplateDeclaration::e_template_m_function
+               : SgTemplateDeclaration::e_template_function;
+  }
+  if (const auto *record =
+          llvm::dyn_cast<clang::CXXRecordDecl>(templated_decl)) {
+    return record->isCXXClassMember()
+               ? SgTemplateDeclaration::e_template_m_class
+               : SgTemplateDeclaration::e_template_class;
+  }
+  if (const auto *record = llvm::dyn_cast<clang::RecordDecl>(templated_decl)) {
+    return record->isCXXClassMember()
+               ? SgTemplateDeclaration::e_template_m_class
+               : SgTemplateDeclaration::e_template_class;
+  }
+  if (const auto *var = llvm::dyn_cast<clang::VarDecl>(templated_decl)) {
+    return var->isStaticDataMember()
+               ? SgTemplateDeclaration::e_template_m_data
+               : SgTemplateDeclaration::e_template_variable;
+  }
+  return SgTemplateDeclaration::e_template_none;
+}
+
 static void cleanup_unused_param_list(SgFunctionDeclaration *decl,
                                       SgFunctionParameterList *candidate) {
   if (candidate == nullptr) {
@@ -3384,6 +3413,13 @@ SgTemplateParameter *ClangToSageTranslator::translateTemplateParameter(
     SgInitializedName *init_name =
         SageBuilder::buildInitializedName(SgName(name_str), type);
     applySourceRange(init_name, non_type_param->getSourceRange());
+    if (owning_template != nullptr) {
+      if (SgScopeStatement *param_scope =
+              SageBuilder::getOrCreateNonrealDeclarationScope(
+                  owning_template)) {
+        init_name->set_scope(param_scope);
+      }
+    }
 
     SgTemplateParameter *param = SageBuilder::buildTemplateParameter(
         SgTemplateParameter::nontype_parameter, type);
@@ -3713,8 +3749,9 @@ translate_decl:
     ROSE_ASSERT(ret_status == false || result != nullptr);
     break;
   case clang::Decl::BuiltinTemplate: {
-    ret_status = false;
-    result = nullptr;
+    ret_status =
+        VisitBuiltinTemplateDecl((clang::BuiltinTemplateDecl *)decl, &result);
+    ROSE_ASSERT(ret_status == false || result != nullptr);
     break;
   }
   case clang::Decl::Concept:
@@ -5397,14 +5434,109 @@ bool ClangToSageTranslator::VisitTemplateDecl(
 #if DEBUG_VISIT_DECL
   std::cerr << "ClangToSageTranslator::VisitTemplateDecl" << std::endl;
 #endif
-  if (template_decl != nullptr &&
-      template_decl->getTemplatedDecl() != nullptr) {
-    Traverse(template_decl->getTemplatedDecl());
+  if (template_decl == nullptr) {
+    *node = nullptr;
+    return false;
   }
-  // TODO(roadmap): Emit proper template decl nodes once namespace/template
-  // scaffolding lands (see docs/axpy_clang_frontend.md roadmap section).
-  *node = nullptr;
-  return false;
+
+  clang::Decl *templated_decl = template_decl->getTemplatedDecl();
+  SgNode *templated_node = nullptr;
+  if (templated_decl != nullptr) {
+    templated_node = Traverse(templated_decl);
+  }
+
+  std::string name_str = template_decl->getNameAsString();
+  if (name_str.empty()) {
+    if (clang::NamedDecl *named_decl =
+            llvm::dyn_cast_or_null<clang::NamedDecl>(templated_decl)) {
+      name_str = getDeclNameSafe(named_decl);
+    }
+  }
+  if (name_str.empty()) {
+    name_str = "__anon_template_" +
+               generate_source_position_string(template_decl->getBeginLoc());
+  }
+
+  SgTemplateDeclaration *template_stmt =
+      new SgTemplateDeclaration(SgName(name_str));
+  ROSE_ASSERT(template_stmt != nullptr);
+
+  SgScopeStatement *semantic_scope = nullptr;
+  SgScopeStatement *lexical_parent = nullptr;
+  if (SgDeclarationStatement *templated_stmt =
+          isSgDeclarationStatement(templated_node)) {
+    semantic_scope = templated_stmt->get_scope();
+    if (semantic_scope == nullptr) {
+      semantic_scope = isSgScopeStatement(templated_stmt->get_parent());
+    }
+    lexical_parent = isSgScopeStatement(templated_stmt->get_parent());
+  }
+
+  if (semantic_scope == nullptr) {
+    clang::DeclContext *decl_context = template_decl->getDeclContext();
+    semantic_scope =
+        resolveScopeFromDeclContext(decl_context, SageBuilder::topScopeStack());
+  }
+  if (semantic_scope == nullptr) {
+    semantic_scope = getGlobalScope();
+  }
+
+  if (lexical_parent == nullptr) {
+    clang::DeclContext *lexical_context =
+        template_decl->getLexicalDeclContext();
+    lexical_parent =
+        resolveScopeFromDeclContext(lexical_context, semantic_scope);
+  }
+  if (lexical_parent == nullptr) {
+    lexical_parent = semantic_scope;
+  }
+
+  template_stmt->set_scope(semantic_scope);
+  template_stmt->set_parent(lexical_parent);
+  template_stmt->set_firstNondefiningDeclaration(template_stmt);
+  template_stmt->set_definingDeclaration(nullptr);
+  SgTemplateDeclaration::template_type_enum template_kind =
+      classify_template_kind(templated_decl);
+  if (template_kind == SgTemplateDeclaration::e_template_none &&
+      llvm::isa<clang::BuiltinTemplateDecl>(template_decl)) {
+    template_kind = SgTemplateDeclaration::e_template_class;
+  }
+  template_stmt->set_template_kind(template_kind);
+
+  applySourceRange(template_stmt, template_decl->getSourceRange());
+  suppress_unparse_output(template_stmt);
+
+  SageBuilder::getOrCreateNonrealDeclarationScope(template_stmt);
+
+  if (clang::TemplateParameterList *params =
+          template_decl->getTemplateParameters()) {
+    auto sg_params = translateTemplateParameterList(params, template_stmt);
+    template_stmt->get_templateParameters() = *sg_params;
+    attach_nonreal_template_parameters(template_stmt,
+                                       template_stmt->get_templateParameters());
+
+    if (const clang::Expr *requires_expr = params->getRequiresClause()) {
+      if (SgExpression *sg_requires =
+              translateConstraintExpression(requires_expr)) {
+        template_stmt->set_requiresClause(sg_requires);
+        sg_requires->set_parent(template_stmt);
+      }
+    }
+  }
+
+  if (lexical_parent != nullptr) {
+    ensure_decl_in_scope_child_list_preserve_scope(
+        template_stmt, lexical_parent, "VisitTemplateDecl");
+  }
+  registerDeclarationSymbol(template_stmt);
+
+  p_decl_translation_map[template_decl] = template_stmt;
+  if (clang::Decl *canonical = template_decl->getCanonicalDecl()) {
+    p_decl_translation_map[canonical] = template_stmt;
+  }
+
+  *node = template_stmt;
+  return VisitNamedDecl(template_decl, node);
 }
 
 bool ClangToSageTranslator::VisitBuiltinTemplateDecl(
@@ -5412,11 +5544,7 @@ bool ClangToSageTranslator::VisitBuiltinTemplateDecl(
 #if DEBUG_VISIT_DECL
   std::cerr << "ClangToSageTranslator::VisitBuiltinTemplateDecl" << std::endl;
 #endif
-  bool res = true;
-
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
-  return VisitTemplateDecl(builtin_template_decl, node) && res;
+  return VisitTemplateDecl(builtin_template_decl, node);
 }
 
 bool ClangToSageTranslator::VisitConceptDecl(clang::ConceptDecl *concept_decl,
@@ -10709,6 +10837,9 @@ ClangToSageTranslator::buildSymbolForDeclaration(SgDeclarationStatement *decl) {
           isSgTemplateClassDeclaration(decl)) {
     return new SgTemplateClassSymbol(tmpl_decl);
   }
+  if (SgTemplateDeclaration *tmpl_decl = isSgTemplateDeclaration(decl)) {
+    return new SgTemplateSymbol(tmpl_decl);
+  }
   if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
     return new SgClassSymbol(class_decl);
   }
@@ -10822,6 +10953,7 @@ void ClangToSageTranslator::registerDeclarationSymbol(
   }
 
   bool is_symbol_decl =
+      isSgTemplateDeclaration(symbol_decl) != nullptr ||
       isSgFunctionDeclaration(symbol_decl) != nullptr ||
       isSgClassDeclaration(symbol_decl) != nullptr ||
       isSgEnumDeclaration(symbol_decl) != nullptr ||

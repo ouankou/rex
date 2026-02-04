@@ -581,6 +581,9 @@ string SageInterface::generateUniqueName(
       case SgTemplateDeclaration::e_template_m_data:
         additionalSuffix += "_member_data";
         break;
+      case SgTemplateDeclaration::e_template_variable:
+        additionalSuffix += "_variable";
+        break;
 
       default: {
         printf("Error: default reached \n");
