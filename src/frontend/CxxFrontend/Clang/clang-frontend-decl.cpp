@@ -6113,6 +6113,21 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(
     }
   }
 
+  auto translate_spec_if_needed = [&](clang::FunctionDecl *spec) {
+    if (p_compiler_instance != nullptr) {
+      clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+      clang::SourceLocation loc = spec->getLocation();
+      if (!loc.isValid() || sm.isInSystemHeader(loc) ||
+          sm.isWrittenInBuiltinFile(loc)) {
+        return;
+      }
+    }
+    if (p_decl_translation_map.find(spec) == p_decl_translation_map.end()) {
+      SgNode *spec_node = nullptr;
+      translateFunctionDeclCommon(spec, function_template_decl, &spec_node);
+    }
+  };
+
   for (auto it = function_template_decl->spec_begin();
        it != function_template_decl->spec_end(); ++it) {
     clang::FunctionDecl *spec = *it;
@@ -6120,36 +6135,14 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(
       continue;
     }
     if (spec->isInvalidDecl()) {
-      if (p_compiler_instance != nullptr) {
-        clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-        clang::SourceLocation loc = spec->getLocation();
-        if (!loc.isValid() || sm.isInSystemHeader(loc) ||
-            sm.isWrittenInBuiltinFile(loc)) {
-          continue;
-        }
-      }
-      if (p_decl_translation_map.find(spec) == p_decl_translation_map.end()) {
-        SgNode *spec_node = nullptr;
-        translateFunctionDeclCommon(spec, function_template_decl, &spec_node);
-      }
+      translate_spec_if_needed(spec);
       continue;
     }
 
     clang::TemplateSpecializationKind kind =
         spec->getTemplateSpecializationKind();
     if (kind == clang::TSK_ImplicitInstantiation && !spec->hasBody()) {
-      if (p_compiler_instance != nullptr) {
-        clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-        clang::SourceLocation loc = spec->getLocation();
-        if (!loc.isValid() || sm.isInSystemHeader(loc) ||
-            sm.isWrittenInBuiltinFile(loc)) {
-          continue;
-        }
-      }
-      if (p_decl_translation_map.find(spec) == p_decl_translation_map.end()) {
-        SgNode *spec_node = nullptr;
-        translateFunctionDeclCommon(spec, function_template_decl, &spec_node);
-      }
+      translate_spec_if_needed(spec);
       continue;
     }
     if (kind != clang::TSK_ImplicitInstantiation &&
