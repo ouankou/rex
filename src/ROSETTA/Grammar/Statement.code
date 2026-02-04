@@ -2414,7 +2414,8 @@ HEADER_TEMPLATE_DECLARATION_STATEMENT_START
                e_template_m_class    = 2, /*!< nested class template */
                e_template_function   = 3, /*!< function template */
                e_template_m_function = 4, /*!< member function template */
-               e_template_m_data     = 5  /*!< member data template (typically static member data) */
+               e_template_m_data     = 5, /*!< member data template (typically static member data) */
+               e_template_variable   = 6  /*!< variable template (non-member) */
              };
 
        // DQ (9/8/2004): added support for qualified names

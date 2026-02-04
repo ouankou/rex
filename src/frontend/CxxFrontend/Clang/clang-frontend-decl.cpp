@@ -140,8 +140,10 @@ classify_template_kind(const clang::Decl *templated_decl) {
                ? SgTemplateDeclaration::e_template_m_class
                : SgTemplateDeclaration::e_template_class;
   }
-  if (llvm::isa<clang::VarDecl>(templated_decl)) {
-    return SgTemplateDeclaration::e_template_m_data;
+  if (const auto *var = llvm::dyn_cast<clang::VarDecl>(templated_decl)) {
+    return var->isStaticDataMember()
+               ? SgTemplateDeclaration::e_template_m_data
+               : SgTemplateDeclaration::e_template_variable;
   }
   return SgTemplateDeclaration::e_template_none;
 }

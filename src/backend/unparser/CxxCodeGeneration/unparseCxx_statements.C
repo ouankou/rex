@@ -7752,7 +7752,8 @@ void Unparse_ExprStmt::unparseTemplateDeclStmt(SgStatement *stmt,
   case SgTemplateDeclaration::e_template_m_class:
   case SgTemplateDeclaration::e_template_function:
   case SgTemplateDeclaration::e_template_m_function:
-  case SgTemplateDeclaration::e_template_m_data: {
+  case SgTemplateDeclaration::e_template_m_data:
+  case SgTemplateDeclaration::e_template_variable: {
     // printf ("debugging 64 bit bug: templateString = %s
     // \n",templateString.c_str());
     if (templateString.empty() == true) {
