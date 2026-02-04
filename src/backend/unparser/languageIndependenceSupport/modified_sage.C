@@ -1790,7 +1790,8 @@ void Unparse_MOD_SAGE::printSpecifier2(SgDeclarationStatement *decl_stmt,
       // declaration appearing in a class.
       SgClassDefinition *classDefinition =
           isSgClassDefinition(functionDeclaration->get_parent());
-      if (classDefinition != NULL) {
+      if (classDefinition != NULL ||
+          functionDeclaration->get_is_deduction_guide()) {
         curprint("explicit ");
       }
     }

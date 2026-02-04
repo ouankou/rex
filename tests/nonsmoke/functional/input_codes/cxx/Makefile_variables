@@ -1349,6 +1349,7 @@ ROSE__CXX_TESTS = \
 	rex_test2026_stl_type_traits.cpp \
 	rex_test2026_stl_variant.cpp \
 	rex_test2026_stl_vector.cpp \
+	rex_test2026_deduction_guide.cpp \
 	rex_test2026_sfinae.cpp \
 	rex_test2026_dependent_qualification.cpp \
 	rex_test2026_extern_c_brace_roundtrip.cpp

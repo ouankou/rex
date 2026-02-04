@@ -2946,21 +2946,11 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
       if (sub_decl_stmt == nullptr) {
         continue;
       } else if (child != nullptr) {
-        // FIXME This is a hack to avoid autonomous decl of unnamed type to
-        // being added to the global scope....
-        SgClassDeclaration *class_decl = isSgClassDeclaration(child);
-        if (class_decl != nullptr &&
-            (class_decl->get_name() == "" || class_decl->get_isUnNamed()))
-          continue;
-
-        SgEnumDeclaration *enum_decl = isSgEnumDeclaration(child);
-        if (enum_decl != nullptr &&
-            (enum_decl->get_name() == "" || enum_decl->get_isUnNamed()))
-          continue;
-        if (clang::TagDecl::classof(decl)) {
-          clang::TagDecl *tagDecl = (clang::TagDecl *)decl;
-          if (tagDecl->isEmbeddedInDeclarator())
+        if (clang::TagDecl *tagDecl = llvm::dyn_cast<clang::TagDecl>(decl)) {
+          if (tagDecl->isEmbeddedInDeclarator() ||
+              tagDecl->getTypedefNameForAnonDecl() != nullptr) {
             continue;
+          }
         }
       }
       if (scope != nullptr && !p_in_for_init_translation) {
@@ -6658,6 +6648,40 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
   }
 
   bool res = true;
+  auto ensure_function_decl_symbol = [&](SgFunctionDeclaration *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+    auto ensure_decl = [&](SgFunctionDeclaration *candidate) {
+      if (candidate == nullptr) {
+        return;
+      }
+      if (candidate->get_symbol_from_symbol_table() == nullptr) {
+        registerDeclarationSymbol(candidate);
+      }
+    };
+    ensure_decl(decl);
+    ensure_decl(
+        isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration()));
+    ensure_decl(isSgFunctionDeclaration(decl->get_definingDeclaration()));
+  };
+  auto finalize_instantiation_decl = [&](SgFunctionDeclaration *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+    if (SgScopeStatement *scope = decl->get_scope()) {
+      ensureDeclInScopeChildList(decl, scope, "VisitDeclRefExpr:instantiation");
+    }
+    setCompilerGeneratedFileInfo(decl);
+    if (SgFunctionParameterList *params = decl->get_parameterList()) {
+      setCompilerGeneratedFileInfo(params);
+      for (SgInitializedName *param : params->get_args()) {
+        if (param != nullptr) {
+          setCompilerGeneratedFileInfo(param);
+        }
+      }
+    }
+  };
   auto attach_explicit_qualifier = [&](SgExpression *expr) {
     if (expr == nullptr || decl_ref_expr == nullptr ||
         !decl_ref_expr->hasQualifier()) {
@@ -6992,8 +7016,12 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 }
               }
 
+              finalize_instantiation_decl(inst_decl);
+              registerDeclarationSymbol(inst_decl);
               if (SgMemberFunctionSymbol *inst_sym = isSgMemberFunctionSymbol(
                       inst_decl->get_symbol_from_symbol_table())) {
+                ensure_function_decl_symbol(
+                    isSgFunctionDeclaration(inst_sym->get_declaration()));
                 SgExpression *ref_exp =
                     SageBuilder::buildMemberFunctionRefExp_nfi(inst_sym, false,
                                                                false);
@@ -7555,6 +7583,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                   }
                 }
 
+                finalize_instantiation_decl(inst_decl);
+                registerDeclarationSymbol(inst_decl);
                 SgMemberFunctionSymbol *inst_sym = isSgMemberFunctionSymbol(
                     inst_decl->get_symbol_from_symbol_table());
                 if (inst_sym == nullptr) {
@@ -7608,6 +7638,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         SgExpression *ref_exp = SageBuilder::buildMemberFunctionRefExp_nfi(
             ref_member_sym, false, need_qualifier);
         attach_explicit_qualifier(ref_exp);
+        ensure_function_decl_symbol(
+            isSgFunctionDeclaration(ref_member_sym->get_declaration()));
         *node = ref_exp;
       } else if (func_sym != nullptr) {
         SgFunctionSymbol *ref_func_sym = func_sym;
@@ -7833,6 +7865,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                   }
                 }
 
+                finalize_instantiation_decl(inst_decl);
+                registerDeclarationSymbol(inst_decl);
                 SgFunctionSymbol *inst_sym = isSgFunctionSymbol(
                     inst_decl->get_symbol_from_symbol_table());
                 if (inst_sym == nullptr) {
@@ -7881,6 +7915,8 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         }
         SgExpression *ref_exp = SageBuilder::buildFunctionRefExp(ref_func_sym);
         attach_explicit_qualifier(ref_exp);
+        ensure_function_decl_symbol(
+            isSgFunctionDeclaration(ref_func_sym->get_declaration()));
         *node = ref_exp;
       } else {
         if (enum_sym != nullptr) {
@@ -9472,7 +9508,16 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
 
   ROSE_ASSERT(sg_member_expr != nullptr);
 
-  // TODO (C++) member_expr->getQualifier() : for 'a->Base::foo'
+  if (member_expr->hasQualifier() && p_compiler_instance != nullptr) {
+    clang::NestedNameSpecifierLoc qualifier_loc =
+        member_expr->getQualifierLoc();
+    const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
+        qualifier_loc.getNestedNameSpecifier() != nullptr ? &qualifier_loc
+                                                          : nullptr;
+    attachExplicitQualifierFromNestedName(
+        sg_member_expr, member_expr->getQualifier(), qualifier_loc_ptr,
+        p_compiler_instance);
+  }
 
   if (implicit_access) {
     *node = sg_member_expr;

@@ -22,6 +22,20 @@ int main(int argc, char *argv[]) {
   ROSE_ASSERT(decl_scope != nullptr);
   ROSE_ASSERT(decl_scope->get_parent() == target);
 
+  SgName scope_mangled = decl_scope->get_mangled_name();
+  std::string scope_mangled_str = scope_mangled.getString();
+  ROSE_ASSERT(scope_mangled_str.find("__declaration_scope__") !=
+              std::string::npos);
+  SgName owner_mangled = target->get_mangled_name();
+  if (!owner_mangled.getString().empty()) {
+    ROSE_ASSERT(scope_mangled_str.find(owner_mangled.getString()) !=
+                std::string::npos);
+  }
+
+  SgName scope_qualified = decl_scope->get_qualified_name();
+  SgName owner_qualified = target->get_qualified_name();
+  ROSE_ASSERT(scope_qualified == owner_qualified);
+
   std::vector<SgNode *> decl_scopes =
       NodeQuery::querySubTree(project, V_SgDeclarationScope);
   ROSE_ASSERT(!decl_scopes.empty());

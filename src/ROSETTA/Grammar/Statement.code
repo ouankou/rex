@@ -9341,7 +9341,17 @@ SgDeclarationScope::post_construction_initialization()
 SgName
 SgDeclarationScope::get_mangled_name(void) const
    {
-  // I think that for this scope we need not return anything.
+  // Use the owning declaration's mangled name when available so that
+  // declaration scopes are stable and distinguishable in name mangling.
+     if (SgDeclarationStatement* decl = isSgDeclarationStatement(get_parent()))
+        {
+          return decl->get_mangled_name() + SgName("__declaration_scope__");
+        }
+     if (const SgScopeStatement* scope = isSgScopeStatement(get_parent()))
+        {
+          return scope->get_mangled_name() + SgName("__declaration_scope__");
+        }
+
      return SgName ("__declaration_scope__");
    }
 
@@ -9350,16 +9360,39 @@ SgName
 SgDeclarationScope::get_qualified_name() const
    {
      SgNode *p = get_parent();
-     if (isSgTemplateFunctionDeclaration(p)) {
-       return ((SgTemplateFunctionDeclaration *)p)->get_qualified_name();
-     } else if (isSgTemplateClassDeclaration(p)) {
-       return ((SgTemplateClassDeclaration *)p)->get_qualified_name();
-     } else if (isSgTemplateTypedefDeclaration(p)) {
-       return ((SgTemplateTypedefDeclaration *)p)->get_qualified_name();
-     } else {
-       std::string globalScopeDelimiter = "";
-       return SgName (globalScopeDelimiter);
+     if (SgTemplateFunctionDeclaration *tplfn =
+             isSgTemplateFunctionDeclaration(p)) {
+       return tplfn->get_qualified_name();
+     } else if (SgTemplateClassDeclaration *tplclass =
+                    isSgTemplateClassDeclaration(p)) {
+       return tplclass->get_qualified_name();
+     } else if (SgTemplateTypedefDeclaration *tpltypedef =
+                    isSgTemplateTypedefDeclaration(p)) {
+       return tpltypedef->get_qualified_name();
+     } else if (SgTemplateDeclaration *tpldecl = isSgTemplateDeclaration(p)) {
+       return tpldecl->get_qualified_name();
+     } else if (SgNonrealDecl *nrdecl = isSgNonrealDecl(p)) {
+       return nrdecl->get_qualified_name();
+     } else if (SgClassDeclaration *cdecl = isSgClassDeclaration(p)) {
+       return cdecl->get_qualified_name();
+     } else if (SgMemberFunctionDeclaration *mfdecl =
+                    isSgMemberFunctionDeclaration(p)) {
+       return mfdecl->get_qualified_name();
+     } else if (SgFunctionDeclaration *fdecl = isSgFunctionDeclaration(p)) {
+       return fdecl->get_qualified_name();
+     } else if (SgTypedefDeclaration *tdef = isSgTypedefDeclaration(p)) {
+       return tdef->get_qualified_name();
+     } else if (SgEnumDeclaration *edecl = isSgEnumDeclaration(p)) {
+       return edecl->get_qualified_name();
+     } else if (SgNamespaceDeclarationStatement *ndecl =
+                    isSgNamespaceDeclarationStatement(p)) {
+       return ndecl->get_qualified_name();
+     } else if (SgScopeStatement *scope = isSgScopeStatement(p)) {
+       return scope->get_qualified_name();
      }
+
+     std::string globalScopeDelimiter = "";
+     return SgName (globalScopeDelimiter);
    }
 
 void
@@ -12177,7 +12210,12 @@ SgTemplateInstantiationFunctionDecl::get_mangled_name (void) const
 SgSymbol*
 SgTemplateInstantiationFunctionDecl::get_symbol_from_symbol_table() const
    {
-     return SgFunctionDeclaration::get_symbol_from_symbol_table();
+     ROSE_ASSERT(get_scope() != NULL);
+     SgScopeStatement* scope = get_scope();
+     SgSymbol* sym = scope->find_symbol_from_declaration(this);
+     if (sym != NULL)
+        return sym;
+     return NULL;
    }
 
 
@@ -12259,7 +12297,12 @@ SgTemplateInstantiationMemberFunctionDecl::get_mangled_name (void) const
 SgSymbol*
 SgTemplateInstantiationMemberFunctionDecl::get_symbol_from_symbol_table() const
    {
-     return SgMemberFunctionDeclaration::get_symbol_from_symbol_table();
+     ROSE_ASSERT(get_scope() != NULL);
+     SgScopeStatement* scope = get_scope();
+     SgSymbol* sym = scope->find_symbol_from_declaration(this);
+     if (sym != NULL)
+        return sym;
+     return NULL;
    }
 
 // DQ (11/27/2011): Adding support to hold the template declarations in the AST.

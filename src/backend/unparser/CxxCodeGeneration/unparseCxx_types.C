@@ -3335,8 +3335,9 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
       unparseNonrealType(nrparent_nrscope->get_type(), info, false);
       curprint("::");
     } else {
-      if (has_global_qualifier)
+      if (has_global_qualifier) {
         curprint("::");
+      }
     }
 
   } else if (info.get_reference_node_for_qualification()) {
@@ -3347,6 +3348,8 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
 #endif
     curprint(nameQualifier.str());
     has_nonreal_parent = true;
+  } else if (has_global_qualifier) {
+    curprint("::");
   }
 
   SgTemplateArgumentPtrList &tpl_args = nrdecl->get_tpl_args();

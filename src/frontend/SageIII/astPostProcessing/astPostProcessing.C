@@ -10,6 +10,7 @@
 // macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
 
+#include <memory>
 #include <unordered_set>
 
 // DQ (12/31/2005): This is OK if not declared in a header file
@@ -17,6 +18,31 @@ using namespace std;
 
 // DQ (8/20/2005): Make this local so that it can't be called externally!
 void postProcessingSupport(SgNode *node);
+
+SgSymbolTable &get_orphan_symbol_table() {
+  static std::unique_ptr<SgSymbolTable> orphan_table;
+  if (!orphan_table) {
+    orphan_table.reset(new SgSymbolTable());
+  }
+  return *orphan_table;
+}
+
+void move_symbol_to_orphan_table(SgSymbol *symbol) {
+  if (symbol == nullptr) {
+    return;
+  }
+  if (SgSymbolTable *parent_table = isSgSymbolTable(symbol->get_parent())) {
+    if (parent_table->exists(symbol)) {
+      return;
+    }
+  }
+  // Keep detached symbols alive without reintroducing them into a scope.
+  SgSymbolTable &orphan_table = get_orphan_symbol_table();
+  if (orphan_table.exists(symbol)) {
+    return;
+  }
+  orphan_table.insert(symbol->get_name(), symbol);
+}
 
 namespace {
 // Global hook to let memory-pool traversals ignore unwanted nodes (e.g., Clang
@@ -77,6 +103,100 @@ bool usesClangFrontend(SgNode *node) {
   }
 
   return false;
+}
+
+bool constraintFailureOnNode(SgNode *node) {
+  auto failed = [](auto *target) -> bool {
+    if (target == nullptr) {
+      return false;
+    }
+    if (target->get_constraintSatisfactionEvaluated()) {
+      if (!target->get_constraintSatisfactionSatisfied() ||
+          target->get_constraintSatisfactionContainsErrors() ||
+          target->get_constraintSatisfactionSubstitutionFailure()) {
+        return true;
+      }
+    }
+    if (target->get_sfinaeEvaluated() &&
+        target->get_sfinaeSubstitutionFailure()) {
+      return true;
+    }
+    return false;
+  };
+
+  if (auto *inst = isSgTemplateInstantiationMemberFunctionDecl(node)) {
+    return failed(inst);
+  }
+  if (auto *inst = isSgTemplateInstantiationFunctionDecl(node)) {
+    return failed(inst);
+  }
+  if (auto *inst = isSgTemplateInstantiationTypedefDeclaration(node)) {
+    return failed(inst);
+  }
+  if (auto *inst = isSgTemplateVariableDeclaration(node)) {
+    return failed(inst);
+  }
+  if (auto *inst = isSgTemplateInstantiationDecl(node)) {
+    return failed(inst);
+  }
+  return false;
+}
+
+void pruneSymbolsForConstraintFailures(SgNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  struct Pruner : public AstSimpleProcessing {
+    void visit(SgNode *n) override {
+      SgDeclarationStatement *decl = isSgDeclarationStatement(n);
+      if (decl == nullptr) {
+        return;
+      }
+      if (!constraintFailureOnNode(decl)) {
+        return;
+      }
+
+      auto remove_symbol = [&](SgSymbol *symbol) {
+        if (symbol == nullptr) {
+          return;
+        }
+        if (SgSymbolTable *table = isSgSymbolTable(symbol->get_parent())) {
+          if (table->exists(symbol)) {
+            table->remove(symbol);
+          }
+        } else if (SgScopeStatement *scope =
+                       isSgScopeStatement(symbol->get_parent())) {
+          if (scope->symbol_exists(symbol)) {
+            scope->remove_symbol(symbol);
+          }
+        }
+        move_symbol_to_orphan_table(symbol);
+      };
+
+      if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(decl)) {
+        for (SgInitializedName *init_name : var_decl->get_variables()) {
+          if (init_name == nullptr) {
+            continue;
+          }
+          remove_symbol(init_name->get_symbol_from_symbol_table());
+        }
+      }
+
+      if (SgSymbol *symbol = decl->get_symbol_from_symbol_table()) {
+        remove_symbol(symbol);
+      }
+
+      if (SgDeclarationStatement *first_nondef =
+              decl->get_firstNondefiningDeclaration()) {
+        if (SgSymbol *symbol = first_nondef->get_symbol_from_symbol_table()) {
+          remove_symbol(symbol);
+        }
+      }
+    }
+  } pruner;
+
+  pruner.traverse(node, preorder);
 }
 } // namespace
 
@@ -490,6 +610,10 @@ void postProcessingSupport(SgNode *node) {
     // DQ (2/25/2019): Adding support to mark shared defining declarations
     // across multiple files.
     markSharedDeclarationsForOutputInCodeGeneration(node);
+
+    // Prune symbols for constraint-unsatisfied instantiations after all
+    // symbol-table fixups have completed.
+    pruneSymbolsForConstraintFailures(node);
     if (SgProject::get_verbose() > 1) {
       printf("Calling checkIsModifiedFlag() \n");
     }
