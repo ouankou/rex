@@ -64,6 +64,8 @@ set(noinst_programs
   rex_test2026_template_constraints_ir
   rex_test2026_deduction_ordering
   rex_test2026_param_list_unique_name
+  rex_test2026_sfinae_prune
+  rex_test2026_on_demand_qualification
   rex_test2026_fold_pack_expr
   rex_test2026_stl_vector
   rex_test2026_stl_tuple
@@ -148,6 +150,7 @@ set(group1_tests
   rex_test2026_null_expression_unparse
   rex_test2026_deduction_ordering
   rex_test2026_param_list_unique_name
+  rex_test2026_on_demand_qualification
 )
 
 foreach(test ${group1_tests})
@@ -201,6 +204,11 @@ add_test(
 add_test(
   NAME astInterface_rex_test2026_template_constraints_ir
   COMMAND rex_test2026_template_constraints_ir ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_template_constraints_ir.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_sfinae_prune
+  COMMAND rex_test2026_sfinae_prune ${TEST_CXXFLAGS} -rex:clang:continue-on-error -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_sfinae_prune.C
 )
 
 add_test(

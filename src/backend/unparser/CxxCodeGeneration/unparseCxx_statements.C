@@ -4093,6 +4093,7 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
   SgUnparse_Info ninfo(info);
 
   fixupScopeInUnparseInfo(ninfo, funcdecl_stmt);
+  const bool is_deduction_guide = funcdecl_stmt->get_is_deduction_guide();
 
   if ((funcdecl_stmt->isForward() == false) &&
       (funcdecl_stmt->get_definition() != NULL) &&
@@ -4124,7 +4125,6 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     // available,
     //   and from type() otherwise.
     SgType *rtype = funcdecl_stmt->get_orig_return_type();
-    ninfo.set_isTypeFirstPart();
 
     SgUnparse_Info ninfo_for_type(ninfo);
     if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true) {
@@ -4141,7 +4141,10 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     ninfo_for_type.set_type_elaboration_required(
         funcdecl_stmt->get_type_elaboration_required_for_return_type());
 
-    unp->u_type->unparseType(rtype, ninfo_for_type);
+    if (!is_deduction_guide) {
+      ninfo_for_type.set_isTypeFirstPart();
+      unp->u_type->unparseType(rtype, ninfo_for_type);
+    }
 
     if (funcdecl_stmt->isForward() == false) {
       unp->u_sage->printAttributes(funcdecl_stmt, info);
@@ -4164,8 +4167,17 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     unparse_helper(funcdecl_stmt, ninfo);
 
     ninfo.set_declstatement_ptr(NULL);
-    ninfo.set_isTypeSecondPart();
-    unp->u_type->unparseType(rtype, ninfo);
+    if (is_deduction_guide) {
+      curprint(" -> ");
+      SgUnparse_Info trailing_type_info(ninfo_for_type);
+      trailing_type_info.set_isTypeFirstPart();
+      unp->u_type->unparseType(rtype, trailing_type_info);
+      trailing_type_info.set_isTypeSecondPart();
+      unp->u_type->unparseType(rtype, trailing_type_info);
+    } else {
+      ninfo.set_isTypeSecondPart();
+      unp->u_type->unparseType(rtype, ninfo);
+    }
 
     if (funcdecl_stmt->get_declarationModifier().isThrow()) {
       const SgTypePtrList &exceptionSpecifierList =

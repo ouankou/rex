@@ -1674,6 +1674,11 @@ void Grammar::setUpStatements() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
+  // C++17 deduction guide marker.
+  FunctionDeclaration.setDataPrototype(
+      "bool", "is_deduction_guide", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   // DQ (2/10/2016): Adding support for a scope to put function parameters to
   // support C99 cases such as: "foobar(int size, int array[size]);"
   FunctionDeclaration.setDataPrototype(

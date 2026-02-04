@@ -32,7 +32,11 @@ static inline void move_symbol_to_orphan_table(SgSymbol *symbol) {
   }
 
   // Keep detached symbols alive without reintroducing them into a scope.
-  get_orphan_symbol_table().insert(symbol->get_name(), symbol);
+  SgSymbolTable &orphan_table = get_orphan_symbol_table();
+  if (orphan_table.exists(symbol)) {
+    return;
+  }
+  orphan_table.insert(symbol->get_name(), symbol);
 }
 
 class MissingTemplateHeaderFixupAttribute : public AstAttribute {
@@ -744,7 +748,8 @@ protected:
   // the provided scope.
   SgNonrealType *
   buildNonrealTypeForNestedNameSpecifierType(const clang::Type *clang_type,
-                                             SgScopeStatement *scope);
+                                             SgScopeStatement *scope,
+                                             bool prefer_current_scope = false);
 
   // Helper: Translate a constraint expression into a ROSE expression.
   SgExpression *translateConstraintExpression(const clang::Expr *expr);
@@ -754,6 +759,12 @@ protected:
       const clang::NamedDecl *constraint_owner,
       llvm::ArrayRef<clang::AssociatedConstraint> constraints,
       llvm::ArrayRef<clang::TemplateArgument> template_args,
+      clang::SourceRange template_id_range);
+
+  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
+      const clang::NamedDecl *constraint_owner,
+      llvm::ArrayRef<clang::AssociatedConstraint> constraints,
+      const clang::MultiLevelTemplateArgumentList &template_args,
       clang::SourceRange template_id_range);
 
   ConstraintSatisfactionResult evaluateConstraintSatisfaction(
@@ -771,12 +782,18 @@ protected:
   ConstraintSatisfactionResult evaluateConstraintSatisfaction(
       const clang::NamedDecl *constraint_owner,
       llvm::ArrayRef<const clang::Expr *> constraints,
+      const clang::MultiLevelTemplateArgumentList &template_args,
+      clang::SourceRange template_id_range);
+
+  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
+      const clang::NamedDecl *constraint_owner,
+      llvm::ArrayRef<const clang::Expr *> constraints,
       const clang::TemplateArgumentList &template_args,
       clang::SourceRange template_id_range);
+#endif
   // Evaluate non-constraint SFINAE for a template instantiation.
   SFINAEFailureResult
   evaluateSFINAEFailure(const clang::FunctionDecl *function_decl);
-#endif
 
   void attachConstraintSatisfaction(SgNode *node,
                                     const ConstraintSatisfactionResult &result);

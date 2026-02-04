@@ -1311,8 +1311,6 @@ bool ClangToDotTranslator::VisitCXXDeductionGuideDecl(
 
   node_desc.kind_hierarchy.push_back("CXXDeductionGuideDecl");
 
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
-
   return VisitFunctionDecl(cxx_deduction_guide_decl, node_desc) && res;
 }
 
