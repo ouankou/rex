@@ -22,10 +22,10 @@ int main(int argc, char *argv[]) {
   ROSE_ASSERT(decl_scope != nullptr);
   ROSE_ASSERT(decl_scope->get_parent() == target);
 
-  SgDeclarationScope *owner_scope = isSgDeclarationScope(target->get_scope());
+  SgDeclarationScope *owner_scope = isSgDeclarationScope(target->get_parent());
   ROSE_ASSERT(owner_scope != nullptr);
+  ROSE_ASSERT(target->get_scope() == owner_scope);
   ROSE_ASSERT(owner_scope->statementExistsInScope(target));
-  ROSE_ASSERT(target->get_parent() == owner_scope);
   ROSE_ASSERT(owner_scope->lookup_nonreal_symbol(target->get_name(), nullptr,
                                                  nullptr) != nullptr);
 

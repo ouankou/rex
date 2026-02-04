@@ -9434,6 +9434,20 @@ SgDeclarationScope::insert_child(SgStatement* target, SgStatement* newstmt, bool
             decl->set_scope(this);
             decl->set_parent(this);
           }
+     else if (extractBasicBlock)
+          {
+            if (SgBasicBlock* bb = isSgBasicBlock(newstmt))
+                 {
+                   const SgStatementPtrList& stmts = bb->get_statements();
+                   for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end(); ++it)
+                        {
+                          if (SgDeclarationStatement* decl_in_bb = isSgDeclarationStatement(*it))
+                               {
+                                 decl_in_bb->set_scope(this);
+                               }
+                        }
+                 }
+          }
      return StatementListInsertChild( this, get_declarations(), target, newstmt, inFront, extractBasicBlock, false);
    }
 
@@ -9444,6 +9458,20 @@ SgDeclarationScope::replace_child(SgStatement *target ,SgStatement * newstmt, bo
           {
             decl->set_scope(this);
             decl->set_parent(this);
+          }
+     else if (extractBasicBlock)
+          {
+            if (SgBasicBlock* bb = isSgBasicBlock(newstmt))
+                 {
+                   const SgStatementPtrList& stmts = bb->get_statements();
+                   for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end(); ++it)
+                        {
+                          if (SgDeclarationStatement* decl_in_bb = isSgDeclarationStatement(*it))
+                               {
+                                 decl_in_bb->set_scope(this);
+                               }
+                        }
+                 }
           }
      return StatementListInsertChild( this, get_declarations(), target, newstmt, true, extractBasicBlock, true);
    }
