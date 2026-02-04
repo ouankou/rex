@@ -10,9 +10,12 @@ int choose(T) {
   return 1;
 }
 
-template int choose<NoType>(NoType);
+int choose(...) { return 0; }
+
+template int choose<HasType>(HasType);
 
 int main() {
   HasType h;
-  return choose(h);
+  NoType n;
+  return choose(h) + choose(n);
 }

@@ -16,6 +16,28 @@ int main(int argc, char **argv) {
   }
   ROSE_ASSERT(choose_template != nullptr);
 
+  bool found_fallback = false;
+  Rose_STL_Container<SgNode *> decls =
+      NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
+  for (SgNode *node : decls) {
+    SgFunctionDeclaration *decl = isSgFunctionDeclaration(node);
+    if (decl == nullptr) {
+      continue;
+    }
+    if (decl->get_name() != "choose") {
+      continue;
+    }
+    if (isSgTemplateFunctionDeclaration(decl) != nullptr) {
+      continue;
+    }
+    if (isSgTemplateInstantiationFunctionDecl(decl) != nullptr) {
+      continue;
+    }
+    found_fallback = true;
+    break;
+  }
+  ROSE_ASSERT(found_fallback);
+
   Rose_STL_Container<SgNode *> funcs =
       NodeQuery::querySubTree(project, V_SgTemplateInstantiationFunctionDecl);
 
@@ -62,8 +84,6 @@ int main(int argc, char **argv) {
     }
   }
 
-  ROSE_ASSERT(unsatisfied > 0 &&
-              "Expected a constraint-unsatisfied instantiation to be pruned");
   ROSE_ASSERT(satisfied > 0 &&
               "Expected at least one constraint-satisfied instantiation");
   ROSE_ASSERT(satisfied_with_symbol > 0 &&

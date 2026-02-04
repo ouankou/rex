@@ -36,7 +36,12 @@ void move_symbol_to_orphan_table(SgSymbol *symbol) {
       return;
     }
   }
-  get_orphan_symbol_table().insert(symbol->get_name(), symbol);
+  // Keep detached symbols alive without reintroducing them into a scope.
+  SgSymbolTable &orphan_table = get_orphan_symbol_table();
+  if (orphan_table.exists(symbol)) {
+    return;
+  }
+  orphan_table.insert(symbol->get_name(), symbol);
 }
 
 namespace {
