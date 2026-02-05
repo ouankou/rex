@@ -7,6 +7,8 @@
 
 #include "ompSupport.h" // to support unparsing OpenMP constructs
 
+#include "OpenACCKinds.h"
+
 // DQ (10/29/2013): Adding support for unparsing from the token stream.
 #include "tokenStreamMapping.h"
 
@@ -3571,6 +3573,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           break;
         case V_SgAccParallelStatement:
         case V_SgAccParallelLoopStatement:
+        case V_SgAccDataStatement:
+        case V_SgAccKernelsStatement:
+        case V_SgAccAtomicStatement:
+        case V_SgAccEnterDataStatement:
+        case V_SgAccExitDataStatement:
+        case V_SgAccRoutineStatement:
+        case V_SgAccWaitStatement:
+        case V_SgAccCacheStatement:
           unparseAccGenericStatement(stmt, info);
           break;
         default:
@@ -11069,22 +11079,115 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     ROSE_ABORT();
   }
 
+  static std::string accDefaultKindToString(int kind) {
+    switch (static_cast<OpenACCDefaultClauseKind>(kind)) {
+    case ACCC_DEFAULT_none:
+      return "none";
+    case ACCC_DEFAULT_present:
+      return "present";
+    default:
+      return "";
+    }
+  }
+
+  static std::string accReductionOperatorToString(int op) {
+    switch (static_cast<OpenACCReductionClauseOperator>(op)) {
+    case ACCC_REDUCTION_add:
+      return "+";
+    case ACCC_REDUCTION_sub:
+      return "-";
+    case ACCC_REDUCTION_mul:
+      return "*";
+    case ACCC_REDUCTION_max:
+      return "max";
+    case ACCC_REDUCTION_min:
+      return "min";
+    case ACCC_REDUCTION_bitand:
+      return "&";
+    case ACCC_REDUCTION_bitor:
+      return "|";
+    case ACCC_REDUCTION_bitxor:
+      return "^";
+    case ACCC_REDUCTION_logand:
+      return "&&";
+    case ACCC_REDUCTION_logor:
+      return "||";
+    case ACCC_REDUCTION_fort_and:
+      return ".and.";
+    case ACCC_REDUCTION_fort_or:
+      return ".or.";
+    case ACCC_REDUCTION_fort_eqv:
+      return ".eqv.";
+    case ACCC_REDUCTION_fort_neqv:
+      return ".neqv.";
+    case ACCC_REDUCTION_fort_iand:
+      return ".iand.";
+    case ACCC_REDUCTION_fort_ior:
+      return ".ior.";
+    case ACCC_REDUCTION_fort_ieor:
+      return ".ieor.";
+    default:
+      return "";
+    }
+  }
+
   void UnparseLanguageIndependentConstructs::unparseAccExpressionClause(
       SgAccExpressionClause * clause, SgUnparse_Info & info) {
     ASSERT_not_null(clause);
     switch (clause->variantT()) {
     case V_SgAccCollapseClause:
       curprint(string(" collapse("));
-      break;
+      if (clause->get_expression() != NULL) {
+        unparseExpression(clause->get_expression(), info);
+      }
+      curprint(string(")"));
+      return;
     case V_SgAccNumGangsClause:
       curprint(string(" num_gangs("));
-      break;
+      if (clause->get_expression() != NULL) {
+        unparseExpression(clause->get_expression(), info);
+      }
+      curprint(string(")"));
+      return;
     case V_SgAccNumWorkersClause:
       curprint(string(" num_workers("));
-      break;
+      if (clause->get_expression() != NULL) {
+        unparseExpression(clause->get_expression(), info);
+      }
+      curprint(string(")"));
+      return;
     case V_SgAccVectorLengthClause:
       curprint(string(" vector_length("));
-      break;
+      if (clause->get_expression() != NULL) {
+        unparseExpression(clause->get_expression(), info);
+      }
+      curprint(string(")"));
+      return;
+    case V_SgAccAsyncClause:
+      if (clause->get_expression() != NULL) {
+        curprint(string(" async("));
+        unparseExpression(clause->get_expression(), info);
+        curprint(string(")"));
+      } else {
+        curprint(string(" async"));
+      }
+      return;
+    case V_SgAccIfClause:
+      curprint(string(" if("));
+      if (clause->get_expression() != NULL) {
+        unparseExpression(clause->get_expression(), info);
+      }
+      curprint(string(")"));
+      return;
+    case V_SgAccVectorClause:
+      if (clause->get_expression() != NULL) {
+        curprint(string(" vector("));
+        unparseExpression(clause->get_expression(), info);
+        curprint(string(")"));
+      } else {
+        curprint(string(" vector"));
+      }
+      return;
     default:
       cerr << "Unhandled OpenACC expression clause type in "
               "UnparseLanguageIndependentConstructs::"
@@ -11092,11 +11195,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
            << clause->class_name() << endl;
       ROSE_ABORT();
     }
-
-    if (clause->get_expression() != NULL) {
-      unparseExpression(clause->get_expression(), info);
-    }
-    curprint(string(")"));
   }
 
   void UnparseLanguageIndependentConstructs::unparseAccVariablesClause(
@@ -11111,6 +11209,21 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     case V_SgAccCopyoutClause:
       curprint(string(" copyout("));
+      break;
+    case V_SgAccCreateClause:
+      curprint(string(" create("));
+      break;
+    case V_SgAccPresentClause:
+      curprint(string(" present("));
+      break;
+    case V_SgAccPrivateClause:
+      curprint(string(" private("));
+      break;
+    case V_SgAccDeviceptrClause:
+      curprint(string(" deviceptr("));
+      break;
+    case V_SgAccDeleteClause:
+      curprint(string(" delete("));
       break;
     default:
       cerr << "Unhandled OpenACC variables clause type in "
@@ -11144,12 +11257,81 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgAccNumGangsClause:
     case V_SgAccNumWorkersClause:
     case V_SgAccVectorLengthClause:
+    case V_SgAccAsyncClause:
+    case V_SgAccIfClause:
+    case V_SgAccVectorClause:
       unparseAccExpressionClause(isSgAccExpressionClause(clause), info);
       break;
     case V_SgAccCopyClause:
     case V_SgAccCopyinClause:
     case V_SgAccCopyoutClause:
+    case V_SgAccCreateClause:
+    case V_SgAccPresentClause:
+    case V_SgAccPrivateClause:
+    case V_SgAccDeviceptrClause:
+    case V_SgAccDeleteClause:
       unparseAccVariablesClause(isSgAccVariablesClause(clause), info);
+      break;
+    case V_SgAccDefaultClause: {
+      SgAccDefaultClause *default_clause = isSgAccDefaultClause(clause);
+      ASSERT_not_null(default_clause);
+      curprint(string(" default"));
+      std::string kind =
+          accDefaultKindToString(default_clause->get_default_kind());
+      if (!kind.empty()) {
+        curprint(string("("));
+        curprint(kind);
+        curprint(string(")"));
+      }
+      break;
+    }
+    case V_SgAccReductionClause: {
+      SgAccReductionClause *reduction_clause = isSgAccReductionClause(clause);
+      ASSERT_not_null(reduction_clause);
+      std::string op = accReductionOperatorToString(
+          reduction_clause->get_reduction_operator());
+      if (op.empty()) {
+        cerr << "Unhandled OpenACC reduction operator in "
+                "UnparseLanguageIndependentConstructs::unparseAccClause():"
+             << reduction_clause->get_reduction_operator() << endl;
+        ROSE_ABORT();
+      }
+      curprint(string(" reduction("));
+      curprint(op);
+      curprint(string(" : "));
+      SgExprListExp *var_list = reduction_clause->get_variables();
+      if (var_list != NULL) {
+        const SgExpressionPtrList &exprs = var_list->get_expressions();
+        bool first = true;
+        for (SgExpressionPtrList::const_iterator it = exprs.begin();
+             it != exprs.end(); ++it) {
+          if (!first) {
+            curprint(string(", "));
+          }
+          first = false;
+          unparseExpression(*it, info);
+        }
+      }
+      curprint(string(")"));
+      break;
+    }
+    case V_SgAccGangClause:
+      curprint(string(" gang"));
+      break;
+    case V_SgAccSeqClause:
+      curprint(string(" seq"));
+      break;
+    case V_SgAccUpdateClause:
+      curprint(string(" update"));
+      break;
+    case V_SgAccReadClause:
+      curprint(string(" read"));
+      break;
+    case V_SgAccWriteClause:
+      curprint(string(" write"));
+      break;
+    case V_SgAccCaptureClause:
+      curprint(string(" capture"));
       break;
     default:
       cerr << "Unhandled OpenACC clause type in "
@@ -11171,6 +11353,116 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgAccParallelLoopStatement:
       curprint(string("parallel loop"));
       break;
+    case V_SgAccDataStatement:
+      curprint(string("data"));
+      break;
+    case V_SgAccKernelsStatement:
+      curprint(string("kernels"));
+      break;
+    case V_SgAccAtomicStatement:
+      curprint(string("atomic"));
+      break;
+    case V_SgAccEnterDataStatement:
+      curprint(string("enter data"));
+      break;
+    case V_SgAccExitDataStatement:
+      curprint(string("exit data"));
+      break;
+    case V_SgAccRoutineStatement: {
+      curprint(string("routine"));
+      SgAccRoutineStatement *routine_stmt = isSgAccRoutineStatement(stmt);
+      if (routine_stmt != NULL &&
+          routine_stmt->get_routine_name().getString() != "") {
+        curprint(string("("));
+        curprint(routine_stmt->get_routine_name().getString());
+        curprint(string(")"));
+      }
+      break;
+    }
+    case V_SgAccWaitStatement: {
+      curprint(string("wait"));
+      SgAccWaitStatement *wait_stmt = isSgAccWaitStatement(stmt);
+      if (wait_stmt != NULL) {
+        const bool have_devnum = wait_stmt->get_devnum() != NULL;
+        const bool have_queues = wait_stmt->get_queues();
+        const bool have_list =
+            wait_stmt->get_wait_list() != NULL &&
+            !wait_stmt->get_wait_list()->get_expressions().empty();
+        if (have_devnum || have_queues || have_list) {
+          curprint(string("("));
+          bool wrote_prefix = false;
+          if (have_devnum) {
+            curprint(string("devnum: "));
+            unparseExpression(wait_stmt->get_devnum(), info);
+            curprint(string(": "));
+            wrote_prefix = true;
+          }
+          if (have_queues) {
+            curprint(string("queues: "));
+            wrote_prefix = true;
+          }
+          if (have_list) {
+            const SgExpressionPtrList &exprs =
+                wait_stmt->get_wait_list()->get_expressions();
+            bool first = true;
+            for (SgExpressionPtrList::const_iterator it = exprs.begin();
+                 it != exprs.end(); ++it) {
+              if (!first) {
+                curprint(string(", "));
+              }
+              first = false;
+              unparseExpression(*it, info);
+            }
+          } else if (wrote_prefix) {
+            // No wait list, but prefix was emitted; leave empty.
+          }
+          curprint(string(")"));
+        }
+      }
+      break;
+    }
+    case V_SgAccCacheStatement: {
+      curprint(string("cache"));
+      SgAccCacheStatement *cache_stmt = isSgAccCacheStatement(stmt);
+      if (cache_stmt != NULL) {
+        const bool have_vars =
+            cache_stmt->get_variables() != NULL &&
+            !cache_stmt->get_variables()->get_expressions().empty();
+        const bool have_modifier = cache_stmt->get_modifier() != 0;
+        if (have_vars || have_modifier) {
+          curprint(string("("));
+          if (have_modifier) {
+            OpenACCCacheDirectiveModifier modifier =
+                static_cast<OpenACCCacheDirectiveModifier>(
+                    cache_stmt->get_modifier());
+            if (modifier == ACCC_CACHE_readonly) {
+              curprint(string("readonly: "));
+            } else {
+              cerr << "Unhandled OpenACC cache modifier in "
+                      "UnparseLanguageIndependentConstructs::"
+                      "unparseAccDirectivePrefixAndName(): "
+                   << cache_stmt->get_modifier() << endl;
+              ROSE_ABORT();
+            }
+          }
+          if (have_vars) {
+            const SgExpressionPtrList &exprs =
+                cache_stmt->get_variables()->get_expressions();
+            bool first = true;
+            for (SgExpressionPtrList::const_iterator it = exprs.begin();
+                 it != exprs.end(); ++it) {
+              if (!first) {
+                curprint(string(", "));
+              }
+              first = false;
+              unparseExpression(*it, info);
+            }
+          }
+          curprint(string(")"));
+        }
+      }
+      break;
+    }
     default:
       cerr << "error: unacceptable OpenACC directive type within "
               "unparseAccDirectivePrefixAndName(): "

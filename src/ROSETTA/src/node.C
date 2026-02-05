@@ -273,22 +273,53 @@ void Grammar::setUpNodes() {
                      "AccNumWorkersClauseTag");
   NEW_TERMINAL_MACRO(AccVectorLengthClause, "AccVectorLengthClause",
                      "AccVectorLengthClauseTag");
+  NEW_TERMINAL_MACRO(AccAsyncClause, "AccAsyncClause", "AccAsyncClauseTag");
+  NEW_TERMINAL_MACRO(AccIfClause, "AccIfClause", "AccIfClauseTag");
+  NEW_TERMINAL_MACRO(AccVectorClause, "AccVectorClause", "AccVectorClauseTag");
 
   NEW_NONTERMINAL_MACRO(AccExpressionClause,
                         AccCollapseClause | AccNumGangsClause |
-                            AccNumWorkersClause | AccVectorLengthClause,
+                            AccNumWorkersClause | AccVectorLengthClause |
+                            AccAsyncClause | AccIfClause | AccVectorClause,
                         "AccExpressionClause", "AccExpressionClauseTag", false);
 
   NEW_TERMINAL_MACRO(AccCopyClause, "AccCopyClause", "AccCopyClauseTag");
   NEW_TERMINAL_MACRO(AccCopyinClause, "AccCopyinClause", "AccCopyinClauseTag");
   NEW_TERMINAL_MACRO(AccCopyoutClause, "AccCopyoutClause",
                      "AccCopyoutClauseTag");
+  NEW_TERMINAL_MACRO(AccCreateClause, "AccCreateClause", "AccCreateClauseTag");
+  NEW_TERMINAL_MACRO(AccPresentClause, "AccPresentClause",
+                     "AccPresentClauseTag");
+  NEW_TERMINAL_MACRO(AccPrivateClause, "AccPrivateClause",
+                     "AccPrivateClauseTag");
+  NEW_TERMINAL_MACRO(AccDeviceptrClause, "AccDeviceptrClause",
+                     "AccDeviceptrClauseTag");
+  NEW_TERMINAL_MACRO(AccDeleteClause, "AccDeleteClause", "AccDeleteClauseTag");
+  NEW_TERMINAL_MACRO(AccReductionClause, "AccReductionClause",
+                     "AccReductionClauseTag");
 
   NEW_NONTERMINAL_MACRO(AccVariablesClause,
-                        AccCopyClause | AccCopyinClause | AccCopyoutClause,
+                        AccCopyClause | AccCopyinClause | AccCopyoutClause |
+                            AccCreateClause | AccPresentClause |
+                            AccPrivateClause | AccDeviceptrClause |
+                            AccDeleteClause | AccReductionClause,
                         "AccVariablesClause", "AccVariablesClauseTag", false);
 
-  NEW_NONTERMINAL_MACRO(AccClause, AccExpressionClause | AccVariablesClause,
+  NEW_TERMINAL_MACRO(AccDefaultClause, "AccDefaultClause",
+                     "AccDefaultClauseTag");
+  NEW_TERMINAL_MACRO(AccGangClause, "AccGangClause", "AccGangClauseTag");
+  NEW_TERMINAL_MACRO(AccSeqClause, "AccSeqClause", "AccSeqClauseTag");
+  NEW_TERMINAL_MACRO(AccUpdateClause, "AccUpdateClause", "AccUpdateClauseTag");
+  NEW_TERMINAL_MACRO(AccReadClause, "AccReadClause", "AccReadClauseTag");
+  NEW_TERMINAL_MACRO(AccWriteClause, "AccWriteClause", "AccWriteClauseTag");
+  NEW_TERMINAL_MACRO(AccCaptureClause, "AccCaptureClause",
+                     "AccCaptureClauseTag");
+
+  NEW_NONTERMINAL_MACRO(AccClause,
+                        AccExpressionClause | AccVariablesClause |
+                            AccDefaultClause | AccGangClause | AccSeqClause |
+                            AccUpdateClause | AccReadClause | AccWriteClause |
+                            AccCaptureClause,
                         "AccClause", "AccClauseTag", false);
 
   // DQ (10/3/2008): Support for the Fortran "USE" statement and its rename list
@@ -1552,5 +1583,13 @@ void Grammar::setUpNodes() {
   AccVariablesClause.setDataPrototype(
       "SgExprListExp*", "variables", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+
+  AccDefaultClause.setDataPrototype(
+      "int", "default_kind", "= 0", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
+  AccReductionClause.setDataPrototype(
+      "int", "reduction_operator", "= 0", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
 } // end

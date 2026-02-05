@@ -293,6 +293,15 @@ public:
   unparseOmpEndDirectivePrefixAndName(SgStatement *stmt,
                                       SgUnparse_Info &info) override;
 
+  // unparsing for OpenACC AST
+  virtual void unparseAccPrefix(SgUnparse_Info &info) override;
+  virtual void unparseAccBeginDirectiveClauses(SgStatement *stmt,
+                                               SgUnparse_Info &info) override;
+  virtual void unparseAccGenericStatement(SgStatement *stmt,
+                                          SgUnparse_Info &info) override;
+  void unparseAccEndDirectivePrefixAndName(SgStatement *stmt,
+                                           SgUnparse_Info &info);
+
   /**
    * override to make unary plus/minus expressions have the same precedence as
    * binary plus; everything else remains the same.

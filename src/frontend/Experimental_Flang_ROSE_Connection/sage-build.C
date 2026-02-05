@@ -5532,60 +5532,6 @@ void ApplyCudaSubprogramAttrs(
 }
 
 namespace {
-std::string TrimWhitespace(const std::string &text) {
-  const auto start = text.find_first_not_of(" \t\r\n");
-  if (start == std::string::npos) {
-    return std::string{};
-  }
-  const auto end = text.find_last_not_of(" \t\r\n");
-  return text.substr(start, end - start + 1);
-}
-
-std::string NormalizeDirectiveText(const parser::CharBlock &source) {
-  std::string text = TrimWhitespace(source.ToString());
-  if (text.rfind("!$", 0) == 0) {
-    text = TrimWhitespace(text.substr(2));
-  }
-  return text;
-}
-
-std::string BuildAccClauseList(const parser::AccClauseList &clauses) {
-  std::string clauseText;
-  for (const auto &clause : clauses.v) {
-    std::string text = TrimWhitespace(clause.source.ToString());
-    if (text.empty()) {
-      continue;
-    }
-    if (!clauseText.empty()) {
-      clauseText += " ";
-    }
-    clauseText += text;
-  }
-  return clauseText;
-}
-
-std::string BuildAccDirectiveText(llvm::acc::Directive directive,
-                                  const parser::AccClauseList &clauses,
-                                  bool isEnd = false) {
-  std::string text = "acc ";
-  if (isEnd) {
-    text += "end ";
-  }
-  text += llvm::acc::getOpenACCDirectiveName(directive).str();
-  std::string clauseText = BuildAccClauseList(clauses);
-  if (!clauseText.empty()) {
-    text += " ";
-    text += clauseText;
-  }
-  return text;
-}
-
-std::string BuildAccEndDirectiveText(llvm::acc::Directive directive) {
-  std::string text = "acc end ";
-  text += llvm::acc::getOpenACCDirectiveName(directive).str();
-  return text;
-}
-
 const parser::CharBlock *
 SelectAccDirectiveSource(const parser::CharBlock &primary,
                          const parser::Verbatim *verbatim) {
@@ -10140,195 +10086,53 @@ void Build(parser::OpenMPConstruct &x) {
 void Build(parser::OpenACCConstruct &x) {
   BuildVisitor &visitor = CurrentBuildVisitor();
 
-  auto appendDirectiveFromSourceOrText =
-      [&](const parser::CharBlock &source, const parser::Verbatim *verbatim,
-          llvm::acc::Directive directive, const parser::AccClauseList *clauses,
-          bool isEnd) {
-        if (const auto *selected = SelectAccDirectiveSource(source, verbatim)) {
-          AppendPragmasFromCharBlock(*selected);
-          return;
-        }
-
-        std::string text;
-        if (clauses != nullptr) {
-          text = BuildAccDirectiveText(directive, *clauses, isEnd);
-        } else if (isEnd) {
-          text = BuildAccEndDirectiveText(directive);
-        } else {
-          text = std::string("acc ") +
-                 llvm::acc::getOpenACCDirectiveName(directive).str();
-        }
-        AppendPragmaStatement(text, SageBuilder::topScopeStack());
-      };
-
   common::visit(
       common::visitors{
           [&](parser::OpenACCBlockConstruct &y) {
-            auto &begin = std::get<parser::AccBeginBlockDirective>(y.t);
-            appendDirectiveFromSourceOrText(
-                begin.source, nullptr,
-                std::get<parser::AccBlockDirective>(begin.t).v,
-                &std::get<parser::AccClauseList>(begin.t), /*isEnd=*/false);
-
             visitor.Walk(std::get<parser::Block>(y.t));
-
-            auto &end = std::get<parser::AccEndBlockDirective>(y.t);
-            appendDirectiveFromSourceOrText(end.source, nullptr, end.v.v,
-                                            nullptr, /*isEnd=*/true);
           },
           [&](parser::OpenACCCombinedConstruct &y) {
-            auto &begin = std::get<parser::AccBeginCombinedDirective>(y.t);
-            appendDirectiveFromSourceOrText(
-                begin.source, nullptr,
-                std::get<parser::AccCombinedDirective>(begin.t).v,
-                &std::get<parser::AccClauseList>(begin.t), /*isEnd=*/false);
-
             if (auto &doConstruct =
                     std::get<std::optional<parser::DoConstruct>>(y.t)) {
               visitor.Walk(doConstruct.value());
-            }
-
-            if (auto &end =
-                    std::get<std::optional<parser::AccEndCombinedDirective>>(
-                        y.t)) {
-              appendDirectiveFromSourceOrText(end->source, nullptr, end->v.v,
-                                              nullptr, /*isEnd=*/true);
             }
           },
           [&](parser::OpenACCLoopConstruct &y) {
-            auto &begin = std::get<parser::AccBeginLoopDirective>(y.t);
-            appendDirectiveFromSourceOrText(
-                begin.source, nullptr,
-                std::get<parser::AccLoopDirective>(begin.t).v,
-                &std::get<parser::AccClauseList>(begin.t), /*isEnd=*/false);
-
             if (auto &doConstruct =
                     std::get<std::optional<parser::DoConstruct>>(y.t)) {
               visitor.Walk(doConstruct.value());
             }
-
-            if (std::get<std::optional<parser::AccEndLoop>>(y.t)) {
-              AppendPragmaStatement(
-                  BuildAccEndDirectiveText(llvm::acc::Directive::ACCD_loop),
-                  SageBuilder::topScopeStack());
-            }
           },
-          [&](parser::OpenACCStandaloneConstruct &y) {
-            appendDirectiveFromSourceOrText(
-                y.source, nullptr,
-                std::get<parser::AccStandaloneDirective>(y.t).v,
-                &std::get<parser::AccClauseList>(y.t), /*isEnd=*/false);
-          },
-          [&](parser::OpenACCCacheConstruct &y) {
-            const auto &verbatim = std::get<parser::Verbatim>(y.t);
-            if (const auto *selected =
-                    SelectAccDirectiveSource(y.source, &verbatim)) {
-              AppendPragmasFromCharBlock(*selected);
-              return;
-            }
-            std::cerr
-                << "OpenACCCacheConstruct missing directive source text.\n";
-            ROSE_ABORT();
-          },
-          [&](parser::OpenACCWaitConstruct &y) {
-            const auto &verbatim = std::get<parser::Verbatim>(y.t);
-            if (const auto *selected =
-                    SelectAccDirectiveSource(y.source, &verbatim)) {
-              AppendPragmasFromCharBlock(*selected);
-              return;
-            }
-            std::cerr
-                << "OpenACCWaitConstruct missing directive source text.\n";
-            ROSE_ABORT();
-          },
+          [&](parser::OpenACCStandaloneConstruct &y) { static_cast<void>(y); },
+          [&](parser::OpenACCCacheConstruct &y) { static_cast<void>(y); },
+          [&](parser::OpenACCWaitConstruct &y) { static_cast<void>(y); },
           [&](parser::OpenACCAtomicConstruct &y) {
-            auto appendAtomicEnd = [&]() {
-              AppendPragmaStatement(
-                  BuildAccEndDirectiveText(llvm::acc::Directive::ACCD_atomic),
-                  SageBuilder::topScopeStack());
-            };
-
             common::visit(
                 common::visitors{
                     [&](parser::AccAtomicRead &atom) {
-                      const auto &verbatim = std::get<parser::Verbatim>(atom.t);
-                      if (const auto *selected =
-                              SelectAccDirectiveSource(y.source, &verbatim)) {
-                        AppendPragmasFromCharBlock(*selected);
-                      } else {
-                        std::cerr << "OpenACC atomic read missing directive "
-                                     "source.\n";
-                        ROSE_ABORT();
-                      }
                       visitor.Walk(
                           std::get<parser::Statement<parser::AssignmentStmt>>(
                               atom.t));
-                      if (std::get<std::optional<parser::AccEndAtomic>>(
-                              atom.t)) {
-                        appendAtomicEnd();
-                      }
                     },
                     [&](parser::AccAtomicWrite &atom) {
-                      const auto &verbatim = std::get<parser::Verbatim>(atom.t);
-                      if (const auto *selected =
-                              SelectAccDirectiveSource(y.source, &verbatim)) {
-                        AppendPragmasFromCharBlock(*selected);
-                      } else {
-                        std::cerr << "OpenACC atomic write missing directive "
-                                     "source.\n";
-                        ROSE_ABORT();
-                      }
                       visitor.Walk(
                           std::get<parser::Statement<parser::AssignmentStmt>>(
                               atom.t));
-                      if (std::get<std::optional<parser::AccEndAtomic>>(
-                              atom.t)) {
-                        appendAtomicEnd();
-                      }
                     },
                     [&](parser::AccAtomicUpdate &atom) {
-                      const auto &verbatimOpt =
-                          std::get<std::optional<parser::Verbatim>>(atom.t);
-                      const auto *verbatim =
-                          verbatimOpt ? &verbatimOpt.value() : nullptr;
-                      if (const auto *selected =
-                              SelectAccDirectiveSource(y.source, verbatim)) {
-                        AppendPragmasFromCharBlock(*selected);
-                      } else {
-                        std::cerr << "OpenACC atomic update missing directive "
-                                     "source.\n";
-                        ROSE_ABORT();
-                      }
                       visitor.Walk(
                           std::get<parser::Statement<parser::AssignmentStmt>>(
                               atom.t));
-                      if (std::get<std::optional<parser::AccEndAtomic>>(
-                              atom.t)) {
-                        appendAtomicEnd();
-                      }
                     },
                     [&](parser::AccAtomicCapture &atom) {
-                      const auto &verbatim = std::get<parser::Verbatim>(atom.t);
-                      if (const auto *selected =
-                              SelectAccDirectiveSource(y.source, &verbatim)) {
-                        AppendPragmasFromCharBlock(*selected);
-                      } else {
-                        std::cerr << "OpenACC atomic capture missing directive "
-                                     "source.\n";
-                        ROSE_ABORT();
-                      }
                       visitor.Walk(
                           std::get<parser::AccAtomicCapture::Stmt1>(atom.t).v);
                       visitor.Walk(
                           std::get<parser::AccAtomicCapture::Stmt2>(atom.t).v);
-                      appendAtomicEnd();
                     }},
                 y.u);
           },
-          [&](parser::OpenACCEndConstruct &y) {
-            appendDirectiveFromSourceOrText(y.source, nullptr, y.v, nullptr,
-                                            /*isEnd=*/true);
-          }},
+          [&](parser::OpenACCEndConstruct &y) { static_cast<void>(y); }},
       x.u);
 }
 
@@ -10357,14 +10161,7 @@ void BuildVisitor::Build(parser::OmpBeginLoopDirective &x) {
   AppendPragmasFromCharBlockIfMissing(x.source);
 }
 
-void Build(parser::AccEndCombinedDirective &x) {
-  if (const auto *selected = SelectAccDirectiveSource(x.source, nullptr)) {
-    AppendPragmasFromCharBlock(*selected);
-    return;
-  }
-  AppendPragmaStatement(BuildAccEndDirectiveText(x.v.v),
-                        SageBuilder::topScopeStack());
-}
+void Build(parser::AccEndCombinedDirective &x) { static_cast<void>(x); }
 
 // CUFKernelDoConstruct
 void Build(parser::CUFKernelDoConstruct &x) {
@@ -10854,17 +10651,7 @@ void Build(parser::ProcedureDeclarationStmt &x) {
   visitor.Build(x);
 }
 
-void Build(parser::OpenACCRoutineConstruct &x) {
-  const auto &verbatim = std::get<parser::Verbatim>(x.t);
-  if (const auto *selected = SelectAccDirectiveSource(x.source, &verbatim)) {
-    AppendPragmasFromCharBlock(*selected);
-    return;
-  }
-  AppendPragmaStatement(
-      BuildAccDirectiveText(llvm::acc::Directive::ACCD_routine,
-                            std::get<parser::AccClauseList>(x.t)),
-      SageBuilder::topScopeStack());
-}
+void Build(parser::OpenACCRoutineConstruct &x) { static_cast<void>(x); }
 
 // OpenACCDeclarativeConstruct
 void Build(parser::OpenMPDeclarativeConstruct &x) {
@@ -10874,21 +10661,12 @@ void Build(parser::OpenMPDeclarativeConstruct &x) {
 
 // OpenACCDeclarativeConstruct
 void Build(parser::OpenACCDeclarativeConstruct &x) {
-  common::visit(common::visitors{
-                    [&](parser::OpenACCStandaloneDeclarativeConstruct &y) {
-                      if (const auto *selected =
-                              SelectAccDirectiveSource(y.source, nullptr)) {
-                        AppendPragmasFromCharBlock(*selected);
-                        return;
-                      }
-                      AppendPragmaStatement(
-                          BuildAccDirectiveText(
-                              std::get<parser::AccDeclarativeDirective>(y.t).v,
-                              std::get<parser::AccClauseList>(y.t)),
-                          SageBuilder::topScopeStack());
-                    },
-                    [&](parser::OpenACCRoutineConstruct &y) { Build(y); }},
-                x.u);
+  common::visit(
+      common::visitors{[&](parser::OpenACCStandaloneDeclarativeConstruct &y) {
+                         static_cast<void>(y);
+                       },
+                       [&](parser::OpenACCRoutineConstruct &y) { Build(y); }},
+      x.u);
 }
 
 // AccessSpec

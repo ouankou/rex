@@ -532,10 +532,31 @@ void Grammar::setUpStatements() {
                      "ACC_PARALLEL_STMT");
   NEW_TERMINAL_MACRO(AccParallelLoopStatement, "AccParallelLoopStatement",
                      "ACC_PARALLEL_LOOP_STMT");
+  NEW_TERMINAL_MACRO(AccDataStatement, "AccDataStatement", "ACC_DATA_STMT");
+  NEW_TERMINAL_MACRO(AccKernelsStatement, "AccKernelsStatement",
+                     "ACC_KERNELS_STMT");
+  NEW_TERMINAL_MACRO(AccAtomicStatement, "AccAtomicStatement",
+                     "ACC_ATOMIC_STMT");
+  NEW_TERMINAL_MACRO(AccEnterDataStatement, "AccEnterDataStatement",
+                     "ACC_ENTER_DATA_STMT");
+  NEW_TERMINAL_MACRO(AccExitDataStatement, "AccExitDataStatement",
+                     "ACC_EXIT_DATA_STMT");
+  NEW_TERMINAL_MACRO(AccRoutineStatement, "AccRoutineStatement",
+                     "ACC_ROUTINE_STMT");
+  NEW_TERMINAL_MACRO(AccWaitStatement, "AccWaitStatement", "ACC_WAIT_STMT");
+  NEW_TERMINAL_MACRO(AccCacheStatement, "AccCacheStatement", "ACC_CACHE_STMT");
 
   NEW_NONTERMINAL_MACRO(AccClauseBodyStatement,
-                        AccParallelStatement | AccParallelLoopStatement,
+                        AccParallelStatement | AccParallelLoopStatement |
+                            AccDataStatement | AccKernelsStatement |
+                            AccAtomicStatement,
                         "AccClauseBodyStatement", "ACC_CLAUSEBODY_STMT", false);
+
+  NEW_NONTERMINAL_MACRO(AccClauseStatement,
+                        AccEnterDataStatement | AccExitDataStatement |
+                            AccRoutineStatement | AccWaitStatement |
+                            AccCacheStatement,
+                        "AccClauseStatement", "ACC_CLAUSE_STMT", false);
 
   NEW_NONTERMINAL_MACRO(AccBodyStatement, AccClauseBodyStatement,
                         "AccBodyStatement", "ACC_BODY_STMT", false);
@@ -841,7 +862,8 @@ void Grammar::setUpStatements() {
           ElseWhereStatement | NullifyStatement | ArithmeticIfStatement |
           AssignStatement | ComputedGotoStatement | AssignedGotoStatement |
           AllocateStatement | DeallocateStatement | SequenceStatement |
-          AccBodyStatement | OmpExecStatement | ImageControlStatement,
+          AccBodyStatement | AccClauseStatement | OmpExecStatement |
+          ImageControlStatement,
       "Statement", "StatementTag", false);
 
   // DQ (11/24/2007): These have been moved to be declarations, so they can
@@ -5554,12 +5576,30 @@ void Grammar::setUpStatements() {
                                          "../Grammar/Statement.code");
   AccParallelLoopStatement.setFunctionSource(
       "SOURCE_ACC_PARALLEL_LOOP_STATEMENT", "../Grammar/Statement.code");
+  AccDataStatement.setFunctionSource("SOURCE_ACC_DATA_STATEMENT",
+                                     "../Grammar/Statement.code");
+  AccKernelsStatement.setFunctionSource("SOURCE_ACC_KERNELS_STATEMENT",
+                                        "../Grammar/Statement.code");
+  AccAtomicStatement.setFunctionSource("SOURCE_ACC_ATOMIC_STATEMENT",
+                                       "../Grammar/Statement.code");
+  AccEnterDataStatement.setFunctionSource("SOURCE_ACC_ENTER_DATA_STATEMENT",
+                                          "../Grammar/Statement.code");
+  AccExitDataStatement.setFunctionSource("SOURCE_ACC_EXIT_DATA_STATEMENT",
+                                         "../Grammar/Statement.code");
+  AccRoutineStatement.setFunctionSource("SOURCE_ACC_ROUTINE_STATEMENT",
+                                        "../Grammar/Statement.code");
+  AccWaitStatement.setFunctionSource("SOURCE_ACC_WAIT_STATEMENT",
+                                     "../Grammar/Statement.code");
+  AccCacheStatement.setFunctionSource("SOURCE_ACC_CACHE_STATEMENT",
+                                      "../Grammar/Statement.code");
   AccBodyStatement.setFunctionPrototype("HEADER_ACC_BODY_STATEMENT",
                                         "../Grammar/Statement.code");
   AccBodyStatement.setFunctionSource("SOURCE_ACC_BODY_STATEMENT",
                                      "../Grammar/Statement.code");
   AccClauseBodyStatement.setFunctionSource("SOURCE_ACC_CLAUSEBODY_STATEMENT",
                                            "../Grammar/Statement.code");
+  AccClauseStatement.setFunctionSource("SOURCE_ACC_CLAUSE_STATEMENT",
+                                       "../Grammar/Statement.code");
 
   AccBodyStatement.setDataPrototype(
       "SgStatement*", "body", "= NULL", CONSTRUCTOR_PARAMETER,
@@ -5567,4 +5607,29 @@ void Grammar::setUpStatements() {
   AccClauseBodyStatement.setDataPrototype(
       "SgAccClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+
+  AccClauseStatement.setDataPrototype(
+      "SgAccClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
+  AccRoutineStatement.setDataPrototype(
+      "SgName", "routine_name", "= \"\"", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
+  AccWaitStatement.setDataPrototype(
+      "SgExprListExp*", "wait_list", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  AccWaitStatement.setDataPrototype(
+      "SgExpression*", "devnum", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  AccWaitStatement.setDataPrototype(
+      "bool", "queues", "= false", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
+  AccCacheStatement.setDataPrototype(
+      "SgExprListExp*", "variables", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  AccCacheStatement.setDataPrototype(
+      "int", "modifier", "= 0", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+      NO_TRAVERSAL, NO_DELETE);
 }

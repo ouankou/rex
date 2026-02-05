@@ -4858,6 +4858,68 @@ void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
   } // end switch
 }
 
+// OpenACC support
+void FortranCodeGeneration_locatedNode::unparseAccPrefix(SgUnparse_Info &info) {
+  curprint(string("!$acc "));
+}
+
+void FortranCodeGeneration_locatedNode::unparseAccBeginDirectiveClauses(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  ASSERT_not_null(stmt);
+  const SgAccClausePtrList *clause_ptr_list = nullptr;
+  if (SgAccClauseBodyStatement *bodystmt = isSgAccClauseBodyStatement(stmt)) {
+    clause_ptr_list = &bodystmt->get_clauses();
+  } else if (SgAccClauseStatement *clausestmt = isSgAccClauseStatement(stmt)) {
+    clause_ptr_list = &clausestmt->get_clauses();
+  }
+  if (clause_ptr_list != nullptr) {
+    for (SgAccClause *c_clause : *clause_ptr_list) {
+      unparseAccClause(c_clause, info);
+    }
+  }
+}
+
+void FortranCodeGeneration_locatedNode::unparseAccEndDirectivePrefixAndName(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  ASSERT_not_null(stmt);
+  unp->u_sage->curprint_newline();
+  unparseAccPrefix(info);
+  switch (stmt->variantT()) {
+  case V_SgAccParallelStatement:
+    curprint(string("end parallel"));
+    break;
+  case V_SgAccParallelLoopStatement:
+    curprint(string("end parallel loop"));
+    break;
+  case V_SgAccDataStatement:
+    curprint(string("end data"));
+    break;
+  case V_SgAccKernelsStatement:
+    curprint(string("end kernels"));
+    break;
+  default:
+    break;
+  }
+}
+
+void FortranCodeGeneration_locatedNode::unparseAccGenericStatement(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  ASSERT_not_null(stmt);
+  unparseAccDirectivePrefixAndName(stmt, info);
+  unparseAccBeginDirectiveClauses(stmt, info);
+  unp->u_sage->curprint_newline();
+
+  if (SgAccBodyStatement *b_stmt = isSgAccBodyStatement(stmt)) {
+    SgUnparse_Info ninfo(info);
+    unparseStatement(b_stmt->get_body(), ninfo);
+  }
+
+  if (stmt->getAttribute("acc_fortran_end") != NULL) {
+    unparseAccEndDirectivePrefixAndName(stmt, info);
+    unp->u_sage->curprint_newline();
+  }
+}
+
 void FortranCodeGeneration_locatedNode::unparseOmpDoStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);

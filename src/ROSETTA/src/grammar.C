@@ -3567,8 +3567,16 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
         nodeName == "SgOmpClauseBodyStatement" ||
         nodeName == "SgOmpClauseStatement" ||
         nodeName == "SgAccClauseBodyStatement" ||
+        nodeName == "SgAccClauseStatement" ||
         nodeName == "SgAccParallelStatement" ||
         nodeName == "SgAccParallelLoopStatement" ||
+        nodeName == "SgAccDataStatement" ||
+        nodeName == "SgAccKernelsStatement" ||
+        nodeName == "SgAccAtomicStatement" ||
+        nodeName == "SgAccEnterDataStatement" ||
+        nodeName == "SgAccExitDataStatement" ||
+        nodeName == "SgAccRoutineStatement" ||
+        nodeName == "SgAccWaitStatement" || nodeName == "SgAccCacheStatement" ||
         nodeName == "SgOmpMetadirectiveStatement" ||
         nodeName == "SgOmpParallelStatement" ||
         nodeName == "SgOmpTeamsStatement" ||

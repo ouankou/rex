@@ -8247,10 +8247,14 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
 void Unparse_ExprStmt::unparseAccBeginDirectiveClauses(SgStatement *stmt,
                                                        SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
-  SgAccClauseBodyStatement *bodystmt = isSgAccClauseBodyStatement(stmt);
-  if (bodystmt != NULL) {
-    const SgAccClausePtrList &clause_ptr_list = bodystmt->get_clauses();
-    for (SgAccClause *c_clause : clause_ptr_list) {
+  const SgAccClausePtrList *clause_ptr_list = nullptr;
+  if (SgAccClauseBodyStatement *bodystmt = isSgAccClauseBodyStatement(stmt)) {
+    clause_ptr_list = &bodystmt->get_clauses();
+  } else if (SgAccClauseStatement *clausestmt = isSgAccClauseStatement(stmt)) {
+    clause_ptr_list = &clausestmt->get_clauses();
+  }
+  if (clause_ptr_list != nullptr) {
+    for (SgAccClause *c_clause : *clause_ptr_list) {
       unparseAccClause(c_clause, info);
     }
   }
