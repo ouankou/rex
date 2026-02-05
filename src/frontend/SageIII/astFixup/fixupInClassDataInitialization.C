@@ -45,30 +45,16 @@ void FixupInClassDataInitialization::visit(SgNode *node) {
                 .get_constVolatileModifier()
                 .setConst();
           } else {
-            // The legacy frontend/Sage connection ignores the
-            // const when the type is non-integral So "const
-            // double pi = 3.14;" will compile with legacy
-            // frontend, but the legacy frontend/Sage connection
-            // only generates "double pi = 3.14;" (dropping the
-            // const). Since this is a bug in a non-standard
-            // usage, it is patch here, the dropping of the
-            // "const" could be fixed in the legacy frontend/Sage
-            // connection but I have not done so. It is not clear
-            // how seriously to treat a bug in a non-standard
-            // feature.
-
-            // printf ("This is not a modifier type (so it is not const!) \n");
-            // variableDeclaration->get_file_info()->display("Error: this is not
-            // a modifier type (so it is not const!)");
+            // Ensure in-class initialized members are represented as const in
+            // the AST even if the frontend/type construction dropped const.
+            // Use semantic constness (typedef-aware) to avoid duplicating
+            // const.
 
             modifierType = new SgModifierType(variableType);
             ROSE_ASSERT(modifierType != NULL);
             modifierType->get_typeModifier()
                 .get_constVolatileModifier()
                 .setConst();
-
-            // printf ("DEBUGGING: just called new SgModifierType() modifierType
-            // = %p \n",modifierType);
 
 #if DEBUG_SAGE_ACCESS_FUNCTIONS
           // DQ (6/13/2007): New access function tests using
