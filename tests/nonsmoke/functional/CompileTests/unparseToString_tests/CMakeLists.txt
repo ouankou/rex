@@ -123,6 +123,15 @@ foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
 endforeach()
 
 add_test(
+  NAME rex_issue481_typedef_const_no_double_const
+  COMMAND sh -c "out=$(\"$@\") || exit $?; echo \"$out\" | grep -q \"const constint\" && exit 1; echo \"$out\" | grep -q \"\\bconstint\\b\""
+    dummy
+    $<TARGET_FILE:unparseToString> ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+      -c ${TESTCODE_DIR}/test2006_130.C
+)
+set_tests_properties(rex_issue481_typedef_const_no_double_const PROPERTIES LABELS rex)
+
+add_test(
   NAME unparseProject_test2014_26
   COMMAND unparseProject ${CMAKE_CURRENT_SOURCE_DIR}/test2014_26.C
 )
