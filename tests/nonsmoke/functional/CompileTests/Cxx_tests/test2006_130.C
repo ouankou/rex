@@ -37,12 +37,9 @@ Thanks,
 -- Peter 
 */
 
-#error "Output is incorrect but it does compile (const normalization)"
-
 typedef const int constint;
 class A
    {
      public:
           static constint foo = 1;
-   };
-
+};
