@@ -35,7 +35,6 @@ set(astPostProcessingSources
   detectTransformations.C
   fixupFunctionDefaultArguments.C
   fixupSelfReferentialMacros.C
-  fixupDeclarationScope.C
   checkPhysicalSourcePosition.C
   fixupFileInfoFlags.C
   fixupTemplateArguments.C
@@ -68,7 +67,7 @@ install(FILES  astPostProcessing.h       fixupDefiningAndNondefiningDeclarations
 
     checkIsCompilerGeneratedFlag.h checkIsFrontendSpecificFlag.h
     checkPhysicalSourcePosition.h detectTransformations.h
-    fixupDeclarationScope.h fixupFunctionDefaultArguments.h
+    fixupFunctionDefaultArguments.h
     fixupSelfReferentialMacros.h fixupTypeReferences.h
     fixupFileInfoFlags.h
     fixupTemplateArguments.h

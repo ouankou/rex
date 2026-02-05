@@ -1300,6 +1300,9 @@ HEADER_LIST_DECLARATIONS
     virtual bool replace_child(SgStatement *,SgStatement *, bool extractListFromBasicBlock = false) override;
     virtual bool insert_child(SgStatement*, SgStatement*, bool inFront = true, bool extractListFromBasicBlock = false) override;
 
+  private:
+    void setChildScope(SgStatement* newstmt, bool extractBasicBlock);
+
 HEADER_DECLARATION_SCOPE_END
 
 
@@ -5547,6 +5550,10 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
                SgDeclarationStatement* newDeclarationStatement = isSgDeclarationStatement(newTransformationStatement);
 
                ROSE_ASSERT(newDeclarationStatement != NULL);
+               if (SgDeclarationScope* declScope = isSgDeclarationScope(currentScope))
+                  {
+                    newDeclarationStatement->set_scope(declScope);
+                  }
 
             // DQ (6/26/2013): Added test for if this statement already exists in the current scope (declaration list).
                ROSE_ASSERT(find(declarationList.begin(),declarationList.end(),newDeclarationStatement) == declarationList.end());
@@ -5626,6 +5633,10 @@ SgScopeStatement::insertStatementInScope ( SgStatement* newTransformationStateme
                SgDeclarationStatement* newDeclarationStatement = isSgDeclarationStatement(newTransformationStatement);
 
                ROSE_ASSERT(newDeclarationStatement != NULL);
+               if (SgDeclarationScope* declScope = isSgDeclarationScope(currentScope))
+                  {
+                    newDeclarationStatement->set_scope(declScope);
+                  }
 
             // DQ (6/26/2013): Added test for if this statement already exists in the current scope (declaration list).
                ROSE_ASSERT(find(declarationList.begin(),declarationList.end(),newDeclarationStatement) == declarationList.end());
@@ -9399,26 +9410,64 @@ SgDeclarationScope::get_qualified_name() const
 void
 SgDeclarationScope::append_declaration(SgDeclarationStatement * what)
    {
+     if (what == NULL)
+          return;
+
      get_declarations().push_back(what);
+     what->set_scope(this);
      what->set_parent(this);
    }
 
 void
 SgDeclarationScope::prepend_declaration(SgDeclarationStatement * what)
    {
+     if (what == NULL)
+          return;
+
      get_declarations().insert(get_declarations().begin(), what);
+     what->set_scope(this);
      what->set_parent(this);
+   }
+
+void
+SgDeclarationScope::setChildScope(SgStatement* newstmt, bool extractBasicBlock)
+   {
+     if (SgDeclarationStatement* decl = isSgDeclarationStatement(newstmt))
+          {
+            decl->set_scope(this);
+            decl->set_parent(this);
+            return;
+          }
+
+     if (!extractBasicBlock)
+          {
+            return;
+          }
+
+     if (SgBasicBlock* bb = isSgBasicBlock(newstmt))
+          {
+            const SgStatementPtrList& stmts = bb->get_statements();
+            for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end(); ++it)
+                 {
+                   if (SgDeclarationStatement* decl_in_bb = isSgDeclarationStatement(*it))
+                        {
+                          decl_in_bb->set_scope(this);
+                        }
+                 }
+          }
    }
 
 bool
 SgDeclarationScope::insert_child(SgStatement* target, SgStatement* newstmt, bool inFront, bool extractBasicBlock)
    {
+     setChildScope(newstmt, extractBasicBlock);
      return StatementListInsertChild( this, get_declarations(), target, newstmt, inFront, extractBasicBlock, false);
    }
 
 bool
 SgDeclarationScope::replace_child(SgStatement *target ,SgStatement * newstmt, bool extractBasicBlock)
    {
+     setChildScope(newstmt, extractBasicBlock);
      return StatementListInsertChild( this, get_declarations(), target, newstmt, true, extractBasicBlock, true);
    }
 

@@ -10020,11 +10020,6 @@ SgDeclarationScope *SageBuilder::buildDeclarationScope() {
   SageInterface::setSourcePosition(nonreal_decl_scope);
   nonreal_decl_scope->get_startOfConstruct()->setCompilerGenerated();
   nonreal_decl_scope->get_endOfConstruct()->setCompilerGenerated();
-  // Ensure a valid parent so get_scope() is well-defined for declaration
-  // scopes even if callers forget to attach one explicitly.
-  if (SgScopeStatement *parent_scope = SageBuilder::topScopeStack()) {
-    nonreal_decl_scope->set_parent(parent_scope);
-  }
   return nonreal_decl_scope;
 }
 
@@ -10042,6 +10037,9 @@ bool SageBuilder::setNonrealDeclarationScope(SgDeclarationStatement *owner,
     return false;
   }
   owner->set_nonreal_decl_scope(scope);
+  if (scope->get_parent() != owner) {
+    scope->set_parent(owner);
+  }
   return true;
 }
 
