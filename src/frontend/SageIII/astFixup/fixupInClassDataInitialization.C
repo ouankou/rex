@@ -4,6 +4,8 @@
 
 #include "sage3basic.h"
 
+#include "sageInterface.h"
+
 void fixupInClassDataInitialization(SgNode *node) {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
   TimingPerformance timer("Fixup class data member initialization:");
@@ -37,31 +39,22 @@ void FixupInClassDataInitialization::visit(SgNode *node) {
         SgType *variableType = (*variable)->get_typeptr();
         ROSE_ASSERT(variableType != NULL);
         SgModifierType *modifierType = isSgModifierType(variableType);
-        if (modifierType == NULL) {
-          // The legacy frontend/Sage connection ignores the
-          // const when the type is non-integral So "const
-          // double pi = 3.14;" will compile with legacy
-          // frontend, but the legacy frontend/Sage connection
-          // only generates "double pi = 3.14;" (dropping the
-          // const). Since this is a bug in a non-standard
-          // usage, it is patch here, the dropping of the
-          // "const" could be fixed in the legacy frontend/Sage
-          // connection but I have not done so. It is not clear
-          // how seriously to treat a bug in a non-standard
-          // feature.
+        if (SageInterface::isConstType(variableType) == false) {
+          if (modifierType != NULL) {
+            modifierType->get_typeModifier()
+                .get_constVolatileModifier()
+                .setConst();
+          } else {
+            // Ensure in-class initialized members are represented as const in
+            // the AST even if the frontend/type construction dropped const.
+            // Use semantic constness (typedef-aware) to avoid duplicating
+            // const.
 
-          // printf ("This is not a modifier type (so it is not const!) \n");
-          // variableDeclaration->get_file_info()->display("Error: this is not a
-          // modifier type (so it is not const!)");
-
-          modifierType = new SgModifierType(variableType);
-          ROSE_ASSERT(modifierType != NULL);
-          modifierType->get_typeModifier()
-              .get_constVolatileModifier()
-              .setConst();
-
-          // printf ("DEBUGGING: just called new SgModifierType() modifierType =
-          // %p \n",modifierType);
+            modifierType = new SgModifierType(variableType);
+            ROSE_ASSERT(modifierType != NULL);
+            modifierType->get_typeModifier()
+                .get_constVolatileModifier()
+                .setConst();
 
 #if DEBUG_SAGE_ACCESS_FUNCTIONS
           // DQ (6/13/2007): New access function tests using
@@ -76,8 +69,8 @@ void FixupInClassDataInitialization::visit(SgNode *node) {
           }
 #endif
           (*variable)->set_typeptr(modifierType);
+          }
         }
-        ROSE_ASSERT(modifierType != NULL);
 
         // FMZ (12/18/2009):
         //    the flag may set in the SgVariableDeclaration instead of
@@ -86,22 +79,17 @@ void FixupInClassDataInitialization::visit(SgNode *node) {
                 .get_typeModifier()
                 .get_constVolatileModifier()
                 .isConst() == false) {
-          ROSE_ASSERT(modifierType->get_typeModifier()
-                          .get_constVolatileModifier()
-                          .isConst());
+          ROSE_ASSERT(SageInterface::isConstType((*variable)->get_typeptr()));
         }
 
-        if (modifierType->get_typeModifier()
-                .get_constVolatileModifier()
-                .isConst() == false) {
+        if (SageInterface::isConstType((*variable)->get_typeptr()) == false) {
           printf("Error: this should be a const variable (might be a fortran "
                  "specific problem) \n");
           variableDeclaration->get_file_info()->display(
               "this should be a const variable");
         }
-        ROSE_ASSERT(modifierType->get_typeModifier()
-                        .get_constVolatileModifier()
-                        .isConst() == true);
+        ROSE_ASSERT(SageInterface::isConstType((*variable)->get_typeptr()) ==
+                    true);
         if (variableDeclaration->get_declarationModifier()
                 .get_storageModifier()
                 .isStatic() == false) {
