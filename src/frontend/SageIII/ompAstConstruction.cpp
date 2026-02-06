@@ -2285,6 +2285,9 @@ void convert_Fortran_ACC_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
     }
 
     SgStatement *stmt = isSgStatement(locNode);
+    if (stmt == NULL) {
+      stmt = SageInterface::getEnclosingStatement(locNode);
+    }
     ROSE_ASSERT(stmt != NULL);
     SgScopeStatement *scope = stmt->get_scope();
     ROSE_ASSERT(scope != NULL);
