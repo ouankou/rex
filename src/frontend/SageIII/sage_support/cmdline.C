@@ -4395,7 +4395,7 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
            compilerName.c_str());
   }
 
-  std::vector<std::string> backendArgv = argv;
+  std::vector<std::string> &backendArgv = argv;
   SgFile::stripRoseCommandLineOptions(backendArgv);
   if (get_Fortran_only() == true) {
     SgFile::stripFortranCommandLineOptions(backendArgv);
