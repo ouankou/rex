@@ -11384,39 +11384,33 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       SgAccWaitStatement *wait_stmt = isSgAccWaitStatement(stmt);
       if (wait_stmt != NULL) {
         const bool have_devnum = wait_stmt->get_devnum() != NULL;
-        const bool have_queues = wait_stmt->get_queues();
         const bool have_list =
             wait_stmt->get_wait_list() != NULL &&
             !wait_stmt->get_wait_list()->get_expressions().empty();
-        if (have_devnum || have_queues || have_list) {
+        if (have_devnum || have_list) {
           curprint(string("("));
-          bool wrote_prefix = false;
+          bool need_comma = false;
           if (have_devnum) {
-            curprint(string("devnum: "));
+            curprint(string("devnum:"));
             unparseExpression(wait_stmt->get_devnum(), info);
-            curprint(string(": "));
-            wrote_prefix = true;
-          }
-          if (have_queues) {
-            curprint(string("queues: "));
-            wrote_prefix = true;
+            need_comma = true;
           }
           if (have_list) {
             const SgExpressionPtrList &exprs =
                 wait_stmt->get_wait_list()->get_expressions();
-            bool first = true;
             for (SgExpressionPtrList::const_iterator it = exprs.begin();
                  it != exprs.end(); ++it) {
-              if (!first) {
+              if (need_comma) {
                 curprint(string(", "));
               }
-              first = false;
               unparseExpression(*it, info);
+              need_comma = true;
             }
-          } else if (wrote_prefix) {
-            // No wait list, but prefix was emitted; leave empty.
           }
           curprint(string(")"));
+        }
+        if (wait_stmt->get_queues()) {
+          curprint(string(" queues"));
         }
       }
       break;
