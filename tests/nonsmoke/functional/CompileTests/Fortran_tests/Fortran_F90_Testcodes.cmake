@@ -202,7 +202,7 @@ set(F90_TESTCODES
   rex_test2026_include.f90
   rex_test2026_assumed_rank.f90
   rex_test2026_coarray_image_selector.f90
-  rex_test2026_coarray_remote_call.f90
+  rex_test2026_cuda_kernel_launch_call.f90
   rex_test2026_allocate_specs.f90
   rex_test2026_openacc_constructs.f90
   rex_test2026_cuf_kernel_do.f90

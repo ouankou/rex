@@ -8,11 +8,11 @@ contains
   end subroutine saxpy_kernel
 end module rex_test2026_cuda_kernel
 
-program rex_test2026_coarray_remote_call
+program rex_test2026_cuda_kernel_launch_call
   use rex_test2026_cuda_kernel
   implicit none
   real, device :: x(10)
   real, device :: y(10)
   real, unified :: u(10)
   call saxpy_kernel<<<1,1>>>(1, x, y)
-end program rex_test2026_coarray_remote_call
+end program rex_test2026_cuda_kernel_launch_call

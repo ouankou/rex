@@ -835,8 +835,8 @@ HEADER_STORAGE_MODIFIER_START
                e_cuda_device_memory  = 20, /*!< CUDA, in device's global memory */
                e_cuda_managed        = 21, /*!< CUDA, memory managed between host and device */
                e_cuda_unified        = 22, /*!< CUDA, unified memory */
-               e_cuda_pinned         = 23, /*!< CUDA, in device's texture memory (read only)  */
-               e_cuda_texture        = 24, /*!< CUDA, in host's page-locked memory */
+               e_cuda_pinned         = 23, /*!< CUDA, in host's page-locked memory */
+               e_cuda_texture        = 24, /*!< CUDA, in device's texture memory (read only) */
 
                e_last_modifier  /*!< last value (upper bound on range of values, used in error checking) */
              };
