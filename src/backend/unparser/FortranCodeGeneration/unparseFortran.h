@@ -272,7 +272,10 @@ public:
 
   // unparsing for Rice Coarray Fortran 2.0
   void unparseWithTeamStatement(SgStatement *stmt, SgUnparse_Info &info);
+  void unparseCAFImageSelectorExp(SgExpression *expr, SgUnparse_Info &info);
   void unparseCoArrayExpression(SgExpression *expr, SgUnparse_Info &info);
+  void unparseCudaKernelCall(SgExpression *expr, SgUnparse_Info &info);
+  void unparseCudaKernelExecConfig(SgExpression *expr, SgUnparse_Info &info);
   void curprint(const std::string &) const;
 
   // unparsing for OpenMP AST
@@ -289,6 +292,15 @@ public:
   virtual void
   unparseOmpEndDirectivePrefixAndName(SgStatement *stmt,
                                       SgUnparse_Info &info) override;
+
+  // unparsing for OpenACC AST
+  virtual void unparseAccPrefix(SgUnparse_Info &info) override;
+  virtual void unparseAccBeginDirectiveClauses(SgStatement *stmt,
+                                               SgUnparse_Info &info) override;
+  virtual void unparseAccGenericStatement(SgStatement *stmt,
+                                          SgUnparse_Info &info) override;
+  void unparseAccEndDirectivePrefixAndName(SgStatement *stmt,
+                                           SgUnparse_Info &info);
 
   /**
    * override to make unary plus/minus expressions have the same precedence as

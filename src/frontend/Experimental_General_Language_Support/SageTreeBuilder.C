@@ -3388,6 +3388,45 @@ void SageTreeBuilder::Leave(
       var_decl->get_declarationModifier().get_storageModifier().setExtern();
       break;
     }
+    case LanguageTranslation::ExpressionKind::
+        e_storage_modifier_cuda_constant: {
+      var_decl->get_declarationModifier()
+          .get_storageModifier()
+          .setCudaConstant();
+      break;
+    }
+    case LanguageTranslation::ExpressionKind::e_storage_modifier_cuda_device: {
+      var_decl->get_declarationModifier()
+          .get_storageModifier()
+          .setCudaDeviceMemory();
+      break;
+    }
+    case LanguageTranslation::ExpressionKind::e_storage_modifier_cuda_managed: {
+      var_decl->get_declarationModifier()
+          .get_storageModifier()
+          .setCudaManaged();
+      break;
+    }
+    case LanguageTranslation::ExpressionKind::e_storage_modifier_cuda_pinned: {
+      var_decl->get_declarationModifier().get_storageModifier().setCudaPinned();
+      break;
+    }
+    case LanguageTranslation::ExpressionKind::e_storage_modifier_cuda_shared: {
+      var_decl->get_declarationModifier().get_storageModifier().setCudaShared();
+      break;
+    }
+    case LanguageTranslation::ExpressionKind::e_storage_modifier_cuda_texture: {
+      var_decl->get_declarationModifier()
+          .get_storageModifier()
+          .setCudaTexture();
+      break;
+    }
+    case LanguageTranslation::ExpressionKind::e_storage_modifier_cuda_unified: {
+      var_decl->get_declarationModifier()
+          .get_storageModifier()
+          .setCudaUnified();
+      break;
+    }
     case LanguageTranslation::ExpressionKind::e_access_modifier_public: {
       var_decl->get_declarationModifier().get_accessModifier().setPublic();
       break;
@@ -4018,6 +4057,14 @@ SgExpression *buildAggregateInitializer_nfi(SgExprListExp *initializers,
 
 SgExpression *buildAsteriskShapeExp_nfi() {
   SgAsteriskShapeExp *shape = new SgAsteriskShapeExp();
+  ASSERT_not_null(shape);
+  SageInterface::setSourcePosition(shape);
+
+  return shape;
+}
+
+SgExpression *buildAssumedRankExp_nfi() {
+  SgAssumedRankExp *shape = new SgAssumedRankExp();
   ASSERT_not_null(shape);
   SageInterface::setSourcePosition(shape);
 

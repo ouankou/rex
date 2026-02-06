@@ -209,7 +209,9 @@ void UnparseFortran_type::unparseArrayType(SgType *type, SgUnparse_Info &info,
   }
 
   if (printDim) {
-    ROSE_ASSERT(array_type->get_rank() >= 1);
+    if (!array_type->get_isCoArray()) {
+      ROSE_ASSERT(array_type->get_rank() >= 1);
+    }
     curprint(array_type->get_isCoArray() ? ", CODIMENSION" : ", DIMENSION");
 
     ASSERT_not_null(unp);

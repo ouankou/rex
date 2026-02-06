@@ -49,6 +49,13 @@ enum ExpressionKind {
   e_storage_modifier_external,
   e_storage_modifier_static,
   e_storage_modifier_location,
+  e_storage_modifier_cuda_constant,
+  e_storage_modifier_cuda_device,
+  e_storage_modifier_cuda_managed,
+  e_storage_modifier_cuda_pinned,
+  e_storage_modifier_cuda_shared,
+  e_storage_modifier_cuda_texture,
+  e_storage_modifier_cuda_unified,
 
   // Type modifiers
   // --------------

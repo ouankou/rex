@@ -834,8 +834,9 @@ HEADER_STORAGE_MODIFIER_START
            // Rasmussen (03/13/2018): New CUDA storage modifiers
                e_cuda_device_memory  = 20, /*!< CUDA, in device's global memory */
                e_cuda_managed        = 21, /*!< CUDA, memory managed between host and device */
-               e_cuda_pinned         = 22, /*!< CUDA, in device's texture memory (read only)  */
-               e_cuda_texture        = 23, /*!< CUDA, in host's page-locked memory */
+               e_cuda_unified        = 22, /*!< CUDA, unified memory */
+               e_cuda_pinned         = 23, /*!< CUDA, in host's page-locked memory */
+               e_cuda_texture        = 24, /*!< CUDA, in device's texture memory (read only) */
 
                e_last_modifier  /*!< last value (upper bound on range of values, used in error checking) */
              };
@@ -906,6 +907,9 @@ HEADER_STORAGE_MODIFIER_START
 
           bool isCudaManaged() const;
           void setCudaManaged();
+
+          bool isCudaUnified() const;
+          void setCudaUnified();
 
           bool isCudaPinned() const;
           void setCudaPinned();
@@ -2370,6 +2374,9 @@ void SgStorageModifier::setCudaDeviceMemory()      {        p_modifier  = e_cuda
 bool SgStorageModifier::isCudaManaged()      const { return p_modifier == e_cuda_managed; }
 void SgStorageModifier::setCudaManaged()           {        p_modifier  = e_cuda_managed; }
 
+bool SgStorageModifier::isCudaUnified()      const { return p_modifier == e_cuda_unified; }
+void SgStorageModifier::setCudaUnified()           {        p_modifier  = e_cuda_unified; }
+
 bool SgStorageModifier::isCudaPinned()       const { return p_modifier == e_cuda_pinned; }
 void SgStorageModifier::setCudaPinned()            {        p_modifier  = e_cuda_pinned; }
 
@@ -2433,6 +2440,7 @@ bool operator== (const $CLASSNAME& lhs, const $CLASSNAME& rhs)
          (lhs.isCudaConstant()   == rhs.isCudaConstant()) &&
          (lhs.isCudaShared()     == rhs.isCudaShared()  ) &&
          (lhs.isCudaManaged()    == rhs.isCudaManaged() ) &&
+         (lhs.isCudaUnified()    == rhs.isCudaUnified() ) &&
          (lhs.isCudaPinned()     == rhs.isCudaPinned()  ) &&
          (lhs.isCudaTexture()    == rhs.isCudaTexture() ) &&
          (lhs.isCudaDynamicShared() == rhs.isCudaDynamicShared() ) &&

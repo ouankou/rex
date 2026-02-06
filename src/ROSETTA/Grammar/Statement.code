@@ -16037,6 +16037,54 @@ SgAccParallelLoopStatement::post_construction_initialization()
    {}
 SOURCE_ACC_PARALLEL_LOOP_STATEMENT_END
 
+SOURCE_ACC_DATA_STATEMENT_START
+void
+SgAccDataStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_DATA_STATEMENT_END
+
+SOURCE_ACC_KERNELS_STATEMENT_START
+void
+SgAccKernelsStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_KERNELS_STATEMENT_END
+
+SOURCE_ACC_ATOMIC_STATEMENT_START
+void
+SgAccAtomicStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_ATOMIC_STATEMENT_END
+
+SOURCE_ACC_ENTER_DATA_STATEMENT_START
+void
+SgAccEnterDataStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_ENTER_DATA_STATEMENT_END
+
+SOURCE_ACC_EXIT_DATA_STATEMENT_START
+void
+SgAccExitDataStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_EXIT_DATA_STATEMENT_END
+
+SOURCE_ACC_ROUTINE_STATEMENT_START
+void
+SgAccRoutineStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_ROUTINE_STATEMENT_END
+
+SOURCE_ACC_WAIT_STATEMENT_START
+void
+SgAccWaitStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_WAIT_STATEMENT_END
+
+SOURCE_ACC_CACHE_STATEMENT_START
+void
+SgAccCacheStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_CACHE_STATEMENT_END
+
 SOURCE_OMP_CANCELLATION_POINT_STATEMENT_START
 void
 SgOmpCancellationPointStatement::post_construction_initialization()
@@ -16621,6 +16669,12 @@ void
 SgAccClauseBodyStatement::post_construction_initialization()
    {}
 SOURCE_ACC_CLAUSEBODY_STATEMENT_END
+
+SOURCE_ACC_CLAUSE_STATEMENT_START
+void
+SgAccClauseStatement::post_construction_initialization()
+   {}
+SOURCE_ACC_CLAUSE_STATEMENT_END
 
 
 SOURCE_OMP_BARRIER_STATEMENT_START

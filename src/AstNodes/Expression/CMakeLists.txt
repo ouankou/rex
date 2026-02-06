@@ -8,11 +8,13 @@ add_library(roseAstNodesExpression OBJECT
   SgArrowStarOp.C
   SgAsmOp.C
   SgAssignInitializer.C
+  SgAssumedRankExp.C
   SgAsteriskShapeExp.C
   SgBinaryOp.C
   SgBitComplementOp.C
   SgBracedInitializer.C
   SgCAFCoExpression.C
+  SgCAFImageSelectorExp.C
   SgCallExpression.C
   SgCastExp.C
   SgChar16Val.C

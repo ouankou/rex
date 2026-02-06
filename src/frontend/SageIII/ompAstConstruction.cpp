@@ -20,6 +20,20 @@ static std::vector<std::pair<SgPragmaDeclaration *, OpenACCDirective *>>
 OpenACCDirective *accparser_OpenACCIR;
 
 std::map<SgPragmaDeclaration *, OpenMPDirective *> fortran_paired_pragma_dict;
+std::map<SgPragmaDeclaration *, OpenACCDirective *>
+    fortran_acc_paired_pragma_dict;
+
+static const char *const kAccFortranEndAttributeName = "acc_fortran_end";
+
+class AccFortranEndAttribute : public AstAttribute {
+public:
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+  AstAttribute *copy() const override {
+    return new AccFortranEndAttribute(*this);
+  }
+};
 std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *, OpenMPDirective *>>
     fortran_omp_pragma_list;
 
@@ -256,6 +270,141 @@ static bool startsWithCaseInsensitive(const std::string &text,
     }
   }
   return true;
+}
+
+static size_t findCaseInsensitive(const std::string &haystack,
+                                  const std::string &needle, size_t pos) {
+  if (needle.empty()) {
+    return pos <= haystack.size() ? pos : std::string::npos;
+  }
+  const std::string lower_haystack = toLowerCopy(haystack);
+  const std::string lower_needle = toLowerCopy(needle);
+  return lower_haystack.find(lower_needle, pos);
+}
+
+static size_t rfindCaseInsensitive(const std::string &haystack,
+                                   const std::string &needle, size_t pos) {
+  if (needle.empty()) {
+    return pos <= haystack.size() ? pos : std::string::npos;
+  }
+  const std::string lower_haystack = toLowerCopy(haystack);
+  const std::string lower_needle = toLowerCopy(needle);
+  return lower_haystack.rfind(lower_needle, pos);
+}
+
+static bool startsWithAccKeyword(const std::string &text) {
+  if (!startsWithCaseInsensitive(text, "acc")) {
+    return false;
+  }
+  if (text.size() == 3) {
+    return true;
+  }
+  const char next = text[3];
+  return std::isspace(static_cast<unsigned char>(next)) || next == '(';
+}
+
+static bool isFortranAccDirective(const std::string &text) {
+  std::string trimmed = text;
+  trimLeft(trimmed);
+  if (trimmed.empty()) {
+    return false;
+  }
+  const char marker =
+      static_cast<char>(std::tolower(static_cast<unsigned char>(trimmed[0])));
+  if (marker != '!' && marker != 'c' && marker != 'd' && marker != '*') {
+    return false;
+  }
+  size_t pos = 1;
+  while (pos < trimmed.size() &&
+         std::isspace(static_cast<unsigned char>(trimmed[pos]))) {
+    ++pos;
+  }
+  if (pos >= trimmed.size() || trimmed[pos] != '$') {
+    return false;
+  }
+  ++pos;
+  while (pos < trimmed.size() &&
+         std::isspace(static_cast<unsigned char>(trimmed[pos]))) {
+    ++pos;
+  }
+  return startsWithCaseInsensitive(trimmed.substr(pos), "acc");
+}
+
+static void normalizeFortranAccSentinel(std::string &buffer) {
+  size_t pos = buffer.find_first_not_of(" \t");
+  if (pos == std::string::npos) {
+    return;
+  }
+  const char marker =
+      static_cast<char>(std::tolower(static_cast<unsigned char>(buffer[pos])));
+  if (marker != '!' && marker != 'c' && marker != 'd' && marker != '*') {
+    return;
+  }
+  size_t next = pos + 1;
+  while (next < buffer.size() &&
+         std::isspace(static_cast<unsigned char>(buffer[next]))) {
+    ++next;
+  }
+  if (next >= buffer.size() || buffer[next] != '$') {
+    return;
+  }
+  if (next > pos + 1) {
+    buffer.erase(pos + 1, next - (pos + 1));
+  }
+  const size_t dollar = pos + 1;
+  size_t acc_start = dollar + 1;
+  while (acc_start < buffer.size() &&
+         std::isspace(static_cast<unsigned char>(buffer[acc_start]))) {
+    ++acc_start;
+  }
+  if (acc_start > dollar + 1) {
+    buffer.erase(dollar + 1, acc_start - (dollar + 1));
+  }
+}
+
+static void removeFortranAccComments(std::string &buffer) {
+  size_t pos1;
+  size_t pos2;
+  size_t pos3 = std::string::npos;
+
+  pos1 = buffer.rfind("!", pos3);
+  while (pos1 != std::string::npos) {
+    pos2 = rfindCaseInsensitive(buffer, "!$acc", pos3);
+    if (pos1 != pos2) {
+      buffer.erase(pos1);
+    } else {
+      if (pos2 >= 1) {
+        pos3 = pos2 - 1;
+      } else {
+        break;
+      }
+    }
+    pos1 = buffer.rfind("!", pos3);
+  }
+}
+
+static void postProcessMergedAccContinuation(std::string &buffer) {
+  removeFortranAccComments(buffer);
+  size_t first_pos = buffer.find("&");
+  if (first_pos == std::string::npos) {
+    return;
+  }
+  size_t second_pos = findCaseInsensitive(buffer, "$acc", first_pos);
+  if (second_pos == std::string::npos) {
+    return;
+  }
+  second_pos += 3;
+  size_t last_pos = buffer.find("&", second_pos);
+  if (hasFortranLineContinuation(buffer)) {
+    size_t next_cont_pos = buffer.rfind("&");
+    if (last_pos == next_cont_pos) {
+      last_pos = std::string::npos;
+    }
+  }
+  if (last_pos == std::string::npos) {
+    last_pos = second_pos;
+  }
+  buffer.erase(first_pos, last_pos - first_pos + 1);
 }
 
 static std::string stripOmpPrefix(std::string text) {
@@ -1773,6 +1922,100 @@ void convert_Fortran_Pragma_Pairs(SgSourceFile *sageFilePtr) {
 
 } // end convert_Fortran_Pragma_Pairs()
 
+static bool allowsImplicitFortranAccEnd(OpenACCDirectiveKind kind) {
+  switch (kind) {
+  case ACCD_parallel_loop:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool isFortranAccPairedDirective(OpenACCDirective *directive) {
+  if (directive == NULL) {
+    return false;
+  }
+  switch (directive->getKind()) {
+  case ACCD_parallel:
+  case ACCD_parallel_loop:
+  case ACCD_data:
+  case ACCD_kernels:
+    return true;
+  default:
+    return false;
+  }
+}
+
+void merge_Matching_Fortran_ACC_Pragma_pairs(SgPragmaDeclaration *decl) {
+  SgPragmaDeclaration *end_decl = NULL;
+  SgStatement *next_stmt = getNextStatement(decl);
+  OpenACCDirectiveKind begin_directive_kind =
+      fortran_acc_paired_pragma_dict[decl]->getKind();
+
+  std::vector<SgStatement *> affected_stmts;
+
+  while (next_stmt != NULL) {
+    end_decl = isSgPragmaDeclaration(next_stmt);
+    if (end_decl != NULL) {
+      auto end_it = fortran_acc_paired_pragma_dict.find(end_decl);
+      if (end_it != fortran_acc_paired_pragma_dict.end()) {
+        OpenACCDirective *end_ir = end_it->second;
+        if (end_ir != NULL && end_ir->getKind() == ACCD_end) {
+          OpenACCEndDirective *end_directive =
+              dynamic_cast<OpenACCEndDirective *>(end_ir);
+          if (end_directive != NULL &&
+              end_directive->getPairedDirective() != NULL &&
+              end_directive->getPairedDirective()->getKind() ==
+                  begin_directive_kind) {
+            break;
+          }
+        }
+      }
+    }
+    end_decl = NULL;
+    affected_stmts.push_back(next_stmt);
+    next_stmt = getNextStatement(next_stmt);
+  }
+
+  if (end_decl == NULL) {
+    if (!allowsImplicitFortranAccEnd(begin_directive_kind)) {
+      cerr << "merge_Matching_Fortran_ACC_Pragma_pairs(): cannot find required "
+              "end directive for: "
+           << endl;
+      cerr << decl->get_pragma()->get_pragma() << endl;
+      ROSE_ABORT();
+    }
+    return;
+  }
+
+  ROSE_ASSERT(end_decl != NULL);
+  ensureSingleStmtOrBasicBlock(decl, affected_stmts);
+
+  decl->setAttribute(kAccFortranEndAttributeName, new AccFortranEndAttribute());
+
+  removeStatement(end_decl);
+}
+
+void convert_Fortran_ACC_Pragma_Pairs(SgSourceFile *sageFilePtr) {
+  ROSE_ASSERT(sageFilePtr != NULL);
+  list<SgPragmaDeclaration *>::reverse_iterator iter;
+  for (iter = omp_pragma_list.rbegin(); iter != omp_pragma_list.rend();
+       iter++) {
+    SgPragmaDeclaration *decl = *iter;
+    if (decl->get_file_info()->get_filename() !=
+            sageFilePtr->get_file_info()->get_filename() &&
+        !(decl->get_file_info()->isTransformation()))
+      continue;
+    auto acc_it = fortran_acc_paired_pragma_dict.find(decl);
+    if (acc_it == fortran_acc_paired_pragma_dict.end()) {
+      continue;
+    }
+    if (isFortranAccPairedDirective(acc_it->second)) {
+      merge_Matching_Fortran_ACC_Pragma_pairs(decl);
+    }
+  }
+}
+
 //! Convert OpenMP Fortran comments to pragmas
 //  main purpose is to
 //     x. Generate pragmas from OpenMPIR and insert them into the right places
@@ -1935,6 +2178,212 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
   convert_Fortran_Pragma_Pairs(sageFilePtr);
 } // end convert_Fortran_OMP_Comments_to_Pragmas ()
 
+//! Convert OpenACC Fortran comments to pragmas (no OpenACC AST conversion yet)
+void convert_Fortran_ACC_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
+  ROSE_ASSERT(sageFilePtr != NULL);
+
+  struct FortranCommentEntry {
+    SgLocatedNode *loc_node;
+    PreprocessingInfo *info;
+    int file_id;
+    int line;
+    int column;
+    size_t order;
+  };
+
+  std::vector<FortranCommentEntry> comment_entries;
+  size_t order = 0;
+  std::vector<SgNode *> loc_nodes =
+      NodeQuery::querySubTree(sageFilePtr, V_SgLocatedNode);
+  for (SgNode *node : loc_nodes) {
+    SgLocatedNode *locNode = isSgLocatedNode(node);
+    ROSE_ASSERT(locNode);
+    AttachedPreprocessingInfoType *comments =
+        locNode->getAttachedPreprocessingInfo();
+    if (!comments) {
+      continue;
+    }
+    for (PreprocessingInfo *pinfo : *comments) {
+      if (pinfo->getTypeOfDirective() ==
+              PreprocessingInfo::FortranStyleComment ||
+          pinfo->getTypeOfDirective() == PreprocessingInfo::F90StyleComment) {
+        comment_entries.push_back({locNode, pinfo, pinfo->getFileId(),
+                                   pinfo->getLineNumber(),
+                                   pinfo->getColumnNumber(), order++});
+      }
+    }
+  }
+
+  std::stable_sort(
+      comment_entries.begin(), comment_entries.end(),
+      [](const FortranCommentEntry &lhs, const FortranCommentEntry &rhs) {
+        if (lhs.file_id != rhs.file_id) {
+          return lhs.file_id < rhs.file_id;
+        }
+        if (lhs.line != rhs.line) {
+          return lhs.line < rhs.line;
+        }
+        if (lhs.column != rhs.column) {
+          return lhs.column < rhs.column;
+        }
+        return lhs.order < rhs.order;
+      });
+
+  std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_pragma_dict;
+  std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_before_pragma_dict;
+
+  PreprocessingInfo *previnfo = nullptr;
+  SgLocatedNode *prev_loc_node = nullptr;
+  for (const FortranCommentEntry &entry : comment_entries) {
+    SgLocatedNode *locNode = entry.loc_node;
+    PreprocessingInfo *pinfo = entry.info;
+
+    if (previnfo != nullptr && prev_loc_node != locNode) {
+      previnfo = nullptr;
+      prev_loc_node = nullptr;
+    }
+
+    std::string buffer = pinfo->getString();
+    if (!isFortranAccDirective(buffer)) {
+      if (previnfo != nullptr && prev_loc_node == locNode) {
+        cerr << "error: Found a non-OpenACC comment after a pending OpenACC "
+                "comment with a line continuation\n";
+        ROSE_ABORT();
+      }
+      continue;
+    }
+
+    normalizeFortranAccSentinel(buffer);
+    removeFortranAccComments(buffer);
+
+    if (previnfo != nullptr && prev_loc_node == locNode) {
+      buffer = previnfo->getString() + buffer;
+      postProcessMergedAccContinuation(buffer);
+      previnfo->setString("");
+      previnfo = nullptr;
+      prev_loc_node = nullptr;
+    }
+
+    pinfo->setString(buffer);
+
+    if (hasFortranLineContinuation(buffer)) {
+      previnfo = pinfo;
+      prev_loc_node = locNode;
+      continue;
+    }
+
+    std::string pragma_text = buffer;
+    stripFortranDirectiveSentinel(pragma_text);
+    stripFortranComment(pragma_text);
+    stripFortranLineContinuation(pragma_text);
+    trim(pragma_text);
+    if (pragma_text.empty()) {
+      continue;
+    }
+    if (!startsWithAccKeyword(pragma_text)) {
+      pragma_text = std::string("acc ") + pragma_text;
+    }
+
+    SgStatement *stmt = isSgStatement(locNode);
+    if (stmt == NULL) {
+      stmt = SageInterface::getEnclosingStatement(locNode);
+    }
+    ROSE_ASSERT(stmt != NULL);
+    SgScopeStatement *scope = stmt->get_scope();
+    ROSE_ASSERT(scope != NULL);
+
+    SgPragmaDeclaration *p_decl = buildPragmaDeclaration(pragma_text, scope);
+    copyStartFileInfo(locNode, p_decl);
+    if (Sg_File_Info *info = p_decl->get_file_info()) {
+      info->set_line(pinfo->getLineNumber());
+      info->set_col(pinfo->getColumnNumber());
+    }
+
+    std::string parse_text = std::string("!$") + pragma_text;
+    accparser_OpenACCIR = parseOpenACC(parse_text);
+    ROSE_ASSERT(accparser_OpenACCIR != NULL);
+    use_accparser = checkOpenACCIR(accparser_OpenACCIR);
+    ROSE_ASSERT(use_accparser == true);
+    if (accparser_OpenACCIR->getKind() != ACCD_end) {
+      OpenACCIR_list.push_back(std::make_pair(p_decl, accparser_OpenACCIR));
+    }
+    fortran_acc_paired_pragma_dict[p_decl] = accparser_OpenACCIR;
+
+    AttachedPreprocessingInfoType *comments =
+        stmt->getAttachedPreprocessingInfo();
+    ROSE_ASSERT(comments != NULL);
+    auto m_pos = find(comments->begin(), comments->end(), pinfo);
+    if (m_pos == comments->end()) {
+      cerr << "Cannot find a Fortran comment from a node: " << endl;
+      cerr << "The comment is " << pinfo->getString() << endl;
+      cerr << "The AST Node is " << stmt->class_name() << endl;
+      stmt->get_file_info()->display("debug here");
+      for (auto *info : *comments) {
+        cerr << info->getString() << endl;
+      }
+      ROSE_ASSERT(m_pos != comments->end());
+    }
+    comments->erase(m_pos);
+
+    PreprocessingInfo::RelativePositionType position =
+        pinfo->getRelativePosition();
+    if (position == PreprocessingInfo::before) {
+      SgPragmaDeclaration *last_before = NULL;
+      if (stmt_last_before_pragma_dict.count(stmt)) {
+        last_before = stmt_last_before_pragma_dict[stmt];
+      }
+      if (isSgBasicBlock(stmt) && isSgFortranDo(stmt->get_parent())) {
+        if (last_before) {
+          insertStatementAfter(last_before, p_decl, false);
+        } else {
+          prependStatement(p_decl, isSgBasicBlock(stmt));
+        }
+      } else if (isSgFunctionDefinition(stmt->get_parent())) {
+        SgFunctionDefinition *def = isSgFunctionDefinition(stmt->get_parent());
+        ROSE_ASSERT(def != NULL);
+        SgBasicBlock *body = def->get_body();
+        ROSE_ASSERT(body != NULL);
+        if (last_before) {
+          insertStatementAfter(last_before, p_decl, false);
+        } else {
+          prependStatement(p_decl, body);
+        }
+      } else if (last_before) {
+        insertStatementAfter(last_before, p_decl, false);
+      } else {
+        insertStatementBefore(stmt, p_decl, false);
+      }
+      stmt_last_before_pragma_dict[stmt] = p_decl;
+    } else if (position == PreprocessingInfo::inside) {
+      SgScopeStatement *scope = isSgScopeStatement(stmt);
+      ROSE_ASSERT(scope != NULL);
+      appendStatement(p_decl, scope);
+    } else if (position == PreprocessingInfo::after) {
+      SgStatement *last = stmt;
+      if (stmt_last_pragma_dict.count(stmt)) {
+        last = stmt_last_pragma_dict[stmt];
+      }
+      if (isSgFunctionDefinition(stmt->get_parent())) {
+        SgFunctionDefinition *def = isSgFunctionDefinition(stmt->get_parent());
+        ROSE_ASSERT(def != NULL);
+        SgBasicBlock *body = def->get_body();
+        ROSE_ASSERT(body != NULL);
+        appendStatement(p_decl, body);
+      } else {
+        insertStatementAfter(last, p_decl, false);
+      }
+      stmt_last_pragma_dict[stmt] = p_decl;
+    } else {
+      cerr << "ompAstConstruction.cpp , illegal "
+              "PreprocessingInfo::RelativePositionType:"
+           << position << endl;
+      ROSE_ABORT();
+    }
+
+    omp_pragma_list.push_back(p_decl);
+  }
+}
+
 // Liao, 5/31/2009 an entry point for OpenMP related processing
 // including parsing, AST construction, and later on translation
 void processOpenMP(SgSourceFile *sageFilePtr) {
@@ -1964,9 +2413,12 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
     printf("Processing OpenMP directives ... \n");
   }
 
-  if (sageFilePtr->get_openmp() == false) {
+  const bool wantsOpenMP = sageFilePtr->get_openmp();
+  const bool wantsOpenACC = sageFilePtr->get_openacc();
+
+  if (!wantsOpenMP && !wantsOpenACC) {
     if (SgProject::get_verbose() > 1) {
-      printf("Stop processing OpenMP directives since no OpenMP found. \n");
+      printf("Stop processing OpenMP/OpenACC directives since none found. \n");
     }
     return;
   }
@@ -1986,9 +2438,11 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   // used by the directives/clauses For Fortran, search comments for OpenMP
   // directives
   if (isFortran) { // use ompparser to process Fortran.
-    parsed_fortran_pragmas = parseOpenMPFortranPragmas(sageFilePtr);
-    if (!parsed_fortran_pragmas) {
-      parseOpenMPFortran(sageFilePtr);
+    if (wantsOpenMP) {
+      parsed_fortran_pragmas = parseOpenMPFortranPragmas(sageFilePtr);
+      if (!parsed_fortran_pragmas) {
+        parseOpenMPFortran(sageFilePtr);
+      }
     }
   } else { // For C/C++, search pragma declarations for OpenMP directives
     std::vector<SgNode *> all_pragmas =
@@ -2001,7 +2455,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
       istringstream istr(pragmaString);
       std::string key;
       istr >> key;
-      if (key == "omp") {
+      if (key == "omp" && wantsOpenMP) {
         omp_pragma_list.push_back(pragmaDeclaration);
 
         // parse expression
@@ -2022,8 +2476,10 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
         assert(accparser_OpenACCIR != NULL);
         use_accparser = checkOpenACCIR(accparser_OpenACCIR);
         assert(use_accparser == true);
-        OpenACCIR_list.push_back(
-            std::make_pair(pragmaDeclaration, accparser_OpenACCIR));
+        if (accparser_OpenACCIR->getKind() != ACCD_end) {
+          OpenACCIR_list.push_back(
+              std::make_pair(pragmaDeclaration, accparser_OpenACCIR));
+        }
       }
     } // end for
   }
@@ -2048,6 +2504,8 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
           sageFilePtr); // TODO: need to fix not sure why we still need this
                         // here since Fortran is already parsed before.
     }
+    convert_Fortran_ACC_Comments_to_Pragmas(sageFilePtr);
+    convert_Fortran_ACC_Pragma_Pairs(sageFilePtr);
   }
   if (SgProject::get_verbose() > 1) {
     printf("Calling convert_OpenMP_pragma_to_AST() \n");

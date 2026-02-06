@@ -5189,6 +5189,22 @@ std::vector<CFGEdge> SgAsteriskShapeExp::cfgInEdges(unsigned int idx) {
   return result;
 }
 
+unsigned int SgAssumedRankExp::cfgIndexForEnd() const { return 0; }
+
+std::vector<CFGEdge> SgAssumedRankExp::cfgOutEdges(unsigned int idx) {
+  std::vector<CFGEdge> result;
+  ASSERT_require(idx == 0);
+  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+
+std::vector<CFGEdge> SgAssumedRankExp::cfgInEdges(unsigned int idx) {
+  std::vector<CFGEdge> result;
+  ASSERT_require(idx == 0);
+  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  return result;
+}
+
 unsigned int SgImpliedDo::cfgIndexForEnd() const { return 3; }
 
 std::vector<CFGEdge> SgImpliedDo::cfgOutEdges(unsigned int idx) {

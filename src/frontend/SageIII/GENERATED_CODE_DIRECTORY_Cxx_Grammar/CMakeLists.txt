@@ -29,6 +29,8 @@ if(enable-smaller-generated-files)
     SgAssignOp.C
     SgAssignStatement.C
     SgAssociateStatement.C
+    SgAssumedRankExp.C
+    SgCAFImageSelectorExp.C
     SgAsteriskShapeExp.C
     SgAttribute.C
     SgAttributeSpecificationStatement.C

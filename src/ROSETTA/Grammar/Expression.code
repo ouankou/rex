@@ -1403,6 +1403,15 @@ HEADER_ASTERISK_SHAPE_EXPRESSION_START
 HEADER_ASTERISK_SHAPE_EXPRESSION_END
 
 
+HEADER_ASSUMED_RANK_EXPRESSION_START
+#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
+          virtual unsigned int cfgIndexForEnd() const override;
+          virtual std::vector<VirtualCFG::CFGEdge> cfgOutEdges(unsigned int index) override;
+          virtual std::vector<VirtualCFG::CFGEdge> cfgInEdges(unsigned int index) override;
+#endif
+HEADER_ASSUMED_RANK_EXPRESSION_END
+
+
 HEADER_IMPLIED_DO_START
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
           virtual unsigned int cfgIndexForEnd() const override;

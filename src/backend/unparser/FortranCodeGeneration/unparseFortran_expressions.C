@@ -340,6 +340,9 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
   case V_SgAsteriskShapeExp:
     unparseAsteriskShapeExp(expr, info);
     break;
+  case V_SgAssumedRankExp:
+    curprint("..");
+    break;
 
     // initializers
   case V_SgAggregateInitializer:
@@ -402,6 +405,15 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
     break;
   case V_SgCAFCoExpression:
     unparseCoArrayExpression(expr, info);
+    break;
+  case V_SgCAFImageSelectorExp:
+    unparseCAFImageSelectorExp(expr, info);
+    break;
+  case V_SgCudaKernelCallExp:
+    unparseCudaKernelCall(expr, info);
+    break;
+  case V_SgCudaKernelExecConfig:
+    unparseCudaKernelExecConfig(expr, info);
     break;
 
   default: {
@@ -1506,35 +1518,144 @@ void FortranCodeGeneration_locatedNode::unparseCoArrayExpression(
 
   // print the data reference
   ROSE_ASSERT(referData);
-  unparseLanguageSpecificExpression(referData, info);
+  unparseExpression(referData, info);
 
   // print the image selector
   curprint("[");
 
-  if (teamRank) {
-    SgIntVal *val = isSgIntVal(teamRank);
-    if (val)
-      unparseIntVal(val, info);
-    else
-      unparseLanguageSpecificExpression(teamRank, info);
-  }
+  if (auto *selector = isSgCAFImageSelectorExp(teamRank)) {
+    unparseCAFImageSelectorExp(selector, info);
+  } else if (auto *exprList = isSgExprListExp(teamRank)) {
+    bool needComma = false;
+    for (SgExpression *item : exprList->get_expressions()) {
+      if (needComma) {
+        curprint(", ");
+      }
+      unparseExpression(item, info);
+      needComma = true;
+    }
+  } else {
+    if (teamRank) {
+      SgIntVal *val = isSgIntVal(teamRank);
+      if (val)
+        unparseIntVal(val, info);
+      else
+        unparseExpression(teamRank, info);
+    }
 
-  if (teamRank && teamVarRef)
-    curprint(" ");
+    if (teamRank && teamVarRef)
+      curprint(" ");
 
-  if (teamVarRef) {
-    string name = teamVarRef->get_symbol()->get_declaration()->get_name();
-    if (name == "team_world" && !teamRank)
-      curprint("*");
-    else if (name == "team_default" && !teamRank)
-      curprint("@");
-    else {
-      curprint("@");
-      curprint(name);
+    if (teamVarRef) {
+      string name = teamVarRef->get_symbol()->get_declaration()->get_name();
+      if (name == "team_world" && !teamRank)
+        curprint("*");
+      else if (name == "team_default" && !teamRank)
+        curprint("@");
+      else {
+        curprint("@");
+        curprint(name);
+      }
     }
   }
 
   curprint("]");
+}
+
+void FortranCodeGeneration_locatedNode::unparseCAFImageSelectorExp(
+    SgExpression *expr, SgUnparse_Info &info) {
+  SgCAFImageSelectorExp *selector = isSgCAFImageSelectorExp(expr);
+  ASSERT_not_null(selector);
+
+  bool needComma = false;
+  if (SgExprListExp *cosubs = selector->get_cosubscripts()) {
+    for (SgExpression *item : cosubs->get_expressions()) {
+      if (needComma) {
+        curprint(", ");
+      }
+      unparseExpression(item, info);
+      needComma = true;
+    }
+  }
+
+  if (SgExpression *statExpr = selector->get_stat_expression()) {
+    curprint(needComma ? ", STAT = " : "STAT = ");
+    unparseExpression(statExpr, info);
+    needComma = true;
+  }
+
+  if (SgExpression *teamExpr = selector->get_team_expression()) {
+    curprint(needComma ? ", TEAM = " : "TEAM = ");
+    unparseExpression(teamExpr, info);
+    needComma = true;
+  }
+
+  if (SgExpression *teamNumberExpr = selector->get_team_number_expression()) {
+    curprint(needComma ? ", TEAM_NUMBER = " : "TEAM_NUMBER = ");
+    unparseExpression(teamNumberExpr, info);
+  }
+}
+
+void FortranCodeGeneration_locatedNode::unparseCudaKernelExecConfig(
+    SgExpression *expr, SgUnparse_Info &info) {
+  SgCudaKernelExecConfig *exec_config = isSgCudaKernelExecConfig(expr);
+  ASSERT_not_null(exec_config);
+
+  curprint("<<<");
+
+  SgExpression *grid_exp = exec_config->get_grid();
+  ASSERT_not_null(grid_exp);
+  unparseExpression(grid_exp, info);
+  curprint(",");
+
+  SgExpression *blocks_exp = exec_config->get_blocks();
+  ASSERT_not_null(blocks_exp);
+  unparseExpression(blocks_exp, info);
+
+  SgExpression *shared_exp = exec_config->get_shared();
+  if (shared_exp != NULL) {
+    curprint(",");
+    unparseExpression(shared_exp, info);
+
+    SgExpression *stream_exp = exec_config->get_stream();
+    if (stream_exp != NULL) {
+      curprint(",");
+      unparseExpression(stream_exp, info);
+    }
+  }
+
+  curprint(">>>");
+}
+
+void FortranCodeGeneration_locatedNode::unparseCudaKernelCall(
+    SgExpression *expr, SgUnparse_Info &info) {
+  SgCudaKernelCallExp *kernel_call = isSgCudaKernelCallExp(expr);
+  ASSERT_not_null(kernel_call);
+
+  if (isSubroutineCall(kernel_call)) {
+    curprint("CALL ");
+  }
+
+  unparseExpression(kernel_call->get_function(), info);
+
+  SgCudaKernelExecConfig *exec_config =
+      isSgCudaKernelExecConfig(kernel_call->get_exec_config());
+  ASSERT_not_null(exec_config);
+
+  unparseCudaKernelExecConfig(exec_config, info);
+
+  curprint("(");
+  if (kernel_call->get_args() != NULL) {
+    SgExpressionPtrList &list = kernel_call->get_args()->get_expressions();
+    SgExpressionPtrList::iterator arg = list.begin();
+    while (arg != list.end()) {
+      unparseExpression((*arg), info);
+      arg++;
+      if (arg != list.end())
+        curprint(",");
+    }
+  }
+  curprint(")");
 }
 
 bool FortranCodeGeneration_locatedNode::requiresParentheses(
