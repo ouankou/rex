@@ -4395,6 +4395,12 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
            compilerName.c_str());
   }
 
+  std::vector<std::string> backendArgv = argv;
+  SgFile::stripRoseCommandLineOptions(backendArgv);
+  if (get_Fortran_only() == true) {
+    SgFile::stripFortranCommandLineOptions(backendArgv);
+  }
+
   // To use rose in place of a C or C++ compiler specify the compiler name using
   //      rose -compiler <originalCompilerName> ...
   // the default value of "originalCompilerName" is "CC"
@@ -4752,7 +4758,8 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   // from the input.
   if (get_strict_language_handling() == true) {
     // Check if it is appears as "-ansi" on the original commandline
-    if (CommandlineProcessing::isOption(argv, "-", "ansi", false) == true) {
+    if (CommandlineProcessing::isOption(backendArgv, "-", "ansi", false) ==
+        true) {
       printf("Option -ansi detected on the original commandline \n");
     } else {
       // This is might be specific to GNU
@@ -4776,7 +4783,7 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
 
   if (get_C_only() || get_Cxx_only() || get_Fortran_only()) {
     // specify compilation only option (new style command line processing)
-    if (CommandlineProcessing::isOption(argv, "-", "c", false) == true) {
+    if (CommandlineProcessing::isOption(backendArgv, "-", "c", false) == true) {
 #if DEBUG_COMPILER_COMMAND_LINE
       printf("Option -c found (compile only)! \n");
 #endif
@@ -4814,7 +4821,7 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   }
 
   // DQ (3/31/2004): New cleaned up source file handling
-  Rose_STL_Container<string> argcArgvList = argv;
+  Rose_STL_Container<string> argcArgvList = backendArgv;
 
 #if DEBUG_COMPILER_COMMAND_LINE
   printf(
