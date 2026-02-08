@@ -15,13 +15,7 @@ public:
       : cost_function_(
             std::bind(&scaledPartitionCost, 0.5, std::placeholders::_1)) {}
 
-  CostFunction getCostFunction() const {
-    if (cost_function_) {
-      return cost_function_;
-    }
-
-    return std::bind(&scaledPartitionCost, 1.0, std::placeholders::_1);
-  }
+  CostFunction getCostFunction() const { return cost_function_; }
 
 private:
   CostFunction cost_function_;

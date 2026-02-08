@@ -5,25 +5,26 @@ namespace lambda {
 
 namespace {
 using Integer = int;
-int _1 = 0;
+int placeholder_1 = 0;
 } // namespace
 
-Integer transform(Integer value) { return value + _1; }
+Integer transform(Integer value) { return value + placeholder_1; }
 
 } // namespace lambda
 
 namespace bind {
-int _1 = 0;
+int placeholder_1 = 0;
 } // namespace bind
 } // namespace vendor
 
-int _1 = 0;
+int placeholder_1 = 0;
 
 int useVendorPlaceholders() {
-  _1 = 1;
-  vendor::lambda::_1 = 2;
-  vendor::bind::_1 = 3;
+  placeholder_1 = 1;
+  vendor::lambda::placeholder_1 = 2;
+  vendor::bind::placeholder_1 = 3;
 
   vendor::lambda::Integer number = vendor::lambda::transform(4);
-  return _1 + vendor::lambda::_1 + vendor::bind::_1 + number;
+  return placeholder_1 + vendor::lambda::placeholder_1 +
+         vendor::bind::placeholder_1 + number;
 }
