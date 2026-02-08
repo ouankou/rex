@@ -560,12 +560,69 @@ sub installed_memory {
     return $mb;
 }
 
+sub shell_quote {
+  my ($s) = @_;
+  return "''" unless defined $s && $s ne '';
+  $s =~ s/'/'\\''/g;
+  return "'$s'";
+}
+
+sub join_shell_tokens {
+  return join " ", map { /\s/ ? shell_quote($_) : $_ } @_;
+}
+
+sub insert_after_first_token {
+  my ($cmd, $insert) = @_;
+  return $cmd unless defined $insert && $insert ne '';
+  return $cmd unless defined $cmd && $cmd =~ /\S/;
+
+  my $len = length($cmd);
+  my $i = 0;
+  $i++ while $i < $len && substr($cmd, $i, 1) =~ /\s/;
+  return $cmd if $i >= $len;
+
+  my $quote = substr($cmd, $i, 1);
+  if ($quote eq "'") {
+    $i++;
+    $i++ while $i < $len && substr($cmd, $i, 1) ne "'";
+    $i++ if $i < $len;
+  } elsif ($quote eq '"') {
+    $i++;
+    my $escaped = 0;
+    while ($i < $len) {
+      my $c = substr($cmd, $i, 1);
+      if ($escaped) {
+        $escaped = 0;
+        $i++;
+        next;
+      }
+      if ($c eq "\\") {
+        $escaped = 1;
+        $i++;
+        next;
+      }
+      if ($c eq '"') {
+        $i++;
+        last;
+      }
+      $i++;
+    }
+  } else {
+    $i++ while $i < $len && substr($cmd, $i, 1) !~ /\s/;
+  }
+
+  my $before = substr($cmd, 0, $i);
+  my $after = substr($cmd, $i);
+  return $before . " " . $insert . $after;
+}
+
 # Variables, augmented from the command-line
 my %variables;
 $variables{"TEMP_FILE_$_"} = tempname for 0 .. 9;
 
 # Parse command-line switches and arguments
 my($do_cleanup,$quiet_failure,$immediate_output,$config_file,$target,$target_pass,$target_fail,$no_stdout,$no_stderr) = (1);
+my @rose_cmdline;
 while (@ARGV) {
   local($_) = shift @ARGV;
   /^--$/ and last;
@@ -577,6 +634,16 @@ while (@ARGV) {
   /^--no-stderr$/ and do {$no_stderr=1; next};
   /^--no-output$/ and do {$no_stderr=$no_stdout=1; next};
   /^--quiet-failure$/ and do {$quiet_failure=1; next};
+  /^-rose:/ and do {
+    push @rose_cmdline, $_;
+    while (@ARGV > 2) {
+      my $next = $ARGV[0];
+      last if $next =~ /^-/;
+      last if $next =~ /^\w+=/;
+      push @rose_cmdline, shift @ARGV;
+    }
+    next;
+  };
   /^-/ and die "$0: unknown command line switch: $_\n";
   /^(\w+)=(.*)/ and do {
     my ($var, $val) = ($1, $2);
@@ -606,6 +673,12 @@ if ($target =~ /(.+)\.\w+$/) {
   ($target_pass,$target_fail) = ("$target.passed","$target.failed");
 }
 $variables{TARGET} = $target;
+if (@rose_cmdline) {
+  $variables{ROSE_CMDLINE} = join_shell_tokens(@rose_cmdline);
+  if (exists $variables{CMD} && $variables{CMD} ne '') {
+    $variables{CMD} = insert_after_first_token($variables{CMD}, $variables{ROSE_CMDLINE});
+  }
+}
 my %config = load_config $config_file, \%variables;
 
 # Print output to indicate test is starting. Do nothing if the test
