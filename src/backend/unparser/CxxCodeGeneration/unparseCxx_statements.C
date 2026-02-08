@@ -7246,12 +7246,11 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
       ninfo_for_type.set_requiresGlobalNameQualification();
     }
 
-    SgDeclarationStatement *declaration = typedef_stmt->get_declaration();
-    if (declaration != NULL) {
-      ninfo_for_type.set_reference_node_for_qualification(declaration);
-    } else {
-      ninfo_for_type.set_reference_node_for_qualification(typedef_stmt);
-    }
+    // Qualify the aliased type relative to the alias declaration context.
+    // Using typedef_stmt->get_declaration() can bind qualification to the
+    // referenced type declaration itself (e.g. Host::Nested), which drops
+    // required prefixes in nested scopes (e.g. `using A = Nested;`).
+    ninfo_for_type.set_reference_node_for_qualification(typedef_stmt);
 
     ninfo_for_type.set_name_qualification_length(
         typedef_stmt->get_name_qualification_length_for_base_type());
@@ -8177,6 +8176,10 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       ninfo.unset_SkipSemiColon();
       ninfo.set_declstatement_ptr(NULL);
       ninfo.set_declstatement_ptr(templateClassDeclaration);
+
+      // Match non-template class declaration output so friend/specifier
+      // modifiers attached to template declarations are preserved.
+      unp->u_sage->printSpecifier2(templateClassDeclaration, ninfo);
 
       SgClassDefinition *class_defn =
           templateClassDeclaration->get_definition();

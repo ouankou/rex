@@ -4135,6 +4135,14 @@ void ClangToSageTranslator::populateClassDefinition(
         }
       }
       SgScopeStatement *new_scope = child_decl->get_scope();
+      if (old_scope != nullptr && new_scope == class_def &&
+          old_scope != class_def) {
+        // If a member declaration was first translated on-demand in an outer
+        // scope, remove that stale structural attachment before rehoming it to
+        // the class. Keeping both attachments emits duplicate declarations and
+        // misplaced access specifiers at namespace/global scope.
+        detach_decl_from_scope_child_list(child_decl, old_scope);
+      }
       if (old_scope != nullptr && new_scope != nullptr &&
           old_scope != new_scope) {
         rehome_decl_symbol(child_decl, old_scope, new_scope);
@@ -5258,7 +5266,12 @@ bool ClangToSageTranslator::TraverseForDeclContext(
         // source; attaching them structurally makes translator tests that move
         // global declarations inadvertently move/unparse builtins into user
         // files.
-        if (decl->isImplicit() && decl->getLocation().isInvalid()) {
+        //
+        // IMPORTANT: Do not drop implicit using-directives for anonymous
+        // namespaces. They carry core C++ semantics that inject anonymous
+        // namespace members into the enclosing scope.
+        if (decl->isImplicit() && decl->getLocation().isInvalid() &&
+            !llvm::isa<clang::UsingDirectiveDecl>(decl)) {
           continue;
         }
 
@@ -19872,6 +19885,13 @@ bool ClangToSageTranslator::VisitCXXConstructorDecl(
     unsigned cnt = 0;
     for (initializer = cxx_constructor_decl->init_begin();
          initializer != cxx_constructor_decl->init_end(); initializer++) {
+      // Keep only source-written ctor initializers. Clang synthesizes implicit
+      // base/member initializers for default construction; emitting them can
+      // rewrite valid constructors into incorrect delegating forms.
+      if (!(*initializer)->isWritten()) {
+        continue;
+      }
+
       cnt++;
 #if DEBUG_VISIT_DECL
       std::cerr << "isBaseInitializer = " << (*initializer)->isBaseInitializer()
@@ -20869,6 +20889,22 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     }
     if (suppress_var && name.getString().empty()) {
       suppress_var = false;
+    }
+
+    // Keep semantic implicit variables synthesized from user code (e.g.
+    // range-for desugaring temporaries) so downstream unparsing has a complete
+    // AST. Continue suppressing implicit decls that originate outside the main
+    // source file (builtins/system headers).
+    if (suppress_var) {
+      clang::SourceLocation implicit_loc = loc;
+      if (implicit_loc.isMacroID()) {
+        implicit_loc = sm.getSpellingLoc(implicit_loc);
+      }
+      if (implicit_loc.isValid() && sm.isWrittenInMainFile(implicit_loc) &&
+          !sm.isInSystemHeader(implicit_loc) &&
+          !sm.isWrittenInBuiltinFile(implicit_loc)) {
+        suppress_var = false;
+      }
     }
 
     if (!suppress_var) {

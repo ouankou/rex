@@ -527,6 +527,20 @@ std::string getFloatingLiteralSpelling(const clang::FloatingLiteral *literal,
   return text.str();
 }
 
+static bool looksLikeIntegerLiteralToken(const std::string &text) {
+  size_t i = 0;
+  while (i < text.size() &&
+         std::isspace(static_cast<unsigned char>(text[i])) != 0) {
+    ++i;
+  }
+  if (i >= text.size()) {
+    return false;
+  }
+
+  // Integer literal tokens always start with a digit in C/C++.
+  return std::isdigit(static_cast<unsigned char>(text[i])) != 0;
+}
+
 std::string getIntegerLiteralSpelling(const clang::IntegerLiteral *literal,
                                       clang::SourceManager &sm,
                                       const clang::LangOptions &lang_opts) {
@@ -546,7 +560,10 @@ std::string getIntegerLiteralSpelling(const clang::IntegerLiteral *literal,
     llvm::StringRef spelling =
         clang::Lexer::getSpelling(loc, buf, sm, lang_opts, &invalid);
     if (!invalid && !spelling.empty()) {
-      return spelling.str();
+      std::string token = spelling.str();
+      if (looksLikeIntegerLiteralToken(token)) {
+        return token;
+      }
     }
   }
 
@@ -569,7 +586,12 @@ std::string getIntegerLiteralSpelling(const clang::IntegerLiteral *literal,
     return "";
   }
 
-  return text.str();
+  std::string token = text.str();
+  if (!looksLikeIntegerLiteralToken(token)) {
+    return "";
+  }
+
+  return token;
 }
 
 SgSymbol *findEnclosingThisSymbol(SgScopeStatement *starting_scope) {
@@ -2849,11 +2871,12 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
 #endif
   bool res = true;
 
-  // Build the scope first so that any declarations created while lowering the
-  // range-for (e.g., `__range`, `__begin`, `__end`, and the loop variable) are
-  // inserted into the correct symbol table (see VisitForStmt()).
-  SgForStatement *sg_for_stmt = new SgForStatement(
-      (SgStatement *)nullptr, (SgExpression *)nullptr, (SgStatement *)nullptr);
+  SgRangeBasedForStatement *sg_for_stmt =
+      SageBuilder::buildRangeBasedForStatement_nfi(
+          (SgVariableDeclaration *)nullptr, (SgVariableDeclaration *)nullptr,
+          (SgVariableDeclaration *)nullptr, (SgVariableDeclaration *)nullptr,
+          (SgExpression *)nullptr, (SgExpression *)nullptr,
+          (SgStatement *)nullptr);
 
   sg_for_stmt->set_parent(SageBuilder::topScopeStack());
   ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
@@ -2864,6 +2887,7 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
     if (clang_stmt == nullptr) {
       return nullptr;
     }
+
     bool prev_in_for_init = p_in_for_init_translation;
     p_in_for_init_translation = true;
     SgNode *tmp = Traverse(clang_stmt);
@@ -2875,84 +2899,75 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
         stmt = SageBuilder::buildExprStatement(expr);
         applySourceRange(stmt, clang_stmt->getSourceRange());
       } else if (tmp != nullptr) {
-        std::cerr << "Runtime error: for-range init child did not translate "
-                     "to a statement ("
+        std::cerr << "Runtime error: for-range child did not translate to a "
+                     "statement ("
                   << tmp->class_name() << ")" << std::endl;
         res = false;
       }
     }
+
     return stmt;
   };
 
-  // ROOT CAUSE FIX: C++11 range-based for loop: `for (auto x : container) { ...
-  // }`.
-  //
-  // Clang can leave `getCond()` / `getInc()` null for dependent range-for loops
-  // in templates. ROSE's `SgForStatement` requires a non-null test statement
-  // (unparser asserts on it), so we must always materialize a test statement
-  // even when Clang did not provide the desugared condition/increment.
+  auto translate_var_decl_child =
+      [&](clang::Stmt *clang_stmt,
+          const char *child_label) -> SgVariableDeclaration * {
+    SgStatement *stmt = translate_for_init_child(clang_stmt);
+    if (stmt == nullptr) {
+      return nullptr;
+    }
 
-  // Get the desugared components from Clang.
-  // Range stmt declares the internal `__range` variable.
-  SgStatement *range_stmt = nullptr;
-  range_stmt = translate_for_init_child(cxx_for_range_stmt->getRangeStmt());
+    SgVariableDeclaration *var_decl = isSgVariableDeclaration(stmt);
+    if (var_decl == nullptr) {
+      std::cerr << "Runtime error: " << child_label
+                << " translated to non-variable declaration statement: "
+                << stmt->class_name() << std::endl;
+      res = false;
+    }
 
-  // Begin/end iterator setup - must be included in init_stmts
-  // The condition and increment expressions reference __begin/__end variables
-  // created here
-  SgStatement *begin_stmt =
-      translate_for_init_child(cxx_for_range_stmt->getBeginStmt());
-  SgStatement *end_stmt =
-      translate_for_init_child(cxx_for_range_stmt->getEndStmt());
+    return var_decl;
+  };
 
-  // Loop variable declaration
-  SgStatement *loop_var_decl =
-      translate_for_init_child(cxx_for_range_stmt->getLoopVarStmt());
+  // Root-cause fix: model C++ range-for directly in the AST instead of
+  // desugaring to SgForStatement. SgForStatement for-init unparsing merges
+  // declarations and rewrites type deduction semantics (e.g. __range/__begin).
+  SgVariableDeclaration *range_decl = translate_var_decl_child(
+      cxx_for_range_stmt->getRangeStmt(), "CXXForRangeStmt::range");
+  SgVariableDeclaration *begin_decl = translate_var_decl_child(
+      cxx_for_range_stmt->getBeginStmt(), "CXXForRangeStmt::begin");
+  SgVariableDeclaration *end_decl = translate_var_decl_child(
+      cxx_for_range_stmt->getEndStmt(), "CXXForRangeStmt::end");
+  SgVariableDeclaration *iterator_decl = translate_var_decl_child(
+      cxx_for_range_stmt->getLoopVarStmt(), "CXXForRangeStmt::loop variable");
 
-  // Condition, increment, and body
-  clang::Expr *clang_cond = cxx_for_range_stmt->getCond();
-  SgStatement *test_stmt = nullptr;
-  if (clang_cond != nullptr) {
+  SgExpression *not_equal_expr = nullptr;
+  if (clang::Expr *clang_cond = cxx_for_range_stmt->getCond()) {
     SgNode *tmp_cond = Traverse(clang_cond);
     if (SgExpression *cond_expr = isSgExpression(tmp_cond)) {
-      test_stmt = SageBuilder::buildExprStatement(cond_expr);
-      applySourceRange(test_stmt, clang_cond->getSourceRange());
-    } else if (SgStatement *cond_as_stmt = isSgStatement(tmp_cond)) {
-      test_stmt = cond_as_stmt;
-      applySourceRange(test_stmt, clang_cond->getSourceRange());
+      not_equal_expr = cond_expr;
+    } else if (SgExprStatement *cond_stmt = isSgExprStatement(tmp_cond)) {
+      not_equal_expr = cond_stmt->get_expression();
     } else if (tmp_cond != nullptr) {
-      std::cerr
-          << "Runtime error: CXXForRangeStmt cond translated to non-statement/"
-             "non-expression node: "
-          << tmp_cond->class_name() << std::endl;
+      std::cerr << "Runtime error: CXXForRangeStmt cond translated to "
+                   "non-expression node: "
+                << tmp_cond->class_name() << std::endl;
       res = false;
     }
   }
-  if (test_stmt == nullptr) {
-    test_stmt = SageBuilder::buildNullStatement_nfi();
-    setCompilerGeneratedFileInfo(test_stmt, true);
-  }
 
-  clang::Expr *clang_inc = cxx_for_range_stmt->getInc();
-  SgExpression *inc = nullptr;
-  if (clang_inc != nullptr) {
+  SgExpression *increment_expr = nullptr;
+  if (clang::Expr *clang_inc = cxx_for_range_stmt->getInc()) {
     SgNode *tmp_inc = Traverse(clang_inc);
-    inc = isSgExpression(tmp_inc);
-    if (tmp_inc != nullptr && inc == nullptr) {
-      if (SgExprStatement *inc_stmt = isSgExprStatement(tmp_inc)) {
-        inc = inc_stmt->get_expression();
-      }
-    }
-    if (tmp_inc != nullptr && inc == nullptr) {
-      std::cerr << "Runtime error: CXXForRangeStmt inc translated to non-"
-                   "expression node: "
+    if (SgExpression *inc_expr = isSgExpression(tmp_inc)) {
+      increment_expr = inc_expr;
+    } else if (SgExprStatement *inc_stmt = isSgExprStatement(tmp_inc)) {
+      increment_expr = inc_stmt->get_expression();
+    } else if (tmp_inc != nullptr) {
+      std::cerr << "Runtime error: CXXForRangeStmt inc translated to "
+                   "non-expression node: "
                 << tmp_inc->class_name() << std::endl;
       res = false;
     }
-  }
-  if (inc == nullptr) {
-    inc = SageBuilder::buildNullExpression_nfi();
-    setCompilerGeneratedFileInfo(inc, true);
   }
 
   SgNode *tmp_body = cxx_for_range_stmt->getBody()
@@ -2960,82 +2975,80 @@ bool ClangToSageTranslator::VisitCXXForRangeStmt(
                          : nullptr;
   SgStatement *body = isSgStatement(tmp_body);
   if (body == nullptr) {
-    SgExpression *body_expr = isSgExpression(tmp_body);
-    if (body_expr != nullptr) {
+    if (SgExpression *body_expr = isSgExpression(tmp_body)) {
       body = SageBuilder::buildExprStatement(body_expr);
       applySourceRange(body, cxx_for_range_stmt->getBody()->getSourceRange());
+    } else if (tmp_body != nullptr) {
+      std::cerr << "Runtime error: CXXForRangeStmt body translated to "
+                   "non-statement node: "
+                << tmp_body->class_name() << std::endl;
+      res = false;
     }
   }
   if (body != nullptr) {
     body = wrapStatementWithOpenMPPragmas(cxx_for_range_stmt->getBody(), body);
   }
 
-  // Build initialization statement list (range + begin/end iterators + loop
-  // variable).
-  SgStatementPtrList init_stmts;
-  if (range_stmt != nullptr)
-    init_stmts.push_back(range_stmt);
-  if (begin_stmt)
-    init_stmts.push_back(begin_stmt);
-  if (end_stmt)
-    init_stmts.push_back(end_stmt);
-  if (loop_var_decl)
-    init_stmts.push_back(loop_var_decl);
-  if (init_stmts.empty()) {
-    SgNullStatement *nullStmt = SageBuilder::buildNullStatement_nfi();
-    setCompilerGeneratedFileInfo(nullStmt, true);
-    init_stmts.push_back(nullStmt);
-  }
-
-  SgForInitStatement *for_init = sg_for_stmt->get_for_init_stmt();
-  ROSE_ASSERT(for_init != nullptr);
-  for_init->get_init_stmt().clear();
-  for (SgStatement *init_stmt : init_stmts) {
-    if (init_stmt == nullptr) {
-      continue;
-    }
-    for_init->append_init_stmt(init_stmt);
-    if (SgDeclarationStatement *decl = isSgDeclarationStatement(init_stmt)) {
-      if (decl->get_scope() == nullptr) {
-        decl->set_scope(sg_for_stmt);
-      }
-      if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(decl)) {
-        for (SgInitializedName *init_name : var_decl->get_variables()) {
-          if (init_name != nullptr && init_name->get_scope() == nullptr) {
-            init_name->set_scope(sg_for_stmt);
-          }
-        }
-      }
-    }
-  }
-
   SageBuilder::popScopeStack();
 
-  if (for_init->get_parent() == nullptr) {
-    for_init->set_parent(sg_for_stmt);
-  }
+  auto finalize_decl = [&](SgVariableDeclaration *decl) {
+    if (decl == nullptr) {
+      return;
+    }
 
-  if (test_stmt != nullptr) {
-    test_stmt->set_parent(sg_for_stmt);
-    sg_for_stmt->set_test(test_stmt);
-  }
+    if (decl->get_scope() == nullptr) {
+      decl->set_scope(sg_for_stmt);
+    }
 
-  if (inc != nullptr) {
-    inc->set_parent(sg_for_stmt);
-    sg_for_stmt->set_increment(inc);
-  }
+    for (SgInitializedName *init_name : decl->get_variables()) {
+      if (init_name != nullptr && init_name->get_scope() == nullptr) {
+        init_name->set_scope(sg_for_stmt);
+      }
+    }
+  };
 
+  finalize_decl(iterator_decl);
+  finalize_decl(range_decl);
+  finalize_decl(begin_decl);
+  finalize_decl(end_decl);
+
+  if (iterator_decl != nullptr) {
+    iterator_decl->set_parent(sg_for_stmt);
+    sg_for_stmt->set_iterator_declaration(iterator_decl);
+  }
+  if (range_decl != nullptr) {
+    range_decl->set_parent(sg_for_stmt);
+    sg_for_stmt->set_range_declaration(range_decl);
+  }
+  if (begin_decl != nullptr) {
+    begin_decl->set_parent(sg_for_stmt);
+    sg_for_stmt->set_begin_declaration(begin_decl);
+  }
+  if (end_decl != nullptr) {
+    end_decl->set_parent(sg_for_stmt);
+    sg_for_stmt->set_end_declaration(end_decl);
+  }
+  if (not_equal_expr != nullptr) {
+    not_equal_expr->set_parent(sg_for_stmt);
+    sg_for_stmt->set_not_equal_expression(not_equal_expr);
+  }
+  if (increment_expr != nullptr) {
+    increment_expr->set_parent(sg_for_stmt);
+    sg_for_stmt->set_increment_expression(increment_expr);
+  }
   if (body != nullptr) {
     body->set_parent(sg_for_stmt);
     sg_for_stmt->set_loop_body(body);
   }
 
-  SageBuilder::buildForStatement_nfi(sg_for_stmt, for_init, test_stmt, inc,
-                                     body);
-  ROSE_ASSERT(sg_for_stmt->get_parent() != nullptr);
+  applySourceRange(sg_for_stmt, cxx_for_range_stmt->getSourceRange());
+
+  // Enforce structural invariants expected by AST tests and CFG support.
+  ROSE_ASSERT(sg_for_stmt->get_iterator_declaration() != nullptr);
+  ROSE_ASSERT(sg_for_stmt->get_range_declaration() != nullptr);
+  ROSE_ASSERT(sg_for_stmt->get_loop_body() != nullptr);
 
   *node = sg_for_stmt;
-
   return VisitStmt(cxx_for_range_stmt, node) && res;
 }
 
@@ -9124,10 +9137,12 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           has_explicit_template_args = true;
         }
       }
-      // Restrict on-the-fly instantiation synthesis to explicit template
-      // argument references only. Deduced references should reuse translated
-      // declarations to preserve qualifier and type stability.
-      const bool should_build_instantiation = has_explicit_template_args;
+      // Restrict on-the-fly instantiation synthesis to unqualified explicit
+      // template-argument references only. Qualified references (e.g.
+      // `::foo<int>`) must preserve the source spelling to keep overload and
+      // specialization lookup semantics intact.
+      const bool should_build_instantiation =
+          has_explicit_template_args && !decl_ref_expr->hasQualifier();
       auto get_decl_namespace_scope =
           [&](clang::NamedDecl *clang_decl) -> SgScopeStatement * {
         if (clang_decl == nullptr) {
@@ -9449,6 +9464,28 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             isSgFunctionDeclaration(ref_member_sym->get_declaration()));
         *node = ref_exp;
       } else if (func_sym != nullptr) {
+        if (!should_build_instantiation && has_explicit_template_args &&
+            decl_ref_expr->hasQualifier()) {
+          // Preserve qualified explicit template-id spellings (e.g.
+          // `::foo<int>`) without forcing synthetic instantiation symbols.
+          SgTemplateArgumentPtrList template_args =
+              buildTemplateArguments(explicit_arg_info, true);
+          const SgTemplateArgumentPtrList *template_args_ptr =
+              template_args.empty() ? nullptr : &template_args;
+          SgScopeStatement *scope = SageBuilder::topScopeStack();
+          if (scope == nullptr) {
+            scope = getGlobalScope();
+          }
+          SgExpression *ref_exp = buildNonrealRefExpFromNestedNameSpecifier(
+              const_cast<clang::NestedNameSpecifier *>(decl_ref_qualifier),
+              scope, SgName(decl_ref_expr->getDecl()->getNameAsString()),
+              decl_ref_expr->hasTemplateKeyword(), template_args_ptr);
+          attach_explicit_qualifier(ref_exp);
+          *node = ref_exp;
+          applySourceRange(*node, decl_ref_expr->getSourceRange());
+          return VisitExpr(decl_ref_expr, node) && res;
+        }
+
         SgFunctionSymbol *ref_func_sym = func_sym;
         if (should_build_instantiation) {
           SgTemplateArgumentPtrList template_args;
