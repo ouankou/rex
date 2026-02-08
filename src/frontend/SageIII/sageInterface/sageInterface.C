@@ -23209,6 +23209,42 @@ bool SageInterface::checkTypesAreEqual(SgType *typeA, SgType *typeB) {
       return node;
     }
 
+    static std::string normalizeQualifiedName(const std::string &name) {
+      if (name.size() >= 2 && name[0] == ':' && name[1] == ':') {
+        return name.substr(2);
+      }
+      return name;
+    }
+
+    bool extractComparableQualifiedName(SgNode *node, std::string *name) const {
+      if (node == NULL || name == NULL) {
+        return false;
+      }
+
+      if (SgNamedType *named = isSgNamedType(node)) {
+        if (!named->get_autonomous_declaration()) {
+          return false;
+        }
+        *name = normalizeQualifiedName(named->get_qualified_name().getString());
+        return !name->empty();
+      }
+
+      if (SgNonrealType *nrtype = isSgNonrealType(node)) {
+        SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration());
+        if (nrdecl == NULL) {
+          return false;
+        }
+        std::string qualified = nrdecl->get_qualified_name().getString();
+        if (qualified.empty()) {
+          qualified = nrdecl->get_name().getString();
+        }
+        *name = normalizeQualifiedName(qualified);
+        return !name->empty();
+      }
+
+      return false;
+    }
+
     bool typesAreEqual(SgType *t1, SgType *t2) {
       bool equal = false;
       if (t1 == NULL || t2 == NULL) {
@@ -23276,7 +23312,8 @@ bool SageInterface::checkTypesAreEqual(SgType *typeA, SgType *typeB) {
             if (!c2->get_autonomous_declaration()) {
               return false;
             }
-            if (c1->get_qualified_name() == c2->get_qualified_name()) {
+            if (normalizeQualifiedName(c1->get_qualified_name().getString()) ==
+                normalizeQualifiedName(c2->get_qualified_name().getString())) {
               return true;
             } else {
               return false;
@@ -23365,6 +23402,13 @@ bool SageInterface::checkTypesAreEqual(SgType *typeA, SgType *typeB) {
         } else {
           // In this case the types are not equal, since its variantT is not
           // equal.
+          std::string lhs_name;
+          std::string rhs_name;
+          if (extractComparableQualifiedName(nodeT1, &lhs_name) &&
+              extractComparableQualifiedName(nodeT2, &rhs_name) &&
+              lhs_name == rhs_name) {
+            return true;
+          }
           return false;
         }
       }

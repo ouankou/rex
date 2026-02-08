@@ -8,7 +8,6 @@ set(CXX14_TESTCODES
   test2016_20.C
   test2016_21.C
   test2016_22.C
-  test2016_23.C
   test2017_01.C
   test2016_40.C
   test2016_06.C
@@ -21,13 +20,11 @@ set(CXX14_TESTCODES
   test2016_03.C
   test2016_11.C
   test2016_25.C
-  test2016_02.C
   test2016_04.C
   test2016_05.C
   test2016_10.C
   test2016_15.C
   test2016_19.C
-  test2016_24.C
 )
 set(CXX14_DISABLED_TESTCODES
   test2016_01.C
@@ -39,7 +36,6 @@ set(CXX14_DISABLED_TESTCODES
   test2016_20.C
   test2016_21.C
   test2016_22.C
-  test2016_23.C
   test2017_01.C
   test2016_40.C
   test2016_06.C

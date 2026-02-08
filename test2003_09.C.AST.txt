@@ -1,0 +1,122 @@
+|___  ->@0x7de9c9023010 SgProject 
+    |___ p_fileList_ptr ->@0x5ea76e007850 SgFileList 
+        |___ *[0] ->@0x7de9c8ede010 SgSourceFile 
+            |___ p_globalScope ->@0x7de9caf77240 SgGlobal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 0:0
+                |--- *[0] ->@0x7de9c8a542d8 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8a54010 defining decl@0x7de9c8a542d8 "::__NSConstantString_tag"
+                |   |___ p_definition ->@0x7de9c8978010 SgClassDefinition compilerGenerated 0:0
+                |       |--- *[0] ->@0x7de9c86f9010 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c86f9010 defining decl@0
+                |       |   |___ *[3] ->@0x7de9c860a010 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::isa" type@0x7de9c8861010 initializer@0 scope@0x7de9c8978010
+                |       |--- *[1] ->@0x7de9c86f92f0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c86f92f0 defining decl@0
+                |       |   |___ *[3] ->@0x7de9c860a1f8 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::flags" type@0x7de9c8939010 initializer@0 scope@0x7de9c8978010
+                |       |--- *[2] ->@0x7de9c86f95d0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c86f95d0 defining decl@0
+                |       |   |___ *[3] ->@0x7de9c860a3e0 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::str" type@0x7de9c8861090 initializer@0 scope@0x7de9c8978010
+                |       |___ *[3] ->@0x7de9c86f98b0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c86f98b0 defining decl@0
+                |           |___ *[3] ->@0x7de9c860a5c8 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::length" type@0x7de9c846b010 initializer@0 scope@0x7de9c8978010
+                |--- *[1] ->@0x7de9c8a54868 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8a545a0 defining decl@0x7de9c8a54868 "::__va_list_tag"
+                |   |___ p_definition ->@0x7de9c8978148 SgClassDefinition compilerGenerated 0:0
+                |       |--- *[0] ->@0x7de9c86f9b90 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c86f9b90 defining decl@0
+                |       |   |___ *[3] ->@0x7de9c860a7b0 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::gp_offset" type@0x7de9c8430010 initializer@0 scope@0x7de9c8978148
+                |       |--- *[1] ->@0x7de9c86f9e70 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c86f9e70 defining decl@0
+                |       |   |___ *[3] ->@0x7de9c860a998 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::fp_offset" type@0x7de9c8430010 initializer@0 scope@0x7de9c8978148
+                |       |--- *[2] ->@0x7de9c86fa150 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c86fa150 defining decl@0
+                |       |   |___ *[3] ->@0x7de9c860ab80 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::overflow_arg_area" type@0x7de9c8861190 initializer@0 scope@0x7de9c8978148
+                |       |___ *[3] ->@0x7de9c86fa430 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c86fa430 defining decl@0
+                |           |___ *[3] ->@0x7de9c860ad68 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::reg_save_area" type@0x7de9c8861190 initializer@0 scope@0x7de9c8978148
+                |--- *[2] ->@0x7de9c8181010 SgNamespaceDeclarationStatement /home/ouankou/Projects/rex-ai/rex-codex/build/include-staging/clang/clang-builtin-cpp.hpp 12:1 first nondefining decl@0x7de9c8181010 defining decl@0
+                |   |___ p_definition ->@0x7de9c82ca010 SgNamespaceDefinitionStatement NULL_FILE 0:0
+                |--- *[3] ->@0x7de9c8a54b30 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 3:1 AttachedPreprocessingInfoType@0x5ea76e4376f0{<id=0 0x5ea76e0a7140 classification=CpreprocessorDefineDeclaration string=#define DEMONSTRATE_BUG 1
+ relative pos=before>} first nondefining decl@0x7de9c8a54b30 defining decl@0x7de9c8a55650 "::intArray"
+                |--- *[4] ->@0x7de9c8a550c0 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 5:1 first nondefining decl@0x7de9c8a54df8 defining decl@0x7de9c8a550c0 "::intArray_Descriptor_Type"
+                |   |___ p_definition ->@0x7de9c8978280 SgClassDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 5:1
+                |       |___ *[0] ->@0x7de9c7ca0010 SgFunctionDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 8:3 AttachedPreprocessingInfoType@0x5ea76e162aa0{<id=0 0x5ea76e1d7530 classification=CpreprocessorIfDeclaration string=#if DEMONSTRATE_BUG
+ relative pos=before>} first nondefining decl@0x7de9c7ca0010 defining decl@0x7de9c7ca0498 "::transpose"
+                |           |___ p_parameterList ->@0x7de9c8015010 SgFunctionParameterList /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 8:25 first nondefining decl@0x7de9c8015010 defining decl@0
+                |               |___ *[1] ->@0x7de9c860af50 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 8:25 "::intArray_Descriptor_Type::X" type@0x7de9c7f4d010 initializer@0 scope@0x7de9c8978280
+                |--- *[5] ->@0x7de9c8a55650 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 13:1 AttachedPreprocessingInfoType@0x5ea76e162980{<id=0 0x5ea76e1d78b0 classification=CpreprocessorEndifDeclaration string=#endif
+ relative pos=before>
+<id=1 0x5ea76e1d79e0 classification=CplusplusStyleComment string=//        void transpose( intArray & X );
+ relative pos=before>} first nondefining decl@0x7de9c8a54b30 defining decl@0x7de9c8a55650 "::intArray"
+                |   |___ p_definition ->@0x7de9c89783b8 SgClassDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 13:1
+                |       |___ *[0] ->@0x7de9c86fa710 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 15:3 first nondefining decl@0x7de9c86fa710 defining decl@0
+                |           |___ *[3] ->@0x7de9c860b138 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 15:3 AttachedPreprocessingInfoType@0x5ea76e437450{<id=0 0x5ea76e1d7b00 classification=CplusplusStyleComment string=//       friend void transpose( intArray & X );
+ relative pos=after>} "::intArray::Array_Descriptor" type@0x7de9c8a111a8 initializer@0 scope@0x7de9c89783b8
+                |--- *[6] ->@0x7de9c7ca0498 SgFunctionDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 19:1 first nondefining decl@0x7de9c7ca0010 defining decl@0x7de9c7ca0498 "::transpose"
+                |   |--- p_parameterList ->@0x7de9c8015278 SgFunctionParameterList /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 19:16 first nondefining decl@0x7de9c8015278 defining decl@0
+                |   |   |___ *[1] ->@0x7de9c860b320 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 19:16 "X" type@0x7de9c7f4d010 initializer@0 scope@0x7de9c7b5f010
+                |   |___ p_definition ->@0x7de9c7b5f010 SgFunctionDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 19:1 AttachedPreprocessingInfoType@0x5ea76e4376d0{<id=0 0x5ea76e1d7c70 classification=CplusplusStyleComment string=// void intArray_Descriptor_Type::transpose (intArray & X )
+ relative pos=after>}
+                |       |___ p_body ->@0x7de9c7bf8168 SgBasicBlock /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 21:1
+                |           |___ *[0] ->@0x7de9c86fa9f0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 22:3 first nondefining decl@0x7de9c86fa9f0 defining decl@0
+                |               |___ *[3] ->@0x7de9c860b508 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 22:3 "Result" type@0x7de9c7f4d010 initializer@0x7de9c7ae9010 scope@0x7de9c7bf8168
+                |                   |___ p_initptr ->@0x7de9c7ae9010 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 22:22
+                |                       |___ p_operand_i ->@0x7de9c7b1c010 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 22:22 AttachedPreprocessingInfoType@0x5ea76e4375e0{<id=0 0x5ea76e1d8210 classification=CplusplusStyleComment string=// *(new intArray());
+ relative pos=after>} init name@0x7de9c860b320 symbol name="X"
+                |___ *[7] ->@0x7de9c8c79e70 SgTypedefDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 30:1 AttachedPreprocessingInfoType@0x5ea76e1629a0{<id=0 0x5ea76e1d82c0 classification=CplusplusStyleComment string=// This case works fine.  The code above demonstrates
+ relative pos=before>
+<id=1 0x5ea76e1d8390 classification=CplusplusStyleComment string=// the bug (synthesized from a large source code base)
+ relative pos=before>
+<id=2 0x5ea76e1d7be0 classification=CplusplusStyleComment string=// typedef long unsigned int size_t;
+ relative pos=before>
+<id=3 0x5ea76e1d84e0 classification=CplusplusStyleComment string=// This approach is independent of 32 or 64 bit systems (at least for GNU)
+ relative pos=before>} first nondefining decl@0x7de9c8c79e70 defining decl@0 "::size_t" base_type@0x7de9c7aae010
+Types encountered ....
+|___  ->@0x7de9c83f5010 SgTypeVoid 
+|___  ->@0x7de9c8861010 SgPointerType 
+    |___ p_base_type ->@0x7de9c88a0010 SgModifierType 
+        |___ p_base_type ->@0x7de9c8939010 SgTypeInt 
+|___  ->@0x7de9c8861090 SgPointerType 
+    |___ p_base_type ->@0x7de9c88a0280 SgModifierType 
+        |___ p_base_type ->@0x7de9c84a6010 SgTypeChar 
+|___  ->@0x7de9c8861110 SgPointerType 
+    |___ p_base_type ->@0x7de9c84a6010 SgTypeChar 
+|___  ->@0x7de9c8861190 SgPointerType 
+    |___ p_base_type ->@0x7de9c83f5010 SgTypeVoid 
+|___  ->@0x7de9c7f4d010 SgReferenceType 
+|___  ->@0x7de9c88a0010 SgModifierType 
+    |___ p_base_type ->@0x7de9c8939010 SgTypeInt 
+|___  ->@0x7de9c88a0148 SgModifierType 
+    |___ p_base_type ->@0x7de9c8939010 SgTypeInt 
+|___  ->@0x7de9c88a0280 SgModifierType 
+    |___ p_base_type ->@0x7de9c84a6010 SgTypeChar 
+|___  ->@0x7de9c88a03b8 SgModifierType 
+    |___ p_base_type ->@0x7de9c84a6010 SgTypeChar 
+|___  ->@0x7de9c7ed7010 SgFunctionType 
+    |___ p_return_type ->@0x7de9c83f5010 SgTypeVoid 
+|___  ->@0x7de9c8367010 SgArrayType  base_type@0x7de9c8a11098
+    |___ p_index ->@0x7de9c83b6010 SgIntVal NULL_FILE 0:0 value=1 valueString=
+|___  ->@0x7de9c8e53010 SgTypeDefault 
+|___  ->@0x7de9c8a11010 SgClassType 
+    |___ p_builtin_type ->@0x7de9c8a54010 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8a54010 defining decl@0x7de9c8a542d8 "::__NSConstantString_tag"
+|___  ->@0x7de9c8a11098 SgClassType 
+    |___ p_builtin_type ->@0x7de9c8a545a0 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8a545a0 defining decl@0x7de9c8a54868 "::__va_list_tag"
+|___  ->@0x7de9c8a11120 SgClassType 
+    |___ p_builtin_type ->@0x7de9c8a54b30 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 3:1 AttachedPreprocessingInfoType@0x5ea76e4376f0{<id=0 0x5ea76e0a7140 classification=CpreprocessorDefineDeclaration string=#define DEMONSTRATE_BUG 1
+ relative pos=before>} first nondefining decl@0x7de9c8a54b30 defining decl@0x7de9c8a55650 "::intArray"
+|___  ->@0x7de9c8a111a8 SgClassType 
+    |___ p_builtin_type ->@0x7de9c8a54df8 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8a54df8 defining decl@0x7de9c8a550c0 "::intArray_Descriptor_Type"
+|___  ->@0x7de9c8c32010 SgTypedefType 
+    |___ p_builtin_type ->@0x7de9c8c79010 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8c79010 defining decl@0 "::__int128_t" base_type@0x7de9c8de1010
+|___  ->@0x7de9c8c320a0 SgTypedefType 
+    |___ p_builtin_type ->@0x7de9c8c792f0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8c792f0 defining decl@0 "::__uint128_t" base_type@0x7de9c8bb0010
+|___  ->@0x7de9c8c32130 SgTypedefType 
+    |___ p_builtin_type ->@0x7de9c8c795d0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8c795d0 defining decl@0 "::__NSConstantString" base_type@0x7de9c8a11010
+|___  ->@0x7de9c8c321c0 SgTypedefType 
+    |___ p_builtin_type ->@0x7de9c8c798b0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8c798b0 defining decl@0 "::__builtin_ms_va_list" base_type@0x7de9c8861110
+|___  ->@0x7de9c8c32250 SgTypedefType 
+    |___ p_builtin_type ->@0x7de9c8c79b90 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x7de9c8c79b90 defining decl@0 "::__builtin_va_list" base_type@0x7de9c8367010
+|___  ->@0x7de9c8c322e0 SgTypedefType 
+    |___ p_builtin_type ->@0x7de9c8c79e70 SgTypedefDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2003_09.C 30:1 AttachedPreprocessingInfoType@0x5ea76e1629a0{<id=0 0x5ea76e1d82c0 classification=CplusplusStyleComment string=// This case works fine.  The code above demonstrates
+ relative pos=before>
+<id=1 0x5ea76e1d8390 classification=CplusplusStyleComment string=// the bug (synthesized from a large source code base)
+ relative pos=before>
+<id=2 0x5ea76e1d7be0 classification=CplusplusStyleComment string=// typedef long unsigned int size_t;
+ relative pos=before>
+<id=3 0x5ea76e1d84e0 classification=CplusplusStyleComment string=// This approach is independent of 32 or 64 bit systems (at least for GNU)
+ relative pos=before>} first nondefining decl@0x7de9c8c79e70 defining decl@0 "::size_t" base_type@0x7de9c7aae010
+|___  ->@0x7de9c84a6010 SgTypeChar 
+|___  ->@0x7de9c8939010 SgTypeInt 
+|___  ->@0x7de9c846b010 SgTypeLong 
+|___  ->@0x7de9c8de1010 SgTypeLongLong 
+|___  ->@0x7de9c8430010 SgTypeUnsignedInt 
+|___  ->@0x7de9c7aae010 SgTypeUnsignedLong 
+|___  ->@0x7de9c8bb0010 SgTypeUnsignedLongLong 

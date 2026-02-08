@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
 
   ROSE_ASSERT(hasTemplateInstantiation(project, "integral_constant"));
   ROSE_ASSERT(hasTemplateInstantiation(project, "remove_all_pointers"));
+
   ROSE_ASSERT(hasTemplateInstantiationTypedef(project, "add_pointer_t"));
   ROSE_ASSERT(hasTemplateInstantiationTypedef(project, "remove_reference_t"));
 

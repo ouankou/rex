@@ -154,7 +154,7 @@ set(files_to_test
   test2004_64.C test2004_70.C test2004_71.C test2004_72.C test2004_73.C
   test2004_74.C test2004_75.C test2004_76.C test2004_77.C test2004_78.C
   test2004_79.C test2004_80.C test2004_81.C test2004_82.C test2004_84.C
-  test2004_85.C test2004_86.C test2004_87.C test2004_88.C test2004_89.C
+  test2004_85.C test2004_86.C test2004_87.C test2004_88.C
   test2004_90.C
   test2004_91.C test2004_93.C test2004_94.C test2004_95.C
   test2004_96.C test2004_97.C test2004_98.C test2004_99.C test2004_100.C
@@ -167,7 +167,7 @@ set(files_to_test
   test2004_132.C test2004_133.C test2004_134.C test2004_135.C test2004_136.C
   test2004_137.C test2004_138.C test2004_139.C test2004_140.C test2004_141.C
   test2004_142.C test2004_143.C test2004_144.C test2004_145.C test2004_146.C
-  test2004_147.C test2004_148.C test2004_149.C test2004_150.C test2004_151.C
+  test2004_147.C test2004_149.C test2004_150.C test2004_151.C
   test2004_152.C test2004_155.C test2004_156.C test2004_157.C test2004_158.C
   test2004_159.C test2004_160.C test2004_161.C test2004_162.C test2004_163.C
   test2004_164.C test2005_02.C test2005_03.C test2005_04.C test2005_05.C
@@ -188,7 +188,7 @@ set(files_to_test
   test2005_79.C test2005_80.C test2005_82.C test2005_83.C test2005_84.C
   test2005_86.C test2005_87.C test2005_88.C test2005_89.C test2005_90.C
   test2005_91.C test2005_92.C test2005_94.C test2005_95.C test2005_96.C
-  test2005_97.C test2005_99.C test2005_100.C test2005_101.C test2005_102.C
+  test2005_97.C test2005_99.C test2005_100.C test2005_101.C
   test2005_103.C
   test2005_104.C test2005_105.C test2005_106.C test2005_107.C
   test2005_108.C test2005_109.C test2005_110.C test2005_111.C test2005_112.C

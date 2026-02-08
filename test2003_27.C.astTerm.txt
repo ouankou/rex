@@ -1,0 +1,2 @@
+SgTemplateClassDeclaration(SgTemplateClassDefinition(SgVariableDeclaration(null,null,SgInitializedName(null))),null)
+SgTemplateClassDeclaration(SgTemplateClassDefinition(SgTypedefDeclaration(null),SgTypedefDeclaration(null),SgTypedefDeclaration(null)),null)

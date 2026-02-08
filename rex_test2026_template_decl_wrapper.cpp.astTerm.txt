@@ -1,0 +1,3 @@
+SgTemplateTypedefDeclaration(null,null)
+SgTypedefDeclaration(null)
+SgFunctionDeclaration(SgFunctionParameterList,null,SgFunctionDefinition(SgBasicBlock(SgVariableDeclaration(null,null,SgInitializedName(SgAssignInitializer(SgIntVal:0))),SgReturnStmt(SgCastExp(SgVarRefExp:value)))))

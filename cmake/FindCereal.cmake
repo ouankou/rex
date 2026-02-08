@@ -1,7 +1,6 @@
 # Cereal detection for ROSE.
 #
-# Cereal is a header-only library similar to boost::serialization. It was developed at the
-# University of Southern California. Cite as:
+# Cereal is a header-only library developed at the University of Southern California. Cite as:
 #
 #     Grant, W. Shane and Voorhies, Randolph (2017).
 #     cereal - A C++11 library for serialization.

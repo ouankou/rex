@@ -63,6 +63,34 @@ SgName SgExpression::get_qualified_name_prefix() const {
            nameQualifier.str());
 #endif
   } else {
+    // Preserve explicit source qualifiers when name qualification is absent.
+    auto buildExplicitQualifier = [](const SgStringList &tokens,
+                                     bool explicitGlobal) -> SgName {
+      std::string qualifier;
+      if (explicitGlobal) {
+        qualifier = "::";
+      }
+      for (const std::string &token : tokens) {
+        if (token.empty()) {
+          continue;
+        }
+        if (!qualifier.empty() && qualifier.back() != ':') {
+          qualifier += "::";
+        }
+        qualifier += token;
+        qualifier += "::";
+      }
+      return SgName(qualifier);
+    };
+
+    if (const SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(this)) {
+      const SgStringList &tokens =
+          nonreal_ref->get_explicit_name_qualification_tokens();
+      bool explicit_global = nonreal_ref->get_explicit_global_qualification();
+      if (!tokens.empty() || explicit_global) {
+        nameQualifier = buildExplicitQualifier(tokens, explicit_global);
+      }
+    }
 #if DEBUG_SGEXPRESSION_GET_QUALIFIED_NAME_PREFIX
     printf("In SgExpression::get_qualified_name_prefix(): Could NOT find a "
            "valid name qualification: nameQualifier = %s \n",

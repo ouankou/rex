@@ -2699,6 +2699,12 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       // PL (10/06/2025): Enable GNU extensions without forcing a C++ standard.
       set_gnu_standard();
 #endif
+#if defined(ROSE_USE_CLANG_FRONTEND)
+      // REX: Default to C++17 for the Clang frontend so modern tests parse by
+      // default, while retaining GNU extensions for legacy inputs.
+      set_standard(e_cxx17_standard);
+      set_gnu_standard();
+#endif
     } else if (get_Fortran_only()) {
       set_F2003_only();
     }
@@ -4699,6 +4705,18 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     ROSE_ABORT();
   }
   }
+
+#if defined(BACKEND_CXX_IS_CLANG_COMPILER)
+  if (get_standard() == e_cxx17_standard ||
+      get_standard() == e_cxx20_standard ||
+      get_standard() == e_cxx23_standard ||
+      get_standard() == e_cxx26_standard) {
+    compilerNameString.push_back("-Wno-error=register");
+    compilerNameString.push_back("-Wno-error=dynamic-exception-spec");
+    compilerNameString.push_back("-Wno-register");
+    compilerNameString.push_back("-Wno-dynamic-exception-spec");
+  }
+#endif
 
   // printf ("compilerName       = %s \n",compilerName);
   // printf ("compilerNameString = %s \n",compilerNameString.c_str());

@@ -3444,6 +3444,64 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
     compilerCmdLine.insert(compilerCmdLine.begin() + 2, "c");
   }
 
+#if defined(ROSE_USE_CLANG_FRONTEND)
+  if (get_C_only() || get_Cxx_only() || get_Cuda_only() || get_OpenCL_only()) {
+    std::string clang_include_root = ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR;
+    if (!clang_include_root.empty()) {
+      std::filesystem::path build_root(clang_include_root);
+      std::filesystem::path build_clang_root = build_root / "clang";
+      if (std::filesystem::exists(build_clang_root)) {
+        clang_include_root = build_clang_root.string();
+      }
+    }
+    if (clang_include_root.empty() ||
+        !std::filesystem::exists(clang_include_root)) {
+      clang_include_root = ROSE_INSTALL_CLANG_INCLUDE_DIR;
+    }
+    if (!clang_include_root.empty() &&
+        std::filesystem::exists(clang_include_root)) {
+      std::string builtin_header;
+      if (get_C_only()) {
+        builtin_header = "clang-builtin-c.h";
+      } else if (get_Cuda_only()) {
+        builtin_header = "clang-builtin-cuda.hpp";
+      } else if (get_OpenCL_only()) {
+        builtin_header = "clang-builtin-opencl.h";
+      } else if (get_Cxx_only()) {
+        builtin_header = "clang-builtin-cpp.hpp";
+      }
+
+      auto has_flag_with_value = [&](const std::string &flag,
+                                     const std::string &value) {
+        for (size_t i = 0; i + 1 < compilerCmdLine.size(); ++i) {
+          if (compilerCmdLine[i] == flag && compilerCmdLine[i + 1] == value) {
+            return true;
+          }
+        }
+        return false;
+      };
+      auto has_include = [&](const std::string &header) {
+        for (size_t i = 0; i + 1 < compilerCmdLine.size(); ++i) {
+          if (compilerCmdLine[i] == "-include" &&
+              compilerCmdLine[i + 1] == header) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      if (!has_flag_with_value("-isystem", clang_include_root)) {
+        compilerCmdLine.push_back("-isystem");
+        compilerCmdLine.push_back(clang_include_root);
+      }
+      if (!builtin_header.empty() && !has_include(builtin_header)) {
+        compilerCmdLine.push_back("-include");
+        compilerCmdLine.push_back(builtin_header);
+      }
+    }
+  }
+#endif
+
   int returnValueForCompiler = 0;
 
   // error checking

@@ -361,8 +361,8 @@ int method_2() {
   //! [iterate 2]
   // Example iterating over attributes using an attributeMechanism data member
   // of obj_1
-  BOOST_FOREACH (const std::string &attributeName,
-                 obj_1.attributeMechanism.getAttributeIdentifiers()) {
+  for (const std::string &attributeName :
+       obj_1.attributeMechanism.getAttributeIdentifiers()) {
     std::cout << "attribute \"" << StringUtility::cEscape(attributeName)
               << "\" pointer is " << obj_1.attributeMechanism[attributeName]
               << "\n";
@@ -461,8 +461,8 @@ int method_3() {
 
   //! [iterate 3]
   // Example iterating over attributes using the SgNode attribute API.
-  BOOST_FOREACH (const std::string &attributeName,
-                 obj_1->get_attributeMechanism()->getAttributeIdentifiers()) {
+  for (const std::string &attributeName :
+       obj_1->get_attributeMechanism()->getAttributeIdentifiers()) {
     std::cout << "attribute \"" << StringUtility::cEscape(attributeName)
               << "\" pointer is " << obj_1->getAttribute(attributeName) << "\n";
   }

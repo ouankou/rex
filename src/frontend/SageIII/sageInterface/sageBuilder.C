@@ -738,11 +738,20 @@ SgName SageBuilder::appendTemplateArgumentsToName(
           break;
         }
 
-          // DQ (2/5/2022): Is this implementation correct for SgNonrealDecl?
+          // SgNonrealDecl::get_qualified_name() drops declaration-scope parents
+          // used for dependent names (e.g., T::value_type). Use template
+          // argument unparsing to preserve the full dependent spelling.
         case V_SgNonrealDecl: {
-          SgNonrealDecl *nonrealDeclaration = isSgNonrealDecl(declaration);
-          string fully_qualified_name =
-              nonrealDeclaration->get_qualified_name();
+          string fully_qualified_name = templateArgument->unparseToString(info);
+
+          if (fully_qualified_name.empty()) {
+            SgNonrealDecl *nonrealDeclaration = isSgNonrealDecl(declaration);
+            fully_qualified_name = nonrealDeclaration->get_qualified_name();
+            if (fully_qualified_name.empty()) {
+              fully_qualified_name = nonrealDeclaration->get_name().str();
+            }
+          }
+
 #if DEBUG_TEMPLATE_ARGUMENT_NAMES
           printf("fully_qualified_name = %s \n", fully_qualified_name.c_str());
 #endif
@@ -2259,24 +2268,21 @@ SgTypedefDeclaration *SageBuilder::buildTypedefDeclaration_nfi(
   // DQ (3/20/2012): I don't remember why we need to provide the symbol
   // for the scope of the parent rather then the scope. But as I recall
   // there was a special corner of C++ that required this sort of support.
+  //
+  // Keep this populated for all frontends.  Leaving it null for namespace
+  // scopes causes typedef types from different scopes (e.g. ::size_t vs
+  // ::std::size_t) to collide in SgTypedefType::createType().
   SgSymbol *parent_scope = NULL;
-#ifndef ROSE_USE_CLANG_FRONTEND
   if (scope != NULL) {
-    ROSE_ASSERT(scope->get_parent() != NULL);
-    SgDeclarationStatement *declaration =
-        isSgDeclarationStatement(scope->get_parent());
-
-    // PP (3/9/22)
-    //   this is because a the discriminated type obtains the name of the
-    //   underlying declaration.
-    if (declaration) {
-
-      ROSE_ASSERT(declaration->get_firstNondefiningDeclaration() != NULL);
+    if (SgDeclarationStatement *declaration =
+            isSgDeclarationStatement(scope->get_parent())) {
+      if (SgDeclarationStatement *first_nondef =
+              declaration->get_firstNondefiningDeclaration()) {
+        declaration = first_nondef;
+      }
       parent_scope = declaration->search_for_symbol_from_symbol_table();
-      ROSE_ASSERT(parent_scope != NULL);
     }
   }
-#endif
 
   // SgTypedefDeclaration (Sg_File_Info *startOfConstruct, SgName name="",
   // SgType *base_type=NULL, SgTypedefType *type=NULL, SgDeclarationStatement
@@ -9743,7 +9749,10 @@ SageBuilder::buildNonrealType(const SgName &name, SgScopeStatement *scope,
   SgNonrealDecl *nrdecl = buildNonrealDecl(name, decl_scope);
   ROSE_ASSERT(nrdecl != NULL);
 
-  if (tplArgs != NULL && !tplArgs->empty()) {
+  if (tplArgs != NULL) {
+    // Preserve explicit template-id spelling even when the argument list is
+    // empty (e.g., Foo<>). Callers pass a null pointer when no template-id is
+    // present.
     nrdecl->set_is_nonreal_template(true);
     nrdecl->get_tpl_args() = *tplArgs;
     for (SgTemplateArgument *arg : nrdecl->get_tpl_args()) {

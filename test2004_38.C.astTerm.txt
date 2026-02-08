@@ -1,0 +1,3 @@
+SgClassDeclaration(SgClassDefinition(SgMemberFunctionDeclaration(SgFunctionParameterList,null,null,SgCtorInitializerList)))
+SgTemplateClassDeclaration(SgTemplateClassDefinition(SgTypedefDeclaration(null),SgTemplateMemberFunctionDeclaration(SgFunctionParameterList,null,null,SgCtorInitializerList,null),SgTemplateMemberFunctionDeclaration(SgFunctionParameterList,null,SgFunctionDefinition(SgBasicBlock(SgReturnStmt(SgConstructorInitializer(SgExprListExp:)))),SgCtorInitializerList,null)),null)
+SgVariableDeclaration(null,null,SgInitializedName(SgConstructorInitializer(SgExprListExp:)))

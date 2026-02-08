@@ -1,0 +1,132 @@
+|___  ->@0x74b0dde23010 SgProject 
+    |___ p_fileList_ptr ->@0x5884ddc41930 SgFileList 
+        |___ *[0] ->@0x74b0ddcde010 SgSourceFile 
+            |___ p_globalScope ->@0x74b0e00a4240 SgGlobal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 0:0
+                |--- *[0] ->@0x74b0dd9162d8 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd916010 defining decl@0x74b0dd9162d8 "::__NSConstantString_tag"
+                |   |___ p_definition ->@0x74b0dd83a010 SgClassDefinition compilerGenerated 0:0
+                |       |--- *[0] ->@0x74b0dd5bb010 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd5bb010 defining decl@0
+                |       |   |___ *[3] ->@0x74b0dd4cc010 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::isa" type@0x74b0dd723010 initializer@0 scope@0x74b0dd83a010
+                |       |--- *[1] ->@0x74b0dd5bb2f0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd5bb2f0 defining decl@0
+                |       |   |___ *[3] ->@0x74b0dd4cc1f8 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::flags" type@0x74b0dd7fb010 initializer@0 scope@0x74b0dd83a010
+                |       |--- *[2] ->@0x74b0dd5bb5d0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd5bb5d0 defining decl@0
+                |       |   |___ *[3] ->@0x74b0dd4cc3e0 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::str" type@0x74b0dd723090 initializer@0 scope@0x74b0dd83a010
+                |       |___ *[3] ->@0x74b0dd5bb8b0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd5bb8b0 defining decl@0
+                |           |___ *[3] ->@0x74b0dd4cc5c8 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::length" type@0x74b0dd32d010 initializer@0 scope@0x74b0dd83a010
+                |--- *[1] ->@0x74b0dd916868 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd9165a0 defining decl@0x74b0dd916868 "::__va_list_tag"
+                |   |___ p_definition ->@0x74b0dd83a148 SgClassDefinition compilerGenerated 0:0
+                |       |--- *[0] ->@0x74b0dd5bbb90 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd5bbb90 defining decl@0
+                |       |   |___ *[3] ->@0x74b0dd4cc7b0 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::gp_offset" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a148
+                |       |--- *[1] ->@0x74b0dd5bbe70 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd5bbe70 defining decl@0
+                |       |   |___ *[3] ->@0x74b0dd4cc998 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::fp_offset" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a148
+                |       |--- *[2] ->@0x74b0dd5bc150 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd5bc150 defining decl@0
+                |       |   |___ *[3] ->@0x74b0dd4ccb80 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::overflow_arg_area" type@0x74b0dd723190 initializer@0 scope@0x74b0dd83a148
+                |       |___ *[3] ->@0x74b0dd5bc430 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd5bc430 defining decl@0
+                |           |___ *[3] ->@0x74b0dd4ccd68 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::reg_save_area" type@0x74b0dd723190 initializer@0 scope@0x74b0dd83a148
+                |--- *[2] ->@0x74b0dd043010 SgNamespaceDeclarationStatement /home/ouankou/Projects/rex-ai/rex-codex/build/include-staging/clang/clang-builtin-cpp.hpp 12:1 first nondefining decl@0x74b0dd043010 defining decl@0
+                |   |___ p_definition ->@0x74b0dd18c010 SgNamespaceDefinitionStatement NULL_FILE 0:0
+                |___ *[3] ->@0x74b0dd916df8 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 7:1 AttachedPreprocessingInfoType@0x5884ddd9cf00{<id=0 0x5884ddbe9280 classification=CpreprocessorDefineDeclaration string=#define __BIG_ENDIAN 0
+ relative pos=before>
+<id=1 0x5884dddb75f0 classification=CpreprocessorDefineDeclaration string=#define __LITTLE_ENDIAN 1
+ relative pos=before>
+<id=2 0x5884dddb7740 classification=CpreprocessorDefineDeclaration string=#define __BYTE_ORDER __LITTLE_ENDIAN
+ relative pos=before>} first nondefining decl@0x74b0dd916b30 defining decl@0x74b0dd916df8 "::wait"
+                    |___ p_definition ->@0x74b0dd83a280 SgClassDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 7:1
+                        |--- *[0] ->@0x74b0dd5bc710 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 9:5 first nondefining decl@0x74b0dd5bc710 defining decl@0
+                        |   |___ *[3] ->@0x74b0dd4ccf50 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 9:5 "::wait::w_status" type@0x74b0dd7fb010 initializer@0 scope@0x74b0dd83a280
+                        |--- *[1] ->@0x74b0dd5bd570 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 11:5 first nondefining decl@0x74b0dd5bd570 defining decl@0
+                        |   |--- p_baseTypeDefiningDeclaration ->@0x74b0dd917388 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 11:5 first nondefining decl@0x74b0dd9170c0 defining decl@0x74b0dd917388 "::wait::__anonymous_0x0_11_5"
+                        |   |   |___ p_definition ->@0x74b0dd83a3b8 SgClassDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 11:5
+                        |   |       |--- *[0] ->@0x74b0dd5bc9f0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 14:2 AttachedPreprocessingInfoType@0x5884ddd9cf80{<id=0 0x5884dde11fb0 classification=CpreprocessorIfDeclaration string=#if	__BYTE_ORDER == __LITTLE_ENDIAN
+ relative pos=before>} first nondefining decl@0x74b0dd5bc9f0 defining decl@0
+                        |   |       |   |___ *[3] ->@0x74b0dd4cd138 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 14:2 AttachedPreprocessingInfoType@0x5884ddd9cee0{<id=0 0x5884dde12140 classification=C_StyleComment string=/* Terminating signal.  */
+ relative pos=after>} "::wait::__anonymous_0x0_11_5::__w_termsig" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a3b8
+                        |   |       |--- *[1] ->@0x74b0dd5bccd0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 15:2 first nondefining decl@0x74b0dd5bccd0 defining decl@0
+                        |   |       |   |___ *[3] ->@0x74b0dd4cd320 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 15:2 AttachedPreprocessingInfoType@0x5884ddfd0ae0{<id=0 0x5884dde122f0 classification=C_StyleComment string=/* Set if dumped core.  */
+ relative pos=after>} "::wait::__anonymous_0x0_11_5::__w_coredump" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a3b8
+                        |   |       |--- *[2] ->@0x74b0dd5bcfb0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 16:2 first nondefining decl@0x74b0dd5bcfb0 defining decl@0
+                        |   |       |   |___ *[3] ->@0x74b0dd4cd508 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 16:2 AttachedPreprocessingInfoType@0x5884ddfd09e0{<id=0 0x5884dde12410 classification=C_StyleComment string=/* Return code if exited normally.  */
+ relative pos=after>} "::wait::__anonymous_0x0_11_5::__w_retcode" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a3b8
+                        |   |       |___ *[3] ->@0x74b0dd5bd290 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 17:2 first nondefining decl@0x74b0dd5bd290 defining decl@0
+                        |   |           |___ *[3] ->@0x74b0dd4cd6f0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 17:2 "::wait::__anonymous_0x0_11_5::" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a3b8
+                        |   |___ *[3] ->@0x74b0dd4cd8d8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 11:5 "::wait::__wait_terminated" type@0x74b0dd8d31a8 initializer@0 scope@0x74b0dd83a280
+                        |___ *[2] ->@0x74b0dd5be0f0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 27:5 AttachedPreprocessingInfoType@0x5884ddfca380{<id=0 0x5884dde125b0 classification=CpreprocessorEndifDeclaration string=#endif				/* Little endian.  */
+ relative pos=before>
+<id=1 0x5884dde124a0 classification=C_StyleComment string=/* Little endian.  */
+ relative pos=before>
+<id=2 0x5884dde121d0 classification=CpreprocessorIfDeclaration string=#if	__BYTE_ORDER == __BIG_ENDIAN
+ relative pos=before>
+<id=3 0x5884dde12b70 classification=CpreprocessorEndifDeclaration string=#endif				/* Big endian.  */
+ relative pos=before>
+<id=4 0x5884dde12a80 classification=C_StyleComment string=/* Big endian.  */
+ relative pos=before>
+<id=5 0x5884dde13bf0 classification=CpreprocessorEndifDeclaration string=#endif				/* Little endian.  */
+ relative pos=after>
+<id=6 0x5884dde13ad0 classification=C_StyleComment string=/* Little endian.  */
+ relative pos=after>
+<id=7 0x5884dde141b0 classification=CpreprocessorIfDeclaration string=#if	__BYTE_ORDER == __BIG_ENDIAN
+ relative pos=after>
+<id=8 0x5884dde14330 classification=CpreprocessorEndifDeclaration string=#endif				/* Big endian.  */
+ relative pos=after>
+<id=9 0x5884dde14240 classification=C_StyleComment string=/* Big endian.  */
+ relative pos=after>} first nondefining decl@0x74b0dd5be0f0 defining decl@0
+                            |--- p_baseTypeDefiningDeclaration ->@0x74b0dd917918 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 27:5 first nondefining decl@0x74b0dd917650 defining decl@0x74b0dd917918 "::wait::__anonymous_0x0_27_5"
+                            |   |___ p_definition ->@0x74b0dd83a4f0 SgClassDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 27:5
+                            |       |--- *[0] ->@0x74b0dd5bd850 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 30:2 AttachedPreprocessingInfoType@0x5884dde12040{<id=0 0x5884dde138f0 classification=CpreprocessorIfDeclaration string=#if	__BYTE_ORDER == __LITTLE_ENDIAN
+ relative pos=before>} first nondefining decl@0x74b0dd5bd850 defining decl@0
+                            |       |   |___ *[3] ->@0x74b0dd4cdac0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 30:2 AttachedPreprocessingInfoType@0x5884ddda5970{<id=0 0x5884dde139b0 classification=C_StyleComment string=/* W_STOPPED if stopped.  */
+ relative pos=after>} "::wait::__anonymous_0x0_27_5::__w_stopval" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a4f0
+                            |       |--- *[1] ->@0x74b0dd5bdb30 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 31:2 first nondefining decl@0x74b0dd5bdb30 defining decl@0
+                            |       |   |___ *[3] ->@0x74b0dd4cdca8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 31:2 AttachedPreprocessingInfoType@0x5884dddacd50{<id=0 0x5884dde13a40 classification=C_StyleComment string=/* Stopping signal.  */
+ relative pos=after>} "::wait::__anonymous_0x0_27_5::__w_stopsig" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a4f0
+                            |       |___ *[2] ->@0x74b0dd5bde10 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 32:2 first nondefining decl@0x74b0dd5bde10 defining decl@0
+                            |           |___ *[3] ->@0x74b0dd4cde90 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 32:2 "::wait::__anonymous_0x0_27_5::" type@0x74b0dd2f2010 initializer@0 scope@0x74b0dd83a4f0
+                            |___ *[3] ->@0x74b0dd4ce078 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_92.C 27:5 "::wait::__wait_stopped" type@0x74b0dd8d3230 initializer@0 scope@0x74b0dd83a280
+Types encountered ....
+|___  ->@0x74b0dd2b7010 SgTypeVoid 
+|___  ->@0x74b0dd723010 SgPointerType 
+    |___ p_base_type ->@0x74b0dd762010 SgModifierType 
+        |___ p_base_type ->@0x74b0dd7fb010 SgTypeInt 
+|___  ->@0x74b0dd723090 SgPointerType 
+    |___ p_base_type ->@0x74b0dd762280 SgModifierType 
+        |___ p_base_type ->@0x74b0dd368010 SgTypeChar 
+|___  ->@0x74b0dd723110 SgPointerType 
+    |___ p_base_type ->@0x74b0dd368010 SgTypeChar 
+|___  ->@0x74b0dd723190 SgPointerType 
+    |___ p_base_type ->@0x74b0dd2b7010 SgTypeVoid 
+|___  ->@0x74b0dd762010 SgModifierType 
+    |___ p_base_type ->@0x74b0dd7fb010 SgTypeInt 
+|___  ->@0x74b0dd762148 SgModifierType 
+    |___ p_base_type ->@0x74b0dd7fb010 SgTypeInt 
+|___  ->@0x74b0dd762280 SgModifierType 
+    |___ p_base_type ->@0x74b0dd368010 SgTypeChar 
+|___  ->@0x74b0dd7623b8 SgModifierType 
+    |___ p_base_type ->@0x74b0dd368010 SgTypeChar 
+|___  ->@0x74b0dd229010 SgArrayType  base_type@0x74b0dd8d3098
+    |___ p_index ->@0x74b0dd278010 SgIntVal NULL_FILE 0:0 value=1 valueString=
+|___  ->@0x74b0dfda6010 SgTypeDefault 
+|___  ->@0x74b0dd8d3010 SgClassType 
+    |___ p_builtin_type ->@0x74b0dd916010 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd916010 defining decl@0x74b0dd9162d8 "::__NSConstantString_tag"
+|___  ->@0x74b0dd8d3098 SgClassType 
+    |___ p_builtin_type ->@0x74b0dd9165a0 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd9165a0 defining decl@0x74b0dd916868 "::__va_list_tag"
+|___  ->@0x74b0dd8d3120 SgClassType 
+    |___ p_builtin_type ->@0x74b0dd916b30 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd916b30 defining decl@0x74b0dd916df8 "::wait"
+|___  ->@0x74b0dd8d31a8 SgClassType 
+    |___ p_builtin_type ->@0x74b0dd9170c0 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd9170c0 defining decl@0x74b0dd917388 "::wait::__anonymous_0x0_11_5"
+|___  ->@0x74b0dd8d3230 SgClassType 
+    |___ p_builtin_type ->@0x74b0dd917650 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0dd917650 defining decl@0x74b0dd917918 "::wait::__anonymous_0x0_27_5"
+|___  ->@0x74b0ddaf4010 SgTypedefType 
+    |___ p_builtin_type ->@0x74b0ddb3b010 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0ddb3b010 defining decl@0 "::__int128_t" base_type@0x74b0ddca3010
+|___  ->@0x74b0ddaf40a0 SgTypedefType 
+    |___ p_builtin_type ->@0x74b0ddb3b2f0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0ddb3b2f0 defining decl@0 "::__uint128_t" base_type@0x74b0dda72010
+|___  ->@0x74b0ddaf4130 SgTypedefType 
+    |___ p_builtin_type ->@0x74b0ddb3b5d0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0ddb3b5d0 defining decl@0 "::__NSConstantString" base_type@0x74b0dd8d3010
+|___  ->@0x74b0ddaf41c0 SgTypedefType 
+    |___ p_builtin_type ->@0x74b0ddb3b8b0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0ddb3b8b0 defining decl@0 "::__builtin_ms_va_list" base_type@0x74b0dd723110
+|___  ->@0x74b0ddaf4250 SgTypedefType 
+    |___ p_builtin_type ->@0x74b0ddb3bb90 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x74b0ddb3bb90 defining decl@0 "::__builtin_va_list" base_type@0x74b0dd229010
+|___  ->@0x74b0dd368010 SgTypeChar 
+|___  ->@0x74b0dd7fb010 SgTypeInt 
+|___  ->@0x74b0dd32d010 SgTypeLong 
+|___  ->@0x74b0ddca3010 SgTypeLongLong 
+|___  ->@0x74b0dd2f2010 SgTypeUnsignedInt 
+|___  ->@0x74b0dda72010 SgTypeUnsignedLongLong 

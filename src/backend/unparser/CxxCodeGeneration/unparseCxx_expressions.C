@@ -1505,7 +1505,7 @@ void Unparse_ExprStmt::unparseTemplateParameterList(
     SgUnparse_Info &info, bool is_template_header) {
 
   if (templateParameterList.empty() == false) {
-    curprint("< ");
+    curprint("<");
     SgTemplateParameterPtrList::const_iterator i =
         templateParameterList.begin();
     while (i != templateParameterList.end()) {
@@ -1529,6 +1529,29 @@ void Unparse_ExprStmt::unparseTemplateParameter(
     SgTemplateParameter *templateParameter, SgUnparse_Info &info,
     bool is_template_header) {
   ASSERT_not_null(templateParameter);
+
+  // Default template arguments belong on the primary declaration only.
+  // Some declaration chains share template parameters across multiple
+  // redeclarations; once emitted, suppress subsequent repeats.
+  static std::set<const SgTemplateParameter *> emitted_default_template_args;
+
+  bool emit_default_template_arg = is_template_header;
+  if (emit_default_template_arg) {
+    SgTemplateDeclaration *template_decl =
+        isSgTemplateDeclaration(info.get_declstatement_ptr());
+    if (template_decl != NULL) {
+      SgDeclarationStatement *first_nondef =
+          template_decl->get_firstNondefiningDeclaration();
+      if (first_nondef != NULL && first_nondef != template_decl) {
+        emit_default_template_arg = false;
+      }
+    }
+  }
+  if (emit_default_template_arg &&
+      emitted_default_template_args.find(templateParameter) !=
+          emitted_default_template_args.end()) {
+    emit_default_template_arg = false;
+  }
 
   switch (templateParameter->get_parameterType()) {
   case SgTemplateParameter::type_parameter: {
@@ -1574,10 +1597,14 @@ void Unparse_ExprStmt::unparseTemplateParameter(
     }
 
     SgType *default_type = templateParameter->get_defaultTypeParameter();
-    if (default_type != NULL) {
-      // Need to add the default type.
-      // See test2014_149.C for an example of where this is mistakenly done in
-      // the defining declaration (where it is an error).
+    if (emit_default_template_arg && default_type != NULL) {
+      curprint(" = ");
+      SgUnparse_Info dinfo(info);
+      dinfo.set_SkipClassDefinition();
+      dinfo.set_SkipEnumDefinition();
+      dinfo.set_SkipQualifiedNames();
+      unp->u_type->unparseType(default_type, dinfo);
+      emitted_default_template_args.insert(templateParameter);
     }
     break;
   }
@@ -1599,6 +1626,7 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       // the template header, but not in the template parameter list.
       // unp->u_type->outputType<SgInitializedName>(templateParameter->get_initializedName(),type,info);
       // TV (03/20/2018) only if it is a template header (not a specialization)
+      bool printed_name_with_type = false;
       if (is_template_header) {
         SgExpression *constraint = templateParameter->get_typeConstraint();
         if (constraint != NULL) {
@@ -1608,13 +1636,47 @@ void Unparse_ExprStmt::unparseTemplateParameter(
           unparseExpression(constraint, cinfo);
           curprint(" ");
         }
-        SgUnparse_Info ninfo(info);
-        unp->u_type->unparseType(type, ninfo);
-        if (is_pack) {
-          curprint("... ");
+
+        auto is_function_pointer_like = [](SgType *t) {
+          if (isSgPointerMemberType(t) != NULL || isSgFunctionType(t) != NULL ||
+              isSgMemberFunctionType(t) != NULL) {
+            return true;
+          }
+          if (SgPointerType *ptr = isSgPointerType(t)) {
+            SgType *base = ptr->get_base_type();
+            return isSgFunctionType(base) != NULL ||
+                   isSgMemberFunctionType(base) != NULL;
+          }
+          return false;
+        };
+
+        if (!is_pack && is_function_pointer_like(type)) {
+          SgUnparse_Info ninfo(info);
+          unp->u_type->outputType<SgInitializedName>(
+              templateParameter->get_initializedName(), type, ninfo);
+          printed_name_with_type = true;
+        } else {
+          SgUnparse_Info ninfo(info);
+          unp->u_type->unparseType(type, ninfo);
+          if (is_pack) {
+            curprint("... ");
+          }
         }
       }
-      curprint(templateParameter->get_initializedName()->get_name());
+      if (!printed_name_with_type) {
+        curprint(templateParameter->get_initializedName()->get_name());
+      }
+      if (emit_default_template_arg) {
+        if (SgExpression *default_expr =
+                templateParameter->get_defaultExpressionParameter()) {
+          curprint(" = ");
+          SgUnparse_Info einfo(info);
+          einfo.set_SkipClassDefinition();
+          einfo.set_SkipEnumDefinition();
+          unparseExpression(default_expr, einfo);
+          emitted_default_template_args.insert(templateParameter);
+        }
+      }
     }
 
     break;
@@ -1977,6 +2039,10 @@ void Unparse_ExprStmt::unparseTemplateArgument(
            "\n");
     ROSE_ABORT();
   }
+  }
+
+  if (templateArgument->get_is_pack_element()) {
+    curprint("...");
   }
 
 #if DEBUG_TEMPLATE_ARGUMENT
@@ -4995,16 +5061,46 @@ void Unparse_ExprStmt::unparseChooseExpression(SgExpression *,
 // DQ (7/26/2020): Adding support for C++20 expression folding expression.
 void Unparse_ExprStmt::unparseFoldExpression(SgExpression *expr,
                                              SgUnparse_Info &info) {
-  // printf ("C++20 fold expression unparse support not implemented (selected an
-  // alternative operator +) \n");
-
   SgFoldExpression *foldExpression = isSgFoldExpression(expr);
-  SgExpression *operands = foldExpression->get_operands();
-  unparseExpression(operands, info);
-  string operator_token = foldExpression->get_operator_token();
+  ASSERT_not_null(foldExpression);
 
-  curprint(operator_token.c_str());
-  curprint(" ... ");
+  SgExpression *operands = foldExpression->get_operands();
+  ASSERT_not_null(operands);
+
+  const std::string &operator_token = foldExpression->get_operator_token();
+  ROSE_ASSERT(!operator_token.empty());
+
+  if (SgExprListExp *operand_list = isSgExprListExp(operands)) {
+    SgExpressionPtrList &expressions = operand_list->get_expressions();
+    ROSE_ASSERT(expressions.size() == 2);
+    ASSERT_not_null(expressions[0]);
+    ASSERT_not_null(expressions[1]);
+
+    curprint("(");
+    unparseExpression(expressions[0], info);
+    curprint(" ");
+    curprint(operator_token.c_str());
+    curprint(" ... ");
+    curprint(operator_token.c_str());
+    curprint(" ");
+    unparseExpression(expressions[1], info);
+    curprint(")");
+    return;
+  }
+
+  curprint("(");
+  if (foldExpression->get_is_left_associative()) {
+    curprint("... ");
+    curprint(operator_token.c_str());
+    curprint(" ");
+    unparseExpression(operands, info);
+  } else {
+    unparseExpression(operands, info);
+    curprint(" ");
+    curprint(operator_token.c_str());
+    curprint(" ...");
+  }
+  curprint(")");
 }
 
 void Unparse_ExprStmt::unparseSizeOfOp(SgExpression *expr,

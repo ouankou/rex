@@ -1,0 +1,340 @@
+|___  ->@0x71644dc23010 SgProject 
+    |___ p_fileList_ptr ->@0x63b6df2708b0 SgFileList 
+        |___ *[0] ->@0x71644da88010 SgSourceFile 
+            |___ p_globalScope ->@0x71644fb77240 SgGlobal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 0:0
+                |--- *[0] ->@0x71644d62f2d8 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d62f010 defining decl@0x71644d62f2d8 "::__NSConstantString_tag"
+                |   |___ p_definition ->@0x71644d553010 SgClassDefinition compilerGenerated 0:0
+                |       |--- *[0] ->@0x71644d2d4010 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d2d4010 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e5010 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::isa" type@0x71644d43c010 initializer@0 scope@0x71644d553010
+                |       |--- *[1] ->@0x71644d2d42f0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d2d42f0 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e51f8 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::flags" type@0x71644d514010 initializer@0 scope@0x71644d553010
+                |       |--- *[2] ->@0x71644d2d45d0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d2d45d0 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e53e0 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::str" type@0x71644d43c090 initializer@0 scope@0x71644d553010
+                |       |___ *[3] ->@0x71644d2d48b0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d2d48b0 defining decl@0
+                |           |___ *[3] ->@0x71644d1e55c8 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::length" type@0x71644d046010 initializer@0 scope@0x71644d553010
+                |--- *[1] ->@0x71644d62f868 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d62f5a0 defining decl@0x71644d62f868 "::__va_list_tag"
+                |   |___ p_definition ->@0x71644d553148 SgClassDefinition compilerGenerated 0:0
+                |       |--- *[0] ->@0x71644d2d4b90 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d2d4b90 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e57b0 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::gp_offset" type@0x71644d00b010 initializer@0 scope@0x71644d553148
+                |       |--- *[1] ->@0x71644d2d4e70 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d2d4e70 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e5998 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::fp_offset" type@0x71644d00b010 initializer@0 scope@0x71644d553148
+                |       |--- *[2] ->@0x71644d2d5150 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d2d5150 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e5b80 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::overflow_arg_area" type@0x71644d43c190 initializer@0 scope@0x71644d553148
+                |       |___ *[3] ->@0x71644d2d5430 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d2d5430 defining decl@0
+                |           |___ *[3] ->@0x71644d1e5d68 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::reg_save_area" type@0x71644d43c190 initializer@0 scope@0x71644d553148
+                |--- *[2] ->@0x71644cd5c010 SgNamespaceDeclarationStatement /home/ouankou/Projects/rex-ai/rex-codex/build/include-staging/clang/clang-builtin-cpp.hpp 12:1 first nondefining decl@0x71644cd5c010 defining decl@0
+                |   |___ p_definition ->@0x71644cea5010 SgNamespaceDefinitionStatement NULL_FILE 0:0
+                |--- *[3] ->@0x71644d62fdf8 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 14:1 AttachedPreprocessingInfoType@0x63b6df750f40{<id=0 0x63b6df30b590 classification=CplusplusStyleComment string=// This and example showing the static const integer data member in-class initialization!
+ relative pos=before>
+<id=1 0x63b6df218280 classification=CplusplusStyleComment string=// It does not work for non-iteger types (like float or double), but it does work for
+ relative pos=before>
+<id=2 0x63b6df3e6df0 classification=CplusplusStyleComment string=// char, long, etc.
+ relative pos=before>
+<id=3 0x63b6df43ca90 classification=CplusplusStyleComment string=// Under some non-standard conditions doubles and floats can be initialized in-class
+ relative pos=before>
+<id=4 0x63b6df43cbd0 classification=CplusplusStyleComment string=// though I think it is handled sufficiently differently in different compilers o make 
+ relative pos=before>
+<id=5 0x63b6df43ccf0 classification=CplusplusStyleComment string=// it painful.
+ relative pos=before>
+<id=6 0x63b6df43cd80 classification=CplusplusStyleComment string=// More info at:
+ relative pos=before>
+<id=7 0x63b6df43ce10 classification=CplusplusStyleComment string=//      http://www.cqf.info/forum/
+ relative pos=before>
+<id=8 0x63b6df43cf00 classification=CplusplusStyleComment string=//      C++ static double in class
+ relative pos=before>
+<id=9 0x63b6df43cc60 classification=CplusplusStyleComment string=// #include<stdlib.h>
+ relative pos=before>} first nondefining decl@0x71644d62fb30 defining decl@0x71644d62fdf8 "::X"
+                |   |___ p_definition ->@0x71644d553280 SgClassDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 14:1 AttachedPreprocessingInfoType@0x63b6df784bb0{<id=0 0x63b6df441890 classification=CplusplusStyleComment string=// Notice that we can initialize static constants within the class!
+ relative pos=after>}
+                |       |--- *[0] ->@0x71644d2d5710 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 18:11 first nondefining decl@0x71644d2d5710 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e5f50 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 18:11 "::X::maxIntValue" type@0x71644d47b010 initializer@0x71644ccea010 scope@0x71644d553280
+                |       |       |___ p_initptr ->@0x71644ccea010 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 18:48
+                |       |           |___ p_operand_i ->@0x71644cf91090 SgIntVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 18:48 value=3 valueString=3
+                |       |--- *[1] ->@0x71644d2d59f0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 19:11 first nondefining decl@0x71644d2d59f0 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e6138 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 19:11 "::X::maxLongValue" type@0x71644d47b760 initializer@0x71644ccea078 scope@0x71644d553280
+                |       |       |___ p_initptr ->@0x71644ccea078 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 19:48
+                |       |           |___ p_operand_i ->@0x71644cf91110 SgIntVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 19:48 value=3 valueString=3
+                |       |--- *[2] ->@0x71644d2d5cd0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 20:11 first nondefining decl@0x71644d2d5cd0 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e6320 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 20:11 "::X::maxCharValue" type@0x71644d47b280 initializer@0x71644ccea0e0 scope@0x71644d553280
+                |       |       |___ p_initptr ->@0x71644ccea0e0 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 20:48
+                |       |           |___ p_operand_i ->@0x71644ccab010 SgCharVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 20:48 AttachedPreprocessingInfoType@0x63b6df784880{<id=0 0x63b6df4419e0 classification=CplusplusStyleComment string=// Not allowed for float, double, or pointers (interesting!)
+ relative pos=after>}
+                |       |--- *[3] ->@0x71644d2d5fb0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 29:11 AttachedPreprocessingInfoType@0x63b6df3cc620{<id=0 0x63b6df441800 classification=CplusplusStyleComment string=// static const float  maxFloatValue  = 3.0;
+ relative pos=before>
+<id=1 0x63b6df441b20 classification=CplusplusStyleComment string=// static const double maxDoubleValue = 3.0;
+ relative pos=before>
+<id=2 0x63b6df441bf0 classification=CplusplusStyleComment string=// static const size_t maxSizeTValue = 3;
+ relative pos=before>
+<id=3 0x63b6df441cc0 classification=CplusplusStyleComment string=// static const int   *maxIntPointerValue = 0L;
+ relative pos=before>
+<id=4 0x63b6df441da0 classification=CplusplusStyleComment string=// types of data members that can't be initalized in-class
+ relative pos=before>} first nondefining decl@0x71644d2d5fb0 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e6508 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 29:11 "::X::pi" type@0x71644d47bc40 initializer@0 scope@0x71644d553280
+                |       |--- *[4] ->@0x71644d2d6290 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 30:11 first nondefining decl@0x71644d2d6290 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e66f0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 30:11 "::X::tuncatedPi" type@0x71644d47b010 initializer@0 scope@0x71644d553280
+                |       |--- *[5] ->@0x71644d2d6570 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 31:11 first nondefining decl@0x71644d2d6570 defining decl@0
+                |       |   |___ *[3] ->@0x71644d1e68d8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 31:11 AttachedPreprocessingInfoType@0x63b6df751120{<id=0 0x63b6df4420a0 classification=CplusplusStyleComment string=// this is the only way to initalize a non-static const variable (integer or double)
+ relative pos=after>} "::X::e" type@0x71644d47bc40 initializer@0 scope@0x71644d553280
+                |       |--- *[6] ->@0x71644c7ae010 SgMemberFunctionDeclaration compilerGenerated 0:0 first nondefining decl@0x71644c7ae010 defining decl@0x71644c7ae4a8 "::X::X" assoc. class decl@0x71644d62fdf8
+                |       |   |--- p_parameterList ->@0x71644cb43278 SgFunctionParameterList compilerGenerated 0:0 first nondefining decl@0x71644cb43278 defining decl@0
+                |       |   |___ p_CtorInitializerList ->@0x71644c681010 SgCtorInitializerList compilerGenerated 0:0 first nondefining decl@0x71644c681010 defining decl@0x71644c681010
+                |       |___ *[7] ->@0x71644c7ae4a8 SgMemberFunctionDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:11 first nondefining decl@0x71644c7ae010 defining decl@0x71644c7ae4a8 "::X::X" assoc. class decl@0x71644d62fdf8
+                |           |--- p_parameterList ->@0x71644cb43010 SgFunctionParameterList compilerGenerated 0:0 first nondefining decl@0x71644cb43010 defining decl@0
+                |           |--- p_definition ->@0x71644c540010 SgFunctionDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:11
+                |           |   |___ p_body ->@0x71644c5d9168 SgBasicBlock /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:39
+                |           |___ p_CtorInitializerList ->@0x71644c6814e0 SgCtorInitializerList NULL_FILE 0:0 first nondefining decl@0x71644c6814e0 defining decl@0x71644c6814e0
+                |               |--- *[1] ->@0x71644d1e6ac0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:16 "::X::tuncatedPi" type@0x71644d47b010 initializer@0x71644ccea148 scope@0x71644d553280
+                |               |   |___ p_initptr ->@0x71644ccea148 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:27
+                |               |       |___ p_operand_i ->@0x71644cf91190 SgIntVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:27 value=3 valueString=3
+                |               |___ *[2] ->@0x71644d1e6ca8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:31 "::X::e" type@0x71644d47bc40 initializer@0x71644ccea1b0 scope@0x71644d553280
+                |                   |___ p_initptr ->@0x71644ccea1b0 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:33
+                |                       |___ p_operand_i ->@0x71644c501010 SgDoubleVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 34:33 AttachedPreprocessingInfoType@0x63b6df7512c0{<id=0 0x63b6df442340 classification=CplusplusStyleComment string=// This is the only way to initialize a static const data member which is non-integer based
+ relative pos=after>} value=2.71 valueString=2.71
+                |--- *[4] ->@0x71644d2d6850 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 38:1 first nondefining decl@0x71644d2d6850 defining decl@0
+                |   |___ *[3] ->@0x71644d1e6e90 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 38:1 "::X::pi" type@0x71644d47bc40 initializer@0x71644ccea218 scope@0x71644d553280
+                |       |___ p_initptr ->@0x71644ccea218 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 38:22
+                |           |___ p_operand_i ->@0x71644c501090 SgDoubleVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 38:22 AttachedPreprocessingInfoType@0x63b6df76a060{<id=0 0x63b6df443400 classification=CplusplusStyleComment string=// #if SWIG
+ relative pos=after>} value=3.14 valueString=3.14
+                |--- *[5] ->@0x71644d630388 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 42:1 AttachedPreprocessingInfoType@0x63b6df3cc640{<id=0 0x63b6df4434b0 classification=CpreprocessorDefineDeclaration string=#define STORAGE
+ relative pos=before>} first nondefining decl@0x71644d6300c0 defining decl@0x71644d630388 "::Y"
+                |   |___ p_definition ->@0x71644d5533b8 SgClassDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 42:1 AttachedPreprocessingInfoType@0x63b6df6d64b0{<id=0 0x63b6df4435f0 classification=CplusplusStyleComment string=// This is allowed by GNU but not by legacy frontend
+ relative pos=after>}
+                |       |___ *[0] ->@0x71644d2d6b30 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 67:11 AttachedPreprocessingInfoType@0x63b6df784a50{<id=0 0x63b6df4436e0 classification=CplusplusStyleComment string=// static const double pi = 3.141592653589793238462643383279; // Pi to 30
+ relative pos=before>
+<id=1 0x63b6df443770 classification=CplusplusStyleComment string=// places
+ relative pos=before>
+<id=2 0x63b6df443860 classification=CplusplusStyleComment string=// This is allowed by legacy frontend, but not by g++ (g++ needs constant
+ relative pos=before>
+<id=3 0x63b6df443940 classification=CplusplusStyleComment string=// to be static) const double pi = 3.141592653589793238462643383279; //
+ relative pos=before>
+<id=4 0x63b6df4439d0 classification=CplusplusStyleComment string=// Pi to 30 places
+ relative pos=before>
+<id=5 0x63b6df443ad0 classification=CplusplusStyleComment string=// Code that will compile with legacy frontend
+ relative pos=before>
+<id=6 0x63b6df443c20 classification=CplusplusStyleComment string=// const double pi = 3.141592653589793238462643383279; // Pi to 30 places
+ relative pos=before>
+<id=7 0x63b6df443d40 classification=CplusplusStyleComment string=// Code that we should generate so that we can compile with g++
+ relative pos=before>
+<id=8 0x63b6df443cb0 classification=CplusplusStyleComment string=// static const double pi = 3.141592653589793238462643383279; // Pi to 30
+ relative pos=before>
+<id=9 0x63b6df443e30 classification=CplusplusStyleComment string=// places
+ relative pos=before>
+<id=10 0x63b6df443ec0 classification=CpreprocessorIfdefDeclaration string=#ifdef USE_ROSE
+ relative pos=before>
+<id=11 0x63b6df443f80 classification=CpreprocessorElseDeclaration string=#else
+ relative pos=before>} first nondefining decl@0x71644d2d6b30 defining decl@0
+                |           |___ *[3] ->@0x71644d1e7078 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 67:11 AttachedPreprocessingInfoType@0x63b6df751690{<id=0 0x63b6df444060 classification=CplusplusStyleComment string=// = 3.141592653589793238462643383279; // Pi to 30 places
+ relative pos=after>} "::Y::pi" type@0x71644cc70010 initializer@0 scope@0x71644d5533b8
+                |___ *[6] ->@0x71644c283498 SgFunctionDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 72:1 AttachedPreprocessingInfoType@0x63b6df76b560{<id=0 0x63b6df4440f0 classification=CpreprocessorEndifDeclaration string=#endif
+ relative pos=before>
+<id=1 0x63b6df449260 classification=CplusplusStyleComment string=// This does not work presently
+ relative pos=after>} first nondefining decl@0x71644c283010 defining decl@0x71644c283498 "::foo"
+                    |--- p_parameterList ->@0x71644cb434e0 SgFunctionParameterList compilerGenerated 0:0 first nondefining decl@0x71644cb434e0 defining decl@0
+                    |___ p_definition ->@0x71644c540148 SgFunctionDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 72:1
+                        |___ p_body ->@0x71644c5d92c0 SgBasicBlock /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 73:4
+                            |--- *[0] ->@0x71644d2d6e10 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 74:6 first nondefining decl@0x71644d2d6e10 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e7260 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 74:6 "x" type@0x71644d5ec120 initializer@0x71644c211010 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644c211010 SgConstructorInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 74:8 member function decl@0
+                            |           |___ p_args ->@0x71644c250010 SgExprListExp compilerGenerated 0:0
+                            |--- *[1] ->@0x71644d2d70f0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 74:6 first nondefining decl@0x71644d2d70f0 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e7448 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 74:6 "xptr" type@0x71644d43c210 initializer@0 scope@0x71644c5d92c0
+                            |--- *[2] ->@0x71644d2d73d0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 76:6 first nondefining decl@0x71644d2d73d0 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e7630 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 76:6 "gamma" type@0x71644d47bc40 initializer@0x71644ccea280 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea280 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 76:34
+                            |           |___ p_operand_i ->@0x71644c501110 SgDoubleVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 76:34 value=7.89 valueString=7.89
+                            |--- *[3] ->@0x71644d2d76b0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 77:6 first nondefining decl@0x71644d2d76b0 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e7818 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 77:6 "integerConst" type@0x71644d47b010 initializer@0x71644ccea2e8 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea2e8 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 77:34
+                            |           |___ p_operand_i ->@0x71644cf91210 SgIntVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 77:34 value=42 valueString=42
+                            |--- *[4] ->@0x71644d2d7990 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 82:6 AttachedPreprocessingInfoType@0x63b6df784fe0{<id=0 0x63b6df4455a0 classification=CpreprocessorIfdefDeclaration string=#ifdef USE_ROSE
+ relative pos=before>
+<id=1 0x63b6df445660 classification=CpreprocessorElseDeclaration string=#else
+ relative pos=before>} first nondefining decl@0x71644d2d7990 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e7a00 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 82:6 "var1" type@0x71644cc70010 initializer@0x71644ccea350 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea350 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 82:21
+                            |           |___ p_operand_i ->@0x71644c197010 SgDotExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 82:21
+                            |               |--- p_lhs_operand_i ->@0x71644c1ce010 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 82:21 init name@0x71644d1e7260 symbol name="x"
+                            |               |___ p_rhs_operand_i ->@0x71644c1ce098 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e6e90 symbol name="pi"
+                            |--- *[5] ->@0x71644d2d7c70 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 84:6 AttachedPreprocessingInfoType@0x63b6df76a7c0{<id=0 0x63b6df445f10 classification=CpreprocessorEndifDeclaration string=#endif
+ relative pos=before>} first nondefining decl@0x71644d2d7c70 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e7be8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 84:6 "var2" type@0x71644cc70010 initializer@0x71644ccea3b8 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea3b8 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 84:21
+                            |           |___ p_operand_i ->@0x71644c197080 SgDotExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 84:21
+                            |               |--- p_lhs_operand_i ->@0x71644c1ce120 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 84:21 init name@0x71644d1e7260 symbol name="x"
+                            |               |___ p_rhs_operand_i ->@0x71644c1ce1a8 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e68d8 symbol name="e"
+                            |--- *[6] ->@0x71644d2d7f50 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 85:6 first nondefining decl@0x71644d2d7f50 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e7dd0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 85:6 "var3" type@0x71644cc70010 initializer@0x71644ccea420 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea420 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 85:21
+                            |           |___ p_operand_i ->@0x71644c1ce230 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 85:21 init name@0x71644d1e7630 symbol name="gamma"
+                            |--- *[7] ->@0x71644d2d8230 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 86:6 first nondefining decl@0x71644d2d8230 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e7fb8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 86:6 "var4" type@0x71644d514010 initializer@0x71644ccea488 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea488 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 86:21
+                            |           |___ p_operand_i ->@0x71644c1ce2b8 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 86:21 AttachedPreprocessingInfoType@0x63b6df443390{<id=0 0x63b6df446060 classification=CplusplusStyleComment string=// Access via static qualifier works fine but access via data member filed
+ relative pos=after>} init name@0x71644d1e7818 symbol name="integerConst"
+                            |--- *[8] ->@0x71644d2d8510 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 91:6 AttachedPreprocessingInfoType@0x63b6df3d5110{<id=0 0x63b6df446150 classification=CplusplusStyleComment string=// generates error: "x->3;" The fix (to legacy frontend/Sage translation)
+ relative pos=before>
+<id=1 0x63b6df4462c0 classification=CplusplusStyleComment string=// was to make these generate the same code (as it should be)
+ relative pos=before>} first nondefining decl@0x71644d2d8510 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e81a0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 91:6 "var5" type@0x71644d514010 initializer@0x71644ccea4f0 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea4f0 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 91:21
+                            |           |___ p_operand_i ->@0x71644c1ce340 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 91:21 init name@0x71644d1e5f50 symbol name="maxIntValue"
+                            |--- *[9] ->@0x71644d2d87f0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 92:6 first nondefining decl@0x71644d2d87f0 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e8388 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 92:6 "var6" type@0x71644d514010 initializer@0x71644ccea558 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea558 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 92:21
+                            |           |___ p_operand_i ->@0x71644c1970f0 SgDotExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 92:21
+                            |               |--- p_lhs_operand_i ->@0x71644c1ce3c8 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 92:21 init name@0x71644d1e7260 symbol name="x"
+                            |               |___ p_rhs_operand_i ->@0x71644c1ce450 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e5f50 symbol name="maxIntValue"
+                            |--- *[10] ->@0x71644d2d8ad0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 94:6 first nondefining decl@0x71644d2d8ad0 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e8570 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 94:6 "var7" type@0x71644d514010 initializer@0x71644ccea5c0 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea5c0 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 94:21
+                            |           |___ p_operand_i ->@0x71644c197160 SgDotExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 94:21
+                            |               |--- p_lhs_operand_i ->@0x71644c1ce4d8 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 94:21 init name@0x71644d1e7260 symbol name="x"
+                            |               |___ p_rhs_operand_i ->@0x71644c1ce560 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e6138 symbol name="maxLongValue"
+                            |--- *[11] ->@0x71644d2d8db0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 95:6 first nondefining decl@0x71644d2d8db0 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e8758 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 95:6 "var8" type@0x71644d081010 initializer@0x71644ccea628 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea628 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 95:21
+                            |           |___ p_operand_i ->@0x71644c1971d0 SgDotExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 95:21
+                            |               |--- p_lhs_operand_i ->@0x71644c1ce5e8 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 95:21 init name@0x71644d1e7260 symbol name="x"
+                            |               |___ p_rhs_operand_i ->@0x71644c1ce670 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e6320 symbol name="maxCharValue"
+                            |--- *[12] ->@0x71644d2d9090 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 97:6 first nondefining decl@0x71644d2d9090 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e8940 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 97:6 "var9" type@0x71644d514010 initializer@0x71644ccea690 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea690 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 97:21
+                            |           |___ p_operand_i ->@0x71644c160010 SgArrowExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 97:21
+                            |               |--- p_lhs_operand_i ->@0x71644c1ce6f8 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 97:21 init name@0x71644d1e7448 symbol name="xptr"
+                            |               |___ p_rhs_operand_i ->@0x71644c1ce780 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e5f50 symbol name="maxIntValue"
+                            |--- *[13] ->@0x71644d2d9370 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 98:6 first nondefining decl@0x71644d2d9370 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e8b28 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 98:6 "var10" type@0x71644cc70010 initializer@0x71644ccea6f8 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea6f8 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 98:21
+                            |           |___ p_operand_i ->@0x71644c121190 SgCastExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 98:21
+                            |               |___ p_operand_i ->@0x71644c121090 SgCastExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 98:30
+                            |                   |___ p_operand_i ->@0x71644c160080 SgArrowExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 98:39
+                            |                       |--- p_lhs_operand_i ->@0x71644c1ce808 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 98:39 AttachedPreprocessingInfoType@0x63b6df3dc4c0{<id=0 0x63b6df448420 classification=CplusplusStyleComment string=// ROSE can properly handle integer constants but we need to handle
+ relative pos=after>} init name@0x71644d1e7448 symbol name="xptr"
+                            |                       |___ p_rhs_operand_i ->@0x71644c1ce890 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e6e90 symbol name="pi"
+                            |--- *[14] ->@0x71644d2d9650 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 103:6 AttachedPreprocessingInfoType@0x63b6df3d5330{<id=0 0x63b6df448500 classification=CplusplusStyleComment string=// floating point constants as well (which is non-standard in C++).
+ relative pos=before>
+<id=1 0x63b6df446230 classification=CplusplusStyleComment string=// Since we are close this is likely worth fixing.
+ relative pos=before>} first nondefining decl@0x71644d2d9650 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e8d10 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 103:6 "y" type@0x71644d5ec1a8 initializer@0x71644c211090 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644c211090 SgConstructorInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 103:8 member function decl@0
+                            |           |___ p_args ->@0x71644c250078 SgExprListExp compilerGenerated 0:0
+                            |--- *[15] ->@0x71644d2d9930 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 103:6 first nondefining decl@0x71644d2d9930 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e8ef8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 103:6 "yptr" type@0x71644d43c290 initializer@0 scope@0x71644c5d92c0
+                            |--- *[16] ->@0x71644d2d9c10 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 111:6 AttachedPreprocessingInfoType@0x63b6df76aea0{<id=0 0x63b6df448eb0 classification=CpreprocessorIfdefDeclaration string=#ifdef USE_ROSE
+ relative pos=before>
+<id=1 0x63b6df448f70 classification=CpreprocessorElseDeclaration string=#else
+ relative pos=before>} first nondefining decl@0x71644d2d9c10 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e90e0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 111:6 "var11" type@0x71644cc70010 initializer@0x71644ccea760 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea760 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 111:21
+                            |           |___ p_operand_i ->@0x71644c197240 SgDotExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 111:21
+                            |               |--- p_lhs_operand_i ->@0x71644c1ce918 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 111:21 AttachedPreprocessingInfoType@0x63b6df76b420{<id=0 0x63b6df449000 classification=CplusplusStyleComment string=// This works
+ relative pos=after>} init name@0x71644d1e8d10 symbol name="y"
+                            |               |___ p_rhs_operand_i ->@0x71644c1ce9a0 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e7078 symbol name="pi"
+                            |--- *[17] ->@0x71644d2d9ef0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 113:6 AttachedPreprocessingInfoType@0x63b6df777c60{<id=0 0x63b6df449090 classification=CpreprocessorEndifDeclaration string=#endif
+ relative pos=before>} first nondefining decl@0x71644d2d9ef0 defining decl@0
+                            |   |___ *[3] ->@0x71644d1e92c8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 113:6 "var12" type@0x71644cc70010 initializer@0x71644ccea7c8 scope@0x71644c5d92c0
+                            |       |___ p_initptr ->@0x71644ccea7c8 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 113:21
+                            |           |___ p_operand_i ->@0x71644c1972b0 SgDotExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 113:21
+                            |               |--- p_lhs_operand_i ->@0x71644c1cea28 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 113:21 AttachedPreprocessingInfoType@0x63b6df3cc560{<id=0 0x63b6df449150 classification=CplusplusStyleComment string=// This does not work presently
+ relative pos=after>} init name@0x71644d1e8d10 symbol name="y"
+                            |               |___ p_rhs_operand_i ->@0x71644c1ceab0 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e7078 symbol name="pi"
+                            |___ *[18] ->@0x71644d2da1d0 SgVariableDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 114:6 first nondefining decl@0x71644d2da1d0 defining decl@0
+                                |___ *[3] ->@0x71644d1e94b0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 114:6 "var13" type@0x71644cc70010 initializer@0x71644ccea830 scope@0x71644c5d92c0
+                                    |___ p_initptr ->@0x71644ccea830 SgAssignInitializer /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 114:21
+                                        |___ p_operand_i ->@0x71644c1600f0 SgArrowExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 114:21
+                                            |--- p_lhs_operand_i ->@0x71644c1ceb38 SgVarRefExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_32.C 114:21 init name@0x71644d1e8ef8 symbol name="yptr"
+                                            |___ p_rhs_operand_i ->@0x71644c1cebc0 SgVarRefExp NULL_FILE 0:0 init name@0x71644d1e7078 symbol name="pi"
+Types encountered ....
+|___  ->@0x71644cfd0010 SgTypeVoid 
+|___  ->@0x71644d43c010 SgPointerType 
+    |___ p_base_type ->@0x71644d47b010 SgModifierType 
+        |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d43c090 SgPointerType 
+    |___ p_base_type ->@0x71644d47b280 SgModifierType 
+        |___ p_base_type ->@0x71644d081010 SgTypeChar 
+|___  ->@0x71644d43c110 SgPointerType 
+    |___ p_base_type ->@0x71644d081010 SgTypeChar 
+|___  ->@0x71644d43c190 SgPointerType 
+    |___ p_base_type ->@0x71644cfd0010 SgTypeVoid 
+|___  ->@0x71644d43c210 SgPointerType 
+    |___ p_base_type ->@0x71644d5ec120 SgClassType 
+        |___ p_builtin_type ->@0x71644d62fb30 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d62fb30 defining decl@0x71644d62fdf8 "::X"
+|___  ->@0x71644d43c290 SgPointerType 
+    |___ p_base_type ->@0x71644d5ec1a8 SgClassType 
+        |___ p_builtin_type ->@0x71644d6300c0 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d6300c0 defining decl@0x71644d630388 "::Y"
+|___  ->@0x71644d47b010 SgModifierType 
+    |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d47b148 SgModifierType 
+    |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d47b280 SgModifierType 
+    |___ p_base_type ->@0x71644d081010 SgTypeChar 
+|___  ->@0x71644d47b3b8 SgModifierType 
+    |___ p_base_type ->@0x71644d081010 SgTypeChar 
+|___  ->@0x71644d47b4f0 SgModifierType 
+    |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d47b628 SgModifierType 
+    |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d47b760 SgModifierType 
+    |___ p_base_type ->@0x71644d046010 SgTypeLong 
+|___  ->@0x71644d47b898 SgModifierType 
+    |___ p_base_type ->@0x71644d046010 SgTypeLong 
+|___  ->@0x71644d47b9d0 SgModifierType 
+    |___ p_base_type ->@0x71644d081010 SgTypeChar 
+|___  ->@0x71644d47bb08 SgModifierType 
+    |___ p_base_type ->@0x71644d081010 SgTypeChar 
+|___  ->@0x71644d47bc40 SgModifierType 
+    |___ p_base_type ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d47bd78 SgModifierType 
+    |___ p_base_type ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d47beb0 SgModifierType 
+    |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d47bfe8 SgModifierType 
+    |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d47c120 SgModifierType 
+    |___ p_base_type ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d47c258 SgModifierType 
+    |___ p_base_type ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d47c390 SgModifierType 
+    |___ p_base_type ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d47c4c8 SgModifierType 
+    |___ p_base_type ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d47c600 SgModifierType 
+    |___ p_base_type ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d47c738 SgModifierType 
+    |___ p_base_type ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d47c870 SgModifierType 
+    |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d47c9a8 SgModifierType 
+    |___ p_base_type ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644c4ba010 SgFunctionType 
+    |___ p_return_type ->@0x71644cfd0010 SgTypeVoid 
+|___  ->@0x71644cf42010 SgArrayType  base_type@0x71644d5ec098
+    |___ p_index ->@0x71644cf91010 SgIntVal NULL_FILE 0:0 value=1 valueString=
+|___  ->@0x71644da2e010 SgTypeDefault 
+|___  ->@0x71644d5ec010 SgClassType 
+    |___ p_builtin_type ->@0x71644d62f010 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d62f010 defining decl@0x71644d62f2d8 "::__NSConstantString_tag"
+|___  ->@0x71644d5ec098 SgClassType 
+    |___ p_builtin_type ->@0x71644d62f5a0 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d62f5a0 defining decl@0x71644d62f868 "::__va_list_tag"
+|___  ->@0x71644d5ec120 SgClassType 
+    |___ p_builtin_type ->@0x71644d62fb30 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d62fb30 defining decl@0x71644d62fdf8 "::X"
+|___  ->@0x71644d5ec1a8 SgClassType 
+    |___ p_builtin_type ->@0x71644d6300c0 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d6300c0 defining decl@0x71644d630388 "::Y"
+|___  ->@0x71644d80d010 SgTypedefType 
+    |___ p_builtin_type ->@0x71644d854010 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d854010 defining decl@0 "::__int128_t" base_type@0x71644d9bc010
+|___  ->@0x71644d80d0a0 SgTypedefType 
+    |___ p_builtin_type ->@0x71644d8542f0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d8542f0 defining decl@0 "::__uint128_t" base_type@0x71644d78b010
+|___  ->@0x71644d80d130 SgTypedefType 
+    |___ p_builtin_type ->@0x71644d8545d0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d8545d0 defining decl@0 "::__NSConstantString" base_type@0x71644d5ec010
+|___  ->@0x71644d80d1c0 SgTypedefType 
+    |___ p_builtin_type ->@0x71644d8548b0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d8548b0 defining decl@0 "::__builtin_ms_va_list" base_type@0x71644d43c110
+|___  ->@0x71644d80d250 SgTypedefType 
+    |___ p_builtin_type ->@0x71644d854b90 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x71644d854b90 defining decl@0 "::__builtin_va_list" base_type@0x71644cf42010
+|___  ->@0x71644c9ed010 SgMemberFunctionType 
+    |___ p_return_type ->@0x71644cfd0010 SgTypeVoid 
+|___  ->@0x71644d081010 SgTypeChar 
+|___  ->@0x71644cc70010 SgTypeDouble 
+|___  ->@0x71644d514010 SgTypeInt 
+|___  ->@0x71644d046010 SgTypeLong 
+|___  ->@0x71644d9bc010 SgTypeLongLong 
+|___  ->@0x71644d00b010 SgTypeUnsignedInt 
+|___  ->@0x71644d78b010 SgTypeUnsignedLongLong 

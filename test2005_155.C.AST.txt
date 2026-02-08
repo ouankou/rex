@@ -1,0 +1,126 @@
+|___  ->@0x78c8e6823010 SgProject 
+    |___ p_fileList_ptr ->@0x6084580ed770 SgFileList 
+        |___ *[0] ->@0x78c8e66de010 SgSourceFile 
+            |___ p_globalScope ->@0x78c8e8a95240 SgGlobal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 0:0
+                |--- *[0] ->@0x78c8e63162d8 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e6316010 defining decl@0x78c8e63162d8 "::__NSConstantString_tag"
+                |   |___ p_definition ->@0x78c8e623a010 SgClassDefinition compilerGenerated 0:0
+                |       |--- *[0] ->@0x78c8e5fbb010 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5fbb010 defining decl@0
+                |       |   |___ *[3] ->@0x78c8e5ecc010 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::isa" type@0x78c8e6123010 initializer@0 scope@0x78c8e623a010
+                |       |--- *[1] ->@0x78c8e5fbb2f0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5fbb2f0 defining decl@0
+                |       |   |___ *[3] ->@0x78c8e5ecc1f8 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::flags" type@0x78c8e61fb010 initializer@0 scope@0x78c8e623a010
+                |       |--- *[2] ->@0x78c8e5fbb5d0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5fbb5d0 defining decl@0
+                |       |   |___ *[3] ->@0x78c8e5ecc3e0 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::str" type@0x78c8e6123090 initializer@0 scope@0x78c8e623a010
+                |       |___ *[3] ->@0x78c8e5fbb8b0 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5fbb8b0 defining decl@0
+                |           |___ *[3] ->@0x78c8e5ecc5c8 SgInitializedName compilerGenerated 0:0 "::__NSConstantString_tag::length" type@0x78c8e5d2d010 initializer@0 scope@0x78c8e623a010
+                |--- *[1] ->@0x78c8e6316868 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e63165a0 defining decl@0x78c8e6316868 "::__va_list_tag"
+                |   |___ p_definition ->@0x78c8e623a148 SgClassDefinition compilerGenerated 0:0
+                |       |--- *[0] ->@0x78c8e5fbbb90 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5fbbb90 defining decl@0
+                |       |   |___ *[3] ->@0x78c8e5ecc7b0 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::gp_offset" type@0x78c8e5cf2010 initializer@0 scope@0x78c8e623a148
+                |       |--- *[1] ->@0x78c8e5fbbe70 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5fbbe70 defining decl@0
+                |       |   |___ *[3] ->@0x78c8e5ecc998 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::fp_offset" type@0x78c8e5cf2010 initializer@0 scope@0x78c8e623a148
+                |       |--- *[2] ->@0x78c8e5fbc150 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5fbc150 defining decl@0
+                |       |   |___ *[3] ->@0x78c8e5eccb80 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::overflow_arg_area" type@0x78c8e6123190 initializer@0 scope@0x78c8e623a148
+                |       |___ *[3] ->@0x78c8e5fbc430 SgVariableDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5fbc430 defining decl@0
+                |           |___ *[3] ->@0x78c8e5eccd68 SgInitializedName compilerGenerated 0:0 "::__va_list_tag::reg_save_area" type@0x78c8e6123190 initializer@0 scope@0x78c8e623a148
+                |--- *[2] ->@0x78c8e5a43010 SgNamespaceDeclarationStatement /home/ouankou/Projects/rex-ai/rex-codex/build/include-staging/clang/clang-builtin-cpp.hpp 12:1 first nondefining decl@0x78c8e5a43010 defining decl@0
+                |   |___ p_definition ->@0x78c8e5b8c010 SgNamespaceDefinitionStatement NULL_FILE 0:0
+                |___ *[3] ->@0x78c8e6316df8 SgClassDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 4:1 AttachedPreprocessingInfoType@0x608458477430{<id=0 0x608458187be0 classification=CpreprocessorDefineDeclaration string=#define DEFINE_IN_CLASS 1
+ relative pos=before>
+<id=1 0x6084582bd8d0 classification=CpreprocessorIfDeclaration string=#if !DEFINE_IN_CLASS
+ relative pos=after>
+<id=2 0x6084582c13d0 classification=CpreprocessorEndifDeclaration string=#endif
+ relative pos=after>
+<id=3 0x6084582c1460 classification=CplusplusStyleComment string=// Template instantiation Directive for a member function
+ relative pos=after>} first nondefining decl@0x78c8e6316b30 defining decl@0x78c8e6316df8 "::X"
+                    |___ p_definition ->@0x78c8e623a280 SgClassDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 4:1 AttachedPreprocessingInfoType@0x6084585a1800{<id=0 0x6084582bd960 classification=CpreprocessorElseDeclaration string=#else
+ relative pos=inside>}
+                        |--- *[0] ->@0x78c8e4f15010 SgTemplateMemberFunctionDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e4f15010 defining decl@0x78c8e4f15528 "::X::foo" assoc. class decl@0x78c8e6316df8
+                        |   |--- p_parameterList ->@0x78c8e58d79b0 SgFunctionParameterList compilerGenerated 0:0 first nondefining decl@0x78c8e58d79b0 defining decl@0
+                        |   |   |--- *[1] ->@0x78c8e5ecdac0 SgInitializedName compilerGenerated 0:0 "::X::i" type@0x78c8e61fb010 initializer@0 scope@0x78c8e623a280
+                        |   |   |--- *[2] ->@0x78c8e5ecdca8 SgInitializedName compilerGenerated 0:0 "::X::j" type@0x78c8e61fb010 initializer@0 scope@0x78c8e623a280
+                        |   |   |___ *[3] ->@0x78c8e5ecde90 SgInitializedName compilerGenerated 0:0 "::X::k" type@0x78c8e61fb010 initializer@0 scope@0x78c8e623a280
+                        |   |___ p_CtorInitializerList ->@0x78c8e54154e0 SgCtorInitializerList compilerGenerated 0:0 first nondefining decl@0x78c8e54154e0 defining decl@0x78c8e54154e0
+                        |--- *[1] ->@0x78c8e4f15528 SgTemplateMemberFunctionDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 14:11 AttachedPreprocessingInfoType@0x608458248590{<id=0 0x6084582bd5b0 classification=CpreprocessorIfDeclaration string=#if DEFINE_IN_CLASS
+ relative pos=before>
+<id=1 0x6084582bde50 classification=CpreprocessorEndifDeclaration string=#endif
+ relative pos=after>} first nondefining decl@0x78c8e4f15010 defining decl@0x78c8e4f15528 "::X::foo" assoc. class decl@0x78c8e6316df8
+                        |   |--- p_parameterList ->@0x78c8e58d7748 SgFunctionParameterList /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 14:20 first nondefining decl@0x78c8e58d7748 defining decl@0
+                        |   |   |--- *[1] ->@0x78c8e5ecd508 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 14:20 "i" type@0x78c8e61fb010 initializer@0 scope@0x78c8e52d4148
+                        |   |   |--- *[2] ->@0x78c8e5ecd6f0 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 14:27 "j" type@0x78c8e61fb010 initializer@0 scope@0x78c8e52d4148
+                        |   |   |___ *[3] ->@0x78c8e5ecd8d8 SgInitializedName /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 14:34 "k" type@0x78c8e61fb010 initializer@0 scope@0x78c8e52d4148
+                        |   |--- p_definition ->@0x78c8e52d4148 SgFunctionDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 14:11
+                        |   |   |___ p_body ->@0x78c8e536d418 SgBasicBlock /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 14:41
+                        |   |___ p_CtorInitializerList ->@0x78c8e5415748 SgCtorInitializerList NULL_FILE 0:0 first nondefining decl@0x78c8e5415748 defining decl@0x78c8e5415748
+                        |--- *[2] ->@0x78c8e4bb5010 SgTemplateInstantiationMemberFunctionDecl compilerGenerated 0:0 first nondefining decl@0x78c8e4bb5010 defining decl@0 "::X::foo < int >" assoc. class decl@0x78c8e6316df8 template member func decl@0x78c8e4f15528
+                        |   |--- p_parameterList ->@0x78c8e58d74e0 SgFunctionParameterList compilerGenerated 0:0 first nondefining decl@0x78c8e58d74e0 defining decl@0
+                        |   |   |--- *[1] ->@0x78c8e5eccf50 SgInitializedName compilerGenerated 0:0 "::X::i" type@0x78c8e61fb010 initializer@0 scope@0x78c8e623a280
+                        |   |   |--- *[2] ->@0x78c8e5ecd138 SgInitializedName compilerGenerated 0:0 "::X::j" type@0x78c8e61fb010 initializer@0 scope@0x78c8e623a280
+                        |   |   |___ *[3] ->@0x78c8e5ecd320 SgInitializedName compilerGenerated 0:0 "::X::k" type@0x78c8e61fb010 initializer@0 scope@0x78c8e623a280
+                        |   |___ p_CtorInitializerList ->@0x78c8e54159b0 SgCtorInitializerList compilerGenerated 0:0 first nondefining decl@0x78c8e54159b0 defining decl@0x78c8e54159b0
+                        |--- *[3] ->@0x78c8e5542010 SgMemberFunctionDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e5542010 defining decl@0x78c8e55424a8 "::X::foobar" assoc. class decl@0x78c8e6316df8
+                        |   |--- p_parameterList ->@0x78c8e58d7278 SgFunctionParameterList compilerGenerated 0:0 first nondefining decl@0x78c8e58d7278 defining decl@0
+                        |   |___ p_CtorInitializerList ->@0x78c8e5415010 SgCtorInitializerList compilerGenerated 0:0 first nondefining decl@0x78c8e5415010 defining decl@0x78c8e5415010
+                        |___ *[4] ->@0x78c8e55424a8 SgMemberFunctionDeclaration /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 7:11 first nondefining decl@0x78c8e5542010 defining decl@0x78c8e55424a8 "::X::foobar" assoc. class decl@0x78c8e6316df8
+                            |--- p_parameterList ->@0x78c8e58d7010 SgFunctionParameterList compilerGenerated 0:0 first nondefining decl@0x78c8e58d7010 defining decl@0
+                            |--- p_definition ->@0x78c8e52d4010 SgFunctionDefinition /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 7:11
+                            |   |___ p_body ->@0x78c8e536d168 SgBasicBlock /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 8:14
+                            |       |___ *[0] ->@0x78c8e4ad1010 SgExprStatement /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 9:16
+                            |           |___ p_expression ->@0x78c8e4b00010 SgFunctionCallExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 9:16
+                            |               |--- p_function ->@0x78c8e4b6a0a8 SgMemberFunctionRefExp NULL_FILE 0:0 member func decl@0x78c8e4bb5010
+                            |               |___ p_args ->@0x78c8e4b37010 SgExprListExp /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 9:16
+                            |                   |--- *[0] ->@0x78c8e5c78090 SgIntVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 9:25 value=1 valueString=1
+                            |                   |--- *[1] ->@0x78c8e5c78110 SgIntVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 9:27 value=2 valueString=2
+                            |                   |___ *[2] ->@0x78c8e5c78190 SgIntVal /home/ouankou/Projects/rex-ai/rex-codex/tests/nonsmoke/functional/CompileTests/Cxx_tests/test2005_155.C 9:29 value=3 valueString=3
+                            |___ p_CtorInitializerList ->@0x78c8e5415278 SgCtorInitializerList NULL_FILE 0:0 first nondefining decl@0x78c8e5415278 defining decl@0x78c8e5415278
+Types encountered ....
+|___  ->@0x78c8e5cb7010 SgTypeVoid 
+|___  ->@0x78c8e6123010 SgPointerType 
+    |___ p_base_type ->@0x78c8e6162010 SgModifierType 
+        |___ p_base_type ->@0x78c8e61fb010 SgTypeInt 
+|___  ->@0x78c8e6123090 SgPointerType 
+    |___ p_base_type ->@0x78c8e6162280 SgModifierType 
+        |___ p_base_type ->@0x78c8e5d68010 SgTypeChar 
+|___  ->@0x78c8e6123110 SgPointerType 
+    |___ p_base_type ->@0x78c8e5d68010 SgTypeChar 
+|___  ->@0x78c8e6123190 SgPointerType 
+    |___ p_base_type ->@0x78c8e5cb7010 SgTypeVoid 
+|___  ->@0x78c8e6162010 SgModifierType 
+    |___ p_base_type ->@0x78c8e61fb010 SgTypeInt 
+|___  ->@0x78c8e6162148 SgModifierType 
+    |___ p_base_type ->@0x78c8e61fb010 SgTypeInt 
+|___  ->@0x78c8e6162280 SgModifierType 
+    |___ p_base_type ->@0x78c8e5d68010 SgTypeChar 
+|___  ->@0x78c8e61623b8 SgModifierType 
+    |___ p_base_type ->@0x78c8e5d68010 SgTypeChar 
+|___  ->@0x78c8e528d010 SgFunctionType 
+    |___ p_return_type ->@0x78c8e5cb7010 SgTypeVoid 
+|___  ->@0x78c8e5c29010 SgArrayType  base_type@0x78c8e62d3098
+    |___ p_index ->@0x78c8e5c78010 SgIntVal NULL_FILE 0:0 value=1 valueString=
+|___  ->@0x78c8e51c9010 SgTemplateType 
+|___  ->@0x78c8e87a6010 SgTypeDefault 
+|___  ->@0x78c8e62d3010 SgClassType 
+    |___ p_builtin_type ->@0x78c8e6316010 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e6316010 defining decl@0x78c8e63162d8 "::__NSConstantString_tag"
+|___  ->@0x78c8e62d3098 SgClassType 
+    |___ p_builtin_type ->@0x78c8e63165a0 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e63165a0 defining decl@0x78c8e6316868 "::__va_list_tag"
+|___  ->@0x78c8e62d3120 SgClassType 
+    |___ p_builtin_type ->@0x78c8e6316b30 SgClassDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e6316b30 defining decl@0x78c8e6316df8 "::X"
+|___  ->@0x78c8e64f4010 SgTypedefType 
+    |___ p_builtin_type ->@0x78c8e653b010 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e653b010 defining decl@0 "::__int128_t" base_type@0x78c8e66a3010
+|___  ->@0x78c8e64f40a0 SgTypedefType 
+    |___ p_builtin_type ->@0x78c8e653b2f0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e653b2f0 defining decl@0 "::__uint128_t" base_type@0x78c8e6472010
+|___  ->@0x78c8e64f4130 SgTypedefType 
+    |___ p_builtin_type ->@0x78c8e653b5d0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e653b5d0 defining decl@0 "::__NSConstantString" base_type@0x78c8e62d3010
+|___  ->@0x78c8e64f41c0 SgTypedefType 
+    |___ p_builtin_type ->@0x78c8e653b8b0 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e653b8b0 defining decl@0 "::__builtin_ms_va_list" base_type@0x78c8e6123110
+|___  ->@0x78c8e64f4250 SgTypedefType 
+    |___ p_builtin_type ->@0x78c8e653bb90 SgTypedefDeclaration compilerGenerated 0:0 first nondefining decl@0x78c8e653bb90 defining decl@0 "::__builtin_va_list" base_type@0x78c8e5c29010
+|___  ->@0x78c8e5781010 SgMemberFunctionType 
+    |___ p_return_type ->@0x78c8e5cb7010 SgTypeVoid 
+|___  ->@0x78c8e57810b0 SgMemberFunctionType 
+    |___ p_return_type ->@0x78c8e5cb7010 SgTypeVoid 
+|___  ->@0x78c8e5d68010 SgTypeChar 
+|___  ->@0x78c8e61fb010 SgTypeInt 
+|___  ->@0x78c8e5d2d010 SgTypeLong 
+|___  ->@0x78c8e66a3010 SgTypeLongLong 
+|___  ->@0x78c8e5cf2010 SgTypeUnsignedInt 
+|___  ->@0x78c8e6472010 SgTypeUnsignedLongLong 

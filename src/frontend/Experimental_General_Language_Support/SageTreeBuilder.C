@@ -3313,6 +3313,21 @@ void SageTreeBuilder::Leave(
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgVariableDeclaration*) with modifiers \n";
 
+  auto apply_const_to_decl_types = [](SgVariableDeclaration *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+    for (SgInitializedName *init_name : decl->get_variables()) {
+      if (init_name == nullptr) {
+        continue;
+      }
+      SgType *type = init_name->get_type();
+      if (type != nullptr && !SageInterface::isConstType(type)) {
+        init_name->set_type(SageBuilder::buildConstType(type));
+      }
+    }
+  };
+
   for (LanguageTranslation::ExpressionKind modifier_enum : modifier_enum_list) {
     switch (modifier_enum) {
     case LanguageTranslation::ExpressionKind::e_type_modifier_intent_in: {
@@ -3336,6 +3351,7 @@ void SageTreeBuilder::Leave(
           .get_typeModifier()
           .get_constVolatileModifier()
           .setConst();
+      apply_const_to_decl_types(var_decl);
       break;
     }
     case LanguageTranslation::ExpressionKind::e_type_modifier_const: {
@@ -3343,6 +3359,7 @@ void SageTreeBuilder::Leave(
           .get_typeModifier()
           .get_constVolatileModifier()
           .setConst();
+      apply_const_to_decl_types(var_decl);
       break;
     }
     case LanguageTranslation::ExpressionKind::e_type_modifier_allocatable: {

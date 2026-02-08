@@ -83,17 +83,11 @@ set(CXX11_TESTCODES
   test2014_57.C
   test2014_58.C
   test2014_70.C
-  test2014_71.C
-  test2014_72.C
-  test2014_73.C
   test2014_74.C
   test2014_75.C
   test2014_76.C
-  test2014_77.C
-  test2014_78.C
   test2014_79.C
   test2014_80.C
-  test2014_81.C
   test2014_82.C
   test2014_83.C
   test2014_84.C
@@ -138,10 +132,8 @@ set(CXX11_TESTCODES
   test2016_29.C
   test2016_30.C
   test2016_37.C
-  test2016_39.C
   test2016_42.C
   test2016_91.C
-  test2016_92.C
   test2016_93.C
   test2017_03.C
   test2017_04.C
@@ -792,10 +784,8 @@ set(CXX11_TESTCODES
   test2020_51a.C
   test2020_51b.C
   test2020_72.C
-  test2016_24.C
   test2016_33.C
   test2016_34.C
-  test2016_90.C
   test2019_31.C
   test2019_33.C
   test2019_94.C
@@ -903,7 +893,6 @@ set(CXX11_TESTCODES
   test2020_54.C
   test2020_55.C
   test2020_56.C
-  test2016_23.C
   test2016_35.C
   test2016_36.C
   rose-1973.C

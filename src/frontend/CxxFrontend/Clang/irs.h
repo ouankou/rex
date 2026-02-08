@@ -1,0 +1,3 @@
+#ifndef ROSE_CLANG_BUILTIN_IRS_H
+#define ROSE_CLANG_BUILTIN_IRS_H
+#endif

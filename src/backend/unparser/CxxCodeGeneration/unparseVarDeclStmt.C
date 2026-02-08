@@ -287,6 +287,78 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
 #endif
   ninfo.set_declstatement_ptr(vardecl_stmt);
 
+  auto unparse_enclosing_template_headers = [&]() {
+    if (isSgTemplateVariableDeclaration(vardecl_stmt) != NULL) {
+      return;
+    }
+    if (vardecl_stmt->get_variables().empty()) {
+      return;
+    }
+
+    SgInitializedName *decl_item = vardecl_stmt->get_variables().front();
+    ASSERT_not_null(decl_item);
+
+    SgScopeStatement *decl_item_scope = decl_item->get_scope();
+    SgScopeStatement *decl_scope = vardecl_stmt->get_scope();
+    if (decl_item_scope == NULL || decl_scope == NULL ||
+        decl_item_scope == decl_scope) {
+      return;
+    }
+
+    std::vector<SgTemplateClassDeclaration *> template_chain;
+    auto add_template_decl = [&](SgTemplateClassDeclaration *tmpl_decl) {
+      if (tmpl_decl == NULL) {
+        return;
+      }
+      for (SgTemplateClassDeclaration *existing : template_chain) {
+        if (existing == tmpl_decl) {
+          return;
+        }
+      }
+      template_chain.push_back(tmpl_decl);
+    };
+
+    std::set<SgScopeStatement *> visited_scopes;
+    for (SgScopeStatement *scope = decl_item_scope;
+         scope != NULL && visited_scopes.insert(scope).second;
+         scope = scope->get_scope()) {
+      if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+        add_template_decl(
+            isSgTemplateClassDeclaration(class_def->get_declaration()));
+        continue;
+      }
+      if (SgTemplateClassDefinition *template_def =
+              isSgTemplateClassDefinition(scope)) {
+        add_template_decl(template_def->get_declaration());
+        continue;
+      }
+      if (SgTemplateInstantiationDefn *inst_def =
+              isSgTemplateInstantiationDefn(scope)) {
+        if (SgTemplateInstantiationDecl *inst_decl =
+                isSgTemplateInstantiationDecl(inst_def->get_declaration())) {
+          add_template_decl(isSgTemplateClassDeclaration(
+              inst_decl->get_templateDeclaration()));
+        }
+      }
+    }
+
+    for (auto it = template_chain.rbegin(); it != template_chain.rend(); ++it) {
+      SgTemplateClassDeclaration *tmpl_decl = *it;
+      if (tmpl_decl->get_templateParameters().empty()) {
+        continue;
+      }
+      curprint("template ");
+      SgTemplateParameterPtrList params = tmpl_decl->get_templateParameters();
+      SgUnparse_Info tinfo(info);
+      tinfo.set_declstatement_ptr(NULL);
+      tinfo.set_declstatement_ptr(tmpl_decl);
+      unparseTemplateParameterList(params, tinfo, true);
+      curprint("\n");
+    }
+  };
+
+  unparse_enclosing_template_headers();
+
   SgClassDefinition *classDefinition =
       isSgClassDefinition(vardecl_stmt->get_parent());
   if (classDefinition != nullptr &&
@@ -375,6 +447,16 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
         unp->u_sage->printAttributesForType(vardecl_stmt, info);
 
       curprint(build_decl_item_name(decl_item));
+      if (SgTemplateVariableDeclaration *template_var_decl =
+              isSgTemplateVariableDeclaration(vardecl_stmt)) {
+        const SgTemplateArgumentPtrList &spec_args =
+            template_var_decl->get_templateSpecializationArguments();
+        if (!spec_args.empty()) {
+          SgUnparse_Info tinfo(ninfo);
+          tinfo.set_declstatement_ptr(template_var_decl);
+          unparseTemplateArgumentList(spec_args, tinfo);
+        }
+      }
 
       ninfo_for_type.set_isTypeSecondPart();
       unp->u_type->unparseType(decl_type, ninfo_for_type);

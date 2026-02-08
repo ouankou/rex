@@ -14,6 +14,10 @@ SgType *SgPntrArrRefExp::get_type() const {
   ROSE_ASSERT(get_lhs_operand() != nullptr);
   ROSE_ASSERT(get_rhs_operand() != nullptr);
 
+  if (p_expression_type != nullptr) {
+    return p_expression_type;
+  }
+
   // (10/25/2024): In C and C++, E1[E2] is definitionally equivalent to
   // *(E1+E2). Therefore, we can borrow the type inference code from
   // SgBinaryOp.C to compute the type of E1+E2 before proceeding with type

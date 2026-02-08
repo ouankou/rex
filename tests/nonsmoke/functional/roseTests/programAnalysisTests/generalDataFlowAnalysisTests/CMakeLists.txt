@@ -583,7 +583,6 @@ set(FAILING_CXX_CONSTPROP_SPECIMENS
   test2011_117.C
   test2011_118.C
   test2011_119.C
-  test2011_120.C
   test2011_19.C
   test2011_20.C
   test2011_21.C
