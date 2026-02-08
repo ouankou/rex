@@ -86,6 +86,10 @@ Unparse_ExprStmt::~Unparse_ExprStmt() {
   // Nothing to do here!
 }
 
+void Unparse_ExprStmt::resetTemplateParameterEmissionState() {
+  emitted_default_template_args_.clear();
+}
+
 void Unparse_ExprStmt::unparseFunctionTryBlock(SgTryStmt *try_stmt,
                                                SgUnparse_Info &ninfo) {
   ASSERT_not_null(try_stmt);

@@ -477,6 +477,8 @@ void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
 #define DEBUG_UNPARSE_FILE 0
 
   ASSERT_not_null(file);
+  ASSERT_not_null(u_exprStmt);
+  u_exprStmt->resetTemplateParameterEmissionState();
 
   // DQ (6/5/2021): Save the previous statement that was just unparsed (at this
   // point we just want to clear the value from any other file).

@@ -1532,8 +1532,7 @@ void Unparse_ExprStmt::unparseTemplateParameter(
 
   // Default template arguments belong on the primary declaration only.
   // Some declaration chains share template parameters across multiple
-  // redeclarations; once emitted, suppress subsequent repeats.
-  static std::set<const SgTemplateParameter *> emitted_default_template_args;
+  // redeclarations; once emitted in this unparse task, suppress repeats.
 
   bool emit_default_template_arg = is_template_header;
   if (emit_default_template_arg) {
@@ -1548,8 +1547,8 @@ void Unparse_ExprStmt::unparseTemplateParameter(
     }
   }
   if (emit_default_template_arg &&
-      emitted_default_template_args.find(templateParameter) !=
-          emitted_default_template_args.end()) {
+      emitted_default_template_args_.find(templateParameter) !=
+          emitted_default_template_args_.end()) {
     emit_default_template_arg = false;
   }
 
@@ -1604,7 +1603,7 @@ void Unparse_ExprStmt::unparseTemplateParameter(
       dinfo.set_SkipEnumDefinition();
       dinfo.set_SkipQualifiedNames();
       unp->u_type->unparseType(default_type, dinfo);
-      emitted_default_template_args.insert(templateParameter);
+      emitted_default_template_args_.insert(templateParameter);
     }
     break;
   }
@@ -1674,7 +1673,7 @@ void Unparse_ExprStmt::unparseTemplateParameter(
           einfo.set_SkipClassDefinition();
           einfo.set_SkipEnumDefinition();
           unparseExpression(default_expr, einfo);
-          emitted_default_template_args.insert(templateParameter);
+          emitted_default_template_args_.insert(templateParameter);
         }
       }
     }
