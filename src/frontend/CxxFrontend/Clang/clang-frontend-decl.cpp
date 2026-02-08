@@ -2323,8 +2323,11 @@ should_preserve_structural_function_scope(clang::DeclContext *scope_context,
 }
 
 static bool is_clang_builtin_support_path(const std::string &filename) {
-  return filename.find("/include-staging/clang/") != std::string::npos ||
-         filename.find("clang-builtin") != std::string::npos;
+  // Clang builtin shim headers synthesize compatibility declarations (e.g.,
+  // __va_list_tag, __NSConstantString_tag) that should not be emitted as user
+  // declarations. Keep standard library declarations from Clang resource
+  // headers available in the AST for semantic analyses.
+  return filename.find("clang-builtin") != std::string::npos;
 }
 
 bool is_declaration_scope_context(const clang::DeclContext *context) {
@@ -5575,6 +5578,71 @@ bool ClangToSageTranslator::TraverseForDeclContext(
         continue;
       }
 
+      it = global_decls.erase(it);
+    }
+
+    std::unordered_set<std::string> seen_support_class_keys;
+    for (SgDeclarationStatementPtrList::iterator it = global_decls.begin();
+         it != global_decls.end();) {
+      SgDeclarationStatement *decl_stmt = *it;
+      if (decl_stmt == nullptr) {
+        it = global_decls.erase(it);
+        continue;
+      }
+
+      Sg_File_Info *fi = decl_stmt->get_file_info();
+      if (fi == nullptr) {
+        ++it;
+        continue;
+      }
+
+      const std::string &filename = fi->get_filenameString();
+      const bool from_clang_builtin_header =
+          !filename.empty() && is_clang_builtin_support_path(filename);
+      const bool from_compiler_generated_line0 =
+          fi->get_line() <= 0 && fi->isCompilerGenerated();
+
+      if (SgTypedefDeclaration *typedef_decl =
+              isSgTypedefDeclaration(decl_stmt)) {
+        if (from_compiler_generated_line0 && !fi->isOutputInCodeGeneration() &&
+            isSgTemplateInstantiationTypedefDeclaration(typedef_decl) ==
+                nullptr) {
+          if (is_decl_attached_to_scope_child_list(global_scope, decl_stmt)) {
+            detach_decl_from_scope_child_list(decl_stmt, global_scope);
+          }
+          it = global_decls.erase(it);
+          continue;
+        }
+        ++it;
+        continue;
+      }
+
+      SgClassDeclaration *class_decl = isSgClassDeclaration(decl_stmt);
+      if (class_decl == nullptr ||
+          isSgTemplateClassDeclaration(class_decl) != nullptr ||
+          isSgTemplateInstantiationDecl(class_decl) != nullptr) {
+        ++it;
+        continue;
+      }
+
+      bool is_support_class = fi->isFrontendSpecific() ||
+                              from_clang_builtin_header ||
+                              from_compiler_generated_line0;
+      if (!is_support_class) {
+        ++it;
+        continue;
+      }
+
+      std::string dedup_key = class_decl->get_name().getString();
+      if (dedup_key.empty() ||
+          seen_support_class_keys.insert(dedup_key).second) {
+        ++it;
+        continue;
+      }
+
+      if (is_decl_attached_to_scope_child_list(global_scope, decl_stmt)) {
+        detach_decl_from_scope_child_list(decl_stmt, global_scope);
+      }
       it = global_decls.erase(it);
     }
   }
@@ -9699,6 +9767,11 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
         mark_compiler_generated_and_suppress_unparse(def);
         if (Sg_File_Info *def_fi = def->get_file_info()) {
           def_fi->setFrontendSpecific();
+        }
+      }
+      if (SgScopeStatement *decl_scope = decl->get_scope()) {
+        if (is_decl_attached_to_scope_child_list(decl_scope, decl)) {
+          detach_decl_from_scope_child_list(decl, decl_scope);
         }
       }
     };

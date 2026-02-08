@@ -2282,231 +2282,259 @@ void finishSageAST(ClangToSageTranslator &translator) {
                  type == PreprocessingInfo::CpreprocessorEndifDeclaration;
         };
 
-    auto relocate_class_conditionals =
-        [&](SgLocatedNode *class_anchor,
-            const SgDeclarationStatementPtrList &members,
-            SgLocatedNode *class_decl_owner) {
-          if (class_anchor == nullptr || members.empty()) {
-            return;
+    auto relocate_class_conditionals = [&](SgLocatedNode *class_anchor,
+                                           const SgDeclarationStatementPtrList
+                                               &members,
+                                           SgLocatedNode *class_decl_owner) {
+      if (class_anchor == nullptr || members.empty()) {
+        return;
+      }
+
+      Sg_File_Info *class_start = class_anchor->get_startOfConstruct();
+      Sg_File_Info *class_end = class_anchor->get_endOfConstruct();
+      if (class_start == nullptr || class_end == nullptr ||
+          class_start->get_line() <= 0 || class_end->get_line() <= 0) {
+        return;
+      }
+      if (!same_file(class_start, class_end)) {
+        return;
+      }
+
+      struct MemberAnchor {
+        SgDeclarationStatement *decl = nullptr;
+        Sg_File_Info *info = nullptr;
+      };
+      std::vector<MemberAnchor> member_anchors;
+      member_anchors.reserve(members.size());
+      for (SgDeclarationStatement *member : members) {
+        SgLocatedNode *member_loc = isSgLocatedNode(member);
+        if (member_loc == nullptr) {
+          continue;
+        }
+        Sg_File_Info *member_info = get_effective_info(member_loc);
+        if (member_info == nullptr || member_info->get_line() <= 0) {
+          continue;
+        }
+        if (member_info->isCompilerGenerated() &&
+            !member_info->isOutputInCodeGeneration()) {
+          continue;
+        }
+        if (!same_file(member_info, class_start)) {
+          continue;
+        }
+        member_anchors.push_back({member, member_info});
+      }
+
+      if (member_anchors.empty()) {
+        return;
+      }
+
+      std::vector<SgLocatedNode *> directive_owners;
+      directive_owners.reserve(members.size() + 2);
+      directive_owners.push_back(class_anchor);
+      if (class_decl_owner != nullptr && class_decl_owner != class_anchor) {
+        directive_owners.push_back(class_decl_owner);
+      }
+      for (SgDeclarationStatement *member : members) {
+        if (member == nullptr) {
+          continue;
+        }
+        // Nested classes are relocated in their own pass; keep outer-class
+        // relocation focused on direct non-class members.
+        if (isSgClassDeclaration(member) != nullptr ||
+            isSgTemplateClassDeclaration(member) != nullptr) {
+          continue;
+        }
+        if (SgLocatedNode *member_loc = isSgLocatedNode(member)) {
+          directive_owners.push_back(member_loc);
+        }
+      }
+
+      struct PendingMove {
+        PreprocessingInfo *info = nullptr;
+        SgDeclarationStatement *anchor = nullptr;
+        PreprocessingInfo::RelativePositionType relative_position =
+            PreprocessingInfo::after;
+      };
+
+      std::vector<PendingMove> moves;
+
+      auto pick_member_before =
+          [&](const Sg_File_Info *cursor) -> SgDeclarationStatement * {
+        SgDeclarationStatement *best = nullptr;
+        Sg_File_Info *best_info = nullptr;
+        for (const MemberAnchor &entry : member_anchors) {
+          if (!source_before_or_equal(entry.info, cursor)) {
+            continue;
+          }
+          if (best_info == nullptr ||
+              source_before_or_equal(best_info, entry.info)) {
+            best = entry.decl;
+            best_info = entry.info;
+          }
+        }
+        return best;
+      };
+
+      auto pick_member_after =
+          [&](const Sg_File_Info *cursor) -> SgDeclarationStatement * {
+        SgDeclarationStatement *best = nullptr;
+        Sg_File_Info *best_info = nullptr;
+        for (const MemberAnchor &entry : member_anchors) {
+          if (source_before_or_equal(entry.info, cursor)) {
+            continue;
+          }
+          if (best_info == nullptr ||
+              source_before_or_equal(entry.info, best_info)) {
+            best = entry.decl;
+            best_info = entry.info;
+          }
+        }
+        return best;
+      };
+
+      auto directive_inside_member = [&](const Sg_File_Info *cursor) -> bool {
+        if (cursor == nullptr || cursor->get_line() <= 0) {
+          return false;
+        }
+        for (const MemberAnchor &entry : member_anchors) {
+          SgLocatedNode *member_loc = isSgLocatedNode(entry.decl);
+          if (member_loc == nullptr) {
+            continue;
+          }
+          Sg_File_Info *member_start = get_effective_info(member_loc);
+          Sg_File_Info *member_end = member_loc->get_endOfConstruct();
+          if (member_start == nullptr || member_end == nullptr ||
+              member_start->get_line() <= 0 || member_end->get_line() <= 0) {
+            continue;
+          }
+          if (!same_file(member_start, cursor) ||
+              !same_file(member_end, cursor)) {
+            continue;
+          }
+          if (source_before_or_equal(member_start, cursor) &&
+              source_before_or_equal(cursor, member_end)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      for (SgLocatedNode *owner : directive_owners) {
+        if (owner == nullptr) {
+          continue;
+        }
+        AttachedPreprocessingInfoType *attached =
+            owner->getAttachedPreprocessingInfo();
+        if (attached == nullptr || attached->empty()) {
+          continue;
+        }
+
+        for (auto it = attached->begin(); it != attached->end();) {
+          PreprocessingInfo *info = *it;
+          if (info == nullptr ||
+              !is_class_conditional_directive(info->getTypeOfDirective())) {
+            ++it;
+            continue;
           }
 
-          Sg_File_Info *class_start = class_anchor->get_startOfConstruct();
-          Sg_File_Info *class_end = class_anchor->get_endOfConstruct();
-          if (class_start == nullptr || class_end == nullptr ||
-              class_start->get_line() <= 0 || class_end->get_line() <= 0) {
-            return;
+          Sg_File_Info *info_fi = info->get_file_info();
+          if (info_fi == nullptr || info_fi->get_line() <= 0) {
+            ++it;
+            continue;
           }
-          if (!same_file(class_start, class_end)) {
-            return;
+          if (!same_file(info_fi, class_start)) {
+            ++it;
+            continue;
           }
-
-          struct MemberAnchor {
-            SgDeclarationStatement *decl = nullptr;
-            Sg_File_Info *info = nullptr;
-          };
-          std::vector<MemberAnchor> member_anchors;
-          member_anchors.reserve(members.size());
-          for (SgDeclarationStatement *member : members) {
-            SgLocatedNode *member_loc = isSgLocatedNode(member);
-            if (member_loc == nullptr) {
-              continue;
-            }
-            Sg_File_Info *member_info = get_effective_info(member_loc);
-            if (member_info == nullptr || member_info->get_line() <= 0) {
-              continue;
-            }
-            if (member_info->isCompilerGenerated() &&
-                !member_info->isOutputInCodeGeneration()) {
-              continue;
-            }
-            if (!same_file(member_info, class_start)) {
-              continue;
-            }
-            member_anchors.push_back({member, member_info});
+          if (directive_inside_member(info_fi)) {
+            ++it;
+            continue;
           }
 
-          if (member_anchors.empty()) {
-            return;
+          const bool inside_class_range =
+              source_before_or_equal(class_start, info_fi) &&
+              source_before_or_equal(info_fi, class_end);
+          if (!inside_class_range) {
+            ++it;
+            continue;
           }
 
-          std::vector<SgLocatedNode *> directive_owners;
-          directive_owners.reserve(members.size() + 2);
-          directive_owners.push_back(class_anchor);
-          if (class_decl_owner != nullptr && class_decl_owner != class_anchor) {
-            directive_owners.push_back(class_decl_owner);
-          }
-          for (SgDeclarationStatement *member : members) {
-            if (member == nullptr) {
-              continue;
+          SgDeclarationStatement *member_before = pick_member_before(info_fi);
+          SgDeclarationStatement *member_after = pick_member_after(info_fi);
+
+          SgDeclarationStatement *anchor = nullptr;
+          PreprocessingInfo::RelativePositionType relative_position =
+              PreprocessingInfo::after;
+          PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+          if (type == PreprocessingInfo::CpreprocessorElseDeclaration ||
+              type == PreprocessingInfo::CpreprocessorElifDeclaration) {
+            if (member_after != nullptr) {
+              anchor = member_after;
+              relative_position = PreprocessingInfo::before;
+            } else {
+              anchor = member_before;
+              relative_position = PreprocessingInfo::after;
             }
-            // Nested classes are relocated in their own pass; keep outer-class
-            // relocation focused on direct non-class members.
-            if (isSgClassDeclaration(member) != nullptr ||
-                isSgTemplateClassDeclaration(member) != nullptr) {
-              continue;
+          } else if (type == PreprocessingInfo::CpreprocessorEndifDeclaration) {
+            if (member_after != nullptr) {
+              anchor = member_after;
+              relative_position = PreprocessingInfo::before;
+            } else if (member_before != nullptr) {
+              anchor = member_before;
+              relative_position = PreprocessingInfo::after;
             }
-            if (SgLocatedNode *member_loc = isSgLocatedNode(member)) {
-              directive_owners.push_back(member_loc);
+          } else {
+            if (member_after != nullptr) {
+              anchor = member_after;
+              relative_position = PreprocessingInfo::before;
+            } else {
+              anchor = member_before;
+              relative_position = PreprocessingInfo::after;
             }
           }
 
-          struct PendingMove {
-            PreprocessingInfo *info = nullptr;
-            SgDeclarationStatement *anchor = nullptr;
-            PreprocessingInfo::RelativePositionType relative_position =
-                PreprocessingInfo::after;
-          };
-
-          std::vector<PendingMove> moves;
-
-          auto pick_member_before =
-              [&](const Sg_File_Info *cursor) -> SgDeclarationStatement * {
-            SgDeclarationStatement *best = nullptr;
-            Sg_File_Info *best_info = nullptr;
-            for (const MemberAnchor &entry : member_anchors) {
-              if (!source_before_or_equal(entry.info, cursor)) {
-                continue;
-              }
-              if (best_info == nullptr ||
-                  source_before_or_equal(best_info, entry.info)) {
-                best = entry.decl;
-                best_info = entry.info;
-              }
-            }
-            return best;
-          };
-
-          auto pick_member_after =
-              [&](const Sg_File_Info *cursor) -> SgDeclarationStatement * {
-            SgDeclarationStatement *best = nullptr;
-            Sg_File_Info *best_info = nullptr;
-            for (const MemberAnchor &entry : member_anchors) {
-              if (source_before_or_equal(entry.info, cursor)) {
-                continue;
-              }
-              if (best_info == nullptr ||
-                  source_before_or_equal(entry.info, best_info)) {
-                best = entry.decl;
-                best_info = entry.info;
-              }
-            }
-            return best;
-          };
-
-          for (SgLocatedNode *owner : directive_owners) {
-            if (owner == nullptr) {
-              continue;
-            }
-            AttachedPreprocessingInfoType *attached =
-                owner->getAttachedPreprocessingInfo();
-            if (attached == nullptr || attached->empty()) {
-              continue;
-            }
-
-            for (auto it = attached->begin(); it != attached->end();) {
-              PreprocessingInfo *info = *it;
-              if (info == nullptr ||
-                  !is_class_conditional_directive(info->getTypeOfDirective())) {
-                ++it;
-                continue;
-              }
-
-              Sg_File_Info *info_fi = info->get_file_info();
-              if (info_fi == nullptr || info_fi->get_line() <= 0) {
-                ++it;
-                continue;
-              }
-              if (!same_file(info_fi, class_start)) {
-                ++it;
-                continue;
-              }
-
-              const bool inside_class_range =
-                  source_before_or_equal(class_start, info_fi) &&
-                  source_before_or_equal(info_fi, class_end);
-              if (!inside_class_range) {
-                ++it;
-                continue;
-              }
-
-              SgDeclarationStatement *member_before =
-                  pick_member_before(info_fi);
-              SgDeclarationStatement *member_after = pick_member_after(info_fi);
-
-              SgDeclarationStatement *anchor = nullptr;
-              PreprocessingInfo::RelativePositionType relative_position =
-                  PreprocessingInfo::after;
-              PreprocessingInfo::DirectiveType type =
-                  info->getTypeOfDirective();
-              if (type == PreprocessingInfo::CpreprocessorElseDeclaration ||
-                  type == PreprocessingInfo::CpreprocessorElifDeclaration) {
-                if (member_after != nullptr) {
-                  anchor = member_after;
-                  relative_position = PreprocessingInfo::before;
-                } else {
-                  anchor = member_before;
-                  relative_position = PreprocessingInfo::after;
-                }
-              } else if (type ==
-                         PreprocessingInfo::CpreprocessorEndifDeclaration) {
-                if (member_before != nullptr) {
-                  anchor = member_before;
-                  relative_position = PreprocessingInfo::after;
-                } else {
-                  anchor = member_after;
-                  relative_position = PreprocessingInfo::before;
-                }
-              } else {
-                if (member_after != nullptr) {
-                  anchor = member_after;
-                  relative_position = PreprocessingInfo::before;
-                } else {
-                  anchor = member_before;
-                  relative_position = PreprocessingInfo::after;
-                }
-              }
-
-              if (anchor == nullptr) {
-                ++it;
-                continue;
-              }
-
-              moves.push_back({info, anchor, relative_position});
-              it = attached->erase(it);
-            }
+          if (anchor == nullptr) {
+            ++it;
+            continue;
           }
 
-          if (moves.empty()) {
-            return;
-          }
+          moves.push_back({info, anchor, relative_position});
+          it = attached->erase(it);
+        }
+      }
 
-          std::stable_sort(
-              moves.begin(), moves.end(),
-              [](const PendingMove &lhs, const PendingMove &rhs) {
-                Sg_File_Info *lhs_info =
-                    lhs.info != nullptr ? lhs.info->get_file_info() : nullptr;
-                Sg_File_Info *rhs_info =
-                    rhs.info != nullptr ? rhs.info->get_file_info() : nullptr;
-                if (lhs_info == nullptr || rhs_info == nullptr) {
-                  return lhs_info < rhs_info;
-                }
-                if (lhs_info->get_line() != rhs_info->get_line()) {
-                  return lhs_info->get_line() < rhs_info->get_line();
-                }
-                if (lhs_info->get_col() != rhs_info->get_col()) {
-                  return lhs_info->get_col() < rhs_info->get_col();
-                }
-                return lhs.info < rhs.info;
-              });
+      if (moves.empty()) {
+        return;
+      }
 
-          for (const PendingMove &move : moves) {
-            if (move.info == nullptr || move.anchor == nullptr) {
-              continue;
+      std::stable_sort(
+          moves.begin(), moves.end(),
+          [](const PendingMove &lhs, const PendingMove &rhs) {
+            Sg_File_Info *lhs_info =
+                lhs.info != nullptr ? lhs.info->get_file_info() : nullptr;
+            Sg_File_Info *rhs_info =
+                rhs.info != nullptr ? rhs.info->get_file_info() : nullptr;
+            if (lhs_info == nullptr || rhs_info == nullptr) {
+              return lhs_info < rhs_info;
             }
-            move.info->setRelativePosition(move.relative_position);
-            move.anchor->addToAttachedPreprocessingInfo(move.info);
-          }
-        };
+            if (lhs_info->get_line() != rhs_info->get_line()) {
+              return lhs_info->get_line() < rhs_info->get_line();
+            }
+            if (lhs_info->get_col() != rhs_info->get_col()) {
+              return lhs_info->get_col() < rhs_info->get_col();
+            }
+            return lhs.info < rhs.info;
+          });
+
+      for (const PendingMove &move : moves) {
+        if (move.info == nullptr || move.anchor == nullptr) {
+          continue;
+        }
+        move.info->setRelativePosition(move.relative_position);
+        move.anchor->addToAttachedPreprocessingInfo(move.info);
+      }
+    };
 
     Rose_STL_Container<SgNode *> class_nodes =
         NodeQuery::querySubTree(global_scope, V_SgClassDeclaration);
@@ -2634,6 +2662,34 @@ void finishSageAST(ClangToSageTranslator &translator) {
             return best;
           };
 
+          auto directive_inside_declaration =
+              [&](const Sg_File_Info *cursor) -> bool {
+            if (cursor == nullptr || cursor->get_line() <= 0) {
+              return false;
+            }
+            for (const DeclAnchor &entry : anchors) {
+              SgLocatedNode *decl_loc = isSgLocatedNode(entry.decl);
+              if (decl_loc == nullptr) {
+                continue;
+              }
+              Sg_File_Info *decl_start = get_effective_info(decl_loc);
+              Sg_File_Info *decl_end = decl_loc->get_endOfConstruct();
+              if (decl_start == nullptr || decl_end == nullptr ||
+                  decl_start->get_line() <= 0 || decl_end->get_line() <= 0) {
+                continue;
+              }
+              if (!same_file(decl_start, cursor) ||
+                  !same_file(decl_end, cursor)) {
+                continue;
+              }
+              if (source_before_or_equal(decl_start, cursor) &&
+                  source_before_or_equal(cursor, decl_end)) {
+                return true;
+              }
+            }
+            return false;
+          };
+
           struct PendingMove {
             PreprocessingInfo *info = nullptr;
             SgDeclarationStatement *anchor = nullptr;
@@ -2656,6 +2712,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
               continue;
             }
             if (!same_file(owner_info, directive_info)) {
+              ++it;
+              continue;
+            }
+            if (directive_inside_declaration(directive_info)) {
               ++it;
               continue;
             }
@@ -2771,6 +2831,90 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
       relocate_scope_conditionals(class_decl, class_def->get_members());
       relocate_scope_conditionals(class_def, class_def->get_members());
+    }
+  }
+
+  if (global_scope != nullptr) {
+    auto is_pp_conditional_directive =
+        [](PreprocessingInfo::DirectiveType type) {
+          return type == PreprocessingInfo::CpreprocessorIfDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorIfdefDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorIfndefDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorElifDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorElseDeclaration ||
+                 type == PreprocessingInfo::CpreprocessorEndifDeclaration;
+        };
+
+    auto conditional_source_less = [](const PreprocessingInfo *lhs,
+                                      const PreprocessingInfo *rhs) {
+      if (lhs == nullptr || rhs == nullptr) {
+        return lhs < rhs;
+      }
+      Sg_File_Info *lhs_info = lhs->get_file_info();
+      Sg_File_Info *rhs_info = rhs->get_file_info();
+      if (lhs_info == nullptr || rhs_info == nullptr) {
+        return lhs_info < rhs_info;
+      }
+      if (lhs_info->get_line() != rhs_info->get_line()) {
+        return lhs_info->get_line() < rhs_info->get_line();
+      }
+      if (lhs_info->get_col() != rhs_info->get_col()) {
+        return lhs_info->get_col() < rhs_info->get_col();
+      }
+      return lhs < rhs;
+    };
+
+    auto reorder_attached_conditionals = [&](SgLocatedNode *node) {
+      if (node == nullptr) {
+        return;
+      }
+      AttachedPreprocessingInfoType *attached =
+          node->getAttachedPreprocessingInfo();
+      if (attached == nullptr || attached->size() < 2) {
+        return;
+      }
+
+      auto reorder_for_position =
+          [&](PreprocessingInfo::RelativePositionType rel_pos) {
+            std::vector<size_t> slots;
+            std::vector<PreprocessingInfo *> directives;
+
+            for (size_t i = 0; i < attached->size(); ++i) {
+              PreprocessingInfo *info = (*attached)[i];
+              if (info == nullptr || info->getRelativePosition() != rel_pos ||
+                  !is_pp_conditional_directive(info->getTypeOfDirective())) {
+                continue;
+              }
+              Sg_File_Info *fi = info->get_file_info();
+              if (fi == nullptr || fi->get_line() <= 0) {
+                continue;
+              }
+              slots.push_back(i);
+              directives.push_back(info);
+            }
+
+            if (directives.size() < 2) {
+              return;
+            }
+
+            std::stable_sort(directives.begin(), directives.end(),
+                             conditional_source_less);
+
+            for (size_t i = 0; i < slots.size(); ++i) {
+              (*attached)[slots[i]] = directives[i];
+            }
+          };
+
+      reorder_for_position(PreprocessingInfo::before);
+      reorder_for_position(PreprocessingInfo::inside);
+      reorder_for_position(PreprocessingInfo::after);
+    };
+
+    reorder_attached_conditionals(global_scope);
+    Rose_STL_Container<SgNode *> located_nodes =
+        NodeQuery::querySubTree(global_scope, V_SgLocatedNode);
+    for (SgNode *node : located_nodes) {
+      reorder_attached_conditionals(isSgLocatedNode(node));
     }
   }
 

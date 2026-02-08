@@ -7247,9 +7247,12 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     }
 
     SgDeclarationStatement *declaration = typedef_stmt->get_declaration();
-    if (declaration != NULL) {
+    if (declaration != NULL && isSgEnumDeclaration(declaration) != NULL &&
+        isSgTemplateInstantiationDecl(declaration) == NULL) {
       ninfo_for_type.set_reference_node_for_qualification(declaration);
     } else {
+      // Qualify using-alias base types relative to alias declaration context.
+      // This preserves required owner qualifiers for nested types.
       ninfo_for_type.set_reference_node_for_qualification(typedef_stmt);
     }
 
