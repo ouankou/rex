@@ -86,6 +86,12 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2026_sfinae.cpp
   rex_test2026_dependent_qualification.cpp
   rex_test2026_extern_c_brace_roundtrip.cpp
+  rex_test2026_std_filesystem.cpp
+  rex_test2026_std_shared_ptr_enable_shared.cpp
+  rex_test2026_std_bind_function.cpp
+  rex_test2026_std_random.cpp
+  rex_test2026_std_variant_visit.cpp
+  rex_test2026_namespace_qualification.cpp
   rex_test2025_issue88.cpp
   rex_test2025_issue89_alias.cpp
   rex_test2025_issue90_array_dim.cpp
