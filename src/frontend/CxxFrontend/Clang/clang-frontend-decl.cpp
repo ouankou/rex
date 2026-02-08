@@ -12945,21 +12945,25 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
   sg_typedef_decl->set_typedef_type(SgTypedefDeclaration::e_using);
   sg_typedef_decl->set_type_elaboration_required_for_base_type(false);
 
-  // For using-aliases of class types, keep declaration linkage on the type
-  // itself; attaching a declaration here can force spurious elaboration
-  // keywords during unparsing.
-  if (isSgClassType(sg_typedef_decl->get_base_type()) != nullptr) {
-    sg_typedef_decl->set_declaration(nullptr);
-  }
+  auto mark_skip_elaborate_for_class_alias = [](SgTypedefDeclaration *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+    SgType *base_type = decl->get_base_type();
+    if (base_type != nullptr &&
+        isSgClassType(base_type->findBaseType()) != nullptr) {
+      decl->setSkipElaborateType();
+    }
+  };
+
+  mark_skip_elaborate_for_class_alias(sg_typedef_decl);
 
   *node = sg_typedef_decl;
 
   bool result = VisitTypedefNameDecl(type_alias_decl, node) && res;
   if (result) {
     sg_typedef_decl->set_type_elaboration_required_for_base_type(false);
-  }
-  if (result && isSgClassType(sg_typedef_decl->get_base_type()) != nullptr) {
-    sg_typedef_decl->set_declaration(nullptr);
+    mark_skip_elaborate_for_class_alias(sg_typedef_decl);
   }
   if (result && p_compiler_instance != nullptr) {
     clang::SourceManager &sm = p_compiler_instance->getSourceManager();

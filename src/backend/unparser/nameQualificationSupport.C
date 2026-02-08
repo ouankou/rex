@@ -6072,6 +6072,12 @@ void NameQualificationTraversal::traverseType(SgType *type,
     // typedef declaration.
     if (inTypedefDecl == true) {
       unparseInfoPointer->set_inTypedefDecl();
+
+      // Carry declaration-level elaboration policy into generated type strings
+      // so map-based type names match the AST semantics.
+      if (typedefDeclaration->skipElaborateType()) {
+        unparseInfoPointer->set_SkipClassSpecifier();
+      }
     }
 
     // DQ (5/18/2019): Makr this as being in a SgAggregateInitializer.
