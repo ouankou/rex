@@ -2962,6 +2962,51 @@ void mark_compiler_generated_and_suppress_unparse(SgLocatedNode *n) {
   }
 }
 
+static void
+repair_typedef_declaration_reference(SgTypedefDeclaration *typedef_decl) {
+  if (typedef_decl == nullptr || typedef_decl->get_declaration() != nullptr) {
+    return;
+  }
+
+  SgType *resolved = typedef_decl->get_base_type();
+  while (resolved != nullptr) {
+    if (SgModifierType *modifier = isSgModifierType(resolved)) {
+      resolved = modifier->get_base_type();
+      continue;
+    }
+    if (SgTypedefType *typedef_type = isSgTypedefType(resolved)) {
+      resolved = typedef_type->get_base_type();
+      continue;
+    }
+    break;
+  }
+
+  if (SgClassType *class_type = isSgClassType(resolved)) {
+    if (SgClassDeclaration *class_decl =
+            isSgClassDeclaration(class_type->get_declaration())) {
+      SgDeclarationStatement *decl_ref = class_decl;
+      if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+              class_decl->get_firstNondefiningDeclaration())) {
+        decl_ref = first_nondef;
+      }
+      typedef_decl->set_declaration(decl_ref);
+    }
+    return;
+  }
+
+  if (SgEnumType *enum_type = isSgEnumType(resolved)) {
+    if (SgEnumDeclaration *enum_decl =
+            isSgEnumDeclaration(enum_type->get_declaration())) {
+      SgDeclarationStatement *decl_ref = enum_decl;
+      if (SgEnumDeclaration *first_nondef = isSgEnumDeclaration(
+              enum_decl->get_firstNondefiningDeclaration())) {
+        decl_ref = first_nondef;
+      }
+      typedef_decl->set_declaration(decl_ref);
+    }
+  }
+}
+
 void mark_implicit_instantiation_for_suppression(
     SgFunctionDeclaration *func_decl) {
   if (func_decl == nullptr) {
@@ -5581,7 +5626,6 @@ bool ClangToSageTranslator::TraverseForDeclContext(
       it = global_decls.erase(it);
     }
 
-    std::unordered_set<std::string> seen_support_class_keys;
     for (SgDeclarationStatementPtrList::iterator it = global_decls.begin();
          it != global_decls.end();) {
       SgDeclarationStatement *decl_stmt = *it;
@@ -5604,12 +5648,10 @@ bool ClangToSageTranslator::TraverseForDeclContext(
 
       if (SgTypedefDeclaration *typedef_decl =
               isSgTypedefDeclaration(decl_stmt)) {
+        repair_typedef_declaration_reference(typedef_decl);
         if (from_compiler_generated_line0 && !fi->isOutputInCodeGeneration() &&
             isSgTemplateInstantiationTypedefDeclaration(typedef_decl) ==
                 nullptr) {
-          if (is_decl_attached_to_scope_child_list(global_scope, decl_stmt)) {
-            detach_decl_from_scope_child_list(decl_stmt, global_scope);
-          }
           it = global_decls.erase(it);
           continue;
         }
@@ -5625,30 +5667,28 @@ bool ClangToSageTranslator::TraverseForDeclContext(
         continue;
       }
 
-      bool is_support_class = fi->isFrontendSpecific() ||
-                              from_clang_builtin_header ||
-                              from_compiler_generated_line0;
-      if (!is_support_class) {
+      bool drop_support_class =
+          fi->isFrontendSpecific() || from_clang_builtin_header ||
+          (from_compiler_generated_line0 && !fi->isOutputInCodeGeneration());
+      if (!drop_support_class) {
         ++it;
         continue;
       }
 
-      std::string dedup_key = class_decl->get_name().getString();
-      if (dedup_key.empty() ||
-          seen_support_class_keys.insert(dedup_key).second) {
-        ++it;
-        continue;
-      }
-
-      if (is_decl_attached_to_scope_child_list(global_scope, decl_stmt)) {
-        detach_decl_from_scope_child_list(decl_stmt, global_scope);
-      }
       it = global_decls.erase(it);
     }
   }
 
   if (namespace_scope != nullptr) {
     reorder_scope_declarations_by_source_position(namespace_scope);
+
+    for (SgDeclarationStatement *decl_stmt :
+         namespace_scope->get_declarations()) {
+      if (SgTypedefDeclaration *typedef_decl =
+              isSgTypedefDeclaration(decl_stmt)) {
+        repair_typedef_declaration_reference(typedef_decl);
+      }
+    }
 
     SgScopeStatement *canonical_scope =
         normalizeNamespaceScope(namespace_scope);
@@ -9753,38 +9793,6 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     }
   }
 
-  if (is_builtin_support_record || is_implicit_builtin_record) {
-    auto suppress_builtin_record = [&](SgClassDeclaration *decl) {
-      if (decl == nullptr) {
-        return;
-      }
-      decl->set_isAutonomousDeclaration(false);
-      mark_compiler_generated_and_suppress_unparse(decl);
-      if (Sg_File_Info *decl_fi = decl->get_file_info()) {
-        decl_fi->setFrontendSpecific();
-      }
-      if (SgClassDefinition *def = decl->get_definition()) {
-        mark_compiler_generated_and_suppress_unparse(def);
-        if (Sg_File_Info *def_fi = def->get_file_info()) {
-          def_fi->setFrontendSpecific();
-        }
-      }
-      if (SgScopeStatement *decl_scope = decl->get_scope()) {
-        if (is_decl_attached_to_scope_child_list(decl_scope, decl)) {
-          detach_decl_from_scope_child_list(decl, decl_scope);
-        }
-      }
-    };
-
-    suppress_builtin_record(sg_class_decl);
-    if (sg_first_class_decl != sg_class_decl) {
-      suppress_builtin_record(sg_first_class_decl);
-    }
-    if (sg_def_class_decl != sg_class_decl) {
-      suppress_builtin_record(sg_def_class_decl);
-    }
-  }
-
   if (is_embedded_record && is_local_class && structural_scope != nullptr) {
     auto attach_local_class = [&](SgClassDeclaration *decl) {
       if (decl == nullptr) {
@@ -9813,7 +9821,47 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
 
   *node = sg_class_decl;
 
-  return VisitTagDecl(record_decl, node) && res;
+  bool visit_result = VisitTagDecl(record_decl, node) && res;
+
+  if (visit_result &&
+      (is_builtin_support_record || is_implicit_builtin_record)) {
+    std::unordered_set<SgClassDeclaration *> visited;
+    std::vector<SgClassDeclaration *> worklist;
+    auto enqueue = [&](SgClassDeclaration *candidate) {
+      if (candidate != nullptr && visited.insert(candidate).second) {
+        worklist.push_back(candidate);
+      }
+    };
+
+    enqueue(isSgClassDeclaration(*node));
+    enqueue(sg_first_class_decl);
+    enqueue(sg_def_class_decl);
+
+    for (size_t idx = 0; idx < worklist.size(); ++idx) {
+      SgClassDeclaration *current = worklist[idx];
+      enqueue(isSgClassDeclaration(current->get_firstNondefiningDeclaration()));
+      enqueue(isSgClassDeclaration(current->get_definingDeclaration()));
+
+      current->set_isAutonomousDeclaration(false);
+      mark_compiler_generated_and_suppress_unparse(current);
+      if (Sg_File_Info *decl_fi = current->get_file_info()) {
+        decl_fi->setFrontendSpecific();
+      }
+      if (SgClassDefinition *def = current->get_definition()) {
+        mark_compiler_generated_and_suppress_unparse(def);
+        if (Sg_File_Info *def_fi = def->get_file_info()) {
+          def_fi->setFrontendSpecific();
+        }
+      }
+      if (SgScopeStatement *decl_scope = current->get_scope()) {
+        if (is_decl_attached_to_scope_child_list(decl_scope, current)) {
+          detach_decl_from_scope_child_list(current, decl_scope);
+        }
+      }
+    }
+  }
+
+  return visit_result;
 }
 
 bool ClangToSageTranslator::VisitCXXRecordDecl(
@@ -12212,7 +12260,13 @@ bool ClangToSageTranslator::VisitTypedefNameDecl(
 
   ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
-  return VisitTypeDecl(typedef_name_decl, node) && res;
+  bool visit_res = VisitTypeDecl(typedef_name_decl, node) && res;
+  if (visit_res && node != nullptr) {
+    if (SgTypedefDeclaration *typedef_decl = isSgTypedefDeclaration(*node)) {
+      repair_typedef_declaration_reference(typedef_decl);
+    }
+  }
+  return visit_res;
 }
 
 bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
@@ -12670,6 +12724,9 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
   *node = sg_typedef_decl;
 
   bool result = VisitTypedefNameDecl(typedef_decl, node) && res;
+  if (result) {
+    repair_typedef_declaration_reference(sg_typedef_decl);
+  }
 
   // Clang provides a number of implicit/builtin typedefs (e.g. `__int128_t`,
   // `__builtin_va_list`) with no meaningful source location. When ROSE outputs
@@ -12862,12 +12919,16 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
 
   SgTypedefDeclaration *sg_typedef_decl =
       SageBuilder::buildTypedefDeclaration_nfi(name, type, scope);
+  repair_typedef_declaration_reference(sg_typedef_decl);
 
   sg_typedef_decl->set_typedef_type(SgTypedefDeclaration::e_using);
 
   *node = sg_typedef_decl;
 
   bool result = VisitTypedefNameDecl(type_alias_decl, node) && res;
+  if (result) {
+    repair_typedef_declaration_reference(sg_typedef_decl);
+  }
   if (result && p_compiler_instance != nullptr) {
     clang::SourceManager &sm = p_compiler_instance->getSourceManager();
     clang::SourceLocation loc = type_alias_decl->getLocation();
@@ -20390,6 +20451,53 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     if (SgFunctionDeclaration *func_decl =
             isSgFunctionDeclaration(sg_function_decl)) {
       mark_implicit_instantiation_for_suppression(func_decl);
+    }
+  }
+
+  const bool is_implicit_support_function =
+      function_decl->isImplicit() && !function_decl->getLocation().isValid();
+  if (visit_res && is_implicit_support_function) {
+    std::unordered_set<SgFunctionDeclaration *> visited;
+    std::vector<SgFunctionDeclaration *> worklist;
+    auto enqueue_decl = [&](SgFunctionDeclaration *candidate) {
+      if (candidate != nullptr && visited.insert(candidate).second) {
+        worklist.push_back(candidate);
+      }
+    };
+
+    enqueue_decl(isSgFunctionDeclaration(*node));
+    enqueue_decl(sg_function_decl);
+    enqueue_decl(isSgFunctionDeclaration(
+        sg_function_decl->get_firstNondefiningDeclaration()));
+    enqueue_decl(
+        isSgFunctionDeclaration(sg_function_decl->get_definingDeclaration()));
+
+    for (size_t idx = 0; idx < worklist.size(); ++idx) {
+      SgFunctionDeclaration *current = worklist[idx];
+      enqueue_decl(
+          isSgFunctionDeclaration(current->get_firstNondefiningDeclaration()));
+      enqueue_decl(isSgFunctionDeclaration(current->get_definingDeclaration()));
+
+      mark_compiler_generated_frontend_specific(current);
+      suppress_unparse_output(current);
+
+      if (SgFunctionParameterList *params = current->get_parameterList()) {
+        mark_compiler_generated_frontend_specific(params);
+        suppress_unparse_output(params);
+        for (SgInitializedName *param : params->get_args()) {
+          mark_compiler_generated_frontend_specific(param);
+          suppress_unparse_output(param);
+        }
+      }
+
+      if (SgFunctionDefinition *def = current->get_definition()) {
+        mark_compiler_generated_frontend_specific(def);
+        suppress_unparse_output(def);
+        if (SgBasicBlock *body = def->get_body()) {
+          mark_compiler_generated_frontend_specific(body);
+          suppress_unparse_output(body);
+        }
+      }
     }
   }
 
