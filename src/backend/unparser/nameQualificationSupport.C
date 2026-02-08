@@ -4474,13 +4474,23 @@ void NameQualificationTraversal::
 #endif
 
   SgScopeStatement *effectiveScope = currentScope;
+  bool preserve_unnamed_namespace_scope = false;
   if (positionStatement != nullptr) {
     if (SgScopeStatement *positionScope =
             SageInterface::getScope(positionStatement)) {
       effectiveScope = positionScope;
+      if (SgNamespaceDefinitionStatement *position_ns =
+              isSgNamespaceDefinitionStatement(positionScope)) {
+        if (SgNamespaceDeclarationStatement *position_ns_decl =
+                position_ns->get_namespaceDeclaration()) {
+          preserve_unnamed_namespace_scope =
+              position_ns_decl->get_isUnnamedNamespace();
+        }
+      }
     }
   }
-  if (isSgNamespaceDefinitionStatement(effectiveScope) != nullptr) {
+  if (!preserve_unnamed_namespace_scope &&
+      isSgNamespaceDefinitionStatement(effectiveScope) != nullptr) {
     SgNode *global_anchor =
         positionStatement != nullptr
             ? static_cast<SgNode *>(positionStatement)
@@ -4545,7 +4555,7 @@ void NameQualificationTraversal::
           saw_namespace = true;
         }
         if (SgGlobal *global_scope = isSgGlobal(scope_iter)) {
-          if (saw_namespace) {
+          if (saw_namespace && !preserve_unnamed_namespace_scope) {
             effectiveScope = global_scope;
           }
           break;
@@ -9938,10 +9948,14 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       if ((baseTypeDeclaration != NULL) &&
           (typedefDeclaration
                ->get_typedefBaseTypeContainsDefiningDeclaration() == false)) {
-        // int amountOfNameQualificationRequiredForBaseType =
-        // nameQualificationDepth(baseTypeDeclaration,currentScope,typedefDeclaration);
-        int amountOfNameQualificationRequiredForBaseType =
-            nameQualificationDepth(baseType, currentScope, typedefDeclaration);
+        int amountOfNameQualificationRequiredForBaseType = 0;
+        if (isSgTemplateInstantiationDecl(baseTypeDeclaration) != NULL) {
+          amountOfNameQualificationRequiredForBaseType = nameQualificationDepth(
+              baseTypeDeclaration, currentScope, typedefDeclaration);
+        } else {
+          amountOfNameQualificationRequiredForBaseType = nameQualificationDepth(
+              baseType, currentScope, typedefDeclaration);
+        }
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
         MLOG_WARN_C(MLOG_UNPARSER,
                     "SgTypedefDeclaration: "

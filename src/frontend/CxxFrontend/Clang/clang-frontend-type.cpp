@@ -3793,11 +3793,50 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
         }
         clang::TemplateSpecializationTypeLoc written_tst_loc =
             find_template_specialization_loc(type_info->getTypeLoc());
+
+        SgType *resolved_type = arg_type;
         if (arg_tst == nullptr && !written_tst_loc.isNull()) {
           arg_tst = written_tst_loc.getTypePtr();
         }
+        if (arg_tst != nullptr) {
+          if (SgType *spelled_type =
+                  build_template_specialization_type(arg_tst)) {
+            resolved_type = spelled_type;
+          }
+        } else {
+          const clang::Type *raw_type = arg.getAsType().getTypePtrOrNull();
+          const clang::RecordType *record_type =
+              raw_type != nullptr ? raw_type->getAs<clang::RecordType>()
+                                  : nullptr;
+          const clang::RecordDecl *record_decl =
+              record_type != nullptr ? record_type->getDecl() : nullptr;
+          if (record_decl != nullptr &&
+              (resolved_type == nullptr ||
+               isSgTypeUnknown(resolved_type) != nullptr)) {
+            SgClassDeclaration *record_sg_decl =
+                isSgClassDeclaration(lookupSgDeclarationForClangDecl(
+                    const_cast<clang::RecordDecl *>(record_decl),
+                    /*allow_on_demand=*/true));
+            if (record_sg_decl == nullptr &&
+                p_decl_translation_in_progress.find(
+                    const_cast<clang::RecordDecl *>(record_decl)) ==
+                    p_decl_translation_in_progress.end()) {
+              if (SgNode *record_node = TraverseOnDemand(
+                      const_cast<clang::RecordDecl *>(record_decl))) {
+                record_sg_decl = isSgClassDeclaration(record_node);
+              }
+            }
+            if (record_sg_decl != nullptr) {
+              if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+                      record_sg_decl->get_firstNondefiningDeclaration())) {
+                record_sg_decl = first_nondef;
+              }
+              resolved_type = SgClassType::createType(record_sg_decl);
+            }
+          }
+        }
 
-        return new SgTemplateArgument(arg_type, explicitlySpecified);
+        return new SgTemplateArgument(resolved_type, explicitlySpecified);
       }
     }
     break;
@@ -5187,8 +5226,8 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     if (scope == nullptr) {
       scope = getGlobalScope();
     }
-    if (scope == nullptr && p_sage_source_file != nullptr) {
-      scope = p_sage_source_file->get_globalScope();
+    if (scope == nullptr) {
+      scope = getGlobalScope();
     }
 
     auto scope_reachable_from_current_file =
@@ -5245,10 +5284,13 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
 
     auto resolve_reachable_namespace_scope =
         [&](clang::DeclContext *decl_context) -> SgScopeStatement * {
-      if (decl_context == nullptr || p_sage_source_file == nullptr) {
+      if (decl_context == nullptr) {
         return nullptr;
       }
-      SgScopeStatement *reachable_scope = p_sage_source_file->get_globalScope();
+      SgScopeStatement *reachable_scope = getGlobalScope();
+      if (reachable_scope == nullptr && p_sage_source_file != nullptr) {
+        reachable_scope = p_sage_source_file->get_globalScope();
+      }
       if (reachable_scope == nullptr) {
         return nullptr;
       }
@@ -5260,16 +5302,32 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
           continue;
         }
 
-        SgNamespaceSymbol *ns_symbol = reachable_scope->lookup_namespace_symbol(
-            SgName(ns_decl->getNameAsString()));
-        if (ns_symbol == nullptr) {
-          return nullptr;
+        SgName ns_name(ns_decl->getNameAsString());
+        SgNamespaceDeclarationStatement *ns_stmt = nullptr;
+        if (SgNamespaceSymbol *ns_symbol =
+                reachable_scope->lookup_namespace_symbol(ns_name)) {
+          ns_stmt = ns_symbol->get_declaration();
         }
 
-        SgNamespaceDeclarationStatement *ns_stmt = ns_symbol->get_declaration();
+        if (ns_stmt == nullptr || ns_stmt->get_definition() == nullptr ||
+            !scope_reachable_from_current_file(ns_stmt->get_definition())) {
+          // Materialize/reopen a namespace in the reachable scope rather than
+          // reusing detached canonical namespace nodes from system-header
+          // contexts.
+          ns_stmt = SageBuilder::buildNamespaceDeclaration_nfi(ns_name, false,
+                                                               reachable_scope);
+        }
+
         if (ns_stmt == nullptr || ns_stmt->get_definition() == nullptr) {
           return nullptr;
         }
+
+        if (ns_stmt->get_parent() != reachable_scope) {
+          ensureDeclInScopeChildList(
+              ns_stmt, reachable_scope,
+              "VisitTemplateSpecializationType:reachable-namespace");
+        }
+
         reachable_scope = ns_stmt->get_definition();
       }
 
@@ -5284,28 +5342,22 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     }
 
     if (!scope_reachable_from_current_file(scope)) {
-      bool use_file_global_fallback = (alias_decl == nullptr);
-      if (alias_decl != nullptr) {
-        clang::DeclContext *alias_context = alias_decl->getDeclContext();
-        while (alias_context != nullptr &&
-               llvm::isa<clang::LinkageSpecDecl>(alias_context)) {
-          alias_context = alias_context->getParent();
-        }
-        use_file_global_fallback =
-            alias_context != nullptr && alias_context->isTranslationUnit();
-      }
-
-      if (use_file_global_fallback && p_sage_source_file != nullptr &&
-          p_sage_source_file->get_globalScope() != nullptr) {
+      if (SgScopeStatement *global_scope = getGlobalScope()) {
+        scope = global_scope;
+      } else if (p_sage_source_file != nullptr &&
+                 p_sage_source_file->get_globalScope() != nullptr) {
         scope = p_sage_source_file->get_globalScope();
       }
     }
 
     if (alias_sg_decl != nullptr && scope != nullptr &&
         !scope_reachable_from_current_file(alias_sg_decl->get_scope())) {
+      SgName reachable_alias_name = alias_sg_decl->get_name();
+      if (alias_decl != nullptr) {
+        reachable_alias_name = SgName(alias_decl->getNameAsString());
+      }
       if (SgTemplateTypedefSymbol *reachable_alias_sym =
-              scope->lookup_template_typedef_symbol(
-                  alias_sg_decl->get_name())) {
+              scope->lookup_template_typedef_symbol(reachable_alias_name)) {
         if (SgTemplateTypedefDeclaration *reachable_alias_decl =
                 isSgTemplateTypedefDeclaration(
                     reachable_alias_sym->get_declaration())) {
@@ -5317,6 +5369,9 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     if (alias_sg_decl != nullptr && aliased_type != nullptr &&
         scope != nullptr) {
       SgName alias_name = alias_sg_decl->get_name();
+      if (alias_decl != nullptr) {
+        alias_name = SgName(alias_decl->getNameAsString());
+      }
       SgName alias_name_with_args =
           SageBuilder::appendTemplateArgumentsToName(alias_name, template_args);
       if (SgTemplateTypedefSymbol *existing_symbol =
@@ -5344,7 +5399,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
         inst_decl->get_templateArguments() = template_args;
         inst_decl->get_deducedTemplateArguments() = deduced_args;
         inst_decl->set_nameResetFromMangledForm(true);
-        inst_decl->setCompilerGenerated();
+        inst_decl->unsetCompilerGenerated();
         if (Sg_File_Info *fi = inst_decl->get_file_info()) {
           fi->unsetOutputInCodeGeneration();
         }

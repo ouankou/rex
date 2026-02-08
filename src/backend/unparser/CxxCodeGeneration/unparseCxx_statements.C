@@ -7505,22 +7505,17 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     // typedef declaration is not appropriate to use with
     // set_reference_node_for_qualification().
     SgDeclarationStatement *declaration = typedef_stmt->get_declaration();
-    if (declaration != NULL) {
+    if (declaration != NULL && isSgEnumDeclaration(declaration) != NULL &&
+        isSgTemplateInstantiationDecl(declaration) == NULL) {
 #if DEBUG_TYPEDEF_DECLARATIONS
-      printf("Found declaration statment in typedef declaration (need to use "
-             "it as reference node for qualification) \n");
+      printf("Found enum declaration in typedef declaration; using it as "
+             "reference node for qualification.\n");
 #endif
       ninfo_for_type.set_reference_node_for_qualification(declaration);
     } else {
-      // DQ (6/2/2011): Note that this might cause name qualification to be
-      // uniform for all subtypes. We don't presently have a better way to
-      // handle this since types are shared and even types that reference types
-      // are shared.  Need to think about this (similar problem to throw
-      // expression lists).
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("typedef_stmt->get_declaration() == NULL: using typedef_stmt as "
-             "reference_node_for_qualification \n");
-#endif
+      // Qualify typedef base types relative to the typedef declaration context.
+      // This preserves required global qualification when local declarations
+      // shadow class names (e.g., typedef ::A::B inside a function-local A).
       ninfo_for_type.set_reference_node_for_qualification(typedef_stmt);
     }
 
