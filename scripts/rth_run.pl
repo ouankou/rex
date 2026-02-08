@@ -340,6 +340,7 @@ Licensed under Revised BSD License (see COPYRIGHT file at top of ROSE source cod
 
 use strict;
 use Config;
+use Errno qw(EEXIST);
 
 sub usage {
     print STDERR "usage: $0 [VAR=VALUE...] CONFIG TARGET\n";
@@ -521,7 +522,13 @@ sub run_command {
   }
 
   # Read variables set by the child process
-  my($nerror_bytes) = `cat $stats_file`;
+  my $nerror_bytes = 0;
+  if (open STATS_FILE, "<", $stats_file) {
+    local $/ = undef;
+    my $content = <STATS_FILE>;
+    close STATS_FILE;
+    $nerror_bytes = int($content) if defined $content;
+  }
   return ($status, $nerror_bytes);
 }
 
@@ -650,7 +657,9 @@ while (@ARGV) {
   /^--quiet-failure$/ and do {$quiet_failure=1; next};
   /^-rose:/ and do {
     push @rose_cmdline, $_;
-    while (@ARGV > 1) {
+    my $preserve_positional = 1;
+    $preserve_positional = 2 if @ARGV >= 2 && -f $ARGV[-2];
+    while (@ARGV > $preserve_positional) {
       my $next = $ARGV[0];
       last if $next =~ /^-/;
       last if $next =~ /^\w+=/;
@@ -690,13 +699,21 @@ if (defined $target && $target =~ /(.+)\.\w+$/) {
   ($target_pass,$target_fail) = ("$target.passed","$target.failed");
 }
 $variables{TARGET} = $target;
+my $rose_injected_into_cmd_var = 0;
 if (@rose_cmdline) {
   $variables{ROSE_CMDLINE} = join_shell_tokens(@rose_cmdline);
-  if (exists $variables{CMD} && $variables{CMD} ne '') {
+  if (exists $variables{CMD} && defined $variables{CMD} && $variables{CMD} ne '') {
     $variables{CMD} = insert_after_first_token($variables{CMD}, $variables{ROSE_CMDLINE});
+    $rose_injected_into_cmd_var = 1;
   }
 }
 my %config = load_config $config_file, \%variables;
+if (!$rose_injected_into_cmd_var && exists $variables{ROSE_CMDLINE} && defined $variables{ROSE_CMDLINE} &&
+    $variables{ROSE_CMDLINE} ne '') {
+  for my $cmd (@{$config{cmd}}) {
+    $cmd = insert_after_first_token($cmd, $variables{ROSE_CMDLINE});
+  }
+}
 
 # Print output to indicate test is starting. Do nothing if the test
 # is disabled.
@@ -733,12 +750,53 @@ if ($config{subdir} eq 'yes') {
 # Run the commands, capturing their output into files.
 my($cmd_stdout_file,$cmd_stderr_file) = map {tempname} (qw/out err/);
 unlink $cmd_stdout_file, $cmd_stderr_file;
+my($stdout_prefixer_pid, $stderr_prefixer_pid);
 if (!$immediate_output) {
     open CMD_STDOUT, ">", $cmd_stdout_file or die "$cmd_stdout_file: $!\n";
     open CMD_STDERR, ">", $cmd_stderr_file or die "$cmd_stderr_file: $!\n";
 } else {
-    open CMD_STDOUT, "|tee $cmd_stdout_file |sed 's/^/$target [out]: /'" or die "tee $cmd_stdout_file: $!\n";
-    open CMD_STDERR, "|tee $cmd_stderr_file |sed 's/^/$target [err]: /' >&2" or die "tee $cmd_stderr_file: $!\n";
+    sub start_prefixer {
+        my ($stream, $outfile, $prefix, $to_stderr) = @_;
+        pipe(my $read_end, my $write_end) or die "$0: pipe: $!\n";
+        defined(my $pid = fork) or die "$0: fork: $!\n";
+        if ($pid == 0) {
+            close $write_end;
+            open my $outfh, ">", $outfile or exit(255);
+            select((select($outfh), $| = 1)[0]);
+            my $dest = $to_stderr ? *STDERR : *STDOUT;
+            select((select($dest), $| = 1)[0]);
+            my $buf = "";
+            while (1) {
+                my $chunk;
+                my $nread = sysread($read_end, $chunk, 8192);
+                last unless defined $nread && $nread > 0;
+                $buf .= $chunk;
+                while ($buf =~ s/^(.*\n)//) {
+                    my $line = $1;
+                    print $outfh $line;
+                    print $dest $prefix, $line;
+                }
+            }
+            if ($buf ne "") {
+                print $outfh $buf;
+                print $dest $prefix, $buf;
+            }
+            close $outfh;
+            close $read_end;
+            exit(0);
+        }
+        close $read_end;
+        return ($pid, $write_end);
+    }
+
+    ($stdout_prefixer_pid, my $stdout_pipe) =
+        start_prefixer("out", $cmd_stdout_file, "$target [out]: ", 0);
+    ($stderr_prefixer_pid, my $stderr_pipe) =
+        start_prefixer("err", $cmd_stderr_file, "$target [err]: ", 1);
+    open CMD_STDOUT, ">&", $stdout_pipe or die "$0: dup stdout pipe: $!\n";
+    open CMD_STDERR, ">&", $stderr_pipe or die "$0: dup stderr pipe: $!\n";
+    close $stdout_pipe;
+    close $stderr_pipe;
 }
 my($starttime) = time;
 my($status,$nerror_bytes) = run_command($config{timeout}, $subdir, @{$config{cmd}});
@@ -828,7 +886,11 @@ if ($config{may_fail} eq 'yes') {
     open LOCK, ">", $prelock or die "$0: $prelock: $!\n";
     print LOCK "$$\n"; # only for debugging
     close LOCK;
-    while (system "ln $prelock $lock 2>/dev/null") {
+    while (!link($prelock, $lock)) {
+      if ($! != EEXIST) {
+        unlink $prelock;
+        die "$0: cannot obtain lock: $lock: $!\n";
+      }
       if (--$ntries <= 0) {
         unlink $prelock;
         die "$0: cannot obtain lock: $lock\n";
@@ -883,6 +945,12 @@ print "$target: ignoring failure\n" if $ignored_failure;
 # Create the *.failed file and populate it with the commands' stdout and stderr
 close CMD_STDOUT;
 close CMD_STDERR;
+if ($stdout_prefixer_pid) {
+  waitpid($stdout_prefixer_pid, 0);
+}
+if ($stderr_prefixer_pid) {
+  waitpid($stderr_prefixer_pid, 0);
+}
 open TARGET, ">", $target_fail or die "$0: $target_fail: $!\n";
 my %output_filename = (out => $cmd_stdout_file, err => $cmd_stderr_file);
 for my $stream (qw(out err)) {
