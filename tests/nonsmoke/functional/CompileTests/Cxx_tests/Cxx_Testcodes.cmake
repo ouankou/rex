@@ -7,4 +7,10 @@ list(APPEND EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_cfe_token_stream_mapping_macros_includes.cpp
   rex_test2025_cfe_token_stream_mapping_macro_transform.cpp
   rex_test2025_cfe_token_stream_mapping_preproc_order.cpp
+  rex_test2026_std_filesystem.cpp
+  rex_test2026_std_shared_ptr_enable_shared.cpp
+  rex_test2026_std_bind_function.cpp
+  rex_test2026_std_random.cpp
+  rex_test2026_std_variant_visit.cpp
+  rex_test2026_namespace_qualification.cpp
 )

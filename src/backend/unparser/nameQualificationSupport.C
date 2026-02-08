@@ -633,11 +633,11 @@ NameQualificationTraversal::associatedDeclaration(SgScopeStatement *scope) {
     break;
   }
 
-    // DQ (7/19/2017): Declaration scopes are often synthetic and do not map
-    // directly to a source declaration. However, nonreal declaration scopes
-    // are rooted at the corresponding SgNonrealDecl parent and carry the
-    // source-level dependent qualifier chain (e.g., A<T>::). Preserve that
-    // association so name qualification can recover unresolved using targets.
+    // Declaration scopes are often synthetic and do not map directly to a
+    // source declaration. Nonreal declaration scopes are rooted at their
+    // SgNonrealDecl parent and carry the source-level dependent qualifier
+    // chain (e.g., A<T>::). Preserve that association so name qualification
+    // can recover unresolved using targets.
   case V_SgDeclarationScope: {
     if (SgNonrealDecl *nrdecl = isSgNonrealDecl(scope->get_parent())) {
       return_declaration = nrdecl;
