@@ -2968,6 +2968,10 @@ repair_typedef_declaration_reference(SgTypedefDeclaration *typedef_decl) {
     return;
   }
 
+  if (typedef_decl->get_typedef_type() == SgTypedefDeclaration::e_using) {
+    return;
+  }
+
   SgType *resolved = typedef_decl->get_base_type();
   while (resolved != nullptr) {
     if (SgModifierType *modifier = isSgModifierType(resolved)) {
@@ -12882,11 +12886,29 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
   }
 
   if (underlying_type_info != nullptr) {
-    if (SgType *written_type =
-            buildTypeFromTypeLoc(underlying_type_info->getTypeLoc())) {
-      // Prefer source-spelled type structure for aliases so explicit
-      // qualifications (e.g., std::foo) are preserved.
-      type = written_type;
+    clang::TypeLoc written_type_loc = underlying_type_info->getTypeLoc();
+    bool use_written_type_loc = true;
+
+    // Clang may wrap an unqualified alias target in ElaboratedType sugar with
+    // no explicit keyword/qualifier. Preserving that wrapper forces unnecessary
+    // "struct/class" elaboration in output (e.g., "using A = struct T;").
+    if (auto elaborated_loc =
+            written_type_loc.getAs<clang::ElaboratedTypeLoc>()) {
+      const clang::ElaboratedType *elaborated = elaborated_loc.getTypePtr();
+      if (elaborated != nullptr && !elaborated->isDependentType() &&
+          elaborated->getKeyword() == clang::ElaboratedTypeKeyword::None &&
+          elaborated_loc.getQualifierLoc().getNestedNameSpecifier() ==
+              nullptr) {
+        use_written_type_loc = false;
+      }
+    }
+
+    if (use_written_type_loc) {
+      if (SgType *written_type = buildTypeFromTypeLoc(written_type_loc)) {
+        // Prefer source-spelled type structure for aliases so explicit
+        // qualifications (e.g., std::foo) are preserved.
+        type = written_type;
+      }
     }
   }
   if (type == nullptr) {
@@ -12919,15 +12941,25 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
 
   SgTypedefDeclaration *sg_typedef_decl =
       SageBuilder::buildTypedefDeclaration_nfi(name, type, scope);
-  repair_typedef_declaration_reference(sg_typedef_decl);
 
   sg_typedef_decl->set_typedef_type(SgTypedefDeclaration::e_using);
+  sg_typedef_decl->set_type_elaboration_required_for_base_type(false);
+
+  // For using-aliases of class types, keep declaration linkage on the type
+  // itself; attaching a declaration here can force spurious elaboration
+  // keywords during unparsing.
+  if (isSgClassType(sg_typedef_decl->get_base_type()) != nullptr) {
+    sg_typedef_decl->set_declaration(nullptr);
+  }
 
   *node = sg_typedef_decl;
 
   bool result = VisitTypedefNameDecl(type_alias_decl, node) && res;
   if (result) {
-    repair_typedef_declaration_reference(sg_typedef_decl);
+    sg_typedef_decl->set_type_elaboration_required_for_base_type(false);
+  }
+  if (result && isSgClassType(sg_typedef_decl->get_base_type()) != nullptr) {
+    sg_typedef_decl->set_declaration(nullptr);
   }
   if (result && p_compiler_instance != nullptr) {
     clang::SourceManager &sm = p_compiler_instance->getSourceManager();

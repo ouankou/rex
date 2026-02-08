@@ -1649,7 +1649,17 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
     // info.SkipClassSpecifier() = " + (info.SkipClassSpecifier() ? "true" :
     // "false") + " */ ";
 
-    if (!info.SkipClassSpecifier()) {
+    bool suppressClassSpecifier = info.SkipClassSpecifier();
+    if (!suppressClassSpecifier) {
+      if (SgTypedefDeclaration *typedef_decl = isSgTypedefDeclaration(
+              info.get_reference_node_for_qualification())) {
+        if (typedef_decl->get_typedef_type() == SgTypedefDeclaration::e_using) {
+          suppressClassSpecifier = true;
+        }
+      }
+    }
+
+    if (!suppressClassSpecifier) {
       // GB (09/18/2007): If the class definition is unparsed, also unparse its
       // attached preprocessing info.
       if (cDefiningDecl != NULL && !info.SkipClassDefinition()) {
