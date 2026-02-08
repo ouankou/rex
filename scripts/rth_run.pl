@@ -577,34 +577,56 @@ sub insert_after_first_token {
   return $cmd unless defined $cmd && $cmd =~ /\S/;
 
   my $len = length($cmd);
-  my $i = 0;
-  $i++ while $i < $len && substr($cmd, $i, 1) =~ /\s/;
-  return $cmd if $i >= $len;
+  my $pos = 0;
+  $pos++ while $pos < $len && substr($cmd, $pos, 1) =~ /\s/;
+  return $cmd if $pos >= $len;
 
-  my $quote = substr($cmd, $i, 1);
-  if ($quote eq "'") {
-    $i++;
-    $i++ while $i < $len && substr($cmd, $i, 1) ne "'";
-    $i++ if $i < $len;
-  } elsif ($quote eq '"') {
-    $i++;
-    while ($i < $len) {
-      my $c = substr($cmd, $i, 1);
-      if ($c eq "\\") {
-        $i += 2;
+  my $scan_word_end = sub {
+    my ($s, $i) = @_;
+    my $n = length($s);
+    while ($i < $n) {
+      my $c = substr($s, $i, 1);
+      last if $c =~ /\s/;
+      if ($c eq "'") {
+        $i++;
+        $i++ while $i < $n && substr($s, $i, 1) ne "'";
+        $i++ if $i < $n;
       } elsif ($c eq '"') {
         $i++;
-        last;
+        while ($i < $n) {
+          my $d = substr($s, $i, 1);
+          if ($d eq "\\") {
+            $i += 2;
+          } elsif ($d eq '"') {
+            $i++;
+            last;
+          } else {
+            $i++;
+          }
+        }
+      } elsif ($c eq "\\") {
+        $i += 2;
       } else {
         $i++;
       }
     }
-  } else {
-    $i++ while $i < $len && substr($cmd, $i, 1) !~ /\s/;
+    return $i;
+  };
+
+  my $end;
+  while (1) {
+    $end = $scan_word_end->($cmd, $pos);
+    my $token = substr($cmd, $pos, $end - $pos);
+    last unless $token =~ /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+    my $next = $end;
+    $next++ while $next < $len && substr($cmd, $next, 1) =~ /\s/;
+    return $cmd if $next >= $len;
+    $pos = $next;
   }
 
-  my $before = substr($cmd, 0, $i);
-  my $after = substr($cmd, $i);
+  my $before = substr($cmd, 0, $end);
+  my $after = substr($cmd, $end);
   return $before . " " . $insert . $after;
 }
 
@@ -628,7 +650,7 @@ while (@ARGV) {
   /^--quiet-failure$/ and do {$quiet_failure=1; next};
   /^-rose:/ and do {
     push @rose_cmdline, $_;
-    while (@ARGV > 2) {
+    while (@ARGV > 1) {
       my $next = $ARGV[0];
       last if $next =~ /^-/;
       last if $next =~ /^\w+=/;
@@ -658,10 +680,13 @@ while (@ARGV) {
   usage;
 }
 usage if @ARGV || !$config_file;
-if ($target =~ /(.+)\.\w+$/) {
+if (defined $target && $target =~ /(.+)\.\w+$/) {
   ($target, $target_pass, $target_fail) = ($1, $target, "$1.failed");
 } else {
-  ($target) = $target || ($config_file =~ /([^\/]+?)(.\w+)?$/);
+  if (!defined $target || $target eq '') {
+    my ($derived_target) = ($config_file =~ /([^\/]+?)(\.\w+)?$/);
+    $target = defined $derived_target ? $derived_target : $config_file;
+  }
   ($target_pass,$target_fail) = ("$target.passed","$target.failed");
 }
 $variables{TARGET} = $target;
