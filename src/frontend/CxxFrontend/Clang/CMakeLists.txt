@@ -65,26 +65,30 @@ target_include_directories(libroseClangFrontend SYSTEM PRIVATE
 target_compile_definitions(libroseClangFrontend PRIVATE
   ${LLVM_DEFINITIONS})
 
-# Copy builtin headers to staging directory for build-tree usage
-# (Install tree headers are handled by install() commands below)
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/clang)
-file(COPY
+set(CLANG_BUILTIN_HEADERS
   clang-builtin-c.h
   clang-builtin-cpp.hpp
   clang-builtin-cuda.hpp
   clang-builtin-opencl.h
-  DESTINATION ${CMAKE_BINARY_DIR}/include-staging/clang)
+  irs.h
+  irsctl.h
+)
+
+# Copy builtin headers to staging directory for build-tree usage
+# (Install tree headers are handled by install() commands below)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/clang)
+foreach(header IN LISTS CLANG_BUILTIN_HEADERS)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${header}
+    ${CMAKE_BINARY_DIR}/include-staging/clang/${header}
+    COPYONLY)
+endforeach()
 
 # Install headers
 install(FILES ${CLANG_FRONTEND_HEADERS}
   DESTINATION ${INCLUDE_INSTALL_DIR})
 
 # Install builtin headers
-install(FILES
-  clang-builtin-c.h
-  clang-builtin-cpp.hpp
-  clang-builtin-cuda.hpp
-  clang-builtin-opencl.h
+install(FILES ${CLANG_BUILTIN_HEADERS}
   DESTINATION ${INCLUDE_INSTALL_DIR}/clang)
 
 message(STATUS "Clang frontend configured successfully")

@@ -122,6 +122,17 @@ SgName Unparser_Nameq::lookup_generated_qualified_name(SgNode *referencedNode) {
     break;
   }
 
+  case V_SgNonrealDecl: {
+    SgNonrealDecl *node = isSgNonrealDecl(referencedNode);
+    SgUnorderedMapNodeToString::iterator i =
+        SgNode::get_globalQualifiedNameMapForNames().find(node);
+    if (i != SgNode::get_globalQualifiedNameMapForNames().end()) {
+      ROSE_ASSERT(node == i->first);
+      nameQualifier = i->second;
+    }
+    break;
+  }
+
   case V_SgTemplateArgument: {
     SgTemplateArgument *node = isSgTemplateArgument(referencedNode);
     nameQualifier = node->get_qualified_name_prefix_for_type();

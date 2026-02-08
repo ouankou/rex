@@ -1094,10 +1094,30 @@ void FixupAstSymbolTablesToSupportAliasedSymbols::
                 currentScope->lookup_alias_symbol(name, symbol);
             SgAliasSymbol *aliasSymbol = isSgAliasSymbol(currentScopeSymbol);
 
+            // If lookup by (name, symbol) misses, fall back to creating the
+            // alias now so injected members remain visible in the current
+            // scope.
+            if (aliasSymbol == NULL) {
+              ROSE_ASSERT(causalNode != NULL);
+
+#if ALIAS_SYMBOL_DEBUGGING || 0
+              printf("In injectSymbolsFromReferencedScopeIntoCurrentScope(): "
+                     "lookup_alias_symbol() returned NULL, creating alias "
+                     "for symbol = %p = %s name = %s\n",
+                     symbol, symbol->class_name().c_str(), name.str());
+#endif
+
+              aliasSymbol = new SgAliasSymbol(symbol);
+              ROSE_ASSERT(aliasSymbol != NULL);
+              ROSE_ASSERT(aliasSymbol->get_causal_nodes().empty() == true);
+              aliasSymbol->get_causal_nodes().push_back(causalNode);
+              currentScope->insert_symbol(name, aliasSymbol);
+            }
+
             ROSE_ASSERT(aliasSymbol != NULL);
 
-            // DQ (7/12/2014): Added support to trace back the SgAliasSymbol to
-            // the declarations that caused it to be added.
+            // DQ (7/12/2014): Added support to trace back the SgAliasSymbol
+            // to the declarations that caused it to be added.
             ROSE_ASSERT(causalNode != NULL);
 
             // DQ (7/19/2025): Adding performance debugging support.

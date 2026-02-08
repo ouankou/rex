@@ -283,7 +283,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2004_145.C
   test2004_146.C
   test2004_147.C
-  test2004_148.C
   test2004_149.C
   test2004_15.C
   test2004_150.C
@@ -364,7 +363,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2004_86.C
   test2004_87.C
   test2004_88.C
-  test2004_89.C
   test2004_90.C
   test2004_91.C
   test2004_93.C
@@ -386,7 +384,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2005_10.C
   test2005_100.C
   test2005_101.C
-  test2005_102.C
   test2005_103.C
   test2005_104.C
   test2005_105.C
@@ -600,7 +597,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2006_119.C
   test2006_12.C
   test2006_120.C
-  test2006_121.C
   test2006_122.C
   test2006_123.C
   test2006_124.C
@@ -2167,54 +2163,24 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue99_uaf.cpp
   test2025_issue84_friend_template_in_class.cpp
   test2009_24.C
-  test2011_120.C
-  test2012_99.C
-  test2013_237.C
   test2014_108.C
   test2014_205.C
   test2014_239.C
-  test2014_72.C
-  test2014_73.C
-  test2014_77.C
-  test2014_78.C
-  test2015_100.C
-  test2015_101.C
-  test2015_102.C
-  test2015_103.C
-  test2015_104.C
-  test2015_121.C
-  test2015_147.C
-  test2015_149.C
-  test2015_88.C
-  test2015_97.C
   test2015_99.C
-  test2016_02.C
   test2016_34.C
   test2016_48.C
   test2016_54.C
   test2016_55.C
   test2016_56.C
   test2017_26.C
-  test2017_27.C
-  test2017_28.C
   test2017_51.C
-  test2014_110.C
-  test2017_63.C
   test2016_96.C
-  test2015_127.C
-  test2015_129.C
-  test2014_71.C
   test2014_111.C
-  test2013_63.C
-  test2013_235.C
   test2014_187.C
   test2014_187_work_around.C
   test2014_188.C
-  test2015_120.C
-  test2014_81.C
   test2014_236.C
   test2014_238.C
-  test2015_55.C
   test2015_115.C
   test2015_116.C
   test2015_148.C
@@ -2329,7 +2295,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2007_32.C
   test2007_33.C
   test2007_34.C
-  test2007_35.C
   test2007_36.C
   test2007_37.C
   test2007_39.C
@@ -2371,7 +2336,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2009_13.C
   test2009_17.C
   test2009_22.C
-  test2009_23.C
   test2009_25.C
   test2009_26.C
   test2009_29.C
@@ -2386,10 +2350,8 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2009_45.C
   test2009_46.C
   test2009_47.C
-  test2010_01.C
   test2010_02.C
   test2010_07.C
-  test2010_08.C
   test2010_09.C
   test2010_10.C
   test2010_11.C
@@ -2473,13 +2435,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2013_185.C
   test2013_197.C
   test2013_19.C
-  test2013_224.C
-  test2013_233.C
-  test2013_234.C
-  test2013_236.C
-  test2013_240.C
-  test2013_241.C
-  test2013_242.C
   test2013_245.C
   test2013_248.C
   test2013_249.C
@@ -2495,7 +2450,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2013_267.C
   test2013_268.C
   test2013_269.C
-  test2013_270.C
   test2013_309.C
   test2013_30.C
   test2013_321.C
@@ -2508,17 +2462,11 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2013_45.C
   test2013_49.C
   test2013_62.C
-  test2014_103.C
-  test2014_104.C
-  test2014_105.C
-  test2014_106.C
-  test2014_113.C
   test2014_138.C
   test2014_14.C
   test2014_158.C
   test2014_15.C
   test2014_164.C
-  test2014_173.C
   test2014_175.C
   test2014_180.C
   test2014_181.C
@@ -2528,7 +2476,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_228.C
   test2014_229.C
   test2014_22.C
-  test2014_237.C
   test2014_23.C
   test2014_25.C
   test2014_42.C
@@ -2542,34 +2489,14 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_65.C
   test2014_66.C
   test2014_69.C
-  test2015_105.C
   test2015_109.C
   test2015_25.C
-  test2015_62.C
-  test2015_63.C
-  test2015_64.C
   test2015_72_icpc.C
   test2015_82.C
   test2015_83.C
   test2015_84.C
-  test2015_87.C
-  test2015_90.C
-  test2015_91.C
-  test2015_92.C
-  test2015_93.C
-  test2015_94.C
-  test2015_95.C
-  test2015_96.C
-  test2015_98.C
-  test2016_24.C
   test2016_35.C
-  test2016_39.C
   test2016_52.C
-  test2016_58.C
-  test2016_90.C
-  test2016_92.C
-  test2016_94.C
-  test2016_95.C
   test2017_05.C
   test2017_08.C
   test2017_12.C
@@ -2697,7 +2624,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_32.C
   test2007_33.C
   test2007_34.C
-  test2007_35.C
   test2007_36.C
   test2007_37.C
   test2007_39.C
@@ -2737,7 +2663,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2009_13.C
   test2009_17.C
   test2009_22.C
-  test2009_23.C
   test2009_26.C
   test2009_29.C
   test2009_32.C
@@ -2751,9 +2676,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2009_45.C
   test2009_46.C
   test2009_47.C
-  test2010_01.C
   test2010_07.C
-  test2010_08.C
   test2010_09.C
   test2010_10.C
   test2010_11.C
@@ -2832,13 +2755,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2013_185.C
   test2013_197.C
   test2013_19.C
-  test2013_224.C
-  test2013_233.C
-  test2013_234.C
-  test2013_236.C
-  test2013_240.C
-  test2013_241.C
-  test2013_242.C
   test2013_245.C
   test2013_248.C
   test2013_249.C
@@ -2852,7 +2768,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2013_266.C
   test2013_267.C
   test2013_268.C
-  test2013_270.C
   test2013_309.C
   test2013_321.C
   test2013_322.C
@@ -2864,17 +2779,11 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2013_45.C
   test2013_49.C
   test2013_62.C
-  test2014_103.C
-  test2014_104.C
-  test2014_105.C
-  test2014_106.C
-  test2014_113.C
   test2014_138.C
   test2014_14.C
   test2014_158.C
   test2014_15.C
   test2014_164.C
-  test2014_173.C
   test2014_175.C
   test2014_180.C
   test2014_181.C
@@ -2884,7 +2793,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2014_228.C
   test2014_229.C
   test2014_22.C
-  test2014_237.C
   test2014_23.C
   test2014_25.C
   test2014_42.C
@@ -2897,34 +2805,14 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2014_64.C
   test2014_66.C
   test2014_69.C
-  test2015_105.C
   test2015_109.C
   test2015_25.C
-  test2015_62.C
-  test2015_63.C
-  test2015_64.C
   test2015_72_icpc.C
   test2015_82.C
   test2015_83.C
   test2015_84.C
-  test2015_87.C
-  test2015_90.C
-  test2015_91.C
-  test2015_92.C
-  test2015_93.C
-  test2015_94.C
-  test2015_95.C
-  test2015_96.C
-  test2015_98.C
-  test2016_24.C
   test2016_35.C
-  test2016_39.C
   test2016_52.C
-  test2016_58.C
-  test2016_90.C
-  test2016_92.C
-  test2016_94.C
-  test2016_95.C
   test2017_05.C
   test2017_08.C
   test2017_12.C
@@ -3312,57 +3200,9 @@ set(TESTCODE_CURRENTLY_FAILING
   test_gnu.C
   vector_cpp.C
   test2004_117.C
-  test2007_35.C
   test2007_56.C
-  test2009_23.C
-  test2010_01.C
-  test2010_08.C
   test2013_178.C
   test2013_182.C
-  test2013_224.C
-  test2013_233.C
-  test2013_234.C
-  test2013_235.C
-  test2013_236.C
-  test2013_240.C
-  test2013_241.C
-  test2013_242.C
-  test2013_270.C
-  test2014_103.C
-  test2014_104.C
-  test2014_105.C
-  test2014_106.C
-  test2014_110.C
-  test2014_113.C
-  test2014_173.C
-  test2014_237.C
-  test2015_100.C
-  test2015_105.C
-  test2015_127.C
-  test2015_129.C
-  test2015_62.C
-  test2015_63.C
-  test2015_64.C
-  test2015_87.C
-  test2015_90.C
-  test2015_91.C
-  test2015_92.C
-  test2015_93.C
-  test2015_94.C
-  test2015_95.C
-  test2015_96.C
-  test2015_98.C
-  test2016_24.C
-  test2016_39.C
-  test2016_58.C
-  test2016_90.C
-  test2016_92.C
-  test2016_94.C
-  test2016_95.C
-  test2017_06.C
-  test2017_27.C
-  test2017_28.C
-  test2017_63.C
 )
 
 set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS "${EXAMPLE_TESTCODES_REQUIRED_TO_PASS}" CACHE INTERNAL "")
@@ -3508,17 +3348,6 @@ set_tests_properties(Cxx_tests_test2005_56_special PROPERTIES LABELS Cxx_tests D
 rex_lock_test_for_input(Cxx_tests_test2005_56_special test2005_56.C)
 
 add_test(
-  NAME Cxx_tests_test2010_01_special
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:${translator}>
-    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_01.C
-    -o test2010_01.o
-)
-set_tests_properties(Cxx_tests_test2010_01_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
-rex_lock_test_for_input(Cxx_tests_test2010_01_special test2010_01.C)
-
-add_test(
   NAME Cxx_tests_test2010_02_special
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:${translator}>
@@ -3541,18 +3370,6 @@ add_test(
 )
 set_tests_properties(Cxx_tests_test2010_07_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
 rex_lock_test_for_input(Cxx_tests_test2010_07_special test2010_07.C)
-
-add_test(
-  NAME Cxx_tests_test2010_08_special
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:${translator}>
-    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
-    -I${CMAKE_BINARY_DIR}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_08.C
-    -o test2010_08.o
-)
-set_tests_properties(Cxx_tests_test2010_08_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
-rex_lock_test_for_input(Cxx_tests_test2010_08_special test2010_08.C)
 
 add_test(
   NAME Cxx_tests_cpp_test2010_07

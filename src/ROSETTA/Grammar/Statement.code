@@ -7860,6 +7860,7 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
 
 
           SgSymbol* symbol = this->get_symbol_from_symbol_table();
+          SgScopeStatement* symbolScopeForReset = parentScope;
           if (symbol == NULL)
              {
             // If searching for the old name returned a null symbol pointer then make sure that there is an entry for the new name
@@ -7867,11 +7868,27 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
              }
             else
              {
+            if (symbolScopeForReset != NULL &&
+                symbolScopeForReset->symbol_exists(symbol->get_name(),symbol) == false)
+               {
+                 SgSymbolTable* symbolTable = isSgSymbolTable(symbol->get_parent());
+                 if (symbolTable != NULL)
+                    {
+                      SgScopeStatement* scopeFromSymbolTable = isSgScopeStatement(symbolTable->get_parent());
+                      if (scopeFromSymbolTable != NULL)
+                         {
+                           symbolScopeForReset = scopeFromSymbolTable;
+                         }
+                    }
+               }
+
             // Remove the symbol (previously inserted under the old name and hashed accordingly)
             // so that we can reinsert it into the symbol table after we change the name.
             // ROSE_ASSERT(false);
-
-               parentScope->remove_symbol(symbol);
+               if (symbolScopeForReset != NULL)
+                  {
+                    symbolScopeForReset->remove_symbol(symbol);
+                  }
              }
 
        // DQ (2/15/2005): Modified to reference input parameters ("name" is an input parameter to this function!)
@@ -7881,7 +7898,10 @@ SgDeclarationStatement::resetTemplateNameSupport ( bool & nameResetFromMangledFo
           if (symbol != NULL)
              {
             // printf ("Inserting the symbol = %p = %s name = %s from scope %p = %s \n",symbol,symbol->class_name().c_str(),name.str(),parentScope,parentScope->class_name().c_str());
-               parentScope->insert_symbol(name,symbol);
+               if (symbolScopeForReset != NULL)
+                  {
+                    symbolScopeForReset->insert_symbol(name,symbol);
+                  }
              }
 
        // DQ (2/15/2005): Modified to reference input parameters

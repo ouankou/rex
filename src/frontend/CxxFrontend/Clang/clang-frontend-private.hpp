@@ -41,6 +41,24 @@ private:
 inline constexpr char kMissingTemplateHeaderFixupAttributeName[] =
     "rex_missing_template_header_fixups";
 
+class ExplicitGlobalQualifierAttribute : public AstAttribute {
+public:
+  ExplicitGlobalQualifierAttribute() = default;
+
+  AstAttribute *copy() const override {
+    return new ExplicitGlobalQualifierAttribute(*this);
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string toString() override { return "explicit_global_qualifier"; }
+};
+
+inline constexpr char kExplicitGlobalQualifierAttributeName[] =
+    "rex_explicit_global_qualifier";
+
 struct ConstraintSatisfactionResult {
   bool evaluated = false;
   bool satisfied = true;
@@ -487,6 +505,11 @@ public:
    */
   void applySourceRangeWithTrailingSemicolon(SgNode *rose_node,
                                              const clang::Stmt *clang_stmt);
+  // Ensure every function declaration has an associated symbol in its scope.
+  void repairMissingFunctionSymbols();
+  // Normalize namespace scopes so decl->get_scope() matches canonical
+  // namespace definitions used by symbol tables.
+  void normalizeNamespaceDeclarationScopes();
   // Extract spelling source text for a clang source range.
   std::string getSourceText(clang::SourceRange range) const;
 
@@ -537,6 +560,13 @@ protected:
   // Track class definitions already populated to avoid duplicate member
   // insertion during on-demand/re-entrant translation.
   std::set<const SgClassDefinition *> p_record_definitions_populated;
+  // Track tag declarations defined inline in declarators (even when Clang does
+  // not mark them as embedded) so we can suppress standalone unparsing and
+  // attach them to the correct scope.
+  std::set<const clang::TagDecl *> p_inline_tag_decls;
+  // Track friend declarations that explicitly used a global qualifier ("::")
+  // so we can preserve it during translation/unparsing.
+  std::set<const clang::Decl *> p_explicit_global_friend_decls;
   // Track when we are translating a for-init so we avoid appending decls
   // directly into the enclosing scope statement list.
   bool p_in_for_init_translation = false;
@@ -596,6 +626,7 @@ protected:
   SgScopeStatement *getSafeOpaqueTypeInsertionScope() const;
 
   SgType *buildTypeFromQualifiedType(const clang::QualType &qual_type);
+  SgType *buildTypeFromTypeLoc(const clang::TypeLoc &type_loc);
   SgExpression *buildFallbackExpression(const clang::Expr *expr);
   SgExpression *buildFallbackExpression(SgType *type);
 
@@ -645,10 +676,16 @@ protected:
   void appendTemplateArguments(SgTemplateArgumentPtrList &arg_list,
                                const clang::TemplateArgument &arg,
                                bool explicitlySpecified = false);
+  void appendTemplateArguments(SgTemplateArgumentPtrList &arg_list,
+                               const clang::TemplateArgumentLoc &arg_loc,
+                               bool explicitlySpecified = false);
 
   // Helper: Translate a single template argument
   SgTemplateArgument *
   translateTemplateArgument(const clang::TemplateArgument &arg,
+                            bool explicitlySpecified = false);
+  SgTemplateArgument *
+  translateTemplateArgument(const clang::TemplateArgumentLoc &arg_loc,
                             bool explicitlySpecified = false);
 
   // Helper: Build template parameters (inferred from arguments)
@@ -1574,7 +1611,6 @@ void finishSageAST(ClangToSageTranslator &translator);
 
 class SagePreprocessorRecord : public clang::PPCallbacks,
                                public clang::CommentHandler {
-public:
 protected:
   clang::SourceManager *p_source_manager;
 
@@ -1604,6 +1640,7 @@ public:
                      llvm::StringRef SearchPath, llvm::StringRef RelativePath,
                      const clang::Module *SuggestedModule, bool ModuleImported,
                      clang::SrcMgr::CharacteristicKind FileType) override;
+  bool FileNotFound(llvm::StringRef FileName) override;
   void EndOfMainFile() override;
   void Ident(clang::SourceLocation Loc, llvm::StringRef Str) override;
   void PragmaComment(clang::SourceLocation Loc,

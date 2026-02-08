@@ -633,9 +633,19 @@ NameQualificationTraversal::associatedDeclaration(SgScopeStatement *scope) {
     break;
   }
 
-    // DQ (7/19/2017): Adding support for new SgDeclarationScope, though it
-    // might be that we want the parent defining or non-defining declaration.
-  case V_SgDeclarationScope:
+    // DQ (7/19/2017): Declaration scopes are often synthetic and do not map
+    // directly to a source declaration. However, nonreal declaration scopes
+    // are rooted at the corresponding SgNonrealDecl parent and carry the
+    // source-level dependent qualifier chain (e.g., A<T>::). Preserve that
+    // association so name qualification can recover unresolved using targets.
+  case V_SgDeclarationScope: {
+    if (SgNonrealDecl *nrdecl = isSgNonrealDecl(scope->get_parent())) {
+      return_declaration = nrdecl;
+    } else {
+      return_declaration = NULL;
+    }
+    break;
+  }
 
     // DQ (6/26/2019): Added rage-based for loop (see test2019_483.C).
   case V_SgRangeBasedForStatement:
@@ -4464,13 +4474,23 @@ void NameQualificationTraversal::
 #endif
 
   SgScopeStatement *effectiveScope = currentScope;
+  bool preserve_unnamed_namespace_scope = false;
   if (positionStatement != nullptr) {
     if (SgScopeStatement *positionScope =
             SageInterface::getScope(positionStatement)) {
       effectiveScope = positionScope;
+      if (SgNamespaceDefinitionStatement *position_ns =
+              isSgNamespaceDefinitionStatement(positionScope)) {
+        if (SgNamespaceDeclarationStatement *position_ns_decl =
+                position_ns->get_namespaceDeclaration()) {
+          preserve_unnamed_namespace_scope =
+              position_ns_decl->get_isUnnamedNamespace();
+        }
+      }
     }
   }
-  if (isSgNamespaceDefinitionStatement(effectiveScope) != nullptr) {
+  if (!preserve_unnamed_namespace_scope &&
+      isSgNamespaceDefinitionStatement(effectiveScope) != nullptr) {
     SgNode *global_anchor =
         positionStatement != nullptr
             ? static_cast<SgNode *>(positionStatement)
@@ -4535,7 +4555,7 @@ void NameQualificationTraversal::
           saw_namespace = true;
         }
         if (SgGlobal *global_scope = isSgGlobal(scope_iter)) {
-          if (saw_namespace) {
+          if (saw_namespace && !preserve_unnamed_namespace_scope) {
             effectiveScope = global_scope;
           }
           break;
@@ -6052,6 +6072,12 @@ void NameQualificationTraversal::traverseType(SgType *type,
     // typedef declaration.
     if (inTypedefDecl == true) {
       unparseInfoPointer->set_inTypedefDecl();
+
+      // Carry declaration-level elaboration policy into generated type strings
+      // so map-based type names match the AST semantics.
+      if (typedefDeclaration->skipElaborateType()) {
+        unparseInfoPointer->set_SkipClassSpecifier();
+      }
     }
 
     // DQ (5/18/2019): Makr this as being in a SgAggregateInitializer.
@@ -9928,10 +9954,14 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       if ((baseTypeDeclaration != NULL) &&
           (typedefDeclaration
                ->get_typedefBaseTypeContainsDefiningDeclaration() == false)) {
-        // int amountOfNameQualificationRequiredForBaseType =
-        // nameQualificationDepth(baseTypeDeclaration,currentScope,typedefDeclaration);
-        int amountOfNameQualificationRequiredForBaseType =
-            nameQualificationDepth(baseType, currentScope, typedefDeclaration);
+        int amountOfNameQualificationRequiredForBaseType = 0;
+        if (isSgTemplateInstantiationDecl(baseTypeDeclaration) != NULL) {
+          amountOfNameQualificationRequiredForBaseType = nameQualificationDepth(
+              baseTypeDeclaration, currentScope, typedefDeclaration);
+        } else {
+          amountOfNameQualificationRequiredForBaseType = nameQualificationDepth(
+              baseType, currentScope, typedefDeclaration);
+        }
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
         MLOG_WARN_C(MLOG_UNPARSER,
                     "SgTypedefDeclaration: "
@@ -13165,6 +13195,19 @@ traverseNonrealDeclForCorrectScope(SgDeclarationStatement *declaration) {
 
   SgNonrealDecl *nrdecl = isSgNonrealDecl(declaration);
   while (nrdecl != NULL) {
+    if (nrdecl->get_is_template_param()) {
+      // Template parameters are looked up in template-parameter scope;
+      // qualifying them as namespace/class members is invalid.
+      SgScopeStatement *param_scope = nrdecl->get_scope();
+      if (SgDeclarationScope *decl_scope = isSgDeclarationScope(param_scope)) {
+        scope = decl_scope;
+      } else {
+        scope = param_scope;
+      }
+      ASSERT_not_null(scope);
+      break;
+    }
+
     if (nrdecl->get_templateDeclaration() == NULL) {
       SgDeclarationScope *decl_scope =
           isSgDeclarationScope(nrdecl->get_scope());
@@ -13981,6 +14024,64 @@ void NameQualificationTraversal::setNameQualification(
   ASSERT_not_null(declarationSet);
   // ROSE_ASSERT(declarationSet->getDeclarationMap().size() != 0);
 
+  SgClassDefinition *friend_class_def = NULL;
+  if (isFriend) {
+    friend_class_def = isSgClassDefinition(functionDeclaration->get_parent());
+    if (friend_class_def == NULL &&
+        functionDeclaration->get_firstNondefiningDeclaration() != NULL) {
+      friend_class_def = isSgClassDefinition(
+          functionDeclaration->get_firstNondefiningDeclaration()->get_parent());
+    }
+    if (friend_class_def == NULL &&
+        functionDeclaration->get_definingDeclaration() != NULL) {
+      friend_class_def = isSgClassDefinition(
+          functionDeclaration->get_definingDeclaration()->get_parent());
+    }
+  }
+
+  auto has_explicit_global_friend_attr = [](SgFunctionDeclaration *decl) {
+    return decl != NULL &&
+           decl->attributeExists("rex_explicit_global_qualifier");
+  };
+
+  bool explicit_global_friend_decl =
+      has_explicit_global_friend_attr(functionDeclaration) ||
+      has_explicit_global_friend_attr(isSgFunctionDeclaration(
+          functionDeclaration->get_firstNondefiningDeclaration())) ||
+      has_explicit_global_friend_attr(isSgFunctionDeclaration(
+          functionDeclaration->get_definingDeclaration()));
+
+  if (isFriend && friend_class_def != NULL) {
+    if (!explicit_global_friend_decl) {
+      outputNameQualificationLength = 0;
+      outputGlobalQualification = false;
+      qualifier = "";
+    } else {
+      SgScopeStatement *friend_enclosing_scope = friend_class_def->get_scope();
+      SgScopeStatement *friend_decl_scope = functionDeclaration->get_scope();
+      if (friend_enclosing_scope != NULL && friend_decl_scope != NULL &&
+          !SgScopeStatement::isEquivalentScope(friend_enclosing_scope,
+                                               friend_decl_scope)) {
+        if (outputNameQualificationLength < 1) {
+          outputNameQualificationLength = 1;
+        }
+        outputGlobalQualification = (isSgGlobal(friend_decl_scope) != NULL);
+        if (outputGlobalQualification) {
+          qualifier = "::";
+        }
+      } else {
+        outputNameQualificationLength = 0;
+        outputGlobalQualification = false;
+        qualifier = "";
+      }
+    }
+
+    functionRefExp->set_global_qualification_required(
+        outputGlobalQualification);
+    functionRefExp->set_name_qualification_length(
+        outputNameQualificationLength);
+  }
+
   // MLOG_WARN_C(MLOG_UNPARSER, "In
   // NameQualificationTraversal::setNameQualification(): qualifier = %s
   // \n",qualifier.c_str());
@@ -14700,15 +14801,54 @@ void NameQualificationTraversal::setNameQualification(
     }
   }
 
+  auto has_explicit_global_friend_attr = [](SgFunctionDeclaration *decl) {
+    return decl != NULL &&
+           decl->attributeExists("rex_explicit_global_qualifier");
+  };
+
+  bool explicit_global_friend_decl =
+      has_explicit_global_friend_attr(functionDeclaration) ||
+      has_explicit_global_friend_attr(isSgFunctionDeclaration(
+          functionDeclaration->get_firstNondefiningDeclaration())) ||
+      has_explicit_global_friend_attr(isSgFunctionDeclaration(
+          functionDeclaration->get_definingDeclaration()));
+
   if (isFriendDecl && friend_class_def != NULL) {
     SgScopeStatement *friend_enclosing_scope = friend_class_def->get_scope();
     SgScopeStatement *friend_decl_scope = functionDeclaration->get_scope();
-    if (friend_enclosing_scope != NULL && friend_decl_scope != NULL &&
-        SgScopeStatement::isEquivalentScope(friend_enclosing_scope,
-                                            friend_decl_scope)) {
+
+    SgFunctionDeclaration *friend_first_nondef = isSgFunctionDeclaration(
+        functionDeclaration->get_firstNondefiningDeclaration());
+    SgScopeStatement *friend_first_scope =
+        friend_first_nondef != NULL ? friend_first_nondef->get_scope() : NULL;
+
+    bool friend_targets_global_scope =
+        (friend_decl_scope != NULL && isSgGlobal(friend_decl_scope) != NULL) ||
+        (friend_first_scope != NULL && isSgGlobal(friend_first_scope) != NULL);
+
+    bool requires_global_friend_qualification =
+        friend_enclosing_scope != NULL &&
+        isSgGlobal(friend_enclosing_scope) == NULL &&
+        friend_targets_global_scope;
+
+    if (requires_global_friend_qualification) {
+      if (outputNameQualificationLength < 1) {
+        outputNameQualificationLength = 1;
+      }
+      outputGlobalQualification = true;
+      qualifier = "::";
+    } else if (!explicit_global_friend_decl) {
       outputNameQualificationLength = 0;
       outputGlobalQualification = false;
       qualifier = "";
+    } else {
+      if (friend_enclosing_scope != NULL && friend_decl_scope != NULL &&
+          SgScopeStatement::isEquivalentScope(friend_enclosing_scope,
+                                              friend_decl_scope)) {
+        outputNameQualificationLength = 0;
+        outputGlobalQualification = false;
+        qualifier = "";
+      }
     }
   }
 
@@ -17159,20 +17299,42 @@ string NameQualificationTraversal::setNameQualificationSupport(
       }
     }
 
+    SgScopeStatement *next_scope = scope->get_scope();
     SgDeclarationScope *decl_scope = isSgDeclarationScope(scope);
     if (decl_scope != NULL) {
+      if (SgNonrealDecl *nrdecl = isSgNonrealDecl(scope->get_parent())) {
+        SgName nonreal_name = nrdecl->get_name();
+        if (!nrdecl->get_tpl_args().empty()) {
+          nonreal_name = SageBuilder::appendTemplateArgumentsToName(
+              nonreal_name, nrdecl->get_tpl_args());
+        }
+        std::string nonreal_scope_name = nonreal_name.getString();
+        if (!nonreal_scope_name.empty()) {
+          scope_name = nonreal_scope_name;
+          skip_over_scope = false;
+        }
+        if (SgScopeStatement *nr_scope = nrdecl->get_scope()) {
+          next_scope = nr_scope;
+        }
+      } else if (next_scope == NULL) {
+        next_scope = SageInterface::getEnclosingScope(scope);
+      }
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
       MLOG_WARN_C(
           MLOG_UNPARSER,
-          "setNameQualificationSupport(): case of SgDeclarationScope:\n");
-      MLOG_WARN_C(MLOG_UNPARSER, " --- scope_name         = %s \n",
+          "setNameQualificationSupport(): case of SgDeclarationScope:
+");
+      MLOG_WARN_C(MLOG_UNPARSER, " --- scope_name         = %s 
+",
                   scope_name.c_str());
-      MLOG_WARN_C(MLOG_UNPARSER, " --- scope->get_scope() = %p (%s) \n",
+      MLOG_WARN_C(MLOG_UNPARSER, " --- scope->get_scope() = %p (%s) 
+",
                   scope->get_scope(),
                   scope->get_scope() != NULL
                       ? scope->get_scope()->class_name().c_str()
                       : "");
-      MLOG_WARN_C(MLOG_UNPARSER, " --- scope->get_parent() = %p (%s) \n",
+      MLOG_WARN_C(MLOG_UNPARSER, " --- scope->get_parent() = %p (%s) 
+",
                   scope->get_parent(),
                   scope->get_parent() != NULL
                       ? scope->get_parent()->class_name().c_str()
@@ -17240,7 +17402,7 @@ string NameQualificationTraversal::setNameQualificationSupport(
       break;
 
     // We have to loop over scopes that are not named scopes!
-    scope = scope->get_scope();
+    scope = next_scope;
 
     if (breakOutOfLoop == true) {
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3) && 1

@@ -1,11 +1,11 @@
 add_executable(dotGenerator dotGenerator.C)
 add_dependencies(dotGenerator ROSE_DLL)
-target_link_libraries(dotGenerator ROSE_DLL)
+target_link_libraries(dotGenerator PRIVATE ROSE_DLL)
 install(TARGETS dotGenerator DESTINATION bin)
 
 add_executable(dotGeneratorWholeASTGraph dotGeneratorWholeASTGraph.C)
 add_dependencies(dotGeneratorWholeASTGraph ROSE_DLL)
-target_link_libraries(dotGeneratorWholeASTGraph ROSE_DLL)
+target_link_libraries(dotGeneratorWholeASTGraph PRIVATE ROSE_DLL)
 install(TARGETS dotGeneratorWholeASTGraph DESTINATION bin)
 
 if(TARGET rose_clang_libstdcxx_headers)

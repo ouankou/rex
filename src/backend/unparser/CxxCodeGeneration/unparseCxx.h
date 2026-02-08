@@ -10,6 +10,8 @@
 
 #include "unparser.h"
 
+#include <set>
+
 // Unparser::token_sequence_position_enum_type xxx;
 
 class SgExpression;
@@ -53,6 +55,9 @@ public:
                                         bool is_template_header = false);
   virtual void unparseTemplateArgument(SgTemplateArgument *templateArgument,
                                        SgUnparse_Info &info);
+
+  // Reset per-unparse state that must not leak across translation units.
+  void resetTemplateParameterEmissionState();
 
   // DQ (11/27/2004): Added to support unparsing of pointers to nested template
   // arguments
@@ -554,6 +559,10 @@ public:
   void unparsePragmaAttribute(SgScopeStatement *scope_stmt);
 
 private:
+  // Template default-argument emission tracking is scoped to a single unparse
+  // task.
+  std::set<const SgTemplateParameter *> emitted_default_template_args_;
+
   void unparseFunctionTryBlock(SgTryStmt *try_stmt, SgUnparse_Info &ninfo);
 };
 

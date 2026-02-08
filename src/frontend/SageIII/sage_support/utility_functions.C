@@ -413,6 +413,59 @@ SgProject *frontend(const std::vector<std::string> &argv,
       // to debug symbol with null basis.
       unsetNodesMarkedAsModified(project);
 
+      // Clang frontend does not populate a full SgToken stream. If raw-token
+      // output would otherwise be chosen, mark a real AST node as modified so
+      // unparsing uses the AST.
+      for (SgFile *file : project->get_fileList()) {
+        SgSourceFile *sourceFile = isSgSourceFile(file);
+        if (sourceFile == nullptr) {
+          continue;
+        }
+        if (!(sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
+              sourceFile->get_Cuda_only() || sourceFile->get_OpenCL_only())) {
+          continue;
+        }
+        if (sourceFile->get_unparse_tokens()) {
+          continue;
+        }
+        if (!sourceFile->get_token_list().empty()) {
+          continue;
+        }
+        ROSEAttributesListContainerPtr preproc_list =
+            sourceFile->get_preprocessorDirectivesAndCommentsList();
+        if (preproc_list == nullptr ||
+            preproc_list->getList().find(sourceFile->getFileName()) ==
+                preproc_list->getList().end()) {
+          continue;
+        }
+
+        SgStatement *mark_stmt = nullptr;
+        if (SgGlobal *global_scope = sourceFile->get_globalScope()) {
+          const SgDeclarationStatementPtrList &decls =
+              global_scope->get_declarations();
+          for (auto it = decls.rbegin(); it != decls.rend(); ++it) {
+            SgDeclarationStatement *decl = *it;
+            if (decl == nullptr) {
+              continue;
+            }
+            Sg_File_Info *info = decl->get_file_info();
+            if (info != nullptr && info->isOutputInCodeGeneration()) {
+              mark_stmt = decl;
+              break;
+            }
+          }
+          if (mark_stmt == nullptr) {
+            mark_stmt = global_scope;
+            if (Sg_File_Info *info = global_scope->get_file_info()) {
+              info->setOutputInCodeGeneration();
+            }
+          }
+        }
+        if (mark_stmt != nullptr) {
+          mark_stmt->set_isModified(true);
+        }
+      }
+
       // Set the mode to be transformation, mostly for Fortran. Liao 8/1/2013
       if (SageBuilder::SourcePositionClassificationMode ==
           SageBuilder::e_sourcePositionFrontendConstruction) {

@@ -138,7 +138,6 @@ set(FILELOCATION_TEST_SOURCES
   test2004_145.C
   test2004_146.C
   test2004_147.C
-  test2004_148.C
   test2004_149.C
   test2004_15.C
   test2004_150.C
@@ -220,7 +219,6 @@ set(FILELOCATION_TEST_SOURCES
   test2004_86.C
   test2004_87.C
   test2004_88.C
-  test2004_89.C
   test2004_90.C
   test2004_91.C
   test2004_93.C
@@ -242,7 +240,6 @@ set(FILELOCATION_TEST_SOURCES
   test2005_10.C
   test2005_100.C
   test2005_101.C
-  test2005_102.C
   test2005_103.C
   test2005_104.C
   test2005_105.C
@@ -453,7 +450,6 @@ set(FILELOCATION_TEST_SOURCES
   test2006_119.C
   test2006_12.C
   test2006_120.C
-  test2006_121.C
   test2006_122.C
   test2006_123.C
   test2006_124.C

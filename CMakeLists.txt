@@ -733,12 +733,18 @@ endif()
 # Miscellaneous user-selectable features
 ########################################################################################################################
 
-option(ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY "Enable compilation and testing of exampleTranslators directory" OFF)
 option(ENABLE-TESTS-DIRECTORY "Enable compilation and testing of the ROSE/tests directory" ON)
 set(_rex_enable_testing_default "${ENABLE-TESTS-DIRECTORY}")
 option(REX_ENABLE_TESTING "Enable REX tests (alias for ENABLE-TESTS-DIRECTORY)" ${_rex_enable_testing_default})
 set(ENABLE-TESTS-DIRECTORY "${REX_ENABLE_TESTING}" CACHE BOOL "Enable compilation and testing of the ROSE/tests directory" FORCE)
 set(BUILD_TESTING "${ENABLE-TESTS-DIRECTORY}" CACHE BOOL "Build the testing tree." FORCE)
+set(_rex_enable_example_translators_default "${ENABLE-TESTS-DIRECTORY}")
+option(ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY "Enable compilation and testing of exampleTranslators directory" ${_rex_enable_example_translators_default})
+if(ENABLE-TESTS-DIRECTORY AND NOT ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY)
+  message(FATAL_ERROR
+    "ENABLE-TESTS-DIRECTORY=ON requires ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY=ON because tests depend on translator executables. "
+    "Reconfigure with -DENABLE-EXAMPLE-TRANSLATORS-DIRECTORY=ON or disable tests.")
+endif()
 if(ENABLE-TESTS-DIRECTORY)
   enable_testing()
   add_test(

@@ -1649,7 +1649,9 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
     // info.SkipClassSpecifier() = " + (info.SkipClassSpecifier() ? "true" :
     // "false") + " */ ";
 
-    if (!info.SkipClassSpecifier()) {
+    bool suppressClassSpecifier = info.SkipClassSpecifier();
+
+    if (!suppressClassSpecifier) {
       // GB (09/18/2007): If the class definition is unparsed, also unparse its
       // attached preprocessing info.
       if (cDefiningDecl != NULL && !info.SkipClassDefinition()) {
@@ -3332,7 +3334,13 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
         if (has_global_qualifier)
           curprint("::");
       }
-      unparseNonrealType(nrparent_nrscope->get_type(), info, false);
+      if (is_first_in_nonreal_chain && has_global_qualifier) {
+        SgUnparse_Info parent_info(info);
+        parent_info.set_reference_node_for_qualification(NULL);
+        unparseNonrealType(nrparent_nrscope->get_type(), parent_info, false);
+      } else {
+        unparseNonrealType(nrparent_nrscope->get_type(), info, false);
+      }
       curprint("::");
     } else {
       if (has_global_qualifier) {
@@ -3361,15 +3369,16 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
   curprint(nrtype->get_name());
 
   // unparse template argument list
-  if (tpl_args.size() > 0) {
+  if (tpl_args.size() > 0 || nrdecl->get_is_nonreal_template()) {
 #if DEBUG_UNPARSE_NONREAL_TYPE
     printf("  tpl_args.size() = %d\n", tpl_args.size());
 #endif
+    SgTemplateArgumentPtrList explicit_args = tpl_args;
     SgUnparse_Info ninfo(info);
     ninfo.set_SkipClassDefinition();
     ninfo.set_SkipEnumDefinition();
     ninfo.set_SkipClassSpecifier();
-    unp->u_exprStmt->unparseTemplateArgumentList(tpl_args, ninfo);
+    unp->u_exprStmt->unparseTemplateArgumentList(explicit_args, ninfo);
   }
 
   curprint(" ");

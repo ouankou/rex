@@ -180,6 +180,18 @@ HiddenListTraversal::associatedDeclaration(SgScopeStatement *scope) {
     break;
   }
 
+    // Declaration scopes are synthetic containers. For nonreal declaration
+    // scopes, recover the parent SgNonrealDecl so dependent qualification can
+    // be reconstructed during hidden-list/name-qualification processing.
+  case V_SgDeclarationScope: {
+    if (SgNonrealDecl *nrdecl = isSgNonrealDecl(scope->get_parent())) {
+      return_declaration = nrdecl;
+    } else {
+      return_declaration = NULL;
+    }
+    break;
+  }
+
     // Some scopes don't have an associated declaration (return NULL in these
     // cases). Also missing some of the Fortran specific scopes.
   case V_SgGlobal:

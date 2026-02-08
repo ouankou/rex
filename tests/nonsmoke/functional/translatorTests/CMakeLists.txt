@@ -80,7 +80,6 @@ if(ENABLE-C)
     COMMAND testDataMemberOfConst
       ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/dataMemberOfConst.C
       -o /dev/null)
-  set_tests_properties(Translator_testDataMemberOfConst PROPERTIES DISABLED TRUE)
 
   add_test(
     NAME Translator_testPragmaInBody
@@ -175,8 +174,40 @@ if(ENABLE-C)
   add_test(
     NAME Translator_testFortranProtected
     COMMAND sh -c
-      "${BACKEND_FORTRAN_COMPILER} -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03 && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null"
+      "${BACKEND_FORTRAN_COMPILER} -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected_mod.f03 && gdb -nx -batch --return-child-result -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null || { status=$?; gdb -nx -batch -ex 'set pagination off' -ex 'set debuginfod enabled off' -ex 'run' -ex 'bt' --args $<TARGET_FILE:testFortranProtected> ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/protected.f03 -o /dev/null; exit $status; }"
   )
+
+  set(_translator_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_test_output)
+  file(MAKE_DIRECTORY ${_translator_output_dir})
+  set(_translator_tests
+    testbug125
+    AstConsistencyTests
+    testqualifiedName
+    Translator_testConstDeclarations
+    Translator_testDataMemberOfConst
+    Translator_testPragmaInBody
+    Translator_rex_genericPragma
+    Translator_label_stmt_file_info
+    Translator_querySubTree
+    Translator_ompVariableCollecting
+    Translator_testTranslator2010_02
+    Translator_testTranslator2010_01
+    Translator_testTranslator2010_03
+    Translator_moveStatementsBetweenBlocks
+    Translator_testCopyAndDelete_1
+    Translator_testCopyAndDelete_2
+    Translator_testTraversalOfTemplateInstantiations
+    Translator_testTranslator2012_01
+    Translator_testTranslator2013_01
+    Translator_testTranslator2013_02
+    Translator_testTranslator2018_01
+    Translator_testTranslator2018_02
+    Translator_testPlugins
+    Translator_testFortranParameter
+    Translator_testFortranProtected
+  )
+  set_tests_properties(${_translator_tests} PROPERTIES
+    ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_translator_output_dir}")
 
 endif()
 
@@ -201,10 +232,7 @@ add_test(
     -DREX_CTEST_GROUP_TESTS=${_translator_cxx_tests}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES LABELS disabled DEPENDS "${_translator_cxx_tests}" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES DISABLED TRUE)
-endif()
+set_tests_properties(nonsmoke_functional_translatorTests_check-cxx PROPERTIES DEPENDS "${_translator_cxx_tests}" )
 add_test(
   NAME nonsmoke_functional_translatorTests_check-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

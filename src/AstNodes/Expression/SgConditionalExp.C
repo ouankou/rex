@@ -50,9 +50,11 @@ SgType *SgConditionalExp::get_type() const {
   }
 #endif
 
-  // This was the previous choice for how p_expression_type was set,
-  // so to be consistant we will select the same branch.
-  SgType *returnType = trueType;
+  // Prefer an explicitly stored expression type when available. This is
+  // required for correct typing when conditional operands undergo implicit
+  // conversions (e.g., const qualifications).
+  SgType *returnType =
+      (p_expression_type != NULL) ? p_expression_type : trueType;
 
   // PC (10/12/2009): If returnType is in fact an SgArrayType it will undergo
   // array-to-pointer conversion
