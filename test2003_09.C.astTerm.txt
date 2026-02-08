@@ -1,5 +1,0 @@
-SgClassDeclaration(null)
-SgClassDeclaration(SgClassDefinition(SgFunctionDeclaration(SgFunctionParameterList(SgInitializedName(null)),null,null)))
-SgClassDeclaration(SgClassDefinition(SgVariableDeclaration(null,null,SgInitializedName(null))))
-SgFunctionDeclaration(SgFunctionParameterList(SgInitializedName(null)),null,SgFunctionDefinition(SgBasicBlock(SgVariableDeclaration(null,null,SgInitializedName(SgAssignInitializer(SgVarRefExp:X))))))
-SgTypedefDeclaration(null)

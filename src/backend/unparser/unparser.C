@@ -20,6 +20,7 @@
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
+#include <cstdlib>
 #include <filesystem>
 
 #include "rose_config.h"
@@ -37,7 +38,29 @@
 namespace si = SageInterface;
 
 namespace {
+std::string resolveUnparseOutputToTestDir(const std::string &filename) {
+  const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (output_dir == nullptr || output_dir[0] == '\0') {
+    return filename;
+  }
+
+  std::filesystem::path output_path(filename);
+  if (output_path.is_absolute()) {
+    return filename;
+  }
+
+  std::filesystem::path output_dir_path(output_dir);
+  std::error_code ec;
+  std::filesystem::create_directories(output_dir_path, ec);
+  if (ec) {
+    return filename;
+  }
+
+  return (output_dir_path / output_path).string();
+}
+
 bool fileHasRelevantModifications(SgSourceFile *file) {
+
   if (file == NULL) {
     return true;
   }
@@ -2389,6 +2412,8 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
     }
 
     // string outputFilename = "rose_" + file->get_sourceFileNameWithoutPath();
+
+    outputFilename = resolveUnparseOutputToTestDir(outputFilename);
 
     // Set the output filename in the SgFile IR node.
     file->set_unparse_output_filename(outputFilename);

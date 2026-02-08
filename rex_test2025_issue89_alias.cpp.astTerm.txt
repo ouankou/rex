@@ -1,3 +1,0 @@
-SgTemplateClassDeclaration(SgTemplateClassDefinition(SgTypedefDeclaration(null),SgTypedefDeclaration(null)),null)
-SgTypedefDeclaration(null)
-SgFunctionDeclaration(SgFunctionParameterList,null,SgFunctionDefinition(SgBasicBlock(SgVariableDeclaration(null,null,SgInitializedName(SgConstructorInitializer(SgExprListExp:))),SgVariableDeclaration(null,null,SgInitializedName(SgAssignInitializer(SgIntVal:5))),SgReturnStmt(SgVarRefExp:x))))

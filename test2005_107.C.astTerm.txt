@@ -1,2 +1,0 @@
-SgClassDeclaration(SgClassDefinition(SgVariableDeclaration(null,null,SgInitializedName(null))))
-SgClassDeclaration(SgClassDefinition(SgTypedefDeclaration(null),SgMemberFunctionDeclaration(SgFunctionParameterList,null,null,SgCtorInitializerList),SgMemberFunctionDeclaration(SgFunctionParameterList,null,SgFunctionDefinition(SgBasicBlock(SgExprStatement(SgAssignOp(SgArrowExp(SgVarRefExp:rcData,SgVarRefExp:computedGeometry),SgIntVal:0)))),SgCtorInitializerList),SgVariableDeclaration(null,null,SgInitializedName(null))))
