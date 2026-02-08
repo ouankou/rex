@@ -4151,11 +4151,16 @@ void ClangToSageTranslator::populateClassDefinition(
 
       const bool append_as_member = !is_semantic_outer_tag;
       if (append_as_member) {
+        // Preserve lexical declaration order from Clang's DeclContext walk.
+        // On-demand translation can materialize a member early (before its
+        // source location); when we later visit the real declaration, re-append
+        // it here so class members stay in source order.
         const SgDeclarationStatementPtrList &members = class_def->get_members();
-        if (std::find(members.begin(), members.end(), child_decl) ==
+        if (std::find(members.begin(), members.end(), child_decl) !=
             members.end()) {
-          class_def->append_member(child_decl);
+          detach_decl_from_scope_child_list(child_decl, class_def);
         }
+        class_def->append_member(child_decl);
       } else {
         SgScopeStatement *decl_scope = child_decl->get_scope();
         if (semantic_outer_scope != nullptr) {
@@ -9468,9 +9473,15 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   }
 
   bool in_system_header = false;
+  bool in_main_file = true;
   if (p_compiler_instance != nullptr) {
     clang::SourceManager &SM = p_compiler_instance->getSourceManager();
-    in_system_header = SM.isInSystemHeader(class_tpl_spec_decl->getLocation());
+    clang::SourceLocation loc = class_tpl_spec_decl->getLocation();
+    if (loc.isMacroID()) {
+      loc = SM.getSpellingLoc(loc);
+    }
+    in_system_header = SM.isInSystemHeader(loc);
+    in_main_file = loc.isValid() && SM.isWrittenInMainFile(loc);
   }
 
   bool res = true;
@@ -10409,17 +10420,19 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     node_decl = definingDecl;
   }
 
-  if (specialization_kind == clang::TSK_ImplicitInstantiation ||
+  auto suppress_instantiation = [&](SgTemplateInstantiationDecl *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+    mark_compiler_generated_and_suppress_unparse(decl);
+    if (SgClassDefinition *class_def = decl->get_definition()) {
+      mark_compiler_generated_and_suppress_unparse(class_def);
+    }
+  };
+
+  if (!in_main_file ||
+      specialization_kind == clang::TSK_ImplicitInstantiation ||
       specialization_kind == clang::TSK_Undeclared) {
-    auto suppress_instantiation = [&](SgTemplateInstantiationDecl *decl) {
-      if (decl == nullptr) {
-        return;
-      }
-      mark_compiler_generated_and_suppress_unparse(decl);
-      if (SgClassDefinition *class_def = decl->get_definition()) {
-        mark_compiler_generated_and_suppress_unparse(class_def);
-      }
-    };
     suppress_instantiation(nondef_decl);
     if (definingDecl != nullptr) {
       suppress_instantiation(definingDecl);
@@ -10427,7 +10440,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   }
 
   if (specialization_kind == clang::TSK_ExplicitSpecialization &&
-      !in_system_header) {
+      !in_system_header && in_main_file) {
     auto mark_for_output = [](SgLocatedNode *node) {
       if (node == nullptr) {
         return;
@@ -17528,6 +17541,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       } else {
         SgTemplateFunctionDeclaration *first_nondef = nullptr;
 
+        SgScopeStatement *target_scope = builder_scope;
+        if (builder_force_free_scope && friend_symbol_scope != nullptr) {
+          target_scope = friend_symbol_scope;
+        }
+
         if (function_decl->getFirstDecl() != function_decl) {
           auto map_it =
               p_decl_translation_map.find(function_decl->getFirstDecl());
@@ -17591,15 +17609,22 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
         fixup_nondef_params(first_nondef);
 
-        // Fix for Issue 84: Friend template definitions inside a class should
-        // be in the enclosing scope
-        // SageBuilder::buildDefiningTemplateFunctionDeclaration does not
-        // accept a forceFreeFunctionScope flag unlike
-        // buildDefiningFunctionDeclaration, so we must rely on passing the
-        // correct scope.
-        SgScopeStatement *target_scope = builder_scope;
-        if (builder_force_free_scope && friend_symbol_scope != nullptr) {
-          target_scope = friend_symbol_scope;
+        if (first_nondef != nullptr && target_scope != nullptr &&
+            first_nondef->get_scope() != target_scope) {
+          SgScopeStatement *source_scope = first_nondef->get_scope();
+          if (source_scope != nullptr) {
+            rehome_function_symbols_between_scopes(first_nondef, source_scope,
+                                                   target_scope,
+                                                   REHOME_ALLOW_EMPTY_SOURCE);
+          }
+          first_nondef->set_scope(target_scope);
+          if (first_nondef->get_parent() == nullptr ||
+              first_nondef->get_parent() == source_scope) {
+            first_nondef->set_parent(target_scope);
+          }
+        }
+        if (first_nondef != nullptr) {
+          registerDeclarationSymbol(first_nondef);
         }
 
         SgTemplateFunctionDeclaration *defining_template =
@@ -20298,6 +20323,22 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
       isOutOfLineStaticMember = true;
     }
   }
+
+  const clang::TemplateSpecializationKind var_specialization_kind =
+      var_decl->getTemplateSpecializationKind();
+
+  const bool emit_as_template_variable_declaration =
+      isStaticDataMember && isOutOfLineStaticMember &&
+      var_specialization_kind == clang::TSK_ExplicitSpecialization;
+  auto build_var_declaration =
+      [&](SgScopeStatement *decl_scope) -> SgVariableDeclaration * {
+    if (emit_as_template_variable_declaration) {
+      return SageBuilder::buildTemplateVariableDeclaration_nfi(
+          name, type, nullptr, decl_scope);
+    }
+    return SageBuilder::buildVariableDeclaration_nfi(name, type, nullptr,
+                                                     decl_scope);
+  };
   auto resolve_static_member_scope = [&]() -> SgScopeStatement * {
     if (!isStaticDataMember || isOutOfLineStaticMember) {
       return nullptr;
@@ -20379,8 +20420,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     if (decl_scope == nullptr) {
       decl_scope = SageBuilder::topScopeStack();
     }
-    sg_var_decl = SageBuilder::buildVariableDeclaration_nfi(name, type, nullptr,
-                                                            decl_scope);
+    sg_var_decl = build_var_declaration(decl_scope);
     SgInitializedName *prev_init = sgPrevDecl->get_variables().empty()
                                        ? nullptr
                                        : sgPrevDecl->get_variables().front();
@@ -20404,12 +20444,15 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     if (static_member_scope != nullptr) {
       decl_scope = static_member_scope;
     }
-    sg_var_decl = SageBuilder::buildVariableDeclaration_nfi(name, type, nullptr,
-                                                            decl_scope);
+    sg_var_decl = build_var_declaration(decl_scope);
   }
   sg_var_decl->set_isAssociatedWithDeclarationList(true);
   if (var_decl->isConstexpr()) {
     sg_var_decl->set_is_constexpr(true);
+  }
+
+  if (var_specialization_kind == clang::TSK_ExplicitSpecialization) {
+    sg_var_decl->set_specialization(SgDeclarationStatement::e_specialization);
   }
 
   // CLANG FRONTEND FIX: Check if variable has an initializer before traversing
@@ -20891,20 +20934,11 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
       suppress_var = false;
     }
 
-    // Keep semantic implicit variables synthesized from user code (e.g.
-    // range-for desugaring temporaries) so downstream unparsing has a complete
-    // AST. Continue suppressing implicit decls that originate outside the main
-    // source file (builtins/system headers).
-    if (suppress_var) {
-      clang::SourceLocation implicit_loc = loc;
-      if (implicit_loc.isMacroID()) {
-        implicit_loc = sm.getSpellingLoc(implicit_loc);
-      }
-      if (implicit_loc.isValid() && sm.isWrittenInMainFile(implicit_loc) &&
-          !sm.isInSystemHeader(implicit_loc) &&
-          !sm.isWrittenInBuiltinFile(implicit_loc)) {
-        suppress_var = false;
-      }
+    // Keep implicit variables only when they model source-level range-for
+    // declarations. Other implicit VarDecls are compiler artifacts and should
+    // remain suppressed to avoid injecting ghost members/declarations.
+    if (suppress_var && var_decl->isCXXForRangeDecl()) {
+      suppress_var = false;
     }
 
     if (!suppress_var) {

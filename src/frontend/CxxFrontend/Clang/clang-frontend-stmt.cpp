@@ -9137,12 +9137,16 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           has_explicit_template_args = true;
         }
       }
+      const bool is_member_function_decl =
+          llvm::isa<clang::CXXMethodDecl>(decl_ref_expr->getDecl());
       // Restrict on-the-fly instantiation synthesis to unqualified explicit
-      // template-argument references only. Qualified references (e.g.
-      // `::foo<int>`) must preserve the source spelling to keep overload and
-      // specialization lookup semantics intact.
+      // template-argument references, except member-function templates where
+      // explicit args are carried by instantiation declarations.
+      // Qualified namespace/global refs (e.g. `::foo<int>`) must preserve
+      // source spelling to keep overload/specialization lookup stable.
       const bool should_build_instantiation =
-          has_explicit_template_args && !decl_ref_expr->hasQualifier();
+          has_explicit_template_args &&
+          (!decl_ref_expr->hasQualifier() || is_member_function_decl);
       auto get_decl_namespace_scope =
           [&](clang::NamedDecl *clang_decl) -> SgScopeStatement * {
         if (clang_decl == nullptr) {
