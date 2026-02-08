@@ -468,7 +468,7 @@ sub run_command {
       open SINGLE_CMD_ERRORS, ">", $tmp or exit(253);
       open STDERR, ">&SINGLE_CMD_ERRORS" or exit(254);
 
-      $cmd = "cd '$subdir'; $cmd" if $subdir;
+      $cmd = "cd " . shell_quote($subdir) . "; $cmd" if $subdir;
       print CMD_STDERR "+ $cmd\n";
       $status = system $cmd;
 
@@ -568,7 +568,7 @@ sub shell_quote {
 }
 
 sub join_shell_tokens {
-  return join " ", map { /\s/ ? shell_quote($_) : $_ } @_;
+  return join " ", map { shell_quote($_) } @_;
 }
 
 sub insert_after_first_token {
@@ -588,24 +588,16 @@ sub insert_after_first_token {
     $i++ if $i < $len;
   } elsif ($quote eq '"') {
     $i++;
-    my $escaped = 0;
     while ($i < $len) {
       my $c = substr($cmd, $i, 1);
-      if ($escaped) {
-        $escaped = 0;
-        $i++;
-        next;
-      }
       if ($c eq "\\") {
-        $escaped = 1;
-        $i++;
-        next;
-      }
-      if ($c eq '"') {
+        $i += 2;
+      } elsif ($c eq '"') {
         $i++;
         last;
+      } else {
+        $i++;
       }
-      $i++;
     }
   } else {
     $i++ while $i < $len && substr($cmd, $i, 1) !~ /\s/;
