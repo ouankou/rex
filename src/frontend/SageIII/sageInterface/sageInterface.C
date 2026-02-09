@@ -9202,6 +9202,47 @@ struct MutationOwnershipCache {
   std::unordered_map<std::string, bool> include_system_flags;
 };
 
+struct MutationProjectState {
+  MutationOwnershipCache ownership_cache;
+  std::unordered_map<const SgStatement *, SgStatement *> external_clone_map;
+};
+
+const std::string &mutationProjectStateAttributeName() {
+  static const std::string attribute_name =
+      "rose.sageInterface.mutationProjectState";
+  return attribute_name;
+}
+
+class MutationProjectStateAttribute : public AstAttribute {
+public:
+  MutationProjectState state;
+
+  AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string attribute_class_name() const override {
+    return "MutationProjectStateAttribute";
+  }
+};
+
+MutationProjectState &getMutationProjectState(SgProject *project) {
+  ROSE_ASSERT(project != NULL);
+
+  const std::string &attribute_name = mutationProjectStateAttributeName();
+  AstAttribute *attribute = project->getAttribute(attribute_name);
+  if (attribute == NULL) {
+    project->addNewAttribute(attribute_name, new MutationProjectStateAttribute);
+    attribute = project->getAttribute(attribute_name);
+  }
+
+  ROSE_ASSERT(attribute != NULL);
+  MutationProjectStateAttribute *project_state_attribute =
+      dynamic_cast<MutationProjectStateAttribute *>(attribute);
+  ROSE_ASSERT(project_state_attribute != NULL);
+  return project_state_attribute->state;
+}
+
 enum class MutationOperationKind { Remove, Replace, Insert };
 
 const char *mutationOperationName(MutationOperationKind operation) {
@@ -9305,12 +9346,12 @@ void collectIncludeOwnershipMetadata(SgIncludeFile *include_root,
   }
 }
 
-MutationOwnershipCache &getMutationOwnershipCache(const SgProject *project) {
-  static std::unordered_map<const SgProject *, MutationOwnershipCache>
-      cache_by_project;
+MutationOwnershipCache &getMutationOwnershipCache(SgProject *project) {
+  ROSE_ASSERT(project != NULL);
 
-  MutationOwnershipCache &cache = cache_by_project[project];
-  if (cache.initialized || project == NULL) {
+  MutationProjectState &project_state = getMutationProjectState(project);
+  MutationOwnershipCache &cache = project_state.ownership_cache;
+  if (cache.initialized) {
     return cache;
   }
 
@@ -9458,12 +9499,6 @@ SgScopeStatement *fallbackMutationScope(SgStatement *statement) {
   return NULL;
 }
 
-std::unordered_map<const SgStatement *, SgStatement *> &
-externalMutationCloneMap() {
-  static std::unordered_map<const SgStatement *, SgStatement *> clone_map;
-  return clone_map;
-}
-
 bool isPreparedCloneUsable(SgStatement *statement) {
   if (statement == NULL) {
     return false;
@@ -9503,19 +9538,6 @@ SgStatement *prepareStatementForMutation(SgStatement *statement,
                                          MutationOperationKind operation) {
   ROSE_ASSERT(statement != NULL);
 
-  std::unordered_map<const SgStatement *, SgStatement *> &clone_map =
-      externalMutationCloneMap();
-  const SgStatement *key = canonicalMutationKey(statement);
-
-  std::unordered_map<const SgStatement *, SgStatement *>::iterator mapped =
-      clone_map.find(key);
-  if (mapped != clone_map.end()) {
-    if (isPreparedCloneUsable(mapped->second)) {
-      return mapped->second;
-    }
-    clone_map.erase(mapped);
-  }
-
   if (isStatementProjectOwnedForMutation(statement)) {
     if (!isStatementAttachedToParentList(statement)) {
       printf("Error: %s target is project-owned but detached from parent list: "
@@ -9525,6 +9547,23 @@ SgStatement *prepareStatementForMutation(SgStatement *statement,
       ROSE_ASSERT(false);
     }
     return statement;
+  }
+
+  SgProject *project = SageInterface::getProject(statement);
+  ROSE_ASSERT(project != NULL);
+
+  MutationProjectState &project_state = getMutationProjectState(project);
+  std::unordered_map<const SgStatement *, SgStatement *> &clone_map =
+      project_state.external_clone_map;
+  const SgStatement *key = canonicalMutationKey(statement);
+
+  std::unordered_map<const SgStatement *, SgStatement *>::iterator mapped =
+      clone_map.find(key);
+  if (mapped != clone_map.end()) {
+    if (isPreparedCloneUsable(mapped->second)) {
+      return mapped->second;
+    }
+    clone_map.erase(mapped);
   }
 
   SgStatement *clone = materializeProjectOwnedClone(statement, operation);
