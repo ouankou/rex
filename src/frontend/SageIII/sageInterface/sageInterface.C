@@ -23318,18 +23318,10 @@ bool SageInterface::statementCanBeTransformed(SgStatement *stmt) {
     string source_filename = getStatementOwnershipPath(stmt);
     if (source_filename.empty()) {
       Sg_File_Info *fileInfo = stmt->get_file_info();
-      ASSERT_not_null(fileInfo);
-
-      const int physical_file_id = fileInfo->get_physical_file_id();
-      if (physical_file_id >= 0) {
-        const string physical_filename =
-            fileInfo->getFilenameFromID(physical_file_id);
-        if (!physical_filename.empty())
-          source_filename = normalizeOwnershipPath(physical_filename);
+      if (fileInfo != NULL && fileInfo->isTransformation()) {
+        return true;
       }
-
-      if (source_filename.empty())
-        source_filename = stmt->getFilenameString();
+      return false;
     }
 
     SgIncludeFile *include_file =
