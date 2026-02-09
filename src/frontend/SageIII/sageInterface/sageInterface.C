@@ -9242,11 +9242,15 @@ std::string getStatementOwnershipPath(const SgStatement *statement) {
     return "";
   }
 
-  if (file_info->isTransformation()) {
+  if (file_info->isTransformation() || file_info->isFrontendSpecific() ||
+      file_info->isSourcePositionUnavailableInFrontend()) {
     return "";
   }
 
   const int physical_file_id = file_info->get_physical_file_id();
+  if (physical_file_id == Sg_File_Info::NULL_FILE_ID) {
+    return "";
+  }
   if (physical_file_id >= 0) {
     std::string physical_name = file_info->getFilenameFromID(physical_file_id);
     if (!physical_name.empty()) {
@@ -9339,7 +9343,9 @@ bool isStatementProjectOwnedForMutation(SgStatement *statement) {
   if (file_info == NULL) {
     return true;
   }
-  if (file_info->isTransformation()) {
+  if (file_info->isTransformation() || file_info->isFrontendSpecific() ||
+      file_info->isSourcePositionUnavailableInFrontend() ||
+      file_info->get_physical_file_id() == Sg_File_Info::NULL_FILE_ID) {
     return true;
   }
 
@@ -9415,16 +9421,18 @@ const SgStatement *canonicalMutationKey(SgStatement *statement) {
 SgScopeStatement *fallbackMutationScope(SgStatement *statement) {
   ROSE_ASSERT(statement != NULL);
 
-  if (SgScopeStatement *scope = statement->get_scope()) {
-    if (isStatementProjectOwnedForMutation(scope)) {
-      return scope;
+  if (statement->get_parent() != NULL) {
+    if (SgScopeStatement *scope = statement->get_scope()) {
+      if (isStatementProjectOwnedForMutation(scope)) {
+        return scope;
+      }
     }
-  }
 
-  if (SgScopeStatement *enclosing_scope =
-          SageInterface::getEnclosingScope(statement, false)) {
-    if (isStatementProjectOwnedForMutation(enclosing_scope)) {
-      return enclosing_scope;
+    if (SgScopeStatement *enclosing_scope =
+            SageInterface::getEnclosingScope(statement, false)) {
+      if (isStatementProjectOwnedForMutation(enclosing_scope)) {
+        return enclosing_scope;
+      }
     }
   }
 
