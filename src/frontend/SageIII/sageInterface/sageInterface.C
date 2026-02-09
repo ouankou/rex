@@ -23322,18 +23322,20 @@ bool SageInterface::statementCanBeTransformed(SgStatement *stmt) {
     // one other file is this is a header file that was included twice, but it
     // should have a different path.
     string source_filename = getStatementOwnershipPath(stmt);
-    if (source_filename.empty())
-      source_filename = stmt->getFilenameString();
+    if (source_filename.empty()) {
+      Sg_File_Info *fileInfo = stmt->get_file_info();
+      ASSERT_not_null(fileInfo);
 
-    Sg_File_Info *fileInfo = stmt->get_file_info();
-    ASSERT_not_null(fileInfo);
+      const int physical_file_id = fileInfo->get_physical_file_id();
+      if (physical_file_id >= 0) {
+        const string physical_filename =
+            fileInfo->getFilenameFromID(physical_file_id);
+        if (!physical_filename.empty())
+          source_filename = normalizeOwnershipPath(physical_filename);
+      }
 
-    const int physical_file_id = fileInfo->get_physical_file_id();
-    if (physical_file_id >= 0) {
-      const string physical_filename =
-          fileInfo->getFilenameFromID(physical_file_id);
-      if (!physical_filename.empty())
-        source_filename = normalizeOwnershipPath(physical_filename);
+      if (source_filename.empty())
+        source_filename = stmt->getFilenameString();
     }
 
     SgIncludeFile *include_file =
