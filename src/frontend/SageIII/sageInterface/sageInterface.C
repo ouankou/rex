@@ -9221,9 +9221,14 @@ const std::string &mutationProjectStateAttributeName() {
   return attribute_name;
 }
 
+void cleanupPreparedCloneMapOnProjectShutdown(
+    std::unordered_map<const SgStatement *, SgStatement *> &clone_map);
+
 class MutationProjectStateAttribute : public AstAttribute {
 public:
   MutationProjectState state;
+
+  ~MutationProjectStateAttribute() override;
 
   AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
     return CONTAINER_OWNERSHIP;
@@ -9501,6 +9506,31 @@ void deleteStalePreparedClone(SgStatement *clone) {
   if (clone->get_parent() == NULL) {
     SageInterface::deleteAST(clone);
   }
+}
+
+void cleanupPreparedCloneMapOnProjectShutdown(
+    std::unordered_map<const SgStatement *, SgStatement *> &clone_map) {
+  for (std::unordered_map<const SgStatement *, SgStatement *>::iterator it =
+           clone_map.begin();
+       it != clone_map.end(); ++it) {
+    SgStatement *clone = it->second;
+    if (clone == NULL || !SgNode::isLiveNode(clone)) {
+      continue;
+    }
+
+    if (clone->get_parent() != NULL && isStatementAttachedToParentList(clone)) {
+      continue;
+    }
+
+    clone->set_parent(NULL);
+    SageInterface::deleteAST(clone);
+  }
+
+  clone_map.clear();
+}
+
+MutationProjectStateAttribute::~MutationProjectStateAttribute() {
+  cleanupPreparedCloneMapOnProjectShutdown(state.external_clone_map);
 }
 
 [[noreturn]] void
