@@ -505,6 +505,10 @@ int flang_external_builder_main(int argc, char *const argv[],
 
   for (const auto &path : ctx.otherSources) {
     CompileResult result = CompileOtherLanguage(path, ctx.driver);
+    if (!result.succeeded) {
+      hadFrontendErrors = true;
+      continue;
+    }
     if (!ctx.driver.compileOnly && !result.relocatablePath.empty()) {
       ctx.relocatables.push_back(result.relocatablePath);
     }
