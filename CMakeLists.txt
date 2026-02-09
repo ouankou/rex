@@ -561,6 +561,11 @@ endif()
 #
 # Clang frontend support requires shared LLVM to avoid duplicate global
 # allocator instances and shutdown-time memory corruption from static linkage.
+if(NOT (UNIX AND NOT APPLE))
+  message(FATAL_ERROR
+    "REX Clang frontend currently supports Linux only.")
+endif()
+
 set(_rose_shared_llvm_link_item "")
 if(TARGET LLVM)
   foreach(_rose_prop
@@ -568,21 +573,11 @@ if(TARGET LLVM)
       IMPORTED_LOCATION_RELEASE
       IMPORTED_LOCATION_RELWITHDEBINFO
       IMPORTED_LOCATION_MINSIZEREL
-      IMPORTED_LOCATION_DEBUG
-      IMPORTED_IMPLIB
-      IMPORTED_IMPLIB_RELEASE
-      IMPORTED_IMPLIB_RELWITHDEBINFO
-      IMPORTED_IMPLIB_MINSIZEREL
-      IMPORTED_IMPLIB_DEBUG)
+      IMPORTED_LOCATION_DEBUG)
     if(NOT _rose_shared_llvm_link_item)
       get_target_property(_rose_candidate LLVM ${_rose_prop})
-      if(_rose_candidate)
-        if(_rose_candidate MATCHES "\.so(\.[0-9.]+)?$" OR
-           _rose_candidate MATCHES "\.dylib$" OR
-           _rose_candidate MATCHES "\.dll\.a$" OR
-           _rose_candidate MATCHES "\.lib$")
-          set(_rose_shared_llvm_link_item "${_rose_candidate}")
-        endif()
+      if(_rose_candidate AND _rose_candidate MATCHES "\.so(\.[0-9.]+)?$")
+        set(_rose_shared_llvm_link_item "${_rose_candidate}")
       endif()
     endif()
   endforeach()
@@ -590,18 +585,12 @@ endif()
 
 if(NOT _rose_shared_llvm_link_item)
   set(_rose_saved_library_suffixes "${CMAKE_FIND_LIBRARY_SUFFIXES}")
-  if(WIN32)
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib" ".dll.a")
-  elseif(APPLE)
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".dylib")
-  else()
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".so")
-    if(DEFINED LLVM_VERSION_MAJOR)
-      list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".so.${LLVM_VERSION_MAJOR}")
-      if(DEFINED LLVM_VERSION_MINOR)
-        list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES
-          ".so.${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}")
-      endif()
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ".so")
+  if(DEFINED LLVM_VERSION_MAJOR)
+    list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".so.${LLVM_VERSION_MAJOR}")
+    if(DEFINED LLVM_VERSION_MINOR)
+      list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES
+        ".so.${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}")
     endif()
   endif()
 
