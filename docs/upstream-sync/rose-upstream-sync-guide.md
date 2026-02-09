@@ -5,9 +5,8 @@ rose upstream github repo: https://github.com/rose-compiler/rose
 ## Support target (REX)
 - Platform: Linux only (non-Linux platforms dropped).
 - Languages/features: C/C++, Fortran, OpenMP, OpenACC, OpenCL, CUDA.
-- Frontend: Clang/LLVM for C/C++ (LLVM 20); Fortran via OFP with experimental Flang frontend in scope (imported; keep synced).
-- Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, Java (source language), UPC, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, and other legacy frontends/tools (excluding experimental Flang).
-- Java is still required only as a runtime dependency for the OFP Fortran parser; no Java frontend support.
+- Frontend: Clang/LLVM for C/C++ (LLVM 20); Fortran via Flang (imported; keep synced).
+- Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, Java (source language), UPC, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, and other legacy frontends/tools.
 - Rosebud: keep the generator engine if present, but drop Rosebud inputs tied to dropped subsystems (e.g., binary analysis, Jovial).
 - Legacy array test suites are dropped from CompileTests and CompilerOptionsTests inventories.
 
@@ -35,7 +34,6 @@ Status legend: pending / in-progress / synced / inventory / skip
 - pending CLAUDE.md
 - in-progress CMakeLists.txt
 - pending COPYRIGHT
-- pending FORTRAN_EVALUATION_STATUS.md
 - pending FORTRAN_TESTING_GUIDE.md
 - pending GEMINI.md
 - inventory Makefile.am
@@ -153,7 +151,6 @@ pending src/frontend/CxxFrontend
 in-progress src/frontend/CxxFrontend/Clang
 synced src/frontend/Experimental_Flang_ROSE_Connection
 in-progress src/frontend/Experimental_General_Language_Support
-pending src/frontend/OpenFortranParser_SAGE_Connection
 in-progress src/frontend/SageIII
 pending src/frontend/SageIII/GENERATED_CODE_DIRECTORY_Cxx_Grammar
 pending src/frontend/SageIII/accparser

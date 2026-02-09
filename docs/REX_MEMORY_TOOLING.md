@@ -55,12 +55,12 @@ ctest --test-dir build-valgrind -T memcheck -R "<regex>" -LE death -j"$(nproc)" 
 
 Use `ctest -N -R "<regex>"` to list tests before running memcheck.
 
-## LSan and the embedded JVM (OFP)
+## LSan and external runtime allocations
 
-When Fortran OFP support is enabled, the embedded JVM allocates process-lifetime
-memory that LSan cannot attribute correctly. To keep sanitizer runs actionable,
-REX ships `scripts/rose-suppressions-for-lsan` and CTest applies it automatically
-when `ENABLE-SANITIZER` includes `leak`. If you run tests manually, set:
+Some toolchain/runtime components allocate process-lifetime memory that LSan
+cannot attribute cleanly. To keep sanitizer runs actionable, REX ships
+`scripts/rose-suppressions-for-lsan` and CTest applies it automatically when
+`ENABLE-SANITIZER` includes `leak`. If you run tests manually, set:
 `LSAN_OPTIONS=suppressions=<path-to>/scripts/rose-suppressions-for-lsan`.
 
 ## How memcheck works in REX
@@ -88,7 +88,7 @@ Death tests intentionally abort to validate hard invariants, which leaves “sti
 - `definite`, `indirect`, `possible`: Almost always real leaks and must be fixed in ROSE code.
 - `reachable` (aka “still reachable”): Memory that is still referenced at exit. This can be:
   - A real issue in ROSE (e.g., pools or caches not released after AST teardown).
-  - External/runtime process-lifetime allocations (e.g., `/usr/bin/perl`, JVM, LLVM managed statics).
+  - External/runtime process-lifetime allocations (e.g., `/usr/bin/perl`, LLVM managed statics).
 
 If “still reachable” comes from ROSE-owned structures, treat it as a real issue. If it is from external runtimes and cannot be cleaned up safely, suppress it explicitly in `scripts/rose-suppressions-for-valgrind`.
 

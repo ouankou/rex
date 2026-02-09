@@ -168,7 +168,7 @@ if(ENABLE-C)
     PUBLIC ${link_with_libraries}
     PRIVATE ${CLANG_LIBS} ${LLVM_LIBS})
 else()
-  target_link_libraries(ROSE_DLL PUBLIC ${link_with_libraries})
+  target_link_libraries(ROSE_DLL PUBLIC ${link_with_libraries} PRIVATE ${LLVM_LIBS})
 endif()
 
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
@@ -292,7 +292,7 @@ add_custom_command(
   TARGET check-core
   POST_BUILD
   COMMENT "  TEST     whether a trivial ROSE program runs [rose-compiler]"
-  COMMAND /bin/sh -c "if ! ${PROJECT_BINARY_DIR}/bin/rose-compiler --version ; then echo \"error: You cannot run a program linked with ROSE. Please be sure that your\" >&2; echo \"error: LD_LIBRARY_PATH contains the correct libraries (JVM, librose.so, etc.)\" >&2; exit 1; fi;"
+  COMMAND /bin/sh -c "if ! ${PROJECT_BINARY_DIR}/bin/rose-compiler --version ; then echo \"error: You cannot run a program linked with ROSE. Please be sure that your\" >&2; echo \"error: LD_LIBRARY_PATH contains the correct libraries (LLVM runtime libs, librose.so, etc.)\" >&2; exit 1; fi;"
   VERBATIM)
 
 #Check that rose-config works
