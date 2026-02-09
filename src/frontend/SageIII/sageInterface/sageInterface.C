@@ -83,6 +83,8 @@
 
 #include <map>
 
+#include <mutex>
+
 #include <numeric> // for std::accumulate
 #include <sstream>
 
@@ -9203,9 +9205,15 @@ struct MutationOwnershipCache {
 };
 
 struct MutationProjectState {
+  std::recursive_mutex mutex;
   MutationOwnershipCache ownership_cache;
   std::unordered_map<const SgStatement *, SgStatement *> external_clone_map;
 };
+
+std::mutex &mutationProjectStateInstallMutex() {
+  static std::mutex install_mutex;
+  return install_mutex;
+}
 
 const std::string &mutationProjectStateAttributeName() {
   static const std::string attribute_name =
@@ -9228,6 +9236,8 @@ public:
 
 MutationProjectState &getMutationProjectState(SgProject *project) {
   ROSE_ASSERT(project != NULL);
+
+  std::lock_guard<std::mutex> install_guard(mutationProjectStateInstallMutex());
 
   const std::string &attribute_name = mutationProjectStateAttributeName();
   AstAttribute *attribute = project->getAttribute(attribute_name);
@@ -9346,13 +9356,13 @@ void collectIncludeOwnershipMetadata(SgIncludeFile *include_root,
   }
 }
 
-MutationOwnershipCache &getMutationOwnershipCache(SgProject *project) {
+void initializeMutationOwnershipCacheLocked(
+    SgProject *project, MutationProjectState &project_state) {
   ROSE_ASSERT(project != NULL);
 
-  MutationProjectState &project_state = getMutationProjectState(project);
   MutationOwnershipCache &cache = project_state.ownership_cache;
   if (cache.initialized) {
-    return cache;
+    return;
   }
 
   const SgFilePtrList &file_list = project->get_fileList();
@@ -9374,7 +9384,6 @@ MutationOwnershipCache &getMutationOwnershipCache(SgProject *project) {
   }
 
   cache.initialized = true;
-  return cache;
 }
 
 bool isStatementProjectOwnedForMutation(SgStatement *statement) {
@@ -9400,7 +9409,10 @@ bool isStatementProjectOwnedForMutation(SgStatement *statement) {
     return true;
   }
 
-  MutationOwnershipCache &cache = getMutationOwnershipCache(project);
+  MutationProjectState &project_state = getMutationProjectState(project);
+  std::lock_guard<std::recursive_mutex> lock(project_state.mutex);
+  initializeMutationOwnershipCacheLocked(project, project_state);
+  MutationOwnershipCache &cache = project_state.ownership_cache;
   if (cache.project_source_files.find(statement_path) !=
       cache.project_source_files.end()) {
     return true;
@@ -9503,10 +9515,30 @@ bool isPreparedCloneUsable(SgStatement *statement) {
   if (statement == NULL) {
     return false;
   }
+  if (!SgNode::isLiveNode(statement)) {
+    return false;
+  }
   if (statement->get_parent() == NULL) {
     return false;
   }
   return isStatementAttachedToParentList(statement);
+}
+
+void deleteStalePreparedClone(SgStatement *clone) {
+  if (clone == NULL) {
+    return;
+  }
+  if (!SgNode::isLiveNode(clone)) {
+    return;
+  }
+
+  if (clone->get_parent() != NULL && !isStatementAttachedToParentList(clone)) {
+    clone->set_parent(NULL);
+  }
+
+  if (clone->get_parent() == NULL) {
+    SageInterface::deleteAST(clone);
+  }
 }
 
 SgStatement *materializeProjectOwnedClone(SgStatement *statement,
@@ -9553,6 +9585,8 @@ SgStatement *prepareStatementForMutation(SgStatement *statement,
   ROSE_ASSERT(project != NULL);
 
   MutationProjectState &project_state = getMutationProjectState(project);
+  std::lock_guard<std::recursive_mutex> lock(project_state.mutex);
+
   std::unordered_map<const SgStatement *, SgStatement *> &clone_map =
       project_state.external_clone_map;
   const SgStatement *key = canonicalMutationKey(statement);
@@ -9563,6 +9597,7 @@ SgStatement *prepareStatementForMutation(SgStatement *statement,
     if (isPreparedCloneUsable(mapped->second)) {
       return mapped->second;
     }
+    deleteStalePreparedClone(mapped->second);
     clone_map.erase(mapped);
   }
 
