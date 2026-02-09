@@ -9503,16 +9503,28 @@ void deleteStalePreparedClone(SgStatement *clone) {
   }
 }
 
-SgStatement *materializeProjectOwnedClone(SgStatement *statement,
-                                          MutationOperationKind operation) {
+[[noreturn]] void
+reportMutationPreparationError(MutationOperationKind operation,
+                               const char *reason,
+                               const SgStatement *statement) {
+  MLOG_ERROR_CXX("sageInterface")
+      << "Error: " << reason << " for " << mutationOperationName(operation)
+      << " target " << statement << " = "
+      << ((statement != NULL) ? statement->class_name() : "<null>")
+      << std::endl;
+  ROSE_ASSERT(false);
+  ROSE_ABORT();
+}
+
+SgStatement *materializeProjectOwnedClone(
+    SgStatement *statement, MutationOperationKind operation,
+    std::unordered_map<const SgStatement *, SgStatement *> &clone_map) {
   ROSE_ASSERT(statement != NULL);
 
   if (!isStatementAttachedToParentList(statement)) {
-    printf("Error: %s target is external but detached from parent list: "
-           "%p = %s\n",
-           mutationOperationName(operation), statement,
-           statement->class_name().c_str());
-    ROSE_ASSERT(false);
+    reportMutationPreparationError(
+        operation, "target is external but detached from parent list",
+        statement);
   }
 
   std::vector<SgStatement *> mutation_path;
@@ -9533,30 +9545,24 @@ SgStatement *materializeProjectOwnedClone(SgStatement *statement,
     }
 
     if (!isStatementAttachedToParentList(parent_statement)) {
-      printf("Error: %s cannot clone mutation path; detached ancestor: "
-             "%p = %s\n",
-             mutationOperationName(operation), parent_statement,
-             parent_statement->class_name().c_str());
-      ROSE_ASSERT(false);
+      reportMutationPreparationError(
+          operation, "cannot clone mutation path; detached ancestor",
+          parent_statement);
     }
 
     cursor = parent_statement;
   }
 
   if (project_owned_parent == NULL) {
-    printf("Error: unable to find project-owned mutation parent for %s target "
-           "%p = %s\n",
-           mutationOperationName(operation), statement,
-           statement->class_name().c_str());
-    ROSE_ASSERT(false);
+    reportMutationPreparationError(
+        operation, "unable to find project-owned mutation parent", statement);
   }
 
   SgStatement *project_owned_child = mutation_path.back();
   if (!isStatementAttachedToParentList(project_owned_child)) {
-    printf("Error: %s path root detached before clone replacement: %p = %s\n",
-           mutationOperationName(operation), project_owned_child,
-           project_owned_child->class_name().c_str());
-    ROSE_ASSERT(false);
+    reportMutationPreparationError(
+        operation, "path root detached before clone replacement",
+        project_owned_child);
   }
 
   std::vector<SgNode *> capture_nodes;
@@ -9569,38 +9575,49 @@ SgStatement *materializeProjectOwnedClone(SgStatement *statement,
   SgStatement *project_owned_child_clone =
       isSgStatement(project_owned_child->copy(capturing_copy));
   if (project_owned_child_clone == NULL) {
-    printf("Error: failed to clone mutation path root for %s target %p = %s\n",
-           mutationOperationName(operation), statement,
-           statement->class_name().c_str());
-    ROSE_ASSERT(false);
+    reportMutationPreparationError(
+        operation, "failed to clone mutation path root", statement);
   }
 
   project_owned_parent->replace_statement(project_owned_child,
                                           project_owned_child_clone);
 
   if (!isStatementAttachedToParentList(project_owned_child_clone)) {
-    printf("Error: cloned path root not attached after replacement for %s "
-           "target %p = %s\n",
-           mutationOperationName(operation), statement,
-           statement->class_name().c_str());
-    ROSE_ASSERT(false);
+    reportMutationPreparationError(
+        operation, "cloned path root not attached after replacement",
+        statement);
   }
 
   const std::vector<SgNode *> &copy_list = capturing_copy.get_copyList();
   if (copy_list.size() != mutation_path.size()) {
-    printf("Error: clone capture size mismatch for %s target %p = %s\n",
-           mutationOperationName(operation), statement,
-           statement->class_name().c_str());
-    ROSE_ASSERT(false);
+    reportMutationPreparationError(operation, "clone capture size mismatch",
+                                   statement);
+  }
+
+  for (size_t index = 0; index < mutation_path.size(); ++index) {
+    SgStatement *original_statement = mutation_path[index];
+    SgStatement *cloned_statement = isSgStatement(copy_list[index]);
+    if (cloned_statement == NULL) {
+      reportMutationPreparationError(
+          operation, "failed to capture cloned mutation-path statement",
+          original_statement);
+    }
+
+    const SgStatement *mapped_key = canonicalMutationKey(original_statement);
+    std::unordered_map<const SgStatement *, SgStatement *>::iterator old =
+        clone_map.find(mapped_key);
+    if (old != clone_map.end() && old->second != cloned_statement &&
+        !isPreparedCloneUsable(old->second)) {
+      deleteStalePreparedClone(old->second);
+    }
+
+    clone_map[mapped_key] = cloned_statement;
   }
 
   SgStatement *statement_clone = isSgStatement(copy_list[0]);
   if (statement_clone == NULL) {
-    printf("Error: failed to capture cloned mutation target for %s target %p "
-           "= %s\n",
-           mutationOperationName(operation), statement,
-           statement->class_name().c_str());
-    ROSE_ASSERT(false);
+    reportMutationPreparationError(
+        operation, "failed to capture cloned mutation target", statement);
   }
 
   return statement_clone;
@@ -9610,19 +9627,20 @@ SgStatement *prepareStatementForMutation(SgStatement *statement,
                                          MutationOperationKind operation) {
   ROSE_ASSERT(statement != NULL);
 
-  if (isStatementProjectOwnedForMutation(statement)) {
-    if (!isStatementAttachedToParentList(statement)) {
-      printf("Error: %s target is project-owned but detached from parent list: "
-             "%p = %s\n",
-             mutationOperationName(operation), statement,
-             statement->class_name().c_str());
-      ROSE_ASSERT(false);
-    }
-    return statement;
-  }
-
   SgProject *project = SageInterface::getProject(statement);
-  ROSE_ASSERT(project != NULL);
+  if (project == NULL) {
+    if (isStatementProjectOwnedForMutation(statement)) {
+      if (!isStatementAttachedToParentList(statement)) {
+        reportMutationPreparationError(
+            operation, "target is project-owned but detached from parent list",
+            statement);
+      }
+      return statement;
+    }
+
+    reportMutationPreparationError(
+        operation, "unable to locate project for target", statement);
+  }
 
   MutationProjectState &project_state = getMutationProjectState(project);
   std::lock_guard<std::recursive_mutex> lock(project_state.mutex);
@@ -9641,9 +9659,23 @@ SgStatement *prepareStatementForMutation(SgStatement *statement,
     clone_map.erase(mapped);
   }
 
-  SgStatement *clone = materializeProjectOwnedClone(statement, operation);
-  clone_map[key] = clone;
-  return clone;
+  if (isStatementProjectOwnedForMutation(statement)) {
+    if (!isStatementAttachedToParentList(statement)) {
+      reportMutationPreparationError(
+          operation, "target is project-owned but detached from parent list",
+          statement);
+    }
+    return statement;
+  }
+
+  if (!isStatementAttachedToParentList(statement)) {
+    reportMutationPreparationError(
+        operation,
+        "target became detached before clone lookup/materialization completed",
+        statement);
+  }
+
+  return materializeProjectOwnedClone(statement, operation, clone_map);
 }
 
 } // namespace
