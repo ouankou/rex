@@ -9356,7 +9356,7 @@ bool isStatementProjectOwnedForMutation(SgStatement *statement) {
 
   const std::string statement_path = getStatementOwnershipPath(statement);
   if (statement_path.empty()) {
-    return false;
+    return true;
   }
 
   MutationOwnershipCache &cache = getMutationOwnershipCache(project);
@@ -9371,7 +9371,9 @@ bool isStatementProjectOwnedForMutation(SgStatement *statement) {
     return include_it->second == false;
   }
 
-  return false;
+  // Ownership is unknown: default to project-owned to avoid cloning nodes that
+  // are not confirmed system-header statements.
+  return true;
 }
 
 bool isStatementAttachedToParentList(SgStatement *statement) {
