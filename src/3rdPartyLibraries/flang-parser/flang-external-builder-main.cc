@@ -46,6 +46,24 @@ std::vector<std::string> filesToDelete;
 std::string includeTempDir;
 
 namespace {
+struct CompileResult {
+  bool succeeded{true};
+  bool hadErrors{false};
+  bool hadFatalErrors{false};
+  bool astBuilt{false};
+  std::string relocatablePath;
+};
+
+bool HasErrorDiagnostics(Fortran::parser::Messages &messages) {
+  for (const auto &message : messages.messages()) {
+    if (message.severity() == Fortran::parser::Severity::Error ||
+        message.severity() == Fortran::parser::Severity::Todo) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool IsIncludeDirective(const std::string &line, size_t &headerEnd,
                         size_t &trailingStart) {
   size_t pos = line.find_first_not_of(" \t");
@@ -242,18 +260,21 @@ void Exec(std::vector<llvm::StringRef> &argv, bool verbose = false) {
   }
 }
 
-std::string CompileOtherLanguage(const std::string &path,
-                                 const DriverOptions &driver) {
+CompileResult CompileOtherLanguage(const std::string &path,
+                                   const DriverOptions &driver) {
+  CompileResult result;
   if (driver.verbose) {
     llvm::errs() << "f18-parse-demo: not compiling \"" << path
                  << "\" because it's not a Fortran source file\n";
   }
-  return {};
+  return result;
 }
 
-std::string CompileFortran(const std::string &path,
-                           const Fortran::parser::Options &optionsIn,
-                           const DriverOptions &driver) {
+CompileResult CompileFortran(const std::string &path,
+                             const Fortran::parser::Options &optionsIn,
+                             const DriverOptions &driver) {
+  CompileResult result;
+
   // TODO: should be able to use -o to set object file name
   // TODO: support Unicode names in filesystem?
   if (driver.verbose) {
@@ -287,13 +308,18 @@ std::string CompileFortran(const std::string &path,
   if (!messages.empty()) {
     messages.Emit(llvm::errs(), parsing.allCooked());
   }
-  if (messages.AnyFatalError()) {
-    return {};
+  const bool hasPrescanErrors = HasErrorDiagnostics(messages);
+  const bool hasPrescanFatalErrors = messages.AnyFatalError();
+  if (hasPrescanErrors || hasPrescanFatalErrors) {
+    result.succeeded = false;
+    result.hadErrors = hasPrescanErrors || hasPrescanFatalErrors;
+    result.hadFatalErrors = hasPrescanFatalErrors;
+    return result;
   }
 
   if (options.prescanAndReformat) {
     parsing.EmitPreprocessedSource(llvm::outs(), driver.lineDirectives);
-    return {};
+    return result;
   }
 
   parsing.Parse(llvm::nulls());
@@ -302,13 +328,20 @@ std::string CompileFortran(const std::string &path,
   if (!messages.empty()) {
     messages.Emit(llvm::errs(), parsing.allCooked());
   }
-  if (messages.AnyFatalError()) {
-    return {};
+  const bool hasParseErrors = HasErrorDiagnostics(messages);
+  const bool hasParseFatalErrors = messages.AnyFatalError();
+  if (hasParseErrors || hasParseFatalErrors) {
+    result.succeeded = false;
+    result.hadErrors = hasParseErrors || hasParseFatalErrors;
+    result.hadFatalErrors = hasParseFatalErrors;
+    return result;
   }
 
   auto &parseTreeOpt = parsing.parseTree();
   if (!parseTreeOpt) {
-    return {};
+    result.succeeded = false;
+    result.hadErrors = true;
+    return result;
   }
   auto &parseTree{*parseTreeOpt};
 
@@ -316,6 +349,7 @@ std::string CompileFortran(const std::string &path,
   if (driver.externalBuilder) {
     auto start{CPUseconds()};
     Rose::builder::Build(parseTree, allCookedSources);
+    result.astBuilt = true;
     auto stop{CPUseconds()};
     if (canTime) {
       llvm::outs() << "Rose::Build time for " << path << ": " << (stop - start)
@@ -325,11 +359,11 @@ std::string CompileFortran(const std::string &path,
 
   if (driver.dumpProvenance) {
     parsing.DumpProvenance(llvm::outs());
-    return {};
+    return result;
   }
   if (driver.dumpParseTree) {
     Fortran::parser::DumpTree(llvm::outs(), parseTree);
-    return {};
+    return result;
   }
   if (driver.dumpUnparse) {
 #if LLVM_VERSION_MAJOR >= 21
@@ -342,14 +376,14 @@ std::string CompileFortran(const std::string &path,
             options.features.IsEnabled(
                 Fortran::common::LanguageFeature::BackslashEscapes));
 #endif
-    return {};
+    return result;
   }
   if (driver.syntaxOnly) {
-    return {};
+    return result;
   }
   if (driver.externalBuilder) {
     // ROSE only needs the parse tree; avoid invoking the external compiler.
-    return {};
+    return result;
   }
   std::string unparsedPath{path};
   if (!driver.noReformat) {
@@ -407,12 +441,13 @@ std::string CompileFortran(const std::string &path,
   }
   Exec(argv, driver.verbose);
   if (driver.compileOnly) {
-    return {};
+    return result;
   }
   if (driver.outputPath.empty()) {
-    return objectPath;
+    result.relocatablePath = objectPath;
+    return result;
   } else {
-    return {};
+    return result;
   }
 }
 
@@ -451,27 +486,41 @@ int flang_external_builder_main(int argc, char *const argv[],
 
   if (!ctx.anyFiles) {
     ctx.driver.dumpUnparse = true;
-    CompileFortran("-", ctx.options, ctx.driver);
-    return exitStatus;
+    CompileResult result = CompileFortran("-", ctx.options, ctx.driver);
+    return result.succeeded ? EXIT_SUCCESS : EXIT_FAILURE;
   }
 
+  bool hadFrontendErrors = false;
+
   for (const auto &path : ctx.fortranSources) {
-    std::string relo{CompileFortran(path, ctx.options, ctx.driver)};
-    if (!ctx.driver.compileOnly && !relo.empty()) {
-      ctx.relocatables.push_back(relo);
+    CompileResult result = CompileFortran(path, ctx.options, ctx.driver);
+    if (!result.succeeded) {
+      hadFrontendErrors = true;
+      continue;
+    }
+    if (!ctx.driver.compileOnly && !result.relocatablePath.empty()) {
+      ctx.relocatables.push_back(result.relocatablePath);
     }
   }
 
   for (const auto &path : ctx.otherSources) {
-    std::string relo{CompileOtherLanguage(path, ctx.driver)};
-    if (!ctx.driver.compileOnly && !relo.empty()) {
-      ctx.relocatables.push_back(relo);
+    CompileResult result = CompileOtherLanguage(path, ctx.driver);
+    if (!result.succeeded) {
+      hadFrontendErrors = true;
+      continue;
     }
+    if (!ctx.driver.compileOnly && !result.relocatablePath.empty()) {
+      ctx.relocatables.push_back(result.relocatablePath);
+    }
+  }
+
+  if (hadFrontendErrors) {
+    return EXIT_FAILURE;
   }
 
   if (!ctx.relocatables.empty()) {
     Link(ctx.relocatables, ctx.driver);
   }
 
-  return exitStatus;
+  return EXIT_SUCCESS;
 }

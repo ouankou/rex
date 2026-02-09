@@ -481,6 +481,23 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
   endif()
 
   add_compile_definitions(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
+
+  if(NOT ENABLE-C AND (NOT DEFINED LLVM_LIBS OR "${LLVM_LIBS}" STREQUAL ""))
+    if("LLVM" IN_LIST LLVM_AVAILABLE_LIBS)
+      set(LLVM_LIBS LLVM)
+      message(STATUS "Using shared LLVM library (Fortran-only): ${LLVM_LIBS}")
+    else()
+      set(LLVM_LINK_LLVM_DYLIB ON)
+      llvm_map_components_to_libnames(LLVM_LIBS
+        support core irreader
+        option mc mcparser
+        binaryformat bitreader bitwriter
+        profiledata
+        target targetparser
+        frontendopenmp)
+      message(STATUS "Using LLVM component libraries (Fortran-only): ${LLVM_LIBS}")
+    endif()
+  endif()
 endif()
 
 # OpenCL
@@ -1164,10 +1181,20 @@ if(HAVE_QUADMATH_COMPILE)
 endif()
 
 # Check compilers and version numbers. The module is located in src/cmake/modules.
-if(ENABLE-C)
+if(ENABLE-C OR ENABLE-FORTRAN)
   include(roseChooseBackendCompiler)
+
+  if(ENABLE-FORTRAN)
+    if("${BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER}" STREQUAL "" OR
+       "${BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER}" STREQUAL "")
+      message(FATAL_ERROR "Failed to determine backend Fortran compiler version metadata.")
+    endif()
+  endif()
+
+  if(ENABLE-C)
   include(roseGenerateBackendCompilerSpecificHeaders)
   install(DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/ DESTINATION ${CLANG_BUILTIN_HEADERS_INSTALL_DIR})
+  endif()
 else()
   # These are required to be defined even when C/C++ analysis is not enabled, but their values don't matter
   set(BACKEND_C_COMPILER_NAME_WITHOUT_PATH "no_compiler")

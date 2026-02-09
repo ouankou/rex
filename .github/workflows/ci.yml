@@ -86,3 +86,71 @@ jobs:
         cd $GITHUB_WORKSPACE/build
         CTEST_JOBS="$(nproc)"
         ctest -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering" --output-on-failure -j"${CTEST_JOBS}"
+
+  fortran-only-config:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04]
+        llvm: [20]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        persist-credentials: false
+
+    - uses: StoneMoe/setup-antlr4@v4.10.1
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          bison \
+          build-essential \
+          cmake \
+          clang-${{ matrix.llvm }} \
+          curl \
+          flang-${{ matrix.llvm }} \
+          flex \
+          g++ \
+          gdb \
+          ghostscript \
+          git \
+          graphviz \
+          libantlr4-runtime-dev \
+          libclang-${{ matrix.llvm }}-dev \
+          libclang-cpp${{ matrix.llvm }}-dev \
+          libhpdf-dev \
+          libtool \
+          llvm-${{ matrix.llvm }} \
+          llvm-${{ matrix.llvm }}-dev \
+          openjdk-25-jdk \
+          pkg-config
+
+    - name: Configure and build (Fortran-only)
+      env:
+        PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ matrix.llvm }}
+        LLVM_DIR: /usr/lib/llvm-${{ matrix.llvm }}
+        CC: clang-${{ matrix.llvm }}
+        CXX: clang++-${{ matrix.llvm }}
+        FC: flang-${{ matrix.llvm }}
+      run: |
+        cmake -S . -B build-fortran-only \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DENABLE-C=OFF \
+          -DENABLE-FORTRAN=ON \
+          -DENABLE-FORTRAN-FLANG=ON
+        cmake --build build-fortran-only -j"$(nproc)"
+
+    - name: Verify Fortran-only compiler metadata
+      run: |
+        grep -E "^#define BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER [0-9]+$" build-fortran-only/rose_config.h
+        grep -E "^#define BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER [0-9]+$" build-fortran-only/rose_config.h

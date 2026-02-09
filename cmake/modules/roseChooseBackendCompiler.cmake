@@ -231,9 +231,7 @@ if(ENABLE-FORTRAN)
   endif()
 
   if(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER STREQUAL "" OR BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER STREQUAL "")
-    message(WARNING "Could not determine Fortran compiler version from ${BACKEND_FORTRAN_COMPILER}; defaulting to 0.0")
-    set(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER 0)
-    set(BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER 0)
+    message(FATAL_ERROR "Could not determine Fortran compiler version from ${BACKEND_FORTRAN_COMPILER}")
   endif()
 endif()
 

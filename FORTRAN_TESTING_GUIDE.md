@@ -171,17 +171,13 @@ FORTRAN_FLAGS:
 - ✅ `ctest -N -L FORTRANTEST` shows 1614 tests (538 files × 3 test types)
 - ✅ Test executables (testTranslator, testGraphGeneration, testTokenGeneration) build successfully
 
-## Current Status (October 2025)
+## Current Status
 
-Based on evaluation testing:
-- **Simple programs**: 100% success
-- **Complex programs**: 100% success
-- **Random sample (10 tests)**: 90% success (9/10)
-- **CTest integration**: ✅ WORKING (1614 tests registered)
-- **Overall assessment**: Fortran support is production-ready
+Fortran tests are actively maintained under the Flang frontend and run through
+CTest labels (`FORTRANTEST`, `GFORTRANSUITE`). Use the commands above to get
+the authoritative status from your current build directory.
 
 ## References
 
 - Legacy list: upstream ROSE test manifests (see `scripts/gen_test_manifest.py`)
 - CMake: `tests/nonsmoke/functional/CompileTests/Fortran_tests/CMakeLists.txt`
-- Evaluation: `FORTRAN_EVALUATION_STATUS.md`

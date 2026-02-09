@@ -2802,7 +2802,6 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       std::error_code ec;
       std::filesystem::remove_all(temp_dir, ec);
     }
-    ROSE_ASSERT(status == 0);
 #else
     ROSE_ASSERT(!"[FATAL] [ROSE] [frontend] [Fortran] "
                  "error: ROSE was not configured to support the Fortran Flang "
@@ -3153,9 +3152,7 @@ int SgSourceFile::buildAST(vector<string> argv,
 #if defined(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT) ||                            \
     defined(ROSE_EXPERIMENTAL_FLANG_ROSE_CONNECTION)
     frontendErrorLevel = build_Fortran_AST(argv, inputCommandLine);
-    frontend_failed =
-        (frontendErrorLevel > 1); // DXN (01/18/2011): needed to pass make
-                                  // check.  TODO: need fixing up
+    frontend_failed = (frontendErrorLevel != 0);
 #else
     // DQ (2/21/2016): Added "error: " to allow this to be caught by the ROSE
     // Matrix Testing.

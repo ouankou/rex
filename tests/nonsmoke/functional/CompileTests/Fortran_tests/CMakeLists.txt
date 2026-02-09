@@ -43,6 +43,18 @@ function(fortran_test input_file)
   set_tests_properties(FORTRANTEST_${input_file}_token_generation PROPERTIES DEPENDS FORTRANTEST_${input_file}_graph_generation LABELS FORTRANTEST)
 endfunction()
 
+function(fortran_frontend_negative_test input_file)
+  set(_fortran_flags ${FORTRAN_FLAGS} ${ARGN})
+  string(JOIN " " _fortran_flags_str ${_fortran_flags})
+  add_test(
+    NAME FORTRANTEST_${input_file}_frontend_negative
+    WORKING_DIRECTORY ${_fortran_output_dir}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "! $<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} ${_fortran_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}"
+  )
+  set_tests_properties(FORTRANTEST_${input_file}_frontend_negative PROPERTIES LABELS FORTRANTEST)
+endfunction()
+
 set(FORTRAN_FLAGS -rose:fortran_std=f77)
 foreach(F77_test ${F77_TESTCODES})
   fortran_test(${F77_test})
@@ -56,22 +68,38 @@ set(_fortran_cray_pointer_tests
   test2007_84.f90
   test2011_imperial_crayPointers.f90
 )
-set(_fortran_skip_final_compile_tests
-  # FIXME: LLVM Flang (20–22, and main as of 2026-02-04) aborts in
-  # flang/lib/Lower/ConvertExprToHLFIR.cpp with
-  # "coarray: lowering a reference to a coarray object".
-  # Skip final compile here until upstream coarray lowering is implemented.
+set(_fortran_frontend_negative_tests
   rex_test2026_coarray_image_selector.f90
+  rex_test2026_cuda_kernel_launch_call.f90
+  rex_test2026_allocate_specs.f90
+  test2007_70.f90
+  test2007_88.f90
+  test2007_152.f90
+  test2007_177.f90
+  test2007_example.f90
+  test2010_19.f90
+  test2010_26.f90
+  test2010_102.f90
+  test2010_175.f90
+  test2011_38.f90
+  test2011_59.f90
 )
 foreach(F90_test ${F90_TESTCODES})
-  if(F90_test IN_LIST _fortran_cray_pointer_tests)
+  if(F90_test IN_LIST _fortran_frontend_negative_tests)
+    fortran_frontend_negative_test(${F90_test})
+  elseif(F90_test IN_LIST _fortran_cray_pointer_tests)
     fortran_test(${F90_test} -fcray-pointer)
-  elseif(F90_test IN_LIST _fortran_skip_final_compile_tests)
-    fortran_test(${F90_test} -rose:skipfinalCompileStep)
   else()
     fortran_test(${F90_test})
   endif()
 endforeach()
+
+add_test(
+  NAME fortran_rex_coarray_image_selector_reports_backend_limitation
+  WORKING_DIRECTORY ${_fortran_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "! $<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_coarray_image_selector.f90"
+)
 
 foreach(F90_comment_test ${F90_COMMENTS_TESTCODES})
   fortran_test(${F90_comment_test})
@@ -79,8 +107,17 @@ endforeach()
 
 set(FORTRAN_FLAGS -rose:skip_syntax_check -rose:skipfinalCompileStep
                   -rose:fortran_std=f2003)
+set(_fortran_f03_frontend_negative_tests
+  test2007_171.f03
+  test2010_27.f03
+  test2010_74.f03
+)
 foreach(F03_test ${F03_TESTCODES})
-  fortran_test(${F03_test})
+  if(F03_test IN_LIST _fortran_f03_frontend_negative_tests)
+    fortran_frontend_negative_test(${F03_test})
+  else()
+    fortran_test(${F03_test})
+  endif()
 endforeach()
 
 # Extra tests from Automake conditional-check-local and supporting rules.
@@ -157,6 +194,29 @@ add_test(
   WORKING_DIRECTORY ${_fortran_issue487_output_dir}
   COMMAND ${BASH_EXECUTABLE} -c
     "rm -f a.out && $<TARGET_FILE:testTranslator> ${ROSE_FLAGS_ISSUE487_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_issue487_compile_only.f90 && test ! -e a.out"
+)
+
+set(_fortran_invalid_output_dir ${_fortran_output_dir}/invalid_fortran)
+file(MAKE_DIRECTORY ${_fortran_invalid_output_dir})
+set(ROSE_FLAGS_INVALID -rose:verbose 0 -rose:detect_dangling_pointers 2
+                       -I${CMAKE_CURRENT_SOURCE_DIR}
+                       -I${CMAKE_CURRENT_BINARY_DIR}
+                       -I${_fortran_invalid_output_dir}
+                       -outputdir ${_fortran_invalid_output_dir})
+string(JOIN " " ROSE_FLAGS_INVALID_STR ${ROSE_FLAGS_INVALID})
+
+add_test(
+  NAME fortran_rex_invalid_source_reports_error
+  WORKING_DIRECTORY ${_fortran_invalid_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -f invalid_fortran_error.o rose_invalid_fortran_error.f90 && ! $<TARGET_FILE:testTranslator> ${ROSE_FLAGS_INVALID_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/invalid_fortran_error.f90"
+)
+
+add_test(
+  NAME fortran_rex_invalid_source_no_backend_object
+  WORKING_DIRECTORY ${_fortran_invalid_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "rm -f invalid_fortran_error.o rose_invalid_fortran_error.f90 && ! $<TARGET_FILE:testTranslator> ${ROSE_FLAGS_INVALID_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/invalid_fortran_error.f90 && test ! -e invalid_fortran_error.o"
 )
 
 set(_fortran_comment_diff_tests
