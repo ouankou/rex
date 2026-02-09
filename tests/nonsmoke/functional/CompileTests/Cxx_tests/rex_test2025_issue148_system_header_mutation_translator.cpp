@@ -15,6 +15,7 @@
 namespace {
 const char kHeaderName[] = "test_system_header.hpp";
 const char kTargetTypeName[] = "RexIssue148SystemHeaderType";
+const char kAuxTypeName[] = "RexIssue148SystemHeaderAuxType";
 
 bool hasHeaderFileInfo(const SgLocatedNode *node) {
   if (node == NULL) {
@@ -63,6 +64,28 @@ SgClassDeclaration *findSystemHeaderType(SgProject *project) {
   }
   return NULL;
 }
+
+SgClassDeclaration *findSystemHeaderClass(SgProject *project,
+                                          const std::string &name) {
+  std::vector<SgNode *> decls =
+      NodeQuery::querySubTree(project, V_SgClassDeclaration);
+  for (SgNode *node : decls) {
+    SgClassDeclaration *decl = isSgClassDeclaration(node);
+    if (decl == NULL) {
+      continue;
+    }
+    if (decl->get_definingDeclaration() != decl) {
+      continue;
+    }
+    if (!hasHeaderFileInfo(decl)) {
+      continue;
+    }
+    if (decl->get_name().getString() == name) {
+      return decl;
+    }
+  }
+  return NULL;
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -87,6 +110,25 @@ int main(int argc, char **argv) {
 
   SageInterface::insertStatement(target, injected, false);
   ROSE_ASSERT(scopeContainsDecl(scope, injected));
+
+  SgClassDeclaration *replacement =
+      SageBuilder::buildStructDeclaration("RexIssue148ReplacementType", scope);
+  ROSE_ASSERT(replacement != NULL);
+  SageInterface::replaceStatement(target, replacement, true);
+  ROSE_ASSERT(scopeContainsDecl(scope, replacement));
+
+  SgClassDeclaration *aux_decl = findSystemHeaderClass(project, kAuxTypeName);
+  ROSE_ASSERT(aux_decl != NULL);
+  SgScopeStatement *var_scope = isSgScopeStatement(aux_decl->get_parent());
+  if (var_scope == NULL) {
+    var_scope = aux_decl->get_scope();
+  }
+  ROSE_ASSERT(var_scope != NULL);
+
+  SageInterface::removeStatement(aux_decl);
+  AstTests::runAllTests(project);
+
+  ROSE_ASSERT(findSystemHeaderClass(project, kAuxTypeName) == NULL);
 
   AstTests::runAllTests(project);
 

@@ -32,8 +32,6 @@ Status legend: pending / in-progress / synced / inventory / skip
 - pending .gitmodules
 - pending AGENTS.md
 - pending BUILDING_WITH_CLANG.md
-- pending CLANG_FRONTEND_FIXES.md
-- pending CLANG_FRONTEND_IMPROVEMENTS.md
 - pending CLAUDE.md
 - in-progress CMakeLists.txt
 - pending COPYRIGHT
@@ -45,7 +43,6 @@ Status legend: pending / in-progress / synced / inventory / skip
 - pending README.md
 - pending ROSE_COMPILER_FIXES.md
 - pending ROSE_VERSION
-- pending TEMPLATE_INSTANTIATION_ROADMAP.md
 - inventory configure.ac
 - pending build-rex.sh
 - pending rose_config.h.in.cmake
