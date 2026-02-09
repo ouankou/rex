@@ -9473,44 +9473,6 @@ const SgStatement *canonicalMutationKey(SgStatement *statement) {
   return statement;
 }
 
-SgScopeStatement *fallbackMutationScope(SgStatement *statement) {
-  ROSE_ASSERT(statement != NULL);
-
-  if (statement->get_parent() != NULL) {
-    if (SgScopeStatement *scope = statement->get_scope()) {
-      if (isStatementProjectOwnedForMutation(scope)) {
-        return scope;
-      }
-    }
-
-    if (SgScopeStatement *enclosing_scope =
-            SageInterface::getEnclosingScope(statement, false)) {
-      if (isStatementProjectOwnedForMutation(enclosing_scope)) {
-        return enclosing_scope;
-      }
-    }
-  }
-
-  SgProject *project = SageInterface::getProject(statement);
-  if (project != NULL) {
-    const SgFilePtrList &file_list = project->get_fileList();
-    for (size_t index = 0; index < file_list.size(); ++index) {
-      if (SgSourceFile *source_file = isSgSourceFile(file_list[index])) {
-        SgGlobal *global_scope = source_file->get_globalScope();
-        if (global_scope != NULL) {
-          return global_scope;
-        }
-      }
-    }
-  }
-
-  if (SgScopeStatement *top_scope = SageBuilder::topScopeStack()) {
-    return top_scope;
-  }
-
-  return NULL;
-}
-
 bool isPreparedCloneUsable(SgStatement *statement) {
   if (statement == NULL) {
     return false;
@@ -9545,19 +9507,103 @@ SgStatement *materializeProjectOwnedClone(SgStatement *statement,
                                           MutationOperationKind operation) {
   ROSE_ASSERT(statement != NULL);
 
-  SgStatement *clone = SageInterface::copyStatement(statement);
-  ROSE_ASSERT(clone != NULL);
-
-  SgScopeStatement *scope = fallbackMutationScope(statement);
-  if (scope == NULL) {
-    printf("Error: unable to find project-owned scope for %s target %p = %s\n",
+  if (!isStatementAttachedToParentList(statement)) {
+    printf("Error: %s target is external but detached from parent list: "
+           "%p = %s\n",
            mutationOperationName(operation), statement,
            statement->class_name().c_str());
     ROSE_ASSERT(false);
   }
-  SageInterface::appendStatement(clone, scope);
 
-  return clone;
+  std::vector<SgStatement *> mutation_path;
+  SgStatement *cursor = statement;
+  SgStatement *project_owned_parent = NULL;
+
+  while (cursor != NULL) {
+    mutation_path.push_back(cursor);
+
+    SgStatement *parent_statement = isSgStatement(cursor->get_parent());
+    if (parent_statement == NULL) {
+      break;
+    }
+
+    if (isStatementProjectOwnedForMutation(parent_statement)) {
+      project_owned_parent = parent_statement;
+      break;
+    }
+
+    if (!isStatementAttachedToParentList(parent_statement)) {
+      printf("Error: %s cannot clone mutation path; detached ancestor: "
+             "%p = %s\n",
+             mutationOperationName(operation), parent_statement,
+             parent_statement->class_name().c_str());
+      ROSE_ASSERT(false);
+    }
+
+    cursor = parent_statement;
+  }
+
+  if (project_owned_parent == NULL) {
+    printf("Error: unable to find project-owned mutation parent for %s target "
+           "%p = %s\n",
+           mutationOperationName(operation), statement,
+           statement->class_name().c_str());
+    ROSE_ASSERT(false);
+  }
+
+  SgStatement *project_owned_child = mutation_path.back();
+  if (!isStatementAttachedToParentList(project_owned_child)) {
+    printf("Error: %s path root detached before clone replacement: %p = %s\n",
+           mutationOperationName(operation), project_owned_child,
+           project_owned_child->class_name().c_str());
+    ROSE_ASSERT(false);
+  }
+
+  std::vector<SgNode *> capture_nodes;
+  capture_nodes.reserve(mutation_path.size());
+  for (size_t index = 0; index < mutation_path.size(); ++index) {
+    capture_nodes.push_back(mutation_path[index]);
+  }
+
+  SgCapturingCopy<SgTreeCopy> capturing_copy(capture_nodes);
+  SgStatement *project_owned_child_clone =
+      isSgStatement(project_owned_child->copy(capturing_copy));
+  if (project_owned_child_clone == NULL) {
+    printf("Error: failed to clone mutation path root for %s target %p = %s\n",
+           mutationOperationName(operation), statement,
+           statement->class_name().c_str());
+    ROSE_ASSERT(false);
+  }
+
+  project_owned_parent->replace_statement(project_owned_child,
+                                          project_owned_child_clone);
+
+  if (!isStatementAttachedToParentList(project_owned_child_clone)) {
+    printf("Error: cloned path root not attached after replacement for %s "
+           "target %p = %s\n",
+           mutationOperationName(operation), statement,
+           statement->class_name().c_str());
+    ROSE_ASSERT(false);
+  }
+
+  const std::vector<SgNode *> &copy_list = capturing_copy.get_copyList();
+  if (copy_list.size() != mutation_path.size()) {
+    printf("Error: clone capture size mismatch for %s target %p = %s\n",
+           mutationOperationName(operation), statement,
+           statement->class_name().c_str());
+    ROSE_ASSERT(false);
+  }
+
+  SgStatement *statement_clone = isSgStatement(copy_list[0]);
+  if (statement_clone == NULL) {
+    printf("Error: failed to capture cloned mutation target for %s target %p "
+           "= %s\n",
+           mutationOperationName(operation), statement,
+           statement->class_name().c_str());
+    ROSE_ASSERT(false);
+  }
+
+  return statement_clone;
 }
 
 SgStatement *prepareStatementForMutation(SgStatement *statement,
