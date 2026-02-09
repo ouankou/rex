@@ -587,6 +587,9 @@ bool isLocatedNodeInSourceFile(const SgLocatedNode *node,
     return false;
   }
 
+  // getEnclosingSourceFile is legacy and not const-correct; it only walks
+  // parent/source-file links and does not mutate the node, so this cast is
+  // safe for read-only ownership lookup.
   SgSourceFile *owner =
       SageInterface::getEnclosingSourceFile(const_cast<SgLocatedNode *>(node));
   if (owner != NULL) {
