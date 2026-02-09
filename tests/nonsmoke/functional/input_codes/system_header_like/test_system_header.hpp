@@ -5,6 +5,10 @@ struct RexIssue148SystemHeaderType {
   int value;
 };
 
+struct RexIssue148SystemHeaderAuxType {
+  int value;
+};
+
 static int rex_issue148_system_header_value = 17;
 
 inline int rex_issue148_system_header_function(int input) {

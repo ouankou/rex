@@ -83,6 +83,8 @@
 
 #include <map>
 
+#include <mutex>
+
 #include <numeric> // for std::accumulate
 #include <sstream>
 
@@ -9194,6 +9196,520 @@ bool SageInterface::isRemovableStatement(SgStatement *s) {
   return isContainer;
 }
 
+namespace {
+
+struct MutationOwnershipCache {
+  bool initialized = false;
+  std::unordered_set<std::string> project_source_files;
+  std::unordered_map<std::string, bool> include_system_flags;
+};
+
+struct MutationProjectState {
+  std::recursive_mutex mutex;
+  MutationOwnershipCache ownership_cache;
+  std::unordered_map<const SgStatement *, SgStatement *> external_clone_map;
+};
+
+std::mutex &mutationProjectStateInstallMutex() {
+  static std::mutex install_mutex;
+  return install_mutex;
+}
+
+const std::string &mutationProjectStateAttributeName() {
+  static const std::string attribute_name =
+      "rose.sageInterface.mutationProjectState";
+  return attribute_name;
+}
+
+void cleanupPreparedCloneMapOnProjectShutdown(
+    std::unordered_map<const SgStatement *, SgStatement *> &clone_map);
+
+class MutationProjectStateAttribute : public AstAttribute {
+public:
+  MutationProjectState state;
+
+  ~MutationProjectStateAttribute() override;
+
+  AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string attribute_class_name() const override {
+    return "MutationProjectStateAttribute";
+  }
+};
+
+MutationProjectState &getMutationProjectState(SgProject *project) {
+  ROSE_ASSERT(project != NULL);
+
+  std::lock_guard<std::mutex> install_guard(mutationProjectStateInstallMutex());
+
+  const std::string &attribute_name = mutationProjectStateAttributeName();
+  AstAttribute *attribute = project->getAttribute(attribute_name);
+  if (attribute == NULL) {
+    project->addNewAttribute(attribute_name, new MutationProjectStateAttribute);
+    attribute = project->getAttribute(attribute_name);
+  }
+
+  ROSE_ASSERT(attribute != NULL);
+  MutationProjectStateAttribute *project_state_attribute =
+      dynamic_cast<MutationProjectStateAttribute *>(attribute);
+  ROSE_ASSERT(project_state_attribute != NULL);
+  return project_state_attribute->state;
+}
+
+enum class MutationOperationKind { Remove, Replace, Insert };
+
+const char *mutationOperationName(MutationOperationKind operation) {
+  switch (operation) {
+  case MutationOperationKind::Remove:
+    return "removeStatement";
+  case MutationOperationKind::Replace:
+    return "replaceStatement";
+  case MutationOperationKind::Insert:
+    return "insertStatement";
+  }
+
+  ROSE_ASSERT(false);
+  return "<unknown-mutation-operation>";
+}
+
+std::string normalizeOwnershipPath(const std::string &input_path) {
+  if (input_path.empty()) {
+    return input_path;
+  }
+
+  std::string absolute_path =
+      Rose::StringUtility::getAbsolutePathFromRelativePath(input_path, false);
+  if (absolute_path.empty()) {
+    return input_path;
+  }
+  return absolute_path;
+}
+
+std::string getStatementOwnershipPath(const SgStatement *statement) {
+  const SgLocatedNode *located_node = isSgLocatedNode(statement);
+  if (located_node == NULL) {
+    return "";
+  }
+
+  const Sg_File_Info *file_info = located_node->get_file_info();
+  if (file_info == NULL) {
+    return "";
+  }
+
+  if (file_info->isTransformation() || file_info->isFrontendSpecific() ||
+      file_info->isSourcePositionUnavailableInFrontend()) {
+    return "";
+  }
+
+  const int physical_file_id = file_info->get_physical_file_id();
+  if (physical_file_id == Sg_File_Info::NULL_FILE_ID) {
+    return "";
+  }
+  if (physical_file_id >= 0) {
+    std::string physical_name = file_info->getFilenameFromID(physical_file_id);
+    if (!physical_name.empty()) {
+      return normalizeOwnershipPath(physical_name);
+    }
+  }
+
+  return normalizeOwnershipPath(file_info->get_filenameString());
+}
+
+void collectIncludeOwnershipMetadata(SgIncludeFile *include_root,
+                                     MutationOwnershipCache &cache) {
+  if (include_root == NULL) {
+    return;
+  }
+
+  std::vector<SgIncludeFile *> worklist;
+  std::unordered_set<SgIncludeFile *> visited;
+  worklist.push_back(include_root);
+
+  while (!worklist.empty()) {
+    SgIncludeFile *include_file = worklist.back();
+    worklist.pop_back();
+    if (include_file == NULL) {
+      continue;
+    }
+    if (!visited.insert(include_file).second) {
+      continue;
+    }
+
+    const std::string include_path =
+        normalizeOwnershipPath(include_file->get_filename());
+    if (!include_path.empty()) {
+      bool is_system_include = include_file->get_isSystemInclude();
+      std::unordered_map<std::string, bool>::iterator found =
+          cache.include_system_flags.find(include_path);
+      if (found == cache.include_system_flags.end()) {
+        cache.include_system_flags.insert(
+            std::make_pair(include_path, is_system_include));
+      } else {
+        // If the same file appears with mixed include styles, prefer treating
+        // it as user-owned when any include edge is non-system.
+        found->second = found->second && is_system_include;
+      }
+    }
+
+    const SgIncludeFilePtrList &children =
+        include_file->get_include_file_list();
+    for (size_t index = 0; index < children.size(); ++index) {
+      worklist.push_back(children[index]);
+    }
+  }
+}
+
+void initializeMutationOwnershipCacheLocked(
+    SgProject *project, MutationProjectState &project_state) {
+  ROSE_ASSERT(project != NULL);
+
+  MutationOwnershipCache &cache = project_state.ownership_cache;
+  if (cache.initialized) {
+    return;
+  }
+
+  const SgFilePtrList &file_list = project->get_fileList();
+  for (size_t index = 0; index < file_list.size(); ++index) {
+    SgFile *file = file_list[index];
+    if (file == NULL) {
+      continue;
+    }
+
+    const std::string source_path = normalizeOwnershipPath(file->getFileName());
+    if (!source_path.empty()) {
+      cache.project_source_files.insert(source_path);
+    }
+
+    if (SgSourceFile *source_file = isSgSourceFile(file)) {
+      collectIncludeOwnershipMetadata(
+          source_file->get_associated_include_file(), cache);
+    }
+  }
+
+  cache.initialized = true;
+}
+
+bool isStatementProjectOwnedForMutation(SgStatement *statement) {
+  ROSE_ASSERT(statement != NULL);
+
+  Sg_File_Info *file_info = statement->get_file_info();
+  if (file_info == NULL) {
+    return true;
+  }
+  if (file_info->isTransformation() || file_info->isFrontendSpecific() ||
+      file_info->isSourcePositionUnavailableInFrontend() ||
+      file_info->get_physical_file_id() == Sg_File_Info::NULL_FILE_ID) {
+    return true;
+  }
+
+  SgProject *project = SageInterface::getProject(statement);
+  if (project == NULL) {
+    return true;
+  }
+
+  const std::string statement_path = getStatementOwnershipPath(statement);
+  if (statement_path.empty()) {
+    return true;
+  }
+
+  MutationProjectState &project_state = getMutationProjectState(project);
+  std::lock_guard<std::recursive_mutex> lock(project_state.mutex);
+  initializeMutationOwnershipCacheLocked(project, project_state);
+  MutationOwnershipCache &cache = project_state.ownership_cache;
+  if (cache.project_source_files.find(statement_path) !=
+      cache.project_source_files.end()) {
+    return true;
+  }
+
+  std::unordered_map<std::string, bool>::const_iterator include_it =
+      cache.include_system_flags.find(statement_path);
+  if (include_it != cache.include_system_flags.end()) {
+    return include_it->second == false;
+  }
+
+  // Ownership is unknown: default to project-owned to avoid cloning nodes that
+  // are not confirmed system-header statements.
+  return true;
+}
+
+bool isStatementAttachedToParentList(SgStatement *statement) {
+  ROSE_ASSERT(statement != NULL);
+
+  SgStatement *parent_statement = isSgStatement(statement->get_parent());
+  if (parent_statement == NULL) {
+    return false;
+  }
+
+  if (SgScopeStatement *scope_parent = isSgScopeStatement(parent_statement)) {
+    if (scope_parent->containsOnlyDeclarations()) {
+      SgDeclarationStatement *declaration = isSgDeclarationStatement(statement);
+      if (declaration == NULL) {
+        return false;
+      }
+
+      const SgDeclarationStatementPtrList &declarations =
+          scope_parent->getDeclarationList();
+      return std::find(declarations.begin(), declarations.end(), declaration) !=
+             declarations.end();
+    }
+  }
+
+  std::vector<SgNode *> successors =
+      parent_statement->get_traversalSuccessorContainer();
+  return std::find(successors.begin(), successors.end(), statement) !=
+         successors.end();
+}
+
+const SgStatement *canonicalMutationKey(SgStatement *statement) {
+  if (SgDeclarationStatement *declaration =
+          isSgDeclarationStatement(statement)) {
+    if (SgDeclarationStatement *first_nondefining = isSgDeclarationStatement(
+            declaration->get_firstNondefiningDeclaration())) {
+      return first_nondefining;
+    }
+    if (SgDeclarationStatement *defining =
+            isSgDeclarationStatement(declaration->get_definingDeclaration())) {
+      return defining;
+    }
+  }
+
+  return statement;
+}
+
+bool isPreparedCloneUsable(SgStatement *statement) {
+  if (statement == NULL) {
+    return false;
+  }
+  if (!SgNode::isLiveNode(statement)) {
+    return false;
+  }
+  if (statement->get_parent() == NULL) {
+    return false;
+  }
+  return isStatementAttachedToParentList(statement);
+}
+
+void deleteStalePreparedClone(SgStatement *clone) {
+  if (clone == NULL) {
+    return;
+  }
+  if (!SgNode::isLiveNode(clone)) {
+    return;
+  }
+
+  if (clone->get_parent() != NULL && !isStatementAttachedToParentList(clone)) {
+    clone->set_parent(NULL);
+  }
+
+  if (clone->get_parent() == NULL) {
+    SageInterface::deleteAST(clone);
+  }
+}
+
+void cleanupPreparedCloneMapOnProjectShutdown(
+    std::unordered_map<const SgStatement *, SgStatement *> &clone_map) {
+  for (std::unordered_map<const SgStatement *, SgStatement *>::iterator it =
+           clone_map.begin();
+       it != clone_map.end(); ++it) {
+    SgStatement *clone = it->second;
+    if (clone == NULL || !SgNode::isLiveNode(clone)) {
+      continue;
+    }
+
+    if (clone->get_parent() != NULL && isStatementAttachedToParentList(clone)) {
+      continue;
+    }
+
+    clone->set_parent(NULL);
+    SageInterface::deleteAST(clone);
+  }
+
+  clone_map.clear();
+}
+
+MutationProjectStateAttribute::~MutationProjectStateAttribute() {
+  cleanupPreparedCloneMapOnProjectShutdown(state.external_clone_map);
+}
+
+[[noreturn]] void
+reportMutationPreparationError(MutationOperationKind operation,
+                               const char *reason,
+                               const SgStatement *statement) {
+  MLOG_ERROR_CXX("sageInterface")
+      << "Error: " << reason << " for " << mutationOperationName(operation)
+      << " target " << statement << " = "
+      << ((statement != NULL) ? statement->class_name() : "<null>")
+      << std::endl;
+  ROSE_ASSERT(false);
+  ROSE_ABORT();
+}
+
+SgStatement *materializeProjectOwnedClone(
+    SgStatement *statement, MutationOperationKind operation,
+    std::unordered_map<const SgStatement *, SgStatement *> &clone_map) {
+  ROSE_ASSERT(statement != NULL);
+
+  if (!isStatementAttachedToParentList(statement)) {
+    reportMutationPreparationError(
+        operation, "target is external but detached from parent list",
+        statement);
+  }
+
+  std::vector<SgStatement *> mutation_path;
+  SgStatement *cursor = statement;
+  SgStatement *project_owned_parent = NULL;
+
+  while (cursor != NULL) {
+    mutation_path.push_back(cursor);
+
+    SgStatement *parent_statement = isSgStatement(cursor->get_parent());
+    if (parent_statement == NULL) {
+      break;
+    }
+
+    if (isStatementProjectOwnedForMutation(parent_statement)) {
+      project_owned_parent = parent_statement;
+      break;
+    }
+
+    if (!isStatementAttachedToParentList(parent_statement)) {
+      reportMutationPreparationError(
+          operation, "cannot clone mutation path; detached ancestor",
+          parent_statement);
+    }
+
+    cursor = parent_statement;
+  }
+
+  if (project_owned_parent == NULL) {
+    reportMutationPreparationError(
+        operation, "unable to find project-owned mutation parent", statement);
+  }
+
+  SgStatement *project_owned_child = mutation_path.back();
+  if (!isStatementAttachedToParentList(project_owned_child)) {
+    reportMutationPreparationError(
+        operation, "path root detached before clone replacement",
+        project_owned_child);
+  }
+
+  std::vector<SgNode *> capture_nodes;
+  capture_nodes.reserve(mutation_path.size());
+  for (size_t index = 0; index < mutation_path.size(); ++index) {
+    capture_nodes.push_back(mutation_path[index]);
+  }
+
+  SgCapturingCopy<SgTreeCopy> capturing_copy(capture_nodes);
+  SgStatement *project_owned_child_clone =
+      isSgStatement(project_owned_child->copy(capturing_copy));
+  if (project_owned_child_clone == NULL) {
+    reportMutationPreparationError(
+        operation, "failed to clone mutation path root", statement);
+  }
+
+  project_owned_parent->replace_statement(project_owned_child,
+                                          project_owned_child_clone);
+
+  if (!isStatementAttachedToParentList(project_owned_child_clone)) {
+    reportMutationPreparationError(
+        operation, "cloned path root not attached after replacement",
+        statement);
+  }
+
+  const std::vector<SgNode *> &copy_list = capturing_copy.get_copyList();
+  if (copy_list.size() != mutation_path.size()) {
+    reportMutationPreparationError(operation, "clone capture size mismatch",
+                                   statement);
+  }
+
+  for (size_t index = 0; index < mutation_path.size(); ++index) {
+    SgStatement *original_statement = mutation_path[index];
+    SgStatement *cloned_statement = isSgStatement(copy_list[index]);
+    if (cloned_statement == NULL) {
+      reportMutationPreparationError(
+          operation, "failed to capture cloned mutation-path statement",
+          original_statement);
+    }
+
+    const SgStatement *mapped_key = canonicalMutationKey(original_statement);
+    std::unordered_map<const SgStatement *, SgStatement *>::iterator old =
+        clone_map.find(mapped_key);
+    if (old != clone_map.end() && old->second != cloned_statement &&
+        !isPreparedCloneUsable(old->second)) {
+      deleteStalePreparedClone(old->second);
+    }
+
+    clone_map[mapped_key] = cloned_statement;
+  }
+
+  SgStatement *statement_clone = isSgStatement(copy_list[0]);
+  if (statement_clone == NULL) {
+    reportMutationPreparationError(
+        operation, "failed to capture cloned mutation target", statement);
+  }
+
+  return statement_clone;
+}
+
+SgStatement *prepareStatementForMutation(SgStatement *statement,
+                                         MutationOperationKind operation) {
+  ROSE_ASSERT(statement != NULL);
+
+  SgProject *project = SageInterface::getProject(statement);
+  if (project == NULL) {
+    if (isStatementProjectOwnedForMutation(statement)) {
+      if (!isStatementAttachedToParentList(statement)) {
+        reportMutationPreparationError(
+            operation, "target is project-owned but detached from parent list",
+            statement);
+      }
+      return statement;
+    }
+
+    reportMutationPreparationError(
+        operation, "unable to locate project for target", statement);
+  }
+
+  MutationProjectState &project_state = getMutationProjectState(project);
+  std::lock_guard<std::recursive_mutex> lock(project_state.mutex);
+
+  std::unordered_map<const SgStatement *, SgStatement *> &clone_map =
+      project_state.external_clone_map;
+  const SgStatement *key = canonicalMutationKey(statement);
+
+  std::unordered_map<const SgStatement *, SgStatement *>::iterator mapped =
+      clone_map.find(key);
+  if (mapped != clone_map.end()) {
+    if (isPreparedCloneUsable(mapped->second)) {
+      return mapped->second;
+    }
+    deleteStalePreparedClone(mapped->second);
+    clone_map.erase(mapped);
+  }
+
+  if (isStatementProjectOwnedForMutation(statement)) {
+    if (!isStatementAttachedToParentList(statement)) {
+      reportMutationPreparationError(
+          operation, "target is project-owned but detached from parent list",
+          statement);
+    }
+    return statement;
+  }
+
+  if (!isStatementAttachedToParentList(statement)) {
+    reportMutationPreparationError(
+        operation,
+        "target became detached before clone lookup/materialization completed",
+        statement);
+  }
+
+  return materializeProjectOwnedClone(statement, operation, clone_map);
+}
+
+} // namespace
+
 //! Remove a statement: TODO consider side effects for symbol tables
 void SageInterface::removeStatement(
     SgStatement *targetStmt, bool autoRelocatePreprocessingInfo /*= true*/) {
@@ -9211,6 +9727,9 @@ void SageInterface::removeStatement(
   // This function only supports the removal of a whole statement (not an
   // expression within a statement)
   ROSE_ASSERT(targetStmt != NULL);
+
+  targetStmt =
+      prepareStatementForMutation(targetStmt, MutationOperationKind::Remove);
 
   SgStatement *parentStatement = isSgStatement(targetStmt->get_parent());
 
@@ -9850,6 +10369,10 @@ void SageInterface::replaceStatement(
   ROSE_ASSERT(newStmt);
   if (oldStmt == newStmt)
     return;
+
+  oldStmt =
+      prepareStatementForMutation(oldStmt, MutationOperationKind::Replace);
+
   SgStatement *p = isSgStatement(oldStmt->get_parent());
   ROSE_ASSERT(p);
   p->replace_statement(oldStmt, newStmt);
@@ -13440,13 +13963,8 @@ void SageInterface::insertStatement(
   ROSE_ASSERT(targetStmt && newStmt);
   ROSE_ASSERT(targetStmt != newStmt); // should not share statement nodes!
 
-  // Don't try to mutate statements that originate from compiler-generated or
-  // frontend-specific nodes; they may not be safely owned by the surrounding
-  // scope.
-  if (Sg_File_Info *fi = targetStmt->get_file_info()) {
-    if (fi->isCompilerGenerated() || fi->isFrontendSpecific())
-      return;
-  }
+  targetStmt =
+      prepareStatementForMutation(targetStmt, MutationOperationKind::Insert);
 
   if (isSgGlobal(targetStmt) || isSgClassDefinition(targetStmt) ||
       isSgNamespaceDefinitionStatement(targetStmt) ||
@@ -22905,16 +23423,14 @@ bool SageInterface::statementCanBeTransformed(SgStatement *stmt) {
     // if statements from this file can be transformed. There could be at least
     // one other file is this is a header file that was included twice, but it
     // should have a different path.
-    string source_filename = stmt->getFilenameString();
-
-    Sg_File_Info *fileInfo = stmt->get_file_info();
-    ASSERT_not_null(fileInfo);
-
-    const int physical_file_id = fileInfo->get_physical_file_id();
-    const string physical_filename =
-        fileInfo->getFilenameFromID(physical_file_id);
-    if (!physical_filename.empty() && physical_filename != "transformation")
-      source_filename = physical_filename;
+    string source_filename = getStatementOwnershipPath(stmt);
+    if (source_filename.empty()) {
+      Sg_File_Info *fileInfo = stmt->get_file_info();
+      if (fileInfo != NULL && fileInfo->isTransformation()) {
+        return true;
+      }
+      return false;
+    }
 
     SgIncludeFile *include_file =
         lookupIncludeFileInUnparseMap(source_filename);
@@ -23612,7 +24128,7 @@ void SageInterface::reportModifiedStatements(const string &label,
     string filename = (*i)->get_file_info()->get_filename();
 
     // DQ (10/14/2019): Get the best name possible.
-    if (filename == "transformation") {
+    if ((*i)->get_file_info()->isTransformation()) {
       // filename = (*i)->get_file_info()->get_physical_filename();
       SgSourceFile *sourceFile = SageInterface::getEnclosingSourceFile(*i);
       if (sourceFile != NULL) {
