@@ -17,6 +17,8 @@
 
 #include "wholeAST_API.h"
 
+#include "tokenStreamMapping.h"
+
 #include "plugin.h"
 
 #include <time.h>
@@ -577,6 +579,170 @@ SgProject *frontendShell(const std::vector<std::string> &argv) {
   return project;
 }
 
+namespace {
+
+bool isLocatedNodeInSourceFile(const SgLocatedNode *node,
+                               const SgSourceFile *sourceFile) {
+  if (node == NULL || sourceFile == NULL) {
+    return false;
+  }
+
+  SgSourceFile *owner =
+      SageInterface::getEnclosingSourceFile(const_cast<SgLocatedNode *>(node));
+  if (owner != NULL) {
+    return owner == sourceFile;
+  }
+
+  const Sg_File_Info *nodeInfo = node->get_file_info();
+  const Sg_File_Info *sourceInfo = sourceFile->get_file_info();
+  if (nodeInfo == NULL || sourceInfo == NULL) {
+    return false;
+  }
+
+  if (nodeInfo->get_file_id() >= 0 && sourceInfo->get_file_id() >= 0) {
+    return nodeInfo->get_file_id() == sourceInfo->get_file_id();
+  }
+
+  return nodeInfo->get_filenameString() == sourceFile->getFileName();
+}
+
+void assertTokenSubsequenceWithinBounds(
+    const SgSourceFile *sourceFile, const SgNode *node,
+    const TokenStreamSequenceToNodeMapping *mapping, size_t tokenCount) {
+  if (mapping == NULL) {
+    MLOG_ERROR_CXX("sageSupport")
+        << "token-unparse contract violation: NULL token mapping for node "
+        << node << " ("
+        << (node != NULL ? node->class_name() : std::string("<null>"))
+        << ") in file " << sourceFile->getFileName() << std::endl;
+    ROSE_ASSERT(false);
+  }
+
+  if (tokenCount == 0) {
+    ROSE_ASSERT(mapping->token_subsequence_start == -1);
+    ROSE_ASSERT(mapping->token_subsequence_end == -1);
+    return;
+  }
+
+  if (mapping->token_subsequence_start < 0 ||
+      mapping->token_subsequence_end < 0 ||
+      mapping->token_subsequence_start > mapping->token_subsequence_end ||
+      static_cast<size_t>(mapping->token_subsequence_end) >= tokenCount) {
+    MLOG_ERROR_CXX("sageSupport")
+        << "token-unparse contract violation: invalid token bounds ["
+        << mapping->token_subsequence_start << ","
+        << mapping->token_subsequence_end << "] for node " << node << " ("
+        << (node != NULL ? node->class_name() : std::string("<null>"))
+        << ") in file " << sourceFile->getFileName() << " with " << tokenCount
+        << " tokens" << std::endl;
+    ROSE_ASSERT(false);
+  }
+}
+
+void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
+  ASSERT_not_null(sourceFile);
+
+  const bool isCOrCxx =
+      sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
+      sourceFile->get_Cuda_only() || sourceFile->get_OpenCL_only();
+  if (!isCOrCxx || sourceFile->get_unparse_tokens() == false) {
+    return;
+  }
+
+  SgGlobal *globalScope = isSgGlobal(sourceFile->get_globalScope());
+  ASSERT_not_null(globalScope);
+
+  std::map<SgSourceFile *, std::map<SgNode *, TokenStreamSequenceToNodeMapping
+                                                  *> *>::const_iterator mapIt =
+      Rose::tokenSubsequenceMapOfMapsBySourceFile.find(sourceFile);
+  if (mapIt == Rose::tokenSubsequenceMapOfMapsBySourceFile.end() ||
+      mapIt->second == NULL) {
+    MLOG_ERROR_CXX("sageSupport")
+        << "token-unparse contract violation: missing token-map entry for "
+        << "token-based unparsing in file " << sourceFile->getFileName()
+        << std::endl;
+    ROSE_ASSERT(false);
+  }
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *> &tokenMap =
+      sourceFile->get_tokenSubsequenceMap();
+
+  std::vector<stream_element *> tokenVector = getTokenStream(sourceFile);
+  const size_t tokenCount = tokenVector.size();
+
+  std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator globalIt =
+      tokenMap.find(globalScope);
+  if (globalIt == tokenMap.end() || globalIt->second == NULL) {
+    MLOG_ERROR_CXX("sageSupport")
+        << "token-unparse contract violation: token-map missing global-scope "
+        << "entry for file " << sourceFile->getFileName() << std::endl;
+    ROSE_ASSERT(false);
+  }
+
+  assertTokenSubsequenceWithinBounds(sourceFile, globalScope, globalIt->second,
+                                     tokenCount);
+
+  const SgDeclarationStatementPtrList &declarations =
+      globalScope->get_declarations();
+  size_t requiredTopLevelMappings = 0;
+
+  for (SgDeclarationStatement *decl : declarations) {
+    if (decl == NULL) {
+      continue;
+    }
+
+    Sg_File_Info *declInfo = decl->get_file_info();
+    if (declInfo == NULL || declInfo->isCompilerGenerated() ||
+        declInfo->isTransformation() ||
+        declInfo->isOutputInCodeGeneration() == false) {
+      continue;
+    }
+
+    if (!isLocatedNodeInSourceFile(decl, sourceFile)) {
+      continue;
+    }
+
+    requiredTopLevelMappings += 1;
+
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator declIt =
+        tokenMap.find(decl);
+    if (declIt == tokenMap.end() || declIt->second == NULL) {
+      MLOG_ERROR_CXX("sageSupport")
+          << "token-unparse contract violation: token-map missing top-level "
+          << "declaration entry " << decl << " (" << decl->class_name()
+          << ") in file " << sourceFile->getFileName() << std::endl;
+      ROSE_ASSERT(false);
+    }
+
+    assertTokenSubsequenceWithinBounds(sourceFile, decl, declIt->second,
+                                       tokenCount);
+  }
+
+  if (requiredTopLevelMappings > 0 && tokenMap.size() <= 1) {
+    MLOG_ERROR_CXX("sageSupport")
+        << "token-unparse contract violation: token-map for file "
+        << sourceFile->getFileName() << " contains only global-scope mapping "
+        << "but " << requiredTopLevelMappings
+        << " top-level declaration(s) require token coverage" << std::endl;
+    ROSE_ASSERT(false);
+  }
+}
+
+void enforceTokenUnparseContract(SgProject *project) {
+  ASSERT_not_null(project);
+
+  for (SgFile *file : project->get_fileList()) {
+    SgSourceFile *sourceFile = isSgSourceFile(file);
+    if (sourceFile == NULL) {
+      continue;
+    }
+
+    enforceTokenUnparseContractForFile(sourceFile);
+  }
+}
+
+} // namespace
+
 /*! \brief Call to backend, generates either object file or executable.
 
     This function operates in two modes:
@@ -634,6 +800,7 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
       cout << "Calling project->unparse()\n";
     }
 
+    enforceTokenUnparseContract(project);
     project->unparse(unparseFormatHelp, unparseDelegate);
 
     if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL) {

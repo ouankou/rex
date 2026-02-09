@@ -558,39 +558,85 @@ endif()
 # LLVM/Clang headers are added to the specific targets that need them.
 # Avoid forcing LLVM include paths globally to prevent conflicts with
 # the system C++ ABI headers when building third-party code (e.g., gtest).
-# Prefer linking against shared LLVM library when available to avoid duplicate globals
-# Try two methods to detect if shared LLVM library exists:
-# Method 1: Check if "LLVM" target is in LLVM_AVAILABLE_LIBS (works on many systems)
-# Method 2: Set LLVM_LINK_LLVM_DYLIB=ON and check result of llvm_map_components_to_libnames
-
-# Method 1: Direct check for "LLVM" in available libraries list
-if("LLVM" IN_LIST LLVM_AVAILABLE_LIBS)
-  # Use shared LLVM library to avoid duplicate global objects and double-free errors
-  set(LLVM_LIBS LLVM)
-  message(STATUS "Using shared LLVM library (detected via LLVM_AVAILABLE_LIBS): ${LLVM_LIBS}")
-else()
-  # Method 2: Try using LLVM_LINK_LLVM_DYLIB with llvm_map_components_to_libnames
-  set(LLVM_LINK_LLVM_DYLIB ON)
-  llvm_map_components_to_libnames(LLVM_LIBS
-    support core irreader
-    option mc mcparser
-    binaryformat bitreader bitwriter
-    profiledata
-    target targetparser
-    frontendopenmp)
-
-  # Check if we got the shared library (will be "LLVM" or "LLVM-<version>")
-  # or static components (will be list like "LLVMSupport;LLVMCore;...")
-  if(LLVM_LIBS MATCHES "^LLVM(-[0-9.]+)?$")
-    message(STATUS "Using shared LLVM library (detected via llvm_map_components_to_libnames): ${LLVM_LIBS}")
-  else()
-    # No shared library available - using static components
-    # Note: This may cause double-free errors at program exit with Clang frontend
-    message(STATUS "Using static LLVM component libraries: ${LLVM_LIBS}")
-    message(WARNING "Static LLVM linking may cause double-free errors with Clang frontend. "
-                    "Recommend building LLVM with -DLLVM_BUILD_LLVM_DYLIB=ON for shared library support.")
-  endif()
+#
+# Clang frontend support requires shared LLVM to avoid duplicate global
+# allocator instances and shutdown-time memory corruption from static linkage.
+set(_rose_shared_llvm_link_item "")
+if(TARGET LLVM)
+  foreach(_rose_prop
+      IMPORTED_LOCATION
+      IMPORTED_LOCATION_RELEASE
+      IMPORTED_LOCATION_RELWITHDEBINFO
+      IMPORTED_LOCATION_MINSIZEREL
+      IMPORTED_LOCATION_DEBUG
+      IMPORTED_IMPLIB
+      IMPORTED_IMPLIB_RELEASE
+      IMPORTED_IMPLIB_RELWITHDEBINFO
+      IMPORTED_IMPLIB_MINSIZEREL
+      IMPORTED_IMPLIB_DEBUG)
+    if(NOT _rose_shared_llvm_link_item)
+      get_target_property(_rose_candidate LLVM ${_rose_prop})
+      if(_rose_candidate)
+        if(_rose_candidate MATCHES "\.so(\.[0-9.]+)?$" OR
+           _rose_candidate MATCHES "\.dylib$" OR
+           _rose_candidate MATCHES "\.dll\.a$" OR
+           _rose_candidate MATCHES "\.lib$")
+          set(_rose_shared_llvm_link_item "${_rose_candidate}")
+        endif()
+      endif()
+    endif()
+  endforeach()
 endif()
+
+if(NOT _rose_shared_llvm_link_item)
+  set(_rose_saved_library_suffixes "${CMAKE_FIND_LIBRARY_SUFFIXES}")
+  if(WIN32)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib" ".dll.a")
+  elseif(APPLE)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".dylib")
+  else()
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".so")
+    if(DEFINED LLVM_VERSION_MAJOR)
+      list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".so.${LLVM_VERSION_MAJOR}")
+      if(DEFINED LLVM_VERSION_MINOR)
+        list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES
+          ".so.${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}")
+      endif()
+    endif()
+  endif()
+
+  set(_rose_llvm_candidates LLVM)
+  if(DEFINED LLVM_VERSION_MAJOR AND NOT LLVM_VERSION_MAJOR STREQUAL "")
+    list(APPEND _rose_llvm_candidates LLVM-${LLVM_VERSION_MAJOR})
+  endif()
+  if(LLVM_PACKAGE_VERSION)
+    list(APPEND _rose_llvm_candidates LLVM-${LLVM_PACKAGE_VERSION})
+  endif()
+
+  find_library(_rose_shared_llvm_link_item
+    NAMES ${_rose_llvm_candidates}
+    PATHS ${LLVM_LIBRARY_DIRS}
+    NO_DEFAULT_PATH)
+  if(NOT _rose_shared_llvm_link_item)
+    find_library(_rose_shared_llvm_link_item NAMES ${_rose_llvm_candidates})
+  endif()
+
+  set(CMAKE_FIND_LIBRARY_SUFFIXES "${_rose_saved_library_suffixes}")
+  unset(_rose_saved_library_suffixes)
+  unset(_rose_llvm_candidates)
+endif()
+
+if(NOT _rose_shared_llvm_link_item)
+  message(FATAL_ERROR
+    "REX Clang frontend requires a shared LLVM library (libLLVM). "
+    "Install/build LLVM with LLVM_BUILD_LLVM_DYLIB=ON and rerun CMake.")
+endif()
+
+set(LLVM_LIBS "${_rose_shared_llvm_link_item}")
+message(STATUS "Using required shared LLVM library for Clang frontend: ${LLVM_LIBS}")
+unset(_rose_candidate)
+unset(_rose_prop)
+unset(_rose_shared_llvm_link_item)
 
 # Clang libraries needed
 set(CLANG_LIBS

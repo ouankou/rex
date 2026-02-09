@@ -4132,6 +4132,48 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2025_cfe_token_stream_mapping_macros_includes_token_mapping
   rex_test2025_cfe_token_stream_mapping_macros_includes.cpp)
 
+# Issue 189 follow-up: enforce token-unparse contract before backend unparsing.
+add_executable(
+  rex_test2026_token_unparse_contract_translator
+  rex_test2026_token_unparse_contract_translator.cpp
+)
+target_link_libraries(
+  rex_test2026_token_unparse_contract_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME Cxx_tests_rex_test2026_token_unparse_contract_rejects_incomplete_map
+  COMMAND
+    sh -c
+    "\"$@\" 2> rex_test2026_token_unparse_contract.err; status=$?; test $status -ne 0 && grep -F 'token-unparse contract violation' rex_test2026_token_unparse_contract.err"
+    dummy
+    $<TARGET_FILE:rex_test2026_token_unparse_contract_translator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_token_unparse_contract.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_token_unparse_contract_rejects_incomplete_map
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_token_unparse_contract_rejects_incomplete_map
+  rex_test2026_token_unparse_contract.cpp)
+
+if(UNIX AND NOT APPLE)
+  # CMake-level root-cause guard: Clang frontend builds must link shared libLLVM.
+  add_test(
+    NAME Cxx_tests_rex_test2026_shared_llvm_linkage
+    COMMAND
+      sh -c "ldd \"$1\" | grep -E 'libLLVM([^[:space:]]*)\\.so' >/dev/null"
+      dummy
+      $<TARGET_FILE:rex_test2025_cfe_token_stream_mapping_translator>
+  )
+  set_tests_properties(Cxx_tests_rex_test2026_shared_llvm_linkage PROPERTIES LABELS Cxx_tests)
+endif()
+
 # Issue 151: LinkageSpecDecl (extern "C") must not drop declarations and must
 # preserve linkage in the generated output.
 add_test(

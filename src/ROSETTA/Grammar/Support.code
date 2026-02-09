@@ -14586,24 +14586,56 @@ SgSourceFile::initialization()
      p_isDynamicLibrary                           = false;
      p_firstStatement                             = NULL;
      p_lastStatement                              = NULL;
+
+  // Maintain a per-source-file token map entry as a construction-time
+  // invariant so token-map lookup has no hidden side effects.
+     std::map<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >::iterator mapIt =
+          Rose::tokenSubsequenceMapOfMapsBySourceFile.find(this);
+     if (mapIt == Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
+        {
+          std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenStreamSequenceMap =
+               new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
+          Rose::tokenSubsequenceMapOfMapsBySourceFile.insert(
+               std::pair<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >(this,tokenStreamSequenceMap));
+        }
+       else
+        {
+          if (mapIt->second == NULL)
+             {
+               mapIt->second = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
+             }
+        }
    }
 
-// DQ (1/20/2021): Changed the API to use a pointer to a std::map<SgNode*,TokenStreamSequenceToNodeMapping*> instead of a reference.
+// Updated API: use a pointer to std::map<SgNode*,TokenStreamSequenceToNodeMapping*>
+// instead of a reference.
 // void SgSourceFile::set_tokenSubsequenceMap(std::map<SgNode*,TokenStreamSequenceToNodeMapping*> & tokenStreamSequenceMap)
 void
 SgSourceFile::set_tokenSubsequenceMap(std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenStreamSequenceMap)
    {
-  // DQ (1/19/2021): This is a newer version of this function that only inserts the input map into
-  // a map container that is using the SgSourceFile instead of the file_id as a key (to the map).
+  // Update the token-map entry keyed by this SgSourceFile. Ownership of
+  // the provided map is transferred to that entry.
 
-     if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(this) == Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
+     if (tokenStreamSequenceMap == NULL)
         {
-          Rose::tokenSubsequenceMapOfMapsBySourceFile.insert(std::pair<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >(this,tokenStreamSequenceMap));
+          tokenStreamSequenceMap = new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
+        }
+
+     std::map<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >::iterator mapIt =
+          Rose::tokenSubsequenceMapOfMapsBySourceFile.find(this);
+     if (mapIt == Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
+        {
+          Rose::tokenSubsequenceMapOfMapsBySourceFile.insert(
+               std::pair<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >(this,tokenStreamSequenceMap));
         }
        else
         {
-          printf ("Error: entry for SgSourceFile = %p is already present in Rose::tokenSubsequenceMapOfMapsBySourceFile \n",this);
-          ROSE_ASSERT(false);
+          if (mapIt->second != NULL && mapIt->second != tokenStreamSequenceMap)
+             {
+               delete mapIt->second;
+             }
+
+          mapIt->second = tokenStreamSequenceMap;
         }
    }
 
@@ -14614,22 +14646,26 @@ SgSourceFile::set_tokenSubsequenceMap(std::map<SgNode*,TokenStreamSequenceToNode
 std::map<SgNode*,TokenStreamSequenceToNodeMapping*> &
 SgSourceFile::get_tokenSubsequenceMap()
    {
-  // DQ (1/23/2021): Newer version, uses the "this" pointer as a key so that multiple SgSourceFile IR nodes
-  // can use the same file (reading the same filename).
-     std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* result = NULL;
+  // Use the "this" pointer as a key so multiple SgSourceFile IR nodes
+  // can use the same filename while still owning separate token maps.
+     std::map<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >::iterator mapIt =
+          Rose::tokenSubsequenceMapOfMapsBySourceFile.find(this);
 
-     if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(this) != Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
+     if (mapIt == Rose::tokenSubsequenceMapOfMapsBySourceFile.end())
         {
-          result = Rose::tokenSubsequenceMapOfMapsBySourceFile[this];
+          MLOG_ERROR_CXX("sageSupport")
+              << "missing token subsequence map entry for SgSourceFile = "
+              << this << std::endl;
+          ROSE_ASSERT(false);
         }
-       else
+
+     std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* result = mapIt->second;
+     if (result == NULL)
         {
-       // Create an empty entry so callers can safely treat this as "no tokens".
-          std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* tokenStreamSequenceMap =
-               new std::map<SgNode*,TokenStreamSequenceToNodeMapping*>();
-          Rose::tokenSubsequenceMapOfMapsBySourceFile.insert(
-               std::pair<SgSourceFile*,std::map<SgNode*,TokenStreamSequenceToNodeMapping*>* >(this,tokenStreamSequenceMap));
-          result = tokenStreamSequenceMap;
+          MLOG_ERROR_CXX("sageSupport")
+              << "NULL token subsequence map for SgSourceFile = " << this
+              << std::endl;
+          ROSE_ASSERT(false);
         }
 
      return *result;
