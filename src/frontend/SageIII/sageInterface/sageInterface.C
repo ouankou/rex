@@ -9511,6 +9511,332 @@ SgScopeStatement *fallbackMutationScope(SgStatement *statement) {
   return NULL;
 }
 
+class SymbolBasisNodeCollector : public AstSimpleProcessing {
+public:
+  std::vector<SgNode *> nodes;
+
+  void visit(SgNode *node) override {
+    if (isSgDeclarationStatement(node) != NULL ||
+        isSgInitializedName(node) != NULL) {
+      nodes.push_back(node);
+    }
+  }
+};
+
+std::unordered_map<const SgNode *, SgNode *>
+buildSymbolBasisReplacementMap(SgStatement *original_statement,
+                               SgStatement *cloned_statement) {
+  std::unordered_map<const SgNode *, SgNode *> basis_map;
+  ROSE_ASSERT(original_statement != NULL);
+  ROSE_ASSERT(cloned_statement != NULL);
+
+  SymbolBasisNodeCollector original_collector;
+  SymbolBasisNodeCollector clone_collector;
+  original_collector.traverse(original_statement, preorder);
+  clone_collector.traverse(cloned_statement, preorder);
+
+  if (original_collector.nodes.size() == clone_collector.nodes.size()) {
+    bool is_compatible = true;
+    for (size_t i = 0; i < original_collector.nodes.size(); ++i) {
+      if (original_collector.nodes[i]->variantT() !=
+          clone_collector.nodes[i]->variantT()) {
+        is_compatible = false;
+        break;
+      }
+    }
+
+    if (is_compatible) {
+      for (size_t i = 0; i < original_collector.nodes.size(); ++i) {
+        basis_map[original_collector.nodes[i]] = clone_collector.nodes[i];
+      }
+      return basis_map;
+    }
+  }
+
+  basis_map[original_statement] = cloned_statement;
+
+  if (SgVariableDeclaration *original_variable_declaration =
+          isSgVariableDeclaration(original_statement)) {
+    if (SgVariableDeclaration *clone_variable_declaration =
+            isSgVariableDeclaration(cloned_statement)) {
+      const SgInitializedNamePtrList &original_variables =
+          original_variable_declaration->get_variables();
+      const SgInitializedNamePtrList &clone_variables =
+          clone_variable_declaration->get_variables();
+      if (original_variables.size() == clone_variables.size()) {
+        for (size_t i = 0; i < original_variables.size(); ++i) {
+          basis_map[original_variables[i]] = clone_variables[i];
+        }
+      }
+    }
+  }
+
+  if (SgEnumDeclaration *original_enum_declaration =
+          isSgEnumDeclaration(original_statement)) {
+    if (SgEnumDeclaration *clone_enum_declaration =
+            isSgEnumDeclaration(cloned_statement)) {
+      const SgInitializedNamePtrList &original_enumerators =
+          original_enum_declaration->get_enumerators();
+      const SgInitializedNamePtrList &clone_enumerators =
+          clone_enum_declaration->get_enumerators();
+      if (original_enumerators.size() == clone_enumerators.size()) {
+        for (size_t i = 0; i < original_enumerators.size(); ++i) {
+          basis_map[original_enumerators[i]] = clone_enumerators[i];
+        }
+      }
+    }
+  }
+
+  return basis_map;
+}
+
+bool rebindSymbolDeclarationBasis(SgSymbol *symbol, SgNode *replacement_basis) {
+  ROSE_ASSERT(symbol != NULL);
+  ROSE_ASSERT(replacement_basis != NULL);
+
+  if (SgTemplateVariableSymbol *template_variable_symbol =
+          isSgTemplateVariableSymbol(symbol)) {
+    SgInitializedName *replacement_declaration =
+        isSgInitializedName(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    template_variable_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgVariableSymbol *variable_symbol = isSgVariableSymbol(symbol)) {
+    SgInitializedName *replacement_declaration =
+        isSgInitializedName(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    variable_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgEnumFieldSymbol *enum_field_symbol = isSgEnumFieldSymbol(symbol)) {
+    SgInitializedName *replacement_declaration =
+        isSgInitializedName(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    enum_field_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgIntrinsicSymbol *intrinsic_symbol = isSgIntrinsicSymbol(symbol)) {
+    SgInitializedName *replacement_declaration =
+        isSgInitializedName(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    intrinsic_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgCommonSymbol *common_symbol = isSgCommonSymbol(symbol)) {
+    SgInitializedName *replacement_declaration =
+        isSgInitializedName(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    common_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgTemplateMemberFunctionSymbol *template_member_function_symbol =
+          isSgTemplateMemberFunctionSymbol(symbol)) {
+    SgMemberFunctionDeclaration *replacement_declaration =
+        isSgMemberFunctionDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    template_member_function_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgMemberFunctionSymbol *member_function_symbol =
+          isSgMemberFunctionSymbol(symbol)) {
+    SgMemberFunctionDeclaration *replacement_declaration =
+        isSgMemberFunctionDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    member_function_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgTemplateFunctionSymbol *template_function_symbol =
+          isSgTemplateFunctionSymbol(symbol)) {
+    SgFunctionDeclaration *replacement_declaration =
+        isSgFunctionDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    template_function_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgFunctionSymbol *function_symbol = isSgFunctionSymbol(symbol)) {
+    SgFunctionDeclaration *replacement_declaration =
+        isSgFunctionDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    function_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgTemplateClassSymbol *template_class_symbol =
+          isSgTemplateClassSymbol(symbol)) {
+    SgTemplateClassDeclaration *replacement_declaration =
+        isSgTemplateClassDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    template_class_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgClassSymbol *class_symbol = isSgClassSymbol(symbol)) {
+    SgClassDeclaration *replacement_declaration =
+        isSgClassDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    class_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgTemplateSymbol *template_symbol = isSgTemplateSymbol(symbol)) {
+    SgTemplateDeclaration *replacement_declaration =
+        isSgTemplateDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    template_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgEnumSymbol *enum_symbol = isSgEnumSymbol(symbol)) {
+    SgEnumDeclaration *replacement_declaration =
+        isSgEnumDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    enum_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgTypedefSymbol *typedef_symbol = isSgTypedefSymbol(symbol)) {
+    SgTypedefDeclaration *replacement_declaration =
+        isSgTypedefDeclaration(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    typedef_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgLabelSymbol *label_symbol = isSgLabelSymbol(symbol)) {
+    SgLabelStatement *replacement_declaration =
+        isSgLabelStatement(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    label_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgNamespaceSymbol *namespace_symbol = isSgNamespaceSymbol(symbol)) {
+    SgNamespaceDeclarationStatement *replacement_declaration =
+        isSgNamespaceDeclarationStatement(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    namespace_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgModuleSymbol *module_symbol = isSgModuleSymbol(symbol)) {
+    SgModuleStatement *replacement_declaration =
+        isSgModuleStatement(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    module_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  if (SgInterfaceSymbol *interface_symbol = isSgInterfaceSymbol(symbol)) {
+    SgInterfaceStatement *replacement_declaration =
+        isSgInterfaceStatement(replacement_basis);
+    if (replacement_declaration == NULL) {
+      return false;
+    }
+    interface_symbol->set_declaration(replacement_declaration);
+    return true;
+  }
+
+  return false;
+}
+
+void synchronizeScopeSymbolsAfterClone(SgStatement *original_statement,
+                                       SgStatement *cloned_statement) {
+  ROSE_ASSERT(original_statement != NULL);
+  ROSE_ASSERT(cloned_statement != NULL);
+
+  SgScopeStatement *scope = original_statement->get_scope();
+  if (scope == NULL) {
+    scope = isSgScopeStatement(original_statement->get_parent());
+  }
+  if (scope == NULL || scope->get_symbol_table() == NULL ||
+      scope->get_symbol_table()->get_table() == NULL) {
+    return;
+  }
+
+  std::unordered_map<const SgNode *, SgNode *> basis_replacement_map =
+      buildSymbolBasisReplacementMap(original_statement, cloned_statement);
+  if (basis_replacement_map.empty()) {
+    return;
+  }
+
+  rose_hash_multimap *symbol_table_entries =
+      scope->get_symbol_table()->get_table();
+  ROSE_ASSERT(symbol_table_entries != NULL);
+
+  for (rose_hash_multimap::iterator it = symbol_table_entries->begin();
+       it != symbol_table_entries->end(); ++it) {
+    SgSymbol *symbol = it->second;
+    if (symbol == NULL) {
+      continue;
+    }
+
+    SgNode *current_basis = symbol->get_symbol_basis();
+    if (current_basis == NULL) {
+      continue;
+    }
+
+    std::unordered_map<const SgNode *, SgNode *>::const_iterator replacement =
+        basis_replacement_map.find(current_basis);
+    if (replacement == basis_replacement_map.end() ||
+        replacement->second == current_basis) {
+      continue;
+    }
+
+    if (!rebindSymbolDeclarationBasis(symbol, replacement->second)) {
+      printf("Error: unable to rebind symbol declaration during clone "
+             "replacement: "
+             "symbol = %p = %s basis = %p = %s replacement = %p = %s\n",
+             symbol, symbol->class_name().c_str(), current_basis,
+             current_basis->class_name().c_str(), replacement->second,
+             replacement->second->class_name().c_str());
+      ROSE_ASSERT(false);
+    }
+  }
+}
+
 bool isPreparedCloneUsable(SgStatement *statement) {
   if (statement == NULL) {
     return false;
@@ -9549,8 +9875,10 @@ SgStatement *materializeProjectOwnedClone(SgStatement *statement,
   ROSE_ASSERT(clone != NULL);
 
   SgStatement *parent_statement = isSgStatement(statement->get_parent());
+  bool replaced_in_parent_list = false;
   if (parent_statement != NULL && isStatementAttachedToParentList(statement)) {
     parent_statement->replace_statement(statement, clone);
+    replaced_in_parent_list = true;
   } else {
     SgScopeStatement *scope = fallbackMutationScope(statement);
     if (scope == NULL) {
@@ -9561,6 +9889,10 @@ SgStatement *materializeProjectOwnedClone(SgStatement *statement,
       ROSE_ASSERT(false);
     }
     SageInterface::appendStatement(clone, scope);
+  }
+
+  if (replaced_in_parent_list) {
+    synchronizeScopeSymbolsAfterClone(statement, clone);
   }
 
   return clone;
