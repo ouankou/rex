@@ -645,16 +645,20 @@ std::string stripTrailingMacroReplacementComment(const std::string &text) {
   bool in_single_quote = false;
   bool in_double_quote = false;
   bool escaped = false;
+  std::string stripped;
+  stripped.reserve(text.size());
 
   for (std::size_t index = 0; index < text.size(); ++index) {
     const char ch = text[index];
 
     if (escaped) {
+      stripped.push_back(ch);
       escaped = false;
       continue;
     }
 
     if (in_single_quote || in_double_quote) {
+      stripped.push_back(ch);
       if (ch == '\\') {
         escaped = true;
         continue;
@@ -669,22 +673,55 @@ std::string stripTrailingMacroReplacementComment(const std::string &text) {
 
     if (ch == '\'') {
       in_single_quote = true;
+      stripped.push_back(ch);
       continue;
     }
     if (ch == '"') {
       in_double_quote = true;
+      stripped.push_back(ch);
       continue;
     }
 
     if (ch == '/' && index + 1 < text.size()) {
       const char next = text[index + 1];
-      if (next == '/' || next == '*') {
-        return text.substr(0, index);
+      if (next == '/') {
+        break;
+      }
+      if (next == '*') {
+        index += 2;
+        bool found_comment_end = false;
+        while (index < text.size()) {
+          if (text[index] == '*' && index + 1 < text.size() &&
+              text[index + 1] == '/') {
+            ++index;
+            found_comment_end = true;
+            break;
+          }
+          ++index;
+        }
+
+        if (!found_comment_end) {
+          break;
+        }
+
+        const bool has_previous_non_space =
+            !stripped.empty() &&
+            !std::isspace(static_cast<unsigned char>(stripped.back()));
+        const bool has_following_non_space =
+            index + 1 < text.size() &&
+            !std::isspace(static_cast<unsigned char>(text[index + 1]));
+        if (has_previous_non_space && has_following_non_space) {
+          stripped.push_back(' ');
+        }
+
+        continue;
       }
     }
+
+    stripped.push_back(ch);
   }
 
-  return text;
+  return stripped;
 }
 
 std::unordered_map<std::string, std::string>
