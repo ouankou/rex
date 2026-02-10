@@ -112,51 +112,44 @@ static string normalizeNameForMangledNameSupport(const string &name) {
   replaceAllInString(normalized, "__ptr__", escaped_literal_prefix + "ptr");
   replaceAllInString(normalized, "__minus__", escaped_literal_prefix + "minus");
 
+  struct OperatorRule {
+    const char *operator_name;
+    const char *marker_label;
+    const char *mangled_operator_name;
+  };
+
+  const OperatorRule operator_rules[] = {
+      {"_operator>", "REX_INTERNAL_GT_OP", "_operator__tae__"},
+      {"operator<=>", "REX_SPACESHIP_OP", "operator__tas__=__tae__"},
+      {"operator>>", "REX_SHIFT_R_OP", "operator__tae____tae__"},
+      {"operator<<", "REX_SHIFT_L_OP", "operator__tas____tas__"},
+      {"operator>=", "REX_GE_OP", "operator__tae__="},
+      {"operator<=", "REX_LE_OP", "operator__tas__="},
+      {"operator->*", "REX_ARROW_STAR_OP", "operator-__tae____ptr__"},
+      {"operator->", "REX_ARROW_OP", "operator-__tae__"},
+      {"operator&&", "REX_LOGICAL_AND_OP", "operator__ref____ref__"},
+      {"operator&", "REX_ADDR_OF_OP", "operator__ref__"},
+      {"operator,", "REX_COMMA_OP", "operator__comma__"},
+      {"operator>", "REX_GT_OP", "operator__tae__"},
+      {"operator<", "REX_LT_OP", "operator__tas__"},
+      {"operator*", "REX_MUL_OP", "operator__ptr__"},
+  };
+
   string marker_search_space = normalized;
-  const string operator_internal_gt =
-      makeUniqueTemporaryMarker("REX_INTERNAL_GT_OP", marker_search_space);
-  const string operator_shift_r =
-      makeUniqueTemporaryMarker("REX_SHIFT_R_OP", marker_search_space);
-  const string operator_shift_l =
-      makeUniqueTemporaryMarker("REX_SHIFT_L_OP", marker_search_space);
-  const string operator_ge =
-      makeUniqueTemporaryMarker("REX_GE_OP", marker_search_space);
-  const string operator_le =
-      makeUniqueTemporaryMarker("REX_LE_OP", marker_search_space);
-  const string operator_spaceship =
-      makeUniqueTemporaryMarker("REX_SPACESHIP_OP", marker_search_space);
-  const string operator_gt =
-      makeUniqueTemporaryMarker("REX_GT_OP", marker_search_space);
-  const string operator_lt =
-      makeUniqueTemporaryMarker("REX_LT_OP", marker_search_space);
-  const string operator_arrow_star =
-      makeUniqueTemporaryMarker("REX_ARROW_STAR_OP", marker_search_space);
-  const string operator_arrow =
-      makeUniqueTemporaryMarker("REX_ARROW_OP", marker_search_space);
-  const string operator_logical_and =
-      makeUniqueTemporaryMarker("REX_LOGICAL_AND_OP", marker_search_space);
-  const string operator_addr_of =
-      makeUniqueTemporaryMarker("REX_ADDR_OF_OP", marker_search_space);
-  const string operator_comma =
-      makeUniqueTemporaryMarker("REX_COMMA_OP", marker_search_space);
-  const string operator_mul =
-      makeUniqueTemporaryMarker("REX_MUL_OP", marker_search_space);
+  const size_t operator_rule_count =
+      sizeof(operator_rules) / sizeof(operator_rules[0]);
+  vector<string> operator_markers;
+  operator_markers.reserve(operator_rule_count);
 
-  replaceAllInString(normalized, "_operator>", operator_internal_gt);
+  for (size_t i = 0; i < operator_rule_count; ++i) {
+    operator_markers.push_back(makeUniqueTemporaryMarker(
+        operator_rules[i].marker_label, marker_search_space));
+  }
 
-  replaceAllInString(normalized, "operator<=>", operator_spaceship);
-  replaceAllInString(normalized, "operator>>", operator_shift_r);
-  replaceAllInString(normalized, "operator<<", operator_shift_l);
-  replaceAllInString(normalized, "operator>=", operator_ge);
-  replaceAllInString(normalized, "operator<=", operator_le);
-  replaceAllInString(normalized, "operator->*", operator_arrow_star);
-  replaceAllInString(normalized, "operator->", operator_arrow);
-  replaceAllInString(normalized, "operator&&", operator_logical_and);
-  replaceAllInString(normalized, "operator&", operator_addr_of);
-  replaceAllInString(normalized, "operator,", operator_comma);
-  replaceAllInString(normalized, "operator>", operator_gt);
-  replaceAllInString(normalized, "operator<", operator_lt);
-  replaceAllInString(normalized, "operator*", operator_mul);
+  for (size_t i = 0; i < operator_rule_count; ++i) {
+    replaceAllInString(normalized, operator_rules[i].operator_name,
+                       operator_markers[i]);
+  }
 
   replaceAllInString(normalized, "<", "__tas__");
   replaceAllInString(normalized, ">", "__tae__");
@@ -166,23 +159,10 @@ static string normalizeNameForMangledNameSupport(const string &name) {
   replaceAllInString(normalized, "*", "__ptr__");
   replaceAllInString(normalized, "_-", "__minus__");
 
-  replaceAllInString(normalized, operator_internal_gt, "_operator__tae__");
-
-  replaceAllInString(normalized, operator_spaceship, "operator__tas__=__tae__");
-  replaceAllInString(normalized, operator_shift_r, "operator__tae____tae__");
-  replaceAllInString(normalized, operator_shift_l, "operator__tas____tas__");
-  replaceAllInString(normalized, operator_ge, "operator__tae__=");
-  replaceAllInString(normalized, operator_le, "operator__tas__=");
-  replaceAllInString(normalized, operator_arrow_star,
-                     "operator-__tae____ptr__");
-  replaceAllInString(normalized, operator_arrow, "operator-__tae__");
-  replaceAllInString(normalized, operator_logical_and,
-                     "operator__ref____ref__");
-  replaceAllInString(normalized, operator_addr_of, "operator__ref__");
-  replaceAllInString(normalized, operator_comma, "operator__comma__");
-  replaceAllInString(normalized, operator_gt, "operator__tae__");
-  replaceAllInString(normalized, operator_lt, "operator__tas__");
-  replaceAllInString(normalized, operator_mul, "operator__ptr__");
+  for (size_t i = 0; i < operator_rule_count; ++i) {
+    replaceAllInString(normalized, operator_markers[i],
+                       operator_rules[i].mangled_operator_name);
+  }
 
   replaceAllInString(normalized, escaped_literal_prefix + "tas", "__tas__");
   replaceAllInString(normalized, escaped_literal_prefix + "tae", "__tae__");
