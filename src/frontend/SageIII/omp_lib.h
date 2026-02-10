@@ -1,13 +1,15 @@
 include 'omp_lib_kinds.h' integer openmp_version
-parameter(openmp_version = 200805) external omp_set_num_threads integer
-    omp_get_num_threads external omp_get_num_threads integer omp_get_max_threads
-    external omp_get_max_threads integer omp_get_thread_num external
-    omp_get_thread_num integer omp_get_num_procs external
-    omp_get_num_procs logical omp_in_parallel external omp_in_parallel external
-    omp_set_dynamic logical omp_get_dynamic external omp_get_dynamic external
-    omp_set_nested logical omp_get_nested external omp_get_nested external
-    omp_set_schedule external omp_get_schedule integer omp_get_thread_limit
-    external omp_get_thread_limit external omp_set_max_active_levels integer
+parameter(openmp_version = 200805)
+
+    external omp_set_num_threads integer omp_get_num_threads external
+    omp_get_num_threads integer omp_get_max_threads external omp_get_max_threads
+    integer omp_get_thread_num external omp_get_thread_num integer
+    omp_get_num_procs external omp_get_num_procs logical
+    omp_in_parallel external omp_in_parallel external omp_set_dynamic logical
+    omp_get_dynamic external omp_get_dynamic external omp_set_nested logical
+    omp_get_nested external omp_get_nested external omp_set_schedule external
+    omp_get_schedule integer omp_get_thread_limit external
+    omp_get_thread_limit external omp_set_max_active_levels integer
     omp_get_max_active_levels external omp_get_max_active_levels integer
     omp_get_level external omp_get_level integer omp_get_ancestor_thread_num
     external omp_get_ancestor_thread_num integer omp_get_team_size external

@@ -1,2 +1,2 @@
-#pragma omp parallel  num_threads(2)
-#pragma omp parallel  num_threads(4 + 8)
+#pragma omp parallel num_threads(2)
+#pragma omp parallel num_threads(THREADS_2 + THREADS_3)

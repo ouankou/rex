@@ -33,14 +33,21 @@ static std::string gExpressionString;
    and shift the current position pointer of user input afterwards 
    to prepare next round of token recognition!!
 */
-#define YY_INPUT(buf, result, max_size) { \
-                if (*ompparserinput == '\0') result = 0; \
-                else { strncpy(buf, ompparserinput, max_size); \
-                        buf[max_size] = 0; \
-                        result = strlen(buf); \
-                        ompparserinput += result; \
-                } \
-                }
+#define YY_INPUT(buf, result, max_size)                                            \
+  do {                                                                              \
+    if (ompparserinput == NULL || *ompparserinput == '\0') {                       \
+      result = 0;                                                                   \
+    } else {                                                                        \
+      size_t remaining = strlen(ompparserinput);                                    \
+      size_t to_copy =                                                               \
+          remaining < static_cast<size_t>(max_size)                                 \
+              ? remaining                                                            \
+              : static_cast<size_t>(max_size);                                      \
+      memcpy(buf, ompparserinput, to_copy);                                         \
+      result = static_cast<int>(to_copy);                                           \
+      ompparserinput += to_copy;                                                    \
+    }                                                                               \
+  } while (0)
 
 %}
 
@@ -76,6 +83,8 @@ fortran_block_end [ ]*[^a-zA-Z0-9_]
 ":"             { return (':'); }
 "+"             { return ('+'); }
 "*"             { return ('*'); }
+\/\*([^*]|\*+[^*/])*\*+\/ { /* Ignore C-style block comments */ }
+"//"[^\n]*      { /* Ignore C++-style line comments */ }
 "/"             { return ('/'); }
 "-"             { return ('-'); }
 "&"             { return ('&'); }

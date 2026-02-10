@@ -531,22 +531,22 @@ additive_expr : multiplicative_expr
                 }
               ;
 
-multiplicative_expr : primary_expr
-                    | multiplicative_expr '*' primary_expr {
+multiplicative_expr : unary_expr
+                    | multiplicative_expr '*' unary_expr {
                         current_exp = SageBuilder::buildMultiplyOp(
                           (SgExpression*)($1),
                           (SgExpression*)($3)
                         ); 
                         $$ = current_exp; 
                       }
-                    | multiplicative_expr '/' primary_expr {
+                    | multiplicative_expr '/' unary_expr {
                         current_exp = SageBuilder::buildDivideOp(
                           (SgExpression*)($1),
                           (SgExpression*)($3)
                         ); 
                         $$ = current_exp; 
                       }
-                    | multiplicative_expr '%' primary_expr {
+                    | multiplicative_expr '%' unary_expr {
                         current_exp = SageBuilder::buildModOp(
                           (SgExpression*)($1),
                           (SgExpression*)($3)
@@ -679,14 +679,21 @@ variable_list : postfix_expr {
 int yyerror(const char *s) {
     SgLocatedNode* lnode = isSgLocatedNode(omp_directive_node);
     assert (lnode);
-    printf("Error when parsing pragma:\n\t %s \n\t associated with node at line %d\n", orig_str, lnode->get_file_info()->get_line()); 
-    printf(" %s!\n", s);
+    MLOG_ERROR_C("omp_exprparser",
+                 "Error when parsing pragma at line %d: %s\n",
+                 lnode->get_file_info()->get_line(),
+                 orig_str ? orig_str : "");
+    MLOG_ERROR_C("omp_exprparser", "%s\n", s ? s : "unknown parse error");
     ROSE_ABORT();
     return 0; // we want to the program to stop on error
 }
 
 void omp_exprparser_parser_init(SgNode* directive, const char* str) {
     orig_str = str;
+    current_exp = NULL;
+    array_symbol = NULL;
+    lower_exp = NULL;
+    length_exp = NULL;
     omp_exprparser_lexer_init(str);
     omp_directive_node = directive;
 }
@@ -735,7 +742,9 @@ static void ofs_add_block_variables (const char* block_name)
 
   if (found_block_object == NULL)
   {
-    printf("error: cannot find a common block with a name of %s\n",block_name);
+    MLOG_ERROR_C("omp_exprparser",
+                 "cannot find a common block with a name of %s\n",
+                 block_name ? block_name : "");
     ROSE_ABORT();
   }
 
@@ -880,6 +889,10 @@ static bool addOmpVariableExpr(SgExpression* expr) {
 
 SgExpression* parseArraySectionExpression(SgNode* directive, bool look_forward, const char* str) {
     orig_str = str;
+    current_exp = NULL;
+    array_symbol = NULL;
+    lower_exp = NULL;
+    length_exp = NULL;
     omp_exprparser_lexer_init(str);
     omp_directive_node = directive;
     omp_exprparser_look_forward = look_forward;
@@ -891,6 +904,10 @@ SgExpression* parseArraySectionExpression(SgNode* directive, bool look_forward, 
 
 SgExpression* parseExpression(SgNode* directive, bool look_forward, const char* str) {
     orig_str = str;
+    current_exp = NULL;
+    array_symbol = NULL;
+    lower_exp = NULL;
+    length_exp = NULL;
     omp_exprparser_lexer_init(str);
     omp_directive_node = directive;
     omp_exprparser_look_forward = look_forward;

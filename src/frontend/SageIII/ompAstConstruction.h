@@ -25,8 +25,8 @@ extern std::vector<std::pair<std::string, SgNode *>> omp_variable_list;
 extern std::map<SgSymbol *,
                 std::vector<std::pair<SgExpression *, SgExpression *>>>
     array_dimensions;
-extern OpenMPDirective *parseOpenMP(const char *,
-                                    void *_exprParse(const char *));
+extern OpenMPDirective *parseOpenMP(const char *, OpenMPExprParseCallback,
+                                    void *);
 extern OpenACCDirective *parseOpenACC(std::string);
 
 extern bool checkOpenACCIR(OpenACCDirective *);

@@ -11,6 +11,6 @@
 #pragma omp for schedule(guided)
 #pragma omp single
 #pragma omp for schedule(runtime) ordered
-//#pragma omp parallel for schedule (auto)
 #pragma omp parallel
 #pragma omp single
+//#pragma omp parallel for schedule (auto)
