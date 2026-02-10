@@ -14,6 +14,7 @@
 #include <cctype>
 #include <fstream>
 #include <memory>
+#include <sys/stat.h>
 #include <tuple>
 #include <unordered_map>
 
@@ -603,11 +604,98 @@ bool isIdentifierChar(char ch) {
   return std::isalnum(uch) != 0 || ch == '_';
 }
 
+constexpr std::size_t kMaxMacroScanBytes = static_cast<std::size_t>(16) << 20;
+
+bool isRegularFileForMacroScan(const std::string &filename) {
+  struct stat file_status;
+  if (stat(filename.c_str(), &file_status) != 0) {
+    MLOG_WARN_C("ompAstConstruction",
+                "Could not stat file for macro collection: %s\n",
+                filename.c_str());
+    return false;
+  }
+
+  if (!S_ISREG(file_status.st_mode)) {
+    MLOG_WARN_C("ompAstConstruction",
+                "Skipping macro collection for non-regular file: %s\n",
+                filename.c_str());
+    return false;
+  }
+
+  if (file_status.st_size < 0) {
+    MLOG_WARN_C("ompAstConstruction",
+                "Skipping macro collection for file with unknown size: %s\n",
+                filename.c_str());
+    return false;
+  }
+
+  const std::size_t file_size = static_cast<std::size_t>(file_status.st_size);
+  if (file_size > kMaxMacroScanBytes) {
+    MLOG_WARN_C(
+        "ompAstConstruction",
+        "Skipping macro collection for oversized file (%zu bytes): %s\n",
+        file_size, filename.c_str());
+    return false;
+  }
+
+  return true;
+}
+
+std::string stripTrailingMacroReplacementComment(const std::string &text) {
+  bool in_single_quote = false;
+  bool in_double_quote = false;
+  bool escaped = false;
+
+  for (std::size_t index = 0; index < text.size(); ++index) {
+    const char ch = text[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (in_single_quote || in_double_quote) {
+      if (ch == '\\') {
+        escaped = true;
+        continue;
+      }
+      if (in_single_quote && ch == '\'') {
+        in_single_quote = false;
+      } else if (in_double_quote && ch == '"') {
+        in_double_quote = false;
+      }
+      continue;
+    }
+
+    if (ch == '\'') {
+      in_single_quote = true;
+      continue;
+    }
+    if (ch == '"') {
+      in_double_quote = true;
+      continue;
+    }
+
+    if (ch == '/' && index + 1 < text.size()) {
+      const char next = text[index + 1];
+      if (next == '/' || next == '*') {
+        return text.substr(0, index);
+      }
+    }
+  }
+
+  return text;
+}
+
 std::unordered_map<std::string, std::string>
 collectObjectLikeMacrosUntilLine(const std::string &filename,
                                  unsigned int max_line_inclusive) {
   std::unordered_map<std::string, std::string> object_macros;
   if (filename.empty() || max_line_inclusive == 0) {
+    return object_macros;
+  }
+
+  if (!isRegularFileForMacroScan(filename)) {
     return object_macros;
   }
 
@@ -621,8 +709,16 @@ collectObjectLikeMacrosUntilLine(const std::string &filename,
 
   std::string raw_line;
   unsigned int current_line = 0;
+  std::size_t bytes_processed = 0;
+  bool reached_scan_limit = false;
   while (current_line < max_line_inclusive && std::getline(stream, raw_line)) {
     ++current_line;
+    if (raw_line.size() > kMaxMacroScanBytes - bytes_processed) {
+      reached_scan_limit = true;
+      break;
+    }
+    bytes_processed += raw_line.size();
+
     std::string logical_line = raw_line;
 
     while (current_line < max_line_inclusive) {
@@ -635,8 +731,17 @@ collectObjectLikeMacrosUntilLine(const std::string &filename,
         break;
       }
       ++current_line;
+      if (next_line.size() > kMaxMacroScanBytes - bytes_processed) {
+        reached_scan_limit = true;
+        break;
+      }
+      bytes_processed += next_line.size();
       logical_line.erase(end);
       logical_line += " " + trimWhitespaceCopy(next_line);
+    }
+
+    if (reached_scan_limit) {
+      break;
     }
 
     const std::string stripped = trimWhitespaceCopy(logical_line);
@@ -660,7 +765,9 @@ collectObjectLikeMacrosUntilLine(const std::string &filename,
       if (pos < stripped.size() && stripped[pos] == '(') {
         continue;
       }
-      const std::string replacement = trimWhitespaceCopy(stripped.substr(pos));
+      std::string replacement =
+          stripTrailingMacroReplacementComment(stripped.substr(pos));
+      replacement = trimWhitespaceCopy(replacement);
       object_macros[macro_name] = replacement;
       continue;
     }
@@ -684,6 +791,12 @@ collectObjectLikeMacrosUntilLine(const std::string &filename,
           stripped.substr(name_begin, pos - name_begin);
       object_macros.erase(macro_name);
     }
+  }
+
+  if (reached_scan_limit) {
+    MLOG_WARN_C("ompAstConstruction",
+                "Macro collection stopped after reading %zu bytes from %s\n",
+                bytes_processed, filename.c_str());
   }
 
   return object_macros;
