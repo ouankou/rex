@@ -52,6 +52,71 @@ string trimSpaces(const string &s) {
   return s_new;
 }
 
+static void replaceAllInString(string &source, const string &target,
+                               const string &replacement) {
+  if (target.empty()) {
+    return;
+  }
+
+  string::size_type pos = 0;
+  while ((pos = source.find(target, pos)) != string::npos) {
+    source.replace(pos, target.size(), replacement);
+    pos += replacement.size();
+  }
+}
+
+static string normalizeNameForMangledNameSupport(const string &name) {
+  string normalized = trimSpaces(name);
+  if (normalized.empty()) {
+    return normalized;
+  }
+
+  const bool hasTemplateSyntax = SageInterface::hasTemplateSyntax(normalized);
+  const bool hasScopeSyntax = normalized.find("::") != string::npos;
+  const bool hasTemplateSeparators = normalized.find(',') != string::npos;
+  const bool hasTypeDecorators = normalized.find('&') != string::npos ||
+                                 normalized.find('*') != string::npos ||
+                                 normalized.find("_-") != string::npos;
+  if (!hasTemplateSyntax && !hasScopeSyntax && !hasTemplateSeparators &&
+      !hasTypeDecorators) {
+    return normalized;
+  }
+
+  replaceAllInString(normalized, " ", "");
+
+  replaceAllInString(normalized, "_operator>", "_operator?");
+
+  replaceAllInString(normalized, "operator>>", "operator??");
+  replaceAllInString(normalized, "operator<<", "operator$$");
+  replaceAllInString(normalized, "operator>", "operator?");
+  replaceAllInString(normalized, "operator<", "operator$");
+  replaceAllInString(normalized, "operator*", "operator@");
+
+  replaceAllInString(normalized, "<", "__tas__");
+  replaceAllInString(normalized, ">", "__tae__");
+  replaceAllInString(normalized, "::", "__scope__");
+  replaceAllInString(normalized, ",", "__comma__");
+  replaceAllInString(normalized, "&", "__ref__");
+  replaceAllInString(normalized, "*", "__ptr__");
+  replaceAllInString(normalized, "_-", "__minus__");
+
+  replaceAllInString(normalized, "_operator?", "_operator__tae__");
+
+  replaceAllInString(normalized, "operator??", "operator>>");
+  replaceAllInString(normalized, "operator$$", "operator<<");
+  replaceAllInString(normalized, "operator?", "operator>");
+  replaceAllInString(normalized, "operator$", "operator<");
+  replaceAllInString(normalized, "operator@", "operator*");
+
+  replaceAllInString(normalized, " ", "");
+
+  ROSE_ASSERT(normalized.find("::") == string::npos);
+  ROSE_ASSERT(normalized.find(':') == string::npos);
+  ROSE_ASSERT(normalized.find(',') == string::npos);
+
+  return normalized;
+}
+
 string joinMangledQualifiersToString(const string &base, const string &name) {
   string mangled_name(base);
   if (!base.empty() && !name.empty())
@@ -348,6 +413,8 @@ string mangleQualifiersToString(const SgScopeStatement *scope) {
     }
     }
   }
+
+  mangled_name = normalizeNameForMangledNameSupport(mangled_name);
 
   // DQ (5/31/2012): Added test for template brackets that are caught later in
   // AstConsistencyTests. Make sure that there is no template specific syntax
@@ -648,8 +715,11 @@ string mangleTemplateToString(const string &templ_name,
     scope_name = mangleQualifiersToString(scope);
   }
 
+  string mangled_template_name = normalizeNameForMangledNameSupport(templ_name);
+
   // Compute the final mangled name.
-  string mangled_name = joinMangledQualifiersToString(scope_name, templ_name);
+  string mangled_name =
+      joinMangledQualifiersToString(scope_name, mangled_template_name);
 
   if (mangled_name.empty() == true) {
     mangled_name = "unknown_template_name";
@@ -687,8 +757,11 @@ string mangleTemplateToString(const string &templ_name,
     scope_name = mangleQualifiersToString(scope);
   }
 
+  string mangled_template_name = normalizeNameForMangledNameSupport(templ_name);
+
   // Compute the final mangled name.
-  string mangled_name = joinMangledQualifiersToString(scope_name, templ_name);
+  string mangled_name =
+      joinMangledQualifiersToString(scope_name, mangled_template_name);
 
   if (mangled_name.empty() == true) {
     mangled_name = "unknown_template_name";
