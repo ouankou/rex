@@ -3953,6 +3953,8 @@ bool ClangToSageTranslator::VisitIndirectGotoStmt(
              "SgExpression ("
           << tmp_target->class_name() << ")." << std::endl;
     }
+    *node = SageBuilder::buildNullStatement();
+    setCompilerGeneratedFileInfo(*node);
     res = false;
   } else {
     SgGotoStatement *sg_goto_stmt =
@@ -4743,6 +4745,9 @@ bool ClangToSageTranslator::VisitAddrLabelExpr(
   std::cerr << "ClangToSageTranslator::VisitAddrLabelExpr" << std::endl;
 #endif
   bool res = true;
+
+  *node = buildFallbackExpression(addr_label_expr);
+  ROSE_ASSERT(*node != nullptr);
 
   clang::LabelDecl *label_decl = addr_label_expr->getLabel();
   if (label_decl == nullptr) {
