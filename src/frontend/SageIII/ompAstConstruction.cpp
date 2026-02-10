@@ -613,6 +613,9 @@ collectObjectLikeMacrosUntilLine(const std::string &filename,
 
   std::ifstream stream(filename);
   if (!stream.is_open()) {
+    MLOG_WARN_C("ompAstConstruction",
+                "Could not open file to collect macros: %s\n",
+                filename.c_str());
     return object_macros;
   }
 
