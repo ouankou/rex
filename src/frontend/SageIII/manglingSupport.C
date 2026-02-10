@@ -119,17 +119,41 @@ static string normalizeNameForMangledNameSupport(const string &name) {
       makeUniqueTemporaryMarker("REX_SHIFT_R_OP", marker_search_space);
   const string operator_shift_l =
       makeUniqueTemporaryMarker("REX_SHIFT_L_OP", marker_search_space);
+  const string operator_ge =
+      makeUniqueTemporaryMarker("REX_GE_OP", marker_search_space);
+  const string operator_le =
+      makeUniqueTemporaryMarker("REX_LE_OP", marker_search_space);
+  const string operator_spaceship =
+      makeUniqueTemporaryMarker("REX_SPACESHIP_OP", marker_search_space);
   const string operator_gt =
       makeUniqueTemporaryMarker("REX_GT_OP", marker_search_space);
   const string operator_lt =
       makeUniqueTemporaryMarker("REX_LT_OP", marker_search_space);
+  const string operator_arrow_star =
+      makeUniqueTemporaryMarker("REX_ARROW_STAR_OP", marker_search_space);
+  const string operator_arrow =
+      makeUniqueTemporaryMarker("REX_ARROW_OP", marker_search_space);
+  const string operator_logical_and =
+      makeUniqueTemporaryMarker("REX_LOGICAL_AND_OP", marker_search_space);
+  const string operator_addr_of =
+      makeUniqueTemporaryMarker("REX_ADDR_OF_OP", marker_search_space);
+  const string operator_comma =
+      makeUniqueTemporaryMarker("REX_COMMA_OP", marker_search_space);
   const string operator_mul =
       makeUniqueTemporaryMarker("REX_MUL_OP", marker_search_space);
 
   replaceAllInString(normalized, "_operator>", operator_internal_gt);
 
+  replaceAllInString(normalized, "operator<=>", operator_spaceship);
   replaceAllInString(normalized, "operator>>", operator_shift_r);
   replaceAllInString(normalized, "operator<<", operator_shift_l);
+  replaceAllInString(normalized, "operator>=", operator_ge);
+  replaceAllInString(normalized, "operator<=", operator_le);
+  replaceAllInString(normalized, "operator->*", operator_arrow_star);
+  replaceAllInString(normalized, "operator->", operator_arrow);
+  replaceAllInString(normalized, "operator&&", operator_logical_and);
+  replaceAllInString(normalized, "operator&", operator_addr_of);
+  replaceAllInString(normalized, "operator,", operator_comma);
   replaceAllInString(normalized, "operator>", operator_gt);
   replaceAllInString(normalized, "operator<", operator_lt);
   replaceAllInString(normalized, "operator*", operator_mul);
@@ -144,8 +168,16 @@ static string normalizeNameForMangledNameSupport(const string &name) {
 
   replaceAllInString(normalized, operator_internal_gt, "_operator__tae__");
 
+  replaceAllInString(normalized, operator_spaceship, "operator<=>");
   replaceAllInString(normalized, operator_shift_r, "operator>>");
   replaceAllInString(normalized, operator_shift_l, "operator<<");
+  replaceAllInString(normalized, operator_ge, "operator>=");
+  replaceAllInString(normalized, operator_le, "operator<=");
+  replaceAllInString(normalized, operator_arrow_star, "operator->*");
+  replaceAllInString(normalized, operator_arrow, "operator->");
+  replaceAllInString(normalized, operator_logical_and, "operator&&");
+  replaceAllInString(normalized, operator_addr_of, "operator&");
+  replaceAllInString(normalized, operator_comma, "operator,");
   replaceAllInString(normalized, operator_gt, "operator>");
   replaceAllInString(normalized, operator_lt, "operator<");
   replaceAllInString(normalized, operator_mul, "operator*");
