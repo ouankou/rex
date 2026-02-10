@@ -27,6 +27,7 @@ extern int omp_exprparser_lex();
 #include "omp_exprparser_parser.hh"
 
 static const char* ompparserinput = NULL;
+static size_t ompparserinput_remaining = 0;
 static std::string gExpressionString;
 
 /* pass user specified string to buf, indicate the size using 'result', 
@@ -35,17 +36,17 @@ static std::string gExpressionString;
 */
 #define YY_INPUT(buf, result, max_size)                                            \
   do {                                                                              \
-    if (ompparserinput == NULL || *ompparserinput == '\0') {                       \
+    if (ompparserinput == NULL || ompparserinput_remaining == 0) {                 \
       result = 0;                                                                   \
     } else {                                                                        \
-      size_t remaining = strlen(ompparserinput);                                    \
       size_t to_copy =                                                               \
-          remaining < static_cast<size_t>(max_size)                                 \
-              ? remaining                                                            \
+          ompparserinput_remaining < static_cast<size_t>(max_size)                  \
+              ? ompparserinput_remaining                                            \
               : static_cast<size_t>(max_size);                                      \
       memcpy(buf, ompparserinput, to_copy);                                         \
       result = static_cast<int>(to_copy);                                           \
       ompparserinput += to_copy;                                                    \
+      ompparserinput_remaining -= to_copy;                                          \
     }                                                                               \
   } while (0)
 
@@ -137,6 +138,7 @@ array_section   { return (ARRAY_SECTION); }
 /* entry point invoked by callers to start scanning for a string */
 extern void omp_exprparser_lexer_init(const char* str) {
   ompparserinput = str;
+  ompparserinput_remaining = str != NULL ? strlen(str) : 0;
   /* We have omp_ suffix for all flex functions */
   omp_exprparser_restart(omp_exprparser_in);
 }

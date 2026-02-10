@@ -696,7 +696,18 @@ std::string expandObjectLikeMacros(
     return text;
   }
 
+  constexpr std::string::size_type kMaxExpandedPragmaSize =
+      static_cast<std::string::size_type>(1) << 20;
+
   std::string current = text;
+  if (current.size() > kMaxExpandedPragmaSize) {
+    MLOG_WARN_C(
+        "ompAstConstruction",
+        "Skipping macro expansion for oversized pragma text (%zu bytes)\n",
+        current.size());
+    return current;
+  }
+
   for (int iteration = 0; iteration < 16; ++iteration) {
     bool changed = false;
     std::string expanded;
@@ -704,7 +715,43 @@ std::string expandObjectLikeMacros(
 
     std::string::size_type pos = 0;
     while (pos < current.size()) {
+      if (current[pos] == '"' || current[pos] == '\'') {
+        const char quote_char = current[pos];
+        const std::string::size_type begin = pos;
+        ++pos;
+        while (pos < current.size()) {
+          if (current[pos] == '\\' && pos + 1 < current.size()) {
+            pos += 2;
+            continue;
+          }
+          if (current[pos] == quote_char) {
+            ++pos;
+            break;
+          }
+          ++pos;
+        }
+
+        const std::string::size_type literal_size = pos - begin;
+        if (literal_size > kMaxExpandedPragmaSize ||
+            expanded.size() > kMaxExpandedPragmaSize - literal_size) {
+          MLOG_WARN_C("ompAstConstruction",
+                      "Macro expansion exceeded size limit (%zu bytes); using "
+                      "unexpanded text\n",
+                      kMaxExpandedPragmaSize);
+          return current;
+        }
+        expanded.append(current, begin, literal_size);
+        continue;
+      }
+
       if (!isIdentifierStart(current[pos])) {
+        if (expanded.size() == kMaxExpandedPragmaSize) {
+          MLOG_WARN_C("ompAstConstruction",
+                      "Macro expansion exceeded size limit (%zu bytes); using "
+                      "unexpanded text\n",
+                      kMaxExpandedPragmaSize);
+          return current;
+        }
         expanded.push_back(current[pos]);
         ++pos;
         continue;
@@ -718,11 +765,19 @@ std::string expandObjectLikeMacros(
 
       const std::string token = current.substr(begin, pos - begin);
       const auto found = object_macros.find(token);
+      const std::string &replacement_text =
+          found != object_macros.end() ? found->second : token;
+      if (replacement_text.size() > kMaxExpandedPragmaSize ||
+          expanded.size() > kMaxExpandedPragmaSize - replacement_text.size()) {
+        MLOG_WARN_C("ompAstConstruction",
+                    "Macro expansion exceeded size limit (%zu bytes); using "
+                    "unexpanded text\n",
+                    kMaxExpandedPragmaSize);
+        return current;
+      }
+      expanded += replacement_text;
       if (found != object_macros.end()) {
-        expanded += found->second;
         changed = true;
-      } else {
-        expanded += token;
       }
     }
 
