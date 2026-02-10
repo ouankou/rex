@@ -17074,6 +17074,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     const bool register_redecl_chain =
         specialization_kind != clang::TSK_ExplicitInstantiationDefinition &&
         specialization_kind != clang::TSK_ExplicitInstantiationDeclaration;
+    const bool register_all_implicit_instantiation_redecls =
+        specialization_kind == clang::TSK_ImplicitInstantiation;
 
     auto register_decl = [&](clang::FunctionDecl *key) {
       if (key == nullptr) {
@@ -17100,6 +17102,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     if (register_redecl_chain) {
       register_decl(clang_decl->getCanonicalDecl());
       register_decl(clang_decl->getFirstDecl());
+    }
+
+    if (register_all_implicit_instantiation_redecls) {
+      for (clang::FunctionDecl *redecl : clang_decl->redecls()) {
+        register_decl(redecl);
+      }
     }
   };
 
