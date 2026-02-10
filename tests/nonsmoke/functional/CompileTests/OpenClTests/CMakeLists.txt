@@ -26,10 +26,7 @@ add_test(
   COMMAND testTranslator ${ROSE_FLAGS}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/empty.cl
 )
-set_tests_properties(OPENCLTEST_empty PROPERTIES LABELS "OPENCLTEST;disabled")
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(OPENCLTEST_empty PROPERTIES DISABLED TRUE)
-endif()
+set_tests_properties(OPENCLTEST_empty PROPERTIES LABELS "OPENCLTEST")
 
 # Makefile check targets.
 set(_opencl_group_tests)
@@ -38,6 +35,7 @@ foreach(file_to_test ${files_to_test})
   string(REPLACE "." "_" _test_key "${_test_key}")
   list(APPEND _opencl_group_tests "OPENCLTEST_${_test_key}")
 endforeach()
+list(APPEND _opencl_group_tests OPENCLTEST_empty)
 add_test(
   NAME nonsmoke_functional_CompileTests_OpenClTests_check-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

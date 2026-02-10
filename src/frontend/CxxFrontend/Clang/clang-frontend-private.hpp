@@ -600,6 +600,7 @@ protected:
                                     SgInitializedName *&target_init);
 
   void rehomeSymbolToScope(SgSymbol *symbol, SgScopeStatement *scope);
+  void attachSymbolToScopeOrOrphan(SgSymbol *symbol, SgScopeStatement *scope);
   void ensureMemberFunctionScope(SgFunctionDeclaration *decl,
                                  SgClassDefinition *parent_def);
   SgSymbol *buildSymbolForDeclaration(SgDeclarationStatement *decl);
