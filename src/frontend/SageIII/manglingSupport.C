@@ -81,6 +81,133 @@ static string makeUniqueTemporaryMarker(const string &label,
   return marker;
 }
 
+struct OperatorRule {
+  const char *operator_name;
+  const char *marker_label;
+  const char *mangled_operator_name;
+};
+
+static const OperatorRule operator_rules[] = {
+    {"_operator>", "REX_INTERNAL_GT_OP", "_operator__tae__"},
+    {"operator<=>", "REX_SPACESHIP_OP", "operator__tas__=__tae__"},
+    {"operator>>", "REX_SHIFT_R_OP", "operator__tae____tae__"},
+    {"operator<<", "REX_SHIFT_L_OP", "operator__tas____tas__"},
+    {"operator>=", "REX_GE_OP", "operator__tae__="},
+    {"operator<=", "REX_LE_OP", "operator__tas__="},
+    {"operator->*", "REX_ARROW_STAR_OP", "operator-__tae____ptr__"},
+    {"operator->", "REX_ARROW_OP", "operator-__tae__"},
+    {"operator&&", "REX_LOGICAL_AND_OP", "operator__ref____ref__"},
+    {"operator&", "REX_ADDR_OF_OP", "operator__ref__"},
+    {"operator,", "REX_COMMA_OP", "operator__comma__"},
+    {"operator>", "REX_GT_OP", "operator__tae__"},
+    {"operator<", "REX_LT_OP", "operator__tas__"},
+    {"operator*", "REX_MUL_OP", "operator__ptr__"},
+};
+
+class ManglingNormalizer {
+public:
+  explicit ManglingNormalizer(const string &normalized_name)
+      : normalized_(normalized_name), escaped_literal_prefix_("__rexesc__") {}
+
+  string normalize() {
+    replaceAllInString(normalized_, " ", "");
+
+    escapeExistingManglingTokens();
+    substituteOperatorsWithMarkers();
+    mangleSpecialCharacters();
+    restoreOperatorsFromMarkers();
+    unescapeOriginalManglingTokens();
+
+    replaceAllInString(normalized_, " ", "");
+
+    ROSE_ASSERT(normalized_.find("::") == string::npos);
+    ROSE_ASSERT(normalized_.find(':') == string::npos);
+    ROSE_ASSERT(normalized_.find(',') == string::npos);
+
+    return normalized_;
+  }
+
+private:
+  static size_t operatorRuleCount() {
+    return sizeof(operator_rules) / sizeof(operator_rules[0]);
+  }
+
+  void escapeExistingManglingTokens() {
+    replaceAllInString(normalized_, escaped_literal_prefix_,
+                       escaped_literal_prefix_ + escaped_literal_prefix_);
+
+    replaceAllInString(normalized_, "__tas__", escaped_literal_prefix_ + "tas");
+    replaceAllInString(normalized_, "__tae__", escaped_literal_prefix_ + "tae");
+    replaceAllInString(normalized_, "__scope__",
+                       escaped_literal_prefix_ + "scope");
+    replaceAllInString(normalized_, "__comma__",
+                       escaped_literal_prefix_ + "comma");
+    replaceAllInString(normalized_, "__ref__", escaped_literal_prefix_ + "ref");
+    replaceAllInString(normalized_, "__ptr__", escaped_literal_prefix_ + "ptr");
+    replaceAllInString(normalized_, "__minus__",
+                       escaped_literal_prefix_ + "minus");
+  }
+
+  void substituteOperatorsWithMarkers() {
+    string marker_search_space = normalized_;
+    const size_t operator_rule_count = operatorRuleCount();
+
+    operator_markers_.clear();
+    operator_markers_.reserve(operator_rule_count);
+
+    for (size_t i = 0; i < operator_rule_count; ++i) {
+      operator_markers_.push_back(makeUniqueTemporaryMarker(
+          operator_rules[i].marker_label, marker_search_space));
+    }
+
+    for (size_t i = 0; i < operator_rule_count; ++i) {
+      replaceAllInString(normalized_, operator_rules[i].operator_name,
+                         operator_markers_[i]);
+    }
+  }
+
+  void mangleSpecialCharacters() {
+    replaceAllInString(normalized_, "<", "__tas__");
+    replaceAllInString(normalized_, ">", "__tae__");
+    replaceAllInString(normalized_, "::", "__scope__");
+    replaceAllInString(normalized_, ",", "__comma__");
+    replaceAllInString(normalized_, "&", "__ref__");
+    replaceAllInString(normalized_, "*", "__ptr__");
+    replaceAllInString(normalized_, "_-", "__minus__");
+  }
+
+  void restoreOperatorsFromMarkers() {
+    const size_t operator_rule_count = operatorRuleCount();
+    ROSE_ASSERT(operator_markers_.size() == operator_rule_count);
+
+    for (size_t i = 0; i < operator_rule_count; ++i) {
+      replaceAllInString(normalized_, operator_markers_[i],
+                         operator_rules[i].mangled_operator_name);
+    }
+  }
+
+  void unescapeOriginalManglingTokens() {
+    replaceAllInString(normalized_, escaped_literal_prefix_ + "tas", "__tas__");
+    replaceAllInString(normalized_, escaped_literal_prefix_ + "tae", "__tae__");
+    replaceAllInString(normalized_, escaped_literal_prefix_ + "scope",
+                       "__scope__");
+    replaceAllInString(normalized_, escaped_literal_prefix_ + "comma",
+                       "__comma__");
+    replaceAllInString(normalized_, escaped_literal_prefix_ + "ref", "__ref__");
+    replaceAllInString(normalized_, escaped_literal_prefix_ + "ptr", "__ptr__");
+    replaceAllInString(normalized_, escaped_literal_prefix_ + "minus",
+                       "__minus__");
+
+    replaceAllInString(normalized_,
+                       escaped_literal_prefix_ + escaped_literal_prefix_,
+                       escaped_literal_prefix_);
+  }
+
+  string normalized_;
+  const string escaped_literal_prefix_;
+  vector<string> operator_markers_;
+};
+
 static string normalizeNameForMangledNameSupport(const string &name) {
   string normalized = trimSpaces(name);
   if (normalized.empty()) {
@@ -98,91 +225,8 @@ static string normalizeNameForMangledNameSupport(const string &name) {
     return normalized;
   }
 
-  replaceAllInString(normalized, " ", "");
-
-  const string escaped_literal_prefix = "__rexesc__";
-  replaceAllInString(normalized, escaped_literal_prefix,
-                     escaped_literal_prefix + escaped_literal_prefix);
-
-  replaceAllInString(normalized, "__tas__", escaped_literal_prefix + "tas");
-  replaceAllInString(normalized, "__tae__", escaped_literal_prefix + "tae");
-  replaceAllInString(normalized, "__scope__", escaped_literal_prefix + "scope");
-  replaceAllInString(normalized, "__comma__", escaped_literal_prefix + "comma");
-  replaceAllInString(normalized, "__ref__", escaped_literal_prefix + "ref");
-  replaceAllInString(normalized, "__ptr__", escaped_literal_prefix + "ptr");
-  replaceAllInString(normalized, "__minus__", escaped_literal_prefix + "minus");
-
-  struct OperatorRule {
-    const char *operator_name;
-    const char *marker_label;
-    const char *mangled_operator_name;
-  };
-
-  const OperatorRule operator_rules[] = {
-      {"_operator>", "REX_INTERNAL_GT_OP", "_operator__tae__"},
-      {"operator<=>", "REX_SPACESHIP_OP", "operator__tas__=__tae__"},
-      {"operator>>", "REX_SHIFT_R_OP", "operator__tae____tae__"},
-      {"operator<<", "REX_SHIFT_L_OP", "operator__tas____tas__"},
-      {"operator>=", "REX_GE_OP", "operator__tae__="},
-      {"operator<=", "REX_LE_OP", "operator__tas__="},
-      {"operator->*", "REX_ARROW_STAR_OP", "operator-__tae____ptr__"},
-      {"operator->", "REX_ARROW_OP", "operator-__tae__"},
-      {"operator&&", "REX_LOGICAL_AND_OP", "operator__ref____ref__"},
-      {"operator&", "REX_ADDR_OF_OP", "operator__ref__"},
-      {"operator,", "REX_COMMA_OP", "operator__comma__"},
-      {"operator>", "REX_GT_OP", "operator__tae__"},
-      {"operator<", "REX_LT_OP", "operator__tas__"},
-      {"operator*", "REX_MUL_OP", "operator__ptr__"},
-  };
-
-  string marker_search_space = normalized;
-  const size_t operator_rule_count =
-      sizeof(operator_rules) / sizeof(operator_rules[0]);
-  vector<string> operator_markers;
-  operator_markers.reserve(operator_rule_count);
-
-  for (size_t i = 0; i < operator_rule_count; ++i) {
-    operator_markers.push_back(makeUniqueTemporaryMarker(
-        operator_rules[i].marker_label, marker_search_space));
-  }
-
-  for (size_t i = 0; i < operator_rule_count; ++i) {
-    replaceAllInString(normalized, operator_rules[i].operator_name,
-                       operator_markers[i]);
-  }
-
-  replaceAllInString(normalized, "<", "__tas__");
-  replaceAllInString(normalized, ">", "__tae__");
-  replaceAllInString(normalized, "::", "__scope__");
-  replaceAllInString(normalized, ",", "__comma__");
-  replaceAllInString(normalized, "&", "__ref__");
-  replaceAllInString(normalized, "*", "__ptr__");
-  replaceAllInString(normalized, "_-", "__minus__");
-
-  for (size_t i = 0; i < operator_rule_count; ++i) {
-    replaceAllInString(normalized, operator_markers[i],
-                       operator_rules[i].mangled_operator_name);
-  }
-
-  replaceAllInString(normalized, escaped_literal_prefix + "tas", "__tas__");
-  replaceAllInString(normalized, escaped_literal_prefix + "tae", "__tae__");
-  replaceAllInString(normalized, escaped_literal_prefix + "scope", "__scope__");
-  replaceAllInString(normalized, escaped_literal_prefix + "comma", "__comma__");
-  replaceAllInString(normalized, escaped_literal_prefix + "ref", "__ref__");
-  replaceAllInString(normalized, escaped_literal_prefix + "ptr", "__ptr__");
-  replaceAllInString(normalized, escaped_literal_prefix + "minus", "__minus__");
-
-  replaceAllInString(normalized,
-                     escaped_literal_prefix + escaped_literal_prefix,
-                     escaped_literal_prefix);
-
-  replaceAllInString(normalized, " ", "");
-
-  ROSE_ASSERT(normalized.find("::") == string::npos);
-  ROSE_ASSERT(normalized.find(':') == string::npos);
-  ROSE_ASSERT(normalized.find(',') == string::npos);
-
-  return normalized;
+  ManglingNormalizer normalizer(normalized);
+  return normalizer.normalize();
 }
 
 string joinMangledQualifiersToString(const string &base, const string &name) {
