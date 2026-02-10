@@ -168,19 +168,21 @@ static string normalizeNameForMangledNameSupport(const string &name) {
 
   replaceAllInString(normalized, operator_internal_gt, "_operator__tae__");
 
-  replaceAllInString(normalized, operator_spaceship, "operator<=>");
-  replaceAllInString(normalized, operator_shift_r, "operator>>");
-  replaceAllInString(normalized, operator_shift_l, "operator<<");
-  replaceAllInString(normalized, operator_ge, "operator>=");
-  replaceAllInString(normalized, operator_le, "operator<=");
-  replaceAllInString(normalized, operator_arrow_star, "operator->*");
-  replaceAllInString(normalized, operator_arrow, "operator->");
-  replaceAllInString(normalized, operator_logical_and, "operator&&");
-  replaceAllInString(normalized, operator_addr_of, "operator&");
-  replaceAllInString(normalized, operator_comma, "operator,");
-  replaceAllInString(normalized, operator_gt, "operator>");
-  replaceAllInString(normalized, operator_lt, "operator<");
-  replaceAllInString(normalized, operator_mul, "operator*");
+  replaceAllInString(normalized, operator_spaceship, "operator__tas__=__tae__");
+  replaceAllInString(normalized, operator_shift_r, "operator__tae____tae__");
+  replaceAllInString(normalized, operator_shift_l, "operator__tas____tas__");
+  replaceAllInString(normalized, operator_ge, "operator__tae__=");
+  replaceAllInString(normalized, operator_le, "operator__tas__=");
+  replaceAllInString(normalized, operator_arrow_star,
+                     "operator-__tae____ptr__");
+  replaceAllInString(normalized, operator_arrow, "operator-__tae__");
+  replaceAllInString(normalized, operator_logical_and,
+                     "operator__ref____ref__");
+  replaceAllInString(normalized, operator_addr_of, "operator__ref__");
+  replaceAllInString(normalized, operator_comma, "operator__comma__");
+  replaceAllInString(normalized, operator_gt, "operator__tae__");
+  replaceAllInString(normalized, operator_lt, "operator__tas__");
+  replaceAllInString(normalized, operator_mul, "operator__ptr__");
 
   replaceAllInString(normalized, escaped_literal_prefix + "tas", "__tas__");
   replaceAllInString(normalized, escaped_literal_prefix + "tae", "__tae__");
