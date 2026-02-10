@@ -7169,8 +7169,7 @@ bool SgDeclarationStatement::skipEmptyTemplateArgumentListTest(
 
   ROSE_ASSERT(templateArgListPtr != NULL);
 
-  if (declarationMarksTemplateArgsAsExplicit == true &&
-      templateArgListPtr->empty() == false) {
+  if (declarationMarksTemplateArgsAsExplicit == true) {
     return false;
   }
 
