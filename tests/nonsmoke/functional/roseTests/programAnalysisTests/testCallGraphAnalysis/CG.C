@@ -85,6 +85,18 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
   cgNodes.sort(nodeCompareGraphPair);
   cgNodes.unique();
 
+  auto formatDumpName = [](SgFunctionDeclaration *func_decl) -> std::string {
+    ROSE_ASSERT(func_decl != NULL);
+    std::string name =
+        stripGlobalModifer(func_decl->get_qualified_name().getString());
+    if ((isSgTemplateInstantiationFunctionDecl(func_decl) != NULL ||
+         isSgTemplateInstantiationMemberFunctionDecl(func_decl) != NULL) &&
+        !name.empty() && name[name.size() - 1] != ' ') {
+      name += " ";
+    }
+    return name;
+  };
+
   for (list<pair<SgGraphNode *, int>>::iterator it = cgNodes.begin();
        it != cgNodes.end(); it++) {
     // get list over the end-points for which this node points to
@@ -114,33 +126,24 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
       std::cout << "Node " << cur_function << " has " << calledNodes.size()
                 << " calls to it." << std::endl;
 
-    if (calledNodes.size() == 0) {
-      {
-        ROSE_ASSERT(cur_function != NULL);
-        file << stripGlobalModifer(
-                    cur_function->get_qualified_name().getString())
-             << " ->";
-      }
+    ROSE_ASSERT(cur_function != NULL);
+    std::string output_line = formatDumpName(cur_function) + " ->";
 
-    } else {
-      {
-        ROSE_ASSERT(cur_function != NULL);
-        file << stripGlobalModifer(
-                    cur_function->get_qualified_name().getString())
-             << " ->";
-      }
-
+    if (!calledNodes.empty()) {
       for (list<SgGraphNode *>::iterator j = calledNodes.begin();
            j != calledNodes.end(); j++) {
         SgFunctionDeclaration *j_function =
             isSgFunctionDeclaration((*j)->get_SgNode());
 
-        file << " "
-             << stripGlobalModifer(
-                    j_function->get_qualified_name().getString());
+        output_line += " " + formatDumpName(j_function);
       }
     }
-    file << endl;
+
+    while (!output_line.empty() && output_line[output_line.size() - 1] == ' ') {
+      output_line.resize(output_line.size() - 1);
+    }
+
+    file << output_line << endl;
   }
 
   file.close();

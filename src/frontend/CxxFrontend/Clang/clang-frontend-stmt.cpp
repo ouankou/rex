@@ -5483,6 +5483,99 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       func_scope = SageBuilder::topScopeStack();
     }
 
+    auto try_use_mapped_instantiation = [&]() -> bool {
+      SgDeclarationStatement *mapped_decl =
+          lookupSgDeclarationForClangDecl(template_arg_decl,
+                                          /*allow_on_demand=*/true);
+      if (SgTemplateInstantiationDirectiveStatement *inst_directive =
+              isSgTemplateInstantiationDirectiveStatement(mapped_decl)) {
+        mapped_decl = inst_directive->get_declaration();
+      }
+
+      auto resolve_function_symbol =
+          [&](SgFunctionDeclaration *candidate_decl) -> SgFunctionSymbol * {
+        if (candidate_decl == nullptr ||
+            isSgTemplateInstantiationFunctionDecl(candidate_decl) == nullptr) {
+          return nullptr;
+        }
+        sync_function_instantiation_args(candidate_decl);
+        registerDeclarationSymbol(candidate_decl);
+        SgFunctionSymbol *candidate_sym =
+            isSgFunctionSymbol(candidate_decl->get_symbol_from_symbol_table());
+        if (candidate_sym == nullptr && func_scope != nullptr) {
+          candidate_sym = new SgFunctionSymbol(candidate_decl);
+          attachSymbolToScopeOrOrphan(candidate_sym, func_scope);
+        }
+        return candidate_sym;
+      };
+
+      auto resolve_member_symbol =
+          [&](SgMemberFunctionDeclaration *candidate_decl)
+          -> SgMemberFunctionSymbol * {
+        if (candidate_decl == nullptr ||
+            isSgTemplateInstantiationMemberFunctionDecl(candidate_decl) ==
+                nullptr) {
+          return nullptr;
+        }
+        sync_member_instantiation_args(candidate_decl);
+        registerDeclarationSymbol(candidate_decl);
+        SgMemberFunctionSymbol *candidate_sym = isSgMemberFunctionSymbol(
+            candidate_decl->get_symbol_from_symbol_table());
+        if (candidate_sym == nullptr && func_scope != nullptr) {
+          candidate_sym = new SgMemberFunctionSymbol(candidate_decl);
+          attachSymbolToScopeOrOrphan(candidate_sym, func_scope);
+        }
+        return candidate_sym;
+      };
+
+      if (member_sym != nullptr) {
+        if (SgMemberFunctionDeclaration *member_decl =
+                isSgMemberFunctionDeclaration(mapped_decl)) {
+          SgDeclarationStatement *decls_to_try[] = {
+              member_decl, member_decl->get_firstNondefiningDeclaration(),
+              member_decl->get_definingDeclaration()};
+          for (SgDeclarationStatement *decl_stmt : decls_to_try) {
+            if (SgMemberFunctionDeclaration *cand_decl =
+                    isSgMemberFunctionDeclaration(decl_stmt)) {
+              if (SgMemberFunctionSymbol *candidate_sym =
+                      resolve_member_symbol(cand_decl)) {
+                SgExpression *new_ref =
+                    SageBuilder::buildMemberFunctionRefExp_nfi(candidate_sym,
+                                                               false, false);
+                replace_ref(new_ref);
+                return true;
+              }
+            }
+          }
+        }
+      } else if (func_sym != nullptr) {
+        if (SgFunctionDeclaration *function_decl =
+                isSgFunctionDeclaration(mapped_decl)) {
+          SgDeclarationStatement *decls_to_try[] = {
+              function_decl, function_decl->get_firstNondefiningDeclaration(),
+              function_decl->get_definingDeclaration()};
+          for (SgDeclarationStatement *decl_stmt : decls_to_try) {
+            if (SgFunctionDeclaration *cand_decl =
+                    isSgFunctionDeclaration(decl_stmt)) {
+              if (SgFunctionSymbol *candidate_sym =
+                      resolve_function_symbol(cand_decl)) {
+                SgExpression *new_ref =
+                    SageBuilder::buildFunctionRefExp(candidate_sym);
+                replace_ref(new_ref);
+                return true;
+              }
+            }
+          }
+        }
+      }
+
+      return false;
+    };
+
+    if (try_use_mapped_instantiation()) {
+      return;
+    }
+
     SgFunctionDeclaration *base_decl = ref_decl;
     SgName template_base_name = ref_decl->get_name();
     if (SgTemplateFunctionDeclaration *tmpl_decl =
@@ -5491,6 +5584,16 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     } else if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                    isSgTemplateMemberFunctionDeclaration(ref_decl)) {
       template_base_name = tmpl_decl->get_name();
+    } else if (SgTemplateInstantiationFunctionDecl *inst_decl =
+                   isSgTemplateInstantiationFunctionDecl(ref_decl)) {
+      if (inst_decl->get_templateName().is_null() == false) {
+        template_base_name = inst_decl->get_templateName();
+      }
+    } else if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
+                   isSgTemplateInstantiationMemberFunctionDecl(ref_decl)) {
+      if (inst_decl->get_templateName().is_null() == false) {
+        template_base_name = inst_decl->get_templateName();
+      }
     }
 
     SgType *lookup_type = ref_decl->get_type();
@@ -5517,37 +5620,67 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       unsigned int functionConstVolatileFlags =
           member_type != nullptr ? member_type->get_mfunc_specifier() : 0;
 
-      SgTemplateInstantiationMemberFunctionDecl *inst_decl =
-          isSgTemplateInstantiationMemberFunctionDecl(
-              SageBuilder::buildNondefiningMemberFunctionDeclaration(
-                  template_base_name, ret_type, param_list, func_scope,
-                  functionConstVolatileFlags,
-                  /*buildTemplateInstantiation=*/true, template_args_ptr));
-      ensure_function_param_list(inst_decl, param_list);
-      if (inst_decl != nullptr) {
-        sync_member_instantiation_args(inst_decl);
-        if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                isSgTemplateMemberFunctionDeclaration(base_decl)) {
-          inst_decl->set_templateDeclaration(tmpl_decl);
-          inst_decl->set_templateName(tmpl_decl->get_name());
-        } else if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                       isSgTemplateMemberFunctionDeclaration(
-                           base_decl->get_firstNondefiningDeclaration())) {
-          inst_decl->set_templateDeclaration(tmpl_decl);
-          inst_decl->set_templateName(tmpl_decl->get_name());
+      SgMemberFunctionSymbol *inst_sym = nullptr;
+      if (func_scope != nullptr) {
+        SgFunctionSymbol *existing_sym = func_scope->lookup_function_symbol(
+            template_base_name, lookup_type, template_args_ptr);
+        if (existing_sym == nullptr && lookup_type != nullptr) {
+          existing_sym = func_scope->lookup_function_symbol(template_base_name,
+                                                            lookup_type);
         }
+        if (existing_sym != nullptr) {
+          if (isSgTemplateInstantiationMemberFunctionDecl(
+                  existing_sym->get_declaration()) != nullptr) {
+            inst_sym = isSgMemberFunctionSymbol(existing_sym);
+          } else if (SgMemberFunctionDeclaration *first_nondef =
+                         isSgMemberFunctionDeclaration(
+                             existing_sym->get_declaration()
+                                 ->get_firstNondefiningDeclaration())) {
+            if (isSgTemplateInstantiationMemberFunctionDecl(first_nondef) !=
+                nullptr) {
+              inst_sym = isSgMemberFunctionSymbol(existing_sym);
+            }
+          }
+        }
+      }
 
-        SgMemberFunctionSymbol *inst_sym =
-            isSgMemberFunctionSymbol(inst_decl->get_symbol_from_symbol_table());
-        if (inst_sym == nullptr && func_scope != nullptr) {
-          inst_sym = new SgMemberFunctionSymbol(inst_decl);
-          attachSymbolToScopeOrOrphan(inst_sym, func_scope);
+      if (inst_sym == nullptr) {
+        SgTemplateInstantiationMemberFunctionDecl *inst_decl =
+            isSgTemplateInstantiationMemberFunctionDecl(
+                SageBuilder::buildNondefiningMemberFunctionDeclaration(
+                    template_base_name, ret_type, param_list, func_scope,
+                    functionConstVolatileFlags,
+                    /*buildTemplateInstantiation=*/true, template_args_ptr));
+        ensure_function_param_list(inst_decl, param_list);
+        if (inst_decl != nullptr) {
+          sync_member_instantiation_args(inst_decl);
+          if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                  isSgTemplateMemberFunctionDeclaration(base_decl)) {
+            inst_decl->set_templateDeclaration(tmpl_decl);
+            inst_decl->set_templateName(tmpl_decl->get_name());
+          } else if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                         isSgTemplateMemberFunctionDeclaration(
+                             base_decl->get_firstNondefiningDeclaration())) {
+            inst_decl->set_templateDeclaration(tmpl_decl);
+            inst_decl->set_templateName(tmpl_decl->get_name());
+          }
+
+          inst_sym = isSgMemberFunctionSymbol(
+              inst_decl->get_symbol_from_symbol_table());
+          if (inst_sym == nullptr && func_scope != nullptr) {
+            inst_sym = new SgMemberFunctionSymbol(inst_decl);
+            attachSymbolToScopeOrOrphan(inst_sym, func_scope);
+          }
         }
-        if (inst_sym != nullptr) {
-          SgExpression *new_ref = SageBuilder::buildMemberFunctionRefExp_nfi(
-              inst_sym, false, false);
-          replace_ref(new_ref);
-        }
+      } else {
+        sync_member_instantiation_args(
+            isSgMemberFunctionDeclaration(inst_sym->get_declaration()));
+      }
+
+      if (inst_sym != nullptr) {
+        SgExpression *new_ref =
+            SageBuilder::buildMemberFunctionRefExp_nfi(inst_sym, false, false);
+        replace_ref(new_ref);
       }
     } else if (func_sym != nullptr) {
       SgFunctionType *func_type = isSgFunctionType(lookup_type);
@@ -5559,37 +5692,68 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
                     func_type->get_argument_list())
               : SageBuilder::buildFunctionParameterList_nfi();
 
-      SgTemplateInstantiationFunctionDecl *inst_decl =
-          isSgTemplateInstantiationFunctionDecl(
-              SageBuilder::buildNondefiningFunctionDeclaration(
-                  template_base_name, ret_type, param_list, func_scope,
-                  /*buildTemplateInstantiation=*/true, template_args_ptr,
-                  SgStorageModifier::e_default,
-                  /*forceFreeFunctionScope=*/false));
-      ensure_function_param_list(inst_decl, param_list);
-      if (inst_decl != nullptr) {
-        sync_function_instantiation_args(inst_decl);
-        if (SgTemplateFunctionDeclaration *tmpl_decl =
-                isSgTemplateFunctionDeclaration(base_decl)) {
-          inst_decl->set_templateDeclaration(tmpl_decl);
-          inst_decl->set_templateName(tmpl_decl->get_name());
-        } else if (SgTemplateFunctionDeclaration *tmpl_decl =
-                       isSgTemplateFunctionDeclaration(
-                           base_decl->get_firstNondefiningDeclaration())) {
-          inst_decl->set_templateDeclaration(tmpl_decl);
-          inst_decl->set_templateName(tmpl_decl->get_name());
-        }
-
-        SgFunctionSymbol *inst_sym =
-            isSgFunctionSymbol(inst_decl->get_symbol_from_symbol_table());
-        if (inst_sym == nullptr && func_scope != nullptr) {
-          inst_sym = new SgFunctionSymbol(inst_decl);
-          attachSymbolToScopeOrOrphan(inst_sym, func_scope);
+      SgFunctionSymbol *inst_sym = nullptr;
+      if (func_scope != nullptr) {
+        inst_sym = func_scope->lookup_function_symbol(
+            template_base_name, lookup_type, template_args_ptr);
+        if (inst_sym == nullptr && lookup_type != nullptr) {
+          inst_sym = func_scope->lookup_function_symbol(template_base_name,
+                                                        lookup_type);
         }
         if (inst_sym != nullptr) {
-          SgExpression *new_ref = SageBuilder::buildFunctionRefExp(inst_sym);
-          replace_ref(new_ref);
+          if (isSgTemplateInstantiationFunctionDecl(
+                  inst_sym->get_declaration()) == nullptr) {
+            if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+                    inst_sym->get_declaration()
+                        ->get_firstNondefiningDeclaration())) {
+              if (isSgTemplateInstantiationFunctionDecl(first_nondef) ==
+                  nullptr) {
+                inst_sym = nullptr;
+              }
+            } else {
+              inst_sym = nullptr;
+            }
+          }
         }
+      }
+
+      if (inst_sym == nullptr) {
+        SgTemplateInstantiationFunctionDecl *inst_decl =
+            isSgTemplateInstantiationFunctionDecl(
+                SageBuilder::buildNondefiningFunctionDeclaration(
+                    template_base_name, ret_type, param_list, func_scope,
+                    /*buildTemplateInstantiation=*/true, template_args_ptr,
+                    SgStorageModifier::e_default,
+                    /*forceFreeFunctionScope=*/false));
+        ensure_function_param_list(inst_decl, param_list);
+        if (inst_decl != nullptr) {
+          sync_function_instantiation_args(inst_decl);
+          if (SgTemplateFunctionDeclaration *tmpl_decl =
+                  isSgTemplateFunctionDeclaration(base_decl)) {
+            inst_decl->set_templateDeclaration(tmpl_decl);
+            inst_decl->set_templateName(tmpl_decl->get_name());
+          } else if (SgTemplateFunctionDeclaration *tmpl_decl =
+                         isSgTemplateFunctionDeclaration(
+                             base_decl->get_firstNondefiningDeclaration())) {
+            inst_decl->set_templateDeclaration(tmpl_decl);
+            inst_decl->set_templateName(tmpl_decl->get_name());
+          }
+
+          inst_sym =
+              isSgFunctionSymbol(inst_decl->get_symbol_from_symbol_table());
+          if (inst_sym == nullptr && func_scope != nullptr) {
+            inst_sym = new SgFunctionSymbol(inst_decl);
+            attachSymbolToScopeOrOrphan(inst_sym, func_scope);
+          }
+        }
+      } else {
+        sync_function_instantiation_args(
+            isSgFunctionDeclaration(inst_sym->get_declaration()));
+      }
+
+      if (inst_sym != nullptr) {
+        SgExpression *new_ref = SageBuilder::buildFunctionRefExp(inst_sym);
+        replace_ref(new_ref);
       }
     }
   };
@@ -8788,6 +8952,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     }
 
     tmp_decl = Traverse(decl_ref_expr->getDecl());
+
+    if (SgTemplateInstantiationDirectiveStatement *inst_directive =
+            isSgTemplateInstantiationDirectiveStatement(tmp_decl)) {
+      if (SgDeclarationStatement *inst_decl =
+              inst_directive->get_declaration()) {
+        tmp_decl = inst_decl;
+      }
+    }
 
     if (pushed_scope) {
       SageBuilder::popScopeStack();
