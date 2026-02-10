@@ -214,9 +214,46 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
       // TV (10/26/2018): FIXME ROSE-1487
       // assert(!f || f==f->get_firstNondefiningDeclaration()); // node
       // uniqueness test
-      return f && f == f->get_firstNondefiningDeclaration() &&
-             !isSgTemplateMemberFunctionDeclaration(f) &&
-             !isSgTemplateFunctionDeclaration(f) && pred(f);
+      if (f == nullptr || f != f->get_firstNondefiningDeclaration() ||
+          isSgTemplateMemberFunctionDeclaration(f) ||
+          isSgTemplateFunctionDeclaration(f)) {
+        return false;
+      }
+
+      SgFunctionDeclaration *pred_decl = f;
+      if (Sg_File_Info *file_info = f->get_file_info()) {
+        if (file_info->isCompilerGenerated()) {
+          if (SgFunctionDeclaration *def_decl =
+                  isSgFunctionDeclaration(f->get_definingDeclaration())) {
+            pred_decl = def_decl;
+          }
+        }
+      }
+
+      SgFunctionDeclaration *def_decl =
+          isSgFunctionDeclaration(f->get_definingDeclaration());
+      bool has_definition = f->get_definition() != NULL;
+      if (!has_definition && def_decl != NULL) {
+        has_definition = def_decl->get_definition() != NULL;
+      }
+
+      if (SgTemplateInstantiationFunctionDecl *inst_func =
+              isSgTemplateInstantiationFunctionDecl(f)) {
+        if (inst_func->get_templateArguments().empty() &&
+            inst_func->get_deducedTemplateArguments().empty() &&
+            !has_definition) {
+          return false;
+        }
+      } else if (SgTemplateInstantiationMemberFunctionDecl *inst_member =
+                     isSgTemplateInstantiationMemberFunctionDecl(f)) {
+        if (inst_member->get_templateArguments().empty() &&
+            inst_member->get_deducedTemplateArguments().empty() &&
+            !has_definition) {
+          return false;
+        }
+      }
+
+      return pred(pred_decl);
     }
   };
 
@@ -259,9 +296,11 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
     std::vector<SgFunctionDeclaration *> &callees =
         currentFunction.functionList;
     for (SgFunctionDeclaration *callee : callees) {
-      if (isSelected(pred)(callee)) {
-        SgGraphNode *dstNode =
-            getGraphNodeFor(callee); // getGraphNode here, see function comment
+      SgFunctionDeclaration *callee_unique =
+          isSgFunctionDeclaration(callee->get_firstNondefiningDeclaration());
+      if (isSelected(pred)(callee_unique)) {
+        SgGraphNode *dstNode = getGraphNodeFor(
+            callee_unique); // getGraphNode here, see function comment
         ROSE_ASSERT(dstNode != NULL);
         if (graph->checkIfDirectedGraphEdgeExists(srcNode, dstNode) == false)
           graph->addDirectedEdge(srcNode, dstNode);

@@ -7113,141 +7113,150 @@ SgDeclarationStatement::testForBadGenerateTemplateName( const std::string & name
           printf ("Error: SgDeclarationStatement (this) = %p = %s = %s \n",this,this->class_name().c_str(),SageInterface::get_name(this).c_str());
           get_file_info()->display("Error: likely and unconverted legacy frontend name");
           ROSE_ASSERT (false);
-        }
-   }
+     }
+}
 
+bool SgDeclarationStatement::skipEmptyTemplateArgumentListTest(
+    SgFunctionDeclaration *functionDeclaration) {
+  // DQ (4/13/2005): Avoid output of empty lists of template arguments in
+  // function names as in "endl<>" (which is a bug in g++ version 3.4, see
+  // test2005_55.C).  This should only apply to function and member functions
+  // since they alone can skip the output of "<>". What we do below is skip
+  // the "<" and ">" when the list of template arguments would be empty. It
+  // would be empty when either there are no arguments or non were explicitly
+  // specified in the source code.
 
-bool
-	SgDeclarationStatement::skipEmptyTemplateArgumentListTest ( SgFunctionDeclaration* functionDeclaration )
-	   {
-  // DQ (4/13/2005): Avoid output of empty lists of template arguments in function names
-  // as in "endl<>" (which is a bug in g++ version 3.4, see test2005_55.C).  This
-  // should only apply to function and member functions since they alone can skip the output of "<>".
-  // What we do below is skip the "<" and ">" when the list of template arguments would be empty.
-  // It would be empty when either there are no arguments or non were explicitly specified in the
-  // source code.
+  // Note that this function can only be applied to functions (since only
+  // they are explicitly mark with if there template arguments are specified
+  // or not!)
 
-  // Note that this function can only be applied to functions (since only they are explicitly
-  // mark with if there template arguments are specified or not!)
-
-     ROSE_ASSERT(functionDeclaration != NULL);
+  ROSE_ASSERT(functionDeclaration != NULL);
 
   // default is true, so empty lists are not output (could this be an error?)
-     bool skipEmptyTemplateArgumentList = true;
+  bool skipEmptyTemplateArgumentList = true;
 
-     string functionName;
-     SgTemplateArgumentPtrListPtr templateArgListPtr = NULL;
+  string functionName;
+  SgTemplateArgumentPtrListPtr templateArgListPtr = NULL;
+  bool declarationMarksTemplateArgsAsExplicit = false;
 
   // One or the other of these are valid pointers, but not both!
-     SgTemplateInstantiationFunctionDecl       *templateInstantiationFunctionDeclaration       =
+  SgTemplateInstantiationFunctionDecl
+      *templateInstantiationFunctionDeclaration =
           isSgTemplateInstantiationFunctionDecl(functionDeclaration);
-     SgTemplateInstantiationMemberFunctionDecl *templateInstantiationMemberFunctionDeclaration =
+  SgTemplateInstantiationMemberFunctionDecl
+      *templateInstantiationMemberFunctionDeclaration =
           isSgTemplateInstantiationMemberFunctionDecl(functionDeclaration);
 
-     if (templateInstantiationFunctionDeclaration != NULL)
-        {
-          functionName       = templateInstantiationFunctionDeclaration->get_templateName().str();
-          templateArgListPtr = &templateInstantiationFunctionDeclaration->get_templateArguments();
-        }
-       else
-        {
-          ROSE_ASSERT(templateInstantiationMemberFunctionDeclaration != NULL);
-          functionName       = templateInstantiationMemberFunctionDeclaration->get_templateName().str();
-          templateArgListPtr = &templateInstantiationMemberFunctionDeclaration->get_templateArguments();
-        }
+  if (templateInstantiationFunctionDeclaration != NULL) {
+    functionName =
+        templateInstantiationFunctionDeclaration->get_templateName().str();
+    templateArgListPtr =
+        &templateInstantiationFunctionDeclaration->get_templateArguments();
+    declarationMarksTemplateArgsAsExplicit =
+        templateInstantiationFunctionDeclaration
+            ->get_template_argument_list_is_explicit();
+  } else {
+    ROSE_ASSERT(templateInstantiationMemberFunctionDeclaration != NULL);
+    functionName =
+        templateInstantiationMemberFunctionDeclaration->get_templateName()
+            .str();
+    templateArgListPtr = &templateInstantiationMemberFunctionDeclaration
+                              ->get_templateArguments();
+    declarationMarksTemplateArgsAsExplicit =
+        templateInstantiationMemberFunctionDeclaration
+            ->get_template_argument_list_is_explicit();
+  }
 
+  ROSE_ASSERT(templateArgListPtr != NULL);
 
-     ROSE_ASSERT(templateArgListPtr != NULL);
+  if (declarationMarksTemplateArgsAsExplicit == true &&
+      templateArgListPtr->empty() == false) {
+    return false;
+  }
 
-     SgTemplateArgumentPtrList::const_iterator i = templateArgListPtr->begin();
-     while (i != templateArgListPtr->end())
-        {
+  SgTemplateArgumentPtrList::const_iterator i = templateArgListPtr->begin();
+  while (i != templateArgListPtr->end()) {
 
-       // DQ (2/27/2005): Added support for output of only template arguments
-       // that were explicit in the source code.  Only meaningful for function
-       // and member function template arguments.
-          bool templateArgumentWasExplicitlySpecified = (*i)->get_explicitlySpecified();
-       // bool outputTemplateArgument = false;
-          if ( templateArgumentWasExplicitlySpecified == true )
-             {
-            // outputTemplateArgument = true;
-               skipEmptyTemplateArgumentList = false;
-             }
+    // DQ (2/27/2005): Added support for output of only template arguments
+    // that were explicit in the source code.  Only meaningful for function
+    // and member function template arguments.
+    bool templateArgumentWasExplicitlySpecified =
+        (*i)->get_explicitlySpecified();
+    // bool outputTemplateArgument = false;
+    if (templateArgumentWasExplicitlySpecified == true) {
+      // outputTemplateArgument = true;
+      skipEmptyTemplateArgumentList = false;
+    }
 
+    i++;
+  }
 
-          i++;
-        }
+  return skipEmptyTemplateArgumentList;
+}
 
+std::string SgDeclarationStatement::buildTemplateNameWithArguments(
+    const std::string &templateName,
+    const SgTemplateArgumentPtrList &templateArgumentsList,
+    SgScopeStatement *nameQualificationScope,
+    bool outputOnlyExplicitlySpecified) {
+  ROSE_ASSERT(!templateName.empty());
 
-	     return skipEmptyTemplateArgumentList;
-	   }
+  SgUnparse_Info unparseInfo;
+  unparseInfo.set_language(SgFile::e_Cxx_language);
+  unparseInfo.set_SkipDefinition();
+  unparseInfo.set_SkipComments();
+  unparseInfo.set_SkipWhitespaces();
+  unparseInfo.set_SkipCPPDirectives();
+  unparseInfo.set_SkipClassDefinition();
+  unparseInfo.set_SkipEnumDefinition();
+  unparseInfo.set_use_generated_name_for_template_arguments(true);
+  if (nameQualificationScope != NULL) {
+    unparseInfo.set_current_scope(nameQualificationScope);
+  } else {
+    unparseInfo.set_requiresGlobalNameQualification();
+  }
 
+  bool need_separator = false;
+  std::string argumentsString;
+  for (SgTemplateArgumentPtrList::const_iterator i =
+           templateArgumentsList.begin();
+       i != templateArgumentsList.end(); ++i) {
+    SgTemplateArgument *argument = *i;
+    ROSE_ASSERT(argument != NULL);
+    ROSE_ASSERT(argument->get_argumentType() !=
+                SgTemplateArgument::argument_undefined);
+    if (argument->get_argumentType() ==
+        SgTemplateArgument::start_of_pack_expansion_argument) {
+      continue;
+    }
+    if (outputOnlyExplicitlySpecified == true &&
+        argument->get_explicitlySpecified() == false) {
+      continue;
+    }
 
-			std::string
-			SgDeclarationStatement::buildTemplateNameWithArguments(
-			        const std::string& templateName,
-			        const SgTemplateArgumentPtrList& templateArgumentsList,
-			        SgScopeStatement* nameQualificationScope,
-			        bool outputOnlyExplicitlySpecified)
-			   {
-			     ROSE_ASSERT(!templateName.empty());
+    if (need_separator) {
+      argumentsString += " , ";
+    }
 
-			     SgUnparse_Info unparseInfo;
-			     unparseInfo.set_language(SgFile::e_Cxx_language);
-			     unparseInfo.set_SkipDefinition();
-			     unparseInfo.set_SkipComments();
-			     unparseInfo.set_SkipWhitespaces();
-			     unparseInfo.set_SkipCPPDirectives();
-			     unparseInfo.set_SkipClassDefinition();
-			     unparseInfo.set_SkipEnumDefinition();
-			     unparseInfo.set_use_generated_name_for_template_arguments(true);
-		     if (nameQualificationScope != NULL) {
-		       unparseInfo.set_current_scope(nameQualificationScope);
-		     } else {
-		       unparseInfo.set_requiresGlobalNameQualification();
-		     }
+    std::string argumentString = argument->unparseToString(&unparseInfo);
+    argumentString = Rose::StringUtility::trim(argumentString);
+    argumentsString += argumentString;
+    need_separator = true;
+  }
 
-		     bool need_separator = false;
-		     std::string argumentsString;
-			     for (SgTemplateArgumentPtrList::const_iterator i = templateArgumentsList.begin();
-			          i != templateArgumentsList.end(); ++i) {
-			       SgTemplateArgument* argument = *i;
-			       ROSE_ASSERT(argument != NULL);
-			       ROSE_ASSERT(argument->get_argumentType() !=
-			                   SgTemplateArgument::argument_undefined);
-			       if (argument->get_argumentType() ==
-			           SgTemplateArgument::start_of_pack_expansion_argument) {
-			         continue;
-			       }
-		       if (outputOnlyExplicitlySpecified == true &&
-		           argument->get_explicitlySpecified() == false) {
-		         continue;
-		       }
+  if (need_separator == false) {
+    return templateName;
+  }
 
-		       if (need_separator) {
-		         argumentsString += " , ";
-		       }
+  return templateName + " < " + argumentsString + " >";
+}
 
-		       argumentsString += argument->unparseToString(&unparseInfo);
-		       need_separator = true;
-		     }
-
-		     if (need_separator == false) {
-		       return templateName;
-		     }
-
-		     return templateName + " < " + argumentsString + " >";
-		   }
-
-
-void
-resetTemplateNamesInScope ( SgScopeStatement* scope )
-   {
+void resetTemplateNamesInScope(SgScopeStatement *scope) {
   // DQ (8/11/2005): This function loops over all parent scopes to reset
   // any possibly unset names in instantiated templated classes.
 
   // DQ (2/10/2007): I hope we can assert this!
-     ROSE_ASSERT(scope != NULL);
+  ROSE_ASSERT(scope != NULL);
 
 
 
@@ -7336,10 +7345,7 @@ resetTemplateNamesInScope ( SgScopeStatement* scope )
           ROSE_ASSERT(scope != next_scope);
           scope = next_scope;
         }
-
-   }
-
-
+}
 
 // DQ (2/15/2005): This is the former SgTemplateInstantitionDecl::resetTemplateName()
 // member function.  It has been moved to a global supporting function so that similar

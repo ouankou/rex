@@ -2182,7 +2182,10 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
     // DQ (8/29/2005): "template" keyword now output by
     // Unparse_ExprStmt::outputTemplateSpecializationSpecifier() curprint (
     // string("template ";
-    unparseFuncDeclStmt(functionDeclaration, info);
+    SgUnparse_Info ninfo(info);
+    ninfo.set_SkipFunctionDefinition();
+    ninfo.set_AddSemiColonAfterDeclaration();
+    unparseFuncDeclStmt(functionDeclaration, ninfo);
     break;
   }
 
@@ -2202,7 +2205,10 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
       // DQ (8/29/2005): "template" keyword now output by
       // Unparse_ExprStmt::outputTemplateSpecializationSpecifier() curprint (
       // string("template ";
-      unparseMFuncDeclStmt(memberFunctionDeclaration, info);
+      SgUnparse_Info ninfo(info);
+      ninfo.set_SkipFunctionDefinition();
+      ninfo.set_AddSemiColonAfterDeclaration();
+      unparseMFuncDeclStmt(memberFunctionDeclaration, ninfo);
     } else {
       // It seems that if the class declaration is not specialized then the
       // non-member function template instantiation directive is allowed. But we
