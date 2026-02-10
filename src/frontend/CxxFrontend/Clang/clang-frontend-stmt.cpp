@@ -3954,18 +3954,16 @@ bool ClangToSageTranslator::VisitIndirectGotoStmt(
           << tmp_target->class_name() << ")." << std::endl;
     }
     res = false;
+  } else {
+    SgGotoStatement *sg_goto_stmt =
+        SageBuilder::buildGotoStatement_nfi(target_expr);
+    ROSE_ASSERT(sg_goto_stmt != nullptr);
+    if (target_expr->get_parent() == nullptr) {
+      target_expr->set_parent(sg_goto_stmt);
+    }
+
+    *node = sg_goto_stmt;
   }
-
-  ROSE_ASSERT(target_expr != nullptr);
-
-  SgGotoStatement *sg_goto_stmt =
-      SageBuilder::buildGotoStatement_nfi(target_expr);
-  ROSE_ASSERT(sg_goto_stmt != nullptr);
-  if (target_expr->get_parent() == nullptr) {
-    target_expr->set_parent(sg_goto_stmt);
-  }
-
-  *node = sg_goto_stmt;
 
   return VisitStmt(indirect_goto_stmt, node) && res;
 }
