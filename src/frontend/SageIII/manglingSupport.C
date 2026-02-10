@@ -84,13 +84,13 @@ static string normalizeNameForMangledNameSupport(const string &name) {
 
   replaceAllInString(normalized, " ", "");
 
-  replaceAllInString(normalized, "_operator>", "_operator?");
+  replaceAllInString(normalized, "_operator>", "__REX_INTERNAL_GT_OP__");
 
-  replaceAllInString(normalized, "operator>>", "operator??");
-  replaceAllInString(normalized, "operator<<", "operator$$");
-  replaceAllInString(normalized, "operator>", "operator?");
-  replaceAllInString(normalized, "operator<", "operator$");
-  replaceAllInString(normalized, "operator*", "operator@");
+  replaceAllInString(normalized, "operator>>", "__REX_SHIFT_R_OP__");
+  replaceAllInString(normalized, "operator<<", "__REX_SHIFT_L_OP__");
+  replaceAllInString(normalized, "operator>", "__REX_GT_OP__");
+  replaceAllInString(normalized, "operator<", "__REX_LT_OP__");
+  replaceAllInString(normalized, "operator*", "__REX_MUL_OP__");
 
   replaceAllInString(normalized, "<", "__tas__");
   replaceAllInString(normalized, ">", "__tae__");
@@ -100,13 +100,13 @@ static string normalizeNameForMangledNameSupport(const string &name) {
   replaceAllInString(normalized, "*", "__ptr__");
   replaceAllInString(normalized, "_-", "__minus__");
 
-  replaceAllInString(normalized, "_operator?", "_operator__tae__");
+  replaceAllInString(normalized, "__REX_INTERNAL_GT_OP__", "_operator__tae__");
 
-  replaceAllInString(normalized, "operator??", "operator>>");
-  replaceAllInString(normalized, "operator$$", "operator<<");
-  replaceAllInString(normalized, "operator?", "operator>");
-  replaceAllInString(normalized, "operator$", "operator<");
-  replaceAllInString(normalized, "operator@", "operator*");
+  replaceAllInString(normalized, "__REX_SHIFT_R_OP__", "operator>>");
+  replaceAllInString(normalized, "__REX_SHIFT_L_OP__", "operator<<");
+  replaceAllInString(normalized, "__REX_GT_OP__", "operator>");
+  replaceAllInString(normalized, "__REX_LT_OP__", "operator<");
+  replaceAllInString(normalized, "__REX_MUL_OP__", "operator*");
 
   replaceAllInString(normalized, " ", "");
 
