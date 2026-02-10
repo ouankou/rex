@@ -105,6 +105,8 @@ static void addIncomingFortranGotos(SgStatement *stmt, unsigned int index,
   if (isSgProcedureHeaderStatement(stmt) || isSgProgramHeaderStatement(stmt) ||
       isSgFunctionDefinition(stmt))
     hasLabel = true;
+  if (index == 0 && isSgLabelStatement(stmt) != nullptr)
+    hasLabel = true;
   if (!hasLabel)
     return;
 
@@ -120,13 +122,24 @@ static void addIncomingFortranGotos(SgStatement *stmt, unsigned int index,
   for (Rose_STL_Container<SgNode *>::const_iterator i = allGotos.begin();
        i != allGotos.end(); ++i) {
     if (SageInterface::isAncestor(thisFunction, *i)) {
-      SgLabelRefExp *lRef = isSgGotoStatement(*i)->get_label_expression();
-      if (!lRef)
+      SgGotoStatement *goto_stmt = isSgGotoStatement(*i);
+      ASSERT_not_null(goto_stmt);
+
+      SgLabelRefExp *lRef = goto_stmt->get_label_expression();
+      if (!lRef) {
+        if (goto_stmt->get_selector_expression() != nullptr && index == 0 &&
+            isSgLabelStatement(stmt) != nullptr) {
+          SgLabelStatement *label_stmt = isSgLabelStatement(stmt);
+          if (label_stmt->get_scope() == thisFunction) {
+            makeEdge(CFGNode(goto_stmt, 0), cfgNode, result);
+          }
+        }
         continue;
+      }
       SgLabelSymbol *sym = lRef->get_symbol();
       ASSERT_not_null(sym);
       if (getCFGTargetOfFortranLabelSymbol(sym) == cfgNode) {
-        makeEdge(CFGNode(isSgGotoStatement(*i), 0), cfgNode, result);
+        makeEdge(CFGNode(goto_stmt, 0), cfgNode, result);
       }
     }
   }
@@ -1905,11 +1918,27 @@ std::vector<CFGEdge> SgGotoStatement::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0: {
-    if (this->get_label_expression()) { // A Fortran goto
+    if (this->get_selector_expression()) { // A C/C++ computed goto
+      SgFunctionDefinition *thisFunction =
+          SageInterface::getEnclosingProcedure(this, true);
+      ASSERT_not_null(thisFunction);
+
+      Rose_STL_Container<SgNode *> allLabels =
+          NodeQuery::querySubTree(thisFunction, V_SgLabelStatement);
+      for (Rose_STL_Container<SgNode *>::const_iterator i = allLabels.begin();
+           i != allLabels.end(); ++i) {
+        SgLabelStatement *label_stmt = isSgLabelStatement(*i);
+        ASSERT_not_null(label_stmt);
+        if (label_stmt->get_scope() == thisFunction) {
+          makeEdge(CFGNode(this, idx), label_stmt->cfgForBeginning(), result);
+        }
+      }
+    } else if (this->get_label_expression()) { // A Fortran goto
       makeEdge(CFGNode(this, idx),
                getCFGTargetOfFortranLabelRef(this->get_label_expression()),
                result);
     } else { // A C/C++ goto
+      ASSERT_not_null(this->get_label());
       makeEdge(CFGNode(this, idx), this->get_label()->cfgForBeginning(),
                result);
     }

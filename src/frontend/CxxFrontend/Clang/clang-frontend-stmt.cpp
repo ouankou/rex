@@ -3938,7 +3938,34 @@ bool ClangToSageTranslator::VisitIndirectGotoStmt(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
+  SgNode *tmp_target = Traverse(indirect_goto_stmt->getTarget());
+  SgExpression *target_expr = isSgExpression(tmp_target);
+
+  if (target_expr == nullptr) {
+    if (tmp_target == nullptr) {
+      MLOG_ERROR_CXX(MLOG_FRONTEND)
+          << "Runtime error: IndirectGotoStmt target did not translate to a "
+             "Sage node."
+          << std::endl;
+    } else {
+      MLOG_ERROR_CXX(MLOG_FRONTEND)
+          << "Runtime error: IndirectGotoStmt target did not translate to "
+             "SgExpression ("
+          << tmp_target->class_name() << ")." << std::endl;
+    }
+    res = false;
+  }
+
+  ROSE_ASSERT(target_expr != nullptr);
+
+  SgGotoStatement *sg_goto_stmt =
+      SageBuilder::buildGotoStatement_nfi(target_expr);
+  ROSE_ASSERT(sg_goto_stmt != nullptr);
+  if (target_expr->get_parent() == nullptr) {
+    target_expr->set_parent(sg_goto_stmt);
+  }
+
+  *node = sg_goto_stmt;
 
   return VisitStmt(indirect_goto_stmt, node) && res;
 }
@@ -4719,7 +4746,63 @@ bool ClangToSageTranslator::VisitAddrLabelExpr(
 #endif
   bool res = true;
 
-  // TODO
+  clang::LabelDecl *label_decl = addr_label_expr->getLabel();
+  if (label_decl == nullptr) {
+    MLOG_ERROR_CXX(MLOG_FRONTEND)
+        << "Runtime error: AddrLabelExpr has no target label declaration."
+        << std::endl;
+    res = false;
+  } else {
+    clang::LabelDecl *lookup_decl =
+        llvm::dyn_cast<clang::LabelDecl>(label_decl->getCanonicalDecl());
+    if (lookup_decl == nullptr) {
+      lookup_decl = label_decl;
+    }
+
+    SgLabelSymbol *label_sym =
+        isSgLabelSymbol(GetSymbolFromSymbolTable(lookup_decl));
+    if (label_sym == nullptr) {
+      clang::LabelStmt *clang_label_stmt = lookup_decl->getStmt();
+      if (clang_label_stmt == nullptr) {
+        MLOG_ERROR_CXX(MLOG_FRONTEND)
+            << "Runtime error: Cannot resolve target LabelStmt for "
+               "AddrLabelExpr: \""
+            << lookup_decl->getNameAsString() << "\"." << std::endl;
+        res = false;
+      } else {
+        SgNode *tmp_label = Traverse(clang_label_stmt);
+        SgLabelStatement *sg_label_stmt = isSgLabelStatement(tmp_label);
+        if (sg_label_stmt == nullptr) {
+          MLOG_ERROR_CXX(MLOG_FRONTEND)
+              << "Runtime error: Cannot translate target LabelStmt for "
+                 "AddrLabelExpr: \""
+              << lookup_decl->getNameAsString() << "\"." << std::endl;
+          res = false;
+        } else {
+          label_sym = isSgLabelSymbol(GetSymbolFromSymbolTable(lookup_decl));
+          if (label_sym == nullptr) {
+            label_sym =
+                isSgLabelSymbol(sg_label_stmt->get_symbol_from_symbol_table());
+          }
+          if (label_sym == nullptr && sg_label_stmt->get_scope() != nullptr) {
+            label_sym = sg_label_stmt->get_scope()->lookup_label_symbol(
+                sg_label_stmt->get_name());
+          }
+        }
+      }
+    }
+
+    if (label_sym == nullptr) {
+      MLOG_ERROR_CXX(MLOG_FRONTEND)
+          << "Runtime error: Cannot find label symbol for AddrLabelExpr: \""
+          << lookup_decl->getNameAsString() << "\"." << std::endl;
+      res = false;
+    } else {
+      SgLabelRefExp *label_ref = SageBuilder::buildLabelRefExp(label_sym);
+      applySourceRange(label_ref, addr_label_expr->getSourceRange());
+      *node = label_ref;
+    }
+  }
 
   return VisitExpr(addr_label_expr, node) && res;
 }
