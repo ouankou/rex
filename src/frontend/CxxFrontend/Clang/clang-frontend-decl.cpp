@@ -340,8 +340,14 @@ static void ensureFunctionParameterSymbols(SgFunctionDeclaration *decl) {
           isSgVariableSymbol(param->get_symbol_from_symbol_table());
       if (symbol == nullptr) {
         symbol = new SgVariableSymbol(param);
-        scope->insert_symbol(param->get_name(), symbol);
-        symbol->set_parent(scope->get_symbol_table());
+        if (scope != nullptr) {
+          scope->insert_symbol(param->get_name(), symbol);
+          if (SgSymbolTable *symbol_table = scope->get_symbol_table()) {
+            symbol->set_parent(symbol_table);
+          }
+        } else {
+          move_symbol_to_orphan_table(symbol);
+        }
       }
     }
   }
@@ -942,8 +948,7 @@ ClangToSageTranslator::GetSymbolFromSymbolTable(clang::NamedDecl *decl) {
                 return member_sym;
               }
               SgVariableSymbol *new_sym = new SgVariableSymbol(init_name);
-              new_sym->set_parent(init_name);
-              member_scope->insert_symbol(init_name->get_name(), new_sym);
+              rehomeSymbolToScope(new_sym, member_scope);
               return new_sym;
             }
             return nullptr;
@@ -2215,6 +2220,9 @@ void attach_nonreal_template_parameters(
                                           nullptr) == nullptr) {
       SgNonrealSymbol *symbol = new SgNonrealSymbol(nrdecl);
       decl_scope->insert_symbol(nrdecl->get_name(), symbol);
+      if (SgSymbolTable *symbol_table = decl_scope->get_symbol_table()) {
+        symbol->set_parent(symbol_table);
+      }
     }
   }
 }
@@ -12086,8 +12094,7 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
     if (scope != nullptr &&
         scope->find_symbol_from_declaration(enumerator) == nullptr) {
       SgEnumFieldSymbol *field_symbol = new SgEnumFieldSymbol(enumerator);
-      field_symbol->set_parent(enumerator);
-      scope->insert_symbol(enumerator->get_name(), field_symbol);
+      rehomeSymbolToScope(field_symbol, scope);
     }
   };
 
@@ -14338,6 +14345,18 @@ void ClangToSageTranslator::rehomeSymbolToScope(SgSymbol *symbol,
   }
 }
 
+void ClangToSageTranslator::attachSymbolToScopeOrOrphan(
+    SgSymbol *symbol, SgScopeStatement *scope) {
+  if (symbol == nullptr) {
+    return;
+  }
+  if (scope != nullptr) {
+    rehomeSymbolToScope(symbol, scope);
+  } else {
+    move_symbol_to_orphan_table(symbol);
+  }
+}
+
 SgSymbol *
 ClangToSageTranslator::buildSymbolForDeclaration(SgDeclarationStatement *decl) {
   if (decl == nullptr) {
@@ -14689,7 +14708,7 @@ void ClangToSageTranslator::registerDeclarationSymbol(
       } else {
         symbol = new SgVariableSymbol(init_name);
       }
-      rehomeSymbolToScope(symbol, var_scope);
+      attachSymbolToScopeOrOrphan(symbol, var_scope);
     }
     return;
   }
@@ -15132,7 +15151,7 @@ void ClangToSageTranslator::ensureMemberFunctionScope(
       symbol = new SgMemberFunctionSymbol(member_decl);
     }
   }
-  rehomeSymbolToScope(symbol, parent_def);
+  attachSymbolToScopeOrOrphan(symbol, parent_def);
 }
 
 SgExpression *
@@ -19563,7 +19582,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     if (decl->get_symbol_from_symbol_table() == nullptr &&
         target_scope != nullptr) {
       if (SgSymbol *sym = buildSymbolForDeclaration(decl)) {
-        rehomeSymbolToScope(sym, target_scope);
+        attachSymbolToScopeOrOrphan(sym, target_scope);
       }
     }
   };
@@ -21585,8 +21604,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
         }
         if (member_scope->find_symbol_from_declaration(init_name) == nullptr) {
           SgVariableSymbol *member_sym = new SgVariableSymbol(init_name);
-          member_sym->set_parent(init_name);
-          member_scope->insert_symbol(init_name->get_name(), member_sym);
+          rehomeSymbolToScope(member_sym, member_scope);
         }
       } else {
         init_name->set_scope(SageBuilder::topScopeStack());
@@ -22315,7 +22333,7 @@ bool ClangToSageTranslator::VisitEnumConstantDecl(
   if (scope != nullptr &&
       scope->find_symbol_from_declaration(init_name) == nullptr) {
     SgEnumFieldSymbol *symbol = new SgEnumFieldSymbol(init_name);
-    scope->insert_symbol(name, symbol);
+    rehomeSymbolToScope(symbol, scope);
   }
 
   *node = init_name;

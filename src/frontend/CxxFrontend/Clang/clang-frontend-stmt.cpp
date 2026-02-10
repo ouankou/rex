@@ -5116,9 +5116,9 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     if (member_sym == nullptr) {
       member_sym = new SgMemberFunctionSymbol(member_decl);
       if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
-        decl_scope->insert_symbol(member_decl->get_name(), member_sym);
+        attachSymbolToScopeOrOrphan(member_sym, decl_scope);
       } else {
-        member_sym->set_parent(member_decl);
+        attachSymbolToScopeOrOrphan(member_sym, nullptr);
       }
     }
     ROSE_ASSERT(member_sym != nullptr);
@@ -5541,8 +5541,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
             isSgMemberFunctionSymbol(inst_decl->get_symbol_from_symbol_table());
         if (inst_sym == nullptr && func_scope != nullptr) {
           inst_sym = new SgMemberFunctionSymbol(inst_decl);
-          inst_sym->set_parent(inst_decl);
-          func_scope->insert_symbol(template_base_name, inst_sym);
+          attachSymbolToScopeOrOrphan(inst_sym, func_scope);
         }
         if (inst_sym != nullptr) {
           SgExpression *new_ref = SageBuilder::buildMemberFunctionRefExp_nfi(
@@ -5585,8 +5584,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
             isSgFunctionSymbol(inst_decl->get_symbol_from_symbol_table());
         if (inst_sym == nullptr && func_scope != nullptr) {
           inst_sym = new SgFunctionSymbol(inst_decl);
-          inst_sym->set_parent(inst_decl);
-          func_scope->insert_symbol(template_base_name, inst_sym);
+          attachSymbolToScopeOrOrphan(inst_sym, func_scope);
         }
         if (inst_sym != nullptr) {
           SgExpression *new_ref = SageBuilder::buildFunctionRefExp(inst_sym);
@@ -5825,7 +5823,11 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
           }
           if (member_sym == nullptr) {
             member_sym = new SgMemberFunctionSymbol(member_decl);
-            member_sym->set_parent(member_decl);
+            if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
+              attachSymbolToScopeOrOrphan(member_sym, decl_scope);
+            } else {
+              attachSymbolToScopeOrOrphan(member_sym, nullptr);
+            }
           }
         }
 
@@ -5890,7 +5892,11 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
         }
         if (member_sym == nullptr) {
           member_sym = new SgMemberFunctionSymbol(member_decl);
-          member_sym->set_parent(member_decl);
+          if (SgScopeStatement *decl_scope = member_decl->get_scope()) {
+            attachSymbolToScopeOrOrphan(member_sym, decl_scope);
+          } else {
+            attachSymbolToScopeOrOrphan(member_sym, nullptr);
+          }
         }
       }
 
@@ -6478,7 +6484,9 @@ bool ClangToSageTranslator::VisitCompoundLiteralExpr(
   ROSE_ASSERT(vsym != nullptr);
 
   if (scope != nullptr) {
-    scope->insert_symbol(name, vsym);
+    attachSymbolToScopeOrOrphan(vsym, scope);
+  } else {
+    attachSymbolToScopeOrOrphan(vsym, nullptr);
   }
   var_decl->set_isAssociatedWithDeclarationList(true);
 
@@ -8049,13 +8057,11 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
           if (existing_sym == nullptr) {
             SgFunctionSymbol *new_sym = new SgFunctionSymbol(symbol_decl);
-            new_sym->set_parent(symbol_decl);
-            global_scope->insert_symbol(symbol_decl->get_name(), new_sym);
+            attachSymbolToScopeOrOrphan(new_sym, global_scope);
           } else if (existing_sym->get_declaration() != symbol_decl) {
             // Keep existing symbol but ensure this declaration also has one.
             SgFunctionSymbol *new_sym = new SgFunctionSymbol(symbol_decl);
-            new_sym->set_parent(symbol_decl);
-            global_scope->insert_symbol(symbol_decl->get_name(), new_sym);
+            attachSymbolToScopeOrOrphan(new_sym, global_scope);
           }
         } else {
           registerDeclarationSymbol(func_decl);
@@ -8156,7 +8162,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         }
         if (scope != nullptr) {
           if (SgSymbol *sym = buildSymbolForDeclaration(candidate)) {
-            rehomeSymbolToScope(sym, scope);
+            attachSymbolToScopeOrOrphan(sym, scope);
           }
         }
       }
@@ -8525,9 +8531,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       if (member_sym == nullptr) {
         member_sym = new SgMemberFunctionSymbol(member_decl);
         if (decl_scope != nullptr) {
-          decl_scope->insert_symbol(member_decl->get_name(), member_sym);
+          attachSymbolToScopeOrOrphan(member_sym, decl_scope);
         } else {
-          member_sym->set_parent(member_decl);
+          attachSymbolToScopeOrOrphan(member_sym, nullptr);
         }
       }
       return member_sym;
@@ -8604,9 +8610,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           if (func_sym == nullptr) {
             func_sym = new SgFunctionSymbol(func_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(func_decl->get_name(), func_sym);
+              attachSymbolToScopeOrOrphan(func_sym, decl_scope);
             } else {
-              func_sym->set_parent(func_decl);
+              attachSymbolToScopeOrOrphan(func_sym, nullptr);
             }
           }
           if (func_sym != nullptr) {
@@ -8827,9 +8833,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             SgTemplateMemberFunctionSymbol *new_sym =
                 new SgTemplateMemberFunctionSymbol(tmpl_member);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(tmpl_member->get_name(), new_sym);
+              attachSymbolToScopeOrOrphan(new_sym, decl_scope);
             } else {
-              new_sym->set_parent(tmpl_member);
+              attachSymbolToScopeOrOrphan(new_sym, nullptr);
             }
             member_sym = new_sym;
           }
@@ -8854,9 +8860,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             SgMemberFunctionSymbol *new_sym =
                 new SgMemberFunctionSymbol(member_func_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(member_func_decl->get_name(), new_sym);
+              attachSymbolToScopeOrOrphan(new_sym, decl_scope);
             } else {
-              new_sym->set_parent(member_func_decl);
+              attachSymbolToScopeOrOrphan(new_sym, nullptr);
             }
             member_func_sym = new_sym;
           }
@@ -8896,9 +8902,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             SgTemplateFunctionSymbol *new_sym =
                 new SgTemplateFunctionSymbol(tmpl_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(tmpl_decl->get_name(), new_sym);
+              attachSymbolToScopeOrOrphan(new_sym, decl_scope);
             } else {
-              new_sym->set_parent(tmpl_decl);
+              attachSymbolToScopeOrOrphan(new_sym, nullptr);
             }
             func_sym = new_sym;
           }
@@ -8915,9 +8921,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           if (non_template_sym == nullptr) {
             SgFunctionSymbol *new_sym = new SgFunctionSymbol(func_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(func_decl->get_name(), new_sym);
+              attachSymbolToScopeOrOrphan(new_sym, decl_scope);
             } else {
-              new_sym->set_parent(func_decl);
+              attachSymbolToScopeOrOrphan(new_sym, nullptr);
             }
             non_template_sym = new_sym;
           }
@@ -8943,9 +8949,10 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           // If still not found, create new symbol
           if (sym == nullptr) {
             sym = new SgVariableSymbol(init_name);
-            sym->set_parent(init_name);
             if (init_scope != nullptr) {
-              init_scope->insert_symbol(init_name->get_name(), sym);
+              attachSymbolToScopeOrOrphan(sym, init_scope);
+            } else {
+              attachSymbolToScopeOrOrphan(sym, nullptr);
             }
           }
         }
@@ -8966,15 +8973,19 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               init_scope->lookup_enum_field_symbol(init_name->get_name());
           if (enum_sym == nullptr) {
             enum_sym = new SgEnumFieldSymbol(init_name);
-            enum_sym->set_parent(init_name);
-            init_scope->insert_symbol(init_name->get_name(), enum_sym);
+            attachSymbolToScopeOrOrphan(enum_sym, init_scope);
           }
           sym = enum_sym;
         }
       } else {
         sym = new SgVariableSymbol(init_name);
-        sym->set_parent(tmp_decl);
-        SageBuilder::topScopeStack()->insert_symbol(init_name->get_name(), sym);
+        SgScopeStatement *decl_scope =
+            normalizeNamespaceScope(SageBuilder::topScopeStack());
+        if (decl_scope != nullptr) {
+          attachSymbolToScopeOrOrphan(sym, decl_scope);
+        } else {
+          attachSymbolToScopeOrOrphan(sym, nullptr);
+        }
       }
     }
   }
@@ -9054,9 +9065,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           if (member_sym == nullptr) {
             member_sym = new SgMemberFunctionSymbol(member_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(member_decl->get_name(), member_sym);
+              attachSymbolToScopeOrOrphan(member_sym, decl_scope);
             } else {
-              member_sym->set_parent(member_decl);
+              attachSymbolToScopeOrOrphan(member_sym, nullptr);
             }
           }
         }
@@ -9083,9 +9094,9 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             }
             member_sym = new SgMemberFunctionSymbol(member_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(member_decl->get_name(), member_sym);
+              attachSymbolToScopeOrOrphan(member_sym, decl_scope);
             } else {
-              member_sym->set_parent(member_decl);
+              attachSymbolToScopeOrOrphan(member_sym, nullptr);
             }
           }
         }
@@ -9449,8 +9460,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 }
                 if (inst_sym == nullptr && func_scope != nullptr) {
                   inst_sym = new SgMemberFunctionSymbol(inst_decl);
-                  inst_sym->set_parent(inst_decl);
-                  func_scope->insert_symbol(template_base_name, inst_sym);
+                  attachSymbolToScopeOrOrphan(inst_sym, func_scope);
                 }
                 if (inst_sym != nullptr) {
                   ref_member_sym = inst_sym;
@@ -9743,8 +9753,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 }
                 if (inst_sym == nullptr && func_scope != nullptr) {
                   inst_sym = new SgFunctionSymbol(inst_decl);
-                  inst_sym->set_parent(inst_decl);
-                  func_scope->insert_symbol(template_base_name, inst_sym);
+                  attachSymbolToScopeOrOrphan(inst_sym, func_scope);
                 }
                 if (inst_sym != nullptr) {
                   ref_func_sym = inst_sym;
@@ -9987,8 +9996,9 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
           if (var_sym == nullptr) {
             var_sym = new SgVariableSymbol(init_name);
             if (decl_scope != nullptr) {
-              var_sym->set_parent(decl_scope);
-              decl_scope->insert_symbol(init_name->get_name(), var_sym);
+              attachSymbolToScopeOrOrphan(var_sym, decl_scope);
+            } else {
+              attachSymbolToScopeOrOrphan(var_sym, nullptr);
             }
           }
         }
@@ -10169,6 +10179,7 @@ bool ClangToSageTranslator::VisitExtVectorElementExpr(
   setCompilerGeneratedFileInfo(init_name);
   init_name->set_scope(global);
   SgVariableSymbol *var_symbol = new SgVariableSymbol(init_name);
+  attachSymbolToScopeOrOrphan(var_symbol, nullptr);
   SgVarRefExp *pseudo_field = new SgVarRefExp(var_symbol);
   setCompilerGeneratedFileInfo(pseudo_field, true);
   init_name->set_parent(pseudo_field);
@@ -10911,9 +10922,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       if (member_sym == nullptr) {
         member_sym = new SgMemberFunctionSymbol(member_decl);
         if (decl_scope != nullptr) {
-          decl_scope->insert_symbol(member_decl->get_name(), member_sym);
+          attachSymbolToScopeOrOrphan(member_sym, decl_scope);
         } else {
-          member_sym->set_parent(member_decl);
+          attachSymbolToScopeOrOrphan(member_sym, nullptr);
         }
       }
       return member_sym;
@@ -11049,8 +11060,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
             }
             if (decl_scope != nullptr) {
               SgVariableSymbol *new_sym = new SgVariableSymbol(init_name);
-              new_sym->set_parent(decl_scope);
-              decl_scope->insert_symbol(init_name->get_name(), new_sym);
+              attachSymbolToScopeOrOrphan(new_sym, decl_scope);
               sym = new_sym;
             }
           }
@@ -11081,6 +11091,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
         // Create a temporary symbol if we got an initialized name
         SgVariableSymbol *temp_sym =
             new SgVariableSymbol(isSgInitializedName(tmp_member));
+        attachSymbolToScopeOrOrphan(temp_sym, nullptr);
         sg_member_expr = SageBuilder::buildVarRefExp(temp_sym);
       }
       // ROOT CAUSE FIX: Handle SgMemberFunctionDeclaration from
@@ -11102,9 +11113,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           if (sym == nullptr) {
             SgTemplateMemberFunctionSymbol *new_func_sym =
                 new SgTemplateMemberFunctionSymbol(tmpl_member);
-            new_func_sym->set_parent(tmpl_member);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(tmpl_member->get_name(), new_func_sym);
+              attachSymbolToScopeOrOrphan(new_func_sym, decl_scope);
+            } else {
+              attachSymbolToScopeOrOrphan(new_func_sym, nullptr);
             }
             sym = new_func_sym;
           }
@@ -11124,10 +11136,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           if (sym == nullptr) {
             SgMemberFunctionSymbol *new_func_sym =
                 new SgMemberFunctionSymbol(member_func_decl);
-            new_func_sym->set_parent(member_func_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(member_func_decl->get_name(),
-                                        new_func_sym);
+              attachSymbolToScopeOrOrphan(new_func_sym, decl_scope);
+            } else {
+              attachSymbolToScopeOrOrphan(new_func_sym, nullptr);
             }
             sym = new_func_sym;
           }
@@ -11171,9 +11183,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           if (sym == nullptr) {
             SgTemplateFunctionSymbol *new_func_sym =
                 new SgTemplateFunctionSymbol(tmpl_decl);
-            new_func_sym->set_parent(tmpl_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(tmpl_decl->get_name(), new_func_sym);
+              attachSymbolToScopeOrOrphan(new_func_sym, decl_scope);
+            } else {
+              attachSymbolToScopeOrOrphan(new_func_sym, nullptr);
             }
             sym = new_func_sym;
           }
@@ -11191,9 +11204,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           // If not found, create new function symbol
           if (sym == nullptr) {
             SgFunctionSymbol *new_func_sym = new SgFunctionSymbol(func_decl);
-            new_func_sym->set_parent(func_decl);
             if (decl_scope != nullptr) {
-              decl_scope->insert_symbol(func_decl->get_name(), new_func_sym);
+              attachSymbolToScopeOrOrphan(new_func_sym, decl_scope);
+            } else {
+              attachSymbolToScopeOrOrphan(new_func_sym, nullptr);
             }
             sym = new_func_sym;
           }
@@ -11281,9 +11295,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
         }
         SgVariableSymbol *sym = isSgVariableSymbol(
             init_name->search_for_symbol_from_symbol_table());
-        if (sym == nullptr && var_scope != nullptr) {
+        if (sym == nullptr) {
           sym = new SgVariableSymbol(init_name);
-          rehomeSymbolToScope(sym, var_scope);
+          attachSymbolToScopeOrOrphan(sym, var_scope);
         }
         if (sym == nullptr) {
           return nullptr;
@@ -11509,8 +11523,7 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           new_inst_decl->get_symbol_from_symbol_table());
       if (inst_sym == nullptr && func_scope != nullptr) {
         inst_sym = new SgMemberFunctionSymbol(new_inst_decl);
-        inst_sym->set_parent(new_inst_decl);
-        func_scope->insert_symbol(template_base_name, inst_sym);
+        attachSymbolToScopeOrOrphan(inst_sym, func_scope);
       }
       return inst_sym != nullptr ? inst_sym : member_symbol;
     };
