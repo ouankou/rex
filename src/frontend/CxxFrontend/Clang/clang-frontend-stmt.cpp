@@ -5531,66 +5531,39 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       if (member_sym != nullptr) {
         if (SgMemberFunctionDeclaration *member_decl =
                 isSgMemberFunctionDeclaration(mapped_decl)) {
-          if (SgMemberFunctionSymbol *candidate_sym =
-                  resolve_member_symbol(member_decl)) {
-            SgExpression *new_ref = SageBuilder::buildMemberFunctionRefExp_nfi(
-                candidate_sym, false, false);
-            replace_ref(new_ref);
-            return true;
-          }
-          if (SgMemberFunctionDeclaration *first_nondef =
-                  isSgMemberFunctionDeclaration(
-                      member_decl->get_firstNondefiningDeclaration())) {
-            if (SgMemberFunctionSymbol *candidate_sym =
-                    resolve_member_symbol(first_nondef)) {
-              SgExpression *new_ref =
-                  SageBuilder::buildMemberFunctionRefExp_nfi(candidate_sym,
-                                                             false, false);
-              replace_ref(new_ref);
-              return true;
-            }
-          }
-          if (SgMemberFunctionDeclaration *def_decl =
-                  isSgMemberFunctionDeclaration(
-                      member_decl->get_definingDeclaration())) {
-            if (SgMemberFunctionSymbol *candidate_sym =
-                    resolve_member_symbol(def_decl)) {
-              SgExpression *new_ref =
-                  SageBuilder::buildMemberFunctionRefExp_nfi(candidate_sym,
-                                                             false, false);
-              replace_ref(new_ref);
-              return true;
+          SgDeclarationStatement *decls_to_try[] = {
+              member_decl, member_decl->get_firstNondefiningDeclaration(),
+              member_decl->get_definingDeclaration()};
+          for (SgDeclarationStatement *decl_stmt : decls_to_try) {
+            if (SgMemberFunctionDeclaration *cand_decl =
+                    isSgMemberFunctionDeclaration(decl_stmt)) {
+              if (SgMemberFunctionSymbol *candidate_sym =
+                      resolve_member_symbol(cand_decl)) {
+                SgExpression *new_ref =
+                    SageBuilder::buildMemberFunctionRefExp_nfi(candidate_sym,
+                                                               false, false);
+                replace_ref(new_ref);
+                return true;
+              }
             }
           }
         }
       } else if (func_sym != nullptr) {
         if (SgFunctionDeclaration *function_decl =
                 isSgFunctionDeclaration(mapped_decl)) {
-          if (SgFunctionSymbol *candidate_sym =
-                  resolve_function_symbol(function_decl)) {
-            SgExpression *new_ref =
-                SageBuilder::buildFunctionRefExp(candidate_sym);
-            replace_ref(new_ref);
-            return true;
-          }
-          if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
-                  function_decl->get_firstNondefiningDeclaration())) {
-            if (SgFunctionSymbol *candidate_sym =
-                    resolve_function_symbol(first_nondef)) {
-              SgExpression *new_ref =
-                  SageBuilder::buildFunctionRefExp(candidate_sym);
-              replace_ref(new_ref);
-              return true;
-            }
-          }
-          if (SgFunctionDeclaration *def_decl = isSgFunctionDeclaration(
-                  function_decl->get_definingDeclaration())) {
-            if (SgFunctionSymbol *candidate_sym =
-                    resolve_function_symbol(def_decl)) {
-              SgExpression *new_ref =
-                  SageBuilder::buildFunctionRefExp(candidate_sym);
-              replace_ref(new_ref);
-              return true;
+          SgDeclarationStatement *decls_to_try[] = {
+              function_decl, function_decl->get_firstNondefiningDeclaration(),
+              function_decl->get_definingDeclaration()};
+          for (SgDeclarationStatement *decl_stmt : decls_to_try) {
+            if (SgFunctionDeclaration *cand_decl =
+                    isSgFunctionDeclaration(decl_stmt)) {
+              if (SgFunctionSymbol *candidate_sym =
+                      resolve_function_symbol(cand_decl)) {
+                SgExpression *new_ref =
+                    SageBuilder::buildFunctionRefExp(candidate_sym);
+                replace_ref(new_ref);
+                return true;
+              }
             }
           }
         }
