@@ -17766,10 +17766,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       SgDeclarationStatement *specialized_template_decl =
           lookupSgDeclarationForClangDecl(primary, /*allow_on_demand=*/true);
 
+      const bool is_explicit_instantiation_definition =
+          specialization_kind == clang::TSK_ExplicitInstantiationDefinition;
       const bool needs_defining_instantiation =
           function_decl->isThisDeclarationADefinition() &&
           function_decl->hasBody() && !is_explicitly_defaulted_or_deleted &&
-          !is_explicit_instantiation && !is_system_or_builtin;
+          (!is_explicit_instantiation ||
+           is_explicit_instantiation_definition) &&
+          !is_system_or_builtin;
       auto clone_param_list =
           [&](SgFunctionParameterList *source) -> SgFunctionParameterList * {
         SgFunctionParameterList *cloned =
@@ -17875,6 +17879,24 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
               if (decl == nullptr) {
                 return;
               }
+              const bool has_instantiation_template_args =
+                  template_args_ptr != nullptr && !template_args_ptr->empty();
+              const bool mark_template_args_explicit =
+                  has_explicit_args || has_instantiation_template_args;
+              auto mark_template_arguments_as_explicit =
+                  [&](SgDeclarationStatement *inst_decl) {
+                    if (!mark_template_args_explicit || inst_decl == nullptr) {
+                      return;
+                    }
+                    if (SgTemplateArgumentPtrList *args =
+                            SageBuilder::getTemplateArgumentList(inst_decl)) {
+                      for (SgTemplateArgument *arg : *args) {
+                        if (arg != nullptr) {
+                          arg->set_explicitlySpecified(true);
+                        }
+                      }
+                    }
+                  };
               auto keep_existing_template_args =
                   [&](SgDeclarationStatement *inst_decl) -> bool {
                 if (!preserve_existing_explicit) {
@@ -17895,13 +17917,25 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                 inst_func->set_template_argument_list_is_explicit(
                     preserve_existing_explicit
                         ? inst_func->get_template_argument_list_is_explicit() ||
-                              has_explicit_args
-                        : has_explicit_args);
+                              mark_template_args_explicit
+                        : mark_template_args_explicit);
                 if (!keep_existing_template_args(inst_func)) {
                   SageBuilder::setTemplateArgumentsInDeclaration(
                       inst_func, explicit_template_args_ptr);
                 }
                 apply_deduced_args(inst_func);
+                if (inst_func->get_templateArguments().empty() &&
+                    !inst_func->get_deducedTemplateArguments().empty()) {
+                  SgTemplateArgumentPtrList *deduced_args =
+                      &inst_func->get_deducedTemplateArguments();
+                  SageBuilder::setTemplateArgumentsInDeclaration(inst_func,
+                                                                 deduced_args);
+                }
+                mark_template_arguments_as_explicit(inst_func);
+                if (!inst_func->get_templateArguments().empty()) {
+                  inst_func->set_nameResetFromMangledForm(false);
+                  inst_func->resetTemplateName();
+                }
                 if (SgTemplateFunctionDeclaration *tmpl_decl =
                         isSgTemplateFunctionDeclaration(
                             specialized_template_decl)) {
@@ -17917,13 +17951,25 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                     preserve_existing_explicit
                         ? inst_member
                                   ->get_template_argument_list_is_explicit() ||
-                              has_explicit_args
-                        : has_explicit_args);
+                              mark_template_args_explicit
+                        : mark_template_args_explicit);
                 if (!keep_existing_template_args(inst_member)) {
                   SageBuilder::setTemplateArgumentsInDeclaration(
                       inst_member, explicit_template_args_ptr);
                 }
                 apply_deduced_args(inst_member);
+                if (inst_member->get_templateArguments().empty() &&
+                    !inst_member->get_deducedTemplateArguments().empty()) {
+                  SgTemplateArgumentPtrList *deduced_args =
+                      &inst_member->get_deducedTemplateArguments();
+                  SageBuilder::setTemplateArgumentsInDeclaration(inst_member,
+                                                                 deduced_args);
+                }
+                mark_template_arguments_as_explicit(inst_member);
+                if (!inst_member->get_templateArguments().empty()) {
+                  inst_member->set_nameResetFromMangledForm(false);
+                  inst_member->resetTemplateName();
+                }
                 if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                         isSgTemplateMemberFunctionDeclaration(
                             specialized_template_decl)) {
@@ -17992,7 +18038,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           register_function_translation(function_decl, sg_function_decl);
           res = translate_function_body(sg_function_decl) && res;
 
-          if (specialization_kind == clang::TSK_ImplicitInstantiation) {
+          if (specialization_kind == clang::TSK_ImplicitInstantiation ||
+              specialization_kind ==
+                  clang::TSK_ExplicitInstantiationDefinition) {
             setCompilerGeneratedFileInfo(inst_symbol_decl);
             suppress_unparse_output(inst_symbol_decl);
             if (SgFunctionParameterList *params =
@@ -18012,7 +18060,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           }
         } else {
           sg_function_decl = inst_symbol_decl;
-          if (specialization_kind == clang::TSK_ImplicitInstantiation) {
+          if (specialization_kind == clang::TSK_ImplicitInstantiation ||
+              specialization_kind ==
+                  clang::TSK_ExplicitInstantiationDefinition) {
             setCompilerGeneratedFileInfo(sg_function_decl);
             suppress_unparse_output(sg_function_decl);
             if (SgFunctionParameterList *params =

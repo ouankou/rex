@@ -887,7 +887,9 @@ SgName SageBuilder::appendTemplateArgumentsToName(
     // (SgUnparse_Info *info) function instead of the version not taking an
     // argument. returnName += (*i)->unparseToString(info);
     if (used_fully_qualified_name == false) {
-      returnName += (*i)->unparseToString(info);
+      std::string argument_string = (*i)->unparseToString(info);
+      argument_string = Rose::StringUtility::trim(argument_string);
+      returnName += argument_string;
     }
 
 #if DEBUG_APPEND_TEMPLATE_ARGUMENT_LIST
