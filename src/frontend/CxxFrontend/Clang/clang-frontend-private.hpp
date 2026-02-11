@@ -412,6 +412,30 @@ private:
     return true;
   }
 
+  static bool consumeComment(const std::string &text,
+                             std::string::size_type start,
+                             std::string::size_type *end) {
+    ROSE_ASSERT(end != nullptr);
+
+    if (start + 1 >= text.size() || text[start] != '/') {
+      return false;
+    }
+
+    if (text[start + 1] == '/') {
+      const std::string::size_type newline_pos = text.find('\n', start + 2);
+      *end = newline_pos == std::string::npos ? text.size() : newline_pos;
+      return true;
+    }
+
+    if (text[start + 1] == '*') {
+      const std::string::size_type close_pos = text.find("*/", start + 2);
+      *end = close_pos == std::string::npos ? text.size() : close_pos + 2;
+      return true;
+    }
+
+    return false;
+  }
+
   bool tryGetObjectLikeMacroReplacement(const std::string &identifier,
                                         std::string *replacement) const {
     ROSE_ASSERT(replacement != nullptr);
@@ -482,6 +506,18 @@ private:
           }
           expanded.append(current, pos, literal_size);
           pos = raw_literal_end;
+          continue;
+        }
+
+        std::string::size_type comment_end = std::string::npos;
+        if (consumeComment(current, pos, &comment_end)) {
+          const std::string::size_type comment_size = comment_end - pos;
+          if (comment_size > kMaxExpandedPragmaSize ||
+              expanded.size() > kMaxExpandedPragmaSize - comment_size) {
+            return current;
+          }
+          expanded.append(current, pos, comment_size);
+          pos = comment_end;
           continue;
         }
 
