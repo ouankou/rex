@@ -1,4 +1,4 @@
 #pragma omp parallel
 #pragma omp single
 #pragma omp atomic
-#pragma omp single nowait
+#pragma omp single  nowait

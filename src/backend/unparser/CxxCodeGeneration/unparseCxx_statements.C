@@ -8455,6 +8455,11 @@ void Unparse_ExprStmt::unparseOmpForSimdStatement(SgStatement *stmt,
 void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
                                                        SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
+  if (isSgOmpRequiresStatement(stmt) != nullptr ||
+      isSgOmpTaskwaitStatement(stmt) != nullptr) {
+    return;
+  }
+
   // optional clauses
   SgOmpClauseBodyStatement *bodystmt = isSgOmpClauseBodyStatement(stmt);
   SgOmpDeclareSimdStatement *simdstmt = isSgOmpDeclareSimdStatement(stmt);

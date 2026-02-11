@@ -560,6 +560,86 @@ std::string trimWhitespaceCopy(const std::string &value) {
   return value.substr(begin, end - begin + 1);
 }
 
+std::string stripCppCommentPrefix(const std::string &text) {
+  const std::string trimmed = trimWhitespaceCopy(text);
+  if (trimmed.rfind("//", 0) != 0) {
+    return trimmed;
+  }
+  return trimWhitespaceCopy(trimmed.substr(2));
+}
+
+bool isCommentedOpenMPPragmaLine(const std::string &text) {
+  const std::string body = stripCppCommentPrefix(text);
+  if (body.rfind("#pragma", 0) != 0) {
+    return false;
+  }
+  return body.find("omp") != std::string::npos ||
+         body.find("acc") != std::string::npos;
+}
+
+void mergeSplitCommentedOpenMPPragmaLine(SgStatement *directive_stmt,
+                                         SgScopeStatement *scope) {
+  if (directive_stmt == nullptr || scope == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *directive_comments =
+      directive_stmt->getAttachedPreprocessingInfo();
+  AttachedPreprocessingInfoType *scope_comments =
+      scope->getAttachedPreprocessingInfo();
+  if (directive_comments == nullptr || scope_comments == nullptr) {
+    return;
+  }
+
+  for (PreprocessingInfo *continuation_comment : *directive_comments) {
+    if (continuation_comment == nullptr) {
+      continue;
+    }
+    if (continuation_comment->getTypeOfDirective() !=
+            PreprocessingInfo::CplusplusStyleComment ||
+        continuation_comment->getRelativePosition() !=
+            PreprocessingInfo::before) {
+      continue;
+    }
+
+    const std::string continuation_body =
+        stripCppCommentPrefix(continuation_comment->getString());
+    if (continuation_body.empty() ||
+        continuation_body.find("#pragma") != std::string::npos) {
+      continue;
+    }
+
+    const int continuation_line = continuation_comment->getLineNumber();
+    for (AttachedPreprocessingInfoType::iterator scope_it =
+             scope_comments->begin();
+         scope_it != scope_comments->end(); ++scope_it) {
+      PreprocessingInfo *header_comment = *scope_it;
+      if (header_comment == nullptr) {
+        continue;
+      }
+      if (header_comment->getTypeOfDirective() !=
+              PreprocessingInfo::CplusplusStyleComment ||
+          header_comment->getRelativePosition() != PreprocessingInfo::after) {
+        continue;
+      }
+      if (!isCommentedOpenMPPragmaLine(header_comment->getString())) {
+        continue;
+      }
+      if (header_comment->getLineNumber() + 1 != continuation_line) {
+        continue;
+      }
+
+      std::string merged_header =
+          trimWhitespaceCopy(header_comment->getString());
+      merged_header += " ";
+      merged_header += continuation_body;
+      continuation_comment->setString(merged_header);
+      scope_comments->erase(scope_it);
+      return;
+    }
+  }
+}
+
 SgVariableSymbol *extractClauseVariableSymbol(SgNode *node) {
   if (SgInitializedName *initialized_name = isSgInitializedName(node)) {
     return isSgVariableSymbol(
@@ -1250,6 +1330,13 @@ SgExpression *replace_expression_with_macro_value(std::string define_macro,
 SgExpression *checkOmpExpressionClause(SgExpression *clause_expression,
                                        SgGlobal *global,
                                        omp_construct_enum clause_type) {
+  (void)global;
+  // Keep symbolic identifiers in final(...) intact for source-faithful output.
+  // Example: final(pos > LIMIT) should not be rewritten as final(pos > 3).
+  if (clause_type == e_final) {
+    return clause_expression;
+  }
+
   SgExpression *newExp = clause_expression;
   // ordered (n): optional (n)
   if (clause_expression == NULL && clause_type == e_ordered_clause)
@@ -3305,6 +3392,7 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   ROSE_ASSERT(scope != NULL);
   moveUpPreprocessingInfo(result,
                           pdecl); // keep #ifdef etc attached to the pragma
+  mergeSplitCommentedOpenMPPragmaLine(result, scope);
   replaceStatement(pdecl, result);
 
   return result;
