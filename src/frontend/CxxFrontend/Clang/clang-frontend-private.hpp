@@ -8,6 +8,7 @@
 #include "sage3basic.h"
 
 #include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <memory>
 #include <set>
@@ -315,6 +316,8 @@ private:
   std::set<std::pair<clang::FileID, unsigned>> pragma_continuation_lines;
   clang::SourceManager &p_source_manager;
   clang::Preprocessor &p_preprocessor;
+  static constexpr std::size_t kMaxExpandedPragmaSize =
+      static_cast<std::size_t>(1) << 20;
 
   static bool isOpenMPPragmaText(const std::string &text) {
     size_t pos = 0;
@@ -336,6 +339,216 @@ private:
       return true;
     }
     return (pos + 3 <= text.size() && text.compare(pos, 3, "acc") == 0);
+  }
+
+  static bool isIdentifierStart(char ch) {
+    const unsigned char uch = static_cast<unsigned char>(ch);
+    return std::isalpha(uch) != 0 || ch == '_';
+  }
+
+  static bool isIdentifierChar(char ch) {
+    const unsigned char uch = static_cast<unsigned char>(ch);
+    return std::isalnum(uch) != 0 || ch == '_';
+  }
+
+  static bool isValidRawStringDelimiterChar(char ch) {
+    const unsigned char uch = static_cast<unsigned char>(ch);
+    if (std::isspace(uch) != 0 || std::iscntrl(uch) != 0) {
+      return false;
+    }
+    return ch != '(' && ch != ')' && ch != '\\' && ch != '"';
+  }
+
+  static bool consumeRawStringLiteral(const std::string &text,
+                                      std::string::size_type start,
+                                      std::string::size_type *end) {
+    ROSE_ASSERT(end != nullptr);
+
+    if (start >= text.size()) {
+      return false;
+    }
+
+    std::string::size_type raw_marker_pos = std::string::npos;
+    if (text.compare(start, 2, "R\"") == 0) {
+      raw_marker_pos = start;
+    } else if (text.compare(start, 4, "u8R\"") == 0) {
+      raw_marker_pos = start + 2;
+    } else if (start + 2 < text.size() &&
+               (text[start] == 'u' || text[start] == 'U' ||
+                text[start] == 'L') &&
+               text[start + 1] == 'R' && text[start + 2] == '"') {
+      raw_marker_pos = start + 1;
+    } else {
+      return false;
+    }
+
+    const std::string::size_type delimiter_begin = raw_marker_pos + 2;
+    std::string::size_type open_paren_pos = delimiter_begin;
+    while (open_paren_pos < text.size() && text[open_paren_pos] != '(') {
+      if (!isValidRawStringDelimiterChar(text[open_paren_pos])) {
+        return false;
+      }
+      if (open_paren_pos - delimiter_begin >= 16) {
+        return false;
+      }
+      ++open_paren_pos;
+    }
+
+    if (open_paren_pos == text.size()) {
+      return false;
+    }
+
+    const std::string delimiter =
+        text.substr(delimiter_begin, open_paren_pos - delimiter_begin);
+    const std::string terminator = ")" + delimiter + "\"";
+    const std::string::size_type close_pos =
+        text.find(terminator, open_paren_pos);
+    if (close_pos == std::string::npos) {
+      *end = text.size();
+    } else {
+      *end = close_pos + terminator.size();
+    }
+
+    return true;
+  }
+
+  bool tryGetObjectLikeMacroReplacement(const std::string &identifier,
+                                        std::string *replacement) const {
+    ROSE_ASSERT(replacement != nullptr);
+    replacement->clear();
+
+    if (identifier.empty()) {
+      return false;
+    }
+
+    clang::IdentifierInfo *macro_id =
+        p_preprocessor.getIdentifierInfo(identifier);
+    if (macro_id == nullptr) {
+      return false;
+    }
+
+    const clang::MacroDefinition macro_definition =
+        p_preprocessor.getMacroDefinition(macro_id);
+    if (!macro_definition) {
+      return false;
+    }
+
+    const clang::MacroInfo *macro_info = macro_definition.getMacroInfo();
+    if (macro_info == nullptr || macro_info->isFunctionLike() ||
+        macro_info->isBuiltinMacro()) {
+      return false;
+    }
+
+    for (const clang::Token &token : macro_info->tokens()) {
+      bool invalid = false;
+      const std::string spelling = p_preprocessor.getSpelling(token, &invalid);
+      if (invalid) {
+        replacement->clear();
+        return false;
+      }
+
+      if (!replacement->empty()) {
+        replacement->push_back(' ');
+      }
+      replacement->append(spelling);
+    }
+
+    return true;
+  }
+
+  std::string expandObjectLikeMacros(const std::string &text) const {
+    if (text.empty()) {
+      return text;
+    }
+
+    if (text.size() > kMaxExpandedPragmaSize) {
+      return text;
+    }
+
+    std::string current = text;
+    for (int iteration = 0; iteration < 16; ++iteration) {
+      bool changed = false;
+      std::string expanded;
+      expanded.reserve(current.size());
+
+      std::string::size_type pos = 0;
+      while (pos < current.size()) {
+        std::string::size_type raw_literal_end = std::string::npos;
+        if (consumeRawStringLiteral(current, pos, &raw_literal_end)) {
+          const std::string::size_type literal_size = raw_literal_end - pos;
+          if (literal_size > kMaxExpandedPragmaSize ||
+              expanded.size() > kMaxExpandedPragmaSize - literal_size) {
+            return current;
+          }
+          expanded.append(current, pos, literal_size);
+          pos = raw_literal_end;
+          continue;
+        }
+
+        if (current[pos] == '"' || current[pos] == '\'') {
+          const char quote_char = current[pos];
+          const std::string::size_type begin = pos;
+          ++pos;
+          while (pos < current.size()) {
+            if (current[pos] == '\\' && pos + 1 < current.size()) {
+              pos += 2;
+              continue;
+            }
+            if (current[pos] == quote_char) {
+              ++pos;
+              break;
+            }
+            ++pos;
+          }
+
+          const std::string::size_type literal_size = pos - begin;
+          if (literal_size > kMaxExpandedPragmaSize ||
+              expanded.size() > kMaxExpandedPragmaSize - literal_size) {
+            return current;
+          }
+          expanded.append(current, begin, literal_size);
+          continue;
+        }
+
+        if (!isIdentifierStart(current[pos])) {
+          if (expanded.size() >= kMaxExpandedPragmaSize) {
+            return current;
+          }
+          expanded.push_back(current[pos]);
+          ++pos;
+          continue;
+        }
+
+        const std::string::size_type begin = pos;
+        ++pos;
+        while (pos < current.size() && isIdentifierChar(current[pos])) {
+          ++pos;
+        }
+
+        const std::string token = current.substr(begin, pos - begin);
+        std::string replacement;
+        if (tryGetObjectLikeMacroReplacement(token, &replacement)) {
+          if (replacement.size() > kMaxExpandedPragmaSize ||
+              expanded.size() > kMaxExpandedPragmaSize - replacement.size()) {
+            return current;
+          }
+          expanded.append(replacement);
+          changed = true;
+        } else {
+          if (expanded.size() > kMaxExpandedPragmaSize - token.size()) {
+            return current;
+          }
+          expanded.append(token);
+        }
+      }
+
+      current.swap(expanded);
+      if (!changed) {
+        break;
+      }
+    }
+
+    return current;
   }
 
 public:
@@ -440,9 +653,15 @@ public:
     }
     pos = skipWhitespace(original_text, pos);
 
+    const bool is_openmp = isOpenMPPragmaText(original_text);
+    std::string pragma_text = original_text;
+    if (is_openmp) {
+      pragma_text = expandObjectLikeMacros(original_text);
+    }
+
     // Store with (FileID, line) key to handle multi-file TUs
-    line_to_pragma[std::make_pair(file_id, line)] = original_text;
-    if (isOpenMPPragmaText(original_text)) {
+    line_to_pragma[std::make_pair(file_id, line)] = pragma_text;
+    if (is_openmp) {
       openmp_lines.insert(std::make_pair(file_id, line));
     }
     for (unsigned offset = 1; offset < line_count; ++offset) {
