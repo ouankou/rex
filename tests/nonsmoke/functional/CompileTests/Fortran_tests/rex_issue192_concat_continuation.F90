@@ -13,7 +13,7 @@ program rex_issue192_concat_continuation
                                &/'.'/&
                                &/logtime
 
-  if (log_filename /= 'pop.out.20000101.010203') error stop 1
+  if (log_filename /= 'pop.out.20000101.010203') stop 1
 
   mix_steps = '2'
   mix_step = ' 3'
@@ -21,5 +21,5 @@ program rex_issue192_concat_continuation
                            &/',' /&
                                  &/ trim(mix_step)
 
-  if (mix_steps /= '2, 3') error stop 2
+  if (mix_steps /= '2, 3') stop 2
 end program rex_issue192_concat_continuation
