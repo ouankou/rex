@@ -180,6 +180,13 @@ add_test(
     "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_include.f90 && awk 'tolower($0) ~ /include/ && $0 ~ /rex_test2026_include\\.inc/ {found=1} END {exit !found}' rose_rex_test2026_include.f90"
 )
 
+add_test(
+  NAME fortran_rex_issue192_concat_continuation
+  WORKING_DIRECTORY ${_fortran_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_issue192_concat_continuation.F90 && ! grep -q '/ /' rose_rex_issue192_concat_continuation.F90 && grep -q '//' rose_rex_issue192_concat_continuation.F90 && grep -qi 'log_filename' rose_rex_issue192_concat_continuation.F90 && grep -qi 'mix_steps' rose_rex_issue192_concat_continuation.F90"
+)
+
 set(_fortran_issue487_output_dir ${_fortran_output_dir}/rex_issue487_compile_only)
 file(MAKE_DIRECTORY ${_fortran_issue487_output_dir})
 set(ROSE_FLAGS_ISSUE487 -rose:verbose 0 -rose:detect_dangling_pointers 2
