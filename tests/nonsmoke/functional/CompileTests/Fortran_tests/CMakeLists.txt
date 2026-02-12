@@ -184,7 +184,7 @@ add_test(
   NAME fortran_rex_issue192_concat_continuation
   WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND ${BASH_EXECUTABLE} -c
-    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_issue192_concat_continuation.F90 && ! (grep -v '^[[:space:]]*!' rose_rex_issue192_concat_continuation.F90 | grep -q '/ /') && grep -q '//' rose_rex_issue192_concat_continuation.F90 && grep -iq 'log_filename' rose_rex_issue192_concat_continuation.F90 && grep -iq 'mix_steps' rose_rex_issue192_concat_continuation.F90"
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_issue192_concat_continuation.F90 && ! (grep -v '^[[:space:]]*!' rose_rex_issue192_concat_continuation.F90 | grep -q '/ /') && (grep -v '^[[:space:]]*!' rose_rex_issue192_concat_continuation.F90 | grep -q '//') && grep -iq 'log_filename' rose_rex_issue192_concat_continuation.F90 && grep -iq 'mix_steps' rose_rex_issue192_concat_continuation.F90"
 )
 
 set(_fortran_issue487_output_dir ${_fortran_output_dir}/rex_issue487_compile_only)
