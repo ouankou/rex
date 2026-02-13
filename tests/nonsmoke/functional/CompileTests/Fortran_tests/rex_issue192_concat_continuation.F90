@@ -18,7 +18,7 @@ program rex_issue192_concat_continuation
   mix_steps = '2'
   mix_step = ' 3'
   mix_steps = trim(mix_steps)/&
-                           &/',' /&
+                           &/', ' /&
                                  &/ trim(mix_step)
 
   if (mix_steps /= '2, 3') stop 2
