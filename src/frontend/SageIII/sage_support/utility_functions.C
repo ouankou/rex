@@ -179,7 +179,7 @@ bool Rose::is_OpenCL_language = false;
 // disabled. REX: legacy frontend has been replaced with Clang/LLVM frontend
 std::string frontendVersionString() {
 #ifdef ROSE_BUILD_CXX_LANGUAGE_SUPPORT
-  string frontend_version = "Clang/LLVM 20 (experimental)";
+  string frontend_version = "Clang/LLVM 21 (experimental)";
 #else
   string frontend_version = "unknown (C/C++ is disabled)";
 #endif

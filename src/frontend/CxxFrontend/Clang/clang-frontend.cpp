@@ -1076,12 +1076,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   // 2 - Create a compiler instance
 
-#if LLVM_VERSION_MAJOR >= 21
   auto diag_opts = std::make_shared<clang::DiagnosticOptions>();
-#else
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_opts =
-      llvm::makeIntrusiveRefCnt<clang::DiagnosticOptions>();
-#endif
 
   auto compiler_instance = std::make_unique<clang::CompilerInstance>();
 
@@ -1100,15 +1095,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       llvm::vfs::createPhysicalFileSystem();
 
   // TextDiagnosticPrinter keeps a reference to DiagnosticOptions; ensure it
-  // outlives the diagnostics engine for both LLVM 20 and LLVM 21+.
+  // outlives the diagnostics engine for LLVM 21.
   clang::TextDiagnosticPrinter *diag_printer =
-#if LLVM_VERSION_MAJOR >= 21
       new clang::TextDiagnosticPrinter(llvm::errs(), *diag_opts);
-#else
-      new clang::TextDiagnosticPrinter(llvm::errs(), diag_opts.get());
-#endif
 
-  // LLVM 20+ API - requires VFS as first parameter
+  // LLVM API - requires VFS as first parameter
   compiler_instance->createDiagnostics(*vfs, diag_printer, true);
 
   clang::CompilerInvocation &invocation = compiler_instance->getInvocation();
@@ -1325,7 +1316,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       invocation.getHeaderSearchOpts();
 
   // Ensure Clang's builtin and system include paths are active for both
-  // LLVM 20 and 21 so the resource-dir headers are always available.
+  // LLVM 21 so the resource-dir headers are always available.
   headerSearchOpts.UseBuiltinIncludes = true;
   headerSearchOpts.UseStandardSystemIncludes = true;
   headerSearchOpts.UseStandardCXXIncludes = true;
@@ -1504,21 +1495,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                             lang_specific_includes.end());
   }
 
-  // LLVM 20 requires shared_ptr, LLVM 21+ requires reference
-#if LLVM_VERSION_MAJOR >= 21
+  // LLVM requires reference
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
       compiler_instance->getDiagnostics(), invocation.getTargetOpts());
-#else
-  auto target_options =
-      std::make_shared<clang::TargetOptions>(invocation.getTargetOpts());
-  clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
-      compiler_instance->getDiagnostics(), target_options);
-#endif
   compiler_instance->setTarget(target_info);
 
   compiler_instance->createSourceManager(compiler_instance->getFileManager());
 
-  // In LLVM 20, getFileRef returns Expected<FileEntryRef> instead of ErrorOr
+  // getFileRef returns Expected<FileEntryRef> instead of ErrorOr
   llvm::Expected<clang::FileEntryRef> ret =
       compiler_instance->getFileManager().getFileRef(input_file);
   if (!ret) {
@@ -1526,7 +1510,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     ROSE_ABORT();
   }
   clang::FileEntryRef input_file_entry = *ret;
-  // In LLVM 20, createFileID takes FileEntryRef instead of const FileEntry*
+  // createFileID takes FileEntryRef instead of const FileEntry*
   clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(
       input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
 
@@ -1673,7 +1657,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                   compiler_instance->getASTContext());
   compiler_instance->getDiagnosticClient().EndSourceFile();
 
-  // In LLVM 20, get error count from diagnostics directly
+  // get error count from diagnostics directly
   unsigned numErrors = compiler_instance->getDiagnostics().getNumErrors();
   if (numErrors > 0) {
     printf("Clang found %d diagnostic errors during parsing\n", numErrors);
@@ -3611,11 +3595,11 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
                        "check before...");
         }
 
-        // In LLVM 20, getFileEntryForID still returns const FileEntry*.
+        // getFileEntryForID still returns const FileEntry*.
         const clang::FileEntry *fileEntry = sm.getFileEntryForID(file_begin);
         std::string file;
         if (fileEntry) {
-          // In LLVM 20, FileEntry uses tryGetRealPathName() instead of
+          // FileEntry uses tryGetRealPathName() instead of
           // getName().
           file = fileEntry->tryGetRealPathName().str();
         }

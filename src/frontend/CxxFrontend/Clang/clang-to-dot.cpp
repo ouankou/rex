@@ -217,22 +217,13 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
 
   llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs =
       llvm::vfs::createPhysicalFileSystem();
-#if LLVM_VERSION_MAJOR >= 21
   auto diag_opts = std::make_shared<clang::DiagnosticOptions>();
-#else
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_opts =
-      llvm::makeIntrusiveRefCnt<clang::DiagnosticOptions>();
-#endif
   auto compiler_instance = std::make_unique<clang::CompilerInstance>();
 
   // Create diagnostics with instance-specific filesystem (avoid global
   // singleton lifetime issues).
-  auto diag_printer = std::make_unique<clang::TextDiagnosticPrinter>(
-#if LLVM_VERSION_MAJOR >= 21
-      llvm::errs(), *diag_opts);
-#else
-      llvm::errs(), diag_opts.get());
-#endif
+  auto diag_printer =
+      std::make_unique<clang::TextDiagnosticPrinter>(llvm::errs(), *diag_opts);
   compiler_instance->createDiagnostics(*vfs, diag_printer.release(), true);
 
   // Parse command-line arguments to populate invocation (including
@@ -316,22 +307,15 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
                             lang_specific_includes.end());
   }
 
-  // LLVM 20 requires shared_ptr, LLVM 21+ requires reference
-#if LLVM_VERSION_MAJOR >= 21
+  // LLVM requires reference
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
       compiler_instance->getDiagnostics(),
       compiler_instance->getInvocation().getTargetOpts());
-#else
-  auto target_options = std::make_shared<clang::TargetOptions>(
-      compiler_instance->getInvocation().getTargetOpts());
-  clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
-      compiler_instance->getDiagnostics(), target_options);
-#endif
   compiler_instance->setTarget(target_info);
 
   compiler_instance->createSourceManager(compiler_instance->getFileManager());
 
-  // In LLVM 20, getFileRef returns Expected<FileEntryRef> instead of ErrorOr
+  // getFileRef returns Expected<FileEntryRef> instead of ErrorOr
   llvm::Expected<clang::FileEntryRef> ret =
       compiler_instance->getFileManager().getFileRef(input_file);
   if (!ret) {
@@ -339,7 +323,7 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
     ROSE_ABORT();
   }
   clang::FileEntryRef input_file_entry = *ret;
-  // In LLVM 20, createFileID takes FileEntryRef instead of const FileEntry*
+  // createFileID takes FileEntryRef instead of const FileEntry*
   clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(
       input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
 
@@ -509,7 +493,7 @@ void ClangToDotPreprocessorRecord::InclusionDirective(
   unsigned cs =
       p_source_manager->getSpellingColumnNumber(HashLoc, &inv_begin_col);
 
-  // In LLVM 20, FileEntry uses tryGetRealPathName() instead of getName()
+  // FileEntry uses tryGetRealPathName() instead of getName()
   std::string file = "";
   const clang::FileEntry *fileEntry =
       p_source_manager->getFileEntryForID(p_source_manager->getFileID(HashLoc));
@@ -769,11 +753,7 @@ void ClangToDotTranslator::VisitNestedNameSpecifier(
         prefix + " namespace_alias",
         Traverse(nested_name_specifier->getAsNamespaceAlias())));
     break;
-  case clang::NestedNameSpecifier::TypeSpec:
-#if LLVM_VERSION_MAJOR < 21
-  case clang::NestedNameSpecifier::TypeSpecWithTemplate:
-#endif
-  {
+  case clang::NestedNameSpecifier::TypeSpec: {
     const char *label =
         nestedNameSpecifierHasTemplateKeyword(nested_name_specifier)
             ? "type_specifier_with_template"
@@ -828,7 +808,7 @@ void ClangToDotTranslator::VisitTemplateName(
     VisitNestedNameSpecifier(
         template_name.getAsQualifiedTemplateName()->getQualifier(), node_desc,
         oss.str() + "nested_name_specifier");
-    // In LLVM 20, getDecl() and getTemplateDecl() were removed from
+    // getDecl() and getTemplateDecl() were removed from
     // QualifiedTemplateName Use getUnderlyingTemplate() instead
     node_desc.successors.push_back(std::pair<std::string, std::string>(
         oss.str() + "declaration",

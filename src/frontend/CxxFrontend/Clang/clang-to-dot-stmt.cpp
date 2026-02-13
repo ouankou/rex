@@ -609,7 +609,7 @@ std::string ClangToDotTranslator::Traverse(clang::Stmt *stmt) {
   case clang::Stmt::TypeTraitExprClass:
     ret_status = VisitTypeTraitExpr((clang::TypeTraitExpr *)stmt, node_desc);
     break;
-  // TypoExpr was removed in LLVM 20
+  // TypoExpr was removed in LLVM
   // case clang::Stmt::TypoExprClass:
   //     ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, node_desc);
   //     break;

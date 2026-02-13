@@ -3,7 +3,7 @@
 ### Context
 - Target input: `tests/nonsmoke/functional/input_codes/axpy_omp.c`.
 - Goal: compile the source with `./build/bin/rose-compiler` while ensuring generated code (`rose_axpy_omp.c`) preserves OpenMP pragmas and is accepted by stock `clang`.
-- Environment: Clang/LLVM 20 frontend in ROSE (“rex”).
+- Environment: Clang/LLVM 21 frontend in ROSE (“rex”).
 
 ### Findings & Fixes
 - **Clang builtin redeclarations**: local prototypes for `__builtin_va_start/__builtin_va_end/__builtin_alloca` conflicted with the Clang 20 headers. Added `__has_builtin` guards and adjusted signatures to match Clang’s runtime expectations.
@@ -39,6 +39,6 @@
 - Add regression coverage: run `rose-compiler -fopenmp` and verify that the emitted pragmas and loop headers remain canonical.
 
 ### Practical Notes
-- The current passthrough path allows the user to recompile the generated file with `clang-20 -fopenmp` successfully.
+- The current passthrough path allows the user to recompile the generated file with `clang-21 -fopenmp` successfully.
 - When no OpenMP flags are supplied, pragmas remain untouched but Clang also does not attempt to parse them as structured directives, matching legacy frontend’s historical behaviour.
 - Mode selection logic lives entirely in `clang-frontend.cpp`; no build-system changes are required.

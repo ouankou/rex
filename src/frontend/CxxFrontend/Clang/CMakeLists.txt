@@ -32,7 +32,7 @@ add_library(libroseClangFrontend OBJECT ${CLANG_FRONTEND_SOURCES})
 # Depend on ROSETTA-generated files (Cxx_Grammar.h etc.)
 add_dependencies(libroseClangFrontend rosetta_generated)
 
-# Set C++17 standard (required by LLVM 20)
+# Set C++17 standard
 set_target_properties(libroseClangFrontend PROPERTIES
   CXX_STANDARD 17
   CXX_STANDARD_REQUIRED ON
@@ -45,11 +45,11 @@ target_include_directories(libroseClangFrontend PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# Add LLVM includes to ensure LLVM 20 headers are found first
+# Add LLVM includes to ensure LLVM headers are found first
 # when multiple LLVM versions are installed.
 # Get LLVM include path from llvm-config if LLVM_INCLUDE_DIRS is not set
 if(NOT LLVM_INCLUDE_DIRS)
-  execute_process(COMMAND llvm-config-20 --includedir
+  execute_process(COMMAND llvm-config-21 --includedir
     OUTPUT_VARIABLE LLVM_INCLUDE_DIRS
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()

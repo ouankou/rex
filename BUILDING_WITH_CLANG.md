@@ -8,7 +8,7 @@ REX targets Linux only; non-Linux builds are unsupported.
 
 REX has transitioned from the proprietary legacy frontend frontend to an experimental Clang/LLVM-based frontend. This new frontend supports:
 - **C language analysis** (primary focus)
-- **LLVM 20.x** or later
+- **LLVM 21.x** or later
 - **CMake-only build system**
 
 **Important**: The Clang frontend is **highly experimental** and may only successfully compile simple C programs like "hello world". C++ support is essentially non-existent at this stage.
@@ -39,10 +39,10 @@ REX has transitioned from the proprietary legacy frontend frontend to an experim
 
 #### LLVM/Clang Frontend
 
-4. **LLVM/Clang 20.x or later**
+4. **LLVM/Clang 21.x or later**
    ```bash
    # Ubuntu/Debian
-   sudo apt-get install llvm-20 clang-20 libclang-20-dev
+   sudo apt-get install llvm-21 clang-21 libclang-21-dev
 
    # Fedora/RHEL
    sudo dnf install llvm clang clang-devel
@@ -83,7 +83,7 @@ For Ubuntu/Debian, install all dependencies at once:
 ```bash
 sudo apt-get update && sudo apt-get install -y \
     build-essential git cmake perl flex bison \
-    llvm-20 clang-20 libclang-20-dev \
+    llvm-21 clang-21 libclang-21-dev \
     zlib1g-dev libzstd-dev \
     libxml2-dev \
     ocl-icd-opencl-dev
@@ -92,7 +92,7 @@ sudo apt-get update && sudo apt-get install -y \
 ### Verify LLVM Installation
 
 ```bash
-llvm-config --version  # Should show 20.x or later
+llvm-config --version  # Should show 21.x or later
 clang --version        # Should match LLVM version
 ```
 
@@ -154,7 +154,7 @@ cmake .. \
 - `-Denable-clang-frontend=ON` - **Required** to use Clang frontend
 - `-DENABLE-C=ON` - Enable C language support
 - `-DENABLE-FORTRAN=OFF` - Disable Fortran (not supported with Clang frontend)
-- `-DCMAKE_CXX_STANDARD=17` - Required by LLVM 20
+- `-DCMAKE_CXX_STANDARD=17` - Required by LLVM/Clang frontend
 
 ### 4. Build
 
@@ -239,16 +239,16 @@ rose-compiler -c hello.c
 **Solution**:
 ```bash
 # Specify LLVM installation directory
-cmake .. -DLLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm
+cmake .. -DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm
 ```
 
 ### Compilation Errors in Clang Frontend
 
 **Error**: API compatibility errors in `clang-*.cpp` files
 
-**Cause**: The Clang frontend code has been updated for LLVM 20 API. If you see errors, your LLVM version may be incompatible.
+**Cause**: The Clang frontend code targets LLVM 21 APIs. If you see errors, your LLVM version may be incompatible.
 
-**Solution**: Ensure you're using LLVM 20.x:
+**Solution**: Ensure you're using LLVM 21.x:
 ```bash
 llvm-config --version
 ```
@@ -257,7 +257,7 @@ llvm-config --version
 
 **Error**: `The link interface of target "LLVMSupport" contains: zstd::libzstd_shared but the target was not found`
 
-**Cause**: LLVM 20 requires the zstd compression library, but it's not installed.
+**Cause**: LLVM requires the zstd compression library, but it's not installed.
 
 **Solution**:
 ```bash
@@ -366,7 +366,7 @@ The Clang frontend in REX is **highly experimental**:
 **Current Phase**: Experimental Clang frontend with good C support
 
 - ✅ CMake build system configured
-- ✅ LLVM 20 API compatibility implemented
+- ✅ LLVM 21 API compatibility implemented
 - ✅ Basic Clang frontend integration
 - ✅ **C language support** (95% test pass rate)
 - ✅ Enum constant handling fixed (declptr issue resolved)

@@ -875,7 +875,7 @@ public:
   // virtual bool VisitObjCSubscriptRefexpr
   virtual bool VisitOffsetOfExpr(clang::OffsetOfExpr *offset_of_expr,
                                  NodeDescriptor &node_desc);
-  // In LLVM 20, OMPArraySectionExpr was renamed to ArraySectionExpr
+  // OMPArraySectionExpr was renamed to ArraySectionExpr
   virtual bool
   VisitOMPArraySectionExpr(clang::ArraySectionExpr *omp_array_section_expr,
                            NodeDescriptor &node_desc);
@@ -921,7 +921,7 @@ public:
       NodeDescriptor &node_desc);
   virtual bool VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
                                   NodeDescriptor &node_desc);
-  // TypoExpr was removed in LLVM 20
+  // TypoExpr was removed in LLVM
   // virtual bool VisitTypoExpr(clang::TypoExpr * typo_expr, NodeDescriptor &
   // node_desc);
   virtual bool VisitUnaryExprOrTypeTraitExpr(
@@ -1004,7 +1004,7 @@ public:
   virtual bool VisitInjectedClassNameType(
       clang::InjectedClassNameType *injected_class_name_type,
       NodeDescriptor &node_desc);
-  // LocInfoType was removed in LLVM 20
+  // LocInfoType was removed in LLVM
   // virtual bool VisitLocInfoType(clang::LocInfoType * loc_info_type,
   // NodeDescriptor & node_desc);
   virtual bool
@@ -1074,7 +1074,7 @@ public:
   virtual bool
   VisitUnaryTransformType(clang::UnaryTransformType *unary_transform_type,
                           NodeDescriptor &node_desc);
-  // DependentUnaryTransformType was removed/renamed in LLVM 20
+  // DependentUnaryTransformType was removed/renamed in LLVM
   // virtual bool
   // VisitDependentUnaryTransformType(clang::DependentUnaryTransformType *
   // dependent_unary_transform_type, NodeDescriptor & node_desc);
