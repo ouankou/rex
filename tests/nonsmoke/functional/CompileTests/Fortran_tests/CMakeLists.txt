@@ -184,7 +184,7 @@ add_test(
   NAME fortran_rex_issue192_concat_continuation
   WORKING_DIRECTORY ${_fortran_output_dir}
   COMMAND ${BASH_EXECUTABLE} -c
-    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_issue192_concat_continuation.F90 && awk 'BEGIN{IGNORECASE=1; slash=\"/\"; dslash=slash slash; sslash=slash \" \" slash} /log_filename[[:space:]]*=/{lf=1; if(index($0, dslash) && !index($0, sslash)) lf_ok=1} /mix_steps[[:space:]]*=/{ms=1; if(index($0, dslash) && !index($0, sslash)) ms_ok=1} END{exit !(lf && lf_ok && ms && ms_ok)}' rose_rex_issue192_concat_continuation.F90"
+    "$<TARGET_FILE:testTranslator> ${ROSE_FLAGS_STR} -rose:fortran_std=f90 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_issue192_concat_continuation.F90 && awk 'BEGIN{IGNORECASE=1; dslash=\"//\"; sslash=\"/ /\"} /log_filename[[:space:]]*=/{lf=1; if(index($0, dslash) && !index($0, sslash)) lf_ok=1} /mix_steps[[:space:]]*=/{ms=1; if(index($0, dslash) && !index($0, sslash)) ms_ok=1} END{exit !(lf && lf_ok && ms && ms_ok)}' rose_rex_issue192_concat_continuation.F90"
 )
 
 set(_fortran_issue487_output_dir ${_fortran_output_dir}/rex_issue487_compile_only)
