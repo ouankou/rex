@@ -67,19 +67,26 @@ echo ""
 
 # Check for LLVM/Clang
 echo -e "${YELLOW}[2/5] Checking for LLVM/Clang installation...${NC}"
-if ! command -v llvm-config &> /dev/null; then
+LLVM_CONFIG_CMD=""
+if command -v llvm-config-21 &> /dev/null; then
+    LLVM_CONFIG_CMD="llvm-config-21"
+elif command -v llvm-config &> /dev/null; then
+    LLVM_CONFIG_CMD="llvm-config"
+fi
+
+if [ -z "$LLVM_CONFIG_CMD" ]; then
     echo -e "${RED}Error: llvm-config not found. Please install LLVM/Clang 21 or later.${NC}"
     echo "On Ubuntu/Debian: sudo apt-get install llvm-21 clang-21 libclang-21-dev"
     exit 1
 fi
 
-LLVM_VERSION=$(llvm-config --version)
+LLVM_VERSION=$($LLVM_CONFIG_CMD --version)
 LLVM_MAJOR=$(echo "$LLVM_VERSION" | sed -E 's/^([0-9]+).*/\1/')
 if [ -z "$LLVM_MAJOR" ] || [ "$LLVM_MAJOR" -lt 21 ]; then
-    echo -e "${RED}Error: detected LLVM version $LLVM_VERSION. REX requires LLVM/Clang 21 or later.${NC}"
+    echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires LLVM/Clang 21 or later.${NC}"
     exit 1
 fi
-echo -e "${GREEN}Found LLVM version: $LLVM_VERSION${NC}"
+echo -e "${GREEN}Found LLVM version: $LLVM_VERSION (${LLVM_CONFIG_CMD})${NC}"
 echo ""
 
 # Create and enter build directory
