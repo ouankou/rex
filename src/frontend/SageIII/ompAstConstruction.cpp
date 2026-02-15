@@ -63,6 +63,7 @@ static std::unordered_map<OpenMPDirective *, OmpClauseParseCache>
 struct PendingCommentedDirectiveRelocation {
   SgLocatedNode *owner = nullptr;
   PreprocessingInfo *info = nullptr;
+  int source_line = 0;
 };
 
 static std::unordered_map<SgPragmaDeclaration *,
@@ -153,39 +154,13 @@ void collectCommentedDirectiveRelocations(
   struct PragmaPosition {
     SgPragmaDeclaration *declaration = nullptr;
     unsigned line = 0;
-    bool requires_relocation = false;
   };
 
-  std::unordered_set<SgPragmaDeclaration *> pragmas_requiring_relocation;
-  for (SgPragmaDeclaration *pragma_decl : pragma_list) {
-    if (pragma_decl != nullptr) {
-      pragmas_requiring_relocation.insert(pragma_decl);
-    }
-  }
-
   std::unordered_map<int, std::vector<PragmaPosition>> pragma_positions_by_file;
-  std::vector<SgNode *> all_pragmas =
-      NodeQuery::querySubTree(source_file, V_SgPragmaDeclaration);
-  for (SgNode *node : all_pragmas) {
-    SgPragmaDeclaration *pragma_decl = isSgPragmaDeclaration(node);
+  for (SgPragmaDeclaration *pragma_decl : pragma_list) {
     if (pragma_decl == nullptr) {
       continue;
     }
-
-    SgPragma *pragma = pragma_decl->get_pragma();
-    if (pragma == nullptr) {
-      continue;
-    }
-    std::istringstream directive_tokens(pragma->get_pragma());
-    std::string key;
-    directive_tokens >> key;
-    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char ch) {
-      return static_cast<char>(std::tolower(ch));
-    });
-    if (key != "omp" && key != "acc") {
-      continue;
-    }
-
     const Sg_File_Info *file_info = pragma_decl->get_file_info();
     if (file_info == nullptr) {
       continue;
@@ -197,9 +172,7 @@ void collectCommentedDirectiveRelocations(
     }
 
     pragma_positions_by_file[file_info->get_file_id()].push_back(
-        PragmaPosition{pragma_decl, pragma_line,
-                       pragmas_requiring_relocation.find(pragma_decl) !=
-                           pragmas_requiring_relocation.end()});
+        PragmaPosition{pragma_decl, pragma_line});
   }
 
   for (auto &entry : pragma_positions_by_file) {
@@ -214,17 +187,7 @@ void collectCommentedDirectiveRelocations(
     return;
   }
 
-  struct CommentCandidate {
-    PreprocessingInfo *info = nullptr;
-    int line = 0;
-    int file_id = 0;
-  };
-
   std::unordered_set<PreprocessingInfo *> seen_comments;
-  std::unordered_map<PreprocessingInfo *, std::vector<SgLocatedNode *>>
-      comment_owners;
-  std::vector<CommentCandidate> candidates;
-
   std::vector<SgNode *> located_nodes =
       NodeQuery::querySubTree(source_file, V_SgLocatedNode);
   for (SgNode *node : located_nodes) {
@@ -244,117 +207,72 @@ void collectCommentedDirectiveRelocations(
       if (!isCommentedOutDirective(info)) {
         continue;
       }
-
-      comment_owners[info].push_back(owner);
       if (!seen_comments.insert(info).second) {
         continue;
       }
 
-      const int comment_line = info->getLineNumber();
+      int comment_line = info->getLineNumber();
+      int file_id = info->getFileId();
+
+      if (comment_line <= 0) {
+        comment_line = static_cast<int>(getLocatedNodeLine(owner));
+      }
+      if (file_id <= 0) {
+        if (const Sg_File_Info *owner_info = owner->get_file_info()) {
+          file_id = owner_info->get_file_id();
+        }
+      }
+      if (file_id <= 0) {
+        if (const Sg_File_Info *source_info = source_file->get_file_info()) {
+          file_id = source_info->get_file_id();
+        }
+      }
       if (comment_line <= 0) {
         continue;
       }
-      candidates.push_back(
-          CommentCandidate{info, comment_line, info->getFileId()});
-    }
-  }
 
-  auto detach_comment_from_known_owners =
-      [&comment_owners](PreprocessingInfo *info) {
-        if (info == nullptr) {
-          return;
+      auto pragma_positions_it = pragma_positions_by_file.find(file_id);
+      if (pragma_positions_it == pragma_positions_by_file.end()) {
+        if (pragma_positions_by_file.size() == 1) {
+          pragma_positions_it = pragma_positions_by_file.begin();
+        } else {
+          continue;
         }
+      }
 
-        auto owners_it = comment_owners.find(info);
-        if (owners_it == comment_owners.end()) {
-          return;
+      const std::vector<PragmaPosition> &positions =
+          pragma_positions_it->second;
+      if (positions.empty()) {
+        continue;
+      }
+
+      auto next_pragma_it =
+          std::lower_bound(positions.begin(), positions.end(), comment_line,
+                           [](const PragmaPosition &position, int line) {
+                             return static_cast<int>(position.line) < line;
+                           });
+      SgPragmaDeclaration *target_pragma = nullptr;
+      if (next_pragma_it != positions.end()) {
+        target_pragma = next_pragma_it->declaration;
+      } else {
+        const PragmaPosition &last_position = positions.back();
+        const int owner_line = static_cast<int>(getLocatedNodeLine(owner));
+        const bool owner_before_last_pragma =
+            owner_line > 0 &&
+            owner_line <= static_cast<int>(last_position.line);
+        if (comment_line > static_cast<int>(last_position.line) &&
+            owner_before_last_pragma) {
+          target_pragma = last_position.declaration;
+        } else {
+          continue;
         }
+      }
+      if (target_pragma == nullptr) {
+        continue;
+      }
 
-        for (SgLocatedNode *owner : owners_it->second) {
-          if (owner == nullptr) {
-            continue;
-          }
-          AttachedPreprocessingInfoType *owner_info =
-              owner->get_attachedPreprocessingInfoPtr();
-          if (owner_info == nullptr || owner_info->empty()) {
-            continue;
-          }
-
-          owner_info->erase(
-              std::remove(owner_info->begin(), owner_info->end(), info),
-              owner_info->end());
-        }
-      };
-
-  for (const CommentCandidate &candidate : candidates) {
-    PreprocessingInfo *info = candidate.info;
-    if (info == nullptr) {
-      continue;
-    }
-
-    auto pragma_positions_it = pragma_positions_by_file.find(candidate.file_id);
-    if (pragma_positions_it == pragma_positions_by_file.end()) {
-      continue;
-    }
-
-    const std::vector<PragmaPosition> &positions = pragma_positions_it->second;
-    if (positions.empty()) {
-      continue;
-    }
-
-    auto next_pragma_it =
-        std::lower_bound(positions.begin(), positions.end(), candidate.line,
-                         [](const PragmaPosition &position, int line) {
-                           return static_cast<int>(position.line) < line;
-                         });
-
-    const PragmaPosition *target_position = nullptr;
-    if (next_pragma_it != positions.end()) {
-      target_position = &(*next_pragma_it);
-    } else {
-      // No following pragma in this file: keep this commented-out directive
-      // on its original owner node instead of relocating it backward.
-      continue;
-    }
-
-    SgPragmaDeclaration *target_pragma =
-        target_position != nullptr ? target_position->declaration : nullptr;
-    if (target_pragma == nullptr) {
-      continue;
-    }
-
-    detach_comment_from_known_owners(info);
-
-    if (target_position->requires_relocation) {
       g_pending_commented_directive_relocations[target_pragma].push_back(
-          PendingCommentedDirectiveRelocation{nullptr, info});
-      continue;
-    }
-
-    AttachedPreprocessingInfoType *target_info =
-        target_pragma->get_attachedPreprocessingInfoPtr();
-    if (target_info == nullptr) {
-      target_info = new AttachedPreprocessingInfoType;
-      target_pragma->set_attachedPreprocessingInfoPtr(target_info);
-    }
-    if (std::find(target_info->begin(), target_info->end(), info) !=
-        target_info->end()) {
-      continue;
-    }
-
-    const bool appears_before_pragma =
-        static_cast<unsigned>(candidate.line) <= target_position->line;
-    if (appears_before_pragma) {
-      info->setRelativePosition(PreprocessingInfo::before);
-      auto insert_after_existing_before = std::find_if(
-          target_info->begin(), target_info->end(),
-          [](PreprocessingInfo *current) {
-            return current->getRelativePosition() != PreprocessingInfo::before;
-          });
-      target_info->insert(insert_after_existing_before, info);
-    } else {
-      info->setRelativePosition(PreprocessingInfo::after);
-      target_info->push_back(info);
+          PendingCommentedDirectiveRelocation{owner, info, comment_line});
     }
   }
 }
@@ -381,11 +299,7 @@ void relocatePendingCommentedDirectivesForPragma(
   std::stable_sort(pending.begin(), pending.end(),
                    [](const PendingCommentedDirectiveRelocation &lhs,
                       const PendingCommentedDirectiveRelocation &rhs) {
-                     const int lhs_line =
-                         lhs.info != nullptr ? lhs.info->getLineNumber() : 0;
-                     const int rhs_line =
-                         rhs.info != nullptr ? rhs.info->getLineNumber() : 0;
-                     return lhs_line < rhs_line;
+                     return lhs.source_line < rhs.source_line;
                    });
 
   AttachedPreprocessingInfoType *directive_info =
@@ -419,7 +333,8 @@ void relocatePendingCommentedDirectivesForPragma(
 
     const bool appears_before_pragma =
         pragma_line == 0 ||
-        entry.info->getLineNumber() <= static_cast<int>(pragma_line);
+        (entry.source_line > 0 &&
+         entry.source_line <= static_cast<int>(pragma_line));
     if (appears_before_pragma) {
       entry.info->setRelativePosition(PreprocessingInfo::before);
       auto insert_after_existing_before = std::find_if(

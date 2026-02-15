@@ -63,9 +63,24 @@ run_ctest_regex() {
   ctest -R "${regex}" --exclude-regex "${exclude_regex}" -j"$(nproc)" --output-on-failure
 }
 
+run_ctest_dir() {
+  local test_dir=$1
+  echo "Running ctest --test-dir \"${test_dir}\"..."
+  local count
+  count=$(ctest -N --test-dir "${test_dir}" | awk '/Total Tests:/ {print $3}')
+  if [[ -n "${count:-}" ]] && (( count == 0 )); then
+    echo "ctest --test-dir \"${test_dir}\" found zero tests. Ensure the build matches CI configuration." >&2
+    return 1
+  fi
+  ctest --test-dir "${test_dir}" -j"$(nproc)" --output-on-failure
+}
+
 run_ctest_regex \
   "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" \
   "omp_lowering"
+
+run_ctest_dir \
+  "${build_dir}/tests/nonsmoke/functional/CompileTests/OpenMP_tests"
 EOF
 
 chmod +x "$hook_path"
