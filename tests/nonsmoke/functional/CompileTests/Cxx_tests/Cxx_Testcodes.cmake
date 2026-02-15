@@ -13,4 +13,5 @@ list(APPEND EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2026_std_random.cpp
   rex_test2026_std_variant_visit.cpp
   rex_test2026_namespace_qualification.cpp
+  rex_test2026_issue203_template_qualified_private_typedef.cpp
 )

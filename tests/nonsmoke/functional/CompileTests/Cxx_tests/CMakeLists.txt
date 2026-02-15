@@ -136,6 +136,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue60_friend_function_symbol_scope.cpp
   rex_test2025_issue61_function_decl_chain.cpp
   rex_test2025_mangle_qualifiers_no_template_syntax.cpp
+  rex_test2026_issue203_template_qualified_private_typedef.cpp
   rex_test2025_issue63_pseudo_dtor_typedef_ptr.cpp
   rex_test2025_issue64_shadow_template_global_qual.cpp
   rex_test2025_issue69_member_class_out_of_line.cpp
@@ -3946,6 +3947,13 @@ rex_lock_test_for_input(
 # Issue 62: Mangled qualifiers must never contain template syntax.
 rex_compile_test_name(_issue62_test "Cxx_tests" rex_test2025_mangle_qualifiers_no_template_syntax.cpp)
 set_tests_properties(${_issue62_test} PROPERTIES
+  FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):"
+)
+
+# Issue 203: Template-qualified default template args must not assert in
+# mangleQualifiersToString.
+rex_compile_test_name(_issue203_test "Cxx_tests" rex_test2026_issue203_template_qualified_private_typedef.cpp)
+set_tests_properties(${_issue203_test} PROPERTIES
   FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):"
 )
 
