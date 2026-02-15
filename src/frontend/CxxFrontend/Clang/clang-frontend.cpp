@@ -1536,7 +1536,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   if ((language == ClangToSageTranslator::C ||
        language == ClangToSageTranslator::CPLUSPLUS ||
        language == ClangToSageTranslator::CUDA) &&
-      sageFile.get_skipfinalCompileStep() && !openmp_ast_mode) {
+      sageFile.get_skipfinalCompileStep()) {
     sageFile.set_unparse_tokens(true);
   }
 
