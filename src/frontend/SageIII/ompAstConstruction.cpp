@@ -952,6 +952,27 @@ static std::list<SgPragmaDeclaration *> omp_pragma_list;
 static std::vector<std::pair<SgPragmaDeclaration *, OpenMPDirective *>>
     OpenMPIR_list;
 
+static void clearClauseParseCacheForSourceFile(SgSourceFile *source_file) {
+  if (source_file == nullptr) {
+    return;
+  }
+
+  std::vector<OpenMPDirective *> directives_to_clear;
+  directives_to_clear.reserve(OpenMPIR_list.size());
+  for (const auto &entry : OpenMPIR_list) {
+    if (entry.first == nullptr || entry.second == nullptr) {
+      continue;
+    }
+    if (getEnclosingSourceFile(entry.first) == source_file) {
+      directives_to_clear.push_back(entry.second);
+    }
+  }
+
+  for (OpenMPDirective *directive : directives_to_clear) {
+    g_omp_clause_nodes.erase(directive);
+  }
+}
+
 static std::string toLowerCopy(const std::string &input) {
   std::string result = input;
   std::transform(
@@ -3329,6 +3350,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_parse_only() = %s \n",
              sageFilePtr->get_openmp_parse_only() ? "true" : "false");
     }
+    clearClauseParseCacheForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
@@ -3362,6 +3384,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_ast_only() = %s \n",
              sageFilePtr->get_openmp_ast_only() ? "true" : "false");
     }
+    clearClauseParseCacheForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
@@ -3376,11 +3399,13 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_analyzing() = %s \n",
              sageFilePtr->get_openmp_analyzing() ? "true" : "false");
     }
+    clearClauseParseCacheForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
 
   lower_omp(sageFilePtr);
+  clearClauseParseCacheForSourceFile(sageFilePtr);
   mark_processed(sageFilePtr);
 }
 
