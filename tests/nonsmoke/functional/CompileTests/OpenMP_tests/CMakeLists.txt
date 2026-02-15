@@ -148,7 +148,7 @@ function(add_omp_output_diff_tests input_file dependency label)
     NAME OMPTEST_output_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${BASH_EXECUTABLE} -c
-      "grep -E \"^[[:space:]]*(#pragma[[:space:]]+omp|//[[:space:]]*#pragma[[:space:]]+omp)\" ${_rose_file} > ${_output_file} || exit 0"
+      "grep -E \"^[[:space:]]*(#pragma[[:space:]]+omp|//[[:space:]]*#pragma[[:space:]]+omp|/\\*[[:space:]]*#pragma[[:space:]]+omp.*)\" ${_rose_file} > ${_output_file} || exit 0"
   )
   set_tests_properties(OMPTEST_output_${_name} PROPERTIES DEPENDS "${dependency}" LABELS "${label}")
 
