@@ -312,7 +312,9 @@ void collectCommentedDirectiveRelocations(
     if (next_pragma_it != positions.end()) {
       target_position = &(*next_pragma_it);
     } else {
-      target_position = &positions.back();
+      // No following pragma in this file: keep this commented-out directive
+      // on its original owner node instead of relocating it backward.
+      continue;
     }
 
     SgPragmaDeclaration *target_pragma =
