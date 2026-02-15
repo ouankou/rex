@@ -8459,6 +8459,7 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
   SgOmpClauseBodyStatement *bodystmt = isSgOmpClauseBodyStatement(stmt);
   SgOmpDeclareSimdStatement *simdstmt = isSgOmpDeclareSimdStatement(stmt);
   SgOmpClauseStatement *clausestmt = isSgOmpClauseStatement(stmt);
+  SgOmpRequiresStatement *requiresstmt = isSgOmpRequiresStatement(stmt);
   const SgOmpClausePtrList *clause_ptr_list = nullptr;
   if (bodystmt != nullptr) {
     clause_ptr_list = &bodystmt->get_clauses();
@@ -8466,6 +8467,8 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
     clause_ptr_list = &simdstmt->get_clauses();
   } else if (clausestmt != nullptr) {
     clause_ptr_list = &clausestmt->get_clauses();
+  } else if (requiresstmt != nullptr) {
+    clause_ptr_list = &requiresstmt->get_clauses();
   }
   if (clause_ptr_list != nullptr && !clause_ptr_list->empty()) {
     for (SgOmpClause *c_clause : *clause_ptr_list) {

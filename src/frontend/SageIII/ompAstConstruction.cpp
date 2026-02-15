@@ -3389,7 +3389,6 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
 SgStatement *
 convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                      current_OpenMPIR_to_SageIII) {
-  //    printf("ompparser directive is ready.\n");
   OpenMPDirectiveKind directive_kind =
       current_OpenMPIR_to_SageIII.second->getKind();
   SgStatement *result = NULL;
@@ -3555,7 +3554,6 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
 SgStatement *
 convertVariantDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                             current_OpenMPIR_to_SageIII) {
-  printf("ompparser variant directive is ready.\n");
   OpenMPDirectiveKind directive_kind =
       current_OpenMPIR_to_SageIII.second->getKind();
   SgStatement *result = NULL;
@@ -3606,7 +3604,6 @@ convertSimpleClause(SgStatement *directive,
                     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                         current_OpenMPIR_to_SageIII,
                     OpenMPClause *current_omp_clause) {
-  printf("ompparser simple clause is ready.\n");
   SgOmpClause *sg_clause = NULL;
   OpenMPClauseKind clause_kind = current_omp_clause->getKind();
   switch (clause_kind) {
@@ -4505,7 +4502,6 @@ convertDepobjUpdateClause(SgOmpClauseBodyStatement *clause_body,
                           std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                               current_OpenMPIR_to_SageIII,
                           OpenMPClause *current_omp_clause) {
-  printf("ompparser depobj update clause is ready.\n");
 
   OpenMPDepobjUpdateClauseDependeceType modifier =
       ((OpenMPDepobjUpdateClause *)current_omp_clause)->getType();
@@ -4519,7 +4515,6 @@ convertDepobjUpdateClause(SgOmpClauseBodyStatement *clause_body,
   clause_body->get_clauses().push_back(sg_clause);
   sg_clause->set_parent(clause_body);
 
-  printf("ompparser depobj update clause added!\n");
   return result;
 }
 
@@ -4528,7 +4523,6 @@ SgOmpAtomicDefaultMemOrderClause *convertAtomicDefaultMemOrderClause(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         current_OpenMPIR_to_SageIII,
     OpenMPClause *current_omp_clause) {
-  printf("ompparser atomic_default_mem_order clause is ready.\n");
   OpenMPAtomicDefaultMemOrderClauseKind atomic_default_mem_order_kind =
       ((OpenMPAtomicDefaultMemOrderClause *)current_omp_clause)->getKind();
   SgOmpClause::omp_atomic_default_mem_order_kind_enum sg_dv =
@@ -4557,7 +4551,6 @@ SgOmpAtomicDefaultMemOrderClause *convertAtomicDefaultMemOrderClause(
   setOneSourcePositionForTransformation(result);
   ((SgOmpRequiresStatement *)directive)->get_clauses().push_back(result);
   result->set_parent(directive);
-  printf("ompparser atomic_default_mem_order clause is added.\n");
   return result;
 }
 
@@ -4567,19 +4560,18 @@ convertExtImplementationDefinedRequirementClause(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         current_OpenMPIR_to_SageIII,
     OpenMPClause *current_omp_clause) {
-  printf("ompparser atomic_default_mem_order clause is ready.\n");
-  SgExpression *ext_implementation_defined_requirement = NULL;
-  ext_implementation_defined_requirement = parseOmpExpression(
-      current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+  const std::string requirement_text = trimWhitespaceCopy(
       ((OpenMPExtImplementationDefinedRequirementClause *)current_omp_clause)
           ->getImplementationDefinedRequirement());
+  SgExpression *ext_implementation_defined_requirement =
+      buildOpaqueOpenMPClauseExpression(current_OpenMPIR_to_SageIII.first,
+                                        requirement_text);
   SgOmpExtImplementationDefinedRequirementClause *result =
       new SgOmpExtImplementationDefinedRequirementClause(
           ext_implementation_defined_requirement);
   setOneSourcePositionForTransformation(result);
   ((SgOmpRequiresStatement *)directive)->get_clauses().push_back(result);
   result->set_parent(directive);
-  printf("ompparser atomic_default_mem_order clause is added.\n");
   return result;
 }
 
@@ -4588,7 +4580,6 @@ convertScheduleClause(SgStatement *directive,
                       std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                           current_OpenMPIR_to_SageIII,
                       OpenMPClause *current_omp_clause) {
-  printf("ompparser schedule clause is ready.\n");
 
   OpenMPScheduleClauseModifier modifier1 =
       ((OpenMPScheduleClause *)current_omp_clause)->getModifier1();
@@ -4615,7 +4606,6 @@ convertScheduleClause(SgStatement *directive,
   setOneSourcePositionForTransformation(result);
   addOmpClause(directive, result);
   result->set_parent(directive);
-  printf("ompparser schedule clause is added.\n");
   return result;
 }
 
@@ -4624,7 +4614,6 @@ convertDistScheduleClause(SgOmpClauseBodyStatement *clause_body,
                           std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                               current_OpenMPIR_to_SageIII,
                           OpenMPClause *current_omp_clause) {
-  printf("ompparser dist_schedule clause is ready.\n");
 
   OpenMPDistScheduleClauseKind kind =
       ((OpenMPDistScheduleClause *)current_omp_clause)->getKind();
@@ -4646,7 +4635,6 @@ convertDistScheduleClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpClause *sg_clause = result;
   clause_body->get_clauses().push_back(sg_clause);
   sg_clause->set_parent(clause_body);
-  printf("ompparser dist_schedule clause is added.\n");
   return result;
 }
 
@@ -4655,7 +4643,6 @@ convertDefaultmapClause(SgOmpClauseBodyStatement *clause_body,
                         std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                             current_OpenMPIR_to_SageIII,
                         OpenMPClause *current_omp_clause) {
-  printf("ompparser defaultmap clause is ready.\n");
 
   OpenMPDefaultmapClauseBehavior behavior =
       ((OpenMPDefaultmapClause *)current_omp_clause)->getBehavior();
@@ -4674,7 +4661,6 @@ convertDefaultmapClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpClause *sg_clause = result;
   clause_body->get_clauses().push_back(sg_clause);
   sg_clause->set_parent(clause_body);
-  printf("ompparser defaultmap clause is added.\n");
   return result;
 }
 
@@ -4686,7 +4672,6 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
 
   // budui, allocator yinggai he array duiyingqilai , yinggai you henduo
   // allocators
-  printf("ompparser uses_allocators clause is ready.\n");
   SgOmpUsesAllocatorsClause *result = NULL;
   SgOmpUsesAllocatorsDefination *uses_allocators_defination = NULL;
   SgOmpClause::omp_uses_allocators_allocator_enum sg_allocator;
@@ -4735,7 +4720,6 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpClause *sg_clause = result;
   clause_body->get_clauses().push_back(sg_clause);
   sg_clause->set_parent(clause_body);
-  printf("ompparser uses_allocators clause is added.\n");
   return result;
 }
 
@@ -4744,7 +4728,6 @@ convertMapClause(SgOmpClauseBodyStatement *clause_body,
                  std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                      current_OpenMPIR_to_SageIII,
                  OpenMPClause *current_omp_clause) {
-  printf("ompparser map clause is ready.\n");
   SgOmpMapClause *result = NULL;
   OpenMPMapClauseType type = ((OpenMPMapClause *)current_omp_clause)->getType();
   SgOmpClause::omp_map_operator_enum sg_type = toSgOmpClauseMapOperator(type);
@@ -4853,7 +4836,6 @@ convertMapClause(SgOmpClauseBodyStatement *clause_body,
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
-  printf("ompparser map clause is added.\n");
   return result;
 }
 
@@ -5957,7 +5939,6 @@ convertDependClause(SgStatement *clause_body,
                     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                         current_OpenMPIR_to_SageIII,
                     OpenMPClause *current_omp_clause) {
-  printf("ompparser depend clause is ready.\n");
   SgOmpDependClause *result = NULL;
 
   SgExpression *iterator_type = NULL;
@@ -6142,7 +6123,6 @@ convertDependClause(SgStatement *clause_body,
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
-  printf("ompparser depend clause is added.\n");
   return result;
 }
 
@@ -6151,7 +6131,6 @@ convertAffinityClause(SgStatement *clause_body,
                       std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                           current_OpenMPIR_to_SageIII,
                       OpenMPClause *current_omp_clause) {
-  printf("ompparser affinity clause is ready.\n");
   SgOmpAffinityClause *result = NULL;
 
   SgExpression *iterator_type = NULL;
@@ -6229,7 +6208,6 @@ convertAffinityClause(SgStatement *clause_body,
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
-  printf("ompparser affinity clause is added.\n");
   return result;
 }
 
@@ -6238,7 +6216,6 @@ convertExpressionClause(SgStatement *directive,
                         std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                             current_OpenMPIR_to_SageIII,
                         OpenMPClause *current_omp_clause) {
-  printf("ompparser expression clause is ready.\n");
   SgOmpExpressionClause *result = NULL;
   SgExpression *clause_expression = NULL;
   SgGlobal *global =

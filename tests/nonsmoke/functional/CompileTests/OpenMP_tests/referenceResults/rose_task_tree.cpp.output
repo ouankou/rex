@@ -1,4 +1,3 @@
- * #pragma omp taskwait is used in the end 9/12/2008
 #pragma omp critical
 #pragma omp task
 #pragma omp task
