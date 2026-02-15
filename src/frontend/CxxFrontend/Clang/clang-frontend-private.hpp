@@ -207,6 +207,8 @@ getConstraintSatisfactionAttribute(const SgNode *node) {
 
 #include <clang/Lex/HeaderSearch.h>
 
+#include <clang/Lex/Lexer.h>
+
 #include <clang/Lex/PPCallbacks.h>
 
 #include <clang/Lex/Pragma.h>
@@ -228,6 +230,8 @@ getConstraintSatisfactionAttribute(const SgNode *node) {
 #include <llvm/Support/raw_os_ostream.h>
 
 #include <llvm/Support/raw_ostream.h>
+
+#include <llvm/Support/MemoryBuffer.h>
 
 #include <llvm/TargetParser/Host.h>
 
@@ -341,250 +345,174 @@ private:
     return (pos + 3 <= text.size() && text.compare(pos, 3, "acc") == 0);
   }
 
-  static bool isIdentifierStart(char ch) {
-    const unsigned char uch = static_cast<unsigned char>(ch);
-    return std::isalpha(uch) != 0 || ch == '_';
-  }
-
-  static bool isIdentifierChar(char ch) {
-    const unsigned char uch = static_cast<unsigned char>(ch);
-    return std::isalnum(uch) != 0 || ch == '_';
-  }
-
-  static bool isValidRawStringDelimiterChar(char ch) {
-    const unsigned char uch = static_cast<unsigned char>(ch);
-    if (std::isspace(uch) != 0 || std::iscntrl(uch) != 0) {
-      return false;
-    }
-    return ch != '(' && ch != ')' && ch != '\\' && ch != '"';
-  }
-
-  static bool consumeRawStringLiteral(const std::string &text,
-                                      std::string::size_type start,
-                                      std::string::size_type *end) {
-    ROSE_ASSERT(end != nullptr);
-
-    if (start >= text.size()) {
-      return false;
+  const clang::IdentifierInfo *
+  getIdentifierInfoForToken(const clang::Token &token) const {
+    if (token.is(clang::tok::identifier) &&
+        token.getIdentifierInfo() != nullptr) {
+      return token.getIdentifierInfo();
     }
 
-    std::string::size_type raw_marker_pos = std::string::npos;
-    if (text.compare(start, 2, "R\"") == 0) {
-      raw_marker_pos = start;
-    } else if (text.compare(start, 4, "u8R\"") == 0) {
-      raw_marker_pos = start + 2;
-    } else if (start + 2 < text.size() &&
-               (text[start] == 'u' || text[start] == 'U' ||
-                text[start] == 'L') &&
-               text[start + 1] == 'R' && text[start + 2] == '"') {
-      raw_marker_pos = start + 1;
-    } else {
-      return false;
+    if (!token.is(clang::tok::raw_identifier)) {
+      return nullptr;
     }
 
-    const std::string::size_type delimiter_begin = raw_marker_pos + 2;
-    std::string::size_type open_paren_pos = delimiter_begin;
-    while (open_paren_pos < text.size() && text[open_paren_pos] != '(') {
-      if (!isValidRawStringDelimiterChar(text[open_paren_pos])) {
+    clang::Token mutable_token = token;
+    clang::IdentifierInfo *identifier_info =
+        p_preprocessor.LookUpIdentifierInfo(mutable_token);
+    if (identifier_info == nullptr) {
+      return nullptr;
+    }
+    return identifier_info;
+  }
+
+  bool lexPragmaTokens(const std::string &text,
+                       std::vector<clang::Token> *tokens) const {
+    ROSE_ASSERT(tokens != nullptr);
+    tokens->clear();
+
+    std::unique_ptr<llvm::MemoryBuffer> text_buffer =
+        llvm::MemoryBuffer::getMemBufferCopy(text, "<rex pragma>");
+    const clang::FileID file_id =
+        p_source_manager.createFileID(std::move(text_buffer));
+    const llvm::MemoryBufferRef buffer_ref =
+        p_source_manager.getBufferOrFake(file_id);
+
+    clang::Lexer lexer(file_id, buffer_ref, p_source_manager,
+                       p_preprocessor.getLangOpts());
+    while (true) {
+      clang::Token token;
+      lexer.LexFromRawLexer(token);
+      if (token.is(clang::tok::eof)) {
+        break;
+      }
+
+      if (token.is(clang::tok::raw_identifier)) {
+        p_preprocessor.LookUpIdentifierInfo(token);
+      }
+
+      tokens->push_back(token);
+      if (tokens->size() > kMaxExpandedPragmaSize) {
         return false;
       }
-      if (open_paren_pos - delimiter_begin >= 16) {
-        return false;
-      }
-      ++open_paren_pos;
-    }
-
-    if (open_paren_pos == text.size()) {
-      return false;
-    }
-
-    const std::string delimiter =
-        text.substr(delimiter_begin, open_paren_pos - delimiter_begin);
-    const std::string terminator = ")" + delimiter + "\"";
-    const std::string::size_type close_pos =
-        text.find(terminator, open_paren_pos);
-    if (close_pos == std::string::npos) {
-      *end = text.size();
-    } else {
-      *end = close_pos + terminator.size();
     }
 
     return true;
   }
 
-  static bool consumeComment(const std::string &text,
-                             std::string::size_type start,
-                             std::string::size_type *end) {
-    ROSE_ASSERT(end != nullptr);
+  bool expandObjectLikeMacroTokens(
+      const std::vector<clang::Token> &input_tokens,
+      std::vector<clang::Token> *output_tokens,
+      std::set<const clang::IdentifierInfo *> *active_macros, unsigned depth,
+      bool *changed) const {
+    ROSE_ASSERT(output_tokens != nullptr);
+    ROSE_ASSERT(active_macros != nullptr);
+    ROSE_ASSERT(changed != nullptr);
 
-    if (start + 1 >= text.size() || text[start] != '/') {
+    static constexpr unsigned kMaxMacroExpansionDepth = 64;
+    if (depth > kMaxMacroExpansionDepth) {
       return false;
     }
 
-    if (text[start + 1] == '/') {
-      const std::string::size_type newline_pos = text.find('\n', start + 2);
-      *end = newline_pos == std::string::npos ? text.size() : newline_pos;
-      return true;
+    for (const clang::Token &token : input_tokens) {
+      const clang::IdentifierInfo *identifier =
+          getIdentifierInfoForToken(token);
+      if (identifier != nullptr &&
+          active_macros->find(identifier) == active_macros->end()) {
+        const clang::MacroDefinition macro_definition =
+            p_preprocessor.getMacroDefinition(
+                const_cast<clang::IdentifierInfo *>(identifier));
+        if (macro_definition) {
+          const clang::MacroInfo *macro_info = macro_definition.getMacroInfo();
+          if (macro_info != nullptr && !macro_info->isFunctionLike() &&
+              !macro_info->isBuiltinMacro()) {
+            active_macros->insert(identifier);
+            std::vector<clang::Token> replacement_tokens(
+                macro_info->tokens().begin(), macro_info->tokens().end());
+            if (!replacement_tokens.empty() &&
+                !expandObjectLikeMacroTokens(replacement_tokens, output_tokens,
+                                             active_macros, depth + 1,
+                                             changed)) {
+              active_macros->erase(identifier);
+              return false;
+            }
+            active_macros->erase(identifier);
+            *changed = true;
+            continue;
+          }
+        }
+      }
+
+      output_tokens->push_back(token);
+      if (output_tokens->size() > kMaxExpandedPragmaSize) {
+        return false;
+      }
     }
 
-    if (text[start + 1] == '*') {
-      const std::string::size_type close_pos = text.find("*/", start + 2);
-      *end = close_pos == std::string::npos ? text.size() : close_pos + 2;
-      return true;
-    }
-
-    return false;
+    return true;
   }
 
-  bool tryGetObjectLikeMacroReplacement(const std::string &identifier,
-                                        std::string *replacement) const {
-    ROSE_ASSERT(replacement != nullptr);
-    replacement->clear();
+  bool stringifyTokens(const std::vector<clang::Token> &tokens,
+                       std::string *text) const {
+    ROSE_ASSERT(text != nullptr);
+    text->clear();
 
-    if (identifier.empty()) {
-      return false;
-    }
-
-    clang::IdentifierInfo *macro_id =
-        p_preprocessor.getIdentifierInfo(identifier);
-    if (macro_id == nullptr) {
-      return false;
-    }
-
-    const clang::MacroDefinition macro_definition =
-        p_preprocessor.getMacroDefinition(macro_id);
-    if (!macro_definition) {
-      return false;
-    }
-
-    const clang::MacroInfo *macro_info = macro_definition.getMacroInfo();
-    if (macro_info == nullptr || macro_info->isFunctionLike() ||
-        macro_info->isBuiltinMacro()) {
-      return false;
-    }
-
-    for (const clang::Token &token : macro_info->tokens()) {
+    for (const clang::Token &token : tokens) {
       bool invalid = false;
       const std::string spelling = p_preprocessor.getSpelling(token, &invalid);
       if (invalid) {
-        replacement->clear();
         return false;
       }
 
-      if (!replacement->empty()) {
-        replacement->push_back(' ');
+      if (spelling.empty()) {
+        continue;
       }
-      replacement->append(spelling);
+
+      const std::size_t separator = text->empty() ? 0 : 1;
+      const std::size_t required_size =
+          text->size() + separator + spelling.size();
+      if (required_size > kMaxExpandedPragmaSize) {
+        return false;
+      }
+
+      if (separator != 0) {
+        text->push_back(' ');
+      }
+      text->append(spelling);
     }
 
     return true;
   }
 
   std::string expandObjectLikeMacros(const std::string &text) const {
-    if (text.empty()) {
+    if (text.empty() || text.size() > kMaxExpandedPragmaSize) {
       return text;
     }
 
-    if (text.size() > kMaxExpandedPragmaSize) {
+    std::vector<clang::Token> pragma_tokens;
+    if (!lexPragmaTokens(text, &pragma_tokens)) {
       return text;
     }
 
-    std::string current = text;
-    for (int iteration = 0; iteration < 16; ++iteration) {
-      bool changed = false;
-      std::string expanded;
-      expanded.reserve(current.size());
+    std::vector<clang::Token> expanded_tokens;
+    expanded_tokens.reserve(pragma_tokens.size());
 
-      std::string::size_type pos = 0;
-      while (pos < current.size()) {
-        std::string::size_type raw_literal_end = std::string::npos;
-        if (consumeRawStringLiteral(current, pos, &raw_literal_end)) {
-          const std::string::size_type literal_size = raw_literal_end - pos;
-          if (literal_size > kMaxExpandedPragmaSize ||
-              expanded.size() > kMaxExpandedPragmaSize - literal_size) {
-            return current;
-          }
-          expanded.append(current, pos, literal_size);
-          pos = raw_literal_end;
-          continue;
-        }
-
-        std::string::size_type comment_end = std::string::npos;
-        if (consumeComment(current, pos, &comment_end)) {
-          const std::string::size_type comment_size = comment_end - pos;
-          if (comment_size > kMaxExpandedPragmaSize ||
-              expanded.size() > kMaxExpandedPragmaSize - comment_size) {
-            return current;
-          }
-          expanded.append(current, pos, comment_size);
-          pos = comment_end;
-          continue;
-        }
-
-        if (current[pos] == '"' || current[pos] == '\'') {
-          const char quote_char = current[pos];
-          const std::string::size_type begin = pos;
-          ++pos;
-          while (pos < current.size()) {
-            if (current[pos] == '\\' && pos + 1 < current.size()) {
-              pos += 2;
-              continue;
-            }
-            if (current[pos] == quote_char) {
-              ++pos;
-              break;
-            }
-            ++pos;
-          }
-
-          const std::string::size_type literal_size = pos - begin;
-          if (literal_size > kMaxExpandedPragmaSize ||
-              expanded.size() > kMaxExpandedPragmaSize - literal_size) {
-            return current;
-          }
-          expanded.append(current, begin, literal_size);
-          continue;
-        }
-
-        if (!isIdentifierStart(current[pos])) {
-          if (expanded.size() >= kMaxExpandedPragmaSize) {
-            return current;
-          }
-          expanded.push_back(current[pos]);
-          ++pos;
-          continue;
-        }
-
-        const std::string::size_type begin = pos;
-        ++pos;
-        while (pos < current.size() && isIdentifierChar(current[pos])) {
-          ++pos;
-        }
-
-        const std::string token = current.substr(begin, pos - begin);
-        std::string replacement;
-        if (tryGetObjectLikeMacroReplacement(token, &replacement)) {
-          if (replacement.size() > kMaxExpandedPragmaSize ||
-              expanded.size() > kMaxExpandedPragmaSize - replacement.size()) {
-            return current;
-          }
-          expanded.append(replacement);
-          changed = true;
-        } else {
-          if (expanded.size() > kMaxExpandedPragmaSize - token.size()) {
-            return current;
-          }
-          expanded.append(token);
-        }
-      }
-
-      current.swap(expanded);
-      if (!changed) {
-        break;
-      }
+    std::set<const clang::IdentifierInfo *> active_macros;
+    bool changed = false;
+    if (!expandObjectLikeMacroTokens(pragma_tokens, &expanded_tokens,
+                                     &active_macros, 0, &changed)) {
+      return text;
     }
 
-    return current;
+    if (!changed) {
+      return text;
+    }
+
+    std::string expanded_text;
+    if (!stringifyTokens(expanded_tokens, &expanded_text)) {
+      return text;
+    }
+
+    return expanded_text;
   }
 
 public:
