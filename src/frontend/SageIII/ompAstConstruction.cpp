@@ -153,13 +153,39 @@ void collectCommentedDirectiveRelocations(
   struct PragmaPosition {
     SgPragmaDeclaration *declaration = nullptr;
     unsigned line = 0;
+    bool requires_relocation = false;
   };
 
-  std::unordered_map<int, std::vector<PragmaPosition>> pragma_positions_by_file;
+  std::unordered_set<SgPragmaDeclaration *> pragmas_requiring_relocation;
   for (SgPragmaDeclaration *pragma_decl : pragma_list) {
+    if (pragma_decl != nullptr) {
+      pragmas_requiring_relocation.insert(pragma_decl);
+    }
+  }
+
+  std::unordered_map<int, std::vector<PragmaPosition>> pragma_positions_by_file;
+  std::vector<SgNode *> all_pragmas =
+      NodeQuery::querySubTree(source_file, V_SgPragmaDeclaration);
+  for (SgNode *node : all_pragmas) {
+    SgPragmaDeclaration *pragma_decl = isSgPragmaDeclaration(node);
     if (pragma_decl == nullptr) {
       continue;
     }
+
+    SgPragma *pragma = pragma_decl->get_pragma();
+    if (pragma == nullptr) {
+      continue;
+    }
+    std::istringstream directive_tokens(pragma->get_pragma());
+    std::string key;
+    directive_tokens >> key;
+    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char ch) {
+      return static_cast<char>(std::tolower(ch));
+    });
+    if (key != "omp" && key != "acc") {
+      continue;
+    }
+
     const Sg_File_Info *file_info = pragma_decl->get_file_info();
     if (file_info == nullptr) {
       continue;
@@ -171,7 +197,9 @@ void collectCommentedDirectiveRelocations(
     }
 
     pragma_positions_by_file[file_info->get_file_id()].push_back(
-        PragmaPosition{pragma_decl, pragma_line});
+        PragmaPosition{pragma_decl, pragma_line,
+                       pragmas_requiring_relocation.find(pragma_decl) !=
+                           pragmas_requiring_relocation.end()});
   }
 
   for (auto &entry : pragma_positions_by_file) {
@@ -189,6 +217,29 @@ void collectCommentedDirectiveRelocations(
   std::unordered_set<PreprocessingInfo *> seen_comments;
   std::vector<SgNode *> located_nodes =
       NodeQuery::querySubTree(source_file, V_SgLocatedNode);
+  auto detach_comment_from_all_owners =
+      [&located_nodes](PreprocessingInfo *info) {
+        if (info == nullptr) {
+          return;
+        }
+
+        for (SgNode *candidate : located_nodes) {
+          SgLocatedNode *candidate_owner = isSgLocatedNode(candidate);
+          if (candidate_owner == nullptr) {
+            continue;
+          }
+          AttachedPreprocessingInfoType *candidate_info =
+              candidate_owner->get_attachedPreprocessingInfoPtr();
+          if (candidate_info == nullptr || candidate_info->empty()) {
+            continue;
+          }
+
+          candidate_info->erase(
+              std::remove(candidate_info->begin(), candidate_info->end(), info),
+              candidate_info->end());
+        }
+      };
+
   for (SgNode *node : located_nodes) {
     SgLocatedNode *owner = isSgLocatedNode(node);
     if (owner == nullptr) {
@@ -231,19 +282,54 @@ void collectCommentedDirectiveRelocations(
                              return static_cast<int>(position.line) < line;
                            });
 
-      SgPragmaDeclaration *target_pragma = nullptr;
+      const PragmaPosition *target_position = nullptr;
       if (next_pragma_it != positions.end()) {
-        target_pragma = next_pragma_it->declaration;
+        target_position = &(*next_pragma_it);
       } else {
-        target_pragma = positions.back().declaration;
+        target_position = &positions.back();
       }
 
+      SgPragmaDeclaration *target_pragma =
+          target_position != nullptr ? target_position->declaration : nullptr;
       if (target_pragma == nullptr) {
         continue;
       }
 
-      g_pending_commented_directive_relocations[target_pragma].push_back(
-          PendingCommentedDirectiveRelocation{owner, info});
+      if (target_position->requires_relocation) {
+        detach_comment_from_all_owners(info);
+        g_pending_commented_directive_relocations[target_pragma].push_back(
+            PendingCommentedDirectiveRelocation{nullptr, info});
+        continue;
+      }
+
+      detach_comment_from_all_owners(info);
+
+      AttachedPreprocessingInfoType *target_info =
+          target_pragma->get_attachedPreprocessingInfoPtr();
+      if (target_info == nullptr) {
+        target_info = new AttachedPreprocessingInfoType;
+        target_pragma->set_attachedPreprocessingInfoPtr(target_info);
+      }
+      if (std::find(target_info->begin(), target_info->end(), info) !=
+          target_info->end()) {
+        continue;
+      }
+
+      const bool appears_before_pragma =
+          static_cast<unsigned>(comment_line) <= target_position->line;
+      if (appears_before_pragma) {
+        info->setRelativePosition(PreprocessingInfo::before);
+        auto insert_after_existing_before =
+            std::find_if(target_info->begin(), target_info->end(),
+                         [](PreprocessingInfo *current) {
+                           return current->getRelativePosition() !=
+                                  PreprocessingInfo::before;
+                         });
+        target_info->insert(insert_after_existing_before, info);
+      } else {
+        info->setRelativePosition(PreprocessingInfo::after);
+        target_info->push_back(info);
+      }
     }
   }
 }
