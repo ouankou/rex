@@ -45,11 +45,6 @@ set(REX_UNPARSE_ALIAS_FAILING
   test2011_142.C
 )
 
-function(rex_lock_test_for_input test_name input_file)
-  get_filename_component(lock_base ${input_file} NAME_WE)
-  set_tests_properties(${test_name} PROPERTIES RESOURCE_LOCK rose_output_${lock_base})
-endfunction()
-
 foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
   set(_labels UNPARSETOSTRING_FAILING known_fail)
   if(NOT REX_ENABLE_FAILING_TESTS)

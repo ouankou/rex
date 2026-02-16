@@ -77,6 +77,22 @@ function(compile_test input_file label)
   endif()
 endfunction()
 
+# Prevent race conditions when multiple tests process the same input file.
+# Sets a CTest RESOURCE_LOCK so tests sharing the same base input name are serialized.
+function(rex_lock_test_for_input test_name input_file)
+  get_filename_component(lock_base ${input_file} NAME_WE)
+  set_tests_properties(${test_name} PROPERTIES RESOURCE_LOCK rose_output_${lock_base})
+endfunction()
+
+# Compute the CTest test name that compile_test would generate for a given
+# input file and label, so callers can reference it without hardcoding.
+function(rex_compile_test_name out_var label input_file)
+  set(_test_key ${input_file})
+  string(REPLACE "/" "_" _test_key "${_test_key}")
+  string(REPLACE "." "_" _test_key "${_test_key}")
+  set(${out_var} "${label}_${_test_key}" PARENT_SCOPE)
+endfunction()
+
 # determine what subdirectories to enter based on our configuration settings.
 
 add_subdirectory(CudaTests)

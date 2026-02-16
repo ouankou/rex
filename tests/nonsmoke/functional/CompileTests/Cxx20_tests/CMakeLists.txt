@@ -200,6 +200,8 @@ set(ROSE_EXPECTED_FAIL_TESTCODES ${CXX20_EXPECTED_FAIL_TESTCODES})
 
 foreach(file_to_test ${CXX20_TESTCODES})
   compile_test(${file_to_test} "Cxx20_tests")
+  rex_compile_test_name(_test_name "Cxx20_tests" ${file_to_test})
+  rex_lock_test_for_input(${_test_name} ${file_to_test})
 endforeach()
 
 # Makefile check targets.
@@ -237,3 +239,4 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_concepts_requires.cpp
 )
 set_tests_properties(Cxx20_tests_rex_test2026_concepts_requires_unparse PROPERTIES LABELS Cxx20_tests )
+rex_lock_test_for_input(Cxx20_tests_rex_test2026_concepts_requires_unparse rex_test2026_concepts_requires.cpp)
