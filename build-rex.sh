@@ -81,7 +81,7 @@ if [ -z "$LLVM_CONFIG_CMD" ]; then
 fi
 
 LLVM_VERSION=$($LLVM_CONFIG_CMD --version)
-LLVM_MAJOR=$(echo "$LLVM_VERSION" | sed -E 's/^([0-9]+).*/\1/')
+LLVM_MAJOR=$(echo "$LLVM_VERSION" | sed -nE 's/^([0-9]+).*/\1/p')
 if [ -z "$LLVM_MAJOR" ] || [ "$LLVM_MAJOR" -lt 21 ]; then
     echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires LLVM/Clang 21 or later.${NC}"
     exit 1
