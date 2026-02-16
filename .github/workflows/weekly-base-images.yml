@@ -52,9 +52,10 @@ jobs:
         context: .
         file: ci/docker/rex-riscv64.Dockerfile
         platforms: linux/riscv64
+        tags: ${{ env.IMAGE_REPO }}
         pull: true
         provenance: false
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
 
     - name: Build and push base image (loong64)
       id: build-loong64
@@ -63,9 +64,10 @@ jobs:
         context: .
         file: ci/docker/rex-loongarch64.Dockerfile
         platforms: linux/loong64
+        tags: ${{ env.IMAGE_REPO }}
         pull: true
         provenance: false
-        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+        outputs: type=image,push-by-digest=true,name-canonical=true,push=true
 
     - name: Publish multi-arch manifest (base tag only)
       run: |
