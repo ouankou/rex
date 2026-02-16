@@ -21,11 +21,6 @@ function(rex_set_cfg_output test_name)
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${ROSE_TEST_CFG_OUTPUT_DIR}")
 endfunction()
 
-function(rex_lock_test_for_input test_name input_file)
-  get_filename_component(lock_base ${input_file} NAME_WE)
-  set_tests_properties(${test_name} PROPERTIES RESOURCE_LOCK rose_output_${lock_base})
-endfunction()
-
 function(rex_set_disabled_test test_name base_label)
   set_tests_properties(${test_name} PROPERTIES LABELS "${base_label};disabled")
   if(NOT REX_ENABLE_DISABLED_TESTS)

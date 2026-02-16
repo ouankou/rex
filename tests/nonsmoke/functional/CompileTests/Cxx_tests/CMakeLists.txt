@@ -3252,18 +3252,6 @@ set(ROSE_OUTPUT_TO_BUILD_TESTCODES
   test2007_125.C
 )
 
-function(rex_lock_test_for_input test_name input_file)
-  get_filename_component(lock_base ${input_file} NAME_WE)
-  set_tests_properties(${test_name} PROPERTIES RESOURCE_LOCK rose_output_${lock_base})
-endfunction()
-
-function(rex_compile_test_name out_var label input_file)
-  set(_test_key ${input_file})
-  string(REPLACE "/" "_" _test_key "${_test_key}")
-  string(REPLACE "." "_" _test_key "${_test_key}")
-  set(${out_var} "${label}_${_test_key}" PARENT_SCOPE)
-endfunction()
-
 foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
   compile_test(${file_to_test} "Cxx_tests_failing")
   rex_compile_test_name(_test_name "Cxx_tests_failing" ${file_to_test})
