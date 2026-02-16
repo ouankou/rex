@@ -428,8 +428,14 @@ void mergeEndClausesToBeginDirective(OpenMPDirective *begin_decl,
       }
       std::vector<const char *> *expressions =
           end_copyprivate_clause->getExpressions();
-      for (auto variable_expression : *expressions) {
-        begin_copyprivate_clause->addLangExpr(variable_expression);
+      const std::vector<OpenMPClauseSeparator> &expression_separators =
+          end_copyprivate_clause->getExpressionSeparators();
+      for (size_t idx = 0; idx < expressions->size(); ++idx) {
+        OpenMPClauseSeparator separator = OMPC_CLAUSE_SEP_space;
+        if (idx < expression_separators.size()) {
+          separator = expression_separators[idx];
+        }
+        begin_copyprivate_clause->addLangExpr((*expressions)[idx], separator);
       }
     }
   }
@@ -568,7 +574,7 @@ void parseOpenMPFortran(SgSourceFile *sageFilePtr) {
     // use ompparser to process Fortran
     std::string parse_buffer = buffer;
     trimLeft(parse_buffer);
-    ompparser_OpenMPIR = parseOpenMP(parse_buffer.c_str(), NULL);
+    ompparser_OpenMPIR = parseOpenMP(parse_buffer.c_str(), nullptr, nullptr);
     ROSE_ASSERT(ompparser_OpenMPIR != NULL);
     ompparser_OpenMPIR->setLine(pinfo->getLineNumber());
 

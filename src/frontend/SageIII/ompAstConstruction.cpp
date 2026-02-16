@@ -12,7 +12,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <memory>
 #include <tuple>
+#include <unordered_map>
+#include <unordered_set>
 
 // the vector of pairs of OpenACC pragma and accparser IR.
 static std::vector<std::pair<SgPragmaDeclaration *, OpenACCDirective *>>
@@ -37,6 +40,42 @@ public:
 std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *, OpenMPDirective *>>
     fortran_omp_pragma_list;
 
+struct OmpParsedExpression {
+  OpenMPExprParseMode mode = OMP_EXPR_PARSE_none;
+  std::string text;
+  SgNode *node = nullptr;
+  std::vector<std::pair<SgExpression *, SgExpression *>> dimensions;
+};
+
+struct OmpClauseParseCache {
+  std::vector<std::unique_ptr<OmpParsedExpression>> owned_nodes;
+  std::unordered_map<const OpenMPClause *,
+                     std::vector<const OmpParsedExpression *>>
+      clause_expression_nodes;
+  std::unordered_map<const OpenMPClause *,
+                     std::vector<std::vector<const OmpParsedExpression *>>>
+      map_dist_data_policy_nodes;
+};
+
+static std::unordered_map<OpenMPDirective *, OmpClauseParseCache>
+    g_omp_clause_nodes;
+
+struct PendingCommentedDirectiveRelocation {
+  SgLocatedNode *owner = nullptr;
+  PreprocessingInfo *info = nullptr;
+  int source_line = 0;
+};
+
+static std::unordered_map<SgPragmaDeclaration *,
+                          std::vector<PendingCommentedDirectiveRelocation>>
+    g_pending_commented_directive_relocations;
+
+struct OmpExprParseContext {
+  SgPragmaDeclaration *pragma_declaration = nullptr;
+  OpenMPDirective *directive = nullptr;
+  std::vector<std::unique_ptr<OmpParsedExpression>> owned_nodes;
+};
+
 OpenMPDirective *ompparser_OpenMPIR;
 static bool use_ompparser = false;
 static bool use_accparser = false;
@@ -51,6 +90,285 @@ using namespace SageBuilder;
 using namespace OmpSupport;
 
 namespace {
+SgExpression *buildOpaqueOpenMPClauseExpression(SgPragmaDeclaration *directive,
+                                                const std::string &text);
+SgVariableSymbol *extractClauseVariableSymbol(SgNode *node);
+std::string trimWhitespaceCopy(const std::string &value);
+const OmpParsedExpression *findParsedExpressionByText(
+    const std::vector<const OmpParsedExpression *> *parsed_nodes,
+    const std::string &expression_text, OpenMPExprParseMode required_mode);
+
+unsigned getLocatedNodeLine(const SgLocatedNode *node) {
+  if (node == nullptr) {
+    return 0;
+  }
+
+  if (const Sg_File_Info *info = node->get_file_info()) {
+    if (info->get_line() > 0) {
+      return info->get_line();
+    }
+  }
+
+  if (const Sg_File_Info *info = node->get_startOfConstruct()) {
+    return info->get_line();
+  }
+
+  return 0;
+}
+
+bool isCommentedOutDirective(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+
+  const PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+  if (type != PreprocessingInfo::CplusplusStyleComment &&
+      type != PreprocessingInfo::C_StyleComment &&
+      type != PreprocessingInfo::FortranStyleComment &&
+      type != PreprocessingInfo::F90StyleComment) {
+    return false;
+  }
+
+  std::string text = info->getString();
+  std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+
+  const std::string::size_type pragma_pos = text.find("#pragma");
+  if (pragma_pos == std::string::npos) {
+    return false;
+  }
+
+  return text.find("omp", pragma_pos) != std::string::npos ||
+         text.find("acc", pragma_pos) != std::string::npos;
+}
+
+void collectCommentedDirectiveRelocations(
+    SgSourceFile *source_file,
+    const std::list<SgPragmaDeclaration *> &pragma_list) {
+  g_pending_commented_directive_relocations.clear();
+  if (source_file == nullptr) {
+    return;
+  }
+
+  struct PragmaPosition {
+    SgPragmaDeclaration *declaration = nullptr;
+    unsigned line = 0;
+  };
+
+  std::unordered_map<int, std::vector<PragmaPosition>> pragma_positions_by_file;
+  for (SgPragmaDeclaration *pragma_decl : pragma_list) {
+    if (pragma_decl == nullptr) {
+      continue;
+    }
+    const Sg_File_Info *file_info = pragma_decl->get_file_info();
+    if (file_info == nullptr) {
+      continue;
+    }
+
+    const unsigned pragma_line = getLocatedNodeLine(pragma_decl);
+    if (pragma_line == 0) {
+      continue;
+    }
+
+    pragma_positions_by_file[file_info->get_file_id()].push_back(
+        PragmaPosition{pragma_decl, pragma_line});
+  }
+
+  for (auto &entry : pragma_positions_by_file) {
+    std::vector<PragmaPosition> &positions = entry.second;
+    std::sort(positions.begin(), positions.end(),
+              [](const PragmaPosition &lhs, const PragmaPosition &rhs) {
+                return lhs.line < rhs.line;
+              });
+  }
+
+  if (pragma_positions_by_file.empty()) {
+    return;
+  }
+
+  std::unordered_set<PreprocessingInfo *> seen_comments;
+  std::vector<SgNode *> located_nodes =
+      NodeQuery::querySubTree(source_file, V_SgLocatedNode);
+  for (SgNode *node : located_nodes) {
+    SgLocatedNode *owner = isSgLocatedNode(node);
+    if (owner == nullptr) {
+      continue;
+    }
+
+    AttachedPreprocessingInfoType *attached =
+        owner->get_attachedPreprocessingInfoPtr();
+    if (attached == nullptr || attached->empty()) {
+      continue;
+    }
+
+    AttachedPreprocessingInfoType attached_copy = *attached;
+    for (PreprocessingInfo *info : attached_copy) {
+      if (!isCommentedOutDirective(info)) {
+        continue;
+      }
+      if (!seen_comments.insert(info).second) {
+        continue;
+      }
+
+      int comment_line = info->getLineNumber();
+      int file_id = info->getFileId();
+
+      if (comment_line <= 0) {
+        comment_line = static_cast<int>(getLocatedNodeLine(owner));
+      }
+      if (file_id <= 0) {
+        if (const Sg_File_Info *owner_info = owner->get_file_info()) {
+          file_id = owner_info->get_file_id();
+        }
+      }
+      if (file_id <= 0) {
+        if (const Sg_File_Info *source_info = source_file->get_file_info()) {
+          file_id = source_info->get_file_id();
+        }
+      }
+      if (comment_line <= 0) {
+        continue;
+      }
+
+      auto pragma_positions_it = pragma_positions_by_file.find(file_id);
+      if (pragma_positions_it == pragma_positions_by_file.end()) {
+        if (pragma_positions_by_file.size() == 1) {
+          pragma_positions_it = pragma_positions_by_file.begin();
+        } else {
+          continue;
+        }
+      }
+
+      const std::vector<PragmaPosition> &positions =
+          pragma_positions_it->second;
+      if (positions.empty()) {
+        continue;
+      }
+
+      auto next_pragma_it =
+          std::lower_bound(positions.begin(), positions.end(), comment_line,
+                           [](const PragmaPosition &position, int line) {
+                             return static_cast<int>(position.line) < line;
+                           });
+      SgPragmaDeclaration *target_pragma = nullptr;
+      if (next_pragma_it != positions.end()) {
+        target_pragma = next_pragma_it->declaration;
+      } else {
+        const PragmaPosition &last_position = positions.back();
+        const int owner_line = static_cast<int>(getLocatedNodeLine(owner));
+        const bool owner_before_last_pragma =
+            owner_line > 0 &&
+            owner_line <= static_cast<int>(last_position.line);
+        if (comment_line > static_cast<int>(last_position.line) &&
+            owner_before_last_pragma) {
+          target_pragma = last_position.declaration;
+        } else {
+          continue;
+        }
+      }
+      if (target_pragma == nullptr) {
+        continue;
+      }
+
+      g_pending_commented_directive_relocations[target_pragma].push_back(
+          PendingCommentedDirectiveRelocation{owner, info, comment_line});
+    }
+  }
+}
+
+void relocatePendingCommentedDirectivesForPragma(
+    SgPragmaDeclaration *pragma_decl, SgStatement *directive_stmt) {
+  if (pragma_decl == nullptr || directive_stmt == nullptr) {
+    return;
+  }
+
+  auto found = g_pending_commented_directive_relocations.find(pragma_decl);
+  if (found == g_pending_commented_directive_relocations.end()) {
+    return;
+  }
+
+  std::vector<PendingCommentedDirectiveRelocation> pending =
+      std::move(found->second);
+  g_pending_commented_directive_relocations.erase(found);
+  if (pending.empty()) {
+    return;
+  }
+
+  const unsigned pragma_line = getLocatedNodeLine(pragma_decl);
+  std::stable_sort(pending.begin(), pending.end(),
+                   [](const PendingCommentedDirectiveRelocation &lhs,
+                      const PendingCommentedDirectiveRelocation &rhs) {
+                     return lhs.source_line < rhs.source_line;
+                   });
+
+  AttachedPreprocessingInfoType *directive_info =
+      directive_stmt->get_attachedPreprocessingInfoPtr();
+  if (directive_info == nullptr) {
+    directive_info = new AttachedPreprocessingInfoType;
+    directive_stmt->set_attachedPreprocessingInfoPtr(directive_info);
+  }
+
+  for (const PendingCommentedDirectiveRelocation &entry : pending) {
+    if (entry.info == nullptr) {
+      continue;
+    }
+
+    if (entry.owner != nullptr) {
+      AttachedPreprocessingInfoType *owner_info =
+          entry.owner->get_attachedPreprocessingInfoPtr();
+      if (owner_info != nullptr) {
+        auto owner_pos =
+            std::find(owner_info->begin(), owner_info->end(), entry.info);
+        if (owner_pos != owner_info->end()) {
+          owner_info->erase(owner_pos);
+        }
+      }
+    }
+
+    if (std::find(directive_info->begin(), directive_info->end(), entry.info) !=
+        directive_info->end()) {
+      continue;
+    }
+
+    const bool appears_before_pragma =
+        pragma_line == 0 ||
+        (entry.source_line > 0 &&
+         entry.source_line <= static_cast<int>(pragma_line));
+    if (appears_before_pragma) {
+      entry.info->setRelativePosition(PreprocessingInfo::before);
+      auto insert_after_existing_before = std::find_if(
+          directive_info->begin(), directive_info->end(),
+          [](PreprocessingInfo *current) {
+            return current->getRelativePosition() != PreprocessingInfo::before;
+          });
+      directive_info->insert(insert_after_existing_before, entry.info);
+    } else {
+      entry.info->setRelativePosition(PreprocessingInfo::after);
+      directive_info->push_back(entry.info);
+    }
+  }
+}
+
+bool shouldParseDeviceExprAsVerbatim(const std::string &expression_text) {
+  const std::string trimmed = trimWhitespaceCopy(expression_text);
+  if (trimmed.empty()) {
+    return false;
+  }
+  if (trimmed == "*") {
+    return true;
+  }
+  if (trimmed.find('"') != std::string::npos ||
+      trimmed.find('\'') != std::string::npos) {
+    return true;
+  }
+  if (trimmed.find(':') != std::string::npos &&
+      trimmed.find('?') == std::string::npos) {
+    return true;
+  }
+  return false;
+}
+
 SgExpression *buildOmpVarExprFromNode(SgNode *node) {
   if (SgInitializedName *iname = isSgInitializedName(node)) {
     return SageBuilder::buildVarRefExp(iname);
@@ -60,6 +378,484 @@ SgExpression *buildOmpVarExprFromNode(SgNode *node) {
   }
   return nullptr;
 }
+
+void clearOpenMPClauseTemporaryState() {
+  omp_variable_list.clear();
+  array_dimensions.clear();
+}
+
+const OmpParsedExpression *asParsedExpression(const void *node) {
+  return static_cast<const OmpParsedExpression *>(node);
+}
+
+SgExpression *cloneParsedExpressionNode(const OmpParsedExpression *parsed) {
+  if (parsed == nullptr) {
+    return nullptr;
+  }
+  if (parsed->node == nullptr) {
+    return nullptr;
+  }
+
+  if (SgInitializedName *iname = isSgInitializedName(parsed->node)) {
+    return SageBuilder::buildVarRefExp(iname);
+  }
+
+  if (SgExpression *expr = isSgExpression(parsed->node)) {
+    if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+      SgVariableSymbol *symbol = var_ref->get_symbol();
+      ROSE_ASSERT(symbol != nullptr);
+      return SageBuilder::buildVarRefExp(symbol);
+    }
+    return SageInterface::copyExpression(expr);
+  }
+
+  return nullptr;
+}
+
+void parseAndStoreVariableList(const std::string &expr_text,
+                               OmpParsedExpression *parsed,
+                               SgPragmaDeclaration *pragma_declaration,
+                               OpenMPDirective *directive,
+                               OpenMPClauseKind clause_kind) {
+  ROSE_ASSERT(parsed != nullptr);
+  clearOpenMPClauseTemporaryState();
+  parseOmpVariable(std::make_pair(pragma_declaration, directive), clause_kind,
+                   expr_text);
+  ROSE_ASSERT(!omp_variable_list.empty());
+  parsed->node = omp_variable_list.back().second;
+  parsed->dimensions.clear();
+  omp_variable_list.clear();
+  array_dimensions.clear();
+}
+
+void parseAndStoreArraySection(const std::string &expr_text,
+                               OmpParsedExpression *parsed,
+                               SgPragmaDeclaration *pragma_declaration,
+                               OpenMPDirective *directive,
+                               OpenMPClauseKind clause_kind) {
+  ROSE_ASSERT(parsed != nullptr);
+  clearOpenMPClauseTemporaryState();
+  parseOmpArraySection(pragma_declaration, clause_kind, expr_text);
+  ROSE_ASSERT(!omp_variable_list.empty());
+  parsed->node = omp_variable_list.back().second;
+  parsed->dimensions.clear();
+  if (SgVariableSymbol *symbol =
+          extractClauseVariableSymbol(omp_variable_list.back().second)) {
+    auto found = array_dimensions.find(symbol);
+    if (found != array_dimensions.end()) {
+      parsed->dimensions = found->second;
+    }
+  }
+  omp_variable_list.clear();
+  array_dimensions.clear();
+}
+
+void parseAndStoreExpression(const std::string &expr_text,
+                             OmpParsedExpression *parsed,
+                             SgPragmaDeclaration *pragma_declaration,
+                             OpenMPDirective *directive,
+                             OpenMPClauseKind clause_kind) {
+  ROSE_ASSERT(parsed != nullptr);
+  clearOpenMPClauseTemporaryState();
+  SgExpression *expression =
+      parseOmpExpression(pragma_declaration, clause_kind, expr_text);
+  ROSE_ASSERT(expression != nullptr);
+  parsed->node = expression;
+  parsed->dimensions.clear();
+  if (SgVariableSymbol *symbol = extractClauseVariableSymbol(expression)) {
+    auto found = array_dimensions.find(symbol);
+    if (found != array_dimensions.end()) {
+      parsed->dimensions = found->second;
+    }
+  }
+  omp_variable_list.clear();
+  array_dimensions.clear();
+}
+
+void *parseOpenMPExprCallback(OpenMPDirectiveKind directive_kind,
+                              OpenMPClauseKind clause_kind,
+                              OpenMPExprParseMode parse_mode,
+                              const char *expression, void *user_data) {
+  OmpExprParseContext *context = static_cast<OmpExprParseContext *>(user_data);
+  ROSE_ASSERT(context != nullptr);
+  ROSE_ASSERT(context->pragma_declaration != nullptr);
+  ROSE_ASSERT(context->directive != nullptr);
+  if (expression == nullptr) {
+    return nullptr;
+  }
+
+  auto parsed = std::make_unique<OmpParsedExpression>();
+  parsed->mode = parse_mode;
+  parsed->text = expression;
+
+  (void)directive_kind;
+
+  if (parse_mode == OMP_EXPR_PARSE_expression) {
+    if (clause_kind == OMPC_device &&
+        shouldParseDeviceExprAsVerbatim(parsed->text)) {
+      parsed->node = buildOpaqueOpenMPClauseExpression(
+          context->pragma_declaration, trimWhitespaceCopy(parsed->text));
+    } else {
+      parseAndStoreExpression(parsed->text, parsed.get(),
+                              context->pragma_declaration, context->directive,
+                              clause_kind);
+    }
+  } else if (parse_mode == OMP_EXPR_PARSE_variable_list) {
+    parseAndStoreVariableList(parsed->text, parsed.get(),
+                              context->pragma_declaration, context->directive,
+                              clause_kind);
+  } else if (parse_mode == OMP_EXPR_PARSE_array_section) {
+    parseAndStoreArraySection(parsed->text, parsed.get(),
+                              context->pragma_declaration, context->directive,
+                              clause_kind);
+  } else if (parse_mode == OMP_EXPR_PARSE_verbatim) {
+    parsed->node = buildOpaqueOpenMPClauseExpression(
+        context->pragma_declaration, parsed->text);
+  }
+
+  OmpParsedExpression *raw = parsed.get();
+  context->owned_nodes.push_back(std::move(parsed));
+  return raw;
+}
+
+OmpClauseParseCache
+parseClauseNodesForDirective(SgPragmaDeclaration *pragma_declaration,
+                             OpenMPDirective *directive,
+                             const std::string &directive_text) {
+  OmpClauseParseCache parsed_cache;
+  if (pragma_declaration == nullptr || directive == nullptr ||
+      directive_text.empty()) {
+    return parsed_cache;
+  }
+
+  std::string parse_text = directive_text;
+  if (directive->getBaseLang() == Lang_Fortran) {
+    const std::string trimmed = trimWhitespaceCopy(parse_text);
+    std::string lowered = trimmed;
+    std::transform(
+        lowered.begin(), lowered.end(), lowered.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+    if (lowered.rfind("#pragma", 0) == 0) {
+      const std::string::size_type omp_pos = lowered.find("omp");
+      ROSE_ASSERT(omp_pos != std::string::npos);
+      parse_text = "!$" + trimmed.substr(omp_pos);
+    } else if (lowered.rfind("!$omp", 0) != 0 &&
+               lowered.rfind("c$omp", 0) != 0 &&
+               lowered.rfind("*$omp", 0) != 0) {
+      if (lowered.rfind("omp", 0) == 0) {
+        parse_text = "!$" + trimmed;
+      } else {
+        parse_text = "!$omp " + trimmed;
+      }
+    } else {
+      parse_text = trimmed;
+    }
+  }
+
+  std::vector<OpenMPClause *> *original_clauses =
+      directive->getClausesInOriginalOrder();
+  ROSE_ASSERT(original_clauses != nullptr);
+
+  bool requires_expression_cache = false;
+  bool requires_strict_expression_cache = false;
+  bool skip_reparse_for_merged_fortran_single = false;
+  for (OpenMPClause *clause : *original_clauses) {
+    if (clause == nullptr) {
+      continue;
+    }
+    if (!clause->getExpressions()->empty()) {
+      requires_expression_cache = true;
+    }
+    if (clause->getKind() == OMPC_to) {
+      auto *to_clause = static_cast<OpenMPToClause *>(clause);
+      if (!to_clause->getMapperIdentifier().empty()) {
+        requires_expression_cache = true;
+        requires_strict_expression_cache = true;
+      }
+    } else if (clause->getKind() == OMPC_from) {
+      auto *from_clause = static_cast<OpenMPFromClause *>(clause);
+      if (!from_clause->getMapperIdentifier().empty()) {
+        requires_expression_cache = true;
+        requires_strict_expression_cache = true;
+      }
+    } else if (clause->getKind() == OMPC_allocate) {
+      auto *allocate_clause = static_cast<OpenMPAllocateClause *>(clause);
+      if (!allocate_clause->getUserDefinedAllocator().empty()) {
+        requires_expression_cache = true;
+        requires_strict_expression_cache = true;
+      }
+    } else if (directive->getBaseLang() == Lang_Fortran &&
+               directive->getKind() == OMPD_single &&
+               clause->getKind() == OMPC_copyprivate) {
+      skip_reparse_for_merged_fortran_single = true;
+    }
+  }
+
+  if (!requires_expression_cache) {
+    return parsed_cache;
+  }
+
+  if (skip_reparse_for_merged_fortran_single &&
+      !requires_strict_expression_cache) {
+    return parsed_cache;
+  }
+
+  OmpExprParseContext context;
+  context.pragma_declaration = pragma_declaration;
+  context.directive = directive;
+  OpenMPDirective *parsed_directive =
+      parseOpenMP(parse_text.c_str(), parseOpenMPExprCallback, &context);
+  if (parsed_directive == nullptr) {
+    if (!requires_strict_expression_cache) {
+      return parsed_cache;
+    }
+    MLOG_ERROR_C("ompAstConstruction",
+                 "Failed to reparse OpenMP directive text for cache: %s\n",
+                 parse_text.c_str());
+    ROSE_ABORT();
+  }
+  ROSE_ASSERT(parsed_directive->getKind() == directive->getKind());
+
+  parsed_cache.owned_nodes = std::move(context.owned_nodes);
+
+  std::vector<OpenMPClause *> *parsed_clauses =
+      parsed_directive->getClausesInOriginalOrder();
+  ROSE_ASSERT(parsed_clauses != nullptr);
+  ROSE_ASSERT(original_clauses->size() == parsed_clauses->size());
+
+  for (size_t index = 0; index < original_clauses->size(); ++index) {
+    OpenMPClause *original_clause = (*original_clauses)[index];
+    OpenMPClause *parsed_clause = (*parsed_clauses)[index];
+    ROSE_ASSERT(original_clause != nullptr);
+    ROSE_ASSERT(parsed_clause != nullptr);
+    ROSE_ASSERT(original_clause->getKind() == parsed_clause->getKind());
+
+    std::vector<const OmpParsedExpression *> clause_nodes;
+    const std::vector<const void *> &raw_nodes =
+        parsed_clause->getExpressionNodes();
+    clause_nodes.reserve(raw_nodes.size() + 1);
+    for (const void *raw_node : raw_nodes) {
+      if (const OmpParsedExpression *parsed = asParsedExpression(raw_node)) {
+        clause_nodes.push_back(parsed);
+      }
+    }
+
+    if (original_clause->getKind() == OMPC_to) {
+      auto *original_to_clause = static_cast<OpenMPToClause *>(original_clause);
+      auto *parsed_to_clause = static_cast<OpenMPToClause *>(parsed_clause);
+      if (!original_to_clause->getMapperIdentifier().empty()) {
+        const OmpParsedExpression *mapper_node =
+            asParsedExpression(parsed_to_clause->getMapperIdentifierNode());
+        ROSE_ASSERT(mapper_node != nullptr);
+        clause_nodes.push_back(mapper_node);
+      }
+    } else if (original_clause->getKind() == OMPC_from) {
+      auto *original_from_clause =
+          static_cast<OpenMPFromClause *>(original_clause);
+      auto *parsed_from_clause = static_cast<OpenMPFromClause *>(parsed_clause);
+      if (!original_from_clause->getMapperIdentifier().empty()) {
+        const OmpParsedExpression *mapper_node =
+            asParsedExpression(parsed_from_clause->getMapperIdentifierNode());
+        ROSE_ASSERT(mapper_node != nullptr);
+        clause_nodes.push_back(mapper_node);
+      }
+    } else if (original_clause->getKind() == OMPC_allocate) {
+      auto *original_allocate_clause =
+          static_cast<OpenMPAllocateClause *>(original_clause);
+      auto *parsed_allocate_clause =
+          static_cast<OpenMPAllocateClause *>(parsed_clause);
+      if (!original_allocate_clause->getUserDefinedAllocator().empty()) {
+        const OmpParsedExpression *allocator_node = asParsedExpression(
+            parsed_allocate_clause->getUserDefinedAllocatorNode());
+        ROSE_ASSERT(allocator_node != nullptr);
+        clause_nodes.push_back(allocator_node);
+      }
+    }
+
+    parsed_cache.clause_expression_nodes[original_clause] =
+        std::move(clause_nodes);
+
+    if (original_clause->getKind() == OMPC_map) {
+      auto *parsed_map_clause = static_cast<OpenMPMapClause *>(parsed_clause);
+      const auto &dist_data_policies = parsed_map_clause->getDistDataPolicies();
+      std::vector<std::vector<const OmpParsedExpression *>> policy_nodes;
+      policy_nodes.reserve(dist_data_policies.size());
+      for (const auto &policies_for_item : dist_data_policies) {
+        std::vector<const OmpParsedExpression *> item_nodes;
+        item_nodes.reserve(policies_for_item.size());
+        for (const auto &policy : policies_for_item) {
+          item_nodes.push_back(asParsedExpression(policy.argument_node));
+        }
+        policy_nodes.push_back(std::move(item_nodes));
+      }
+      parsed_cache.map_dist_data_policy_nodes[original_clause] =
+          std::move(policy_nodes);
+    }
+  }
+
+  delete parsed_directive;
+  return parsed_cache;
+}
+
+const OmpClauseParseCache *getClauseParseCache(OpenMPDirective *directive) {
+  auto found = g_omp_clause_nodes.find(directive);
+  if (found == g_omp_clause_nodes.end()) {
+    return nullptr;
+  }
+  return &found->second;
+}
+
+const std::vector<const OmpParsedExpression *> *
+getParsedClauseExpressionNodes(OpenMPDirective *directive,
+                               const OpenMPClause *clause) {
+  const OmpClauseParseCache *cache = getClauseParseCache(directive);
+  if (cache == nullptr || clause == nullptr) {
+    return nullptr;
+  }
+  auto found = cache->clause_expression_nodes.find(clause);
+  if (found == cache->clause_expression_nodes.end()) {
+    return nullptr;
+  }
+  return &found->second;
+}
+
+const std::vector<std::vector<const OmpParsedExpression *>> *
+getParsedMapDistDataPolicyNodes(OpenMPDirective *directive,
+                                const OpenMPClause *clause) {
+  const OmpClauseParseCache *cache = getClauseParseCache(directive);
+  if (cache == nullptr || clause == nullptr) {
+    return nullptr;
+  }
+  auto found = cache->map_dist_data_policy_nodes.find(clause);
+  if (found == cache->map_dist_data_policy_nodes.end()) {
+    return nullptr;
+  }
+  return &found->second;
+}
+
+SgOmpClause::omp_map_dist_data_enum
+toSgMapDistDataPolicy(OpenMPMapClause::DistDataPolicyKind policy_kind) {
+  switch (policy_kind) {
+  case OpenMPMapClause::DIST_DATA_duplicate:
+    return SgOmpClause::e_omp_map_dist_data_duplicate;
+  case OpenMPMapClause::DIST_DATA_block:
+    return SgOmpClause::e_omp_map_dist_data_block;
+  case OpenMPMapClause::DIST_DATA_cyclic:
+    return SgOmpClause::e_omp_map_dist_data_cyclic;
+  }
+  MLOG_ERROR_C("ompAstConstruction",
+               "Unsupported dist_data policy kind in map clause\n");
+  ROSE_ABORT();
+}
+
+void appendParsedVariableNode(const OmpParsedExpression *parsed) {
+  ROSE_ASSERT(parsed != nullptr);
+  ROSE_ASSERT(parsed->node != nullptr);
+  omp_variable_list.push_back(std::make_pair(parsed->text, parsed->node));
+  if (SgVariableSymbol *symbol = extractClauseVariableSymbol(parsed->node)) {
+    if (!parsed->dimensions.empty()) {
+      array_dimensions[symbol] = parsed->dimensions;
+    }
+  }
+}
+
+SgExpression *cloneParsedExpressionNodeByText(
+    const std::vector<const OmpParsedExpression *> *parsed_nodes,
+    const std::string &expression_text,
+    OpenMPExprParseMode preferred_mode = OMP_EXPR_PARSE_none) {
+  const OmpParsedExpression *parsed =
+      findParsedExpressionByText(parsed_nodes, expression_text, preferred_mode);
+  if (parsed == nullptr && preferred_mode != OMP_EXPR_PARSE_none) {
+    parsed = findParsedExpressionByText(parsed_nodes, expression_text,
+                                        OMP_EXPR_PARSE_none);
+  }
+  if (parsed == nullptr) {
+    return nullptr;
+  }
+  return cloneParsedExpressionNode(parsed);
+}
+
+const OmpParsedExpression *findParsedExpressionByText(
+    const std::vector<const OmpParsedExpression *> *parsed_nodes,
+    const std::string &expression_text,
+    OpenMPExprParseMode required_mode = OMP_EXPR_PARSE_none) {
+  if (parsed_nodes == nullptr) {
+    return nullptr;
+  }
+
+  for (const OmpParsedExpression *parsed : *parsed_nodes) {
+    if (parsed == nullptr) {
+      continue;
+    }
+    if (required_mode != OMP_EXPR_PARSE_none && parsed->mode != required_mode) {
+      continue;
+    }
+    if (parsed->text == expression_text) {
+      return parsed;
+    }
+  }
+
+  return nullptr;
+}
+
+SgExpression *buildOpaqueOpenMPClauseExpression(SgPragmaDeclaration *directive,
+                                                const std::string &text) {
+  SgScopeStatement *scope =
+      directive != nullptr ? directive->get_scope() : nullptr;
+  if (scope == nullptr && directive != nullptr) {
+    scope = SageInterface::getScope(directive);
+  }
+  if (scope == nullptr) {
+    SgNode *global_parent = SageInterface::getGlobalScope(directive);
+    scope = isSgScopeStatement(global_parent);
+  }
+  ROSE_ASSERT(scope != nullptr);
+  return SageBuilder::buildOpaqueVarRefExp(text, scope);
+}
+
+std::string trimWhitespaceCopy(const std::string &value) {
+  const std::string::size_type begin = value.find_first_not_of(" \t\r\n");
+  if (begin == std::string::npos) {
+    return std::string();
+  }
+  const std::string::size_type end = value.find_last_not_of(" \t\r\n");
+  return value.substr(begin, end - begin + 1);
+}
+
+SgVariableSymbol *extractClauseVariableSymbol(SgNode *node) {
+  if (SgInitializedName *initialized_name = isSgInitializedName(node)) {
+    return isSgVariableSymbol(
+        initialized_name->search_for_symbol_from_symbol_table());
+  }
+
+  if (SgVarRefExp *var_ref = isSgVarRefExp(node)) {
+    return var_ref->get_symbol();
+  }
+
+  if (SgPntrArrRefExp *array_ref = isSgPntrArrRefExp(node)) {
+    return extractClauseVariableSymbol(array_ref->get_lhs_operand());
+  }
+
+  if (SgDotExp *dot = isSgDotExp(node)) {
+    return extractClauseVariableSymbol(dot->get_lhs_operand());
+  }
+
+  if (SgArrowExp *arrow = isSgArrowExp(node)) {
+    return extractClauseVariableSymbol(arrow->get_lhs_operand());
+  }
+
+  if (SgCastExp *cast_exp = isSgCastExp(node)) {
+    return extractClauseVariableSymbol(cast_exp->get_operand());
+  }
+
+  if (SgUnaryOp *unary_op = isSgUnaryOp(node)) {
+    return extractClauseVariableSymbol(unary_op->get_operand());
+  }
+
+  return nullptr;
+}
+
 } // namespace
 
 // Liao 4/23/2011, special function to copy file info of the original SgPragma
@@ -181,6 +977,27 @@ static std::list<SgPragmaDeclaration *> omp_pragma_list;
 // the vector of pairs of OpenMP pragma and Ompparser IR.
 static std::vector<std::pair<SgPragmaDeclaration *, OpenMPDirective *>>
     OpenMPIR_list;
+
+static void clearClauseParseCacheForSourceFile(SgSourceFile *source_file) {
+  if (source_file == nullptr) {
+    return;
+  }
+
+  std::vector<OpenMPDirective *> directives_to_clear;
+  directives_to_clear.reserve(OpenMPIR_list.size());
+  for (const auto &entry : OpenMPIR_list) {
+    if (entry.first == nullptr || entry.second == nullptr) {
+      continue;
+    }
+    if (getEnclosingSourceFile(entry.first) == source_file) {
+      directives_to_clear.push_back(entry.second);
+    }
+  }
+
+  for (OpenMPDirective *directive : directives_to_clear) {
+    g_omp_clause_nodes.erase(directive);
+  }
+}
 
 static std::string toLowerCopy(const std::string &input) {
   std::string result = input;
@@ -436,6 +1253,40 @@ static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {
   }
 }
 
+static bool allowsImplicitOpenMPEnd(OpenMPDirective *directive) {
+  if (directive == NULL) {
+    return true;
+  }
+
+  if (directive->getRequiresExplicitEnd()) {
+    return false;
+  }
+
+  return allowsImplicitFortranEnd(directive->getKind());
+}
+
+static bool isOpenMPDirectiveEndMarkerOnly(OpenMPDirective *directive) {
+  if (directive == nullptr || directive->getKind() != OMPD_end) {
+    return false;
+  }
+
+  OpenMPDirective *paired =
+      static_cast<OpenMPEndDirective *>(directive)->getPairedDirective();
+  return paired != nullptr && paired->getRequiresExplicitEnd();
+}
+
+static bool shouldSkipOpenMPDirectiveAstConversion(OpenMPDirective *directive) {
+  if (directive == nullptr) {
+    return false;
+  }
+
+  if (directive->getRequiresExplicitEnd()) {
+    return true;
+  }
+
+  return isOpenMPDirectiveEndMarkerOnly(directive);
+}
+
 static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   std::vector<SgNode *> all_pragmas =
       NodeQuery::querySubTree(sageFilePtr, V_SgPragmaDeclaration);
@@ -463,6 +1314,7 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   std::vector<OpenMPDirective *> pairing_list;
   std::vector<std::pair<SgPragmaDeclaration *, OpenMPDirective *>>
       local_OpenMPIR_list;
+  std::unordered_map<OpenMPDirective *, std::string> local_pragma_text_by_ir;
   std::vector<SgPragmaDeclaration *> local_omp_pragma_list;
   std::map<SgPragmaDeclaration *, OpenMPDirective *>
       local_fortran_paired_pragma_dict;
@@ -509,7 +1361,7 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
       continue;
     }
 
-    ompparser_OpenMPIR = parseOpenMP(pending.c_str(), NULL);
+    ompparser_OpenMPIR = parseOpenMP(pending.c_str(), nullptr, nullptr);
     if (ompparser_OpenMPIR == NULL) {
       for (const auto &entry : local_OpenMPIR_list) {
         delete entry.second;
@@ -540,7 +1392,7 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
           matched = true;
           break;
         }
-        if (!allowsImplicitFortranEnd(begin_directive->getKind())) {
+        if (!allowsImplicitOpenMPEnd(begin_directive)) {
           ROSE_ASSERT(end_directive->getKind() == begin_directive->getKind());
         }
         pairing_list.pop_back();
@@ -553,7 +1405,8 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
 
     SgPragmaDeclaration *primary = pending_pragmas.front();
     local_fortran_paired_pragma_dict[primary] = ompparser_OpenMPIR;
-    if (ompparser_OpenMPIR->getKind() != OMPD_end) {
+    local_pragma_text_by_ir[ompparser_OpenMPIR] = pending;
+    if (!shouldSkipOpenMPDirectiveAstConversion(ompparser_OpenMPIR)) {
       local_OpenMPIR_list.push_back(
           std::make_pair(primary, ompparser_OpenMPIR));
       local_omp_pragma_list.push_back(primary);
@@ -574,6 +1427,13 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
 
   for (const auto &entry : local_OpenMPIR_list) {
     OpenMPIR_list.push_back(entry);
+    if (entry.second->getKind() == OMPD_end) {
+      continue;
+    }
+    const auto text_it = local_pragma_text_by_ir.find(entry.second);
+    ROSE_ASSERT(text_it != local_pragma_text_by_ir.end());
+    g_omp_clause_nodes[entry.second] = parseClauseNodesForDirective(
+        entry.first, entry.second, text_it->second);
   }
   for (SgPragmaDeclaration *decl : local_omp_pragma_list) {
     omp_pragma_list.push_back(decl);
@@ -2039,6 +2899,7 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
   std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_pragma_dict;
   // Track pragmas inserted before a statement to preserve their original order.
   std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_before_pragma_dict;
+  std::unordered_map<OpenMPDirective *, std::string> pragma_text_by_ir;
 
   std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *,
                          OpenMPDirective *>>::iterator iter;
@@ -2063,6 +2924,8 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
     // the pragma will have string to ease debugging
     std::string pragma_string =
         ompparser_directive_ir->generatePragmaString("omp ", "", "");
+    pragma_text_by_ir[ompparser_directive_ir] =
+        std::string("#pragma ") + pragma_string;
     SgPragmaDeclaration *p_decl = buildPragmaDeclaration(pragma_string, scope);
     // preserve the original source file info ,TODO complex cases , use real
     // preprocessing info's line information !!
@@ -2174,6 +3037,17 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       ROSE_ABORT();
     }
   } // end for omp_comment_list
+
+  for (const auto &entry : OpenMPIR_list) {
+    if (entry.second->getKind() == OMPD_end) {
+      continue;
+    }
+    auto pragma_it = pragma_text_by_ir.find(entry.second);
+    if (pragma_it != pragma_text_by_ir.end()) {
+      g_omp_clause_nodes[entry.second] = parseClauseNodesForDirective(
+          entry.first, entry.second, pragma_it->second);
+    }
+  }
 
   convert_Fortran_Pragma_Pairs(sageFilePtr);
 } // end convert_Fortran_OMP_Comments_to_Pragmas ()
@@ -2456,16 +3330,27 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
       std::string key;
       istr >> key;
       if (key == "omp" && wantsOpenMP) {
-        omp_pragma_list.push_back(pragmaDeclaration);
-
         // parse expression
         // Get the object that ompparser IR.
-        ompparser_OpenMPIR = parseOpenMP(pragmaString.c_str(), NULL);
+        ompparser_OpenMPIR =
+            parseOpenMP(pragmaString.c_str(), nullptr, nullptr);
         assert(ompparser_OpenMPIR != NULL);
+        if (shouldSkipOpenMPDirectiveAstConversion(ompparser_OpenMPIR)) {
+          delete ompparser_OpenMPIR;
+          ompparser_OpenMPIR = nullptr;
+          continue;
+        }
+
         use_ompparser = checkOpenMPIR(ompparser_OpenMPIR);
         assert(use_ompparser == true);
+        omp_pragma_list.push_back(pragmaDeclaration);
         OpenMPIR_list.push_back(
             std::make_pair(pragmaDeclaration, ompparser_OpenMPIR));
+        std::string parse_text = std::string("#pragma ") + pragmaString;
+        if (ompparser_OpenMPIR->getKind() != OMPD_end) {
+          g_omp_clause_nodes[ompparser_OpenMPIR] = parseClauseNodesForDirective(
+              pragmaDeclaration, ompparser_OpenMPIR, parse_text);
+        }
       } else if (key == "acc") {
         // store them into a buffer, reused by build_OpenMP_AST()
         omp_pragma_list.push_back(pragmaDeclaration);
@@ -2491,11 +3376,16 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_parse_only() = %s \n",
              sageFilePtr->get_openmp_parse_only() ? "true" : "false");
     }
+    clearClauseParseCacheForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
 
   // Build OpenMP AST nodes based on parsing results
+  if (!isFortran) {
+    collectCommentedDirectiveRelocations(sageFilePtr, omp_pragma_list);
+  }
+
   if (isFortran) {
     if (parsed_fortran_pragmas) {
       convert_Fortran_Pragma_Pairs(sageFilePtr);
@@ -2520,6 +3410,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_ast_only() = %s \n",
              sageFilePtr->get_openmp_ast_only() ? "true" : "false");
     }
+    clearClauseParseCacheForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
@@ -2534,11 +3425,13 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_analyzing() = %s \n",
              sageFilePtr->get_openmp_analyzing() ? "true" : "false");
     }
+    clearClauseParseCacheForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
 
   lower_omp(sageFilePtr);
+  clearClauseParseCacheForSourceFile(sageFilePtr);
   mark_processed(sageFilePtr);
 }
 
@@ -2547,7 +3440,6 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
 SgStatement *
 convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                      current_OpenMPIR_to_SageIII) {
-  //    printf("ompparser directive is ready.\n");
   OpenMPDirectiveKind directive_kind =
       current_OpenMPIR_to_SageIII.second->getKind();
   SgStatement *result = NULL;
@@ -2606,6 +3498,10 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   case OMPD_workshare:
   case OMPD_tile:
   case OMPD_unroll: {
+    result = convertBodyDirective(current_OpenMPIR_to_SageIII);
+    break;
+  }
+  case OMPD_end: {
     result = convertBodyDirective(current_OpenMPIR_to_SageIII);
     break;
   }
@@ -2698,6 +3594,7 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   //! For C/C++ replace OpenMP pragma declaration with an SgOmpxxStatement
   SgScopeStatement *scope = pdecl->get_scope();
   ROSE_ASSERT(scope != NULL);
+  relocatePendingCommentedDirectivesForPragma(pdecl, result);
   moveUpPreprocessingInfo(result,
                           pdecl); // keep #ifdef etc attached to the pragma
   replaceStatement(pdecl, result);
@@ -2708,7 +3605,6 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
 SgStatement *
 convertVariantDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                             current_OpenMPIR_to_SageIII) {
-  printf("ompparser variant directive is ready.\n");
   OpenMPDirectiveKind directive_kind =
       current_OpenMPIR_to_SageIII.second->getKind();
   SgStatement *result = NULL;
@@ -2759,7 +3655,6 @@ convertSimpleClause(SgStatement *directive,
                     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                         current_OpenMPIR_to_SageIII,
                     OpenMPClause *current_omp_clause) {
-  printf("ompparser simple clause is ready.\n");
   SgOmpClause *sg_clause = NULL;
   OpenMPClauseKind clause_kind = current_omp_clause->getKind();
   switch (clause_kind) {
@@ -3658,7 +4553,6 @@ convertDepobjUpdateClause(SgOmpClauseBodyStatement *clause_body,
                           std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                               current_OpenMPIR_to_SageIII,
                           OpenMPClause *current_omp_clause) {
-  printf("ompparser depobj update clause is ready.\n");
 
   OpenMPDepobjUpdateClauseDependeceType modifier =
       ((OpenMPDepobjUpdateClause *)current_omp_clause)->getType();
@@ -3672,7 +4566,6 @@ convertDepobjUpdateClause(SgOmpClauseBodyStatement *clause_body,
   clause_body->get_clauses().push_back(sg_clause);
   sg_clause->set_parent(clause_body);
 
-  printf("ompparser depobj update clause added!\n");
   return result;
 }
 
@@ -3681,7 +4574,6 @@ SgOmpAtomicDefaultMemOrderClause *convertAtomicDefaultMemOrderClause(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         current_OpenMPIR_to_SageIII,
     OpenMPClause *current_omp_clause) {
-  printf("ompparser atomic_default_mem_order clause is ready.\n");
   OpenMPAtomicDefaultMemOrderClauseKind atomic_default_mem_order_kind =
       ((OpenMPAtomicDefaultMemOrderClause *)current_omp_clause)->getKind();
   SgOmpClause::omp_atomic_default_mem_order_kind_enum sg_dv =
@@ -3710,7 +4602,6 @@ SgOmpAtomicDefaultMemOrderClause *convertAtomicDefaultMemOrderClause(
   setOneSourcePositionForTransformation(result);
   ((SgOmpRequiresStatement *)directive)->get_clauses().push_back(result);
   result->set_parent(directive);
-  printf("ompparser atomic_default_mem_order clause is added.\n");
   return result;
 }
 
@@ -3720,19 +4611,18 @@ convertExtImplementationDefinedRequirementClause(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         current_OpenMPIR_to_SageIII,
     OpenMPClause *current_omp_clause) {
-  printf("ompparser atomic_default_mem_order clause is ready.\n");
-  SgExpression *ext_implementation_defined_requirement = NULL;
-  ext_implementation_defined_requirement = parseOmpExpression(
-      current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+  const std::string requirement_text = trimWhitespaceCopy(
       ((OpenMPExtImplementationDefinedRequirementClause *)current_omp_clause)
           ->getImplementationDefinedRequirement());
+  SgExpression *ext_implementation_defined_requirement =
+      buildOpaqueOpenMPClauseExpression(current_OpenMPIR_to_SageIII.first,
+                                        requirement_text);
   SgOmpExtImplementationDefinedRequirementClause *result =
       new SgOmpExtImplementationDefinedRequirementClause(
           ext_implementation_defined_requirement);
   setOneSourcePositionForTransformation(result);
   ((SgOmpRequiresStatement *)directive)->get_clauses().push_back(result);
   result->set_parent(directive);
-  printf("ompparser atomic_default_mem_order clause is added.\n");
   return result;
 }
 
@@ -3741,7 +4631,6 @@ convertScheduleClause(SgStatement *directive,
                       std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                           current_OpenMPIR_to_SageIII,
                       OpenMPClause *current_omp_clause) {
-  printf("ompparser schedule clause is ready.\n");
 
   OpenMPScheduleClauseModifier modifier1 =
       ((OpenMPScheduleClause *)current_omp_clause)->getModifier1();
@@ -3768,7 +4657,6 @@ convertScheduleClause(SgStatement *directive,
   setOneSourcePositionForTransformation(result);
   addOmpClause(directive, result);
   result->set_parent(directive);
-  printf("ompparser schedule clause is added.\n");
   return result;
 }
 
@@ -3777,7 +4665,6 @@ convertDistScheduleClause(SgOmpClauseBodyStatement *clause_body,
                           std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                               current_OpenMPIR_to_SageIII,
                           OpenMPClause *current_omp_clause) {
-  printf("ompparser dist_schedule clause is ready.\n");
 
   OpenMPDistScheduleClauseKind kind =
       ((OpenMPDistScheduleClause *)current_omp_clause)->getKind();
@@ -3799,7 +4686,6 @@ convertDistScheduleClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpClause *sg_clause = result;
   clause_body->get_clauses().push_back(sg_clause);
   sg_clause->set_parent(clause_body);
-  printf("ompparser dist_schedule clause is added.\n");
   return result;
 }
 
@@ -3808,7 +4694,6 @@ convertDefaultmapClause(SgOmpClauseBodyStatement *clause_body,
                         std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                             current_OpenMPIR_to_SageIII,
                         OpenMPClause *current_omp_clause) {
-  printf("ompparser defaultmap clause is ready.\n");
 
   OpenMPDefaultmapClauseBehavior behavior =
       ((OpenMPDefaultmapClause *)current_omp_clause)->getBehavior();
@@ -3827,7 +4712,6 @@ convertDefaultmapClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpClause *sg_clause = result;
   clause_body->get_clauses().push_back(sg_clause);
   sg_clause->set_parent(clause_body);
-  printf("ompparser defaultmap clause is added.\n");
   return result;
 }
 
@@ -3839,7 +4723,6 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
 
   // budui, allocator yinggai he array duiyingqilai , yinggai you henduo
   // allocators
-  printf("ompparser uses_allocators clause is ready.\n");
   SgOmpUsesAllocatorsClause *result = NULL;
   SgOmpUsesAllocatorsDefination *uses_allocators_defination = NULL;
   SgOmpClause::omp_uses_allocators_allocator_enum sg_allocator;
@@ -3888,7 +4771,6 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
   SgOmpClause *sg_clause = result;
   clause_body->get_clauses().push_back(sg_clause);
   sg_clause->set_parent(clause_body);
-  printf("ompparser uses_allocators clause is added.\n");
   return result;
 }
 
@@ -3897,19 +4779,97 @@ convertMapClause(SgOmpClauseBodyStatement *clause_body,
                  std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                      current_OpenMPIR_to_SageIII,
                  OpenMPClause *current_omp_clause) {
-  printf("ompparser map clause is ready.\n");
   SgOmpMapClause *result = NULL;
   OpenMPMapClauseType type = ((OpenMPMapClause *)current_omp_clause)->getType();
   SgOmpClause::omp_map_operator_enum sg_type = toSgOmpClauseMapOperator(type);
 
-  std::vector<const char *> *current_expressions =
-      current_omp_clause->getExpressions();
-  if (current_expressions->size() != 0) {
-    std::vector<const char *>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
-      parseOmpArraySection(current_OpenMPIR_to_SageIII.first,
-                           current_omp_clause->getKind(), *iter);
+  std::map<SgSymbol *,
+           std::vector<
+               std::pair<SgOmpClause::omp_map_dist_data_enum, SgExpression *>>>
+      map_dist_data_policies;
+
+  omp_variable_list.clear();
+  array_dimensions.clear();
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
+  if (parsed_nodes != nullptr && !parsed_nodes->empty()) {
+    for (const OmpParsedExpression *parsed : *parsed_nodes) {
+      if (parsed == nullptr) {
+        continue;
+      }
+      if (parsed->mode == OMP_EXPR_PARSE_array_section ||
+          parsed->mode == OMP_EXPR_PARSE_variable_list) {
+        appendParsedVariableNode(parsed);
+      }
+    }
+
+    const auto &map_policies =
+        static_cast<OpenMPMapClause *>(current_omp_clause)
+            ->getDistDataPolicies();
+    const auto *policy_nodes = getParsedMapDistDataPolicyNodes(
+        current_OpenMPIR_to_SageIII.second, current_omp_clause);
+    const size_t policy_item_count = map_policies.size();
+    for (size_t item_index = 0; item_index < policy_item_count; ++item_index) {
+      if (item_index >= omp_variable_list.size()) {
+        MLOG_ERROR_C("ompAstConstruction",
+                     "Map clause parse node count mismatch with variables\n");
+        ROSE_ABORT();
+      }
+      SgVariableSymbol *mapped_symbol =
+          extractClauseVariableSymbol(omp_variable_list[item_index].second);
+      if (mapped_symbol == nullptr) {
+        MLOG_ERROR_C("ompAstConstruction",
+                     "Unable to resolve map symbol for dist_data policy\n");
+        ROSE_ABORT();
+      }
+
+      std::vector<
+          std::pair<SgOmpClause::omp_map_dist_data_enum, SgExpression *>>
+          sg_policies;
+      const auto &policies_for_item = map_policies[item_index];
+      const std::vector<const OmpParsedExpression *> *parsed_policy_nodes =
+          nullptr;
+      if (policy_nodes != nullptr && item_index < policy_nodes->size()) {
+        parsed_policy_nodes = &(*policy_nodes)[item_index];
+      }
+
+      for (size_t policy_index = 0; policy_index < policies_for_item.size();
+           ++policy_index) {
+        const OpenMPMapClause::DistDataPolicy &policy =
+            policies_for_item[policy_index];
+        SgExpression *policy_expression = nullptr;
+        if (!policy.argument.empty()) {
+          const OmpParsedExpression *parsed_policy = nullptr;
+          if (parsed_policy_nodes != nullptr &&
+              policy_index < parsed_policy_nodes->size()) {
+            parsed_policy = (*parsed_policy_nodes)[policy_index];
+          }
+          if (parsed_policy != nullptr) {
+            policy_expression = cloneParsedExpressionNode(parsed_policy);
+          }
+          if (policy_expression == nullptr) {
+            policy_expression = parseOmpExpression(
+                current_OpenMPIR_to_SageIII.first,
+                current_omp_clause->getKind(), policy.argument);
+          }
+        }
+        sg_policies.push_back(std::make_pair(toSgMapDistDataPolicy(policy.kind),
+                                             policy_expression));
+      }
+
+      if (!sg_policies.empty()) {
+        map_dist_data_policies[mapped_symbol] = std::move(sg_policies);
+      }
+    }
+  } else {
+    std::vector<const char *> *current_expressions =
+        current_omp_clause->getExpressions();
+    if (!current_expressions->empty()) {
+      for (const char *expression : *current_expressions) {
+        parseOmpArraySection(current_OpenMPIR_to_SageIII.first,
+                             current_omp_clause->getKind(), expression);
+      }
     }
   }
   SgExprListExp *explist = buildExprListExp();
@@ -3919,6 +4879,7 @@ convertMapClause(SgOmpClauseBodyStatement *clause_body,
   buildVariableList(result);
   explist->set_parent(result);
   result->set_array_dimensions(array_dimensions);
+  result->set_dist_data_policies(map_dist_data_policies);
 
   setOneSourcePositionForTransformation(result);
   SgOmpClause *sg_clause = result;
@@ -3926,7 +4887,6 @@ convertMapClause(SgOmpClauseBodyStatement *clause_body,
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
-  printf("ompparser map clause is added.\n");
   return result;
 }
 
@@ -4662,18 +5622,32 @@ convertClause(SgStatement *directive,
                   current_OpenMPIR_to_SageIII,
               OpenMPClause *current_omp_clause) {
   omp_variable_list.clear();
+  array_dimensions.clear();
   SgOmpVariablesClause *result = NULL;
   OpenMPClauseKind clause_kind = current_omp_clause->getKind();
   SgGlobal *global =
       SageInterface::getGlobalScope(current_OpenMPIR_to_SageIII.first);
-  std::vector<const char *> *current_expressions =
-      current_omp_clause->getExpressions();
-  if (current_expressions->size() != 0) {
-    std::vector<const char *>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
-      parseOmpVariable(current_OpenMPIR_to_SageIII,
-                       current_omp_clause->getKind(), *iter);
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
+  if (parsed_nodes != nullptr && !parsed_nodes->empty()) {
+    for (const OmpParsedExpression *parsed : *parsed_nodes) {
+      if (parsed == nullptr) {
+        continue;
+      }
+      if (parsed->mode == OMP_EXPR_PARSE_variable_list ||
+          parsed->mode == OMP_EXPR_PARSE_array_section) {
+        appendParsedVariableNode(parsed);
+      }
+    }
+  } else {
+    std::vector<const char *> *current_expressions =
+        current_omp_clause->getExpressions();
+    if (!current_expressions->empty()) {
+      for (const char *expression : *current_expressions) {
+        parseOmpVariable(current_OpenMPIR_to_SageIII,
+                         current_omp_clause->getKind(), expression);
+      }
     }
   }
 
@@ -4686,10 +5660,12 @@ convertClause(SgStatement *directive,
         toSgOmpClauseAllocateAllocator(allocate_allocator);
     SgExpression *user_defined_parameter = NULL;
     if (sg_modifier == SgOmpClause::e_omp_allocate_user_defined_modifier) {
-      SgExpression *clause_expression = parseOmpExpression(
-          current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+      const std::string user_defined_allocator =
           ((OpenMPAllocateClause *)current_omp_clause)
-              ->getUserDefinedAllocator());
+              ->getUserDefinedAllocator();
+      SgExpression *clause_expression = cloneParsedExpressionNodeByText(
+          parsed_nodes, user_defined_allocator, OMP_EXPR_PARSE_expression);
+      ROSE_ASSERT(clause_expression != nullptr);
       user_defined_parameter =
           checkOmpExpressionClause(clause_expression, global, e_allocate);
     }
@@ -4882,29 +5858,46 @@ convertToClause(SgStatement *clause_body,
                 std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                     current_OpenMPIR_to_SageIII,
                 OpenMPClause *current_omp_clause) {
-  printf("ompparser to clause is ready.\n");
+  MLOG_DEBUG_C("ompAstConstruction", "ompparser to clause is ready.\n");
   SgOmpToClause *result = NULL;
   OpenMPToClauseKind kind = ((OpenMPToClause *)current_omp_clause)->getKind();
   SgOmpClause::omp_to_kind_enum sg_type = toSgOmpClauseToKind(kind);
   SgExpression *mapper_identifier = NULL;
 
-  std::vector<const char *> *current_expressions =
-      current_omp_clause->getExpressions();
-  if (current_expressions->size() != 0) {
-    std::vector<const char *>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
-      parseOmpArraySection(current_OpenMPIR_to_SageIII.first,
-                           current_omp_clause->getKind(), *iter);
+  omp_variable_list.clear();
+  array_dimensions.clear();
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
+  if (parsed_nodes != nullptr && !parsed_nodes->empty()) {
+    for (const OmpParsedExpression *parsed : *parsed_nodes) {
+      if (parsed == nullptr) {
+        continue;
+      }
+      if (parsed->mode == OMP_EXPR_PARSE_array_section ||
+          parsed->mode == OMP_EXPR_PARSE_variable_list) {
+        appendParsedVariableNode(parsed);
+      }
+    }
+  } else {
+    std::vector<const char *> *current_expressions =
+        current_omp_clause->getExpressions();
+    if (!current_expressions->empty()) {
+      for (const char *expression : *current_expressions) {
+        parseOmpArraySection(current_OpenMPIR_to_SageIII.first,
+                             current_omp_clause->getKind(), expression);
+      }
     }
   }
   SgExprListExp *explist = buildExprListExp();
 
   result = new SgOmpToClause(explist, sg_type);
   if ((((OpenMPToClause *)current_omp_clause)->getMapperIdentifier()) != "") {
-    mapper_identifier = parseOmpExpression(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        ((OpenMPToClause *)current_omp_clause)->getMapperIdentifier());
+    mapper_identifier = cloneParsedExpressionNodeByText(
+        parsed_nodes,
+        ((OpenMPToClause *)current_omp_clause)->getMapperIdentifier(),
+        OMP_EXPR_PARSE_expression);
+    ROSE_ASSERT(mapper_identifier != nullptr);
   }
   result->set_mapper_identifier(mapper_identifier);
   ROSE_ASSERT(result != NULL);
@@ -4922,7 +5915,7 @@ convertToClause(SgStatement *clause_body,
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
-  printf("ompparser to clause is added.\n");
+  MLOG_DEBUG_C("ompAstConstruction", "ompparser to clause is added.\n");
   return result;
 }
 
@@ -4931,29 +5924,46 @@ convertFromClause(SgStatement *clause_body,
                   std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                       current_OpenMPIR_to_SageIII,
                   OpenMPClause *current_omp_clause) {
-  printf("ompparser from clause is ready.\n");
+  MLOG_DEBUG_C("ompAstConstruction", "ompparser from clause is ready.\n");
   SgOmpFromClause *result = NULL;
   OpenMPFromClauseKind kind =
       ((OpenMPFromClause *)current_omp_clause)->getKind();
   SgOmpClause::omp_from_kind_enum sg_type = toSgOmpClauseFromKind(kind);
   SgExpression *mapper_identifier = NULL;
 
-  std::vector<const char *> *current_expressions =
-      current_omp_clause->getExpressions();
-  if (current_expressions->size() != 0) {
-    std::vector<const char *>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
-      parseOmpArraySection(current_OpenMPIR_to_SageIII.first,
-                           current_omp_clause->getKind(), *iter);
+  omp_variable_list.clear();
+  array_dimensions.clear();
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
+  if (parsed_nodes != nullptr && !parsed_nodes->empty()) {
+    for (const OmpParsedExpression *parsed : *parsed_nodes) {
+      if (parsed == nullptr) {
+        continue;
+      }
+      if (parsed->mode == OMP_EXPR_PARSE_array_section ||
+          parsed->mode == OMP_EXPR_PARSE_variable_list) {
+        appendParsedVariableNode(parsed);
+      }
+    }
+  } else {
+    std::vector<const char *> *current_expressions =
+        current_omp_clause->getExpressions();
+    if (!current_expressions->empty()) {
+      for (const char *expression : *current_expressions) {
+        parseOmpArraySection(current_OpenMPIR_to_SageIII.first,
+                             current_omp_clause->getKind(), expression);
+      }
     }
   }
   SgExprListExp *explist = buildExprListExp();
   result = new SgOmpFromClause(explist, sg_type);
-  if ((((OpenMPToClause *)current_omp_clause)->getMapperIdentifier()) != "") {
-    mapper_identifier = parseOmpExpression(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        ((OpenMPToClause *)current_omp_clause)->getMapperIdentifier());
+  if ((((OpenMPFromClause *)current_omp_clause)->getMapperIdentifier()) != "") {
+    mapper_identifier = cloneParsedExpressionNodeByText(
+        parsed_nodes,
+        ((OpenMPFromClause *)current_omp_clause)->getMapperIdentifier(),
+        OMP_EXPR_PARSE_expression);
+    ROSE_ASSERT(mapper_identifier != nullptr);
   }
   result->set_mapper_identifier(mapper_identifier);
   ROSE_ASSERT(result != NULL);
@@ -4971,7 +5981,7 @@ convertFromClause(SgStatement *clause_body,
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
-  printf("ompparser from clause is added.\n");
+  MLOG_DEBUG_C("ompAstConstruction", "ompparser from clause is added.\n");
   return result;
 }
 
@@ -4980,14 +5990,17 @@ convertDependClause(SgStatement *clause_body,
                     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                         current_OpenMPIR_to_SageIII,
                     OpenMPClause *current_omp_clause) {
-  printf("ompparser depend clause is ready.\n");
   SgOmpDependClause *result = NULL;
+  clearOpenMPClauseTemporaryState();
 
   SgExpression *iterator_type = NULL;
   SgExpression *identifier = NULL;
   SgExpression *begin = NULL;
   SgExpression *end = NULL;
   SgExpression *step = NULL;
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
 
   auto *depend_clause = static_cast<OpenMPDependClause *>(current_omp_clause);
   OpenMPDependClauseModifier modifier = depend_clause->getModifier();
@@ -4997,30 +6010,62 @@ convertDependClause(SgStatement *clause_body,
     for (const auto &iterator_def : omp_depend_iterators) {
       std::list<SgExpression *> iterator_expressions;
       if (!iterator_def.qualifier.empty()) {
-        iterator_type = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                                           current_omp_clause->getKind(),
-                                           iterator_def.qualifier);
+        const OmpParsedExpression *parsed = findParsedExpressionByText(
+            parsed_nodes, iterator_def.qualifier, OMP_EXPR_PARSE_expression);
+        iterator_type = cloneParsedExpressionNode(parsed);
+        if (iterator_type == NULL) {
+          iterator_type = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                             current_omp_clause->getKind(),
+                                             iterator_def.qualifier);
+        }
         iterator_expressions.push_back(iterator_type);
       } else {
         iterator_type = NULL;
         iterator_expressions.push_back(iterator_type);
       }
-      identifier =
-          parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                             current_omp_clause->getKind(), iterator_def.var);
+      {
+        const OmpParsedExpression *parsed = findParsedExpressionByText(
+            parsed_nodes, iterator_def.var, OMP_EXPR_PARSE_expression);
+        identifier = cloneParsedExpressionNode(parsed);
+        if (identifier == NULL) {
+          identifier = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                          current_omp_clause->getKind(),
+                                          iterator_def.var);
+        }
+      }
       iterator_expressions.push_back(identifier);
-      begin =
-          parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                             current_omp_clause->getKind(), iterator_def.begin);
+      {
+        const OmpParsedExpression *parsed = findParsedExpressionByText(
+            parsed_nodes, iterator_def.begin, OMP_EXPR_PARSE_expression);
+        begin = cloneParsedExpressionNode(parsed);
+        if (begin == NULL) {
+          begin = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                     current_omp_clause->getKind(),
+                                     iterator_def.begin);
+        }
+      }
       iterator_expressions.push_back(begin);
-      end = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                               current_omp_clause->getKind(), iterator_def.end);
+      {
+        const OmpParsedExpression *parsed = findParsedExpressionByText(
+            parsed_nodes, iterator_def.end, OMP_EXPR_PARSE_expression);
+        end = cloneParsedExpressionNode(parsed);
+        if (end == NULL) {
+          end = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                   current_omp_clause->getKind(),
+                                   iterator_def.end);
+        }
+      }
       iterator_expressions.push_back(end);
 
       if (!iterator_def.step.empty()) {
-        step = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                                  current_omp_clause->getKind(),
-                                  iterator_def.step);
+        const OmpParsedExpression *parsed = findParsedExpressionByText(
+            parsed_nodes, iterator_def.step, OMP_EXPR_PARSE_expression);
+        step = cloneParsedExpressionNode(parsed);
+        if (step == NULL) {
+          step = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                    current_omp_clause->getKind(),
+                                    iterator_def.step);
+        }
         iterator_expressions.push_back(step);
       } else {
         step = NULL;
@@ -5035,36 +6080,74 @@ convertDependClause(SgStatement *clause_body,
   SgOmpClause::omp_dependence_type_enum sg_type =
       toSgOmpClauseDependenceType(type);
   SgExprListExp *explist = NULL;
-  SgExpression *vec = NULL;
   std::list<SgExpression *> vec_list;
+  size_t depend_expression_count = 0;
   if (type != OMPC_DEPENDENCE_TYPE_sink) {
-    std::vector<const char *> *current_expressions =
-        current_omp_clause->getExpressions();
-    if (current_expressions->size() != 0) {
-      std::vector<const char *>::iterator iter;
-      for (iter = current_expressions->begin();
-           iter != current_expressions->end(); iter++) {
-        parseOmpArraySection(current_OpenMPIR_to_SageIII.first,
-                             current_omp_clause->getKind(), *iter);
+    if (parsed_nodes != nullptr && !parsed_nodes->empty()) {
+      for (const OmpParsedExpression *parsed : *parsed_nodes) {
+        if (parsed == nullptr) {
+          continue;
+        }
+        if (parsed->mode == OMP_EXPR_PARSE_array_section ||
+            parsed->mode == OMP_EXPR_PARSE_variable_list) {
+          appendParsedVariableNode(parsed);
+        } else if (parsed->mode == OMP_EXPR_PARSE_expression &&
+                   parsed->node != nullptr) {
+          omp_variable_list.push_back(
+              std::make_pair(parsed->text, parsed->node));
+        }
+      }
+      depend_expression_count = parsed_nodes->size();
+    } else {
+      std::vector<const char *> *current_expressions =
+          current_omp_clause->getExpressions();
+      depend_expression_count = current_expressions->size();
+      if (!current_expressions->empty()) {
+        for (const char *raw_expression : *current_expressions) {
+          ROSE_ASSERT(raw_expression != NULL);
+          const std::string expression_text(raw_expression);
+          parseOmpArraySection(current_OpenMPIR_to_SageIII.first,
+                               current_omp_clause->getKind(), expression_text);
+        }
       }
     }
     explist = buildExprListExp();
   } else if (type == OMPC_DEPENDENCE_TYPE_sink) {
     explist = buildExprListExp();
-    std::vector<const char *> *current_expressions =
-        current_omp_clause->getExpressions();
-    if (current_expressions->size() != 0) {
-      std::vector<const char *>::iterator iter;
-      for (iter = current_expressions->begin();
-           iter != current_expressions->end(); iter++) {
-        vec = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                                 current_omp_clause->getKind(), *iter);
-        vec_list.push_back(vec);
+    if (parsed_nodes != nullptr && !parsed_nodes->empty()) {
+      for (const OmpParsedExpression *parsed : *parsed_nodes) {
+        if (parsed == nullptr) {
+          continue;
+        }
+        SgExpression *parsed_expr = cloneParsedExpressionNode(parsed);
+        if (parsed_expr == nullptr && !parsed->text.empty()) {
+          parsed_expr =
+              parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                 current_omp_clause->getKind(), parsed->text);
+        }
+        if (parsed_expr != nullptr) {
+          vec_list.push_back(parsed_expr);
+        }
+      }
+    } else {
+      std::vector<const char *> *current_expressions =
+          current_omp_clause->getExpressions();
+      if (!current_expressions->empty()) {
+        for (const char *expression : *current_expressions) {
+          SgExpression *vec =
+              parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                                 current_omp_clause->getKind(), expression);
+          vec_list.push_back(vec);
+        }
       }
     }
   }
   result = new SgOmpDependClause(explist, sg_modifier, sg_type);
   ROSE_ASSERT(result != NULL);
+  if (type != OMPC_DEPENDENCE_TYPE_sink &&
+      type != OMPC_DEPENDENCE_TYPE_source && depend_expression_count > 0) {
+    ROSE_ASSERT(!omp_variable_list.empty());
+  }
   buildVariableList(result);
   if (type != OMPC_DEPENDENCE_TYPE_sink)
     explist->set_parent(result);
@@ -5091,7 +6174,6 @@ convertDependClause(SgStatement *clause_body,
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
-  printf("ompparser depend clause is added.\n");
   return result;
 }
 
@@ -5100,7 +6182,6 @@ convertAffinityClause(SgStatement *clause_body,
                       std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                           current_OpenMPIR_to_SageIII,
                       OpenMPClause *current_omp_clause) {
-  printf("ompparser affinity clause is ready.\n");
   SgOmpAffinityClause *result = NULL;
 
   SgExpression *iterator_type = NULL;
@@ -5178,7 +6259,6 @@ convertAffinityClause(SgStatement *clause_body,
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
-  printf("ompparser affinity clause is added.\n");
   return result;
 }
 
@@ -5187,21 +6267,35 @@ convertExpressionClause(SgStatement *directive,
                         std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                             current_OpenMPIR_to_SageIII,
                         OpenMPClause *current_omp_clause) {
-  printf("ompparser expression clause is ready.\n");
   SgOmpExpressionClause *result = NULL;
   SgExpression *clause_expression = NULL;
   SgGlobal *global =
       SageInterface::getGlobalScope(current_OpenMPIR_to_SageIII.first);
   OpenMPClauseKind clause_kind = current_omp_clause->getKind();
-  std::vector<const char *> *current_expressions =
-      current_omp_clause->getExpressions();
-  if (current_expressions->size() != 0) {
-    std::vector<const char *>::iterator iter;
-    for (iter = current_expressions->begin();
-         iter != current_expressions->end(); iter++) {
-      clause_expression =
-          parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                             current_omp_clause->getKind(), *iter);
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
+  if (parsed_nodes != nullptr && !parsed_nodes->empty()) {
+    for (const OmpParsedExpression *parsed : *parsed_nodes) {
+      if (parsed == nullptr) {
+        continue;
+      }
+      clause_expression = cloneParsedExpressionNode(parsed);
+      if (clause_expression == nullptr && !parsed->text.empty()) {
+        clause_expression =
+            parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                               current_omp_clause->getKind(), parsed->text);
+      }
+    }
+  } else {
+    std::vector<const char *> *current_expressions =
+        current_omp_clause->getExpressions();
+    if (!current_expressions->empty()) {
+      for (const char *expression : *current_expressions) {
+        clause_expression =
+            parseOmpExpression(current_OpenMPIR_to_SageIII.first,
+                               current_omp_clause->getKind(), expression);
+      }
     }
   }
 

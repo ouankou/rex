@@ -1,7 +1,7 @@
 #pragma omp parallel
 #pragma omp for private(xx,yy,j,i)
-//#pragma omp parallel
-//#pragma omp target device (tid) map(tofrom: u[offset*m:m*n]) map(to: uold[offset*m:m*n],f[offset*m:m*n],m,n, offset,ax,ay,b,omega)
+// #pragma omp parallel
+// #pragma omp target device (tid) map(tofrom: u[offset*m:m*n]) map(to:
 #pragma omp parallel shared(uold,u,f,offset,ax,ay,b,omega,n)
 #pragma omp for private(resid,j,i) reduction(+ : err_tmp)
 #pragma omp parallel

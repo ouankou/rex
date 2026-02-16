@@ -27,20 +27,28 @@ extern int omp_exprparser_lex();
 #include "omp_exprparser_parser.hh"
 
 static const char* ompparserinput = NULL;
+static size_t ompparserinput_remaining = 0;
 static std::string gExpressionString;
 
 /* pass user specified string to buf, indicate the size using 'result', 
    and shift the current position pointer of user input afterwards 
    to prepare next round of token recognition!!
 */
-#define YY_INPUT(buf, result, max_size) { \
-                if (*ompparserinput == '\0') result = 0; \
-                else { strncpy(buf, ompparserinput, max_size); \
-                        buf[max_size] = 0; \
-                        result = strlen(buf); \
-                        ompparserinput += result; \
-                } \
-                }
+#define YY_INPUT(buf, result, max_size)                                            \
+  do {                                                                              \
+    if (ompparserinput == NULL || ompparserinput_remaining == 0) {                 \
+      result = 0;                                                                   \
+    } else {                                                                        \
+      size_t to_copy =                                                               \
+          ompparserinput_remaining < static_cast<size_t>(max_size)                  \
+              ? ompparserinput_remaining                                            \
+              : static_cast<size_t>(max_size);                                      \
+      memcpy(buf, ompparserinput, to_copy);                                         \
+      result = static_cast<int>(to_copy);                                           \
+      ompparserinput += to_copy;                                                    \
+      ompparserinput_remaining -= to_copy;                                          \
+    }                                                                               \
+  } while (0)
 
 %}
 
@@ -76,6 +84,8 @@ fortran_block_end [ ]*[^a-zA-Z0-9_]
 ":"             { return (':'); }
 "+"             { return ('+'); }
 "*"             { return ('*'); }
+\/\*([^*]|\*+[^*/])*\*+\/ { /* Ignore C-style block comments */ }
+"//"[^\n]*      { /* Ignore C++-style line comments */ }
 "/"             { return ('/'); }
 "-"             { return ('-'); }
 "&"             { return ('&'); }
@@ -128,6 +138,7 @@ array_section   { return (ARRAY_SECTION); }
 /* entry point invoked by callers to start scanning for a string */
 extern void omp_exprparser_lexer_init(const char* str) {
   ompparserinput = str;
+  ompparserinput_remaining = str != NULL ? strlen(str) : 0;
   /* We have omp_ suffix for all flex functions */
   omp_exprparser_restart(omp_exprparser_in);
 }

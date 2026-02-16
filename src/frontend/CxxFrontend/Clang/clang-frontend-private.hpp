@@ -8,6 +8,7 @@
 #include "sage3basic.h"
 
 #include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <memory>
 #include <set>
@@ -206,6 +207,8 @@ getConstraintSatisfactionAttribute(const SgNode *node) {
 
 #include <clang/Lex/HeaderSearch.h>
 
+#include <clang/Lex/Lexer.h>
+
 #include <clang/Lex/PPCallbacks.h>
 
 #include <clang/Lex/Pragma.h>
@@ -227,6 +230,8 @@ getConstraintSatisfactionAttribute(const SgNode *node) {
 #include <llvm/Support/raw_os_ostream.h>
 
 #include <llvm/Support/raw_ostream.h>
+
+#include <llvm/Support/MemoryBuffer.h>
 
 #include <llvm/TargetParser/Host.h>
 
@@ -315,6 +320,8 @@ private:
   std::set<std::pair<clang::FileID, unsigned>> pragma_continuation_lines;
   clang::SourceManager &p_source_manager;
   clang::Preprocessor &p_preprocessor;
+  static constexpr std::size_t kMaxExpandedPragmaSize =
+      static_cast<std::size_t>(1) << 20;
 
   static bool isOpenMPPragmaText(const std::string &text) {
     size_t pos = 0;
@@ -336,6 +343,176 @@ private:
       return true;
     }
     return (pos + 3 <= text.size() && text.compare(pos, 3, "acc") == 0);
+  }
+
+  const clang::IdentifierInfo *
+  getIdentifierInfoForToken(const clang::Token &token) const {
+    if (token.is(clang::tok::identifier) &&
+        token.getIdentifierInfo() != nullptr) {
+      return token.getIdentifierInfo();
+    }
+
+    if (!token.is(clang::tok::raw_identifier)) {
+      return nullptr;
+    }
+
+    clang::Token mutable_token = token;
+    clang::IdentifierInfo *identifier_info =
+        p_preprocessor.LookUpIdentifierInfo(mutable_token);
+    if (identifier_info == nullptr) {
+      return nullptr;
+    }
+    return identifier_info;
+  }
+
+  bool lexPragmaTokens(const std::string &text,
+                       std::vector<clang::Token> *tokens) const {
+    ROSE_ASSERT(tokens != nullptr);
+    tokens->clear();
+
+    std::unique_ptr<llvm::MemoryBuffer> text_buffer =
+        llvm::MemoryBuffer::getMemBufferCopy(text, "<rex pragma>");
+    const clang::FileID file_id =
+        p_source_manager.createFileID(std::move(text_buffer));
+    const llvm::MemoryBufferRef buffer_ref =
+        p_source_manager.getBufferOrFake(file_id);
+
+    clang::Lexer lexer(file_id, buffer_ref, p_source_manager,
+                       p_preprocessor.getLangOpts());
+    while (true) {
+      clang::Token token;
+      lexer.LexFromRawLexer(token);
+      if (token.is(clang::tok::eof)) {
+        break;
+      }
+
+      if (token.is(clang::tok::raw_identifier)) {
+        p_preprocessor.LookUpIdentifierInfo(token);
+      }
+
+      tokens->push_back(token);
+      if (tokens->size() > kMaxExpandedPragmaSize) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool expandObjectLikeMacroTokens(
+      const std::vector<clang::Token> &input_tokens,
+      std::vector<clang::Token> *output_tokens,
+      std::set<const clang::IdentifierInfo *> *active_macros, unsigned depth,
+      bool *changed) const {
+    ROSE_ASSERT(output_tokens != nullptr);
+    ROSE_ASSERT(active_macros != nullptr);
+    ROSE_ASSERT(changed != nullptr);
+
+    static constexpr unsigned kMaxMacroExpansionDepth = 64;
+    if (depth > kMaxMacroExpansionDepth) {
+      return false;
+    }
+
+    for (const clang::Token &token : input_tokens) {
+      const clang::IdentifierInfo *identifier =
+          getIdentifierInfoForToken(token);
+      if (identifier != nullptr &&
+          active_macros->find(identifier) == active_macros->end()) {
+        const clang::MacroDefinition macro_definition =
+            p_preprocessor.getMacroDefinition(
+                const_cast<clang::IdentifierInfo *>(identifier));
+        if (macro_definition) {
+          const clang::MacroInfo *macro_info = macro_definition.getMacroInfo();
+          if (macro_info != nullptr && !macro_info->isFunctionLike() &&
+              !macro_info->isBuiltinMacro()) {
+            active_macros->insert(identifier);
+            std::vector<clang::Token> replacement_tokens(
+                macro_info->tokens().begin(), macro_info->tokens().end());
+            if (!replacement_tokens.empty() &&
+                !expandObjectLikeMacroTokens(replacement_tokens, output_tokens,
+                                             active_macros, depth + 1,
+                                             changed)) {
+              active_macros->erase(identifier);
+              return false;
+            }
+            active_macros->erase(identifier);
+            *changed = true;
+            continue;
+          }
+        }
+      }
+
+      output_tokens->push_back(token);
+      if (output_tokens->size() > kMaxExpandedPragmaSize) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool stringifyTokens(const std::vector<clang::Token> &tokens,
+                       std::string *text) const {
+    ROSE_ASSERT(text != nullptr);
+    text->clear();
+
+    for (const clang::Token &token : tokens) {
+      bool invalid = false;
+      const std::string spelling = p_preprocessor.getSpelling(token, &invalid);
+      if (invalid) {
+        return false;
+      }
+
+      if (spelling.empty()) {
+        continue;
+      }
+
+      const std::size_t separator = text->empty() ? 0 : 1;
+      const std::size_t required_size =
+          text->size() + separator + spelling.size();
+      if (required_size > kMaxExpandedPragmaSize) {
+        return false;
+      }
+
+      if (separator != 0) {
+        text->push_back(' ');
+      }
+      text->append(spelling);
+    }
+
+    return true;
+  }
+
+  std::string expandObjectLikeMacros(const std::string &text) const {
+    if (text.empty() || text.size() > kMaxExpandedPragmaSize) {
+      return text;
+    }
+
+    std::vector<clang::Token> pragma_tokens;
+    if (!lexPragmaTokens(text, &pragma_tokens)) {
+      return text;
+    }
+
+    std::vector<clang::Token> expanded_tokens;
+    expanded_tokens.reserve(pragma_tokens.size());
+
+    std::set<const clang::IdentifierInfo *> active_macros;
+    bool changed = false;
+    if (!expandObjectLikeMacroTokens(pragma_tokens, &expanded_tokens,
+                                     &active_macros, 0, &changed)) {
+      return text;
+    }
+
+    if (!changed) {
+      return text;
+    }
+
+    std::string expanded_text;
+    if (!stringifyTokens(expanded_tokens, &expanded_text)) {
+      return text;
+    }
+
+    return expanded_text;
   }
 
 public:
@@ -440,9 +617,15 @@ public:
     }
     pos = skipWhitespace(original_text, pos);
 
+    const bool is_openmp = isOpenMPPragmaText(original_text);
+    std::string pragma_text = original_text;
+    if (is_openmp) {
+      pragma_text = expandObjectLikeMacros(original_text);
+    }
+
     // Store with (FileID, line) key to handle multi-file TUs
-    line_to_pragma[std::make_pair(file_id, line)] = original_text;
-    if (isOpenMPPragmaText(original_text)) {
+    line_to_pragma[std::make_pair(file_id, line)] = pragma_text;
+    if (is_openmp) {
       openmp_lines.insert(std::make_pair(file_id, line));
     }
     for (unsigned offset = 1; offset < line_count; ++offset) {
