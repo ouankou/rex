@@ -1,4 +1,4 @@
-# Generated from legacy test lists test lists.
+# OpenMP Fortran test source list.
 set(OPENMP_FORTRAN_TESTCODES
   allocate_predefined_modifiers.f90
   allocate_user_defined_modifiers.f90

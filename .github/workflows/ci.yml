@@ -82,14 +82,15 @@ jobs:
         ./build-rex.sh $GITHUB_WORKSPACE/rex_install Debug
 
     # Run frontend-related tests
-    - name: Run astInterface, translator, and astQuery Tests
+    - name: Run core and OpenMP tests
       env:
         PATH: /usr/lib/llvm-${{ matrix.llvm }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         LD_LIBRARY_PATH: /usr/lib/llvm-${{ matrix.llvm }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
       run: |
-        cd $GITHUB_WORKSPACE/build
+        cd $GITHUB_WORKSPACE
         CTEST_JOBS="$(nproc)"
-        ctest -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering" --output-on-failure -j"${CTEST_JOBS}"
+        ctest --test-dir build -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering" --output-on-failure -j"${CTEST_JOBS}"
+        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests --output-on-failure -j"${CTEST_JOBS}"
 
   fortran-only-config:
     strategy:

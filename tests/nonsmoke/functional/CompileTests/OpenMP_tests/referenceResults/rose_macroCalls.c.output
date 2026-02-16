@@ -1,0 +1,2 @@
+#pragma omp parallel
+#pragma omp for private(i,j,hypre__nx,hypre__ny)
