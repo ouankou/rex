@@ -46,42 +46,32 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build and push base image (riscv64)
-      run: |
-        set -euo pipefail
-        metadata_file="${RUNNER_TEMP}/riscv64-metadata.json"
-        docker buildx build \
-          --platform linux/riscv64 \
-          --pull \
-          -f ci/docker/rex-riscv64.Dockerfile \
-          --output=type=registry,name="${IMAGE_REPO}",push-by-digest=true \
-          --provenance=false \
-          --metadata-file "${metadata_file}" \
-          .
-        export METADATA_FILE="${metadata_file}"
-        riscv_digest="$(python3 -c 'import json, os; print(json.load(open(os.environ["METADATA_FILE"], "r", encoding="utf-8"))["containerimage.digest"])')"
-        echo "RISCV_DIGEST=${riscv_digest}" >> "${GITHUB_ENV}"
+      id: build-riscv64
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-riscv64.Dockerfile
+        platforms: linux/riscv64
+        pull: true
+        provenance: false
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Build and push base image (loong64)
-      run: |
-        set -euo pipefail
-        metadata_file="${RUNNER_TEMP}/loong64-metadata.json"
-        docker buildx build \
-          --platform linux/loong64 \
-          --pull \
-          -f ci/docker/rex-loongarch64.Dockerfile \
-          --output=type=registry,name="${IMAGE_REPO}",push-by-digest=true \
-          --provenance=false \
-          --metadata-file "${metadata_file}" \
-          .
-        export METADATA_FILE="${metadata_file}"
-        loong_digest="$(python3 -c 'import json, os; print(json.load(open(os.environ["METADATA_FILE"], "r", encoding="utf-8"))["containerimage.digest"])')"
-        echo "LOONG_DIGEST=${loong_digest}" >> "${GITHUB_ENV}"
+      id: build-loong64
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-loongarch64.Dockerfile
+        platforms: linux/loong64
+        pull: true
+        provenance: false
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
 
     - name: Publish multi-arch manifest (base tag only)
       run: |
         set -euo pipefail
         docker buildx imagetools create \
           -t "${IMAGE_REPO}:${BASE_TAG}" \
-          "${IMAGE_REPO}@${RISCV_DIGEST}" \
-          "${IMAGE_REPO}@${LOONG_DIGEST}"
+          "${IMAGE_REPO}@${{ steps.build-riscv64.outputs.digest }}" \
+          "${IMAGE_REPO}@${{ steps.build-loong64.outputs.digest }}"
         docker buildx imagetools inspect "${IMAGE_REPO}:${BASE_TAG}"
