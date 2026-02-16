@@ -45,11 +45,7 @@ bool nestedNameSpecifierHasTypeQualifier(
     const clang::NestedNameSpecifier *qualifier) {
   for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
        nns = nns->getPrefix()) {
-    if (nns->getKind() == clang::NestedNameSpecifier::TypeSpec
-#if LLVM_VERSION_MAJOR < 21
-        || nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate
-#endif
-    ) {
+    if (nns->getKind() == clang::NestedNameSpecifier::TypeSpec) {
       return true;
     }
   }
@@ -239,22 +235,12 @@ cloneQualifierWithPrefix(clang::NestedNameSpecifier *prefix,
       result = clang::NestedNameSpecifier::Create(context, result, ns);
       break;
     }
-    case clang::NestedNameSpecifier::TypeSpec:
-#if LLVM_VERSION_MAJOR < 21
-    case clang::NestedNameSpecifier::TypeSpecWithTemplate:
-#endif
-    {
-      bool has_template = false;
-#if LLVM_VERSION_MAJOR < 21
-      has_template = segment->getKind() ==
-                     clang::NestedNameSpecifier::TypeSpecWithTemplate;
-#endif
+    case clang::NestedNameSpecifier::TypeSpec: {
       const clang::Type *type = segment->getAsType();
       if (type == nullptr) {
         break;
       }
-      result = clang::NestedNameSpecifier::Create(context, result, has_template,
-                                                  type);
+      result = clang::NestedNameSpecifier::Create(context, result, type);
       break;
     }
     case clang::NestedNameSpecifier::Global:
@@ -324,7 +310,6 @@ DependentTemplateSpecializationNameInfo getDependentTemplateSpecializationName(
   DependentTemplateSpecializationNameInfo info;
   ROSE_ASSERT(dts != nullptr);
 
-#if LLVM_VERSION_MAJOR >= 21
   const clang::DependentTemplateStorage &name = dts->getDependentTemplateName();
   info.qualifier = name.getQualifier();
   info.has_template_keyword = name.hasTemplateKeyword();
@@ -335,13 +320,6 @@ DependentTemplateSpecializationNameInfo getDependentTemplateSpecializationName(
   } else {
     info.base_name = buildOverloadedOperatorName(base.getOperator());
   }
-#else
-  info.qualifier = dts->getQualifier();
-  const clang::IdentifierInfo *id = dts->getIdentifier();
-  ROSE_ASSERT(id != nullptr);
-  info.base_name = id->getName().str();
-  info.has_template_keyword = true;
-#endif
 
   ROSE_ASSERT(!info.base_name.empty());
   return info;
@@ -443,18 +421,11 @@ std::string getTemplateNameBase(const clang::TemplateName &tname) {
 
   if (const clang::DependentTemplateName *dtn =
           tname.getAsDependentTemplateName()) {
-#if LLVM_VERSION_MAJOR >= 21
     clang::IdentifierOrOverloadedOperator name = dtn->getName();
     if (const clang::IdentifierInfo *id = name.getIdentifier()) {
       return id->getName().str();
     }
     return buildOverloadedOperatorName(name.getOperator());
-#else
-    if (dtn->isIdentifier()) {
-      return dtn->getIdentifier()->getName().str();
-    }
-    return buildOverloadedOperatorName(dtn->getOperator());
-#endif
   }
 
   if (const clang::SubstTemplateTemplateParmStorage *subst =
@@ -1659,7 +1630,7 @@ bool ClangToSageTranslator::VisitIncompleteArrayType(
   SgType *type =
       buildTypeFromQualifiedType(incomplete_array_type->getElementType());
 
-  // In LLVM 20, ArraySizeModifier moved from ArrayType:: to clang:: namespace
+  // ArraySizeModifier moved from ArrayType:: to clang:: namespace
 
   clang::ArraySizeModifier sizeModifier =
       incomplete_array_type->getSizeModifier();
@@ -2203,7 +2174,7 @@ bool ClangToSageTranslator::VisitInjectedClassNameType(
   return VisitType(injected_class_name_type, node) && res;
 }
 
-// LocInfoType was removed in LLVM 20
+// LocInfoType was removed in LLVM
 /*
 bool ClangToSageTranslator::VisitLocInfoType(clang::LocInfoType * loc_info_type,
 SgNode ** node) { #if DEBUG_VISIT_TYPE std::cerr <<
@@ -2243,7 +2214,6 @@ bool ClangToSageTranslator::VisitMemberPointerType(
 #endif
   bool res = true;
 
-#if LLVM_VERSION_MAJOR >= 21
   clang::QualType classQualType;
   if (clang::NestedNameSpecifier *qualifier =
           member_pointer_type->getQualifier()) {
@@ -2253,9 +2223,6 @@ bool ClangToSageTranslator::VisitMemberPointerType(
       classQualType = clang::QualType(record->getTypeForDecl(), 0);
     }
   }
-#else
-  clang::QualType classQualType(member_pointer_type->getClass(), 0);
-#endif
   SgType *classType = buildTypeFromQualifiedType(classQualType);
   if (classType == NULL) {
     classType = SageBuilder::buildUnknownType();
@@ -4574,11 +4541,7 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
       break;
     }
 
-    case clang::NestedNameSpecifier::TypeSpec:
-#if LLVM_VERSION_MAJOR < 21
-    case clang::NestedNameSpecifier::TypeSpecWithTemplate:
-#endif
-    {
+    case clang::NestedNameSpecifier::TypeSpec: {
       bool prefer_current = (nns->getPrefix() != nullptr);
       segment_type = buildNonrealTypeForNestedNameSpecifierType(
           nns->getAsType(), current_scope, prefer_current);
@@ -4631,9 +4594,6 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
         continue;
       case clang::NestedNameSpecifier::Identifier:
       case clang::NestedNameSpecifier::TypeSpec:
-#if LLVM_VERSION_MAJOR < 21
-      case clang::NestedNameSpecifier::TypeSpecWithTemplate:
-#endif
       case clang::NestedNameSpecifier::Super:
         return true;
       }
@@ -4710,11 +4670,7 @@ ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
                                                    current_scope, nullptr);
       break;
     }
-    case clang::NestedNameSpecifier::TypeSpec:
-#if LLVM_VERSION_MAJOR < 21
-    case clang::NestedNameSpecifier::TypeSpecWithTemplate:
-#endif
-    {
+    case clang::NestedNameSpecifier::TypeSpec: {
       bool prefer_current = (nns->getPrefix() != nullptr);
       segment_type = buildNonrealTypeForNestedNameSpecifierType(
           nns->getAsType(), current_scope, prefer_current);
@@ -5818,7 +5774,7 @@ bool ClangToSageTranslator::VisitTypeOfType(clang::TypeOfType *type_of_type,
 #endif
   bool res = true;
 
-  // In LLVM 20, getUnderlyingType() was renamed to getUnmodifiedType()
+  // getUnderlyingType() was renamed to getUnmodifiedType()
   SgType *underlyinigType =
       buildTypeFromQualifiedType(type_of_type->getUnmodifiedType());
 
@@ -6209,7 +6165,7 @@ bool ClangToSageTranslator::VisitUnaryTransformType(
   return VisitType(unary_transform_type, node) && res;
 }
 
-// DependentUnaryTransformType was removed/renamed in LLVM 20
+// DependentUnaryTransformType was removed/renamed in LLVM
 /*
 bool
 ClangToSageTranslator::VisitDependentUnaryTransformType(clang::DependentUnaryTransformType

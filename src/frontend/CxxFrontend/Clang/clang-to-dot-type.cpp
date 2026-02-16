@@ -216,7 +216,7 @@ bool ClangToDotTranslator::VisitType(clang::Type *type,
 
   node_desc.kind_hierarchy.push_back("Type");
 
-  // In LLVM 20, Linkage became a scoped enum
+  // Linkage became a scoped enum
   switch (type->getLinkage()) {
   case clang::Linkage::None:
     break;
@@ -1021,7 +1021,7 @@ bool ClangToDotTranslator::VisitTemplateSpecializationType(
       template_specialization_type->getTemplateName();
   VisitTemplateName(template_name, node_desc, "template_name");
 
-  // In LLVM 20, iterator API was removed, use template_arguments() instead
+  // iterator API was removed, use template_arguments() instead
   unsigned cnt = 0;
   for (const clang::TemplateArgument &arg :
        template_specialization_type->template_arguments()) {
@@ -1128,7 +1128,7 @@ bool ClangToDotTranslator::VisitTypeWithKeyword(
 
   ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
-  // In LLVM 20, use ElaboratedTypeKeyword enum
+  // use ElaboratedTypeKeyword enum
   switch (type_with_keyword->getKeyword()) {
   case clang::ElaboratedTypeKeyword::Struct:
     node_desc.attributes.push_back(std::pair<std::string, std::string>(

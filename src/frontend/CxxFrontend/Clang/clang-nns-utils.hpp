@@ -12,9 +12,6 @@ nestedNameSpecifierHasTemplateKeyword(const clang::NestedNameSpecifier *nns) {
   if (nns == nullptr) {
     return false;
   }
-#if LLVM_VERSION_MAJOR < 21
-  return nns->getKind() == clang::NestedNameSpecifier::TypeSpecWithTemplate;
-#else
   if (nns->getKind() != clang::NestedNameSpecifier::TypeSpec) {
     return false;
   }
@@ -28,7 +25,6 @@ nestedNameSpecifierHasTemplateKeyword(const clang::NestedNameSpecifier *nns) {
     return dependent->getDependentTemplateName().hasTemplateKeyword();
   }
   return false;
-#endif
 }
 
 #endif

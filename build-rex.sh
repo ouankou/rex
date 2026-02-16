@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# REX Build Script with Clang Frontend (LLVM 20)
+# REX Build Script with Clang Frontend (LLVM 21)
 # This script automates the build process for REX compiler
 # with the experimental Clang frontend enabled.
 #
@@ -67,14 +67,26 @@ echo ""
 
 # Check for LLVM/Clang
 echo -e "${YELLOW}[2/5] Checking for LLVM/Clang installation...${NC}"
-if ! command -v llvm-config &> /dev/null; then
-    echo -e "${RED}Error: llvm-config not found. Please install LLVM/Clang 20 or later.${NC}"
-    echo "On Ubuntu/Debian: sudo apt-get install llvm-20 clang-20 libclang-20-dev"
+LLVM_CONFIG_CMD=""
+if command -v llvm-config-21 &> /dev/null; then
+    LLVM_CONFIG_CMD="llvm-config-21"
+elif command -v llvm-config &> /dev/null; then
+    LLVM_CONFIG_CMD="llvm-config"
+fi
+
+if [ -z "$LLVM_CONFIG_CMD" ]; then
+    echo -e "${RED}Error: llvm-config not found. Please install LLVM/Clang 21 or later.${NC}"
+    echo "On Ubuntu/Debian: sudo apt-get install llvm-21 clang-21 libclang-21-dev"
     exit 1
 fi
 
-LLVM_VERSION=$(llvm-config --version)
-echo -e "${GREEN}Found LLVM version: $LLVM_VERSION${NC}"
+LLVM_VERSION=$($LLVM_CONFIG_CMD --version)
+LLVM_MAJOR=$(echo "$LLVM_VERSION" | sed -nE 's/^([0-9]+).*/\1/p')
+if [ -z "$LLVM_MAJOR" ] || [ "$LLVM_MAJOR" -lt 21 ]; then
+    echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires LLVM/Clang 21 or later.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Found LLVM version: $LLVM_VERSION (${LLVM_CONFIG_CMD})${NC}"
 echo ""
 
 # Create and enter build directory
@@ -86,7 +98,7 @@ fi
 mkdir -p "$BUILD_DIR" || { echo -e "${RED}Failed to create build directory${NC}"; exit 1; }
 cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 1; }
 
-# Configure with CMake (will auto-detect compilers, preferring clang-20/flang)
+# Configure with CMake (will auto-detect compilers, preferring clang/flang)
 cmake .. \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \

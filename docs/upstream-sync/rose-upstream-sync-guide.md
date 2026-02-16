@@ -5,7 +5,7 @@ rose upstream github repo: https://github.com/rose-compiler/rose
 ## Support target (REX)
 - Platform: Linux only (non-Linux platforms dropped).
 - Languages/features: C/C++, Fortran, OpenMP, OpenACC, OpenCL, CUDA.
-- Frontend: Clang/LLVM for C/C++ (LLVM 20); Fortran via Flang (imported; keep synced).
+- Frontend: Clang/LLVM for C/C++ (LLVM 21); Fortran via Flang (imported; keep synced).
 - Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, Java (source language), UPC, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, and other legacy frontends/tools.
 - Rosebud: keep the generator engine if present, but drop Rosebud inputs tied to dropped subsystems (e.g., binary analysis, Jovial).
 - Legacy array test suites are dropped from CompileTests and CompilerOptionsTests inventories.

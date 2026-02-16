@@ -950,7 +950,6 @@ protected:
   // Helper: Translate a constraint expression into a ROSE expression.
   SgExpression *translateConstraintExpression(const clang::Expr *expr);
 
-#if LLVM_VERSION_MAJOR >= 21
   ConstraintSatisfactionResult evaluateConstraintSatisfaction(
       const clang::NamedDecl *constraint_owner,
       llvm::ArrayRef<clang::AssociatedConstraint> constraints,
@@ -968,25 +967,6 @@ protected:
       llvm::ArrayRef<clang::AssociatedConstraint> constraints,
       const clang::TemplateArgumentList &template_args,
       clang::SourceRange template_id_range);
-#else
-  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
-      const clang::NamedDecl *constraint_owner,
-      llvm::ArrayRef<const clang::Expr *> constraints,
-      llvm::ArrayRef<clang::TemplateArgument> template_args,
-      clang::SourceRange template_id_range);
-
-  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
-      const clang::NamedDecl *constraint_owner,
-      llvm::ArrayRef<const clang::Expr *> constraints,
-      const clang::MultiLevelTemplateArgumentList &template_args,
-      clang::SourceRange template_id_range);
-
-  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
-      const clang::NamedDecl *constraint_owner,
-      llvm::ArrayRef<const clang::Expr *> constraints,
-      const clang::TemplateArgumentList &template_args,
-      clang::SourceRange template_id_range);
-#endif
   // Evaluate non-constraint SFINAE for a template instantiation.
   SFINAEFailureResult
   evaluateSFINAEFailure(const clang::FunctionDecl *function_decl);
@@ -1626,7 +1606,7 @@ public:
       SgNode **node);
   virtual bool VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
                                   SgNode **node);
-  // TypoExpr was removed in LLVM 20
+  // TypoExpr was removed in LLVM
   // virtual bool VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** node);
   virtual bool VisitUnaryExprOrTypeTraitExpr(
       clang::UnaryExprOrTypeTraitExpr *unary_expr_or_type_trait_expr,
@@ -1700,7 +1680,7 @@ public:
                          SgNode **node);
   virtual bool VisitInjectedClassNameType(
       clang::InjectedClassNameType *injected_class_name_type, SgNode **node);
-  // LocInfoType was removed in LLVM 20
+  // LocInfoType was removed in LLVM
   // virtual bool VisitLocInfoType(clang::LocInfoType * loc_info_type, SgNode **
   // node);
   virtual bool
@@ -1763,7 +1743,7 @@ public:
   virtual bool
   VisitUnaryTransformType(clang::UnaryTransformType *unary_transform_type,
                           SgNode **node);
-  // DependentUnaryTransformType was removed/renamed in LLVM 20
+  // DependentUnaryTransformType was removed/renamed in LLVM
   // virtual bool
   // VisitDependentUnaryTransformType(clang::DependentUnaryTransformType *
   // dependent_unary_transform_type, SgNode ** node);

@@ -72,11 +72,9 @@ set(_fortran_frontend_negative_tests
   rex_test2026_coarray_image_selector.f90
   rex_test2026_cuda_kernel_launch_call.f90
   rex_test2026_allocate_specs.f90
-  test2007_70.f90
   test2007_88.f90
   test2007_152.f90
   test2007_177.f90
-  test2007_example.f90
   test2010_19.f90
   test2010_26.f90
   test2010_102.f90

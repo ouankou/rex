@@ -43,15 +43,9 @@
 
 #include <llvm/Config/llvm-config.h>
 
-#if LLVM_VERSION_MAJOR >= 21
 #include <flang/Support/Fortran-features.h>
 #include <flang/Support/LangOptions.h>
 #include <flang/Support/default-kinds.h>
-#else
-#include <flang/Common/Fortran-features.h>
-#include <flang/Common/LangOptions.h>
-#include <flang/Common/default-kinds.h>
-#endif
 
 #include <llvm/Support/Errno.h>
 

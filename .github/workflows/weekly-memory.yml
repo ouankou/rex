@@ -11,6 +11,9 @@ concurrency:
   group: weekly-memory-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  LLVM_VERSION: 21
+
 jobs:
   full-tests:
     runs-on: ubuntu-24.04
@@ -28,6 +31,11 @@ jobs:
     # NOTE: Ubuntu 24.04 ships antlr4 v4.9 but antlr4-cpp-runtime v4.10, which are API-incompatible; manually install the matching antlr4 v4.10.
     - uses: StoneMoe/setup-antlr4@v4.10.1
 
+    - name: Add LLVM apt repository
+      run: |
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -35,9 +43,9 @@ jobs:
           bison \
           build-essential \
           cmake \
-          clang-20 \
+          clang-${LLVM_VERSION} \
           curl \
-          flang-20 \
+          flang-${LLVM_VERSION} \
           flex \
           g++ \
           gdb \
@@ -45,23 +53,24 @@ jobs:
           git \
           graphviz \
           libantlr4-runtime-dev \
-          libclang-20-dev \
+          libclang-${LLVM_VERSION}-dev \
+          libclang-cpp${LLVM_VERSION}-dev \
           libhpdf-dev \
           libtool \
-          llvm-20 \
-          llvm-20-dev \
+          llvm-${LLVM_VERSION} \
+          llvm-${LLVM_VERSION}-dev \
           openjdk-25-jdk \
           pkg-config
 
     - name: Configure (Debug)
       env:
-        PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-20
-        LLVM_DIR: /usr/lib/llvm-20
-        CC: clang-20
-        CXX: clang++-20
-        FC: flang-20
+        PATH: /usr/lib/llvm-${LLVM_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-${LLVM_VERSION}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${LLVM_VERSION}
+        LLVM_DIR: /usr/lib/llvm-${LLVM_VERSION}
+        CC: clang-${LLVM_VERSION}
+        CXX: clang++-${LLVM_VERSION}
+        FC: flang-${LLVM_VERSION}
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \
@@ -111,6 +120,11 @@ jobs:
 
     - uses: StoneMoe/setup-antlr4@v4.10.1
 
+    - name: Add LLVM apt repository
+      run: |
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -118,9 +132,9 @@ jobs:
           bison \
           build-essential \
           cmake \
-          clang-20 \
+          clang-${LLVM_VERSION} \
           curl \
-          flang-20 \
+          flang-${LLVM_VERSION} \
           flex \
           g++ \
           gdb \
@@ -128,24 +142,25 @@ jobs:
           git \
           graphviz \
           libantlr4-runtime-dev \
-          libclang-20-dev \
+          libclang-${LLVM_VERSION}-dev \
+          libclang-cpp${LLVM_VERSION}-dev \
           libhpdf-dev \
           libtool \
-          llvm-20 \
-          llvm-20-dev \
+          llvm-${LLVM_VERSION} \
+          llvm-${LLVM_VERSION}-dev \
           openjdk-25-jdk \
           pkg-config \
           valgrind
 
     - name: Configure (Debug + Valgrind)
       env:
-        PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-20
-        LLVM_DIR: /usr/lib/llvm-20
-        CC: clang-20
-        CXX: clang++-20
-        FC: flang-20
+        PATH: /usr/lib/llvm-${LLVM_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-${LLVM_VERSION}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${LLVM_VERSION}
+        LLVM_DIR: /usr/lib/llvm-${LLVM_VERSION}
+        CC: clang-${LLVM_VERSION}
+        CXX: clang++-${LLVM_VERSION}
+        FC: flang-${LLVM_VERSION}
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \
@@ -191,6 +206,11 @@ jobs:
 
     - uses: StoneMoe/setup-antlr4@v4.10.1
 
+    - name: Add LLVM apt repository
+      run: |
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -198,9 +218,9 @@ jobs:
           bison \
           build-essential \
           cmake \
-          clang-20 \
+          clang-${LLVM_VERSION} \
           curl \
-          flang-20 \
+          flang-${LLVM_VERSION} \
           flex \
           g++ \
           gdb \
@@ -208,24 +228,24 @@ jobs:
           git \
           graphviz \
           libantlr4-runtime-dev \
-          libclang-20-dev \
-          libclang-cpp20-dev \
+          libclang-${LLVM_VERSION}-dev \
+          libclang-cpp${LLVM_VERSION}-dev \
           libhpdf-dev \
           libtool \
-          llvm-20 \
-          llvm-20-dev \
+          llvm-${LLVM_VERSION} \
+          llvm-${LLVM_VERSION}-dev \
           openjdk-25-jdk \
           pkg-config
 
     - name: Configure (Debug + Sanitizers)
       env:
-        PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-20/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-20
-        LLVM_DIR: /usr/lib/llvm-20
-        CC: clang-20
-        CXX: clang++-20
-        FC: flang-20
+        PATH: /usr/lib/llvm-${LLVM_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-${LLVM_VERSION}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${LLVM_VERSION}
+        LLVM_DIR: /usr/lib/llvm-${LLVM_VERSION}
+        CC: clang-${LLVM_VERSION}
+        CXX: clang++-${LLVM_VERSION}
+        FC: flang-${LLVM_VERSION}
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \

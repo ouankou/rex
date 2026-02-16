@@ -5991,15 +5991,9 @@ bool ClangToSageTranslator::VisitFileScopeAsmDecl(
 #endif
   bool res = true;
 
-  // LLVM 20 returns StringLiteral*, LLVM 21 returns std::string
+  // LLVM returns std::string
   std::string AsmString;
-#if LLVM_VERSION_MAJOR >= 21
   AsmString = file_scope_asm_decl->getAsmString();
-#else
-  if (auto *str_lit = file_scope_asm_decl->getAsmString()) {
-    AsmString = str_lit->getString().str();
-  }
-#endif
 
 #if DEBUG_VISIT_DECL
   std::cerr << "AsmString:" << AsmString << std::endl;
@@ -10613,11 +10607,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
   if (specialization_kind == clang::TSK_ImplicitInstantiation ||
       specialization_kind == clang::TSK_ExplicitInstantiationDefinition ||
       specialization_kind == clang::TSK_ExplicitInstantiationDeclaration) {
-#if LLVM_VERSION_MAJOR >= 21
     llvm::SmallVector<clang::AssociatedConstraint, 4> constraints;
-#else
-    llvm::SmallVector<const clang::Expr *, 4> constraints;
-#endif
     const clang::NamedDecl *constraint_owner = nullptr;
     if (const clang::ClassTemplatePartialSpecializationDecl *partial =
             llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
@@ -15175,7 +15165,6 @@ ClangToSageTranslator::translateConstraintExpression(const clang::Expr *expr) {
   return buildFallbackExpression(expr);
 }
 
-#if LLVM_VERSION_MAJOR >= 21
 ConstraintSatisfactionResult
 ClangToSageTranslator::evaluateConstraintSatisfaction(
     const clang::NamedDecl *constraint_owner,
@@ -15239,71 +15228,6 @@ ClangToSageTranslator::evaluateConstraintSatisfaction(
                                         template_args.asArray(),
                                         template_id_range);
 }
-#else
-ConstraintSatisfactionResult
-ClangToSageTranslator::evaluateConstraintSatisfaction(
-    const clang::NamedDecl *constraint_owner,
-    llvm::ArrayRef<const clang::Expr *> constraints,
-    const clang::MultiLevelTemplateArgumentList &template_args,
-    clang::SourceRange template_id_range) {
-  ConstraintSatisfactionResult result;
-  if (constraint_owner == nullptr || constraints.empty()) {
-    return result;
-  }
-  if (p_compiler_instance == nullptr || !p_compiler_instance->hasSema()) {
-    return result;
-  }
-
-  clang::Sema &sema = p_compiler_instance->getSema();
-  llvm::ArrayRef<clang::TemplateArgument> summary_args;
-  if (template_args.getNumSubstitutedLevels() > 0) {
-    summary_args = template_args.getInnermost();
-  }
-  clang::ConstraintSatisfaction satisfaction(constraint_owner, summary_args);
-  const clang::DeclContext *owner_ctx = nullptr;
-  if (const clang::Decl *owner_decl =
-          llvm::dyn_cast<clang::Decl>(constraint_owner)) {
-    owner_ctx = owner_decl->getDeclContext();
-  }
-  clang::Sema::ContextRAII context_raii(
-      sema, owner_ctx != nullptr
-                ? const_cast<clang::DeclContext *>(owner_ctx)
-                : sema.getASTContext().getTranslationUnitDecl());
-
-  bool error = sema.CheckConstraintSatisfaction(
-      constraint_owner, constraints, template_args, template_id_range,
-      satisfaction);
-  result.evaluated = true;
-  result.contains_errors = error || satisfaction.ContainsErrors;
-  result.substitution_failure = satisfaction.HasSubstitutionFailure();
-  result.satisfied = !result.contains_errors && satisfaction.IsSatisfied;
-  return result;
-}
-
-ConstraintSatisfactionResult
-ClangToSageTranslator::evaluateConstraintSatisfaction(
-    const clang::NamedDecl *constraint_owner,
-    llvm::ArrayRef<const clang::Expr *> constraints,
-    llvm::ArrayRef<clang::TemplateArgument> template_args,
-    clang::SourceRange template_id_range) {
-  clang::MultiLevelTemplateArgumentList arg_list(
-      const_cast<clang::Decl *>(llvm::dyn_cast<clang::Decl>(constraint_owner)),
-      template_args, /*Final=*/true);
-  return evaluateConstraintSatisfaction(constraint_owner, constraints, arg_list,
-                                        template_id_range);
-}
-
-ConstraintSatisfactionResult
-ClangToSageTranslator::evaluateConstraintSatisfaction(
-    const clang::NamedDecl *constraint_owner,
-    llvm::ArrayRef<const clang::Expr *> constraints,
-    const clang::TemplateArgumentList &template_args,
-    clang::SourceRange template_id_range) {
-  return evaluateConstraintSatisfaction(constraint_owner, constraints,
-                                        template_args.asArray(),
-                                        template_id_range);
-}
-#endif
 
 namespace {
 template <typename NodeT, typename Fn>
@@ -17658,11 +17582,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       if (specialization_kind == clang::TSK_ImplicitInstantiation ||
           specialization_kind == clang::TSK_ExplicitInstantiationDefinition ||
           specialization_kind == clang::TSK_ExplicitInstantiationDeclaration) {
-#if LLVM_VERSION_MAJOR >= 21
         llvm::SmallVector<clang::AssociatedConstraint, 4> constraints;
-#else
-        llvm::SmallVector<const clang::Expr *, 4> constraints;
-#endif
         const clang::NamedDecl *constraint_owner = nullptr;
         clang::FunctionTemplateDecl *primary =
             function_decl->getPrimaryTemplate();
@@ -17677,11 +17597,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           constraint_owner = primary;
         }
 
-#if LLVM_VERSION_MAJOR >= 21
         llvm::SmallVector<clang::AssociatedConstraint, 4> trailing_constraints;
-#else
-        llvm::SmallVector<const clang::Expr *, 4> trailing_constraints;
-#endif
         function_decl->getAssociatedConstraints(trailing_constraints);
         constraints.append(trailing_constraints.begin(),
                            trailing_constraints.end());
@@ -20435,7 +20351,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
-#if LLVM_VERSION_MAJOR >= 21
   const clang::AssociatedConstraint &trailing_requires =
       function_decl->getTrailingRequiresClause();
   if (trailing_requires && trailing_requires.ConstraintExpr != nullptr) {
@@ -20465,36 +20380,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
     }
   }
-#else
-  if (const clang::Expr *trailing_requires =
-          function_decl->getTrailingRequiresClause()) {
-    if (SgExpression *sg_trailing =
-            translateConstraintExpression(trailing_requires)) {
-      auto attach_trailing = [&](SgFunctionDeclaration *decl,
-                                 SgExpression *expr) {
-        if (decl == nullptr || expr == nullptr) {
-          return;
-        }
-        decl->set_trailingRequiresClause(expr);
-        expr->set_parent(decl);
-      };
-
-      attach_trailing(sg_function_decl, sg_trailing);
-      if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
-              sg_function_decl->get_firstNondefiningDeclaration())) {
-        if (first_nondef != sg_function_decl) {
-          attach_trailing(first_nondef, clone_constraint_expr(sg_trailing));
-        }
-      }
-      if (SgFunctionDeclaration *def_decl = isSgFunctionDeclaration(
-              sg_function_decl->get_definingDeclaration())) {
-        if (def_decl != sg_function_decl) {
-          attach_trailing(def_decl, clone_constraint_expr(sg_trailing));
-        }
-      }
-    }
-  }
-#endif
 
   if (SgTemplateFunctionDeclaration *tmpl_func =
           isSgTemplateFunctionDeclaration(sg_function_decl)) {
@@ -22034,11 +21919,7 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
   if (specialization_kind == clang::TSK_ImplicitInstantiation ||
       specialization_kind == clang::TSK_ExplicitInstantiationDeclaration ||
       specialization_kind == clang::TSK_ExplicitInstantiationDefinition) {
-#if LLVM_VERSION_MAJOR >= 21
     llvm::SmallVector<clang::AssociatedConstraint, 4> constraints;
-#else
-    llvm::SmallVector<const clang::Expr *, 4> constraints;
-#endif
     const clang::NamedDecl *constraint_owner = nullptr;
     if (const clang::VarTemplatePartialSpecializationDecl *partial =
             llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(
@@ -22574,7 +22455,7 @@ bool ClangToSageTranslator::VisitStaticAssertDecl(
         << std::endl;
     res = false;
   } else {
-    // In LLVM 20, getMessage() returns Expr*, need to cast to StringLiteral
+    // getMessage() returns Expr*, need to cast to StringLiteral
     std::string message_str = "";
     if (auto *msg_expr = pragma_static_assert_decl->getMessage()) {
       if (auto *str_lit = clang::dyn_cast<clang::StringLiteral>(msg_expr)) {

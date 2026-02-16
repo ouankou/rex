@@ -45,9 +45,7 @@ static void suppress_unparse_output(SgLocatedNode *n) {
   }
 }
 
-#if LLVM_VERSION_MAJOR >= 21
 #include <clang/AST/APValue.h>
-#endif
 
 #include <clang/AST/LambdaCapture.h>
 
@@ -817,11 +815,7 @@ ExplicitQualifierInfo getExplicitQualifierInfo(
         }
         break;
       }
-      case clang::NestedNameSpecifier::TypeSpec:
-#if LLVM_VERSION_MAJOR < 21
-      case clang::NestedNameSpecifier::TypeSpecWithTemplate:
-#endif
-      {
+      case clang::NestedNameSpecifier::TypeSpec: {
         const clang::Type *type = nns->getAsType();
         if (const clang::ElaboratedType *elab =
                 llvm::dyn_cast_or_null<clang::ElaboratedType>(type)) {
@@ -1718,7 +1712,7 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     ret_status = VisitTypeTraitExpr((clang::TypeTraitExpr *)stmt, &result);
     ROSE_ASSERT(result != nullptr);
     break;
-  // TypoExpr was removed in LLVM 20
+  // TypoExpr was removed in LLVM
   // case clang::Stmt::TypoExprClass:
   //     ret_status = VisitTypoExpr((clang::TypoExpr *)stmt, &result);
   //     ROSE_ASSERT(result != nullptr);
@@ -1851,15 +1845,9 @@ bool ClangToSageTranslator::VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt,
   unsigned asmNumOutput = gcc_asm_stmt->getNumOutputs();
   unsigned asmClobber = gcc_asm_stmt->getNumClobbers();
 
-  // LLVM 20 returns StringLiteral*, LLVM 21 returns std::string
+  // LLVM returns std::string
   std::string AsmString;
-#if LLVM_VERSION_MAJOR >= 21
   AsmString = gcc_asm_stmt->getAsmString();
-#else
-  if (auto *str_lit = gcc_asm_stmt->getAsmString()) {
-    AsmString = str_lit->getString().str();
-  }
-#endif
 
   std::cout << "input op:" << asmNumInput << " output op: " << asmNumOutput
             << std::endl;
@@ -8244,9 +8232,6 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       switch (nns->getKind()) {
       case clang::NestedNameSpecifier::Identifier:
       case clang::NestedNameSpecifier::TypeSpec:
-#if LLVM_VERSION_MAJOR < 21
-      case clang::NestedNameSpecifier::TypeSpecWithTemplate:
-#endif
       case clang::NestedNameSpecifier::Super:
         return true;
       default:
@@ -10227,7 +10212,7 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
     clang::DesignatedInitExpr::Designator *D =
         designated_init_expr->getDesignator(it - 1);
     if (D->isFieldDesignator()) {
-      // In LLVM 20, getField() was renamed to getFieldDecl()
+      // getField() was renamed to getFieldDecl()
       clang::FieldDecl *field_decl = D->getFieldDecl();
       SgSymbol *symbol = GetSymbolFromSymbolTable(field_decl);
       SgVariableSymbol *var_sym = isSgVariableSymbol(symbol);
@@ -12476,7 +12461,7 @@ bool ClangToSageTranslator::VisitPredefinedExpr(
   SgName name;
 
   // (01/29/2020) Pei-Hung: change to getIndentKind.  And this list is
-  // incomplete for Clang 9 In LLVM 20, enum is PredefinedIdentKind with values
+  // incomplete for Clang 9 enum is PredefinedIdentKind with values
   // Func, Function, etc.
   switch (predefined_expr->getIdentKind()) {
   case clang::PredefinedIdentKind::Func:
@@ -12855,7 +12840,6 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
   if (!type_trait->isValueDependent()) {
     // Non-dependent: get the compile-time result and create a bool literal
     bool trait_value = false;
-#if LLVM_VERSION_MAJOR >= 21
     if (type_trait->isStoredAsBoolean()) {
       trait_value = type_trait->getBoolValue();
     } else {
@@ -12864,9 +12848,6 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
         trait_value = value.getInt().getBoolValue();
       }
     }
-#else
-    trait_value = type_trait->getValue();
-#endif
     *node = SageBuilder::buildBoolValExp(trait_value);
   } else {
     const char *trait_name = clang::getTraitName(type_trait->getTrait());
@@ -12889,7 +12870,7 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
   return VisitExpr(type_trait, node) && res;
 }
 
-// TypoExpr was removed in LLVM 20
+// TypoExpr was removed in LLVM
 /*
 bool ClangToSageTranslator::VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode **
 node) { #if DEBUG_VISIT_STMT std::cerr << "ClangToSageTranslator::VisitTypoExpr"

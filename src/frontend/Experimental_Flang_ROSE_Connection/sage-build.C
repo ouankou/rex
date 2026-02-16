@@ -1347,6 +1347,30 @@ void SetFortranEndLabelReference(SgStatement *stmt, int label_value,
   stmt->set_end_numeric_label(ref_exp);
 }
 
+void ApplyFortranBoundaryLabels(
+    SgStatement *stmt, SgScopeStatement *label_scope,
+    const std::optional<Fortran::parser::Label> &start_label,
+    const std::optional<Fortran::parser::Label> &end_label) {
+  ASSERT_not_null(stmt);
+  if (label_scope == nullptr) {
+    label_scope = SageBuilder::topScopeStack();
+  }
+  ASSERT_not_null(label_scope);
+
+  auto apply = [&](const std::optional<Fortran::parser::Label> &label,
+                   SgLabelSymbol::label_type_enum label_type) {
+    if (label && static_cast<int>(label.value()) > 0) {
+      SageInterface::setFortranNumericLabel(
+          stmt, static_cast<int>(label.value()), label_type, label_scope);
+    }
+  };
+
+  apply(start_label, SgLabelSymbol::e_start_label_type);
+  if (stmt->has_end_numeric_label()) {
+    apply(end_label, SgLabelSymbol::e_end_label_type);
+  }
+}
+
 SgLabelSymbol *GetOrCreateFortranLabelSymbol(int label_value,
                                              SgScopeStatement *label_scope) {
   ROSE_ASSERT(label_scope != nullptr);
@@ -2052,6 +2076,9 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
   builder.Enter(funcDecl, name, /*return_type*/ nullptr, paramList, modifiers,
                 isDefDecl, sources, comments);
   ApplyCudaSubprogramAttrs(funcDecl, cudaAttrs);
+  ApplyFortranBoundaryLabels(funcDecl,
+                             isSgScopeStatement(funcDecl->get_definition()),
+                             stmt.label, end.label);
   TransferParamScopeToFunctionBody(paramScope, funcDecl);
 
   // ExecutionPart
@@ -2131,6 +2158,9 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
   // Begin SageTreeBuilder for SgFunctionDeclaration
   builder.Enter(funcDecl, name, returnType, paramList, modifiers, isDefDecl,
                 sources, comments);
+  ApplyFortranBoundaryLabels(funcDecl,
+                             isSgScopeStatement(funcDecl->get_definition()),
+                             stmt.label, end.label);
   TransferParamScopeToFunctionBody(paramScope, funcDecl);
 
   // ExecutionPart
@@ -2281,6 +2311,9 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   // Begin SageTreeBuilder for SgFunctionDeclaration
   builder.Enter(functionDecl, name, returnType, paramList, modifiers, isDefDecl,
                 sources, comments);
+  ApplyFortranBoundaryLabels(functionDecl,
+                             isSgScopeStatement(functionDecl->get_definition()),
+                             stmt.label, end.label);
   ApplyCudaSubprogramAttrs(functionDecl, cudaAttrs);
   TransferParamScopeToFunctionBody(paramScope, functionDecl);
 
@@ -2312,6 +2345,9 @@ void BuildVisitor::Build(parser::Module &x) {
 
   SgModuleStatement *module{nullptr};
   builder.Enter(module, stmt.statement.v.ToString());
+
+  ApplyFortranBoundaryLabels(module, module->get_definition(), stmt.label,
+                             end.label);
 
   Walk(std::get<parser::SpecificationPart>(x.t));
   Walk(std::get<std::optional<ModuleSubprogramPart>>(x.t));
@@ -2345,6 +2381,7 @@ void BuildVisitor::Build(parser::Submodule &x) {
   using namespace Fortran::parser;
 
   auto &stmt{std::get<Statement<SubmoduleStmt>>(x.t)};
+  auto &end{std::get<Statement<EndSubmoduleStmt>>(x.t)};
   auto &parentId = std::get<ParentIdentifier>(stmt.statement.t);
   std::string parentName = std::get<Name>(parentId.t).ToString();
   if (auto &parentMod = std::get<std::optional<Name>>(parentId.t)) {
@@ -2356,6 +2393,9 @@ void BuildVisitor::Build(parser::Submodule &x) {
   builder.Enter(module, submoduleName);
   module->addNewAttribute(kFortranSubmoduleParentAttr,
                           new AstValueAttribute<std::string>(parentName));
+
+  ApplyFortranBoundaryLabels(module, module->get_definition(), stmt.label,
+                             end.label);
 
   Walk(std::get<parser::SpecificationPart>(x.t));
   Walk(std::get<std::optional<ModuleSubprogramPart>>(x.t));
@@ -2425,6 +2465,9 @@ void BuildVisitor::Build(parser::BlockData &x) {
     procDecl->set_subprogram_kind(
         SgProcedureHeaderStatement::e_block_data_subprogram_kind);
   }
+  ApplyFortranBoundaryLabels(functionDecl,
+                             isSgScopeStatement(functionDecl->get_definition()),
+                             stmt.label, end.label);
 
   builder.Leave(functionDecl, paramScope, haveEndStmt);
 }
@@ -6958,6 +7001,7 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
   using namespace Fortran::parser;
 
   auto &stmt{std::get<Statement<DerivedTypeStmt>>(x.t)};
+  auto &end{std::get<Statement<EndTypeStmt>>(x.t)};
 
   // DerivedTypeStmt std::tuple<std::list<TypeAttrSpec>, Name, std::list<Name>>
   // t;
@@ -6965,6 +7009,9 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
 
   SgDerivedTypeStatement *derived{nullptr};
   builder.Enter(derived, name);
+
+  ApplyFortranBoundaryLabels(derived, derived->get_scope(), stmt.label,
+                             end.label);
 
   std::list<LanguageTranslation::ExpressionKind> modifiers;
   for (auto &attr : std::get<0>(stmt.statement.t)) {
@@ -8686,7 +8733,6 @@ BuildFunctionCallFromSymbolIfFound(const std::string &func_name,
 
 SgExpression *BuildIoUnitExpr(const parser::IoUnit &x) {
   SgExpression *expr{nullptr};
-#if LLVM_VERSION_MAJOR >= 21
   common::visit(
       common::visitors{[&](const parser::Variable &y) { WalkExpr(y, expr); },
                        [&](const common::Indirection<parser::Expr> &y) {
@@ -8696,16 +8742,6 @@ SgExpression *BuildIoUnitExpr(const parser::IoUnit &x) {
                          expr = SageBuilderCpp17::buildAsteriskShapeExp_nfi();
                        }},
       x.u);
-#else
-  common::visit(
-      common::visitors{
-          [&](const parser::Variable &y) { WalkExpr(y, expr); },
-          [&](const parser::FileUnitNumber &y) { WalkExpr(y.v, expr); },
-          [&](const parser::Star &) {
-            expr = SageBuilderCpp17::buildAsteriskShapeExp_nfi();
-          }},
-      x.u);
-#endif
   ASSERT_not_null(expr);
   return expr;
 }
@@ -10304,6 +10340,7 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
 
   auto &stmt = std::get<Statement<InterfaceStmt>>(x.t);
   auto &specs = std::get<std::list<InterfaceSpecification>>(x.t);
+  auto &end = std::get<Statement<EndInterfaceStmt>>(x.t);
 
   SgInterfaceStatement::generic_spec_enum kind =
       SgInterfaceStatement::e_unnamed_interface_type;
@@ -10407,6 +10444,9 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
   ASSERT_not_null(interfaceStmt);
   SageInterface::setSourcePosition(interfaceStmt);
   SageInterface::appendStatement(interfaceStmt, SageBuilder::topScopeStack());
+
+  ApplyFortranBoundaryLabels(interfaceStmt, interfaceStmt->get_scope(),
+                             stmt.label, end.label);
 
   auto stabilizeParamScopeParent = [](SgScopeStatement *paramScope) {
     if (paramScope == nullptr) {

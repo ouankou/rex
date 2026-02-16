@@ -586,7 +586,7 @@ bool ClangToDotTranslator::VisitNamespaceDecl(
 
   node_desc.kind_hierarchy.push_back("NamespaceDecl");
 
-  // In LLVM 20, getOriginalNamespace() was removed, use getFirstDecl()
+  // getOriginalNamespace() was removed, use getFirstDecl()
   // instead
   node_desc.successors.push_back(std::pair<std::string, std::string>(
       "original_namespace", Traverse(namespace_decl->getFirstDecl())));
@@ -1040,7 +1040,7 @@ bool ClangToDotTranslator::VisitTemplateTypeParmDecl(
 
   if (template_type_parm_decl->hasDefaultArgument())
     node_desc.successors.push_back(
-        // In LLVM 20, getDefaultArgument() returns TemplateArgumentLoc, need
+        // getDefaultArgument() returns TemplateArgumentLoc, need
         // to extract Type*
         std::pair<std::string, std::string>(
             "default_argument",
@@ -1421,7 +1421,7 @@ bool ClangToDotTranslator::VisitNonTypeTemplateParmDecl(
   node_desc.kind_hierarchy.push_back("NonTypeTemplateParmDecl");
 
   if (non_type_template_param_decl->hasDefaultArgument())
-    // In LLVM 20, getDefaultArgument() returns TemplateArgumentLoc, use
+    // getDefaultArgument() returns TemplateArgumentLoc, use
     // getSourceExpression() to get Expr*
     node_desc.successors.push_back(std::pair<std::string, std::string>(
         "default_argument",
