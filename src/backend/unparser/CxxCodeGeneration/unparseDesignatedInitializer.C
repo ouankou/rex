@@ -66,6 +66,11 @@ void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
     SgExpression *upper = subscriptDesignator->get_upperBound();
     ASSERT_not_null(lower);
     ASSERT_not_null(upper);
+    SgExpression *stride = subscriptDesignator->get_stride();
+    ASSERT_not_null(stride);
+    SgIntVal *stride_val = isSgIntVal(stride);
+    // Array range designators must have a unit stride.
+    ROSE_ASSERT(stride_val != nullptr && stride_val->get_value() == 1);
 
     curprint("[");
     unparseExpression(lower, info);
