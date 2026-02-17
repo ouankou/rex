@@ -79,7 +79,8 @@ char peek_ch(istream &in) {
     getch(in);
     c = peek_next(in);
   }
-  if (in.eof() || c == EOF)
+  if (in.eof() ||
+      (annotation::buffer == "" && in.peek() == std::char_traits<char>::eof()))
     getch(in);
   return c;
 }

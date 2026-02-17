@@ -6,8 +6,8 @@
 
 #include <algorithm>
 #include <cctype>
-
 #include <clang/AST/Attr.h>
+#include <limits>
 
 #include <clang/Lex/Lexer.h>
 
@@ -5817,27 +5817,63 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
   }
 
   if (decl != nullptr) {
-    int alignment_value = -1;
+    int max_alignment = -1;
     bool has_aligned_attr = false;
     for (const clang::AlignedAttr *aligned_attr :
          decl->specific_attrs<clang::AlignedAttr>()) {
       has_aligned_attr = true;
-      if (aligned_attr == nullptr) {
+      if (aligned_attr == nullptr || p_compiler_instance == nullptr) {
         continue;
       }
-      const clang::Expr *alignment_expr = aligned_attr->getAlignmentExpr();
-      if (alignment_expr == nullptr) {
+      clang::ASTContext &ast_context = p_compiler_instance->getASTContext();
+
+      int alignment_candidate = -1;
+      if (aligned_attr->isAlignmentDependent() ||
+          aligned_attr->isAlignmentErrorDependent()) {
         continue;
       }
-      alignment_expr = alignment_expr->IgnoreParenImpCasts();
-      if (const clang::IntegerLiteral *int_lit =
-              llvm::dyn_cast<clang::IntegerLiteral>(alignment_expr)) {
-        const unsigned long long value = int_lit->getValue().getZExtValue();
-        if (value > static_cast<unsigned long long>(alignment_value)) {
-          alignment_value = static_cast<int>(value);
+
+      if (aligned_attr->isAlignmentExpr()) {
+        const clang::Expr *alignment_expr = aligned_attr->getAlignmentExpr();
+        if (alignment_expr != nullptr) {
+          alignment_expr = alignment_expr->IgnoreParenImpCasts();
+          if (alignment_expr->isEvaluatable(ast_context)) {
+            const llvm::APSInt value =
+                alignment_expr->EvaluateKnownConstInt(ast_context);
+            if (value.isNonNegative()) {
+              const int64_t alignment_value_64 = value.getSExtValue();
+              if (alignment_value_64 <= std::numeric_limits<int>::max()) {
+                alignment_candidate = static_cast<int>(alignment_value_64);
+              }
+            }
+          }
+        }
+      } else {
+        clang::TypeSourceInfo *alignment_type =
+            aligned_attr->getAlignmentType();
+        if (alignment_type != nullptr) {
+          const clang::QualType qual_type = alignment_type->getType();
+          if (!qual_type.isNull() && !qual_type->isDependentType() &&
+              !qual_type->isInstantiationDependentType()) {
+            const clang::CharUnits align_chars =
+                ast_context.getTypeAlignInChars(qual_type);
+            if (!align_chars.isZero()) {
+              const auto quantity = align_chars.getQuantity();
+              if (quantity > 0 &&
+                  quantity <= static_cast<decltype(quantity)>(
+                                  std::numeric_limits<int>::max())) {
+                alignment_candidate = static_cast<int>(quantity);
+              }
+            }
+          }
         }
       }
+
+      if (alignment_candidate > max_alignment) {
+        max_alignment = alignment_candidate;
+      }
     }
+    int alignment_value = max_alignment;
 
     auto normalize_zero_alignment = [](int value) -> int {
       return value == 0 ? -1 : value;
