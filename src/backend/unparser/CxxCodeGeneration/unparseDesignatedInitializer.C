@@ -33,8 +33,6 @@ void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
 
   bool isDataMemberDesignator = (varRefExp != NULL);
   bool isArrayRangeDesignator = (subscriptDesignator != NULL);
-  bool isArrayElementDesignator =
-      (isDataMemberDesignator == false && isArrayRangeDesignator == false);
   bool isAssignInitializer = (isSgAssignInitializer(initializer) != NULL);
 
   bool isInUnion = false;
@@ -74,12 +72,10 @@ void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
     curprint(" ... ");
     unparseExpression(upper, info);
     curprint("]");
-  } else if (isArrayElementDesignator == true) {
+  } else {
     curprint("[");
     unparseExpression(designator, info);
     curprint("]");
-  } else {
-    ROSE_ABORT();
   }
 
   SgAggregateInitializer *aggregateInitializer =
