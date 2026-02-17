@@ -5840,8 +5840,11 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
           if (alignment_expr->isEvaluatable(ast_context)) {
             const llvm::APSInt value =
                 alignment_expr->EvaluateKnownConstInt(ast_context);
-            if (value.isNonNegative() && value.getActiveBits() <= 31) {
-              alignment_candidate = value.getSExtValue();
+            if (value.isNonNegative()) {
+              const int64_t alignment_value_64 = value.getSExtValue();
+              if (alignment_value_64 <= std::numeric_limits<int>::max()) {
+                alignment_candidate = static_cast<int>(alignment_value_64);
+              }
             }
           }
         }
