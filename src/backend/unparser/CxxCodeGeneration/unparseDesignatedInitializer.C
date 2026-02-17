@@ -28,11 +28,13 @@ void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
          initializer ? initializer->class_name().c_str() : "");
 #endif
   SgVarRefExp *varRefExp = isSgVarRefExp(designator);
+  SgSubscriptExpression *subscriptDesignator =
+      isSgSubscriptExpression(designator);
 
   bool isDataMemberDesignator = (varRefExp != NULL);
-  bool isArrayElementDesignator = (isSgUnsignedLongVal(designator) != NULL);
-  bool isCastDesignator = (isSgCastExp(designator) != NULL);
-  bool isAggregateInitializer = (isSgAggregateInitializer(designator) != NULL);
+  bool isArrayRangeDesignator = (subscriptDesignator != NULL);
+  bool isArrayElementDesignator =
+      (isDataMemberDesignator == false && isArrayRangeDesignator == false);
   bool isAssignInitializer = (isSgAssignInitializer(initializer) != NULL);
 
   bool isInUnion = false;
@@ -61,25 +63,23 @@ void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
       curprint(".");
       unparseVarRef(designator, info);
     }
+  } else if (isArrayRangeDesignator == true) {
+    SgExpression *lower = subscriptDesignator->get_lowerBound();
+    SgExpression *upper = subscriptDesignator->get_upperBound();
+    ASSERT_not_null(lower);
+    ASSERT_not_null(upper);
+
+    curprint("[");
+    unparseExpression(lower, info);
+    curprint(" ... ");
+    unparseExpression(upper, info);
+    curprint("]");
+  } else if (isArrayElementDesignator == true) {
+    curprint("[");
+    unparseExpression(designator, info);
+    curprint("]");
   } else {
-    if (isArrayElementDesignator == true) {
-      curprint("[");
-      unparseValue(designator, info);
-      curprint("]");
-      isArrayElementDesignator = true;
-    } else {
-      if (isCastDesignator == true || isAggregateInitializer == true) {
-        printf("WARNING: designator might be an inappropriate expression "
-               "(expected SgVarRefExp or SgUnsignedLongVal, but this case "
-               "might be OK): designator = %p = %s \n",
-               designator, designator->class_name().c_str());
-      } else {
-        printf("ERROR: designator is an inappropriate expression (should be "
-               "SgVarRefExp or SgUnsignedLongVal): designator = %p = %s \n",
-               designator, designator->class_name().c_str());
-        ROSE_ABORT();
-      }
-    }
+    ROSE_ABORT();
   }
 
   SgAggregateInitializer *aggregateInitializer =

@@ -10258,26 +10258,30 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
         expr = SageBuilder::buildVarRefExp_nfi(var_sym);
       }
     } else if (D->isArrayDesignator()) {
-      SgNode *tmp_expr = nullptr;
-      if (clang::ConstantExpr::classof(
-              designated_init_expr->getArrayIndex(*D))) {
-        clang::FullExpr *fullExpr =
-            (clang::FullExpr *)designated_init_expr->getArrayIndex(*D);
-        clang::IntegerLiteral *integerLiteral =
-            (clang::IntegerLiteral *)fullExpr->getSubExpr();
-        tmp_expr = SageBuilder::buildUnsignedLongVal(
-            (unsigned long)integerLiteral->getValue().getSExtValue());
-      } else {
-        tmp_expr = Traverse(designated_init_expr->getArrayIndex(*D));
-      }
+      SgNode *tmp_expr = Traverse(designated_init_expr->getArrayIndex(*D));
       expr = isSgExpression(tmp_expr);
       ROSE_ASSERT(expr != nullptr);
 
     } else if (D->isArrayRangeDesignator()) {
-      ROSE_ASSERT(!"I don't believe range designator initializer are supported "
-                   "by ROSE...");
-    } else
+      SgExpression *lower_bound = isSgExpression(
+          Traverse(designated_init_expr->getArrayRangeStart(*D)));
+      SgExpression *upper_bound =
+          isSgExpression(Traverse(designated_init_expr->getArrayRangeEnd(*D)));
+      ROSE_ASSERT(lower_bound != nullptr);
+      ROSE_ASSERT(upper_bound != nullptr);
+
+      SgExpression *stride = SageBuilder::buildIntVal(1);
+      SgSubscriptExpression *range_designator =
+          SageBuilder::buildSubscriptExpression_nfi(lower_bound, upper_bound,
+                                                    stride);
+      lower_bound->set_parent(range_designator);
+      upper_bound->set_parent(range_designator);
+      stride->set_parent(range_designator);
+
+      expr = range_designator;
+    } else {
       ROSE_ABORT();
+    }
 
     ROSE_ASSERT(expr != nullptr);
 
