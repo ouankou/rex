@@ -57,6 +57,10 @@ set(SAGE3_SOURCES
   Utf8.C
   memory-pool-snapshot.C)
 
+if(ENABLE-FORTRAN)
+  configure_file(omp_lib.f90.in ${CMAKE_CURRENT_BINARY_DIR}/omp_lib.f90 @ONLY)
+endif()
+
 #GENERATING the license_string.h file
 add_custom_command(
   OUTPUT ${CMAKE_BINARY_DIR}/src/frontend/SageIII/license_string.h

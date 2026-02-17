@@ -221,6 +221,31 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/mod
 set(ROSE_TOP_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(ROSE_TOP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
+# Keep OpenMP version as a single source of truth by extracting it from
+# sage3basic.h and reusing it for generated Fortran OpenMP modules.
+set(ROSE_SAGE3BASIC_HEADER "${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/sage3basic.h")
+if(NOT EXISTS "${ROSE_SAGE3BASIC_HEADER}")
+  message(FATAL_ERROR "ROSE SageIII header not found: ${ROSE_SAGE3BASIC_HEADER}")
+endif()
+file(STRINGS "${ROSE_SAGE3BASIC_HEADER}" ROSE_OPENMP_VERSION_LINE
+  REGEX "^[ \t]*#define[ \t]+OMPVERSION[ \t]+[0-9]+")
+list(LENGTH ROSE_OPENMP_VERSION_LINE ROSE_OPENMP_VERSION_LINE_COUNT)
+if(NOT ROSE_OPENMP_VERSION_LINE_COUNT EQUAL 1)
+  message(FATAL_ERROR
+    "Expected exactly one OMPVERSION definition in ${ROSE_SAGE3BASIC_HEADER}, "
+    "found ${ROSE_OPENMP_VERSION_LINE_COUNT}")
+endif()
+string(REGEX REPLACE "^[ \t]*#define[ \t]+OMPVERSION[ \t]+([0-9]+).*" "\\1"
+  ROSE_OPENMP_VERSION "${ROSE_OPENMP_VERSION_LINE}")
+if(NOT ROSE_OPENMP_VERSION MATCHES "^[0-9]+$")
+  message(FATAL_ERROR
+    "Failed to parse numeric OMPVERSION from ${ROSE_SAGE3BASIC_HEADER}: "
+    "${ROSE_OPENMP_VERSION_LINE}")
+endif()
+set(ROSE_OPENMP_VERSION "${ROSE_OPENMP_VERSION}" CACHE INTERNAL
+  "OpenMP version extracted from sage3basic.h")
+message(STATUS "ROSE OpenMP version: ${ROSE_OPENMP_VERSION}")
+
 
 ########################################################################################################################
 # ROSE version information
