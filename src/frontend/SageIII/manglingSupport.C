@@ -146,6 +146,8 @@ private:
     replaceAllInString(normalized_, "__ptr__", escaped_literal_prefix_ + "ptr");
     replaceAllInString(normalized_, "__minus__",
                        escaped_literal_prefix_ + "minus");
+    replaceAllInString(normalized_, "__quote__",
+                       escaped_literal_prefix_ + "quote");
   }
 
   void substituteOperatorsWithMarkers() {
@@ -174,6 +176,7 @@ private:
     replaceAllInString(normalized_, "&", "__ref__");
     replaceAllInString(normalized_, "*", "__ptr__");
     replaceAllInString(normalized_, "_-", "__minus__");
+    replaceAllInString(normalized_, "\"", "__quote__");
   }
 
   void restoreOperatorsFromMarkers() {
@@ -197,6 +200,8 @@ private:
     replaceAllInString(normalized_, escaped_literal_prefix_ + "ptr", "__ptr__");
     replaceAllInString(normalized_, escaped_literal_prefix_ + "minus",
                        "__minus__");
+    replaceAllInString(normalized_, escaped_literal_prefix_ + "quote",
+                       "__quote__");
 
     replaceAllInString(normalized_,
                        escaped_literal_prefix_ + escaped_literal_prefix_,
@@ -220,8 +225,9 @@ static string normalizeNameForMangledNameSupport(const string &name) {
   const bool hasTypeDecorators = normalized.find('&') != string::npos ||
                                  normalized.find('*') != string::npos ||
                                  normalized.find("_-") != string::npos;
+  const bool hasLiteralQuotes = normalized.find('"') != string::npos;
   if (!hasTemplateSyntax && !hasScopeSyntax && !hasTemplateSeparators &&
-      !hasTypeDecorators) {
+      !hasTypeDecorators && !hasLiteralQuotes) {
     return normalized;
   }
 
@@ -749,7 +755,7 @@ string mangleFunctionNameToString(const string &s,
   }
   // else, leave name as is.
 
-  return s_mangled;
+  return normalizeNameForMangledNameSupport(s_mangled);
 }
 
 SgName mangleFunctionName(const SgName &n, const SgName &ret_type_name) {
