@@ -79,7 +79,7 @@ char peek_ch(istream &in) {
     getch(in);
     c = peek_next(in);
   }
-  if (in.eof() || c == EOF)
+  if (in.eof())
     getch(in);
   return c;
 }

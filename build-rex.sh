@@ -23,7 +23,10 @@ NC='\033[0m' # No Color
 INSTALL_PREFIX="${1:-$HOME/rex-install}"
 BUILD_TYPE="${2:-RelWithDebInfo}"
 BUILD_DIR="build"
-NUM_JOBS=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
+NUM_JOBS="${NUM_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+if ! [[ "$NUM_JOBS" =~ ^[0-9]+$ ]] || [ "$NUM_JOBS" -lt 1 ]; then
+    NUM_JOBS=4
+fi
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}REX Build Script with Clang Frontend${NC}"
