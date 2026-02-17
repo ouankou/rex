@@ -118,6 +118,7 @@ nodeColor( SgStatement* statement )
                case V_SgUsingDirectiveStatement:
                case V_SgVariableDeclaration:
                case V_SgVariableDefinition:
+               case V_SgEmptyDeclaration:
                     returnString = "lightred";
                     break;
 
@@ -669,4 +670,3 @@ int main( int argc, char * argv[] )
 
      return backend(project);
    }
-
