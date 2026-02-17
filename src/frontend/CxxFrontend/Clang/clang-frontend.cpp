@@ -834,20 +834,22 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // _OPENMP when explicitly requested via AST-only modes and only if the user
   // has not already provided a value on the command line.
   if (openmp_ast_mode) {
+    const std::string default_openmp_define =
+        "_OPENMP=" + std::to_string(OMPVERSION);
     std::string openmp_define;
     for (const auto &define_value : openmp_define_list) {
       if (define_value == "_OPENMP") {
-        openmp_define = "_OPENMP=201511";
+        openmp_define = default_openmp_define;
         break;
       }
       if (define_value.rfind("_OPENMP=", 0) == 0) {
         std::string value = define_value.substr(strlen("_OPENMP="));
         char *endptr = nullptr;
         long parsed = std::strtol(value.c_str(), &endptr, 10);
-        if (endptr == value.c_str() || *endptr != '\0') {
-          openmp_define = "_OPENMP=201511";
-        } else if (parsed >= 201811) {
-          openmp_define = "_OPENMP=201511";
+        if (endptr == value.c_str() || *endptr != '\0' || parsed <= 0) {
+          openmp_define = default_openmp_define;
+        } else if (parsed > OMPVERSION) {
+          openmp_define = default_openmp_define;
         } else {
           openmp_define = "_OPENMP=" + std::to_string(parsed);
         }
@@ -855,7 +857,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       }
     }
     if (openmp_define.empty()) {
-      openmp_define = "_OPENMP=201511";
+      openmp_define = default_openmp_define;
     }
     if (std::find(define_list.begin(), define_list.end(), openmp_define) ==
         define_list.end()) {

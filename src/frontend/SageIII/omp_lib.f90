@@ -12,7 +12,7 @@
       module omp_lib
         use omp_lib_kinds
         implicit none
-        integer, parameter :: openmp_version = 200805
+        integer, parameter :: openmp_version = 202011
         integer (omp_sched_kind), parameter :: omp_sched_static = 1
         integer (omp_sched_kind), parameter :: omp_sched_dynamic = 2
         integer (omp_sched_kind), parameter :: omp_sched_guided = 3

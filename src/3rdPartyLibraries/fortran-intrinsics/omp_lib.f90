@@ -188,8 +188,8 @@ module omp_lib
 
   use omp_lib_kinds
 
-!                               OpenMP API v5.2
-  integer, parameter :: openmp_version = 202111
+!                               OpenMP API v5.1
+  integer, parameter :: openmp_version = 202011
 
   interface
 
