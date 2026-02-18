@@ -43,6 +43,52 @@
 
 namespace {
 
+const char *
+builtinPreincludeForLanguage(ClangToSageTranslator::Language language) {
+  switch (language) {
+  case ClangToSageTranslator::C:
+    return "clang-builtin-c.h";
+  case ClangToSageTranslator::CPLUSPLUS:
+    return "clang-builtin-cpp.hpp";
+  case ClangToSageTranslator::CUDA:
+    return "clang-builtin-cuda.hpp";
+  case ClangToSageTranslator::OPENCL:
+    return "clang-builtin-opencl.h";
+  case ClangToSageTranslator::OBJC:
+  case ClangToSageTranslator::unknown:
+    return nullptr;
+  }
+  return nullptr;
+}
+
+bool hasConfiguredPreinclude(const std::vector<std::string> &includes,
+                             const std::string &required_include) {
+  for (const auto &include : includes) {
+    llvm::StringRef include_ref(include);
+    if (include_ref == required_include ||
+        llvm::sys::path::filename(include_ref) == required_include) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void assertRequiredPreincludeConfigured(
+    const std::vector<std::string> &includes,
+    ClangToSageTranslator::Language language, const char *stage) {
+  const char *required_include = builtinPreincludeForLanguage(language);
+  if (required_include == nullptr) {
+    return;
+  }
+  if (hasConfiguredPreinclude(includes, required_include)) {
+    return;
+  }
+  llvm::errs() << "ROSE Clang frontend invariant violation: required "
+                  "preinclude '"
+               << required_include << "' missing during " << stage << ".\n";
+  ROSE_ABORT();
+}
+
 struct TokenWithOffset {
   clang::Token token;
   unsigned offset;
@@ -1018,6 +1064,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     ROSE_ABORT();
   }
   }
+  assertRequiredPreincludeConfigured(inc_list, language,
+                                     "driver argument construction");
 
   // FIXME should be handle by Clang ?
   define_list.push_back("__I__=_Complex_I");
@@ -1494,6 +1542,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                             lang_specific_includes.begin(),
                             lang_specific_includes.end());
   }
+  assertRequiredPreincludeConfigured(pp_opts.Includes, language,
+                                     "compiler invocation setup");
 
   // LLVM requires reference
   clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
