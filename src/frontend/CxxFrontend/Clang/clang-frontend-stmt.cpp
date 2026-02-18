@@ -231,6 +231,12 @@ buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
 }
 
 static std::string getDeclarationNameAsString(clang::DeclarationName name) {
+  if (name.isEmpty()) {
+    return "";
+  }
+  if (const clang::IdentifierInfo *identifier = name.getAsIdentifierInfo()) {
+    return identifier->getName().str();
+  }
   if (name.getCXXOverloadedOperator() != clang::OO_None) {
     return buildOverloadedOperatorName(name.getCXXOverloadedOperator());
   }
