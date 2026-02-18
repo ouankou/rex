@@ -188,8 +188,8 @@ module omp_lib
 
   use omp_lib_kinds
 
-!                               OpenMP API v5.2
-  integer, parameter :: openmp_version = 202111
+!                               OpenMP API version from ROSE OMPVERSION
+  integer, parameter :: openmp_version = @ROSE_OPENMP_VERSION@
 
   interface
 

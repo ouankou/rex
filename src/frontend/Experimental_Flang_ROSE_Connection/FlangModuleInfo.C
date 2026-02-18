@@ -281,9 +281,12 @@ void FlangModuleInfo::set_inputDirs(SgProject *project) {
   const std::string intrinsic_src_path =
       findRoseSupportPathFromSource("src/3rdPartyLibraries/fortran-intrinsics",
                                     "src/3rdPartyLibraries/fortran-intrinsics");
+  const std::string intrinsic_build_path = findRoseSupportPathFromBuild(
+      "src/3rdPartyLibraries/fortran-intrinsics", "share/rose");
   const std::string intrinsic_install_path = findRoseSupportPathFromSource(
       "src/3rdPartyLibraries/fortran-intrinsics", "share/rose");
   addInputDir(inputDirs, intrinsic_src_path);
+  addInputDir(inputDirs, intrinsic_build_path);
   addInputDir(inputDirs, intrinsic_install_path);
   addInputDir(sourceDirs, intrinsic_src_path);
   addInputDir(sourceDirs, intrinsic_install_path);

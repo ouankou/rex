@@ -57,6 +57,12 @@ set(SAGE3_SOURCES
   Utf8.C
   memory-pool-snapshot.C)
 
+configure_file(sage3basic.h.in ${CMAKE_CURRENT_BINARY_DIR}/sage3basic.h @ONLY)
+
+if(ENABLE-FORTRAN)
+  configure_file(omp_lib.f90.in ${CMAKE_CURRENT_BINARY_DIR}/omp_lib.f90 @ONLY)
+endif()
+
 #GENERATING the license_string.h file
 add_custom_command(
   OUTPUT ${CMAKE_BINARY_DIR}/src/frontend/SageIII/license_string.h
@@ -110,7 +116,7 @@ add_dependencies(sage3 rosetta_generated)
 
 install(
   FILES
-    sage3.h sage3basic.h rose_attributes_list.h attachPreprocessingInfo.h
+    sage3.h ${CMAKE_CURRENT_BINARY_DIR}/sage3basic.h rose_attributes_list.h attachPreprocessingInfo.h
     attachPreprocessingInfoTraversal.h attach_all_info.h manglingSupport.h
     C++_include_files.h fixupCopy.h general_token_defs.h rtiHelpers.h
     ompAstConstruction.h omp.h ompSupport.h

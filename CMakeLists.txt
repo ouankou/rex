@@ -221,6 +221,12 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/mod
 set(ROSE_TOP_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(ROSE_TOP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
+# Keep OpenMP version in CMake as the single source of truth and use it
+# to generate both C++ and Fortran OpenMP interfaces.
+set(ROSE_OPENMP_VERSION 202011 CACHE INTERNAL
+  "OpenMP version used by ROSE-generated OpenMP interfaces")
+message(STATUS "ROSE OpenMP version: ${ROSE_OPENMP_VERSION}")
+
 
 ########################################################################################################################
 # ROSE version information

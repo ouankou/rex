@@ -4830,7 +4830,7 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
 
     // Add -D_OPENMP to backend compiler when OpenMP is enabled
     // This allows backend to process #ifdef _OPENMP guards in generated code
-    // OMPVERSION (202011 = OpenMP 5.1) matches Clang 20's native OpenMP support
+    // OMPVERSION (202011 = OpenMP 5.1) matches Clang 21's native OpenMP support
     if (get_openmp_lowering() || (get_openmp() && !Outliner::select_omp_loop)) {
       string ompmacro =
           "-D_OPENMP=" + StringUtility::numberToString(OMPVERSION);
