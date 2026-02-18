@@ -3443,6 +3443,19 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
 
 #if defined(ROSE_USE_CLANG_FRONTEND)
   if (get_C_only() || get_Cxx_only() || get_Cuda_only() || get_OpenCL_only()) {
+    auto has_flag = [&](const std::string &flag) {
+      return std::find(compilerCmdLine.begin(), compilerCmdLine.end(), flag) !=
+             compilerCmdLine.end();
+    };
+    if (get_C_only() || get_Cxx_only() || get_Cuda_only()) {
+      if (!has_flag("-fno-builtin-va_start")) {
+        compilerCmdLine.push_back("-fno-builtin-va_start");
+      }
+      if (!has_flag("-fno-builtin-va_end")) {
+        compilerCmdLine.push_back("-fno-builtin-va_end");
+      }
+    }
+
     std::string clang_include_root = ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR;
     if (!clang_include_root.empty()) {
       std::filesystem::path build_root(clang_include_root);

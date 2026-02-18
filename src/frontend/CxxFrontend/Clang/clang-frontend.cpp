@@ -983,6 +983,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     // Keep frontend macro state aligned with backend compilation.
     add_passthrough_flag_if_missing("-DUSE_ROSE");
     add_passthrough_flag_if_missing("-DUSE_ROSE_BACKEND");
+
+    // Legacy ROSE compatibility declarations may spell va_start/va_end as
+    // ordinary functions. Disable Clang's special-case builtin treatment for
+    // these two names in frontend parsing so those declarations stay legal.
+    add_passthrough_flag_if_missing("-fno-builtin-va_start");
+    add_passthrough_flag_if_missing("-fno-builtin-va_end");
   }
 
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
