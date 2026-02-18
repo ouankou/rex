@@ -10630,20 +10630,22 @@ bool ClangToSageTranslator::VisitImplicitValueInitExpr(
 
   SgType *type =
       buildTypeFromQualifiedType(implicit_value_init_expr->getType());
+  ROSE_ASSERT(type != nullptr);
+
+  SgType *stripped =
+      type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE);
   SgExpression *expr = nullptr;
 
-  if (type == nullptr) {
-    expr = buildFallbackExpression(type);
-  } else if (SageInterface::isScalarType(type) ||
-             SageInterface::isPointerType(type) ||
-             SageInterface::isReferenceType(type) || isSgEnumType(type) ||
-             isSgTypeNullptr(type)) {
+  if (isSgTypeNullptr(stripped) != nullptr) {
+    expr = SageBuilder::buildNullptrValExp();
+  } else if (SageInterface::isScalarType(stripped) ||
+             SageInterface::isPointerType(stripped) ||
+             isSgEnumType(stripped) != nullptr) {
     expr = SageBuilder::buildCastExp(SageBuilder::buildIntVal(0), type);
   } else {
-    bool class_unknown = false;
-    if (isSgTypedefType(type) == nullptr && isSgClassType(type) == nullptr) {
-      class_unknown = true;
-    }
+    ROSE_ASSERT(isSgTypeUnknown(stripped) == nullptr);
+    bool class_unknown =
+        isSgTypedefType(type) == nullptr && isSgClassType(stripped) == nullptr;
     SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
     expr = SageBuilder::buildConstructorInitializer_nfi(
         nullptr, args, type,
@@ -10653,6 +10655,7 @@ bool ClangToSageTranslator::VisitImplicitValueInitExpr(
         class_unknown // associated_class_unknown
     );
   }
+  ROSE_ASSERT(expr != nullptr);
 
   *node = expr;
 
