@@ -5972,13 +5972,15 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     std::string objectFileName = get_objectFileNameWithoutPath();
     if (objectFileName.length() == 0) {
       objectFileName = generateOutputFileName();
-      printf(" --- get_objectFileNameWithoutPath() returned empty string, "
-             "using generateOutputFileName(): objectFileName = %s \n",
-             objectFileName.c_str());
+      MLOG_TRACE_CXX("sage_support")
+          << "get_objectFileNameWithoutPath() returned empty string; "
+             "using generateOutputFileName(): objectFileName = "
+          << objectFileName << std::endl;
     } else {
-      printf(" --- using value from get_objectFileNameWithoutPath(): "
-             "objectFileName = %s \n",
-             objectFileName.c_str());
+      MLOG_TRACE_CXX("sage_support")
+          << "using value from get_objectFileNameWithoutPath(): objectFileName "
+             "= "
+          << objectFileName << std::endl;
     }
 #if DEBUG_COMPILER_COMMAND_LINE
     printf("In buildCompilerCommandLineOptions: test 5.5: objectNameSpecified "

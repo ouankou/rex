@@ -245,7 +245,9 @@ public:
   void Build(Fortran::parser::ProcedureDeclarationStmt &);
   void Build(Fortran::parser::ArithmeticIfStmt &);
 
-  void Done() const { std::cerr << "Done()\n"; }
+  void Done() const {
+    MLOG_TRACE_CXX(MLOG_FRONTEND) << "BuildVisitor::Done()\n";
+  }
 
   void BuildPrefix(std::list<Fortran::parser::PrefixSpec> &,
                    LanguageTranslation::FunctionModifierList &, SgType *&);

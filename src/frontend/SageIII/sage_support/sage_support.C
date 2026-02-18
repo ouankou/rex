@@ -3537,14 +3537,12 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
                                                               false, false)
                  .c_str());
     }
-    // DQ (7/7/2021): This can be useful to have an output, but in general it
-    // must be supressed. I need the exact command line used to compile the
-    // generate code with the backendcompiler (so that I can reuse it to test
-    // the generated code).
-    printf("SgFile::compileOutput(): compilerCmdLine = \n%s\n",
-           CommandlineProcessing::generateStringFromArgList(compilerCmdLine,
+    MLOG_TRACE_CXX("sage_support")
+        << "SgFile::compileOutput(): compilerCmdLine =\n"
+        << CommandlineProcessing::generateStringFromArgList(compilerCmdLine,
                                                             false, false)
-               .c_str());
+        << std::endl;
+
     // DQ (4/18/2015): Adding support to add compile only mode to the processing
     // of each file when multiple files are processed.
     if (get_compileOnly() == true) {
@@ -3646,9 +3644,10 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
     // correct and shouldn't be compilerCmdLine
     returnValueForCompiler = systemFromVector(compilerCmdLine);
 
-    printf("In SgFile::compileOutput(): Calling systemFromVector(): "
-           "returnValueForCompiler = %d \n",
-           returnValueForCompiler);
+    MLOG_TRACE_CXX("sage_support")
+        << "SgFile::compileOutput(): systemFromVector() returnValueForCompiler "
+           "= "
+        << returnValueForCompiler << std::endl;
 
     // TOO1 (05/14/2013): Handling for -rose:keep_going
     //
