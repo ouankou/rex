@@ -11,6 +11,8 @@
 
 #include <memory>
 
+#include <set>
+
 #include <sstream>
 #include <vector>
 
@@ -884,6 +886,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     const std::string default_openmp_define =
         "_OPENMP=" + std::to_string(OMPVERSION);
     std::string openmp_define;
+
     for (const auto &define_value : openmp_define_list) {
       if (define_value == "_OPENMP") {
         openmp_define = default_openmp_define;
@@ -903,6 +906,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
         break;
       }
     }
+
     if (openmp_define.empty()) {
       openmp_define = default_openmp_define;
     }
@@ -1076,13 +1080,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // Avoid staged Clang resource headers that cause include_next loops.
   filter_staged_resource_dirs(sys_dirs_list);
 
-  // If user explicitly provided -D_OPENMP=value on command line, honor it
-  // Otherwise, when -fopenmp is passed to Clang (enable_openmp=true), Clang
-  // will automatically define _OPENMP with the correct version for its OpenMP
-  // runtime. We should NOT override Clang's built-in _OPENMP macro with a
-  // hardcoded value.
-  // Do not pass _OPENMP to the Clang frontend: OpenMP pragmas are handled as
-  // plain text and Clang's omp.h expects OpenMP-enabled parsing semantics.
+  // Build cc1-style argument list for the in-process Clang invocation.
 
   const size_t estimated_argc = 1 + define_list.size() + inc_dirs_list.size() +
                                 (sys_dirs_list.size() * 2) +
@@ -1304,6 +1302,103 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       cc1_args_storage.emplace_back();
     }
   }
+
+  auto canonical_path = [](const std::string &path) -> std::string {
+    if (path.empty()) {
+      return path;
+    }
+    llvm::SmallString<256> resolved;
+    if (!llvm::sys::fs::real_path(path, resolved)) {
+      return resolved.str().str();
+    }
+    return path;
+  };
+  std::set<std::string> cc1_system_include_dirs;
+  auto record_system_include = [&](const std::string &dir) {
+    if (dir.empty()) {
+      return;
+    }
+    cc1_system_include_dirs.insert(canonical_path(dir));
+  };
+  auto parse_system_include_flag = [&](const std::string &flag,
+                                       std::size_t index) -> bool {
+    auto consume_prefixed = [&](const char *prefix) -> bool {
+      const std::size_t prefix_len = std::strlen(prefix);
+      if (flag.rfind(prefix, 0) != 0 || flag.size() <= prefix_len) {
+        return false;
+      }
+      std::string suffix = flag.substr(prefix_len);
+      if (!suffix.empty() && suffix[0] == '=') {
+        suffix.erase(suffix.begin());
+      }
+      if (!suffix.empty()) {
+        record_system_include(suffix);
+      }
+      return true;
+    };
+
+    if (flag == "-isystem" || flag == "-internal-isystem" ||
+        flag == "-internal-externc-isystem" || flag == "-c-isystem" ||
+        flag == "-cxx-isystem") {
+      if (index + 1 < cc1_args_storage.size()) {
+        record_system_include(cc1_args_storage[index + 1]);
+      }
+      return true;
+    }
+    return consume_prefixed("-isystem") ||
+           consume_prefixed("-internal-isystem") ||
+           consume_prefixed("-internal-externc-isystem") ||
+           consume_prefixed("-c-isystem") || consume_prefixed("-cxx-isystem");
+  };
+  for (std::size_t i = 0; i < cc1_args_storage.size(); ++i) {
+    parse_system_include_flag(cc1_args_storage[i], i);
+  }
+
+  // Clang 21 toolchains on some distros may omit GCC's runtime include
+  // directory from cc1 args, which drops omp.h target API declarations.
+  if (sageFile.get_openmp() && !disable_openmp_via_flag) {
+    std::vector<std::string> omp_runtime_candidates;
+    std::set<std::string> seen_runtime_candidates;
+    auto collect_openmp_include_candidates = [&](const auto &paths) {
+      for (const std::string &base_dir : paths) {
+        if (base_dir.empty()) {
+          continue;
+        }
+        llvm::SmallString<256> include_dir(base_dir);
+        if (!llvm::StringRef(base_dir).ends_with("/include")) {
+          llvm::sys::path::append(include_dir, "include");
+        }
+        if (!llvm::sys::fs::exists(include_dir)) {
+          continue;
+        }
+        llvm::SmallString<256> omp_header(include_dir);
+        llvm::sys::path::append(omp_header, "omp.h");
+        if (!llvm::sys::fs::exists(omp_header)) {
+          continue;
+        }
+        std::string normalized = canonical_path(include_dir.str().str());
+        if (seen_runtime_candidates.insert(normalized).second) {
+          omp_runtime_candidates.push_back(normalized);
+        }
+      }
+    };
+
+    const clang::driver::ToolChain &default_toolchain =
+        compilation->getDefaultToolChain();
+    collect_openmp_include_candidates(default_toolchain.getFilePaths());
+    collect_openmp_include_candidates(default_toolchain.getLibraryPaths());
+
+    for (const std::string &candidate : omp_runtime_candidates) {
+      if (cc1_system_include_dirs.count(candidate) != 0) {
+        continue;
+      }
+      cc1_args_storage.push_back("-internal-isystem");
+      cc1_args_storage.push_back(candidate);
+      cc1_system_include_dirs.insert(candidate);
+      break;
+    }
+  }
+
   std::vector<const char *> cc1_args_cstr;
   cc1_args_cstr.reserve(cc1_args_storage.size());
   for (const auto &arg : cc1_args_storage) {
@@ -1478,16 +1573,13 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     lang_opts.GNUCVersion = 40201; // GCC 4.2.1 (Clang default)
   }
   if (openmp_ast_mode) {
-    // OpenMP/OpenACC AST-only parsing should tolerate non-standard C code used
-    // in legacy tests (e.g., void main, implicit functions). Keep C++ in
-    // hosted mode so standard headers (iostream, etc.) remain usable.
+    // OpenMP/OpenACC AST-only parsing should preserve the same language
+    // standard selected for normal frontend parsing. Do not force legacy C89
+    // semantics here; users who do not pass -std should get Clang's default.
+    // Keep C++ in hosted mode so standard headers (iostream, etc.) remain
+    // usable.
     if (language == ClangToSageTranslator::C) {
       lang_opts.Freestanding = 1;
-      lang_opts.C99 = 0;
-      lang_opts.C11 = 0;
-      lang_opts.C17 = 0;
-      lang_opts.C23 = 0;
-      lang_opts.GNUMode = 1;
     }
   }
 
@@ -1567,13 +1659,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(
       input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
 
-  // Preserve original spelling for no-backend-compile roundtrip workflows
-  // (e.g., cmp-based translator tests), unless we intentionally rewrite the
-  // in-memory source buffer below.
   if ((language == ClangToSageTranslator::C ||
        language == ClangToSageTranslator::CPLUSPLUS ||
        language == ClangToSageTranslator::CUDA) &&
-      sageFile.get_skipfinalCompileStep() && !openmp_ast_mode) {
+      sageFile.get_skipfinalCompileStep() && !openmp_ast_mode &&
+      !sageFile.get_openmp_lowering()) {
+    // Preserve original spelling for no-backend-compile roundtrip workflows
+    // (e.g., cmp-based translator tests), unless we intentionally rewrite the
+    // in-memory source buffer below.
     sageFile.set_unparse_tokens(true);
   }
 
@@ -1623,6 +1716,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // Register pragma and preprocessor callbacks (OpenMP and includes).
   RoseOpenMPPragmaCallback *omp_callback = nullptr;
   SagePreprocessorRecord *preprocessor_recorder = nullptr;
+  std::unique_ptr<SagePreprocessorRecord> secondary_preprocessor_recorder;
   {
     clang::Preprocessor &PP = compiler_instance->getPreprocessor();
     auto omp_callback_owner = std::make_unique<RoseOpenMPPragmaCallback>(
@@ -1633,8 +1727,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     auto preprocessor_recorder_owner = std::make_unique<SagePreprocessorRecord>(
         &(compiler_instance->getSourceManager()));
     preprocessor_recorder = preprocessor_recorder_owner.get();
-    PP.addPPCallbacks(std::move(preprocessor_recorder_owner));
-    PP.addCommentHandler(preprocessor_recorder);
+    if (!is_secondary_parse) {
+      PP.addPPCallbacks(std::move(preprocessor_recorder_owner));
+      PP.addCommentHandler(preprocessor_recorder);
+    } else {
+      // Secondary parses should not contribute another directive/comment stream
+      // to the already-annotated primary AST.
+      secondary_preprocessor_recorder = std::move(preprocessor_recorder_owner);
+    }
   }
   if (preprocessor_recorder != nullptr && !suppressed_includes.empty()) {
     clang::SourceLocation file_start =
@@ -1980,6 +2080,10 @@ void finishSageAST(ClangToSageTranslator &translator) {
       if (node == nullptr) {
         return nullptr;
       }
+      Sg_File_Info *info = node->get_file_info();
+      if (info != nullptr && info->get_line() > 0) {
+        return info;
+      }
       Sg_File_Info *start = node->get_startOfConstruct();
       if (start != nullptr && start->get_line() > 0) {
         return start;
@@ -2165,6 +2269,76 @@ void finishSageAST(ClangToSageTranslator &translator) {
       }
       return nullptr;
     };
+    auto is_comment_directive = [](const PreprocessingInfo *info) -> bool {
+      if (info == nullptr) {
+        return false;
+      }
+      PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+      return type == PreprocessingInfo::C_StyleComment ||
+             type == PreprocessingInfo::CplusplusStyleComment;
+    };
+    auto find_sibling_anchor_after_cursor =
+        [&](SgLocatedNode *anchor, Sg_File_Info *cursor) -> SgLocatedNode * {
+      if (anchor == nullptr || cursor == nullptr) {
+        return nullptr;
+      }
+
+      auto better_anchor = [&](SgLocatedNode *lhs, SgLocatedNode *rhs) -> bool {
+        if (lhs == nullptr) {
+          return false;
+        }
+        if (rhs == nullptr) {
+          return true;
+        }
+        return location_leq(node_start(lhs), node_start(rhs));
+      };
+
+      auto consider = [&](SgLocatedNode *candidate, SgLocatedNode *&best) {
+        if (candidate == nullptr) {
+          return;
+        }
+        Sg_File_Info *candidate_start = node_start(candidate);
+        if (candidate_start == nullptr || candidate_start->get_line() <= 0) {
+          return;
+        }
+        if (!is_same_file(candidate_start, cursor)) {
+          return;
+        }
+        if (!location_leq(cursor, candidate_start)) {
+          return;
+        }
+        if (better_anchor(candidate, best)) {
+          best = candidate;
+        }
+      };
+
+      SgLocatedNode *best = nullptr;
+      SgNode *parent = anchor->get_parent();
+      if (SgBasicBlock *block = isSgBasicBlock(parent)) {
+        for (SgStatement *stmt : block->get_statements()) {
+          consider(isSgLocatedNode(stmt), best);
+        }
+      } else if (SgGlobal *scope = isSgGlobal(parent)) {
+        for (SgDeclarationStatement *decl : scope->get_declarations()) {
+          consider(isSgLocatedNode(decl), best);
+        }
+      } else if (SgNamespaceDefinitionStatement *scope =
+                     isSgNamespaceDefinitionStatement(parent)) {
+        for (SgDeclarationStatement *decl : scope->get_declarations()) {
+          consider(isSgLocatedNode(decl), best);
+        }
+      } else if (SgClassDefinition *scope = isSgClassDefinition(parent)) {
+        for (SgDeclarationStatement *decl : scope->get_members()) {
+          consider(isSgLocatedNode(decl), best);
+        }
+      } else if (SgTemplateClassDefinition *scope =
+                     isSgTemplateClassDefinition(parent)) {
+        for (SgDeclarationStatement *decl : scope->get_members()) {
+          consider(isSgLocatedNode(decl), best);
+        }
+      }
+      return best;
+    };
 
     SgStatement *attach_target = find_last_output_stmt(global_scope);
     SgStatement *first_output_stmt = find_first_output_stmt(global_scope);
@@ -2217,6 +2391,19 @@ void finishSageAST(ClangToSageTranslator &translator) {
       if (entry.second != nullptr) {
         SgLocatedNode *anchor = find_anchor_for_cursor(entry.first);
         if (anchor != nullptr) {
+          if (is_comment_directive(entry.second) && entry.first != nullptr) {
+            Sg_File_Info *anchor_start = node_start(anchor);
+            if (anchor_start != nullptr && anchor_start->get_line() > 0 &&
+                is_same_file(anchor_start, entry.first) &&
+                location_leq(entry.first, anchor_start) &&
+                !location_leq(anchor_start, entry.first)) {
+              if (SgLocatedNode *better_anchor =
+                      find_sibling_anchor_after_cursor(anchor, entry.first)) {
+                anchor = better_anchor;
+              }
+            }
+          }
+
           Sg_File_Info *start = node_start(anchor);
           Sg_File_Info *end = node_end(anchor);
           if (isSgBasicBlock(anchor) != nullptr ||
@@ -4009,6 +4196,14 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     return node->get_endOfConstruct();
   };
   auto should_attach_preproc = [&](SgLocatedNode *node) -> bool {
+    // Keep in sync with SgLocatedNode::addToAttachedPreprocessingInfo() hard
+    // restrictions: these node kinds are not valid preprocessing anchors.
+    if (isSgTypedefSeq(node) != nullptr ||
+        isSgCatchStatementSeq(node) != nullptr ||
+        isSgCtorInitializerList(node) != nullptr) {
+      return false;
+    }
+
     Sg_File_Info *info = get_effective_file_info(node);
     if (info == nullptr) {
       return false;
@@ -4059,20 +4254,6 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     }
 
     return best;
-  };
-  auto is_comment_directive = [](const PreprocessingInfo *info) -> bool {
-    if (info == nullptr) {
-      return false;
-    }
-    switch (info->getTypeOfDirective()) {
-    case PreprocessingInfo::C_StyleComment:
-    case PreprocessingInfo::CplusplusStyleComment:
-    case PreprocessingInfo::FortranStyleComment:
-    case PreprocessingInfo::F90StyleComment:
-      return true;
-    default:
-      return false;
-    }
   };
   auto is_same_file = [](Sg_File_Info *a, Sg_File_Info *b) -> bool {
     if (a == nullptr || b == nullptr) {
@@ -4828,69 +5009,6 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
           }
         }
       }
-      auto attach_to_candidate = [&]() {
-        if (inheritedValue->candidat == nullptr ||
-            inheritedValue->candidat == loc_node ||
-            isSgGlobal(inheritedValue->candidat) != nullptr) {
-          return;
-        }
-
-        SgLocatedNode *candidate = inheritedValue->candidat;
-        if (SgExprStatement *expr_stmt = isSgExprStatement(candidate)) {
-          if (SgExpression *expr = expr_stmt->get_expression()) {
-            candidate = expr;
-          }
-        }
-        if (!should_attach_preproc(candidate)) {
-          return;
-        }
-
-        attach_node = candidate;
-        Sg_File_Info *cursor_info = inheritedValue->cursor;
-        Sg_File_Info *candidate_start = candidate->get_startOfConstruct();
-        Sg_File_Info *candidate_end = candidate->get_endOfConstruct();
-        if (candidate_end == nullptr) {
-          candidate_end = candidate_start;
-        }
-        if (cursor_info == nullptr || candidate_end == nullptr) {
-          return;
-        }
-
-        bool same_file =
-            cursor_info->get_file_id() == candidate_end->get_file_id();
-        if (!same_file && !cursor_info->get_filenameString().empty() &&
-            !candidate_end->get_filenameString().empty()) {
-          same_file = cursor_info->get_filenameString() ==
-                      candidate_end->get_filenameString();
-        }
-        if (!same_file) {
-          return;
-        }
-
-        if (cursor_info->get_line() > candidate_end->get_line() ||
-            (cursor_info->get_line() == candidate_end->get_line() &&
-             cursor_info->get_col() > candidate_end->get_col())) {
-          inheritedValue->next_to_insert->setRelativePosition(
-              PreprocessingInfo::after);
-          return;
-        }
-
-        if (candidate_start != nullptr &&
-            (cursor_info->get_line() < candidate_start->get_line() ||
-             (cursor_info->get_line() == candidate_start->get_line() &&
-              cursor_info->get_col() < candidate_start->get_col()))) {
-          inheritedValue->next_to_insert->setRelativePosition(
-              PreprocessingInfo::before);
-          return;
-        }
-
-        inheritedValue->next_to_insert->setRelativePosition(
-            PreprocessingInfo::after);
-      };
-
-      if (is_comment_directive(inheritedValue->next_to_insert)) {
-        attach_to_candidate();
-      }
       bool is_include = is_include_directive(inheritedValue->next_to_insert);
       if (is_include && inheritedValue->cursor != nullptr &&
           attach_node != nullptr && attach_node->get_file_info() != nullptr &&
@@ -5136,11 +5254,89 @@ void SagePreprocessorRecord::recordDirective(
       return false;
     }
   };
+  auto is_comment_directive = [](PreprocessingInfo::DirectiveType type) {
+    switch (type) {
+    case PreprocessingInfo::C_StyleComment:
+    case PreprocessingInfo::CplusplusStyleComment:
+    case PreprocessingInfo::FortranStyleComment:
+    case PreprocessingInfo::F90StyleComment:
+      return true;
+    default:
+      return false;
+    }
+  };
+  auto same_record_location = [&](const Sg_File_Info *existing_info) {
+    if (existing_info == nullptr) {
+      return false;
+    }
+    if (existing_info->get_line() != static_cast<int>(ls)) {
+      return false;
+    }
+    const std::string existing_file = existing_info->get_filenameString();
+    if (!existing_file.empty() && !file.empty() && existing_file != file) {
+      return false;
+    }
+    return true;
+  };
 
   if (requires_hash(directive_type)) {
     size_t first_nonspace = content.find_first_not_of(" \t");
     if (first_nonspace != std::string::npos && content[first_nonspace] != '#') {
       content.insert(first_nonspace, "#");
+    }
+  }
+
+  // Clang can report the same main-file comment more than once in some
+  // preprocessing flows. Keep only exact duplicates at the same source point.
+  for (const auto &existing : p_preprocessor_record_list) {
+    Sg_File_Info *existing_info = existing.first;
+    PreprocessingInfo *existing_pp = existing.second;
+    if (existing_info == nullptr || existing_pp == nullptr) {
+      continue;
+    }
+    if (existing_pp->getTypeOfDirective() != directive_type) {
+      continue;
+    }
+    if (!same_record_location(existing_info) ||
+        existing_info->get_col() != static_cast<int>(cs)) {
+      continue;
+    }
+    if (existing_pp->getString() == content) {
+      return;
+    }
+  }
+
+  // A trailing comment on the same source line as a preprocessor directive
+  // should stay embedded in that directive text, not as a separate comment
+  // record.
+  if (is_comment_directive(directive_type)) {
+    for (const auto &existing : p_preprocessor_record_list) {
+      Sg_File_Info *existing_info = existing.first;
+      PreprocessingInfo *existing_pp = existing.second;
+      if (existing_info == nullptr || existing_pp == nullptr) {
+        continue;
+      }
+      if (!same_record_location(existing_info)) {
+        continue;
+      }
+      if (!is_comment_directive(existing_pp->getTypeOfDirective())) {
+        return;
+      }
+    }
+  } else {
+    for (auto it = p_preprocessor_record_list.begin();
+         it != p_preprocessor_record_list.end();) {
+      Sg_File_Info *existing_info = it->first;
+      PreprocessingInfo *existing_pp = it->second;
+      if (existing_info == nullptr || existing_pp == nullptr ||
+          !same_record_location(existing_info) ||
+          !is_comment_directive(existing_pp->getTypeOfDirective())) {
+        ++it;
+        continue;
+      }
+      delete existing_info;
+      delete existing_pp;
+      it = p_preprocessor_record_list.erase(it);
     }
   }
 
@@ -5190,14 +5386,18 @@ void SagePreprocessorRecord::InclusionDirective(
     directive = "#include_next ";
   }
 
-  std::string include_target;
-  if (IsAngled) {
-    include_target = "<" + FileName.str() + ">";
-  } else {
-    include_target = "\"" + FileName.str() + "\"";
+  // Preserve original include spelling (including trailing comments) when
+  // available from the main-file source buffer.
+  std::string include_text = collectDirectiveText(HashLoc);
+  if (include_text.empty()) {
+    std::string include_target;
+    if (IsAngled) {
+      include_target = "<" + FileName.str() + ">";
+    } else {
+      include_target = "\"" + FileName.str() + "\"";
+    }
+    include_text = directive + include_target;
   }
-
-  std::string include_text = directive + include_target + "\n";
 
   recordDirective(HashLoc, directive_type, include_text);
 }

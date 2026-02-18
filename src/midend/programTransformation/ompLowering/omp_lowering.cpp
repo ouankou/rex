@@ -72,6 +72,20 @@ SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   }
   return nullptr;
 }
+
+void prependGlobalDeclPreservingLeadingPreproc(SgStatement *decl,
+                                               SgGlobal *global_scope) {
+  ROSE_ASSERT(decl != nullptr);
+  ROSE_ASSERT(global_scope != nullptr);
+
+  if (SgStatement *first_stmt = SageInterface::getFirstStatement(global_scope);
+      first_stmt != nullptr) {
+    SageInterface::insertStatementBefore(first_stmt, decl,
+                                         /*autoMovePreprocessingInfo=*/true);
+  } else {
+    SageInterface::prependStatement(decl, global_scope);
+  }
+}
 } // namespace
 
 // This is a hack to pass the number of CUDA loop iteration count around
@@ -4271,8 +4285,8 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   offload_entry_decl->get_decl_item(SgName(func_name + "omp_offload_entry__"))
       ->set_gnu_attribute_section_name("omp_offloading_entries");
 
-  prependStatement(offload_entry_decl, g_scope);
-  prependStatement(outlined_kernel_id_decl, g_scope);
+  prependGlobalDeclPreservingLeadingPreproc(offload_entry_decl, g_scope);
+  prependGlobalDeclPreservingLeadingPreproc(outlined_kernel_id_decl, g_scope);
 
   SgVariableDeclaration *host_point_decl = buildVariableDeclaration(
       "__host_ptr", buildPointerType(buildVoidType()),
@@ -4781,8 +4795,8 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   offload_entry_decl->get_decl_item(SgName(func_name + "omp_offload_entry__"))
       ->set_gnu_attribute_section_name("omp_offloading_entries");
 
-  prependStatement(offload_entry_decl, g_scope);
-  prependStatement(outlined_kernel_id_decl, g_scope);
+  prependGlobalDeclPreservingLeadingPreproc(offload_entry_decl, g_scope);
+  prependGlobalDeclPreservingLeadingPreproc(outlined_kernel_id_decl, g_scope);
 
   SgVariableDeclaration *host_point_decl = buildVariableDeclaration(
       "__host_ptr", buildPointerType(buildVoidType()),
@@ -7564,6 +7578,9 @@ generate_outlined_function_file(SgFunctionDeclaration *outlined_func,
       "rex_lib_" + original_file_name + "." + file_extension;
   new_file->get_file_info()->set_filenameString(new_file_name);
   new_file->set_unparse_output_filename(new_file_name);
+  // Outlined files are synthesized/renamed after parsing, so token-stream
+  // mappings from the original source are not valid for them.
+  new_file->set_unparse_tokens(false);
 
   // insert REX runtime header to the new file (C/C++ only)
   SgGlobal *new_scope = new_file->get_globalScope();
@@ -7668,8 +7685,12 @@ static void post_processing(SgSourceFile *file) {
   };
 
   if (!file->get_Fortran_only()) {
-    SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::before, false,
-                                g_scope);
+    // Insert host runtime header at the start of the output file, including
+    // when transformation-generated globals were prepended before source
+    // declarations.
+    SageInterface::insertHeader(file, "rex_kmp.h",
+                                /*isSystemHeader=*/false,
+                                /*asLastHeader=*/false);
   }
   if (new_file != NULL) {
     AstPostProcessing(new_file);

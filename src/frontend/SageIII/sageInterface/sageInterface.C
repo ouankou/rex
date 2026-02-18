@@ -10124,6 +10124,47 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
   SgStatement *surroundingStatement = targetStmt;
   int surroundingStatement_fileId =
       Sg_File_Info::BAD_FILE_ID; // No file id can have this value.
+  int targetStatement_fileId = Sg_File_Info::BAD_FILE_ID;
+
+  if (Sg_File_Info *target_file_info = targetStmt->get_file_info()) {
+    targetStatement_fileId = target_file_info->get_file_id();
+    if (targetStatement_fileId < 0) {
+      int physical_file_id = target_file_info->get_physical_file_id();
+      if (physical_file_id > 0) {
+        targetStatement_fileId = physical_file_id;
+      }
+    }
+  }
+
+  if (targetStatement_fileId < 0) {
+    if (AttachedPreprocessingInfoType *attached_comments =
+            targetStmt->getAttachedPreprocessingInfo()) {
+      for (AttachedPreprocessingInfoType::iterator it =
+               attached_comments->begin();
+           it != attached_comments->end(); ++it) {
+        PreprocessingInfo *pp_info = *it;
+        if (pp_info == NULL) {
+          continue;
+        }
+        Sg_File_Info *pp_file_info = pp_info->get_file_info();
+        if (pp_file_info == NULL) {
+          continue;
+        }
+
+        int pp_file_id = pp_file_info->get_file_id();
+        if (pp_file_id >= 0) {
+          targetStatement_fileId = pp_file_id;
+          break;
+        }
+
+        int pp_physical_file_id = pp_file_info->get_physical_file_id();
+        if (pp_physical_file_id > 0) {
+          targetStatement_fileId = pp_physical_file_id;
+          break;
+        }
+      }
+    }
+  }
 
 #if REMOVE_STATEMENT_DEBUG || 0
   printf("TOP of findSurroundingStatementFromSameFile(): "
@@ -10135,12 +10176,12 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
 
   // Only handle relocation for statements that exist in the file (at least for
   // now while debugging).
-  if (targetStmt->get_file_info()->get_file_id() >= 0) {
+  if (targetStatement_fileId >= 0) {
     surroundingStatementPreceedsTargetStatement = true;
 
 #if REMOVE_STATEMENT_DEBUG
     printf("   targetStmt->get_file_info()->get_file_id()           = %d \n",
-           targetStmt->get_file_info()->get_file_id());
+           targetStatement_fileId);
 #endif
 #if REMOVE_STATEMENT_DEBUG
     printf("Before loop: surroundingStatement = %p = %s name = %s "
@@ -10154,8 +10195,7 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
     // targetStmt->get_file_info()->get_file_id())
     while ((returningNullSurroundingStatement == false) &&
            (surroundingStatement != NULL) &&
-           surroundingStatement_fileId !=
-               targetStmt->get_file_info()->get_file_id() &&
+           surroundingStatement_fileId != targetStatement_fileId &&
            surroundingStatement_fileId !=
                Sg_File_Info::TRANSFORMATION_FILE_ID) {
       // Start by going up in the source sequence.
@@ -10255,8 +10295,7 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
         // (surroundingStatement->get_file_info()->get_file_id() !=
         // targetStmt->get_file_info()->get_file_id()) )
         while ((surroundingStatement != NULL) &&
-               (surroundingStatement_fileId !=
-                targetStmt->get_file_info()->get_file_id())) {
+               (surroundingStatement_fileId != targetStatement_fileId)) {
           // DQ (11/15/2020): Eliminate the infinite loop that is possible when
           // we iterate over a loop of statements.
           if (forwardVisitedStatementSet.find(surroundingStatement) !=
@@ -10333,8 +10372,12 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
   } else {
     printf("This is a special statement (not associated with the original "
            "source code, comment relocation is not supported for these "
-           "statements) targetStmt file id = %d \n",
-           targetStmt->get_file_info()->get_file_id());
+           "statements) targetStmt file id = %d (physical file id = %d)\n",
+           targetStmt->get_file_info() ? targetStmt->get_file_info()->get_file_id()
+                                       : Sg_File_Info::BAD_FILE_ID,
+           targetStmt->get_file_info()
+               ? targetStmt->get_file_info()->get_physical_file_id()
+               : Sg_File_Info::BAD_FILE_ID);
     surroundingStatement = NULL;
   }
 
@@ -25882,7 +25925,7 @@ SgFunctionDeclaration *SageInterface::buildFunctionPrototype(
 // want to mark it for output or template unparsing from the AST).
 SgFunctionDeclaration *
 SageInterface::replaceDefiningFunctionDeclarationWithFunctionPrototype(
-    SgFunctionDeclaration *functionDeclaration) {
+    SgFunctionDeclaration *functionDeclaration, bool movePreprocessingInfo) {
   SgFunctionDeclaration *nondefiningFunctionDeclaration = NULL;
   ROSE_ASSERT(functionDeclaration != NULL);
 
@@ -25937,17 +25980,6 @@ SageInterface::replaceDefiningFunctionDeclarationWithFunctionPrototype(
       // Likely we should build a new nondefining function declaration instead
       // of reusing the existing non-defining declaration.
       // removeStatement(functionDeclaration);
-      // DQ (11/22/2020): Note that this step will move the comments and CPP
-      // directives to the new statement (better in this step than in the copy
-      // of the pointer to the list above, which cause an iterator invalidation
-      // error). DQ (10/21/2020): I think we may want to return the orignal
-      // defining function declaration. DQ (12/2/2019): Need to support member
-      // functions which can't be declared when outside of their class. DQ
-      // (11/15/2020): Note that the default is false, and we need true.
-      bool movePreprocessingInfo = true;
-      replaceStatement(functionDeclaration, nondefiningFunctionDeclaration,
-                       movePreprocessingInfo);
-
       // DQ (11/25/2020): This is the cause of a problem in the outliner caught
       // in the resetParentPointer.C (definingDeclaration->get_parent() !=
       // __null). DQ (11/24/2020): Maybe we should set the parent of the
@@ -25956,6 +25988,11 @@ SageInterface::replaceDefiningFunctionDeclarationWithFunctionPrototype(
       // functionDeclaration is inserted into global scope and the name
       // qualification is not computed correctly (since the parent was still the
       // namespace scope where it was originally.
+      //
+      // Replace old function definition with non-defining declaration.
+      replaceStatement(functionDeclaration, nondefiningFunctionDeclaration,
+                       movePreprocessingInfo);
+
       ROSE_ASSERT(nondefiningFunctionDeclaration->get_parent() != NULL);
     }
   } else {
