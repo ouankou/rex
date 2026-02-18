@@ -90,7 +90,10 @@ jobs:
         cd $GITHUB_WORKSPACE
         CTEST_JOBS="$(nproc)"
         ctest --test-dir build -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering" --output-on-failure -j"${CTEST_JOBS}"
-        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests --output-on-failure -j"${CTEST_JOBS}"
+        # Explicitly gate Rodinia-derived OpenMP lowering regressions.
+        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests -L "OMPLOWERING_RODINIA" --output-on-failure -j"${CTEST_JOBS}"
+        # Run the remaining OpenMP tests without rerunning OMPLOWERING_RODINIA.
+        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests -LE "OMPLOWERING_RODINIA" --output-on-failure -j"${CTEST_JOBS}"
 
   fortran-only-config:
     strategy:

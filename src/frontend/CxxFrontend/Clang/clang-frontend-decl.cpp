@@ -69,6 +69,73 @@ std::string normalizeOperatorFunctionName(std::string name) {
   return name;
 }
 
+static bool canLexTrailingDeclToken(clang::SourceLocation loc,
+                                    clang::SourceManager &sm) {
+  if (!loc.isValid() || loc.isMacroID()) {
+    return false;
+  }
+
+  clang::FileID file_id = sm.getFileID(loc);
+  if (file_id.isInvalid() || file_id != sm.getMainFileID()) {
+    return false;
+  }
+
+  auto buffer = sm.getBufferDataOrNone(file_id);
+  if (!buffer) {
+    return false;
+  }
+
+  unsigned offset = sm.getFileOffset(loc);
+  if (offset >= buffer->size()) {
+    return false;
+  }
+
+  bool invalid = false;
+  (void)sm.getCharacterData(loc, &invalid);
+  return !invalid;
+}
+
+static clang::SourceRange extendDeclSourceRangeWithTrailingSemicolon(
+    clang::SourceRange range, clang::SourceManager &sm,
+    const clang::LangOptions &lang_opts) {
+  if (!range.isValid()) {
+    return range;
+  }
+
+  clang::SourceLocation end = range.getEnd();
+  if (!end.isValid()) {
+    return range;
+  }
+  if (end.isMacroID()) {
+    end = sm.getExpansionLoc(end);
+  }
+  if (!end.isValid()) {
+    return range;
+  }
+
+  if (!canLexTrailingDeclToken(end, sm)) {
+    return range;
+  }
+
+  clang::SourceLocation after_end =
+      clang::Lexer::getLocForEndOfToken(end, 0, sm, lang_opts);
+  if (!after_end.isValid()) {
+    return range;
+  }
+
+  clang::Token tok;
+  if (clang::Lexer::getRawToken(after_end, tok, sm, lang_opts,
+                                /*IgnoreWhiteSpace=*/true)) {
+    return range;
+  }
+  if (!tok.is(clang::tok::semi)) {
+    return range;
+  }
+
+  range.setEnd(tok.getLocation());
+  return range;
+}
+
 } // namespace
 
 static bool symbol_present_in_scope(SgScopeStatement *scope, SgSymbol *sym) {
@@ -5777,6 +5844,11 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
       if (loc.isValid()) {
         range = clang::SourceRange(loc, loc);
       }
+    }
+    if (range.isValid() && p_compiler_instance != nullptr) {
+      range = extendDeclSourceRangeWithTrailingSemicolon(
+          range, p_compiler_instance->getSourceManager(),
+          p_compiler_instance->getLangOpts());
     }
     applySourceRange(*node, range);
   }
@@ -16036,15 +16108,25 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
   for (unsigned i = 0; i < function_decl->getNumParams(); i++) {
     clang::ParmVarDecl *param_decl = function_decl->getParamDecl(i);
-    if (funcProtoType != nullptr && function_decl->getParamDecl(i)->getType() !=
-                                        funcProtoType->getParamType(i)) {
+    if (funcProtoType != nullptr) {
+      const clang::QualType declared_param_type = param_decl->getType();
+      const clang::QualType proto_param_type = funcProtoType->getParamType(i);
+      bool differs = false;
+      if (p_compiler_instance != nullptr) {
+        differs = !p_compiler_instance->getASTContext().hasSameType(
+            declared_param_type, proto_param_type);
+      } else {
+        differs = declared_param_type.getCanonicalType() !=
+                  proto_param_type.getCanonicalType();
+      }
+      if (differs) {
 #if DEBUG_VISIT_DECL
-      std::cout << "Func arg type :"
-                << function_decl->getParamDecl(i)->getType().getAsString()
-                << " funcProtoType arg type:"
-                << funcProtoType->getParamType(i).getAsString() << std::endl;
+        std::cout << "Func arg type :" << declared_param_type.getAsString()
+                  << " funcProtoType arg type:"
+                  << proto_param_type.getAsString() << std::endl;
 #endif
-      diffInProtoType = true;
+        diffInProtoType = true;
+      }
     }
     SgNode *tmp_init_name = Traverse(param_decl);
     SgInitializedName *init_name = isSgInitializedName(tmp_init_name);
@@ -19664,15 +19746,10 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   */
   //  ROSE_ASSERT(GetSymbolFromSymbolTable(function_decl) != nullptr);
 
-  // Pei-Hung (09/27/2022) setup linkage
-  if (function_decl->isExternC()) {
-    sg_function_decl->get_declarationModifier()
-        .get_storageModifier()
-        .setExtern();
-  }
-
-  // Pei-Hung (06/16/22) added "extern" modifier
-  bool hasExternalStorage = function_decl->isLocalExternDecl();
+  // Map only explicit storage-class extern, not plain C language linkage.
+  bool hasExternalStorage =
+      function_decl->isLocalExternDecl() ||
+      function_decl->getStorageClass() == clang::SC_Extern;
   if (hasExternalStorage) {
     sg_function_decl->get_declarationModifier()
         .get_storageModifier()
@@ -21751,7 +21828,19 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
 
     if (!suppress_var) {
       if (loc.isMacroID()) {
-        loc = sm.getSpellingLoc(loc);
+        // Macro-spelled declarations used in source-level macros (e.g. GNU
+        // statement-expressions in main-file macros) should be preserved using
+        // their expansion location. Falling back to spelling location here
+        // would incorrectly suppress declarations that are lexically in the
+        // main file but spelled in headers.
+        clang::SourceLocation expansion_loc = sm.getExpansionLoc(loc);
+        if (expansion_loc.isValid() && sm.isWrittenInMainFile(expansion_loc) &&
+            !sm.isInSystemHeader(expansion_loc) &&
+            !sm.isWrittenInBuiltinFile(expansion_loc)) {
+          loc = expansion_loc;
+        } else {
+          loc = sm.getSpellingLoc(loc);
+        }
       }
       if (!loc.isValid()) {
         suppress_var = true;

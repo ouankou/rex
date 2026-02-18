@@ -88,9 +88,9 @@ set(OMP_ACC_TESTCODES
   jacobi-ompacc-multiGPU.c axpy_ompacc_mpi.c axpy_ompacc4.c
   axpy_ompacc_parseonly.c)
 
-# ROSE flags for OpenMP parsing (CFE frontend only)
-# C tests use C99-style declarations in for-loop initializers.
-set(ROSE_C_FLAGS -std=c99 -rose:openmp:ast_only -w -rose:verbose 0)
+# ROSE flags for OpenMP parsing (CFE frontend only).
+# Do not force a C standard here; rely on the frontend default dialect.
+set(ROSE_C_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
 set(ROSE_CXX_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
 
 # Include path to find omp.h header
@@ -171,3 +171,6 @@ endforeach()
 add_omp_output_diff_tests(bonds-2.c OMPTEST_bonds-2 OMPTEST)
 
 add_omp_output_diff_tests(macroIds.c OMPTEST_macroIds OMPTEST)
+
+# Rodinia-derived OpenMP lowering regressions (separate from AST output refs).
+add_subdirectory(lowering_rodinia)
