@@ -2769,6 +2769,12 @@ HEADER_NAMESPACE_DEFINITION_STATEMENT_END
 
 HEADER_NAMESPACE_ALIAS_DECLARATION_STATEMENT_START
 
+#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
+          virtual unsigned int cfgIndexForEnd() const override;
+          virtual std::vector<VirtualCFG::CFGEdge> cfgOutEdges(unsigned int index) override;
+          virtual std::vector<VirtualCFG::CFGEdge> cfgInEdges(unsigned int index) override;
+#endif
+
        // DQ (2/18/2006): Added general name mangling for all declarations (and some other IR nodes).
           virtual SgName get_mangled_name(void) const override;
 

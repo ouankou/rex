@@ -2060,6 +2060,27 @@ std::vector<CFGEdge> SgTypedefDeclaration::cfgInEdges(unsigned int idx) {
   return result;
 }
 
+unsigned int SgNamespaceAliasDeclarationStatement::cfgIndexForEnd() const {
+  return 0;
+}
+
+std::vector<CFGEdge>
+SgNamespaceAliasDeclarationStatement::cfgOutEdges(unsigned int idx) {
+  ASSERT_require(idx == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+
+std::vector<CFGEdge>
+SgNamespaceAliasDeclarationStatement::cfgInEdges(unsigned int idx) {
+  ASSERT_require(idx == 0);
+  std::vector<CFGEdge> result;
+  addIncomingFortranGotos(this, idx, result);
+  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  return result;
+}
+
 unsigned int SgUsingDirectiveStatement::cfgIndexForEnd() const { return 0; }
 
 std::vector<CFGEdge> SgUsingDirectiveStatement::cfgOutEdges(unsigned int idx) {
