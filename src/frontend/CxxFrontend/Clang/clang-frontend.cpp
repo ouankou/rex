@@ -57,12 +57,14 @@ builtinPreincludeForLanguage(ClangToSageTranslator::Language language) {
   case ClangToSageTranslator::OBJC:
   case ClangToSageTranslator::unknown:
     return nullptr;
+  default:
+    ROSE_ABORT();
   }
   return nullptr;
 }
 
 bool hasConfiguredPreinclude(const std::vector<std::string> &includes,
-                             const std::string &required_include) {
+                             llvm::StringRef required_include) {
   for (const auto &include : includes) {
     llvm::StringRef include_ref(include);
     if (include_ref == required_include ||
