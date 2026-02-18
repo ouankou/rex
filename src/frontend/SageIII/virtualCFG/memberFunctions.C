@@ -181,6 +181,18 @@ static void addIncomingFortranGotos(SgStatement *stmt, unsigned int index,
   }
 }
 
+static SgStatement *unwrapLeadingLabelStatement(SgStatement *statement) {
+  ASSERT_not_null(statement);
+  while (SgLabelStatement *labelStatement = isSgLabelStatement(statement)) {
+    SgStatement *next = labelStatement->get_statement();
+    if (next == nullptr) {
+      break;
+    }
+    statement = next;
+  }
+  return statement;
+}
+
 static CFGNode getNodeJustAfterInContainer(SgNode *n) {
   // Only handles next-statement control flow
   SgNode *parent = n->get_parent();
@@ -212,7 +224,7 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
     }
   }
 
-  if (isSgCaseOptionStmt(n)) {
+  if (isSgCaseOptionStmt(n) && isSgLabelStatement(parent) == nullptr) {
     unsigned int idx = parent->cfgFindNextChildIndex(n);
 #if DEBUG_CALLGRAPH
     printf(
@@ -221,6 +233,18 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
 #endif
 
     return CFGNode(parent, idx);
+  }
+
+  SgLabelStatement *labelStatement = isSgLabelStatement(n);
+  if (labelStatement != nullptr && labelStatement->get_statement() != nullptr) {
+    unsigned int idx = 0;
+#if DEBUG_CALLGRAPH
+    printf(
+        "In getNodeJustAfterInContainer(): found SgLabelStatement: idx = %u \n",
+        idx);
+#endif
+    ASSERT_not_null(labelStatement->get_statement());
+    return CFGNode(labelStatement->get_statement(), idx);
   }
 
   // DQ (1/16/2018): Handle the case of where the parent is a SgLabelStatement.
@@ -249,18 +273,6 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
            idx);
 #endif
     return CFGNode(parent, idx);
-  }
-
-  SgLabelStatement *labelStatement = isSgLabelStatement(n);
-  if (labelStatement != nullptr && labelStatement->get_statement() != nullptr) {
-    unsigned int idx = 0;
-#if DEBUG_CALLGRAPH
-    printf(
-        "In getNodeJustAfterInContainer(): found SgLabelStatement: idx = %u \n",
-        idx);
-#endif
-    ASSERT_not_null(labelStatement->get_statement());
-    return CFGNode(labelStatement->get_statement(), idx);
   } else {
     if (labelStatement != nullptr) {
 #if DEBUG_CALLGRAPH
@@ -500,26 +512,13 @@ std::vector<CFGEdge> SgBasicBlock::cfgInEdges(unsigned int idx) {
 #endif
 
     if (idx <= this->get_statements().size()) {
-      SgStatement *statement = this->get_statements()[idx - 1];
+      SgStatement *statement =
+          unwrapLeadingLabelStatement(this->get_statements()[idx - 1]);
 #if DEBUG_CALLGRAPH
       printf("In SgBasicBlock::cfgInEdges(): idx = %u Compute the starting "
              "node: statement = %p = %s \n",
              idx, statement, statement->class_name().c_str());
 #endif
-      SgLabelStatement *labelStatement = isSgLabelStatement(statement);
-      if (labelStatement != nullptr &&
-          labelStatement->get_statement() != nullptr) {
-        statement = labelStatement->get_statement();
-        ASSERT_not_null(statement);
-      } else {
-        if (labelStatement != nullptr) {
-#if DEBUG_CALLGRAPH
-          printf("In SgBasicBlock::cfgInEdges(): This should be the case of a "
-                 "fortran program \n");
-#endif
-        }
-      }
-
       makeEdge(statement->cfgForEnd(), CFGNode(this, idx), result);
     } else {
       ROSE_ASSERT(!"Bad index for SgBasicBlock");
@@ -1601,7 +1600,8 @@ std::vector<CFGEdge> SgCaseOptionStmt::cfgInEdges(unsigned int idx) {
     break;
   }
   case 1:
-    makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
+    makeEdge(unwrapLeadingLabelStatement(this->get_body())->cfgForEnd(),
+             CFGNode(this, idx), result);
     break;
   default:
     ROSE_ASSERT(!"Bad index for SgCaseOptionStmt");
@@ -1766,7 +1766,8 @@ std::vector<CFGEdge> SgDefaultOptionStmt::cfgInEdges(unsigned int idx) {
     break;
   }
   case 1:
-    makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
+    makeEdge(unwrapLeadingLabelStatement(this->get_body())->cfgForEnd(),
+             CFGNode(this, idx), result);
     break;
   default:
     ROSE_ASSERT(!"Bad index for SgDefaultOptionStmt");
