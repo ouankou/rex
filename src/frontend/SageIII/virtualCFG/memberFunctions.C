@@ -364,6 +364,31 @@ static CFGNode getNodeJustBeforeInContainer(SgNode *n) {
   return CFGNode(parent, idx);
 }
 
+template <class StatementT>
+static unsigned int
+simpleDeclarationCfgIndexForEnd(const StatementT * /*node*/) {
+  return 0;
+}
+
+template <class StatementT>
+static std::vector<CFGEdge> simpleDeclarationCfgOutEdges(StatementT *node,
+                                                         unsigned int idx) {
+  ASSERT_require(idx == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(CFGNode(node, idx), getNodeJustAfterInContainer(node), result);
+  return result;
+}
+
+template <class StatementT>
+static std::vector<CFGEdge> simpleDeclarationCfgInEdges(StatementT *node,
+                                                        unsigned int idx) {
+  ASSERT_require(idx == 0);
+  std::vector<CFGEdge> result;
+  addIncomingFortranGotos(node, idx, result);
+  makeEdge(getNodeJustBeforeInContainer(node), CFGNode(node, idx), result);
+  return result;
+}
+
 //---------------------------------------
 
 unsigned int SgStatement::cfgIndexForEnd() const {
@@ -2043,55 +2068,54 @@ SgStaticAssertionDeclaration::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgTypedefDeclaration::cfgIndexForEnd() const { return 0; }
+unsigned int SgTypedefDeclaration::cfgIndexForEnd() const {
+  return simpleDeclarationCfgIndexForEnd(this);
+}
 
 std::vector<CFGEdge> SgTypedefDeclaration::cfgOutEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  return result;
+  return simpleDeclarationCfgOutEdges(this, idx);
 }
 
 std::vector<CFGEdge> SgTypedefDeclaration::cfgInEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  addIncomingFortranGotos(this, idx, result);
-  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  return result;
+  return simpleDeclarationCfgInEdges(this, idx);
 }
 
-unsigned int SgUsingDirectiveStatement::cfgIndexForEnd() const { return 0; }
+unsigned int SgNamespaceAliasDeclarationStatement::cfgIndexForEnd() const {
+  return simpleDeclarationCfgIndexForEnd(this);
+}
+
+std::vector<CFGEdge>
+SgNamespaceAliasDeclarationStatement::cfgOutEdges(unsigned int idx) {
+  return simpleDeclarationCfgOutEdges(this, idx);
+}
+
+std::vector<CFGEdge>
+SgNamespaceAliasDeclarationStatement::cfgInEdges(unsigned int idx) {
+  return simpleDeclarationCfgInEdges(this, idx);
+}
+
+unsigned int SgUsingDirectiveStatement::cfgIndexForEnd() const {
+  return simpleDeclarationCfgIndexForEnd(this);
+}
 
 std::vector<CFGEdge> SgUsingDirectiveStatement::cfgOutEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  return result;
+  return simpleDeclarationCfgOutEdges(this, idx);
 }
 
 std::vector<CFGEdge> SgUsingDirectiveStatement::cfgInEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  addIncomingFortranGotos(this, idx, result);
-  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  return result;
+  return simpleDeclarationCfgInEdges(this, idx);
 }
 
-unsigned int SgPragmaDeclaration::cfgIndexForEnd() const { return 0; }
+unsigned int SgPragmaDeclaration::cfgIndexForEnd() const {
+  return simpleDeclarationCfgIndexForEnd(this);
+}
 
 std::vector<CFGEdge> SgPragmaDeclaration::cfgOutEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  return result;
+  return simpleDeclarationCfgOutEdges(this, idx);
 }
 
 std::vector<CFGEdge> SgPragmaDeclaration::cfgInEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  addIncomingFortranGotos(this, idx, result);
-  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  return result;
+  return simpleDeclarationCfgInEdges(this, idx);
 }
 
 // DQ (3/22/2019): Adding EmptyDeclaration to support addition of comments and
@@ -2099,39 +2123,29 @@ std::vector<CFGEdge> SgPragmaDeclaration::cfgInEdges(unsigned int idx) {
 // precision. For example, used to add an include directive with greater
 // precission to the global scope and permit the unparsing via the token stream
 // to be used as well.
-unsigned int SgEmptyDeclaration::cfgIndexForEnd() const { return 0; }
+unsigned int SgEmptyDeclaration::cfgIndexForEnd() const {
+  return simpleDeclarationCfgIndexForEnd(this);
+}
 
 std::vector<CFGEdge> SgEmptyDeclaration::cfgOutEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  return result;
+  return simpleDeclarationCfgOutEdges(this, idx);
 }
 
 std::vector<CFGEdge> SgEmptyDeclaration::cfgInEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  addIncomingFortranGotos(this, idx, result);
-  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  return result;
+  return simpleDeclarationCfgInEdges(this, idx);
 }
 
-unsigned int SgUsingDeclarationStatement::cfgIndexForEnd() const { return 0; }
+unsigned int SgUsingDeclarationStatement::cfgIndexForEnd() const {
+  return simpleDeclarationCfgIndexForEnd(this);
+}
 
 std::vector<CFGEdge>
 SgUsingDeclarationStatement::cfgOutEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  return result;
+  return simpleDeclarationCfgOutEdges(this, idx);
 }
 
 std::vector<CFGEdge> SgUsingDeclarationStatement::cfgInEdges(unsigned int idx) {
-  ASSERT_require(idx == 0);
-  std::vector<CFGEdge> result;
-  addIncomingFortranGotos(this, idx, result);
-  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  return result;
+  return simpleDeclarationCfgInEdges(this, idx);
 }
 
 unsigned int SgCommonBlock::cfgIndexForEnd() const { return 0; }
