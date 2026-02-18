@@ -60,7 +60,6 @@ builtinPreincludeForLanguage(ClangToSageTranslator::Language language) {
   default:
     ROSE_ABORT();
   }
-  return nullptr;
 }
 
 bool hasConfiguredPreinclude(const std::vector<std::string> &includes,
