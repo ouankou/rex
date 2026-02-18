@@ -10645,8 +10645,7 @@ bool ClangToSageTranslator::VisitImplicitValueInitExpr(
     expr = SageBuilder::buildCastExp(SageBuilder::buildIntVal(0), type);
   } else {
     ROSE_ASSERT(isSgTypeUnknown(stripped) == nullptr);
-    bool class_unknown =
-        isSgTypedefType(type) == nullptr && isSgClassType(type) == nullptr;
+    bool class_unknown = isSgClassType(stripped) == nullptr;
     SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
     expr = SageBuilder::buildConstructorInitializer_nfi(
         nullptr, args, type,
