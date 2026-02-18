@@ -364,9 +364,9 @@ ROSE_PRAGMA_MESSAGE("sage3basic.h must be included before Cereal header files")
 // endif for ifndef ROSE_USE_SWIG_SUPPORT
 // #endif
 
-// OpenMP version macro value (YYYYMM format from OpenMP spec)
-// 202011 = OpenMP 5.1 (November 2020), matching Clang-21 default
-#define OMPVERSION 202011
+// OpenMP version macro value (YYYYMM format from OpenMP spec).
+// Value is injected from CMake's ROSE_OPENMP_VERSION.
+#define OMPVERSION @ROSE_OPENMP_VERSION@
 
 // Optional filter for memory-pool traversals. AstPostProcessing uses this to
 // skip nodes originating from system headers when running with the Clang
