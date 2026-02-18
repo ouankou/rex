@@ -10631,6 +10631,7 @@ bool ClangToSageTranslator::VisitImplicitValueInitExpr(
   SgType *type =
       buildTypeFromQualifiedType(implicit_value_init_expr->getType());
   ROSE_ASSERT(type != nullptr);
+  ROSE_ASSERT(isSgReferenceType(type) == nullptr);
 
   SgType *stripped =
       type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE);
