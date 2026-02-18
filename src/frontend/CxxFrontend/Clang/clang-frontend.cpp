@@ -1002,6 +1002,15 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     }
   }
 
+  if ((language == ClangToSageTranslator::CPLUSPLUS ||
+       language == ClangToSageTranslator::CUDA) &&
+      !has_passthrough_flag("-fdelayed-template-parsing") &&
+      !has_passthrough_flag("-fno-delayed-template-parsing")) {
+    // GCC-based headers and legacy ROSE tests rely on delayed lookup in
+    // template member definitions; keep Clang frontend semantics aligned.
+    add_passthrough_flag_if_missing("-fdelayed-template-parsing");
+  }
+
   if (exception_mode == ExceptionMode::Unspecified &&
       (language == ClangToSageTranslator::CPLUSPLUS ||
        language == ClangToSageTranslator::CUDA)) {
