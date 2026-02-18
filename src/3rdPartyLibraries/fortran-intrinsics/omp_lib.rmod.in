@@ -6,7 +6,7 @@
 MODULE omp_lib
 USE omp_lib_kinds
 IMPLICIT NONE
-INTEGER, PARAMETER :: openmp_version = 201511
+INTEGER, PARAMETER :: openmp_version = @ROSE_OPENMP_VERSION@
 INTERFACE
 SUBROUTINE omp_init_lock(svar)
 USE omp_lib_kinds
