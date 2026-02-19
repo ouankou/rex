@@ -26,7 +26,7 @@ mptOmpLowering_includeHeaders=\
 	$(mptOmpLoweringPath)/libgomp_g.h \
 	$(mptOmpLoweringPath)/libompc.h \
 	$(mptOmpLoweringPath)/libxomp.h \
-	$(mptOmpLoweringPath)/libxompf.fh
+	$(mptOmpLoweringPath)/libxompf.h
 
 mptOmpLowering_extraDist=\
 	$(mptOmpLoweringPath)/CMakeLists.txt \
