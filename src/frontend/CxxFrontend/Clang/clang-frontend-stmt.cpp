@@ -12171,6 +12171,15 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
   }
 
   auto build_single_overload_function_ref = [&]() -> SgExpression * {
+    // Keep unresolved ADL/dependent lookups in nonreal form. Even when Clang
+    // exposes a single ordinary-lookup candidate, ADL or template-dependent
+    // context can still change the selected callee at instantiation time.
+    if (unresolved_lookup_expr->requiresADL() ||
+        unresolved_lookup_expr->isTypeDependent() ||
+        unresolved_lookup_expr->isValueDependent()) {
+      return nullptr;
+    }
+
     if (unresolved_lookup_expr->getName().getCXXOverloadedOperator() !=
         clang::OO_None) {
       return nullptr;
