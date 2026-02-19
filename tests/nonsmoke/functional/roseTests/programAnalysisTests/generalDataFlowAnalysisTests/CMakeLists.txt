@@ -1216,7 +1216,7 @@ foreach(specimen IN LISTS _c_constprop_disabled)
     NAME gdf_c_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="cp ${_cxx_test_dir}/${specimen} ${_c_specimen} && $<TARGET_FILE:constantPropagationTest> -I${_cxx_test_dir} -c ${_c_specimen}"
+      CMD="cp \"${_cxx_test_dir}/${specimen}\" \"${_c_specimen}\" && \"$<TARGET_FILE:constantPropagationTest>\" -I\"${_cxx_test_dir}\" -c \"${_c_specimen}\""
       ${_exit_status}
       ccp_${specimen}.passed
   )
