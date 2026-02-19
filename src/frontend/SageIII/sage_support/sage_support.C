@@ -4244,36 +4244,67 @@ int SgProject::link(const std::vector<std::string> &argv,
   // will be no SgFile at all in this case but we still want to append relevant
   // linking options for OpenMP
   if (get_openmp_linking()) {
-// Sara Royuela 12/10/2012:  Add GCC version check
+    linkingCommand.push_back(resolveXompArchivePath());
+    bool openmp_runtime_configured = false;
+
+#ifdef LLVM_OPENMP_LIB_PATH
+    string llvm_openmp_lib_path(LLVM_OPENMP_LIB_PATH);
+    if (!llvm_openmp_lib_path.empty()) {
+      std::filesystem::path runtime_root(llvm_openmp_lib_path);
+      std::filesystem::path runtime_library;
+      const std::vector<std::string> llvm_runtime_candidates = {
+          "libiomp5.so", "libiomp5.a", "libomp.so", "libomp.a"};
+      for (const std::string &candidate : llvm_runtime_candidates) {
+        std::filesystem::path resolved = runtime_root / candidate;
+        if (std::filesystem::exists(resolved)) {
+          runtime_library = resolved;
+          break;
+        }
+      }
+
+      if (!runtime_library.empty()) {
+        linkingCommand.push_back(runtime_library.string());
+      } else {
+        linkingCommand.push_back("-L" + llvm_openmp_lib_path);
+        linkingCommand.push_back("-liomp5");
+      }
+      linkingCommand.push_back("-Wl,-rpath," + llvm_openmp_lib_path);
+      linkingCommand.push_back("-lpthread");
+      openmp_runtime_configured = true;
+    }
+#endif
+
+    if (!openmp_runtime_configured) {
 #ifdef USE_ROSE_GOMP_OPENMP_LIBRARY
+// Sara Royuela 12/10/2012:  Add GCC version check
 #if (__GNUC__ < 4 || (__GNUC__ == 4 && (__GNUC_MINOR__ < 4)))
 #warning "GNU version lower than expected"
-    printf("GCC version must be 4.4.0 or later when linking with GOMP OpenMP "
-           "Runtime Library \n(OpenMP tasking calls are not implemented in "
-           "previous versions)\n");
-    ROSE_ABORT();
+      printf("GCC version must be 4.4.0 or later when linking with GOMP OpenMP "
+             "Runtime Library \n(OpenMP tasking calls are not implemented in "
+             "previous versions)\n");
+      ROSE_ABORT();
 #endif
-
-    linkingCommand.push_back(resolveXompArchivePath());
-
-    // lib path is available if --with-gomp_omp_runtime_library=XXX is used
-    string gomp_lib_path(GCC_GOMP_OPENMP_LIB_PATH);
-    ROSE_ASSERT(gomp_lib_path.size() != 0);
-    linkingCommand.push_back(gomp_lib_path + "/libgomp.a");
-    linkingCommand.push_back("-lpthread");
+      string gomp_lib_path(GCC_GOMP_OPENMP_LIB_PATH);
+      ROSE_ASSERT(gomp_lib_path.size() != 0);
+      linkingCommand.push_back(gomp_lib_path + "/libgomp.a");
+      linkingCommand.push_back("-lpthread");
+      openmp_runtime_configured = true;
 #else
-// GOMP has higher priority when both GOMP and OMNI are specified (wrongfully)
 #ifdef OMNI_OPENMP_LIB_PATH
-    linkingCommand.push_back(resolveXompArchivePath());
+      string omni_lib_path(OMNI_OPENMP_LIB_PATH);
+      ROSE_ASSERT(omni_lib_path.size() != 0);
+      linkingCommand.push_back(omni_lib_path + "/libgompc.a");
+      linkingCommand.push_back("-lpthread");
+      openmp_runtime_configured = true;
+#endif
+#endif
+    }
 
-    string omni_lib_path(OMNI_OPENMP_LIB_PATH);
-    ROSE_ASSERT(omni_lib_path.size() != 0);
-    linkingCommand.push_back(omni_lib_path + "/libgompc.a");
-    linkingCommand.push_back("-lpthread");
-    printf("Warning: OpenMP lowering is requested but no target runtime "
-           "library is specified!\n");
-#endif
-#endif
+    if (!openmp_runtime_configured) {
+      printf("Error: OpenMP lowering is requested but no runtime library is "
+             "configured.\n");
+      ROSE_ABORT();
+    }
   }
 
   // TOO1 (2015/05/11): Causes configure-time tests to fail. Checking ld

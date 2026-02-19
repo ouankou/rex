@@ -194,32 +194,90 @@ set(OMP_ACC_CXX_DISABLED_TESTS
   jacobi-ompacc2.cpp
 )
 
+set(_omp_legacy_ci_label OMPLOWERING_LEGACY_ADDRESSED)
+
+set(OMP_C_COMPILE_CI_ENABLED_TESTS
+  alignment.c
+  collapse.c
+  endif.c
+  endif3.c
+  full_verify.c
+  include_header_only.c
+  lastprivateOrphaned.c
+  linebreak.c
+  ompfor8.c
+  parallel_pragma.c
+  private-duplicate.c
+  sizeof.c
+  task_orphaned.c
+  task_underIf.c
+  task_untied4.c
+  task_wait.c
+  task_wait2.c
+  twoRegions.c
+)
+
+set(OMP_C_RUN_CI_ENABLED_TESTS
+  array_init.c
+  array_init_2.c
+  barrier.c
+  critical_orphaned.c
+  firstPrivateArray.c
+  firstPrivateArray_2.c
+  flush.c
+  omp_version.c
+  parallel.c
+  parallelfor.c
+  prettyfunc.c
+  task_outlining.c
+)
+
+set(OMP_CXX_COMPILE_CI_ENABLED_TESTS
+  memberFunction.cpp
+  memberFunction2.cpp
+)
+
+set(OMP_CXX_RUN_CI_ENABLED_TESTS
+  hello1.cpp
+)
+
+set(OMP_ACC_C_CI_ENABLED_TESTS
+  axpy_ompacc.c
+)
+
+function(_mark_omp_legacy_ci_enabled test_name)
+  set_property(TEST ${test_name} APPEND PROPERTY LABELS ${_omp_legacy_ci_label})
+endfunction()
+
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 
 set(_omp_test_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests)
 set(_omp_test_includes
-  -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII
   -I${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering
   -I${CMAKE_BINARY_DIR})
+if(ROSE_LLVM_OPENMP_INCLUDE_DIR)
+  list(APPEND _omp_test_includes -isystem ${ROSE_LLVM_OPENMP_INCLUDE_DIR})
+endif()
 
 set(_omp_flags ${_omp_test_includes} -rose:openmp:lowering -g)
 set(_omp_acc_flags ${_omp_test_includes} -rose:openmp:lowering -g)
+string(JOIN " " _omp_flags_str ${_omp_flags})
+string(JOIN " " _omp_acc_flags_str ${_omp_acc_flags})
 
 add_test(
   NAME omp_lowering_single2
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:roseomp> ${_omp_flags} --edg:no_warnings -c ${_omp_test_dir}/single2.c
+  COMMAND $<TARGET_FILE:roseomp> ${_omp_flags} -c ${_omp_test_dir}/single2.c
 )
-set_tests_properties(omp_lowering_single2 PROPERTIES DISABLED TRUE)
 
 add_test(
   NAME omp_lowering_sizeof
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:roseomp> ${_omp_flags} --edg:no_warnings -c ${_omp_test_dir}/sizeof.c
+  COMMAND $<TARGET_FILE:roseomp> ${_omp_flags} -c ${_omp_test_dir}/sizeof.c
 )
-set_tests_properties(omp_lowering_sizeof PROPERTIES DISABLED TRUE)
+_mark_omp_legacy_ci_enabled(omp_lowering_sizeof)
 
 foreach(testcode IN LISTS OMP_C_COMPILE_TESTS)
   string(REPLACE "." "_" _omp_name ${testcode})
@@ -229,10 +287,13 @@ foreach(testcode IN LISTS OMP_C_COMPILE_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="./roseomp ${_omp_flags} -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
+  if(testcode IN_LIST OMP_C_COMPILE_CI_ENABLED_TESTS)
+    _mark_omp_legacy_ci_enabled(omp_lowering_c_compile_${_omp_name})
+  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_C_COMPILE_DISABLED_TESTS)
@@ -243,11 +304,13 @@ foreach(testcode IN LISTS OMP_C_COMPILE_DISABLED_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="./roseomp ${_omp_flags} -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
-  set_tests_properties(omp_lowering_c_compile_${_omp_name} PROPERTIES DISABLED TRUE)
+  if(testcode IN_LIST OMP_C_COMPILE_CI_ENABLED_TESTS)
+    _mark_omp_legacy_ci_enabled(omp_lowering_c_compile_${_omp_name})
+  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_C_RUN_TESTS)
@@ -258,10 +321,13 @@ foreach(testcode IN LISTS OMP_C_RUN_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="./roseomp ${_omp_flags} -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
+  if(testcode IN_LIST OMP_C_RUN_CI_ENABLED_TESTS)
+    _mark_omp_legacy_ci_enabled(omp_lowering_c_run_${_omp_name})
+  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_C_RUN_DISABLED_TESTS)
@@ -272,11 +338,13 @@ foreach(testcode IN LISTS OMP_C_RUN_DISABLED_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="./roseomp ${_omp_flags} -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
-  set_tests_properties(omp_lowering_c_run_${_omp_name} PROPERTIES DISABLED TRUE)
+  if(testcode IN_LIST OMP_C_RUN_CI_ENABLED_TESTS)
+    _mark_omp_legacy_ci_enabled(omp_lowering_c_run_${_omp_name})
+  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_CXX_COMPILE_TESTS)
@@ -287,10 +355,13 @@ foreach(testcode IN LISTS OMP_CXX_COMPILE_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="./roseomp ${_omp_flags} -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
+  if(testcode IN_LIST OMP_CXX_COMPILE_CI_ENABLED_TESTS)
+    _mark_omp_legacy_ci_enabled(omp_lowering_cxx_compile_${_omp_name})
+  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_CXX_RUN_TESTS)
@@ -301,10 +372,13 @@ foreach(testcode IN LISTS OMP_CXX_RUN_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="./roseomp ${_omp_flags} -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
+  if(testcode IN_LIST OMP_CXX_RUN_CI_ENABLED_TESTS)
+    _mark_omp_legacy_ci_enabled(omp_lowering_cxx_run_${_omp_name})
+  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_ACC_C_TESTS)
@@ -315,10 +389,13 @@ foreach(testcode IN LISTS OMP_ACC_C_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseompacc ${testcode} [${_omp_target}]"
-      CMD="./roseompacc ${_omp_acc_flags} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseompacc> ${_omp_acc_flags_str} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
+  if(testcode IN_LIST OMP_ACC_C_CI_ENABLED_TESTS)
+    _mark_omp_legacy_ci_enabled(omp_acc_lowering_c_${_omp_name})
+  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_ACC_C_DISABLED_TESTS)
@@ -329,11 +406,13 @@ foreach(testcode IN LISTS OMP_ACC_C_DISABLED_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseompacc ${testcode} [${_omp_target}]"
-      CMD="./roseompacc ${_omp_acc_flags} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseompacc> ${_omp_acc_flags_str} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
-  set_tests_properties(omp_acc_lowering_c_${_omp_name} PROPERTIES DISABLED TRUE)
+  if(testcode IN_LIST OMP_ACC_C_CI_ENABLED_TESTS)
+    _mark_omp_legacy_ci_enabled(omp_acc_lowering_c_${_omp_name})
+  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_ACC_CXX_TESTS)
@@ -344,7 +423,7 @@ foreach(testcode IN LISTS OMP_ACC_CXX_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseompacc ${testcode} [${_omp_target}]"
-      CMD="./roseompacc ${_omp_acc_flags} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseompacc> ${_omp_acc_flags_str} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
@@ -358,11 +437,10 @@ foreach(testcode IN LISTS OMP_ACC_CXX_DISABLED_TESTS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="roseompacc ${testcode} [${_omp_target}]"
-      CMD="./roseompacc ${_omp_acc_flags} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
+      CMD="$<TARGET_FILE:roseompacc> ${_omp_acc_flags_str} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
       ${_exit_status}
       ${_omp_target}
   )
-  set_tests_properties(omp_acc_lowering_cxx_${_omp_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 set(_omp_rex_reference_dir ${CMAKE_CURRENT_SOURCE_DIR}/REXReferenceTest)
@@ -375,9 +453,6 @@ foreach(testcode IN LISTS OMP_C_COMPILE_TESTS)
       ${_omp_rex_reference_dir}/rex_${testcode}
   )
   set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DEPENDS omp_lowering_c_compile_${_omp_name})
-  if(testcode IN_LIST OMP_REX_DIFF_DISABLED_TESTS)
-    set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DISABLED TRUE)
-  endif()
 endforeach()
 
 foreach(testcode IN LISTS OMP_C_RUN_TESTS)
@@ -389,9 +464,6 @@ foreach(testcode IN LISTS OMP_C_RUN_TESTS)
       ${_omp_rex_reference_dir}/rex_${testcode}
   )
   set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DEPENDS omp_lowering_c_run_${_omp_name})
-  if(testcode IN_LIST OMP_REX_DIFF_DISABLED_TESTS)
-    set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DISABLED TRUE)
-  endif()
 endforeach()
 
 add_subdirectory(fortran)
@@ -399,7 +471,7 @@ add_subdirectory(fortran)
 # Makefile check targets.
 add_test(
   NAME nonsmoke_functional_roseTests_ompLoweringTests_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
@@ -409,7 +481,7 @@ add_test(
 set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_conditional-check-local PROPERTIES DEPENDS "OMPTEST_memberFunction.cpp;OMPTEST_memberFunction2.cpp;OMPTEST_ompfor5.c;OMPTEST_ompfor6.c;OMPTEST_ompfor7.c;OMPTEST_referenceType.cpp;OMPTEST_twoRegions.c" )
 add_test(
   NAME nonsmoke_functional_roseTests_ompLoweringTests_ompacc_diff_check
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}

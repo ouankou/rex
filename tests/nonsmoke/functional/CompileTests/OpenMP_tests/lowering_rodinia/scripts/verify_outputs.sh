@@ -45,20 +45,52 @@ first_line() {
   echo "${line}"
 }
 
+verify_common_cuda_lowering() {
+  local rose_file="$1"
+  local cu_file="$2"
+  local kernel_count="$3"
+
+  require_file "${rose_file}"
+  require_file "${cu_file}"
+
+  expect_count "${rose_file}" '#include "rex_kmp.h"' 1 "host runtime include count"
+  expect_count "${rose_file}" 'struct[[:space:]]+__tgt_offload_entry[[:space:]]+OUT__' "${kernel_count}" "host offload entry count"
+  expect_count "${rose_file}" 'char[[:space:]]+OUT__.*__id__[[:space:]]*=' "${kernel_count}" "host kernel id count"
+
+  expect_count "${cu_file}" '#include "rex_nvidia.h"' 1 "device runtime include count"
+  expect_count "${cu_file}" 'extern "C"' 1 "device extern C count"
+  expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+OUT__' "${kernel_count}" "device kernel count"
+}
+
 case "${case_name}" in
   rodinia_bfs_like)
     rose_file="${workdir}/rose_rodinia_bfs_like.c"
     cu_file="${workdir}/rex_lib_rodinia_bfs_like.cu"
-    require_file "${rose_file}"
-    require_file "${cu_file}"
+    verify_common_cuda_lowering "${rose_file}" "${cu_file}" 1
+    ;;
 
-    expect_count "${rose_file}" '#include "rex_kmp.h"' 1 "host runtime include count"
-    expect_count "${rose_file}" 'struct[[:space:]]+__tgt_offload_entry[[:space:]]+OUT__' 1 "host offload entry count"
-    expect_count "${rose_file}" 'char[[:space:]]+OUT__.*__id__[[:space:]]*=' 1 "host kernel id count"
+  rodinia_gaussian_like)
+    rose_file="${workdir}/rose_rodinia_gaussian_like.c"
+    cu_file="${workdir}/rex_lib_rodinia_gaussian_like.cu"
+    verify_common_cuda_lowering "${rose_file}" "${cu_file}" 3
+    ;;
 
-    expect_count "${cu_file}" '#include "rex_nvidia.h"' 1 "device runtime include count"
-    expect_count "${cu_file}" 'extern "C"' 1 "device extern C count"
-    expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+OUT__' 1 "device kernel count"
+  rodinia_hotspot_like)
+    rose_file="${workdir}/rose_rodinia_hotspot_like.c"
+    cu_file="${workdir}/rex_lib_rodinia_hotspot_like.cu"
+    verify_common_cuda_lowering "${rose_file}" "${cu_file}" 2
+    ;;
+
+  rodinia_nn_like)
+    rose_file="${workdir}/rose_rodinia_nn_like.c"
+    cu_file="${workdir}/rex_lib_rodinia_nn_like.cu"
+    verify_common_cuda_lowering "${rose_file}" "${cu_file}" 1
+    ;;
+
+  rodinia_pathfinder_like)
+    rose_file="${workdir}/rose_rodinia_pathfinder_like.c"
+    cu_file="${workdir}/rex_lib_rodinia_pathfinder_like.cu"
+    verify_common_cuda_lowering "${rose_file}" "${cu_file}" 1
     ;;
 
   rodinia_srad_comments_like)
@@ -102,19 +134,18 @@ case "${case_name}" in
     (( p4 - up_line <= 30 )) || die "scale-up pragma too far from marker"
     ;;
 
+  rodinia_srad_v2_like)
+    rose_file="${workdir}/rose_rodinia_srad_v2_like.c"
+    cu_file="${workdir}/rex_lib_rodinia_srad_v2_like.cu"
+    verify_common_cuda_lowering "${rose_file}" "${cu_file}" 2
+    expect_count "${rose_file}" '//[[:space:]]*target data region ends' 1 "target-data trailing comment count"
+    ;;
+
   rodinia_btree_kernel_like)
     rose_file="${workdir}/rose_rodinia_btree_kernel_like.c"
     cu_file="${workdir}/rex_lib_rodinia_btree_kernel_like.cu"
-    require_file "${rose_file}"
-    require_file "${cu_file}"
-
-    expect_count "${rose_file}" '#include "rex_kmp.h"' 1 "host runtime include count"
-    expect_count "${rose_file}" 'struct[[:space:]]+__tgt_offload_entry[[:space:]]+OUT__' 1 "host offload entry count"
-    expect_count "${rose_file}" 'char[[:space:]]+OUT__.*__id__[[:space:]]*=' 1 "host kernel id count"
+    verify_common_cuda_lowering "${rose_file}" "${cu_file}" 1
     expect_count "${rose_file}" '//[[:space:]]*main' 1 "host trailing main comment count"
-
-    expect_count "${cu_file}" '#include "rex_nvidia.h"' 1 "device runtime include count"
-    expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+OUT__' 1 "device kernel count"
     ;;
 
   *)

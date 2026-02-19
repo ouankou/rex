@@ -12662,7 +12662,13 @@ bool SageInterface::isCanonicalForLoop(
   SgVarRefExp *testvar = isSgVarRefExp(SkipCasting(test->get_lhs_operand()));
   if (testvar == NULL)
     return false;
-  if (testvar->get_symbol() != ivarname->get_symbol_from_symbol_table())
+  SgVariableSymbol *loop_index_symbol =
+      isSgVariableSymbol(ivarname->get_symbol_from_symbol_table());
+  SgVariableSymbol *test_symbol = isSgVariableSymbol(testvar->get_symbol());
+  if (test_symbol == NULL)
+    return false;
+  if (test_symbol != loop_index_symbol &&
+      test_symbol->get_declaration() != ivarname)
     return false;
   // grab the upper bound
   ubast = test->get_rhs_operand();
@@ -12734,7 +12740,11 @@ bool SageInterface::isCanonicalForLoop(
 
   if (incr_var == NULL)
     return false;
-  if (incr_var->get_symbol() != ivarname->get_symbol_from_symbol_table())
+  SgVariableSymbol *incr_symbol = isSgVariableSymbol(incr_var->get_symbol());
+  if (incr_symbol == NULL)
+    return false;
+  if (incr_symbol != loop_index_symbol &&
+      incr_symbol->get_declaration() != ivarname)
     return false;
 
   // single entry and single exit?
@@ -14966,6 +14976,16 @@ int SageInterface::fixVariableReferences(SgNode *root,
     SgScopeStatement *scope = findScopeForNode(ref);
     return scope != nullptr ? scope : fallback_scope;
   };
+  auto isNodeWithinScope = [](SgNode *node, SgScopeStatement *scope) -> bool {
+    if (scope == nullptr)
+      return false;
+    for (SgNode *parent = node; parent != nullptr;
+         parent = parent->get_parent()) {
+      if (parent == scope)
+        return true;
+    }
+    return false;
+  };
   Rose_STL_Container<SgNode *> reflist =
       NodeQuery::querySubTree(root, V_SgVarRefExp);
   for (Rose_STL_Container<SgNode *>::iterator i = reflist.begin();
@@ -14990,7 +15010,27 @@ int SageInterface::fixVariableReferences(SgNode *root,
         continue;
       }
     }
-    if (initname->get_type() == SgTypeUnknown::createType())
+    bool has_out_of_scope_local_symbol = false;
+    if (initname != NULL) {
+      SgScopeStatement *decl_scope = initname->get_scope();
+      // Local/parameter symbols from a different function/block can survive
+      // AST moves during outlining and must be rebound to the nearest visible
+      // symbol in the new scope.
+      if (decl_scope != NULL && !isNodeWithinScope(varRef, decl_scope) &&
+          !isSgGlobal(decl_scope) &&
+          !isSgNamespaceDefinitionStatement(decl_scope) &&
+          !isSgClassDefinition(decl_scope)) {
+        has_out_of_scope_local_symbol = true;
+      }
+    }
+
+    const bool is_in_omp_clause =
+        getEnclosingNode<SgOmpClause>(varRef, true) != NULL;
+    const bool needs_out_of_scope_rebind =
+        has_out_of_scope_local_symbol && !is_in_omp_clause;
+
+    if (initname->get_type() == SgTypeUnknown::createType() ||
+        needs_out_of_scope_rebind)
     //    if ((initname->get_scope()==NULL) &&
     //    (initname->get_type()==SgTypeUnknown::createType()))
     {
@@ -15094,17 +15134,13 @@ int SageInterface::fixVariableReferences(SgNode *root,
         // cerr<<"Error: cannot find a symbol for "<<varName.getString()<<endl;
         // ROSE_ASSERT(realSymbol);
       } else {
-        // release placeholder initname and symbol
-        ROSE_ASSERT(realSymbol != (varRef->get_symbol()));
-
-        // CH (2010/7/26): We cannot delete those initname and symbol here,
-        // since there may be other variable references which point to them. We
-        // will delay this clear just before AstTests.
-
-        // std::cout << "Fixed variable reference: " <<
-        // realSymbol->get_name().str() << std::endl;
-        varRef->set_symbol(isSgVariableSymbol(realSymbol));
-        counter++;
+        if (realSymbol != varRef->get_symbol()) {
+          // CH (2010/7/26): We cannot delete those initname and symbol here,
+          // since there may be other variable references which point to them.
+          // We will delay this clear just before AstTests.
+          varRef->set_symbol(isSgVariableSymbol(realSymbol));
+          counter++;
+        }
       }
     }
   } // end for
@@ -21339,6 +21375,15 @@ static void moveOneStatement(SgScopeStatement *sourceBlock,
     case V_SgFortranIncludeLine:
     case V_SgImplicitStatement: // TODO: implicit statement with letter-list
     case V_SgPragmaDeclaration:
+    case V_SgOmpThreadprivateStatement:
+    case V_SgOmpRequiresStatement:
+    case V_SgOmpTaskwaitStatement:
+    case V_SgOmpDeclareSimdStatement:
+    case V_SgOmpDeclareMapperStatement:
+    case V_SgOmpDeclareTargetStatement:
+    case V_SgOmpEndDeclareTargetStatement:
+      declaration->set_parent(targetBlock);
+      declaration->set_scope(targetBlock);
       break;
     default: {
       printf("Moving this declaration = %p = %s = %s between blocks is not yet "

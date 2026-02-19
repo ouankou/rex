@@ -59,6 +59,23 @@ SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   }
   return nullptr;
 }
+
+bool shouldSkipImplicitDataSharingVar(const SgInitializedName *init_var) {
+  if (init_var == nullptr) {
+    return true;
+  }
+  if (const Sg_File_Info *fi = init_var->get_file_info()) {
+    if (fi->isCompilerGenerated() || fi->isTransformation()) {
+      return true;
+    }
+  }
+
+  // Clang may materialize predefined function-name expressions as internal
+  // declarations. They are not user data-sharing candidates.
+  const std::string name = init_var->get_name().getString();
+  return name == "__PRETTY_FUNCTION__" || name == "__func__" ||
+         name == "__FUNCTION__";
+}
 } // namespace
 
 Rose_STL_Container<SgNode *>
@@ -262,6 +279,8 @@ static bool isSharedInEnclosingConstructs(SgInitializedName *init_var,
   bool result = false;
   ROSE_ASSERT(init_var != NULL);
   ROSE_ASSERT(start_stmt != NULL);
+  if (shouldSkipImplicitDataSharingVar(init_var))
+    return true;
   SgScopeStatement *var_scope = init_var->get_scope();
   //    SgScopeStatement* directive_scope = start_stmt->get_scope();
   // locally declared variables are private to the start_stmt
@@ -481,6 +500,8 @@ int patchUpFirstprivateVariables(SgFile *file) {
       ROSE_ASSERT(var_ref->get_symbol() != NULL);
       SgInitializedName *init_var = var_ref->get_symbol()->get_declaration();
       ROSE_ASSERT(init_var != NULL);
+      if (shouldSkipImplicitDataSharingVar(init_var))
+        continue;
       SgScopeStatement *var_scope = init_var->get_scope();
       ROSE_ASSERT(var_scope != NULL);
 
@@ -543,6 +564,8 @@ int patchUpImplicitMappingVariables(SgFile *file) {
       ROSE_ASSERT(var_ref->get_symbol() != NULL);
       SgInitializedName *init_var = var_ref->get_symbol()->get_declaration();
       ROSE_ASSERT(init_var != NULL);
+      if (shouldSkipImplicitDataSharingVar(init_var))
+        continue;
       SgScopeStatement *var_scope = init_var->get_scope();
       ROSE_ASSERT(var_scope != NULL);
 
@@ -671,6 +694,8 @@ int patchUpImplicitSharedVariables(SgFile *file) {
       ROSE_ASSERT(var_ref->get_symbol() != NULL);
       SgInitializedName *init_var = var_ref->get_symbol()->get_declaration();
       ROSE_ASSERT(init_var != NULL);
+      if (shouldSkipImplicitDataSharingVar(init_var))
+        continue;
       SgScopeStatement *var_scope = init_var->get_scope();
       ROSE_ASSERT(var_scope != NULL);
 

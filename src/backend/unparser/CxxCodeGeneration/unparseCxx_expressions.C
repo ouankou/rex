@@ -667,9 +667,14 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
   SgNonrealDecl *nrdecl = nrsym->get_declaration();
   ASSERT_not_null(nrdecl);
 
+  SgTemplateArgumentPtrList &expr_args = nr_refexp->get_templateArguments();
+  SgTemplateArgumentPtrList &decl_args = nrdecl->get_tpl_args();
+  SgTemplateArgumentPtrList &tpl_args =
+      !expr_args.empty() ? expr_args : decl_args;
+
   string func_name = nrsym->get_name().str();
   if (!unp->opt.get_overload_opt() && uses_operator_syntax &&
-      func_name.compare(0, 8, "operator") == 0) {
+      func_name.compare(0, 8, "operator") == 0 && tpl_args.empty()) {
     const bool is_new_operator = func_name.compare(0, 12, "operator new") == 0;
     const bool is_delete_operator =
         func_name.compare(0, 15, "operator delete") == 0;
@@ -684,10 +689,6 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
   }
   curprint(func_name);
 
-  SgTemplateArgumentPtrList &expr_args = nr_refexp->get_templateArguments();
-  SgTemplateArgumentPtrList &decl_args = nrdecl->get_tpl_args();
-  SgTemplateArgumentPtrList &tpl_args =
-      !expr_args.empty() ? expr_args : decl_args;
   if (!tpl_args.empty()) {
     unparseTemplateArgumentList(tpl_args, info);
   }
@@ -919,8 +920,15 @@ void Unparse_ExprStmt::unparseTemplateFunctionName(
   // unparseTemplateArgumentList
   ASSERT_not_null(templateInstantiationFunctionDeclaration);
 
-  unp->u_exprStmt->curprint(
-      templateInstantiationFunctionDeclaration->get_templateName().str());
+  std::string function_name =
+      templateInstantiationFunctionDeclaration->get_templateName().str();
+  if (templateInstantiationFunctionDeclaration->get_specialFunctionModifier()
+          .isOperator() &&
+      function_name.compare(0, 8, "operator") != 0) {
+    function_name = templateInstantiationFunctionDeclaration->get_name().str();
+  }
+
+  unp->u_exprStmt->curprint(function_name);
 
   bool unparseTemplateArguments =
       templateInstantiationFunctionDeclaration
@@ -954,6 +962,13 @@ void Unparse_ExprStmt::unparseTemplateMemberFunctionName(
 
   string function_name =
       templateInstantiationMemberFunctionDeclaration->get_templateName();
+  if (templateInstantiationMemberFunctionDeclaration
+          ->get_specialFunctionModifier()
+          .isOperator() &&
+      function_name.compare(0, 8, "operator") != 0) {
+    function_name =
+        templateInstantiationMemberFunctionDeclaration->get_name().str();
+  }
 
   // DQ (6/15/2013): Now that we have fixed template handling for member
   // function name output in member function reference handling, we have to make
@@ -2748,11 +2763,16 @@ void Unparse_ExprStmt::unparseFuncRefSupport(SgExpression *expr,
         // strchr works, look up the man page for it. func_name =
         // strchr(func_name.c_str(), func_name[8]);
         if (uses_operator_syntax == true) {
-          func_name = strchr(func_name.c_str(), func_name[8]);
-          if (is_literal_operator == true) {
-            // func_name = strchr(func_name.c_str(), func_name[8]);
-            // func_name = strchr(func_name.c_str(), "\"\"");
-            func_name = strchr(func_name.c_str(), func_name[4]);
+          // Keep the full operator spelling when extra suffix tokens are
+          // attached to the name (e.g. explicit template arguments) to avoid
+          // producing invalid forms like "<< <T>(...)"
+          if (func_name.find(' ') == string::npos) {
+            func_name = strchr(func_name.c_str(), func_name[8]);
+            if (is_literal_operator == true) {
+              // func_name = strchr(func_name.c_str(), func_name[8]);
+              // func_name = strchr(func_name.c_str(), "\"\"");
+              func_name = strchr(func_name.c_str(), func_name[4]);
+            }
           }
 
 #if DEBUG_FUNCTION_REFERENCE_SUPPORT

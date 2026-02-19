@@ -1,6 +1,11 @@
+#ifndef REX_KMP_H
+#define REX_KMP_H
+
 #include <stddef.h>
 
 #include <stdint.h>
+
+#include "libxomp.h"
 
 typedef struct ident {
   int reserved_1;
@@ -39,7 +44,8 @@ struct __tgt_bin_desc {
 extern "C" {
 #endif
 
-void __kmpc_fork_call(ident_t *, int, void *, ...);
+typedef void (*kmpc_micro_t)(int *, int *, ...);
+void __kmpc_fork_call(ident_t *, int, kmpc_micro_t, ...);
 void __kmpc_atomic_start(void);
 void __kmpc_atomic_end(void);
 void __kmpc_push_num_threads(ident_t *, int, int);
@@ -49,6 +55,9 @@ void __kmpc_end_single(ident_t *, int);
 void __kmpc_barrier(ident_t *, int);
 int __kmpc_serialized_parallel(ident_t *, int);
 void __kmpc_end_serialized_parallel(ident_t *, int);
+void *__kmpc_omp_task_alloc(ident_t *, int, int, size_t, size_t, void *);
+int __kmpc_omp_task(ident_t *, int, void *);
+int __kmpc_omp_taskwait(ident_t *, int);
 void __kmpc_for_static_init_4(ident_t *, int, int, int *, int *, int *, int *,
                               int, int);
 void __kmpc_for_static_fini(ident_t *, int);
@@ -87,3 +96,5 @@ struct __tgt_bin_desc *register_cubin(const char *);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* REX_KMP_H */

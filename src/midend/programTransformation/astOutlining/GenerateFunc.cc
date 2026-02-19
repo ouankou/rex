@@ -78,6 +78,15 @@ createFuncSkeleton(const string &name, SgType *ret_type,
 
   ROSE_ASSERT(func != NULL);
 
+  // Preserve scope language semantics for generated outlined routines.
+  if (SageInterface::is_Fortran_language() || scope->isCaseInsensitive()) {
+    if (SgFunctionDefinition *func_def = func->get_definition()) {
+      func_def->setCaseInsensitive(true);
+      if (SgBasicBlock *func_body = func_def->get_body())
+        func_body->setCaseInsensitive(true);
+    }
+  }
+
   SgFunctionSymbol *func_symbol =
       scope->lookup_function_symbol(func->get_name());
   ROSE_ASSERT(func_symbol != NULL);
@@ -1073,6 +1082,46 @@ static void remapVarSyms(
   // Check if variable remapping is even needed.
   if (vsym_remap.empty() && private_remap.empty())
     return;
+
+  auto remapToPointerDeref = [&](SgVarRefExp *ref_orig,
+                                 SgVariableSymbol *sym_new) {
+    ROSE_ASSERT(ref_orig != NULL);
+    ROSE_ASSERT(sym_new != NULL);
+
+    // Detached references can appear in pre-collected query results after
+    // earlier rewrites. They are not part of the active AST anymore.
+    if (ref_orig->get_parent() == NULL)
+      return;
+
+    SgPointerDerefExp *deref_exp =
+        SageBuilder::buildPointerDerefExp(buildVarRefExp(sym_new));
+    deref_exp->set_need_paren(true);
+
+    if (SgOmpClause *omp_clause =
+            getEnclosingNode<SgOmpClause>(ref_orig, true)) {
+      SgOmpExecStatement *directive =
+          isSgOmpExecStatement(omp_clause->get_parent());
+      ROSE_ASSERT(directive != NULL);
+      if (!clause_variable_renaming_record.count(directive))
+        clause_variable_renaming_record[directive] =
+            new std::map<SgInitializedName *, SgExpression *>();
+      std::map<SgInitializedName *, SgExpression *> *name_mapping =
+          clause_variable_renaming_record[directive];
+      (*name_mapping)[ref_orig->get_symbol()->get_declaration()] = deref_exp;
+      return;
+    }
+
+    // flush lists are lowered to runtime calls and should not be rewritten as
+    // dereference expressions in-place.
+    if (getEnclosingNode<SgOmpFlushStatement>(ref_orig, true) != NULL)
+      return;
+
+    // Keep the old node detached (instead of deep-deleting) while iterating
+    // over a pre-collected reference list to avoid stale pointer reuse.
+    SageInterface::replaceExpression(isSgExpression(ref_orig),
+                                     isSgExpression(deref_exp), true);
+  };
+
   // Find all variable references
   typedef Rose_STL_Container<SgNode *> NodeList_t;
   NodeList_t refs = NodeQuery::querySubTree(b, V_SgVarRefExp);
@@ -1109,11 +1158,7 @@ static void remapVarSyms(
         if (pdSyms.find(ref_orig->get_symbol()) == pdSyms.end()) // using temp
           ref_orig->set_symbol(sym_new);
         else {
-          SgPointerDerefExp *deref_exp =
-              SageBuilder::buildPointerDerefExp(buildVarRefExp(sym_new));
-          deref_exp->set_need_paren(true);
-          SageInterface::replaceExpression(isSgExpression(ref_orig),
-                                           isSgExpression(deref_exp));
+          remapToPointerDeref(ref_orig, sym_new);
         }
       } else // no variable cloning is used
       {
@@ -1123,29 +1168,7 @@ static void remapVarSyms(
         // TODO compare the orig and new type, use pointer dereferencing only
         // when necessary
         {
-          SgPointerDerefExp *deref_exp =
-              SageBuilder::buildPointerDerefExp(buildVarRefExp(sym_new));
-          deref_exp->set_need_paren(true);
-          // We can't rename variables in omp clauses, e.g. reduction(+ : sum)
-          // -> reduction(+ : *sum) Instead, the mapping between old and new
-          // names is stored in a map for now. When those clauses are
-          // transformed later, necessary renaming is performed based on this
-          // map.
-          if (isSgOmpClause(ref_orig->get_parent())) {
-            SgOmpExecStatement *directive = isSgOmpExecStatement(
-                isSgOmpClause(ref_orig->get_parent())->get_parent());
-            ROSE_ASSERT(directive != NULL);
-            if (!clause_variable_renaming_record.count(directive))
-              clause_variable_renaming_record[directive] =
-                  new std::map<SgInitializedName *, SgExpression *>();
-            std::map<SgInitializedName *, SgExpression *> *name_mapping =
-                clause_variable_renaming_record[directive];
-            (*name_mapping)[ref_orig->get_symbol()->get_declaration()] =
-                deref_exp;
-          } else {
-            SageInterface::replaceExpression(isSgExpression(ref_orig),
-                                             isSgExpression(deref_exp));
-          }
+          remapToPointerDeref(ref_orig, sym_new);
         } else
           ref_orig->set_symbol(sym_new);
       }
@@ -1819,6 +1842,16 @@ SgFunctionDeclaration *Outliner::generateFunction(
 
   // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
   // Outliner::generateFunction(): 10") == false);
+
+  // Outlined Fortran procedures must keep case-insensitive scope semantics.
+  if (SageInterface::is_Fortran_language()) {
+    SgFunctionDefinition *func_def = func->get_definition();
+    ROSE_ASSERT(func_def != NULL);
+    func_def->setCaseInsensitive(true);
+    SgBasicBlock *func_body = func_def->get_body();
+    ROSE_ASSERT(func_body != NULL);
+    func_body->setCaseInsensitive(true);
+  }
 
   return func;
 }

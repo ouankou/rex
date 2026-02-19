@@ -556,6 +556,9 @@
 /* Location (unquoted) of the LLVM OpenMP runtime library. */
 #cmakedefine LLVM_OPENMP_LIB_PATH "@LLVM_OPENMP_LIB_PATH@"
 
+/* Location (unquoted) of the LLVM OpenMP header directory. */
+#cmakedefine LLVM_OPENMP_INCLUDE_PATH "@LLVM_OPENMP_INCLUDE_PATH@"
+
 /* Version number of package */
 //AS Don't know what to do with this
 

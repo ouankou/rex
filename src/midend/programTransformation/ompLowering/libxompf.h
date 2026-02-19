@@ -1,40 +1,28 @@
-!Liao 1 / 11 / 2011 !XOMP function prototype support Fortran source - to -
-    source translation !This is necessary since they will be treated
-        as returning REAL !since they start with
-        X(implicit to be REAL, not INTEGER)
+external XOMP_loop_static_start external XOMP_loop_dynamic_start external XOMP_loop_guided_start
+    external XOMP_loop_runtime_start external XOMP_loop_ordered_static_start external XOMP_loop_ordered_dynamic_start
+        external XOMP_loop_ordered_guided_start external XOMP_loop_ordered_runtime_start
 
-            !loop scheduling functions !loop start EXTERNAL XOMP_loop_static_start
-                EXTERNAL XOMP_loop_dynamic_start EXTERNAL XOMP_loop_guided_start
-                    EXTERNAL XOMP_loop_runtime_start EXTERNAL XOMP_loop_ordered_static_start
-                        EXTERNAL XOMP_loop_ordered_dynamic_start EXTERNAL
-                            XOMP_loop_ordered_guided_start EXTERNAL XOMP_loop_ordered_runtime_start
+            integer XOMP_loop_static_start integer XOMP_loop_dynamic_start integer XOMP_loop_guided_start
+                integer XOMP_loop_runtime_start integer XOMP_loop_ordered_static_start integer XOMP_loop_ordered_dynamic_start
+                    integer XOMP_loop_ordered_guided_start integer XOMP_loop_ordered_runtime_start
 
-                                INTEGER XOMP_loop_static_start INTEGER
-                                    XOMP_loop_dynamic_start INTEGER XOMP_loop_guided_start
-                                        INTEGER XOMP_loop_runtime_start INTEGER
-                                            XOMP_loop_ordered_static_start INTEGER
-                                                XOMP_loop_ordered_dynamic_start INTEGER
-                                                    XOMP_loop_ordered_guided_start
-                                                        INTEGER
-                                                            XOMP_loop_ordered_runtime_start
+                        external XOMP_loop_static_next external XOMP_loop_dynamic_next
+                            external XOMP_loop_guided_next external XOMP_loop_runtime_next
+                                external XOMP_loop_ordered_static_next external XOMP_loop_ordered_dynamic_next
+                                    external XOMP_loop_ordered_guided_next external XOMP_loop_ordered_runtime_next
 
-    !loop next EXTERNAL XOMP_loop_static_next EXTERNAL XOMP_loop_dynamic_next
-        EXTERNAL XOMP_loop_guided_next EXTERNAL XOMP_loop_runtime_next EXTERNAL
-            XOMP_loop_ordered_static_next EXTERNAL XOMP_loop_ordered_dynamic_next
-                EXTERNAL XOMP_loop_ordered_guided_next EXTERNAL
-                    XOMP_loop_ordered_runtime_next
+                                        integer XOMP_loop_static_next integer XOMP_loop_dynamic_next
+                                            integer XOMP_loop_guided_next integer XOMP_loop_runtime_next
+                                                integer XOMP_loop_ordered_static_next integer XOMP_loop_ordered_dynamic_next
+                                                    integer XOMP_loop_ordered_guided_next integer XOMP_loop_ordered_runtime_next
 
-                        INTEGER XOMP_loop_static_next INTEGER
-                            XOMP_loop_dynamic_next INTEGER XOMP_loop_guided_next
-                                INTEGER XOMP_loop_runtime_next INTEGER
-                                    XOMP_loop_ordered_static_next INTEGER
-                                        XOMP_loop_ordered_dynamic_next INTEGER
-                                            XOMP_loop_ordered_guided_next INTEGER
-                                                XOMP_loop_ordered_runtime_next
+                                                        external XOMP_sections_end external XOMP_sections_end_nowait
+                                                            integer XOMP_sections_init_next
+                                                                integer XOMP_sections_next
 
-    !sections INTEGER XOMP_sections_init_next INTEGER XOMP_sections_next
+                                                                    external XOMP_single external
+                                                                        XOMP_master integer XOMP_single
+                                                                            integer XOMP_master
 
-        EXTERNAL XOMP_sections_end EXTERNAL XOMP_sections_end_nowait
-
-    !a few others EXTERNAL XOMP_single INTEGER XOMP_single EXTERNAL XOMP_master
-        INTEGER XOMP_master
+                                                                                external xomp_task
+                                                                                    external XOMP_taskwait
