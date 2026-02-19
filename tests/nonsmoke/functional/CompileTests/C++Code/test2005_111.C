@@ -12,15 +12,10 @@
 // give it a declaration to eat (hence the variable declaration "int
 // _April_12_2005 = 0;"
 
-#if defined(__clang__)
-// Clang treats va_start as a builtin and rejects redeclarations of that name.
-// Keep this test focused on declaration sequencing without redefining builtins.
+// Use a non-builtin marker declaration for this legacy sequencing test.
+// Modern Clang rejects redeclarations of builtin names like va_start.
 void rose_test2005_111_marker(__builtin_va_list __builtin__x,
                               void *__builtin__y);
-#else
-#define __builtin_va_start va_start
-void va_start(__builtin_va_list __builtin__x, void *__builtin__y);
-#endif
 
 // DQ (4/12/2005): This is a bizzar legacy frontend bug which I have not figured
 // out (except to verify that it is present). Bug: legacy frontend will ignore
