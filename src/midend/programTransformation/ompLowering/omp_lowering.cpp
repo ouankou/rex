@@ -115,22 +115,28 @@ void normalizeScalarLocalDerefUses(
     return;
   }
 
-  typedef Rose_STL_Container<SgNode *> NodeList_t;
-  NodeList_t derefs = NodeQuery::querySubTree(bb, V_SgPointerDerefExp);
-  for (NodeList_t::iterator i = derefs.begin(); i != derefs.end(); ++i) {
-    SgPointerDerefExp *deref = isSgPointerDerefExp(*i);
-    if (deref == nullptr || deref->get_parent() == nullptr) {
-      continue;
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    typedef Rose_STL_Container<SgNode *> NodeList_t;
+    NodeList_t derefs = NodeQuery::querySubTree(bb, V_SgPointerDerefExp);
+    for (NodeList_t::iterator i = derefs.begin(); i != derefs.end(); ++i) {
+      SgPointerDerefExp *deref = isSgPointerDerefExp(*i);
+      if (deref == nullptr || deref->get_parent() == nullptr) {
+        continue;
+      }
+      SgExpression *operand = stripNoopCastsAndParens(deref->get_operand());
+      SgVarRefExp *var_ref = isSgVarRefExp(operand);
+      if (var_ref == nullptr || var_ref->get_symbol() == nullptr) {
+        continue;
+      }
+      if (scalar_locals_from_pointer_symbols.count(var_ref->get_symbol()) ==
+          0) {
+        continue;
+      }
+      replaceExpression(deref, buildVarRefExp(var_ref->get_symbol()));
+      changed = true;
     }
-    SgExpression *operand = stripNoopCastsAndParens(deref->get_operand());
-    SgVarRefExp *var_ref = isSgVarRefExp(operand);
-    if (var_ref == nullptr || var_ref->get_symbol() == nullptr) {
-      continue;
-    }
-    if (scalar_locals_from_pointer_symbols.count(var_ref->get_symbol()) == 0) {
-      continue;
-    }
-    replaceExpression(deref, buildVarRefExp(var_ref->get_symbol()));
   }
 }
 
@@ -140,6 +146,18 @@ SgType *stripTypeAliases(SgType *type) {
   }
   return type->stripType(SgType::STRIP_MODIFIER_TYPE |
                          SgType::STRIP_TYPEDEF_TYPE);
+}
+
+SgType *stripTypeAliasesAndReferences(SgType *type) {
+  SgType *result = stripTypeAliases(type);
+  while (SgReferenceType *ref_type = isSgReferenceType(result)) {
+    result = stripTypeAliases(ref_type->get_base_type());
+  }
+  return result;
+}
+
+bool isPointerBackedType(SgType *type) {
+  return isSgPointerType(stripTypeAliasesAndReferences(type)) != nullptr;
 }
 
 bool is_32_bit_target(const SgNode *context) {
@@ -196,6 +214,40 @@ SgType *resolvePointerBaseType(SgType *pointer_type, size_t deref_depth) {
     result = ptr->get_base_type();
   }
   return stripTypeAliases(result);
+}
+
+bool buildExpressionMatchingTypeFromActiveSymbol(
+    SgVariableSymbol *active_symbol, SgType *expected_type,
+    SgExpression *&value_expr) {
+  ROSE_ASSERT(active_symbol != nullptr);
+  ROSE_ASSERT(expected_type != nullptr);
+
+  SgType *expected = stripTypeAliases(expected_type);
+  ROSE_ASSERT(expected != nullptr);
+
+  SgExpression *candidate = buildVarRefExp(active_symbol);
+  SgType *current = stripTypeAliases(active_symbol->get_type());
+
+  while (current != nullptr) {
+    if (current == expected) {
+      value_expr = candidate;
+      return true;
+    }
+
+    if (SgReferenceType *ref_type = isSgReferenceType(current)) {
+      current = stripTypeAliases(ref_type->get_base_type());
+      continue;
+    }
+
+    SgPointerType *ptr_type = isSgPointerType(current);
+    if (ptr_type == nullptr)
+      break;
+
+    candidate = buildPointerDerefExp(candidate);
+    current = stripTypeAliases(ptr_type->get_base_type());
+  }
+
+  return false;
 }
 
 bool rewritePointerBasedForIndex(SgForStatement *for_loop) {
@@ -7502,20 +7554,13 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
           if (isSgOmpTaskStatement(clause_stmt) != NULL &&
               stripTypeAliases(active_symbol->get_type()) !=
                   stripTypeAliases(effective_type)) {
-            SgType *active_type = stripTypeAliases(active_symbol->get_type());
-            SgType *expected_type = stripTypeAliases(effective_type);
-            SgExpression *active_value = buildVarRefExp(active_symbol);
-            if (SgPointerType *active_pointer = isSgPointerType(active_type)) {
-              if (stripTypeAliases(active_pointer->get_base_type()) ==
-                  expected_type) {
-                active_value = buildPointerDerefExp(active_value);
-              } else {
-                active_value = copyExpression(orig_var_exp);
-              }
-            } else if (active_type != expected_type) {
-              active_value = copyExpression(orig_var_exp);
+            SgExpression *active_value = nullptr;
+            if (buildExpressionMatchingTypeFromActiveSymbol(
+                    active_symbol, effective_type, active_value)) {
+              init = buildAssignInitializer(active_value);
+            } else {
+              init = buildAssignInitializer(copyExpression(orig_var_exp));
             }
-            init = buildAssignInitializer(active_value);
           } else {
             init = buildAssignInitializer(copyExpression(orig_var_exp));
           }
@@ -7550,8 +7595,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
         if (orig_symbol != NULL && orig_symbol != active_symbol)
           var_map.insert(
               VariableSymbolMap_t::value_type(orig_symbol, local_symbol));
-        if (isSgPointerType(stripTypeAliases(active_symbol->get_type())) !=
-                NULL &&
+        if (isPointerBackedType(active_symbol->get_type()) &&
             isSgPointerType(stripTypeAliases(local_symbol->get_type())) ==
                 NULL) {
           scalar_locals_from_pointer_symbols.insert(local_symbol);
@@ -7577,8 +7621,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
         if (orig_symbol != NULL && orig_symbol != active_symbol)
           var_map.insert(
               VariableSymbolMap_t::value_type(orig_symbol, local_symbol));
-        if (isSgPointerType(stripTypeAliases(active_symbol->get_type())) !=
-                NULL &&
+        if (isPointerBackedType(active_symbol->get_type()) &&
             isSgPointerType(stripTypeAliases(local_symbol->get_type())) ==
                 NULL) {
           scalar_locals_from_pointer_symbols.insert(local_symbol);
