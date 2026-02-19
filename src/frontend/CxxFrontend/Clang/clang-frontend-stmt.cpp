@@ -6623,6 +6623,33 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
 
   ROSE_ASSERT(expr != nullptr);
 
+  // Materialize implicit scalar-to-bool conversions as compiler-generated cast
+  // nodes. This preserves CFG/AST node parity for control-flow conditions while
+  // keeping unparsing unchanged (compiler-generated C-style casts are skipped).
+  switch (implicit_cast_expr->getCastKind()) {
+  case clang::CK_IntegralToBoolean:
+  case clang::CK_FloatingToBoolean:
+  case clang::CK_PointerToBoolean:
+  case clang::CK_MemberPointerToBoolean:
+  case clang::CK_IntegralToFloating: {
+    SgType *target_type =
+        buildTypeFromQualifiedType(implicit_cast_expr->getType());
+    if (target_type != nullptr) {
+      SgCastExp *cast_expr = SageBuilder::buildCastExp(
+          expr, target_type, SgCastExp::e_C_style_cast);
+      ROSE_ASSERT(cast_expr != nullptr);
+      setCompilerGeneratedFileInfo(cast_expr, true);
+      ROSE_ASSERT(cast_expr->get_file_info() != nullptr);
+      cast_expr->get_file_info()->setImplicitCast();
+      *node = cast_expr;
+      return VisitExpr(implicit_cast_expr, node);
+    }
+    break;
+  }
+  default:
+    break;
+  }
+
   // FIX: Pass through implicit casts without creating SgCastExp nodes
   // Legacy frontend doesn't create explicit cast nodes for implicit casts
   // Creating them breaks parent pointer relationships (e.g., FunctionRefExp
