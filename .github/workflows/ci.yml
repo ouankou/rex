@@ -60,6 +60,7 @@ jobs:
           libclang-${{ matrix.llvm }}-dev \
           libclang-cpp${{ matrix.llvm }}-dev \
           libhpdf-dev \
+          libomp-${{ matrix.llvm }}-dev \
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
@@ -89,11 +90,18 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE
         CTEST_JOBS="$(nproc)"
-        ctest --test-dir build -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering" --output-on-failure -j"${CTEST_JOBS}"
-        # Explicitly gate Rodinia-derived OpenMP lowering regressions.
-        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests -L "OMPLOWERING_RODINIA" --output-on-failure -j"${CTEST_JOBS}"
-        # Run the remaining OpenMP tests without rerunning OMPLOWERING_RODINIA.
-        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests -LE "OMPLOWERING_RODINIA" --output-on-failure -j"${CTEST_JOBS}"
+
+        # Keep the broad core sweep, but avoid unresolved legacy omp_lowering
+        # and avoid rerunning OMPFORTRAN (already covered by OpenMP test steps below).
+        ctest --test-dir build -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering|OMPFORTRAN" --output-on-failure -j"${CTEST_JOBS}"
+
+        # Run only legacy lowering tests that are currently addressed.
+        ctest --test-dir build -L "OMPLOWERING_LEGACY_ADDRESSED" --output-on-failure -j"${CTEST_JOBS}"
+
+        # Gate all new/lowered OpenMP compile-tests (includes OMPLOWERING_CPU and OMPLOWERING_RODINIA).
+        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests -L "OMPLOWERING" --output-on-failure -j"${CTEST_JOBS}"
+        # Run remaining OpenMP compile-tests without rerunning lowering-labeled tests.
+        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests -LE "OMPLOWERING" --output-on-failure -j"${CTEST_JOBS}"
 
   fortran-only-config:
     strategy:
@@ -140,6 +148,7 @@ jobs:
           libclang-${{ matrix.llvm }}-dev \
           libclang-cpp${{ matrix.llvm }}-dev \
           libhpdf-dev \
+          libomp-${{ matrix.llvm }}-dev \
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \

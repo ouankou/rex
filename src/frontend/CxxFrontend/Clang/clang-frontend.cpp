@@ -42,6 +42,7 @@
 #include <clang/Lex/Lexer.h>
 
 #include "rose_config.h"
+#include "rose_paths.h"
 
 namespace {
 
@@ -878,41 +879,17 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     enable_openmp = true; // SIMD requires pragma capture
   }
 
-  // In OpenMP/OpenACC AST-only mode, pragmas are parsed as plain text but
-  // conditional blocks guarded by _OPENMP must remain visible. Only inject
-  // _OPENMP when explicitly requested via AST-only modes and only if the user
-  // has not already provided a value on the command line.
-  if (openmp_ast_mode) {
-    const std::string default_openmp_define =
-        "_OPENMP=" + std::to_string(OMPVERSION);
-    std::string openmp_define;
-
-    for (const auto &define_value : openmp_define_list) {
-      if (define_value == "_OPENMP") {
-        openmp_define = default_openmp_define;
-        break;
-      }
-      if (define_value.rfind("_OPENMP=", 0) == 0) {
-        std::string value = define_value.substr(strlen("_OPENMP="));
-        char *endptr = nullptr;
-        long parsed = std::strtol(value.c_str(), &endptr, 10);
-        if (endptr == value.c_str() || *endptr != '\0' || parsed <= 0) {
-          openmp_define = default_openmp_define;
-        } else if (parsed > OMPVERSION) {
-          openmp_define = default_openmp_define;
-        } else {
-          openmp_define = "_OPENMP=" + std::to_string(parsed);
-        }
-        break;
-      }
+  // Preserve explicit user-provided _OPENMP defines.
+  // Do not synthesize _OPENMP automatically in pragma-driven OpenMP mode:
+  // that mode intentionally avoids -fopenmp, and forcing _OPENMP can expose
+  // header branches that require compiler-side OpenMP semantic handling.
+  for (const auto &define_value : openmp_define_list) {
+    if (define_value.empty()) {
+      continue;
     }
-
-    if (openmp_define.empty()) {
-      openmp_define = default_openmp_define;
-    }
-    if (std::find(define_list.begin(), define_list.end(), openmp_define) ==
+    if (std::find(define_list.begin(), define_list.end(), define_value) ==
         define_list.end()) {
-      define_list.push_back(openmp_define);
+      define_list.push_back(define_value);
     }
   }
 
@@ -1071,6 +1048,12 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     ROSE_ABORT();
   }
   }
+
+  // Keep REX OpenMP/OpenACC extension APIs visible during frontend parsing.
+  if (sageFile.get_openmp() || openmp_ast_mode || sageFile.get_openacc()) {
+    inc_list.push_back("clang-builtin-openmp-compat.h");
+  }
+
   assertRequiredPreincludeConfigured(inc_list, language,
                                      "driver argument construction");
 
@@ -1354,48 +1337,66 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     parse_system_include_flag(cc1_args_storage[i], i);
   }
 
-  // Clang 21 toolchains on some distros may omit GCC's runtime include
-  // directory from cc1 args, which drops omp.h target API declarations.
+  // OpenMP parsing in REX is pragma-driven (without forwarding -fopenmp to
+  // Clang), so explicitly add:
+  // 1) a compatibility wrapper include dir (contains omp.h wrapper)
+  // 2) LLVM's OpenMP header directory discovered at configure time.
   if (sageFile.get_openmp() && !disable_openmp_via_flag) {
-    std::vector<std::string> omp_runtime_candidates;
-    std::set<std::string> seen_runtime_candidates;
-    auto collect_openmp_include_candidates = [&](const auto &paths) {
-      for (const std::string &base_dir : paths) {
-        if (base_dir.empty()) {
-          continue;
-        }
-        llvm::SmallString<256> include_dir(base_dir);
-        if (!llvm::StringRef(base_dir).ends_with("/include")) {
-          llvm::sys::path::append(include_dir, "include");
-        }
-        if (!llvm::sys::fs::exists(include_dir)) {
-          continue;
-        }
-        llvm::SmallString<256> omp_header(include_dir);
-        llvm::sys::path::append(omp_header, "omp.h");
-        if (!llvm::sys::fs::exists(omp_header)) {
-          continue;
-        }
-        std::string normalized = canonical_path(include_dir.str().str());
-        if (seen_runtime_candidates.insert(normalized).second) {
-          omp_runtime_candidates.push_back(normalized);
-        }
-      }
-    };
+    std::string openmp_compat_include_dir;
+    const std::vector<std::string> openmp_compat_candidates = {
+        ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR + "/openmp-compat",
+        ROSE_SOURCE_TREE + "/src/frontend/CxxFrontend/Clang/openmp-compat",
+        ROSE_INSTALL_PREFIX + "/" + ROSE_INSTALL_CLANG_INCLUDE_DIR +
+            "/openmp-compat"};
 
-    const clang::driver::ToolChain &default_toolchain =
-        compilation->getDefaultToolChain();
-    collect_openmp_include_candidates(default_toolchain.getFilePaths());
-    collect_openmp_include_candidates(default_toolchain.getLibraryPaths());
-
-    for (const std::string &candidate : omp_runtime_candidates) {
-      if (cc1_system_include_dirs.count(candidate) != 0) {
+    for (const auto &candidate : openmp_compat_candidates) {
+      if (candidate.empty()) {
         continue;
       }
+      std::string normalized_candidate = canonical_path(candidate);
+      llvm::SmallString<256> compat_header(normalized_candidate);
+      llvm::sys::path::append(compat_header, "omp.h");
+      if (llvm::sys::fs::exists(compat_header)) {
+        openmp_compat_include_dir = normalized_candidate;
+        break;
+      }
+    }
+    if (openmp_compat_include_dir.empty()) {
+      llvm::errs()
+          << "REX OpenMP frontend cannot find compatibility omp.h wrapper.\n";
+      ROSE_ABORT();
+    }
+    if (cc1_system_include_dirs.count(openmp_compat_include_dir) == 0) {
+      // Force wrapper precedence over Clang resource/system omp.h. The wrapper
+      // temporarily hides _OPENMP before include_next <omp.h>.
+      cc1_args_storage.push_back("-I");
+      cc1_args_storage.push_back(openmp_compat_include_dir);
+      cc1_system_include_dirs.insert(openmp_compat_include_dir);
+    }
+
+    std::string llvm_openmp_include_dir;
+#ifdef LLVM_OPENMP_INCLUDE_PATH
+    llvm_openmp_include_dir = canonical_path(LLVM_OPENMP_INCLUDE_PATH);
+#endif
+    if (llvm_openmp_include_dir.empty()) {
+      llvm::errs()
+          << "REX OpenMP frontend requires LLVM_OPENMP_INCLUDE_PATH to be "
+             "configured.\n";
+      ROSE_ABORT();
+    }
+
+    llvm::SmallString<256> llvm_openmp_header(llvm_openmp_include_dir);
+    llvm::sys::path::append(llvm_openmp_header, "omp.h");
+    if (!llvm::sys::fs::exists(llvm_openmp_header)) {
+      llvm::errs() << "REX OpenMP frontend cannot find LLVM omp.h at: "
+                   << llvm_openmp_header << "\n";
+      ROSE_ABORT();
+    }
+
+    if (cc1_system_include_dirs.count(llvm_openmp_include_dir) == 0) {
       cc1_args_storage.push_back("-internal-isystem");
-      cc1_args_storage.push_back(candidate);
-      cc1_system_include_dirs.insert(candidate);
-      break;
+      cc1_args_storage.push_back(llvm_openmp_include_dir);
+      cc1_system_include_dirs.insert(llvm_openmp_include_dir);
     }
   }
 

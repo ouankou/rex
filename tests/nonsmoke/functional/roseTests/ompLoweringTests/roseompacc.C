@@ -43,10 +43,10 @@ int main(int argc, char *argv[]) {
   // properly in omp_lowering.cpp
   //   AstTests::runAllTests(project);
 
-  // change .c suffix to .cu suffix
-  // We only process one single input file at a time
-  ROSE_ASSERT(project->get_fileList().size() == 1);
-  SgFile *cur_file = project->get_fileList()[0];
+  // Change the primary input file suffix to .cu. Lowering may synthesize
+  // additional helper files in the project, so only require a non-empty list.
+  ROSE_ASSERT(!project->get_fileList().empty());
+  SgFile *cur_file = project->get_fileList().front();
 
   string orig_name = cur_file->get_file_info()->get_filenameString();
   string file_suffix = StringUtility::fileNameSuffix(orig_name);

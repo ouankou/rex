@@ -21,13 +21,15 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     omp_pragma_example2.c)
 endif()
 
-set(ROSE_FLAGS -std=c99 -rose:C_only  -w -rose:verbose 0
+set(ROSE_FLAGS -rose:C_only -w -rose:verbose 0
                -rose:openmp -rose:openmp:ast_only)
 
 foreach(file_to_test ${TESTCODES})
+  set(_cvalidation_test_name OMPTEST_CVALIDATION_${file_to_test})
   add_test(
-    NAME OMPTEST_${file_to_test}
-    COMMAND parseOmp ${ROSE_FLAGS} -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII
+    NAME ${_cvalidation_test_name}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND parseOmp ${ROSE_FLAGS}
                      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
-  set_tests_properties(OMPTEST_${file_to_test} PROPERTIES LABELS OMPTEST)
+  set_tests_properties(${_cvalidation_test_name} PROPERTIES LABELS OMPTEST)
 endforeach()

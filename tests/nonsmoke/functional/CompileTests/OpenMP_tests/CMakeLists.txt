@@ -93,8 +93,8 @@ set(OMP_ACC_TESTCODES
 set(ROSE_C_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
 set(ROSE_CXX_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
 
-# Include path to find omp.h header
-set(TESTCODE_INCLUDES -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
+set(_omp_test_output_dir ${CMAKE_CURRENT_BINARY_DIR})
+file(MAKE_DIRECTORY ${_omp_test_output_dir})
 
 foreach(file_to_test ${TESTCODES})
   if(file_to_test MATCHES "\\.c$")
@@ -104,7 +104,8 @@ foreach(file_to_test ${TESTCODES})
   endif()
   add_test(
     NAME OMPTEST_${file_to_test}
-    COMMAND parseOmp ${_rose_flags} ${TESTCODE_INCLUDES} -c
+    WORKING_DIRECTORY ${_omp_test_output_dir}
+    COMMAND parseOmp ${_rose_flags} -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(OMPTEST_${file_to_test} PROPERTIES LABELS OMPTEST)
 endforeach()
@@ -112,6 +113,7 @@ endforeach()
 foreach(file_to_test ${OMP_ACC_TESTCODES})
   add_test(
     NAME OMPACCTEST_${file_to_test}
+    WORKING_DIRECTORY ${_omp_test_output_dir}
     COMMAND parseOmp ${ROSE_C_FLAGS} -rose:skipfinalCompileStep
                      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(OMPACCTEST_${file_to_test} PROPERTIES LABELS OMPACCTEST)
@@ -121,7 +123,8 @@ endforeach()
 # Multi-file test: verifies correct handling of multiple source files with OpenMP pragmas
 add_test(
   NAME OMPTEST_bonds-2
-  COMMAND parseOmp ${ROSE_C_FLAGS} ${TESTCODE_INCLUDES}
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND parseOmp ${ROSE_C_FLAGS}
           -c ${CMAKE_CURRENT_SOURCE_DIR}/atoms-2.c
           ${CMAKE_CURRENT_SOURCE_DIR}/bonds-2.c)
 set_tests_properties(OMPTEST_bonds-2 PROPERTIES LABELS OMPTEST)
@@ -129,7 +132,8 @@ set_tests_properties(OMPTEST_bonds-2 PROPERTIES LABELS OMPTEST)
 # Test for macro ID handling with comment/directive collection
 add_test(
   NAME OMPTEST_macroIds
-  COMMAND parseOmp ${ROSE_C_FLAGS} ${TESTCODE_INCLUDES}
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND parseOmp ${ROSE_C_FLAGS}
           -rose:collectAllCommentsAndDirectives
           ${CMAKE_CURRENT_SOURCE_DIR}/macroIds.c)
 set_tests_properties(OMPTEST_macroIds PROPERTIES LABELS OMPTEST)
@@ -174,3 +178,6 @@ add_omp_output_diff_tests(macroIds.c OMPTEST_macroIds OMPTEST)
 
 # Rodinia-derived OpenMP lowering regressions (separate from AST output refs).
 add_subdirectory(lowering_rodinia)
+
+# CPU lowering semantic equivalence (original vs lowered executable behavior).
+add_subdirectory(lowering_cpu)

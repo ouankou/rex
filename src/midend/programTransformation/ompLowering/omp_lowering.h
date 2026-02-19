@@ -158,7 +158,8 @@ SgFunctionDeclaration *
 generateOutlinedTask(SgNode *node, std::string &wrapper_name,
                      std::set<const SgVariableSymbol *> &syms,
                      std::set<const SgVariableSymbol *> &pdSyms3,
-                     bool use_task_param = false);
+                     bool use_task_param = false,
+                     bool insert_runtime_ids = true);
 
 //! Translate OpenMP variables associated with an OpenMP pragma, such as
 //! private, firstprivate, lastprivate, reduction, etc. bb1 is the translation

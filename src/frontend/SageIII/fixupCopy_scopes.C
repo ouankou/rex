@@ -46,9 +46,9 @@ void resetVariableDefinitionSupport(
   SgNode *originalDeclaration = originalInitializedName->get_declptr();
   switch (originalDeclaration->variantT()) {
   case V_SgVariableDefinition: {
-    // In this case the target declaration is a SgVariableDefinition, and it has
-    // to be constructed, so the input paremter is NULL.
-    ROSE_ASSERT(targetDeclaration == NULL);
+    // Build a fresh variable-definition copy for the initialized name.  In some
+    // Fortran forms (e.g., copied procedure parameters), callers can provide a
+    // non-null target declaration, but it is not used for this declptr kind.
 
     SgVariableDefinition *variableDefinition_original =
         isSgVariableDefinition(originalInitializedName->get_declptr());
@@ -428,6 +428,12 @@ void SgScopeStatement::fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const {
 
   // DQ (10/24/2007): New test.
   ROSE_ASSERT(copyScopeStatement->variantT() == this->variantT());
+
+  // Preserve case-sensitivity semantics across deep copies (critical for
+  // Fortran scopes and symbol-table lookup behavior).
+  if (copyScopeStatement->isCaseInsensitive() != this->isCaseInsensitive()) {
+    copyScopeStatement->setCaseInsensitive(this->isCaseInsensitive());
+  }
 
   // The symbol table should not have been setup yet!
 

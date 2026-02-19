@@ -4836,6 +4836,32 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
           "-D_OPENMP=" + StringUtility::numberToString(OMPVERSION);
       compilerNameString.push_back(ompmacro);
     }
+
+    if ((get_openmp() || get_openmp_lowering()) && !get_Fortran_only()) {
+#ifdef LLVM_OPENMP_INCLUDE_PATH
+      const string llvm_openmp_include_dir = LLVM_OPENMP_INCLUDE_PATH;
+      if (!llvm_openmp_include_dir.empty()) {
+        bool has_llvm_openmp_include = false;
+        for (size_t idx = 0; idx < compilerNameString.size(); ++idx) {
+          const string &arg = compilerNameString[idx];
+          if (arg == "-isystem" && (idx + 1) < compilerNameString.size() &&
+              compilerNameString[idx + 1] == llvm_openmp_include_dir) {
+            has_llvm_openmp_include = true;
+            break;
+          }
+          if (arg == "-I" + llvm_openmp_include_dir ||
+              arg == "-isystem" + llvm_openmp_include_dir) {
+            has_llvm_openmp_include = true;
+            break;
+          }
+        }
+        if (!has_llvm_openmp_include) {
+          compilerNameString.push_back("-isystem");
+          compilerNameString.push_back(llvm_openmp_include_dir);
+        }
+      }
+#endif
+    }
   }
 
   // DQ (3/31/2004): New cleaned up source file handling
