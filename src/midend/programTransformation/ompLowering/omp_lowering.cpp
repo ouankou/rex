@@ -3236,7 +3236,7 @@ void transOmpParallel(SgNode *node) {
   SgExpression *thread_global_tid = NULL;
 
   // add __kmpc_fork_call (0, 2, OUT_func_xxx, &a, &sum);
-  // or __kmpc_fork_call (0, 0, OUT_func_xxx, 0); // if no variables need to be
+  // or __kmpc_fork_call (0, 0, OUT_func_xxx); // if no variables need to be
   // passed
   SgExpression *source_location_info = buildIntVal(0);
   SgExpression *outlined_function_parameter_amount = buildIntVal(syms.size());
@@ -3262,10 +3262,6 @@ void transOmpParallel(SgNode *node) {
     ROSE_ASSERT(actual_arg != NULL);
     appendExpression(parameters, actual_arg);
   }
-  if (syms.size() == 0) {
-    appendExpression(parameters, buildIntVal(0));
-  };
-
   ROSE_ASSERT(parameters != NULL);
 
   // extern void XOMP_parallel_start (void (*func) (void *), void *data,

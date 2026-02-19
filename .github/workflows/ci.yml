@@ -60,6 +60,8 @@ jobs:
           libclang-${{ matrix.llvm }}-dev \
           libclang-cpp${{ matrix.llvm }}-dev \
           libhpdf-dev \
+          libomp-${{ matrix.llvm }}-dev \
+          libomp5-${{ matrix.llvm }} \
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
@@ -147,6 +149,8 @@ jobs:
           libclang-${{ matrix.llvm }}-dev \
           libclang-cpp${{ matrix.llvm }}-dev \
           libhpdf-dev \
+          libomp-${{ matrix.llvm }}-dev \
+          libomp5-${{ matrix.llvm }} \
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
