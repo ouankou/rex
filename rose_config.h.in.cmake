@@ -556,6 +556,9 @@
 /* Location (unquoted) of the LLVM OpenMP runtime library. */
 #cmakedefine LLVM_OPENMP_LIB_PATH "@LLVM_OPENMP_LIB_PATH@"
 
+/* Full path (unquoted) of the LLVM OpenMP runtime library selected by CMake. */
+#cmakedefine ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "@ROSE_LLVM_OPENMP_RUNTIME_LIBRARY@"
+
 /* Location (unquoted) of the LLVM OpenMP header directory. */
 #cmakedefine LLVM_OPENMP_INCLUDE_PATH "@LLVM_OPENMP_INCLUDE_PATH@"
 

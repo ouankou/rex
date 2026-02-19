@@ -4247,28 +4247,17 @@ int SgProject::link(const std::vector<std::string> &argv,
     linkingCommand.push_back(resolveXompArchivePath());
     bool openmp_runtime_configured = false;
 
-#ifdef LLVM_OPENMP_LIB_PATH
-    string llvm_openmp_lib_path(LLVM_OPENMP_LIB_PATH);
-    if (!llvm_openmp_lib_path.empty()) {
-      std::filesystem::path runtime_root(llvm_openmp_lib_path);
-      std::filesystem::path runtime_library;
-      const std::vector<std::string> llvm_runtime_candidates = {
-          "libiomp5.so", "libiomp5.a", "libomp.so", "libomp.a"};
-      for (const std::string &candidate : llvm_runtime_candidates) {
-        std::filesystem::path resolved = runtime_root / candidate;
-        if (std::filesystem::exists(resolved)) {
-          runtime_library = resolved;
-          break;
-        }
+#ifdef ROSE_LLVM_OPENMP_RUNTIME_LIBRARY
+    string llvm_openmp_runtime_library(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY);
+    if (!llvm_openmp_runtime_library.empty()) {
+      linkingCommand.push_back(llvm_openmp_runtime_library);
+      string llvm_openmp_runtime_dir =
+          std::filesystem::path(llvm_openmp_runtime_library)
+              .parent_path()
+              .string();
+      if (!llvm_openmp_runtime_dir.empty()) {
+        linkingCommand.push_back("-Wl,-rpath," + llvm_openmp_runtime_dir);
       }
-
-      if (!runtime_library.empty()) {
-        linkingCommand.push_back(runtime_library.string());
-      } else {
-        linkingCommand.push_back("-L" + llvm_openmp_lib_path);
-        linkingCommand.push_back("-liomp5");
-      }
-      linkingCommand.push_back("-Wl,-rpath," + llvm_openmp_lib_path);
       linkingCommand.push_back("-lpthread");
       openmp_runtime_configured = true;
     }
