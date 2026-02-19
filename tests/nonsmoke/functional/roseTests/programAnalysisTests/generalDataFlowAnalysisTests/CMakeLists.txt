@@ -1147,6 +1147,7 @@ foreach(specimen IN LISTS TAINT_ANALYSIS_SPECIMENS)
     COMMAND ${_rth}
       INPUT=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
       ANSWER=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}.ans
+      TAINT_ANALYSIS_TEST=$<TARGET_FILE:taintAnalysisTest>
       ${_taint_conf}
       cxxta_${specimen}.passed
   )
@@ -1215,7 +1216,7 @@ foreach(specimen IN LISTS _c_constprop_disabled)
     NAME gdf_c_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="cp ${_cxx_test_dir}/${specimen} ${_c_specimen} && ./constantPropagationTest -I${_cxx_test_dir} -c ${_c_specimen}"
+      CMD="cp ${_cxx_test_dir}/${specimen} ${_c_specimen} && $<TARGET_FILE:constantPropagationTest> -I${_cxx_test_dir} -c ${_c_specimen}"
       ${_exit_status}
       ccp_${specimen}.passed
   )
