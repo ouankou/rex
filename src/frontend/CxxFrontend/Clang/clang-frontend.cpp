@@ -688,6 +688,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   bool disable_openmp_via_flag = false;
   bool continue_on_error = false;
   bool disable_access_control = false;
+  bool delayed_template_parsing_compat = false;
   enum class ExceptionMode { Unspecified, Enabled, Disabled };
   ExceptionMode exception_mode = ExceptionMode::Unspecified;
   enum class RttiMode { Unspecified, Enabled, Disabled };
@@ -795,6 +796,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       continue_on_error = true;
     } else if (current_arg == "-rex:clang:disable-access-control") {
       disable_access_control = true;
+    } else if (current_arg == "-rex:clang:delayed-template-parsing") {
+      delayed_template_parsing_compat = true;
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // TODO -include
 #if DEBUG_ARGS
@@ -1013,6 +1016,15 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       (language == ClangToSageTranslator::CPLUSPLUS ||
        language == ClangToSageTranslator::CUDA)) {
     rtti_mode = RttiMode::Enabled;
+  }
+
+  if (delayed_template_parsing_compat &&
+      (language == ClangToSageTranslator::CPLUSPLUS ||
+       language == ClangToSageTranslator::CUDA) &&
+      !has_passthrough_flag("-fno-delayed-template-parsing")) {
+    // Keep modern Clang behavior by default; enable delayed parsing only when
+    // compatibility mode is explicitly requested.
+    add_passthrough_flag_if_missing("-fdelayed-template-parsing");
   }
 
   RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);

@@ -3637,6 +3637,8 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   Rose::Cmdline::StripRoseOptions(argv);
   CommandlineProcessing::removeArgs(argv, "-rex:clang:continue-on-error");
   CommandlineProcessing::removeArgs(argv, "-rex:clang:disable-access-control");
+  CommandlineProcessing::removeArgs(argv,
+                                    "-rex:clang:delayed-template-parsing");
   CommandlineProcessing::removeArgsWithParameters(argv, "-outputdir");
 
   //----------------------------------------------------------------------------
@@ -4222,6 +4224,8 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
     } else if (current_arg == "-rex:clang:continue-on-error") {
       clang_frontend_args.push_back(current_arg);
     } else if (current_arg == "-rex:clang:disable-access-control") {
+      clang_frontend_args.push_back(current_arg);
+    } else if (current_arg == "-rex:clang:delayed-template-parsing") {
       clang_frontend_args.push_back(current_arg);
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // Ignore other frontend/driver flags that Clang cc1 doesn't accept.

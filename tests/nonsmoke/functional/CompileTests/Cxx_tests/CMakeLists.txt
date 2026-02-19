@@ -3235,6 +3235,11 @@ set(CXX_TESTCODES_GNUXX14
 )
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX14})
 
+set(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING
+  test2016_85.C
+)
+list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
+
 
 set(ROSE_DISABLED_TESTCODES ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED})
 set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
@@ -3271,6 +3276,16 @@ foreach(file_to_test ${CXX_TESTCODES_GNUXX14})
 endforeach()
 set(ROSE_FLAGS ${_rose_flags_default})
 
+set(ROSE_FLAGS ${_rose_flags_default} -rex:clang:delayed-template-parsing)
+foreach(file_to_test ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
+  compile_test(${file_to_test} "Cxx_tests")
+  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
+  rex_lock_test_for_input(${_test_name} ${file_to_test})
+  set_tests_properties(${_test_name} PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endforeach()
+set(ROSE_FLAGS ${_rose_flags_default})
+
 
 foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
@@ -3290,10 +3305,14 @@ list(REMOVE_DUPLICATES _unfolded_constants_tests)
 
 foreach(file_to_test ${_unfolded_constants_tests})
   set(_unfolded_target "${file_to_test}.unfoldedConstants-o")
+  set(_unfolded_flags ${ROSE_FLAGS})
+  if(file_to_test IN_LIST CXX_TESTCODES_DELAYED_TEMPLATE_PARSING)
+    list(APPEND _unfolded_flags -rex:clang:delayed-template-parsing)
+  endif()
   add_test(
     NAME ${_unfolded_target}
     COMMAND $<TARGET_FILE:testTranslatorUnfoldedConstants>
-      ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+      ${_unfolded_flags} ${ROSE_INCLUDE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
