@@ -1624,12 +1624,12 @@ generateGOMPLoopNextFuncName(bool isOrdered,
   return result;
 }
 
-//! Fortran only action: insert include "libxompf.h" into the function body with
-//! calls to XOMP_loop_* functions
+//! Fortran only action: insert include "libxompf.fh" into the function body
+//! with calls to XOMP_loop_* functions
 // This is necessary since XOMP_loop_* functions will be treated as returning
 // REAL by implicit rules (starting with X) This function finds the function
 // definition enclosing a start node, check if there is any existing include
-// 'libxompf.h' then insert one if there is none.
+// 'libxompf.fh' then insert one if there is none.
 static void insert_libxompf_h(SgNode *startNode) {
   ROSE_ASSERT(startNode != NULL);
   // This function should not be used for other than Fortran
@@ -1639,7 +1639,7 @@ static void insert_libxompf_h(SgNode *startNode) {
 
   SgBasicBlock *t_body = getEnclosingRegionOrFuncDefinition(startNode);
   ROSE_ASSERT(t_body != NULL);
-  // Try to find an existing include 'libxompf.h'
+  // Try to find an existing include 'libxompf.fh'
   // Assumptions:
   //   1. It only shows up at the top level, not within other SgBasicBlock
   //   2. The startNode is after the include line
@@ -1653,14 +1653,14 @@ static void insert_libxompf_h(SgNode *startNode) {
     if (f_inc) {
       string f_name =
           StringUtility::stripPathFromFileName(f_inc->get_filename());
-      if (f_name == "libxompf.h") {
+      if (f_name == "libxompf.fh" || f_name == "libxompf.h") {
         s_include = f_inc;
         break;
       }
     }
   }
   if (s_include == NULL) {
-    s_include = buildFortranIncludeLine("libxompf.h");
+    s_include = buildFortranIncludeLine("libxompf.fh");
     SgStatement *l_stmt = findLastDeclarationStatement(t_body);
     if (l_stmt)
       insertStatementAfter(l_stmt, s_include);

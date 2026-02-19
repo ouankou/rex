@@ -109,14 +109,14 @@ static void insert_libxompf_h_for_task(SgNode *start_node) {
 
     std::string include_name =
         StringUtility::stripPathFromFileName(f_inc->get_filename());
-    if (include_name == "libxompf.h") {
+    if (include_name == "libxompf.fh" || include_name == "libxompf.h") {
       existing_include = f_inc;
       break;
     }
   }
 
   if (existing_include == NULL) {
-    SgFortranIncludeLine *inc_line = buildFortranIncludeLine("libxompf.h");
+    SgFortranIncludeLine *inc_line = buildFortranIncludeLine("libxompf.fh");
     SgStatement *last_decl = findLastDeclarationStatement(body);
     if (last_decl != NULL)
       insertStatementAfter(last_decl, inc_line);
