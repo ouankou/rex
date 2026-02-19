@@ -6639,9 +6639,8 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
           expr, target_type, SgCastExp::e_C_style_cast);
       ROSE_ASSERT(cast_expr != nullptr);
       setCompilerGeneratedFileInfo(cast_expr, true);
-      if (cast_expr->get_file_info() != nullptr) {
-        cast_expr->get_file_info()->setImplicitCast();
-      }
+      ROSE_ASSERT(cast_expr->get_file_info() != nullptr);
+      cast_expr->get_file_info()->setImplicitCast();
       *node = cast_expr;
       return VisitExpr(implicit_cast_expr, node);
     }
