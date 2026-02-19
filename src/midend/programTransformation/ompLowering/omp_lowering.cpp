@@ -9,6 +9,8 @@
 
 #include "sage3basic.h"
 
+#include "abiStuff.h"
+
 #include "sageBuilder.h"
 
 #include <algorithm>
@@ -138,6 +140,49 @@ SgType *stripTypeAliases(SgType *type) {
   }
   return type->stripType(SgType::STRIP_MODIFIER_TYPE |
                          SgType::STRIP_TYPEDEF_TYPE);
+}
+
+bool is_32_bit_target(const SgNode *context) {
+  SgProject *project = SageInterface::getProject(context);
+  ROSE_ASSERT(project != nullptr);
+  return project->get_mode_32_bit();
+}
+
+StructLayoutInfo get_target_layout_info(SgType *type, const SgNode *context) {
+  ROSE_ASSERT(type != nullptr);
+
+  if (is_32_bit_target(context)) {
+    I386PrimitiveTypeLayoutGenerator primitive_generator(nullptr);
+    NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
+    return layout_generator.layoutType(type);
+  }
+
+  X86_64PrimitiveTypeLayoutGenerator primitive_generator(nullptr);
+  NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
+  return layout_generator.layoutType(type);
+}
+
+size_t get_target_type_size_bytes(SgType *type, const SgNode *context) {
+  StructLayoutInfo layout = get_target_layout_info(type, context);
+  ROSE_ASSERT(layout.size > 0);
+  return layout.size;
+}
+
+bool use_kmpc_loop_64bit_runtime(SgType *loop_var_type, const SgNode *context) {
+  return get_target_type_size_bytes(loop_var_type, context) > 4;
+}
+
+const char *get_kmpc_for_static_init_name(bool use_64_runtime) {
+  return use_64_runtime ? "__kmpc_for_static_init_8"
+                        : "__kmpc_for_static_init_4";
+}
+
+const char *get_kmpc_dispatch_init_name(bool use_64_runtime) {
+  return use_64_runtime ? "__kmpc_dispatch_init_8" : "__kmpc_dispatch_init_4";
+}
+
+const char *get_kmpc_dispatch_next_name(bool use_64_runtime) {
+  return use_64_runtime ? "__kmpc_dispatch_next_8" : "__kmpc_dispatch_next_4";
 }
 
 SgType *resolvePointerBaseType(SgType *pointer_type, size_t deref_depth) {
@@ -1779,6 +1824,10 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
   }
   ROSE_ASSERT(is_canonical == true);
 
+  const bool use_64_runtime =
+      for_loop != NULL && use_kmpc_loop_64bit_runtime(
+                              getFirstVariable(*lower_decl).get_type(), target);
+
   Rose_STL_Container<SgOmpClause *> clauses =
       getClause(target, V_SgOmpScheduleClause);
 
@@ -1787,7 +1836,7 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
   SgOmpClause::omp_schedule_kind_enum s_kind =
       SgOmpClause::e_omp_schedule_kind_static;
   SgExpression *orig_chunk_size = NULL;
-  string func_init_name = "__kmpc_for_static_init_4";
+  string func_init_name = get_kmpc_for_static_init_name(use_64_runtime);
   int32_t schedule_type = 0;
   bool hasOrder = false;
   if (hasClause(target, V_SgOmpOrderedClause))
@@ -1814,7 +1863,7 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     if (s_kind == SgOmpClause::e_omp_schedule_kind_dynamic ||
         s_kind == SgOmpClause::e_omp_schedule_kind_guided) {
       orig_chunk_size = createAdjustedChunkSize(orig_chunk_size);
-      func_init_name = "__kmpc_dispatch_init_4";
+      func_init_name = get_kmpc_dispatch_init_name(use_64_runtime);
       if (s_kind == SgOmpClause::e_omp_schedule_kind_dynamic) {
         schedule_type += kmp_sched_dynamic;
       } else {
@@ -1828,7 +1877,7 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     } else if (s_kind == SgOmpClause::e_omp_schedule_kind_auto ||
                s_kind == SgOmpClause::e_omp_schedule_kind_runtime) {
       orig_chunk_size = buildIntVal(1);
-      func_init_name = "__kmpc_dispatch_init_4";
+      func_init_name = get_kmpc_dispatch_init_name(use_64_runtime);
       if (s_kind == SgOmpClause::e_omp_schedule_kind_auto) {
         schedule_type += kmp_sched_auto;
       } else {
@@ -1938,8 +1987,9 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
                            buildAddressOfOp(buildVarRefExp(lower_decl)),
                            buildAddressOfOp(buildVarRefExp(upper_decl)),
                            buildAddressOfOp(buildVarRefExp(stride_decl)));
-      func_next_exp = buildFunctionCallExp("__kmpc_dispatch_next_4",
-                                           buildIntType(), parameters, bb1);
+      func_next_exp =
+          buildFunctionCallExp(get_kmpc_dispatch_next_name(use_64_runtime),
+                               buildIntType(), parameters, bb1);
     } else { // for schedule(static, n), lower_bound <= upper_bound controls the
              // while loop
       func_next_exp = buildLessOrEqualOp(buildVarRefExp(lower_decl),
@@ -2225,10 +2275,15 @@ void transOmpLoop(SgNode *node) {
   // Declare local loop control variables: _p_loop_index _p_loop_lower
   // _p_loop_upper , no change to the original stride
   SgType *loop_var_type = NULL;
-  // xomp interface expects long for some runtime calls now, 6/9/2010
-  if (for_loop)
-    loop_var_type = buildLongType();
-  else if (do_loop) // No long integer in Fortran
+  // Use 64-bit loop controls only when the target ABI requires it.
+  if (for_loop) {
+    bool use_64bit_loop_vars =
+        use_kmpc_loop_64bit_runtime(buildLongType(), target);
+    if (use_64bit_loop_vars)
+      loop_var_type = buildLongType();
+    else
+      loop_var_type = buildIntType();
+  } else if (do_loop) // No long integer in Fortran
     loop_var_type = buildIntType();
   SgVariableDeclaration *index_decl = NULL;
   SgVariableDeclaration *lower_decl = NULL;
@@ -2258,14 +2313,13 @@ void transOmpLoop(SgNode *node) {
         "p_last_iter_" + StringUtility::numberToString(nCounter),
         buildIntType(), NULL, bb1);
   } else {
-    index_decl =
-        buildVariableDeclaration("__index_", buildIntType(), NULL, bb1);
+    index_decl = buildVariableDeclaration("__index_", loop_var_type, NULL, bb1);
     lower_decl = buildVariableDeclaration(
-        "__lower_", buildIntType(), buildAssignInitializer(orig_lower), bb1);
+        "__lower_", loop_var_type, buildAssignInitializer(orig_lower), bb1);
     upper_decl = buildVariableDeclaration(
-        "__upper_", buildIntType(), buildAssignInitializer(orig_upper), bb1);
+        "__upper_", loop_var_type, buildAssignInitializer(orig_upper), bb1);
     stride_decl = buildVariableDeclaration(
-        "__stride_", buildIntType(), buildAssignInitializer(orig_stride), bb1);
+        "__stride_", loop_var_type, buildAssignInitializer(orig_stride), bb1);
     last_iter_decl =
         buildVariableDeclaration("__last_iter_", buildIntType(),
                                  buildAssignInitializer(buildIntVal(0)), bb1);
@@ -2298,6 +2352,10 @@ void transOmpLoop(SgNode *node) {
       // my_chunk_size = orig_chunk_size;
     }
   }
+
+  const bool use_64_runtime =
+      for_loop != NULL && use_kmpc_loop_64bit_runtime(
+                              getFirstVariable(*lower_decl).get_type(), target);
 
   //  step 3. Translation for omp for
   if (!useStaticSchedule(target) || hasOrder || hasSpecifiedSize) {
@@ -2348,8 +2406,9 @@ void transOmpLoop(SgNode *node) {
     parameters = buildExprListExp(source_location_info, thread_global_tid,
                                   schedule_type, e_last_iter, e4, e5, e_stride,
                                   copyExpression(orig_stride), buildIntVal(1));
-    SgStatement *call_stmt = buildFunctionCallStmt(
-        "__kmpc_for_static_init_4", buildVoidType(), parameters, bb1);
+    SgStatement *call_stmt =
+        buildFunctionCallStmt(get_kmpc_for_static_init_name(use_64_runtime),
+                              buildVoidType(), parameters, bb1);
     appendStatement(call_stmt, bb1);
 
     // insert the upper bound checking
@@ -7443,8 +7502,20 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
           if (isSgOmpTaskStatement(clause_stmt) != NULL &&
               stripTypeAliases(active_symbol->get_type()) !=
                   stripTypeAliases(effective_type)) {
-            effective_type = active_symbol->get_type();
-            init = buildAssignInitializer(buildVarRefExp(active_symbol));
+            SgType *active_type = stripTypeAliases(active_symbol->get_type());
+            SgType *expected_type = stripTypeAliases(effective_type);
+            SgExpression *active_value = buildVarRefExp(active_symbol);
+            if (SgPointerType *active_pointer = isSgPointerType(active_type)) {
+              if (stripTypeAliases(active_pointer->get_base_type()) ==
+                  expected_type) {
+                active_value = buildPointerDerefExp(active_value);
+              } else {
+                active_value = copyExpression(orig_var_exp);
+              }
+            } else if (active_type != expected_type) {
+              active_value = copyExpression(orig_var_exp);
+            }
+            init = buildAssignInitializer(active_value);
           } else {
             init = buildAssignInitializer(copyExpression(orig_var_exp));
           }

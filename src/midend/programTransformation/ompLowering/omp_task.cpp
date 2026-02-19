@@ -10,8 +10,11 @@
 
 #include "sage3basic.h"
 
+#include "abiStuff.h"
+
 #include "sageBuilder.h"
 
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -125,36 +128,46 @@ static void insert_libxompf_h_for_task(SgNode *start_node) {
   }
 }
 
-static int get_fortran_value_parameter_size(SgType *type) {
+static bool is_32_bit_target(const SgNode *context) {
+  SgProject *project = SageInterface::getProject(context);
+  ROSE_ASSERT(project != NULL);
+  return project->get_mode_32_bit();
+}
+
+static StructLayoutInfo get_target_layout_info(SgType *type,
+                                               const SgNode *context) {
+  ROSE_ASSERT(type != NULL);
+
+  if (is_32_bit_target(context)) {
+    I386PrimitiveTypeLayoutGenerator primitive_generator(NULL);
+    NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
+    return layout_generator.layoutType(type);
+  }
+
+  X86_64PrimitiveTypeLayoutGenerator primitive_generator(NULL);
+  NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
+  return layout_generator.layoutType(type);
+}
+
+static int get_target_type_size_bytes(SgType *type, const SgNode *context) {
+  StructLayoutInfo layout = get_target_layout_info(type, context);
+  if (layout.size == 0 ||
+      layout.size > static_cast<size_t>(std::numeric_limits<int>::max()))
+    return -1;
+  return static_cast<int>(layout.size);
+}
+
+static int get_fortran_value_parameter_size(SgType *type,
+                                            const SgNode *context) {
   ROSE_ASSERT(type != NULL);
   SgType *base_type =
       type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE);
   ROSE_ASSERT(base_type != NULL);
+  return get_target_type_size_bytes(base_type, context);
+}
 
-  if (isSgTypeInt(base_type))
-    return sizeof(int);
-  if (isSgTypeLong(base_type))
-    return sizeof(long);
-  if (isSgTypeLongLong(base_type))
-    return sizeof(long long);
-  if (isSgTypeShort(base_type))
-    return sizeof(short);
-  if (isSgTypeUnsignedInt(base_type))
-    return sizeof(unsigned int);
-  if (isSgTypeUnsignedLong(base_type))
-    return sizeof(unsigned long);
-  if (isSgTypeUnsignedLongLong(base_type))
-    return sizeof(unsigned long long);
-  if (isSgTypeFloat(base_type))
-    return sizeof(float);
-  if (isSgTypeDouble(base_type))
-    return sizeof(double);
-  if (isSgTypeLongDouble(base_type))
-    return sizeof(long double);
-  if (isSgTypeBool(base_type))
-    return sizeof(bool);
-
-  return -1;
+static int get_fortran_pointer_parameter_size(const SgNode *context) {
+  return get_target_type_size_bytes(buildPointerType(buildVoidType()), context);
 }
 
 static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
@@ -183,9 +196,22 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
   SgScopeStatement *task_scope = target->get_scope();
   ROSE_ASSERT(task_scope != NULL);
 
+  int pointer_size = get_fortran_pointer_parameter_size(target);
+  if (pointer_size <= 0) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "transOmpTaskForFortran(): unable to determine target pointer size";
+    ROSE_ABORT();
+  }
+  if (syms.size() >
+      static_cast<size_t>(std::numeric_limits<int>::max() / pointer_size)) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "transOmpTaskForFortran(): outlined task parameter size overflow";
+    ROSE_ABORT();
+  }
+
   SgExpression *parameter_cpyfn = buildIntVal(0);
   SgExpression *parameter_arg_size =
-      buildIntVal(static_cast<int>(syms.size() * sizeof(void *)));
+      buildIntVal(static_cast<int>(syms.size() * pointer_size));
   SgExpression *parameter_arg_align = buildIntVal(4);
   SgExpression *parameter_if_clause = buildIntVal(1);
   if (hasClause(target, V_SgOmpIfClause)) {
@@ -216,7 +242,8 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
     appendExpression(parameters, buildIntVal(pass_by_value ? 1 : 0));
 
     if (pass_by_value) {
-      int value_size = get_fortran_value_parameter_size(sym->get_type());
+      int value_size =
+          get_fortran_value_parameter_size(sym->get_type(), target);
       if (value_size < 0) {
         MLOG_ERROR_CXX("ompLowering")
             << "transOmpTaskForFortran(): unsupported pass-by-value type for "
@@ -226,7 +253,7 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
       }
       appendExpression(parameters, buildIntVal(value_size));
     } else {
-      appendExpression(parameters, buildIntVal(sizeof(void *)));
+      appendExpression(parameters, buildIntVal(pointer_size));
     }
 
     appendExpression(parameters,

@@ -60,9 +60,15 @@ int __kmpc_omp_task(ident_t *, int, void *);
 int __kmpc_omp_taskwait(ident_t *, int);
 void __kmpc_for_static_init_4(ident_t *, int, int, int *, int *, int *, int *,
                               int, int);
+void __kmpc_for_static_init_8(ident_t *, int, int, int *, int64_t *, int64_t *,
+                              int64_t *, int64_t, int64_t);
 void __kmpc_for_static_fini(ident_t *, int);
 void __kmpc_dispatch_init_4(ident_t *, int, int, int, int, int, int);
+void __kmpc_dispatch_init_8(ident_t *, int, int, int64_t, int64_t, int64_t,
+                            int64_t);
 int __kmpc_dispatch_next_4(ident_t *, int, int *, int *, int *, int *);
+int __kmpc_dispatch_next_8(ident_t *, int, int *, int64_t *, int64_t *,
+                           int64_t *);
 
 int __tgt_target_teams(int64_t device_id, void *host_ptr, int32_t arg_num,
                        void **args_base, void **args, int64_t *arg_sizes,
