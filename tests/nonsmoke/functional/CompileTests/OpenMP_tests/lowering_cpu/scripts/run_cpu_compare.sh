@@ -73,6 +73,11 @@ fail_with_diff() {
 
 if [[ ! -f "$rose_file" ]]; then
   echo "ERROR(${case_name}): missing lowered host file '$rose_file'" >&2
+  if [[ -f "$workdir/lower.log" ]]; then
+    echo "---- lower.log (${case_name}) ----" >&2
+    cat "$workdir/lower.log" >&2
+    echo "---- end lower.log ----" >&2
+  fi
   exit 1
 fi
 

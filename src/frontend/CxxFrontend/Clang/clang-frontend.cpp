@@ -1367,7 +1367,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       ROSE_ABORT();
     }
     if (cc1_system_include_dirs.count(openmp_compat_include_dir) == 0) {
-      cc1_args_storage.push_back("-internal-isystem");
+      // Force wrapper precedence over Clang resource/system omp.h. The wrapper
+      // temporarily hides _OPENMP before include_next <omp.h>.
+      cc1_args_storage.push_back("-I");
       cc1_args_storage.push_back(openmp_compat_include_dir);
       cc1_system_include_dirs.insert(openmp_compat_include_dir);
     }
