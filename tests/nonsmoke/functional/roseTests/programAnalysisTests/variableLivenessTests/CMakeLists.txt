@@ -2,7 +2,6 @@ include_directories(${ROSE_INCLUDES})
 
 add_executable(variableLivenessRunTest runTest.C)
 target_link_libraries(variableLivenessRunTest ROSE_DLL ${link_with_libraries})
-set_target_properties(variableLivenessRunTest PROPERTIES OUTPUT_NAME runTest)
 
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_liveness_conf ${CMAKE_CURRENT_SOURCE_DIR}/runTest.conf)
@@ -22,7 +21,7 @@ foreach(testnum IN LISTS _liveness_test_numbers)
       srcdir=${CMAKE_CURRENT_SOURCE_DIR}
       blddir=${CMAKE_CURRENT_BINARY_DIR}
       ${_liveness_conf}
-      runTest_${testnum}.passed
+      variableLivenessRunTest_${testnum}.passed
   )
 endforeach()
 
