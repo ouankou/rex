@@ -1,3 +1,4 @@
+#include <memory>
 #include <typeinfo>
 
 struct Base {
@@ -7,8 +8,8 @@ struct Base {
 struct Derived : Base {};
 
 int main() {
-  Base *base = new Derived();
-  Derived *derived = dynamic_cast<Derived *>(base);
+  std::unique_ptr<Base> base = std::make_unique<Derived>();
+  Derived *derived = dynamic_cast<Derived *>(base.get());
   if (derived == 0) {
     return 1;
   }
@@ -21,11 +22,9 @@ int main() {
     throw 42;
   } catch (int value) {
     if (value != 42) {
-      delete base;
       return 3;
     }
   }
 
-  delete base;
   return 0;
 }
