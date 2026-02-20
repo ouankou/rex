@@ -155,6 +155,12 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         replaceFunctionCallsInExpression(paramsList, fct2Var);
         replaceFunctionCallsInExpression(function, fct2Var);
 
+        // Calls returning void cannot be materialized into temporaries. Keep
+        // the call in place and only normalize nested calls in its
+        // function/argument expressions.
+        if (isSgTypeVoid(expType))
+          continue;
+
         // duplicate function call expression, for the initialization
         // declaration and the assignment
         SgTreeCopy treeCopy;
@@ -181,6 +187,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         SgInitializedName *initName;
 
         bool pointerTypeNeeded = false;
+        bool useNonInitBinding = false;
 
         // mark whether to replace inside or outside of ForStatement due to the
         // function call being inside the test or the increment for a for-loop
@@ -199,11 +206,13 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
           ROSE_ASSERT(up);
 
           // function call is in the condition of the for-loop
-          if (up == testExp)
+          if (up == testExp) {
             inForTest.push_back(true);
+          }
           // function call is in the increment expression
           else {
             inForTest.push_back(false);
+            useNonInitBinding = true;
 
             // for increment expressions we need to be able to reassign the
             // return value of the function; if the ret value is a reference, we
@@ -219,6 +228,8 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         // assign them at the end of the body of the loop
         if (isSgDoWhileStmt(stm->get_parent()) && isSgReferenceType(expType))
           pointerTypeNeeded = true;
+        if (isSgDoWhileStmt(stm->get_scope()))
+          useNonInitBinding = true;
 
         // we have a function call returning a reference and we can't initialize
         // the variable at the point of declaration; we need to define the
@@ -242,6 +253,8 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
           initName = isSgVariableDeclaration(nonInitVarDeclaration)
                          ->get_decl_item(name);
           ROSE_ASSERT(initName);
+          initName->set_scope(stm->get_scope());
+          ROSE_ASSERT(initName->get_scope());
 
           varSymbol = new SgVariableSymbol(initName);
           ROSE_ASSERT(varSymbol);
@@ -270,10 +283,24 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
               new SgVariableDeclaration(nonInitLoc, name, expType);
           ROSE_ASSERT(initVarDeclaration && nonInitVarDeclaration);
 
-          initName = isSgVariableDeclaration(nonInitVarDeclaration)
-                         ->get_decl_item(name);
-          ROSE_ASSERT(initName);
-          newExpInit->set_parent(initName);
+          SgInitializedName *nonInitName =
+              isSgVariableDeclaration(nonInitVarDeclaration)
+                  ->get_decl_item(name);
+          ROSE_ASSERT(nonInitName);
+          nonInitName->set_scope(stm->get_scope());
+          ROSE_ASSERT(nonInitName->get_scope());
+
+          SgInitializedName *initDeclName =
+              isSgVariableDeclaration(initVarDeclaration)->get_decl_item(name);
+          ROSE_ASSERT(initDeclName);
+          initDeclName->set_scope(stm->get_scope());
+          ROSE_ASSERT(initDeclName->get_scope());
+
+          initName = nonInitName;
+          newExpInit->set_parent(declInit);
+          if (!useNonInitBinding) {
+            initName = initDeclName;
+          }
           varSymbol = new SgVariableSymbol(initName);
           ROSE_ASSERT(varSymbol);
 
@@ -443,6 +470,37 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
       }
     }
 
+    for (map<SgFunctionCallExp *, SgExpression *>::iterator i = fct2Var.begin();
+         i != fct2Var.end(); ++i) {
+      SgVarRefExp *varRef = isSgVarRefExp(i->second);
+      if (!varRef) {
+        SgPointerDerefExp *ptrDeref = isSgPointerDerefExp(i->second);
+        if (ptrDeref)
+          varRef = isSgVarRefExp(ptrDeref->get_operand_i());
+      }
+      if (!varRef)
+        continue;
+
+      SgVariableSymbol *varSymbol = isSgVariableSymbol(varRef->get_symbol());
+      ROSE_ASSERT(varSymbol);
+
+      if (varSymbol->get_parent() == NULL) {
+        SgInitializedName *decl = varSymbol->get_declaration();
+        ROSE_ASSERT(decl);
+        SgScopeStatement *declScope = decl->get_scope();
+        ROSE_ASSERT(declScope);
+
+        SgVariableSymbol *existingSymbol =
+            declScope->lookup_variable_symbol(decl->get_name());
+        if (existingSymbol && existingSymbol != varSymbol) {
+          varRef->set_symbol(existingSymbol);
+        } else {
+          declScope->insert_symbol(decl->get_name(), varSymbol);
+          varSymbol->set_parent(declScope->get_symbol_table());
+        }
+      }
+    }
+
     // once we have inserted all variable declarations, we need to replace
     // top-level calls in the original statement
     if (variablesDefined) {
@@ -523,9 +581,11 @@ void FunctionCallNormalization::replaceFunctionCallsInExpression(
 
         map<SgFunctionCallExp *, SgExpression *>::iterator mapIter;
         mapIter = fct2Var.find(call);
-        if (mapIter == fct2Var.end())
-          cout << "NOT FOUND " << call->unparseToString() << "\t" << call
-               << "\n";
+        if (mapIter == fct2Var.end()) {
+          ROSE_ASSERT(isSgTypeVoid(call->get_type()));
+          toVisit.pop_front();
+          continue;
+        }
 
         // a mapping for function call exps in the subtree must already exist (
         // postorder traversal )
@@ -538,14 +598,9 @@ void FunctionCallNormalization::replaceFunctionCallsInExpression(
         SgExpression *newVar = isSgExpression(scnd->copy(treeCopy));
         ROSE_ASSERT(newVar);
 
-        SgExpression *parent = isSgExpression(call->get_parent());
-        ROSE_ASSERT(parent);
-
-        // replace the node in the AST
-        newVar->set_parent(parent);
-        int k = parent->replace_expression(call, newVar);
-        ROSE_ASSERT(k == 1);
-        delete call;
+        // Use the general replacement helper so function-call expressions can
+        // be rewritten under both expression and statement parents.
+        SageInterface::replaceExpression(call, newVar);
       }
       toVisit.pop_front();
     }
