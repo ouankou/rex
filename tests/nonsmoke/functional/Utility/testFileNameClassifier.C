@@ -16,6 +16,21 @@ using namespace Rose::StringUtility;
 namespace {
 namespace fs = std::filesystem;
 
+class SandboxDirectory {
+public:
+  explicit SandboxDirectory(const fs::path &path) : path_(path) {}
+
+  ~SandboxDirectory() {
+    std::error_code ec;
+    fs::remove_all(path_, ec);
+  }
+
+  const fs::path &path() const { return path_; }
+
+private:
+  fs::path path_;
+};
+
 void touchFile(const fs::path &path) {
   fs::create_directories(path.parent_path());
   ofstream file(path);
@@ -34,17 +49,21 @@ void expectClassification(const FileNameClassification &classification,
 int main(int argc, char **argv) {
   const string uniqueSuffix =
       to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-  const fs::path sandbox = fs::temp_directory_path() /
-                           ("rex-testFileNameClassifier-" + uniqueSuffix);
+  const SandboxDirectory sandbox(
+      fs::temp_directory_path() /
+      ("rex-testFileNameClassifier-" + uniqueSuffix));
 
-  const fs::path appRoot = sandbox / "app";
+  const fs::path appRoot = sandbox.path() / "app";
   const fs::path userHeader = appRoot / "src" / "user.h";
-  const fs::path cHeader = sandbox / "vendor-c" / "include" / "stdio.h";
-  const fs::path roseHeader = sandbox / "vendor-rose" / "include" / "rose.h";
-  const fs::path stlHeader = sandbox / "vendor-stl" / "include" / "vector";
+  const fs::path cHeader = sandbox.path() / "vendor-c" / "include" / "stdio.h";
+  const fs::path roseHeader =
+      sandbox.path() / "vendor-rose" / "include" / "rose.h";
+  const fs::path stlHeader =
+      sandbox.path() / "vendor-stl" / "include" / "vector";
   const fs::path mappedHeader =
-      sandbox / "vendor-custom" / "include" / "custom.h";
-  const fs::path missingHeader = sandbox / "missing" / "does_not_exist.h";
+      sandbox.path() / "vendor-custom" / "include" / "custom.h";
+  const fs::path missingHeader =
+      sandbox.path() / "missing" / "does_not_exist.h";
 
   touchFile(userHeader);
   touchFile(cHeader);
@@ -78,7 +97,7 @@ int main(int argc, char **argv) {
                        FILENAME_LIBRARY_STL);
 
   map<string, string> customLibraries;
-  customLibraries[(sandbox / "vendor-custom").string()] = "ThirdParty";
+  customLibraries[(sandbox.path() / "vendor-custom").string()] = "ThirdParty";
   classification =
       classifyFileName(mappedHeader.string(), sourceDir, customLibraries);
   expectClassification(classification, FILENAME_LOCATION_LIBRARY, "ThirdParty");
@@ -97,10 +116,6 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(stripDotsFromHeaderFileName("test.h") == "test.h");
   ROSE_ASSERT(stripDotsFromHeaderFileName(" test.h") == "test.h");
   ROSE_ASSERT(stripDotsFromHeaderFileName("test... .h") == "test... .h");
-
-  std::error_code ec;
-  fs::remove_all(sandbox, ec);
-  ROSE_ASSERT(!ec);
 
   return 0;
 }
