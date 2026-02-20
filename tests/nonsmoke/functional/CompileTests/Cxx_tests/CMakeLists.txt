@@ -4346,6 +4346,49 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2025_cfe_error_exit_code_continue_on_error_unparse
   rex_test2025_cfe_error_exit_code.cpp)
 
+# Issue 264: -fno-rtti should remain backend-only unless explicitly opted in.
+add_test(
+  NAME Cxx_tests_rex_test2026_issue264_rtti_backend_only
+  COMMAND
+    sh -c
+    "\"$@\" && test -f rose_rex_test2026_issue264_rtti_dynamic_cast.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -fno-rtti
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_issue264_rtti_dynamic_cast.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_issue264_rtti_backend_only
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_issue264_rtti_backend_only
+  rex_test2026_issue264_rtti_dynamic_cast.cpp)
+
+# Issue 264: Allow explicitly opting in to frontend RTTI flag enforcement.
+add_test(
+  NAME Cxx_tests_rex_test2026_issue264_rtti_respect_frontend_flags
+  COMMAND
+    sh -c
+    "\"$@\" > issue264_rtti_respect_frontend_flags.log 2>&1 && exit 1; grep -E \"dynamic_cast.*-frtti\" issue264_rtti_respect_frontend_flags.log"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -fno-rtti
+    -rex:clang:respect-rtti-flags
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_issue264_rtti_dynamic_cast.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_issue264_rtti_respect_frontend_flags
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_issue264_rtti_respect_frontend_flags
+  rex_test2026_issue264_rtti_dynamic_cast.cpp)
+
 # Issue 124: System header template specializations must preserve template args.
 add_test(
   NAME Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
