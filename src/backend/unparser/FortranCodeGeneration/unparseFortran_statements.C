@@ -611,22 +611,45 @@ void FortranCodeGeneration_locatedNode::unparseImportStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgImportStatement *importStatement = isSgImportStatement(stmt);
   SgExpressionPtrList &importList = importStatement->get_import_list();
-  SgExpressionPtrList::iterator i = importList.begin();
+  auto isValidImportItem = [](SgExpression *expr) -> bool {
+    if (SgVarRefExp *varRef = isSgVarRefExp(expr)) {
+      SgVariableSymbol *rawSymbol = varRef->get_symbol();
+      if (rawSymbol == nullptr) {
+        return false;
+      }
+      SgVariableSymbol *varSymbol = isSgVariableSymbol(rawSymbol);
+      if (varSymbol == nullptr) {
+        return false;
+      }
+      if (varSymbol->get_declaration() == nullptr) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  std::size_t validItems = 0;
+  for (SgExpression *expr : importList) {
+    if (isValidImportItem(expr)) {
+      ++validItems;
+    }
+  }
 
   curprint("import ");
-  if (importList.size() > 0)
+  if (validItems > 0) {
     curprint(":: ");
+  }
 
-  while (i != importList.end()) {
-    unparseExpression(*i, info);
-
-    i++;
-
-    // Put a little space before the next name (it there are multiple names
-    // specified)
-    if (i != importList.end()) {
+  bool needComma = false;
+  for (SgExpression *expr : importList) {
+    if (!isValidImportItem(expr)) {
+      continue;
+    }
+    if (needComma) {
       curprint(", ");
     }
+    unparseExpression(expr, info);
+    needComma = true;
   }
 
   unp->cur.insert_newline(1);

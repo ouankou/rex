@@ -1360,13 +1360,3 @@ add_test(
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
 set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop PROPERTIES DEPENDS gdf_f03_constprop_test2007_37_f03 )
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f77-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f77-constprop PROPERTIES DEPENDS gdf_f77_constprop_test2007_222_f )

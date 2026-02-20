@@ -1064,6 +1064,15 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // Keep REX OpenMP/OpenACC extension APIs visible during frontend parsing.
   if (sageFile.get_openmp() || openmp_ast_mode || sageFile.get_openacc()) {
     inc_list.push_back("clang-builtin-openmp-compat.h");
+#ifdef LLVM_OPENMP_INCLUDE_PATH
+    if (std::strlen(LLVM_OPENMP_INCLUDE_PATH) != 0) {
+      // Prefer including the configured LLVM omp.h by absolute path from the
+      // compatibility wrapper to avoid mixing incompatible Clang resource
+      // header directories in the active include search.
+      define_list.push_back(std::string("ROSE_LLVM_OPENMP_HEADER_FILE=\"") +
+                            LLVM_OPENMP_INCLUDE_PATH + "/omp.h\"");
+    }
+#endif
   }
 
   assertRequiredPreincludeConfigured(inc_list, language,
@@ -1308,6 +1317,83 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     }
     return path;
   };
+
+  std::string active_resource_include_dir;
+  if (!driver.ResourceDir.empty()) {
+    llvm::SmallString<256> include_dir(driver.ResourceDir);
+    llvm::sys::path::append(include_dir, "include");
+    active_resource_include_dir = canonical_path(include_dir.str().str());
+  }
+  auto is_clang_resource_include_dir = [&](const std::string &dir) -> bool {
+    if (dir.empty()) {
+      return false;
+    }
+    const std::string canonical_dir = canonical_path(dir);
+    if (canonical_dir.find("/lib/clang/") == std::string::npos) {
+      return false;
+    }
+    return llvm::sys::path::filename(canonical_dir) == "include";
+  };
+  auto should_drop_mismatched_clang_resource_include =
+      [&](const std::string &dir) -> bool {
+    if (active_resource_include_dir.empty()) {
+      return false;
+    }
+    if (!is_clang_resource_include_dir(dir)) {
+      return false;
+    }
+    return canonical_path(dir) != active_resource_include_dir;
+  };
+
+  // Drop mismatched Clang resource include directories (e.g., a different LLVM
+  // major's <...>/lib/clang/<ver>/include) to avoid include_next guard
+  // collisions in builtin headers such as stdint.h.
+  std::vector<std::string> filtered_cc1_args_storage;
+  filtered_cc1_args_storage.reserve(cc1_args_storage.size());
+  auto is_split_system_include_flag = [](llvm::StringRef flag) {
+    return flag == "-isystem" || flag == "-internal-isystem" ||
+           flag == "-internal-externc-isystem" || flag == "-c-isystem" ||
+           flag == "-cxx-isystem";
+  };
+  auto should_drop_prefixed_system_include = [&](llvm::StringRef flag) -> bool {
+    auto drop_prefixed = [&](const char *prefix) -> bool {
+      const std::size_t prefix_len = std::strlen(prefix);
+      if (!flag.starts_with(prefix) || flag.size() <= prefix_len) {
+        return false;
+      }
+      std::string dir = flag.substr(prefix_len).str();
+      if (!dir.empty() && dir[0] == '=') {
+        dir.erase(dir.begin());
+      }
+      return should_drop_mismatched_clang_resource_include(dir);
+    };
+    return drop_prefixed("-isystem") || drop_prefixed("-internal-isystem") ||
+           drop_prefixed("-internal-externc-isystem") ||
+           drop_prefixed("-c-isystem") || drop_prefixed("-cxx-isystem");
+  };
+  for (std::size_t i = 0; i < cc1_args_storage.size(); ++i) {
+    llvm::StringRef flag(cc1_args_storage[i]);
+    if (is_split_system_include_flag(flag)) {
+      if (i + 1 < cc1_args_storage.size() &&
+          should_drop_mismatched_clang_resource_include(
+              cc1_args_storage[i + 1])) {
+        ++i;
+        continue;
+      }
+      filtered_cc1_args_storage.push_back(cc1_args_storage[i]);
+      if (i + 1 < cc1_args_storage.size()) {
+        filtered_cc1_args_storage.push_back(cc1_args_storage[i + 1]);
+        ++i;
+      }
+      continue;
+    }
+    if (should_drop_prefixed_system_include(flag)) {
+      continue;
+    }
+    filtered_cc1_args_storage.push_back(cc1_args_storage[i]);
+  }
+  cc1_args_storage.swap(filtered_cc1_args_storage);
+
   std::set<std::string> cc1_system_include_dirs;
   auto record_system_include = [&](const std::string &dir) {
     if (dir.empty()) {
@@ -1350,9 +1436,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   }
 
   // OpenMP parsing in REX is pragma-driven (without forwarding -fopenmp to
-  // Clang), so explicitly add:
-  // 1) a compatibility wrapper include dir (contains omp.h wrapper)
-  // 2) LLVM's OpenMP header directory discovered at configure time.
+  // Clang), so explicitly add a compatibility wrapper include dir (contains
+  // omp.h wrapper). The wrapper injects the configured omp.h by absolute path.
   if (sageFile.get_openmp() && !disable_openmp_via_flag) {
     std::string openmp_compat_include_dir;
     const std::vector<std::string> openmp_compat_candidates = {
@@ -1405,7 +1490,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       ROSE_ABORT();
     }
 
-    if (cc1_system_include_dirs.count(llvm_openmp_include_dir) == 0) {
+    if (!should_drop_mismatched_clang_resource_include(
+            llvm_openmp_include_dir) &&
+        cc1_system_include_dirs.count(llvm_openmp_include_dir) == 0) {
       cc1_args_storage.push_back("-internal-isystem");
       cc1_args_storage.push_back(llvm_openmp_include_dir);
       cc1_system_include_dirs.insert(llvm_openmp_include_dir);
@@ -1536,34 +1623,46 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   clang::LangOptions &lang_opts = compiler_instance->getLangOpts();
   std::vector<std::string> lang_specific_includes;
-  clang::LangStandard::Kind requested_std = lang_opts.LangStd;
-  clang::LangStandard std_info =
-      clang::LangStandard::getLangStandardForKind(requested_std);
   clang::Language clang_lang = clang::Language::C;
   bool enable_cuda = false;
   bool enable_opencl = false;
+
+  auto parse_requested_standard_from_cc1_args =
+      [&](const std::vector<std::string> &cc1_args) {
+        clang::LangStandard::Kind parsed_std =
+            clang::LangStandard::lang_unspecified;
+        for (std::size_t i = 0; i < cc1_args.size(); ++i) {
+          llvm::StringRef flag(cc1_args[i]);
+          llvm::StringRef standard_name;
+          if (flag == "-std" && (i + 1) < cc1_args.size()) {
+            standard_name = cc1_args[i + 1];
+          } else if (flag.starts_with("-std=")) {
+            standard_name = flag.drop_front(std::strlen("-std="));
+          }
+          if (standard_name.empty()) {
+            continue;
+          }
+          clang::LangStandard::Kind candidate =
+              clang::LangStandard::getLangKind(standard_name);
+          if (candidate != clang::LangStandard::lang_unspecified) {
+            parsed_std = candidate;
+          }
+        }
+        return parsed_std;
+      };
 
   switch (language) {
   case ClangToSageTranslator::C:
     clang_lang = clang::Language::C;
     break;
   case ClangToSageTranslator::CPLUSPLUS:
-    if (!std_info.isCPlusPlus()) {
-      requested_std = clang::LangStandard::lang_gnucxx17;
-    }
     clang_lang = clang::Language::CXX;
     break;
   case ClangToSageTranslator::CUDA:
-    if (!std_info.isCPlusPlus()) {
-      requested_std = clang::LangStandard::lang_gnucxx17;
-    }
     clang_lang = clang::Language::CUDA;
     enable_cuda = true;
     break;
   case ClangToSageTranslator::OPENCL:
-    if (!std_info.isOpenCL()) {
-      requested_std = clang::LangStandard::lang_opencl30;
-    }
     clang_lang = clang::Language::OpenCL;
     enable_opencl = true;
     break;
@@ -1571,6 +1670,31 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     ROSE_ASSERT(!"Objective-C is not supported by ROSE Compiler.");
   default:
     ROSE_ABORT();
+  }
+
+  clang::LangStandard::Kind requested_std =
+      parse_requested_standard_from_cc1_args(cc1_args_storage);
+  if (requested_std == clang::LangStandard::lang_unspecified) {
+    requested_std =
+        clang::getDefaultLanguageStandard(clang_lang, target_triple);
+  }
+
+  clang::LangStandard std_info =
+      clang::LangStandard::getLangStandardForKind(requested_std);
+  switch (language) {
+  case ClangToSageTranslator::CPLUSPLUS:
+  case ClangToSageTranslator::CUDA:
+    if (!std_info.isCPlusPlus()) {
+      requested_std = clang::LangStandard::lang_gnucxx17;
+    }
+    break;
+  case ClangToSageTranslator::OPENCL:
+    if (!std_info.isOpenCL()) {
+      requested_std = clang::LangStandard::lang_opencl30;
+    }
+    break;
+  default:
+    break;
   }
 
   clang::InputKind input_kind(clang_lang);

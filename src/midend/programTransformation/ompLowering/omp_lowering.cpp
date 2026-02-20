@@ -14,6 +14,7 @@
 #include "sageBuilder.h"
 
 #include <algorithm>
+#include <cctype>
 #include <sstream>
 #include <unordered_set>
 
@@ -782,8 +783,6 @@ static void convertAndFilter(const SgInitializedNamePtrList input,
 }
 
 namespace OmpSupport {
-omp_rtl_enum rtl_type =
-    e_gomp; /* default to  generate code targetting gcc's gomp */
 bool enable_accelerator = false; /* default is to not recognize and lowering
                                     OpenMP accelerator directives */
 bool enable_debugging = false;   /* default is not to debug the process */
@@ -1664,7 +1663,7 @@ string toString(SgOmpClause::omp_schedule_kind_enum s_kind) {
   return result;
 }
 
-//! Generate XOMP loop schedule init function's name, union from OMNI's
+//! Generate XOMP loop schedule init function's name
 string
 generateGOMPLoopInitFuncName(bool isOrdered,
                              SgOmpClause::omp_schedule_kind_enum s_kind) {
@@ -1683,14 +1682,14 @@ generateGOMPLoopInitFuncName(bool isOrdered,
   return result;
 }
 
-//! Generate GOMP loop schedule start function's name
+//! Generate XOMP loop schedule start function's name
 string
-generateGOMPLoopStartFuncName(bool isOrdered,
+generateXOMPLoopStartFuncName(bool isOrdered,
                               SgOmpClause::omp_schedule_kind_enum s_kind) {
-  // GOMP_loop_static_start ()
-  // GOMP_loop_ordered_static_start ()
-  // GOMP_loop_dynamic_start ()
-  // GOMP_loop_ordered_dynamic_start ()
+  // XOMP_loop_static_start ()
+  // XOMP_loop_ordered_static_start ()
+  // XOMP_loop_dynamic_start ()
+  // XOMP_loop_ordered_dynamic_start ()
   // .....
   string result;
   result = "XOMP_loop_";
@@ -1702,15 +1701,15 @@ generateGOMPLoopStartFuncName(bool isOrdered,
   return result;
 }
 
-//! Generate GOMP loop schedule next function's name
+//! Generate XOMP loop schedule next function's name
 string
-generateGOMPLoopNextFuncName(bool isOrdered,
+generateXOMPLoopNextFuncName(bool isOrdered,
                              SgOmpClause::omp_schedule_kind_enum s_kind) {
   string result;
-  // GOMP_loop_static_next()
-  // GOMP_loop_ordered_static_next ()
-  // GOMP_loop_dynamic_next ()
-  // GOMP_loop_ordered_dynamic_next()
+  // XOMP_loop_static_next()
+  // XOMP_loop_ordered_static_next ()
+  // XOMP_loop_dynamic_next ()
+  // XOMP_loop_ordered_dynamic_next()
   // .....
 
   result = "XOMP_loop_";
@@ -1968,7 +1967,7 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
   if (s_kind != SgOmpClause::e_omp_schedule_kind_auto &&
       s_kind != SgOmpClause::e_omp_schedule_kind_runtime)
     ROSE_ASSERT(orig_chunk_size != NULL);
-  string func_start_name = generateGOMPLoopStartFuncName(hasOrder, s_kind);
+  string func_start_name = generateXOMPLoopStartFuncName(hasOrder, s_kind);
   // Assembling function call expression's parameters
   // first three are identical for all cases:
   // we generate inclusive upper (-1) bounds after loop normalization, gomp
@@ -2103,7 +2102,7 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     appendStatement(loop, true_body);
     // if () goto label
     func_next_exp =
-        buildFunctionCallExp(generateGOMPLoopNextFuncName(hasOrder, s_kind),
+        buildFunctionCallExp(generateXOMPLoopNextFuncName(hasOrder, s_kind),
                              buildIntType(), n_exp_list, bb1);
     SgIfStmt *if_stmt_2 =
         buildIfStmt(buildEqualityOp(func_next_exp, buildIntVal(1)),
@@ -6303,39 +6302,68 @@ void transOmpCritical(SgNode *node) {
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
 
-  replaceStatement(target, body, true);
-
   SgExprStatement *func_call_stmt1 = NULL, *func_call_stmt2 = NULL;
   string c_name = target->get_name().getString();
 
-  // assign a default name for the unnamed critical to simplify the translation
-  // GOMP actually have a dedicated function to support unnamed critical
-  // We generate a default name for it and use the named critical support
-  // function instead to be consistent with OMNI
+  // Assign a default lock variable name for unnamed critical directives.
   string g_lock_name = "xomp_critical_user_" + c_name;
   SgGlobal *global = getGlobalScope(target);
   ROSE_ASSERT(global != NULL);
-  // the lock variable may already be declared.
   SgVariableSymbol *sym =
       lookupVariableSymbolInParentScopes(SgName(g_lock_name), global);
   if (sym == NULL) {
-    SgVariableDeclaration *vardecl = buildVariableDeclaration(
-        g_lock_name, buildPointerType(buildVoidType()), NULL, global);
+    SgType *lock_type = NULL;
+    if (SageInterface::is_Fortran_language())
+      lock_type = buildPointerType(buildVoidType());
+    else
+      lock_type = buildArrayType(buildIntType(), buildIntVal(8));
+    SgVariableDeclaration *vardecl =
+        buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
     setStatic(vardecl);
     prependStatement(vardecl, global);
     sym = getFirstVarSym(vardecl);
   }
 
-  SgExprListExp *param1 =
-      buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
-  SgExprListExp *param2 =
-      buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
+  if (SageInterface::is_Fortran_language()) {
+    SgExprListExp *param1 =
+        buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
+    SgExprListExp *param2 =
+        buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
 
-  func_call_stmt1 = buildFunctionCallStmt("XOMP_critical_start",
-                                          buildVoidType(), param1, scope);
-  func_call_stmt2 = buildFunctionCallStmt("XOMP_critical_end", buildVoidType(),
-                                          param2, scope);
+    func_call_stmt1 = buildFunctionCallStmt("XOMP_critical_start",
+                                            buildVoidType(), param1, scope);
+    func_call_stmt2 = buildFunctionCallStmt("XOMP_critical_end",
+                                            buildVoidType(), param2, scope);
+  } else {
+    SgStatement *kmpc_global_tid_init = NULL;
+    SgVariableDeclaration *kmpc_global_tid_declaration =
+        get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
+    SgName tid_name = getFirstVariable(*kmpc_global_tid_declaration).get_name();
 
+    insertStatement(target, kmpc_global_tid_declaration);
+    kmpc_global_tid_declaration->set_parent(target->get_parent());
+    if (kmpc_global_tid_init != NULL)
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+
+    SgExpression *lock_ref1 =
+        buildCastExp(buildVarRefExp(sym), buildPointerType(buildVoidType()),
+                     SgCastExp::e_C_style_cast);
+    SgExpression *lock_ref2 =
+        buildCastExp(buildVarRefExp(sym), buildPointerType(buildVoidType()),
+                     SgCastExp::e_C_style_cast);
+
+    SgExprListExp *param1 = buildExprListExp(
+        buildIntVal(0), buildVarRefExp(tid_name, scope), lock_ref1);
+    SgExprListExp *param2 = buildExprListExp(
+        buildIntVal(0), buildVarRefExp(tid_name, scope), lock_ref2);
+
+    func_call_stmt1 = buildFunctionCallStmt("__kmpc_critical", buildVoidType(),
+                                            param1, scope);
+    func_call_stmt2 = buildFunctionCallStmt("__kmpc_end_critical",
+                                            buildVoidType(), param2, scope);
+  }
+
+  replaceStatement(target, body, true);
   insertStatementBefore(body, func_call_stmt1);
   insertStatementAfter(body, func_call_stmt2);
 }
@@ -6396,13 +6424,13 @@ void transOmpFlush(SgNode *node) {
   SgScopeStatement *scope = target->get_scope();
   ROSE_ASSERT(scope != NULL);
 
-#ifdef ENABLE_XOMP
-  SgExprStatement *func_call_stmt =
-      buildFunctionCallStmt("XOMP_flush_all", buildVoidType(), NULL, scope);
-#else
-  SgExprStatement *func_call_stmt =
-      buildFunctionCallStmt("__sync_synchronize", buildVoidType(), NULL, scope);
-#endif
+  SgExprStatement *func_call_stmt = NULL;
+  if (SageInterface::is_Fortran_language())
+    func_call_stmt =
+        buildFunctionCallStmt("XOMP_flush_all", buildVoidType(), NULL, scope);
+  else
+    func_call_stmt = buildFunctionCallStmt("__sync_synchronize",
+                                           buildVoidType(), NULL, scope);
   replaceStatement(target, func_call_stmt, true);
 }
 
@@ -7797,22 +7825,43 @@ void transOmpMaster(SgNode *node) {
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
 
-#ifdef ENABLE_XOMP
-  SgFunctionCallExp *func_call =
-      buildFunctionCallExp("XOMP_master", buildIntType(), NULL, scope);
   SgIfStmt *if_stmt = NULL;
-  if (SageInterface::is_Fortran_language())
+  SgName tid_name;
+  bool use_kmpc_master = false;
+
+  if (SageInterface::is_Fortran_language()) {
+    SgFunctionCallExp *func_call =
+        buildFunctionCallExp("XOMP_master", buildIntType(), NULL, scope);
     if_stmt =
         buildIfStmt(buildEqualityOp(func_call, buildIntVal(1)), body, NULL);
-  else
-    if_stmt = buildIfStmt(func_call, body, NULL);
-#else
-  SgExpression *func_exp =
-      buildFunctionCallExp("omp_get_thread_num", buildIntType(), NULL, scope);
-  SgIfStmt *if_stmt =
-      buildIfStmt(buildEqualityOp(func_exp, buildIntVal(0)), body, NULL);
-#endif
+  } else {
+    SgStatement *kmpc_global_tid_init = NULL;
+    SgVariableDeclaration *kmpc_global_tid_declaration =
+        get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
+    tid_name = getFirstVariable(*kmpc_global_tid_declaration).get_name();
+
+    insertStatement(target, kmpc_global_tid_declaration);
+    kmpc_global_tid_declaration->set_parent(target->get_parent());
+    if (kmpc_global_tid_init != NULL)
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+
+    SgExprListExp *parameters =
+        buildExprListExp(buildIntVal(0), buildVarRefExp(tid_name, scope));
+    SgExpression *func_exp = buildFunctionCallExp(
+        "__kmpc_master", buildIntType(), parameters, scope);
+    if_stmt = buildIfStmt(func_exp, body, NULL);
+    use_kmpc_master = true;
+  }
+
   replaceStatement(target, if_stmt, true);
+  if (use_kmpc_master) {
+    SgExprListExp *end_parameters =
+        buildExprListExp(buildIntVal(0), buildVarRefExp(tid_name, scope));
+    SgExprStatement *end_master_call = buildFunctionCallStmt(
+        "__kmpc_end_master", buildVoidType(), end_parameters, scope);
+    SgBasicBlock *true_body = ensureBasicBlockAsTrueBodyOfIf(if_stmt);
+    appendStatement(end_master_call, true_body);
+  }
   moveUpPreprocessingInfo(if_stmt, target, PreprocessingInfo::before);
   if (isLast) // the preprocessing info after the last statement may be attached
               // to the inside of its parent scope
@@ -8514,6 +8563,26 @@ void lower_omp(SgSourceFile *file) {
 // each OpenMP statement has such an id with unique name
 // "__global_tid_<enclosing function name>_<original statement line number>_<tid
 // index>"
+static std::string sanitize_identifier_component(const std::string &name) {
+  std::string result;
+  result.reserve(name.size());
+  for (char c : name) {
+    unsigned char uc = static_cast<unsigned char>(c);
+    if (std::isalnum(uc) || c == '_')
+      result.push_back(c);
+    else
+      result.push_back('_');
+  }
+
+  if (result.empty())
+    return std::string("scope");
+
+  if (std::isdigit(static_cast<unsigned char>(result[0])))
+    result.insert(result.begin(), '_');
+
+  return result;
+}
+
 static SgVariableDeclaration *get_kmpc_global_tid(SgNode *target,
                                                   SgScopeStatement *scope,
                                                   SgStatement **init_stmt) {
@@ -8522,7 +8591,7 @@ static SgVariableDeclaration *get_kmpc_global_tid(SgNode *target,
   SgFunctionDeclaration *enclosing_function =
       getEnclosingFunctionDeclaration(target);
   std::string enclosing_function_name =
-      enclosing_function->get_name().getString();
+      sanitize_identifier_component(enclosing_function->get_name().getString());
   std::stringstream statement_line_number;
   statement_line_number << info->get_line();
   std::stringstream kmpc_global_tid_number;

@@ -6,100 +6,82 @@ target_link_libraries(roseomp ROSE_DLL ${link_with_libraries})
 add_executable(roseompacc roseompacc.C)
 target_link_libraries(roseompacc ROSE_DLL ${link_with_libraries})
 
-set(OMP_C_COMPILE_TESTS
-  ompfor5.c
-  ompfor6.c
-  ompfor7.c
-  twoRegions.c
-)
+find_program(BASH_EXECUTABLE bash)
+if(NOT BASH_EXECUTABLE)
+  message(FATAL_ERROR "bash not found; ompLoweringTests require bash")
+endif()
 
-set(OMP_C_RUN_TESTS
-  barrier.c
-  ompfor.c
-  ompfor_c99.c
-  ompfor3.c
-  ompfor4.c
-  ompfor-default.c
-  ompfor-decremental.c
-  ompfor-static.c
-  parallel.c
-  parallel-if.c
-  parallel-if-numthreads.c
-  parallel-numthreads.c
-  parallel-reduction.c
-  parallel-reduction2.c
-  parallelfor2.c
-  single.c
-  single3.c
-  omp_version.c
-)
+set(_omp_test_dir
+  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests)
+set(_omp_lowering_inc
+  ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering)
+set(_omp_translate_script
+  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_translate_only.sh)
+set(_omp_semantic_script
+  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_semantic_compare.sh)
+set(_omp_invariant_script
+  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_invariant_check.sh)
 
-set(OMP_REX_DIFF_DISABLED_TESTS
-  ompfor5.c
-  ompfor6.c
-  ompfor7.c
-  twoRegions.c
-  barrier.c
-  ompfor.c
-  ompfor_c99.c
-  ompfor3.c
-  ompfor4.c
-  ompfor-default.c
-  ompfor-decremental.c
-  ompfor-static.c
-  parallel.c
-  parallel-if.c
-  parallel-if-numthreads.c
-  parallel-numthreads.c
-  parallel-reduction.c
-  parallel-reduction2.c
-  parallelfor2.c
-  single.c
-  single3.c
-  omp_version.c
-)
+set(_omp_legacy_labels
+  OMPLOWERING
+  OMPLOWERING_LEGACY)
 
-set(OMP_CXX_COMPILE_TESTS
-  memberFunction.cpp
-  memberFunction2.cpp
-  referenceType.cpp
-)
+function(_omp_sanitize_name out_var specimen)
+  set(_name ${specimen})
+  string(REPLACE "." "_" _name ${_name})
+  string(REPLACE "-" "_" _name ${_name})
+  set(${out_var} ${_name} PARENT_SCOPE)
+endfunction()
 
-set(OMP_CXX_RUN_TESTS
-  hello1.cpp
-  helloNested.cpp
-  objectPrivate.cpp
-  objectFirstPrivate.cpp
-  objectLastprivate.cpp
-  orphanedAtomic.cpp
-  preprocessingInfo2.cpp
-  task_link.cpp
-  task_link2.cpp
-  task_tree.cpp
-)
+function(_label_omp_legacy test_name)
+  set_property(TEST ${test_name} APPEND PROPERTY LABELS "${_omp_legacy_labels};OMPLOWERING_LEGACY_TRANSLATE")
+endfunction()
 
-set(OMP_ACC_C_TESTS
-  collapse_2.c
-  axpy_ompacc.c
-  axpy_ompacc3.c
-  matrixmultiply-ompacc.c
-  matrixmultiply-ompacc2.c
-  jacobi-ompacc.c
-  jacobi-ompacc-v2.c
-  jacobi-ompacc-opt1.c
-  jacobi-ompacc-opt2.c
-  jacobi-ompacc-multiGPU.c
-)
+function(_label_omp_compile_only test_name)
+  set_property(TEST ${test_name} APPEND PROPERTY LABELS
+               "${_omp_legacy_labels};OMPLOWERING_LEGACY_TRANSLATE;OMPLOWERING_COMPILE_ONLY")
+endfunction()
 
-set(OMP_ACC_C_DISABLED_TESTS
-  axpy_ompacc2.c
-  axpy_ompacc4.c
-)
+function(_label_omp_semantic test_name)
+  set_property(TEST ${test_name} APPEND PROPERTY LABELS "${_omp_legacy_labels};OMPLOWERING_SEMANTIC")
+endfunction()
 
-set(OMP_ACC_CXX_TESTS
-)
+function(_label_omp_invariant test_name)
+  set_property(TEST ${test_name} APPEND PROPERTY LABELS "${_omp_legacy_labels};OMPLOWERING_INVARIANT")
+endfunction()
 
-set(OMP_C_COMPILE_DISABLED_TESTS
+function(add_omp_translate_only_test test_name translator input_file work_subdir)
+  add_test(
+    NAME ${test_name}
+    COMMAND ${BASH_EXECUTABLE} ${_omp_translate_script}
+            ${translator}
+            ${_omp_test_dir}/${input_file}
+            ${CMAKE_CURRENT_BINARY_DIR}/${work_subdir}
+            ${input_file})
+  set_tests_properties(${test_name} PROPERTIES TIMEOUT 180)
+  _label_omp_compile_only(${test_name})
+endfunction()
+
+function(add_omp_semantic_test test_name translator compiler input_file mode language
+         work_subdir)
+  add_test(
+    NAME ${test_name}
+    COMMAND ${BASH_EXECUTABLE} ${_omp_semantic_script}
+            ${translator}
+            ${compiler}
+            ${_omp_test_dir}/${input_file}
+            ${CMAKE_CURRENT_BINARY_DIR}/${work_subdir}
+            ${mode}
+            ${ROSE_LLVM_OPENMP_INCLUDE_DIR}
+            ${ROSE_LLVM_OPENMP_RUNTIME_DIR}
+            ${_omp_lowering_inc}
+            ${input_file}
+            ${language})
+  set_tests_properties(${test_name} PROPERTIES TIMEOUT 300)
+  _label_omp_semantic(${test_name})
+endfunction()
+
+set(OMP_C_COMPILE_BASE_CASES
   alignment.c
   collapse.c
   dijkstra_open_mp.c
@@ -114,6 +96,9 @@ set(OMP_C_COMPILE_DISABLED_TESTS
   master.c
   md_open_mp.c
   nowait.c
+  ompfor5.c
+  ompfor6.c
+  ompfor7.c
   ompfor8.c
   parallel_pragma.c
   private-duplicate.c
@@ -126,13 +111,14 @@ set(OMP_C_COMPILE_DISABLED_TESTS
   task_untied4.c
   task_wait.c
   task_wait2.c
-)
+  twoRegions.c)
 
-set(OMP_C_RUN_DISABLED_TESTS
+set(OMP_C_RUNTIME_BASE_CASES
   3loops.c
   array_init.c
   array_init_2.c
   atomic.c
+  barrier.c
   critical.c
   critical_orphaned.c
   empty.c
@@ -160,11 +146,26 @@ set(OMP_C_RUN_DISABLED_TESTS
   nestedpar1.c
   omp1.c
   ompGetNumThreads.c
+  ompfor.c
   ompfor2.c
+  ompfor3.c
+  ompfor4.c
+  ompfor-default.c
+  ompfor-decremental.c
+  ompfor-static.c
+  ompfor_c99.c
+  omp_version.c
   ordered.c
   ordered2.c
   orphaned-directives.c
+  parallel.c
+  parallel-if.c
+  parallel-if-numthreads.c
+  parallel-numthreads.c
+  parallel-reduction.c
+  parallel-reduction2.c
   parallelfor.c
+  parallelfor2.c
   parallelsections.c
   pi.c
   prettyfunc.c
@@ -177,6 +178,8 @@ set(OMP_C_RUN_DISABLED_TESTS
   section.c
   section1.c
   set_num_threads.c
+  single.c
+  single3.c
   spmd1.c
   subteam.c
   subteam2.c
@@ -187,308 +190,263 @@ set(OMP_C_RUN_DISABLED_TESTS
   task_untied3.c
   threadprivate.c
   threadprivate2.c
-  threadprivate3.c
-)
+  threadprivate3.c)
 
-set(OMP_ACC_CXX_DISABLED_TESTS
-  jacobi-ompacc2.cpp
-)
-
-set(_omp_legacy_ci_label OMPLOWERING_LEGACY_ADDRESSED)
-
-set(OMP_C_COMPILE_CI_ENABLED_TESTS
-  alignment.c
-  collapse.c
-  endif.c
-  endif3.c
-  full_verify.c
-  include_header_only.c
-  lastprivateOrphaned.c
-  linebreak.c
-  ompfor8.c
-  parallel_pragma.c
-  private-duplicate.c
-  sizeof.c
-  task_orphaned.c
-  task_underIf.c
-  task_untied4.c
-  task_wait.c
-  task_wait2.c
-  twoRegions.c
-)
-
-set(OMP_C_RUN_CI_ENABLED_TESTS
-  array_init.c
-  array_init_2.c
-  barrier.c
-  critical_orphaned.c
-  firstPrivateArray.c
-  firstPrivateArray_2.c
-  flush.c
-  omp_version.c
-  parallel.c
-  parallelfor.c
-  prettyfunc.c
-  task_outlining.c
-)
-
-set(OMP_CXX_COMPILE_CI_ENABLED_TESTS
+set(OMP_CXX_COMPILE_BASE_CASES
   memberFunction.cpp
   memberFunction2.cpp
-)
+  referenceType.cpp)
 
-set(OMP_CXX_RUN_CI_ENABLED_TESTS
+set(OMP_CXX_RUNTIME_BASE_CASES
   hello1.cpp
-)
+  helloNested.cpp
+  objectPrivate.cpp
+  objectFirstPrivate.cpp
+  objectLastprivate.cpp
+  orphanedAtomic.cpp
+  preprocessingInfo2.cpp
+  task_link.cpp
+  task_link2.cpp
+  task_tree.cpp)
 
-set(OMP_ACC_C_CI_ENABLED_TESTS
-  axpy_ompacc.c
-)
+set(OMP_ACC_C_CASES)
+set(OMP_ACC_CXX_CASES)
 
-function(_mark_omp_legacy_ci_enabled test_name)
-  set_property(TEST ${test_name} APPEND PROPERTY LABELS ${_omp_legacy_ci_label})
+set(OMP_C_SEMANTIC_CASES
+  barrier.c
+  flush.c
+  hello.c
+  matrixmultiply.c
+  ompfor.c
+  ompfor_c99.c
+  ompfor3.c
+  ompfor4.c
+  ompfor-default.c
+  ompfor-decremental.c
+  ompfor-static.c
+  omp_version.c
+  parallel.c
+  parallel-if.c
+  parallel-if-numthreads.c
+  parallel-numthreads.c
+  parallel-reduction.c
+  parallel-reduction2.c
+  parallelfor2.c
+  private.c
+  reduction.c
+  single.c)
+
+set(OMP_CXX_SEMANTIC_CASES
+  hello1.cpp
+  objectFirstPrivate.cpp
+  objectLastprivate.cpp
+  objectPrivate.cpp
+  orphanedAtomic.cpp
+  preprocessingInfo2.cpp)
+
+set(OMP_C_INVARIANT_CASES
+  barrier.c
+  flush.c
+  hello.c
+  matrixmultiply.c
+  ompfor.c
+  ompfor_c99.c
+  ompfor3.c
+  ompfor4.c
+  ompfor-default.c
+  ompfor-decremental.c
+  ompfor-static.c
+  parallel.c
+  parallel-if.c
+  parallel-if-numthreads.c
+  parallel-numthreads.c
+  parallel-reduction.c
+  parallel-reduction2.c
+  parallelfor2.c
+  private.c
+  reduction.c
+  single.c
+  single3.c
+  ompfor5.c
+  ompfor6.c
+  ompfor7.c
+  twoRegions.c)
+
+set(OMP_CXX_INVARIANT_CASES
+  hello1.cpp
+  objectFirstPrivate.cpp
+  objectLastprivate.cpp
+  objectPrivate.cpp
+  orphanedAtomic.cpp
+  preprocessingInfo2.cpp)
+
+set(OMP_C_ALL_CASES ${OMP_C_COMPILE_BASE_CASES} ${OMP_C_RUNTIME_BASE_CASES})
+set(OMP_CXX_ALL_CASES ${OMP_CXX_COMPILE_BASE_CASES} ${OMP_CXX_RUNTIME_BASE_CASES})
+
+list(REMOVE_DUPLICATES OMP_C_ALL_CASES)
+list(REMOVE_DUPLICATES OMP_CXX_ALL_CASES)
+list(REMOVE_DUPLICATES OMP_C_SEMANTIC_CASES)
+list(REMOVE_DUPLICATES OMP_CXX_SEMANTIC_CASES)
+list(REMOVE_DUPLICATES OMP_C_INVARIANT_CASES)
+list(REMOVE_DUPLICATES OMP_CXX_INVARIANT_CASES)
+
+foreach(testcode IN LISTS OMP_C_SEMANTIC_CASES OMP_C_INVARIANT_CASES)
+  if(NOT testcode IN_LIST OMP_C_ALL_CASES)
+    message(FATAL_ERROR "Case '${testcode}' is not in OMP_C_ALL_CASES")
+  endif()
+endforeach()
+
+foreach(testcode IN LISTS OMP_CXX_SEMANTIC_CASES OMP_CXX_INVARIANT_CASES)
+  if(NOT testcode IN_LIST OMP_CXX_ALL_CASES)
+    message(FATAL_ERROR "Case '${testcode}' is not in OMP_CXX_ALL_CASES")
+  endif()
+endforeach()
+
+set(OMP_LEGACY_CASE_MATRIX)
+function(_append_omp_legacy_case specimen language profile mode invariant)
+  list(APPEND OMP_LEGACY_CASE_MATRIX
+       "${specimen}|${language}|${profile}|${mode}|${invariant}")
+  set(OMP_LEGACY_CASE_MATRIX "${OMP_LEGACY_CASE_MATRIX}" PARENT_SCOPE)
 endfunction()
 
-set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
-set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
+foreach(testcode IN LISTS OMP_C_ALL_CASES)
+  set(_profile compile_only)
+  if(testcode IN_LIST OMP_C_SEMANTIC_CASES)
+    set(_profile semantic)
+  endif()
+  set(_invariant off)
+  if(testcode IN_LIST OMP_C_INVARIANT_CASES)
+    set(_invariant on)
+  endif()
+  _append_omp_legacy_case(${testcode} c ${_profile} sort ${_invariant})
+endforeach()
 
-set(_omp_test_dir
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests)
-set(_omp_test_includes
-  -I${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering
-  -I${CMAKE_BINARY_DIR})
-if(ROSE_LLVM_OPENMP_INCLUDE_DIR)
-  list(APPEND _omp_test_includes -isystem ${ROSE_LLVM_OPENMP_INCLUDE_DIR})
+foreach(testcode IN LISTS OMP_CXX_ALL_CASES)
+  set(_profile compile_only)
+  if(testcode IN_LIST OMP_CXX_SEMANTIC_CASES)
+    set(_profile semantic)
+  endif()
+  set(_invariant off)
+  if(testcode IN_LIST OMP_CXX_INVARIANT_CASES)
+    set(_invariant on)
+  endif()
+  _append_omp_legacy_case(${testcode} cxx ${_profile} sort ${_invariant})
+endforeach()
+
+set(_omp_c_semantic_enabled ON)
+if(NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")
+  message(WARNING "Legacy C lowering semantic tests require Clang; using translate-only mode")
+  set(_omp_c_semantic_enabled OFF)
+endif()
+if(NOT ROSE_LLVM_OPENMP_INCLUDE_DIR OR NOT EXISTS "${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h")
+  message(WARNING "LLVM OpenMP include directory unavailable; using translate-only mode for legacy C semantic tests")
+  set(_omp_c_semantic_enabled OFF)
+endif()
+if(NOT ROSE_LLVM_OPENMP_RUNTIME_DIR)
+  message(WARNING "LLVM OpenMP runtime directory unavailable; using translate-only mode for legacy C semantic tests")
+  set(_omp_c_semantic_enabled OFF)
 endif()
 
-set(_omp_flags ${_omp_test_includes} -rose:openmp:lowering -g)
-set(_omp_acc_flags ${_omp_test_includes} -rose:openmp:lowering -g)
-string(JOIN " " _omp_flags_str ${_omp_flags})
-string(JOIN " " _omp_acc_flags_str ${_omp_acc_flags})
+set(_omp_cxx_semantic_enabled ON)
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  message(WARNING "Legacy C++ lowering semantic tests require Clang; using translate-only mode")
+  set(_omp_cxx_semantic_enabled OFF)
+endif()
+if(NOT _omp_c_semantic_enabled)
+  set(_omp_cxx_semantic_enabled OFF)
+endif()
 
-add_test(
-  NAME omp_lowering_single2
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:roseomp> ${_omp_flags} -c ${_omp_test_dir}/single2.c
-)
+if(ENABLE-C)
+  foreach(_case_entry IN LISTS OMP_LEGACY_CASE_MATRIX)
+    string(REPLACE "|" ";" _case_fields "${_case_entry}")
+    list(GET _case_fields 0 testcode)
+    list(GET _case_fields 1 _language)
+    list(GET _case_fields 2 _profile)
+    list(GET _case_fields 3 _mode)
+    list(GET _case_fields 4 _invariant)
 
-add_test(
-  NAME omp_lowering_sizeof
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:roseomp> ${_omp_flags} -c ${_omp_test_dir}/sizeof.c
-)
-_mark_omp_legacy_ci_enabled(omp_lowering_sizeof)
+    _omp_sanitize_name(_omp_name ${testcode})
+    set(_semantic_enabled ON)
+    set(_compiler "")
+    if(_language STREQUAL "c")
+      set(_semantic_enabled ${_omp_c_semantic_enabled})
+      set(_compiler ${CMAKE_C_COMPILER})
+    elseif(_language STREQUAL "cxx")
+      set(_semantic_enabled ${_omp_cxx_semantic_enabled})
+      set(_compiler ${CMAKE_CXX_COMPILER})
+    else()
+      message(FATAL_ERROR "Unexpected language '${_language}' in OMP_LEGACY_CASE_MATRIX")
+    endif()
 
-foreach(testcode IN LISTS OMP_C_COMPILE_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseomp_compile_${testcode}.passed)
-  add_test(
-    NAME omp_lowering_c_compile_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-  if(testcode IN_LIST OMP_C_COMPILE_CI_ENABLED_TESTS)
-    _mark_omp_legacy_ci_enabled(omp_lowering_c_compile_${_omp_name})
-  endif()
-endforeach()
+    set(_semantic_selected OFF)
+    if(_profile STREQUAL "semantic" AND _semantic_enabled)
+      add_omp_semantic_test(
+        omp_lowering_${_language}_semantic_${_omp_name}
+        $<TARGET_FILE:roseomp>
+        ${_compiler}
+        ${testcode}
+        ${_mode}
+        ${_language}
+        legacy_semantic/${_language}/${_omp_name})
+      set(_semantic_selected ON)
+    else()
+      add_omp_translate_only_test(
+        omp_lowering_${_language}_compile_only_${_omp_name}
+        $<TARGET_FILE:roseomp>
+        ${testcode}
+        legacy_compile_only/${_language}/${_omp_name})
+    endif()
 
-foreach(testcode IN LISTS OMP_C_COMPILE_DISABLED_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseomp_compile_${testcode}.passed)
-  add_test(
-    NAME omp_lowering_c_compile_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-  if(testcode IN_LIST OMP_C_COMPILE_CI_ENABLED_TESTS)
-    _mark_omp_legacy_ci_enabled(omp_lowering_c_compile_${_omp_name})
-  endif()
-endforeach()
+    if(_invariant STREQUAL "on")
+      set(_invariant_dep
+          omp_lowering_${_language}_compile_only_${_omp_name})
+      if(_semantic_selected)
+        set(_invariant_dep
+            omp_lowering_${_language}_semantic_${_omp_name})
+      endif()
 
-foreach(testcode IN LISTS OMP_C_RUN_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseomp_run_${testcode}.passed)
-  add_test(
-    NAME omp_lowering_c_run_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-  if(testcode IN_LIST OMP_C_RUN_CI_ENABLED_TESTS)
-    _mark_omp_legacy_ci_enabled(omp_lowering_c_run_${_omp_name})
-  endif()
-endforeach()
+      add_test(
+        NAME omp_lowering_invariant_${_omp_name}
+        COMMAND ${BASH_EXECUTABLE} ${_omp_invariant_script}
+                $<TARGET_FILE:roseomp>
+                ${_omp_test_dir}/${testcode}
+                ${CMAKE_CURRENT_BINARY_DIR}/legacy_invariants/${_omp_name}
+                ${testcode})
+      set_tests_properties(
+        omp_lowering_invariant_${_omp_name}
+        PROPERTIES
+          DEPENDS ${_invariant_dep}
+          TIMEOUT 180)
+      _label_omp_invariant(omp_lowering_invariant_${_omp_name})
+    endif()
+  endforeach()
 
-foreach(testcode IN LISTS OMP_C_RUN_DISABLED_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseomp_run_${testcode}.passed)
-  add_test(
-    NAME omp_lowering_c_run_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-  if(testcode IN_LIST OMP_C_RUN_CI_ENABLED_TESTS)
-    _mark_omp_legacy_ci_enabled(omp_lowering_c_run_${_omp_name})
-  endif()
-endforeach()
+  foreach(testcode IN LISTS OMP_ACC_C_CASES)
+    _omp_sanitize_name(_omp_name ${testcode})
+    add_omp_translate_only_test(
+      omp_acc_lowering_c_compile_only_${_omp_name}
+      $<TARGET_FILE:roseompacc>
+      ${testcode}
+      legacy_compile_only/acc_c/${_omp_name})
+  endforeach()
 
-foreach(testcode IN LISTS OMP_CXX_COMPILE_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseomp_cxx_compile_${testcode}.passed)
-  add_test(
-    NAME omp_lowering_cxx_compile_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-  if(testcode IN_LIST OMP_CXX_COMPILE_CI_ENABLED_TESTS)
-    _mark_omp_legacy_ci_enabled(omp_lowering_cxx_compile_${_omp_name})
-  endif()
-endforeach()
+  foreach(testcode IN LISTS OMP_ACC_CXX_CASES)
+    _omp_sanitize_name(_omp_name ${testcode})
+    add_omp_translate_only_test(
+      omp_acc_lowering_cxx_compile_only_${_omp_name}
+      $<TARGET_FILE:roseompacc>
+      ${testcode}
+      legacy_compile_only/acc_cxx/${_omp_name})
+  endforeach()
+endif()
 
-foreach(testcode IN LISTS OMP_CXX_RUN_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseomp_cxx_run_${testcode}.passed)
-  add_test(
-    NAME omp_lowering_cxx_run_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseomp ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseomp> ${_omp_flags_str} -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-  if(testcode IN_LIST OMP_CXX_RUN_CI_ENABLED_TESTS)
-    _mark_omp_legacy_ci_enabled(omp_lowering_cxx_run_${_omp_name})
-  endif()
-endforeach()
-
-foreach(testcode IN LISTS OMP_ACC_C_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseompacc_${testcode}.passed)
-  add_test(
-    NAME omp_acc_lowering_c_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseompacc ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseompacc> ${_omp_acc_flags_str} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-  if(testcode IN_LIST OMP_ACC_C_CI_ENABLED_TESTS)
-    _mark_omp_legacy_ci_enabled(omp_acc_lowering_c_${_omp_name})
-  endif()
-endforeach()
-
-foreach(testcode IN LISTS OMP_ACC_C_DISABLED_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseompacc_${testcode}.passed)
-  add_test(
-    NAME omp_acc_lowering_c_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseompacc ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseompacc> ${_omp_acc_flags_str} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-  if(testcode IN_LIST OMP_ACC_C_CI_ENABLED_TESTS)
-    _mark_omp_legacy_ci_enabled(omp_acc_lowering_c_${_omp_name})
-  endif()
-endforeach()
-
-foreach(testcode IN LISTS OMP_ACC_CXX_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseompacc_${testcode}.passed)
-  add_test(
-    NAME omp_acc_lowering_cxx_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseompacc ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseompacc> ${_omp_acc_flags_str} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-endforeach()
-
-foreach(testcode IN LISTS OMP_ACC_CXX_DISABLED_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  set(_omp_target roseompacc_${testcode}.passed)
-  add_test(
-    NAME omp_acc_lowering_cxx_${_omp_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      TITLE="roseompacc ${testcode} [${_omp_target}]"
-      CMD="$<TARGET_FILE:roseompacc> ${_omp_acc_flags_str} -rose:skipfinalCompileStep -c ${_omp_test_dir}/${testcode}"
-      ${_exit_status}
-      ${_omp_target}
-  )
-endforeach()
-
-set(_omp_rex_reference_dir ${CMAKE_CURRENT_SOURCE_DIR}/REXReferenceTest)
-foreach(testcode IN LISTS OMP_C_COMPILE_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  add_test(
-    NAME omp_lowering_rex_diff_${_omp_name}
-    COMMAND ${CMAKE_COMMAND} -E compare_files
-      ${CMAKE_CURRENT_BINARY_DIR}/rose_${testcode}
-      ${_omp_rex_reference_dir}/rex_${testcode}
-  )
-  set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DEPENDS omp_lowering_c_compile_${_omp_name})
-endforeach()
-
-foreach(testcode IN LISTS OMP_C_RUN_TESTS)
-  string(REPLACE "." "_" _omp_name ${testcode})
-  add_test(
-    NAME omp_lowering_rex_diff_${_omp_name}
-    COMMAND ${CMAKE_COMMAND} -E compare_files
-      ${CMAKE_CURRENT_BINARY_DIR}/rose_${testcode}
-      ${_omp_rex_reference_dir}/rex_${testcode}
-  )
-  set_tests_properties(omp_lowering_rex_diff_${_omp_name} PROPERTIES DEPENDS omp_lowering_c_run_${_omp_name})
-endforeach()
+set(OMP_LOWERING_FORTRAN_LABELS ${_omp_legacy_labels})
+set(OMP_LOWERING_TRANSLATE_SCRIPT ${_omp_translate_script})
+set(OMP_LOWERING_FORTRAN_SEMANTIC_SCRIPT
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_fortran_semantic_compare.sh)
+set(OMP_LOWERING_INVARIANT_VERIFY_SCRIPT
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/verify_lowering_invariants.sh)
+set(OMP_LOWERING_TEST_DIR ${_omp_test_dir})
+set(OMP_LOWERING_INC_DIR ${_omp_lowering_inc})
 
 add_subdirectory(fortran)
-
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_ompLoweringTests_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=OMPTEST_memberFunction.cpp\;OMPTEST_memberFunction2.cpp\;OMPTEST_ompfor5.c\;OMPTEST_ompfor6.c\;OMPTEST_ompfor7.c\;OMPTEST_referenceType.cpp\;OMPTEST_twoRegions.c
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_conditional-check-local PROPERTIES DEPENDS "OMPTEST_memberFunction.cpp;OMPTEST_memberFunction2.cpp;OMPTEST_ompfor5.c;OMPTEST_ompfor6.c;OMPTEST_ompfor7.c;OMPTEST_referenceType.cpp;OMPTEST_twoRegions.c" )
-add_test(
-  NAME nonsmoke_functional_roseTests_ompLoweringTests_ompacc_diff_check
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=OMPTEST_alignment.c\;OMPTEST_collapse.c\;OMPTEST_dijkstra_open_mp.c\;OMPTEST_dynamicChunk.c\;OMPTEST_endif.c\;OMPTEST_endif3.c\;OMPTEST_full_verify.c\;OMPTEST_include_header_only.c\;OMPTEST_init.c\;OMPTEST_lastprivateOrphaned.c\;OMPTEST_linebreak.c\;OMPTEST_master.c\;OMPTEST_md_open_mp.c\;OMPTEST_memberFunction.cpp\;OMPTEST_memberFunction2.cpp\;OMPTEST_nowait.c\;OMPTEST_ompfor5.c\;OMPTEST_ompfor6.c\;OMPTEST_ompfor7.c\;OMPTEST_parallel_pragma.c\;OMPTEST_private-duplicate.c\;OMPTEST_referenceType.cpp\;OMPTEST_single2.c\;OMPTEST_sizeof.c\;OMPTEST_staticChunk.c\;OMPTEST_task_array2.c\;OMPTEST_task_orphaned.c\;OMPTEST_task_underIf.c\;OMPTEST_task_untied4.c\;OMPTEST_taskwait.c\;OMPTEST_taskwait2.c\;OMPTEST_twoRegions.c
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_ompacc_diff_check PROPERTIES LABELS disabled DEPENDS "OMPTEST_alignment.c;OMPTEST_collapse.c;OMPTEST_dijkstra_open_mp.c;OMPTEST_dynamicChunk.c;OMPTEST_endif.c;OMPTEST_endif3.c;OMPTEST_full_verify.c;OMPTEST_include_header_only.c;OMPTEST_init.c;OMPTEST_lastprivateOrphaned.c;OMPTEST_linebreak.c;OMPTEST_master.c;OMPTEST_md_open_mp.c;OMPTEST_memberFunction.cpp;OMPTEST_memberFunction2.cpp;OMPTEST_nowait.c;OMPTEST_ompfor5.c;OMPTEST_ompfor6.c;OMPTEST_ompfor7.c;OMPTEST_parallel_pragma.c;OMPTEST_private-duplicate.c;OMPTEST_referenceType.cpp;OMPTEST_single2.c;OMPTEST_sizeof.c;OMPTEST_staticChunk.c;OMPTEST_task_array2.c;OMPTEST_task_orphaned.c;OMPTEST_task_underIf.c;OMPTEST_task_untied4.c;OMPTEST_taskwait.c;OMPTEST_taskwait2.c;OMPTEST_twoRegions.c" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_roseTests_ompLoweringTests_ompacc_diff_check PROPERTIES DISABLED TRUE)
-endif()

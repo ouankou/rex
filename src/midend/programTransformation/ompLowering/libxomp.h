@@ -1,7 +1,7 @@
 /*
- * A common layer for both gomp and omni runtime library
- *  Liao 1/20/2009
- *  */
+ * XOMP compatibility layer used by OpenMP lowering.
+ * Runtime backend in REX is LLVM OpenMP (libomp/__kmpc).
+ */
 #ifndef LIB_XOMP_H
 #define LIB_XOMP_H
 
@@ -26,14 +26,6 @@ extern double xomp_time_stamp(void);
 extern int env_region_instr_val; // save the environment variable value for
                                  // instrumentation support
 // e.g. export XOMP_REGION_INSTR=0|1
-
-// enum omp_rtl_enum {
-//   e_gomp,
-//   e_omni,
-//   e_last_rtl
-// };
-//
-// extern omp_rtl_enum rtl_type;
 
 // Runtime library initialization routine
 extern void XOMP_init(int argc, char **argv);
@@ -75,19 +67,15 @@ extern void XOMP_task(void (*)(void *), void *, void (*)(void *, void *), long,
                       long, bool, unsigned);
 extern void XOMP_taskwait(void);
 
-// scheduler functions, union of runtime library functions
-// empty body if not used by one
-// scheduler initialization, only meaningful used for OMNI
+// Scheduler helper entry points.
 
 // Default loop scheduling, worksharing without any schedule clause, upper
-// bounds are inclusive Kick in before all runtime libraries. We use the default
-// loop scheduling from XOMP regardless the runtime chosen.
+// bounds are inclusive.
 extern void XOMP_loop_default(unsigned int lower, unsigned int upper,
                               unsigned int stride, long *n_lower,
                               long *n_upper);
 
-//! Optional init functions, mostly used for working with omni RTL
-// Non-op for gomp
+//! Optional init functions.
 extern void XOMP_loop_static_init(int lower, int upper, int stride,
                                   int chunk_size);
 extern void XOMP_loop_dynamic_init(int lower, int upper, int stride,
@@ -105,8 +93,7 @@ extern void XOMP_loop_ordered_guided_init(int lower, int upper, int stride,
                                           int chunk_size);
 extern void XOMP_loop_ordered_runtime_init(int lower, int upper, int stride);
 
-// if (start),
-// mostly used because of gomp, omni will just call  XOMP_loop_xxx_next();
+// if (start)
 // (long start, long end, long incr, long chunk_size,long *istart, long *iend)
 //  upper bounds are non-inclusive,
 //  bounds for inclusive loop control will need +/-1 , depending on

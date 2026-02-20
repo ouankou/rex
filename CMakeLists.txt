@@ -895,8 +895,6 @@ set(WITH-VALGRIND "" CACHE PATH "Valgrind installation prefix (empty to disable)
 set(WITH-VALGRIND-BIN "" CACHE PATH "Valgrind bin directory")
 set(WITH-VALGRIND-INCLUDE "" CACHE PATH "Valgrind include directory")
 set(WITH-VALGRIND-LIB "" CACHE PATH "Valgrind library directory")
-set(WITH-GOMP-OMP-RUNTIME-LIBRARY "" CACHE PATH "GCC GOMP OpenMP runtime library directory")
-set(WITH-OMNI-OMP-RUNTIME-SUPPORT "" CACHE PATH "Omni OpenMP runtime library directory")
 set(WITH-LLVM-OMP-RUNTIME-LIBRARY "" CACHE PATH "LLVM OpenMP runtime library directory")
 
 # To use Bison, set BISON_ROOT to the Bison installation prefix. To avoid Bison, use BISON_ROOT=no
@@ -918,8 +916,6 @@ set(_rose_with_vars
   WITH-VALGRIND-BIN
   WITH-VALGRIND-INCLUDE
   WITH-VALGRIND-LIB
-  WITH-GOMP-OMP-RUNTIME-LIBRARY
-  WITH-OMNI-OMP-RUNTIME-SUPPORT
   WITH-LLVM-OMP-RUNTIME-LIBRARY)
 foreach(_rose_var IN LISTS _rose_with_vars)
   if("${${_rose_var}}" STREQUAL "no" OR "${${_rose_var}}" STREQUAL "OFF")
@@ -928,6 +924,20 @@ foreach(_rose_var IN LISTS _rose_with_vars)
 endforeach()
 unset(_rose_with_vars)
 unset(_rose_var)
+
+if(DEFINED WITH-GOMP-OMP-RUNTIME-LIBRARY AND
+   NOT "${WITH-GOMP-OMP-RUNTIME-LIBRARY}" STREQUAL "")
+  message(FATAL_ERROR
+    "WITH-GOMP-OMP-RUNTIME-LIBRARY is no longer supported. "
+    "REX uses LLVM OpenMP runtime only.")
+endif()
+
+if(DEFINED WITH-OMNI-OMP-RUNTIME-SUPPORT AND
+   NOT "${WITH-OMNI-OMP-RUNTIME-SUPPORT}" STREQUAL "")
+  message(FATAL_ERROR
+    "WITH-OMNI-OMP-RUNTIME-SUPPORT is no longer supported. "
+    "REX uses LLVM OpenMP runtime only.")
+endif()
 
 if(WITH-VALGRIND)
   set(VALGRIND_INSTALL_PATH "${WITH-VALGRIND}")
@@ -1152,12 +1162,40 @@ if(ENABLE-C)
     endif()
     unset(_rose_llvm_runtime_prefix)
   endif()
-  unset(_rose_clang_resource_dir)
-
   if(NOT ROSE_LLVM_OPENMP_INCLUDE_DIR)
     message(FATAL_ERROR
       "LLVM OpenMP header (omp.h) not found for ${_rose_llvm_openmp_driver}. "
       "Ensure LLVM's OpenMP headers are installed.")
+  endif()
+
+  file(REAL_PATH "${ROSE_LLVM_OPENMP_INCLUDE_DIR}" ROSE_LLVM_OPENMP_INCLUDE_DIR)
+  if(_rose_clang_resource_dir)
+    set(_rose_clang_resource_include_dir "${_rose_clang_resource_dir}/include")
+    if(EXISTS "${_rose_clang_resource_include_dir}")
+      file(REAL_PATH "${_rose_clang_resource_include_dir}" _rose_clang_resource_include_dir)
+    else()
+      unset(_rose_clang_resource_include_dir)
+    endif()
+  endif()
+
+  # If the only available OpenMP header comes from a different Clang resource
+  # tree than the active frontend, stage a local copy of omp.h and use that
+  # directory instead. This avoids include_next collisions between different
+  # Clang stdint.h versions.
+  if(_rose_clang_resource_include_dir
+     AND NOT ROSE_LLVM_OPENMP_INCLUDE_DIR STREQUAL _rose_clang_resource_include_dir
+     AND ROSE_LLVM_OPENMP_INCLUDE_DIR MATCHES "/lib/clang/.+/include$")
+    set(_rose_staged_openmp_include_dir "${CMAKE_BINARY_DIR}/include-staging/llvm-openmp")
+    file(MAKE_DIRECTORY "${_rose_staged_openmp_include_dir}")
+    configure_file(
+      "${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h"
+      "${_rose_staged_openmp_include_dir}/omp.h"
+      COPYONLY)
+    set(ROSE_LLVM_OPENMP_INCLUDE_DIR "${_rose_staged_openmp_include_dir}")
+    message(STATUS
+      "Staging LLVM OpenMP header to avoid mixed Clang resource headers: "
+      "${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
+    unset(_rose_staged_openmp_include_dir)
   endif()
 
   set(LLVM_OPENMP_LIB_PATH "${ROSE_LLVM_OPENMP_RUNTIME_DIR}")
@@ -1170,19 +1208,11 @@ if(ENABLE-C)
     "Directory containing the LLVM OpenMP header used by REX")
   message(STATUS "Using LLVM OpenMP runtime: ${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
   message(STATUS "Using LLVM OpenMP header dir: ${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
+  unset(_rose_clang_resource_include_dir)
+  unset(_rose_clang_resource_dir)
   unset(_rose_llvm_openmp_driver)
 endif()
 
-if(WITH-GOMP-OMP-RUNTIME-LIBRARY)
-  set(USE_ROSE_GOMP_OPENMP_LIBRARY 1)
-  set(GCC_GOMP_OPENMP_LIB_PATH "${WITH-GOMP-OMP-RUNTIME-LIBRARY}")
-  set(ROSE_INSTALLATION_PATH "${CMAKE_INSTALL_PREFIX}")
-endif()
-if(WITH-OMNI-OMP-RUNTIME-SUPPORT)
-  set(USE_ROSE_OMNI_OPENMP_SUPPORT 1)
-  set(OMNI_OPENMP_LIB_PATH "${WITH-OMNI-OMP-RUNTIME-SUPPORT}")
-  set(ROSE_INSTALLATION_PATH "${CMAKE_INSTALL_PREFIX}")
-endif()
 if(WITH-LLVM-OMP-RUNTIME-LIBRARY AND NOT LLVM_OPENMP_LIB_PATH)
   set(LLVM_OPENMP_LIB_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}")
 endif()

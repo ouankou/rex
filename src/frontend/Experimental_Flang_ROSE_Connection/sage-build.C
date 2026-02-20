@@ -6528,8 +6528,11 @@ void BuildVisitor::Build(
   }
 
   for (const auto &name : importStmtNode.names) {
-    SgVarRefExp *varRef =
-        SageBuilder::buildVarRefExp(name.ToString(), currentScope);
+    // Import-list names denote host-associated identifiers. Keep them as
+    // dedicated placeholder refs instead of binding to mutable in-scope
+    // variable symbols, which can be remapped by later OpenMP lowering steps.
+    SgVarRefExp *varRef = SageBuilder::buildDanglingVarRefExp(
+        SgName(name.ToString()), currentScope);
     ASSERT_not_null(varRef);
     importStmt->get_import_list().push_back(varRef);
     varRef->set_parent(importStmt);
