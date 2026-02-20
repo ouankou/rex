@@ -1553,7 +1553,8 @@ void SgFile::usage() {
         "     -rose:OpenMP:lowering, -rose:openmp:lowering\n"
         "                             on top of -rose:openmp:ast_only, "
         "transform AST with OpenMP nodes into multithreaded code \n"
-        "                             targeting GCC GOMP runtime library\n"
+        "                             targeting LLVM OpenMP runtime "
+        "(__kmpc/libomp)\n"
         "     -rose:OpenACC, -rose:openacc\n"
         "                             follow OpenACC 3.0 specification for "
         "Fortran, perform one of the following actions:\n"
@@ -4842,6 +4843,35 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     }
 
     if ((get_openmp() || get_openmp_lowering()) && !get_Fortran_only()) {
+      const RosePathRoots roots = resolveRosePaths(nullptr);
+      const string openmp_compat_include_dir =
+          roots.compiler_header_root + "openmp-compat";
+      const std::filesystem::path openmp_compat_header =
+          std::filesystem::path(openmp_compat_include_dir) / "omp.h";
+      if (std::filesystem::exists(openmp_compat_header)) {
+        bool has_openmp_compat_include = false;
+        for (size_t idx = 0; idx < compilerNameString.size(); ++idx) {
+          const string &arg = compilerNameString[idx];
+          if ((arg == "-I" || arg == "-isystem") &&
+              (idx + 1) < compilerNameString.size() &&
+              compilerNameString[idx + 1] == openmp_compat_include_dir) {
+            has_openmp_compat_include = true;
+            break;
+          }
+          if (arg == "-I" + openmp_compat_include_dir ||
+              arg == "-isystem" + openmp_compat_include_dir) {
+            has_openmp_compat_include = true;
+            break;
+          }
+        }
+        if (!has_openmp_compat_include) {
+          // Ensure backend compilations resolve <omp.h> to the same REX
+          // compatibility wrapper used in the frontend.
+          compilerNameString.push_back("-I");
+          compilerNameString.push_back(openmp_compat_include_dir);
+        }
+      }
+
 #ifdef LLVM_OPENMP_INCLUDE_PATH
       const string llvm_openmp_include_dir = LLVM_OPENMP_INCLUDE_PATH;
       if (!llvm_openmp_include_dir.empty()) {
@@ -5953,11 +5983,8 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
       iter_last_inc++; // accommodate the insert-before-an-iterator semantics
                        // used in vector::insert()
 
-    // Liao 7/14/2014. Justin changed installation path of headers to
-    // install/rose, Liao, 9/22/2009, we also specify the search path for
-    // libgomp_g.h, libxomp.h etc, which are installed under $ROSE_INS/include
-    // and the path to libgomp.a/libgomp.so, which are located in
-    // $GCC_GOMP_OPENMP_LIB_PATH
+    // Keep REX OpenMP lowering headers reachable from the installation include
+    // tree (LLVM runtime only path).
 
     static const RosePathRoots roots = resolveRosePaths(nullptr);
     if (roots.in_install_tree && !roots.rose_include_root.empty()) {

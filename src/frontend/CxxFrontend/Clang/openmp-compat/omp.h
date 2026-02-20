@@ -10,16 +10,23 @@
  * semantic OpenMP parsing. Temporarily hide _OPENMP while including LLVM omp.h,
  * then restore it for user code.
  */
+#include <stdint.h>
+
 #ifdef _OPENMP
-#define ROSE_SAVED_OPENMP _OPENMP
+#pragma push_macro("_OPENMP")
 #undef _OPENMP
+#define ROSE_RESTORE_OPENMP 1
 #endif
 
+#if defined(ROSE_LLVM_OPENMP_HEADER_FILE)
+#include ROSE_LLVM_OPENMP_HEADER_FILE
+#else
 #include_next <omp.h>
+#endif
 
-#ifdef ROSE_SAVED_OPENMP
-#define _OPENMP ROSE_SAVED_OPENMP
-#undef ROSE_SAVED_OPENMP
+#ifdef ROSE_RESTORE_OPENMP
+#pragma pop_macro("_OPENMP")
+#undef ROSE_RESTORE_OPENMP
 #endif
 
 #endif

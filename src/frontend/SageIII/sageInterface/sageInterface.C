@@ -5249,6 +5249,36 @@ void SageInterface::transferSymbols(SgScopeStatement *from_scope,
   if (symtab == nullptr) {
     return;
   }
+  auto rehome_decl = [&](SgDeclarationStatement *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+
+    auto rehome_one = [&](SgDeclarationStatement *d) {
+      if (d == nullptr) {
+        return;
+      }
+      if (d->get_scope() == from_scope) {
+        d->set_scope(to_scope);
+      }
+      if (d->get_parent() == from_scope) {
+        d->set_parent(to_scope);
+      }
+    };
+
+    rehome_one(decl);
+
+    SgDeclarationStatement *first_nondef =
+        decl->get_firstNondefiningDeclaration();
+    if (first_nondef != decl) {
+      rehome_one(first_nondef);
+    }
+
+    SgDeclarationStatement *def = decl->get_definingDeclaration();
+    if (def != decl) {
+      rehome_one(def);
+    }
+  };
   std::set<SgNode *> symbols = symtab->get_symbols();
   for (SgNode *symNode : symbols) {
     SgSymbol *symbol = isSgSymbol(symNode);
@@ -5262,11 +5292,6 @@ void SageInterface::transferSymbols(SgScopeStatement *from_scope,
     if (to_scope->symbol_exists(name)) {
       continue;
     }
-    from_scope->remove_symbol(symbol);
-    to_scope->insert_symbol(name, symbol);
-    if (symbol->get_parent() != to_scope->get_symbol_table()) {
-      symbol->set_parent(to_scope->get_symbol_table());
-    }
     if (auto *varSym = isSgVariableSymbol(symbol)) {
       if (SgInitializedName *initName = varSym->get_declaration()) {
         if (initName->get_scope() == from_scope) {
@@ -5276,6 +5301,15 @@ void SageInterface::transferSymbols(SgScopeStatement *from_scope,
           initName->set_parent(to_scope);
         }
       }
+    }
+    if (SgDeclarationStatement *decl =
+            isSgDeclarationStatement(symbol->get_symbol_basis())) {
+      rehome_decl(decl);
+    }
+    from_scope->remove_symbol(symbol);
+    to_scope->insert_symbol(name, symbol);
+    if (symbol->get_parent() != to_scope->get_symbol_table()) {
+      symbol->set_parent(to_scope->get_symbol_table());
     }
   }
 }

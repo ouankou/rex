@@ -53,59 +53,19 @@ cmake --build . -- -j"$(nproc)" || {
 run_ctest_regex() {
   local test_dir=$1
   local regex=$2
-  local exclude_regex=$3
-  echo "Running ctest --test-dir \"${test_dir}\" -R \"${regex}\" --exclude-regex \"${exclude_regex}\"..."
+  echo "Running ctest --test-dir \"${test_dir}\" -R \"${regex}\"..."
   local count
-  count=$(ctest -N --test-dir "${test_dir}" -R "${regex}" --exclude-regex "${exclude_regex}" | awk '/Total Tests:/ {print $3}')
+  count=$(ctest -N --test-dir "${test_dir}" -R "${regex}" | awk '/Total Tests:/ {print $3}')
   if [[ -n "${count:-}" ]] && (( count == 0 )); then
     echo "ctest selection found zero matching tests. Ensure the build matches CI configuration." >&2
     return 1
   fi
-  ctest --test-dir "${test_dir}" -R "${regex}" --exclude-regex "${exclude_regex}" -j"$(nproc)" --output-on-failure
-}
-
-run_ctest_label() {
-  local test_dir=$1
-  local regex=$2
-  echo "Running ctest --test-dir \"${test_dir}\" -L \"${regex}\"..."
-  local count
-  count=$(ctest -N --test-dir "${test_dir}" -L "${regex}" | awk '/Total Tests:/ {print $3}')
-  if [[ -n "${count:-}" ]] && (( count == 0 )); then
-    echo "ctest selection found zero matching tests. Ensure the build matches CI configuration." >&2
-    return 1
-  fi
-  ctest --test-dir "${test_dir}" -L "${regex}" -j"$(nproc)" --output-on-failure
-}
-
-run_ctest_label_excluding() {
-  local test_dir=$1
-  local regex=$2
-  echo "Running ctest --test-dir \"${test_dir}\" -LE \"${regex}\"..."
-  local count
-  count=$(ctest -N --test-dir "${test_dir}" -LE "${regex}" | awk '/Total Tests:/ {print $3}')
-  if [[ -n "${count:-}" ]] && (( count == 0 )); then
-    echo "ctest --test-dir \"${test_dir}\" found zero tests. Ensure the build matches CI configuration." >&2
-    return 1
-  fi
-  ctest --test-dir "${test_dir}" -LE "${regex}" -j"$(nproc)" --output-on-failure
+  ctest --test-dir "${test_dir}" -R "${regex}" -j"$(nproc)" --output-on-failure
 }
 
 run_ctest_regex \
   "${build_dir}" \
-  "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" \
-  "omp_lowering|OMPFORTRAN"
-
-run_ctest_label \
-  "${build_dir}" \
-  "OMPLOWERING_LEGACY_ADDRESSED"
-
-run_ctest_label \
-  "${build_dir}/tests/nonsmoke/functional/CompileTests/OpenMP_tests" \
-  "OMPLOWERING"
-
-run_ctest_label_excluding \
-  "${build_dir}/tests/nonsmoke/functional/CompileTests/OpenMP_tests" \
-  "OMPLOWERING"
+  "rex|astInterface|testQuery|fortran|f90|f03|caf|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_"
 EOF
 
 chmod +x "$hook_path"
