@@ -489,6 +489,26 @@ static void split_string(std::string const &str, T &res, char sep = ',',
   res.push_back(f(str.substr(prev, pos - prev)));
 }
 
+static const char *const rexClangFrontendOptions[] = {
+    "-rex:clang:continue-on-error", "-rex:clang:disable-access-control",
+    "-rex:clang:delayed-template-parsing", "-rex:clang:respect-rtti-flags"};
+
+static void removeRexClangFrontendOptions(std::vector<std::string> &argv) {
+  for (const char *option : rexClangFrontendOptions) {
+    CommandlineProcessing::removeArgs(argv, option);
+  }
+}
+
+static bool isRexClangFrontendOption(const std::string &arg) {
+  for (const char *option : rexClangFrontendOptions) {
+    if (arg == option) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /*-----------------------------------------------------------------------------
  *  namespace SgProject {
  *---------------------------------------------------------------------------*/
@@ -3635,11 +3655,7 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   //----------------------------------------------------------------------------
 
   Rose::Cmdline::StripRoseOptions(argv);
-  CommandlineProcessing::removeArgs(argv, "-rex:clang:continue-on-error");
-  CommandlineProcessing::removeArgs(argv, "-rex:clang:disable-access-control");
-  CommandlineProcessing::removeArgs(argv,
-                                    "-rex:clang:delayed-template-parsing");
-  CommandlineProcessing::removeArgs(argv, "-rex:clang:respect-rtti-flags");
+  removeRexClangFrontendOptions(argv);
   CommandlineProcessing::removeArgsWithParameters(argv, "-outputdir");
 
   //----------------------------------------------------------------------------
@@ -4222,13 +4238,7 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
                current_arg == "-fno-cxx-exceptions" ||
                current_arg == "-frtti" || current_arg == "-fno-rtti") {
       clang_frontend_args.push_back(current_arg);
-    } else if (current_arg == "-rex:clang:continue-on-error") {
-      clang_frontend_args.push_back(current_arg);
-    } else if (current_arg == "-rex:clang:disable-access-control") {
-      clang_frontend_args.push_back(current_arg);
-    } else if (current_arg == "-rex:clang:delayed-template-parsing") {
-      clang_frontend_args.push_back(current_arg);
-    } else if (current_arg == "-rex:clang:respect-rtti-flags") {
+    } else if (isRexClangFrontendOption(current_arg)) {
       clang_frontend_args.push_back(current_arg);
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // Ignore other frontend/driver flags that Clang cc1 doesn't accept.
