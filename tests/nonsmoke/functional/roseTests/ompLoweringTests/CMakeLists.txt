@@ -212,6 +212,8 @@ set(OMP_CXX_RUNTIME_BASE_CASES
 set(OMP_ACC_C_CASES)
 set(OMP_ACC_CXX_CASES)
 
+# Keep semantic-compare cases deterministic. Exclude tests such as private.c
+# that intentionally read uninitialized private variables (undefined behavior).
 set(OMP_C_SEMANTIC_CASES
   barrier.c
   flush.c
@@ -232,7 +234,6 @@ set(OMP_C_SEMANTIC_CASES
   parallel-reduction.c
   parallel-reduction2.c
   parallelfor2.c
-  private.c
   reduction.c
   single.c)
 
