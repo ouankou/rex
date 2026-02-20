@@ -161,16 +161,6 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         replaceFunctionCallsInExpression(paramsList, fct2Var);
         replaceFunctionCallsInExpression(function, fct2Var);
 
-        // duplicate function call expression, for the initialization
-        // declaration and the assignment
-        SgTreeCopy treeCopy;
-        SgFunctionCallExp *newExpInit =
-            isSgFunctionCallExp(exp->copy(treeCopy));
-        ROSE_ASSERT(newExpInit);
-        SgFunctionCallExp *newExpAssign =
-            isSgFunctionCallExp(exp->copy(treeCopy));
-        ROSE_ASSERT(newExpAssign);
-
         // variables
         Sg_File_Info
             *initLoc =
@@ -180,20 +170,24 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
             *assignLoc =
                 Sg_File_Info::generateDefaultFileInfoForTransformationNode();
         Declaration *newDecl = new Declaration();
-        SgStatement *nonInitVarDeclaration, *initVarDeclaration, *assignStmt;
-        SgExpression *varRefExp;
-        SgVariableSymbol *varSymbol;
-        SgAssignOp *assignOp;
-        SgInitializedName *initName;
+        SgStatement *nonInitVarDeclaration = NULL, *initVarDeclaration = NULL,
+                    *assignStmt = NULL;
+        SgExpression *varRefExp = NULL;
+        SgVariableSymbol *varSymbol = NULL;
+        SgAssignOp *assignOp = NULL;
+        SgInitializedName *initName = NULL;
 
         bool pointerTypeNeeded = false;
         bool useNonInitDeclaration = false;
+        bool needsAssignment = false;
 
         // mark whether to replace inside or outside of ForStatement due to the
         // function call being inside the test or the increment for a for-loop
         // statement the 'inForTest' list is in 1:1  ordered correpondence with
         // the 'declarations' list
         if (forStm) {
+          needsAssignment = true;
+
           // SgExpressionRoot
           //   *testExp = isSgForStatement( astNode )->get_test_expr_root(),
           //   *incrExp = isSgForStatement( astNode
@@ -227,13 +221,34 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         // assign them at the end of the body of the loop
         if (isSgDoWhileStmt(stm->get_parent()) && isSgReferenceType(expType))
           pointerTypeNeeded = true;
+        if (scope->variantT() == V_SgWhileStmt ||
+            scope->variantT() == V_SgDoWhileStmt)
+          needsAssignment = true;
         if (scope->variantT() == V_SgDoWhileStmt)
           useNonInitDeclaration = true;
+        if (pointerTypeNeeded)
+          useNonInitDeclaration = true;
+
+        // Duplicate function call expression only for nodes that are actually
+        // inserted into the AST.
+        SgFunctionCallExp *newExpInit = NULL, *newExpAssign = NULL;
+        if (!useNonInitDeclaration) {
+          SgTreeCopy initTreeCopy;
+          newExpInit = isSgFunctionCallExp(exp->copy(initTreeCopy));
+          ROSE_ASSERT(newExpInit);
+        }
+        if (needsAssignment) {
+          SgTreeCopy assignTreeCopy;
+          newExpAssign = isSgFunctionCallExp(exp->copy(assignTreeCopy));
+          ROSE_ASSERT(newExpAssign);
+        }
 
         // we have a function call returning a reference and we can't initialize
         // the variable at the point of declaration; we need to define the
         // variable as a pointer
         if (pointerTypeNeeded) {
+          ROSE_ASSERT(needsAssignment && newExpAssign);
+
           // create 'address of' term for function expression, so we can assign
           // it to the pointer
           SgAddressOfOp *addressOp =
@@ -256,7 +271,6 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
 
           varSymbol = new SgVariableSymbol(initName);
           ROSE_ASSERT(varSymbol);
-          varSymbol->set_parent(scope);
           varRefExp = new SgVarRefExp(assignLoc, varSymbol);
 
           SgPointerDerefExp *ptrDeref =
@@ -266,54 +280,44 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
           assignStmt = new SgExprStatement(assignLoc, assignOp);
           ROSE_ASSERT(assignStmt && nonInitVarDeclaration);
 
-          // we don't need initialized declarations in this case
-          initVarDeclaration = NULL;
-
           // save new mapping
           fct2Var.insert(Fct2Var(exp, ptrDeref));
         } else {
-          // create (non- &)initialized declarations, initialized name & symbol
-          SgAssignInitializer *declInit =
-              new SgAssignInitializer(initLoc, newExpInit, expType);
-          ROSE_ASSERT(declInit);
-          initVarDeclaration =
-              new SgVariableDeclaration(initLoc, name, expType, declInit);
-          nonInitVarDeclaration =
-              new SgVariableDeclaration(nonInitLoc, name, expType);
-          ROSE_ASSERT(initVarDeclaration && nonInitVarDeclaration);
+          // Build only the declaration shape used by the enclosing control-flow
+          // context.
+          if (useNonInitDeclaration) {
+            ROSE_ASSERT(needsAssignment);
+            nonInitVarDeclaration =
+                new SgVariableDeclaration(nonInitLoc, name, expType);
+            initName = isSgVariableDeclaration(nonInitVarDeclaration)
+                           ->get_decl_item(name);
+          } else {
+            ROSE_ASSERT(newExpInit);
+            SgAssignInitializer *declInit =
+                new SgAssignInitializer(initLoc, newExpInit, expType);
+            ROSE_ASSERT(declInit);
+            initVarDeclaration =
+                new SgVariableDeclaration(initLoc, name, expType, declInit);
+            initName = isSgVariableDeclaration(initVarDeclaration)
+                           ->get_decl_item(name);
+          }
+          ROSE_ASSERT(initName);
+          initName->set_scope(scope);
 
-          SgInitializedName *initDeclItem =
-              isSgVariableDeclaration(initVarDeclaration)->get_decl_item(name);
-          SgInitializedName *nonInitDeclItem =
-              isSgVariableDeclaration(nonInitVarDeclaration)
-                  ->get_decl_item(name);
-          ROSE_ASSERT(initDeclItem && nonInitDeclItem);
-
-          // Keep both declaration variants internally well-formed even when one
-          // is not inserted for this context.
-          initDeclItem->set_scope(scope);
-          nonInitDeclItem->set_scope(scope);
-
-          SgInitializedName *symbolDeclItem =
-              useNonInitDeclaration ? nonInitDeclItem : initDeclItem;
-          varSymbol = new SgVariableSymbol(symbolDeclItem);
+          varSymbol = new SgVariableSymbol(initName);
           ROSE_ASSERT(varSymbol);
-          varSymbol->set_parent(scope);
 
           // create variable ref exp
           varRefExp = new SgVarRefExp(assignLoc, varSymbol);
           ROSE_ASSERT(isSgVarRefExp(varRefExp));
 
-          // create the assignment
-          assignOp =
-              new SgAssignOp(assignLoc, varRefExp, newExpAssign, expType);
-          assignStmt = new SgExprStatement(assignLoc, assignOp);
-          ROSE_ASSERT(assignStmt);
-
-          initVarDeclaration->set_parent(stm->get_parent());
-          isSgVariableDeclaration(initVarDeclaration)
-              ->set_definingDeclaration(
-                  isSgDeclarationStatement(initVarDeclaration));
+          if (needsAssignment) {
+            ROSE_ASSERT(newExpAssign);
+            assignOp =
+                new SgAssignOp(assignLoc, varRefExp, newExpAssign, expType);
+            assignStmt = new SgExprStatement(assignLoc, assignOp);
+            ROSE_ASSERT(assignStmt);
+          }
 
           // save new mapping
           fct2Var.insert(Fct2Var(exp, varRefExp));
@@ -324,12 +328,24 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         newDecl->nonInitVarDeclaration = nonInitVarDeclaration;
         newDecl->initVarDeclaration = initVarDeclaration;
         newDecl->assignment = assignStmt;
+        newDecl->symbol = varSymbol;
         newDecl->name = name;
-        nonInitVarDeclaration->set_parent(stm->get_parent());
-        isSgVariableDeclaration(nonInitVarDeclaration)
-            ->set_definingDeclaration(
-                isSgVariableDeclaration(nonInitVarDeclaration));
-        assignStmt->set_parent(stm->get_parent());
+        if (initVarDeclaration) {
+          initVarDeclaration->set_parent(stm->get_parent());
+          SgVariableDeclaration *decl =
+              isSgVariableDeclaration(initVarDeclaration);
+          ROSE_ASSERT(decl);
+          decl->set_definingDeclaration(decl);
+        }
+        if (nonInitVarDeclaration) {
+          nonInitVarDeclaration->set_parent(stm->get_parent());
+          SgVariableDeclaration *decl =
+              isSgVariableDeclaration(nonInitVarDeclaration);
+          ROSE_ASSERT(decl);
+          decl->set_definingDeclaration(decl);
+        }
+        if (assignStmt)
+          assignStmt->set_parent(stm->get_parent());
         declarations.push_back(newDecl);
       } // end for
     } // end if  fct calls in crt stmt > 1
@@ -339,7 +355,9 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
     for (DeclarationPtrList::iterator i = declarations.begin();
          i != declarations.end(); i++) {
       Declaration *d = *i;
-      ROSE_ASSERT(d && d->assignment && d->nonInitVarDeclaration);
+      ROSE_ASSERT(d);
+      ROSE_ASSERT(d->initVarDeclaration || d->nonInitVarDeclaration);
+      ROSE_ASSERT(d->symbol);
 
       // if the current statement is a for-loop, we insert Declarations before &
       // in the loop body, depending on the case
@@ -362,6 +380,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
                   ->get_decl_item(d->name);
           ROSE_ASSERT(initName);
           initName->set_scope(isSgScopeStatement(parentScope));
+          isSgScopeStatement(parentScope)->insert_symbol(d->name, d->symbol);
           ROSE_ASSERT(initName->get_scope());
         }
         // function call is in loop post increment so add noninitialized
@@ -375,10 +394,12 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
                   ->get_decl_item(d->name);
           ROSE_ASSERT(initName);
           initName->set_scope(isSgScopeStatement(parentScope));
+          isSgScopeStatement(parentScope)->insert_symbol(d->name, d->symbol);
           ROSE_ASSERT(initName->get_scope());
         }
 
         // in a for-loop, always insert assignments at the end of the loop
+        ROSE_ASSERT(d->assignment);
         body->get_statements().push_back(d->assignment);
         d->assignment->set_parent(body);
 
@@ -395,7 +416,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
           // assignments need to be inserted at the end of each while loop
           SgBasicBlock *body = SageInterface::ensureBasicBlockAsBodyOfWhile(
               isSgWhileStmt(scope));
-          ROSE_ASSERT(body);
+          ROSE_ASSERT(body && d->assignment);
           d->assignment->set_parent(body);
           body->get_statements().push_back(d->assignment);
         }
@@ -407,6 +428,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         case V_SgForStatement:
         case V_SgIfStmt:
         case V_SgSwitchStatement: {
+          ROSE_ASSERT(d->initVarDeclaration);
           // adding bindings (initialized variable declarations only, not
           // assignments) outside the statement, in the parent scope
           SgStatement *parentScope = isSgStatement(scope->get_parent());
@@ -419,12 +441,14 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
                   ->get_decl_item(d->name);
           ROSE_ASSERT(initName);
           initName->set_scope(scope->get_scope());
+          scope->get_scope()->insert_symbol(d->name, d->symbol);
           ROSE_ASSERT(initName->get_scope());
         } break;
 
           // do-while needs noninitialized declarations before the loop, with
           // assignments inside the loop
         case V_SgDoWhileStmt: {
+          ROSE_ASSERT(d->nonInitVarDeclaration && d->assignment);
           // adding noninitialized variable declarations before the body of the
           // loop
           SgStatement *parentScope = isSgStatement(scope->get_parent());
@@ -437,6 +461,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
                   ->get_decl_item(d->name);
           ROSE_ASSERT(initName);
           initName->set_scope(scope->get_scope());
+          scope->get_scope()->insert_symbol(d->name, d->symbol);
           ROSE_ASSERT(initName->get_scope());
 
           // adding assignemts at the end of the do-while loop
@@ -450,6 +475,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
           // for all other scopes, add bindings ( initialized declarations )
           // before the statement, in the same scope
         default:
+          ROSE_ASSERT(d->initVarDeclaration);
           scope->insert_statement(stm, d->initVarDeclaration, true);
 
           // initialized name scope setting
@@ -458,6 +484,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
                   ->get_decl_item(d->name);
           ROSE_ASSERT(initName);
           initName->set_scope(scope->get_scope());
+          scope->get_scope()->insert_symbol(d->name, d->symbol);
           ROSE_ASSERT(initName->get_scope());
         }
       }
@@ -562,7 +589,7 @@ void FunctionCallNormalization::replaceFunctionCallsInExpression(
 
         // Replace through SageInterface so non-expression parents (e.g.
         // SgExprStatement) are handled correctly.
-        SageInterface::replaceExpression(call, newVar);
+        SageInterface::replaceExpression(call, newVar, true);
       }
       toVisit.pop_front();
     }
