@@ -84,6 +84,8 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
 
     SgForStatement *forStm = isSgForStatement(stm);
     SgSwitchStatement *swStm = isSgSwitchStatement(stm);
+    SgScopeStatement *scope = stm->get_scope();
+    ROSE_ASSERT(scope);
     list<SgNode *> temp1, temp2;
 
     // for-loops and Switch statements have conditions ( and increment )
@@ -132,8 +134,6 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
       // to be inserted in the code later
       for (list<SgNode *>::iterator i = functionCallExpList.begin();
            i != functionCallExpList.end(); i++) {
-        variablesDefined = true;
-
         // get function call exp
         SgFunctionCallExp *exp = isSgFunctionCallExp(*i);
         ROSE_ASSERT(exp);
@@ -141,6 +141,12 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         // get type of expression, generate unique variable name
         SgType *expType = exp->get_type();
         ROSE_ASSERT(expType);
+        SgType *strippedExpType = expType->stripType();
+        if (isSgTypeVoid(strippedExpType))
+          continue;
+
+        variablesDefined = true;
+
         Sg_File_Info *location =
             Sg_File_Info::generateDefaultFileInfoForTransformationNode();
         ROSE_ASSERT(location);
@@ -181,6 +187,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         SgInitializedName *initName;
 
         bool pointerTypeNeeded = false;
+        bool useNonInitDeclaration = false;
 
         // mark whether to replace inside or outside of ForStatement due to the
         // function call being inside the test or the increment for a for-loop
@@ -204,6 +211,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
           // function call is in the increment expression
           else {
             inForTest.push_back(false);
+            useNonInitDeclaration = true;
 
             // for increment expressions we need to be able to reassign the
             // return value of the function; if the ret value is a reference, we
@@ -219,6 +227,8 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         // assign them at the end of the body of the loop
         if (isSgDoWhileStmt(stm->get_parent()) && isSgReferenceType(expType))
           pointerTypeNeeded = true;
+        if (scope->variantT() == V_SgDoWhileStmt)
+          useNonInitDeclaration = true;
 
         // we have a function call returning a reference and we can't initialize
         // the variable at the point of declaration; we need to define the
@@ -242,9 +252,11 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
           initName = isSgVariableDeclaration(nonInitVarDeclaration)
                          ->get_decl_item(name);
           ROSE_ASSERT(initName);
+          initName->set_scope(scope);
 
           varSymbol = new SgVariableSymbol(initName);
           ROSE_ASSERT(varSymbol);
+          varSymbol->set_parent(scope);
           varRefExp = new SgVarRefExp(assignLoc, varSymbol);
 
           SgPointerDerefExp *ptrDeref =
@@ -270,12 +282,23 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
               new SgVariableDeclaration(nonInitLoc, name, expType);
           ROSE_ASSERT(initVarDeclaration && nonInitVarDeclaration);
 
-          initName = isSgVariableDeclaration(nonInitVarDeclaration)
-                         ->get_decl_item(name);
-          ROSE_ASSERT(initName);
-          newExpInit->set_parent(initName);
-          varSymbol = new SgVariableSymbol(initName);
+          SgInitializedName *initDeclItem =
+              isSgVariableDeclaration(initVarDeclaration)->get_decl_item(name);
+          SgInitializedName *nonInitDeclItem =
+              isSgVariableDeclaration(nonInitVarDeclaration)
+                  ->get_decl_item(name);
+          ROSE_ASSERT(initDeclItem && nonInitDeclItem);
+
+          // Keep both declaration variants internally well-formed even when one
+          // is not inserted for this context.
+          initDeclItem->set_scope(scope);
+          nonInitDeclItem->set_scope(scope);
+
+          SgInitializedName *symbolDeclItem =
+              useNonInitDeclaration ? nonInitDeclItem : initDeclItem;
+          varSymbol = new SgVariableSymbol(symbolDeclItem);
           ROSE_ASSERT(varSymbol);
+          varSymbol->set_parent(scope);
 
           // create variable ref exp
           varRefExp = new SgVarRefExp(assignLoc, varSymbol);
@@ -310,9 +333,6 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
         declarations.push_back(newDecl);
       } // end for
     } // end if  fct calls in crt stmt > 1
-
-    SgScopeStatement *scope = stm->get_scope();
-    ROSE_ASSERT(scope);
 
     // insert function bindings to variables; each 'declaration' structure in
     // the list corresponds to one function call
@@ -538,14 +558,11 @@ void FunctionCallNormalization::replaceFunctionCallsInExpression(
         SgExpression *newVar = isSgExpression(scnd->copy(treeCopy));
         ROSE_ASSERT(newVar);
 
-        SgExpression *parent = isSgExpression(call->get_parent());
-        ROSE_ASSERT(parent);
+        ROSE_ASSERT(call->get_parent());
 
-        // replace the node in the AST
-        newVar->set_parent(parent);
-        int k = parent->replace_expression(call, newVar);
-        ROSE_ASSERT(k == 1);
-        delete call;
+        // Replace through SageInterface so non-expression parents (e.g.
+        // SgExprStatement) are handled correctly.
+        SageInterface::replaceExpression(call, newVar);
       }
       toVisit.pop_front();
     }
