@@ -750,6 +750,19 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
         passthrough_args.push_back(argv[i]);
       else
         break;
+    } else if (current_arg == "-include") {
+      passthrough_args.push_back(current_arg);
+      ++i;
+      if (i < argc) {
+        passthrough_args.push_back(argv[i]);
+      } else {
+        break;
+      }
+    } else if (current_arg.rfind("-include", 0) == 0) {
+      if (current_arg.size() > 8 && current_arg[8] != '-') {
+        passthrough_args.push_back("-include");
+        passthrough_args.push_back(current_arg.substr(8));
+      }
     } else if (current_arg.rfind("-std=", 0) == 0) {
       passthrough_args.push_back(current_arg);
     } else if (current_arg.find("-o") == 0) {

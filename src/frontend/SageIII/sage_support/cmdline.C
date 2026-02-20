@@ -4215,6 +4215,19 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
       ++i;
       if (i >= argv.size())
         break;
+    } else if (current_arg == "-include") {
+      ++i;
+      if (i < argv.size()) {
+        clang_frontend_args.push_back(current_arg);
+        clang_frontend_args.push_back(argv[i]);
+      } else {
+        break;
+      }
+    } else if (current_arg.rfind("-include", 0) == 0) {
+      if (current_arg.size() > 8 && current_arg[8] != '-') {
+        clang_frontend_args.push_back("-include");
+        clang_frontend_args.push_back(current_arg.substr(8));
+      }
     } else if (current_arg.rfind("-std=", 0) == 0) {
       // Standard selection is handled earlier during command-line
       // processing.
