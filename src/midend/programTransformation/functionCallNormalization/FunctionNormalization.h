@@ -18,6 +18,7 @@
 
 struct Declaration {
   SgStatement *initVarDeclaration, *nonInitVarDeclaration, *assignment;
+  SgVariableSymbol *symbol;
   SgName name;
 };
 
