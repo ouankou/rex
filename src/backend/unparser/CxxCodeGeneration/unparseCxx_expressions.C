@@ -3689,7 +3689,8 @@ void Unparse_ExprStmt::unparseStringVal(SgExpression *expr, SgUnparse_Info &) {
     }
   }
 
-  std::string s = std::string("\"") + str_val->get_value() + std::string("\"");
+  std::string s = std::string("\"") + escapeString(str_val->get_value()) +
+                  std::string("\"");
   curprint(s);
 #endif
 
