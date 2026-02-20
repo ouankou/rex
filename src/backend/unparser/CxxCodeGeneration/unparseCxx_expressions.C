@@ -3661,18 +3661,6 @@ void Unparse_ExprStmt::unparseMFuncRefSupport(SgExpression *expr,
 #endif
 }
 
-// DQ (2/21/2019): Adding support to remove "\000" substrings from output
-// strings in SgStringVal unparsing.
-template <typename T>
-void remove_substrings(basic_string<T> &s, const basic_string<T> &p) {
-  typename basic_string<T>::size_type n = p.length();
-
-  for (typename basic_string<T>::size_type i = s.find(p);
-       i != basic_string<T>::npos; i = s.find(p)) {
-    s.erase(i, n);
-  }
-}
-
 #define DEBUG_unparseStringVal 0
 
 void Unparse_ExprStmt::unparseStringVal(SgExpression *expr, SgUnparse_Info &) {
@@ -3701,15 +3689,7 @@ void Unparse_ExprStmt::unparseStringVal(SgExpression *expr, SgUnparse_Info &) {
     }
   }
 
-  std::string s;
-  if (str_val->get_isRawString()) {
-    curprint("R");
-    s = std::string("\"(") + str_val->get_value() + std::string(")\"");
-    std::string p = "\\000";
-    remove_substrings(s, p);
-  } else {
-    s = std::string("\"") + str_val->get_value() + std::string("\"");
-  }
+  std::string s = std::string("\"") + str_val->get_value() + std::string("\"");
   curprint(s);
 #endif
 
