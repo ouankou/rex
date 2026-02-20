@@ -692,10 +692,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   bool continue_on_error = false;
   bool disable_access_control = false;
   bool delayed_template_parsing_compat = false;
+  bool respect_rtti_flags = false;
   enum class ExceptionMode { Unspecified, Enabled, Disabled };
   ExceptionMode exception_mode = ExceptionMode::Unspecified;
-  enum class RttiMode { Unspecified, Enabled, Disabled };
-  RttiMode rtti_mode = RttiMode::Unspecified;
+  bool saw_explicit_rtti_flag = false;
+  bool explicit_rtti_enabled = true;
 
   for (int i = 0; i < argc; i++) {
     std::string current_arg(argv[i]);
@@ -792,15 +793,21 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       // Treat as backend-only: the Clang frontend must see exceptions enabled
       // to build a complete C++ AST, and -fno-exceptions is not a cc1 flag.
     } else if (current_arg == "-frtti") {
-      rtti_mode = RttiMode::Enabled;
+      saw_explicit_rtti_flag = true;
+      explicit_rtti_enabled = true;
     } else if (current_arg == "-fno-rtti") {
-      // Treat as backend-only: disabling RTTI breaks C++ AST features.
+      saw_explicit_rtti_flag = true;
+      explicit_rtti_enabled = false;
+      // By default this is backend-only: disabling RTTI in the frontend breaks
+      // C++ AST features. Use -rex:clang:respect-rtti-flags to opt in.
     } else if (current_arg == "-rex:clang:continue-on-error") {
       continue_on_error = true;
     } else if (current_arg == "-rex:clang:disable-access-control") {
       disable_access_control = true;
     } else if (current_arg == "-rex:clang:delayed-template-parsing") {
       delayed_template_parsing_compat = true;
+    } else if (current_arg == "-rex:clang:respect-rtti-flags") {
+      respect_rtti_flags = true;
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // TODO -include
 #if DEBUG_ARGS
@@ -993,10 +1000,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     passthrough_args.push_back("-fexceptions");
   }
 
-  if (rtti_mode == RttiMode::Unspecified &&
-      (language == ClangToSageTranslator::CPLUSPLUS ||
-       language == ClangToSageTranslator::CUDA)) {
-    rtti_mode = RttiMode::Enabled;
+  bool frontend_rtti_enabled = true;
+  if ((language == ClangToSageTranslator::CPLUSPLUS ||
+       language == ClangToSageTranslator::CUDA) &&
+      respect_rtti_flags && saw_explicit_rtti_flag) {
+    frontend_rtti_enabled = explicit_rtti_enabled;
   }
 
   if (delayed_template_parsing_compat &&
@@ -1615,13 +1623,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   if (language == ClangToSageTranslator::CPLUSPLUS ||
       language == ClangToSageTranslator::CUDA) {
-    if (rtti_mode == RttiMode::Disabled) {
-      lang_opts.RTTI = 0;
-      lang_opts.RTTIData = 0;
-    } else {
-      lang_opts.RTTI = 1;
-      lang_opts.RTTIData = 1;
-    }
+    lang_opts.RTTI = frontend_rtti_enabled ? 1 : 0;
+    lang_opts.RTTIData = frontend_rtti_enabled ? 1 : 0;
   }
 
   if (enable_cuda) {

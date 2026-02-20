@@ -3639,6 +3639,7 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   CommandlineProcessing::removeArgs(argv, "-rex:clang:disable-access-control");
   CommandlineProcessing::removeArgs(argv,
                                     "-rex:clang:delayed-template-parsing");
+  CommandlineProcessing::removeArgs(argv, "-rex:clang:respect-rtti-flags");
   CommandlineProcessing::removeArgsWithParameters(argv, "-outputdir");
 
   //----------------------------------------------------------------------------
@@ -4226,6 +4227,8 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
     } else if (current_arg == "-rex:clang:disable-access-control") {
       clang_frontend_args.push_back(current_arg);
     } else if (current_arg == "-rex:clang:delayed-template-parsing") {
+      clang_frontend_args.push_back(current_arg);
+    } else if (current_arg == "-rex:clang:respect-rtti-flags") {
       clang_frontend_args.push_back(current_arg);
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // Ignore other frontend/driver flags that Clang cc1 doesn't accept.
