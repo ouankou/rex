@@ -771,11 +771,17 @@ void Unparse_ExprStmt::unparseLambdaExpression(SgExpression *expr,
           curprint("*");
         }
         curprint("this");
+        if (lambdaCapture->get_pack_expansion()) {
+          curprint("...");
+        }
       } else {
         if (lambdaCapture->get_capture_by_reference() == true) {
           curprint("&");
         }
         unp->u_exprStmt->unparseExpression(capt_var_expr, info);
+        if (lambdaCapture->get_pack_expansion()) {
+          curprint("...");
+        }
       }
     }
   }

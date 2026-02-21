@@ -10888,69 +10888,6 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
 #endif
   bool res = true;
 
-  auto detach_declaration_from_scope =
-      [](SgDeclarationStatement *decl) -> SgScopeStatement * {
-    if (decl == nullptr) {
-      return nullptr;
-    }
-
-    SgScopeStatement *original_scope = decl->get_scope();
-
-    // Remove any symbol that was registered for this declaration in the
-    // enclosing scope.
-    if (SgSymbol *associated_symbol =
-            decl->search_for_symbol_from_symbol_table()) {
-      if (SgScopeStatement *symbol_scope = associated_symbol->get_scope()) {
-        symbol_scope->remove_symbol(associated_symbol);
-      } else if (SgSymbolTable *table =
-                     isSgSymbolTable(associated_symbol->get_parent())) {
-        if (table->exists(associated_symbol)) {
-          table->remove(associated_symbol);
-        }
-      }
-      delete associated_symbol;
-    }
-
-    auto is_attached_to_parent_container = [](SgStatement *stmt) -> bool {
-      if (stmt == nullptr || stmt->get_parent() == nullptr) {
-        return false;
-      }
-
-      SgNode *parent = stmt->get_parent();
-      if (SgBasicBlock *bb = isSgBasicBlock(parent)) {
-        const SgStatementPtrList &stmts = bb->get_statements();
-        return std::find(stmts.begin(), stmts.end(), stmt) != stmts.end();
-      }
-
-      if (SgGlobal *global = isSgGlobal(parent)) {
-        const SgDeclarationStatementPtrList &decls = global->get_declarations();
-        return std::find(decls.begin(), decls.end(), stmt) != decls.end();
-      }
-
-      if (SgNamespaceDefinitionStatement *ns =
-              isSgNamespaceDefinitionStatement(parent)) {
-        const SgDeclarationStatementPtrList &decls = ns->get_declarations();
-        return std::find(decls.begin(), decls.end(), stmt) != decls.end();
-      }
-
-      if (SgClassDefinition *class_def = isSgClassDefinition(parent)) {
-        const SgDeclarationStatementPtrList &members = class_def->get_members();
-        return std::find(members.begin(), members.end(), stmt) != members.end();
-      }
-
-      return false;
-    };
-
-    if (original_scope != nullptr) {
-      if (is_attached_to_parent_container(decl)) {
-        SageInterface::removeStatement(decl, false);
-      }
-      decl->set_parent(nullptr);
-    }
-
-    return original_scope;
-  };
-
   // Get the lambda class (closure type) from Clang
   const clang::CXXRecordDecl *clang_lambda_class =
       lambda_expr->getLambdaClass();
@@ -10961,47 +10898,98 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
 
   // Convert Clang lambda class to ROSE class declaration
   SgClassDeclaration *lambda_closure_class = nullptr;
-  SgScopeStatement *lambda_closure_lexical_scope = nullptr;
+  auto mark_lambda_closure_class_hidden =
+      [this](SgClassDeclaration *class_decl) {
+        std::unordered_set<SgClassDeclaration *> visited;
+        std::vector<SgClassDeclaration *> worklist;
+        if (class_decl != nullptr) {
+          worklist.push_back(class_decl);
+        }
+
+        while (!worklist.empty()) {
+          SgClassDeclaration *current = worklist.back();
+          worklist.pop_back();
+          if (current == nullptr || !visited.insert(current).second) {
+            continue;
+          }
+
+          current->set_isAutonomousDeclaration(false);
+          setCompilerGeneratedFileInfo(current, false);
+          suppress_unparse_output(current);
+          if (Sg_File_Info *decl_fi = current->get_file_info()) {
+            decl_fi->setFrontendSpecific();
+          }
+
+          if (SgClassDefinition *class_def = current->get_definition()) {
+            setCompilerGeneratedFileInfo(class_def, false);
+            suppress_unparse_output(class_def);
+            if (Sg_File_Info *def_fi = class_def->get_file_info()) {
+              def_fi->setFrontendSpecific();
+            }
+          }
+
+          if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+                  current->get_firstNondefiningDeclaration())) {
+            worklist.push_back(first_nondef);
+          }
+          if (SgClassDeclaration *defining =
+                  isSgClassDeclaration(current->get_definingDeclaration())) {
+            worklist.push_back(defining);
+          }
+        }
+      };
+
   if (clang_lambda_class != nullptr) {
     SgNode *tmp_class =
         Traverse(const_cast<clang::CXXRecordDecl *>(clang_lambda_class));
     lambda_closure_class = isSgClassDeclaration(tmp_class);
+    if (lambda_closure_class != nullptr) {
+      if (SgClassDeclaration *defining_decl = isSgClassDeclaration(
+              lambda_closure_class->get_definingDeclaration())) {
+        lambda_closure_class = defining_decl;
+      }
+      mark_lambda_closure_class_hidden(lambda_closure_class);
+      if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+              lambda_closure_class->get_firstNondefiningDeclaration())) {
+        if (SgScopeStatement *closure_scope =
+                lambda_closure_class->get_scope()) {
+          first_nondef->set_scope(closure_scope);
+        }
+        if (SgScopeStatement *first_scope = first_nondef->get_scope()) {
+          ensureDeclInScopeChildListPreserveScope(
+              first_nondef, first_scope, "VisitLambdaExpr:lambda-first-nondef");
 
-    // Remove from enclosing scope using SageInterface so symbols/scopes stay
-    // consistent
-    lambda_closure_lexical_scope =
-        detach_declaration_from_scope(lambda_closure_class);
-
-    // Preserve a valid scope so downstream lookups don't see nullptr after
-    // detachment.
-    if (lambda_closure_class != nullptr &&
-        lambda_closure_lexical_scope != nullptr) {
-      lambda_closure_class->set_scope(lambda_closure_lexical_scope);
-      if (SgClassDefinition *class_def =
-              lambda_closure_class->get_definition()) {
-        class_def->set_scope(lambda_closure_lexical_scope);
+          if (SgBasicBlock *bb = isSgBasicBlock(first_scope)) {
+            SgStatementPtrList &stmts = bb->get_statements();
+            if (std::find(stmts.begin(), stmts.end(), first_nondef) ==
+                stmts.end()) {
+              stmts.push_back(first_nondef);
+            }
+            if (first_nondef->get_parent() != bb) {
+              first_nondef->set_parent(bb);
+            }
+          }
+        }
       }
     }
   }
 
   // Convert Clang call operator to ROSE function declaration
   SgFunctionDeclaration *lambda_function = nullptr;
-  SgScopeStatement *lambda_function_scope = nullptr;
   if (clang_call_operator != nullptr) {
     SgNode *tmp_func =
         Traverse(const_cast<clang::CXXMethodDecl *>(clang_call_operator));
     lambda_function = isSgFunctionDeclaration(tmp_func);
-
-    lambda_function_scope = detach_declaration_from_scope(lambda_function);
-
-    // Restore the scope pointer for operator() so later queries succeed.
     if (lambda_function != nullptr) {
-      if (lambda_function_scope != nullptr) {
-        lambda_function->set_scope(lambda_function_scope);
-      } else if (lambda_closure_class != nullptr &&
-                 lambda_closure_class->get_definition() != nullptr) {
-        lambda_function->set_scope(lambda_closure_class->get_definition());
+      if (SgFunctionDeclaration *defining_decl = isSgFunctionDeclaration(
+              lambda_function->get_definingDeclaration())) {
+        lambda_function = defining_decl;
       }
+    }
+    if (lambda_function != nullptr && lambda_function->get_scope() == nullptr &&
+        lambda_closure_class != nullptr &&
+        lambda_closure_class->get_definition() != nullptr) {
+      lambda_function->set_scope(lambda_closure_class->get_definition());
     }
   }
 
@@ -11096,6 +11084,9 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
   built_lambda->set_capture_default(has_default_capture);
   built_lambda->set_default_is_by_reference(capture_default ==
                                             clang::LCD_ByRef);
+  built_lambda->set_has_parameter_decl(lambda_expr->hasExplicitParameters());
+  built_lambda->set_is_mutable(lambda_expr->isMutable());
+  built_lambda->set_explicit_return_type(lambda_expr->hasExplicitResultType());
 
   *node = built_lambda;
 

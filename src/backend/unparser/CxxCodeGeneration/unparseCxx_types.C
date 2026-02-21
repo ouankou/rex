@@ -3433,6 +3433,10 @@ void Unparse_Type::outputType(T *referenceNode, SgType *referenceNodeType,
 
   SgInitializedName *initializedName = isSgInitializedName(referenceNode);
   if (initializedName != NULL) {
+    if (initializedName->get_is_parameter_pack() ||
+        initializedName->get_is_pack_element()) {
+      curprint("... ");
+    }
     SgName tmp_name = initializedName->get_name();
     curprint(tmp_name.str());
   }

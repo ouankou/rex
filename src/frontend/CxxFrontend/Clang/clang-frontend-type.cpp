@@ -5525,22 +5525,81 @@ bool ClangToSageTranslator::VisitTemplateTypeParmType(
 #endif
   bool res = true;
 
-  // CLANG FRONTEND FIX: Proper template type parameter support
-  // Get the template parameter declaration to extract the name
   const clang::TemplateTypeParmDecl *param_decl =
       template_type_parm_type->getDecl();
-  std::string param_name;
 
-  if (param_decl && param_decl->getDeclName().isIdentifier()) {
-    // Use the actual template parameter name (e.g., "T")
+  auto lookup_mapped_template_param =
+      [&](clang::NamedDecl *decl) -> SgTemplateParameter * {
+    if (decl == nullptr) {
+      return nullptr;
+    }
+    auto it = p_decl_translation_map.find(decl);
+    if (it == p_decl_translation_map.end()) {
+      return nullptr;
+    }
+    return isSgTemplateParameter(it->second);
+  };
+
+  SgTemplateParameter *mapped_param = nullptr;
+  if (param_decl != nullptr) {
+    auto *mutable_param_decl =
+        const_cast<clang::TemplateTypeParmDecl *>(param_decl);
+
+    mapped_param = lookup_mapped_template_param(mutable_param_decl);
+    if (mapped_param == nullptr) {
+      if (const clang::NamedDecl *canonical = llvm::dyn_cast<clang::NamedDecl>(
+              mutable_param_decl->getCanonicalDecl())) {
+        mapped_param = lookup_mapped_template_param(
+            const_cast<clang::NamedDecl *>(canonical));
+      }
+    }
+    if (mapped_param == nullptr) {
+      if (clang::TemplateTypeParmDecl *recent =
+              llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
+                  mutable_param_decl->getMostRecentDecl())) {
+        mapped_param = lookup_mapped_template_param(recent);
+      }
+    }
+    if (mapped_param == nullptr) {
+      for (clang::Decl *redecl_decl : mutable_param_decl->redecls()) {
+        if (clang::TemplateTypeParmDecl *redecl =
+                llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
+                    redecl_decl)) {
+          mapped_param = lookup_mapped_template_param(redecl);
+          if (mapped_param != nullptr) {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  std::string param_name;
+  if (mapped_param != nullptr) {
+    if (SgTemplateType *mapped_type =
+            isSgTemplateType(mapped_param->get_type());
+        mapped_type != nullptr) {
+      param_name = mapped_type->get_name().getString();
+    }
+    if (param_name.empty()) {
+      if (SgInitializedName *mapped_init = mapped_param->get_initializedName();
+          mapped_init != nullptr) {
+        param_name = mapped_init->get_name().getString();
+      }
+    }
+  }
+
+  if (param_name.empty() && param_decl != nullptr &&
+      param_decl->getDeclName().isIdentifier()) {
     param_name = param_decl->getNameAsString();
-  } else {
-    // Fallback to a generic name if we can't get the actual name
+  }
+  if (param_name.empty()) {
     param_name = "template_type_param";
   }
 
-  // Create a proper template type with the actual parameter name
-  *node = SageBuilder::buildTemplateType(SgName(param_name));
+  SgTemplateType *template_type =
+      SageBuilder::buildTemplateType(SgName(param_name));
+  *node = template_type;
 
   return VisitType(template_type_parm_type, node) && res;
 }
