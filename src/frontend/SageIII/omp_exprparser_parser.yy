@@ -973,57 +973,14 @@ static bool addOmpVariable(const char* var)  {
 static bool collectArraySectionMetadata(
     SgExpression* expr,
     SgVarRefExp*& base_var_ref,
-    std::vector<std::pair<SgExpression*, SgExpression*> >& dimensions);
-
-static SgExpression* normalizeArraySectionLengthForStride(
-    SgExpression* length,
-    SgExpression* stride) {
-    ROSE_ASSERT(length != NULL);
-    if (stride == NULL) {
-        return length;
-    }
-
-    if (SgIntVal* int_stride = isSgIntVal(stride)) {
-        int stride_value = int_stride->get_value();
-        if (stride_value == 1) {
-            return length;
-        }
-
-        int abs_stride = (stride_value < 0) ? -stride_value : stride_value;
-        if (abs_stride <= 0) {
-            return length;
-        }
-
-        if (SgIntVal* int_length = isSgIntVal(length)) {
-            int length_value = int_length->get_value();
-            if (length_value >= 0) {
-                return SageBuilder::buildIntVal((length_value + abs_stride - 1) /
-                                                abs_stride);
-            }
-        }
-
-        SgExpression* numerator = SageBuilder::buildAddOp(
-            SageInterface::copyExpression(length),
-            SageBuilder::buildIntVal(abs_stride - 1));
-        return SageBuilder::buildDivideOp(numerator,
-                                          SageBuilder::buildIntVal(abs_stride));
-    }
-
-    // For non-constant stride values, preserve the section trip-count semantics
-    // as ceil(length/stride) under the OpenMP requirement that section stride is
-    // a positive integer expression.
-    SgExpression* numerator = SageBuilder::buildAddOp(
-        SageInterface::copyExpression(length),
-        SageBuilder::buildSubtractOp(SageInterface::copyExpression(stride),
-                                     SageBuilder::buildIntVal(1)));
-    return SageBuilder::buildDivideOp(numerator,
-                                      SageInterface::copyExpression(stride));
-}
+    std::vector<std::pair<SgExpression*, SgExpression*> >& dimensions,
+    bool& has_explicit_stride);
 
 static bool collectArraySectionMetadata(
     SgExpression* expr,
     SgVarRefExp*& base_var_ref,
-    std::vector<std::pair<SgExpression*, SgExpression*> >& dimensions) {
+    std::vector<std::pair<SgExpression*, SgExpression*> >& dimensions,
+    bool& has_explicit_stride) {
     if (expr == NULL) {
         return false;
     }
@@ -1031,19 +988,22 @@ static bool collectArraySectionMetadata(
     if (SgCastExp* cast_exp = isSgCastExp(expr)) {
         return collectArraySectionMetadata(cast_exp->get_operand(),
                                            base_var_ref,
-                                           dimensions);
+                                           dimensions,
+                                           has_explicit_stride);
     }
 
     if (SgUnaryOp* unary_op = isSgUnaryOp(expr)) {
         return collectArraySectionMetadata(unary_op->get_operand(),
                                            base_var_ref,
-                                           dimensions);
+                                           dimensions,
+                                           has_explicit_stride);
     }
 
     if (SgPntrArrRefExp* array_ref = isSgPntrArrRefExp(expr)) {
         if (!collectArraySectionMetadata(array_ref->get_lhs_operand(),
                                          base_var_ref,
-                                         dimensions)) {
+                                         dimensions,
+                                         has_explicit_stride)) {
             return false;
         }
 
@@ -1059,10 +1019,14 @@ static bool collectArraySectionMetadata(
             return false;
         }
 
-        SgExpression* stride = subscript->get_stride();
-        SgExpression* normalized_length =
-            normalizeArraySectionLengthForStride(length, stride);
-        dimensions.push_back(std::make_pair(lower, normalized_length));
+        if (SgExpression* stride = subscript->get_stride()) {
+            SgIntVal* int_stride = isSgIntVal(stride);
+            if (int_stride == NULL || int_stride->get_value() != 1) {
+                has_explicit_stride = true;
+            }
+        }
+
+        dimensions.push_back(std::make_pair(lower, length));
         return true;
     }
 
@@ -1091,20 +1055,36 @@ static bool addOmpVariableExpr(SgExpression* expr) {
     if (isSgPntrArrRefExp(expr) != NULL) {
         SgVarRefExp* base_var_ref = NULL;
         std::vector<std::pair<SgExpression*, SgExpression*> > dimensions;
+        bool has_explicit_stride = false;
 
         if (collectArraySectionMetadata(expr,
                                         base_var_ref,
-                                        dimensions) &&
+                                        dimensions,
+                                        has_explicit_stride) &&
             base_var_ref != NULL &&
             !dimensions.empty()) {
             SgVariableSymbol* sym = isSgVariableSymbol(base_var_ref->get_symbol());
             if (sym != NULL) {
+                SgVariableSymbol* mapped_symbol = array_symbol;
+                if (mapped_symbol == NULL) {
+                    mapped_symbol = sym;
+                }
+
+                // Keep explicit-stride array sections as expressions in the
+                // variable list to preserve faithful AST/unparse form, while
+                // still recording dimension metadata for analysis/lowering.
+                if (has_explicit_stride) {
+                    std::string key = expr->unparseToString();
+                    if (key.empty()) {
+                        key = sym->get_name().getString();
+                    }
+                    omp_variable_list.push_back(std::make_pair(key, expr));
+                    array_dimensions[mapped_symbol] = dimensions;
+                    return true;
+                }
+
                 std::string name = sym->get_name().getString();
                 if (!name.empty() && addOmpVariable(name.c_str())) {
-                    SgVariableSymbol* mapped_symbol = array_symbol;
-                    if (mapped_symbol == NULL) {
-                        mapped_symbol = sym;
-                    }
                     array_dimensions[mapped_symbol] = dimensions;
                     return true;
                 }
