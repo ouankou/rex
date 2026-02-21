@@ -797,16 +797,13 @@ void Unparse_ExprStmt::unparseLambdaExpression(SgExpression *expr,
         if (lambdaCapture->get_capture_by_reference() == true) {
           curprint("&");
         }
-        if (lambdaCapture->get_pack_expansion() && is_init_capture) {
+        if (lambdaCapture->get_pack_expansion()) {
           curprint("...");
         }
         unp->u_exprStmt->unparseExpression(capt_var_expr, info);
         if (is_init_capture) {
           curprint("=");
           unp->u_exprStmt->unparseExpression(capture_init_expr, info);
-        }
-        if (lambdaCapture->get_pack_expansion() && !is_init_capture) {
-          curprint("...");
         }
       }
     }
