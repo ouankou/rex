@@ -1920,7 +1920,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
         schedule_type += kmp_sched_guided;
       };
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
           buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
           buildVarRefExp(stride_decl), orig_chunk_size);
 
@@ -1934,7 +1935,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
         schedule_type += kmp_sched_runtime;
       };
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
           buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
           buildVarRefExp(stride_decl), orig_chunk_size);
 
@@ -1955,7 +1957,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
         e_stride = buildVarRefExp(stride_decl);
       }
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
           e_last_iter, e_lower, e_upper, e_stride, copyExpression(orig_stride),
           orig_chunk_size);
     }
@@ -1988,16 +1991,18 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     SgExprListExp *dispatch_parameters = NULL;
     if (for_loop) {
       dispatch_parameters =
-          buildExprListExp(source_location_info, thread_global_tid,
+          buildExprListExp(copyExpression(source_location_info),
+                           copyExpression(thread_global_tid),
                            buildAddressOfOp(buildVarRefExp(last_iter_decl)),
                            buildAddressOfOp(buildVarRefExp(lower_decl)),
                            buildAddressOfOp(buildVarRefExp(upper_decl)),
                            buildAddressOfOp(buildVarRefExp(stride_decl)));
     } else {
       dispatch_parameters = buildExprListExp(
-          source_location_info, thread_global_tid,
-          buildVarRefExp(last_iter_decl), buildVarRefExp(lower_decl),
-          buildVarRefExp(upper_decl), buildVarRefExp(stride_decl));
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildVarRefExp(last_iter_decl),
+          buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
+          buildVarRefExp(stride_decl));
     }
     return buildFunctionCallExp(get_kmpc_dispatch_next_name(use_64_runtime),
                                 buildIntType(), dispatch_parameters, bb1);
@@ -2097,7 +2102,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     appendStatement(loop, do_body);
     if (!use_dispatch_runtime) {
       append_static_chunk_advance(do_body);
-      parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+      parameters =
+          buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
       appendStatement(buildFunctionCallStmt("__kmpc_for_static_fini",
                                             buildVoidType(), parameters, bb1),
                       bb1);
@@ -2144,7 +2150,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     ROSE_ASSERT(statementList.size() == 1);
 
     if (!use_dispatch_runtime) {
-      parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+      parameters =
+          buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
       appendStatement(buildFunctionCallStmt("__kmpc_for_static_fini",
                                             buildVoidType(), parameters, bb1),
                       bb1);
@@ -2162,7 +2169,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
       target, bb1,
       orig_upper); // This should happen before the barrier is inserted.
   if (!hasClause(target, V_SgOmpNowaitClause)) {
-    parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+    parameters =
+        buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
     appendStatement(buildFunctionCallStmt("__kmpc_barrier", buildVoidType(),
                                           parameters, bb1),
                     bb1);
