@@ -153,8 +153,9 @@ bool is_safe_command_path(const std::string &path) {
   if (path.empty()) {
     return false;
   }
-  return path.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST"
-                                "UVWXYZ0123456789_-./") == std::string::npos;
+  return path.find('/') == std::string::npos &&
+         path.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST"
+                                "UVWXYZ0123456789_-.") == std::string::npos;
 }
 
 std::string read_first_line_from_command(const std::string &command_path,
