@@ -4197,6 +4197,9 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
   std::vector<std::string> clang_frontend_args;
   std::vector<std::string> sys_dirs_list;
   std::string input_file;
+  const bool respect_rtti_flags =
+      std::find(argv.begin(), argv.end(), "-rex:clang:respect-rtti-flags") !=
+      argv.end();
 
   for (size_t i = 0; i < argv.size(); i++) {
     std::string current_arg(argv[i]);
@@ -4264,11 +4267,18 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
              current_arg == "-fopenmp-simd") {
     } else if (current_arg.find("--rex-omp-") == 0) {
     } else if (current_arg == "-fexceptions" ||
-               current_arg == "-fno-exceptions" ||
-               current_arg == "-fcxx-exceptions" ||
-               current_arg == "-fno-cxx-exceptions" ||
-               current_arg == "-frtti" || current_arg == "-fno-rtti") {
+               current_arg == "-fcxx-exceptions" || current_arg == "-frtti") {
       clang_frontend_args.push_back(current_arg);
+    } else if (current_arg == "-fno-rtti") {
+      // Keep -fno-rtti backend-only unless frontend enforcement is explicitly
+      // requested.
+      if (respect_rtti_flags) {
+        clang_frontend_args.push_back(current_arg);
+      }
+    } else if (current_arg == "-fno-exceptions" ||
+               current_arg == "-fno-cxx-exceptions") {
+      // Keep exceptions enabled in frontend parsing to build a complete C++
+      // AST; disabling remains a backend concern.
     } else if (isRexClangFrontendOption(current_arg)) {
       clang_frontend_args.push_back(current_arg);
     } else if (!current_arg.empty() && current_arg[0] == '-') {
