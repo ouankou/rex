@@ -16146,8 +16146,60 @@ SgOmpDeclareMapperStatement::get_mangled_name(void) const
      SgScopeStatement* scope = get_scope();
      ROSE_ASSERT(scope != NULL);
 
-     returnName = scope->get_mangled_name() + SgName("_omp_declaration_mapper_");
-      // TODO: add clause/signature details to improve uniqueness if needed.
+     std::string identifier_component = "unspecified";
+     std::string type_component = "unknown";
+     std::string signature_data =
+         "_identifier_kind_" +
+         Rose::StringUtility::numberToString(static_cast<int>(get_identifier()));
+
+     if (SgExpression* user_identifier = get_user_defined_identifier()) {
+       signature_data += "_identifier_expr_" + user_identifier->unparseToString();
+       if (SgVarRefExp* vref = isSgVarRefExp(user_identifier)) {
+         if (SgVariableSymbol* sym = isSgVariableSymbol(vref->get_symbol())) {
+           if (SgInitializedName* decl = sym->get_declaration()) {
+             identifier_component = decl->get_mangled_name().str();
+           }
+         }
+       }
+       if (identifier_component == "unspecified") {
+         identifier_component =
+             "expr_" + Rose::StringUtility::numberToString(
+                           Rose::StringUtility::generate_checksum(
+                               user_identifier->unparseToString()));
+       }
+     } else if (get_identifier() ==
+                SgOmpClause::e_omp_declare_mapper_identifier_default) {
+       identifier_component = "default";
+     }
+
+     if (SgExpression* mapper_type = get_mapper_type()) {
+       signature_data += "_mapper_type_expr_" + mapper_type->unparseToString();
+       if (SgType* type = mapper_type->get_type()) {
+         SgName type_mangled = type->get_mangled();
+         if (type_mangled.is_null() == false) {
+           type_component = type_mangled.str();
+           signature_data += "_mapper_type_mangled_" + type_component;
+         }
+       }
+       if (type_component == "unknown") {
+         type_component =
+             "expr_" + Rose::StringUtility::numberToString(
+                           Rose::StringUtility::generate_checksum(
+                               mapper_type->unparseToString()));
+       }
+     }
+
+     if (SgExpression* mapper_variable = get_mapper_variable()) {
+       signature_data += "_mapper_variable_" + mapper_variable->unparseToString();
+     }
+
+     const std::string signature_suffix = Rose::StringUtility::numberToString(
+         Rose::StringUtility::generate_checksum(signature_data));
+     returnName = scope->get_mangled_name() +
+                  SgName("_omp_declaration_mapper_identifier_") +
+                  SgName(identifier_component) + SgName("_type_") +
+                  SgName(type_component) + SgName("_signature_") +
+                  SgName(signature_suffix);
      return returnName;
    }
 

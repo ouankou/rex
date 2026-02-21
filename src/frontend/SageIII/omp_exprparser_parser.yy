@@ -228,7 +228,7 @@ corresponding C type is union name defaults to YYSTYPE.
         VARLIST ARRAY_SECTION
 /*We ignore NEWLINE since we only care about the pragma string , We relax the syntax check by allowing it as part of line continuation */
 %token <itype> ICONSTANT   
-%token <stype> EXPRESSION ID_EXPRESSION HEXCONSTANT
+%token <stype> EXPRESSION ID_EXPRESSION HEXCONSTANT STRING_LITERAL
 
 /* associativity and precedence */
 %left '<' '>' '=' "!=" "<=" ">="
@@ -548,7 +548,13 @@ primary_expr : ICONSTANT {
                SgIntVal* int_val =
                    SageBuilder::buildIntVal((int)strtol((const char*)($1), NULL, 0));
                int_val->set_valueString((const char*)($1));
+               free(const_cast<char*>($1));
                current_exp = int_val;
+               $$ = current_exp;
+              }
+             | STRING_LITERAL {
+               current_exp = SageBuilder::buildStringVal((const char*)($1));
+               free(const_cast<char*>($1));
                $$ = current_exp;
               }
              | ID_EXPRESSION {
@@ -559,6 +565,7 @@ primary_expr : ICONSTANT {
                } else {
                  current_exp = SageBuilder::buildOpaqueVarRefExp((const char*)($1), scope);
                }
+               free(const_cast<char*>($1));
                $$ = current_exp;
               }
              | '(' expression ')' {
@@ -732,6 +739,7 @@ postfix_expr:primary_expr {
                 SgExpression* base = (SgExpression*)($1);
                 SgVarRefExp* member = SageBuilder::buildOpaqueVarRefExp(
                     (const char*)($3), SageInterface::getScope(omp_directive_node));
+                free(const_cast<char*>($3));
                 current_exp = SageBuilder::buildDotExp(base, member);
                 $$ = current_exp;
               }
@@ -739,6 +747,7 @@ postfix_expr:primary_expr {
                 SgExpression* base = (SgExpression*)($1);
                 SgVarRefExp* member = SageBuilder::buildOpaqueVarRefExp(
                     (const char*)($3), SageInterface::getScope(omp_directive_node));
+                free(const_cast<char*>($3));
                 current_exp = SageBuilder::buildArrowExp(base, member);
                 $$ = current_exp;
              }

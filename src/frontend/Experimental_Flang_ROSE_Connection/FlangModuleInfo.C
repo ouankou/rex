@@ -1,10 +1,13 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "FlangModuleInfo.h"
 
@@ -166,19 +169,54 @@ std::string read_first_line_from_command(const std::string &command_path,
     return "";
   }
 
-  const std::string command = command_path + " " + argument;
-  FILE *pipe = popen(command.c_str(), "r");
-  if (pipe == nullptr) {
+  int pipe_fds[2] = {-1, -1};
+  if (pipe(pipe_fds) != 0) {
+    return "";
+  }
+
+  pid_t child = fork();
+  if (child == -1) {
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    return "";
+  }
+
+  if (child == 0) {
+    close(pipe_fds[0]);
+    if (dup2(pipe_fds[1], STDOUT_FILENO) == -1) {
+      _exit(127);
+    }
+    close(pipe_fds[1]);
+    execlp(command_path.c_str(), command_path.c_str(), argument.c_str(),
+           static_cast<char *>(nullptr));
+    _exit(127);
+  }
+
+  close(pipe_fds[1]);
+  FILE *pipe_stream = fdopen(pipe_fds[0], "r");
+  if (pipe_stream == nullptr) {
+    close(pipe_fds[0]);
+    int status = 0;
+    while (waitpid(child, &status, 0) == -1 && errno == EINTR) {
+    }
     return "";
   }
 
   char buffer[4096] = {0};
   std::string line;
-  if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+  if (fgets(buffer, sizeof(buffer), pipe_stream) != nullptr) {
     line = buffer;
   }
+  fclose(pipe_stream);
 
-  pclose(pipe);
+  int status = 0;
+  while (waitpid(child, &status, 0) == -1 && errno == EINTR) {
+  }
+
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    return "";
+  }
+
   return Rose::StringUtility::trim(line);
 }
 

@@ -1233,13 +1233,14 @@ bool ScopeHasPragmaAtSource(SgScopeStatement *scope,
   return false;
 }
 
-bool SourceHasPragmaAtSource(const SgSourceFile *source,
-                             const SourcePosition &startPos) {
+using SourcePragmaLineIndex = std::unordered_map<int, std::set<std::string>>;
+
+SourcePragmaLineIndex BuildSourcePragmaLineIndex(const SgSourceFile *source) {
+  SourcePragmaLineIndex pragma_line_index;
   if (source == nullptr) {
-    return false;
+    return pragma_line_index;
   }
 
-  std::string normalized_target_path = NormalizeSourcePath(startPos.path);
   std::vector<SgNode *> pragmas = NodeQuery::querySubTree(
       const_cast<SgSourceFile *>(source), V_SgPragmaDeclaration);
   for (SgNode *node : pragmas) {
@@ -1248,19 +1249,39 @@ bool SourceHasPragmaAtSource(const SgSourceFile *source,
       continue;
     }
     Sg_File_Info *info = pragmaStmt->get_file_info();
-    if (info == nullptr || info->get_line() != startPos.line) {
+    if (info == nullptr || info->get_line() <= 0) {
       continue;
     }
-    if (!normalized_target_path.empty()) {
-      const std::string pragma_path =
-          NormalizeSourcePath(info->get_filenameString());
-      if (!pragma_path.empty() && pragma_path != normalized_target_path) {
-        continue;
-      }
-    }
+    const std::string pragma_path =
+        NormalizeSourcePath(info->get_filenameString());
+    pragma_line_index[info->get_line()].insert(pragma_path);
+  }
+  return pragma_line_index;
+}
+
+bool SourceHasPragmaAtSource(const SourcePragmaLineIndex &pragma_line_index,
+                             const SourcePosition &startPos) {
+  const auto pragma_it = pragma_line_index.find(startPos.line);
+  if (pragma_it == pragma_line_index.end()) {
+    return false;
+  }
+
+  const std::string normalized_target_path = NormalizeSourcePath(startPos.path);
+  if (normalized_target_path.empty()) {
     return true;
   }
-  return false;
+
+  const std::set<std::string> &line_paths = pragma_it->second;
+  return line_paths.find(normalized_target_path) != line_paths.end() ||
+         line_paths.find("") != line_paths.end();
+}
+
+void RecordSourcePragmaAtSource(SourcePragmaLineIndex &pragma_line_index,
+                                const SourcePosition &startPos) {
+  if (startPos.line <= 0) {
+    return;
+  }
+  pragma_line_index[startPos.line].insert(NormalizeSourcePath(startPos.path));
 }
 
 bool EndsWithContinuationAmpersand(const std::string &line) {
@@ -1469,8 +1490,10 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
     return;
   }
 
+  SourcePragmaLineIndex pragma_line_index = BuildSourcePragmaLineIndex(source);
+
   for (const RawFortranDirective &directive : directives) {
-    if (SourceHasPragmaAtSource(source, directive.start)) {
+    if (SourceHasPragmaAtSource(pragma_line_index, directive.start)) {
       continue;
     }
 
@@ -1541,6 +1564,7 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
     } else {
       SageInterface::appendStatement(pragma, scope);
     }
+    RecordSourcePragmaAtSource(pragma_line_index, directive.start);
   }
 }
 
