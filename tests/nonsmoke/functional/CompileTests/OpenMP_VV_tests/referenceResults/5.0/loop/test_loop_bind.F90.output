@@ -1,0 +1,20 @@
+!$omp teams num_teams(OMPVV_NUM_TEAMS_HOST) thread_limit(OMPVV_NUM_THREADS_HOST)
+!$omp loop bind(teams) private(j)
+!$omp end loop
+!$omp parallel if(.FALSE.)
+!$omp end parallel
+!$omp end teams
+!$omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+!$omp loop bind(parallel)
+!$omp end loop
+!$omp end parallel
+!$omp teams num_teams(OMPVV_NUM_TEAMS_HOST) thread_limit(OMPVV_NUM_THREADS_HOST) private(x)
+!$omp loop bind(thread)
+!$omp end loop
+!$omp parallel if(.FALSE.)
+!$omp end parallel
+!$omp end teams
+!$omp parallel shared(outData) num_threads(OMPVV_NUM_THREADS_HOST) private(x)
+!$omp loop bind(thread)
+!$omp end loop
+!$omp end parallel

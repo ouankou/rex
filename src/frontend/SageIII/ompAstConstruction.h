@@ -49,16 +49,19 @@ bool checkOpenMPIR(OpenMPDirective *);
 SgStatement *
 getOpenMPBlockBody(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                        current_OpenMPIR_to_SageIII);
-SgExpression *parseOmpArraySection(SgPragmaDeclaration *directive,
-                                   OpenMPClauseKind clause_kind,
-                                   std::string expression);
-SgExpression *parseOmpExpression(SgPragmaDeclaration *directive,
-                                 OpenMPClauseKind clause_kind,
-                                 std::string expression);
+SgExpression *
+parseOmpArraySection(SgPragmaDeclaration *directive,
+                     OpenMPClauseKind clause_kind, std::string expression,
+                     const std::string *directive_source_text = nullptr);
+SgExpression *
+parseOmpExpression(SgPragmaDeclaration *directive, OpenMPClauseKind clause_kind,
+                   std::string expression,
+                   const std::string *directive_source_text = nullptr);
 void buildVariableList(SgOmpVariablesClause *current_omp_clause);
 void parseOmpVariable(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                           current_OpenMPIR_to_SageIII,
-                      OpenMPClauseKind clause_kind, std::string expression);
+                      OpenMPClauseKind clause_kind, std::string expression,
+                      const std::string *directive_source_text = nullptr);
 
 SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
@@ -163,7 +166,7 @@ convertAffinityClause(SgStatement *clause_body,
                           current_OpenMPIR_to_SageIII,
                       OpenMPClause *current_omp_clause);
 SgOmpMapClause *
-convertMapClause(SgOmpClauseBodyStatement *clause_body,
+convertMapClause(SgStatement *clause_body,
                  std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                      current_OpenMPIR_to_SageIII,
                  OpenMPClause *current_omp_clause);

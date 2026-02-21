@@ -1,0 +1,1 @@
+!$omp target teams distribute map(to:a(1:N),b(1:N)) reduction(+:dev_sum) map(tofrom:dev_sum)

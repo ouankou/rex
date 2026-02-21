@@ -1,2 +1,2 @@
-#pragma omp parallel private(i,j)
+#pragma omp parallel private(MY_SMP_PRIVATE)
 #pragma omp for

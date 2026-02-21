@@ -8,8 +8,7 @@
 #pragma omp simd private(tmp) reduction(+ : sum)
 #pragma omp simd lastprivate(j)
 #pragma omp for simd collapse(2) private(tmp)
-#pragma omp parallel
-#pragma omp for simd collapse(2) private(tmp)
+#pragma omp parallel for simd collapse(2) private(tmp)
 #pragma omp declare simd simdlen(1) notinbranch
 #pragma omp declare simd linear(p:1)
 #pragma omp declare simd uniform(p)

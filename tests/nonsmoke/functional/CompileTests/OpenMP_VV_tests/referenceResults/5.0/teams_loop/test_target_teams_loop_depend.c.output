@@ -1,0 +1,3 @@
+#pragma omp target teams loop map(tofrom:a[0:N]) depend(out:a[0:N]) nowait
+#pragma omp target teams loop map(tofrom:a[0:N],b[0:N]) depend(in:a[0:N]) depend(out:b[0:N]) nowait
+#pragma omp target teams loop map(tofrom:b[0:N],c[0:N]) depend(in:b[0:N])

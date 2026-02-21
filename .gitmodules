@@ -4,3 +4,6 @@
 [submodule "src/frontend/SageIII/accparser"]
 	path = src/frontend/SageIII/accparser
 	url = https://github.com/ouankou/accparser.git
+[submodule "third_party/OpenMP_VV"]
+	path = third_party/OpenMP_VV
+	url = https://github.com/OpenMP-Validation-and-Verification/OpenMP_VV.git

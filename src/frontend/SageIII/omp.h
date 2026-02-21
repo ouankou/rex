@@ -1,6 +1,7 @@
 #ifndef _OMP_H_DEF
 #define _OMP_H_DEF
 
+#include <stdint.h> // support uintptr_t
 #include <stdlib.h> // support size_t
 
 /*
@@ -59,6 +60,66 @@ typedef enum omp_proc_bind_t {
   omp_proc_bind_close = 3,
   omp_proc_bind_spread = 4
 } omp_proc_bind_t;
+
+typedef uintptr_t omp_uintptr_t;
+
+typedef enum omp_memspace_handle_t {
+  omp_default_mem_space = 0,
+  omp_large_cap_mem_space = 1,
+  omp_const_mem_space = 2,
+  omp_high_bw_mem_space = 3,
+  omp_low_lat_mem_space = 4
+} omp_memspace_handle_t;
+
+typedef enum omp_allocator_handle_t {
+  omp_null_allocator = 0,
+  omp_default_mem_alloc = 1,
+  omp_large_cap_mem_alloc = 2,
+  omp_const_mem_alloc = 3,
+  omp_high_bw_mem_alloc = 4,
+  omp_low_lat_mem_alloc = 5,
+  omp_cgroup_mem_alloc = 6,
+  omp_pteam_mem_alloc = 7,
+  omp_thread_mem_alloc = 8
+} omp_allocator_handle_t;
+
+typedef enum omp_alloctrait_key_t {
+  omp_atk_sync_hint = 1,
+  omp_atk_alignment = 2,
+  omp_atk_access = 3,
+  omp_atk_pool_size = 4,
+  omp_atk_fallback = 5,
+  omp_atk_fb_data = 6,
+  omp_atk_pinned = 7,
+  omp_atk_partition = 8
+} omp_alloctrait_key_t;
+
+typedef enum omp_alloctrait_value_t {
+  omp_atv_default = (omp_uintptr_t)-1,
+  omp_atv_false = 0,
+  omp_atv_true = 1,
+  omp_atv_contended = 3,
+  omp_atv_uncontended = 4,
+  omp_atv_serialized = 5,
+  omp_atv_private = 6,
+  omp_atv_all = 7,
+  omp_atv_thread = 8,
+  omp_atv_pteam = 9,
+  omp_atv_cgroup = 10,
+  omp_atv_default_mem_fb = 11,
+  omp_atv_null_fb = 12,
+  omp_atv_abort_fb = 13,
+  omp_atv_allocator_fb = 14,
+  omp_atv_environment = 15,
+  omp_atv_nearest = 16,
+  omp_atv_blocked = 17,
+  omp_atv_interleaved = 18
+} omp_alloctrait_value_t;
+
+typedef struct omp_alloctrait_t {
+  omp_alloctrait_key_t key;
+  omp_uintptr_t value;
+} omp_alloctrait_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -119,6 +180,7 @@ void omp_set_num_devices(int);
 
 /* get number of available devices */
 int omp_get_num_devices(void);
+int omp_get_device_num(void);
 // GCC 4.0 provides omp_get_num_devices() already, but without supporting GPUs
 // I have to use another function to bypass it
 int xomp_get_num_devices(void);
@@ -170,6 +232,15 @@ int omp_target_associate_ptr(void *host_ptr, void *device_ptr, size_t _size,
                              size_t device_offset, int device_num);
 
 int omp_target_disassociate_ptr(void *ptr, int device_num);
+
+omp_allocator_handle_t omp_init_allocator(omp_memspace_handle_t memspace,
+                                          int num_traits,
+                                          const omp_alloctrait_t traits[]);
+void omp_destroy_allocator(omp_allocator_handle_t allocator);
+void omp_set_default_allocator(omp_allocator_handle_t allocator);
+omp_allocator_handle_t omp_get_default_allocator(void);
+void *omp_alloc(size_t size, omp_allocator_handle_t allocator);
+void omp_free(void *ptr, omp_allocator_handle_t allocator);
 
 /*
  * FORTRAN Execution Environment Function Wrappers

@@ -12,7 +12,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -27,6 +30,10 @@ std::map<SgPragmaDeclaration *, OpenACCDirective *>
     fortran_acc_paired_pragma_dict;
 
 static const char *const kAccFortranEndAttributeName = "acc_fortran_end";
+static const char *const kFortranKeepOpenMPPragmaAttributeName =
+    "fortran_keep_openmp_pragma";
+static const char *const kOmpCombinedParallelNestedVariantAttrName =
+    "omp_combined_parallel_nested_variant";
 
 class AccFortranEndAttribute : public AstAttribute {
 public:
@@ -35,6 +42,16 @@ public:
   }
   AstAttribute *copy() const override {
     return new AccFortranEndAttribute(*this);
+  }
+};
+
+class KeepFortranOpenMPPragmaAttribute : public AstAttribute {
+public:
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+  AstAttribute *copy() const override {
+    return new KeepFortranOpenMPPragmaAttribute(*this);
   }
 };
 std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *, OpenMPDirective *>>
@@ -69,10 +86,13 @@ struct PendingCommentedDirectiveRelocation {
 static std::unordered_map<SgPragmaDeclaration *,
                           std::vector<PendingCommentedDirectiveRelocation>>
     g_pending_commented_directive_relocations;
+static std::unordered_map<SgPragmaDeclaration *, std::string>
+    g_omp_directive_source_text_by_pragma;
 
 struct OmpExprParseContext {
   SgPragmaDeclaration *pragma_declaration = nullptr;
   OpenMPDirective *directive = nullptr;
+  const std::string *directive_source_text = nullptr;
   std::vector<std::unique_ptr<OmpParsedExpression>> owned_nodes;
 };
 
@@ -92,6 +112,9 @@ using namespace OmpSupport;
 namespace {
 SgExpression *buildOpaqueOpenMPClauseExpression(SgPragmaDeclaration *directive,
                                                 const std::string &text);
+void collectArraySectionDimensions(
+    SgExpression *expression,
+    std::vector<std::pair<SgExpression *, SgExpression *>> &dimensions);
 SgVariableSymbol *extractClauseVariableSymbol(SgNode *node);
 std::string trimWhitespaceCopy(const std::string &value);
 const OmpParsedExpression *findParsedExpressionByText(
@@ -141,6 +164,180 @@ bool isCommentedOutDirective(const PreprocessingInfo *info) {
 
   return text.find("omp", pragma_pos) != std::string::npos ||
          text.find("acc", pragma_pos) != std::string::npos;
+}
+
+bool startsWithCaseInsensitiveKeyword(const std::string &text, size_t pos,
+                                      const char *keyword) {
+  const size_t keyword_len = std::strlen(keyword);
+  if (pos + keyword_len > text.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < keyword_len; ++i) {
+    const unsigned char lhs = static_cast<unsigned char>(text[pos + i]);
+    const unsigned char rhs = static_cast<unsigned char>(keyword[i]);
+    if (std::tolower(lhs) != std::tolower(rhs)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool extractOpenMPCppPragmaPayload(const std::string &line,
+                                   std::string &payload) {
+  payload.clear();
+  size_t pos = line.find_first_not_of(" \t");
+  if (pos == std::string::npos || line[pos] != '#') {
+    return false;
+  }
+
+  ++pos;
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos ||
+      !startsWithCaseInsensitiveKeyword(line, pos, "pragma")) {
+    return false;
+  }
+  pos += 6;
+  if (pos < line.size() &&
+      !std::isspace(static_cast<unsigned char>(line[pos]))) {
+    return false;
+  }
+
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos ||
+      !startsWithCaseInsensitiveKeyword(line, pos, "omp")) {
+    return false;
+  }
+
+  payload = line.substr(pos);
+  return true;
+}
+
+bool endsWithCppLineContinuation(const std::string &line) {
+  const size_t end = line.find_last_not_of(" \t\r");
+  return end != std::string::npos && line[end] == '\\';
+}
+
+std::string stripTrailingCppLineContinuation(const std::string &line) {
+  std::string result = line;
+  const size_t end = result.find_last_not_of(" \t\r");
+  if (end != std::string::npos && result[end] == '\\') {
+    result.erase(end);
+  }
+  return trimWhitespaceCopy(result);
+}
+
+std::string getRawOpenMPCppDirectiveText(
+    SgPragmaDeclaration *pragma_declaration,
+    std::unordered_map<std::string, std::vector<std::string>>
+        &source_lines_cache) {
+  if (pragma_declaration == nullptr) {
+    return "";
+  }
+
+  const Sg_File_Info *info = pragma_declaration->get_startOfConstruct();
+  if (info == nullptr) {
+    info = pragma_declaration->get_file_info();
+  }
+  if (info == nullptr) {
+    return "";
+  }
+
+  const std::string filename = info->get_filenameString();
+  const int line_number = info->get_line();
+  if (filename.empty() || line_number <= 0) {
+    return "";
+  }
+
+  auto cache_it = source_lines_cache.find(filename);
+  if (cache_it == source_lines_cache.end()) {
+    std::ifstream input(filename.c_str());
+    if (!input.is_open()) {
+      return "";
+    }
+
+    std::vector<std::string> lines;
+    std::string line;
+    while (std::getline(input, line)) {
+      if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+      }
+      lines.push_back(line);
+    }
+    cache_it =
+        source_lines_cache.insert(std::make_pair(filename, std::move(lines)))
+            .first;
+  }
+
+  const std::vector<std::string> &lines = cache_it->second;
+  const size_t line_index = static_cast<size_t>(line_number - 1);
+  if (line_index >= lines.size()) {
+    return "";
+  }
+
+  std::string first_payload;
+  if (!extractOpenMPCppPragmaPayload(lines[line_index], first_payload)) {
+    return "";
+  }
+
+  std::string directive_text = stripTrailingCppLineContinuation(first_payload);
+  size_t current_line = line_index;
+  while (current_line < lines.size() &&
+         endsWithCppLineContinuation(lines[current_line])) {
+    ++current_line;
+    if (current_line >= lines.size()) {
+      break;
+    }
+
+    std::string continuation = lines[current_line];
+    const size_t continuation_start = continuation.find_first_not_of(" \t");
+    if (continuation_start != std::string::npos) {
+      continuation.erase(0, continuation_start);
+    } else {
+      continuation.clear();
+    }
+    continuation = stripTrailingCppLineContinuation(continuation);
+    if (!continuation.empty()) {
+      directive_text += " " + continuation;
+    }
+  }
+
+  return trimWhitespaceCopy(directive_text);
+}
+
+void initializeGeneratedOpenMPStatement(SgStatement *statement) {
+  if (statement == nullptr) {
+    return;
+  }
+
+  if (SgLocatedNode *located = isSgLocatedNode(statement)) {
+    if (located->get_file_info() == nullptr ||
+        located->get_startOfConstruct() == nullptr ||
+        located->get_endOfConstruct() == nullptr) {
+      setSourcePositionAsTransformation(located);
+    }
+    if (located->get_file_info() != nullptr) {
+      located->get_file_info()->setTransformation();
+    }
+    if (located->get_startOfConstruct() != nullptr) {
+      located->get_startOfConstruct()->setTransformation();
+    }
+    if (located->get_endOfConstruct() != nullptr) {
+      located->get_endOfConstruct()->setTransformation();
+    }
+    located->setTransformation();
+    located->setOutputInCodeGeneration();
+  }
+
+  if (SgOmpBodyStatement *omp_body = isSgOmpBodyStatement(statement)) {
+    SgStatement *body = omp_body->get_body();
+    SgLocatedNode *located_body = isSgLocatedNode(body);
+    if (located_body != nullptr &&
+        (located_body->get_file_info() == nullptr ||
+         located_body->get_startOfConstruct() == nullptr ||
+         located_body->get_endOfConstruct() == nullptr)) {
+      initializeGeneratedOpenMPStatement(body);
+    }
+  }
 }
 
 void collectCommentedDirectiveRelocations(
@@ -349,7 +546,8 @@ void collectCommentedDirectiveRelocations(
 
       const std::vector<StatementPosition> *positions = nullptr;
       if (!comment_filename.empty()) {
-        auto by_name_it = statement_positions_by_filename.find(comment_filename);
+        auto by_name_it =
+            statement_positions_by_filename.find(comment_filename);
         if (by_name_it != statement_positions_by_filename.end()) {
           positions = &by_name_it->second;
         }
@@ -394,7 +592,8 @@ void collectCommentedDirectiveRelocations(
 
       const bool appears_before_target =
           target_stmt_line == 0 || comment_line <= target_stmt_line;
-      if (SgPragmaDeclaration *target_pragma = isSgPragmaDeclaration(target_stmt)) {
+      if (SgPragmaDeclaration *target_pragma =
+              isSgPragmaDeclaration(target_stmt)) {
         if (pragma_set.find(target_pragma) != pragma_set.end()) {
           g_pending_commented_directive_relocations[target_pragma].push_back(
               PendingCommentedDirectiveRelocation{owner, info, comment_line});
@@ -545,15 +744,15 @@ SgExpression *cloneParsedExpressionNode(const OmpParsedExpression *parsed) {
   return nullptr;
 }
 
-void parseAndStoreVariableList(const std::string &expr_text,
-                               OmpParsedExpression *parsed,
-                               SgPragmaDeclaration *pragma_declaration,
-                               OpenMPDirective *directive,
-                               OpenMPClauseKind clause_kind) {
+void parseAndStoreVariableList(
+    const std::string &expr_text, OmpParsedExpression *parsed,
+    SgPragmaDeclaration *pragma_declaration, OpenMPDirective *directive,
+    OpenMPClauseKind clause_kind,
+    const std::string *directive_source_text = nullptr) {
   ROSE_ASSERT(parsed != nullptr);
   clearOpenMPClauseTemporaryState();
   parseOmpVariable(std::make_pair(pragma_declaration, directive), clause_kind,
-                   expr_text);
+                   expr_text, directive_source_text);
   ROSE_ASSERT(!omp_variable_list.empty());
   parsed->node = omp_variable_list.back().second;
   parsed->dimensions.clear();
@@ -561,14 +760,15 @@ void parseAndStoreVariableList(const std::string &expr_text,
   array_dimensions.clear();
 }
 
-void parseAndStoreArraySection(const std::string &expr_text,
-                               OmpParsedExpression *parsed,
-                               SgPragmaDeclaration *pragma_declaration,
-                               OpenMPDirective *directive,
-                               OpenMPClauseKind clause_kind) {
+void parseAndStoreArraySection(
+    const std::string &expr_text, OmpParsedExpression *parsed,
+    SgPragmaDeclaration *pragma_declaration, OpenMPDirective *directive,
+    OpenMPClauseKind clause_kind,
+    const std::string *directive_source_text = nullptr) {
   ROSE_ASSERT(parsed != nullptr);
   clearOpenMPClauseTemporaryState();
-  parseOmpArraySection(pragma_declaration, clause_kind, expr_text);
+  parseOmpArraySection(pragma_declaration, clause_kind, expr_text,
+                       directive_source_text);
   ROSE_ASSERT(!omp_variable_list.empty());
   parsed->node = omp_variable_list.back().second;
   parsed->dimensions.clear();
@@ -579,19 +779,23 @@ void parseAndStoreArraySection(const std::string &expr_text,
       parsed->dimensions = found->second;
     }
   }
+  if (parsed->dimensions.empty()) {
+    collectArraySectionDimensions(isSgExpression(parsed->node),
+                                  parsed->dimensions);
+  }
   omp_variable_list.clear();
   array_dimensions.clear();
 }
 
-void parseAndStoreExpression(const std::string &expr_text,
-                             OmpParsedExpression *parsed,
-                             SgPragmaDeclaration *pragma_declaration,
-                             OpenMPDirective *directive,
-                             OpenMPClauseKind clause_kind) {
+void parseAndStoreExpression(
+    const std::string &expr_text, OmpParsedExpression *parsed,
+    SgPragmaDeclaration *pragma_declaration, OpenMPDirective *directive,
+    OpenMPClauseKind clause_kind,
+    const std::string *directive_source_text = nullptr) {
   ROSE_ASSERT(parsed != nullptr);
   clearOpenMPClauseTemporaryState();
-  SgExpression *expression =
-      parseOmpExpression(pragma_declaration, clause_kind, expr_text);
+  SgExpression *expression = parseOmpExpression(
+      pragma_declaration, clause_kind, expr_text, directive_source_text);
   ROSE_ASSERT(expression != nullptr);
   parsed->node = expression;
   parsed->dimensions.clear();
@@ -600,6 +804,9 @@ void parseAndStoreExpression(const std::string &expr_text,
     if (found != array_dimensions.end()) {
       parsed->dimensions = found->second;
     }
+  }
+  if (parsed->dimensions.empty()) {
+    collectArraySectionDimensions(expression, parsed->dimensions);
   }
   omp_variable_list.clear();
   array_dimensions.clear();
@@ -631,16 +838,16 @@ void *parseOpenMPExprCallback(OpenMPDirectiveKind directive_kind,
     } else {
       parseAndStoreExpression(parsed->text, parsed.get(),
                               context->pragma_declaration, context->directive,
-                              clause_kind);
+                              clause_kind, context->directive_source_text);
     }
   } else if (parse_mode == OMP_EXPR_PARSE_variable_list) {
     parseAndStoreVariableList(parsed->text, parsed.get(),
                               context->pragma_declaration, context->directive,
-                              clause_kind);
+                              clause_kind, context->directive_source_text);
   } else if (parse_mode == OMP_EXPR_PARSE_array_section) {
     parseAndStoreArraySection(parsed->text, parsed.get(),
                               context->pragma_declaration, context->directive,
-                              clause_kind);
+                              clause_kind, context->directive_source_text);
   } else if (parse_mode == OMP_EXPR_PARSE_verbatim) {
     parsed->node = buildOpaqueOpenMPClauseExpression(
         context->pragma_declaration, parsed->text);
@@ -690,6 +897,15 @@ parseClauseNodesForDirective(SgPragmaDeclaration *pragma_declaration,
       directive->getClausesInOriginalOrder();
   ROSE_ASSERT(original_clauses != nullptr);
 
+  // Fortran clause expressions are already carried as source-faithful text in
+  // the frontend IR. Reparsing into this cache can mis-associate expressions
+  // across adjacent directives and corrupt later lowering (e.g., if/num_threads
+  // clauses becoming runtime helper names). Keep the C/C++ cache behavior, but
+  // bypass this cache path for Fortran.
+  if (directive->getBaseLang() == Lang_Fortran) {
+    return parsed_cache;
+  }
+
   bool requires_expression_cache = false;
   bool requires_strict_expression_cache = false;
   bool skip_reparse_for_merged_fortran_single = false;
@@ -725,6 +941,11 @@ parseClauseNodesForDirective(SgPragmaDeclaration *pragma_declaration,
     }
   }
 
+  // Best-effort cache for Fortran: do not require strict reparse success.
+  if (directive->getBaseLang() == Lang_Fortran) {
+    requires_strict_expression_cache = false;
+  }
+
   if (!requires_expression_cache) {
     return parsed_cache;
   }
@@ -737,6 +958,7 @@ parseClauseNodesForDirective(SgPragmaDeclaration *pragma_declaration,
   OmpExprParseContext context;
   context.pragma_declaration = pragma_declaration;
   context.directive = directive;
+  context.directive_source_text = &directive_text;
   OpenMPDirective *parsed_directive =
       parseOpenMP(parse_text.c_str(), parseOpenMPExprCallback, &context);
   if (parsed_directive == nullptr) {
@@ -755,14 +977,37 @@ parseClauseNodesForDirective(SgPragmaDeclaration *pragma_declaration,
   std::vector<OpenMPClause *> *parsed_clauses =
       parsed_directive->getClausesInOriginalOrder();
   ROSE_ASSERT(parsed_clauses != nullptr);
-  ROSE_ASSERT(original_clauses->size() == parsed_clauses->size());
+  if (original_clauses->size() != parsed_clauses->size()) {
+    delete parsed_directive;
+    if (!requires_strict_expression_cache) {
+      return OmpClauseParseCache();
+    }
+    MLOG_ERROR_C("ompAstConstruction",
+                 "OpenMP reparse produced mismatched clause counts: "
+                 "original=%zu parsed=%zu text=%s\n",
+                 original_clauses->size(), parsed_clauses->size(),
+                 parse_text.c_str());
+    ROSE_ABORT();
+  }
 
   for (size_t index = 0; index < original_clauses->size(); ++index) {
     OpenMPClause *original_clause = (*original_clauses)[index];
     OpenMPClause *parsed_clause = (*parsed_clauses)[index];
     ROSE_ASSERT(original_clause != nullptr);
     ROSE_ASSERT(parsed_clause != nullptr);
-    ROSE_ASSERT(original_clause->getKind() == parsed_clause->getKind());
+    if (original_clause->getKind() != parsed_clause->getKind()) {
+      delete parsed_directive;
+      if (!requires_strict_expression_cache) {
+        return OmpClauseParseCache();
+      }
+      MLOG_ERROR_C("ompAstConstruction",
+                   "OpenMP reparse produced mismatched clause kind: "
+                   "original=%d parsed=%d text=%s\n",
+                   static_cast<int>(original_clause->getKind()),
+                   static_cast<int>(parsed_clause->getKind()),
+                   parse_text.c_str());
+      ROSE_ABORT();
+    }
 
     std::vector<const OmpParsedExpression *> clause_nodes;
     const std::vector<const void *> &raw_nodes =
@@ -780,8 +1025,9 @@ parseClauseNodesForDirective(SgPragmaDeclaration *pragma_declaration,
       if (!original_to_clause->getMapperIdentifier().empty()) {
         const OmpParsedExpression *mapper_node =
             asParsedExpression(parsed_to_clause->getMapperIdentifierNode());
-        ROSE_ASSERT(mapper_node != nullptr);
-        clause_nodes.push_back(mapper_node);
+        if (mapper_node != nullptr) {
+          clause_nodes.push_back(mapper_node);
+        }
       }
     } else if (original_clause->getKind() == OMPC_from) {
       auto *original_from_clause =
@@ -790,8 +1036,9 @@ parseClauseNodesForDirective(SgPragmaDeclaration *pragma_declaration,
       if (!original_from_clause->getMapperIdentifier().empty()) {
         const OmpParsedExpression *mapper_node =
             asParsedExpression(parsed_from_clause->getMapperIdentifierNode());
-        ROSE_ASSERT(mapper_node != nullptr);
-        clause_nodes.push_back(mapper_node);
+        if (mapper_node != nullptr) {
+          clause_nodes.push_back(mapper_node);
+        }
       }
     } else if (original_clause->getKind() == OMPC_allocate) {
       auto *original_allocate_clause =
@@ -801,8 +1048,9 @@ parseClauseNodesForDirective(SgPragmaDeclaration *pragma_declaration,
       if (!original_allocate_clause->getUserDefinedAllocator().empty()) {
         const OmpParsedExpression *allocator_node = asParsedExpression(
             parsed_allocate_clause->getUserDefinedAllocatorNode());
-        ROSE_ASSERT(allocator_node != nullptr);
-        clause_nodes.push_back(allocator_node);
+        if (allocator_node != nullptr) {
+          clause_nodes.push_back(allocator_node);
+        }
       }
     }
 
@@ -886,8 +1134,13 @@ void appendParsedVariableNode(const OmpParsedExpression *parsed) {
   ROSE_ASSERT(parsed != nullptr);
   ROSE_ASSERT(parsed->node != nullptr);
   omp_variable_list.push_back(std::make_pair(parsed->text, parsed->node));
-  if (SgVariableSymbol *symbol = extractClauseVariableSymbol(parsed->node)) {
-    if (!parsed->dimensions.empty()) {
+  // Dimensions are only safe to key by symbol for direct variable items.
+  // For member expressions such as `v.data[0:v.len]`, mapping dimensions by the
+  // base symbol (`v`) incorrectly contaminates sibling items like `v`.
+  if ((isSgInitializedName(parsed->node) != nullptr ||
+       isSgVarRefExp(parsed->node) != nullptr) &&
+      !parsed->dimensions.empty()) {
+    if (SgVariableSymbol *symbol = extractClauseVariableSymbol(parsed->node)) {
       array_dimensions[symbol] = parsed->dimensions;
     }
   }
@@ -907,6 +1160,33 @@ SgExpression *cloneParsedExpressionNodeByText(
     return nullptr;
   }
   return cloneParsedExpressionNode(parsed);
+}
+
+SgExpression *cloneParsedExpressionNodeByApproxText(
+    const std::vector<const OmpParsedExpression *> *parsed_nodes,
+    const std::string &expression_text,
+    OpenMPExprParseMode preferred_mode = OMP_EXPR_PARSE_none) {
+  const std::string trimmed = trimWhitespaceCopy(expression_text);
+  if (trimmed.empty()) {
+    return nullptr;
+  }
+
+  if (SgExpression *expr = cloneParsedExpressionNodeByText(
+          parsed_nodes, trimmed, preferred_mode)) {
+    return expr;
+  }
+
+  const bool quoted = trimmed.size() >= 2 &&
+                      ((trimmed.front() == '"' && trimmed.back() == '"') ||
+                       (trimmed.front() == '\'' && trimmed.back() == '\''));
+  if (quoted) {
+    const std::string unquoted = trimmed.substr(1, trimmed.size() - 2);
+    return cloneParsedExpressionNodeByText(parsed_nodes, unquoted,
+                                           preferred_mode);
+  }
+
+  return cloneParsedExpressionNodeByText(parsed_nodes, "\"" + trimmed + "\"",
+                                         preferred_mode);
 }
 
 const OmpParsedExpression *findParsedExpressionByText(
@@ -944,6 +1224,20 @@ SgExpression *buildOpaqueOpenMPClauseExpression(SgPragmaDeclaration *directive,
     scope = isSgScopeStatement(global_parent);
   }
   ROSE_ASSERT(scope != nullptr);
+  if (directive != nullptr) {
+    if (SgSourceFile *source_file = getEnclosingSourceFile(directive)) {
+      const bool is_fortran_file =
+          source_file->get_Fortran_only() || source_file->get_F77_only() ||
+          source_file->get_F90_only() || source_file->get_F95_only() ||
+          source_file->get_F2003_only();
+      if (is_fortran_file) {
+        // Use a dangling var ref so clause entities preserve original source
+        // spelling (e.g., A/anArray) independent of Fortran symbol
+        // canonicalization.
+        return SageBuilder::buildDanglingVarRefExp(text, scope);
+      }
+    }
+  }
   return SageBuilder::buildOpaqueVarRefExp(text, scope);
 }
 
@@ -954,6 +1248,86 @@ std::string trimWhitespaceCopy(const std::string &value) {
   }
   const std::string::size_type end = value.find_last_not_of(" \t\r\n");
   return value.substr(begin, end - begin + 1);
+}
+
+std::string normalizeMapperIdentifierText(const std::string &value) {
+  std::string identifier = trimWhitespaceCopy(value);
+  const std::string::size_type colon = identifier.find(':');
+  if (colon != std::string::npos) {
+    identifier = trimWhitespaceCopy(identifier.substr(0, colon));
+  }
+  return identifier;
+}
+
+SgExpression *parseMapperIdentifierExpression(
+    SgPragmaDeclaration *pragma_declaration, OpenMPClauseKind clause_kind,
+    const std::vector<const OmpParsedExpression *> *parsed_nodes,
+    const std::string &raw_identifier_text) {
+  const std::string identifier =
+      normalizeMapperIdentifierText(raw_identifier_text);
+  if (identifier.empty()) {
+    return nullptr;
+  }
+
+  SgExpression *expr = cloneParsedExpressionNodeByApproxText(
+      parsed_nodes, identifier, OMP_EXPR_PARSE_expression);
+  if (expr == nullptr) {
+    expr = parseOmpExpression(pragma_declaration, clause_kind, identifier);
+  }
+  return expr;
+}
+
+SgExpression *parseClauseExpressionWithCache(
+    SgPragmaDeclaration *pragma_declaration, OpenMPClauseKind clause_kind,
+    const std::vector<const OmpParsedExpression *> *parsed_nodes,
+    const std::string &expression_text, bool prefer_verbatim = false) {
+  const std::string trimmed = trimWhitespaceCopy(expression_text);
+  if (trimmed.empty()) {
+    return nullptr;
+  }
+
+  SgExpression *expr = cloneParsedExpressionNodeByApproxText(
+      parsed_nodes, trimmed, OMP_EXPR_PARSE_expression);
+  if (expr != nullptr) {
+    return expr;
+  }
+
+  if (prefer_verbatim) {
+    return buildOpaqueOpenMPClauseExpression(pragma_declaration, trimmed);
+  }
+
+  return parseOmpExpression(pragma_declaration, clause_kind, trimmed);
+}
+
+void collectArraySectionDimensions(
+    SgExpression *expression,
+    std::vector<std::pair<SgExpression *, SgExpression *>> &dimensions) {
+  if (expression == nullptr) {
+    return;
+  }
+
+  if (SgCastExp *cast_exp = isSgCastExp(expression)) {
+    collectArraySectionDimensions(cast_exp->get_operand(), dimensions);
+    return;
+  }
+
+  if (SgUnaryOp *unary_op = isSgUnaryOp(expression)) {
+    collectArraySectionDimensions(unary_op->get_operand(), dimensions);
+    return;
+  }
+
+  if (SgPntrArrRefExp *array_ref = isSgPntrArrRefExp(expression)) {
+    collectArraySectionDimensions(array_ref->get_lhs_operand(), dimensions);
+    if (SgSubscriptExpression *subscript =
+            isSgSubscriptExpression(array_ref->get_rhs_operand())) {
+      SgExpression *lower = subscript->get_lowerBound();
+      SgExpression *length = subscript->get_upperBound();
+      if (lower != nullptr && length != nullptr) {
+        dimensions.push_back(std::make_pair(lower, length));
+      }
+    }
+    return;
+  }
 }
 
 SgVariableSymbol *extractClauseVariableSymbol(SgNode *node) {
@@ -1070,6 +1444,14 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
   ROSE_ASSERT(lsrc);
   SgLocatedNode *ldest = isSgLocatedNode(dest);
   ROSE_ASSERT(ldest);
+
+  bool expected_transformation = false;
+  if (ldest->get_file_info() != nullptr) {
+    expected_transformation = ldest->get_file_info()->isTransformation();
+  } else if (ldest->get_startOfConstruct() != nullptr) {
+    expected_transformation = ldest->get_startOfConstruct()->isTransformation();
+  }
+
   // ROSE_ASSERT (lsrc->get_file_info()->isTransformation() == false);
   // already the same, no copy is needed
   if (lsrc->get_endOfConstruct()->get_filename() ==
@@ -1077,7 +1459,9 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
       lsrc->get_endOfConstruct()->get_line() ==
           ldest->get_endOfConstruct()->get_line() &&
       lsrc->get_endOfConstruct()->get_col() ==
-          ldest->get_endOfConstruct()->get_col())
+          ldest->get_endOfConstruct()->get_col() &&
+      ldest->get_endOfConstruct()->isTransformation() ==
+          expected_transformation)
     return true;
 
   Sg_File_Info *copy = new Sg_File_Info(*(lsrc->get_endOfConstruct()));
@@ -1090,6 +1474,11 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
 
   ldest->set_endOfConstruct(copy);
   copy->set_parent(ldest);
+  if (expected_transformation) {
+    copy->setTransformation();
+  } else {
+    copy->unsetTransformation();
+  }
 
   ROSE_ASSERT(lsrc->get_endOfConstruct()->get_filename() ==
               ldest->get_endOfConstruct()->get_filename());
@@ -1098,6 +1487,10 @@ bool copyEndFileInfo(SgNode *src, SgNode *dest) {
   ROSE_ASSERT(lsrc->get_endOfConstruct()->get_col() ==
               ldest->get_endOfConstruct()->get_col());
   ROSE_ASSERT(ldest->get_endOfConstruct() == copy);
+  if (ldest->get_file_info() != nullptr) {
+    ROSE_ASSERT(ldest->get_endOfConstruct()->isTransformation() ==
+                ldest->get_file_info()->isTransformation());
+  }
 
   return result;
 }
@@ -1137,6 +1530,18 @@ static std::string toLowerCopy(const std::string &input) {
   std::transform(
       result.begin(), result.end(), result.begin(),
       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+  return result;
+}
+
+static std::string canonicalizeDirectiveKey(const std::string &input) {
+  std::string result;
+  result.reserve(input.size());
+  for (unsigned char ch : input) {
+    if (std::isspace(ch)) {
+      continue;
+    }
+    result.push_back(static_cast<char>(std::tolower(ch)));
+  }
   return result;
 }
 
@@ -1374,6 +1779,50 @@ static void stripLeadingContinuation(std::string &text) {
   }
 }
 
+static bool extractFortranOpenMPDirectivePayload(std::string &text) {
+  std::string candidate = text;
+  trimLeft(candidate);
+  stripFortranDirectiveSentinel(candidate);
+  trimLeft(candidate);
+  if (startsWithCaseInsensitive(candidate, "omp")) {
+    text = candidate;
+    return true;
+  }
+
+  // Accept embedded sentinels only from preprocessor-like lines (e.g.
+  // "#define X !$omp ..."), not from regular comments that merely mention
+  // "!$omp ...".
+  std::string leading = text;
+  trimLeft(leading);
+  if (leading.empty() || leading.front() != '#') {
+    return false;
+  }
+
+  size_t marker = findCaseInsensitive(text, "!$omp", 0);
+  if (marker == std::string::npos) {
+    marker = findCaseInsensitive(text, "c$omp", 0);
+  }
+  if (marker == std::string::npos) {
+    marker = findCaseInsensitive(text, "d$omp", 0);
+  }
+  if (marker == std::string::npos) {
+    marker = findCaseInsensitive(text, "*$omp", 0);
+  }
+  if (marker == std::string::npos) {
+    return false;
+  }
+
+  candidate = text.substr(marker);
+  stripFortranDirectiveSentinel(candidate);
+  trimLeft(candidate);
+  if (!startsWithCaseInsensitive(candidate, "omp")) {
+    return false;
+  }
+
+  text = candidate;
+  return true;
+}
+
 static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {
   switch (kind) {
   case OMPD_parallel:
@@ -1395,7 +1844,11 @@ static bool allowsImplicitOpenMPEnd(OpenMPDirective *directive) {
     return false;
   }
 
-  return allowsImplicitFortranEnd(directive->getKind());
+  if (allowsImplicitFortranEnd(directive->getKind())) {
+    return true;
+  }
+
+  return !isFortranPairedDirective(directive);
 }
 
 static bool isOpenMPDirectiveEndMarkerOnly(OpenMPDirective *directive) {
@@ -1412,11 +1865,6 @@ static bool shouldSkipOpenMPDirectiveAstConversion(OpenMPDirective *directive) {
   if (directive == nullptr) {
     return false;
   }
-
-  if (directive->getRequiresExplicitEnd()) {
-    return true;
-  }
-
   return isOpenMPDirectiveEndMarkerOnly(directive);
 }
 
@@ -1428,14 +1876,12 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
        iter != all_pragmas.end(); ++iter) {
     SgPragmaDeclaration *pragmaDecl = isSgPragmaDeclaration(*iter);
     ROSE_ASSERT(pragmaDecl != NULL);
+    if (getEnclosingSourceFile(pragmaDecl) != sageFilePtr) {
+      continue;
+    }
     std::string pragmaString = pragmaDecl->get_pragma()->get_pragma();
     std::string normalized = pragmaString;
-    stripFortranDirectiveSentinel(normalized);
-    trim(normalized);
-    std::istringstream istr(normalized);
-    std::string key;
-    istr >> key;
-    if (toLowerCopy(key) == "omp") {
+    if (extractFortranOpenMPDirectivePayload(normalized)) {
       omp_pragmas.push_back(pragmaDecl);
     }
   }
@@ -1456,6 +1902,116 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   std::string pending;
   SgPragmaDeclaration *prev_pragma = NULL;
   bool prev_continuation = false;
+  auto cleanup_local_directives = [&]() {
+    std::unordered_set<OpenMPDirective *> directives_to_delete;
+    directives_to_delete.reserve(local_fortran_paired_pragma_dict.size());
+    for (const auto &entry : local_fortran_paired_pragma_dict) {
+      if (entry.second != NULL) {
+        directives_to_delete.insert(entry.second);
+      }
+    }
+
+    for (OpenMPDirective *directive : directives_to_delete) {
+      delete directive;
+    }
+  };
+  std::unordered_map<std::string, std::vector<std::string>> source_lines_cache;
+  auto get_source_lines =
+      [&](const std::string &filename) -> const std::vector<std::string> * {
+    if (filename.empty()) {
+      return nullptr;
+    }
+
+    auto cache_it = source_lines_cache.find(filename);
+    if (cache_it == source_lines_cache.end()) {
+      std::ifstream input(filename.c_str());
+      if (!input.is_open()) {
+        return nullptr;
+      }
+
+      std::vector<std::string> lines;
+      std::string line;
+      while (std::getline(input, line)) {
+        if (!line.empty() && line.back() == '\r') {
+          line.pop_back();
+        }
+        lines.push_back(line);
+      }
+      cache_it =
+          source_lines_cache.insert(std::make_pair(filename, std::move(lines)))
+              .first;
+    }
+
+    return &(cache_it->second);
+  };
+  auto get_raw_fortran_directive_text =
+      [&](SgPragmaDeclaration *primary) -> std::string {
+    if (primary == NULL) {
+      return "";
+    }
+
+    const Sg_File_Info *info = primary->get_startOfConstruct();
+    if (info == NULL) {
+      info = primary->get_file_info();
+    }
+    if (info == NULL) {
+      return "";
+    }
+
+    const std::string filename = info->get_filenameString();
+    const int line_number = info->get_line();
+    if (filename.empty() || line_number <= 0) {
+      return "";
+    }
+
+    const std::vector<std::string> *lines = get_source_lines(filename);
+    if (lines == nullptr) {
+      return "";
+    }
+
+    size_t current_index = static_cast<size_t>(line_number - 1);
+    if (current_index >= lines->size()) {
+      return "";
+    }
+
+    std::string reconstructed;
+    bool has_any_line = false;
+    while (current_index < lines->size()) {
+      std::string cleaned = (*lines)[current_index];
+      if (!extractFortranOpenMPDirectivePayload(cleaned)) {
+        if (has_any_line) {
+          break;
+        }
+        return "";
+      }
+      stripFortranComment(cleaned);
+      trim(cleaned);
+      if (cleaned.empty()) {
+        if (has_any_line) {
+          break;
+        }
+        return "";
+      }
+
+      bool has_continuation = hasFortranLineContinuation(cleaned);
+      stripFortranLineContinuation(cleaned);
+      if (!has_any_line) {
+        reconstructed = cleaned;
+        has_any_line = true;
+      } else {
+        std::string continuation = stripOmpPrefix(cleaned);
+        stripLeadingContinuation(continuation);
+        reconstructed += continuation;
+      }
+
+      if (!has_continuation) {
+        break;
+      }
+      ++current_index;
+    }
+
+    return reconstructed;
+  };
 
   for (size_t i = 0; i < omp_pragmas.size(); ++i) {
     SgPragmaDeclaration *pragmaDecl = omp_pragmas[i];
@@ -1466,7 +2022,11 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
 
     std::string line = pragmaDecl->get_pragma()->get_pragma();
     std::string cleaned = line;
-    stripFortranDirectiveSentinel(cleaned);
+    if (!extractFortranOpenMPDirectivePayload(cleaned)) {
+      prev_pragma = pragmaDecl;
+      prev_continuation = false;
+      continue;
+    }
     stripFortranComment(cleaned);
     trim(cleaned);
     if (cleaned.empty()) {
@@ -1494,22 +2054,32 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
       continue;
     }
 
-    ompparser_OpenMPIR = parseOpenMP(pending.c_str(), nullptr, nullptr);
+    std::string parse_buffer = pending;
+    trimLeft(parse_buffer);
+    if (!startsWithCaseInsensitive(parse_buffer, "!$")) {
+      parse_buffer = std::string("!$") + parse_buffer;
+    }
+
+    ompparser_OpenMPIR = parseOpenMP(parse_buffer.c_str(), nullptr, nullptr);
+    if (ompparser_OpenMPIR == NULL && parse_buffer != pending) {
+      ompparser_OpenMPIR = parseOpenMP(pending.c_str(), nullptr, nullptr);
+    }
     if (ompparser_OpenMPIR == NULL) {
-      for (const auto &entry : local_OpenMPIR_list) {
-        delete entry.second;
-      }
+      cleanup_local_directives();
       setLang(Lang_unknown);
       return false;
     }
 
-    if (isFortranPairedDirective(ompparser_OpenMPIR)) {
+    if (ompparser_OpenMPIR->getKind() != OMPD_end) {
       pairing_list.push_back(ompparser_OpenMPIR);
     }
     if (ompparser_OpenMPIR->getKind() == OMPD_end) {
       if (pairing_list.empty()) {
-        cerr << "error: unmatched OpenMP end directive\n";
-        ROSE_ABORT();
+        cleanup_local_directives();
+        delete ompparser_OpenMPIR;
+        ompparser_OpenMPIR = NULL;
+        setLang(Lang_unknown);
+        return false;
       }
       OpenMPDirective *end_directive =
           ((OpenMPEndDirective *)ompparser_OpenMPIR)->getPairedDirective();
@@ -1525,21 +2095,30 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
           matched = true;
           break;
         }
-        if (!allowsImplicitOpenMPEnd(begin_directive)) {
-          ROSE_ASSERT(end_directive->getKind() == begin_directive->getKind());
-        }
+        // Keep searching for the matching begin directive; some intervening
+        // directives are not closed by explicit END pragmas.
         pairing_list.pop_back();
       }
       if (!matched) {
-        cerr << "error: unmatched OpenMP end directive\n";
-        ROSE_ABORT();
+        cleanup_local_directives();
+        delete ompparser_OpenMPIR;
+        ompparser_OpenMPIR = NULL;
+        setLang(Lang_unknown);
+        return false;
       }
     }
 
     SgPragmaDeclaration *primary = pending_pragmas.front();
+    std::string directive_source_text = pending;
+    std::string raw_directive_text = get_raw_fortran_directive_text(primary);
+    if (!raw_directive_text.empty()) {
+      directive_source_text = raw_directive_text;
+    }
     local_fortran_paired_pragma_dict[primary] = ompparser_OpenMPIR;
-    local_pragma_text_by_ir[ompparser_OpenMPIR] = pending;
-    if (!shouldSkipOpenMPDirectiveAstConversion(ompparser_OpenMPIR)) {
+    local_pragma_text_by_ir[ompparser_OpenMPIR] = directive_source_text;
+    const bool is_end_directive = ompparser_OpenMPIR->getKind() == OMPD_end;
+    if (!is_end_directive &&
+        !shouldSkipOpenMPDirectiveAstConversion(ompparser_OpenMPIR)) {
       local_OpenMPIR_list.push_back(
           std::make_pair(primary, ompparser_OpenMPIR));
       local_omp_pragma_list.push_back(primary);
@@ -1567,6 +2146,7 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
     ROSE_ASSERT(text_it != local_pragma_text_by_ir.end());
     g_omp_clause_nodes[entry.second] = parseClauseNodesForDirective(
         entry.first, entry.second, text_it->second);
+    g_omp_directive_source_text_by_pragma[entry.first] = text_it->second;
   }
   for (SgPragmaDeclaration *decl : local_omp_pragma_list) {
     omp_pragma_list.push_back(decl);
@@ -1579,6 +2159,204 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
   }
   setLang(Lang_unknown);
   return true;
+}
+
+static bool fortranAstUnparserEmitsOpenMPEnd(OpenMPDirectiveKind kind);
+
+static bool isFortranCommentDirective(PreprocessingInfo *info,
+                                      const std::string &keyword) {
+  if (info == NULL) {
+    return false;
+  }
+
+  std::string text = info->getString();
+  stripFortranDirectiveSentinel(text);
+  trimLeft(text);
+  if (startsWithCaseInsensitive(text, keyword)) {
+    return true;
+  }
+
+  std::string continuation = text;
+  stripLeadingContinuation(continuation);
+  if (startsWithCaseInsensitive(continuation, keyword)) {
+    return true;
+  }
+
+  std::string raw = info->getString();
+  trimLeft(raw);
+  if (!raw.empty() && raw.front() == '&') {
+    stripLeadingContinuation(raw);
+    if (startsWithCaseInsensitive(raw, keyword)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool isFortranDirectiveSentinelOnly(const std::string &text) {
+  std::string trimmed = text;
+  trimLeft(trimmed);
+  if (trimmed.empty()) {
+    return false;
+  }
+
+  const char marker = static_cast<char>(
+      std::tolower(static_cast<unsigned char>(trimmed.front())));
+  if (marker != '!' && marker != 'c' && marker != 'd' && marker != '*') {
+    return false;
+  }
+
+  size_t pos = 1;
+  while (pos < trimmed.size() &&
+         std::isspace(static_cast<unsigned char>(trimmed[pos]))) {
+    ++pos;
+  }
+  if (pos >= trimmed.size() || trimmed[pos] != '$') {
+    return false;
+  }
+  ++pos;
+  while (pos < trimmed.size() &&
+         std::isspace(static_cast<unsigned char>(trimmed[pos]))) {
+    ++pos;
+  }
+  return pos == trimmed.size();
+}
+
+static void removeFortranDirectiveComments(SgSourceFile *sageFilePtr,
+                                           const std::string &keyword) {
+  ROSE_ASSERT(sageFilePtr != NULL);
+
+  std::vector<SgNode *> loc_nodes =
+      NodeQuery::querySubTree(sageFilePtr, V_SgLocatedNode);
+  for (SgNode *node : loc_nodes) {
+    SgLocatedNode *locNode = isSgLocatedNode(node);
+    ROSE_ASSERT(locNode != NULL);
+
+    AttachedPreprocessingInfoType *comments =
+        locNode->getAttachedPreprocessingInfo();
+    if (comments == NULL || comments->empty()) {
+      continue;
+    }
+
+    for (AttachedPreprocessingInfoType::iterator iter = comments->begin();
+         iter != comments->end();) {
+      const bool is_directive = isFortranCommentDirective(*iter, keyword);
+      bool is_sentinel_lead = false;
+      if (!is_directive &&
+          isFortranDirectiveSentinelOnly((*iter)->getString())) {
+        AttachedPreprocessingInfoType::iterator next_iter = iter;
+        ++next_iter;
+        if (next_iter != comments->end() &&
+            isFortranCommentDirective(*next_iter, keyword)) {
+          is_sentinel_lead = true;
+        }
+      }
+      if (is_directive || is_sentinel_lead) {
+        iter = comments->erase(iter);
+      } else {
+        ++iter;
+      }
+    }
+  }
+}
+
+static bool isFortranOpenMPPragmaDeclaration(SgPragmaDeclaration *decl) {
+  if (decl == NULL || decl->get_pragma() == NULL) {
+    return false;
+  }
+
+  std::string pragma_text = decl->get_pragma()->get_pragma();
+  stripFortranDirectiveSentinel(pragma_text);
+  trimLeft(pragma_text);
+  return startsWithCaseInsensitive(pragma_text, "omp");
+}
+
+static SgPragmaDeclaration *
+findFortranPragmaForDirective(OpenMPDirective *directive) {
+  if (directive == NULL) {
+    return NULL;
+  }
+  for (const auto &entry : fortran_paired_pragma_dict) {
+    if (entry.second == directive) {
+      return entry.first;
+    }
+  }
+  return NULL;
+}
+
+static void removeFortranOpenMPPragmas(SgSourceFile *sageFilePtr) {
+  ROSE_ASSERT(sageFilePtr != NULL);
+
+  std::vector<SgNode *> all_pragmas =
+      NodeQuery::querySubTree(sageFilePtr, V_SgPragmaDeclaration);
+  for (SgNode *node : all_pragmas) {
+    SgPragmaDeclaration *decl = isSgPragmaDeclaration(node);
+    if (decl == NULL) {
+      continue;
+    }
+    Sg_File_Info *info = decl->get_file_info();
+    if (info == NULL) {
+      continue;
+    }
+    if (info->get_filename() != sageFilePtr->get_file_info()->get_filename() &&
+        !info->isTransformation()) {
+      continue;
+    }
+    if (!isFortranOpenMPPragmaDeclaration(decl)) {
+      continue;
+    }
+    if (decl->getAttribute(kFortranKeepOpenMPPragmaAttributeName) != NULL) {
+      continue;
+    }
+    auto pair_it = fortran_paired_pragma_dict.find(decl);
+    if (pair_it == fortran_paired_pragma_dict.end()) {
+      // Only clean up Fortran OpenMP pragmas that were successfully parsed and
+      // paired in this pass. Leave untouched pragmas intact.
+      continue;
+    }
+    if (pair_it != fortran_paired_pragma_dict.end() &&
+        pair_it->second != NULL && pair_it->second->getKind() == OMPD_end) {
+      OpenMPEndDirective *end_directive =
+          static_cast<OpenMPEndDirective *>(pair_it->second);
+      OpenMPDirective *paired_begin =
+          end_directive != NULL ? end_directive->getPairedDirective() : NULL;
+      SgPragmaDeclaration *paired_begin_pragma =
+          findFortranPragmaForDirective(paired_begin);
+      if (paired_begin_pragma != NULL &&
+          paired_begin_pragma->getAttribute(
+              kFortranKeepOpenMPPragmaAttributeName) != NULL) {
+        continue;
+      }
+      if (paired_begin != NULL &&
+          !fortranAstUnparserEmitsOpenMPEnd(paired_begin->getKind())) {
+        continue;
+      }
+    }
+    removeStatement(decl, false);
+  }
+}
+
+static bool hasFortranOpenMPArtifactsForSourceFile(SgSourceFile *sageFilePtr) {
+  if (sageFilePtr == NULL) {
+    return false;
+  }
+
+  for (const auto &entry : fortran_paired_pragma_dict) {
+    if (entry.first != NULL &&
+        getEnclosingSourceFile(entry.first) == sageFilePtr) {
+      return true;
+    }
+  }
+
+  for (const auto &entry : fortran_omp_pragma_list) {
+    SgLocatedNode *loc = std::get<0>(entry);
+    if (loc != NULL && getEnclosingSourceFile(loc) == sageFilePtr) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Clause node builders
@@ -1672,86 +2450,12 @@ SgExpression *checkOmpExpressionClause(SgExpression *clause_expression,
   if (clause_expression == NULL && clause_type == e_ordered_clause)
     return NULL;
   ROSE_ASSERT(clause_expression != NULL);
-  bool returnNewExpression = false;
-  if (isSgTypeUnknown(clause_expression->get_type())) {
-    SgVarRefExpVisitor v;
-    v.traverse(clause_expression, preorder);
-    std::vector<SgExpression *> expressions = v.get_expressions();
-    if (!expressions.empty()) {
-      if (expressions.size() == 1) { // create the new expression and return it
-        // otherwise, replace the expression and return the original, which is
-        // now modified
-        returnNewExpression = true;
-      }
-
-      bool macroReplaced;
-      SgDeclarationStatementPtrList &declarations = global->get_declarations();
-      while (!expressions.empty()) {
-        macroReplaced = false;
-        SgExpression *oldExp = expressions.back();
-        for (SgDeclarationStatementPtrList::iterator declIt =
-                 declarations.begin();
-             declIt != declarations.end() && !macroReplaced; ++declIt) {
-          SgDeclarationStatement *declaration = *declIt;
-          AttachedPreprocessingInfoType *preprocInfo =
-              declaration->getAttachedPreprocessingInfo();
-          if (preprocInfo !=
-              NULL) { // There is preprocessed info attached to the current node
-            for (AttachedPreprocessingInfoType::iterator infoIt =
-                     preprocInfo->begin();
-                 infoIt != preprocInfo->end() && !macroReplaced; infoIt++) {
-              if ((*infoIt)->getTypeOfDirective() ==
-                  PreprocessingInfo::CpreprocessorDefineDeclaration) {
-                newExp = replace_expression_with_macro_value(
-                    (*infoIt)->getString(), oldExp, macroReplaced, clause_type);
-              }
-            }
-          }
-        }
-
-        // When a macro is defined in a header without any statement, the
-        // preprocessed information is attached to the SgFile
-        if (!macroReplaced) {
-          SgProject *project = SageInterface::getProject();
-          int nFiles = project->numberOfFiles();
-          for (int fileIt = 0; fileIt < nFiles && !macroReplaced; fileIt++) {
-            SgFile &file = project->get_file(fileIt);
-            ROSEAttributesListContainerPtr filePreprocInfo =
-                file.get_preprocessorDirectivesAndCommentsList();
-            if (filePreprocInfo != NULL) {
-              std::map<std::string, ROSEAttributesList *> preprocInfoMap =
-                  filePreprocInfo->getList();
-              for (std::map<std::string, ROSEAttributesList *>::iterator mapIt =
-                       preprocInfoMap.begin();
-                   mapIt != preprocInfoMap.end() && !macroReplaced; mapIt++) {
-                std::vector<PreprocessingInfo *> preprocInfoList =
-                    mapIt->second->getList();
-                for (std::vector<PreprocessingInfo *>::iterator infoIt =
-                         preprocInfoList.begin();
-                     infoIt != preprocInfoList.end() && !macroReplaced;
-                     infoIt++) {
-                  if ((*infoIt)->getTypeOfDirective() ==
-                      PreprocessingInfo::CpreprocessorDefineDeclaration) {
-                    newExp = replace_expression_with_macro_value(
-                        (*infoIt)->getString(), oldExp, macroReplaced,
-                        clause_type);
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        expressions.pop_back();
-      }
-    } else {
-      printf("error in checkOmpExpressionClause(): no expression found in an "
-             "expression clause\n");
-      ROSE_ABORT();
-    }
-  }
-
-  return (returnNewExpression ? newExp : clause_expression);
+  // Keep unknown-type expressions as parsed instead of replacing macro-like
+  // identifiers with literal values. Replacing these tokens loses source-level
+  // fidelity for OpenMP clauses (e.g., num_threads(MACRO), map(...[0:N])).
+  (void)global;
+  (void)clause_type;
+  return newExp;
 }
 
 //! A helper function to convert OpenMPIfClause modifier to SgClause if modifier
@@ -1980,8 +2684,11 @@ static SgOmpClause::omp_map_operator_enum
 toSgOmpClauseMapOperator(OpenMPMapClauseType at_op) {
   SgOmpClause::omp_map_operator_enum result = SgOmpClause::e_omp_map_unknown;
   switch (at_op) {
-  case OMPC_MAP_TYPE_tofrom:
   case OMPC_MAP_TYPE_unspecified: {
+    result = SgOmpClause::e_omp_map_unknown;
+    break;
+  }
+  case OMPC_MAP_TYPE_tofrom: {
     result = SgOmpClause::e_omp_map_tofrom;
     break;
   }
@@ -1997,15 +2704,309 @@ toSgOmpClauseMapOperator(OpenMPMapClauseType at_op) {
     result = SgOmpClause::e_omp_map_alloc;
     break;
   }
+  case OMPC_MAP_TYPE_storage: {
+    result = SgOmpClause::e_omp_map_storage;
+    break;
+  }
+  case OMPC_MAP_TYPE_release: {
+    result = SgOmpClause::e_omp_map_release;
+    break;
+  }
+  case OMPC_MAP_TYPE_delete: {
+    result = SgOmpClause::e_omp_map_delete;
+    break;
+  }
+  case OMPC_MAP_TYPE_present: {
+    result = SgOmpClause::e_omp_map_present;
+    break;
+  }
+  case OMPC_MAP_TYPE_self: {
+    result = SgOmpClause::e_omp_map_self;
+    break;
+  }
   default: {
-    // printf("error: unacceptable omp construct enum for map operator
-    // conversion:%s\n", OmpSupport::toString(at_op).c_str());
-    ROSE_ABORT();
+    result = SgOmpClause::e_omp_map_unknown;
     break;
   }
   }
-  ROSE_ASSERT(result != SgOmpClause::e_omp_map_unknown);
   return result;
+}
+
+static SgOmpClause::omp_map_modifier_enum
+toSgOmpClauseMapModifier(OpenMPMapClauseModifier modifier) {
+  SgOmpClause::omp_map_modifier_enum result =
+      SgOmpClause::e_omp_map_modifier_unspecified;
+  switch (modifier) {
+  case OMPC_MAP_MODIFIER_always: {
+    result = SgOmpClause::e_omp_map_modifier_always;
+    break;
+  }
+  case OMPC_MAP_MODIFIER_close: {
+    result = SgOmpClause::e_omp_map_modifier_close;
+    break;
+  }
+  case OMPC_MAP_MODIFIER_present: {
+    result = SgOmpClause::e_omp_map_modifier_present;
+    break;
+  }
+  case OMPC_MAP_MODIFIER_self: {
+    result = SgOmpClause::e_omp_map_modifier_self;
+    break;
+  }
+  case OMPC_MAP_MODIFIER_mapper: {
+    result = SgOmpClause::e_omp_map_modifier_mapper;
+    break;
+  }
+  case OMPC_MAP_MODIFIER_iterator: {
+    result = SgOmpClause::e_omp_map_modifier_iterator;
+    break;
+  }
+  case OMPC_MAP_MODIFIER_unspecified: {
+    result = SgOmpClause::e_omp_map_modifier_unspecified;
+    break;
+  }
+  default: {
+    result = SgOmpClause::e_omp_map_modifier_unspecified;
+    break;
+  }
+  }
+  return result;
+}
+
+static SgOmpClause::omp_declare_mapper_identifier_enum
+toSgOmpClauseDeclareMapperIdentifier(
+    OpenMPDeclareMapperDirectiveIdentifier identifier) {
+  SgOmpClause::omp_declare_mapper_identifier_enum result =
+      SgOmpClause::e_omp_declare_mapper_identifier_unspecified;
+  switch (identifier) {
+  case OMPD_DECLARE_MAPPER_IDENTIFIER_default: {
+    result = SgOmpClause::e_omp_declare_mapper_identifier_default;
+    break;
+  }
+  case OMPD_DECLARE_MAPPER_IDENTIFIER_user: {
+    result = SgOmpClause::e_omp_declare_mapper_identifier_user;
+    break;
+  }
+  case OMPD_DECLARE_MAPPER_IDENTIFIER_unspecified: {
+    result = SgOmpClause::e_omp_declare_mapper_identifier_unspecified;
+    break;
+  }
+  default: {
+    result = SgOmpClause::e_omp_declare_mapper_identifier_unspecified;
+    break;
+  }
+  }
+  return result;
+}
+
+struct NormalizedDeclareMapperData {
+  SgOmpClause::omp_declare_mapper_identifier_enum identifier =
+      SgOmpClause::e_omp_declare_mapper_identifier_unspecified;
+  std::string user_defined_identifier;
+  std::string mapper_type;
+  std::string mapper_variable;
+};
+
+static size_t findStandaloneColonPosition(const std::string &value) {
+  for (size_t i = 0; i < value.size(); ++i) {
+    if (value[i] != ':') {
+      continue;
+    }
+    const bool has_prev_colon = i > 0 && value[i - 1] == ':';
+    const bool has_next_colon = i + 1 < value.size() && value[i + 1] == ':';
+    if (!has_prev_colon && !has_next_colon) {
+      return i;
+    }
+  }
+
+  return std::string::npos;
+}
+
+static bool isCaseInsensitiveLiteral(const std::string &value,
+                                     const char *literal) {
+  if (literal == nullptr) {
+    return false;
+  }
+
+  const size_t literal_length = std::strlen(literal);
+  if (value.size() != literal_length) {
+    return false;
+  }
+
+  for (size_t i = 0; i < literal_length; ++i) {
+    const unsigned char lhs = static_cast<unsigned char>(value[i]);
+    const unsigned char rhs = static_cast<unsigned char>(literal[i]);
+    if (std::tolower(lhs) != std::tolower(rhs)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool isSimpleMapperIdentifier(const std::string &value) {
+  if (value.empty()) {
+    return false;
+  }
+
+  const unsigned char first = static_cast<unsigned char>(value.front());
+  if (!(std::isalpha(first) || first == '_')) {
+    return false;
+  }
+
+  for (size_t i = 1; i < value.size(); ++i) {
+    const unsigned char ch = static_cast<unsigned char>(value[i]);
+    if (!(std::isalnum(ch) || ch == '_')) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool assignDeclareMapperIdentifierFromText(
+    const std::string &identifier_text,
+    SgOmpClause::omp_declare_mapper_identifier_enum &identifier,
+    std::string &user_defined_identifier) {
+  const std::string trimmed_identifier = trimWhitespaceCopy(identifier_text);
+  if (trimmed_identifier.empty()) {
+    return false;
+  }
+
+  if (isCaseInsensitiveLiteral(trimmed_identifier, "default")) {
+    identifier = SgOmpClause::e_omp_declare_mapper_identifier_default;
+    user_defined_identifier.clear();
+    return true;
+  }
+
+  if (!isSimpleMapperIdentifier(trimmed_identifier)) {
+    return false;
+  }
+
+  identifier = SgOmpClause::e_omp_declare_mapper_identifier_user;
+  user_defined_identifier = trimmed_identifier;
+  return true;
+}
+
+static bool splitDeclareMapperTypeAndVariable(const std::string &type_var_text,
+                                              std::string &type_text,
+                                              std::string &variable_text) {
+  const std::string trimmed = trimWhitespaceCopy(type_var_text);
+  if (trimmed.empty()) {
+    return false;
+  }
+
+  const size_t fortran_separator_pos = trimmed.find("::");
+  if (fortran_separator_pos != std::string::npos) {
+    const std::string candidate_type =
+        trimWhitespaceCopy(trimmed.substr(0, fortran_separator_pos));
+    const std::string candidate_variable =
+        trimWhitespaceCopy(trimmed.substr(fortran_separator_pos + 2));
+    if (!candidate_type.empty() && !candidate_variable.empty()) {
+      type_text = candidate_type;
+      variable_text = candidate_variable;
+      return true;
+    }
+  }
+
+  for (size_t i = trimmed.size(); i-- > 0;) {
+    const char ch = trimmed[i];
+    if (ch != ' ' && ch != '\t' && ch != '*' && ch != '&') {
+      continue;
+    }
+
+    const std::string candidate_type =
+        trimWhitespaceCopy(trimmed.substr(0, i + 1));
+    const std::string candidate_variable =
+        trimWhitespaceCopy(trimmed.substr(i + 1));
+    if (!candidate_type.empty() && !candidate_variable.empty()) {
+      type_text = candidate_type;
+      variable_text = candidate_variable;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static void
+inferDeclareMapperIdentifierFromType(NormalizedDeclareMapperData &mapper_data) {
+  if (!(mapper_data.identifier ==
+            SgOmpClause::e_omp_declare_mapper_identifier_unspecified ||
+        (mapper_data.identifier ==
+             SgOmpClause::e_omp_declare_mapper_identifier_user &&
+         mapper_data.user_defined_identifier.empty()))) {
+    return;
+  }
+
+  const size_t colon_pos = findStandaloneColonPosition(mapper_data.mapper_type);
+  if (colon_pos == std::string::npos) {
+    return;
+  }
+
+  const std::string candidate_identifier =
+      trimWhitespaceCopy(mapper_data.mapper_type.substr(0, colon_pos));
+  const std::string candidate_type =
+      trimWhitespaceCopy(mapper_data.mapper_type.substr(colon_pos + 1));
+  if (candidate_type.empty()) {
+    return;
+  }
+
+  if (assignDeclareMapperIdentifierFromText(
+          candidate_identifier, mapper_data.identifier,
+          mapper_data.user_defined_identifier)) {
+    mapper_data.mapper_type = candidate_type;
+  }
+}
+
+static NormalizedDeclareMapperData
+normalizeDeclareMapperData(OpenMPDeclareMapperDirective *mapper_directive) {
+  NormalizedDeclareMapperData mapper_data;
+  if (mapper_directive == nullptr) {
+    return mapper_data;
+  }
+
+  mapper_data.identifier =
+      toSgOmpClauseDeclareMapperIdentifier(mapper_directive->getIdentifier());
+  mapper_data.user_defined_identifier =
+      trimWhitespaceCopy(mapper_directive->getUserDefinedIdentifier());
+  mapper_data.mapper_type =
+      trimWhitespaceCopy(mapper_directive->getDeclareMapperType());
+  mapper_data.mapper_variable =
+      trimWhitespaceCopy(mapper_directive->getDeclareMapperVar());
+
+  inferDeclareMapperIdentifierFromType(mapper_data);
+
+  if (mapper_data.mapper_type.empty() && !mapper_data.mapper_variable.empty()) {
+    std::string split_type;
+    std::string split_variable;
+    if (splitDeclareMapperTypeAndVariable(mapper_data.mapper_variable,
+                                          split_type, split_variable)) {
+      mapper_data.mapper_type = split_type;
+      mapper_data.mapper_variable = split_variable;
+      inferDeclareMapperIdentifierFromType(mapper_data);
+    }
+  }
+
+  if (mapper_data.mapper_variable.empty() && !mapper_data.mapper_type.empty()) {
+    std::string split_type;
+    std::string split_variable;
+    if (splitDeclareMapperTypeAndVariable(mapper_data.mapper_type, split_type,
+                                          split_variable)) {
+      mapper_data.mapper_type = split_type;
+      mapper_data.mapper_variable = split_variable;
+      inferDeclareMapperIdentifierFromType(mapper_data);
+    }
+  }
+
+  if (mapper_data.identifier ==
+          SgOmpClause::e_omp_declare_mapper_identifier_user &&
+      mapper_data.user_defined_identifier.empty()) {
+    mapper_data.identifier =
+        SgOmpClause::e_omp_declare_mapper_identifier_unspecified;
+  }
+
+  return mapper_data;
 }
 
 static SgOmpClause::omp_defaultmap_category_enum
@@ -2056,6 +3057,35 @@ toSgOmpClauseDistScheduleKind(OpenMPDistScheduleClauseKind kind) {
     printf("error: unacceptable omp construct enum for dist_schedule kind "
            "conversion:%d\n",
            kind);
+    ROSE_ABORT();
+  }
+  }
+  return result;
+}
+
+static SgOmpClause::omp_when_context_kind_enum
+toSgOmpDeclareTargetDeviceTypeKind(OpenMPDeviceTypeClauseKind kind) {
+  SgOmpClause::omp_when_context_kind_enum result =
+      SgOmpClause::e_omp_when_context_kind_unknown;
+  switch (kind) {
+  case OMPC_DEVICE_TYPE_host: {
+    result = SgOmpClause::e_omp_when_context_kind_host;
+    break;
+  }
+  case OMPC_DEVICE_TYPE_nohost: {
+    result = SgOmpClause::e_omp_when_context_kind_nohost;
+    break;
+  }
+  case OMPC_DEVICE_TYPE_any: {
+    result = SgOmpClause::e_omp_when_context_kind_any;
+    break;
+  }
+  case OMPC_DEVICE_TYPE_unknown: {
+    result = SgOmpClause::e_omp_when_context_kind_unknown;
+    break;
+  }
+  default: {
+    printf("error: unacceptable omp device_type kind conversion:%d\n", kind);
     ROSE_ABORT();
   }
   }
@@ -2786,7 +3816,9 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
                              const std::vector<SgStatement *> &stmt_vec) {
   ROSE_ASSERT(begin_decl != NULL);
   SgStatement *result = NULL;
-  ROSE_ASSERT(stmt_vec.size() > 0);
+  if (stmt_vec.empty()) {
+    return NULL;
+  }
   if (stmt_vec.size() == 1) {
     result = stmt_vec[0];
     ROSE_ASSERT(getNextStatement(begin_decl) == result);
@@ -2810,6 +3842,25 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
   return result;
 }
 
+static bool fortranAstUnparserEmitsOpenMPEnd(OpenMPDirectiveKind kind) {
+  switch (kind) {
+  case OMPD_parallel:
+  case OMPD_critical:
+  case OMPD_sections:
+  case OMPD_master:
+  case OMPD_ordered:
+  case OMPD_workshare:
+  case OMPD_single:
+  case OMPD_task:
+  case OMPD_do:
+  case OMPD_parallel_do:
+  case OMPD_parallel_loop:
+    return true;
+  default:
+    return false;
+  }
+}
+
 //! This function will Find a (optional) end pragma for an input pragma (decl)
 //  and merge clauses from the end pragma to the beginning pragma
 //  statements in between will be put into a basic block if there are more than
@@ -2817,8 +3868,11 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
 void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
   SgPragmaDeclaration *end_decl = NULL;
   SgStatement *next_stmt = getNextStatement(decl);
-  OpenMPDirectiveKind begin_directive_kind =
-      fortran_paired_pragma_dict[decl]->getKind();
+  auto begin_it = fortran_paired_pragma_dict.find(decl);
+  ROSE_ASSERT(begin_it != fortran_paired_pragma_dict.end());
+  OpenMPDirective *begin_directive = begin_it->second;
+  ROSE_ASSERT(begin_directive != NULL);
+  OpenMPDirectiveKind begin_directive_kind = begin_directive->getKind();
 
   std::vector<SgStatement *>
       affected_stmts; // statements which are inside the begin .. end pair
@@ -2826,12 +3880,21 @@ void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
   // Find possible end directives attached to a pragma declaration
   while (next_stmt != NULL) {
     end_decl = isSgPragmaDeclaration(next_stmt);
-    if ((end_decl) &&
-        (((OpenMPEndDirective *)fortran_paired_pragma_dict[end_decl])
-             ->getPairedDirective()) == fortran_paired_pragma_dict[decl])
-      break;
-    else
+    if (end_decl != NULL) {
+      auto end_it = fortran_paired_pragma_dict.find(end_decl);
+      if (end_it != fortran_paired_pragma_dict.end()) {
+        OpenMPDirective *end_ir = end_it->second;
+        if (end_ir != NULL && end_ir->getKind() == OMPD_end) {
+          OpenMPEndDirective *end_directive =
+              static_cast<OpenMPEndDirective *>(end_ir);
+          if (end_directive != NULL &&
+              end_directive->getPairedDirective() == begin_directive) {
+            break;
+          }
+        }
+      }
       end_decl = NULL; // MUST reset to NULL if not a match
+    }
     affected_stmts.push_back(next_stmt);
     next_stmt = getNextStatement(next_stmt);
   } // end while
@@ -2843,7 +3906,8 @@ void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
     if ((begin_directive_kind != OMPD_parallel) &&
         (begin_directive_kind != OMPD_do) &&
         (begin_directive_kind != OMPD_parallel_do) &&
-        (begin_directive_kind != OMPD_parallel_loop)) {
+        (begin_directive_kind != OMPD_parallel_loop) &&
+        (begin_directive_kind != OMPD_requires)) {
       cerr << "merge_Matching_Fortran_Pragma_pairs(): cannot find required end "
               "directive for: "
            << endl;
@@ -2856,21 +3920,16 @@ void merge_Matching_Fortran_Pragma_pairs(SgPragmaDeclaration *decl) {
 
   // at this point, we have found a matching end directive/pragma
   ROSE_ASSERT(end_decl);
-  ensureSingleStmtOrBasicBlock(decl, affected_stmts);
+  SgStatement *merged_body = ensureSingleStmtOrBasicBlock(decl, affected_stmts);
+  if (merged_body == NULL) {
+    // Keep both begin/end pragmas unchanged when no associated body statement
+    // can be formed from this paired region.
+    return;
+  }
 
-  // SgBasicBlock is not unparsed in Fortran
-  //
-  // To ensure the unparsed Fortran code is correct for debugging
-  // -rose:openmp:ast_only
-  //  after converting Fortran comments to Pragmas.
-  // x.  We should not tweak the original text for the pragmas.
-  // x.  We should not remove the end pragma declaration since SgBasicBlock is
-  // not unparsed. In the end , the pragmas don't matter too much, the OpenMPIR
-  // attached to them are used to guide translations.
-  removeStatement(end_decl);
-  // we should save those useless end pragmas to a list
-  // and remove them as one of the first steps in OpenMP lowering for Fortran
-  // omp_end_pragma_list.push_back(end_decl);
+  // Keep end pragmas until after AST conversion. Post-conversion cleanup can
+  // then remove only those end pragmas whose begin directives successfully
+  // lowered to SgOmp nodes that emit matching END directives.
 } // end merge_Matching_Fortran_Pragma_pairs()
 
 //! This function will
@@ -3032,6 +4091,8 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
   std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_pragma_dict;
   // Track pragmas inserted before a statement to preserve their original order.
   std::map<SgStatement *, SgPragmaDeclaration *> stmt_last_before_pragma_dict;
+  std::unordered_set<std::string> seen_requires_directives;
+  std::unordered_set<std::string> seen_directive_instances;
   std::unordered_map<OpenMPDirective *, std::string> pragma_text_by_ir;
 
   std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *,
@@ -3057,18 +4118,15 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
     // the pragma will have string to ease debugging
     std::string pragma_string =
         ompparser_directive_ir->generatePragmaString("omp ", "", "");
-    pragma_text_by_ir[ompparser_directive_ir] =
-        std::string("#pragma ") + pragma_string;
+    const bool duplicate_requires =
+        ompparser_directive_ir->getKind() == OMPD_requires &&
+        !seen_requires_directives
+             .insert(canonicalizeDirectiveKey(pragma_string))
+             .second;
     SgPragmaDeclaration *p_decl = buildPragmaDeclaration(pragma_string, scope);
     // preserve the original source file info ,TODO complex cases , use real
     // preprocessing info's line information !!
     copyStartFileInfo(loc_node, p_decl);
-
-    if (ompparser_directive_ir->getKind() != OMPD_end) {
-      OpenMPIR_list.push_back(std::make_pair(p_decl, ompparser_directive_ir));
-      omp_pragma_list.push_back(p_decl);
-    }
-    fortran_paired_pragma_dict[p_decl] = ompparser_directive_ir;
 
     PreprocessingInfo *info = std::get<1>(*iter);
     ROSE_ASSERT(info != NULL);
@@ -3093,7 +4151,49 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       // line:"<<stmt->get_file_info().get_line()<<endl;
       ROSE_ASSERT(m_pos != comments->end());
     }
-    comments->erase(m_pos);
+
+    const int directive_line = info->getLineNumber();
+    bool erased_any = false;
+    for (AttachedPreprocessingInfoType::iterator c_iter = comments->begin();
+         c_iter != comments->end();) {
+      PreprocessingInfo *candidate = *c_iter;
+      const bool same_comment = candidate == info;
+      const bool duplicate_omp_comment =
+          candidate != NULL && candidate->getLineNumber() == directive_line &&
+          isFortranCommentDirective(candidate, "omp");
+      if (same_comment || duplicate_omp_comment) {
+        c_iter = comments->erase(c_iter);
+        erased_any = true;
+      } else {
+        ++c_iter;
+      }
+    }
+    ROSE_ASSERT(erased_any);
+
+    PreprocessingInfo::RelativePositionType position =
+        info->getRelativePosition();
+    std::ostringstream directive_instance_key;
+    directive_instance_key << info->getFileId() << ":" << info->getLineNumber()
+                           << ":" << canonicalizeDirectiveKey(pragma_string);
+    if (!seen_directive_instances.insert(directive_instance_key.str()).second) {
+      delete p_decl;
+      delete ompparser_directive_ir;
+      continue;
+    }
+
+    if (duplicate_requires) {
+      delete p_decl;
+      delete ompparser_directive_ir;
+      continue;
+    }
+
+    pragma_text_by_ir[ompparser_directive_ir] =
+        std::string("#pragma ") + pragma_string;
+    if (ompparser_directive_ir->getKind() != OMPD_end) {
+      OpenMPIR_list.push_back(std::make_pair(p_decl, ompparser_directive_ir));
+      omp_pragma_list.push_back(p_decl);
+    }
+    fortran_paired_pragma_dict[p_decl] = ompparser_directive_ir;
 
     // two cases for where to insert the pragma, depending on where the
     // preprocessing info is attached to stmt
@@ -3101,8 +4201,6 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
     //     insert the pragma right before the original Fortran statement
     //  2. PreprocessingInfo::inside
     //      insert it as the last statement within stmt
-    PreprocessingInfo::RelativePositionType position =
-        info->getRelativePosition();
     if (position == PreprocessingInfo::before) {
       SgPragmaDeclaration *last_before = NULL;
       if (stmt_last_before_pragma_dict.count(stmt)) {
@@ -3142,6 +4240,28 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       ROSE_ASSERT(scope != NULL);
       appendStatement(p_decl, scope);
     } else if (position == PreprocessingInfo::after) {
+      if (ompparser_directive_ir->getKind() == OMPD_requires) {
+        SgFunctionDefinition *def = getEnclosingFunctionDefinition(stmt);
+        if (SgProgramHeaderStatement *program =
+                isSgProgramHeaderStatement(stmt))
+          def = program->get_definition();
+
+        if (def != NULL) {
+          SgBasicBlock *body = def->get_body();
+          ROSE_ASSERT(body != NULL);
+          SgPragmaDeclaration *last_before = NULL;
+          if (stmt_last_before_pragma_dict.count(body))
+            last_before = stmt_last_before_pragma_dict[body];
+          if (last_before) {
+            insertStatementAfter(last_before, p_decl, false);
+          } else {
+            prependStatement(p_decl, body);
+          }
+          stmt_last_before_pragma_dict[body] = p_decl;
+          continue;
+        }
+      }
+
       SgStatement *last = stmt;
       if (stmt_last_pragma_dict.count(stmt))
         last = stmt_last_pragma_dict[stmt];
@@ -3430,6 +4550,12 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
     return;
   }
 
+  if (wantsOpenMP) {
+    // Preserve original directive/clause structure instead of normalizing and
+    // merging clauses in the parser.
+    setNormalizeClauses(false);
+  }
+
   bool isFortran = sageFilePtr->get_Fortran_only() ||
                    sageFilePtr->get_F77_only() || sageFilePtr->get_F90_only() ||
                    sageFilePtr->get_F95_only() || sageFilePtr->get_F2003_only();
@@ -3454,11 +4580,20 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   } else { // For C/C++, search pragma declarations for OpenMP directives
     std::vector<SgNode *> all_pragmas =
         NodeQuery::querySubTree(sageFilePtr, V_SgPragmaDeclaration);
+    std::unordered_map<std::string, std::vector<std::string>>
+        source_lines_cache;
     std::vector<SgNode *>::iterator iter;
     for (iter = all_pragmas.begin(); iter != all_pragmas.end(); iter++) {
       SgPragmaDeclaration *pragmaDeclaration = isSgPragmaDeclaration(*iter);
       ROSE_ASSERT(pragmaDeclaration != NULL);
-      string pragmaString = pragmaDeclaration->get_pragma()->get_pragma();
+      const std::string preprocessedPragmaString =
+          pragmaDeclaration->get_pragma()->get_pragma();
+      string pragmaString = preprocessedPragmaString;
+      const std::string rawPragmaString =
+          getRawOpenMPCppDirectiveText(pragmaDeclaration, source_lines_cache);
+      if (!rawPragmaString.empty()) {
+        pragmaString = rawPragmaString;
+      }
       istringstream istr(pragmaString);
       std::string key;
       istr >> key;
@@ -3467,6 +4602,12 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
         // Get the object that ompparser IR.
         ompparser_OpenMPIR =
             parseOpenMP(pragmaString.c_str(), nullptr, nullptr);
+        if (ompparser_OpenMPIR == NULL &&
+            pragmaString != preprocessedPragmaString) {
+          pragmaString = preprocessedPragmaString;
+          ompparser_OpenMPIR =
+              parseOpenMP(pragmaString.c_str(), nullptr, nullptr);
+        }
         assert(ompparser_OpenMPIR != NULL);
         if (shouldSkipOpenMPDirectiveAstConversion(ompparser_OpenMPIR)) {
           delete ompparser_OpenMPIR;
@@ -3475,7 +4616,11 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
         }
 
         use_ompparser = checkOpenMPIR(ompparser_OpenMPIR);
-        assert(use_ompparser == true);
+        if (!use_ompparser) {
+          delete ompparser_OpenMPIR;
+          ompparser_OpenMPIR = nullptr;
+          continue;
+        }
         omp_pragma_list.push_back(pragmaDeclaration);
         OpenMPIR_list.push_back(
             std::make_pair(pragmaDeclaration, ompparser_OpenMPIR));
@@ -3484,7 +4629,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
           g_omp_clause_nodes[ompparser_OpenMPIR] = parseClauseNodesForDirective(
               pragmaDeclaration, ompparser_OpenMPIR, parse_text);
         }
-      } else if (key == "acc") {
+      } else if (key == "acc" && wantsOpenACC) {
         // store them into a buffer, reused by build_OpenMP_AST()
         omp_pragma_list.push_back(pragmaDeclaration);
         // Call parser
@@ -3521,20 +4666,29 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
 
   if (isFortran) {
     if (parsed_fortran_pragmas) {
+      removeFortranDirectiveComments(sageFilePtr, "omp");
       convert_Fortran_Pragma_Pairs(sageFilePtr);
     } else {
       convert_Fortran_OMP_Comments_to_Pragmas(
           sageFilePtr); // TODO: need to fix not sure why we still need this
                         // here since Fortran is already parsed before.
     }
-    convert_Fortran_ACC_Comments_to_Pragmas(sageFilePtr);
-    convert_Fortran_ACC_Pragma_Pairs(sageFilePtr);
+    if (wantsOpenACC) {
+      convert_Fortran_ACC_Comments_to_Pragmas(sageFilePtr);
+      convert_Fortran_ACC_Pragma_Pairs(sageFilePtr);
+    }
   }
   if (SgProject::get_verbose() > 1) {
     printf("Calling convert_OpenMP_pragma_to_AST() \n");
   }
   // We can turn this off to debug the convert_Fortran_OMP_Comments_to_Pragmas()
   OpenMPIRToSageAST(sageFilePtr);
+  if (isFortran) {
+    if (hasFortranOpenMPArtifactsForSourceFile(sageFilePtr)) {
+      removeFortranDirectiveComments(sageFilePtr, "omp");
+      removeFortranOpenMPPragmas(sageFilePtr);
+    }
+  }
 
   // stop here if only OpenMP AST construction is requested
   if (sageFilePtr->get_openmp_ast_only()) {
@@ -3715,8 +4869,24 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     printf("Unknown directive is found.\n");
   }
   }
-  setOneSourcePositionForTransformation(result);
   SgPragmaDeclaration *pdecl = current_OpenMPIR_to_SageIII.first;
+  if (result == NULL) {
+    if (SgSourceFile *source_file = getEnclosingSourceFile(pdecl)) {
+      const bool is_fortran_file =
+          source_file->get_Fortran_only() || source_file->get_F77_only() ||
+          source_file->get_F90_only() || source_file->get_F95_only() ||
+          source_file->get_F2003_only();
+      if (is_fortran_file &&
+          pdecl->getAttribute(kFortranKeepOpenMPPragmaAttributeName) == NULL) {
+        pdecl->addNewAttribute(kFortranKeepOpenMPPragmaAttributeName,
+                               new KeepFortranOpenMPPragmaAttribute());
+      }
+    }
+    // Keep the original pragma when conversion is unavailable and preserve it
+    // through Fortran pragma cleanup.
+    return pdecl;
+  }
+  setOneSourcePositionForTransformation(result);
   copyStartFileInfo(pdecl, result);
   copyEndFileInfo(pdecl, result);
   if (SgLocatedNode *located_result = isSgLocatedNode(result)) {
@@ -3726,10 +4896,25 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   //! For C/C++ replace OpenMP pragma declaration with an SgOmpxxStatement
   SgScopeStatement *scope = pdecl->get_scope();
   ROSE_ASSERT(scope != NULL);
-  relocatePendingCommentedDirectivesForPragma(pdecl, result);
-  moveUpPreprocessingInfo(result,
-                          pdecl); // keep #ifdef etc attached to the pragma
-  replaceStatement(pdecl, result);
+  bool is_fortran_file = false;
+  if (SgSourceFile *source_file = getEnclosingSourceFile(pdecl)) {
+    is_fortran_file =
+        source_file->get_Fortran_only() || source_file->get_F77_only() ||
+        source_file->get_F90_only() || source_file->get_F95_only() ||
+        source_file->get_F2003_only();
+  }
+
+  if (!is_fortran_file) {
+    relocatePendingCommentedDirectivesForPragma(pdecl, result);
+    moveUpPreprocessingInfo(result,
+                            pdecl); // keep #ifdef etc attached to the pragma
+  }
+  if (isSgGlobal(scope) != NULL && isSgDeclarationStatement(result) != NULL) {
+    insertStatementBefore(pdecl, result, false);
+    removeStatement(pdecl, false);
+  } else {
+    replaceStatement(pdecl, result);
+  }
 
   return result;
 }
@@ -3737,21 +4922,13 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
 SgStatement *
 convertVariantDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                             current_OpenMPIR_to_SageIII) {
-  OpenMPDirectiveKind directive_kind =
-      current_OpenMPIR_to_SageIII.second->getKind();
-  SgStatement *result = NULL;
+  SgStatement *result =
+      convertVariantBodyDirective(current_OpenMPIR_to_SageIII);
+  if (result == NULL) {
+    return NULL;
+  }
 
-  switch (directive_kind) {
-  case OMPD_parallel: {
-    result = convertVariantBodyDirective(current_OpenMPIR_to_SageIII);
-    break;
-  }
-  default: {
-    printf("Unknown directive is found.\n");
-  }
-  }
   setOneSourcePositionForTransformation(result);
-
   return result;
 }
 
@@ -3944,6 +5121,40 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   case OMPD_declare_mapper: {
     result = new SgOmpDeclareMapperStatement();
+    OpenMPDeclareMapperDirective *mapper_directive =
+        static_cast<OpenMPDeclareMapperDirective *>(
+            current_OpenMPIR_to_SageIII.second);
+    SgOmpDeclareMapperStatement *sg_mapper =
+        isSgOmpDeclareMapperStatement(result);
+    ROSE_ASSERT(mapper_directive != nullptr);
+    ROSE_ASSERT(sg_mapper != nullptr);
+
+    const NormalizedDeclareMapperData mapper_data =
+        normalizeDeclareMapperData(mapper_directive);
+    sg_mapper->set_identifier(mapper_data.identifier);
+
+    if (sg_mapper->get_identifier() ==
+            SgOmpClause::e_omp_declare_mapper_identifier_user &&
+        !mapper_data.user_defined_identifier.empty()) {
+      SgExpression *user_defined_identifier = parseMapperIdentifierExpression(
+          current_OpenMPIR_to_SageIII.first, OMPC_map, nullptr,
+          mapper_data.user_defined_identifier);
+      sg_mapper->set_user_defined_identifier(user_defined_identifier);
+    }
+
+    if (!mapper_data.mapper_type.empty()) {
+      SgExpression *mapper_type = parseClauseExpressionWithCache(
+          current_OpenMPIR_to_SageIII.first, OMPC_map, nullptr,
+          mapper_data.mapper_type);
+      sg_mapper->set_mapper_type(mapper_type);
+    }
+
+    if (!mapper_data.mapper_variable.empty()) {
+      SgExpression *mapper_variable = parseClauseExpressionWithCache(
+          current_OpenMPIR_to_SageIII.first, OMPC_map, nullptr,
+          mapper_data.mapper_variable);
+      sg_mapper->set_mapper_variable(mapper_variable);
+    }
     break;
   }
   case OMPD_cancel: {
@@ -3961,6 +5172,12 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   default: {
     printf("Unknown directive is found.\n");
   }
+  }
+  if (SgDeclarationStatement *decl = isSgDeclarationStatement(result)) {
+    if (decl->get_firstNondefiningDeclaration() == nullptr &&
+        decl->get_definingDeclaration() == nullptr) {
+      decl->set_firstNondefiningDeclaration(decl);
+    }
   }
   // extract all the clauses based on the vector of clauses in the original
   // order
@@ -3995,6 +5212,11 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                           *clause_iter);
       break;
     }
+    case OMPC_map: {
+      convertMapClause(isSgStatement(result), current_OpenMPIR_to_SageIII,
+                       *clause_iter);
+      break;
+    }
     case OMPC_to: {
       convertToClause(isSgStatement(result), current_OpenMPIR_to_SageIII,
                       *clause_iter);
@@ -4023,7 +5245,11 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   // directives like parallel and for have a following code block beside the
   // pragma itself.
   SgStatement *body = getOpenMPBlockBody(current_OpenMPIR_to_SageIII);
-  removeStatement(body, false);
+  if (body != NULL) {
+    removeStatement(body, false);
+  } else if (directive_kind != OMPD_end) {
+    return NULL;
+  }
   SgStatement *result = NULL;
   OpenMPClauseKind clause_kind;
 
@@ -4257,7 +5483,9 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     printf("Unknown directive is found.\n");
   }
   }
-  body->set_parent(result);
+  if (body != NULL) {
+    body->set_parent(result);
+  }
   // extract all the clauses based on the vector of clauses in the original
   // order
   std::vector<OpenMPClause *> *all_clauses =
@@ -4386,6 +5614,7 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     };
   };
 
+  initializeGeneratedOpenMPStatement(result);
   return result;
 }
 
@@ -4437,6 +5666,8 @@ SgStatement *convertOmpDeclareTargetDirective(
         current_OpenMPIR_to_SageIII) {
   SgOmpDeclareTargetStatement *result = new SgOmpDeclareTargetStatement();
   result->set_firstNondefiningDeclaration(result);
+  SgOmpClause::omp_when_context_kind_enum device_type_kind =
+      SgOmpClause::e_omp_when_context_kind_unknown;
 
   std::vector<OpenMPClause *> *all_clauses =
       current_OpenMPIR_to_SageIII.second->getClausesInOriginalOrder();
@@ -4450,11 +5681,17 @@ SgStatement *convertOmpDeclareTargetDirective(
       convertToClause(isSgStatement(result), current_OpenMPIR_to_SageIII,
                       *clause_iter);
       break;
+    case OMPC_device_type: {
+      device_type_kind = toSgOmpDeclareTargetDeviceTypeKind(
+          ((OpenMPDeviceTypeClause *)*clause_iter)->getDeviceTypeClauseKind());
+      break;
+    }
     default:
       convertClause(isSgStatement(result), current_OpenMPIR_to_SageIII,
                     *clause_iter);
     };
   };
+  result->set_device_type_kind(device_type_kind);
   return result;
 }
 
@@ -4907,13 +6144,22 @@ convertUsesAllocatorsClause(SgOmpClauseBodyStatement *clause_body,
 }
 
 SgOmpMapClause *
-convertMapClause(SgOmpClauseBodyStatement *clause_body,
+convertMapClause(SgStatement *clause_body,
                  std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                      current_OpenMPIR_to_SageIII,
                  OpenMPClause *current_omp_clause) {
   SgOmpMapClause *result = NULL;
-  OpenMPMapClauseType type = ((OpenMPMapClause *)current_omp_clause)->getType();
+  OpenMPMapClause *map_clause =
+      static_cast<OpenMPMapClause *>(current_omp_clause);
+  OpenMPMapClauseType type = map_clause->getType();
   SgOmpClause::omp_map_operator_enum sg_type = toSgOmpClauseMapOperator(type);
+  SgOmpClause::omp_map_modifier_enum sg_modifier1 =
+      toSgOmpClauseMapModifier(map_clause->getModifier1());
+  SgOmpClause::omp_map_modifier_enum sg_modifier2 =
+      toSgOmpClauseMapModifier(map_clause->getModifier2());
+  SgOmpClause::omp_map_modifier_enum sg_modifier3 =
+      toSgOmpClauseMapModifier(map_clause->getModifier3());
+  SgExpression *mapper_identifier = NULL;
 
   std::map<SgSymbol *,
            std::vector<
@@ -4943,23 +6189,22 @@ convertMapClause(SgOmpClauseBodyStatement *clause_body,
         current_OpenMPIR_to_SageIII.second, current_omp_clause);
     const size_t policy_item_count = map_policies.size();
     for (size_t item_index = 0; item_index < policy_item_count; ++item_index) {
+      const auto &policies_for_item = map_policies[item_index];
+      if (policies_for_item.empty()) {
+        continue;
+      }
       if (item_index >= omp_variable_list.size()) {
-        MLOG_ERROR_C("ompAstConstruction",
-                     "Map clause parse node count mismatch with variables\n");
-        ROSE_ABORT();
+        continue;
       }
       SgVariableSymbol *mapped_symbol =
           extractClauseVariableSymbol(omp_variable_list[item_index].second);
       if (mapped_symbol == nullptr) {
-        MLOG_ERROR_C("ompAstConstruction",
-                     "Unable to resolve map symbol for dist_data policy\n");
-        ROSE_ABORT();
+        continue;
       }
 
       std::vector<
           std::pair<SgOmpClause::omp_map_dist_data_enum, SgExpression *>>
           sg_policies;
-      const auto &policies_for_item = map_policies[item_index];
       const std::vector<const OmpParsedExpression *> *parsed_policy_nodes =
           nullptr;
       if (policy_nodes != nullptr && item_index < policy_nodes->size()) {
@@ -5007,6 +6252,17 @@ convertMapClause(SgOmpClauseBodyStatement *clause_body,
   SgExprListExp *explist = buildExprListExp();
 
   result = new SgOmpMapClause(explist, sg_type);
+  result->set_modifier1(sg_modifier1);
+  result->set_modifier2(sg_modifier2);
+  result->set_modifier3(sg_modifier3);
+
+  if (!map_clause->getMapperIdentifier().empty()) {
+    mapper_identifier = parseMapperIdentifierExpression(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, map_clause->getMapperIdentifier());
+  }
+  result->set_mapper_identifier(mapper_identifier);
+
   ROSE_ASSERT(result != NULL);
   buildVariableList(result);
   explist->set_parent(result);
@@ -5015,7 +6271,7 @@ convertMapClause(SgOmpClauseBodyStatement *clause_body,
 
   setOneSourcePositionForTransformation(result);
   SgOmpClause *sg_clause = result;
-  clause_body->get_clauses().push_back(sg_clause);
+  addOmpClause(clause_body, sg_clause);
   sg_clause->set_parent(clause_body);
   array_dimensions.clear();
   omp_variable_list.clear();
@@ -5044,6 +6300,51 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   case OMPD_parallel: {
     result = new SgOmpParallelStatement(NULL, NULL);
+    break;
+  }
+  case OMPD_parallel_do: {
+    SgStatement *second_stmt = new SgOmpDoStatement(NULL, NULL);
+    result = new SgOmpParallelStatement(NULL, second_stmt);
+    second_stmt->set_parent(result);
+    result->addNewAttribute(
+        kOmpCombinedParallelNestedVariantAttrName,
+        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+    break;
+  }
+  case OMPD_parallel_for: {
+    SgStatement *second_stmt = new SgOmpForStatement(NULL, NULL);
+    result = new SgOmpParallelStatement(NULL, second_stmt);
+    second_stmt->set_parent(result);
+    result->addNewAttribute(
+        kOmpCombinedParallelNestedVariantAttrName,
+        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+    break;
+  }
+  case OMPD_parallel_for_simd: {
+    SgStatement *second_stmt = new SgOmpForSimdStatement(NULL, NULL);
+    result = new SgOmpParallelStatement(NULL, second_stmt);
+    second_stmt->set_parent(result);
+    result->addNewAttribute(
+        kOmpCombinedParallelNestedVariantAttrName,
+        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+    break;
+  }
+  case OMPD_parallel_sections: {
+    SgStatement *second_stmt = new SgOmpSectionsStatement(NULL, NULL);
+    result = new SgOmpParallelStatement(NULL, second_stmt);
+    second_stmt->set_parent(result);
+    result->addNewAttribute(
+        kOmpCombinedParallelNestedVariantAttrName,
+        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+    break;
+  }
+  case OMPD_parallel_workshare: {
+    SgStatement *second_stmt = new SgOmpWorkshareStatement(NULL, NULL);
+    result = new SgOmpParallelStatement(NULL, second_stmt);
+    second_stmt->set_parent(result);
+    result->addNewAttribute(
+        kOmpCombinedParallelNestedVariantAttrName,
+        new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
     break;
   }
   case OMPD_simd: {
@@ -5301,6 +6602,7 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     };
   };
 
+  initializeGeneratedOpenMPStatement(result);
   return result;
 }
 
@@ -5309,7 +6611,29 @@ getOpenMPBlockBody(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                        current_OpenMPIR_to_SageIII) {
 
   SgStatement *result = NULL;
+  bool current_is_fortran = false;
+  if (SgSourceFile *source_file =
+          getEnclosingSourceFile(current_OpenMPIR_to_SageIII.first)) {
+    current_is_fortran =
+        source_file->get_Fortran_only() || source_file->get_F77_only() ||
+        source_file->get_F90_only() || source_file->get_F95_only() ||
+        source_file->get_F2003_only();
+  }
   result = getNextStatement(current_OpenMPIR_to_SageIII.first);
+  while (SgPragmaDeclaration *next_pragma = isSgPragmaDeclaration(result)) {
+    auto mapped = fortran_paired_pragma_dict.find(next_pragma);
+    if (mapped != fortran_paired_pragma_dict.end() && mapped->second != NULL &&
+        mapped->second->getKind() == OMPD_end) {
+      return NULL;
+    }
+    // Skip stray/misplaced OpenMP pragma declarations so the construct body is
+    // the executable statement/loop that follows.
+    if (current_is_fortran && isFortranOpenMPPragmaDeclaration(next_pragma)) {
+      result = getNextStatement(next_pragma);
+      continue;
+    }
+    break;
+  }
   return result;
 }
 
@@ -5521,9 +6845,11 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
                   std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                       current_OpenMPIR_to_SageIII,
                   OpenMPClause *current_omp_clause) {
-  printf("when clause is coming.\n");
   SgStatement *variant_directive = NULL;
   auto *when_clause = static_cast<OpenMPWhenClause *>(current_omp_clause);
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
   OpenMPDirective *variant_OpenMPIR = when_clause->getVariantDirective();
   if (variant_OpenMPIR) {
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
@@ -5536,33 +6862,33 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
   std::string user_condition_string =
       when_clause->getUserCondition()->expression;
   if (user_condition_string.size()) {
-    user_condition = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                                        current_omp_clause->getKind(),
-                                        user_condition_string.c_str());
+    user_condition = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, user_condition_string);
   };
   SgExpression *user_condition_score = NULL;
   std::string user_condition_score_string =
       when_clause->getUserCondition()->score;
   if (user_condition_score_string.size()) {
-    user_condition_score = parseOmpExpression(
+    user_condition_score = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        user_condition_score_string.c_str());
+        parsed_nodes, user_condition_score_string);
   };
 
   SgExpression *device_arch = NULL;
   std::string device_arch_string = when_clause->getArchExpression()->expression;
   if (device_arch_string.size()) {
-    device_arch = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                                     current_omp_clause->getKind(),
-                                     device_arch_string.c_str());
+    device_arch = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, device_arch_string, true);
   };
 
   SgExpression *device_isa = NULL;
   std::string device_isa_string = when_clause->getIsaExpression()->expression;
   if (device_isa_string.size()) {
-    device_isa = parseOmpExpression(current_OpenMPIR_to_SageIII.first,
-                                    current_omp_clause->getKind(),
-                                    device_isa_string.c_str());
+    device_isa = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, device_isa_string, true);
   };
 
   SgOmpClause::omp_when_context_kind_enum sg_device_kind =
@@ -5638,6 +6964,10 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
     sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_llvm;
     break;
   }
+  case OMPC_CONTEXT_VENDOR_nvidia: {
+    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_nvidia;
+    break;
+  }
   case OMPC_CONTEXT_VENDOR_pgi: {
     sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_pgi;
     break;
@@ -5659,18 +6989,18 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
   std::string implementation_user_defined_string =
       when_clause->getImplementationExpression()->expression;
   if (implementation_user_defined_string.size()) {
-    implementation_user_defined = parseOmpExpression(
+    implementation_user_defined = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        implementation_user_defined_string.c_str());
+        parsed_nodes, implementation_user_defined_string);
   };
 
   SgExpression *implementation_extension = NULL;
   std::string implementation_extension_string =
       when_clause->getExtensionExpression()->expression;
   if (implementation_extension_string.size()) {
-    implementation_extension = parseOmpExpression(
+    implementation_extension = parseClauseExpressionWithCache(
         current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        implementation_extension_string.c_str());
+        parsed_nodes, implementation_extension_string);
   };
 
   SgOmpWhenClause *result = new SgOmpWhenClause(
@@ -5689,7 +7019,10 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
                         construct_directive->at(i).second);
       sg_construct_directive =
           convertVariantDirective(paired_construct_OpenMPIR);
-      sg_construct_directives.push_back(sg_construct_directive);
+      if (sg_construct_directive != NULL) {
+        sg_construct_directives.push_back(sg_construct_directive);
+        sg_construct_directive->set_parent(result);
+      }
     };
     result->set_construct_directives(sg_construct_directives);
   };
@@ -5797,6 +7130,11 @@ convertClause(SgStatement *directive,
               ->getUserDefinedAllocator();
       SgExpression *clause_expression = cloneParsedExpressionNodeByText(
           parsed_nodes, user_defined_allocator, OMP_EXPR_PARSE_expression);
+      if (clause_expression == nullptr) {
+        clause_expression = parseOmpExpression(
+            current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+            user_defined_allocator);
+      }
       ROSE_ASSERT(clause_expression != nullptr);
       user_defined_parameter =
           checkOmpExpressionClause(clause_expression, global, e_allocate);
@@ -6025,10 +7363,10 @@ convertToClause(SgStatement *clause_body,
 
   result = new SgOmpToClause(explist, sg_type);
   if ((((OpenMPToClause *)current_omp_clause)->getMapperIdentifier()) != "") {
-    mapper_identifier = cloneParsedExpressionNodeByText(
+    mapper_identifier = parseMapperIdentifierExpression(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
         parsed_nodes,
-        ((OpenMPToClause *)current_omp_clause)->getMapperIdentifier(),
-        OMP_EXPR_PARSE_expression);
+        ((OpenMPToClause *)current_omp_clause)->getMapperIdentifier());
     ROSE_ASSERT(mapper_identifier != nullptr);
   }
   result->set_mapper_identifier(mapper_identifier);
@@ -6041,6 +7379,11 @@ convertToClause(SgStatement *clause_body,
   SgOmpClause *sg_clause = result;
   if (current_OpenMPIR_to_SageIII.second->getKind() == OMPD_target_update) {
     ((SgOmpTargetUpdateStatement *)clause_body)
+        ->get_clauses()
+        .push_back(sg_clause);
+  } else if (current_OpenMPIR_to_SageIII.second->getKind() ==
+             OMPD_declare_target) {
+    ((SgOmpDeclareTargetStatement *)clause_body)
         ->get_clauses()
         .push_back(sg_clause);
   }
@@ -6091,10 +7434,10 @@ convertFromClause(SgStatement *clause_body,
   SgExprListExp *explist = buildExprListExp();
   result = new SgOmpFromClause(explist, sg_type);
   if ((((OpenMPFromClause *)current_omp_clause)->getMapperIdentifier()) != "") {
-    mapper_identifier = cloneParsedExpressionNodeByText(
+    mapper_identifier = parseMapperIdentifierExpression(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
         parsed_nodes,
-        ((OpenMPFromClause *)current_omp_clause)->getMapperIdentifier(),
-        OMP_EXPR_PARSE_expression);
+        ((OpenMPFromClause *)current_omp_clause)->getMapperIdentifier());
     ROSE_ASSERT(mapper_identifier != nullptr);
   }
   result->set_mapper_identifier(mapper_identifier);
@@ -6107,6 +7450,11 @@ convertFromClause(SgStatement *clause_body,
   SgOmpClause *sg_clause = result;
   if (current_OpenMPIR_to_SageIII.second->getKind() == OMPD_target_update) {
     ((SgOmpTargetUpdateStatement *)clause_body)
+        ->get_clauses()
+        .push_back(sg_clause);
+  } else if (current_OpenMPIR_to_SageIII.second->getKind() ==
+             OMPD_declare_target) {
+    ((SgOmpDeclareTargetStatement *)clause_body)
         ->get_clauses()
         .push_back(sg_clause);
   }
@@ -6574,9 +7922,64 @@ convertExpressionClause(SgStatement *directive,
   return result;
 }
 
+static bool isDirectiveIdentifierCharacter(char c) {
+  const unsigned char uc = static_cast<unsigned char>(c);
+  return std::isalnum(uc) || c == '_';
+}
+
+static std::string
+restoreFortranExpressionSourceCaseFromText(const std::string &source_text,
+                                           const std::string &expression) {
+  std::string trimmed = trimWhitespaceCopy(expression);
+  if (trimmed.empty() || source_text.empty()) {
+    return trimmed;
+  }
+  const std::string lowered_source = toLowerCopy(source_text);
+  const std::string lowered_expr = toLowerCopy(trimmed);
+  const bool enforce_boundaries =
+      isDirectiveIdentifierCharacter(trimmed.front()) &&
+      isDirectiveIdentifierCharacter(trimmed.back());
+
+  std::string::size_type pos = 0;
+  while ((pos = lowered_source.find(lowered_expr, pos)) != std::string::npos) {
+    if (enforce_boundaries) {
+      const bool left_ok =
+          (pos == 0) || !isDirectiveIdentifierCharacter(source_text[pos - 1]);
+      const std::string::size_type end_pos = pos + trimmed.size();
+      const bool right_ok =
+          (end_pos >= source_text.size()) ||
+          !isDirectiveIdentifierCharacter(source_text[end_pos]);
+      if (!(left_ok && right_ok)) {
+        ++pos;
+        continue;
+      }
+    }
+    return source_text.substr(pos, trimmed.size());
+  }
+
+  return trimmed;
+}
+
+static std::string
+restoreFortranExpressionSourceCase(SgPragmaDeclaration *directive,
+                                   const std::string &expression) {
+  std::string trimmed = trimWhitespaceCopy(expression);
+  if (directive == NULL || trimmed.empty()) {
+    return trimmed;
+  }
+
+  auto text_it = g_omp_directive_source_text_by_pragma.find(directive);
+  if (text_it == g_omp_directive_source_text_by_pragma.end()) {
+    return trimmed;
+  }
+
+  return restoreFortranExpressionSourceCaseFromText(text_it->second, trimmed);
+}
+
 void parseOmpVariable(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                           current_OpenMPIR_to_SageIII,
-                      OpenMPClauseKind clause_kind, std::string expression) {
+                      OpenMPClauseKind clause_kind, std::string expression,
+                      const std::string *directive_source_text) {
   // special handling for omp declare simd directive
   // It may have clauses referencing a variable declared in an immediately
   // followed function's parameter list
@@ -6587,13 +7990,35 @@ void parseOmpVariable(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     look_forward = true;
   };
   std::string expr_string = std::string() + "varlist " + expression + "\n";
+  std::size_t old_size = omp_variable_list.size();
   parseExpression(current_OpenMPIR_to_SageIII.first, look_forward,
                   expr_string.c_str());
+  if (omp_variable_list.size() != old_size) {
+    return;
+  }
+
+  SgSourceFile *source_file =
+      getEnclosingSourceFile(current_OpenMPIR_to_SageIII.first);
+  if (source_file != NULL &&
+      (source_file->get_Fortran_only() || source_file->get_F77_only() ||
+       source_file->get_F90_only() || source_file->get_F95_only() ||
+       source_file->get_F2003_only())) {
+    std::string trimmed =
+        directive_source_text != nullptr
+            ? restoreFortranExpressionSourceCaseFromText(*directive_source_text,
+                                                         expression)
+            : restoreFortranExpressionSourceCase(
+                  current_OpenMPIR_to_SageIII.first, expression);
+    SgExpression *opaque = buildOpaqueOpenMPClauseExpression(
+        current_OpenMPIR_to_SageIII.first, trimmed);
+    omp_variable_list.push_back(std::make_pair(trimmed, opaque));
+  }
 }
 
 SgExpression *parseOmpExpression(SgPragmaDeclaration *directive,
                                  OpenMPClauseKind clause_kind,
-                                 std::string expression) {
+                                 std::string expression,
+                                 const std::string *directive_source_text) {
   // special handling for omp declare simd directive
   // It may have clauses referencing a variable declared in an immediately
   // followed function's parameter list
@@ -6606,13 +8031,30 @@ SgExpression *parseOmpExpression(SgPragmaDeclaration *directive,
   std::string expr_string = std::string() + "expr (" + expression + ")\n";
   SgExpression *sg_expression =
       parseExpression(directive, look_forward, expr_string.c_str());
+  if (sg_expression != NULL) {
+    return sg_expression;
+  }
 
-  return sg_expression;
+  SgSourceFile *source_file = getEnclosingSourceFile(directive);
+  if (source_file != NULL &&
+      (source_file->get_Fortran_only() || source_file->get_F77_only() ||
+       source_file->get_F90_only() || source_file->get_F95_only() ||
+       source_file->get_F2003_only())) {
+    return buildOpaqueOpenMPClauseExpression(
+        directive,
+        directive_source_text != nullptr
+            ? restoreFortranExpressionSourceCaseFromText(*directive_source_text,
+                                                         expression)
+            : restoreFortranExpressionSourceCase(directive, expression));
+  }
+
+  return NULL;
 }
 
 SgExpression *parseOmpArraySection(SgPragmaDeclaration *directive,
                                    OpenMPClauseKind clause_kind,
-                                   std::string expression) {
+                                   std::string expression,
+                                   const std::string *directive_source_text) {
   // special handling for omp declare simd directive
   // It may have clauses referencing a variable declared in an immediately
   // followed function's parameter list
@@ -6626,8 +8068,27 @@ SgExpression *parseOmpArraySection(SgPragmaDeclaration *directive,
       std::string() + "array_section (" + expression + ")\n";
   SgExpression *sg_expression =
       parseArraySectionExpression(directive, look_forward, expr_string.c_str());
+  if (sg_expression != NULL) {
+    return sg_expression;
+  }
 
-  return sg_expression;
+  SgSourceFile *source_file = getEnclosingSourceFile(directive);
+  if (source_file != NULL &&
+      (source_file->get_Fortran_only() || source_file->get_F77_only() ||
+       source_file->get_F90_only() || source_file->get_F95_only() ||
+       source_file->get_F2003_only())) {
+    std::string trimmed =
+        directive_source_text != nullptr
+            ? restoreFortranExpressionSourceCaseFromText(*directive_source_text,
+                                                         expression)
+            : restoreFortranExpressionSourceCase(directive, expression);
+    SgExpression *opaque =
+        buildOpaqueOpenMPClauseExpression(directive, trimmed);
+    omp_variable_list.push_back(std::make_pair(trimmed, opaque));
+    return opaque;
+  }
+
+  return NULL;
 }
 
 void buildVariableList(SgOmpVariablesClause *current_omp_clause) {
@@ -6650,8 +8111,10 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
         current_OpenMPIR_to_SageIII) {
   ROSE_ASSERT(current_OpenMPIR_to_SageIII.second != NULL);
   SgStatement *body = getOpenMPBlockBody(current_OpenMPIR_to_SageIII);
+  if (body == NULL) {
+    return NULL;
+  }
   removeStatement(body, false);
-  ROSE_ASSERT(body != NULL);
 
   // build the 2nd directive node first
   SgStatement *second_stmt = NULL;
@@ -6701,6 +8164,9 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
   copyEndFileInfo(current_OpenMPIR_to_SageIII.first, first_stmt);
   first_stmt->setOutputInCodeGeneration();
   second_stmt->set_parent(first_stmt);
+  first_stmt->addNewAttribute(
+      kOmpCombinedParallelNestedVariantAttrName,
+      new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
 
   OpenMPClauseKind clause_kind;
   std::vector<OpenMPClause *> *clause_vector =
@@ -6712,8 +8178,13 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     case OMPC_collapse:
     case OMPC_ordered:
     case OMPC_if:
+    case OMPC_safelen:
+    case OMPC_simdlen:
     case OMPC_num_threads: {
       if (clause_kind == OMPC_collapse || clause_kind == OMPC_ordered) {
+        convertExpressionClause(second_stmt, current_OpenMPIR_to_SageIII,
+                                *citer);
+      } else if (clause_kind == OMPC_safelen || clause_kind == OMPC_simdlen) {
         convertExpressionClause(second_stmt, current_OpenMPIR_to_SageIII,
                                 *citer);
       } else {
@@ -6726,7 +8197,9 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     case OMPC_copyin:
     case OMPC_firstprivate:
     case OMPC_lastprivate:
+    case OMPC_aligned:
     case OMPC_linear:
+    case OMPC_nontemporal:
     case OMPC_private:
     case OMPC_reduction:
     case OMPC_shared:
@@ -6751,6 +8224,10 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     }
     case OMPC_schedule: {
       convertScheduleClause(second_stmt, current_OpenMPIR_to_SageIII, *citer);
+      break;
+    }
+    case OMPC_order: {
+      convertOrderClause(second_stmt, current_OpenMPIR_to_SageIII, *citer);
       break;
     }
     case OMPC_parallel: {
@@ -6880,6 +8357,7 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
       case OMPC_depobj_update:
       case OMPC_destroy:
       case OMPC_detach:
+      case OMPC_device_type:
       case OMPC_device:
       case OMPC_dist_schedule:
       case OMPC_exclusive:

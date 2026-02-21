@@ -1,0 +1,3 @@
+#pragma omp target parallel loop reduction(min:result) map(to:a[0:N],b[0:N]) map(tofrom:result)
+#pragma omp target parallel loop reduction(max:result) map(to:a[0:N],b[0:N]) map(tofrom:result)
+#pragma omp target parallel loop reduction(+:total) map(to:arr[0:N]) map(tofrom:total)

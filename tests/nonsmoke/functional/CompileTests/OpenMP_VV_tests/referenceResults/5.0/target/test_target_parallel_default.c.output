@@ -1,0 +1,5 @@
+#pragma omp target data map(tofrom:count)
+#pragma omp target parallel for shared(count,IfTstPassed) default(none) map(tofrom:IfTstPassed)
+#pragma omp atomic
+#pragma omp target parallel for default(shared) map(tofrom:IfTstPassed)
+#pragma omp atomic

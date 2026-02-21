@@ -1,0 +1,5 @@
+#pragma omp declare target to(compute_on_device)
+#pragma omp parallel master
+#pragma omp taskgroup task_reduction(+:sum)
+#pragma omp target in_reduction(+:sum)
+#pragma omp task in_reduction(+:sum)

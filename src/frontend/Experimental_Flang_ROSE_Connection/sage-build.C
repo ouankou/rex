@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 
 #include <optional>
 
@@ -653,6 +654,7 @@ void BuildExprVisitor::Build(const Fortran::parser::ArrayConstructor &x) {
 SageTreeBuilder builder{SageTreeBuilder::LanguageEnum::Fortran};
 // TEMPORARY until C++17
 void setSgSourceFile(SgSourceFile *sg_file) { builder.setSourceFile(sg_file); }
+SgSourceFile *getSgSourceFile() { return builder.getSourceFile(); }
 
 // TODO: change this to a reference
 Fortran::parser::AllCookedSources *cooked_{nullptr};
@@ -857,7 +859,8 @@ bool IsFortranModuleFilePath(const std::string &path) {
     return false;
   }
   const std::string lower = StringUtility::convertToLowerCase(path);
-  return EndsWith(lower, ".rmod") || EndsWith(lower, ".rcmp");
+  return EndsWith(lower, ".rmod") || EndsWith(lower, ".rcmp") ||
+         EndsWith(lower, ".mod");
 }
 
 std::optional<SourcePosition> BuildSourcePositionFromProvenance(
@@ -1038,6 +1041,26 @@ bool IsOpenMpOrAccDirectiveLine(const std::string &line) {
   return false;
 }
 
+bool IsOpenAccOrCufDirectiveLine(const std::string &line) {
+  std::string trimmed = line;
+  TrimLeft(trimmed);
+  if (trimmed.empty()) {
+    return false;
+  }
+  std::string lower = trimmed;
+  for (char &ch : lower) {
+    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  }
+  const size_t payload = FindFortranDirectivePayloadStart(lower);
+  if (payload != std::string::npos) {
+    if (lower.compare(payload, 3, "acc") == 0 ||
+        lower.compare(payload, 3, "cuf") == 0) {
+      return true;
+    }
+  }
+  return StartsWithAcc(lower) || StartsWithCuf(lower);
+}
+
 std::string NormalizeOmpDirectiveLine(const std::string &line) {
   std::string text = line;
   TrimLeft(text);
@@ -1210,6 +1233,315 @@ bool ScopeHasPragmaAtSource(SgScopeStatement *scope,
   return false;
 }
 
+bool SourceHasPragmaAtSource(const SgSourceFile *source,
+                             const SourcePosition &startPos) {
+  if (source == nullptr) {
+    return false;
+  }
+
+  std::string normalized_target_path = NormalizeSourcePath(startPos.path);
+  std::vector<SgNode *> pragmas = NodeQuery::querySubTree(
+      const_cast<SgSourceFile *>(source), V_SgPragmaDeclaration);
+  for (SgNode *node : pragmas) {
+    SgPragmaDeclaration *pragmaStmt = isSgPragmaDeclaration(node);
+    if (pragmaStmt == nullptr) {
+      continue;
+    }
+    Sg_File_Info *info = pragmaStmt->get_file_info();
+    if (info == nullptr || info->get_line() != startPos.line) {
+      continue;
+    }
+    if (!normalized_target_path.empty()) {
+      const std::string pragma_path =
+          NormalizeSourcePath(info->get_filenameString());
+      if (!pragma_path.empty() && pragma_path != normalized_target_path) {
+        continue;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+bool EndsWithContinuationAmpersand(const std::string &line) {
+  size_t end = line.find_last_not_of(" \t\r");
+  return end != std::string::npos && line[end] == '&';
+}
+
+std::string StripTrailingContinuationAmpersand(std::string text) {
+  while (!text.empty() &&
+         std::isspace(static_cast<unsigned char>(text.back()))) {
+    text.pop_back();
+  }
+  if (!text.empty() && text.back() == '&') {
+    text.pop_back();
+    while (!text.empty() &&
+           std::isspace(static_cast<unsigned char>(text.back()))) {
+      text.pop_back();
+    }
+  }
+  return text;
+}
+
+std::string StripDirectivePrefixForContinuation(const std::string &line) {
+  std::string text = line;
+  TrimLeft(text);
+  if (StartsWithOmp(text) || StartsWithAcc(text) || StartsWithCuf(text)) {
+    if (text.size() >= 3) {
+      text.erase(0, 3);
+      TrimLeft(text);
+    }
+  }
+  if (!text.empty() && text.front() == '&') {
+    text.erase(0, 1);
+    TrimLeft(text);
+  }
+  return text;
+}
+
+struct RawFortranDirective {
+  SourcePosition start;
+  SourcePosition end;
+  std::string text;
+};
+
+std::vector<RawFortranDirective>
+CollectRawFortranDirectivesFromSource(const SgSourceFile *source) {
+  std::vector<RawFortranDirective> directives;
+  if (source == nullptr) {
+    return directives;
+  }
+
+  std::string path = source->get_sourceFileNameWithPath();
+  if (path.empty()) {
+    path = source->getFileName();
+  }
+  if (path.empty()) {
+    return directives;
+  }
+
+  std::ifstream input(path);
+  if (!input) {
+    return directives;
+  }
+
+  std::vector<std::string> lines;
+  std::string line;
+  while (std::getline(input, line)) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+    lines.push_back(line);
+  }
+
+  for (size_t i = 0; i < lines.size(); ++i) {
+    const std::string &current = lines[i];
+    if (!IsOpenMpOrAccDirectiveLine(current)) {
+      continue;
+    }
+
+    std::string normalized = NormalizeOmpDirectiveLine(current);
+    normalized = StripTrailingContinuationAmpersand(normalized);
+    if (normalized.empty()) {
+      continue;
+    }
+
+    size_t first_non_ws = current.find_first_not_of(" \t");
+    int start_col = first_non_ws == std::string::npos
+                        ? 1
+                        : static_cast<int>(first_non_ws) + 1;
+
+    SourcePosition start{path, static_cast<int>(i) + 1, start_col};
+    SourcePosition end{path, static_cast<int>(i) + 1,
+                       static_cast<int>(current.size())};
+
+    bool continued = EndsWithContinuationAmpersand(current);
+    std::string combined = normalized;
+    while (continued && (i + 1) < lines.size()) {
+      const std::string &next = lines[i + 1];
+      std::string next_trimmed = next;
+      TrimLeft(next_trimmed);
+      const bool next_is_directive = IsOpenMpOrAccDirectiveLine(next);
+      const bool next_is_continuation =
+          !next_trimmed.empty() && next_trimmed.front() == '&';
+      if (!next_is_directive && !next_is_continuation) {
+        break;
+      }
+
+      ++i;
+      end.line = static_cast<int>(i) + 1;
+      end.column = static_cast<int>(next.size());
+
+      std::string continuation =
+          next_is_directive ? NormalizeOmpDirectiveLine(next) : next_trimmed;
+      continuation = StripDirectivePrefixForContinuation(continuation);
+      continuation = StripTrailingContinuationAmpersand(continuation);
+      if (!continuation.empty()) {
+        if (!combined.empty()) {
+          combined += " ";
+        }
+        combined += continuation;
+      }
+      continued = EndsWithContinuationAmpersand(next);
+    }
+
+    if (!combined.empty()) {
+      directives.push_back(RawFortranDirective{start, end, combined});
+    }
+  }
+
+  return directives;
+}
+
+SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
+  if (source == nullptr || source->get_globalScope() == nullptr) {
+    return nullptr;
+  }
+
+  SgScopeStatement *best_scope = source->get_globalScope();
+  int best_span = std::numeric_limits<int>::max();
+
+  std::vector<SgNode *> scopes =
+      NodeQuery::querySubTree(source->get_globalScope(), V_SgScopeStatement);
+  for (SgNode *node : scopes) {
+    SgScopeStatement *scope = isSgScopeStatement(node);
+    if (scope == nullptr) {
+      continue;
+    }
+    if (isSgBasicBlock(scope) == nullptr && isSgGlobal(scope) == nullptr &&
+        isSgClassDefinition(scope) == nullptr) {
+      continue;
+    }
+    Sg_File_Info *start = scope->get_file_info();
+    Sg_File_Info *end = scope->get_endOfConstruct();
+    if (start == nullptr || end == nullptr) {
+      continue;
+    }
+    if (start->isSameFile(source) == false) {
+      continue;
+    }
+    if (start->get_line() <= 0 || end->get_line() <= 0) {
+      continue;
+    }
+    int start_line = start->get_line();
+    const int end_line = end->get_line();
+
+    // A Fortran function/program body basic block can start after the
+    // specification-part comments/directives. Treat the enclosing
+    // function-definition start line as part of the block's effective span.
+    if (SgBasicBlock *body = isSgBasicBlock(scope)) {
+      if (SgFunctionDefinition *def =
+              isSgFunctionDefinition(body->get_parent())) {
+        const Sg_File_Info *def_start = def->get_startOfConstruct();
+        if (def_start == nullptr) {
+          def_start = def->get_file_info();
+        }
+        if (def_start != nullptr && def_start->isSameFile(source) &&
+            def_start->get_line() > 0) {
+          start_line = std::min(start_line, def_start->get_line());
+        }
+      }
+    }
+
+    if (line < start_line || line > end_line) {
+      continue;
+    }
+    int span = end_line - start_line;
+    if (span < best_span) {
+      best_span = span;
+      best_scope = scope;
+    }
+  }
+
+  return best_scope;
+}
+
+void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
+  if (source == nullptr || source->get_globalScope() == nullptr) {
+    return;
+  }
+
+  std::vector<RawFortranDirective> directives =
+      CollectRawFortranDirectivesFromSource(source);
+  if (directives.empty()) {
+    return;
+  }
+
+  for (const RawFortranDirective &directive : directives) {
+    if (SourceHasPragmaAtSource(source, directive.start)) {
+      continue;
+    }
+
+    SgScopeStatement *scope =
+        FindInnermostScopeForLine(source, directive.start.line);
+    if (scope == nullptr) {
+      scope = source->get_globalScope();
+    }
+
+    // If directive recovery falls back to global scope, remap directives that
+    // are lexically inside a program/function unit into that unit's body.
+    if (isSgGlobal(scope) != nullptr) {
+      for (SgStatement *stmt :
+           source->get_globalScope()->generateStatementList()) {
+        if (stmt == nullptr) {
+          continue;
+        }
+        Sg_File_Info *start = stmt->get_file_info();
+        Sg_File_Info *end = stmt->get_endOfConstruct();
+        if (start == nullptr || end == nullptr) {
+          continue;
+        }
+        if (start->isSameFile(source) == false || start->get_line() <= 0 ||
+            end->get_line() <= 0) {
+          continue;
+        }
+        if (directive.start.line < start->get_line() ||
+            directive.start.line > end->get_line()) {
+          continue;
+        }
+        if (SgFunctionDeclaration *fn = isSgFunctionDeclaration(stmt)) {
+          if (SgFunctionDefinition *def = fn->get_definition()) {
+            if (SgBasicBlock *body = def->get_body()) {
+              scope = body;
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    if (ScopeHasPragmaAtSource(scope, directive.start, directive.text)) {
+      continue;
+    }
+
+    SgPragmaDeclaration *pragma =
+        SageBuilder::buildPragmaDeclaration(directive.text, scope);
+    ASSERT_not_null(pragma);
+    builder.setSourcePosition(pragma, directive.start, directive.end);
+
+    SgStatement *target = nullptr;
+    const SgStatementPtrList &scope_stmts = scope->generateStatementList();
+    for (SgStatement *stmt : scope_stmts) {
+      if (stmt == nullptr || stmt->get_file_info() == nullptr) {
+        continue;
+      }
+      if (stmt->get_file_info()->isSameFile(source) == false) {
+        continue;
+      }
+      if (stmt->get_file_info()->get_line() >= directive.start.line) {
+        target = stmt;
+        break;
+      }
+    }
+
+    if (target != nullptr) {
+      SageInterface::insertStatementBefore(target, pragma);
+    } else {
+      SageInterface::appendStatement(pragma, scope);
+    }
+  }
+}
+
 void AppendPragmasFromCharBlockIfMissing(
     const Fortran::parser::CharBlock &source) {
   if (source.empty()) {
@@ -1323,6 +1655,9 @@ CollectFortranCommentTokens(const SgSourceFile *source) {
     }
 
     if (comment_start == std::string::npos) {
+      continue;
+    }
+    if (IsOpenAccOrCufDirectiveLine(line)) {
       continue;
     }
 
@@ -1808,10 +2143,26 @@ SgModuleStatement *lookupModuleStatement(const std::string &moduleName) {
 
 SgClassSymbol *lookupDerivedTypeSymbol(const SgName &derivedTypeName,
                                        SgScopeStatement *currentScope) {
+  auto resolveClassSymbol = [](SgSymbol *symbol) -> SgClassSymbol * {
+    SgSymbol *resolved = symbol;
+    while (auto *alias = isSgAliasSymbol(resolved)) {
+      SgSymbol *next = alias->get_alias();
+      if (next == nullptr || next == resolved) {
+        break;
+      }
+      resolved = next;
+    }
+    return isSgClassSymbol(resolved);
+  };
+
   SgClassSymbol *derivedTypeSymbol{nullptr};
   SgScopeStatement *scope{currentScope};
   while (derivedTypeSymbol == nullptr && scope != nullptr) {
     derivedTypeSymbol = scope->lookup_class_symbol(derivedTypeName);
+    if (derivedTypeSymbol == nullptr) {
+      SgSymbol *anySymbol = scope->lookup_symbol(derivedTypeName);
+      derivedTypeSymbol = resolveClassSymbol(anySymbol);
+    }
     scope = isSgGlobal(scope) ? nullptr : scope->get_scope();
   }
 
@@ -1902,6 +2253,11 @@ void Build(parser::Program &x, parser::AllCookedSources &cooked) {
 
   // Start by building ProgramUnit(s)
   Walk(x.v, visitor);
+
+  // Flang does not always surface OpenMP/OpenACC directives as parser
+  // constructs. Recover them from source text so OpenMP AST conversion can
+  // consume consistent pragma declarations.
+  InjectFortranDirectivePragmasFromSource(builder.getSourceFile());
 
   // Root of tree, finished
   visitor.Done();
@@ -6411,14 +6767,15 @@ void BuildVisitor::Build(
   SgModuleStatement *moduleStmt = lookupModuleStatement(moduleName);
   if (moduleStmt == nullptr) {
     moduleStmt = FlangModuleInfo::getModule(moduleName);
-    if (moduleStmt == nullptr) {
+    if (moduleStmt == nullptr &&
+        !FlangModuleInfo::isIntrinsicModuleName(moduleName)) {
       const std::string location = formatSourcePosition(srcBegin);
       std::cerr << "Error: cannot find module '" << moduleName << "'";
       if (!location.empty()) {
         std::cerr << " at " << location;
       }
       std::cerr << ". Ensure module files are in the search path (use -I) or "
-                   "available as .rmod/.rcmp.\n";
+                   "available as .rmod/.rcmp/.mod.\n";
     }
   }
 
@@ -7414,12 +7771,20 @@ SgType *BuildDerivedTypeSpec(const parser::DerivedTypeSpec &derivedSpec) {
   ASSERT_not_null(declScope);
   SgClassSymbol *symbol = lookupDerivedTypeSymbol(name, declScope);
   if (symbol == nullptr) {
+    SgScopeStatement *declInsertionScope = declScope;
+    if (isSgBasicBlock(declInsertionScope) != nullptr &&
+        declInsertionScope->get_parent() != nullptr) {
+      if (SgScopeStatement *outerScope = declInsertionScope->get_scope()) {
+        declInsertionScope = outerScope;
+      }
+    }
+
     SgDerivedTypeStatement *forward =
-        SageBuilder::buildDerivedTypeStatement(name, declScope);
+        SageBuilder::buildDerivedTypeStatement(name, declInsertionScope);
     if (forward != nullptr) {
-      forward->set_scope(declScope);
-      forward->set_parent(declScope);
-      symbol = declScope->lookup_class_symbol(name);
+      forward->set_scope(declInsertionScope);
+      forward->set_parent(declInsertionScope);
+      symbol = declInsertionScope->lookup_class_symbol(name);
     }
   }
   if (symbol != nullptr && symbol->get_declaration() != nullptr &&

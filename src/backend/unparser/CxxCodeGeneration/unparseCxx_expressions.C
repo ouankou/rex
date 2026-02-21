@@ -185,8 +185,13 @@ void Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression *expr,
       unparseExpression(upper, info);
     }
     if (stride != NULL && isSgNullExpression(stride) == NULL) {
-      curprint(":");
-      unparseExpression(stride, info);
+      SgIntVal *integer_stride = isSgIntVal(stride);
+      const bool is_unit_stride =
+          integer_stride != NULL && integer_stride->get_value() == 1;
+      if (!is_unit_stride) {
+        curprint(":");
+        unparseExpression(stride, info);
+      }
     }
     break;
   }

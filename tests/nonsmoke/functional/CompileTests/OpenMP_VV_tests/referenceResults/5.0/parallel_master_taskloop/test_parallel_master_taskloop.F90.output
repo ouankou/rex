@@ -1,0 +1,2 @@
+!$omp parallel master taskloop num_threads(OMPVV_NUM_THREADS_HOST) shared(x,y,z,num_threads)
+!$omp end parallel master taskloop

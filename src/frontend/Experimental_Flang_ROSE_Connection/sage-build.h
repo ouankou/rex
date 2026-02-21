@@ -34,6 +34,7 @@ namespace Rose::builder {
 
 // SgSourceFile* temporary needed until ROSE supports C++17
 void setSgSourceFile(SgSourceFile *sg_file);
+SgSourceFile *getSgSourceFile();
 
 // Converts parsed program to ROSE Sage nodes
 void Build(Fortran::parser::Program &, Fortran::parser::AllCookedSources &);

@@ -1,0 +1,6 @@
+#pragma omp target map(this->h_array[0:N]) map(size)
+#pragma omp target
+#pragma omp declare target
+#pragma omp end declare target
+#pragma omp target map(tofrom:res)
+#pragma omp target map(tofrom:value)

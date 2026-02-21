@@ -27,6 +27,7 @@ public:
   static SgProject *getCurrentProject();
 
   static SgModuleStatement *getModule(const std::string &modName);
+  static bool isIntrinsicModuleName(const std::string &modName);
 
   static void set_inputDirs(SgProject *project);
 

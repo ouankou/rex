@@ -1,4 +1,2 @@
-#pragma omp parallel
-#pragma omp for reduction(min : mn)
-#pragma omp parallel
-#pragma omp for reduction(max : mx)
+#pragma omp parallel for reduction(min : mn)
+#pragma omp parallel for reduction(max : mx)

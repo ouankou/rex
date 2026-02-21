@@ -1,0 +1,7 @@
+#pragma omp declare target
+#pragma omp declare target link(a,b,c)
+#pragma omp end declare target
+#pragma omp declare target
+#pragma omp declare target to(update)
+#pragma omp end declare target
+#pragma omp target map(tofrom:a,b,c)

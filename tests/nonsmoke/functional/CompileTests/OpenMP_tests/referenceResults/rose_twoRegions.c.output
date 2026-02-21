@@ -1,4 +1,2 @@
-#pragma omp parallel shared(b)
-#pragma omp for firstprivate(c)
-#pragma omp parallel shared(b)
-#pragma omp for firstprivate(c)
+#pragma omp parallel for firstprivate(c) shared(b)
+#pragma omp parallel for firstprivate(c) shared(b)

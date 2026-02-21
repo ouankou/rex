@@ -1,0 +1,4 @@
+!$omp target data map(to:device_data) use_device_ptr(device_data)
+!$omp target is_device_ptr(device_data) map(tofrom:host_data)
+!$omp end target
+!$omp end target data

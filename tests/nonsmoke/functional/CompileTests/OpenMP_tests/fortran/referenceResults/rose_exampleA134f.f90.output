@@ -1,5 +1,1 @@
-!$omp task  shared(i) default(shared)
-!$omp end task
-!$omp task  shared(j)
-!$omp end task
 !$omp taskwait

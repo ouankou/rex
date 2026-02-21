@@ -1,0 +1,6 @@
+#pragma omp target map(tofrom:num_threads,x)
+#pragma omp parallel num_threads(OMPVV_NUM_THREADS_DEVICE) default(shared)
+#pragma omp atomic hint(0X4)
+#pragma omp target map(tofrom:num_threads,x)
+#pragma omp parallel num_threads(OMPVV_NUM_THREADS_DEVICE) default(shared)
+#pragma omp atomic hint(0X1024)

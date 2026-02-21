@@ -3749,7 +3749,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
 
   SgSourceFile *source_file = isSgSourceFile(global_scope->get_parent());
   if (source_file != nullptr && !source_file->get_openmp_processed()) {
-    bool has_omp_or_acc = false;
+    bool has_omp = false;
+    bool has_acc = false;
     Rose_STL_Container<SgNode *> pragmas =
         NodeQuery::querySubTree(global_scope, V_SgPragmaDeclaration);
     for (SgNode *pragma_node : pragmas) {
@@ -3761,12 +3762,16 @@ void finishSageAST(ClangToSageTranslator &translator) {
       std::istringstream istr(pragma_text);
       std::string key;
       istr >> key;
-      if (key == "omp" || key == "acc") {
-        has_omp_or_acc = true;
+      if (key == "omp") {
+        has_omp = true;
+      } else if (key == "acc") {
+        has_acc = true;
+      }
+      if (has_omp && has_acc) {
         break;
       }
     }
-    if (has_omp_or_acc) {
+    if (has_omp || has_acc) {
       bool openmp_explicitly_disabled = false;
       const std::vector<std::string> &args =
           source_file->get_originalCommandLineArgumentList();
@@ -3784,7 +3789,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
         }
       }
 
-      if (!source_file->get_openmp() && !openmp_explicitly_disabled) {
+      if (has_omp && !source_file->get_openmp() &&
+          !openmp_explicitly_disabled) {
         source_file->set_openmp(true);
         bool has_explicit_processing_flag =
             source_file->get_openmp_ast_only() ||
@@ -3794,6 +3800,14 @@ void finishSageAST(ClangToSageTranslator &translator) {
             source_file->get_openmp_parse_only()) {
           source_file->set_openmp_parse_only(false);
           source_file->set_openmp_ast_only(true);
+        }
+      }
+
+      if (has_acc && !source_file->get_openacc()) {
+        source_file->set_openacc(true);
+        if (!source_file->get_openacc_ast_only()) {
+          source_file->set_openacc_parse_only(false);
+          source_file->set_openacc_ast_only(true);
         }
       }
     }

@@ -1,0 +1,3 @@
+!$omp parallel do allocate(x_alloc:x) private(x) shared(result_arr) num_threads(OMPVV_NUM_THREADS_HOST)
+!$omp simd simdlen(16) aligned(x:64)
+!$omp end parallel do

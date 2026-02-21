@@ -888,6 +888,31 @@ void SageTreeBuilder::setSourcePosition(SgLocatedNode *node,
                                         const SourcePosition &end) {
   ASSERT_not_null(node);
 
+  const bool missing_source_position = start.path.empty() || end.path.empty() ||
+                                       start.line <= 0 || end.line <= 0 ||
+                                       start.column <= 0 || end.column <= 0;
+  if (missing_source_position) {
+    // Flang can produce nodes without concrete source coordinates.
+    // Keep these nodes printable by using transformation file-info
+    // instead of marking source unavailable.
+    SageInterface::setSourcePositionAsTransformation(node);
+    if (node->get_file_info() != nullptr) {
+      node->get_file_info()->setTransformation();
+      node->get_file_info()->setOutputInCodeGeneration();
+    }
+    if (node->get_startOfConstruct() != nullptr) {
+      node->get_startOfConstruct()->setTransformation();
+      node->get_startOfConstruct()->setOutputInCodeGeneration();
+    }
+    if (node->get_endOfConstruct() != nullptr) {
+      node->get_endOfConstruct()->setTransformation();
+      node->get_endOfConstruct()->setOutputInCodeGeneration();
+    }
+    node->setTransformation();
+    node->setOutputInCodeGeneration();
+    return;
+  }
+
   // SageBuilder may have been used and it builds FileInfo
   if (node->get_startOfConstruct() != nullptr) {
     delete node->get_startOfConstruct();

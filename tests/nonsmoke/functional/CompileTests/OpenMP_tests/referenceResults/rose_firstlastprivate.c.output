@@ -1,2 +1,1 @@
-#pragma omp parallel
-#pragma omp for firstprivate(sum) lastprivate(sum)
+#pragma omp parallel for firstprivate(sum) lastprivate(sum)

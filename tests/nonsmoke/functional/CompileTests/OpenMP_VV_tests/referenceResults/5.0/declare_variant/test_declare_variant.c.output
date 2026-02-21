@@ -1,0 +1,8 @@
+#pragma omp declare variant(p_fn) match(construct={parallel})
+#pragma omp declare variant(t_fn) match(construct={target})
+#pragma omp for
+#pragma omp declare target
+#pragma omp distribute
+#pragma omp end declare target
+#pragma omp parallel
+#pragma omp target teams map(tofrom:c[0:N])

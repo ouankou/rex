@@ -1,5 +1,5 @@
 !$omp threadprivate (x)
-!$omp parallel  default(none) private(a,j) shared(z)
+!$omp parallel  default(none) private(a) shared(z) private(j)
 !$omp do  firstprivate(y)
 !$omp end do
 !$omp end parallel

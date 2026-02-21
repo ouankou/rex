@@ -1,0 +1,12 @@
+!$omp target map(tofrom:num_threads,x)
+!$omp parallel num_threads(OMPVV_NUM_THREADS_DEVICE) default(shared)
+!$omp atomic hint(4)
+!$omp end atomic
+!$omp end parallel
+!$omp end target
+!$omp target map(tofrom:num_threads,x)
+!$omp parallel num_threads(OMPVV_NUM_THREADS_DEVICE) default(shared)
+!$omp atomic hint(4132)
+!$omp end atomic
+!$omp end parallel
+!$omp end target

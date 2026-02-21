@@ -606,7 +606,14 @@ int patchUpImplicitMappingVariables(SgFile *file) {
         Rose_STL_Container<SgOmpClause *>::const_iterator iter;
         for (iter = map_clauses.begin(); iter != map_clauses.end(); iter++) {
           SgOmpMapClause *temp_map_clause = isSgOmpMapClause(*iter);
-          if (temp_map_clause->get_operation() == SgOmpClause::e_omp_map_to) {
+          if (temp_map_clause->get_operation() == SgOmpClause::e_omp_map_to ||
+              temp_map_clause->get_operation() ==
+                  SgOmpClause::e_omp_map_present ||
+              temp_map_clause->get_operation() == SgOmpClause::e_omp_map_self ||
+              temp_map_clause->get_operation() ==
+                  SgOmpClause::e_omp_map_tofrom ||
+              temp_map_clause->get_operation() ==
+                  SgOmpClause::e_omp_map_unknown) {
             map_clause = temp_map_clause;
             array_dimensions = map_clause->get_array_dimensions();
             explist = map_clause->get_variables();
@@ -630,7 +637,8 @@ int patchUpImplicitMappingVariables(SgFile *file) {
       SgExpressionPtrList expression_list = explist->get_expressions();
       for (iter = expression_list.begin(); iter != expression_list.end();
            iter++) {
-        if (isSgVarRefExp(*iter)->get_symbol() == sym) {
+        SgVarRefExp *mapped_ref = extractVarRefFromExpression(*iter);
+        if (mapped_ref != nullptr && mapped_ref->get_symbol() == sym) {
           has_mapped = true;
           break;
         }
@@ -762,7 +770,13 @@ int normalizeOmpMapVariables(SgFile *file, VariantVector clause_vv,
       Rose_STL_Container<SgOmpClause *>::const_iterator iter;
       for (iter = map_clauses.begin(); iter != map_clauses.end(); iter++) {
         SgOmpMapClause *temp_map_clause = isSgOmpMapClause(*iter);
-        if (temp_map_clause->get_operation() == SgOmpClause::e_omp_map_to) {
+        if (temp_map_clause->get_operation() == SgOmpClause::e_omp_map_to ||
+            temp_map_clause->get_operation() ==
+                SgOmpClause::e_omp_map_present ||
+            temp_map_clause->get_operation() == SgOmpClause::e_omp_map_self ||
+            temp_map_clause->get_operation() == SgOmpClause::e_omp_map_tofrom ||
+            temp_map_clause->get_operation() ==
+                SgOmpClause::e_omp_map_unknown) {
           map_clause = temp_map_clause;
           explist = map_clause->get_variables();
           has_map_to_clause = true;

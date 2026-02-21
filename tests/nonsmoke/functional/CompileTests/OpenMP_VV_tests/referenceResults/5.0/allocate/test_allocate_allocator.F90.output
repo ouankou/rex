@@ -1,0 +1,4 @@
+!$omp allocate(x) allocator(x_alloc)
+!$omp parallel
+!$omp do simd simdlen(16) aligned(x:64)
+!$omp end parallel

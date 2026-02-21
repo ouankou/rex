@@ -1,0 +1,3 @@
+!$omp parallel do simd shared(x) num_threads(OMPVV_NUM_THREADS_HOST)
+!$omp atomic update
+!$omp end parallel do simd
