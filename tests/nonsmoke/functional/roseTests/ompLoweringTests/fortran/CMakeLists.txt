@@ -31,15 +31,7 @@ set(OMP_FORTRAN_ALL_CASES
   task_scalar.f
   task_simplest.f)
 
-set(OMP_FORTRAN_SEMANTIC_CASES
-  barrier.f
-  conditional.f
-  helloworld.f
-  helloworld0.f
-  helloworld2.f
-  parallel-1.f
-  parallel-2.f
-  parallel.f)
+set(OMP_FORTRAN_SEMANTIC_CASES ${OMP_FORTRAN_ALL_CASES})
 
 list(REMOVE_DUPLICATES OMP_FORTRAN_ALL_CASES)
 list(REMOVE_DUPLICATES OMP_FORTRAN_SEMANTIC_CASES)

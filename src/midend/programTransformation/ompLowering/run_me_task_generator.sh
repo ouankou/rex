@@ -63,7 +63,7 @@ do
   echo "       assert (v_size == sizeof (void*));"
   echo "       memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);"
   echo "     }"
-  echo "     offset += sizeof(v_size);"
+  echo "     offset += v_size;"
   echo "    "
   echo "   } // end for loop"
 
