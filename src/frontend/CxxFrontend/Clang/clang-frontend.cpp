@@ -95,6 +95,28 @@ void assertRequiredPreincludeConfigured(
   ROSE_ABORT();
 }
 
+bool isRoseInternalOption(const std::string &arg) {
+  return arg.rfind("-rose:", 0) == 0 || arg.rfind("--rose:", 0) == 0;
+}
+
+int countRoseOptionTrailingArguments(const std::string &arg) {
+  if (arg.find('=') != std::string::npos) {
+    return 0;
+  }
+
+  std::string canonical_arg = arg;
+  if (canonical_arg.rfind("--rose:", 0) == 0) {
+    canonical_arg = "-" + canonical_arg.substr(2);
+  }
+
+  if (!CommandlineProcessing::isOptionTakingSecondParameter(canonical_arg)) {
+    return 0;
+  }
+
+  return CommandlineProcessing::isOptionTakingThirdParameter(canonical_arg) ? 2
+                                                                            : 1;
+}
+
 struct TokenWithOffset {
   clang::Token token;
   unsigned offset;
@@ -704,6 +726,18 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     std::string current_arg(argv[i]);
     Rose::Cmdline::IncludeOptionParseResult include_parse_result =
         Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption;
+    if (isRoseInternalOption(current_arg)) {
+      // ROSE-only options are consumed by ROSE command-line processing and
+      // must not be forwarded to Clang.
+      const int trailing_arg_count =
+          countRoseOptionTrailingArguments(current_arg);
+      for (int consumed = 0; consumed < trailing_arg_count && i + 1 < argc;
+           ++consumed) {
+        ++i;
+      }
+      continue;
+    }
+
     if (current_arg.find("-I") == 0) {
       if (current_arg.length() > 2) {
         inc_dirs_list.push_back(current_arg.substr(2));
