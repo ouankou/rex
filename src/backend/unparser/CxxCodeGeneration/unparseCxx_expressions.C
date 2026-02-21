@@ -557,6 +557,11 @@ void Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression *expr,
     break;
   }
 
+  case PACK_EXPANSION_EXPR: {
+    unparsePackExpansionExpression(expr, info);
+    break;
+  }
+
   case REQUIRES_EXPR: {
     unparseRequiresExpr(expr, info);
     break;
@@ -694,6 +699,16 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
   }
 }
 
+void Unparse_ExprStmt::unparsePackExpansionExpression(SgExpression *expr,
+                                                      SgUnparse_Info &info) {
+  SgPackExpansionExpr *pack_expansion = isSgPackExpansionExpr(expr);
+  ASSERT_not_null(pack_expansion);
+  ASSERT_not_null(pack_expansion->get_pattern_expression());
+
+  unparseExpression(pack_expansion->get_pattern_expression(), info);
+  curprint("...");
+}
+
 void Unparse_ExprStmt::unparseLambdaExpression(SgExpression *expr,
                                                SgUnparse_Info &info) {
   SgLambdaExp *lambdaExp = isSgLambdaExp(expr);
@@ -782,12 +797,15 @@ void Unparse_ExprStmt::unparseLambdaExpression(SgExpression *expr,
         if (lambdaCapture->get_capture_by_reference() == true) {
           curprint("&");
         }
+        if (lambdaCapture->get_pack_expansion() && is_init_capture) {
+          curprint("...");
+        }
         unp->u_exprStmt->unparseExpression(capt_var_expr, info);
         if (is_init_capture) {
           curprint("=");
           unp->u_exprStmt->unparseExpression(capture_init_expr, info);
         }
-        if (lambdaCapture->get_pack_expansion()) {
+        if (lambdaCapture->get_pack_expansion() && !is_init_capture) {
           curprint("...");
         }
       }

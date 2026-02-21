@@ -120,7 +120,6 @@ HEADER_GET_TYPE_START
           SgType* get_type() const override;
 HEADER_GET_TYPE_END
 
-
 HEADER_POST_CONSTRUCTION_INITIALIZATION_START
           void post_construction_initialization() override;
 HEADER_POST_CONSTRUCTION_INITIALIZATION_END
@@ -1566,6 +1565,26 @@ $CLASSNAME::get_type() const
      return returnType;
    }
 SOURCE_DEFAULT_GET_TYPE_END
+
+SOURCE_PACK_EXPANSION_EXPRESSION_START
+SgType*
+$CLASSNAME::get_type() const
+   {
+     ROSE_ASSERT(this != NULL);
+
+     SgExpression* pattern_expression = this->get_pattern_expression();
+     if (pattern_expression != NULL)
+        {
+          SgType* pattern_type = pattern_expression->get_type();
+          if (pattern_type != NULL)
+             {
+               return pattern_type;
+             }
+        }
+
+     return SgTypeDefault::createType();
+   }
+SOURCE_PACK_EXPANSION_EXPRESSION_END
 
 
 SOURCE_GET_TYPE_FROM_SYMBOL_START

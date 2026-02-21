@@ -12403,24 +12403,23 @@ bool ClangToSageTranslator::VisitPackExpansionExpr(
 #endif
   bool res = true;
 
-  // ROOT CAUSE FIX: Pack expansion expressions (e.g., f(args...) where args is
-  // a pack) Traverse the pattern expression (the expression before the ...)
+  // Translate pack expansion structurally as an explicit AST node.
   clang::Expr *pattern = pack_expansion_expr->getPattern();
   if (pattern != nullptr) {
     SgNode *tmp_node = Traverse(pattern);
     SgExpression *pattern_expr = isSgExpression(tmp_node);
     if (pattern_expr != nullptr) {
-      if (!pattern_expr->attributeExists(
-              kPackExpansionExpressionAttributeName)) {
-        pattern_expr->setAttribute(kPackExpansionExpressionAttributeName,
-                                   new PackExpansionMarkerAttribute());
+      SgPackExpansionExpr *pack_expr = new SgPackExpansionExpr(pattern_expr);
+      if (pattern_expr->get_parent() == nullptr) {
+        pattern_expr->set_parent(pack_expr);
       }
-      *node = pattern_expr;
+      applySourceRange(pack_expr, pack_expansion_expr->getSourceRange());
+      *node = pack_expr;
       return VisitExpr(pack_expansion_expr, node) && res;
     }
   }
 
-  // Fallback if pattern can't be traversed
+  // Preserve AST validity if the pattern cannot be translated.
   *node = buildFallbackExpression(pack_expansion_expr);
 
   return VisitExpr(pack_expansion_expr, node) && res;

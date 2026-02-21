@@ -7396,9 +7396,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   }
 
 #define DEBUG__unparseExprList 0
-  static constexpr char kPackExpansionExpressionAttributeName[] =
-      "rex_pack_expansion_expression";
-
   void UnparseLanguageIndependentConstructs::unparseExprList(
       SgExpression * expr, SgUnparse_Info & info) {
     SgExprListExp *expr_list = isSgExprListExp(expr);
@@ -7483,12 +7480,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         unparseExpression(*i, newinfo);
         if (needParen)
           curprint(")");
-
-        if (argument_expr != nullptr &&
-            argument_expr->attributeExists(
-                kPackExpansionExpressionAttributeName)) {
-          curprint("...");
-        }
 
         i++;
         if (i != expr_list->get_expressions().end())
@@ -11313,6 +11304,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgPntrArrRefExp: // return 16;
     case V_SgArrowExp:      // return 16;
     case V_SgDotExp:        // return 16;
+    case V_SgPackExpansionExpr:
 
     case V_SgImpliedDo: // return 16;
 
@@ -11801,7 +11793,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgFunctionCallExp:
     case V_SgPntrArrRefExp:
     case V_SgArrowExp:
-    case V_SgDotExp: {
+    case V_SgDotExp:
+    case V_SgPackExpansionExpr: {
       return e_assoc_right;
     }
 
