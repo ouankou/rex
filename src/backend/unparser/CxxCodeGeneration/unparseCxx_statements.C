@@ -5559,9 +5559,6 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
 
       SgName nameQualifier = bcls->get_qualified_name_prefix();
       bool is_pack_expansion_base = bcls->get_pack_expansion();
-      if (is_pack_expansion_base) {
-        curprint("...");
-      }
 
       SgNonrealBaseClass *nr_bcls = isSgNonrealBaseClass(bcls);
       if (nr_bcls != NULL) {
@@ -5604,6 +5601,9 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
           curprint(nameQualifier.str());
           curprint(tmp_decl->get_name().str());
         }
+      }
+      if (is_pack_expansion_base) {
+        curprint("...");
       }
 
       p++;

@@ -793,14 +793,29 @@ void Unparse_ExprStmt::unparseLambdaExpression(SgExpression *expr,
         SgExpression *capture_init_expr =
             lambdaCapture->get_source_closure_variable();
         bool is_init_capture = (capture_init_expr != nullptr);
+        if (is_init_capture) {
+          if (capture_init_expr == capt_var_expr) {
+            is_init_capture = false;
+          } else {
+            SgVarRefExp *captured_var_ref = isSgVarRefExp(capt_var_expr);
+            SgVarRefExp *init_var_ref = isSgVarRefExp(capture_init_expr);
+            if (captured_var_ref != nullptr && init_var_ref != nullptr &&
+                captured_var_ref->get_symbol() == init_var_ref->get_symbol()) {
+              is_init_capture = false;
+            }
+          }
+        }
 
         if (lambdaCapture->get_capture_by_reference() == true) {
           curprint("&");
         }
-        if (lambdaCapture->get_pack_expansion()) {
+        if (is_init_capture && lambdaCapture->get_pack_expansion()) {
           curprint("...");
         }
         unp->u_exprStmt->unparseExpression(capt_var_expr, info);
+        if (!is_init_capture && lambdaCapture->get_pack_expansion()) {
+          curprint("...");
+        }
         if (is_init_capture) {
           curprint("=");
           unp->u_exprStmt->unparseExpression(capture_init_expr, info);
