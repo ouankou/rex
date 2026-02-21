@@ -661,8 +661,6 @@ Fortran::parser::AllCookedSources *cooked_{nullptr};
 BuildVisitor *current_build_visitor{nullptr};
 
 namespace {
-std::optional<Fortran::parser::CharBlock> directive_recovery_source_anchor_;
-
 class CookedSourcesGuard {
 public:
   CookedSourcesGuard(Fortran::parser::AllCookedSources *&slot,
@@ -784,27 +782,6 @@ std::string GetPrimarySourcePath(const SgSourceFile *source) {
     path = source->getFileName();
   }
   return NormalizeSourcePath(path);
-}
-
-void RememberDirectiveRecoverySourceAnchor(
-    const Fortran::parser::CharBlock &source) {
-  if (directive_recovery_source_anchor_.has_value() || cooked_ == nullptr ||
-      source.empty()) {
-    return;
-  }
-
-  const std::string source_path = GetPrimarySourcePath(builder.getSourceFile());
-  if (source_path.empty()) {
-    return;
-  }
-
-  if (auto sourceInfo = cooked_->GetSourcePositionRange(source)) {
-    const std::string stmt_path =
-        NormalizeSourcePath(sourceInfo->first.path.get());
-    if (stmt_path == source_path) {
-      directive_recovery_source_anchor_ = source;
-    }
-  }
 }
 
 bool IsAllWhitespace(const std::string &text) {
@@ -1360,6 +1337,99 @@ struct RawFortranDirective {
   std::string text;
 };
 
+struct RecoveredSourceLine {
+  std::string text;
+  SourcePosition start;
+  SourcePosition end;
+};
+
+std::vector<RecoveredSourceLine>
+CollectSourceLinesFromAllSources(const std::string &source_path) {
+  std::vector<RecoveredSourceLine> lines;
+  if (cooked_ == nullptr || source_path.empty()) {
+    return lines;
+  }
+
+  const Fortran::parser::AllSources &all_sources = cooked_->allSources();
+  const std::size_t all_size = all_sources.size();
+
+  RecoveredSourceLine current;
+  bool has_current = false;
+  auto flush_current = [&]() {
+    if (!has_current) {
+      return;
+    }
+    if (current.end.column <= current.start.column) {
+      const int fallback_width =
+          std::max(1, static_cast<int>(current.text.size()));
+      current.end.column = current.start.column + fallback_width;
+    }
+    lines.push_back(current);
+    current = RecoveredSourceLine{};
+    has_current = false;
+  };
+
+  for (std::size_t offset = 1; offset <= all_size; ++offset) {
+    const Fortran::parser::Provenance prov{offset};
+    auto pos = all_sources.GetSourcePosition(prov);
+    if (!pos.has_value()) {
+      continue;
+    }
+
+    const std::string path = NormalizeSourcePath(pos->path.get());
+    if (path != source_path) {
+      continue;
+    }
+
+    const int line = pos->line;
+    const int col = pos->column;
+    const char ch = all_sources[prov];
+
+    if (!has_current || line != current.start.line) {
+      flush_current();
+      current.start = SourcePosition{path, line, col};
+      current.end = current.start;
+      current.text.clear();
+      has_current = true;
+    }
+
+    if (ch == '\n') {
+      if (current.end.column <= current.start.column) {
+        current.end.column = std::max(current.start.column + 1, col);
+      }
+      flush_current();
+      continue;
+    }
+
+    if (ch != '\r') {
+      const int offset_in_line = col - current.start.column;
+      if (offset_in_line > 0 &&
+          static_cast<int>(current.text.size()) < offset_in_line) {
+        current.text.resize(offset_in_line, ' ');
+      }
+
+      if (offset_in_line >= 0) {
+        const std::size_t index = static_cast<std::size_t>(offset_in_line);
+        if (current.text.size() == index) {
+          current.text.push_back(ch);
+        } else if (current.text.size() > index) {
+          current.text[index] = ch;
+        } else {
+          current.text.resize(index, ' ');
+          current.text.push_back(ch);
+        }
+      } else {
+        current.text.push_back(ch);
+      }
+    }
+
+    current.end = SourcePosition{path, line, col + 1};
+  }
+
+  flush_current();
+  return lines;
+}
+
 std::vector<RawFortranDirective>
 CollectRawFortranDirectivesFromSource(const SgSourceFile *source) {
   std::vector<RawFortranDirective> directives;
@@ -1371,63 +1441,14 @@ CollectRawFortranDirectivesFromSource(const SgSourceFile *source) {
   if (source_path.empty()) {
     return directives;
   }
-
-  if (!directive_recovery_source_anchor_.has_value()) {
-    if (auto top_line = cooked_->GetCharBlockFromLineAndColumns(1, 1, 1)) {
-      RememberDirectiveRecoverySourceAnchor(*top_line);
-    }
-  }
-  if (!directive_recovery_source_anchor_.has_value()) {
+  std::vector<RecoveredSourceLine> lines =
+      CollectSourceLinesFromAllSources(source_path);
+  if (lines.empty()) {
     return directives;
-  }
-
-  const Fortran::parser::CookedSource *cooked_source =
-      cooked_->Find(*directive_recovery_source_anchor_);
-  if (cooked_source == nullptr) {
-    return directives;
-  }
-
-  struct CookedLine {
-    std::string text;
-    SourcePosition start;
-    SourcePosition end;
-  };
-  std::vector<CookedLine> lines;
-
-  const Fortran::parser::CharBlock cooked_text = cooked_source->AsCharBlock();
-  const char *line_begin = cooked_text.begin();
-  const char *text_end = cooked_text.end();
-  while (line_begin < text_end) {
-    const char *line_end = line_begin;
-    while (line_end < text_end && *line_end != '\n') {
-      ++line_end;
-    }
-
-    Fortran::parser::CharBlock line_block{line_begin, line_end};
-    if (!line_block.empty()) {
-      if (auto sourceInfo = cooked_->GetSourcePositionRange(line_block)) {
-        SourcePosition start{NormalizeSourcePath(sourceInfo->first.path.get()),
-                             sourceInfo->first.line, sourceInfo->first.column};
-        SourcePosition end{NormalizeSourcePath(sourceInfo->second.path.get()),
-                           sourceInfo->second.line, sourceInfo->second.column};
-        if (start.path == source_path) {
-          std::string line_text = line_block.ToString();
-          if (!line_text.empty() && line_text.back() == '\r') {
-            line_text.pop_back();
-          }
-          lines.push_back(CookedLine{line_text, start, end});
-        }
-      }
-    }
-
-    if (line_end < text_end && *line_end == '\n') {
-      ++line_end;
-    }
-    line_begin = line_end;
   }
 
   for (size_t i = 0; i < lines.size(); ++i) {
-    const CookedLine &current_line = lines[i];
+    const RecoveredSourceLine &current_line = lines[i];
     const std::string &current = current_line.text;
     if (!IsOpenMpOrAccDirectiveLine(current)) {
       continue;
@@ -1452,7 +1473,7 @@ CollectRawFortranDirectivesFromSource(const SgSourceFile *source) {
     bool continued = EndsWithContinuationAmpersand(current);
     std::string combined = normalized;
     while (continued && (i + 1) < lines.size()) {
-      const CookedLine &next_line = lines[i + 1];
+      const RecoveredSourceLine &next_line = lines[i + 1];
       if (next_line.start.line != end.line + 1) {
         break;
       }
@@ -2337,7 +2358,6 @@ void Build(parser::Program &x, parser::AllCookedSources &cooked) {
 
   // TODO: make go away
   CookedSourcesGuard cooked_guard{cooked_, &cooked};
-  directive_recovery_source_anchor_.reset();
   BuildVisitorGuard visitor_guard{current_build_visitor, &visitor};
   // TODO: make go away
   common::LangOptions langOpts{};
@@ -4665,7 +4685,6 @@ void BuildVisitor::BeginStatementSource(
   current_stmt_source_.reset();
 
   MaybeInsertIncludeLine(source);
-  RememberDirectiveRecoverySourceAnchor(source);
 
   if (cooked_ == nullptr || source.empty()) {
     return;
