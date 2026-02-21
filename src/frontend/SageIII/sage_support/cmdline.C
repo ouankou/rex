@@ -2127,6 +2127,21 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     set_skip_parser(true);
   }
 
+  // Skip all ROSE frontend processing and preserve only command line
+  // bookkeeping. This is used by frontendShell() to build project/file nodes
+  // without invoking parsing, transformation, or backend compilation.
+  if (CommandlineProcessing::isOption(argv, "-rose:", "(skip_rose)", true) ==
+          true ||
+      CommandlineProcessing::isOption(argv, "--rose:", "(skip_rose)", true) ==
+          true) {
+    if (SgProject::get_verbose() >= 1)
+      printf("skip rose mode ON \n");
+    set_useBackendOnly(true);
+    set_skip_transformation(true);
+    set_skipfinalCompileStep(true);
+    set_skip_commentsAndDirectives(true);
+  }
+
   //
   // DQ (11/20/2010): Added token handling support.
   // Turn on the output of the tokens from the parser (only applies to C and
@@ -3781,6 +3796,8 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   optionCount = sla(argv, "-rose:", "($)", "(skip_transformation)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(skip_unparse)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(skip_parser)", 1);
+  optionCount = sla(argv, "-rose:", "($)", "(skip_rose)", 1);
+  optionCount = sla(argv, "--rose:", "($)", "(skip_rose)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(unparse_includes)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(unparse_line_directives)", 1);
   optionCount = sla(argv, "-rose:", "($)",
