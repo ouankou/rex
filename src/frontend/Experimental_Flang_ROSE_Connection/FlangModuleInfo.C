@@ -146,7 +146,27 @@ bool is_fixed_form_source(const std::filesystem::path &path) {
 std::map<std::string, std::string> module_source_index;
 bool module_source_index_built = false;
 
-std::string read_first_line_from_command(const std::string &command) {
+bool is_safe_command_path(const std::string &path) {
+  if (path.empty()) {
+    return false;
+  }
+  return path.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST"
+                                "UVWXYZ0123456789_-./") == std::string::npos;
+}
+
+std::string read_first_line_from_command(const std::string &command_path,
+                                         const std::string &argument) {
+  if (!is_safe_command_path(command_path)) {
+    return "";
+  }
+  if (argument.empty() ||
+      argument.find_first_not_of(
+          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") !=
+          std::string::npos) {
+    return "";
+  }
+
+  const std::string command = command_path + " " + argument;
   FILE *pipe = popen(command.c_str(), "r");
   if (pipe == nullptr) {
     return "";
@@ -164,13 +184,16 @@ std::string read_first_line_from_command(const std::string &command) {
 
 std::string find_flang_intrinsic_module_dir() {
   const char *llvm_config_env = std::getenv("LLVM_CONFIG");
-  std::string llvm_config =
-      (llvm_config_env != nullptr && llvm_config_env[0] != '\0')
-          ? std::string(llvm_config_env)
-          : std::string("llvm-config");
+  std::string llvm_config = "llvm-config";
+  if (llvm_config_env != nullptr && llvm_config_env[0] != '\0') {
+    std::string user_path(llvm_config_env);
+    if (is_safe_command_path(user_path)) {
+      llvm_config = user_path;
+    }
+  }
 
   std::string include_dir =
-      read_first_line_from_command(llvm_config + " --includedir");
+      read_first_line_from_command(llvm_config, "--includedir");
   if (include_dir.empty()) {
     return "";
   }

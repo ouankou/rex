@@ -1409,7 +1409,9 @@ SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
       continue;
     }
     if (isSgBasicBlock(scope) == nullptr && isSgGlobal(scope) == nullptr &&
-        isSgClassDefinition(scope) == nullptr) {
+        isSgClassDefinition(scope) == nullptr &&
+        isSgModuleStatement(scope) == nullptr &&
+        isSgFunctionDefinition(scope) == nullptr) {
       continue;
     }
     Sg_File_Info *start = scope->get_file_info();
