@@ -21,6 +21,25 @@ using namespace std;
 
 namespace NodeQuery {
 
+namespace {
+
+SgType *asTypeNodeFromAstPool(SgNode *candidate) {
+  if (candidate == NULL) {
+    return NULL;
+  }
+
+  // returnDataMemberPointers() can include non-AST payload values.
+  // querySolverGrammarElementFromVariantVector only supports real AST nodes,
+  // so gate casts through the node memory-pool index.
+  if (SgNode::variantFromPool(candidate) == static_cast<VariantT>(0)) {
+    return NULL;
+  }
+
+  return isSgType(candidate);
+}
+
+} // namespace
+
 void printNodeList(const Rose_STL_Container<SgNode *> &localList) {
   // Supporting function for querySolverGrammarElementFromVariantVector
   int counter = 0;
@@ -91,9 +110,7 @@ void *querySolverGrammarElementFromVariantVector(
     for (vector<pair<SgNode *, string>>::iterator iItr =
              allNodesInSubtree.begin();
          iItr != allNodesInSubtree.end(); ++iItr) {
-      // DQ (7/27/2014): Check if this is always non-NULL.
-      // ROSE_ASSERT(iItr->first != NULL);
-      SgType *type = isSgType(iItr->first);
+      SgType *type = asTypeNodeFromAstPool(iItr->first);
       if (type != NULL) {
         // DQ (1/13/2011): If we have not already seen this entry then we have
         // to chase down possible nested types. if
