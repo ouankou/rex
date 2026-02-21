@@ -1,0 +1,2 @@
+!$omp target simd order(concurrent)
+!$omp end target simd

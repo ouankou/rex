@@ -1,8 +1,10 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
+#include "FortranLineWrapSupport.h"
 #include "unparser.h"
 
+#include <cctype>
 #include <limits>
 
 #include "ompSupport.h" // to support unparsing OpenMP constructs
@@ -103,15 +105,12 @@ void UnparseLanguageIndependentConstructs::curprint(
     // check whether line wrapping is needed
     int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
     int free_cols = usable_cols - used_cols;
-    auto is_comment_line = [&]() {
-      size_t first = str.find_first_not_of(' ');
-      if (first == std::string::npos) {
-        return false;
-      }
-      return str[first] == '!' || str[first] == '#';
-    };
-
     if (str.size() > free_cols) {
+      if (FortranLineWrapSupport::isDirectiveChunk(str, used_cols)) {
+        unp->u_sage->curprint(str);
+        return;
+      }
+
       if (is_fixed_format) {
         // only noncomment lines need wrapping
         if (!(used_cols == 0 && str[0] != ' ')) {
@@ -125,7 +124,7 @@ void UnparseLanguageIndependentConstructs::curprint(
           unp->u_sage->curprint("     &");
         }
       } else if (is_free_format) {
-        if (is_comment_line()) {
+        if (FortranLineWrapSupport::isCommentLine(str)) {
           unp->u_sage->curprint(str);
           return;
         }
@@ -3495,6 +3494,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           // Liao 10/21/2010. Handle generic OpenMP directive unparsing here.
         case V_SgOmpSectionStatement:
         case V_SgOmpBarrierStatement:
+        case V_SgOmpEndDeclareTargetStatement:
           unparseOmpSimpleStatement(stmt, info);
           break;
         case V_SgOmpThreadprivateStatement:
@@ -3524,6 +3524,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         case V_SgOmpTeamsStatement:
         case V_SgOmpCancellationPointStatement:
         case V_SgOmpDeclareMapperStatement:
+        case V_SgOmpDeclareTargetStatement:
         case V_SgOmpCancelStatement:
         case V_SgOmpTaskgroupStatement:
         case V_SgOmpDistributeStatement:
@@ -8081,6 +8082,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         curprint(string("llvm"));
         break;
       }
+      case SgOmpClause::e_omp_when_context_vendor_nvidia: {
+        curprint(string("nvidia"));
+        break;
+      }
       case SgOmpClause::e_omp_when_context_vendor_pgi: {
         curprint(string("pgi"));
         break;
@@ -8992,6 +8997,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       SgOmpClause::omp_map_operator_enum ro) {
     string result;
     switch (ro) {
+    case SgOmpClause::e_omp_map_unknown: {
+      result = "";
+      break;
+    }
     case SgOmpClause::e_omp_map_tofrom: {
       result = "tofrom";
       break;
@@ -9008,8 +9017,69 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       result = "alloc";
       break;
     }
+    case SgOmpClause::e_omp_map_storage: {
+      result = "storage";
+      break;
+    }
+    case SgOmpClause::e_omp_map_release: {
+      result = "release";
+      break;
+    }
+    case SgOmpClause::e_omp_map_delete: {
+      result = "delete";
+      break;
+    }
+    case SgOmpClause::e_omp_map_present: {
+      result = "present";
+      break;
+    }
+    case SgOmpClause::e_omp_map_self: {
+      result = "self";
+      break;
+    }
     default: {
       cerr << "Error: unhandled operator type MapOperatorToString():" << ro
+           << endl;
+      ROSE_ABORT();
+    }
+    }
+    return result;
+  }
+
+  static std::string mapModifierToString(
+      SgOmpClause::omp_map_modifier_enum rm) {
+    std::string result;
+    switch (rm) {
+    case SgOmpClause::e_omp_map_modifier_unspecified: {
+      result = "";
+      break;
+    }
+    case SgOmpClause::e_omp_map_modifier_always: {
+      result = "always";
+      break;
+    }
+    case SgOmpClause::e_omp_map_modifier_close: {
+      result = "close";
+      break;
+    }
+    case SgOmpClause::e_omp_map_modifier_present: {
+      result = "present";
+      break;
+    }
+    case SgOmpClause::e_omp_map_modifier_self: {
+      result = "self";
+      break;
+    }
+    case SgOmpClause::e_omp_map_modifier_mapper: {
+      result = "mapper";
+      break;
+    }
+    case SgOmpClause::e_omp_map_modifier_iterator: {
+      result = "iterator";
+      break;
+    }
+    default: {
+      cerr << "Error: unhandled operator type mapModifierToString():" << rm
            << endl;
       ROSE_ABORT();
     }
@@ -9113,7 +9183,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     ROSE_ASSERT(clause != NULL);
     SgOmpUsesAllocatorsClause *c = isSgOmpUsesAllocatorsClause(clause);
     ROSE_ASSERT(c != NULL);
-    curprint(string(" uses_allocator("));
+    curprint(string(" uses_allocators("));
     std::list<SgOmpUsesAllocatorsDefination *> uses_allocators_definations =
         c->get_uses_allocators_defination();
     std::list<SgOmpUsesAllocatorsDefination *>::iterator iter;
@@ -9393,8 +9463,49 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgOmpMapClause: {
       is_map = true;
       curprint(string(" map("));
-      curprint(mapOperatorToString(isSgOmpMapClause(c)->get_operation()));
-      curprint(string(" : "));
+      SgOmpMapClause *map_clause = isSgOmpMapClause(c);
+      ROSE_ASSERT(map_clause != NULL);
+
+      bool has_prefix = false;
+      auto append_map_modifier =
+          [&](SgOmpClause::omp_map_modifier_enum modifier) {
+            if (modifier == SgOmpClause::e_omp_map_modifier_unspecified) {
+              return;
+            }
+            if (has_prefix) {
+              curprint(string(", "));
+            }
+            if (modifier == SgOmpClause::e_omp_map_modifier_mapper) {
+              if (map_clause->get_mapper_identifier() != NULL) {
+                curprint(string("mapper("));
+                SgUnparse_Info ninfo(info);
+                unparseExpression(map_clause->get_mapper_identifier(), ninfo);
+                curprint(string(")"));
+              } else {
+                curprint(string("mapper"));
+              }
+            } else {
+              curprint(mapModifierToString(modifier));
+            }
+            has_prefix = true;
+          };
+
+      append_map_modifier(map_clause->get_modifier1());
+      append_map_modifier(map_clause->get_modifier2());
+      append_map_modifier(map_clause->get_modifier3());
+
+      SgOmpClause::omp_map_operator_enum operation =
+          map_clause->get_operation();
+      if (operation != SgOmpClause::e_omp_map_unknown) {
+        if (has_prefix) {
+          curprint(string(", "));
+        }
+        curprint(mapOperatorToString(operation));
+        has_prefix = true;
+      }
+      if (has_prefix) {
+        curprint(string(" : "));
+      }
       break;
     }
     case V_SgOmpToClause: {
@@ -9446,6 +9557,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       ROSE_ASSERT(m_clause != NULL);
       dims = m_clause->get_array_dimensions();
       dist_policies = m_clause->get_dist_data_policies();
+    } else if (is_depend) {
+      SgOmpDependClause *d_clause = isSgOmpDependClause(clause);
+      ROSE_ASSERT(d_clause != NULL);
+      dims = d_clause->get_array_dimensions();
+    } else if (is_affinity) {
+      SgOmpAffinityClause *a_clause = isSgOmpAffinityClause(clause);
+      ROSE_ASSERT(a_clause != NULL);
+      dims = a_clause->get_array_dimensions();
     }
     if (is_to) {
       SgOmpToClause *m_clause = isSgOmpToClause(clause);
@@ -9502,10 +9621,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
               curprint(string("["));
               //          curprint(lower->unparseToString());
-              unparseExpression(lower, ninfo);
+              if (isSgNullExpression(lower) == NULL) {
+                unparseExpression(lower, ninfo);
+              }
               curprint(string(":"));
               //          curprint(upper->unparseToString());
-              unparseExpression(upper, ninfo);
+              if (isSgNullExpression(upper) == NULL) {
+                unparseExpression(upper, ninfo);
+              }
               curprint(string("]"));
 
               std::vector<std::pair<SgOmpClause::omp_map_dist_data_enum,
@@ -9533,9 +9656,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               ROSE_ASSERT(upper != NULL);
 
               curprint(string("["));
-              unparseExpression(lower, ninfo);
+              if (isSgNullExpression(lower) == NULL) {
+                unparseExpression(lower, ninfo);
+              }
               curprint(string(":"));
-              unparseExpression(upper, ninfo);
+              if (isSgNullExpression(upper) == NULL) {
+                unparseExpression(upper, ninfo);
+              }
               curprint(string("]"));
             } // end for
           } // end if has bounds
@@ -9554,9 +9681,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               ROSE_ASSERT(upper != NULL);
 
               curprint(string("["));
-              unparseExpression(lower, ninfo);
+              if (isSgNullExpression(lower) == NULL) {
+                unparseExpression(lower, ninfo);
+              }
               curprint(string(":"));
-              unparseExpression(upper, ninfo);
+              if (isSgNullExpression(upper) == NULL) {
+                unparseExpression(upper, ninfo);
+              }
               curprint(string("]"));
             } // end for
           } // end if has bounds
@@ -9575,17 +9706,47 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               ROSE_ASSERT(upper != NULL);
 
               curprint(string("["));
-              unparseExpression(lower, ninfo);
+              if (isSgNullExpression(lower) == NULL) {
+                unparseExpression(lower, ninfo);
+              }
               curprint(string(":"));
-              unparseExpression(upper, ninfo);
+              if (isSgNullExpression(upper) == NULL) {
+                unparseExpression(upper, ninfo);
+              }
+              curprint(string("]"));
+            } // end for
+          } // end if has bounds
+        } else if (is_affinity) {
+          std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
+              dims[sym];
+          if (bounds.size() > 0) {
+            std::vector<
+                std::pair<SgExpression *, SgExpression *>>::const_iterator iter;
+            for (iter = bounds.begin(); iter != bounds.end(); iter++) {
+              SgUnparse_Info ninfo(info);
+              std::pair<SgExpression *, SgExpression *> bound = (*iter);
+              SgExpression *lower = bound.first;
+              SgExpression *upper = bound.second;
+              ROSE_ASSERT(lower != NULL);
+              ROSE_ASSERT(upper != NULL);
+
+              curprint(string("["));
+              if (isSgNullExpression(lower) == NULL) {
+                unparseExpression(lower, ninfo);
+              }
+              curprint(string(":"));
+              if (isSgNullExpression(upper) == NULL) {
+                unparseExpression(upper, ninfo);
+              }
               curprint(string("]"));
             } // end for
           } // end if has bounds
         }
       } else {
-        cerr << "Unhandled type of variable in a varlist:" << (*p)->class_name()
-             << endl;
-        ROSE_ABORT();
+        // OpenMP 5.x list items can be general lvalue expressions
+        // (e.g., function calls returning references, dereference expressions).
+        SgUnparse_Info ninfo(info);
+        unparseExpression(*p, ninfo);
       }
 
       // output the optional dimension info for map() variable
@@ -10414,6 +10575,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       curprint(string("declare mapper"));
       break;
     }
+    case V_SgOmpDeclareTargetStatement: {
+      curprint(string("declare target"));
+      break;
+    }
+    case V_SgOmpEndDeclareTargetStatement: {
+      curprint(string("end declare target"));
+      break;
+    }
     case V_SgOmpCancelStatement: {
       curprint(string("cancel"));
       break;
@@ -10677,6 +10846,54 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   void UnparseLanguageIndependentConstructs::unparseOmpGenericStatement(
       SgStatement * stmt, SgUnparse_Info & info) {
     ASSERT_not_null(stmt);
+
+    static const char *const kOmpCombinedParallelNestedVariantAttrName =
+        "omp_combined_parallel_nested_variant";
+
+    // Preserve combined `parallel <construct>` spelling only when FE marks the
+    // outer `parallel` as originating from a combined directive.
+    SgOmpBodyStatement *outer_body_stmt = isSgOmpBodyStatement(stmt);
+    SgStatement *nested_stmt =
+        outer_body_stmt != nullptr ? outer_body_stmt->get_body() : nullptr;
+    SgOmpBodyStatement *nested_body_stmt = isSgOmpBodyStatement(nested_stmt);
+    AstIntAttribute *combined_nested_variant = dynamic_cast<AstIntAttribute *>(
+        stmt->getAttribute(kOmpCombinedParallelNestedVariantAttrName));
+    const bool has_known_nested_omp =
+        nested_stmt != nullptr &&
+        (isSgOmpForStatement(nested_stmt) != nullptr ||
+         isSgOmpForSimdStatement(nested_stmt) != nullptr ||
+         isSgOmpDoStatement(nested_stmt) != nullptr ||
+         isSgOmpSectionsStatement(nested_stmt) != nullptr ||
+         isSgOmpWorkshareStatement(nested_stmt) != nullptr);
+    const bool has_combined_parallel_shape =
+        !SageInterface::is_Fortran_language() &&
+        isSgOmpParallelStatement(stmt) != nullptr && has_known_nested_omp &&
+        combined_nested_variant != nullptr &&
+        combined_nested_variant->getValue() ==
+            static_cast<int>(nested_stmt->variantT());
+    const bool emit_combined_with_body =
+        has_combined_parallel_shape && !isVariant &&
+        nested_body_stmt != nullptr && nested_body_stmt->get_body() != nullptr;
+    const bool emit_combined_variant_selector =
+        has_combined_parallel_shape && isVariant;
+
+    if (emit_combined_with_body || emit_combined_variant_selector) {
+      unparseOmpDirectivePrefixAndName(stmt, info);
+      curprint(string(" "));
+      const bool saved_is_variant = isVariant;
+      isVariant = true;
+      unparseOmpDirectivePrefixAndName(nested_stmt, info);
+      isVariant = saved_is_variant;
+      unparseOmpBeginDirectiveClauses(nested_stmt, info);
+      unparseOmpBeginDirectiveClauses(stmt, info);
+      if (emit_combined_with_body) {
+        unp->u_sage->curprint_newline();
+        SgUnparse_Info ninfo(info);
+        unparseStatement(nested_body_stmt->get_body(), ninfo);
+      }
+      return;
+    }
+
     // unparse the begin directive
     unparseOmpDirectivePrefixAndName(stmt, info);
     // unparse the parentheses of construct directive
@@ -11885,6 +12102,18 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       curprint("/* In requiresParentheses(): Case 1: Output false */ \n");
 #endif
       return false;
+    }
+
+    if (isSgSubscriptExpression(parentExpr) != NULL) {
+      // OpenMP array-section bounds are separated by ':' tokens, so regular
+      // arithmetic expressions do not require extra parentheses.
+      // Keep parentheses for expressions that are syntactically ambiguous
+      // without them, or when they were explicit in the source.
+      if (isSgConditionalExp(expr) != NULL || isSgCommaOpExp(expr) != NULL ||
+          isSgAssignOp(expr) != NULL) {
+        return true;
+      }
+      return expr->get_need_paren();
     }
 
     if ((isSgBinaryOp(expr) != NULL) && (expr->get_need_paren() == true)) {

@@ -226,7 +226,7 @@ static bool isFlangFortranSourceSuffix(const std::string &suffix) {
   return lower == "f" || lower == "ff" || lower == "f90" || lower == "ff90" ||
          lower == "f95" || lower == "ff95" || lower == "f18" ||
          lower == "ff18" || lower == "cuf" || lower == "rmod" ||
-         lower == "rcmp";
+         lower == "rcmp" || lower == "mod";
 }
 
 static bool needsFlangFortranExtensionFix(const std::string &path) {
@@ -1027,9 +1027,13 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
       SageBuilder::symbol_table_case_insensitive_semantics = true;
 
       // determine whether to run this file through the C preprocessor
+      const std::string lowerExtension = toLowerCopy(filenameExtension);
+      bool is_module_file_suffix =
+          (lowerExtension == "rmod" || lowerExtension == "rcmp" ||
+           lowerExtension == "mod");
       bool requires_C_preprocessor =
-          // DXN (02/20/2011): rmod file should never require it
-          (filenameExtension != "rmod") &&
+          // Module interface files should never require preprocessing.
+          !is_module_file_suffix &&
           (
               // if the file extension implies it
               CommandlineProcessing::isFortranFileNameSuffixRequiringCPP(

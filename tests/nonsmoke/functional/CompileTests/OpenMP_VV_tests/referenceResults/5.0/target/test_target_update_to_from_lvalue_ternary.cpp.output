@@ -1,0 +1,6 @@
+#pragma omp target enter data map(to:a,b)
+#pragma omp target map(from:before_value)
+#pragma omp target update to(c?a:b)
+#pragma omp target map(from:after_value)
+#pragma omp target update from(c?a:b)
+#pragma omp target exit data map(delete:a,b)

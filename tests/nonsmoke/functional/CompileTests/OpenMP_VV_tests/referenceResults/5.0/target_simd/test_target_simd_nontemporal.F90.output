@@ -1,0 +1,2 @@
+!$omp target simd nontemporal(a,b,c)
+!$omp end target simd

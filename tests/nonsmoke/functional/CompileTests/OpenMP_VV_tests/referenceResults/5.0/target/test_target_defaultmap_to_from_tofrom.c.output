@@ -1,0 +1,3 @@
+#pragma omp target defaultmap(to)
+#pragma omp target defaultmap(from)
+#pragma omp target defaultmap(tofrom)

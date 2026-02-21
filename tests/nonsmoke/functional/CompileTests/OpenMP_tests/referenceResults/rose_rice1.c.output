@@ -1,4 +1,3 @@
 #pragma omp parallel private(th_id)
 #pragma omp barrier
-#pragma omp parallel
-#pragma omp for
+#pragma omp parallel for

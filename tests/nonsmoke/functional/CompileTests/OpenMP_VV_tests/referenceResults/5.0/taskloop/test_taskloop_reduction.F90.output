@@ -1,0 +1,14 @@
+!$omp parallel num_threads(OMPVV_NUM_THREADS_HOST) shared(a,b,num_threads,test_sum)
+!$omp single
+!$omp taskloop reduction(+:test_sum)
+!$omp atomic
+!$omp end atomic
+!$omp end taskloop
+!$omp end single
+!$omp single
+!$omp taskloop reduction(+:test_sum)
+!$omp atomic
+!$omp end atomic
+!$omp end taskloop
+!$omp end single
+!$omp end parallel

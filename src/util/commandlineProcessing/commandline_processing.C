@@ -496,16 +496,17 @@ bool CommandlineProcessing::isFortranFileNameSuffix(const std::string &suffix) {
       // required.
       || suffix == "F" || suffix == "F77" || suffix == "F90" ||
       suffix == "F95" || suffix == "F03" || suffix == "F08" ||
-      suffix == "FXX" || suffix == "CAF" ||
-      suffix == "rmod" // FMZ 5/28/2008: for importing module declaration
+      suffix == "FXX" || suffix == "CAF" || suffix == "rmod" ||
+      suffix == "mod" || suffix == "RMOD" ||
+      suffix == "MOD" // importing module declaration
   )
 #else // It is a case insensitive system
   if (suffix == "f" || suffix == "f77" || suffix == "f90" || suffix == "f95" ||
       suffix == "f03" || suffix == "f08" || suffix == "fxx" || suffix == "F" ||
       suffix == "F77" || suffix == "F90" || suffix == "F95" ||
       suffix == "F03" || suffix == "F08" || suffix == "FXX" ||
-      suffix == "CAF" ||
-      suffix == "rmod" // FMZ 5/28/2008: for importing module declaration
+      suffix == "CAF" || suffix == "rmod" ||
+      suffix == "mod" // importing module declaration
   )
 #endif
     returnValue = true;
@@ -528,8 +529,7 @@ bool CommandlineProcessing::isFortranFileNameSuffixRequiringCPP(
   // required.
   if (suffix == "f" || suffix == "f77" || suffix == "f90" || suffix == "f95" ||
       suffix == "f03" || suffix == "f08" || suffix == "fxx" ||
-      suffix == "caf" || suffix == "rmod" // FMZ (10/15/2008)
-  )
+      suffix == "caf" || suffix == "rmod" || suffix == "mod")
     returnValue = false;
 #else
   // It is a case insensitive system (assume that C preprocessing is required
@@ -585,9 +585,10 @@ bool CommandlineProcessing::isFortran90FileNameSuffix(
   // UNIXish project.
 
 #if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "f90" || suffix == "F90" || suffix == "rmod")
+  if (suffix == "f90" || suffix == "F90" || suffix == "rmod" ||
+      suffix == "mod" || suffix == "RMOD" || suffix == "MOD")
 #else // It is a case insensitive system
-  if (suffix == "f90" || suffix == "rmod")
+  if (suffix == "f90" || suffix == "rmod" || suffix == "mod")
 #endif
   {
     returnValue = true;

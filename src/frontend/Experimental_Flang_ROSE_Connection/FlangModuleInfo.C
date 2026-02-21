@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 
@@ -8,13 +9,13 @@
 
 #include "Rose/StringUtility/Convert.h"
 #include "Rose/StringUtility/Replace.h"
-
+#include "sage-build.h"
 #include "sage3basic.h"
 
 using namespace std;
 
 namespace {
-const std::array<std::string, 2> kModuleSuffixes{".rcmp", ".rmod"};
+const std::array<std::string, 3> kModuleSuffixes{".rcmp", ".rmod", ".mod"};
 const std::array<std::string, 12> kModuleSourceSuffixes{
     ".f",   ".F",   ".f90", ".F90", ".f95", ".F95",
     ".f03", ".F03", ".f08", ".F08", ".f18", ".F18"};
@@ -113,6 +114,29 @@ bool has_fortran_source_suffix(const std::filesystem::path &path) {
   return false;
 }
 
+bool is_intrinsic_module_name_lower(const std::string &name_lower) {
+  static const std::array<std::string, 10> intrinsic_modules = {
+      "iso_fortran_env", "iso_fortran_env_impl", "iso_c_binding",
+      "omp_lib",         "omp_lib_kinds",        "openacc",
+      "openacc_kinds",   "ieee_arithmetic",      "ieee_exceptions",
+      "ieee_features"};
+  for (const auto &module_name : intrinsic_modules) {
+    if (name_lower == module_name) {
+      return true;
+    }
+  }
+  if (name_lower.rfind("__fortran_", 0) == 0) {
+    return true;
+  }
+  return false;
+}
+
+bool is_compiler_builtin_module_name_lower(const std::string &name_lower) {
+  return name_lower == "iso_fortran_env" ||
+         name_lower == "iso_fortran_env_impl" ||
+         name_lower.rfind("__fortran_", 0) == 0;
+}
+
 bool is_fixed_form_source(const std::filesystem::path &path) {
   std::string ext = path.extension().string();
   return equals_case_insensitive(ext, ".f");
@@ -120,6 +144,26 @@ bool is_fixed_form_source(const std::filesystem::path &path) {
 
 std::map<std::string, std::string> module_source_index;
 bool module_source_index_built = false;
+
+std::string find_flang_intrinsic_module_dir() {
+  std::string include_dir;
+#ifdef ROSE_FLANG_INCLUDEDIR_HINT
+  include_dir = ROSE_FLANG_INCLUDEDIR_HINT;
+#endif
+  if (include_dir.empty()) {
+    return "";
+  }
+
+  std::filesystem::path flang_dir =
+      std::filesystem::path(include_dir) / "flang";
+  std::error_code ec;
+  if (std::filesystem::exists(flang_dir, ec) &&
+      std::filesystem::is_directory(flang_dir, ec)) {
+    return flang_dir.string();
+  }
+
+  return "";
+}
 
 void index_module_source_file(const std::filesystem::path &path) {
   std::ifstream in(path);
@@ -291,6 +335,10 @@ void FlangModuleInfo::set_inputDirs(SgProject *project) {
   addInputDir(sourceDirs, intrinsic_src_path);
   addInputDir(sourceDirs, intrinsic_install_path);
 
+  const std::string flang_intrinsic_dir = find_flang_intrinsic_module_dir();
+  addInputDir(inputDirs, flang_intrinsic_dir);
+  addInputDir(sourceDirs, flang_intrinsic_dir);
+
   // Add source file directories to find module sources in the same tree.
   for (const auto &source : project->get_sourceFileNameList()) {
     std::filesystem::path source_path(source);
@@ -326,6 +374,10 @@ SgModuleStatement *FlangModuleInfo::getModule(const string &modName) {
   size_t numberOfModules_before = moduleNameAstMap.size();
 
   string lowerName = Rose::StringUtility::convertToLowerCase(modName);
+
+  if (is_compiler_builtin_module_name_lower(lowerName)) {
+    return nullptr;
+  }
 
   ModuleMapType::iterator mapIterator = moduleNameAstMap.find(lowerName);
   SgModuleStatement *modStmt =
@@ -381,10 +433,16 @@ SgModuleStatement *FlangModuleInfo::getModule(const string &modName) {
   return modStmt;
 }
 
+bool FlangModuleInfo::isIntrinsicModuleName(const string &modName) {
+  return is_intrinsic_module_name_lower(
+      Rose::StringUtility::convertToLowerCase(modName));
+}
+
 SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
   int errorCode = 0;
   vector<string> argv;
   SgScopeStatement *saved_scope = SageBuilder::topScopeStack();
+  SgSourceFile *saved_source_file = Rose::builder::getSgSourceFile();
 
   const string moduleBase = Rose::StringUtility::convertToLowerCase(moduleName);
   string moduleFileName = find_existing_module_file(moduleName);
@@ -395,7 +453,7 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
   if (moduleFileName.empty()) {
     MLOG_ERROR_CXX("FlangModuleInfo")
         << "File moduleFileName = " << moduleBase
-        << "[.rcmp|.rmod] NOT FOUND (expected to be present)";
+        << "[.rcmp|.rmod|.mod] NOT FOUND (expected to be present)";
     return nullptr;
   }
 
@@ -419,7 +477,7 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
     }
   }
 
-  if (extension == ".rmod" || extension == ".rcmp") {
+  if (extension == ".rmod" || extension == ".rcmp" || extension == ".mod") {
     argv.push_back("-ffree-form");
   }
 
@@ -438,7 +496,7 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
       isSgSourceFile(determineFileType(argv, errorCode, project));
   ROSE_ASSERT(newFile != nullptr);
 
-  if (extension == ".rmod" || extension == ".rcmp") {
+  if (extension == ".rmod" || extension == ".rcmp" || extension == ".mod") {
     newFile->set_sourceFileUsesFortran90FileExtension(true);
     newFile->set_outputFormat(SgFile::e_free_form_output_format);
     newFile->set_backendCompileFormat(SgFile::e_free_form_output_format);
@@ -447,6 +505,8 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
 
   newFile->runFrontend(errorCode);
   ROSE_ASSERT(errorCode == 0);
+
+  Rose::builder::setSgSourceFile(saved_source_file);
 
   if (saved_scope != nullptr) {
     while (SageBuilder::topScopeStack() != saved_scope) {

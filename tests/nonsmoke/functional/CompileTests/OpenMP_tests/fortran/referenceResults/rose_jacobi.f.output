@@ -3,10 +3,9 @@
 !$omp end do
 !$omp end parallel
 !$omp parallel
-!$omp do
-!$omp end do
-!$omp do  private(resid) reduction(+ : error)
-!$omp end do  nowait
+      !$omp do
+      !$omp do private(resid) reduction(+:error)
+      !$omp enddo nowait
 !$omp end parallel
 !$omp parallel
 !$omp do  private(xx,yy,temp) reduction(+ : error)

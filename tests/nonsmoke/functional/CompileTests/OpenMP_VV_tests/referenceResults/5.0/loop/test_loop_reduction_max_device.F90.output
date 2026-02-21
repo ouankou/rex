@@ -1,0 +1,6 @@
+!$omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:device_result,a,b,num_threads)
+!$omp loop reduction(max:device_result)
+!$omp end loop
+!$omp do
+!$omp end do
+!$omp end target parallel

@@ -1,0 +1,1 @@
+#pragma omp target teams map(to:a[0:N],b[0:N]) map(from:c[0:N]) map(tofrom:num_actual_teams) num_teams(NUM_TEAMS_TO_SET)

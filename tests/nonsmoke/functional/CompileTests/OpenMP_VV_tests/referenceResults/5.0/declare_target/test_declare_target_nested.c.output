@@ -1,0 +1,8 @@
+#pragma omp declare target
+#pragma omp declare target
+#pragma omp end declare target
+#pragma omp end declare target
+#pragma omp parallel for
+#pragma omp target
+#pragma omp target update from(errors,a,b,c)
+#pragma omp target update to(a,b,c)

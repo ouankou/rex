@@ -1,0 +1,3 @@
+#pragma omp target data map(to:device_data[0:N])
+#pragma omp target data use_device_addr(device_data)
+#pragma omp target teams map(from:host_data[0:N]) is_device_ptr(dev_ptr)

@@ -1,0 +1,8 @@
+#pragma omp target teams loop map(to:a[0:N],b[0:N]) map(from:c[0:N]) uses_allocators(omp_low_lat_mem_alloc) thread_limit(1) allocate(omp_low_lat_mem_alloc:local) firstprivate(local)
+#pragma omp target teams loop map(to:a[0:N],b[0:N]) map(from:c[0:N]) uses_allocators(omp_default_mem_alloc) allocate(omp_default_mem_alloc:local) firstprivate(local)
+#pragma omp target teams loop map(to:a[0:N],b[0:N]) map(from:c[0:N]) uses_allocators(omp_large_cap_mem_alloc) allocate(omp_large_cap_mem_alloc:local) firstprivate(local)
+#pragma omp target teams loop map(to:a[0:N]) map(from:b[0:N]) firstprivate(local) uses_allocators(omp_const_mem_alloc) allocate(omp_const_mem_alloc:local)
+#pragma omp target teams loop map(to:a[0:N],b[0:N]) map(from:c[0:N]) uses_allocators(omp_high_bw_mem_alloc) allocate(omp_high_bw_mem_alloc:local) firstprivate(local)
+#pragma omp target teams loop map(to:a[0:N],b[0:N]) map(from:c[0:N]) uses_allocators(omp_low_lat_mem_alloc) allocate(omp_low_lat_mem_alloc:local) firstprivate(local)
+#pragma omp target teams loop map(to:a[0:N],b[0:N]) map(from:c[0:N]) uses_allocators(omp_cgroup_mem_alloc) allocate(omp_cgroup_mem_alloc:local) firstprivate(local)
+#pragma omp target teams loop map(to:a[0:N],b[0:N]) map(from:c[0:N]) uses_allocators(omp_pteam_mem_alloc) allocate(omp_pteam_mem_alloc:local) firstprivate(local)

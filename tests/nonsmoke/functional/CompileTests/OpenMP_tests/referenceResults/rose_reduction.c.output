@@ -1,5 +1,4 @@
-#pragma omp parallel
-#pragma omp for reduction(+ : sum)
+#pragma omp parallel for reduction(+ : sum)
 #pragma omp parallel private(sum0)
 #pragma omp for private(i)
 #pragma omp critical

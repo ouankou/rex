@@ -1,0 +1,1 @@
+!$omp target teams distribute map(to:a(1:N)) reduction(min:result) map(tofrom:result)

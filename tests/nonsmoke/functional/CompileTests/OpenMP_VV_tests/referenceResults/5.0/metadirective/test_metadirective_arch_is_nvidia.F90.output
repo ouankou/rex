@@ -1,0 +1,6 @@
+!$omp target map(to:v1,v2) map(from:v3,target_device_num) device(default_device)
+!$omp begin metadirective when(device={arch("nvptx")}:teams distribute parallel do) default(parallel do)
+!$omp atomic write
+!$omp end atomic
+!$omp end metadirective
+!$omp end target

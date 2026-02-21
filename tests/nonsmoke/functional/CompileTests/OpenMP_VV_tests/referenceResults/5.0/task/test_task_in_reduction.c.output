@@ -1,0 +1,3 @@
+#pragma omp parallel reduction(task,+:sum) num_threads(OMPVV_NUM_THREADS_HOST) shared(y,z,num_threads)
+#pragma omp master
+#pragma omp task in_reduction(+:sum)

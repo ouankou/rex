@@ -1,0 +1,2 @@
+#pragma omp target data map(tofrom:Hst_A[0:N]) device(gpu)
+#pragma omp target parallel for is_device_ptr(Dev_B) device(gpu)

@@ -78,6 +78,60 @@ SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   return nullptr;
 }
 
+SgVariableSymbol *extractClauseVariableSymbol(SgExpression *expr) {
+  if (expr == nullptr) {
+    return nullptr;
+  }
+
+  if (SgVarRefExp *vref = isSgVarRefExp(expr)) {
+    return isSgVariableSymbol(vref->get_symbol());
+  }
+  if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(expr)) {
+    return extractClauseVariableSymbol(aref->get_lhs_operand());
+  }
+  if (SgDotExp *dot = isSgDotExp(expr)) {
+    if (SgVariableSymbol *lhs =
+            extractClauseVariableSymbol(dot->get_lhs_operand())) {
+      return lhs;
+    }
+    return extractClauseVariableSymbol(dot->get_rhs_operand());
+  }
+  if (SgArrowExp *arrow = isSgArrowExp(expr)) {
+    if (SgVariableSymbol *lhs =
+            extractClauseVariableSymbol(arrow->get_lhs_operand())) {
+      return lhs;
+    }
+    return extractClauseVariableSymbol(arrow->get_rhs_operand());
+  }
+  if (SgPointerDerefExp *deref = isSgPointerDerefExp(expr)) {
+    return extractClauseVariableSymbol(deref->get_operand());
+  }
+  if (SgAddressOfOp *addr = isSgAddressOfOp(expr)) {
+    return extractClauseVariableSymbol(addr->get_operand());
+  }
+  if (SgCastExp *cast = isSgCastExp(expr)) {
+    return extractClauseVariableSymbol(cast->get_operand());
+  }
+  if (SgCommaOpExp *comma = isSgCommaOpExp(expr)) {
+    if (SgVariableSymbol *rhs =
+            extractClauseVariableSymbol(comma->get_rhs_operand())) {
+      return rhs;
+    }
+    return extractClauseVariableSymbol(comma->get_lhs_operand());
+  }
+  if (SgExprListExp *list = isSgExprListExp(expr)) {
+    for (SgExpression *elem : list->get_expressions()) {
+      if (SgVariableSymbol *sym = extractClauseVariableSymbol(elem)) {
+        return sym;
+      }
+    }
+  }
+  if (SgUnaryOp *unary = isSgUnaryOp(expr)) {
+    return extractClauseVariableSymbol(unary->get_operand());
+  }
+  return nullptr;
+}
+
 SgExpression *stripNoopCastsAndParens(SgExpression *expr) {
   SgExpression *result = expr;
   while (result != nullptr) {
@@ -3336,6 +3390,29 @@ void transOmpParallel(SgNode *node) {
   SgOmpParallelStatement *target = isSgOmpParallelStatement(node);
   ROSE_ASSERT(target != NULL);
 
+  SgExpression *cached_if_condition = NULL;
+  if (hasClause(target, V_SgOmpIfClause)) {
+    Rose_STL_Container<SgOmpClause *> if_clauses =
+        getClause(target, V_SgOmpIfClause);
+    ROSE_ASSERT(if_clauses.size() == 1);
+    SgOmpIfClause *if_clause = isSgOmpIfClause(if_clauses[0]);
+    ROSE_ASSERT(if_clause != NULL);
+    ROSE_ASSERT(if_clause->get_expression() != NULL);
+    cached_if_condition = copyExpression(if_clause->get_expression());
+  }
+
+  SgExpression *cached_num_threads = NULL;
+  if (hasClause(target, V_SgOmpNumThreadsClause)) {
+    Rose_STL_Container<SgOmpClause *> num_threads_clauses =
+        getClause(target, V_SgOmpNumThreadsClause);
+    ROSE_ASSERT(num_threads_clauses.size() == 1);
+    SgOmpNumThreadsClause *num_threads_clause =
+        isSgOmpNumThreadsClause(num_threads_clauses[0]);
+    ROSE_ASSERT(num_threads_clause != NULL);
+    ROSE_ASSERT(num_threads_clause->get_expression() != NULL);
+    cached_num_threads = copyExpression(num_threads_clause->get_expression());
+  }
+
   // Liao 12/7/2010
   // For Fortran code, we have to insert EXTERNAL OUTLINED_FUNC into
   // the function body containing the parallel region
@@ -3459,17 +3536,7 @@ void transOmpParallel(SgNode *node) {
   // first. therefore, the head will be the function call of setting up
   // num_threads.
   SgExprStatement *set_num_threads_statement = NULL;
-  SgExpression *omp_num_threads = NULL;
-  if (hasClause(target, V_SgOmpNumThreadsClause)) {
-    Rose_STL_Container<SgOmpClause *> num_threads_clauses =
-        getClause(target, V_SgOmpNumThreadsClause);
-    ROSE_ASSERT(num_threads_clauses.size() ==
-                1); // should only have one num_threads()
-    SgOmpNumThreadsClause *num_threads_clause =
-        isSgOmpNumThreadsClause(num_threads_clauses[0]);
-    ROSE_ASSERT(num_threads_clause->get_expression() != NULL);
-    omp_num_threads = copyExpression(num_threads_clause->get_expression());
-  }
+  SgExpression *omp_num_threads = cached_num_threads;
   if (omp_num_threads != NULL) {
     SgStatement *kmpc_global_tid_init = NULL;
     kmpc_global_tid_declaration =
@@ -3500,15 +3567,7 @@ void transOmpParallel(SgNode *node) {
 
   // transform the if clause
   // the head of transformed code will be the if statement in this case
-  SgExpression *if_condition = NULL;
-  if (hasClause(target, V_SgOmpIfClause)) {
-    Rose_STL_Container<SgOmpClause *> if_clauses =
-        getClause(target, V_SgOmpIfClause);
-    ROSE_ASSERT(if_clauses.size() == 1); // should only have one if ()
-    SgOmpIfClause *if_clause = isSgOmpIfClause(if_clauses[0]);
-    ROSE_ASSERT(if_clause->get_expression() != NULL);
-    if_condition = copyExpression(if_clause->get_expression());
-  }
+  SgExpression *if_condition = cached_if_condition;
   if (if_condition != NULL) {
     if (omp_num_threads == NULL) {
       SgStatement *kmpc_global_tid_init = NULL;
@@ -3693,8 +3752,13 @@ bool isInClauseVariableList(SgOmpClause *cls, SgSymbol *var) {
       isSgOmpVariablesClause(var_cls)->get_variables()->get_expressions();
 
   std::vector<SgSymbol *> var_list;
-  for (size_t j = 0; j < refs.size(); j++)
-    var_list.push_back(isSgVarRefExp(refs[j])->get_symbol());
+  for (size_t j = 0; j < refs.size(); j++) {
+    SgVariableSymbol *symbol = extractClauseVariableSymbol(refs[j]);
+    if (symbol == nullptr) {
+      continue;
+    }
+    var_list.push_back(symbol);
+  }
 
   if (find(var_list.begin(), var_list.end(), var) != var_list.end())
     return true;
@@ -3922,13 +3986,19 @@ void extractMapClauses(
     };
 
     SgOmpClause::omp_map_operator_enum map_operator = m_cls->get_operation();
-    if (map_operator == SgOmpClause::e_omp_map_alloc)
+    if (map_operator == SgOmpClause::e_omp_map_alloc ||
+        map_operator == SgOmpClause::e_omp_map_storage ||
+        map_operator == SgOmpClause::e_omp_map_release ||
+        map_operator == SgOmpClause::e_omp_map_delete)
       *map_alloc_clause = m_cls;
     else if (map_operator == SgOmpClause::e_omp_map_to)
       *map_to_clause = m_cls;
     else if (map_operator == SgOmpClause::e_omp_map_from)
       *map_from_clause = m_cls;
-    else if (map_operator == SgOmpClause::e_omp_map_tofrom)
+    else if (map_operator == SgOmpClause::e_omp_map_tofrom ||
+             map_operator == SgOmpClause::e_omp_map_present ||
+             map_operator == SgOmpClause::e_omp_map_self ||
+             map_operator == SgOmpClause::e_omp_map_unknown)
       *map_tofrom_clause = m_cls;
     else {
       cerr << "Error. transOmpMapVariables() from omp_lowering.cpp: found "
@@ -6982,12 +7052,26 @@ SgInitializedNamePtrList collectClauseVariables(SgStatement *clause_stmt,
       continue;
     // get initialized name from varRefExp
     SgExpressionPtrList refs = vars->get_expressions();
+    const VariantT clause_variant = p_clause[i]->variantT();
+    const bool allow_designators = clause_variant == V_SgOmpMapClause ||
+                                   clause_variant == V_SgOmpToClause ||
+                                   clause_variant == V_SgOmpFromClause;
     result2.clear();
     for (size_t j = 0; j < refs.size(); j++) {
-      SgVarRefExp *var_ref = isSgVarRefExp(refs[j]);
-      if (var_ref == NULL || var_ref->get_symbol() == NULL)
+      SgVariableSymbol *symbol = NULL;
+      if (allow_designators) {
+        symbol = extractClauseVariableSymbol(refs[j]);
+      } else {
+        SgExpression *expr = stripNoopCastsAndParens(refs[j]);
+        SgVarRefExp *var_ref = isSgVarRefExp(expr);
+        if (var_ref != NULL) {
+          symbol = isSgVariableSymbol(var_ref->get_symbol());
+        }
+      }
+      if (symbol == NULL) {
         continue;
-      result2.push_back(var_ref->get_symbol()->get_declaration());
+      }
+      result2.push_back(symbol->get_declaration());
     }
     std::copy(result2.begin(), result2.end(), back_inserter(result));
   }
@@ -7065,9 +7149,13 @@ getReductionOperationType(SgInitializedName *init_name,
         isSgOmpVariablesClause(r_clause)->get_variables()->get_expressions();
     SgInitializedNamePtrList
         var_list; //= isSgOmpVariablesClause(r_clause)->get_variables();
-    for (size_t j = 0; j < refs.size(); j++)
-      var_list.push_back(
-          isSgVarRefExp(refs[j])->get_symbol()->get_declaration());
+    for (size_t j = 0; j < refs.size(); j++) {
+      SgExpression *expr = stripNoopCastsAndParens(refs[j]);
+      SgVarRefExp *var_ref = isSgVarRefExp(expr);
+      if (var_ref == NULL || var_ref->get_symbol() == NULL)
+        continue;
+      var_list.push_back(var_ref->get_symbol()->get_declaration());
+    }
     SgInitializedNamePtrList::const_iterator iter =
         find(var_list.begin(), var_list.end(), init_name);
     if (iter != var_list.end()) {
@@ -8443,6 +8531,9 @@ void transOmpCollapse(SgStatement *node) {
         SgOmpClause::omp_map_operator_enum map_operator =
             temp_map_clause->get_operation();
         if (map_operator == SgOmpClause::e_omp_map_to ||
+            map_operator == SgOmpClause::e_omp_map_present ||
+            map_operator == SgOmpClause::e_omp_map_self ||
+            map_operator == SgOmpClause::e_omp_map_unknown ||
             map_operator == SgOmpClause::e_omp_map_tofrom) {
           map_to = temp_map_clause;
           break;

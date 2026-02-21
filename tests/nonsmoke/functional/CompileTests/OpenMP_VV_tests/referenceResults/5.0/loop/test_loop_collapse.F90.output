@@ -1,0 +1,8 @@
+!$omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+!$omp loop collapse(1)
+!$omp end loop
+!$omp end parallel
+!$omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+!$omp loop collapse(2)
+!$omp end loop
+!$omp end parallel

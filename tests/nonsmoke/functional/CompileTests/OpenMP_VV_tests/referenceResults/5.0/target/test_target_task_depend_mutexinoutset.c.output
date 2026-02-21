@@ -1,0 +1,9 @@
+#pragma omp target map(from:d)
+#pragma omp parallel
+#pragma omp single
+#pragma omp task depend(out:c)
+#pragma omp task depend(out:a)
+#pragma omp task depend(out:b)
+#pragma omp task depend(in:a) depend(mutexinoutset:c)
+#pragma omp task depend(in:b) depend(mutexinoutset:c)
+#pragma omp task depend(in:c)

@@ -1,3 +1,2 @@
 #pragma omp target map(tofrom : c) map(to : a,b)
-#pragma omp parallel
-#pragma omp for private(i,j,k)
+#pragma omp parallel for private(i,j,k)

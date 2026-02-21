@@ -1,0 +1,2 @@
+#pragma omp teams num_teams(OMPVV_NUM_TEAMS_DEVICE) thread_limit(OMPVV_NUM_THREADS_DEVICE)
+#pragma omp parallel master

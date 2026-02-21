@@ -2480,48 +2480,86 @@ void ClangToSageTranslator::appendUnattachedOpenMPPragmas() {
   };
 
   auto insert_pragma_in_scope = [&](SgPragmaDeclaration *pragma_decl,
-                                    SgScopeStatement *scope, unsigned line) {
+                                    SgScopeStatement *scope,
+                                    const std::string &filename,
+                                    unsigned line) {
     if (pragma_decl == nullptr || scope == nullptr) {
       return;
     }
     if (SgDeclarationStatementPtrList *decls =
             getScopeDeclarationListForPragma(scope)) {
-      auto it = decls->begin();
-      for (; it != decls->end(); ++it) {
+      auto insert_it = decls->end();
+      auto last_same_file_it = decls->end();
+
+      for (auto it = decls->begin(); it != decls->end(); ++it) {
         SgDeclarationStatement *decl = *it;
         if (decl == nullptr) {
           continue;
         }
-        unsigned decl_line = getLineForStatement(decl);
-        if (decl_line == 0) {
+        std::string decl_filename;
+        unsigned decl_line = 0;
+        if (!getLocatedNodeFilenameAndLine(decl, decl_filename, decl_line) ||
+            decl_line == 0 || !filenamesMatch(decl_filename, filename)) {
           continue;
         }
         if (decl_line > line) {
+          insert_it = it;
           break;
         }
+        last_same_file_it = it;
       }
-      decls->insert(it, pragma_decl);
+
+      if (insert_it == decls->end()) {
+        if (last_same_file_it != decls->end()) {
+          insert_it = last_same_file_it;
+          ++insert_it;
+        } else {
+          // Avoid cross-file placement when this scope has no declarations
+          // from the pragma's source file.
+          insert_it = decls->end();
+        }
+      }
+
+      decls->insert(insert_it, pragma_decl);
       pragma_decl->set_parent(scope);
       pragma_decl->set_scope(scope);
       return;
     }
 
     SgStatementPtrList &stmts = scope->getStatementList();
-    auto it = stmts.begin();
-    for (; it != stmts.end(); ++it) {
+    auto insert_it = stmts.end();
+    auto last_same_file_it = stmts.end();
+
+    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
       SgStatement *stmt = *it;
       if (stmt == nullptr) {
         continue;
       }
-      unsigned stmt_line = getLineForStatement(stmt);
-      if (stmt_line == 0) {
+      std::string stmt_filename;
+      unsigned stmt_line = 0;
+      if (!getLocatedNodeFilenameAndLine(stmt, stmt_filename, stmt_line) ||
+          stmt_line == 0 || !filenamesMatch(stmt_filename, filename)) {
         continue;
       }
       if (stmt_line > line) {
+        insert_it = it;
         break;
       }
+      last_same_file_it = it;
     }
-    stmts.insert(it, pragma_decl);
+
+    if (insert_it == stmts.end()) {
+      if (last_same_file_it != stmts.end()) {
+        insert_it = last_same_file_it;
+        ++insert_it;
+      } else {
+        // Avoid cross-file placement when this scope has no statements from
+        // the pragma's source file.
+        insert_it = stmts.end();
+      }
+    }
+
+    stmts.insert(insert_it, pragma_decl);
     pragma_decl->set_parent(scope);
     pragma_decl->set_scope(scope);
   };
@@ -2544,7 +2582,7 @@ void ClangToSageTranslator::appendUnattachedOpenMPPragmas() {
     if (pragma_decl == nullptr) {
       continue;
     }
-    insert_pragma_in_scope(pragma_decl, scope, entry.line);
+    insert_pragma_in_scope(pragma_decl, scope, entry.filename, entry.line);
     p_consumed_openmp_lines.insert(std::make_pair(entry.file_id, entry.line));
   }
 }

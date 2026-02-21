@@ -1,0 +1,6 @@
+!$omp target parallel reduction(task,+:test_sum) num_threads(OMPVV_NUM_THREADS_DEVICE) shared(y,z,num_threads) defaultmap(tofrom)
+!$omp master
+!$omp taskloop in_reduction(+:test_sum)
+!$omp end taskloop
+!$omp end master
+!$omp end target parallel

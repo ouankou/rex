@@ -1,0 +1,2 @@
+#pragma omp allocate(x,y) allocator(x_alloc)
+#pragma omp parallel for simd simdlen(16) aligned(x,y:64)

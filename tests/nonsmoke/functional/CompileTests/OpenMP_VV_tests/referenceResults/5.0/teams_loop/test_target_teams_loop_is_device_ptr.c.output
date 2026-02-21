@@ -1,0 +1,5 @@
+#pragma omp target teams loop is_device_ptr(a_d) map(from:a_h[0:N])
+#pragma omp target teams loop is_device_ptr(a_d)
+#pragma omp target teams loop is_device_ptr(a_d) map(from:a_h[0:N])
+#pragma omp target teams loop is_device_ptr(a_d1,a_d2)
+#pragma omp target teams loop is_device_ptr(a_d1,a_d2) map(from:a_h[0:N])

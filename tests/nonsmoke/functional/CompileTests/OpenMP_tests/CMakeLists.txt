@@ -21,7 +21,7 @@ endif()
 # C test codes
 set(C_TESTCODES
 	3loops.c affinity.c allocate.c jacobi.c jacobi-collapse.c alignment.c
-	array_init.c array_init_2.c atoms-2.c atomic.c atomic-3.c barrier.c
+	array_init.c array_init_2.c array_section_stride.c atoms-2.c atomic.c atomic-3.c barrier.c
 	cancel.c cancellation_point.c collapse.c copyin.c copyprivate2.c copyprivate3.c
 	copyprivate.c critical.c critical1.c critical_dead.c critical_orphaned.c
 	depobj.c task_dep1.c task_dep3.c task_dep_iterator1.c task_dep_iterator2.c
@@ -33,7 +33,7 @@ set(C_TESTCODES
 	get_max_threads.c hello.c hello-1.c hello-2.c hello-ordered.c
 	include_header_only.c init.c lastprivate0.c lastprivate.c lastprivateOrphaned.c
 	limits_threads.c linebreak.c lockarray.c loop.c loop1.c lu_factorization.c
-	master.c masterSingle.c mastertaskloop.c mastertaskloopsimd.c matrix_vector.c
+	master.c masterSingle.c mastertaskloop.c mastertaskloopsimd.c metadirective_arch_nvidia.c matrix_vector.c
 	matrixmultiply.c md_open_mp.c multiple_return.c nestedpar1.c nestedpar.c omp1.c
 	ompfor.c ompfor_c99.c ompfor2.c ompfor3.c ompfor4.c ompfor5.c ompfor6.c
 	ompfor8.c ompfor9.c ompfor10.c ompfor-default.c ompfor-decremental.c
@@ -93,7 +93,7 @@ set(OMP_ACC_TESTCODES
 set(ROSE_C_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
 set(ROSE_CXX_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
 
-set(_omp_test_output_dir ${CMAKE_CURRENT_BINARY_DIR})
+set(_omp_test_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_test_output_dir})
 
 foreach(file_to_test ${TESTCODES})
@@ -105,7 +105,9 @@ foreach(file_to_test ${TESTCODES})
   add_test(
     NAME OMPTEST_${file_to_test}
     WORKING_DIRECTORY ${_omp_test_output_dir}
-    COMMAND parseOmp ${_rose_flags} -c
+    COMMAND parseOmp ${_rose_flags}
+            -rose:output ${_omp_test_output_dir}/rose_${file_to_test}
+            -c
             ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(OMPTEST_${file_to_test} PROPERTIES LABELS OMPTEST)
 endforeach()
@@ -114,7 +116,9 @@ foreach(file_to_test ${OMP_ACC_TESTCODES})
   add_test(
     NAME OMPACCTEST_${file_to_test}
     WORKING_DIRECTORY ${_omp_test_output_dir}
-    COMMAND parseOmp ${ROSE_C_FLAGS} -rose:skipfinalCompileStep
+    COMMAND parseOmp ${ROSE_C_FLAGS}
+                     -rose:output ${_omp_test_output_dir}/rose_${file_to_test}
+                     -rose:skipfinalCompileStep
                      -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test})
   set_tests_properties(OMPACCTEST_${file_to_test} PROPERTIES LABELS OMPACCTEST)
 endforeach()
@@ -134,6 +138,7 @@ add_test(
   NAME OMPTEST_macroIds
   WORKING_DIRECTORY ${_omp_test_output_dir}
   COMMAND parseOmp ${ROSE_C_FLAGS}
+          -rose:output ${_omp_test_output_dir}/rose_macroIds.c
           -rose:collectAllCommentsAndDirectives
           ${CMAKE_CURRENT_SOURCE_DIR}/macroIds.c)
 set_tests_properties(OMPTEST_macroIds PROPERTIES LABELS OMPTEST)
@@ -149,7 +154,7 @@ function(add_omp_output_diff_tests input_file dependency label)
 
   add_test(
     NAME OMPTEST_output_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_omp_test_output_dir}
     COMMAND ${BASH_EXECUTABLE} -c
       "grep -E \"^[[:space:]]*(#pragma[[:space:]]+omp|//[[:space:]]*#pragma[[:space:]]+omp|/\\*[[:space:]]*#pragma[[:space:]]+omp.*)\" ${_rose_file} > ${_output_file} || exit 0"
   )
@@ -157,7 +162,7 @@ function(add_omp_output_diff_tests input_file dependency label)
 
   add_test(
     NAME OMPTEST_output_diff_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    WORKING_DIRECTORY ${_omp_test_output_dir}
     COMMAND ${BASH_EXECUTABLE} -c
       "if diff ${_output_file} ${_omp_reference_dir}/${_output_file} > ${_diff_file}; then rm -f ${_diff_file}; exit 0; else cat ${_diff_file}; rm -f ${_diff_file}; exit 1; fi"
   )

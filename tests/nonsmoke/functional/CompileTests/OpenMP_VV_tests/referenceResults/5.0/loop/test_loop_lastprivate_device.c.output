@@ -1,0 +1,4 @@
+#pragma omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:a,b,x)
+#pragma omp loop lastprivate(x)
+#pragma omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:a,b,x,y)
+#pragma omp loop lastprivate(x,y) collapse(2)

@@ -211,9 +211,17 @@ HEADER_OMP_CLAUSE_START
             e_omp_when_context_vendor_ibm,
             e_omp_when_context_vendor_intel,
             e_omp_when_context_vendor_llvm,
+            e_omp_when_context_vendor_nvidia,
             e_omp_when_context_vendor_pgi,
             e_omp_when_context_vendor_ti,
             e_omp_when_context_vendor_unknown
+        };
+
+        enum omp_declare_mapper_identifier_enum
+        {
+            e_omp_declare_mapper_identifier_unspecified = 0,
+            e_omp_declare_mapper_identifier_default,
+            e_omp_declare_mapper_identifier_user
         };
 
         enum omp_allocate_modifier_enum
@@ -374,7 +382,23 @@ HEADER_OMP_CLAUSE_START
           e_omp_map_to,
           e_omp_map_from,
           e_omp_map_tofrom,
+          e_omp_map_storage,
+          e_omp_map_release,
+          e_omp_map_delete,
+          e_omp_map_present,
+          e_omp_map_self,
           e_omp_map_last
+        };
+
+        enum omp_map_modifier_enum
+        {
+          e_omp_map_modifier_unspecified,
+          e_omp_map_modifier_always,
+          e_omp_map_modifier_close,
+          e_omp_map_modifier_present,
+          e_omp_map_modifier_self,
+          e_omp_map_modifier_mapper,
+          e_omp_map_modifier_iterator
         };
 
         // Liao, 11/11/2015: experimental support for data distribution policies

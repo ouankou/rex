@@ -1,0 +1,2 @@
+!$omp requires  dynamic_allocators
+!$omp allocate (x) allocator(alloc)
