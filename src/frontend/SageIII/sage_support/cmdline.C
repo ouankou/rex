@@ -2131,7 +2131,9 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
   // bookkeeping. This is used by frontendShell() to build project/file nodes
   // without invoking parsing, transformation, or backend compilation.
   if (CommandlineProcessing::isOption(argv, "-rose:", "(skip_rose)", true) ==
-      true) {
+          true ||
+      CommandlineProcessing::isOption(argv, "--rose:", "(skip_rose)", true) ==
+          true) {
     if (SgProject::get_verbose() >= 1)
       printf("skip rose mode ON \n");
     set_useBackendOnly(true);
