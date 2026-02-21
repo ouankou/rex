@@ -29,6 +29,8 @@ using EntityDeclTuple = std::tuple<std::string, SgType *, SgExpression *>;
 
 // Needed until Rose compiles with C++17 (see setSgSourceFile below)
 class SgSourceFile;
+class SgType;
+class SgExpression;
 
 namespace Rose::builder {
 
