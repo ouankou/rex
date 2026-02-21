@@ -127,6 +127,52 @@ bool scopeIsWithinNamespaceChain(SgScopeStatement *scope,
   return true;
 }
 
+std::string normalizeTemplateTypeParamName(std::string name) {
+  if (isImplicitAutoPlaceholderTemplateParamName(name)) {
+    return "auto";
+  }
+  return name;
+}
+
+bool shouldPreserveDependentDecltypeExpression(
+    const clang::DecltypeType *decltype_type) {
+  if (decltype_type == nullptr) {
+    return false;
+  }
+
+  const clang::Expr *underlying_expr = decltype_type->getUnderlyingExpr();
+  if (underlying_expr == nullptr) {
+    return false;
+  }
+
+  const clang::Expr *stripped_expr = underlying_expr->IgnoreParenImpCasts();
+  const clang::DeclRefExpr *decl_ref =
+      llvm::dyn_cast<clang::DeclRefExpr>(stripped_expr);
+  if (decl_ref == nullptr) {
+    return false;
+  }
+
+  const clang::ParmVarDecl *param_decl =
+      llvm::dyn_cast<clang::ParmVarDecl>(decl_ref->getDecl());
+  if (param_decl == nullptr) {
+    return false;
+  }
+
+  if (param_decl->isParameterPack()) {
+    return true;
+  }
+
+  clang::QualType param_type = param_decl->getType();
+  if (param_type.isNull()) {
+    return false;
+  }
+  if (param_type->getContainedAutoType() != nullptr) {
+    return true;
+  }
+
+  return param_type->isDependentType();
+}
+
 clang::NestedNameSpecifier *
 buildNamespaceQualifierForDeclContext(clang::DeclContext *context,
                                       clang::ASTContext &ast_context) {
@@ -1906,8 +1952,37 @@ bool ClangToSageTranslator::VisitDecltypeType(
   bool res = true;
 
   clang::QualType underlying_type = decltype_type->getUnderlyingType();
+  SgType *sg_underlying_type = nullptr;
   if (!underlying_type.isNull()) {
-    *node = buildTypeFromQualifiedType(underlying_type);
+    sg_underlying_type = buildTypeFromQualifiedType(underlying_type);
+  }
+
+  SgType *sg_decltype = nullptr;
+  bool preserve_decltype_expression =
+      isSgAutoType(sg_underlying_type) != nullptr ||
+      shouldPreserveDependentDecltypeExpression(decltype_type);
+
+  // Preserve decltype(expr) when the deduced underlying type is still auto.
+  // This is required for generic-lambda placeholders such as decltype(r),
+  // where reducing to plain "auto" would lose semantics.
+  if (preserve_decltype_expression) {
+    if (const clang::Expr *underlying_expr =
+            decltype_type->getUnderlyingExpr()) {
+      SgNode *expr_node = Traverse(const_cast<clang::Expr *>(underlying_expr));
+      if (SgExpression *expr = isSgExpression(expr_node)) {
+        SgExpression *expr_copy = SageInterface::deepCopy(expr);
+        if (expr_copy != nullptr) {
+          sg_decltype =
+              SageBuilder::buildDeclType(expr_copy, sg_underlying_type);
+        }
+      }
+    }
+  }
+
+  if (sg_decltype != nullptr) {
+    *node = sg_decltype;
+  } else if (sg_underlying_type != nullptr) {
+    *node = sg_underlying_type;
   } else {
     *node = SageBuilder::buildUnknownType();
   }
@@ -5528,6 +5603,13 @@ bool ClangToSageTranslator::VisitTemplateTypeParmType(
   const clang::TemplateTypeParmDecl *param_decl =
       template_type_parm_type->getDecl();
 
+  if (param_decl != nullptr && param_decl->isImplicit() &&
+      isImplicitAutoPlaceholderTemplateParamName(
+          param_decl->getNameAsString())) {
+    *node = SageBuilder::buildAutoType();
+    return VisitType(template_type_parm_type, node) && res;
+  }
+
   auto lookup_mapped_template_param =
       [&](clang::NamedDecl *decl) -> SgTemplateParameter * {
     if (decl == nullptr) {
@@ -5587,11 +5669,15 @@ bool ClangToSageTranslator::VisitTemplateTypeParmType(
         param_name = mapped_init->get_name().getString();
       }
     }
+    param_name = normalizeTemplateTypeParamName(param_name);
   }
 
   if (param_name.empty() && param_decl != nullptr &&
       param_decl->getDeclName().isIdentifier()) {
     param_name = param_decl->getNameAsString();
+  }
+  if (param_name.empty() && param_decl != nullptr) {
+    param_name = normalizeTemplateTypeParamName(param_decl->getNameAsString());
   }
   if (param_name.empty()) {
     param_name = "template_type_param";

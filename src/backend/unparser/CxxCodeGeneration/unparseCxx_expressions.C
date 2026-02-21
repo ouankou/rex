@@ -562,6 +562,11 @@ void Unparse_ExprStmt::unparseLanguageSpecificExpression(SgExpression *expr,
     break;
   }
 
+  case PACK_EXPANSION_EXPR: {
+    unparsePackExpansionExpression(expr, info);
+    break;
+  }
+
   case REQUIRES_EXPR: {
     unparseRequiresExpr(expr, info);
     break;
@@ -699,6 +704,16 @@ void Unparse_ExprStmt::unparseNonrealRefExpression(SgExpression *expr,
   }
 }
 
+void Unparse_ExprStmt::unparsePackExpansionExpression(SgExpression *expr,
+                                                      SgUnparse_Info &info) {
+  SgPackExpansionExpr *pack_expansion = isSgPackExpansionExpr(expr);
+  ASSERT_not_null(pack_expansion);
+  ASSERT_not_null(pack_expansion->get_pattern_expression());
+
+  unparseExpression(pack_expansion->get_pattern_expression(), info);
+  curprint("...");
+}
+
 void Unparse_ExprStmt::unparseLambdaExpression(SgExpression *expr,
                                                SgUnparse_Info &info) {
   SgLambdaExp *lambdaExp = isSgLambdaExp(expr);
@@ -780,12 +795,35 @@ void Unparse_ExprStmt::unparseLambdaExpression(SgExpression *expr,
           curprint("...");
         }
       } else {
+        SgExpression *capture_init_expr =
+            lambdaCapture->get_source_closure_variable();
+        bool is_init_capture = (capture_init_expr != nullptr);
+        if (is_init_capture) {
+          if (capture_init_expr == capt_var_expr) {
+            is_init_capture = false;
+          } else {
+            SgVarRefExp *captured_var_ref = isSgVarRefExp(capt_var_expr);
+            SgVarRefExp *init_var_ref = isSgVarRefExp(capture_init_expr);
+            if (captured_var_ref != nullptr && init_var_ref != nullptr &&
+                captured_var_ref->get_symbol() == init_var_ref->get_symbol()) {
+              is_init_capture = false;
+            }
+          }
+        }
+
         if (lambdaCapture->get_capture_by_reference() == true) {
           curprint("&");
         }
-        unp->u_exprStmt->unparseExpression(capt_var_expr, info);
-        if (lambdaCapture->get_pack_expansion()) {
+        if (is_init_capture && lambdaCapture->get_pack_expansion()) {
           curprint("...");
+        }
+        unp->u_exprStmt->unparseExpression(capt_var_expr, info);
+        if (!is_init_capture && lambdaCapture->get_pack_expansion()) {
+          curprint("...");
+        }
+        if (is_init_capture) {
+          curprint("=");
+          unp->u_exprStmt->unparseExpression(capture_init_expr, info);
         }
       }
     }
@@ -1689,6 +1727,11 @@ void Unparse_ExprStmt::unparseTemplateParameter(
         }
       }
       if (!printed_name_with_type) {
+        if (is_template_header) {
+          // Ensure a separator between the type spelling and parameter name for
+          // generated/qualified type spellings that omit trailing whitespace.
+          curprint(" ");
+        }
         curprint(templateParameter->get_initializedName()->get_name());
       }
       if (emit_default_template_arg) {

@@ -712,6 +712,13 @@ void Grammar::setUpSupport() {
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
+  // Track whether this specific base-specifier carries an ellipsis
+  // (e.g., "Bases...") so unparsing can preserve pack expansion directly
+  // from AST structure rather than declaration-level attributes.
+  BaseClass.setDataPrototype("bool", "pack_expansion", "= false",
+                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE);
+
   // DQ (1/21/2019): Fix this to cause access functions to be automatically
   // generated. DQ (11/7/2007): This should not be shared when a copy is make
   // (see copytest_2007_26.C). DQ (4/25/2004): New interfce for modifiers

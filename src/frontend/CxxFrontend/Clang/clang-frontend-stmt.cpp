@@ -8186,6 +8186,12 @@ bool ClangToSageTranslator::VisitCXXUnresolvedConstructExpr(
           class_unknown // associated_class_unknown for non class-like types
       );
 
+  // Preserve list-initialization form for unresolved constructor expressions
+  // so template definitions keep braces where required (e.g., aggregate
+  // initialization through dependent base packs in C++17).
+  ctor_init->set_is_braced_initialized(
+      cxx_unresolved_construct_expr->isListInitialization());
+
   *node = ctor_init;
 
   return VisitExpr(cxx_unresolved_construct_expr, node) && res;
@@ -12435,19 +12441,23 @@ bool ClangToSageTranslator::VisitPackExpansionExpr(
 #endif
   bool res = true;
 
-  // ROOT CAUSE FIX: Pack expansion expressions (e.g., f(args...) where args is
-  // a pack) Traverse the pattern expression (the expression before the ...)
+  // Translate pack expansion structurally as an explicit AST node.
   clang::Expr *pattern = pack_expansion_expr->getPattern();
   if (pattern != nullptr) {
     SgNode *tmp_node = Traverse(pattern);
     SgExpression *pattern_expr = isSgExpression(tmp_node);
     if (pattern_expr != nullptr) {
-      *node = pattern_expr;
+      SgPackExpansionExpr *pack_expr = new SgPackExpansionExpr(pattern_expr);
+      if (pattern_expr->get_parent() == nullptr) {
+        pattern_expr->set_parent(pack_expr);
+      }
+      applySourceRange(pack_expr, pack_expansion_expr->getSourceRange());
+      *node = pack_expr;
       return VisitExpr(pack_expansion_expr, node) && res;
     }
   }
 
-  // Fallback if pattern can't be traversed
+  // Preserve AST validity if the pattern cannot be translated.
   *node = buildFallbackExpression(pack_expansion_expr);
 
   return VisitExpr(pack_expansion_expr, node) && res;

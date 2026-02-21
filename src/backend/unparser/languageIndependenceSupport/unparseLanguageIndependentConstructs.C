@@ -7397,7 +7397,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   }
 
 #define DEBUG__unparseExprList 0
-
   void UnparseLanguageIndependentConstructs::unparseExprList(
       SgExpression * expr, SgUnparse_Info & info) {
     SgExprListExp *expr_list = isSgExprListExp(expr);
@@ -11522,6 +11521,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgPntrArrRefExp: // return 16;
     case V_SgArrowExp:      // return 16;
     case V_SgDotExp:        // return 16;
+    case V_SgPackExpansionExpr:
 
     case V_SgImpliedDo: // return 16;
 
@@ -12010,7 +12010,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgFunctionCallExp:
     case V_SgPntrArrRefExp:
     case V_SgArrowExp:
-    case V_SgDotExp: {
+    case V_SgDotExp:
+    case V_SgPackExpansionExpr: {
       return e_assoc_right;
     }
 

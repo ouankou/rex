@@ -168,6 +168,8 @@ public:
 
   // DQ (2/14/2019): Adding support for C++14 void values.
   virtual void unparseVoidValue(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparsePackExpansionExpression(SgExpression *expr,
+                                              SgUnparse_Info &info);
   virtual void unparseRequiresExpr(SgExpression *expr, SgUnparse_Info &info);
 
   // JJW -- these need C-specific suffixes
