@@ -545,8 +545,8 @@ primary_expr : ICONSTANT {
                $$ = current_exp;
               }
              | HEXCONSTANT {
-               SgIntVal* int_val =
-                   SageBuilder::buildIntVal((int)strtol((const char*)($1), NULL, 0));
+               SgLongLongIntVal* int_val =
+                   SageBuilder::buildLongLongIntVal(strtoll((const char*)($1), NULL, 0));
                int_val->set_valueString((const char*)($1));
                free(const_cast<char*>($1));
                current_exp = int_val;

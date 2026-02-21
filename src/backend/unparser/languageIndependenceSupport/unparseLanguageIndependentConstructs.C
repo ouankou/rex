@@ -1,6 +1,7 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
+#include "FortranLineWrapSupport.h"
 #include "unparser.h"
 
 #include <cctype>
@@ -104,49 +105,8 @@ void UnparseLanguageIndependentConstructs::curprint(
     // check whether line wrapping is needed
     int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
     int free_cols = usable_cols - used_cols;
-    auto starts_with_case_insensitive = [&](size_t pos,
-                                            const char *token) -> bool {
-      size_t i = 0;
-      while (token[i] != '\0') {
-        if (pos + i >= str.size()) {
-          return false;
-        }
-        unsigned char lhs = static_cast<unsigned char>(str[pos + i]);
-        unsigned char rhs = static_cast<unsigned char>(token[i]);
-        if (std::tolower(lhs) != std::tolower(rhs)) {
-          return false;
-        }
-        ++i;
-      }
-      return true;
-    };
-    auto is_comment_line = [&]() {
-      size_t first = str.find_first_not_of(' ');
-      if (first == std::string::npos) {
-        return false;
-      }
-      return str[first] == '!' || str[first] == '#';
-    };
-    auto is_fortran_directive_chunk = [&]() {
-      size_t first = str.find_first_not_of(' ');
-      if (first == std::string::npos) {
-        return false;
-      }
-
-      if (str[first] == '!' || str[first] == '#') {
-        return starts_with_case_insensitive(first, "!$omp") ||
-               starts_with_case_insensitive(first, "!$acc") ||
-               starts_with_case_insensitive(first, "!$");
-      }
-
-      // Some directive code paths print the sentinel first ("!$"), then print
-      // "omp ..." as a separate chunk. Treat these as directive continuations.
-      return used_cols <= 2 && (starts_with_case_insensitive(first, "omp") ||
-                                starts_with_case_insensitive(first, "acc"));
-    };
-
     if (str.size() > free_cols) {
-      if (is_fortran_directive_chunk()) {
+      if (FortranLineWrapSupport::isDirectiveChunk(str, used_cols)) {
         unp->u_sage->curprint(str);
         return;
       }
@@ -164,7 +124,7 @@ void UnparseLanguageIndependentConstructs::curprint(
           unp->u_sage->curprint("     &");
         }
       } else if (is_free_format) {
-        if (is_comment_line()) {
+        if (FortranLineWrapSupport::isCommentLine(str)) {
           unp->u_sage->curprint(str);
           return;
         }
