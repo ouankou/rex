@@ -4394,7 +4394,7 @@ add_test(
   NAME Cxx_tests_rex_test2026_issue317_rtti_exceptions_backend_only
   COMMAND
     sh -c
-    "\"$@\" && test -f rose_rex_test2026_issue317_rtti_exceptions.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2026_issue317_rtti_exceptions.cpp"
+    "OUTFILE=rose_rex_test2026_issue317_rtti_exceptions.cpp; \"$@\" && test -f \"$OUTFILE\" && \"${CMAKE_CXX_COMPILER}\" -std=c++20 -c \"$OUTFILE\""
     dummy
     $<TARGET_FILE:${translator}>
     ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
