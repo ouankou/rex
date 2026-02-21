@@ -777,7 +777,7 @@ void Unparse_ExprStmt::unparseLambdaExpression(SgExpression *expr,
       } else {
         SgExpression *capture_init_expr =
             lambdaCapture->get_source_closure_variable();
-        bool is_init_capture = (capture_init_expr != NULL);
+        bool is_init_capture = (capture_init_expr != nullptr);
 
         if (lambdaCapture->get_capture_by_reference() == true) {
           curprint("&");

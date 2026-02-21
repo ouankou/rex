@@ -239,25 +239,13 @@ static std::string trimWhitespace(std::string s) {
   return s;
 }
 
-static bool isImplicitAutoPlaceholderTemplateParamName(
-    const clang::TemplateTypeParmDecl *param_decl) {
-  if (param_decl == nullptr || !param_decl->isImplicit()) {
-    return false;
-  }
-
-  const std::string name = param_decl->getNameAsString();
-  if (name.size() < 5) {
-    return false;
-  }
-  return name.compare(name.size() - 5, 5, ":auto") == 0;
-}
-
 static std::string
 normalizedTemplateTypeParamName(const clang::TemplateTypeParmDecl *param_decl) {
   if (param_decl == nullptr) {
     return std::string();
   }
-  if (isImplicitAutoPlaceholderTemplateParamName(param_decl)) {
+  if (param_decl->isImplicit() && isImplicitAutoPlaceholderTemplateParamName(
+                                      param_decl->getNameAsString())) {
     // Clang uses synthetic names like "x:auto" for abbreviated-template
     // placeholders. These are not valid identifiers in template headers.
     return std::string();
@@ -3925,6 +3913,20 @@ void ClangToSageTranslator::populateClassDefinition(
       return isSgClassDeclaration(sg_decl);
     };
 
+    auto mark_pack_expansion_base_declaration = [&](SgBaseClass *base_class,
+                                                    bool is_pack_expansion) {
+      if (!is_pack_expansion || base_class == nullptr) {
+        return;
+      }
+      if (SgClassDeclaration *pack_base_decl = base_class->get_base_class()) {
+        if (pack_base_decl->getAttribute(
+                kPackExpansionBaseClassAttributeName) == nullptr) {
+          pack_base_decl->setAttribute(kPackExpansionBaseClassAttributeName,
+                                       new PackExpansionMarkerAttribute());
+        }
+      }
+    };
+
     for (SgBaseClass *existing : class_def->get_inheritances()) {
       if (existing == nullptr) {
         continue;
@@ -3975,16 +3977,8 @@ void ClangToSageTranslator::populateClassDefinition(
         }
       }
       if (base_class != nullptr) {
-        if (base_is_pack_expansion) {
-          if (SgClassDeclaration *pack_base_decl =
-                  base_class->get_base_class()) {
-            if (pack_base_decl->getAttribute(
-                    kPackExpansionBaseClassAttributeName) == nullptr) {
-              pack_base_decl->setAttribute(kPackExpansionBaseClassAttributeName,
-                                           new PackExpansionMarkerAttribute());
-            }
-          }
-        }
+        mark_pack_expansion_base_declaration(base_class,
+                                             base_is_pack_expansion);
         if (SgBaseClassModifier *modifier =
                 base_class->get_baseClassModifier()) {
           SgAccessModifier &access = modifier->get_accessModifier();
@@ -4111,16 +4105,8 @@ void ClangToSageTranslator::populateClassDefinition(
       }
 
       if (base_class != nullptr) {
-        if (base_is_pack_expansion) {
-          if (SgClassDeclaration *pack_base_decl =
-                  base_class->get_base_class()) {
-            if (pack_base_decl->getAttribute(
-                    kPackExpansionBaseClassAttributeName) == nullptr) {
-              pack_base_decl->setAttribute(kPackExpansionBaseClassAttributeName,
-                                           new PackExpansionMarkerAttribute());
-            }
-          }
-        }
+        mark_pack_expansion_base_declaration(base_class,
+                                             base_is_pack_expansion);
         SgBaseClassModifier *modifier = base_class->get_baseClassModifier();
         if (modifier != nullptr) {
           SgAccessModifier &access = modifier->get_accessModifier();

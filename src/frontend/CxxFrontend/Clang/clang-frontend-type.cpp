@@ -127,21 +127,8 @@ bool scopeIsWithinNamespaceChain(SgScopeStatement *scope,
   return true;
 }
 
-bool isImplicitAutoPlaceholderTemplateParam(
-    const clang::TemplateTypeParmDecl *param_decl) {
-  if (param_decl == nullptr || !param_decl->isImplicit()) {
-    return false;
-  }
-
-  const std::string name = param_decl->getNameAsString();
-  if (name.size() < 5) {
-    return false;
-  }
-  return name.compare(name.size() - 5, 5, ":auto") == 0;
-}
-
 std::string normalizeTemplateTypeParamName(std::string name) {
-  if (name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0) {
+  if (isImplicitAutoPlaceholderTemplateParamName(name)) {
     return "auto";
   }
   return name;
@@ -1974,12 +1961,10 @@ bool ClangToSageTranslator::VisitDecltypeType(
   bool preserve_decltype_expression =
       isSgAutoType(sg_underlying_type) != nullptr ||
       shouldPreserveDependentDecltypeExpression(decltype_type);
-  if (preserve_decltype_expression) {
-    // Preserve decltype(expr) when the deduced underlying type is still auto.
-    // This is required for generic-lambda placeholders such as decltype(r),
-    // where reducing to plain "auto" would lose semantics.
-  }
 
+  // Preserve decltype(expr) when the deduced underlying type is still auto.
+  // This is required for generic-lambda placeholders such as decltype(r),
+  // where reducing to plain "auto" would lose semantics.
   if (preserve_decltype_expression) {
     if (const clang::Expr *underlying_expr =
             decltype_type->getUnderlyingExpr()) {
@@ -5618,7 +5603,9 @@ bool ClangToSageTranslator::VisitTemplateTypeParmType(
   const clang::TemplateTypeParmDecl *param_decl =
       template_type_parm_type->getDecl();
 
-  if (isImplicitAutoPlaceholderTemplateParam(param_decl)) {
+  if (param_decl != nullptr && param_decl->isImplicit() &&
+      isImplicitAutoPlaceholderTemplateParamName(
+          param_decl->getNameAsString())) {
     *node = SageBuilder::buildAutoType();
     return VisitType(template_type_parm_type, node) && res;
   }
