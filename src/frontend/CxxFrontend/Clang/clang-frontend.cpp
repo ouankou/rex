@@ -106,7 +106,7 @@ int countRoseOptionTrailingArguments(const std::string &arg) {
 
   std::string canonical_arg = arg;
   if (canonical_arg.rfind("--rose:", 0) == 0) {
-    canonical_arg = "-" + canonical_arg.substr(2);
+    canonical_arg.erase(0, 1);
   }
 
   if (!CommandlineProcessing::isOptionTakingSecondParameter(canonical_arg)) {
