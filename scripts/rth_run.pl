@@ -578,6 +578,20 @@ sub join_shell_tokens {
   return join " ", map { shell_quote($_) } @_;
 }
 
+sub normalize_cli_var_value {
+  my ($var, $val) = @_;
+  return $val unless defined $val;
+  return $val if length($val) < 2;
+
+  my $quote = substr($val, 0, 1);
+  return $val unless $quote eq "'" || $quote eq '"';
+  my $last = substr($val, -1, 1);
+  die "$0: malformed variable definition for $var: unmatched quote in $var=$val\n"
+    if $last ne $quote;
+
+  return substr($val, 1, length($val) - 2);
+}
+
 sub insert_after_first_token {
   my ($cmd, $insert) = @_;
   return $cmd unless defined $insert && $insert ne '';
@@ -670,9 +684,9 @@ while (@ARGV) {
   /^-/ and die "$0: unknown command line switch: $_\n";
   /^(\w+)=(.*)/ and do {
     my ($var, $val) = ($1, $2);
-    # Allow CMD="..."; strip one layer so the shell sees the full command.
-    $val =~ s/^(['"])(.*)\1$/$2/s;
-    $variables{$var} = $val;
+    # CTest often passes VAR="..." values through as literal quoted strings.
+    # Normalize one outer quote pair here so variables (especially CMD) remain executable.
+    $variables{$var} = normalize_cli_var_value($var, $val);
     next;
   };
   /=/ and die "$0: malformed variable definition: $_\n";
