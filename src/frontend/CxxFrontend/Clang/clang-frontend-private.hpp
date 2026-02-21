@@ -78,9 +78,6 @@ public:
 inline constexpr char kPackExpansionExpressionAttributeName[] =
     "rex_pack_expansion_expression";
 
-inline constexpr char kPackExpansionBaseClassAttributeName[] =
-    "rex_pack_expansion_base_class";
-
 inline bool
 isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
   return name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0;

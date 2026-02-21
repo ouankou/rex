@@ -3913,18 +3913,12 @@ void ClangToSageTranslator::populateClassDefinition(
       return isSgClassDeclaration(sg_decl);
     };
 
-    auto mark_pack_expansion_base_declaration = [&](SgBaseClass *base_class,
-                                                    bool is_pack_expansion) {
-      if (!is_pack_expansion || base_class == nullptr) {
+    auto mark_pack_expansion_base = [&](SgBaseClass *base_class,
+                                        bool is_pack_expansion) {
+      if (base_class == nullptr) {
         return;
       }
-      if (SgClassDeclaration *pack_base_decl = base_class->get_base_class()) {
-        if (pack_base_decl->getAttribute(
-                kPackExpansionBaseClassAttributeName) == nullptr) {
-          pack_base_decl->setAttribute(kPackExpansionBaseClassAttributeName,
-                                       new PackExpansionMarkerAttribute());
-        }
-      }
+      base_class->set_pack_expansion(is_pack_expansion);
     };
 
     for (SgBaseClass *existing : class_def->get_inheritances()) {
@@ -3977,8 +3971,7 @@ void ClangToSageTranslator::populateClassDefinition(
         }
       }
       if (base_class != nullptr) {
-        mark_pack_expansion_base_declaration(base_class,
-                                             base_is_pack_expansion);
+        mark_pack_expansion_base(base_class, base_is_pack_expansion);
         if (SgBaseClassModifier *modifier =
                 base_class->get_baseClassModifier()) {
           SgAccessModifier &access = modifier->get_accessModifier();
@@ -4105,8 +4098,7 @@ void ClangToSageTranslator::populateClassDefinition(
       }
 
       if (base_class != nullptr) {
-        mark_pack_expansion_base_declaration(base_class,
-                                             base_is_pack_expansion);
+        mark_pack_expansion_base(base_class, base_is_pack_expansion);
         SgBaseClassModifier *modifier = base_class->get_baseClassModifier();
         if (modifier != nullptr) {
           SgAccessModifier &access = modifier->get_accessModifier();

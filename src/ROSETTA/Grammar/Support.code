@@ -10161,6 +10161,7 @@ SgBaseClass::SgBaseClass(const SgBaseClass& X)
   // DQ (6/21/2005): Commented out since it is not used, we might want it later!
   // DQ: initialize all values
      p_isDirectBaseClass = 0;
+     p_pack_expansion = X.p_pack_expansion;
 
      ROSE_ASSERT ( X.p_baseClassModifier != NULL);
      p_baseClassModifier = new SgBaseClassModifier( *(X.p_baseClassModifier) );
@@ -10186,6 +10187,7 @@ SgBaseClass::operator= (const SgBaseClass & X)
 
   // DQ (6/21/2005): Renamed to make this more clear
      p_isDirectBaseClass  = X.p_isDirectBaseClass;
+     p_pack_expansion     = X.p_pack_expansion;
 
      ROSE_ASSERT (p_baseClassModifier   != NULL);
      ROSE_ASSERT (X.p_baseClassModifier != NULL);
