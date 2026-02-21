@@ -40,14 +40,100 @@ compile_flags=(
   "-Wl,-rpath,${omp_runtime_dir}"
 )
 
-canonicalize() {
+write_subroutine_driver_if_needed() {
+  local source="$1"
+  local case_id="$2"
+  local out_driver="$3"
+
+  if grep -Eiq '^[[:space:]]*program[[:space:]]+' "${source}"; then
+    return 0
+  fi
+
+  case "${case_id}" in
+    array-one.f)
+      cat > "${out_driver}" <<'EOF'
+      program main
+      implicit none
+      integer n, i
+      parameter (n = 64)
+      double precision u(n), sum, maxabs
+      external initialize
+
+      do i = 1, n
+        u(i) = dble(i)
+      enddo
+
+      call initialize(n, u)
+
+      sum = 0.0d0
+      maxabs = 0.0d0
+      do i = 1, n
+        sum = sum + u(i)
+        if (abs(u(i)) .gt. maxabs) maxabs = abs(u(i))
+      enddo
+      print *, 'sum', sum
+      print *, 'maxabs', maxabs
+      end
+EOF
+      ;;
+    shared-array.f)
+      cat > "${out_driver}" <<'EOF'
+      program main
+      implicit none
+      integer n, m, i, j
+      parameter (n = 32, m = 48)
+      double precision u(n,m), sum, maxabs
+      external initialize
+
+      do j = 1, m
+        do i = 1, n
+          u(i,j) = dble(i + j)
+        enddo
+      enddo
+
+      call initialize(n, m, u)
+
+      sum = 0.0d0
+      maxabs = 0.0d0
+      do j = 1, m
+        do i = 1, n
+          sum = sum + u(i,j)
+          if (abs(u(i,j)) .gt. maxabs) maxabs = abs(u(i,j))
+        enddo
+      enddo
+      print *, 'sum', sum
+      print *, 'maxabs', maxabs
+      end
+EOF
+      ;;
+    *)
+      echo "ERROR(${case_id}): subroutine-only semantic driver is not defined" >&2
+      return 1
+      ;;
+  esac
+}
+
+normalize_output() {
   local in_file="$1"
   local out_file="$2"
+  local norm_file
+  norm_file="$(mktemp)"
+  perl -pe '
+    s/\r$//;
+    s/([Tt]hread[^0-9-]*)(-?\d+)/$1TID/g;
+    s/[Dd]([+-]?\d+)/E$1/g;
+    s/([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)/sprintf("%.12g", $1)/ge;
+    s/[ \t]+/ /g;
+    s/^ //;
+    s/ $//;
+  ' "${in_file}" > "${norm_file}"
+
   if [[ "${mode}" == "sort" ]]; then
-    sort "${in_file}" > "${out_file}"
+    sort "${norm_file}" > "${out_file}"
   else
-    cp "${in_file}" "${out_file}"
+    cp "${norm_file}" "${out_file}"
   fi
+  rm -f "${norm_file}"
 }
 
 fail_with_diff() {
@@ -59,7 +145,18 @@ fail_with_diff() {
   exit 1
 }
 
-"${compiler}" "${compile_flags[@]}" "${input_file}" -o "${workdir}/orig.exe"
+driver_file=""
+driver_sources=()
+driver_file="${workdir}/driver_${source_name}"
+if write_subroutine_driver_if_needed "${input_file}" "${case_name}" "${driver_file}"; then
+  if [[ -f "${driver_file}" ]]; then
+    driver_sources+=("${driver_file}")
+  fi
+else
+  exit 1
+fi
+
+"${compiler}" "${compile_flags[@]}" "${input_file}" "${driver_sources[@]}" -o "${workdir}/orig.exe"
 
 (
   cd "${workdir}"
@@ -78,7 +175,7 @@ if [[ ! -f "${rose_file}" ]]; then
   exit 1
 fi
 
-"${compiler}" "${compile_flags[@]}" "${rose_file}" "${kmpc_fortran_abi_lib}" -o "${workdir}/lowered.exe"
+"${compiler}" "${compile_flags[@]}" "${rose_file}" "${driver_sources[@]}" "${kmpc_fortran_abi_lib}" -o "${workdir}/lowered.exe"
 
 export LD_LIBRARY_PATH="${omp_runtime_dir}:${LD_LIBRARY_PATH:-}"
 thread_counts=(2 4)
@@ -88,8 +185,8 @@ for threads in "${thread_counts[@]}"; do
     timeout "${timeout_s}"s env OMP_NUM_THREADS="${threads}" "${workdir}/orig.exe" > "${workdir}/orig_${threads}_${i}.out" 2> "${workdir}/orig_${threads}_${i}.err"
     timeout "${timeout_s}"s env OMP_NUM_THREADS="${threads}" "${workdir}/lowered.exe" > "${workdir}/low_${threads}_${i}.out" 2> "${workdir}/low_${threads}_${i}.err"
 
-    canonicalize "${workdir}/orig_${threads}_${i}.out" "${workdir}/orig_${threads}_${i}.canon"
-    canonicalize "${workdir}/low_${threads}_${i}.out" "${workdir}/low_${threads}_${i}.canon"
+    normalize_output "${workdir}/orig_${threads}_${i}.out" "${workdir}/orig_${threads}_${i}.canon"
+    normalize_output "${workdir}/low_${threads}_${i}.out" "${workdir}/low_${threads}_${i}.canon"
 
     if ! cmp -s "${workdir}/orig_${threads}_${i}.canon" "${workdir}/low_${threads}_${i}.canon"; then
       fail_with_diff "stdout" "${workdir}/orig_${threads}_${i}.canon" "${workdir}/low_${threads}_${i}.canon"

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 
@@ -708,28 +709,66 @@ bool IsFixedFormSource(const SgSourceFile *source) {
   return false;
 }
 
+bool IsFlangSyntheticPrimaryPath(const std::string &path,
+                                 const SgSourceFile *source) {
+  if (path.empty() || source == nullptr ||
+      !source->get_experimental_flang_frontend()) {
+    return false;
+  }
+
+  std::string sourcePath = source->get_sourceFileNameWithPath();
+  if (sourcePath.empty()) {
+    sourcePath = source->getFileName();
+  }
+  if (sourcePath.empty()) {
+    return false;
+  }
+
+  const std::string sourceStem =
+      std::filesystem::path(sourcePath).stem().string();
+  if (sourceStem.empty()) {
+    return false;
+  }
+
+  const std::string inputStem = std::filesystem::path(path).stem().string();
+  const std::string syntheticPrefix = sourceStem + ".rose_flang_";
+  return inputStem.rfind(syntheticPrefix, 0) == 0;
+}
+
 std::string NormalizeSourcePath(const std::string &path) {
+  // Preserve the path provided by Flang provenance. Replacing it with the
+  // current builder source file path loses include-vs-top-level ownership and
+  // can misattach subsequent statements/comments.
+  if (!path.empty()) {
+    std::string normalizedPath =
+        StringUtility::getAbsolutePathFromRelativePath(path);
+
+    SgSourceFile *source = builder.getSourceFile();
+    if (IsFlangSyntheticPrimaryPath(normalizedPath, source)) {
+      std::string sourcePath = source->get_sourceFileNameWithPath();
+      if (sourcePath.empty()) {
+        sourcePath = source->getFileName();
+      }
+      if (!sourcePath.empty()) {
+        return StringUtility::getAbsolutePathFromRelativePath(sourcePath);
+      }
+    }
+
+    return normalizedPath;
+  }
+
   SgSourceFile *source = builder.getSourceFile();
   if (source == nullptr) {
     return path;
   }
-  if (source->get_experimental_flang_frontend()) {
-    std::string filename = source->get_sourceFileNameWithPath();
-    if (filename.empty()) {
-      filename = source->getFileName();
-    }
-    if (!filename.empty()) {
-      return filename;
-    }
+  std::string filename = source->get_sourceFileNameWithPath();
+  if (filename.empty()) {
+    filename = source->getFileName();
   }
-  if (!source->get_requires_C_preprocessor()) {
-    return path;
+  if (!filename.empty()) {
+    return StringUtility::getAbsolutePathFromRelativePath(filename);
   }
-  const std::string expected = source->getFileName();
-  if (expected.empty()) {
-    return path;
-  }
-  return expected;
+  return path;
 }
 
 bool IsAllWhitespace(const std::string &text) {
@@ -873,6 +912,10 @@ bool IsFromIncludedFile(const Fortran::parser::CharBlock &source) {
     return false;
   }
   const Fortran::parser::AllSources &sources = cooked_->allSources();
+  const bool has_inclusion = sources.GetInclusionInfo(stmtRange).has_value();
+  if (has_inclusion) {
+    return true;
+  }
   std::optional<std::string> actualPath =
       GetSourceFilePathForProvenance(sources, stmtRange->start(),
                                      /*topLevel=*/false);
@@ -882,13 +925,22 @@ bool IsFromIncludedFile(const Fortran::parser::CharBlock &source) {
   if (actualPath && topLevelPath && *actualPath != *topLevelPath) {
     return true;
   }
-  if (actualPath && topLevelPath && *actualPath == *topLevelPath) {
+  return false;
+}
+
+std::string ToLowerCopy(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return value;
+}
+
+bool IsOpenMPFortranRuntimeInclude(const std::string &path) {
+  if (path.empty()) {
     return false;
   }
-  if (sources.GetInclusionInfo(stmtRange).has_value()) {
-    return true;
-  }
-  return false;
+  const std::string base =
+      ToLowerCopy(StringUtility::stripPathFromFileName(path));
+  return base == "omp_lib.h";
 }
 
 SourcePosition ChooseCommentAnchor(const std::optional<SourcePosition> &begin,
@@ -2005,12 +2057,9 @@ void BuildVisitor::Build(parser::SpecificationPart &x) {
   Walk(std::get<
        std::list<parser::Statement<common::Indirection<parser::UseStmt>>>>(
       x.t));
-  auto &importStmts = std::get<
-      std::list<parser::Statement<common::Indirection<parser::ImportStmt>>>>(
-      x.t);
-  for (auto &importStmt : importStmts) {
-    Build(importStmt);
-  }
+  Walk(std::get<
+       std::list<parser::Statement<common::Indirection<parser::ImportStmt>>>>(
+      x.t));
   Walk(std::get<parser::ImplicitPart>(x.t));
   Walk(std::get<std::list<parser::DeclarationConstruct>>(x.t));
 }
@@ -4178,6 +4227,31 @@ void BuildVisitor::BeginStatementSource(
         SourcePosition{endPath, sourceInfo->second.line,
                        sourceInfo->second.column});
   }
+}
+
+bool BuildVisitor::ShouldSkipIncludedSource(
+    const Fortran::parser::CharBlock &source) {
+  if (source.empty() || cooked_ == nullptr) {
+    return false;
+  }
+  if (!IsFromIncludedFile(source)) {
+    return false;
+  }
+
+  std::optional<Fortran::parser::ProvenanceRange> stmtRange =
+      cooked_->GetProvenanceRange(source);
+  if (!stmtRange) {
+    return false;
+  }
+  const Fortran::parser::AllSources &sources = cooked_->allSources();
+  if (auto includePath = GetSourceFilePathForProvenance(
+          sources, stmtRange->start(), /*topLevel=*/false)) {
+    return IsOpenMPFortranRuntimeInclude(*includePath);
+  }
+  if (auto sourceInfo = cooked_->GetSourcePositionRange(source)) {
+    return IsOpenMPFortranRuntimeInclude(sourceInfo->first.sourceFile->path());
+  }
+  return false;
 }
 
 void BuildVisitor::EndStatementSource() {
@@ -6489,6 +6563,9 @@ void BuildVisitor::Build(
 void BuildVisitor::Build(
     parser::Statement<common::Indirection<parser::ImportStmt>> &x) {
   using namespace Fortran::parser;
+  if (ShouldSkipIncludedSource(x.source)) {
+    return;
+  }
 
   SgScopeStatement *currentScope = SageBuilder::topScopeStack();
   ASSERT_not_null(currentScope);
@@ -7005,6 +7082,10 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
 
   auto &stmt{std::get<Statement<DerivedTypeStmt>>(x.t)};
   auto &end{std::get<Statement<EndTypeStmt>>(x.t)};
+  if (ShouldSkipIncludedSource(stmt.source)) {
+    MaybeInsertIncludeLine(stmt.source);
+    return;
+  }
 
   // DerivedTypeStmt std::tuple<std::list<TypeAttrSpec>, Name, std::list<Name>>
   // t;
@@ -10344,6 +10425,10 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
   auto &stmt = std::get<Statement<InterfaceStmt>>(x.t);
   auto &specs = std::get<std::list<InterfaceSpecification>>(x.t);
   auto &end = std::get<Statement<EndInterfaceStmt>>(x.t);
+  if (ShouldSkipIncludedSource(stmt.source)) {
+    MaybeInsertIncludeLine(stmt.source);
+    return;
+  }
 
   SgInterfaceStatement::generic_spec_enum kind =
       SgInterfaceStatement::e_unnamed_interface_type;

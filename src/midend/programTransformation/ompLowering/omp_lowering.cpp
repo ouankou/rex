@@ -1866,7 +1866,6 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     is_canonical =
         isCanonicalDoLoop(do_loop, &orig_index, &orig_lower, &orig_upper,
                           &orig_stride, NULL, &isIncremental, NULL);
-    insert_libxompf_h(do_loop);
   } else {
     cerr << "error! transOmpLoop_others(). loop is neither for_loop nor "
             "do_loop. Aborting.."
@@ -1921,7 +1920,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
         schedule_type += kmp_sched_guided;
       };
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
           buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
           buildVarRefExp(stride_decl), orig_chunk_size);
 
@@ -1935,7 +1935,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
         schedule_type += kmp_sched_runtime;
       };
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
           buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
           buildVarRefExp(stride_decl), orig_chunk_size);
 
@@ -1956,7 +1957,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
         e_stride = buildVarRefExp(stride_decl);
       }
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
           e_last_iter, e_lower, e_upper, e_stride, copyExpression(orig_stride),
           orig_chunk_size);
     }
@@ -1967,118 +1969,141 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
   if (s_kind != SgOmpClause::e_omp_schedule_kind_auto &&
       s_kind != SgOmpClause::e_omp_schedule_kind_runtime)
     ROSE_ASSERT(orig_chunk_size != NULL);
-  string func_start_name = generateXOMPLoopStartFuncName(hasOrder, s_kind);
-  // Assembling function call expression's parameters
-  // first three are identical for all cases:
-  // we generate inclusive upper (-1) bounds after loop normalization, gomp
-  // runtime calls expect exclusive upper bounds so we +1 to adjust it back to
-  // exclusive.
+  const bool use_dispatch_runtime =
+      s_kind == SgOmpClause::e_omp_schedule_kind_dynamic ||
+      s_kind == SgOmpClause::e_omp_schedule_kind_guided ||
+      s_kind == SgOmpClause::e_omp_schedule_kind_auto ||
+      s_kind == SgOmpClause::e_omp_schedule_kind_runtime;
 
-  // build function init stmt
-  SgExprListExp *para_list_i =
-      buildExprListExp(copyExpression(orig_lower), copyExpression(orig_upper),
-                       createAdjustedStride(orig_stride, isIncremental));
-  if (s_kind != SgOmpClause::e_omp_schedule_kind_auto &&
-      s_kind != SgOmpClause::e_omp_schedule_kind_runtime) {
-    appendExpression(para_list_i, copyExpression(orig_chunk_size));
+  if (SageInterface::is_Fortran_language() && use_dispatch_runtime) {
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(bb1);
+    ROSE_ASSERT(func_def != NULL);
+    ensure_fortran_variable_declaration(
+        func_def->get_body(),
+        SgName(get_kmpc_dispatch_next_name(use_64_runtime)), buildIntType());
   }
 
   SgExprStatement *func_init_stmt =
       buildFunctionCallStmt(func_init_name, buildVoidType(), parameters, bb1);
   appendStatement(func_init_stmt, bb1);
 
-  // build function start
-  SgExprListExp *para_list =
-      buildExprListExp(copyExpression(orig_lower), copyExpression(orig_upper),
-                       createAdjustedStride(orig_stride, isIncremental));
-  if (s_kind != SgOmpClause::e_omp_schedule_kind_auto &&
-      s_kind != SgOmpClause::e_omp_schedule_kind_runtime) {
-    appendExpression(para_list, orig_chunk_size);
-  }
-  if (for_loop) {
-    appendExpression(para_list, buildAddressOfOp(buildVarRefExp(lower_decl)));
-    appendExpression(para_list, buildAddressOfOp(buildVarRefExp(upper_decl)));
-  } else if (do_loop) {
-    appendExpression(para_list, buildVarRefExp(lower_decl));
-    appendExpression(para_list, buildVarRefExp(upper_decl));
-  }
-  SgFunctionCallExp *func_start_exp = NULL;
+  auto build_dispatch_next_expr = [&]() -> SgExpression * {
+    SgExprListExp *dispatch_parameters = NULL;
+    if (for_loop) {
+      dispatch_parameters =
+          buildExprListExp(copyExpression(source_location_info),
+                           copyExpression(thread_global_tid),
+                           buildAddressOfOp(buildVarRefExp(last_iter_decl)),
+                           buildAddressOfOp(buildVarRefExp(lower_decl)),
+                           buildAddressOfOp(buildVarRefExp(upper_decl)),
+                           buildAddressOfOp(buildVarRefExp(stride_decl)));
+    } else {
+      dispatch_parameters = buildExprListExp(
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildVarRefExp(last_iter_decl),
+          buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
+          buildVarRefExp(stride_decl));
+    }
+    return buildFunctionCallExp(get_kmpc_dispatch_next_name(use_64_runtime),
+                                buildIntType(), dispatch_parameters, bb1);
+  };
+
+  auto build_static_chunk_continue_expr = [&]() -> SgExpression * {
+    SgExpression *stride_positive =
+        buildGreaterThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *stride_negative =
+        buildLessThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *incremental_bounds = buildLessOrEqualOp(
+        buildVarRefExp(lower_decl), buildVarRefExp(upper_decl));
+    SgExpression *decremental_bounds = buildGreaterOrEqualOp(
+        buildVarRefExp(lower_decl), buildVarRefExp(upper_decl));
+    return buildOrOp(buildAndOp(stride_positive, incremental_bounds),
+                     buildAndOp(stride_negative, decremental_bounds));
+  };
+
+  auto build_upper_clamp_stmt = [&]() -> SgStatement * {
+    SgExpression *stride_positive =
+        buildGreaterThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *stride_negative =
+        buildLessThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *incremental_clamp = buildAndOp(
+        stride_positive, buildGreaterThanOp(buildVarRefExp(upper_decl),
+                                            copyExpression(orig_upper)));
+    SgExpression *decremental_clamp = buildAndOp(
+        stride_negative, buildLessThanOp(buildVarRefExp(upper_decl),
+                                         copyExpression(orig_upper)));
+    SgExpression *if_condition =
+        buildOrOp(incremental_clamp, decremental_clamp);
+    SgExprStatement *update_upper_bound_stmt = buildAssignStatement(
+        buildVarRefExp(upper_decl), copyExpression(orig_upper));
+    SgStatement *if_true_body = update_upper_bound_stmt;
+    if (SageInterface::is_Fortran_language()) {
+      SgBasicBlock *if_body = buildBasicBlock();
+      appendStatement(update_upper_bound_stmt, if_body);
+      if_true_body = if_body;
+    }
+    return buildIfStmt(if_condition, if_true_body, NULL);
+  };
+
+  auto append_static_chunk_advance = [&](SgBasicBlock *scope) {
+    if (SageInterface::is_Fortran_language()) {
+      appendStatement(
+          buildAssignStatement(buildVarRefExp(lower_decl),
+                               buildAddOp(buildVarRefExp(lower_decl),
+                                          buildVarRefExp(stride_decl))),
+          scope);
+      appendStatement(
+          buildAssignStatement(buildVarRefExp(upper_decl),
+                               buildAddOp(buildVarRefExp(upper_decl),
+                                          buildVarRefExp(stride_decl))),
+          scope);
+      return;
+    }
+
+    appendStatement(
+        buildExprStatement(buildPlusAssignOp(buildVarRefExp(lower_decl),
+                                             buildVarRefExp(stride_decl))),
+        scope);
+    appendStatement(
+        buildExprStatement(buildPlusAssignOp(buildVarRefExp(upper_decl),
+                                             buildVarRefExp(stride_decl))),
+        scope);
+  };
+
   SgBasicBlock *true_body = buildBasicBlock();
-  SgIfStmt *if_stmt = NULL;
   if (SageInterface::is_Fortran_language()) {
-    // Note for Fortran, we treat the function as returning integer, same type
-    // as the rhs of .eq. Otherwise, unparser will complain.
-    func_start_exp =
-        buildFunctionCallExp(func_start_name, buildIntType(), para_list, bb1);
-    if_stmt = buildIfStmt(buildEqualityOp(func_start_exp, buildIntVal(1)),
-                          true_body, NULL);
+    SgExpression *entry_cond = NULL;
+    if (use_dispatch_runtime) {
+      entry_cond = buildEqualityOp(build_dispatch_next_expr(), buildIntVal(1));
+    } else {
+      entry_cond = build_static_chunk_continue_expr();
+    }
+    SgIfStmt *if_stmt = buildIfStmt(entry_cond, true_body, NULL);
     appendStatement(if_stmt, bb1);
   } else {
     appendStatement(true_body, bb1);
   }
 
-  SgExprListExp *n_exp_list = NULL;
+  // do {} while (__kmpc_dispatch_next_*(...)) or while (lower <= upper)
   if (for_loop) {
-    n_exp_list = buildExprListExp(buildAddressOfOp(buildVarRefExp(lower_decl)),
-                                  buildAddressOfOp(buildVarRefExp(upper_decl)));
-  } else if (do_loop) {
-    n_exp_list = buildExprListExp(buildVarRefExp(lower_decl),
-                                  buildVarRefExp(upper_decl));
-  }
-  ROSE_ASSERT(n_exp_list != NULL);
-  SgExpression *func_next_exp = NULL;
-
-  // do {} while (GOMP_loop_static_next (&_p_lower, &_p_upper))
-  if (for_loop) { // for schedule(dynamic), the next-fetching call controls the
-                  // while loop
-    if (s_kind == SgOmpClause::e_omp_schedule_kind_dynamic) {
-      parameters =
-          buildExprListExp(source_location_info, thread_global_tid,
-                           buildAddressOfOp(buildVarRefExp(last_iter_decl)),
-                           buildAddressOfOp(buildVarRefExp(lower_decl)),
-                           buildAddressOfOp(buildVarRefExp(upper_decl)),
-                           buildAddressOfOp(buildVarRefExp(stride_decl)));
-      func_next_exp =
-          buildFunctionCallExp(get_kmpc_dispatch_next_name(use_64_runtime),
-                               buildIntType(), parameters, bb1);
-    } else { // for schedule(static, n), lower_bound <= upper_bound controls the
-             // while loop
-      func_next_exp = buildLessOrEqualOp(buildVarRefExp(lower_decl),
-                                         buildVarRefExp(upper_decl));
-    };
+    SgExpression *func_next_exp = NULL;
+    if (use_dispatch_runtime) {
+      func_next_exp = build_dispatch_next_expr();
+    } else {
+      func_next_exp = build_static_chunk_continue_expr();
+    }
     SgBasicBlock *do_body = buildBasicBlock();
     SgWhileStmt *while_do_stmt = buildWhileStmt(func_next_exp, do_body);
     appendStatement(while_do_stmt, true_body);
 
-    // insert the upper bound checking
-    SgExpression *if_condition = NULL;
-    if (isIncremental) {
-      if_condition = buildGreaterThanOp(buildVarRefExp(upper_decl),
-                                        copyExpression(orig_upper));
-    } else {
-      if_condition = buildLessThanOp(buildVarRefExp(upper_decl),
-                                     copyExpression(orig_upper));
-    };
-    SgExprStatement *update_upper_bound_stmt = buildAssignStatement(
-        buildVarRefExp(upper_decl), copyExpression(orig_upper));
-    SgIfStmt *if_statement =
-        buildIfStmt(if_condition, update_upper_bound_stmt, NULL);
-    appendStatement(if_statement, do_body);
+    appendStatement(build_upper_clamp_stmt(), do_body);
 
     // insert the loop into do-while
     appendStatement(loop, do_body);
-    if (s_kind != SgOmpClause::e_omp_schedule_kind_dynamic) {
-      SgExpression *increase_lower_bound = buildPlusAssignOp(
-          buildVarRefExp(lower_decl), buildVarRefExp(stride_decl));
-      SgExprStatement *increase_lower_bound_stmt =
-          buildExprStatement(increase_lower_bound);
-      appendStatement(increase_lower_bound_stmt, do_body);
-      SgExpression *increase_upper_bound = buildPlusAssignOp(
-          buildVarRefExp(upper_decl), buildVarRefExp(stride_decl));
-      SgExprStatement *increase_upper_bound_stmt =
-          buildExprStatement(increase_upper_bound);
-      appendStatement(increase_upper_bound_stmt, do_body);
-      parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+    if (!use_dispatch_runtime) {
+      append_static_chunk_advance(do_body);
+      parameters =
+          buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
       appendStatement(buildFunctionCallStmt("__kmpc_for_static_fini",
                                             buildVoidType(), parameters, bb1),
                       bb1);
@@ -2098,15 +2123,23 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     appendStatement(label_stmt_1, true_body);
     int l_val = suggestNextNumericLabel(funcDef);
     setFortranNumericLabel(label_stmt_1, l_val);
+    appendStatement(build_upper_clamp_stmt(), true_body);
     // loop here
     appendStatement(loop, true_body);
+
+    if (!use_dispatch_runtime)
+      append_static_chunk_advance(true_body);
+
     // if () goto label
-    func_next_exp =
-        buildFunctionCallExp(generateXOMPLoopNextFuncName(hasOrder, s_kind),
-                             buildIntType(), n_exp_list, bb1);
+    SgExpression *func_next_exp = NULL;
+    if (use_dispatch_runtime) {
+      func_next_exp =
+          buildEqualityOp(build_dispatch_next_expr(), buildIntVal(1));
+    } else {
+      func_next_exp = build_static_chunk_continue_expr();
+    }
     SgIfStmt *if_stmt_2 =
-        buildIfStmt(buildEqualityOp(func_next_exp, buildIntVal(1)),
-                    buildBasicBlock(), buildBasicBlock());
+        buildIfStmt(func_next_exp, buildBasicBlock(), buildBasicBlock());
     SgGotoStatement *gt_stmt =
         buildGotoStatement(label_stmt_1->get_numeric_label()->get_symbol());
     appendStatement(gt_stmt, isSgScopeStatement(if_stmt_2->get_true_body()));
@@ -2115,6 +2148,14 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     SgStatementPtrList &statementList =
         isSgBasicBlock(if_stmt_2->get_true_body())->get_statements();
     ROSE_ASSERT(statementList.size() == 1);
+
+    if (!use_dispatch_runtime) {
+      parameters =
+          buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
+      appendStatement(buildFunctionCallStmt("__kmpc_for_static_fini",
+                                            buildVoidType(), parameters, bb1),
+                      bb1);
+    }
   }
 
   // Rewrite loop control variables
@@ -2128,7 +2169,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
       target, bb1,
       orig_upper); // This should happen before the barrier is inserted.
   if (!hasClause(target, V_SgOmpNowaitClause)) {
-    parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+    parameters =
+        buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
     appendStatement(buildFunctionCallStmt("__kmpc_barrier", buildVoidType(),
                                           parameters, bb1),
                     bb1);
@@ -2382,6 +2424,24 @@ void transOmpLoop(SgNode *node) {
     appendStatement(last_iter_decl, bb1);
   }
 
+  if (SageInterface::is_Fortran_language()) {
+    // LLVM runtime loop init expects input lower/upper/stride to be
+    // initialized.
+    appendStatement(buildAssignStatement(buildVarRefExp(lower_decl),
+                                         copyExpression(orig_lower)),
+                    bb1);
+    appendStatement(buildAssignStatement(buildVarRefExp(upper_decl),
+                                         copyExpression(orig_upper)),
+                    bb1);
+    appendStatement(
+        buildAssignStatement(buildVarRefExp(stride_decl),
+                             createAdjustedStride(orig_stride, isIncremental)),
+        bb1);
+    appendStatement(
+        buildAssignStatement(buildVarRefExp(last_iter_decl), buildIntVal(0)),
+        bb1);
+  }
+
   bool hasOrder = false;
   if (hasClause(target, V_SgOmpOrderedClause))
     hasOrder = true;
@@ -2463,14 +2523,18 @@ void transOmpLoop(SgNode *node) {
     appendStatement(call_stmt, bb1);
 
     // insert the upper bound checking
-    SgExpression *if_condition = NULL;
-    if (isIncremental) {
-      if_condition = buildGreaterThanOp(buildVarRefExp(upper_decl),
-                                        copyExpression(orig_upper));
-    } else {
-      if_condition = buildLessThanOp(buildVarRefExp(upper_decl),
-                                     copyExpression(orig_upper));
-    };
+    SgExpression *stride_positive =
+        buildGreaterThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *stride_negative =
+        buildLessThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *incremental_clamp = buildAndOp(
+        stride_positive, buildGreaterThanOp(buildVarRefExp(upper_decl),
+                                            copyExpression(orig_upper)));
+    SgExpression *decremental_clamp = buildAndOp(
+        stride_negative, buildLessThanOp(buildVarRefExp(upper_decl),
+                                         copyExpression(orig_upper)));
+    SgExpression *if_condition =
+        buildOrOp(incremental_clamp, decremental_clamp);
     SgExprStatement *update_upper_bound_stmt = buildAssignStatement(
         buildVarRefExp(upper_decl), copyExpression(orig_upper));
     SgStatement *if_true_body = update_upper_bound_stmt;
@@ -6057,29 +6121,10 @@ void transOmpTargetTeamsDistributeParallelFor(SgNode *node) {
  *        SgBasicBlock
  *          SgStatement
  *
- * Example translated code:
-    int _section_1 = XOMP_sections_init_next (3);
-    while (_section_1 >=0) // This while loop is a must
-    {
-      switch (_section_1) {
-        case 0:
-          printf("hello from section 1\n");
-          break;
-        case 1:
-          printf("hello from section 2\n");
-          break;
-        case 2:
-          printf("hello from section 3\n");
-          break;
-        default:
-          printf("fatal error: XOMP_sections_?_next() returns illegal value
- %d\n", _section_1); abort();
-      }
-      _section_1 = XOMP_sections_next ();  // next round for the current thread:
- deal with possible number of threads < number of sections
-   }
-
-    XOMP_sections_end();   // Or  XOMP_sections_end_nowait ();
+ * Lowering strategy:
+ *   Translate sections as a static-scheduled iteration space [0, N-1] using
+ *   __kmpc_for_static_init_4/__kmpc_for_static_fini so host lowering uses the
+ *   LLVM OpenMP runtime for both C/C++ and Fortran.
  * */
 void transOmpSections(SgNode *node) {
   //    cout<<"Entering transOmpSections() ..."<<endl;
@@ -6098,13 +6143,12 @@ void transOmpSections(SgNode *node) {
   ROSE_ASSERT(sections_block != NULL);
   // verify each statement under sections is SgOmpSectionStatement
   SgStatementPtrList section_list = sections_block->get_statements();
-  int section_count = section_list.size();
+  int section_count = static_cast<int>(section_list.size());
   for (int i = 0; i < section_count; i++) {
     SgStatement *stmt = section_list[i];
     ROSE_ASSERT(isSgOmpSectionStatement(stmt));
   }
 
-  // int _section_1 = XOMP_sections_init_next (3);
   std::string sec_var_name;
   if (SageInterface::is_Fortran_language())
     sec_var_name = "_section_";
@@ -6112,16 +6156,33 @@ void transOmpSections(SgNode *node) {
     sec_var_name = "xomp_section_";
 
   sec_var_name += StringUtility::numberToString(++gensym_counter);
+  const int sec_max_value = section_count - 1;
+  std::string sec_lower_name = sec_var_name + "_lower";
+  std::string sec_upper_name = sec_var_name + "_upper";
+  std::string sec_stride_name = sec_var_name + "_stride";
+  std::string sec_last_iter_name = sec_var_name + "_last_iter";
 
-  SgAssignInitializer *initializer = NULL;
-  if (!SageInterface::is_Fortran_language()) {
-    initializer = buildAssignInitializer(
-        buildFunctionCallExp("XOMP_sections_init_next", buildIntType(),
-                             buildExprListExp(buildIntVal(section_count)),
-                             scope),
-        buildIntType());
-  }
   replaceStatement(target, bb1, true);
+
+  SgScopeStatement *kmpc_tid_decl_scope = scope;
+  if (!SageInterface::is_Fortran_language())
+    kmpc_tid_decl_scope = bb1;
+
+  SgStatement *kmpc_global_tid_init = NULL;
+  SgVariableDeclaration *kmpc_global_tid_declaration =
+      get_kmpc_global_tid(node, kmpc_tid_decl_scope, &kmpc_global_tid_init);
+  SgExpression *thread_global_tid =
+      buildVarRefExp(getFirstVariable(*kmpc_global_tid_declaration).get_name(),
+                     kmpc_tid_decl_scope);
+  if (SageInterface::is_Fortran_language()) {
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                              scope);
+  } else {
+    appendStatement(kmpc_global_tid_declaration, bb1);
+  }
+  if (kmpc_global_tid_init != NULL)
+    appendStatement(kmpc_global_tid_init, bb1);
+
   // Declare a variable to store the current section id
   // Only used to support lastprivate
   SgVariableDeclaration *sec_var_decl_save = NULL;
@@ -6135,21 +6196,82 @@ void transOmpSections(SgNode *node) {
   }
 
   SgVariableDeclaration *sec_var_decl =
-      buildVariableDeclaration(sec_var_name, buildIntType(), initializer, bb1);
+      buildVariableDeclaration(sec_var_name, buildIntType(), NULL, bb1);
+  SgVariableDeclaration *sec_lower_decl =
+      buildVariableDeclaration(sec_lower_name, buildIntType(), NULL, bb1);
+  SgVariableDeclaration *sec_upper_decl =
+      buildVariableDeclaration(sec_upper_name, buildIntType(), NULL, bb1);
+  SgVariableDeclaration *sec_stride_decl =
+      buildVariableDeclaration(sec_stride_name, buildIntType(), NULL, bb1);
+  SgVariableDeclaration *sec_last_iter_decl =
+      buildVariableDeclaration(sec_last_iter_name, buildIntType(), NULL, bb1);
+
   if (SageInterface::is_Fortran_language())
     insert_fortran_declaration_into_procedure(sec_var_decl, scope);
   else
     appendStatement(sec_var_decl, bb1);
 
-  SgStatement *sec_var_init_stmt = NULL;
   if (SageInterface::is_Fortran_language()) {
-    sec_var_init_stmt = buildAssignStatement(
-        buildVarRefExp(sec_var_decl),
-        buildFunctionCallExp("XOMP_sections_init_next", buildIntType(),
-                             buildExprListExp(buildIntVal(section_count)),
-                             scope));
-    appendStatement(sec_var_init_stmt, bb1);
+    insert_fortran_declaration_into_procedure(sec_lower_decl, scope);
+    insert_fortran_declaration_into_procedure(sec_upper_decl, scope);
+    insert_fortran_declaration_into_procedure(sec_stride_decl, scope);
+    insert_fortran_declaration_into_procedure(sec_last_iter_decl, scope);
+  } else {
+    appendStatement(sec_lower_decl, bb1);
+    appendStatement(sec_upper_decl, bb1);
+    appendStatement(sec_stride_decl, bb1);
+    appendStatement(sec_last_iter_decl, bb1);
   }
+
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_lower_decl), buildIntVal(0)),
+      bb1);
+  appendStatement(buildAssignStatement(buildVarRefExp(sec_upper_decl),
+                                       buildIntVal(sec_max_value)),
+                  bb1);
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_stride_decl), buildIntVal(1)),
+      bb1);
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_last_iter_decl), buildIntVal(0)),
+      bb1);
+
+  SgExpression *e_last_iter =
+      buildAddressOfOp(buildVarRefExp(sec_last_iter_decl));
+  SgExpression *e_lower = buildAddressOfOp(buildVarRefExp(sec_lower_decl));
+  SgExpression *e_upper = buildAddressOfOp(buildVarRefExp(sec_upper_decl));
+  SgExpression *e_stride = buildAddressOfOp(buildVarRefExp(sec_stride_decl));
+  if (SageInterface::is_Fortran_language()) {
+    // Fortran scalar arguments are pass-by-reference.
+    e_last_iter = buildVarRefExp(sec_last_iter_decl);
+    e_lower = buildVarRefExp(sec_lower_decl);
+    e_upper = buildVarRefExp(sec_upper_decl);
+    e_stride = buildVarRefExp(sec_stride_decl);
+  }
+  SgExprListExp *init_parameters = buildExprListExp(
+      buildIntVal(0), copyExpression(thread_global_tid),
+      buildIntVal(kmp_sched_static_chunk), e_last_iter, e_lower, e_upper,
+      e_stride, buildIntVal(1), buildIntVal(1));
+  appendStatement(buildFunctionCallStmt("__kmpc_for_static_init_4",
+                                        buildVoidType(), init_parameters,
+                                        scope),
+                  bb1);
+
+  SgIfStmt *clamp_upper =
+      buildIfStmt(buildGreaterThanOp(buildVarRefExp(sec_upper_decl),
+                                     buildIntVal(sec_max_value)),
+                  buildAssignStatement(buildVarRefExp(sec_upper_decl),
+                                       buildIntVal(sec_max_value)),
+                  NULL);
+  appendStatement(clamp_upper, bb1);
+
+  SgIfStmt *init_section_id = buildIfStmt(
+      buildLessOrEqualOp(buildVarRefExp(sec_lower_decl),
+                         buildVarRefExp(sec_upper_decl)),
+      buildAssignStatement(buildVarRefExp(sec_var_decl),
+                           buildVarRefExp(sec_lower_decl)),
+      buildAssignStatement(buildVarRefExp(sec_var_decl), buildIntVal(-1)));
+  appendStatement(init_section_id, bb1);
 
   // while (_section_1 >=0) {}
   SgWhileStmt *while_stmt = buildWhileStmt(
@@ -6157,10 +6279,8 @@ void transOmpSections(SgNode *node) {
       buildBasicBlock());
   if (SageInterface::is_Fortran_language()) {
     while_stmt->set_has_end_statement(true);
-    appendStatement(while_stmt, bb1);
-  } else {
-    insertStatementAfter(sec_var_decl, while_stmt);
   }
+  appendStatement(while_stmt, bb1);
   // switch () {}
   SgSwitchStatement *switch_stmt = buildSwitchStatement(
       buildExprStatement(buildVarRefExp(sec_var_decl)), buildBasicBlock());
@@ -6207,28 +6327,64 @@ void transOmpSections(SgNode *node) {
         buildVarRefExp(sec_var_decl_save), buildVarRefExp(sec_var_decl));
     appendStatement(save_stmt, isSgBasicBlock(while_stmt->get_body()));
   }
-  // _section_1 = XOMP_sections_next ();
-  SgStatement *assign_stmt = buildAssignStatement(
-      buildVarRefExp(sec_var_decl),
-      buildFunctionCallExp("XOMP_sections_next", buildIntType(),
-                           buildExprListExp(), scope));
-  appendStatement(assign_stmt, isSgBasicBlock(while_stmt->get_body()));
+
+  SgBasicBlock *while_body = isSgBasicBlock(while_stmt->get_body());
+  appendStatement(buildAssignStatement(
+                      buildVarRefExp(sec_var_decl),
+                      buildAddOp(buildVarRefExp(sec_var_decl), buildIntVal(1))),
+                  while_body);
+
+  SgBasicBlock *advance_block = buildBasicBlock();
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_lower_decl),
+                           buildAddOp(buildVarRefExp(sec_lower_decl),
+                                      buildVarRefExp(sec_stride_decl))),
+      advance_block);
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_upper_decl),
+                           buildAddOp(buildVarRefExp(sec_upper_decl),
+                                      buildVarRefExp(sec_stride_decl))),
+      advance_block);
+  appendStatement(
+      buildIfStmt(buildGreaterThanOp(buildVarRefExp(sec_upper_decl),
+                                     buildIntVal(sec_max_value)),
+                  buildAssignStatement(buildVarRefExp(sec_upper_decl),
+                                       buildIntVal(sec_max_value)),
+                  NULL),
+      advance_block);
+  appendStatement(
+      buildIfStmt(
+          buildLessOrEqualOp(buildVarRefExp(sec_lower_decl),
+                             buildVarRefExp(sec_upper_decl)),
+          buildAssignStatement(buildVarRefExp(sec_var_decl),
+                               buildVarRefExp(sec_lower_decl)),
+          buildAssignStatement(buildVarRefExp(sec_var_decl), buildIntVal(-1))),
+      advance_block);
+  appendStatement(
+      buildIfStmt(buildGreaterThanOp(buildVarRefExp(sec_var_decl),
+                                     buildVarRefExp(sec_upper_decl)),
+                  advance_block, NULL),
+      while_body);
 
   transOmpVariables(
       target, bb1,
       buildIntVal(section_count -
                   1)); // This should happen before the barrier is inserted.
 
-  // XOMP_sections_end() or XOMP_sections_end_nowait ();
-  SgExprStatement *end_call = NULL;
-  if (hasClause(target, V_SgOmpNowaitClause))
-    end_call = buildFunctionCallStmt("XOMP_sections_end_nowait",
-                                     buildVoidType(), NULL, scope);
-  else
-    end_call = buildFunctionCallStmt("XOMP_sections_end", buildVoidType(), NULL,
-                                     scope);
+  SgExprListExp *fini_parameters =
+      buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
+  appendStatement(buildFunctionCallStmt("__kmpc_for_static_fini",
+                                        buildVoidType(), fini_parameters,
+                                        scope),
+                  bb1);
 
-  appendStatement(end_call, bb1);
+  if (!hasClause(target, V_SgOmpNowaitClause)) {
+    SgExprListExp *barrier_parameters =
+        buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
+    appendStatement(buildFunctionCallStmt("__kmpc_barrier", buildVoidType(),
+                                          barrier_parameters, scope),
+                    bb1);
+  }
   //    removeStatement(target);
 }
 
@@ -6375,8 +6531,32 @@ void transOmpTaskwait(SgNode *node) {
   ROSE_ASSERT(target != NULL);
   SgScopeStatement *scope = target->get_scope();
   ROSE_ASSERT(scope != NULL);
-  SgExprStatement *func_call_stmt =
-      buildFunctionCallStmt("XOMP_taskwait", buildVoidType(), NULL, scope);
+
+  SgStatement *kmpc_global_tid_init = NULL;
+  SgVariableDeclaration *kmpc_global_tid_declaration =
+      get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
+  SgExpression *thread_global_tid = buildVarRefExp(
+      getFirstVariable(*kmpc_global_tid_declaration).get_name(), scope);
+
+  if (SageInterface::is_Fortran_language()) {
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                              scope);
+  } else {
+    insertStatement(target, kmpc_global_tid_declaration);
+    kmpc_global_tid_declaration->set_parent(target->get_parent());
+  }
+
+  if (kmpc_global_tid_init != NULL) {
+    if (SageInterface::is_Fortran_language())
+      insertStatement(target, kmpc_global_tid_init);
+    else
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+  }
+
+  SgExprListExp *parameters =
+      buildExprListExp(buildIntVal(0), thread_global_tid);
+  SgExprStatement *func_call_stmt = buildFunctionCallStmt(
+      "__kmpc_omp_taskwait", buildVoidType(), parameters, scope);
   replaceStatement(target, func_call_stmt, true);
 }
 
@@ -7826,42 +8006,48 @@ void transOmpMaster(SgNode *node) {
   ROSE_ASSERT(body != NULL);
 
   SgIfStmt *if_stmt = NULL;
-  SgName tid_name;
-  bool use_kmpc_master = false;
+  SgStatement *kmpc_global_tid_init = NULL;
+  SgVariableDeclaration *kmpc_global_tid_declaration =
+      get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
+  SgName tid_name = getFirstVariable(*kmpc_global_tid_declaration).get_name();
 
   if (SageInterface::is_Fortran_language()) {
-    SgFunctionCallExp *func_call =
-        buildFunctionCallExp("XOMP_master", buildIntType(), NULL, scope);
-    if_stmt =
-        buildIfStmt(buildEqualityOp(func_call, buildIntVal(1)), body, NULL);
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+    ROSE_ASSERT(func_def != NULL);
+    ensure_fortran_variable_declaration(
+        func_def->get_body(), SgName("__kmpc_master"), buildIntType());
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                              scope);
   } else {
-    SgStatement *kmpc_global_tid_init = NULL;
-    SgVariableDeclaration *kmpc_global_tid_declaration =
-        get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
-    tid_name = getFirstVariable(*kmpc_global_tid_declaration).get_name();
-
     insertStatement(target, kmpc_global_tid_declaration);
     kmpc_global_tid_declaration->set_parent(target->get_parent());
-    if (kmpc_global_tid_init != NULL)
-      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+  }
 
-    SgExprListExp *parameters =
-        buildExprListExp(buildIntVal(0), buildVarRefExp(tid_name, scope));
-    SgExpression *func_exp = buildFunctionCallExp(
-        "__kmpc_master", buildIntType(), parameters, scope);
+  if (kmpc_global_tid_init != NULL) {
+    if (SageInterface::is_Fortran_language())
+      insertStatement(target, kmpc_global_tid_init);
+    else
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+  }
+
+  SgExprListExp *parameters =
+      buildExprListExp(buildIntVal(0), buildVarRefExp(tid_name, scope));
+  SgExpression *func_exp =
+      buildFunctionCallExp("__kmpc_master", buildIntType(), parameters, scope);
+  if (SageInterface::is_Fortran_language()) {
+    if_stmt =
+        buildIfStmt(buildEqualityOp(func_exp, buildIntVal(1)), body, NULL);
+  } else {
     if_stmt = buildIfStmt(func_exp, body, NULL);
-    use_kmpc_master = true;
   }
 
   replaceStatement(target, if_stmt, true);
-  if (use_kmpc_master) {
-    SgExprListExp *end_parameters =
-        buildExprListExp(buildIntVal(0), buildVarRefExp(tid_name, scope));
-    SgExprStatement *end_master_call = buildFunctionCallStmt(
-        "__kmpc_end_master", buildVoidType(), end_parameters, scope);
-    SgBasicBlock *true_body = ensureBasicBlockAsTrueBodyOfIf(if_stmt);
-    appendStatement(end_master_call, true_body);
-  }
+  SgExprListExp *end_parameters =
+      buildExprListExp(buildIntVal(0), buildVarRefExp(tid_name, scope));
+  SgExprStatement *end_master_call = buildFunctionCallStmt(
+      "__kmpc_end_master", buildVoidType(), end_parameters, scope);
+  SgBasicBlock *true_body = ensureBasicBlockAsTrueBodyOfIf(if_stmt);
+  appendStatement(end_master_call, true_body);
   moveUpPreprocessingInfo(if_stmt, target, PreprocessingInfo::before);
   if (isLast) // the preprocessing info after the last statement may be attached
               // to the inside of its parent scope
@@ -7898,7 +8084,6 @@ void transOmpSingle(SgNode *node) {
 
   SgIfStmt *if_stmt = NULL;
 
-  SgExprListExp *parameters = NULL;
   SgStatement *kmpc_global_tid_init = NULL;
   SgVariableDeclaration *kmpc_global_tid_declaration =
       get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
@@ -7917,35 +8102,41 @@ void transOmpSingle(SgNode *node) {
     else
       insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
   }
-  parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+  SgExprListExp *single_parameters =
+      buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
 
   if (SageInterface::is_Fortran_language()) {
-    SgExpression *func_exp =
-        buildFunctionCallExp("XOMP_single", buildIntType(), NULL, scope);
-
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+    ROSE_ASSERT(func_def != NULL);
+    ensure_fortran_variable_declaration(
+        func_def->get_body(), SgName("__kmpc_single"), buildIntType());
+    SgExpression *func_exp = buildFunctionCallExp(
+        "__kmpc_single", buildIntType(), single_parameters, scope);
     if_stmt =
         buildIfStmt(buildEqualityOp(func_exp, buildIntVal(1)), body, NULL);
   } else // C/C++
   {
     SgExpression *func_exp = buildFunctionCallExp(
-        "__kmpc_single", buildBoolType(), parameters, scope);
+        "__kmpc_single", buildBoolType(), single_parameters, scope);
     if_stmt = buildIfStmt(func_exp, body, NULL);
   }
 
   replaceStatement(target, if_stmt, true);
   SgBasicBlock *true_body = ensureBasicBlockAsTrueBodyOfIf(if_stmt);
-  if (SageInterface::is_Fortran_language())
-    insert_libxompf_h(if_stmt); // need prototype for xomp runtime function
   transOmpVariables(target, true_body);
 
+  SgExprListExp *end_single_parameters =
+      buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
   SgExprStatement *end_single_call = buildFunctionCallStmt(
-      "__kmpc_end_single", buildVoidType(), parameters, scope);
+      "__kmpc_end_single", buildVoidType(), end_single_parameters, scope);
   insertStatementAfter(body, end_single_call);
 
   // handle nowait
   if (!hasClause(target, V_SgOmpNowaitClause)) {
+    SgExprListExp *barrier_parameters =
+        buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
     SgExprStatement *barrier_call = buildFunctionCallStmt(
-        "__kmpc_barrier", buildVoidType(), parameters, scope);
+        "__kmpc_barrier", buildVoidType(), barrier_parameters, scope);
     insertStatementAfter(if_stmt, barrier_call);
   }
 }
@@ -8650,6 +8841,19 @@ static bool has_fortran_variable_declaration(SgBasicBlock *body,
   return false;
 }
 
+static SgProcedureHeaderStatement *
+find_fortran_procedure_declaration(SgBasicBlock *body, const SgName &name) {
+  ROSE_ASSERT(body != NULL);
+  const SgStatementPtrList &stmts = body->get_statements();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgProcedureHeaderStatement *proc = isSgProcedureHeaderStatement(*it);
+    if (proc != NULL && proc->get_name() == name)
+      return proc;
+  }
+  return NULL;
+}
+
 static void ensure_fortran_variable_declaration(SgBasicBlock *body,
                                                 const SgName &name,
                                                 SgType *type) {
@@ -8657,6 +8861,20 @@ static void ensure_fortran_variable_declaration(SgBasicBlock *body,
   ROSE_ASSERT(type != NULL);
   if (has_fortran_variable_declaration(body, name))
     return;
+
+  SgProcedureHeaderStatement *proc =
+      find_fortran_procedure_declaration(body, name);
+  if (proc != NULL) {
+    if (proc->get_subprogram_kind() ==
+        SgProcedureHeaderStatement::e_function_subprogram_kind)
+      return;
+
+    fprintf(stderr,
+            "REX OpenMP lowering: conflicting Fortran declaration for '%s' "
+            "(existing subroutine declaration)\n",
+            name.getString().c_str());
+    ROSE_ABORT();
+  }
 
   SgVariableDeclaration *decl =
       buildVariableDeclaration(name, type, NULL, body);
@@ -8706,13 +8924,12 @@ normalize_fortran_external_subroutine_declarations(SgBasicBlock *body) {
            declarations.begin();
        it != declarations.end(); ++it) {
     SgProcedureHeaderStatement *proc = *it;
-    SgAttributeSpecificationStatement *external_stmt =
-        buildAttributeSpecificationStatement(
-            SgAttributeSpecificationStatement::e_externalStatement);
-    SgFunctionRefExp *proc_ref = buildFunctionRefExp(proc);
-    external_stmt->get_parameter_list()->prepend_expression(proc_ref);
-    proc_ref->set_parent(external_stmt->get_parameter_list());
-    replaceStatement(proc, external_stmt, true);
+    // These nondefining subroutine declarations are outlining artifacts.
+    // Keeping them changes procedure binding semantics (e.g., forcing CALL
+    // abort to resolve as abort_) and can also emit invalid declaration forms
+    // in fixed-form Fortran. Drop them and preserve the original unit's
+    // implicit procedure resolution.
+    SageInterface::removeStatement(proc, true);
   }
 }
 
