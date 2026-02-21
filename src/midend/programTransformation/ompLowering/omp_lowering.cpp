@@ -8833,6 +8833,19 @@ static bool has_fortran_variable_declaration(SgBasicBlock *body,
   return false;
 }
 
+static SgProcedureHeaderStatement *
+find_fortran_procedure_declaration(SgBasicBlock *body, const SgName &name) {
+  ROSE_ASSERT(body != NULL);
+  const SgStatementPtrList &stmts = body->get_statements();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgProcedureHeaderStatement *proc = isSgProcedureHeaderStatement(*it);
+    if (proc != NULL && proc->get_name() == name)
+      return proc;
+  }
+  return NULL;
+}
+
 static void ensure_fortran_variable_declaration(SgBasicBlock *body,
                                                 const SgName &name,
                                                 SgType *type) {
@@ -8840,6 +8853,20 @@ static void ensure_fortran_variable_declaration(SgBasicBlock *body,
   ROSE_ASSERT(type != NULL);
   if (has_fortran_variable_declaration(body, name))
     return;
+
+  SgProcedureHeaderStatement *proc =
+      find_fortran_procedure_declaration(body, name);
+  if (proc != NULL) {
+    if (proc->get_subprogram_kind() ==
+        SgProcedureHeaderStatement::e_function_subprogram_kind)
+      return;
+
+    fprintf(stderr,
+            "REX OpenMP lowering: conflicting Fortran declaration for '%s' "
+            "(existing subroutine declaration)\n",
+            name.getString().c_str());
+    ROSE_ABORT();
+  }
 
   SgVariableDeclaration *decl =
       buildVariableDeclaration(name, type, NULL, body);
