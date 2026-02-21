@@ -16370,8 +16370,37 @@ SgOmpEndDeclareTargetStatement::get_mangled_name(void) const
      }
 
      if (signature_suffix.empty()) {
-       signature_suffix = Rose::StringUtility::numberToString(
-           const_cast<SgOmpEndDeclareTargetStatement*>(this));
+       bool found_in_scope = false;
+       unsigned long long scope_local_index = 0;
+
+       if (scope->containsOnlyDeclarations() == true) {
+         const SgDeclarationStatementPtrList &decls =
+             scope->getDeclarationList();
+         for (SgDeclarationStatementPtrList::const_iterator it = decls.begin();
+              it != decls.end(); ++it, ++scope_local_index) {
+           if (*it == this) {
+             found_in_scope = true;
+             break;
+           }
+         }
+       } else {
+         const SgStatementPtrList &stmts = scope->getStatementList();
+         for (SgStatementPtrList::const_iterator it = stmts.begin();
+              it != stmts.end(); ++it, ++scope_local_index) {
+           if (*it == this) {
+             found_in_scope = true;
+             break;
+           }
+         }
+       }
+
+       if (found_in_scope == true) {
+         signature_suffix =
+             "scope_index_" +
+             Rose::StringUtility::numberToString(scope_local_index);
+       } else {
+         signature_suffix = "scope_index_unknown";
+       }
      }
 
      returnName = scope->get_mangled_name() +
