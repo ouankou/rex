@@ -475,6 +475,10 @@ void xomp_task(void (*func)(void *), void (*cpyfn)(void *, void *),
                int *arg_size, int *arg_align, int *if_clause, int *untied,
                int *argcount, ...) {
   (void)cpyfn;
+  rex_fortran_task_arg_meta_t *meta = NULL;
+  char *packed = NULL;
+  va_list ap;
+  bool ap_active = false;
 
   if (func == NULL || arg_size == NULL || arg_align == NULL ||
       if_clause == NULL || untied == NULL || argcount == NULL) {
@@ -502,37 +506,33 @@ void xomp_task(void (*func)(void *), void (*cpyfn)(void *, void *),
     return;
   }
 
-  rex_fortran_task_arg_meta_t *meta = (rex_fortran_task_arg_meta_t *)calloc(
+  meta = (rex_fortran_task_arg_meta_t *)calloc(
       (size_t)largcount, sizeof(rex_fortran_task_arg_meta_t));
   if (meta == NULL) {
     fprintf(stderr,
             "REX Fortran OpenMP lowering: allocation failed for xomp_task "
             "metadata\n");
-    ROSE_ABORT();
+    goto xomp_task_fail;
   }
 
   size_t packed_size = sizeof(void *);
-  va_list ap;
   va_start(ap, argcount);
+  ap_active = true;
   for (long i = 0; i < largcount; ++i) {
     int by_value = *(int *)(va_arg(ap, void *));
     int value_size = *(int *)(va_arg(ap, void *));
     void *storage = va_arg(ap, void *);
     if (value_size <= 0) {
-      va_end(ap);
-      free(meta);
       fprintf(stderr,
               "REX Fortran OpenMP lowering: invalid xomp_task value size=%d\n",
               value_size);
-      ROSE_ABORT();
+      goto xomp_task_fail;
     }
     if (!by_value && value_size != (int)sizeof(void *)) {
-      va_end(ap);
-      free(meta);
       fprintf(stderr,
               "REX Fortran OpenMP lowering: invalid reference size=%d\n",
               value_size);
-      ROSE_ABORT();
+      goto xomp_task_fail;
     }
     meta[i].by_value = (by_value == 1);
     meta[i].value_size = value_size;
@@ -542,14 +542,14 @@ void xomp_task(void (*func)(void *), void (*cpyfn)(void *, void *),
     packed_size += (size_t)value_size;
   }
   va_end(ap);
+  ap_active = false;
 
-  char *packed = (char *)malloc(packed_size);
+  packed = (char *)malloc(packed_size);
   if (packed == NULL) {
-    free(meta);
     fprintf(
         stderr,
         "REX Fortran OpenMP lowering: allocation failed for xomp_task data\n");
-    ROSE_ABORT();
+    goto xomp_task_fail;
   }
 
   size_t offset = 0;
@@ -568,6 +568,7 @@ void xomp_task(void (*func)(void *), void (*cpyfn)(void *, void *),
     offset += (size_t)meta[i].value_size;
   }
   free(meta);
+  meta = NULL;
 
   void (*runner)(void *) = NULL;
   void *runner_data = NULL;
@@ -587,22 +588,28 @@ void xomp_task(void (*func)(void *), void (*cpyfn)(void *, void *),
 #include "run_me_callers2.inc"
 #undef XOMP_task
   default:
-    free(packed);
     fprintf(stderr,
             "REX Fortran OpenMP lowering: unsupported xomp_task argument "
             "count=%ld\n",
             largcount);
-    ROSE_ABORT();
+    goto xomp_task_fail;
   }
 
   if (runner == NULL) {
-    free(packed);
     fprintf(stderr,
             "REX Fortran OpenMP lowering: unresolved xomp_task runner\n");
-    ROSE_ABORT();
+    goto xomp_task_fail;
   }
 
   rex_submit_fortran_task(runner, runner_data, packed, bif_clause, uuntied);
+  return;
+
+xomp_task_fail:
+  if (ap_active)
+    va_end(ap);
+  free(meta);
+  free(packed);
+  ROSE_ABORT();
 }
 
 void __kmpc_for_static_init_4_(int *loc_ref, int *gtid_ref, int *sched_ref,

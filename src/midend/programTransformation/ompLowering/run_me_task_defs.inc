@@ -11,6 +11,7 @@ void run_me_task_1 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[1];
+  bool value_flags[1];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<1; i++)
@@ -27,8 +28,12 @@ void run_me_task_1 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -38,11 +43,17 @@ void run_me_task_1 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
   func(
               p[0]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 1; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_2 (void*);
 void run_me_task_2 (void * data)
@@ -55,6 +66,7 @@ void run_me_task_2 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[2];
+  bool value_flags[2];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<2; i++)
@@ -71,8 +83,12 @@ void run_me_task_2 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -82,12 +98,18 @@ void run_me_task_2 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
   func(
               p[0],
               p[1]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 2; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_3 (void*);
 void run_me_task_3 (void * data)
@@ -101,6 +123,7 @@ void run_me_task_3 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[3];
+  bool value_flags[3];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<3; i++)
@@ -117,8 +140,12 @@ void run_me_task_3 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -128,6 +155,7 @@ void run_me_task_3 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -135,6 +163,11 @@ void run_me_task_3 (void * data)
               p[0],
               p[1],
               p[2]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 3; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_4 (void*);
 void run_me_task_4 (void * data)
@@ -149,6 +182,7 @@ void run_me_task_4 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[4];
+  bool value_flags[4];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<4; i++)
@@ -165,8 +199,12 @@ void run_me_task_4 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -176,6 +214,7 @@ void run_me_task_4 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -184,6 +223,11 @@ void run_me_task_4 (void * data)
               p[1],
               p[2],
               p[3]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 4; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_5 (void*);
 void run_me_task_5 (void * data)
@@ -199,6 +243,7 @@ void run_me_task_5 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[5];
+  bool value_flags[5];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<5; i++)
@@ -215,8 +260,12 @@ void run_me_task_5 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -226,6 +275,7 @@ void run_me_task_5 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -235,6 +285,11 @@ void run_me_task_5 (void * data)
               p[2],
               p[3],
               p[4]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 5; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_6 (void*);
 void run_me_task_6 (void * data)
@@ -251,6 +306,7 @@ void run_me_task_6 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[6];
+  bool value_flags[6];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<6; i++)
@@ -267,8 +323,12 @@ void run_me_task_6 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -278,6 +338,7 @@ void run_me_task_6 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -288,6 +349,11 @@ void run_me_task_6 (void * data)
               p[3],
               p[4],
               p[5]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 6; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_7 (void*);
 void run_me_task_7 (void * data)
@@ -305,6 +371,7 @@ void run_me_task_7 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[7];
+  bool value_flags[7];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<7; i++)
@@ -321,8 +388,12 @@ void run_me_task_7 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -332,6 +403,7 @@ void run_me_task_7 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -343,6 +415,11 @@ void run_me_task_7 (void * data)
               p[4],
               p[5],
               p[6]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 7; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_8 (void*);
 void run_me_task_8 (void * data)
@@ -361,6 +438,7 @@ void run_me_task_8 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[8];
+  bool value_flags[8];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<8; i++)
@@ -377,8 +455,12 @@ void run_me_task_8 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -388,6 +470,7 @@ void run_me_task_8 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -400,6 +483,11 @@ void run_me_task_8 (void * data)
               p[5],
               p[6],
               p[7]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 8; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_9 (void*);
 void run_me_task_9 (void * data)
@@ -419,6 +507,7 @@ void run_me_task_9 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[9];
+  bool value_flags[9];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<9; i++)
@@ -435,8 +524,12 @@ void run_me_task_9 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -446,6 +539,7 @@ void run_me_task_9 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -459,6 +553,11 @@ void run_me_task_9 (void * data)
               p[6],
               p[7],
               p[8]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 9; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_10 (void*);
 void run_me_task_10 (void * data)
@@ -479,6 +578,7 @@ void run_me_task_10 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[10];
+  bool value_flags[10];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<10; i++)
@@ -495,8 +595,12 @@ void run_me_task_10 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -506,6 +610,7 @@ void run_me_task_10 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -520,6 +625,11 @@ void run_me_task_10 (void * data)
               p[7],
               p[8],
               p[9]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 10; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_11 (void*);
 void run_me_task_11 (void * data)
@@ -541,6 +651,7 @@ void run_me_task_11 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[11];
+  bool value_flags[11];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<11; i++)
@@ -557,8 +668,12 @@ void run_me_task_11 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -568,6 +683,7 @@ void run_me_task_11 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -583,6 +699,11 @@ void run_me_task_11 (void * data)
               p[8],
               p[9],
               p[10]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 11; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_12 (void*);
 void run_me_task_12 (void * data)
@@ -605,6 +726,7 @@ void run_me_task_12 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[12];
+  bool value_flags[12];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<12; i++)
@@ -621,8 +743,12 @@ void run_me_task_12 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -632,6 +758,7 @@ void run_me_task_12 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -648,6 +775,11 @@ void run_me_task_12 (void * data)
               p[9],
               p[10],
               p[11]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 12; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_13 (void*);
 void run_me_task_13 (void * data)
@@ -671,6 +803,7 @@ void run_me_task_13 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[13];
+  bool value_flags[13];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<13; i++)
@@ -687,8 +820,12 @@ void run_me_task_13 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -698,6 +835,7 @@ void run_me_task_13 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -715,6 +853,11 @@ void run_me_task_13 (void * data)
               p[10],
               p[11],
               p[12]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 13; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_14 (void*);
 void run_me_task_14 (void * data)
@@ -739,6 +882,7 @@ void run_me_task_14 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[14];
+  bool value_flags[14];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<14; i++)
@@ -755,8 +899,12 @@ void run_me_task_14 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -766,6 +914,7 @@ void run_me_task_14 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -784,6 +933,11 @@ void run_me_task_14 (void * data)
               p[11],
               p[12],
               p[13]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 14; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_15 (void*);
 void run_me_task_15 (void * data)
@@ -809,6 +963,7 @@ void run_me_task_15 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[15];
+  bool value_flags[15];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<15; i++)
@@ -825,8 +980,12 @@ void run_me_task_15 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -836,6 +995,7 @@ void run_me_task_15 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -855,6 +1015,11 @@ void run_me_task_15 (void * data)
               p[12],
               p[13],
               p[14]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 15; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_16 (void*);
 void run_me_task_16 (void * data)
@@ -881,6 +1046,7 @@ void run_me_task_16 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[16];
+  bool value_flags[16];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<16; i++)
@@ -897,8 +1063,12 @@ void run_me_task_16 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -908,6 +1078,7 @@ void run_me_task_16 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -928,6 +1099,11 @@ void run_me_task_16 (void * data)
               p[13],
               p[14],
               p[15]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 16; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_17 (void*);
 void run_me_task_17 (void * data)
@@ -955,6 +1131,7 @@ void run_me_task_17 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[17];
+  bool value_flags[17];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<17; i++)
@@ -971,8 +1148,12 @@ void run_me_task_17 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -982,6 +1163,7 @@ void run_me_task_17 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1003,6 +1185,11 @@ void run_me_task_17 (void * data)
               p[14],
               p[15],
               p[16]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 17; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_18 (void*);
 void run_me_task_18 (void * data)
@@ -1031,6 +1218,7 @@ void run_me_task_18 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[18];
+  bool value_flags[18];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<18; i++)
@@ -1047,8 +1235,12 @@ void run_me_task_18 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1058,6 +1250,7 @@ void run_me_task_18 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1080,6 +1273,11 @@ void run_me_task_18 (void * data)
               p[15],
               p[16],
               p[17]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 18; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_19 (void*);
 void run_me_task_19 (void * data)
@@ -1109,6 +1307,7 @@ void run_me_task_19 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[19];
+  bool value_flags[19];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<19; i++)
@@ -1125,8 +1324,12 @@ void run_me_task_19 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1136,6 +1339,7 @@ void run_me_task_19 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1159,6 +1363,11 @@ void run_me_task_19 (void * data)
               p[16],
               p[17],
               p[18]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 19; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_20 (void*);
 void run_me_task_20 (void * data)
@@ -1189,6 +1398,7 @@ void run_me_task_20 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[20];
+  bool value_flags[20];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<20; i++)
@@ -1205,8 +1415,12 @@ void run_me_task_20 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1216,6 +1430,7 @@ void run_me_task_20 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1240,6 +1455,11 @@ void run_me_task_20 (void * data)
               p[17],
               p[18],
               p[19]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 20; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_21 (void*);
 void run_me_task_21 (void * data)
@@ -1271,6 +1491,7 @@ void run_me_task_21 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[21];
+  bool value_flags[21];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<21; i++)
@@ -1287,8 +1508,12 @@ void run_me_task_21 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1298,6 +1523,7 @@ void run_me_task_21 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1323,6 +1549,11 @@ void run_me_task_21 (void * data)
               p[18],
               p[19],
               p[20]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 21; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_22 (void*);
 void run_me_task_22 (void * data)
@@ -1355,6 +1586,7 @@ void run_me_task_22 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[22];
+  bool value_flags[22];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<22; i++)
@@ -1371,8 +1603,12 @@ void run_me_task_22 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1382,6 +1618,7 @@ void run_me_task_22 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1408,6 +1645,11 @@ void run_me_task_22 (void * data)
               p[19],
               p[20],
               p[21]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 22; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_23 (void*);
 void run_me_task_23 (void * data)
@@ -1441,6 +1683,7 @@ void run_me_task_23 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[23];
+  bool value_flags[23];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<23; i++)
@@ -1457,8 +1700,12 @@ void run_me_task_23 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1468,6 +1715,7 @@ void run_me_task_23 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1495,6 +1743,11 @@ void run_me_task_23 (void * data)
               p[20],
               p[21],
               p[22]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 23; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_24 (void*);
 void run_me_task_24 (void * data)
@@ -1529,6 +1782,7 @@ void run_me_task_24 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[24];
+  bool value_flags[24];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<24; i++)
@@ -1545,8 +1799,12 @@ void run_me_task_24 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1556,6 +1814,7 @@ void run_me_task_24 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1584,6 +1843,11 @@ void run_me_task_24 (void * data)
               p[21],
               p[22],
               p[23]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 24; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_25 (void*);
 void run_me_task_25 (void * data)
@@ -1619,6 +1883,7 @@ void run_me_task_25 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[25];
+  bool value_flags[25];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<25; i++)
@@ -1635,8 +1900,12 @@ void run_me_task_25 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1646,6 +1915,7 @@ void run_me_task_25 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1675,6 +1945,11 @@ void run_me_task_25 (void * data)
               p[22],
               p[23],
               p[24]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 25; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_26 (void*);
 void run_me_task_26 (void * data)
@@ -1711,6 +1986,7 @@ void run_me_task_26 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[26];
+  bool value_flags[26];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<26; i++)
@@ -1727,8 +2003,12 @@ void run_me_task_26 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1738,6 +2018,7 @@ void run_me_task_26 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1768,6 +2049,11 @@ void run_me_task_26 (void * data)
               p[23],
               p[24],
               p[25]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 26; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_27 (void*);
 void run_me_task_27 (void * data)
@@ -1805,6 +2091,7 @@ void run_me_task_27 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[27];
+  bool value_flags[27];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<27; i++)
@@ -1821,8 +2108,12 @@ void run_me_task_27 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1832,6 +2123,7 @@ void run_me_task_27 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1863,6 +2155,11 @@ void run_me_task_27 (void * data)
               p[24],
               p[25],
               p[26]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 27; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_28 (void*);
 void run_me_task_28 (void * data)
@@ -1901,6 +2198,7 @@ void run_me_task_28 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[28];
+  bool value_flags[28];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<28; i++)
@@ -1917,8 +2215,12 @@ void run_me_task_28 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -1928,6 +2230,7 @@ void run_me_task_28 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -1960,6 +2263,11 @@ void run_me_task_28 (void * data)
               p[25],
               p[26],
               p[27]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 28; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_29 (void*);
 void run_me_task_29 (void * data)
@@ -1999,6 +2307,7 @@ void run_me_task_29 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[29];
+  bool value_flags[29];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<29; i++)
@@ -2015,8 +2324,12 @@ void run_me_task_29 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2026,6 +2339,7 @@ void run_me_task_29 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2059,6 +2373,11 @@ void run_me_task_29 (void * data)
               p[26],
               p[27],
               p[28]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 29; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_30 (void*);
 void run_me_task_30 (void * data)
@@ -2099,6 +2418,7 @@ void run_me_task_30 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[30];
+  bool value_flags[30];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<30; i++)
@@ -2115,8 +2435,12 @@ void run_me_task_30 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2126,6 +2450,7 @@ void run_me_task_30 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2160,6 +2485,11 @@ void run_me_task_30 (void * data)
               p[27],
               p[28],
               p[29]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 30; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_31 (void*);
 void run_me_task_31 (void * data)
@@ -2201,6 +2531,7 @@ void run_me_task_31 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[31];
+  bool value_flags[31];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<31; i++)
@@ -2217,8 +2548,12 @@ void run_me_task_31 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2228,6 +2563,7 @@ void run_me_task_31 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2263,6 +2599,11 @@ void run_me_task_31 (void * data)
               p[28],
               p[29],
               p[30]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 31; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_32 (void*);
 void run_me_task_32 (void * data)
@@ -2305,6 +2646,7 @@ void run_me_task_32 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[32];
+  bool value_flags[32];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<32; i++)
@@ -2321,8 +2663,12 @@ void run_me_task_32 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2332,6 +2678,7 @@ void run_me_task_32 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2368,6 +2715,11 @@ void run_me_task_32 (void * data)
               p[29],
               p[30],
               p[31]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 32; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_33 (void*);
 void run_me_task_33 (void * data)
@@ -2411,6 +2763,7 @@ void run_me_task_33 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[33];
+  bool value_flags[33];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<33; i++)
@@ -2427,8 +2780,12 @@ void run_me_task_33 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2438,6 +2795,7 @@ void run_me_task_33 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2475,6 +2833,11 @@ void run_me_task_33 (void * data)
               p[30],
               p[31],
               p[32]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 33; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_34 (void*);
 void run_me_task_34 (void * data)
@@ -2519,6 +2882,7 @@ void run_me_task_34 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[34];
+  bool value_flags[34];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<34; i++)
@@ -2535,8 +2899,12 @@ void run_me_task_34 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2546,6 +2914,7 @@ void run_me_task_34 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2584,6 +2953,11 @@ void run_me_task_34 (void * data)
               p[31],
               p[32],
               p[33]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 34; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_35 (void*);
 void run_me_task_35 (void * data)
@@ -2629,6 +3003,7 @@ void run_me_task_35 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[35];
+  bool value_flags[35];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<35; i++)
@@ -2645,8 +3020,12 @@ void run_me_task_35 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2656,6 +3035,7 @@ void run_me_task_35 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2695,6 +3075,11 @@ void run_me_task_35 (void * data)
               p[32],
               p[33],
               p[34]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 35; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_36 (void*);
 void run_me_task_36 (void * data)
@@ -2741,6 +3126,7 @@ void run_me_task_36 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[36];
+  bool value_flags[36];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<36; i++)
@@ -2757,8 +3143,12 @@ void run_me_task_36 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2768,6 +3158,7 @@ void run_me_task_36 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2808,6 +3199,11 @@ void run_me_task_36 (void * data)
               p[33],
               p[34],
               p[35]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 36; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_37 (void*);
 void run_me_task_37 (void * data)
@@ -2855,6 +3251,7 @@ void run_me_task_37 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[37];
+  bool value_flags[37];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<37; i++)
@@ -2871,8 +3268,12 @@ void run_me_task_37 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2882,6 +3283,7 @@ void run_me_task_37 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -2923,6 +3325,11 @@ void run_me_task_37 (void * data)
               p[34],
               p[35],
               p[36]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 37; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_38 (void*);
 void run_me_task_38 (void * data)
@@ -2971,6 +3378,7 @@ void run_me_task_38 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[38];
+  bool value_flags[38];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<38; i++)
@@ -2987,8 +3395,12 @@ void run_me_task_38 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -2998,6 +3410,7 @@ void run_me_task_38 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -3040,6 +3453,11 @@ void run_me_task_38 (void * data)
               p[35],
               p[36],
               p[37]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 38; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_39 (void*);
 void run_me_task_39 (void * data)
@@ -3089,6 +3507,7 @@ void run_me_task_39 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[39];
+  bool value_flags[39];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<39; i++)
@@ -3105,8 +3524,12 @@ void run_me_task_39 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -3116,6 +3539,7 @@ void run_me_task_39 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -3159,6 +3583,11 @@ void run_me_task_39 (void * data)
               p[36],
               p[37],
               p[38]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 39; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_40 (void*);
 void run_me_task_40 (void * data)
@@ -3209,6 +3638,7 @@ void run_me_task_40 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[40];
+  bool value_flags[40];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<40; i++)
@@ -3225,8 +3655,12 @@ void run_me_task_40 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -3236,6 +3670,7 @@ void run_me_task_40 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -3280,6 +3715,11 @@ void run_me_task_40 (void * data)
               p[37],
               p[38],
               p[39]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 40; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_41 (void*);
 void run_me_task_41 (void * data)
@@ -3331,6 +3771,7 @@ void run_me_task_41 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[41];
+  bool value_flags[41];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<41; i++)
@@ -3347,8 +3788,12 @@ void run_me_task_41 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -3358,6 +3803,7 @@ void run_me_task_41 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -3403,6 +3849,11 @@ void run_me_task_41 (void * data)
               p[38],
               p[39],
               p[40]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 41; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_42 (void*);
 void run_me_task_42 (void * data)
@@ -3455,6 +3906,7 @@ void run_me_task_42 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[42];
+  bool value_flags[42];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<42; i++)
@@ -3471,8 +3923,12 @@ void run_me_task_42 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -3482,6 +3938,7 @@ void run_me_task_42 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -3528,6 +3985,11 @@ void run_me_task_42 (void * data)
               p[39],
               p[40],
               p[41]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 42; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_43 (void*);
 void run_me_task_43 (void * data)
@@ -3581,6 +4043,7 @@ void run_me_task_43 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[43];
+  bool value_flags[43];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<43; i++)
@@ -3597,8 +4060,12 @@ void run_me_task_43 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -3608,6 +4075,7 @@ void run_me_task_43 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -3655,6 +4123,11 @@ void run_me_task_43 (void * data)
               p[40],
               p[41],
               p[42]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 43; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_44 (void*);
 void run_me_task_44 (void * data)
@@ -3709,6 +4182,7 @@ void run_me_task_44 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[44];
+  bool value_flags[44];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<44; i++)
@@ -3725,8 +4199,12 @@ void run_me_task_44 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -3736,6 +4214,7 @@ void run_me_task_44 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -3784,6 +4263,11 @@ void run_me_task_44 (void * data)
               p[41],
               p[42],
               p[43]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 44; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_45 (void*);
 void run_me_task_45 (void * data)
@@ -3839,6 +4323,7 @@ void run_me_task_45 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[45];
+  bool value_flags[45];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<45; i++)
@@ -3855,8 +4340,12 @@ void run_me_task_45 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -3866,6 +4355,7 @@ void run_me_task_45 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -3915,6 +4405,11 @@ void run_me_task_45 (void * data)
               p[42],
               p[43],
               p[44]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 45; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_46 (void*);
 void run_me_task_46 (void * data)
@@ -3971,6 +4466,7 @@ void run_me_task_46 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[46];
+  bool value_flags[46];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<46; i++)
@@ -3987,8 +4483,12 @@ void run_me_task_46 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -3998,6 +4498,7 @@ void run_me_task_46 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -4048,6 +4549,11 @@ void run_me_task_46 (void * data)
               p[43],
               p[44],
               p[45]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 46; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_47 (void*);
 void run_me_task_47 (void * data)
@@ -4105,6 +4611,7 @@ void run_me_task_47 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[47];
+  bool value_flags[47];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<47; i++)
@@ -4121,8 +4628,12 @@ void run_me_task_47 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -4132,6 +4643,7 @@ void run_me_task_47 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -4183,6 +4695,11 @@ void run_me_task_47 (void * data)
               p[44],
               p[45],
               p[46]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 47; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_48 (void*);
 void run_me_task_48 (void * data)
@@ -4241,6 +4758,7 @@ void run_me_task_48 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[48];
+  bool value_flags[48];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<48; i++)
@@ -4257,8 +4775,12 @@ void run_me_task_48 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -4268,6 +4790,7 @@ void run_me_task_48 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -4320,6 +4843,11 @@ void run_me_task_48 (void * data)
               p[45],
               p[46],
               p[47]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 48; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_49 (void*);
 void run_me_task_49 (void * data)
@@ -4379,6 +4907,7 @@ void run_me_task_49 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[49];
+  bool value_flags[49];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<49; i++)
@@ -4395,8 +4924,12 @@ void run_me_task_49 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -4406,6 +4939,7 @@ void run_me_task_49 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -4459,6 +4993,11 @@ void run_me_task_49 (void * data)
               p[46],
               p[47],
               p[48]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 49; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_50 (void*);
 void run_me_task_50 (void * data)
@@ -4519,6 +5058,7 @@ void run_me_task_50 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[50];
+  bool value_flags[50];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<50; i++)
@@ -4535,8 +5075,12 @@ void run_me_task_50 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -4546,6 +5090,7 @@ void run_me_task_50 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -4600,6 +5145,11 @@ void run_me_task_50 (void * data)
               p[47],
               p[48],
               p[49]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 50; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_51 (void*);
 void run_me_task_51 (void * data)
@@ -4661,6 +5211,7 @@ void run_me_task_51 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[51];
+  bool value_flags[51];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<51; i++)
@@ -4677,8 +5228,12 @@ void run_me_task_51 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -4688,6 +5243,7 @@ void run_me_task_51 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -4743,6 +5299,11 @@ void run_me_task_51 (void * data)
               p[48],
               p[49],
               p[50]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 51; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_52 (void*);
 void run_me_task_52 (void * data)
@@ -4805,6 +5366,7 @@ void run_me_task_52 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[52];
+  bool value_flags[52];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<52; i++)
@@ -4821,8 +5383,12 @@ void run_me_task_52 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -4832,6 +5398,7 @@ void run_me_task_52 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -4888,6 +5455,11 @@ void run_me_task_52 (void * data)
               p[49],
               p[50],
               p[51]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 52; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_53 (void*);
 void run_me_task_53 (void * data)
@@ -4951,6 +5523,7 @@ void run_me_task_53 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[53];
+  bool value_flags[53];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<53; i++)
@@ -4967,8 +5540,12 @@ void run_me_task_53 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -4978,6 +5555,7 @@ void run_me_task_53 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -5035,6 +5613,11 @@ void run_me_task_53 (void * data)
               p[50],
               p[51],
               p[52]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 53; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_54 (void*);
 void run_me_task_54 (void * data)
@@ -5099,6 +5682,7 @@ void run_me_task_54 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[54];
+  bool value_flags[54];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<54; i++)
@@ -5115,8 +5699,12 @@ void run_me_task_54 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -5126,6 +5714,7 @@ void run_me_task_54 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -5184,6 +5773,11 @@ void run_me_task_54 (void * data)
               p[51],
               p[52],
               p[53]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 54; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_55 (void*);
 void run_me_task_55 (void * data)
@@ -5249,6 +5843,7 @@ void run_me_task_55 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[55];
+  bool value_flags[55];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<55; i++)
@@ -5265,8 +5860,12 @@ void run_me_task_55 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -5276,6 +5875,7 @@ void run_me_task_55 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -5335,6 +5935,11 @@ void run_me_task_55 (void * data)
               p[52],
               p[53],
               p[54]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 55; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_56 (void*);
 void run_me_task_56 (void * data)
@@ -5401,6 +6006,7 @@ void run_me_task_56 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[56];
+  bool value_flags[56];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<56; i++)
@@ -5417,8 +6023,12 @@ void run_me_task_56 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -5428,6 +6038,7 @@ void run_me_task_56 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -5488,6 +6099,11 @@ void run_me_task_56 (void * data)
               p[53],
               p[54],
               p[55]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 56; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_57 (void*);
 void run_me_task_57 (void * data)
@@ -5555,6 +6171,7 @@ void run_me_task_57 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[57];
+  bool value_flags[57];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<57; i++)
@@ -5571,8 +6188,12 @@ void run_me_task_57 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -5582,6 +6203,7 @@ void run_me_task_57 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -5643,6 +6265,11 @@ void run_me_task_57 (void * data)
               p[54],
               p[55],
               p[56]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 57; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_58 (void*);
 void run_me_task_58 (void * data)
@@ -5711,6 +6338,7 @@ void run_me_task_58 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[58];
+  bool value_flags[58];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<58; i++)
@@ -5727,8 +6355,12 @@ void run_me_task_58 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -5738,6 +6370,7 @@ void run_me_task_58 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -5800,6 +6433,11 @@ void run_me_task_58 (void * data)
               p[55],
               p[56],
               p[57]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 58; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_59 (void*);
 void run_me_task_59 (void * data)
@@ -5869,6 +6507,7 @@ void run_me_task_59 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[59];
+  bool value_flags[59];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<59; i++)
@@ -5885,8 +6524,12 @@ void run_me_task_59 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -5896,6 +6539,7 @@ void run_me_task_59 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -5959,6 +6603,11 @@ void run_me_task_59 (void * data)
               p[56],
               p[57],
               p[58]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 59; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_60 (void*);
 void run_me_task_60 (void * data)
@@ -6029,6 +6678,7 @@ void run_me_task_60 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[60];
+  bool value_flags[60];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<60; i++)
@@ -6045,8 +6695,12 @@ void run_me_task_60 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -6056,6 +6710,7 @@ void run_me_task_60 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -6120,6 +6775,11 @@ void run_me_task_60 (void * data)
               p[57],
               p[58],
               p[59]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 60; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_61 (void*);
 void run_me_task_61 (void * data)
@@ -6191,6 +6851,7 @@ void run_me_task_61 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[61];
+  bool value_flags[61];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<61; i++)
@@ -6207,8 +6868,12 @@ void run_me_task_61 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -6218,6 +6883,7 @@ void run_me_task_61 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -6283,6 +6949,11 @@ void run_me_task_61 (void * data)
               p[58],
               p[59],
               p[60]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 61; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_62 (void*);
 void run_me_task_62 (void * data)
@@ -6355,6 +7026,7 @@ void run_me_task_62 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[62];
+  bool value_flags[62];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<62; i++)
@@ -6371,8 +7043,12 @@ void run_me_task_62 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -6382,6 +7058,7 @@ void run_me_task_62 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -6448,6 +7125,11 @@ void run_me_task_62 (void * data)
               p[59],
               p[60],
               p[61]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 62; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_63 (void*);
 void run_me_task_63 (void * data)
@@ -6521,6 +7203,7 @@ void run_me_task_63 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[63];
+  bool value_flags[63];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<63; i++)
@@ -6537,8 +7220,12 @@ void run_me_task_63 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -6548,6 +7235,7 @@ void run_me_task_63 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -6615,6 +7303,11 @@ void run_me_task_63 (void * data)
               p[60],
               p[61],
               p[62]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 63; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_64 (void*);
 void run_me_task_64 (void * data)
@@ -6689,6 +7382,7 @@ void run_me_task_64 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[64];
+  bool value_flags[64];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<64; i++)
@@ -6705,8 +7399,12 @@ void run_me_task_64 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -6716,6 +7414,7 @@ void run_me_task_64 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -6784,6 +7483,11 @@ void run_me_task_64 (void * data)
               p[61],
               p[62],
               p[63]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 64; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_65 (void*);
 void run_me_task_65 (void * data)
@@ -6859,6 +7563,7 @@ void run_me_task_65 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[65];
+  bool value_flags[65];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<65; i++)
@@ -6875,8 +7580,12 @@ void run_me_task_65 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -6886,6 +7595,7 @@ void run_me_task_65 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -6955,6 +7665,11 @@ void run_me_task_65 (void * data)
               p[62],
               p[63],
               p[64]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 65; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_66 (void*);
 void run_me_task_66 (void * data)
@@ -7031,6 +7746,7 @@ void run_me_task_66 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[66];
+  bool value_flags[66];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<66; i++)
@@ -7047,8 +7763,12 @@ void run_me_task_66 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -7058,6 +7778,7 @@ void run_me_task_66 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -7128,6 +7849,11 @@ void run_me_task_66 (void * data)
               p[63],
               p[64],
               p[65]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 66; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_67 (void*);
 void run_me_task_67 (void * data)
@@ -7205,6 +7931,7 @@ void run_me_task_67 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[67];
+  bool value_flags[67];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<67; i++)
@@ -7221,8 +7948,12 @@ void run_me_task_67 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -7232,6 +7963,7 @@ void run_me_task_67 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -7303,6 +8035,11 @@ void run_me_task_67 (void * data)
               p[64],
               p[65],
               p[66]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 67; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_68 (void*);
 void run_me_task_68 (void * data)
@@ -7381,6 +8118,7 @@ void run_me_task_68 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[68];
+  bool value_flags[68];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<68; i++)
@@ -7397,8 +8135,12 @@ void run_me_task_68 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -7408,6 +8150,7 @@ void run_me_task_68 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -7480,6 +8223,11 @@ void run_me_task_68 (void * data)
               p[65],
               p[66],
               p[67]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 68; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_69 (void*);
 void run_me_task_69 (void * data)
@@ -7559,6 +8307,7 @@ void run_me_task_69 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[69];
+  bool value_flags[69];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<69; i++)
@@ -7575,8 +8324,12 @@ void run_me_task_69 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -7586,6 +8339,7 @@ void run_me_task_69 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -7659,6 +8413,11 @@ void run_me_task_69 (void * data)
               p[66],
               p[67],
               p[68]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 69; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_70 (void*);
 void run_me_task_70 (void * data)
@@ -7739,6 +8498,7 @@ void run_me_task_70 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[70];
+  bool value_flags[70];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<70; i++)
@@ -7755,8 +8515,12 @@ void run_me_task_70 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -7766,6 +8530,7 @@ void run_me_task_70 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -7840,6 +8605,11 @@ void run_me_task_70 (void * data)
               p[67],
               p[68],
               p[69]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 70; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_71 (void*);
 void run_me_task_71 (void * data)
@@ -7921,6 +8691,7 @@ void run_me_task_71 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[71];
+  bool value_flags[71];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<71; i++)
@@ -7937,8 +8708,12 @@ void run_me_task_71 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -7948,6 +8723,7 @@ void run_me_task_71 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -8023,6 +8799,11 @@ void run_me_task_71 (void * data)
               p[68],
               p[69],
               p[70]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 71; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_72 (void*);
 void run_me_task_72 (void * data)
@@ -8105,6 +8886,7 @@ void run_me_task_72 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[72];
+  bool value_flags[72];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<72; i++)
@@ -8121,8 +8903,12 @@ void run_me_task_72 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -8132,6 +8918,7 @@ void run_me_task_72 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -8208,6 +8995,11 @@ void run_me_task_72 (void * data)
               p[69],
               p[70],
               p[71]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 72; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_73 (void*);
 void run_me_task_73 (void * data)
@@ -8291,6 +9083,7 @@ void run_me_task_73 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[73];
+  bool value_flags[73];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<73; i++)
@@ -8307,8 +9100,12 @@ void run_me_task_73 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -8318,6 +9115,7 @@ void run_me_task_73 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -8395,6 +9193,11 @@ void run_me_task_73 (void * data)
               p[70],
               p[71],
               p[72]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 73; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_74 (void*);
 void run_me_task_74 (void * data)
@@ -8479,6 +9282,7 @@ void run_me_task_74 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[74];
+  bool value_flags[74];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<74; i++)
@@ -8495,8 +9299,12 @@ void run_me_task_74 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -8506,6 +9314,7 @@ void run_me_task_74 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -8584,6 +9393,11 @@ void run_me_task_74 (void * data)
               p[71],
               p[72],
               p[73]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 74; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_75 (void*);
 void run_me_task_75 (void * data)
@@ -8669,6 +9483,7 @@ void run_me_task_75 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[75];
+  bool value_flags[75];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<75; i++)
@@ -8685,8 +9500,12 @@ void run_me_task_75 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -8696,6 +9515,7 @@ void run_me_task_75 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -8775,6 +9595,11 @@ void run_me_task_75 (void * data)
               p[72],
               p[73],
               p[74]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 75; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_76 (void*);
 void run_me_task_76 (void * data)
@@ -8861,6 +9686,7 @@ void run_me_task_76 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[76];
+  bool value_flags[76];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<76; i++)
@@ -8877,8 +9703,12 @@ void run_me_task_76 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -8888,6 +9718,7 @@ void run_me_task_76 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -8968,6 +9799,11 @@ void run_me_task_76 (void * data)
               p[73],
               p[74],
               p[75]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 76; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_77 (void*);
 void run_me_task_77 (void * data)
@@ -9055,6 +9891,7 @@ void run_me_task_77 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[77];
+  bool value_flags[77];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<77; i++)
@@ -9071,8 +9908,12 @@ void run_me_task_77 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -9082,6 +9923,7 @@ void run_me_task_77 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -9163,6 +10005,11 @@ void run_me_task_77 (void * data)
               p[74],
               p[75],
               p[76]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 77; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_78 (void*);
 void run_me_task_78 (void * data)
@@ -9251,6 +10098,7 @@ void run_me_task_78 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[78];
+  bool value_flags[78];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<78; i++)
@@ -9267,8 +10115,12 @@ void run_me_task_78 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -9278,6 +10130,7 @@ void run_me_task_78 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -9360,6 +10213,11 @@ void run_me_task_78 (void * data)
               p[75],
               p[76],
               p[77]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 78; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_79 (void*);
 void run_me_task_79 (void * data)
@@ -9449,6 +10307,7 @@ void run_me_task_79 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[79];
+  bool value_flags[79];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<79; i++)
@@ -9465,8 +10324,12 @@ void run_me_task_79 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -9476,6 +10339,7 @@ void run_me_task_79 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -9559,6 +10423,11 @@ void run_me_task_79 (void * data)
               p[76],
               p[77],
               p[78]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 79; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_80 (void*);
 void run_me_task_80 (void * data)
@@ -9649,6 +10518,7 @@ void run_me_task_80 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[80];
+  bool value_flags[80];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<80; i++)
@@ -9665,8 +10535,12 @@ void run_me_task_80 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -9676,6 +10550,7 @@ void run_me_task_80 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -9760,6 +10635,11 @@ void run_me_task_80 (void * data)
               p[77],
               p[78],
               p[79]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 80; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_81 (void*);
 void run_me_task_81 (void * data)
@@ -9851,6 +10731,7 @@ void run_me_task_81 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[81];
+  bool value_flags[81];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<81; i++)
@@ -9867,8 +10748,12 @@ void run_me_task_81 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -9878,6 +10763,7 @@ void run_me_task_81 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -9963,6 +10849,11 @@ void run_me_task_81 (void * data)
               p[78],
               p[79],
               p[80]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 81; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_82 (void*);
 void run_me_task_82 (void * data)
@@ -10055,6 +10946,7 @@ void run_me_task_82 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[82];
+  bool value_flags[82];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<82; i++)
@@ -10071,8 +10963,12 @@ void run_me_task_82 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -10082,6 +10978,7 @@ void run_me_task_82 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -10168,6 +11065,11 @@ void run_me_task_82 (void * data)
               p[79],
               p[80],
               p[81]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 82; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_83 (void*);
 void run_me_task_83 (void * data)
@@ -10261,6 +11163,7 @@ void run_me_task_83 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[83];
+  bool value_flags[83];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<83; i++)
@@ -10277,8 +11180,12 @@ void run_me_task_83 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -10288,6 +11195,7 @@ void run_me_task_83 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -10375,6 +11283,11 @@ void run_me_task_83 (void * data)
               p[80],
               p[81],
               p[82]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 83; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_84 (void*);
 void run_me_task_84 (void * data)
@@ -10469,6 +11382,7 @@ void run_me_task_84 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[84];
+  bool value_flags[84];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<84; i++)
@@ -10485,8 +11399,12 @@ void run_me_task_84 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -10496,6 +11414,7 @@ void run_me_task_84 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -10584,6 +11503,11 @@ void run_me_task_84 (void * data)
               p[81],
               p[82],
               p[83]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 84; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_85 (void*);
 void run_me_task_85 (void * data)
@@ -10679,6 +11603,7 @@ void run_me_task_85 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[85];
+  bool value_flags[85];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<85; i++)
@@ -10695,8 +11620,12 @@ void run_me_task_85 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -10706,6 +11635,7 @@ void run_me_task_85 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -10795,6 +11725,11 @@ void run_me_task_85 (void * data)
               p[82],
               p[83],
               p[84]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 85; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_86 (void*);
 void run_me_task_86 (void * data)
@@ -10891,6 +11826,7 @@ void run_me_task_86 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[86];
+  bool value_flags[86];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<86; i++)
@@ -10907,8 +11843,12 @@ void run_me_task_86 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -10918,6 +11858,7 @@ void run_me_task_86 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -11008,6 +11949,11 @@ void run_me_task_86 (void * data)
               p[83],
               p[84],
               p[85]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 86; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_87 (void*);
 void run_me_task_87 (void * data)
@@ -11105,6 +12051,7 @@ void run_me_task_87 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[87];
+  bool value_flags[87];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<87; i++)
@@ -11121,8 +12068,12 @@ void run_me_task_87 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -11132,6 +12083,7 @@ void run_me_task_87 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -11223,6 +12175,11 @@ void run_me_task_87 (void * data)
               p[84],
               p[85],
               p[86]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 87; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_88 (void*);
 void run_me_task_88 (void * data)
@@ -11321,6 +12278,7 @@ void run_me_task_88 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[88];
+  bool value_flags[88];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<88; i++)
@@ -11337,8 +12295,12 @@ void run_me_task_88 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -11348,6 +12310,7 @@ void run_me_task_88 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -11440,6 +12403,11 @@ void run_me_task_88 (void * data)
               p[85],
               p[86],
               p[87]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 88; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_89 (void*);
 void run_me_task_89 (void * data)
@@ -11539,6 +12507,7 @@ void run_me_task_89 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[89];
+  bool value_flags[89];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<89; i++)
@@ -11555,8 +12524,12 @@ void run_me_task_89 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -11566,6 +12539,7 @@ void run_me_task_89 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -11659,6 +12633,11 @@ void run_me_task_89 (void * data)
               p[86],
               p[87],
               p[88]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 89; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_90 (void*);
 void run_me_task_90 (void * data)
@@ -11759,6 +12738,7 @@ void run_me_task_90 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[90];
+  bool value_flags[90];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<90; i++)
@@ -11775,8 +12755,12 @@ void run_me_task_90 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -11786,6 +12770,7 @@ void run_me_task_90 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -11880,6 +12865,11 @@ void run_me_task_90 (void * data)
               p[87],
               p[88],
               p[89]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 90; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_91 (void*);
 void run_me_task_91 (void * data)
@@ -11981,6 +12971,7 @@ void run_me_task_91 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[91];
+  bool value_flags[91];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<91; i++)
@@ -11997,8 +12988,12 @@ void run_me_task_91 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -12008,6 +13003,7 @@ void run_me_task_91 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -12103,6 +13099,11 @@ void run_me_task_91 (void * data)
               p[88],
               p[89],
               p[90]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 91; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_92 (void*);
 void run_me_task_92 (void * data)
@@ -12205,6 +13206,7 @@ void run_me_task_92 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[92];
+  bool value_flags[92];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<92; i++)
@@ -12221,8 +13223,12 @@ void run_me_task_92 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -12232,6 +13238,7 @@ void run_me_task_92 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -12328,6 +13335,11 @@ void run_me_task_92 (void * data)
               p[89],
               p[90],
               p[91]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 92; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_93 (void*);
 void run_me_task_93 (void * data)
@@ -12431,6 +13443,7 @@ void run_me_task_93 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[93];
+  bool value_flags[93];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<93; i++)
@@ -12447,8 +13460,12 @@ void run_me_task_93 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -12458,6 +13475,7 @@ void run_me_task_93 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -12555,6 +13573,11 @@ void run_me_task_93 (void * data)
               p[90],
               p[91],
               p[92]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 93; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_94 (void*);
 void run_me_task_94 (void * data)
@@ -12659,6 +13682,7 @@ void run_me_task_94 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[94];
+  bool value_flags[94];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<94; i++)
@@ -12675,8 +13699,12 @@ void run_me_task_94 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -12686,6 +13714,7 @@ void run_me_task_94 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -12784,6 +13813,11 @@ void run_me_task_94 (void * data)
               p[91],
               p[92],
               p[93]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 94; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_95 (void*);
 void run_me_task_95 (void * data)
@@ -12889,6 +13923,7 @@ void run_me_task_95 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[95];
+  bool value_flags[95];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<95; i++)
@@ -12905,8 +13940,12 @@ void run_me_task_95 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -12916,6 +13955,7 @@ void run_me_task_95 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -13015,6 +14055,11 @@ void run_me_task_95 (void * data)
               p[92],
               p[93],
               p[94]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 95; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_96 (void*);
 void run_me_task_96 (void * data)
@@ -13121,6 +14166,7 @@ void run_me_task_96 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[96];
+  bool value_flags[96];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<96; i++)
@@ -13137,8 +14183,12 @@ void run_me_task_96 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -13148,6 +14198,7 @@ void run_me_task_96 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -13248,6 +14299,11 @@ void run_me_task_96 (void * data)
               p[93],
               p[94],
               p[95]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 96; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_97 (void*);
 void run_me_task_97 (void * data)
@@ -13355,6 +14411,7 @@ void run_me_task_97 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[97];
+  bool value_flags[97];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<97; i++)
@@ -13371,8 +14428,12 @@ void run_me_task_97 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -13382,6 +14443,7 @@ void run_me_task_97 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -13483,6 +14545,11 @@ void run_me_task_97 (void * data)
               p[94],
               p[95],
               p[96]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 97; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_98 (void*);
 void run_me_task_98 (void * data)
@@ -13591,6 +14658,7 @@ void run_me_task_98 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[98];
+  bool value_flags[98];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<98; i++)
@@ -13607,8 +14675,12 @@ void run_me_task_98 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -13618,6 +14690,7 @@ void run_me_task_98 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -13720,6 +14793,11 @@ void run_me_task_98 (void * data)
               p[95],
               p[96],
               p[97]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 98; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_99 (void*);
 void run_me_task_99 (void * data)
@@ -13829,6 +14907,7 @@ void run_me_task_99 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[99];
+  bool value_flags[99];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<99; i++)
@@ -13845,8 +14924,12 @@ void run_me_task_99 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -13856,6 +14939,7 @@ void run_me_task_99 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -13959,6 +15043,11 @@ void run_me_task_99 (void * data)
               p[96],
               p[97],
               p[98]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 99; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_100 (void*);
 void run_me_task_100 (void * data)
@@ -14069,6 +15158,7 @@ void run_me_task_100 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[100];
+  bool value_flags[100];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<100; i++)
@@ -14085,8 +15175,12 @@ void run_me_task_100 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -14096,6 +15190,7 @@ void run_me_task_100 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -14200,6 +15295,11 @@ void run_me_task_100 (void * data)
               p[97],
               p[98],
               p[99]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 100; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_101 (void*);
 void run_me_task_101 (void * data)
@@ -14311,6 +15411,7 @@ void run_me_task_101 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[101];
+  bool value_flags[101];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<101; i++)
@@ -14327,8 +15428,12 @@ void run_me_task_101 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -14338,6 +15443,7 @@ void run_me_task_101 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -14443,6 +15549,11 @@ void run_me_task_101 (void * data)
               p[98],
               p[99],
               p[100]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 101; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_102 (void*);
 void run_me_task_102 (void * data)
@@ -14555,6 +15666,7 @@ void run_me_task_102 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[102];
+  bool value_flags[102];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<102; i++)
@@ -14571,8 +15683,12 @@ void run_me_task_102 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -14582,6 +15698,7 @@ void run_me_task_102 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -14688,6 +15805,11 @@ void run_me_task_102 (void * data)
               p[99],
               p[100],
               p[101]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 102; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_103 (void*);
 void run_me_task_103 (void * data)
@@ -14801,6 +15923,7 @@ void run_me_task_103 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[103];
+  bool value_flags[103];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<103; i++)
@@ -14817,8 +15940,12 @@ void run_me_task_103 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -14828,6 +15955,7 @@ void run_me_task_103 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -14935,6 +16063,11 @@ void run_me_task_103 (void * data)
               p[100],
               p[101],
               p[102]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 103; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_104 (void*);
 void run_me_task_104 (void * data)
@@ -15049,6 +16182,7 @@ void run_me_task_104 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[104];
+  bool value_flags[104];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<104; i++)
@@ -15065,8 +16199,12 @@ void run_me_task_104 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -15076,6 +16214,7 @@ void run_me_task_104 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -15184,6 +16323,11 @@ void run_me_task_104 (void * data)
               p[101],
               p[102],
               p[103]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 104; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_105 (void*);
 void run_me_task_105 (void * data)
@@ -15299,6 +16443,7 @@ void run_me_task_105 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[105];
+  bool value_flags[105];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<105; i++)
@@ -15315,8 +16460,12 @@ void run_me_task_105 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -15326,6 +16475,7 @@ void run_me_task_105 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -15435,6 +16585,11 @@ void run_me_task_105 (void * data)
               p[102],
               p[103],
               p[104]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 105; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_106 (void*);
 void run_me_task_106 (void * data)
@@ -15551,6 +16706,7 @@ void run_me_task_106 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[106];
+  bool value_flags[106];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<106; i++)
@@ -15567,8 +16723,12 @@ void run_me_task_106 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -15578,6 +16738,7 @@ void run_me_task_106 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -15688,6 +16849,11 @@ void run_me_task_106 (void * data)
               p[103],
               p[104],
               p[105]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 106; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_107 (void*);
 void run_me_task_107 (void * data)
@@ -15805,6 +16971,7 @@ void run_me_task_107 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[107];
+  bool value_flags[107];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<107; i++)
@@ -15821,8 +16988,12 @@ void run_me_task_107 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -15832,6 +17003,7 @@ void run_me_task_107 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -15943,6 +17115,11 @@ void run_me_task_107 (void * data)
               p[104],
               p[105],
               p[106]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 107; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_108 (void*);
 void run_me_task_108 (void * data)
@@ -16061,6 +17238,7 @@ void run_me_task_108 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[108];
+  bool value_flags[108];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<108; i++)
@@ -16077,8 +17255,12 @@ void run_me_task_108 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -16088,6 +17270,7 @@ void run_me_task_108 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -16200,6 +17383,11 @@ void run_me_task_108 (void * data)
               p[105],
               p[106],
               p[107]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 108; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_109 (void*);
 void run_me_task_109 (void * data)
@@ -16319,6 +17507,7 @@ void run_me_task_109 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[109];
+  bool value_flags[109];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<109; i++)
@@ -16335,8 +17524,12 @@ void run_me_task_109 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -16346,6 +17539,7 @@ void run_me_task_109 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -16459,6 +17653,11 @@ void run_me_task_109 (void * data)
               p[106],
               p[107],
               p[108]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 109; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_110 (void*);
 void run_me_task_110 (void * data)
@@ -16579,6 +17778,7 @@ void run_me_task_110 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[110];
+  bool value_flags[110];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<110; i++)
@@ -16595,8 +17795,12 @@ void run_me_task_110 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -16606,6 +17810,7 @@ void run_me_task_110 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -16720,6 +17925,11 @@ void run_me_task_110 (void * data)
               p[107],
               p[108],
               p[109]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 110; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_111 (void*);
 void run_me_task_111 (void * data)
@@ -16841,6 +18051,7 @@ void run_me_task_111 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[111];
+  bool value_flags[111];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<111; i++)
@@ -16857,8 +18068,12 @@ void run_me_task_111 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -16868,6 +18083,7 @@ void run_me_task_111 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -16983,6 +18199,11 @@ void run_me_task_111 (void * data)
               p[108],
               p[109],
               p[110]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 111; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_112 (void*);
 void run_me_task_112 (void * data)
@@ -17105,6 +18326,7 @@ void run_me_task_112 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[112];
+  bool value_flags[112];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<112; i++)
@@ -17121,8 +18343,12 @@ void run_me_task_112 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -17132,6 +18358,7 @@ void run_me_task_112 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -17248,6 +18475,11 @@ void run_me_task_112 (void * data)
               p[109],
               p[110],
               p[111]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 112; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_113 (void*);
 void run_me_task_113 (void * data)
@@ -17371,6 +18603,7 @@ void run_me_task_113 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[113];
+  bool value_flags[113];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<113; i++)
@@ -17387,8 +18620,12 @@ void run_me_task_113 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -17398,6 +18635,7 @@ void run_me_task_113 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -17515,6 +18753,11 @@ void run_me_task_113 (void * data)
               p[110],
               p[111],
               p[112]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 113; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_114 (void*);
 void run_me_task_114 (void * data)
@@ -17639,6 +18882,7 @@ void run_me_task_114 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[114];
+  bool value_flags[114];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<114; i++)
@@ -17655,8 +18899,12 @@ void run_me_task_114 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -17666,6 +18914,7 @@ void run_me_task_114 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -17784,6 +19033,11 @@ void run_me_task_114 (void * data)
               p[111],
               p[112],
               p[113]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 114; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_115 (void*);
 void run_me_task_115 (void * data)
@@ -17909,6 +19163,7 @@ void run_me_task_115 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[115];
+  bool value_flags[115];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<115; i++)
@@ -17925,8 +19180,12 @@ void run_me_task_115 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -17936,6 +19195,7 @@ void run_me_task_115 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -18055,6 +19315,11 @@ void run_me_task_115 (void * data)
               p[112],
               p[113],
               p[114]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 115; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_116 (void*);
 void run_me_task_116 (void * data)
@@ -18181,6 +19446,7 @@ void run_me_task_116 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[116];
+  bool value_flags[116];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<116; i++)
@@ -18197,8 +19463,12 @@ void run_me_task_116 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -18208,6 +19478,7 @@ void run_me_task_116 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -18328,6 +19599,11 @@ void run_me_task_116 (void * data)
               p[113],
               p[114],
               p[115]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 116; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_117 (void*);
 void run_me_task_117 (void * data)
@@ -18455,6 +19731,7 @@ void run_me_task_117 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[117];
+  bool value_flags[117];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<117; i++)
@@ -18471,8 +19748,12 @@ void run_me_task_117 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -18482,6 +19763,7 @@ void run_me_task_117 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -18603,6 +19885,11 @@ void run_me_task_117 (void * data)
               p[114],
               p[115],
               p[116]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 117; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_118 (void*);
 void run_me_task_118 (void * data)
@@ -18731,6 +20018,7 @@ void run_me_task_118 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[118];
+  bool value_flags[118];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<118; i++)
@@ -18747,8 +20035,12 @@ void run_me_task_118 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -18758,6 +20050,7 @@ void run_me_task_118 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -18880,6 +20173,11 @@ void run_me_task_118 (void * data)
               p[115],
               p[116],
               p[117]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 118; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_119 (void*);
 void run_me_task_119 (void * data)
@@ -19009,6 +20307,7 @@ void run_me_task_119 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[119];
+  bool value_flags[119];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<119; i++)
@@ -19025,8 +20324,12 @@ void run_me_task_119 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -19036,6 +20339,7 @@ void run_me_task_119 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -19159,6 +20463,11 @@ void run_me_task_119 (void * data)
               p[116],
               p[117],
               p[118]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 119; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_120 (void*);
 void run_me_task_120 (void * data)
@@ -19289,6 +20598,7 @@ void run_me_task_120 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[120];
+  bool value_flags[120];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<120; i++)
@@ -19305,8 +20615,12 @@ void run_me_task_120 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -19316,6 +20630,7 @@ void run_me_task_120 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -19440,6 +20755,11 @@ void run_me_task_120 (void * data)
               p[117],
               p[118],
               p[119]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 120; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_121 (void*);
 void run_me_task_121 (void * data)
@@ -19571,6 +20891,7 @@ void run_me_task_121 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[121];
+  bool value_flags[121];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<121; i++)
@@ -19587,8 +20908,12 @@ void run_me_task_121 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -19598,6 +20923,7 @@ void run_me_task_121 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -19723,6 +21049,11 @@ void run_me_task_121 (void * data)
               p[118],
               p[119],
               p[120]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 121; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_122 (void*);
 void run_me_task_122 (void * data)
@@ -19855,6 +21186,7 @@ void run_me_task_122 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[122];
+  bool value_flags[122];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<122; i++)
@@ -19871,8 +21203,12 @@ void run_me_task_122 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -19882,6 +21218,7 @@ void run_me_task_122 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -20008,6 +21345,11 @@ void run_me_task_122 (void * data)
               p[119],
               p[120],
               p[121]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 122; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_123 (void*);
 void run_me_task_123 (void * data)
@@ -20141,6 +21483,7 @@ void run_me_task_123 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[123];
+  bool value_flags[123];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<123; i++)
@@ -20157,8 +21500,12 @@ void run_me_task_123 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -20168,6 +21515,7 @@ void run_me_task_123 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -20295,6 +21643,11 @@ void run_me_task_123 (void * data)
               p[120],
               p[121],
               p[122]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 123; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_124 (void*);
 void run_me_task_124 (void * data)
@@ -20429,6 +21782,7 @@ void run_me_task_124 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[124];
+  bool value_flags[124];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<124; i++)
@@ -20445,8 +21799,12 @@ void run_me_task_124 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -20456,6 +21814,7 @@ void run_me_task_124 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -20584,6 +21943,11 @@ void run_me_task_124 (void * data)
               p[121],
               p[122],
               p[123]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 124; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_125 (void*);
 void run_me_task_125 (void * data)
@@ -20719,6 +22083,7 @@ void run_me_task_125 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[125];
+  bool value_flags[125];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<125; i++)
@@ -20735,8 +22100,12 @@ void run_me_task_125 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -20746,6 +22115,7 @@ void run_me_task_125 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -20875,6 +22245,11 @@ void run_me_task_125 (void * data)
               p[122],
               p[123],
               p[124]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 125; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_126 (void*);
 void run_me_task_126 (void * data)
@@ -21011,6 +22386,7 @@ void run_me_task_126 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[126];
+  bool value_flags[126];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<126; i++)
@@ -21027,8 +22403,12 @@ void run_me_task_126 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -21038,6 +22418,7 @@ void run_me_task_126 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -21168,6 +22549,11 @@ void run_me_task_126 (void * data)
               p[123],
               p[124],
               p[125]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 126; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_127 (void*);
 void run_me_task_127 (void * data)
@@ -21305,6 +22691,7 @@ void run_me_task_127 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[127];
+  bool value_flags[127];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<127; i++)
@@ -21321,8 +22708,12 @@ void run_me_task_127 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -21332,6 +22723,7 @@ void run_me_task_127 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -21463,6 +22855,11 @@ void run_me_task_127 (void * data)
               p[124],
               p[125],
               p[126]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 127; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_128 (void*);
 void run_me_task_128 (void * data)
@@ -21601,6 +22998,7 @@ void run_me_task_128 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[128];
+  bool value_flags[128];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<128; i++)
@@ -21617,8 +23015,12 @@ void run_me_task_128 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -21628,6 +23030,7 @@ void run_me_task_128 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -21760,6 +23163,11 @@ void run_me_task_128 (void * data)
               p[125],
               p[126],
               p[127]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 128; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_129 (void*);
 void run_me_task_129 (void * data)
@@ -21899,6 +23307,7 @@ void run_me_task_129 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[129];
+  bool value_flags[129];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<129; i++)
@@ -21915,8 +23324,12 @@ void run_me_task_129 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -21926,6 +23339,7 @@ void run_me_task_129 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -22059,6 +23473,11 @@ void run_me_task_129 (void * data)
               p[126],
               p[127],
               p[128]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 129; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_130 (void*);
 void run_me_task_130 (void * data)
@@ -22199,6 +23618,7 @@ void run_me_task_130 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[130];
+  bool value_flags[130];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<130; i++)
@@ -22215,8 +23635,12 @@ void run_me_task_130 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -22226,6 +23650,7 @@ void run_me_task_130 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -22360,6 +23785,11 @@ void run_me_task_130 (void * data)
               p[127],
               p[128],
               p[129]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 130; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_131 (void*);
 void run_me_task_131 (void * data)
@@ -22501,6 +23931,7 @@ void run_me_task_131 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[131];
+  bool value_flags[131];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<131; i++)
@@ -22517,8 +23948,12 @@ void run_me_task_131 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -22528,6 +23963,7 @@ void run_me_task_131 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -22663,6 +24099,11 @@ void run_me_task_131 (void * data)
               p[128],
               p[129],
               p[130]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 131; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_132 (void*);
 void run_me_task_132 (void * data)
@@ -22805,6 +24246,7 @@ void run_me_task_132 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[132];
+  bool value_flags[132];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<132; i++)
@@ -22821,8 +24263,12 @@ void run_me_task_132 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -22832,6 +24278,7 @@ void run_me_task_132 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -22968,6 +24415,11 @@ void run_me_task_132 (void * data)
               p[129],
               p[130],
               p[131]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 132; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_133 (void*);
 void run_me_task_133 (void * data)
@@ -23111,6 +24563,7 @@ void run_me_task_133 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[133];
+  bool value_flags[133];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<133; i++)
@@ -23127,8 +24580,12 @@ void run_me_task_133 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -23138,6 +24595,7 @@ void run_me_task_133 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -23275,6 +24733,11 @@ void run_me_task_133 (void * data)
               p[130],
               p[131],
               p[132]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 133; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_134 (void*);
 void run_me_task_134 (void * data)
@@ -23419,6 +24882,7 @@ void run_me_task_134 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[134];
+  bool value_flags[134];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<134; i++)
@@ -23435,8 +24899,12 @@ void run_me_task_134 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -23446,6 +24914,7 @@ void run_me_task_134 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -23584,6 +25053,11 @@ void run_me_task_134 (void * data)
               p[131],
               p[132],
               p[133]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 134; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_135 (void*);
 void run_me_task_135 (void * data)
@@ -23729,6 +25203,7 @@ void run_me_task_135 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[135];
+  bool value_flags[135];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<135; i++)
@@ -23745,8 +25220,12 @@ void run_me_task_135 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -23756,6 +25235,7 @@ void run_me_task_135 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -23895,6 +25375,11 @@ void run_me_task_135 (void * data)
               p[132],
               p[133],
               p[134]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 135; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_136 (void*);
 void run_me_task_136 (void * data)
@@ -24041,6 +25526,7 @@ void run_me_task_136 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[136];
+  bool value_flags[136];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<136; i++)
@@ -24057,8 +25543,12 @@ void run_me_task_136 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -24068,6 +25558,7 @@ void run_me_task_136 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -24208,6 +25699,11 @@ void run_me_task_136 (void * data)
               p[133],
               p[134],
               p[135]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 136; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_137 (void*);
 void run_me_task_137 (void * data)
@@ -24355,6 +25851,7 @@ void run_me_task_137 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[137];
+  bool value_flags[137];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<137; i++)
@@ -24371,8 +25868,12 @@ void run_me_task_137 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -24382,6 +25883,7 @@ void run_me_task_137 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -24523,6 +26025,11 @@ void run_me_task_137 (void * data)
               p[134],
               p[135],
               p[136]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 137; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_138 (void*);
 void run_me_task_138 (void * data)
@@ -24671,6 +26178,7 @@ void run_me_task_138 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[138];
+  bool value_flags[138];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<138; i++)
@@ -24687,8 +26195,12 @@ void run_me_task_138 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -24698,6 +26210,7 @@ void run_me_task_138 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -24840,6 +26353,11 @@ void run_me_task_138 (void * data)
               p[135],
               p[136],
               p[137]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 138; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_139 (void*);
 void run_me_task_139 (void * data)
@@ -24989,6 +26507,7 @@ void run_me_task_139 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[139];
+  bool value_flags[139];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<139; i++)
@@ -25005,8 +26524,12 @@ void run_me_task_139 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -25016,6 +26539,7 @@ void run_me_task_139 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -25159,6 +26683,11 @@ void run_me_task_139 (void * data)
               p[136],
               p[137],
               p[138]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 139; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_140 (void*);
 void run_me_task_140 (void * data)
@@ -25309,6 +26838,7 @@ void run_me_task_140 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[140];
+  bool value_flags[140];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<140; i++)
@@ -25325,8 +26855,12 @@ void run_me_task_140 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -25336,6 +26870,7 @@ void run_me_task_140 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -25480,6 +27015,11 @@ void run_me_task_140 (void * data)
               p[137],
               p[138],
               p[139]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 140; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_141 (void*);
 void run_me_task_141 (void * data)
@@ -25631,6 +27171,7 @@ void run_me_task_141 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[141];
+  bool value_flags[141];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<141; i++)
@@ -25647,8 +27188,12 @@ void run_me_task_141 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -25658,6 +27203,7 @@ void run_me_task_141 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -25803,6 +27349,11 @@ void run_me_task_141 (void * data)
               p[138],
               p[139],
               p[140]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 141; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_142 (void*);
 void run_me_task_142 (void * data)
@@ -25955,6 +27506,7 @@ void run_me_task_142 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[142];
+  bool value_flags[142];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<142; i++)
@@ -25971,8 +27523,12 @@ void run_me_task_142 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -25982,6 +27538,7 @@ void run_me_task_142 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -26128,6 +27685,11 @@ void run_me_task_142 (void * data)
               p[139],
               p[140],
               p[141]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 142; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_143 (void*);
 void run_me_task_143 (void * data)
@@ -26281,6 +27843,7 @@ void run_me_task_143 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[143];
+  bool value_flags[143];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<143; i++)
@@ -26297,8 +27860,12 @@ void run_me_task_143 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -26308,6 +27875,7 @@ void run_me_task_143 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -26455,6 +28023,11 @@ void run_me_task_143 (void * data)
               p[140],
               p[141],
               p[142]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 143; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_144 (void*);
 void run_me_task_144 (void * data)
@@ -26609,6 +28182,7 @@ void run_me_task_144 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[144];
+  bool value_flags[144];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<144; i++)
@@ -26625,8 +28199,12 @@ void run_me_task_144 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -26636,6 +28214,7 @@ void run_me_task_144 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -26784,6 +28363,11 @@ void run_me_task_144 (void * data)
               p[141],
               p[142],
               p[143]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 144; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_145 (void*);
 void run_me_task_145 (void * data)
@@ -26939,6 +28523,7 @@ void run_me_task_145 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[145];
+  bool value_flags[145];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<145; i++)
@@ -26955,8 +28540,12 @@ void run_me_task_145 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -26966,6 +28555,7 @@ void run_me_task_145 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -27115,6 +28705,11 @@ void run_me_task_145 (void * data)
               p[142],
               p[143],
               p[144]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 145; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_146 (void*);
 void run_me_task_146 (void * data)
@@ -27271,6 +28866,7 @@ void run_me_task_146 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[146];
+  bool value_flags[146];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<146; i++)
@@ -27287,8 +28883,12 @@ void run_me_task_146 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -27298,6 +28898,7 @@ void run_me_task_146 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -27448,6 +29049,11 @@ void run_me_task_146 (void * data)
               p[143],
               p[144],
               p[145]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 146; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_147 (void*);
 void run_me_task_147 (void * data)
@@ -27605,6 +29211,7 @@ void run_me_task_147 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[147];
+  bool value_flags[147];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<147; i++)
@@ -27621,8 +29228,12 @@ void run_me_task_147 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -27632,6 +29243,7 @@ void run_me_task_147 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -27783,6 +29395,11 @@ void run_me_task_147 (void * data)
               p[144],
               p[145],
               p[146]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 147; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_148 (void*);
 void run_me_task_148 (void * data)
@@ -27941,6 +29558,7 @@ void run_me_task_148 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[148];
+  bool value_flags[148];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<148; i++)
@@ -27957,8 +29575,12 @@ void run_me_task_148 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -27968,6 +29590,7 @@ void run_me_task_148 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -28120,6 +29743,11 @@ void run_me_task_148 (void * data)
               p[145],
               p[146],
               p[147]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 148; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_149 (void*);
 void run_me_task_149 (void * data)
@@ -28279,6 +29907,7 @@ void run_me_task_149 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[149];
+  bool value_flags[149];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<149; i++)
@@ -28295,8 +29924,12 @@ void run_me_task_149 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -28306,6 +29939,7 @@ void run_me_task_149 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -28459,6 +30093,11 @@ void run_me_task_149 (void * data)
               p[146],
               p[147],
               p[148]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 149; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_150 (void*);
 void run_me_task_150 (void * data)
@@ -28619,6 +30258,7 @@ void run_me_task_150 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[150];
+  bool value_flags[150];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<150; i++)
@@ -28635,8 +30275,12 @@ void run_me_task_150 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -28646,6 +30290,7 @@ void run_me_task_150 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -28800,6 +30445,11 @@ void run_me_task_150 (void * data)
               p[147],
               p[148],
               p[149]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 150; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_151 (void*);
 void run_me_task_151 (void * data)
@@ -28961,6 +30611,7 @@ void run_me_task_151 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[151];
+  bool value_flags[151];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<151; i++)
@@ -28977,8 +30628,12 @@ void run_me_task_151 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -28988,6 +30643,7 @@ void run_me_task_151 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -29143,6 +30799,11 @@ void run_me_task_151 (void * data)
               p[148],
               p[149],
               p[150]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 151; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_152 (void*);
 void run_me_task_152 (void * data)
@@ -29305,6 +30966,7 @@ void run_me_task_152 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[152];
+  bool value_flags[152];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<152; i++)
@@ -29321,8 +30983,12 @@ void run_me_task_152 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -29332,6 +30998,7 @@ void run_me_task_152 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -29488,6 +31155,11 @@ void run_me_task_152 (void * data)
               p[149],
               p[150],
               p[151]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 152; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_153 (void*);
 void run_me_task_153 (void * data)
@@ -29651,6 +31323,7 @@ void run_me_task_153 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[153];
+  bool value_flags[153];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<153; i++)
@@ -29667,8 +31340,12 @@ void run_me_task_153 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -29678,6 +31355,7 @@ void run_me_task_153 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -29835,6 +31513,11 @@ void run_me_task_153 (void * data)
               p[150],
               p[151],
               p[152]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 153; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_154 (void*);
 void run_me_task_154 (void * data)
@@ -29999,6 +31682,7 @@ void run_me_task_154 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[154];
+  bool value_flags[154];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<154; i++)
@@ -30015,8 +31699,12 @@ void run_me_task_154 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -30026,6 +31714,7 @@ void run_me_task_154 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -30184,6 +31873,11 @@ void run_me_task_154 (void * data)
               p[151],
               p[152],
               p[153]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 154; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_155 (void*);
 void run_me_task_155 (void * data)
@@ -30349,6 +32043,7 @@ void run_me_task_155 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[155];
+  bool value_flags[155];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<155; i++)
@@ -30365,8 +32060,12 @@ void run_me_task_155 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -30376,6 +32075,7 @@ void run_me_task_155 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -30535,6 +32235,11 @@ void run_me_task_155 (void * data)
               p[152],
               p[153],
               p[154]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 155; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_156 (void*);
 void run_me_task_156 (void * data)
@@ -30701,6 +32406,7 @@ void run_me_task_156 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[156];
+  bool value_flags[156];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<156; i++)
@@ -30717,8 +32423,12 @@ void run_me_task_156 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -30728,6 +32438,7 @@ void run_me_task_156 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -30888,6 +32599,11 @@ void run_me_task_156 (void * data)
               p[153],
               p[154],
               p[155]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 156; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_157 (void*);
 void run_me_task_157 (void * data)
@@ -31055,6 +32771,7 @@ void run_me_task_157 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[157];
+  bool value_flags[157];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<157; i++)
@@ -31071,8 +32788,12 @@ void run_me_task_157 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -31082,6 +32803,7 @@ void run_me_task_157 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -31243,6 +32965,11 @@ void run_me_task_157 (void * data)
               p[154],
               p[155],
               p[156]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 157; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_158 (void*);
 void run_me_task_158 (void * data)
@@ -31411,6 +33138,7 @@ void run_me_task_158 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[158];
+  bool value_flags[158];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<158; i++)
@@ -31427,8 +33155,12 @@ void run_me_task_158 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -31438,6 +33170,7 @@ void run_me_task_158 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -31600,6 +33333,11 @@ void run_me_task_158 (void * data)
               p[155],
               p[156],
               p[157]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 158; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_159 (void*);
 void run_me_task_159 (void * data)
@@ -31769,6 +33507,7 @@ void run_me_task_159 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[159];
+  bool value_flags[159];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<159; i++)
@@ -31785,8 +33524,12 @@ void run_me_task_159 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -31796,6 +33539,7 @@ void run_me_task_159 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -31959,6 +33703,11 @@ void run_me_task_159 (void * data)
               p[156],
               p[157],
               p[158]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 159; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_160 (void*);
 void run_me_task_160 (void * data)
@@ -32129,6 +33878,7 @@ void run_me_task_160 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[160];
+  bool value_flags[160];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<160; i++)
@@ -32145,8 +33895,12 @@ void run_me_task_160 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -32156,6 +33910,7 @@ void run_me_task_160 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -32320,6 +34075,11 @@ void run_me_task_160 (void * data)
               p[157],
               p[158],
               p[159]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 160; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_161 (void*);
 void run_me_task_161 (void * data)
@@ -32491,6 +34251,7 @@ void run_me_task_161 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[161];
+  bool value_flags[161];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<161; i++)
@@ -32507,8 +34268,12 @@ void run_me_task_161 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -32518,6 +34283,7 @@ void run_me_task_161 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -32683,6 +34449,11 @@ void run_me_task_161 (void * data)
               p[158],
               p[159],
               p[160]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 161; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_162 (void*);
 void run_me_task_162 (void * data)
@@ -32855,6 +34626,7 @@ void run_me_task_162 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[162];
+  bool value_flags[162];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<162; i++)
@@ -32871,8 +34643,12 @@ void run_me_task_162 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -32882,6 +34658,7 @@ void run_me_task_162 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -33048,6 +34825,11 @@ void run_me_task_162 (void * data)
               p[159],
               p[160],
               p[161]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 162; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_163 (void*);
 void run_me_task_163 (void * data)
@@ -33221,6 +35003,7 @@ void run_me_task_163 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[163];
+  bool value_flags[163];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<163; i++)
@@ -33237,8 +35020,12 @@ void run_me_task_163 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -33248,6 +35035,7 @@ void run_me_task_163 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -33415,6 +35203,11 @@ void run_me_task_163 (void * data)
               p[160],
               p[161],
               p[162]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 163; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_164 (void*);
 void run_me_task_164 (void * data)
@@ -33589,6 +35382,7 @@ void run_me_task_164 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[164];
+  bool value_flags[164];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<164; i++)
@@ -33605,8 +35399,12 @@ void run_me_task_164 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -33616,6 +35414,7 @@ void run_me_task_164 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -33784,6 +35583,11 @@ void run_me_task_164 (void * data)
               p[161],
               p[162],
               p[163]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 164; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_165 (void*);
 void run_me_task_165 (void * data)
@@ -33959,6 +35763,7 @@ void run_me_task_165 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[165];
+  bool value_flags[165];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<165; i++)
@@ -33975,8 +35780,12 @@ void run_me_task_165 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -33986,6 +35795,7 @@ void run_me_task_165 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -34155,6 +35965,11 @@ void run_me_task_165 (void * data)
               p[162],
               p[163],
               p[164]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 165; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_166 (void*);
 void run_me_task_166 (void * data)
@@ -34331,6 +36146,7 @@ void run_me_task_166 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[166];
+  bool value_flags[166];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<166; i++)
@@ -34347,8 +36163,12 @@ void run_me_task_166 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -34358,6 +36178,7 @@ void run_me_task_166 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -34528,6 +36349,11 @@ void run_me_task_166 (void * data)
               p[163],
               p[164],
               p[165]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 166; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_167 (void*);
 void run_me_task_167 (void * data)
@@ -34705,6 +36531,7 @@ void run_me_task_167 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[167];
+  bool value_flags[167];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<167; i++)
@@ -34721,8 +36548,12 @@ void run_me_task_167 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -34732,6 +36563,7 @@ void run_me_task_167 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -34903,6 +36735,11 @@ void run_me_task_167 (void * data)
               p[164],
               p[165],
               p[166]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 167; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_168 (void*);
 void run_me_task_168 (void * data)
@@ -35081,6 +36918,7 @@ void run_me_task_168 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[168];
+  bool value_flags[168];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<168; i++)
@@ -35097,8 +36935,12 @@ void run_me_task_168 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -35108,6 +36950,7 @@ void run_me_task_168 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -35280,6 +37123,11 @@ void run_me_task_168 (void * data)
               p[165],
               p[166],
               p[167]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 168; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_169 (void*);
 void run_me_task_169 (void * data)
@@ -35459,6 +37307,7 @@ void run_me_task_169 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[169];
+  bool value_flags[169];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<169; i++)
@@ -35475,8 +37324,12 @@ void run_me_task_169 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -35486,6 +37339,7 @@ void run_me_task_169 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -35659,6 +37513,11 @@ void run_me_task_169 (void * data)
               p[166],
               p[167],
               p[168]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 169; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_170 (void*);
 void run_me_task_170 (void * data)
@@ -35839,6 +37698,7 @@ void run_me_task_170 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[170];
+  bool value_flags[170];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<170; i++)
@@ -35855,8 +37715,12 @@ void run_me_task_170 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -35866,6 +37730,7 @@ void run_me_task_170 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -36040,6 +37905,11 @@ void run_me_task_170 (void * data)
               p[167],
               p[168],
               p[169]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 170; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_171 (void*);
 void run_me_task_171 (void * data)
@@ -36221,6 +38091,7 @@ void run_me_task_171 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[171];
+  bool value_flags[171];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<171; i++)
@@ -36237,8 +38108,12 @@ void run_me_task_171 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -36248,6 +38123,7 @@ void run_me_task_171 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -36423,6 +38299,11 @@ void run_me_task_171 (void * data)
               p[168],
               p[169],
               p[170]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 171; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_172 (void*);
 void run_me_task_172 (void * data)
@@ -36605,6 +38486,7 @@ void run_me_task_172 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[172];
+  bool value_flags[172];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<172; i++)
@@ -36621,8 +38503,12 @@ void run_me_task_172 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -36632,6 +38518,7 @@ void run_me_task_172 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -36808,6 +38695,11 @@ void run_me_task_172 (void * data)
               p[169],
               p[170],
               p[171]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 172; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_173 (void*);
 void run_me_task_173 (void * data)
@@ -36991,6 +38883,7 @@ void run_me_task_173 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[173];
+  bool value_flags[173];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<173; i++)
@@ -37007,8 +38900,12 @@ void run_me_task_173 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -37018,6 +38915,7 @@ void run_me_task_173 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -37195,6 +39093,11 @@ void run_me_task_173 (void * data)
               p[170],
               p[171],
               p[172]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 173; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_174 (void*);
 void run_me_task_174 (void * data)
@@ -37379,6 +39282,7 @@ void run_me_task_174 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[174];
+  bool value_flags[174];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<174; i++)
@@ -37395,8 +39299,12 @@ void run_me_task_174 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -37406,6 +39314,7 @@ void run_me_task_174 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -37584,6 +39493,11 @@ void run_me_task_174 (void * data)
               p[171],
               p[172],
               p[173]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 174; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_175 (void*);
 void run_me_task_175 (void * data)
@@ -37769,6 +39683,7 @@ void run_me_task_175 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[175];
+  bool value_flags[175];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<175; i++)
@@ -37785,8 +39700,12 @@ void run_me_task_175 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -37796,6 +39715,7 @@ void run_me_task_175 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -37975,6 +39895,11 @@ void run_me_task_175 (void * data)
               p[172],
               p[173],
               p[174]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 175; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_176 (void*);
 void run_me_task_176 (void * data)
@@ -38161,6 +40086,7 @@ void run_me_task_176 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[176];
+  bool value_flags[176];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<176; i++)
@@ -38177,8 +40103,12 @@ void run_me_task_176 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -38188,6 +40118,7 @@ void run_me_task_176 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -38368,6 +40299,11 @@ void run_me_task_176 (void * data)
               p[173],
               p[174],
               p[175]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 176; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_177 (void*);
 void run_me_task_177 (void * data)
@@ -38555,6 +40491,7 @@ void run_me_task_177 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[177];
+  bool value_flags[177];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<177; i++)
@@ -38571,8 +40508,12 @@ void run_me_task_177 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -38582,6 +40523,7 @@ void run_me_task_177 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -38763,6 +40705,11 @@ void run_me_task_177 (void * data)
               p[174],
               p[175],
               p[176]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 177; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_178 (void*);
 void run_me_task_178 (void * data)
@@ -38951,6 +40898,7 @@ void run_me_task_178 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[178];
+  bool value_flags[178];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<178; i++)
@@ -38967,8 +40915,12 @@ void run_me_task_178 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -38978,6 +40930,7 @@ void run_me_task_178 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -39160,6 +41113,11 @@ void run_me_task_178 (void * data)
               p[175],
               p[176],
               p[177]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 178; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_179 (void*);
 void run_me_task_179 (void * data)
@@ -39349,6 +41307,7 @@ void run_me_task_179 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[179];
+  bool value_flags[179];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<179; i++)
@@ -39365,8 +41324,12 @@ void run_me_task_179 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -39376,6 +41339,7 @@ void run_me_task_179 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -39559,6 +41523,11 @@ void run_me_task_179 (void * data)
               p[176],
               p[177],
               p[178]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 179; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_180 (void*);
 void run_me_task_180 (void * data)
@@ -39749,6 +41718,7 @@ void run_me_task_180 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[180];
+  bool value_flags[180];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<180; i++)
@@ -39765,8 +41735,12 @@ void run_me_task_180 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -39776,6 +41750,7 @@ void run_me_task_180 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -39960,6 +41935,11 @@ void run_me_task_180 (void * data)
               p[177],
               p[178],
               p[179]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 180; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_181 (void*);
 void run_me_task_181 (void * data)
@@ -40151,6 +42131,7 @@ void run_me_task_181 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[181];
+  bool value_flags[181];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<181; i++)
@@ -40167,8 +42148,12 @@ void run_me_task_181 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -40178,6 +42163,7 @@ void run_me_task_181 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -40363,6 +42349,11 @@ void run_me_task_181 (void * data)
               p[178],
               p[179],
               p[180]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 181; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_182 (void*);
 void run_me_task_182 (void * data)
@@ -40555,6 +42546,7 @@ void run_me_task_182 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[182];
+  bool value_flags[182];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<182; i++)
@@ -40571,8 +42563,12 @@ void run_me_task_182 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -40582,6 +42578,7 @@ void run_me_task_182 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -40768,6 +42765,11 @@ void run_me_task_182 (void * data)
               p[179],
               p[180],
               p[181]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 182; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_183 (void*);
 void run_me_task_183 (void * data)
@@ -40961,6 +42963,7 @@ void run_me_task_183 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[183];
+  bool value_flags[183];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<183; i++)
@@ -40977,8 +42980,12 @@ void run_me_task_183 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -40988,6 +42995,7 @@ void run_me_task_183 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -41175,6 +43183,11 @@ void run_me_task_183 (void * data)
               p[180],
               p[181],
               p[182]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 183; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_184 (void*);
 void run_me_task_184 (void * data)
@@ -41369,6 +43382,7 @@ void run_me_task_184 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[184];
+  bool value_flags[184];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<184; i++)
@@ -41385,8 +43399,12 @@ void run_me_task_184 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -41396,6 +43414,7 @@ void run_me_task_184 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -41584,6 +43603,11 @@ void run_me_task_184 (void * data)
               p[181],
               p[182],
               p[183]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 184; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_185 (void*);
 void run_me_task_185 (void * data)
@@ -41779,6 +43803,7 @@ void run_me_task_185 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[185];
+  bool value_flags[185];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<185; i++)
@@ -41795,8 +43820,12 @@ void run_me_task_185 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -41806,6 +43835,7 @@ void run_me_task_185 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -41995,6 +44025,11 @@ void run_me_task_185 (void * data)
               p[182],
               p[183],
               p[184]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 185; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_186 (void*);
 void run_me_task_186 (void * data)
@@ -42191,6 +44226,7 @@ void run_me_task_186 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[186];
+  bool value_flags[186];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<186; i++)
@@ -42207,8 +44243,12 @@ void run_me_task_186 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -42218,6 +44258,7 @@ void run_me_task_186 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -42408,6 +44449,11 @@ void run_me_task_186 (void * data)
               p[183],
               p[184],
               p[185]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 186; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_187 (void*);
 void run_me_task_187 (void * data)
@@ -42605,6 +44651,7 @@ void run_me_task_187 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[187];
+  bool value_flags[187];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<187; i++)
@@ -42621,8 +44668,12 @@ void run_me_task_187 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -42632,6 +44683,7 @@ void run_me_task_187 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -42823,6 +44875,11 @@ void run_me_task_187 (void * data)
               p[184],
               p[185],
               p[186]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 187; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_188 (void*);
 void run_me_task_188 (void * data)
@@ -43021,6 +45078,7 @@ void run_me_task_188 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[188];
+  bool value_flags[188];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<188; i++)
@@ -43037,8 +45095,12 @@ void run_me_task_188 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -43048,6 +45110,7 @@ void run_me_task_188 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -43240,6 +45303,11 @@ void run_me_task_188 (void * data)
               p[185],
               p[186],
               p[187]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 188; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_189 (void*);
 void run_me_task_189 (void * data)
@@ -43439,6 +45507,7 @@ void run_me_task_189 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[189];
+  bool value_flags[189];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<189; i++)
@@ -43455,8 +45524,12 @@ void run_me_task_189 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -43466,6 +45539,7 @@ void run_me_task_189 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -43659,6 +45733,11 @@ void run_me_task_189 (void * data)
               p[186],
               p[187],
               p[188]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 189; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_190 (void*);
 void run_me_task_190 (void * data)
@@ -43859,6 +45938,7 @@ void run_me_task_190 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[190];
+  bool value_flags[190];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<190; i++)
@@ -43875,8 +45955,12 @@ void run_me_task_190 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -43886,6 +45970,7 @@ void run_me_task_190 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -44080,6 +46165,11 @@ void run_me_task_190 (void * data)
               p[187],
               p[188],
               p[189]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 190; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_191 (void*);
 void run_me_task_191 (void * data)
@@ -44281,6 +46371,7 @@ void run_me_task_191 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[191];
+  bool value_flags[191];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<191; i++)
@@ -44297,8 +46388,12 @@ void run_me_task_191 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -44308,6 +46403,7 @@ void run_me_task_191 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -44503,6 +46599,11 @@ void run_me_task_191 (void * data)
               p[188],
               p[189],
               p[190]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 191; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_192 (void*);
 void run_me_task_192 (void * data)
@@ -44705,6 +46806,7 @@ void run_me_task_192 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[192];
+  bool value_flags[192];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<192; i++)
@@ -44721,8 +46823,12 @@ void run_me_task_192 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -44732,6 +46838,7 @@ void run_me_task_192 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -44928,6 +47035,11 @@ void run_me_task_192 (void * data)
               p[189],
               p[190],
               p[191]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 192; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_193 (void*);
 void run_me_task_193 (void * data)
@@ -45131,6 +47243,7 @@ void run_me_task_193 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[193];
+  bool value_flags[193];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<193; i++)
@@ -45147,8 +47260,12 @@ void run_me_task_193 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -45158,6 +47275,7 @@ void run_me_task_193 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -45355,6 +47473,11 @@ void run_me_task_193 (void * data)
               p[190],
               p[191],
               p[192]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 193; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_194 (void*);
 void run_me_task_194 (void * data)
@@ -45559,6 +47682,7 @@ void run_me_task_194 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[194];
+  bool value_flags[194];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<194; i++)
@@ -45575,8 +47699,12 @@ void run_me_task_194 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -45586,6 +47714,7 @@ void run_me_task_194 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -45784,6 +47913,11 @@ void run_me_task_194 (void * data)
               p[191],
               p[192],
               p[193]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 194; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_195 (void*);
 void run_me_task_195 (void * data)
@@ -45989,6 +48123,7 @@ void run_me_task_195 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[195];
+  bool value_flags[195];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<195; i++)
@@ -46005,8 +48140,12 @@ void run_me_task_195 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -46016,6 +48155,7 @@ void run_me_task_195 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -46215,6 +48355,11 @@ void run_me_task_195 (void * data)
               p[192],
               p[193],
               p[194]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 195; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_196 (void*);
 void run_me_task_196 (void * data)
@@ -46421,6 +48566,7 @@ void run_me_task_196 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[196];
+  bool value_flags[196];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<196; i++)
@@ -46437,8 +48583,12 @@ void run_me_task_196 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -46448,6 +48598,7 @@ void run_me_task_196 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -46648,6 +48799,11 @@ void run_me_task_196 (void * data)
               p[193],
               p[194],
               p[195]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 196; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_197 (void*);
 void run_me_task_197 (void * data)
@@ -46855,6 +49011,7 @@ void run_me_task_197 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[197];
+  bool value_flags[197];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<197; i++)
@@ -46871,8 +49028,12 @@ void run_me_task_197 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -46882,6 +49043,7 @@ void run_me_task_197 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -47083,6 +49245,11 @@ void run_me_task_197 (void * data)
               p[194],
               p[195],
               p[196]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 197; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_198 (void*);
 void run_me_task_198 (void * data)
@@ -47291,6 +49458,7 @@ void run_me_task_198 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[198];
+  bool value_flags[198];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<198; i++)
@@ -47307,8 +49475,12 @@ void run_me_task_198 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -47318,6 +49490,7 @@ void run_me_task_198 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -47520,6 +49693,11 @@ void run_me_task_198 (void * data)
               p[195],
               p[196],
               p[197]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 198; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_199 (void*);
 void run_me_task_199 (void * data)
@@ -47729,6 +49907,7 @@ void run_me_task_199 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[199];
+  bool value_flags[199];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<199; i++)
@@ -47745,8 +49924,12 @@ void run_me_task_199 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -47756,6 +49939,7 @@ void run_me_task_199 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -47959,6 +50143,11 @@ void run_me_task_199 (void * data)
               p[196],
               p[197],
               p[198]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 199; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_200 (void*);
 void run_me_task_200 (void * data)
@@ -48169,6 +50358,7 @@ void run_me_task_200 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[200];
+  bool value_flags[200];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<200; i++)
@@ -48185,8 +50375,12 @@ void run_me_task_200 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -48196,6 +50390,7 @@ void run_me_task_200 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -48400,6 +50595,11 @@ void run_me_task_200 (void * data)
               p[197],
               p[198],
               p[199]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 200; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_201 (void*);
 void run_me_task_201 (void * data)
@@ -48611,6 +50811,7 @@ void run_me_task_201 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[201];
+  bool value_flags[201];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<201; i++)
@@ -48627,8 +50828,12 @@ void run_me_task_201 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -48638,6 +50843,7 @@ void run_me_task_201 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -48843,6 +51049,11 @@ void run_me_task_201 (void * data)
               p[198],
               p[199],
               p[200]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 201; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_202 (void*);
 void run_me_task_202 (void * data)
@@ -49055,6 +51266,7 @@ void run_me_task_202 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[202];
+  bool value_flags[202];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<202; i++)
@@ -49071,8 +51283,12 @@ void run_me_task_202 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -49082,6 +51298,7 @@ void run_me_task_202 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -49288,6 +51505,11 @@ void run_me_task_202 (void * data)
               p[199],
               p[200],
               p[201]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 202; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_203 (void*);
 void run_me_task_203 (void * data)
@@ -49501,6 +51723,7 @@ void run_me_task_203 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[203];
+  bool value_flags[203];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<203; i++)
@@ -49517,8 +51740,12 @@ void run_me_task_203 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -49528,6 +51755,7 @@ void run_me_task_203 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -49735,6 +51963,11 @@ void run_me_task_203 (void * data)
               p[200],
               p[201],
               p[202]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 203; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_204 (void*);
 void run_me_task_204 (void * data)
@@ -49949,6 +52182,7 @@ void run_me_task_204 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[204];
+  bool value_flags[204];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<204; i++)
@@ -49965,8 +52199,12 @@ void run_me_task_204 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -49976,6 +52214,7 @@ void run_me_task_204 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -50184,6 +52423,11 @@ void run_me_task_204 (void * data)
               p[201],
               p[202],
               p[203]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 204; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_205 (void*);
 void run_me_task_205 (void * data)
@@ -50399,6 +52643,7 @@ void run_me_task_205 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[205];
+  bool value_flags[205];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<205; i++)
@@ -50415,8 +52660,12 @@ void run_me_task_205 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -50426,6 +52675,7 @@ void run_me_task_205 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -50635,6 +52885,11 @@ void run_me_task_205 (void * data)
               p[202],
               p[203],
               p[204]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 205; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_206 (void*);
 void run_me_task_206 (void * data)
@@ -50851,6 +53106,7 @@ void run_me_task_206 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[206];
+  bool value_flags[206];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<206; i++)
@@ -50867,8 +53123,12 @@ void run_me_task_206 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -50878,6 +53138,7 @@ void run_me_task_206 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -51088,6 +53349,11 @@ void run_me_task_206 (void * data)
               p[203],
               p[204],
               p[205]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 206; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_207 (void*);
 void run_me_task_207 (void * data)
@@ -51305,6 +53571,7 @@ void run_me_task_207 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[207];
+  bool value_flags[207];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<207; i++)
@@ -51321,8 +53588,12 @@ void run_me_task_207 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -51332,6 +53603,7 @@ void run_me_task_207 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -51543,6 +53815,11 @@ void run_me_task_207 (void * data)
               p[204],
               p[205],
               p[206]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 207; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_208 (void*);
 void run_me_task_208 (void * data)
@@ -51761,6 +54038,7 @@ void run_me_task_208 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[208];
+  bool value_flags[208];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<208; i++)
@@ -51777,8 +54055,12 @@ void run_me_task_208 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -51788,6 +54070,7 @@ void run_me_task_208 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -52000,6 +54283,11 @@ void run_me_task_208 (void * data)
               p[205],
               p[206],
               p[207]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 208; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_209 (void*);
 void run_me_task_209 (void * data)
@@ -52219,6 +54507,7 @@ void run_me_task_209 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[209];
+  bool value_flags[209];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<209; i++)
@@ -52235,8 +54524,12 @@ void run_me_task_209 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -52246,6 +54539,7 @@ void run_me_task_209 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -52459,6 +54753,11 @@ void run_me_task_209 (void * data)
               p[206],
               p[207],
               p[208]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 209; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_210 (void*);
 void run_me_task_210 (void * data)
@@ -52679,6 +54978,7 @@ void run_me_task_210 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[210];
+  bool value_flags[210];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<210; i++)
@@ -52695,8 +54995,12 @@ void run_me_task_210 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -52706,6 +55010,7 @@ void run_me_task_210 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -52920,6 +55225,11 @@ void run_me_task_210 (void * data)
               p[207],
               p[208],
               p[209]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 210; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_211 (void*);
 void run_me_task_211 (void * data)
@@ -53141,6 +55451,7 @@ void run_me_task_211 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[211];
+  bool value_flags[211];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<211; i++)
@@ -53157,8 +55468,12 @@ void run_me_task_211 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -53168,6 +55483,7 @@ void run_me_task_211 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -53383,6 +55699,11 @@ void run_me_task_211 (void * data)
               p[208],
               p[209],
               p[210]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 211; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_212 (void*);
 void run_me_task_212 (void * data)
@@ -53605,6 +55926,7 @@ void run_me_task_212 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[212];
+  bool value_flags[212];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<212; i++)
@@ -53621,8 +55943,12 @@ void run_me_task_212 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -53632,6 +55958,7 @@ void run_me_task_212 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -53848,6 +56175,11 @@ void run_me_task_212 (void * data)
               p[209],
               p[210],
               p[211]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 212; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_213 (void*);
 void run_me_task_213 (void * data)
@@ -54071,6 +56403,7 @@ void run_me_task_213 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[213];
+  bool value_flags[213];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<213; i++)
@@ -54087,8 +56420,12 @@ void run_me_task_213 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -54098,6 +56435,7 @@ void run_me_task_213 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -54315,6 +56653,11 @@ void run_me_task_213 (void * data)
               p[210],
               p[211],
               p[212]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 213; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_214 (void*);
 void run_me_task_214 (void * data)
@@ -54539,6 +56882,7 @@ void run_me_task_214 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[214];
+  bool value_flags[214];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<214; i++)
@@ -54555,8 +56899,12 @@ void run_me_task_214 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -54566,6 +56914,7 @@ void run_me_task_214 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -54784,6 +57133,11 @@ void run_me_task_214 (void * data)
               p[211],
               p[212],
               p[213]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 214; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_215 (void*);
 void run_me_task_215 (void * data)
@@ -55009,6 +57363,7 @@ void run_me_task_215 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[215];
+  bool value_flags[215];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<215; i++)
@@ -55025,8 +57380,12 @@ void run_me_task_215 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -55036,6 +57395,7 @@ void run_me_task_215 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -55255,6 +57615,11 @@ void run_me_task_215 (void * data)
               p[212],
               p[213],
               p[214]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 215; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_216 (void*);
 void run_me_task_216 (void * data)
@@ -55481,6 +57846,7 @@ void run_me_task_216 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[216];
+  bool value_flags[216];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<216; i++)
@@ -55497,8 +57863,12 @@ void run_me_task_216 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -55508,6 +57878,7 @@ void run_me_task_216 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -55728,6 +58099,11 @@ void run_me_task_216 (void * data)
               p[213],
               p[214],
               p[215]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 216; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_217 (void*);
 void run_me_task_217 (void * data)
@@ -55955,6 +58331,7 @@ void run_me_task_217 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[217];
+  bool value_flags[217];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<217; i++)
@@ -55971,8 +58348,12 @@ void run_me_task_217 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -55982,6 +58363,7 @@ void run_me_task_217 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -56203,6 +58585,11 @@ void run_me_task_217 (void * data)
               p[214],
               p[215],
               p[216]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 217; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_218 (void*);
 void run_me_task_218 (void * data)
@@ -56431,6 +58818,7 @@ void run_me_task_218 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[218];
+  bool value_flags[218];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<218; i++)
@@ -56447,8 +58835,12 @@ void run_me_task_218 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -56458,6 +58850,7 @@ void run_me_task_218 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -56680,6 +59073,11 @@ void run_me_task_218 (void * data)
               p[215],
               p[216],
               p[217]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 218; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_219 (void*);
 void run_me_task_219 (void * data)
@@ -56909,6 +59307,7 @@ void run_me_task_219 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[219];
+  bool value_flags[219];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<219; i++)
@@ -56925,8 +59324,12 @@ void run_me_task_219 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -56936,6 +59339,7 @@ void run_me_task_219 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -57159,6 +59563,11 @@ void run_me_task_219 (void * data)
               p[216],
               p[217],
               p[218]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 219; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_220 (void*);
 void run_me_task_220 (void * data)
@@ -57389,6 +59798,7 @@ void run_me_task_220 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[220];
+  bool value_flags[220];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<220; i++)
@@ -57405,8 +59815,12 @@ void run_me_task_220 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -57416,6 +59830,7 @@ void run_me_task_220 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -57640,6 +60055,11 @@ void run_me_task_220 (void * data)
               p[217],
               p[218],
               p[219]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 220; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_221 (void*);
 void run_me_task_221 (void * data)
@@ -57871,6 +60291,7 @@ void run_me_task_221 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[221];
+  bool value_flags[221];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<221; i++)
@@ -57887,8 +60308,12 @@ void run_me_task_221 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -57898,6 +60323,7 @@ void run_me_task_221 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -58123,6 +60549,11 @@ void run_me_task_221 (void * data)
               p[218],
               p[219],
               p[220]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 221; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_222 (void*);
 void run_me_task_222 (void * data)
@@ -58355,6 +60786,7 @@ void run_me_task_222 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[222];
+  bool value_flags[222];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<222; i++)
@@ -58371,8 +60803,12 @@ void run_me_task_222 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -58382,6 +60818,7 @@ void run_me_task_222 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -58608,6 +61045,11 @@ void run_me_task_222 (void * data)
               p[219],
               p[220],
               p[221]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 222; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_223 (void*);
 void run_me_task_223 (void * data)
@@ -58841,6 +61283,7 @@ void run_me_task_223 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[223];
+  bool value_flags[223];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<223; i++)
@@ -58857,8 +61300,12 @@ void run_me_task_223 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -58868,6 +61315,7 @@ void run_me_task_223 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -59095,6 +61543,11 @@ void run_me_task_223 (void * data)
               p[220],
               p[221],
               p[222]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 223; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_224 (void*);
 void run_me_task_224 (void * data)
@@ -59329,6 +61782,7 @@ void run_me_task_224 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[224];
+  bool value_flags[224];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<224; i++)
@@ -59345,8 +61799,12 @@ void run_me_task_224 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -59356,6 +61814,7 @@ void run_me_task_224 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -59584,6 +62043,11 @@ void run_me_task_224 (void * data)
               p[221],
               p[222],
               p[223]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 224; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_225 (void*);
 void run_me_task_225 (void * data)
@@ -59819,6 +62283,7 @@ void run_me_task_225 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[225];
+  bool value_flags[225];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<225; i++)
@@ -59835,8 +62300,12 @@ void run_me_task_225 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -59846,6 +62315,7 @@ void run_me_task_225 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -60075,6 +62545,11 @@ void run_me_task_225 (void * data)
               p[222],
               p[223],
               p[224]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 225; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_226 (void*);
 void run_me_task_226 (void * data)
@@ -60311,6 +62786,7 @@ void run_me_task_226 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[226];
+  bool value_flags[226];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<226; i++)
@@ -60327,8 +62803,12 @@ void run_me_task_226 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -60338,6 +62818,7 @@ void run_me_task_226 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -60568,6 +63049,11 @@ void run_me_task_226 (void * data)
               p[223],
               p[224],
               p[225]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 226; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_227 (void*);
 void run_me_task_227 (void * data)
@@ -60805,6 +63291,7 @@ void run_me_task_227 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[227];
+  bool value_flags[227];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<227; i++)
@@ -60821,8 +63308,12 @@ void run_me_task_227 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -60832,6 +63323,7 @@ void run_me_task_227 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -61063,6 +63555,11 @@ void run_me_task_227 (void * data)
               p[224],
               p[225],
               p[226]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 227; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_228 (void*);
 void run_me_task_228 (void * data)
@@ -61301,6 +63798,7 @@ void run_me_task_228 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[228];
+  bool value_flags[228];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<228; i++)
@@ -61317,8 +63815,12 @@ void run_me_task_228 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -61328,6 +63830,7 @@ void run_me_task_228 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -61560,6 +64063,11 @@ void run_me_task_228 (void * data)
               p[225],
               p[226],
               p[227]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 228; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_229 (void*);
 void run_me_task_229 (void * data)
@@ -61799,6 +64307,7 @@ void run_me_task_229 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[229];
+  bool value_flags[229];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<229; i++)
@@ -61815,8 +64324,12 @@ void run_me_task_229 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -61826,6 +64339,7 @@ void run_me_task_229 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -62059,6 +64573,11 @@ void run_me_task_229 (void * data)
               p[226],
               p[227],
               p[228]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 229; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_230 (void*);
 void run_me_task_230 (void * data)
@@ -62299,6 +64818,7 @@ void run_me_task_230 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[230];
+  bool value_flags[230];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<230; i++)
@@ -62315,8 +64835,12 @@ void run_me_task_230 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -62326,6 +64850,7 @@ void run_me_task_230 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -62560,6 +65085,11 @@ void run_me_task_230 (void * data)
               p[227],
               p[228],
               p[229]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 230; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_231 (void*);
 void run_me_task_231 (void * data)
@@ -62801,6 +65331,7 @@ void run_me_task_231 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[231];
+  bool value_flags[231];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<231; i++)
@@ -62817,8 +65348,12 @@ void run_me_task_231 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -62828,6 +65363,7 @@ void run_me_task_231 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -63063,6 +65599,11 @@ void run_me_task_231 (void * data)
               p[228],
               p[229],
               p[230]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 231; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_232 (void*);
 void run_me_task_232 (void * data)
@@ -63305,6 +65846,7 @@ void run_me_task_232 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[232];
+  bool value_flags[232];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<232; i++)
@@ -63321,8 +65863,12 @@ void run_me_task_232 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -63332,6 +65878,7 @@ void run_me_task_232 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -63568,6 +66115,11 @@ void run_me_task_232 (void * data)
               p[229],
               p[230],
               p[231]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 232; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_233 (void*);
 void run_me_task_233 (void * data)
@@ -63811,6 +66363,7 @@ void run_me_task_233 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[233];
+  bool value_flags[233];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<233; i++)
@@ -63827,8 +66380,12 @@ void run_me_task_233 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -63838,6 +66395,7 @@ void run_me_task_233 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -64075,6 +66633,11 @@ void run_me_task_233 (void * data)
               p[230],
               p[231],
               p[232]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 233; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_234 (void*);
 void run_me_task_234 (void * data)
@@ -64319,6 +66882,7 @@ void run_me_task_234 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[234];
+  bool value_flags[234];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<234; i++)
@@ -64335,8 +66899,12 @@ void run_me_task_234 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -64346,6 +66914,7 @@ void run_me_task_234 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -64584,6 +67153,11 @@ void run_me_task_234 (void * data)
               p[231],
               p[232],
               p[233]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 234; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_235 (void*);
 void run_me_task_235 (void * data)
@@ -64829,6 +67403,7 @@ void run_me_task_235 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[235];
+  bool value_flags[235];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<235; i++)
@@ -64845,8 +67420,12 @@ void run_me_task_235 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -64856,6 +67435,7 @@ void run_me_task_235 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -65095,6 +67675,11 @@ void run_me_task_235 (void * data)
               p[232],
               p[233],
               p[234]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 235; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_236 (void*);
 void run_me_task_236 (void * data)
@@ -65341,6 +67926,7 @@ void run_me_task_236 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[236];
+  bool value_flags[236];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<236; i++)
@@ -65357,8 +67943,12 @@ void run_me_task_236 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -65368,6 +67958,7 @@ void run_me_task_236 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -65608,6 +68199,11 @@ void run_me_task_236 (void * data)
               p[233],
               p[234],
               p[235]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 236; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_237 (void*);
 void run_me_task_237 (void * data)
@@ -65855,6 +68451,7 @@ void run_me_task_237 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[237];
+  bool value_flags[237];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<237; i++)
@@ -65871,8 +68468,12 @@ void run_me_task_237 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -65882,6 +68483,7 @@ void run_me_task_237 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -66123,6 +68725,11 @@ void run_me_task_237 (void * data)
               p[234],
               p[235],
               p[236]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 237; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_238 (void*);
 void run_me_task_238 (void * data)
@@ -66371,6 +68978,7 @@ void run_me_task_238 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[238];
+  bool value_flags[238];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<238; i++)
@@ -66387,8 +68995,12 @@ void run_me_task_238 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -66398,6 +69010,7 @@ void run_me_task_238 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -66640,6 +69253,11 @@ void run_me_task_238 (void * data)
               p[235],
               p[236],
               p[237]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 238; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_239 (void*);
 void run_me_task_239 (void * data)
@@ -66889,6 +69507,7 @@ void run_me_task_239 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[239];
+  bool value_flags[239];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<239; i++)
@@ -66905,8 +69524,12 @@ void run_me_task_239 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -66916,6 +69539,7 @@ void run_me_task_239 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -67159,6 +69783,11 @@ void run_me_task_239 (void * data)
               p[236],
               p[237],
               p[238]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 239; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_240 (void*);
 void run_me_task_240 (void * data)
@@ -67409,6 +70038,7 @@ void run_me_task_240 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[240];
+  bool value_flags[240];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<240; i++)
@@ -67425,8 +70055,12 @@ void run_me_task_240 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -67436,6 +70070,7 @@ void run_me_task_240 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -67680,6 +70315,11 @@ void run_me_task_240 (void * data)
               p[237],
               p[238],
               p[239]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 240; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_241 (void*);
 void run_me_task_241 (void * data)
@@ -67931,6 +70571,7 @@ void run_me_task_241 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[241];
+  bool value_flags[241];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<241; i++)
@@ -67947,8 +70588,12 @@ void run_me_task_241 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -67958,6 +70603,7 @@ void run_me_task_241 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -68203,6 +70849,11 @@ void run_me_task_241 (void * data)
               p[238],
               p[239],
               p[240]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 241; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_242 (void*);
 void run_me_task_242 (void * data)
@@ -68455,6 +71106,7 @@ void run_me_task_242 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[242];
+  bool value_flags[242];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<242; i++)
@@ -68471,8 +71123,12 @@ void run_me_task_242 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -68482,6 +71138,7 @@ void run_me_task_242 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -68728,6 +71385,11 @@ void run_me_task_242 (void * data)
               p[239],
               p[240],
               p[241]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 242; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_243 (void*);
 void run_me_task_243 (void * data)
@@ -68981,6 +71643,7 @@ void run_me_task_243 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[243];
+  bool value_flags[243];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<243; i++)
@@ -68997,8 +71660,12 @@ void run_me_task_243 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -69008,6 +71675,7 @@ void run_me_task_243 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -69255,6 +71923,11 @@ void run_me_task_243 (void * data)
               p[240],
               p[241],
               p[242]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 243; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_244 (void*);
 void run_me_task_244 (void * data)
@@ -69509,6 +72182,7 @@ void run_me_task_244 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[244];
+  bool value_flags[244];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<244; i++)
@@ -69525,8 +72199,12 @@ void run_me_task_244 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -69536,6 +72214,7 @@ void run_me_task_244 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -69784,6 +72463,11 @@ void run_me_task_244 (void * data)
               p[241],
               p[242],
               p[243]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 244; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_245 (void*);
 void run_me_task_245 (void * data)
@@ -70039,6 +72723,7 @@ void run_me_task_245 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[245];
+  bool value_flags[245];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<245; i++)
@@ -70055,8 +72740,12 @@ void run_me_task_245 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -70066,6 +72755,7 @@ void run_me_task_245 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -70315,6 +73005,11 @@ void run_me_task_245 (void * data)
               p[242],
               p[243],
               p[244]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 245; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_246 (void*);
 void run_me_task_246 (void * data)
@@ -70571,6 +73266,7 @@ void run_me_task_246 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[246];
+  bool value_flags[246];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<246; i++)
@@ -70587,8 +73283,12 @@ void run_me_task_246 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -70598,6 +73298,7 @@ void run_me_task_246 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -70848,6 +73549,11 @@ void run_me_task_246 (void * data)
               p[243],
               p[244],
               p[245]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 246; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_247 (void*);
 void run_me_task_247 (void * data)
@@ -71105,6 +73811,7 @@ void run_me_task_247 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[247];
+  bool value_flags[247];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<247; i++)
@@ -71121,8 +73828,12 @@ void run_me_task_247 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -71132,6 +73843,7 @@ void run_me_task_247 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -71383,6 +74095,11 @@ void run_me_task_247 (void * data)
               p[244],
               p[245],
               p[246]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 247; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_248 (void*);
 void run_me_task_248 (void * data)
@@ -71641,6 +74358,7 @@ void run_me_task_248 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[248];
+  bool value_flags[248];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<248; i++)
@@ -71657,8 +74375,12 @@ void run_me_task_248 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -71668,6 +74390,7 @@ void run_me_task_248 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -71920,6 +74643,11 @@ void run_me_task_248 (void * data)
               p[245],
               p[246],
               p[247]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 248; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_249 (void*);
 void run_me_task_249 (void * data)
@@ -72179,6 +74907,7 @@ void run_me_task_249 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[249];
+  bool value_flags[249];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<249; i++)
@@ -72195,8 +74924,12 @@ void run_me_task_249 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -72206,6 +74939,7 @@ void run_me_task_249 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -72459,6 +75193,11 @@ void run_me_task_249 (void * data)
               p[246],
               p[247],
               p[248]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 249; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_250 (void*);
 void run_me_task_250 (void * data)
@@ -72719,6 +75458,7 @@ void run_me_task_250 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[250];
+  bool value_flags[250];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<250; i++)
@@ -72735,8 +75475,12 @@ void run_me_task_250 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -72746,6 +75490,7 @@ void run_me_task_250 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -73000,6 +75745,11 @@ void run_me_task_250 (void * data)
               p[247],
               p[248],
               p[249]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 250; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_251 (void*);
 void run_me_task_251 (void * data)
@@ -73261,6 +76011,7 @@ void run_me_task_251 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[251];
+  bool value_flags[251];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<251; i++)
@@ -73277,8 +76028,12 @@ void run_me_task_251 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -73288,6 +76043,7 @@ void run_me_task_251 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -73543,6 +76299,11 @@ void run_me_task_251 (void * data)
               p[248],
               p[249],
               p[250]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 251; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_252 (void*);
 void run_me_task_252 (void * data)
@@ -73805,6 +76566,7 @@ void run_me_task_252 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[252];
+  bool value_flags[252];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<252; i++)
@@ -73821,8 +76583,12 @@ void run_me_task_252 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -73832,6 +76598,7 @@ void run_me_task_252 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -74088,6 +76855,11 @@ void run_me_task_252 (void * data)
               p[249],
               p[250],
               p[251]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 252; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_253 (void*);
 void run_me_task_253 (void * data)
@@ -74351,6 +77123,7 @@ void run_me_task_253 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[253];
+  bool value_flags[253];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<253; i++)
@@ -74367,8 +77140,12 @@ void run_me_task_253 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -74378,6 +77155,7 @@ void run_me_task_253 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -74635,6 +77413,11 @@ void run_me_task_253 (void * data)
               p[250],
               p[251],
               p[252]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 253; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_254 (void*);
 void run_me_task_254 (void * data)
@@ -74899,6 +77682,7 @@ void run_me_task_254 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[254];
+  bool value_flags[254];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<254; i++)
@@ -74915,8 +77699,12 @@ void run_me_task_254 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -74926,6 +77714,7 @@ void run_me_task_254 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -75184,6 +77973,11 @@ void run_me_task_254 (void * data)
               p[251],
               p[252],
               p[253]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 254; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_255 (void*);
 void run_me_task_255 (void * data)
@@ -75449,6 +78243,7 @@ void run_me_task_255 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[255];
+  bool value_flags[255];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<255; i++)
@@ -75465,8 +78260,12 @@ void run_me_task_255 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -75476,6 +78275,7 @@ void run_me_task_255 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -75735,6 +78535,11 @@ void run_me_task_255 (void * data)
               p[252],
               p[253],
               p[254]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 255; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }
 static void run_me_task_256 (void*);
 void run_me_task_256 (void * data)
@@ -76001,6 +78806,7 @@ void run_me_task_256 (void * data)
   memcpy (&func, data, sizeof(FUNC_P));
   offset +=  sizeof(FUNC_P);
   char * p[256];
+  bool value_flags[256];
   int i;
   // Decode the remaining of void* data to be individual parameters one by one
   for (i=0; i<256; i++)
@@ -76017,8 +78823,12 @@ void run_me_task_256 (void * data)
      // 3. Copy the address/value
      if (bValue)
      {// Must allocate memory to copy value parameter
-       p[i] = malloc (v_size); 
-       if (p[i] == NULL) printf ("Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\n ");
+       p[i] = malloc (v_size);
+       if (p[i] == NULL) {
+         fprintf(stderr, "Fatal error in xomp, run_me_task_(). Cannot allocate "
+                         "memory for a value parameter!\n");
+         ROSE_ABORT();
+       }
        memcpy (p[i], &( ((char*)data)[offset]), v_size);
      }  
      else
@@ -76028,6 +78838,7 @@ void run_me_task_256 (void * data)
        assert (v_size == sizeof (void*));
        memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);
      }
+     value_flags[i] = bValue;
      offset += v_size;
 
    } // end for loop
@@ -76288,4 +79099,9 @@ void run_me_task_256 (void * data)
               p[253],
               p[254],
               p[255]);
+  // Release temporary buffers created for pass-by-value arguments.
+  for (i = 0; i < 256; i++) {
+    if (value_flags[i])
+      free(p[i]);
+  }
 }

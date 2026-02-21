@@ -34,6 +34,7 @@ do
   echo "  memcpy (&func, data, sizeof(FUNC_P));"
   echo "  offset +=  sizeof(FUNC_P);"
   echo "  char * p[$c];"
+  echo "  bool value_flags[$c];"
 
   echo "  int i;"
   echo "  // Decode the remaining of void* data to be individual parameters one by one"
@@ -53,7 +54,10 @@ do
   echo "     if (bValue)"
   echo "     {// Must allocate memory to copy value parameter"
   echo "       p[i] = malloc (v_size); "
-  echo "       if (p[i] == NULL) printf (\"Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\\n \");"
+  echo "       if (p[i] == NULL) {"
+  echo "         fprintf (stderr, \"Fatal error in xomp, run_me_task_(). Cannot allocate memory for a value parameter!\\n\");"
+  echo "         ROSE_ABORT();"
+  echo "       }"
   echo "       memcpy (p[i], &( ((char*)data)[offset]), v_size);"
   echo "     }  "
   echo "     else"
@@ -63,6 +67,7 @@ do
   echo "       assert (v_size == sizeof (void*));"
   echo "       memcpy (&(p[i]), &( ((char*)data)[offset]), v_size);"
   echo "     }"
+  echo "     value_flags[i] = bValue;"
   echo "     offset += v_size;"
   echo "    "
   echo "   } // end for loop"
@@ -81,6 +86,12 @@ do
     fi
 
   done
+  echo "  // Release temporary buffers created for pass-by-value arguments."
+  echo "  for (i=0; i<$c; i++)"
+  echo "  {"
+  echo "    if (value_flags[i])"
+  echo "      free (p[i]);"
+  echo "  }"
   echo "}"
 
 done
