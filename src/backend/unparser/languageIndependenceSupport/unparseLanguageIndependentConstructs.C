@@ -7396,6 +7396,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   }
 
 #define DEBUG__unparseExprList 0
+  static constexpr char kPackExpansionExpressionAttributeName[] =
+      "rex_pack_expansion_expression";
 
   void UnparseLanguageIndependentConstructs::unparseExprList(
       SgExpression * expr, SgUnparse_Info & info) {
@@ -7481,6 +7483,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         unparseExpression(*i, newinfo);
         if (needParen)
           curprint(")");
+
+        if (argument_expr != nullptr &&
+            argument_expr->attributeExists(
+                kPackExpansionExpressionAttributeName)) {
+          curprint("...");
+        }
 
         i++;
         if (i != expr_list->get_expressions().end())

@@ -60,6 +60,27 @@ public:
 inline constexpr char kExplicitGlobalQualifierAttributeName[] =
     "rex_explicit_global_qualifier";
 
+class PackExpansionMarkerAttribute : public AstAttribute {
+public:
+  PackExpansionMarkerAttribute() = default;
+
+  AstAttribute *copy() const override {
+    return new PackExpansionMarkerAttribute(*this);
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string toString() override { return "pack_expansion"; }
+};
+
+inline constexpr char kPackExpansionExpressionAttributeName[] =
+    "rex_pack_expansion_expression";
+
+inline constexpr char kPackExpansionBaseClassAttributeName[] =
+    "rex_pack_expansion_base_class";
+
 struct ConstraintSatisfactionResult {
   bool evaluated = false;
   bool satisfied = true;

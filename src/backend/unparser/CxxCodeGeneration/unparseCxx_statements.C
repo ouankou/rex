@@ -5517,6 +5517,8 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
 void Unparse_ExprStmt::unparseClassInheritanceList(
     SgClassDefinition *classdefn_stmt, SgUnparse_Info &ninfo) {
   // print out the class inheritance
+  static constexpr char kPackExpansionBaseClassAttributeName[] =
+      "rex_pack_expansion_base_class";
 
 #define DEBUG_UNPARSE_CLASS_INHERITANCE 0
 
@@ -5558,6 +5560,7 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
           bcls->get_global_qualification_required());
 
       SgName nameQualifier = bcls->get_qualified_name_prefix();
+      bool is_pack_expansion_base = false;
 
       SgNonrealBaseClass *nr_bcls = isSgNonrealBaseClass(bcls);
       if (nr_bcls != NULL) {
@@ -5569,6 +5572,9 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
       } else {
         SgClassDeclaration *tmp_decl = bcls->get_base_class();
         ASSERT_not_null(tmp_decl);
+        is_pack_expansion_base =
+            tmp_decl->getAttribute(kPackExpansionBaseClassAttributeName) !=
+            nullptr;
         SgTemplateInstantiationDecl *templateInstantiationDeclaration =
             isSgTemplateInstantiationDecl(tmp_decl);
         if (templateInstantiationDeclaration != NULL) {
@@ -5600,6 +5606,10 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
           curprint(nameQualifier.str());
           curprint(tmp_decl->get_name().str());
         }
+      }
+
+      if (is_pack_expansion_base) {
+        curprint("...");
       }
       p++;
 

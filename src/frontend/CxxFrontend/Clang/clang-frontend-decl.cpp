@@ -239,6 +239,32 @@ static std::string trimWhitespace(std::string s) {
   return s;
 }
 
+static bool isImplicitAutoPlaceholderTemplateParamName(
+    const clang::TemplateTypeParmDecl *param_decl) {
+  if (param_decl == nullptr || !param_decl->isImplicit()) {
+    return false;
+  }
+
+  const std::string name = param_decl->getNameAsString();
+  if (name.size() < 5) {
+    return false;
+  }
+  return name.compare(name.size() - 5, 5, ":auto") == 0;
+}
+
+static std::string
+normalizedTemplateTypeParamName(const clang::TemplateTypeParmDecl *param_decl) {
+  if (param_decl == nullptr) {
+    return std::string();
+  }
+  if (isImplicitAutoPlaceholderTemplateParamName(param_decl)) {
+    // Clang uses synthetic names like "x:auto" for abbreviated-template
+    // placeholders. These are not valid identifiers in template headers.
+    return std::string();
+  }
+  return param_decl->getNameAsString();
+}
+
 static const clang::TemplateTypeParmType *
 findTemplateParamType(const clang::Type *type) {
   if (type == nullptr) {
@@ -3917,6 +3943,9 @@ void ClangToSageTranslator::populateClassDefinition(
       }
 
       const bool base_is_dependent = base_type->isDependentType();
+      const bool base_is_pack_expansion =
+          base.isPackExpansion() ||
+          llvm::isa<clang::PackExpansionType>(base_type.getTypePtr());
       SgType *sg_base_type = nullptr;
       if (clang::TypeSourceInfo *base_type_info = base.getTypeSourceInfo()) {
         sg_base_type = buildTypeFromTypeLoc(base_type_info->getTypeLoc());
@@ -3946,6 +3975,16 @@ void ClangToSageTranslator::populateClassDefinition(
         }
       }
       if (base_class != nullptr) {
+        if (base_is_pack_expansion) {
+          if (SgClassDeclaration *pack_base_decl =
+                  base_class->get_base_class()) {
+            if (pack_base_decl->getAttribute(
+                    kPackExpansionBaseClassAttributeName) == nullptr) {
+              pack_base_decl->setAttribute(kPackExpansionBaseClassAttributeName,
+                                           new PackExpansionMarkerAttribute());
+            }
+          }
+        }
         if (SgBaseClassModifier *modifier =
                 base_class->get_baseClassModifier()) {
           SgAccessModifier &access = modifier->get_accessModifier();
@@ -4072,6 +4111,16 @@ void ClangToSageTranslator::populateClassDefinition(
       }
 
       if (base_class != nullptr) {
+        if (base_is_pack_expansion) {
+          if (SgClassDeclaration *pack_base_decl =
+                  base_class->get_base_class()) {
+            if (pack_base_decl->getAttribute(
+                    kPackExpansionBaseClassAttributeName) == nullptr) {
+              pack_base_decl->setAttribute(kPackExpansionBaseClassAttributeName,
+                                           new PackExpansionMarkerAttribute());
+            }
+          }
+        }
         SgBaseClassModifier *modifier = base_class->get_baseClassModifier();
         if (modifier != nullptr) {
           SgAccessModifier &access = modifier->get_accessModifier();
@@ -4602,7 +4651,7 @@ SgTemplateParameter *ClangToSageTranslator::translateTemplateParameter(
 
   if (clang::TemplateTypeParmDecl *type_param =
           llvm::dyn_cast<clang::TemplateTypeParmDecl>(param_decl)) {
-    std::string name_str = type_param->getNameAsString();
+    std::string name_str = normalizedTemplateTypeParamName(type_param);
     // REX FIX: Don't generate placeholder names for anonymous parameters
     // Leave them empty so the unparser knows they're anonymous
     // The placeholder names like __type_param_0 are not needed
@@ -7978,10 +8027,11 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
             if (clang::TemplateTypeParmDecl *recent =
                     llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
                         type_param->getMostRecentDecl())) {
-              if (recent->getDeclName().isIdentifier()) {
-                return recent->getNameAsString();
+              std::string name = normalizedTemplateTypeParamName(recent);
+              if (!name.empty()) {
+                return name;
               }
-              return recent->getNameAsString();
+              return std::string();
             }
           } else if (clang::NonTypeTemplateParmDecl *non_type_param =
                          llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(

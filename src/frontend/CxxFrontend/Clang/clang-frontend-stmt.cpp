@@ -8148,6 +8148,12 @@ bool ClangToSageTranslator::VisitCXXUnresolvedConstructExpr(
           class_unknown // associated_class_unknown for non class-like types
       );
 
+  // Preserve list-initialization form for unresolved constructor expressions
+  // so template definitions keep braces where required (e.g., aggregate
+  // initialization through dependent base packs in C++17).
+  ctor_init->set_is_braced_initialized(
+      cxx_unresolved_construct_expr->isListInitialization());
+
   *node = ctor_init;
 
   return VisitExpr(cxx_unresolved_construct_expr, node) && res;
@@ -12404,6 +12410,11 @@ bool ClangToSageTranslator::VisitPackExpansionExpr(
     SgNode *tmp_node = Traverse(pattern);
     SgExpression *pattern_expr = isSgExpression(tmp_node);
     if (pattern_expr != nullptr) {
+      if (!pattern_expr->attributeExists(
+              kPackExpansionExpressionAttributeName)) {
+        pattern_expr->setAttribute(kPackExpansionExpressionAttributeName,
+                                   new PackExpansionMarkerAttribute());
+      }
       *node = pattern_expr;
       return VisitExpr(pack_expansion_expr, node) && res;
     }
