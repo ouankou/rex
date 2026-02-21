@@ -2514,20 +2514,9 @@ void ClangToSageTranslator::appendUnattachedOpenMPPragmas() {
           insert_it = last_same_file_it;
           ++insert_it;
         } else {
-          insert_it = decls->begin();
-          for (; insert_it != decls->end(); ++insert_it) {
-            SgDeclarationStatement *decl = *insert_it;
-            if (decl == nullptr) {
-              continue;
-            }
-            unsigned decl_line = getLineForStatement(decl);
-            if (decl_line == 0) {
-              continue;
-            }
-            if (decl_line > line) {
-              break;
-            }
-          }
+          // Avoid cross-file placement when this scope has no declarations
+          // from the pragma's source file.
+          insert_it = decls->end();
         }
       }
 
@@ -2564,20 +2553,9 @@ void ClangToSageTranslator::appendUnattachedOpenMPPragmas() {
         insert_it = last_same_file_it;
         ++insert_it;
       } else {
-        insert_it = stmts.begin();
-        for (; insert_it != stmts.end(); ++insert_it) {
-          SgStatement *stmt = *insert_it;
-          if (stmt == nullptr) {
-            continue;
-          }
-          unsigned stmt_line = getLineForStatement(stmt);
-          if (stmt_line == 0) {
-            continue;
-          }
-          if (stmt_line > line) {
-            break;
-          }
-        }
+        // Avoid cross-file placement when this scope has no statements from
+        // the pragma's source file.
+        insert_it = stmts.end();
       }
     }
 

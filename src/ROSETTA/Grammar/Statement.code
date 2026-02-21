@@ -16358,7 +16358,25 @@ SgOmpEndDeclareTargetStatement::get_mangled_name(void) const
      SgScopeStatement* scope = get_scope();
      ROSE_ASSERT(scope != NULL);
 
-     returnName = scope->get_mangled_name() + SgName("_omp_end_declaration_target_");
+     std::string signature_suffix;
+     if (Sg_File_Info* fi = get_file_info()) {
+       if (fi->get_line() > 0) {
+         std::string signature_data = fi->get_filenameString() + ":" +
+             Rose::StringUtility::numberToString(fi->get_line()) + ":" +
+             Rose::StringUtility::numberToString(fi->get_col());
+         signature_suffix = Rose::StringUtility::numberToString(
+             Rose::StringUtility::generate_checksum(signature_data));
+       }
+     }
+
+     if (signature_suffix.empty()) {
+       signature_suffix = Rose::StringUtility::numberToString(
+           const_cast<SgOmpEndDeclareTargetStatement*>(this));
+     }
+
+     returnName = scope->get_mangled_name() +
+                  SgName("_omp_end_declaration_target_") +
+                  SgName(signature_suffix);
      return returnName;
    }
 
