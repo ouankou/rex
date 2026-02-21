@@ -4389,6 +4389,28 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2026_issue264_rtti_respect_frontend_flags
   rex_test2026_issue264_rtti_dynamic_cast.cpp)
 
+# Issue 317: Keep -fno-rtti/-fno-exceptions backend-only in frontend parsing.
+add_test(
+  NAME Cxx_tests_rex_test2026_issue317_rtti_exceptions_backend_only
+  COMMAND
+    sh -c
+    "OUTFILE=rose_rex_test2026_issue317_rtti_exceptions.cpp; \"$@\" && test -f \"$OUTFILE\" && \"${CMAKE_CXX_COMPILER}\" -std=c++20 -c \"$OUTFILE\""
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -fno-rtti
+    -fno-exceptions
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_issue317_rtti_exceptions.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_issue317_rtti_exceptions_backend_only
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_issue317_rtti_exceptions_backend_only
+  rex_test2026_issue317_rtti_exceptions.cpp)
+
 # Issue 124: System header template specializations must preserve template args.
 add_test(
   NAME Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
