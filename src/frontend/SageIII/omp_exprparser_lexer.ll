@@ -62,10 +62,10 @@ fortran_block_end [ ]*[^a-zA-Z0-9_]
 
 %%
 0[xX][0-9a-fA-F]+ { omp_exprparser_lval.stype = strdup(yytext); return (HEXCONSTANT); }
-{digit}{digit}* { omp_exprparser_lval.itype = atoi(yytext); return (ICONSTANT); }
+{digit}{digit}* { omp_exprparser_lval.stype = strdup(yytext); return (ICONSTANT); }
 
-[.][Tt][Rr][Uu][Ee][.] { omp_exprparser_lval.itype = 1; return (ICONSTANT); }
-[.][Ff][Aa][Ll][Ss][Ee][.] { omp_exprparser_lval.itype = 0; return (ICONSTANT); }
+[.][Tt][Rr][Uu][Ee][.] { omp_exprparser_lval.stype = strdup("1"); return (ICONSTANT); }
+[.][Ff][Aa][Ll][Ss][Ee][.] { omp_exprparser_lval.stype = strdup("0"); return (ICONSTANT); }
 [.][Nn][Ee][Qq][Vv][.] { return (NE_OP2); }
 [.][Ee][Qq][Vv][.] { return (EQ_OP2); }
 [.][Ee][Qq][.] { return (EQ_OP2); }

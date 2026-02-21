@@ -227,8 +227,7 @@ corresponding C type is union name defaults to YYSTYPE.
         LEXICALERROR IDENTIFIER MIN MAX
         VARLIST ARRAY_SECTION
 /*We ignore NEWLINE since we only care about the pragma string , We relax the syntax check by allowing it as part of line continuation */
-%token <itype> ICONSTANT   
-%token <stype> EXPRESSION ID_EXPRESSION HEXCONSTANT STRING_LITERAL
+%token <stype> ICONSTANT EXPRESSION ID_EXPRESSION HEXCONSTANT STRING_LITERAL
 
 /* associativity and precedence */
 %left '<' '>' '=' "!=" "<=" ">="
@@ -541,7 +540,17 @@ multiplicative_expr : unary_expr
                     ;
 
 primary_expr : ICONSTANT {
-               current_exp = SageBuilder::buildIntVal($1);
+               char* end_ptr = NULL;
+               long long parsed_value =
+                   strtoll((const char*)($1), &end_ptr, 0);
+               if (end_ptr != NULL && *end_ptr != '\0') {
+                 parsed_value = strtoll((const char*)($1), NULL, 10);
+               }
+               SgLongLongIntVal* int_val =
+                   SageBuilder::buildLongLongIntVal(parsed_value);
+               int_val->set_valueString((const char*)($1));
+               free(const_cast<char*>($1));
+               current_exp = int_val;
                $$ = current_exp;
               }
              | HEXCONSTANT {

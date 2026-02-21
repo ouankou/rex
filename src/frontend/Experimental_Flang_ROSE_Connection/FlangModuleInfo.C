@@ -1,13 +1,9 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <cerrno>
-#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <sys/wait.h>
-#include <unistd.h>
 
 #include "FlangModuleInfo.h"
 
@@ -149,90 +145,11 @@ bool is_fixed_form_source(const std::filesystem::path &path) {
 std::map<std::string, std::string> module_source_index;
 bool module_source_index_built = false;
 
-bool is_safe_command_path(const std::string &path) {
-  if (path.empty()) {
-    return false;
-  }
-  return path.find('/') == std::string::npos &&
-         path.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST"
-                                "UVWXYZ0123456789_-.") == std::string::npos;
-}
-
-std::string read_first_line_from_command(const std::string &command_path,
-                                         const std::string &argument) {
-  if (!is_safe_command_path(command_path)) {
-    return "";
-  }
-  if (argument.empty() ||
-      argument.find_first_not_of(
-          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") !=
-          std::string::npos) {
-    return "";
-  }
-
-  int pipe_fds[2] = {-1, -1};
-  if (pipe(pipe_fds) != 0) {
-    return "";
-  }
-
-  pid_t child = fork();
-  if (child == -1) {
-    close(pipe_fds[0]);
-    close(pipe_fds[1]);
-    return "";
-  }
-
-  if (child == 0) {
-    close(pipe_fds[0]);
-    if (dup2(pipe_fds[1], STDOUT_FILENO) == -1) {
-      _exit(127);
-    }
-    close(pipe_fds[1]);
-    execlp(command_path.c_str(), command_path.c_str(), argument.c_str(),
-           static_cast<char *>(nullptr));
-    _exit(127);
-  }
-
-  close(pipe_fds[1]);
-  FILE *pipe_stream = fdopen(pipe_fds[0], "r");
-  if (pipe_stream == nullptr) {
-    close(pipe_fds[0]);
-    int status = 0;
-    while (waitpid(child, &status, 0) == -1 && errno == EINTR) {
-    }
-    return "";
-  }
-
-  char buffer[4096] = {0};
-  std::string line;
-  if (fgets(buffer, sizeof(buffer), pipe_stream) != nullptr) {
-    line = buffer;
-  }
-  fclose(pipe_stream);
-
-  int status = 0;
-  while (waitpid(child, &status, 0) == -1 && errno == EINTR) {
-  }
-
-  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-    return "";
-  }
-
-  return Rose::StringUtility::trim(line);
-}
-
 std::string find_flang_intrinsic_module_dir() {
-  const char *llvm_config_env = std::getenv("LLVM_CONFIG");
-  std::string llvm_config = "llvm-config";
-  if (llvm_config_env != nullptr && llvm_config_env[0] != '\0') {
-    std::string user_path(llvm_config_env);
-    if (is_safe_command_path(user_path)) {
-      llvm_config = user_path;
-    }
-  }
-
-  std::string include_dir =
-      read_first_line_from_command(llvm_config, "--includedir");
+  std::string include_dir;
+#ifdef ROSE_FLANG_INCLUDEDIR_HINT
+  include_dir = ROSE_FLANG_INCLUDEDIR_HINT;
+#endif
   if (include_dir.empty()) {
     return "";
   }
