@@ -31,6 +31,8 @@
 
 #include "clang_paths.h"
 
+#include "clang-include-option.h"
+
 #include "ompAstConstruction.h"
 
 #include <clang/Basic/DiagnosticFrontend.h>
@@ -700,6 +702,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   for (int i = 0; i < argc; i++) {
     std::string current_arg(argv[i]);
+    Rose::Cmdline::IncludeOptionParseResult include_parse_result =
+        Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption;
     if (current_arg.find("-I") == 0) {
       if (current_arg.length() > 2) {
         inc_dirs_list.push_back(current_arg.substr(2));
@@ -750,18 +754,17 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
         passthrough_args.push_back(argv[i]);
       else
         break;
-    } else if (current_arg == "-include") {
-      passthrough_args.push_back(current_arg);
-      ++i;
-      if (i < argc) {
-        passthrough_args.push_back(argv[i]);
-      } else {
+    } else if ((include_parse_result =
+                    Rose::Cmdline::normalizeAndAppendIncludeOption(
+                        current_arg, i, argc,
+                        [argv](int arg_index) {
+                          return std::string(argv[arg_index]);
+                        },
+                        passthrough_args)) !=
+               Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption) {
+      if (include_parse_result ==
+          Rose::Cmdline::IncludeOptionParseResult::MissingArgument) {
         break;
-      }
-    } else if (current_arg.rfind("-include", 0) == 0) {
-      if (current_arg.size() > 8 && current_arg[8] != '-') {
-        passthrough_args.push_back("-include");
-        passthrough_args.push_back(current_arg.substr(8));
       }
     } else if (current_arg.rfind("-std=", 0) == 0) {
       passthrough_args.push_back(current_arg);

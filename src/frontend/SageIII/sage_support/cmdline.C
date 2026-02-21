@@ -23,6 +23,8 @@
 
 #include "rose_path_resolver.h"
 
+#include "clang-include-option.h"
+
 #include "Outliner.hh"
 
 using namespace Rose; // temporary, until this file lives in namespace Rose
@@ -4181,6 +4183,8 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
 
   for (size_t i = 0; i < argv.size(); i++) {
     std::string current_arg(argv[i]);
+    Rose::Cmdline::IncludeOptionParseResult include_parse_result =
+        Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption;
     if (current_arg.find("-I") == 0) {
       if (current_arg.length() > 2) {
         inc_dirs_list.push_back(current_arg.substr(2));
@@ -4215,22 +4219,18 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
       ++i;
       if (i >= argv.size())
         break;
-    } else if (current_arg == "-include") {
-      ++i;
-      if (i < argv.size()) {
-        clang_frontend_args.push_back(current_arg);
-        clang_frontend_args.push_back(argv[i]);
-      } else {
+    } else if ((include_parse_result =
+                    Rose::Cmdline::normalizeAndAppendIncludeOption(
+                        current_arg, i, argv.size(),
+                        [&argv](size_t arg_index) { return argv[arg_index]; },
+                        clang_frontend_args)) !=
+               Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption) {
+      if (include_parse_result ==
+          Rose::Cmdline::IncludeOptionParseResult::MissingArgument) {
         break;
       }
-    } else if (current_arg.rfind("-include", 0) == 0) {
-      if (current_arg.size() > 8 && current_arg[8] != '-') {
-        clang_frontend_args.push_back("-include");
-        clang_frontend_args.push_back(current_arg.substr(8));
-      }
     } else if (current_arg.rfind("-std=", 0) == 0) {
-      // Standard selection is handled earlier during command-line
-      // processing.
+      // Standard selection is handled earlier during command-line processing.
     } else if (current_arg.find("-c") == 0) {
     } else if (current_arg.find("-o") == 0) {
       if (current_arg.length() == 2) {
