@@ -35,6 +35,11 @@ SgType *asTypeNodeFromAstPool(SgNode *candidate) {
     return NULL;
   }
 
+  // Pool membership does not guarantee object liveness.
+  if (!SgNode::isLiveNode(candidate)) {
+    return NULL;
+  }
+
   return isSgType(candidate);
 }
 
