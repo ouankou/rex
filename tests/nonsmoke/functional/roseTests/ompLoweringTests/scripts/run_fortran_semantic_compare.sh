@@ -213,10 +213,11 @@ EOF
     exampleA161f.f90)
       cat > "${out_driver}" <<'EOF'
 subroutine dequeue(idx, arr)
+  use omp_lib
   implicit none
   integer :: idx
   real :: arr(*)
-  idx = 1
+  idx = omp_get_thread_num() + 1
 end subroutine dequeue
 
 subroutine work(idx, arr)
