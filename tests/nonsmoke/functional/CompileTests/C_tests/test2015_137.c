@@ -1,10 +1,7 @@
 
-void foobar()
-   {
-     switch (0) 
-        {
-          case 42:
-               return 0;
-        }
-   }
-
+void foobar() {
+  switch (0) {
+  case 42:
+    return;
+  }
+}
