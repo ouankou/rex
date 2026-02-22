@@ -6556,17 +6556,22 @@ void transOmpCritical(SgNode *node) {
     }
     ROSE_ASSERT(sym != NULL);
 
-    bool symbol_is_module_entity = false;
-    if (SgScopeStatement *symbol_scope = sym->get_scope()) {
-      symbol_is_module_entity = SageInterface::getEnclosingModuleStatement(
-                                    symbol_scope, true) != NULL;
-    }
+    auto is_direct_module_scope = [](SgScopeStatement *candidate) -> bool {
+      if (candidate == NULL)
+        return false;
+      if (isSgModuleStatement(candidate) != NULL)
+        return true;
+      if (SgClassDefinition *class_def = isSgClassDefinition(candidate)) {
+        SgDeclarationStatement *decl = class_def->get_declaration();
+        return isSgModuleStatement(decl) != NULL;
+      }
+      return false;
+    };
+
+    bool symbol_is_module_entity = is_direct_module_scope(sym->get_scope());
     if (!symbol_is_module_entity) {
       if (SgInitializedName *sym_decl = sym->get_declaration()) {
-        if (SgScopeStatement *decl_scope = sym_decl->get_scope()) {
-          symbol_is_module_entity = SageInterface::getEnclosingModuleStatement(
-                                        decl_scope, true) != NULL;
-        }
+        symbol_is_module_entity = is_direct_module_scope(sym_decl->get_scope());
       }
     }
 
