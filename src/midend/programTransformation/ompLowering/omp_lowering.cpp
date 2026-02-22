@@ -9097,9 +9097,13 @@ find_fortran_specification_insertion_anchor(SgBasicBlock *body) {
     ROSE_ASSERT(stmt != NULL);
 
     // Declarations and COMMON must remain in the specification part and before
-    // DATA statements.
+    // DATA statements or internal subprogram definitions.
     if (is_fortran_data_specification_statement(stmt))
       break;
+    if (SgProcedureHeaderStatement *proc = isSgProcedureHeaderStatement(stmt)) {
+      if (proc->get_definition() != NULL)
+        break;
+    }
     if (!isSgDeclarationStatement(stmt))
       break;
 
