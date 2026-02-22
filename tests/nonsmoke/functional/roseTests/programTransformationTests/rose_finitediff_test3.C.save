@@ -9,10 +9,13 @@ void dgemm(double *a,double *b,double *c,int n)
   int k;
 // Finite differencing: cache_fd__1 is a cache of _var_2 * n
   int cache_fd__1;
+ 
 // Finite differencing: cache_fd__2 is a cache of k * n
   int cache_fd__2;
+ 
 // Finite differencing: cache_fd__3 is a cache of j * n
   int cache_fd__3;
+ 
   for (_var_1 = 0; _var_1 <= - 1 + n; _var_1 += 16) {
     for (_var_0 = 0; _var_0 <= - 1 + n; _var_0 += 16) {
       for (i = 0; i <= - 1 + n; i += 1) {

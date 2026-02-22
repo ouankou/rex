@@ -8,11 +8,13 @@ int unknown()
 {
   return 0;
 }
+ 
 
 void foo()
 {
 // Partial redundancy elimination: cachevar__1 is a cache of a + b
   int cachevar__1;
+ 
   int a;
   int b;
   int c;
@@ -20,11 +22,12 @@ void foo()
   int y;
   int z;
   int w;
-  if ((unknown())) {
+  if ((::unknown())) {
     y = a + b;
     a = c;
 // Added by Jeremiah Willcock to test local PRE
     w = a + b;
+ 
     a = b;
     cachevar__1 = a + b;
     x = cachevar__1;
@@ -32,19 +35,20 @@ void foo()
     a = c;
 // End of added part
     x = a + b;
+ 
   }
    else {
   }
-  if ((unknown())) {
+  if ((::unknown())) {
     cachevar__1 = a + b;
-    while((unknown())){
+    while((::unknown())){
       y = cachevar__1;
     }
   }
-   else if ((unknown())) {
-    while((unknown())){
+   else if ((::unknown())) {
+    while((::unknown())){
     }
-    if ((unknown())) {
+    if ((::unknown())) {
       cachevar__1 = a + b;
       y = cachevar__1;
     }
@@ -63,11 +67,13 @@ void foo()
 // L10: 0; // ROSE bug: using return; here doesn't work
   L10:
   return ;
-// ROSE bug: using return; here doesn't work
+ 
 }
+// ROSE bug: using return; here doesn't work
 
 int main(int ,char **)
 {
-  foo();
+  ::foo();
   return 0;
 }
+ 

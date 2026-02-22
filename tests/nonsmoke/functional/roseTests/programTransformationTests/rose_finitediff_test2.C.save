@@ -3,8 +3,10 @@ void dgemm(int *a,int *b,int *c,int n)
 {
 // Finite differencing: cache_fd__1 is a cache of j2 * n
   int cache_fd__1;
+ 
 // Finite differencing: cache_fd__2 is a cache of i * n
   int cache_fd__2;
+ 
 {
     int i;
     for ((cache_fd__2 = 0 , i = 0); i < n; (cache_fd__2 += n , ++i)) {
