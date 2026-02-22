@@ -1,0 +1,5 @@
+#pragma omp target parallel map(tofrom:*ptr,value)
+#pragma omp single
+#pragma omp task depend(out:*ptr)
+#pragma omp task depend(in:*ptr)
+#pragma omp taskwait

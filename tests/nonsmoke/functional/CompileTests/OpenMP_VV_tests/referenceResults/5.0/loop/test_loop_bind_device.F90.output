@@ -1,0 +1,20 @@
+!$omp target teams num_teams(OMPVV_NUM_TEAMS_DEVICE) thread_limit(OMPVV_NUM_THREADS_DEVICE) map(tofrom:x,y,z,num_teams)
+!$omp loop bind(teams) private(j)
+!$omp end loop
+!$omp parallel if(.FALSE.)
+!$omp end parallel
+!$omp end target teams
+!$omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:x,y,z,num_threads)
+!$omp loop bind(parallel)
+!$omp end loop
+!$omp end target parallel
+!$omp target teams num_teams(OMPVV_NUM_TEAMS_DEVICE) thread_limit(OMPVV_NUM_THREADS_DEVICE) private(x) map(tofrom:outData,y,z,num_teams)
+!$omp loop bind(thread)
+!$omp end loop
+!$omp parallel if(.FALSE.)
+!$omp end parallel
+!$omp end target teams
+!$omp target parallel shared(outData) num_threads(OMPVV_NUM_THREADS_DEVICE) private(x) map(tofrom:outData,y,z,num_threads)
+!$omp loop bind(thread)
+!$omp end loop
+!$omp end target parallel

@@ -22,6 +22,7 @@ extern "C" int omp_exprparser_wrap() { return 1; }
 extern int omp_exprparser_lex();
 
 #include <stdio.h>
+#include <cstdlib>
 #include <string>
 #include <string.h>
 #include "omp_exprparser_parser.hh"
@@ -60,10 +61,11 @@ id              [a-zA-Z_][a-zA-Z0-9_]*
 fortran_block_end [ ]*[^a-zA-Z0-9_]
 
 %%
-{digit}{digit}* { omp_exprparser_lval.itype = atoi(strdup(yytext)); return (ICONSTANT); }
+0[xX][0-9a-fA-F]+ { omp_exprparser_lval.stype = strdup(yytext); return (HEXCONSTANT); }
+{digit}{digit}* { omp_exprparser_lval.stype = strdup(yytext); return (ICONSTANT); }
 
-[.][Tt][Rr][Uu][Ee][.] { omp_exprparser_lval.itype = 1; return (ICONSTANT); }
-[.][Ff][Aa][Ll][Ss][Ee][.] { omp_exprparser_lval.itype = 0; return (ICONSTANT); }
+[.][Tt][Rr][Uu][Ee][.] { omp_exprparser_lval.stype = strdup("1"); return (ICONSTANT); }
+[.][Ff][Aa][Ll][Ss][Ee][.] { omp_exprparser_lval.stype = strdup("0"); return (ICONSTANT); }
 [.][Nn][Ee][Qq][Vv][.] { return (NE_OP2); }
 [.][Ee][Qq][Vv][.] { return (EQ_OP2); }
 [.][Ee][Qq][.] { return (EQ_OP2); }
@@ -82,11 +84,13 @@ fortran_block_end [ ]*[^a-zA-Z0-9_]
 "]"             { return (']'); }
 ","             { return (','); }
 ":"             { return (':'); }
+"?"             { return ('?'); }
 "+"             { return ('+'); }
 "*"             { return ('*'); }
 \/\*([^*]|\*+[^*/])*\*+\/ { /* Ignore C-style block comments */ }
 "//"[^\n]*      { /* Ignore C++-style line comments */ }
 "/"             { return ('/'); }
+"%"             { return ('%'); }
 "-"             { return ('-'); }
 "&"             { return ('&'); }
 "^"             { return ('^'); }
@@ -126,6 +130,14 @@ expr            { return (EXPRESSION); }
 varlist         { return (VARLIST); }
 identifier      { return (IDENTIFIER); /*not in use for now*/ }
 array_section   { return (ARRAY_SECTION); }
+\"([^\\\"]|\\.)*\" {
+                  std::string text(yytext);
+                  if (text.size() >= 2) {
+                    text = text.substr(1, text.size() - 2);
+                  }
+                  omp_exprparser_lval.stype = strdup(text.c_str());
+                  return (STRING_LITERAL);
+                }
 {id}            { omp_exprparser_lval.stype = strdup(yytext);
                   return (ID_EXPRESSION); }
 

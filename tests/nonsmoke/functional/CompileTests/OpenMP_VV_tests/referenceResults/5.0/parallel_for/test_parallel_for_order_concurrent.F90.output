@@ -1,0 +1,2 @@
+!$omp parallel do order(concurrent) num_threads(OMPVV_NUM_THREADS_HOST) shared(x,y,z)
+!$omp end parallel do

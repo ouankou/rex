@@ -1,0 +1,2 @@
+!$omp target simd simdlen(64) if(k .eq. N)
+!$omp target simd simdlen(64) if(k .ne. N)

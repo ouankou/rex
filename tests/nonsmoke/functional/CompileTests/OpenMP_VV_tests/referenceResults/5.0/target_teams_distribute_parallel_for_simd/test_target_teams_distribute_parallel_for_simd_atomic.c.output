@@ -1,0 +1,2 @@
+#pragma omp target teams distribute parallel for simd map(tofrom:x) shared(x) num_teams(OMPVV_NUM_TEAMS_DEVICE) num_threads(OMPVV_NUM_THREADS_DEVICE)
+#pragma omp atomic update

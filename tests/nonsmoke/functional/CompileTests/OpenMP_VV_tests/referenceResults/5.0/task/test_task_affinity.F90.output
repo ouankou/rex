@@ -1,0 +1,5 @@
+!$omp task depend(out:B) shared(B) affinity(A)
+!$omp end task
+!$omp task depend(in:B) shared(B) affinity(A)
+!$omp end task
+!$omp taskwait

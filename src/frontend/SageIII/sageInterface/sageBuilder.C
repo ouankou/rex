@@ -77,6 +77,43 @@ void attachScopeAndParent(SgDeclarationStatement *decl,
   }
 }
 
+// buildSourceFile() can clone/reparse a file that already has preprocessing
+// directives/comments attached by the frontend (notably Clang CFE). Running
+// attachPreprocessingInfo() again on such files duplicates top-level
+// directives/comments in outlined helper files.
+bool sourceFileHasAttachedPreprocessingInfo(SgSourceFile *sourceFile) {
+  if (sourceFile == NULL) {
+    return false;
+  }
+
+  if (sourceFile->get_processedToIncludeCppDirectivesAndComments()) {
+    return true;
+  }
+
+  class AttachedPreprocessingInfoDetector : public AstSimpleProcessing {
+  public:
+    bool found = false;
+    void visit(SgNode *node) override {
+      if (found) {
+        return;
+      }
+      SgLocatedNode *located = isSgLocatedNode(node);
+      if (located == NULL) {
+        return;
+      }
+      AttachedPreprocessingInfoType *infos =
+          located->getAttachedPreprocessingInfo();
+      if (infos != NULL && !infos->empty()) {
+        found = true;
+      }
+    }
+  };
+
+  AttachedPreprocessingInfoDetector detector;
+  detector.traverse(sourceFile, preorder);
+  return detector.found;
+}
+
 } // namespace
 
 // MS 2015: utility functions used in the implementation of SageBuilder
@@ -13626,10 +13663,11 @@ void SageBuilder::fixupSourcePositionFileSpecification(
 
       SgExpression *expression = isSgExpression(node);
       if (expression != NULL) {
-        if (expression->get_operatorPosition()->get_physical_file_id() ==
-            originalFileId) {
-          expression->get_operatorPosition()->set_file_id(new_file_id);
-          expression->get_operatorPosition()->set_physical_file_id(new_file_id);
+        Sg_File_Info *operatorPosition = expression->get_operatorPosition();
+        if (operatorPosition != NULL &&
+            operatorPosition->get_physical_file_id() == originalFileId) {
+          operatorPosition->set_file_id(new_file_id);
+          operatorPosition->set_physical_file_id(new_file_id);
         }
       }
     }
@@ -14194,7 +14232,11 @@ SgSourceFile *SageBuilder::buildSourceFile(
   // secondaryPassOverSourceFile() instead of attachPreprocessingInfo() because
   // we need to support the token-based unparsing.
   // file->secondaryPassOverSourceFile();
-  attachPreprocessingInfo(sourceFile);
+  if (sourceFileHasAttachedPreprocessingInfo(sourceFile)) {
+    sourceFile->set_processedToIncludeCppDirectivesAndComments(true);
+  } else {
+    attachPreprocessingInfo(sourceFile);
+  }
 
   // DQ (11/8/2019): This is not working and breaks the current work at present.
   // DQ (11/8/2019): Support function to change the name in each of the IR

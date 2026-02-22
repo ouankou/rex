@@ -442,24 +442,51 @@ void mergeEndClausesToBeginDirective(OpenMPDirective *begin_decl,
 }
 
 bool isFortranPairedDirective(OpenMPDirective *node) {
-  bool result = false;
-  switch (node->getKind()) {
-  case OMPD_barrier:
-  case OMPD_cancel:
-  case OMPD_cancellation_point:
-  case OMPD_end:
-  case OMPD_flush:
-  case OMPD_section:
-  case OMPD_taskwait:
-  case OMPD_taskyield:
-  case OMPD_threadprivate: {
-    break;
+  if (node == NULL) {
+    return false;
   }
-  default: {
-    result = true;
+
+  const OpenMPDirectiveKind kind = node->getKind();
+  if (kind == OMPD_end) {
+    return false;
   }
+
+  if (kind == OMPD_declare_target) {
+    std::vector<OpenMPClause *> *clauses = node->getClausesInOriginalOrder();
+    return clauses == NULL || clauses->empty();
   }
-  return result;
+
+  switch (kind) {
+  case OMPD_parallel:
+  case OMPD_do:
+  case OMPD_parallel_do:
+  case OMPD_parallel_loop:
+  case OMPD_critical:
+  case OMPD_sections:
+  case OMPD_master:
+  case OMPD_ordered:
+  case OMPD_workshare:
+  case OMPD_single:
+  case OMPD_task:
+  case OMPD_taskgroup:
+  case OMPD_target:
+  case OMPD_target_data:
+  case OMPD_target_parallel:
+  case OMPD_target_parallel_loop:
+  case OMPD_target_teams:
+  case OMPD_target_teams_loop:
+  case OMPD_target_simd:
+  case OMPD_teams:
+  case OMPD_parallel_master:
+  case OMPD_master_taskloop:
+  case OMPD_master_taskloop_simd:
+  case OMPD_parallel_master_taskloop:
+  case OMPD_parallel_master_taskloop_simd:
+  case OMPD_metadirective:
+    return true;
+  default:
+    return false;
+  }
 }
 
 static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {

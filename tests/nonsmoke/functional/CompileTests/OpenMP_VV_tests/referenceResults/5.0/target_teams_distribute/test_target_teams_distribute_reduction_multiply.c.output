@@ -1,0 +1,1 @@
+#pragma omp target teams distribute reduction(*:result) map(to:a[0:N]) map(tofrom:result,num_teams[0:N])

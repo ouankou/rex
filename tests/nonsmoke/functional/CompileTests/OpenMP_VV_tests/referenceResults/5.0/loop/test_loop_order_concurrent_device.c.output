@@ -1,0 +1,3 @@
+#pragma omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:x[0:N],num_threads,total_wait_errors) map(to:y[0:N],z[0:N])
+#pragma omp loop order(concurrent)
+#pragma omp atomic update

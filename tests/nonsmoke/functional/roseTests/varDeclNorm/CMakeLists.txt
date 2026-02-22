@@ -1,7 +1,7 @@
 include_directories(${ROSE_INCLUDES})
 
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
-set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
+set(_var_decl_conf ${CMAKE_CURRENT_SOURCE_DIR}/varDeclNorm.conf)
 
 set(_rose_include_flags)
 foreach(entry IN LISTS ROSE_INCLUDES)
@@ -25,6 +25,8 @@ set(_var_decl_flags
   -rose:skipfinalCompileStep
   -w
   -rose:verbose 0)
+list(JOIN _var_decl_flags " " _var_decl_flags_str)
+list(JOIN _rose_include_flags " " _rose_include_flags_str)
 
 foreach(specimen IN LISTS _var_decl_specimens)
   set(_target ${specimen}.passed)
@@ -33,8 +35,9 @@ foreach(specimen IN LISTS _var_decl_specimens)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="varDeclNorm [${specimen}]"
-      CMD="$<TARGET_FILE:testTranslator> ${_var_decl_flags} ${_rose_include_flags} -I${CMAKE_CURRENT_SOURCE_DIR} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
-      ${_exit_status}
+      EXE="$<TARGET_FILE:testTranslator> ${_var_decl_flags_str} ${_rose_include_flags_str} -I${CMAKE_CURRENT_SOURCE_DIR}"
+      INPUT=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
+      ${_var_decl_conf}
       ${_target}
   )
 endforeach()

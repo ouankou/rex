@@ -1,2 +1,1 @@
-#pragma omp parallel
-#pragma omp for private(i,x) reduction(+ : sum) schedule(static)
+#pragma omp parallel for private(i,x) reduction(+ : sum) schedule(static)

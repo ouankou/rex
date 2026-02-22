@@ -1,4 +1,4 @@
-!$omp parallel  private(iam,neighbor) shared(work,isync)
+!$omp parallel  private(IAM,NEIGHBOR) shared(WORK,ISYNC)
 !$omp barrier
 !$omp flush (work,isync)
 !$omp flush (isync)

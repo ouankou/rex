@@ -1,0 +1,6 @@
+#pragma omp declare target
+#pragma omp end declare target
+#pragma omp declare target to(update) device_type(host)
+#pragma omp target update to(a,b,c)
+#pragma omp target
+#pragma omp target update from(a,b,c)

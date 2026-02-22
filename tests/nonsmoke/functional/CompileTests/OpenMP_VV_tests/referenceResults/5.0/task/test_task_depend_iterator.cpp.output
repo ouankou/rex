@@ -1,0 +1,4 @@
+#pragma omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp single
+#pragma omp task depend(iterator(it=0:size),in:ptr[cols[pos+it]]) depend(out:ptr[i])
+#pragma omp critical

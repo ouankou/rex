@@ -3235,6 +3235,11 @@ set(CXX_TESTCODES_GNUXX14
 )
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX14})
 
+set(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING
+  test2016_85.C
+)
+list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
+
 
 set(ROSE_DISABLED_TESTCODES ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED})
 set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
@@ -3271,6 +3276,16 @@ foreach(file_to_test ${CXX_TESTCODES_GNUXX14})
 endforeach()
 set(ROSE_FLAGS ${_rose_flags_default})
 
+set(ROSE_FLAGS ${_rose_flags_default} -rex:clang:delayed-template-parsing)
+foreach(file_to_test ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
+  compile_test(${file_to_test} "Cxx_tests")
+  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
+  rex_lock_test_for_input(${_test_name} ${file_to_test})
+  set_tests_properties(${_test_name} PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endforeach()
+set(ROSE_FLAGS ${_rose_flags_default})
+
 
 foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
@@ -3290,10 +3305,14 @@ list(REMOVE_DUPLICATES _unfolded_constants_tests)
 
 foreach(file_to_test ${_unfolded_constants_tests})
   set(_unfolded_target "${file_to_test}.unfoldedConstants-o")
+  set(_unfolded_flags ${ROSE_FLAGS})
+  if(file_to_test IN_LIST CXX_TESTCODES_DELAYED_TEMPLATE_PARSING)
+    list(APPEND _unfolded_flags -rex:clang:delayed-template-parsing)
+  endif()
   add_test(
     NAME ${_unfolded_target}
     COMMAND $<TARGET_FILE:testTranslatorUnfoldedConstants>
-      ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+      ${_unfolded_flags} ${ROSE_INCLUDE_FLAGS}
       -I${CMAKE_CURRENT_SOURCE_DIR}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
@@ -4326,6 +4345,71 @@ set_tests_properties(
 rex_lock_test_for_input(
   Cxx_tests_rex_test2025_cfe_error_exit_code_continue_on_error_unparse
   rex_test2025_cfe_error_exit_code.cpp)
+
+# Issue 264: -fno-rtti should remain backend-only unless explicitly opted in.
+add_test(
+  NAME Cxx_tests_rex_test2026_issue264_rtti_backend_only
+  COMMAND
+    sh -c
+    "\"$@\" && test -f rose_rex_test2026_issue264_rtti_dynamic_cast.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -fno-rtti
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_issue264_rtti_dynamic_cast.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_issue264_rtti_backend_only
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_issue264_rtti_backend_only
+  rex_test2026_issue264_rtti_dynamic_cast.cpp)
+
+# Issue 264: Allow explicitly opting in to frontend RTTI flag enforcement.
+add_test(
+  NAME Cxx_tests_rex_test2026_issue264_rtti_respect_frontend_flags
+  COMMAND
+    sh -c
+    "\"$@\" > issue264_rtti_respect_frontend_flags.log 2>&1 && exit 1; grep -E \"dynamic_cast.*-frtti\" issue264_rtti_respect_frontend_flags.log"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -fno-rtti
+    -rex:clang:respect-rtti-flags
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_issue264_rtti_dynamic_cast.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_issue264_rtti_respect_frontend_flags
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_issue264_rtti_respect_frontend_flags
+  rex_test2026_issue264_rtti_dynamic_cast.cpp)
+
+# Issue 317: Keep -fno-rtti/-fno-exceptions backend-only in frontend parsing.
+add_test(
+  NAME Cxx_tests_rex_test2026_issue317_rtti_exceptions_backend_only
+  COMMAND
+    sh -c
+    "OUTFILE=rose_rex_test2026_issue317_rtti_exceptions.cpp; \"$@\" && test -f \"$OUTFILE\" && \"${CMAKE_CXX_COMPILER}\" -std=c++20 -c \"$OUTFILE\""
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -fno-rtti
+    -fno-exceptions
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_issue317_rtti_exceptions.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_issue317_rtti_exceptions_backend_only
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_issue317_rtti_exceptions_backend_only
+  rex_test2026_issue317_rtti_exceptions.cpp)
 
 # Issue 124: System header template specializations must preserve template args.
 add_test(

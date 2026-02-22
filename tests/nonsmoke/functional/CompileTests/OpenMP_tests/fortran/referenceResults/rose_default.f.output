@@ -1,2 +1,2 @@
-!$omp parallel  default(none) private(a,j) shared(z)
+!$omp parallel  default(none) private(A) shared(Z) private(J)
 !$omp end parallel

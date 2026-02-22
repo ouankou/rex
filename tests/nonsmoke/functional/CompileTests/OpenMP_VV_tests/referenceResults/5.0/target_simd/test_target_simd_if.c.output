@@ -1,0 +1,2 @@
+#pragma omp target simd simdlen(64) if(k==N)
+#pragma omp target simd simdlen(64) if(k!=N)

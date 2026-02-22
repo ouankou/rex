@@ -9,9 +9,14 @@
 
 #include "sage3basic.h"
 
+#include "abiStuff.h"
+
 #include "sageBuilder.h"
 
+#include <algorithm>
+#include <cctype>
 #include <sstream>
+#include <unordered_set>
 
 using namespace std;
 using namespace Rose;
@@ -72,6 +77,677 @@ SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   }
   return nullptr;
 }
+
+SgVariableSymbol *extractClauseVariableSymbol(SgExpression *expr) {
+  if (expr == nullptr) {
+    return nullptr;
+  }
+
+  if (SgVarRefExp *vref = isSgVarRefExp(expr)) {
+    return isSgVariableSymbol(vref->get_symbol());
+  }
+  if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(expr)) {
+    return extractClauseVariableSymbol(aref->get_lhs_operand());
+  }
+  if (SgDotExp *dot = isSgDotExp(expr)) {
+    if (SgVariableSymbol *lhs =
+            extractClauseVariableSymbol(dot->get_lhs_operand())) {
+      return lhs;
+    }
+    return extractClauseVariableSymbol(dot->get_rhs_operand());
+  }
+  if (SgArrowExp *arrow = isSgArrowExp(expr)) {
+    if (SgVariableSymbol *lhs =
+            extractClauseVariableSymbol(arrow->get_lhs_operand())) {
+      return lhs;
+    }
+    return extractClauseVariableSymbol(arrow->get_rhs_operand());
+  }
+  if (SgPointerDerefExp *deref = isSgPointerDerefExp(expr)) {
+    return extractClauseVariableSymbol(deref->get_operand());
+  }
+  if (SgAddressOfOp *addr = isSgAddressOfOp(expr)) {
+    return extractClauseVariableSymbol(addr->get_operand());
+  }
+  if (SgCastExp *cast = isSgCastExp(expr)) {
+    return extractClauseVariableSymbol(cast->get_operand());
+  }
+  if (SgCommaOpExp *comma = isSgCommaOpExp(expr)) {
+    if (SgVariableSymbol *rhs =
+            extractClauseVariableSymbol(comma->get_rhs_operand())) {
+      return rhs;
+    }
+    return extractClauseVariableSymbol(comma->get_lhs_operand());
+  }
+  if (SgExprListExp *list = isSgExprListExp(expr)) {
+    for (SgExpression *elem : list->get_expressions()) {
+      if (SgVariableSymbol *sym = extractClauseVariableSymbol(elem)) {
+        return sym;
+      }
+    }
+  }
+  if (SgUnaryOp *unary = isSgUnaryOp(expr)) {
+    return extractClauseVariableSymbol(unary->get_operand());
+  }
+  return nullptr;
+}
+
+SgExpression *stripNoopCastsAndParens(SgExpression *expr) {
+  SgExpression *result = expr;
+  while (result != nullptr) {
+    if (SgCastExp *cast = isSgCastExp(result)) {
+      result = cast->get_operand();
+      continue;
+    }
+    if (SgExprListExp *list = isSgExprListExp(result)) {
+      if (list->get_expressions().size() == 1) {
+        result = list->get_expressions().front();
+        continue;
+      }
+    }
+    break;
+  }
+  return result;
+}
+
+bool extractPointerDerefChain(SgExpression *expr, SgVarRefExp *&base_ref,
+                              size_t &deref_depth) {
+  base_ref = nullptr;
+  deref_depth = 0;
+  SgExpression *cursor = stripNoopCastsAndParens(expr);
+  while (SgPointerDerefExp *deref = isSgPointerDerefExp(cursor)) {
+    ++deref_depth;
+    cursor = stripNoopCastsAndParens(deref->get_operand());
+  }
+  base_ref = isSgVarRefExp(cursor);
+  return base_ref != nullptr && deref_depth > 0;
+}
+
+void normalizeScalarLocalDerefUses(
+    SgBasicBlock *bb,
+    const std::set<SgVariableSymbol *> &scalar_locals_from_pointer_symbols) {
+  if (bb == nullptr || scalar_locals_from_pointer_symbols.empty()) {
+    return;
+  }
+
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    typedef Rose_STL_Container<SgNode *> NodeList_t;
+    NodeList_t derefs = NodeQuery::querySubTree(bb, V_SgPointerDerefExp);
+    for (NodeList_t::iterator i = derefs.begin(); i != derefs.end(); ++i) {
+      SgPointerDerefExp *deref = isSgPointerDerefExp(*i);
+      if (deref == nullptr || deref->get_parent() == nullptr) {
+        continue;
+      }
+      SgExpression *operand = stripNoopCastsAndParens(deref->get_operand());
+      SgVarRefExp *var_ref = isSgVarRefExp(operand);
+      if (var_ref == nullptr || var_ref->get_symbol() == nullptr) {
+        continue;
+      }
+      if (scalar_locals_from_pointer_symbols.count(var_ref->get_symbol()) ==
+          0) {
+        continue;
+      }
+      replaceExpression(deref, buildVarRefExp(var_ref->get_symbol()));
+      changed = true;
+    }
+  }
+}
+
+SgType *stripTypeAliases(SgType *type) {
+  if (type == nullptr) {
+    return nullptr;
+  }
+  return type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                         SgType::STRIP_TYPEDEF_TYPE);
+}
+
+SgType *stripTypeAliasesAndReferences(SgType *type) {
+  SgType *result = stripTypeAliases(type);
+  while (SgReferenceType *ref_type = isSgReferenceType(result)) {
+    result = stripTypeAliases(ref_type->get_base_type());
+  }
+  return result;
+}
+
+bool isPointerBackedType(SgType *type) {
+  return isSgPointerType(stripTypeAliasesAndReferences(type)) != nullptr;
+}
+
+bool is_32_bit_target(const SgNode *context) {
+  SgProject *project = SageInterface::getProject(context);
+  ROSE_ASSERT(project != nullptr);
+  return project->get_mode_32_bit();
+}
+
+StructLayoutInfo get_target_layout_info(SgType *type, const SgNode *context) {
+  ROSE_ASSERT(type != nullptr);
+
+  if (is_32_bit_target(context)) {
+    I386PrimitiveTypeLayoutGenerator primitive_generator(nullptr);
+    NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
+    return layout_generator.layoutType(type);
+  }
+
+  X86_64PrimitiveTypeLayoutGenerator primitive_generator(nullptr);
+  NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
+  return layout_generator.layoutType(type);
+}
+
+size_t get_target_type_size_bytes(SgType *type, const SgNode *context) {
+  StructLayoutInfo layout = get_target_layout_info(type, context);
+  ROSE_ASSERT(layout.size > 0);
+  return layout.size;
+}
+
+bool use_kmpc_loop_64bit_runtime(SgType *loop_var_type, const SgNode *context) {
+  return get_target_type_size_bytes(loop_var_type, context) > 4;
+}
+
+const char *get_kmpc_for_static_init_name(bool use_64_runtime) {
+  return use_64_runtime ? "__kmpc_for_static_init_8"
+                        : "__kmpc_for_static_init_4";
+}
+
+const char *get_kmpc_dispatch_init_name(bool use_64_runtime) {
+  return use_64_runtime ? "__kmpc_dispatch_init_8" : "__kmpc_dispatch_init_4";
+}
+
+const char *get_kmpc_dispatch_next_name(bool use_64_runtime) {
+  return use_64_runtime ? "__kmpc_dispatch_next_8" : "__kmpc_dispatch_next_4";
+}
+
+SgType *resolvePointerBaseType(SgType *pointer_type, size_t deref_depth) {
+  SgType *result = pointer_type;
+  for (size_t i = 0; i < deref_depth; ++i) {
+    result = stripTypeAliases(result);
+    SgPointerType *ptr = isSgPointerType(result);
+    if (ptr == nullptr) {
+      return nullptr;
+    }
+    result = ptr->get_base_type();
+  }
+  return stripTypeAliases(result);
+}
+
+bool buildExpressionMatchingTypeFromActiveSymbol(
+    SgVariableSymbol *active_symbol, SgType *expected_type,
+    SgExpression *&value_expr) {
+  ROSE_ASSERT(active_symbol != nullptr);
+  ROSE_ASSERT(expected_type != nullptr);
+
+  SgType *expected = stripTypeAliases(expected_type);
+  ROSE_ASSERT(expected != nullptr);
+
+  SgExpression *candidate = buildVarRefExp(active_symbol);
+  SgType *current = stripTypeAliases(active_symbol->get_type());
+
+  while (current != nullptr) {
+    if (current == expected) {
+      value_expr = candidate;
+      return true;
+    }
+
+    if (SgReferenceType *ref_type = isSgReferenceType(current)) {
+      current = stripTypeAliases(ref_type->get_base_type());
+      continue;
+    }
+
+    SgPointerType *ptr_type = isSgPointerType(current);
+    if (ptr_type == nullptr)
+      break;
+
+    candidate = buildPointerDerefExp(candidate);
+    current = stripTypeAliases(ptr_type->get_base_type());
+  }
+
+  return false;
+}
+
+bool rewritePointerBasedForIndex(SgForStatement *for_loop) {
+  if (for_loop == nullptr || for_loop->get_for_init_stmt() == nullptr) {
+    return false;
+  }
+
+  const SgStatementPtrList &inits =
+      for_loop->get_for_init_stmt()->get_init_stmt();
+  if (inits.size() != 1) {
+    return false;
+  }
+
+  SgExprStatement *init_stmt = isSgExprStatement(inits[0]);
+  if (init_stmt == nullptr) {
+    return false;
+  }
+
+  SgAssignOp *assign = isSgAssignOp(init_stmt->get_expression());
+  if (assign == nullptr) {
+    return false;
+  }
+
+  SgVarRefExp *pointer_ref = nullptr;
+  size_t index_deref_depth = 0;
+  if (!extractPointerDerefChain(assign->get_lhs_operand(), pointer_ref,
+                                index_deref_depth)) {
+    return false;
+  }
+
+  if (pointer_ref == nullptr || pointer_ref->get_symbol() == nullptr) {
+    return false;
+  }
+
+  SgVariableSymbol *pointer_sym = pointer_ref->get_symbol();
+  SgType *index_type =
+      resolvePointerBaseType(pointer_sym->get_type(), index_deref_depth);
+  if (index_type == nullptr) {
+    return false;
+  }
+
+  static unsigned long loop_index_counter = 0;
+  ++loop_index_counter;
+  const std::string local_name =
+      "__target_loop_index_" +
+      StringUtility::numberToString(loop_index_counter);
+
+  SgScopeStatement *scope = for_loop->get_scope();
+  ROSE_ASSERT(scope != nullptr);
+  SgVariableDeclaration *index_decl =
+      buildVariableDeclaration(local_name, index_type, nullptr, scope);
+  insertStatementBefore(for_loop, index_decl);
+  SgVariableSymbol *index_sym = getFirstVarSym(index_decl);
+  ROSE_ASSERT(index_sym != nullptr);
+
+  typedef Rose_STL_Container<SgNode *> NodeList_t;
+  NodeList_t derefs = NodeQuery::querySubTree(for_loop, V_SgPointerDerefExp);
+  for (NodeList_t::iterator i = derefs.begin(); i != derefs.end(); ++i) {
+    SgPointerDerefExp *deref = isSgPointerDerefExp(*i);
+    if (deref == nullptr) {
+      continue;
+    }
+    if (deref->get_parent() == nullptr) {
+      continue;
+    }
+    SgVarRefExp *candidate_base = nullptr;
+    size_t candidate_depth = 0;
+    if (!extractPointerDerefChain(deref, candidate_base, candidate_depth)) {
+      continue;
+    }
+    if (candidate_base->get_symbol() != pointer_sym ||
+        candidate_depth != index_deref_depth) {
+      continue;
+    }
+    replaceExpression(deref, buildVarRefExp(index_sym));
+  }
+
+  return true;
+}
+
+void rewritePointerBasedForIndices(SgForStatement *for_loop) {
+  if (for_loop == nullptr) {
+    return;
+  }
+  typedef Rose_STL_Container<SgNode *> NodeList_t;
+  NodeList_t loops = NodeQuery::querySubTree(for_loop, V_SgForStatement);
+  for (NodeList_t::iterator i = loops.begin(); i != loops.end(); ++i) {
+    rewritePointerBasedForIndex(isSgForStatement(*i));
+  }
+}
+
+bool isConditionalPreprocessingDirective(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+  case PreprocessingInfo::CpreprocessorElseDeclaration:
+  case PreprocessingInfo::CpreprocessorElifDeclaration:
+  case PreprocessingInfo::CpreprocessorEndifDeclaration:
+    return true;
+  default:
+    break;
+  }
+
+  std::string text = info->getString();
+  const std::string::size_type first_non_space =
+      text.find_first_not_of(" \t\r\n");
+  if (first_non_space != std::string::npos) {
+    text = text.substr(first_non_space);
+  }
+  if (!text.empty() && text[0] == '#') {
+    if (text.rfind("#if", 0) == 0 || text.rfind("#ifdef", 0) == 0 ||
+        text.rfind("#ifndef", 0) == 0 || text.rfind("#elif", 0) == 0 ||
+        text.rfind("#else", 0) == 0 || text.rfind("#endif", 0) == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void stripConditionalDirectivesFromList(AttachedPreprocessingInfoType &list) {
+  AttachedPreprocessingInfoType filtered;
+  filtered.reserve(list.size());
+  for (AttachedPreprocessingInfoType::const_iterator it = list.begin();
+       it != list.end(); ++it) {
+    PreprocessingInfo *info = *it;
+    if (info == nullptr || isConditionalPreprocessingDirective(info)) {
+      continue;
+    }
+    filtered.push_back(info);
+  }
+  list.swap(filtered);
+}
+
+void stripConditionalDirectivesFromNode(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+  if (AttachedPreprocessingInfoType *attached =
+          node->getAttachedPreprocessingInfo()) {
+    AttachedPreprocessingInfoType filtered;
+    filtered.reserve(attached->size());
+    for (AttachedPreprocessingInfoType::const_iterator it = attached->begin();
+         it != attached->end(); ++it) {
+      PreprocessingInfo *info = *it;
+      if (info == nullptr || isConditionalPreprocessingDirective(info)) {
+        continue;
+      }
+      filtered.push_back(info);
+    }
+    attached->swap(filtered);
+  }
+}
+
+void stripConditionalDirectivesFromSubtree(SgNode *root) {
+  if (root == nullptr) {
+    return;
+  }
+  if (SgLocatedNode *located_root = isSgLocatedNode(root)) {
+    stripConditionalDirectivesFromNode(located_root);
+  }
+  Rose_STL_Container<SgNode *> located_nodes =
+      NodeQuery::querySubTree(root, V_SgLocatedNode);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = located_nodes.begin();
+       it != located_nodes.end(); ++it) {
+    if (SgLocatedNode *located = isSgLocatedNode(*it)) {
+      stripConditionalDirectivesFromNode(located);
+    }
+  }
+}
+
+bool isConditionalBeginDirective(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+  const PreprocessingInfo::DirectiveType t = info->getTypeOfDirective();
+  return t == PreprocessingInfo::CpreprocessorIfdefDeclaration ||
+         t == PreprocessingInfo::CpreprocessorIfndefDeclaration ||
+         t == PreprocessingInfo::CpreprocessorIfDeclaration;
+}
+
+bool isConditionalMiddleDirective(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+  const PreprocessingInfo::DirectiveType t = info->getTypeOfDirective();
+  return t == PreprocessingInfo::CpreprocessorElseDeclaration ||
+         t == PreprocessingInfo::CpreprocessorElifDeclaration;
+}
+
+bool isConditionalEndDirective(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+  return info->getTypeOfDirective() ==
+         PreprocessingInfo::CpreprocessorEndifDeclaration;
+}
+
+void removeUnbalancedConditionalDirectives(SgNode *root) {
+  if (root == nullptr) {
+    return;
+  }
+
+  std::vector<PreprocessingInfo *> ordered_infos;
+  SageInterface::preOrderCollectPreprocessingInfo(root, ordered_infos, 0);
+
+  struct ConditionalBlock {
+    PreprocessingInfo *begin;
+    std::vector<PreprocessingInfo *> middles;
+  };
+
+  std::vector<ConditionalBlock> stack;
+  std::unordered_set<PreprocessingInfo *> to_remove;
+
+  for (std::vector<PreprocessingInfo *>::const_iterator it =
+           ordered_infos.begin();
+       it != ordered_infos.end(); ++it) {
+    PreprocessingInfo *info = *it;
+    if (!isConditionalPreprocessingDirective(info)) {
+      continue;
+    }
+    if (isConditionalBeginDirective(info)) {
+      ConditionalBlock block;
+      block.begin = info;
+      stack.push_back(block);
+      continue;
+    }
+    if (isConditionalMiddleDirective(info)) {
+      if (stack.empty()) {
+        to_remove.insert(info);
+      } else {
+        stack.back().middles.push_back(info);
+      }
+      continue;
+    }
+    if (isConditionalEndDirective(info)) {
+      if (stack.empty()) {
+        to_remove.insert(info);
+      } else {
+        stack.pop_back();
+      }
+    }
+  }
+
+  for (std::vector<ConditionalBlock>::const_iterator it = stack.begin();
+       it != stack.end(); ++it) {
+    to_remove.insert(it->begin);
+    for (std::vector<PreprocessingInfo *>::const_iterator mit =
+             it->middles.begin();
+         mit != it->middles.end(); ++mit) {
+      to_remove.insert(*mit);
+    }
+  }
+
+  if (to_remove.empty()) {
+    return;
+  }
+
+  if (SgLocatedNode *located_root = isSgLocatedNode(root)) {
+    if (AttachedPreprocessingInfoType *attached =
+            located_root->getAttachedPreprocessingInfo()) {
+      attached->erase(std::remove_if(attached->begin(), attached->end(),
+                                     [&](PreprocessingInfo *info) {
+                                       return to_remove.count(info) != 0;
+                                     }),
+                      attached->end());
+    }
+  }
+
+  Rose_STL_Container<SgNode *> located_nodes =
+      NodeQuery::querySubTree(root, V_SgLocatedNode);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = located_nodes.begin();
+       it != located_nodes.end(); ++it) {
+    SgLocatedNode *located = isSgLocatedNode(*it);
+    if (located == nullptr) {
+      continue;
+    }
+    AttachedPreprocessingInfoType *attached =
+        located->getAttachedPreprocessingInfo();
+    if (attached == nullptr) {
+      continue;
+    }
+    attached->erase(std::remove_if(attached->begin(), attached->end(),
+                                   [&](PreprocessingInfo *info) {
+                                     return to_remove.count(info) != 0;
+                                   }),
+                    attached->end());
+  }
+}
+
+bool declarationsMatch(const SgVariableSymbol *lhs_sym,
+                       const SgInitializedName *rhs_decl) {
+  if (lhs_sym == nullptr || rhs_decl == nullptr) {
+    return false;
+  }
+  return lhs_sym->get_declaration() == rhs_decl;
+}
+
+bool recoverCanonicalForLoopControl(SgForStatement *for_loop,
+                                    SgInitializedName **orig_index,
+                                    SgExpression **orig_lower,
+                                    SgExpression **orig_upper,
+                                    SgExpression **orig_stride,
+                                    bool *is_incremental) {
+  if (for_loop == nullptr || orig_index == nullptr || orig_lower == nullptr ||
+      orig_upper == nullptr || orig_stride == nullptr ||
+      is_incremental == nullptr) {
+    return false;
+  }
+
+  SgInitializedName *index_decl = nullptr;
+  SgExpression *lower_expr = nullptr;
+
+  SgStatementPtrList &init_stmts = for_loop->get_init_stmt();
+  for (SgStatementPtrList::const_iterator it = init_stmts.begin();
+       it != init_stmts.end(); ++it) {
+    if (SgVariableDeclaration *decl = isSgVariableDeclaration(*it)) {
+      if (decl->get_variables().size() != 1) {
+        continue;
+      }
+      SgInitializedName *candidate = decl->get_variables().front();
+      if (candidate == nullptr) {
+        continue;
+      }
+      if (SgAssignInitializer *assign_init =
+              isSgAssignInitializer(candidate->get_initializer())) {
+        index_decl = candidate;
+        lower_expr = assign_init->get_operand();
+        break;
+      }
+      continue;
+    }
+    if (SgExprStatement *expr_stmt = isSgExprStatement(*it)) {
+      SgAssignOp *assign =
+          isSgAssignOp(stripNoopCastsAndParens(expr_stmt->get_expression()));
+      if (assign == nullptr) {
+        continue;
+      }
+      SgVarRefExp *lhs_ref =
+          isSgVarRefExp(stripNoopCastsAndParens(assign->get_lhs_operand()));
+      if (lhs_ref == nullptr || lhs_ref->get_symbol() == nullptr) {
+        continue;
+      }
+      index_decl = lhs_ref->get_symbol()->get_declaration();
+      lower_expr = assign->get_rhs_operand();
+      break;
+    }
+  }
+
+  if (index_decl == nullptr || lower_expr == nullptr) {
+    return false;
+  }
+
+  SgBinaryOp *test_expr = isSgBinaryOp(for_loop->get_test_expr());
+  if (test_expr == nullptr) {
+    return false;
+  }
+  switch (test_expr->variantT()) {
+  case V_SgLessOrEqualOp:
+  case V_SgLessThanOp:
+    *is_incremental = true;
+    break;
+  case V_SgGreaterOrEqualOp:
+  case V_SgGreaterThanOp:
+    *is_incremental = false;
+    break;
+  default:
+    return false;
+  }
+  SgVarRefExp *test_lhs =
+      isSgVarRefExp(stripNoopCastsAndParens(test_expr->get_lhs_operand()));
+  if (test_lhs == nullptr ||
+      !declarationsMatch(test_lhs->get_symbol(), index_decl)) {
+    return false;
+  }
+
+  SgExpression *stride_expr = nullptr;
+  SgExpression *incr_expr = for_loop->get_increment();
+  if (incr_expr == nullptr) {
+    return false;
+  }
+  if (SgPlusAssignOp *plus_assign = isSgPlusAssignOp(incr_expr)) {
+    SgVarRefExp *lhs_ref =
+        isSgVarRefExp(stripNoopCastsAndParens(plus_assign->get_lhs_operand()));
+    if (lhs_ref == nullptr ||
+        !declarationsMatch(lhs_ref->get_symbol(), index_decl)) {
+      return false;
+    }
+    stride_expr = plus_assign->get_rhs_operand();
+  } else if (SgMinusAssignOp *minus_assign = isSgMinusAssignOp(incr_expr)) {
+    SgVarRefExp *lhs_ref =
+        isSgVarRefExp(stripNoopCastsAndParens(minus_assign->get_lhs_operand()));
+    if (lhs_ref == nullptr ||
+        !declarationsMatch(lhs_ref->get_symbol(), index_decl)) {
+      return false;
+    }
+    stride_expr = minus_assign->get_rhs_operand();
+  } else if (SgPlusPlusOp *plusplus = isSgPlusPlusOp(incr_expr)) {
+    SgVarRefExp *operand =
+        isSgVarRefExp(stripNoopCastsAndParens(plusplus->get_operand()));
+    if (operand == nullptr ||
+        !declarationsMatch(operand->get_symbol(), index_decl)) {
+      return false;
+    }
+    stride_expr = buildIntVal(1);
+  } else if (SgMinusMinusOp *minusminus = isSgMinusMinusOp(incr_expr)) {
+    SgVarRefExp *operand =
+        isSgVarRefExp(stripNoopCastsAndParens(minusminus->get_operand()));
+    if (operand == nullptr ||
+        !declarationsMatch(operand->get_symbol(), index_decl)) {
+      return false;
+    }
+    stride_expr = buildIntVal(1);
+  } else {
+    return false;
+  }
+
+  if (stride_expr == nullptr) {
+    return false;
+  }
+
+  *orig_index = index_decl;
+  *orig_lower = lower_expr;
+  *orig_upper = test_expr->get_rhs_operand();
+  *orig_stride = stride_expr;
+  return true;
+}
+
+void prependGlobalDeclPreservingLeadingPreproc(SgStatement *decl,
+                                               SgGlobal *global_scope) {
+  ROSE_ASSERT(decl != nullptr);
+  ROSE_ASSERT(global_scope != nullptr);
+
+  if (SgStatement *first_stmt = SageInterface::getFirstStatement(global_scope);
+      first_stmt != nullptr) {
+    SageInterface::insertStatementBefore(first_stmt, decl,
+                                         /*autoMovePreprocessingInfo=*/true);
+  } else {
+    SageInterface::prependStatement(decl, global_scope);
+  }
+}
 } // namespace
 
 // This is a hack to pass the number of CUDA loop iteration count around
@@ -115,9 +791,16 @@ std::map<SgOmpExecStatement *, std::map<SgInitializedName *, SgExpression *> *>
 // something working first.
 static set<SgVarRefExp *> preservedHostVarRefs;
 
-static SgVariableDeclaration *get_kmpc_global_tid(SgNode *, SgScopeStatement *);
+static SgVariableDeclaration *get_kmpc_global_tid(SgNode *, SgScopeStatement *,
+                                                  SgStatement **);
 static void insert_function_parameter(std::string, SgType *,
                                       SgFunctionDeclaration *, bool);
+static void ensure_fortran_variable_declaration(SgBasicBlock *, const SgName &,
+                                                SgType *);
+static void insert_fortran_declaration_into_procedure(SgVariableDeclaration *,
+                                                      SgScopeStatement *);
+static void normalize_fortran_external_subroutine_declarations(SgBasicBlock *);
+static void normalize_fortran_if_statements(SgSourceFile *);
 // move the outlined function to a separate file
 
 static SgFunctionDeclaration *move_outlined_function(SgFunctionDeclaration *,
@@ -154,8 +837,6 @@ static void convertAndFilter(const SgInitializedNamePtrList input,
 }
 
 namespace OmpSupport {
-omp_rtl_enum rtl_type =
-    e_gomp; /* default to  generate code targetting gcc's gomp */
 bool enable_accelerator = false; /* default is to not recognize and lowering
                                     OpenMP accelerator directives */
 bool enable_debugging = false;   /* default is not to debug the process */
@@ -681,13 +1362,13 @@ int patchUpSharedVariables(SgFile *file) {
 
       if (!isLocal && !isInShared && !isInPrivate && !isInFirstprivate &&
           !isInReduction) {
-        std::cout << " the insert variable is: " << item->unparseToString()
-                  << std::endl;
+        MLOG_DEBUG_CXX("ompLowering")
+            << "add shared clause variable: " << item->unparseToString();
         addClauseVariable(reg,
                           isSgOmpClauseBodyStatement(*allParallelRegionItr),
                           V_SgOmpSharedClause);
         result++;
-        std::cout << " successfully !" << std::endl;
+        MLOG_DEBUG_CXX("ompLowering") << "shared clause insertion succeeded";
       }
       allRefItr++;
     }
@@ -1036,7 +1717,7 @@ string toString(SgOmpClause::omp_schedule_kind_enum s_kind) {
   return result;
 }
 
-//! Generate XOMP loop schedule init function's name, union from OMNI's
+//! Generate XOMP loop schedule init function's name
 string
 generateGOMPLoopInitFuncName(bool isOrdered,
                              SgOmpClause::omp_schedule_kind_enum s_kind) {
@@ -1055,14 +1736,14 @@ generateGOMPLoopInitFuncName(bool isOrdered,
   return result;
 }
 
-//! Generate GOMP loop schedule start function's name
+//! Generate XOMP loop schedule start function's name
 string
-generateGOMPLoopStartFuncName(bool isOrdered,
+generateXOMPLoopStartFuncName(bool isOrdered,
                               SgOmpClause::omp_schedule_kind_enum s_kind) {
-  // GOMP_loop_static_start ()
-  // GOMP_loop_ordered_static_start ()
-  // GOMP_loop_dynamic_start ()
-  // GOMP_loop_ordered_dynamic_start ()
+  // XOMP_loop_static_start ()
+  // XOMP_loop_ordered_static_start ()
+  // XOMP_loop_dynamic_start ()
+  // XOMP_loop_ordered_dynamic_start ()
   // .....
   string result;
   result = "XOMP_loop_";
@@ -1074,15 +1755,15 @@ generateGOMPLoopStartFuncName(bool isOrdered,
   return result;
 }
 
-//! Generate GOMP loop schedule next function's name
+//! Generate XOMP loop schedule next function's name
 string
-generateGOMPLoopNextFuncName(bool isOrdered,
+generateXOMPLoopNextFuncName(bool isOrdered,
                              SgOmpClause::omp_schedule_kind_enum s_kind) {
   string result;
-  // GOMP_loop_static_next()
-  // GOMP_loop_ordered_static_next ()
-  // GOMP_loop_dynamic_next ()
-  // GOMP_loop_ordered_dynamic_next()
+  // XOMP_loop_static_next()
+  // XOMP_loop_ordered_static_next ()
+  // XOMP_loop_dynamic_next ()
+  // XOMP_loop_ordered_dynamic_next()
   // .....
 
   result = "XOMP_loop_";
@@ -1093,12 +1774,12 @@ generateGOMPLoopNextFuncName(bool isOrdered,
   return result;
 }
 
-//! Fortran only action: insert include "libxompf.h" into the function body with
-//! calls to XOMP_loop_* functions
+//! Fortran only action: insert include "libxompf.fh" into the function body
+//! with calls to XOMP_loop_* functions
 // This is necessary since XOMP_loop_* functions will be treated as returning
 // REAL by implicit rules (starting with X) This function finds the function
 // definition enclosing a start node, check if there is any existing include
-// 'libxompf.h' then insert one if there is none.
+// 'libxompf.fh' then insert one if there is none.
 static void insert_libxompf_h(SgNode *startNode) {
   ROSE_ASSERT(startNode != NULL);
   // This function should not be used for other than Fortran
@@ -1108,7 +1789,7 @@ static void insert_libxompf_h(SgNode *startNode) {
 
   SgBasicBlock *t_body = getEnclosingRegionOrFuncDefinition(startNode);
   ROSE_ASSERT(t_body != NULL);
-  // Try to find an existing include 'libxompf.h'
+  // Try to find an existing include 'libxompf.fh'
   // Assumptions:
   //   1. It only shows up at the top level, not within other SgBasicBlock
   //   2. The startNode is after the include line
@@ -1122,14 +1803,14 @@ static void insert_libxompf_h(SgNode *startNode) {
     if (f_inc) {
       string f_name =
           StringUtility::stripPathFromFileName(f_inc->get_filename());
-      if (f_name == "libxompf.h") {
+      if (f_name == "libxompf.fh" || f_name == "libxompf.h") {
         s_include = f_inc;
         break;
       }
     }
   }
   if (s_include == NULL) {
-    s_include = buildFortranIncludeLine("libxompf.h");
+    s_include = buildFortranIncludeLine("libxompf.fh");
     SgStatement *l_stmt = findLastDeclarationStatement(t_body);
     if (l_stmt)
       insertStatementAfter(l_stmt, s_include);
@@ -1213,11 +1894,17 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
       for_loop != NULL ? (SgStatement *)for_loop : (SgStatement *)do_loop;
 
   SgExprListExp *parameters = NULL;
+  SgStatement *kmpc_global_tid_init = NULL;
   SgVariableDeclaration *kmpc_global_tid_declaration =
-      get_kmpc_global_tid(target, bb1);
+      get_kmpc_global_tid(target, bb1, &kmpc_global_tid_init);
   SgExpression *thread_global_tid = buildVarRefExp(
       getFirstVariable(*kmpc_global_tid_declaration).get_name(), bb1);
-  appendStatement(kmpc_global_tid_declaration, bb1);
+  if (SageInterface::is_Fortran_language())
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration, bb1);
+  else
+    appendStatement(kmpc_global_tid_declaration, bb1);
+  if (kmpc_global_tid_init != NULL)
+    appendStatement(kmpc_global_tid_init, bb1);
   SgExpression *source_location_info = buildIntVal(0);
 
   SgInitializedName *orig_index;
@@ -1233,7 +1920,6 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     is_canonical =
         isCanonicalDoLoop(do_loop, &orig_index, &orig_lower, &orig_upper,
                           &orig_stride, NULL, &isIncremental, NULL);
-    insert_libxompf_h(do_loop);
   } else {
     cerr << "error! transOmpLoop_others(). loop is neither for_loop nor "
             "do_loop. Aborting.."
@@ -1241,6 +1927,10 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     ROSE_ABORT();
   }
   ROSE_ASSERT(is_canonical == true);
+
+  const bool use_64_runtime =
+      for_loop != NULL && use_kmpc_loop_64bit_runtime(
+                              getFirstVariable(*lower_decl).get_type(), target);
 
   Rose_STL_Container<SgOmpClause *> clauses =
       getClause(target, V_SgOmpScheduleClause);
@@ -1250,7 +1940,7 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
   SgOmpClause::omp_schedule_kind_enum s_kind =
       SgOmpClause::e_omp_schedule_kind_static;
   SgExpression *orig_chunk_size = NULL;
-  string func_init_name = "__kmpc_for_static_init_4";
+  string func_init_name = get_kmpc_for_static_init_name(use_64_runtime);
   int32_t schedule_type = 0;
   bool hasOrder = false;
   if (hasClause(target, V_SgOmpOrderedClause))
@@ -1277,40 +1967,54 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     if (s_kind == SgOmpClause::e_omp_schedule_kind_dynamic ||
         s_kind == SgOmpClause::e_omp_schedule_kind_guided) {
       orig_chunk_size = createAdjustedChunkSize(orig_chunk_size);
-      func_init_name = "__kmpc_dispatch_init_4";
+      func_init_name = get_kmpc_dispatch_init_name(use_64_runtime);
       if (s_kind == SgOmpClause::e_omp_schedule_kind_dynamic) {
         schedule_type += kmp_sched_dynamic;
       } else {
         schedule_type += kmp_sched_guided;
       };
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
           buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
           buildVarRefExp(stride_decl), orig_chunk_size);
 
     } else if (s_kind == SgOmpClause::e_omp_schedule_kind_auto ||
                s_kind == SgOmpClause::e_omp_schedule_kind_runtime) {
       orig_chunk_size = buildIntVal(1);
-      func_init_name = "__kmpc_dispatch_init_4";
+      func_init_name = get_kmpc_dispatch_init_name(use_64_runtime);
       if (s_kind == SgOmpClause::e_omp_schedule_kind_auto) {
         schedule_type += kmp_sched_auto;
       } else {
         schedule_type += kmp_sched_runtime;
       };
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
           buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
           buildVarRefExp(stride_decl), orig_chunk_size);
 
     } else {
+      if (orig_chunk_size == NULL)
+        orig_chunk_size = buildIntVal(0);
       schedule_type += kmp_sched_static_chunk;
+      SgExpression *e_last_iter =
+          buildAddressOfOp(buildVarRefExp(last_iter_decl));
+      SgExpression *e_lower = buildAddressOfOp(buildVarRefExp(lower_decl));
+      SgExpression *e_upper = buildAddressOfOp(buildVarRefExp(upper_decl));
+      SgExpression *e_stride = buildAddressOfOp(buildVarRefExp(stride_decl));
+      if (do_loop) {
+        // Fortran arguments are pass-by-reference already.
+        e_last_iter = buildVarRefExp(last_iter_decl);
+        e_lower = buildVarRefExp(lower_decl);
+        e_upper = buildVarRefExp(upper_decl);
+        e_stride = buildVarRefExp(stride_decl);
+      }
       parameters = buildExprListExp(
-          source_location_info, thread_global_tid, buildIntVal(schedule_type),
-          buildAddressOfOp(buildVarRefExp(last_iter_decl)),
-          buildAddressOfOp(buildVarRefExp(lower_decl)),
-          buildAddressOfOp(buildVarRefExp(upper_decl)),
-          buildAddressOfOp(buildVarRefExp(stride_decl)),
-          copyExpression(orig_stride), orig_chunk_size);
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildIntVal(schedule_type),
+          e_last_iter, e_lower, e_upper, e_stride, copyExpression(orig_stride),
+          orig_chunk_size);
     }
   } else
     orig_chunk_size = buildIntVal(0);
@@ -1319,117 +2023,141 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
   if (s_kind != SgOmpClause::e_omp_schedule_kind_auto &&
       s_kind != SgOmpClause::e_omp_schedule_kind_runtime)
     ROSE_ASSERT(orig_chunk_size != NULL);
-  string func_start_name = generateGOMPLoopStartFuncName(hasOrder, s_kind);
-  // Assembling function call expression's parameters
-  // first three are identical for all cases:
-  // we generate inclusive upper (-1) bounds after loop normalization, gomp
-  // runtime calls expect exclusive upper bounds so we +1 to adjust it back to
-  // exclusive.
+  const bool use_dispatch_runtime =
+      s_kind == SgOmpClause::e_omp_schedule_kind_dynamic ||
+      s_kind == SgOmpClause::e_omp_schedule_kind_guided ||
+      s_kind == SgOmpClause::e_omp_schedule_kind_auto ||
+      s_kind == SgOmpClause::e_omp_schedule_kind_runtime;
 
-  // build function init stmt
-  SgExprListExp *para_list_i =
-      buildExprListExp(copyExpression(orig_lower), copyExpression(orig_upper),
-                       createAdjustedStride(orig_stride, isIncremental));
-  if (s_kind != SgOmpClause::e_omp_schedule_kind_auto &&
-      s_kind != SgOmpClause::e_omp_schedule_kind_runtime) {
-    appendExpression(para_list_i, copyExpression(orig_chunk_size));
+  if (SageInterface::is_Fortran_language() && use_dispatch_runtime) {
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(bb1);
+    ROSE_ASSERT(func_def != NULL);
+    ensure_fortran_variable_declaration(
+        func_def->get_body(),
+        SgName(get_kmpc_dispatch_next_name(use_64_runtime)), buildIntType());
   }
 
   SgExprStatement *func_init_stmt =
       buildFunctionCallStmt(func_init_name, buildVoidType(), parameters, bb1);
   appendStatement(func_init_stmt, bb1);
 
-  // build function start
-  SgExprListExp *para_list =
-      buildExprListExp(copyExpression(orig_lower), copyExpression(orig_upper),
-                       createAdjustedStride(orig_stride, isIncremental));
-  if (s_kind != SgOmpClause::e_omp_schedule_kind_auto &&
-      s_kind != SgOmpClause::e_omp_schedule_kind_runtime) {
-    appendExpression(para_list, orig_chunk_size);
-  }
-  if (for_loop) {
-    appendExpression(para_list, buildAddressOfOp(buildVarRefExp(lower_decl)));
-    appendExpression(para_list, buildAddressOfOp(buildVarRefExp(upper_decl)));
-  } else if (do_loop) {
-    appendExpression(para_list, buildVarRefExp(lower_decl));
-    appendExpression(para_list, buildVarRefExp(upper_decl));
-  }
-  SgFunctionCallExp *func_start_exp = NULL;
+  auto build_dispatch_next_expr = [&]() -> SgExpression * {
+    SgExprListExp *dispatch_parameters = NULL;
+    if (for_loop) {
+      dispatch_parameters =
+          buildExprListExp(copyExpression(source_location_info),
+                           copyExpression(thread_global_tid),
+                           buildAddressOfOp(buildVarRefExp(last_iter_decl)),
+                           buildAddressOfOp(buildVarRefExp(lower_decl)),
+                           buildAddressOfOp(buildVarRefExp(upper_decl)),
+                           buildAddressOfOp(buildVarRefExp(stride_decl)));
+    } else {
+      dispatch_parameters = buildExprListExp(
+          copyExpression(source_location_info),
+          copyExpression(thread_global_tid), buildVarRefExp(last_iter_decl),
+          buildVarRefExp(lower_decl), buildVarRefExp(upper_decl),
+          buildVarRefExp(stride_decl));
+    }
+    return buildFunctionCallExp(get_kmpc_dispatch_next_name(use_64_runtime),
+                                buildIntType(), dispatch_parameters, bb1);
+  };
+
+  auto build_static_chunk_continue_expr = [&]() -> SgExpression * {
+    SgExpression *stride_positive =
+        buildGreaterThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *stride_negative =
+        buildLessThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *incremental_bounds = buildLessOrEqualOp(
+        buildVarRefExp(lower_decl), buildVarRefExp(upper_decl));
+    SgExpression *decremental_bounds = buildGreaterOrEqualOp(
+        buildVarRefExp(lower_decl), buildVarRefExp(upper_decl));
+    return buildOrOp(buildAndOp(stride_positive, incremental_bounds),
+                     buildAndOp(stride_negative, decremental_bounds));
+  };
+
+  auto build_upper_clamp_stmt = [&]() -> SgStatement * {
+    SgExpression *stride_positive =
+        buildGreaterThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *stride_negative =
+        buildLessThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *incremental_clamp = buildAndOp(
+        stride_positive, buildGreaterThanOp(buildVarRefExp(upper_decl),
+                                            copyExpression(orig_upper)));
+    SgExpression *decremental_clamp = buildAndOp(
+        stride_negative, buildLessThanOp(buildVarRefExp(upper_decl),
+                                         copyExpression(orig_upper)));
+    SgExpression *if_condition =
+        buildOrOp(incremental_clamp, decremental_clamp);
+    SgExprStatement *update_upper_bound_stmt = buildAssignStatement(
+        buildVarRefExp(upper_decl), copyExpression(orig_upper));
+    SgStatement *if_true_body = update_upper_bound_stmt;
+    if (SageInterface::is_Fortran_language()) {
+      SgBasicBlock *if_body = buildBasicBlock();
+      appendStatement(update_upper_bound_stmt, if_body);
+      if_true_body = if_body;
+    }
+    return buildIfStmt(if_condition, if_true_body, NULL);
+  };
+
+  auto append_static_chunk_advance = [&](SgBasicBlock *scope) {
+    if (SageInterface::is_Fortran_language()) {
+      appendStatement(
+          buildAssignStatement(buildVarRefExp(lower_decl),
+                               buildAddOp(buildVarRefExp(lower_decl),
+                                          buildVarRefExp(stride_decl))),
+          scope);
+      appendStatement(
+          buildAssignStatement(buildVarRefExp(upper_decl),
+                               buildAddOp(buildVarRefExp(upper_decl),
+                                          buildVarRefExp(stride_decl))),
+          scope);
+      return;
+    }
+
+    appendStatement(
+        buildExprStatement(buildPlusAssignOp(buildVarRefExp(lower_decl),
+                                             buildVarRefExp(stride_decl))),
+        scope);
+    appendStatement(
+        buildExprStatement(buildPlusAssignOp(buildVarRefExp(upper_decl),
+                                             buildVarRefExp(stride_decl))),
+        scope);
+  };
+
   SgBasicBlock *true_body = buildBasicBlock();
-  SgIfStmt *if_stmt = NULL;
   if (SageInterface::is_Fortran_language()) {
-    // Note for Fortran, we treat the function as returning integer, same type
-    // as the rhs of .eq. Otherwise, unparser will complain.
-    func_start_exp =
-        buildFunctionCallExp(func_start_name, buildIntType(), para_list, bb1);
-    if_stmt = buildIfStmt(buildEqualityOp(func_start_exp, buildIntVal(1)),
-                          true_body, NULL);
+    SgExpression *entry_cond = NULL;
+    if (use_dispatch_runtime) {
+      entry_cond = buildEqualityOp(build_dispatch_next_expr(), buildIntVal(1));
+    } else {
+      entry_cond = build_static_chunk_continue_expr();
+    }
+    SgIfStmt *if_stmt = buildIfStmt(entry_cond, true_body, NULL);
     appendStatement(if_stmt, bb1);
   } else {
     appendStatement(true_body, bb1);
   }
 
-  SgExprListExp *n_exp_list = NULL;
+  // do {} while (__kmpc_dispatch_next_*(...)) or while (lower <= upper)
   if (for_loop) {
-    n_exp_list = buildExprListExp(buildAddressOfOp(buildVarRefExp(lower_decl)),
-                                  buildAddressOfOp(buildVarRefExp(upper_decl)));
-  } else if (do_loop) {
-    n_exp_list = buildExprListExp(buildVarRefExp(lower_decl),
-                                  buildVarRefExp(upper_decl));
-  }
-  ROSE_ASSERT(n_exp_list != NULL);
-  SgExpression *func_next_exp = NULL;
-
-  // do {} while (GOMP_loop_static_next (&_p_lower, &_p_upper))
-  if (for_loop) { // for schedule(dynamic), the next-fetching call controls the
-                  // while loop
-    if (s_kind == SgOmpClause::e_omp_schedule_kind_dynamic) {
-      parameters =
-          buildExprListExp(source_location_info, thread_global_tid,
-                           buildAddressOfOp(buildVarRefExp(last_iter_decl)),
-                           buildAddressOfOp(buildVarRefExp(lower_decl)),
-                           buildAddressOfOp(buildVarRefExp(upper_decl)),
-                           buildAddressOfOp(buildVarRefExp(stride_decl)));
-      func_next_exp = buildFunctionCallExp("__kmpc_dispatch_next_4",
-                                           buildIntType(), parameters, bb1);
-    } else { // for schedule(static, n), lower_bound <= upper_bound controls the
-             // while loop
-      func_next_exp = buildLessOrEqualOp(buildVarRefExp(lower_decl),
-                                         buildVarRefExp(upper_decl));
-    };
+    SgExpression *func_next_exp = NULL;
+    if (use_dispatch_runtime) {
+      func_next_exp = build_dispatch_next_expr();
+    } else {
+      func_next_exp = build_static_chunk_continue_expr();
+    }
     SgBasicBlock *do_body = buildBasicBlock();
     SgWhileStmt *while_do_stmt = buildWhileStmt(func_next_exp, do_body);
     appendStatement(while_do_stmt, true_body);
 
-    // insert the upper bound checking
-    SgExpression *if_condition = NULL;
-    if (isIncremental) {
-      if_condition = buildGreaterThanOp(buildVarRefExp(upper_decl),
-                                        copyExpression(orig_upper));
-    } else {
-      if_condition = buildLessThanOp(buildVarRefExp(upper_decl),
-                                     copyExpression(orig_upper));
-    };
-    SgExprStatement *update_upper_bound_stmt = buildAssignStatement(
-        buildVarRefExp(upper_decl), copyExpression(orig_upper));
-    SgIfStmt *if_statement =
-        buildIfStmt(if_condition, update_upper_bound_stmt, NULL);
-    appendStatement(if_statement, do_body);
+    appendStatement(build_upper_clamp_stmt(), do_body);
 
     // insert the loop into do-while
     appendStatement(loop, do_body);
-    if (s_kind != SgOmpClause::e_omp_schedule_kind_dynamic) {
-      SgExpression *increase_lower_bound = buildPlusAssignOp(
-          buildVarRefExp(lower_decl), buildVarRefExp(stride_decl));
-      SgExprStatement *increase_lower_bound_stmt =
-          buildExprStatement(increase_lower_bound);
-      appendStatement(increase_lower_bound_stmt, do_body);
-      SgExpression *increase_upper_bound = buildPlusAssignOp(
-          buildVarRefExp(upper_decl), buildVarRefExp(stride_decl));
-      SgExprStatement *increase_upper_bound_stmt =
-          buildExprStatement(increase_upper_bound);
-      appendStatement(increase_upper_bound_stmt, do_body);
-      parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+    if (!use_dispatch_runtime) {
+      append_static_chunk_advance(do_body);
+      parameters =
+          buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
       appendStatement(buildFunctionCallStmt("__kmpc_for_static_fini",
                                             buildVoidType(), parameters, bb1),
                       bb1);
@@ -1449,15 +2177,23 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     appendStatement(label_stmt_1, true_body);
     int l_val = suggestNextNumericLabel(funcDef);
     setFortranNumericLabel(label_stmt_1, l_val);
+    appendStatement(build_upper_clamp_stmt(), true_body);
     // loop here
     appendStatement(loop, true_body);
+
+    if (!use_dispatch_runtime)
+      append_static_chunk_advance(true_body);
+
     // if () goto label
-    func_next_exp =
-        buildFunctionCallExp(generateGOMPLoopNextFuncName(hasOrder, s_kind),
-                             buildIntType(), n_exp_list, bb1);
+    SgExpression *func_next_exp = NULL;
+    if (use_dispatch_runtime) {
+      func_next_exp =
+          buildEqualityOp(build_dispatch_next_expr(), buildIntVal(1));
+    } else {
+      func_next_exp = build_static_chunk_continue_expr();
+    }
     SgIfStmt *if_stmt_2 =
-        buildIfStmt(buildEqualityOp(func_next_exp, buildIntVal(1)),
-                    buildBasicBlock(), buildBasicBlock());
+        buildIfStmt(func_next_exp, buildBasicBlock(), buildBasicBlock());
     SgGotoStatement *gt_stmt =
         buildGotoStatement(label_stmt_1->get_numeric_label()->get_symbol());
     appendStatement(gt_stmt, isSgScopeStatement(if_stmt_2->get_true_body()));
@@ -1466,6 +2202,14 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
     SgStatementPtrList &statementList =
         isSgBasicBlock(if_stmt_2->get_true_body())->get_statements();
     ROSE_ASSERT(statementList.size() == 1);
+
+    if (!use_dispatch_runtime) {
+      parameters =
+          buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
+      appendStatement(buildFunctionCallStmt("__kmpc_for_static_fini",
+                                            buildVoidType(), parameters, bb1),
+                      bb1);
+    }
   }
 
   // Rewrite loop control variables
@@ -1479,7 +2223,8 @@ static void transOmpLoop_others(SgOmpClauseBodyStatement *target,
       target, bb1,
       orig_upper); // This should happen before the barrier is inserted.
   if (!hasClause(target, V_SgOmpNowaitClause)) {
-    parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+    parameters =
+        buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
     appendStatement(buildFunctionCallStmt("__kmpc_barrier", buildVoidType(),
                                           parameters, bb1),
                     bb1);
@@ -1559,9 +2304,45 @@ void transOmpLoop(SgNode *node) {
   SgForStatement *for_loop = isSgForStatement(body);
   SgFortranDo *do_loop = isSgFortranDo(body);
 
+  if (for_loop == NULL && do_loop == NULL) {
+    if (SgBasicBlock *body_bb = isSgBasicBlock(body)) {
+      const SgStatementPtrList &stmts = body_bb->get_statements();
+      for (SgStatementPtrList::const_iterator it = stmts.begin();
+           it != stmts.end(); ++it) {
+        for_loop = isSgForStatement(*it);
+        do_loop = isSgFortranDo(*it);
+        if (for_loop != NULL || do_loop != NULL) {
+          break;
+        }
+      }
+    }
+  }
+  if (for_loop == NULL && do_loop == NULL) {
+    VariantVector loop_variants(V_SgForStatement);
+    loop_variants.push_back(V_SgFortranDo);
+    Rose_STL_Container<SgNode *> loops =
+        NodeQuery::querySubTree(body, loop_variants);
+    for (Rose_STL_Container<SgNode *>::const_iterator it = loops.begin();
+         it != loops.end(); ++it) {
+      if (for_loop == NULL)
+        for_loop = isSgForStatement(*it);
+      if (do_loop == NULL)
+        do_loop = isSgFortranDo(*it);
+      if (for_loop != NULL || do_loop != NULL)
+        break;
+    }
+  }
+
   SgStatement *loop =
       (for_loop != NULL ? (SgStatement *)for_loop : (SgStatement *)do_loop);
   ROSE_ASSERT(loop != NULL);
+
+  if (for_loop != NULL) {
+    // Outlined OpenMP regions can represent induction variables as pointer
+    // dereferences (e.g., *i, *(*ip__)). Rewrite them to local scalar indices
+    // before canonical normalization/analysis.
+    rewritePointerBasedForIndices(for_loop);
+  }
 
   SgExprListExp *parameters = NULL;
   SgExpression *source_location_info = buildIntVal(0);
@@ -1596,6 +2377,33 @@ void transOmpLoop(SgNode *node) {
     is_canonical =
         isCanonicalDoLoop(do_loop, &orig_index, &orig_lower, &orig_upper,
                           &orig_stride, NULL, &isIncremental, NULL);
+  if (!is_canonical && for_loop != NULL) {
+    is_canonical = recoverCanonicalForLoopControl(for_loop, &orig_index,
+                                                  &orig_lower, &orig_upper,
+                                                  &orig_stride, &isIncremental);
+  }
+  if (!is_canonical) {
+    MLOG_WARN_CXX("ompLowering")
+        << "transOmpLoop: non-canonical loop after normalization";
+    if (for_loop) {
+      MLOG_WARN_CXX("ompLowering")
+          << "for-loop: " << for_loop->unparseToString();
+      if (for_loop->get_for_init_stmt())
+        MLOG_WARN_CXX("ompLowering")
+            << "for-init: " << for_loop->get_for_init_stmt()->unparseToString();
+      if (for_loop->get_test())
+        MLOG_WARN_CXX("ompLowering")
+            << "for-test: " << for_loop->get_test()->unparseToString();
+      if (for_loop->get_increment())
+        MLOG_WARN_CXX("ompLowering")
+            << "for-increment: "
+            << for_loop->get_increment()->unparseToString();
+    } else if (do_loop) {
+      MLOG_WARN_CXX("ompLowering") << "do-loop: " << do_loop->unparseToString();
+    }
+    if (loop->get_file_info())
+      loop->get_file_info()->display("non-canonical transOmpLoop");
+  }
   ROSE_ASSERT(is_canonical == true);
 
   // step 2. Insert a basic block to replace OmpForStatement
@@ -1614,10 +2422,15 @@ void transOmpLoop(SgNode *node) {
   // Declare local loop control variables: _p_loop_index _p_loop_lower
   // _p_loop_upper , no change to the original stride
   SgType *loop_var_type = NULL;
-  // xomp interface expects long for some runtime calls now, 6/9/2010
-  if (for_loop)
-    loop_var_type = buildLongType();
-  else if (do_loop) // No long integer in Fortran
+  // Use 64-bit loop controls only when the target ABI requires it.
+  if (for_loop) {
+    bool use_64bit_loop_vars =
+        use_kmpc_loop_64bit_runtime(buildLongType(), target);
+    if (use_64bit_loop_vars)
+      loop_var_type = buildLongType();
+    else
+      loop_var_type = buildIntType();
+  } else if (do_loop) // No long integer in Fortran
     loop_var_type = buildIntType();
   SgVariableDeclaration *index_decl = NULL;
   SgVariableDeclaration *lower_decl = NULL;
@@ -1640,15 +2453,20 @@ void transOmpLoop(SgNode *node) {
     upper_decl = buildAndInsertDeclarationForOmp(
         "p_upper_" + StringUtility::numberToString(nCounter), loop_var_type,
         NULL, bb1);
+    stride_decl = buildAndInsertDeclarationForOmp(
+        "p_stride_" + StringUtility::numberToString(nCounter), loop_var_type,
+        NULL, bb1);
+    last_iter_decl = buildAndInsertDeclarationForOmp(
+        "p_last_iter_" + StringUtility::numberToString(nCounter),
+        buildIntType(), NULL, bb1);
   } else {
-    index_decl =
-        buildVariableDeclaration("__index_", buildIntType(), NULL, bb1);
+    index_decl = buildVariableDeclaration("__index_", loop_var_type, NULL, bb1);
     lower_decl = buildVariableDeclaration(
-        "__lower_", buildIntType(), buildAssignInitializer(orig_lower), bb1);
+        "__lower_", loop_var_type, buildAssignInitializer(orig_lower), bb1);
     upper_decl = buildVariableDeclaration(
-        "__upper_", buildIntType(), buildAssignInitializer(orig_upper), bb1);
+        "__upper_", loop_var_type, buildAssignInitializer(orig_upper), bb1);
     stride_decl = buildVariableDeclaration(
-        "__stride_", buildIntType(), buildAssignInitializer(orig_stride), bb1);
+        "__stride_", loop_var_type, buildAssignInitializer(orig_stride), bb1);
     last_iter_decl =
         buildVariableDeclaration("__last_iter_", buildIntType(),
                                  buildAssignInitializer(buildIntVal(0)), bb1);
@@ -1658,6 +2476,24 @@ void transOmpLoop(SgNode *node) {
     appendStatement(upper_decl, bb1);
     appendStatement(stride_decl, bb1);
     appendStatement(last_iter_decl, bb1);
+  }
+
+  if (SageInterface::is_Fortran_language()) {
+    // LLVM runtime loop init expects input lower/upper/stride to be
+    // initialized.
+    appendStatement(buildAssignStatement(buildVarRefExp(lower_decl),
+                                         copyExpression(orig_lower)),
+                    bb1);
+    appendStatement(buildAssignStatement(buildVarRefExp(upper_decl),
+                                         copyExpression(orig_upper)),
+                    bb1);
+    appendStatement(
+        buildAssignStatement(buildVarRefExp(stride_decl),
+                             createAdjustedStride(orig_stride, isIncremental)),
+        bb1);
+    appendStatement(
+        buildAssignStatement(buildVarRefExp(last_iter_decl), buildIntVal(0)),
+        bb1);
   }
 
   bool hasOrder = false;
@@ -1682,16 +2518,27 @@ void transOmpLoop(SgNode *node) {
     }
   }
 
+  const bool use_64_runtime =
+      for_loop != NULL && use_kmpc_loop_64bit_runtime(
+                              getFirstVariable(*lower_decl).get_type(), target);
+
   //  step 3. Translation for omp for
   if (!useStaticSchedule(target) || hasOrder || hasSpecifiedSize) {
     transOmpLoop_others(target, index_decl, lower_decl, upper_decl, stride_decl,
                         last_iter_decl, bb1);
   } else {
+    SgStatement *kmpc_global_tid_init = NULL;
     SgVariableDeclaration *kmpc_global_tid_declaration =
-        get_kmpc_global_tid(node, bb1);
+        get_kmpc_global_tid(node, bb1, &kmpc_global_tid_init);
     SgExpression *thread_global_tid = buildVarRefExp(
         getFirstVariable(*kmpc_global_tid_declaration).get_name(), bb1);
-    appendStatement(kmpc_global_tid_declaration, bb1);
+    if (SageInterface::is_Fortran_language())
+      insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                                bb1);
+    else
+      appendStatement(kmpc_global_tid_declaration, bb1);
+    if (kmpc_global_tid_init != NULL)
+      appendStatement(kmpc_global_tid_init, bb1);
 
     // void XOMP_loop_default(int lower, int upper, int stride, long *n_lower,
     // long * n_upper)
@@ -1713,28 +2560,44 @@ void transOmpLoop(SgNode *node) {
     ROSE_ASSERT(e4 && e5);
     // by default, LLVM uses 34 as the scheduling policy enum
     SgExpression *schedule_type = buildIntVal(kmp_sched_static_nochunk);
-    parameters =
-        buildExprListExp(source_location_info, thread_global_tid, schedule_type,
-                         buildAddressOfOp(buildVarRefExp(last_iter_decl)), e4,
-                         e5, buildAddressOfOp(buildVarRefExp(stride_decl)),
-                         copyExpression(orig_stride), buildIntVal(1));
-    SgStatement *call_stmt = buildFunctionCallStmt(
-        "__kmpc_for_static_init_4", buildVoidType(), parameters, bb1);
+    SgExpression *e_last_iter =
+        buildAddressOfOp(buildVarRefExp(last_iter_decl));
+    SgExpression *e_stride = buildAddressOfOp(buildVarRefExp(stride_decl));
+    if (do_loop) {
+      // Fortran call arguments are already passed by reference.
+      e_last_iter = buildVarRefExp(last_iter_decl);
+      e_stride = buildVarRefExp(stride_decl);
+    }
+    parameters = buildExprListExp(source_location_info, thread_global_tid,
+                                  schedule_type, e_last_iter, e4, e5, e_stride,
+                                  copyExpression(orig_stride), buildIntVal(1));
+    SgStatement *call_stmt =
+        buildFunctionCallStmt(get_kmpc_for_static_init_name(use_64_runtime),
+                              buildVoidType(), parameters, bb1);
     appendStatement(call_stmt, bb1);
 
     // insert the upper bound checking
-    SgExpression *if_condition = NULL;
-    if (isIncremental) {
-      if_condition = buildGreaterThanOp(buildVarRefExp(upper_decl),
-                                        copyExpression(orig_upper));
-    } else {
-      if_condition = buildLessThanOp(buildVarRefExp(upper_decl),
-                                     copyExpression(orig_upper));
-    };
+    SgExpression *stride_positive =
+        buildGreaterThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *stride_negative =
+        buildLessThanOp(copyExpression(orig_stride), buildIntVal(0));
+    SgExpression *incremental_clamp = buildAndOp(
+        stride_positive, buildGreaterThanOp(buildVarRefExp(upper_decl),
+                                            copyExpression(orig_upper)));
+    SgExpression *decremental_clamp = buildAndOp(
+        stride_negative, buildLessThanOp(buildVarRefExp(upper_decl),
+                                         copyExpression(orig_upper)));
+    SgExpression *if_condition =
+        buildOrOp(incremental_clamp, decremental_clamp);
     SgExprStatement *update_upper_bound_stmt = buildAssignStatement(
         buildVarRefExp(upper_decl), copyExpression(orig_upper));
-    SgIfStmt *if_statement =
-        buildIfStmt(if_condition, update_upper_bound_stmt, NULL);
+    SgStatement *if_true_body = update_upper_bound_stmt;
+    if (SageInterface::is_Fortran_language()) {
+      SgBasicBlock *if_body = buildBasicBlock();
+      appendStatement(update_upper_bound_stmt, if_body);
+      if_true_body = if_body;
+    }
+    SgIfStmt *if_statement = buildIfStmt(if_condition, if_true_body, NULL);
     appendStatement(if_statement, bb1);
 
     // add loop here
@@ -2264,7 +3127,8 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
                                             std::string &wrapper_name,
                                             ASTtools::VarSymSet_t &syms,
                                             ASTtools::VarSymSet_t &pdSyms3,
-                                            bool use_task_param) {
+                                            bool use_task_param,
+                                            bool insert_runtime_ids) {
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -2276,6 +3140,14 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
 
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
+  // Outliner::preprocess() only accepts a subset of statement kinds.  Parallel
+  // and task bodies can legally be a bare OpenMP directive (e.g., omp single),
+  // so normalize to a basic block first and lower nested directives later.
+  if (isSgBasicBlock(body) == NULL) {
+    SgOmpBodyStatement *body_stmt = isSgOmpBodyStatement(target);
+    ROSE_ASSERT(body_stmt != NULL);
+    body = ensureBasicBlockAsBodyOfOmpBodyStmt(body_stmt);
+  }
   SgFunctionDeclaration *result = NULL;
   // Initialize outliner
   Outliner::enable_classic = false; // we need use parameter wrapping, which is
@@ -2298,6 +3170,10 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
   // the outlining since firstprivate, private variables are replaced
   // with their local copies before outliner is used
   transOmpVariables(target, body_block);
+
+  // Normalize symbol links introduced by clause-variable rewrites before
+  // collecting outlined captures.
+  SageInterface::fixVariableReferences(body_block);
 
   // variable sets for private, firstprivate, reduction, and pointer
   // dereferencing (pd)
@@ -2420,16 +3296,21 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
   result = Outliner::generateFunction(body_block, func_name, syms, pdSyms3,
                                       restoreVars, struct_decl, g_scope);
 
-  SgPointerType *int_pointer_type = buildPointerType(SgTypeInt::createType());
-  // insert the kmpc ids as the first two parameters
-  if (use_task_param) {
-    auto *taskType = buildOpaqueType("ptask", g_scope);
-    insert_function_parameter("task", taskType, result, false);
-  } else {
-    insert_function_parameter("__bound_tid", int_pointer_type, result, false);
-  }
+  if (insert_runtime_ids) {
+    SgPointerType *int_pointer_type = buildPointerType(SgTypeInt::createType());
+    SgType *thread_id_type = SageInterface::is_Fortran_language()
+                                 ? buildIntType()
+                                 : static_cast<SgType *>(int_pointer_type);
+    // insert the kmpc ids as the first two parameters
+    if (use_task_param) {
+      auto *taskType = buildOpaqueType("ptask", g_scope);
+      insert_function_parameter("task", taskType, result, false);
+    } else {
+      insert_function_parameter("__bound_tid", thread_id_type, result, false);
+    }
 
-  insert_function_parameter("__global_tid", int_pointer_type, result, false);
+    insert_function_parameter("__global_tid", thread_id_type, result, false);
+  }
 
   // insert the forward declaration
   Outliner::insert(result, g_scope, body_block);
@@ -2449,6 +3330,7 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
   if (SageInterface::is_Fortran_language()) {
     SgBasicBlock *body = result->get_definition()->get_body();
     ROSE_ASSERT(body != NULL);
+    normalize_fortran_external_subroutine_declarations(body);
     SgFortranIncludeLine *inc_line = buildFortranIncludeLine("omp_lib.h");
     prependStatement(inc_line, body);
   }
@@ -2508,6 +3390,29 @@ void transOmpParallel(SgNode *node) {
   SgOmpParallelStatement *target = isSgOmpParallelStatement(node);
   ROSE_ASSERT(target != NULL);
 
+  SgExpression *cached_if_condition = NULL;
+  if (hasClause(target, V_SgOmpIfClause)) {
+    Rose_STL_Container<SgOmpClause *> if_clauses =
+        getClause(target, V_SgOmpIfClause);
+    ROSE_ASSERT(if_clauses.size() == 1);
+    SgOmpIfClause *if_clause = isSgOmpIfClause(if_clauses[0]);
+    ROSE_ASSERT(if_clause != NULL);
+    ROSE_ASSERT(if_clause->get_expression() != NULL);
+    cached_if_condition = copyExpression(if_clause->get_expression());
+  }
+
+  SgExpression *cached_num_threads = NULL;
+  if (hasClause(target, V_SgOmpNumThreadsClause)) {
+    Rose_STL_Container<SgOmpClause *> num_threads_clauses =
+        getClause(target, V_SgOmpNumThreadsClause);
+    ROSE_ASSERT(num_threads_clauses.size() == 1);
+    SgOmpNumThreadsClause *num_threads_clause =
+        isSgOmpNumThreadsClause(num_threads_clauses[0]);
+    ROSE_ASSERT(num_threads_clause != NULL);
+    ROSE_ASSERT(num_threads_clause->get_expression() != NULL);
+    cached_num_threads = copyExpression(num_threads_clause->get_expression());
+  }
+
   // Liao 12/7/2010
   // For Fortran code, we have to insert EXTERNAL OUTLINED_FUNC into
   // the function body containing the parallel region
@@ -2518,19 +3423,21 @@ void transOmpParallel(SgNode *node) {
   }
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
+  // The AST retains only the active branch after preprocessing. Carrying
+  // conditional directives through outlining can therefore split unmatched
+  // #if/#endif fragments across host and outlined functions.
+  stripConditionalDirectivesFromSubtree(body);
   // Save preprocessing info as early as possible, avoiding mess up from the
   // outliner
-  AttachedPreprocessingInfoType save_buf1, save_buf2, save_buf_inside;
+  AttachedPreprocessingInfoType save_buf1, save_buf2;
   cutPreprocessingInfo(target, PreprocessingInfo::before, save_buf1);
   cutPreprocessingInfo(target, PreprocessingInfo::after, save_buf2);
+  stripConditionalDirectivesFromList(save_buf1);
+  stripConditionalDirectivesFromList(save_buf2);
 
   // some #endif may be attached to the body, we should not move it with the
   // body into the outlined funcion!! cutPreprocessingInfo(body,
   // PreprocessingInfo::before, save_buf_body) ;
-
-  // 1/15/2009, Liao, also handle the last #endif, which is attached inside of
-  // the target
-  cutPreprocessingInfo(target, PreprocessingInfo::inside, save_buf_inside);
 
   //-----------------------------------------------------------------
   // step 1: generated an outlined function as the task
@@ -2580,24 +3487,32 @@ void transOmpParallel(SgNode *node) {
   SgExpression *thread_global_tid = NULL;
 
   // add __kmpc_fork_call (0, 2, OUT_func_xxx, &a, &sum);
-  // or __kmpc_fork_call (0, 0, OUT_func_xxx, 0); // if no variables need to be
+  // or __kmpc_fork_call (0, 0, OUT_func_xxx); // if no variables need to be
   // passed
   SgExpression *source_location_info = buildIntVal(0);
-  SgExpression *outlined_function_parameter_amount =
-      buildIntVal(pdSyms3.size());
+  SgExpression *outlined_function_parameter_amount = buildIntVal(syms.size());
+  SgExpression *outlined_function_argument = buildFunctionRefExp(outlined_func);
+  if (!SageInterface::is_Fortran_language()) {
+    outlined_function_argument = buildCastExp(
+        outlined_function_argument, buildOpaqueType("kmpc_micro_t", p_scope),
+        SgCastExp::e_C_style_cast);
+  }
   parameters =
       buildExprListExp(source_location_info, outlined_function_parameter_amount,
-                       buildFunctionRefExp(outlined_func));
+                       outlined_function_argument);
   ASTtools::VarSymSet_t::iterator iter;
-  for (iter = pdSyms3.begin(); iter != pdSyms3.end(); iter++) {
+  for (iter = syms.begin(); iter != syms.end(); iter++) {
     const SgVariableSymbol *sb = *iter;
-    appendExpression(parameters, buildAddressOfOp(buildVarRefExp(
-                                     const_cast<SgVariableSymbol *>(sb))));
+    SgExpression *actual_arg = NULL;
+    if (SageInterface::is_Fortran_language()) {
+      actual_arg = buildVarRefExp(const_cast<SgVariableSymbol *>(sb));
+    } else {
+      actual_arg =
+          buildAddressOfOp(buildVarRefExp(const_cast<SgVariableSymbol *>(sb)));
+    }
+    ROSE_ASSERT(actual_arg != NULL);
+    appendExpression(parameters, actual_arg);
   }
-  if (pdSyms3.size() == 0) {
-    appendExpression(parameters, buildIntVal(0));
-  };
-
   ROSE_ASSERT(parameters != NULL);
 
   // extern void XOMP_parallel_start (void (*func) (void *), void *data,
@@ -2621,23 +3536,26 @@ void transOmpParallel(SgNode *node) {
   // first. therefore, the head will be the function call of setting up
   // num_threads.
   SgExprStatement *set_num_threads_statement = NULL;
-  SgExpression *omp_num_threads = NULL;
-  if (hasClause(target, V_SgOmpNumThreadsClause)) {
-    Rose_STL_Container<SgOmpClause *> num_threads_clauses =
-        getClause(target, V_SgOmpNumThreadsClause);
-    ROSE_ASSERT(num_threads_clauses.size() ==
-                1); // should only have one num_threads()
-    SgOmpNumThreadsClause *num_threads_clause =
-        isSgOmpNumThreadsClause(num_threads_clauses[0]);
-    ROSE_ASSERT(num_threads_clause->get_expression() != NULL);
-    omp_num_threads = copyExpression(num_threads_clause->get_expression());
-  }
+  SgExpression *omp_num_threads = cached_num_threads;
   if (omp_num_threads != NULL) {
-    kmpc_global_tid_declaration = get_kmpc_global_tid(target, p_scope);
+    SgStatement *kmpc_global_tid_init = NULL;
+    kmpc_global_tid_declaration =
+        get_kmpc_global_tid(target, p_scope, &kmpc_global_tid_init);
     thread_global_tid = buildVarRefExp(
         getFirstVariable(*kmpc_global_tid_declaration).get_name(), p_scope);
-    insertStatement(target, kmpc_global_tid_declaration);
-    kmpc_global_tid_declaration->set_parent(target->get_parent());
+    if (SageInterface::is_Fortran_language()) {
+      insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                                p_scope);
+    } else {
+      insertStatement(target, kmpc_global_tid_declaration);
+      kmpc_global_tid_declaration->set_parent(target->get_parent());
+    }
+    if (kmpc_global_tid_init != NULL) {
+      if (SageInterface::is_Fortran_language())
+        insertStatement(target, kmpc_global_tid_init);
+      else
+        insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+    }
     parameters =
         buildExprListExp(buildIntVal(0), thread_global_tid, omp_num_threads);
     set_num_threads_statement = buildFunctionCallStmt(
@@ -2649,33 +3567,51 @@ void transOmpParallel(SgNode *node) {
 
   // transform the if clause
   // the head of transformed code will be the if statement in this case
-  SgExpression *if_condition = NULL;
-  if (hasClause(target, V_SgOmpIfClause)) {
-    Rose_STL_Container<SgOmpClause *> if_clauses =
-        getClause(target, V_SgOmpIfClause);
-    ROSE_ASSERT(if_clauses.size() == 1); // should only have one if ()
-    SgOmpIfClause *if_clause = isSgOmpIfClause(if_clauses[0]);
-    ROSE_ASSERT(if_clause->get_expression() != NULL);
-    if_condition = copyExpression(if_clause->get_expression());
-  }
+  SgExpression *if_condition = cached_if_condition;
   if (if_condition != NULL) {
     if (omp_num_threads == NULL) {
-      kmpc_global_tid_declaration = get_kmpc_global_tid(target, p_scope);
+      SgStatement *kmpc_global_tid_init = NULL;
+      kmpc_global_tid_declaration =
+          get_kmpc_global_tid(target, p_scope, &kmpc_global_tid_init);
       thread_global_tid = buildVarRefExp(
           getFirstVariable(*kmpc_global_tid_declaration).get_name(), p_scope);
-      insertStatement(target, kmpc_global_tid_declaration);
-      kmpc_global_tid_declaration->set_parent(target->get_parent());
+      if (SageInterface::is_Fortran_language()) {
+        insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                                  p_scope);
+      } else {
+        insertStatement(target, kmpc_global_tid_declaration);
+        kmpc_global_tid_declaration->set_parent(target->get_parent());
+      }
+      if (kmpc_global_tid_init != NULL) {
+        if (SageInterface::is_Fortran_language())
+          insertStatement(target, kmpc_global_tid_init);
+        else
+          insertStatementAfter(kmpc_global_tid_declaration,
+                               kmpc_global_tid_init);
+      }
     };
     SgIfStmt *if_statement = buildIfStmt(if_condition, s1, NULL);
     SgExprStatement *else_stmt = NULL;
     SgBasicBlock *false_body = buildBasicBlock();
-    parameters =
-        buildExprListExp(buildAddressOfOp(thread_global_tid), buildIntVal(0));
+    if (SageInterface::is_Fortran_language()) {
+      parameters =
+          buildExprListExp(copyExpression(thread_global_tid), buildIntVal(0));
+    } else {
+      parameters =
+          buildExprListExp(buildAddressOfOp(thread_global_tid), buildIntVal(0));
+    }
     ASTtools::VarSymSet_t::iterator iter;
-    for (iter = pdSyms3.begin(); iter != pdSyms3.end(); iter++) {
+    for (iter = syms.begin(); iter != syms.end(); iter++) {
       const SgVariableSymbol *sb = *iter;
-      appendExpression(parameters, buildAddressOfOp(buildVarRefExp(
-                                       const_cast<SgVariableSymbol *>(sb))));
+      SgExpression *actual_arg = NULL;
+      if (SageInterface::is_Fortran_language()) {
+        actual_arg = buildVarRefExp(const_cast<SgVariableSymbol *>(sb));
+      } else {
+        actual_arg = buildAddressOfOp(
+            buildVarRefExp(const_cast<SgVariableSymbol *>(sb)));
+      }
+      ROSE_ASSERT(actual_arg != NULL);
+      appendExpression(parameters, actual_arg);
     }
     else_stmt = buildFunctionCallStmt(outlined_func->get_name(),
                                       buildVoidType(), parameters, p_scope);
@@ -2715,37 +3651,48 @@ void transOmpParallel(SgNode *node) {
   }
 
   pastePreprocessingInfo(s2, PreprocessingInfo::after, save_buf2);
-  // paste the preprocessing info with inside position to the outlined
-  // function's body
-  pastePreprocessingInfo(outlined_func->get_definition()->get_body(),
-                         PreprocessingInfo::inside, save_buf_inside);
 
-  // some #endif may be attached to the body, we should not move it with the
-  // body into the outlined funcion!!
-  // move dangling #endif etc from the body to the end of s2
-  movePreprocessingInfo(body, s2, PreprocessingInfo::before,
-                        PreprocessingInfo::after);
-
-  // Generate a new source file for the outlined function if necessary
-  if (cpu_outlined_file == NULL) {
-    cpu_outlined_file = generate_outlined_function_file(outlined_func, "");
-  }
-  // Move the outlined function to the new source file
-  SgFunctionDeclaration *new_outlined_func =
-      move_outlined_function(outlined_func, cpu_outlined_file);
-  Rose_STL_Container<SgNode *> old_directives =
-      NodeQuery::querySubTree(outlined_func, V_SgOmpExecStatement);
-  Rose_STL_Container<SgNode *> new_directives =
-      NodeQuery::querySubTree(new_outlined_func, V_SgOmpExecStatement);
-  ROSE_ASSERT(old_directives.size() == new_directives.size());
-  for (int i = 0; i < new_directives.size(); i++) {
-    SgOmpExecStatement *old_directive = isSgOmpExecStatement(old_directives[i]);
-    SgOmpExecStatement *new_directive = isSgOmpExecStatement(new_directives[i]);
-    ROSE_ASSERT(old_directive != NULL);
-    ROSE_ASSERT(new_directive != NULL);
-    clause_variable_renaming_record[new_directive] =
-        clause_variable_renaming_record[old_directive];
-    clause_variable_renaming_record.erase(old_directive);
+  // Defensive cleanup: conditional directives are already resolved by the
+  // frontend, and carrying stale #if/#endif fragments across outlining can
+  // leave unbalanced directives in host output.
+  stripConditionalDirectivesFromSubtree(s1);
+  stripConditionalDirectivesFromSubtree(
+      outlined_func->get_definition()->get_body());
+  // Keep outlined procedures in the original file for Fortran and C++.
+  // Fortran needs declaration-link consistency; C++ currently hits
+  // qualification/ODR issues when outlined functions are moved to a synthesized
+  // source file.
+  if (!enable_accelerator && !SageInterface::is_Fortran_language() &&
+      !SageInterface::is_Cxx_language()) {
+    // Generate a new source file for the outlined function if necessary
+    if (cpu_outlined_file == NULL) {
+      cpu_outlined_file = generate_outlined_function_file(outlined_func, "");
+    }
+    // Move the outlined function to the new source file
+    SgFunctionDeclaration *new_outlined_func =
+        move_outlined_function(outlined_func, cpu_outlined_file);
+    if (new_outlined_func != NULL &&
+        new_outlined_func->get_definition() != NULL &&
+        new_outlined_func->get_definition()->get_body() != NULL) {
+      SageInterface::fixVariableReferences(
+          new_outlined_func->get_definition()->get_body());
+    }
+    Rose_STL_Container<SgNode *> old_directives =
+        NodeQuery::querySubTree(outlined_func, V_SgOmpExecStatement);
+    Rose_STL_Container<SgNode *> new_directives =
+        NodeQuery::querySubTree(new_outlined_func, V_SgOmpExecStatement);
+    ROSE_ASSERT(old_directives.size() == new_directives.size());
+    for (int i = 0; i < new_directives.size(); i++) {
+      SgOmpExecStatement *old_directive =
+          isSgOmpExecStatement(old_directives[i]);
+      SgOmpExecStatement *new_directive =
+          isSgOmpExecStatement(new_directives[i]);
+      ROSE_ASSERT(old_directive != NULL);
+      ROSE_ASSERT(new_directive != NULL);
+      clause_variable_renaming_record[new_directive] =
+          clause_variable_renaming_record[old_directive];
+      clause_variable_renaming_record.erase(old_directive);
+    }
   }
 }
 
@@ -2805,8 +3752,13 @@ bool isInClauseVariableList(SgOmpClause *cls, SgSymbol *var) {
       isSgOmpVariablesClause(var_cls)->get_variables()->get_expressions();
 
   std::vector<SgSymbol *> var_list;
-  for (size_t j = 0; j < refs.size(); j++)
-    var_list.push_back(isSgVarRefExp(refs[j])->get_symbol());
+  for (size_t j = 0; j < refs.size(); j++) {
+    SgVariableSymbol *symbol = extractClauseVariableSymbol(refs[j]);
+    if (symbol == nullptr) {
+      continue;
+    }
+    var_list.push_back(symbol);
+  }
 
   if (find(var_list.begin(), var_list.end(), var) != var_list.end())
     return true;
@@ -3034,13 +3986,19 @@ void extractMapClauses(
     };
 
     SgOmpClause::omp_map_operator_enum map_operator = m_cls->get_operation();
-    if (map_operator == SgOmpClause::e_omp_map_alloc)
+    if (map_operator == SgOmpClause::e_omp_map_alloc ||
+        map_operator == SgOmpClause::e_omp_map_storage ||
+        map_operator == SgOmpClause::e_omp_map_release ||
+        map_operator == SgOmpClause::e_omp_map_delete)
       *map_alloc_clause = m_cls;
     else if (map_operator == SgOmpClause::e_omp_map_to)
       *map_to_clause = m_cls;
     else if (map_operator == SgOmpClause::e_omp_map_from)
       *map_from_clause = m_cls;
-    else if (map_operator == SgOmpClause::e_omp_map_tofrom)
+    else if (map_operator == SgOmpClause::e_omp_map_tofrom ||
+             map_operator == SgOmpClause::e_omp_map_present ||
+             map_operator == SgOmpClause::e_omp_map_self ||
+             map_operator == SgOmpClause::e_omp_map_unknown)
       *map_tofrom_clause = m_cls;
     else {
       cerr << "Error. transOmpMapVariables() from omp_lowering.cpp: found "
@@ -4271,8 +5229,8 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   offload_entry_decl->get_decl_item(SgName(func_name + "omp_offload_entry__"))
       ->set_gnu_attribute_section_name("omp_offloading_entries");
 
-  prependStatement(offload_entry_decl, g_scope);
-  prependStatement(outlined_kernel_id_decl, g_scope);
+  prependGlobalDeclPreservingLeadingPreproc(offload_entry_decl, g_scope);
+  prependGlobalDeclPreservingLeadingPreproc(outlined_kernel_id_decl, g_scope);
 
   SgVariableDeclaration *host_point_decl = buildVariableDeclaration(
       "__host_ptr", buildPointerType(buildVoidType()),
@@ -4344,6 +5302,11 @@ SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgForStatement *for_loop = isSgForStatement(node);
   ROSE_ASSERT(for_loop != NULL);
+
+  // In target-offloading outlined kernels, loop indices can appear as pointer
+  // dereferences (e.g., *ip__). Rewrite them to local scalar indices first so
+  // canonical-loop analysis and normalization can proceed.
+  rewritePointerBasedForIndices(for_loop);
 
   // Step 1. Loop normalization
   // For the init statement: for (int i=0;... ) becomes int i; for (i=0;..)
@@ -4781,8 +5744,8 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   offload_entry_decl->get_decl_item(SgName(func_name + "omp_offload_entry__"))
       ->set_gnu_attribute_section_name("omp_offloading_entries");
 
-  prependStatement(offload_entry_decl, g_scope);
-  prependStatement(outlined_kernel_id_decl, g_scope);
+  prependGlobalDeclPreservingLeadingPreproc(offload_entry_decl, g_scope);
+  prependGlobalDeclPreservingLeadingPreproc(outlined_kernel_id_decl, g_scope);
 
   SgVariableDeclaration *host_point_decl = buildVariableDeclaration(
       "__host_ptr", buildPointerType(buildVoidType()),
@@ -4952,7 +5915,7 @@ void transOmpSpmdInTargetRegion(SgNode *node) {
   //    dependence among flags
   SgBasicBlock *body_block = Outliner::preprocess(body);
   // translator OpenMP 3.0 and earlier variables.
-  // transOmpVariables(target, body_block);
+  transOmpVariables(target, body_block);
 
   ASTtools::VarSymSet_t all_syms; // all generated or remaining variables to be
                                   // passed to the outliner
@@ -4969,7 +5932,8 @@ void transOmpSpmdInTargetRegion(SgNode *node) {
   ASTtools::VarSymSet_t::iterator iter;
   for (iter = all_syms.begin(); iter != all_syms.end(); iter++) {
     const SgVariableSymbol *var_sym = *iter;
-    std::cout << var_sym->get_name() << "\n";
+    MLOG_DEBUG_CXX("ompLowering")
+        << "candidate outlined symbol: " << var_sym->get_name();
     SgType *i_type = var_sym->get_declaration()->get_type();
     if (!isSgPointerType(i_type) && !isSgArrayType(i_type))
       addressOf_syms.insert(var_sym);
@@ -5227,29 +6191,10 @@ void transOmpTargetTeamsDistributeParallelFor(SgNode *node) {
  *        SgBasicBlock
  *          SgStatement
  *
- * Example translated code:
-    int _section_1 = XOMP_sections_init_next (3);
-    while (_section_1 >=0) // This while loop is a must
-    {
-      switch (_section_1) {
-        case 0:
-          printf("hello from section 1\n");
-          break;
-        case 1:
-          printf("hello from section 2\n");
-          break;
-        case 2:
-          printf("hello from section 3\n");
-          break;
-        default:
-          printf("fatal error: XOMP_sections_?_next() returns illegal value
- %d\n", _section_1); abort();
-      }
-      _section_1 = XOMP_sections_next ();  // next round for the current thread:
- deal with possible number of threads < number of sections
-   }
-
-    XOMP_sections_end();   // Or  XOMP_sections_end_nowait ();
+ * Lowering strategy:
+ *   Translate sections as a static-scheduled iteration space [0, N-1] using
+ *   __kmpc_for_static_init_4/__kmpc_for_static_fini so host lowering uses the
+ *   LLVM OpenMP runtime for both C/C++ and Fortran.
  * */
 void transOmpSections(SgNode *node) {
   //    cout<<"Entering transOmpSections() ..."<<endl;
@@ -5268,13 +6213,12 @@ void transOmpSections(SgNode *node) {
   ROSE_ASSERT(sections_block != NULL);
   // verify each statement under sections is SgOmpSectionStatement
   SgStatementPtrList section_list = sections_block->get_statements();
-  int section_count = section_list.size();
+  int section_count = static_cast<int>(section_list.size());
   for (int i = 0; i < section_count; i++) {
     SgStatement *stmt = section_list[i];
     ROSE_ASSERT(isSgOmpSectionStatement(stmt));
   }
 
-  // int _section_1 = XOMP_sections_init_next (3);
   std::string sec_var_name;
   if (SageInterface::is_Fortran_language())
     sec_var_name = "_section_";
@@ -5282,30 +6226,131 @@ void transOmpSections(SgNode *node) {
     sec_var_name = "xomp_section_";
 
   sec_var_name += StringUtility::numberToString(++gensym_counter);
+  const int sec_max_value = section_count - 1;
+  std::string sec_lower_name = sec_var_name + "_lower";
+  std::string sec_upper_name = sec_var_name + "_upper";
+  std::string sec_stride_name = sec_var_name + "_stride";
+  std::string sec_last_iter_name = sec_var_name + "_last_iter";
 
-  SgAssignInitializer *initializer = buildAssignInitializer(
-      buildFunctionCallExp("XOMP_sections_init_next", buildIntType(),
-                           buildExprListExp(buildIntVal(section_count)), scope),
-      buildIntType());
   replaceStatement(target, bb1, true);
+
+  SgScopeStatement *kmpc_tid_decl_scope = scope;
+  if (!SageInterface::is_Fortran_language())
+    kmpc_tid_decl_scope = bb1;
+
+  SgStatement *kmpc_global_tid_init = NULL;
+  SgVariableDeclaration *kmpc_global_tid_declaration =
+      get_kmpc_global_tid(node, kmpc_tid_decl_scope, &kmpc_global_tid_init);
+  SgExpression *thread_global_tid =
+      buildVarRefExp(getFirstVariable(*kmpc_global_tid_declaration).get_name(),
+                     kmpc_tid_decl_scope);
+  if (SageInterface::is_Fortran_language()) {
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                              scope);
+  } else {
+    appendStatement(kmpc_global_tid_declaration, bb1);
+  }
+  if (kmpc_global_tid_init != NULL)
+    appendStatement(kmpc_global_tid_init, bb1);
+
   // Declare a variable to store the current section id
   // Only used to support lastprivate
   SgVariableDeclaration *sec_var_decl_save = NULL;
   if (hasClause(target, V_SgOmpLastprivateClause)) {
     sec_var_decl_save = buildVariableDeclaration(sec_var_name + "_save",
                                                  buildIntType(), NULL, bb1);
-    appendStatement(sec_var_decl_save, bb1);
+    if (SageInterface::is_Fortran_language())
+      insert_fortran_declaration_into_procedure(sec_var_decl_save, scope);
+    else
+      appendStatement(sec_var_decl_save, bb1);
   }
 
   SgVariableDeclaration *sec_var_decl =
-      buildVariableDeclaration(sec_var_name, buildIntType(), initializer, bb1);
-  appendStatement(sec_var_decl, bb1);
+      buildVariableDeclaration(sec_var_name, buildIntType(), NULL, bb1);
+  SgVariableDeclaration *sec_lower_decl =
+      buildVariableDeclaration(sec_lower_name, buildIntType(), NULL, bb1);
+  SgVariableDeclaration *sec_upper_decl =
+      buildVariableDeclaration(sec_upper_name, buildIntType(), NULL, bb1);
+  SgVariableDeclaration *sec_stride_decl =
+      buildVariableDeclaration(sec_stride_name, buildIntType(), NULL, bb1);
+  SgVariableDeclaration *sec_last_iter_decl =
+      buildVariableDeclaration(sec_last_iter_name, buildIntType(), NULL, bb1);
+
+  if (SageInterface::is_Fortran_language())
+    insert_fortran_declaration_into_procedure(sec_var_decl, scope);
+  else
+    appendStatement(sec_var_decl, bb1);
+
+  if (SageInterface::is_Fortran_language()) {
+    insert_fortran_declaration_into_procedure(sec_lower_decl, scope);
+    insert_fortran_declaration_into_procedure(sec_upper_decl, scope);
+    insert_fortran_declaration_into_procedure(sec_stride_decl, scope);
+    insert_fortran_declaration_into_procedure(sec_last_iter_decl, scope);
+  } else {
+    appendStatement(sec_lower_decl, bb1);
+    appendStatement(sec_upper_decl, bb1);
+    appendStatement(sec_stride_decl, bb1);
+    appendStatement(sec_last_iter_decl, bb1);
+  }
+
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_lower_decl), buildIntVal(0)),
+      bb1);
+  appendStatement(buildAssignStatement(buildVarRefExp(sec_upper_decl),
+                                       buildIntVal(sec_max_value)),
+                  bb1);
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_stride_decl), buildIntVal(1)),
+      bb1);
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_last_iter_decl), buildIntVal(0)),
+      bb1);
+
+  SgExpression *e_last_iter =
+      buildAddressOfOp(buildVarRefExp(sec_last_iter_decl));
+  SgExpression *e_lower = buildAddressOfOp(buildVarRefExp(sec_lower_decl));
+  SgExpression *e_upper = buildAddressOfOp(buildVarRefExp(sec_upper_decl));
+  SgExpression *e_stride = buildAddressOfOp(buildVarRefExp(sec_stride_decl));
+  if (SageInterface::is_Fortran_language()) {
+    // Fortran scalar arguments are pass-by-reference.
+    e_last_iter = buildVarRefExp(sec_last_iter_decl);
+    e_lower = buildVarRefExp(sec_lower_decl);
+    e_upper = buildVarRefExp(sec_upper_decl);
+    e_stride = buildVarRefExp(sec_stride_decl);
+  }
+  SgExprListExp *init_parameters = buildExprListExp(
+      buildIntVal(0), copyExpression(thread_global_tid),
+      buildIntVal(kmp_sched_static_chunk), e_last_iter, e_lower, e_upper,
+      e_stride, buildIntVal(1), buildIntVal(1));
+  appendStatement(buildFunctionCallStmt("__kmpc_for_static_init_4",
+                                        buildVoidType(), init_parameters,
+                                        scope),
+                  bb1);
+
+  SgIfStmt *clamp_upper =
+      buildIfStmt(buildGreaterThanOp(buildVarRefExp(sec_upper_decl),
+                                     buildIntVal(sec_max_value)),
+                  buildAssignStatement(buildVarRefExp(sec_upper_decl),
+                                       buildIntVal(sec_max_value)),
+                  NULL);
+  appendStatement(clamp_upper, bb1);
+
+  SgIfStmt *init_section_id = buildIfStmt(
+      buildLessOrEqualOp(buildVarRefExp(sec_lower_decl),
+                         buildVarRefExp(sec_upper_decl)),
+      buildAssignStatement(buildVarRefExp(sec_var_decl),
+                           buildVarRefExp(sec_lower_decl)),
+      buildAssignStatement(buildVarRefExp(sec_var_decl), buildIntVal(-1)));
+  appendStatement(init_section_id, bb1);
 
   // while (_section_1 >=0) {}
   SgWhileStmt *while_stmt = buildWhileStmt(
       buildGreaterOrEqualOp(buildVarRefExp(sec_var_decl), buildIntVal(0)),
       buildBasicBlock());
-  insertStatementAfter(sec_var_decl, while_stmt);
+  if (SageInterface::is_Fortran_language()) {
+    while_stmt->set_has_end_statement(true);
+  }
+  appendStatement(while_stmt, bb1);
   // switch () {}
   SgSwitchStatement *switch_stmt = buildSwitchStatement(
       buildExprStatement(buildVarRefExp(sec_var_decl)), buildBasicBlock());
@@ -5352,28 +6397,64 @@ void transOmpSections(SgNode *node) {
         buildVarRefExp(sec_var_decl_save), buildVarRefExp(sec_var_decl));
     appendStatement(save_stmt, isSgBasicBlock(while_stmt->get_body()));
   }
-  // _section_1 = XOMP_sections_next ();
-  SgStatement *assign_stmt = buildAssignStatement(
-      buildVarRefExp(sec_var_decl),
-      buildFunctionCallExp("XOMP_sections_next", buildIntType(),
-                           buildExprListExp(), scope));
-  appendStatement(assign_stmt, isSgBasicBlock(while_stmt->get_body()));
+
+  SgBasicBlock *while_body = isSgBasicBlock(while_stmt->get_body());
+  appendStatement(buildAssignStatement(
+                      buildVarRefExp(sec_var_decl),
+                      buildAddOp(buildVarRefExp(sec_var_decl), buildIntVal(1))),
+                  while_body);
+
+  SgBasicBlock *advance_block = buildBasicBlock();
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_lower_decl),
+                           buildAddOp(buildVarRefExp(sec_lower_decl),
+                                      buildVarRefExp(sec_stride_decl))),
+      advance_block);
+  appendStatement(
+      buildAssignStatement(buildVarRefExp(sec_upper_decl),
+                           buildAddOp(buildVarRefExp(sec_upper_decl),
+                                      buildVarRefExp(sec_stride_decl))),
+      advance_block);
+  appendStatement(
+      buildIfStmt(buildGreaterThanOp(buildVarRefExp(sec_upper_decl),
+                                     buildIntVal(sec_max_value)),
+                  buildAssignStatement(buildVarRefExp(sec_upper_decl),
+                                       buildIntVal(sec_max_value)),
+                  NULL),
+      advance_block);
+  appendStatement(
+      buildIfStmt(
+          buildLessOrEqualOp(buildVarRefExp(sec_lower_decl),
+                             buildVarRefExp(sec_upper_decl)),
+          buildAssignStatement(buildVarRefExp(sec_var_decl),
+                               buildVarRefExp(sec_lower_decl)),
+          buildAssignStatement(buildVarRefExp(sec_var_decl), buildIntVal(-1))),
+      advance_block);
+  appendStatement(
+      buildIfStmt(buildGreaterThanOp(buildVarRefExp(sec_var_decl),
+                                     buildVarRefExp(sec_upper_decl)),
+                  advance_block, NULL),
+      while_body);
 
   transOmpVariables(
       target, bb1,
       buildIntVal(section_count -
                   1)); // This should happen before the barrier is inserted.
 
-  // XOMP_sections_end() or XOMP_sections_end_nowait ();
-  SgExprStatement *end_call = NULL;
-  if (hasClause(target, V_SgOmpNowaitClause))
-    end_call = buildFunctionCallStmt("XOMP_sections_end_nowait",
-                                     buildVoidType(), NULL, scope);
-  else
-    end_call = buildFunctionCallStmt("XOMP_sections_end", buildVoidType(), NULL,
-                                     scope);
+  SgExprListExp *fini_parameters =
+      buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
+  appendStatement(buildFunctionCallStmt("__kmpc_for_static_fini",
+                                        buildVoidType(), fini_parameters,
+                                        scope),
+                  bb1);
 
-  appendStatement(end_call, bb1);
+  if (!hasClause(target, V_SgOmpNowaitClause)) {
+    SgExprListExp *barrier_parameters =
+        buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
+    appendStatement(buildFunctionCallStmt("__kmpc_barrier", buildVoidType(),
+                                          barrier_parameters, scope),
+                    bb1);
+  }
   //    removeStatement(target);
 }
 
@@ -5447,39 +6528,68 @@ void transOmpCritical(SgNode *node) {
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
 
-  replaceStatement(target, body, true);
-
   SgExprStatement *func_call_stmt1 = NULL, *func_call_stmt2 = NULL;
   string c_name = target->get_name().getString();
 
-  // assign a default name for the unnamed critical to simplify the translation
-  // GOMP actually have a dedicated function to support unnamed critical
-  // We generate a default name for it and use the named critical support
-  // function instead to be consistent with OMNI
+  // Assign a default lock variable name for unnamed critical directives.
   string g_lock_name = "xomp_critical_user_" + c_name;
   SgGlobal *global = getGlobalScope(target);
   ROSE_ASSERT(global != NULL);
-  // the lock variable may already be declared.
   SgVariableSymbol *sym =
       lookupVariableSymbolInParentScopes(SgName(g_lock_name), global);
   if (sym == NULL) {
-    SgVariableDeclaration *vardecl = buildVariableDeclaration(
-        g_lock_name, buildPointerType(buildVoidType()), NULL, global);
+    SgType *lock_type = NULL;
+    if (SageInterface::is_Fortran_language())
+      lock_type = buildPointerType(buildVoidType());
+    else
+      lock_type = buildArrayType(buildIntType(), buildIntVal(8));
+    SgVariableDeclaration *vardecl =
+        buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
     setStatic(vardecl);
     prependStatement(vardecl, global);
     sym = getFirstVarSym(vardecl);
   }
 
-  SgExprListExp *param1 =
-      buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
-  SgExprListExp *param2 =
-      buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
+  if (SageInterface::is_Fortran_language()) {
+    SgExprListExp *param1 =
+        buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
+    SgExprListExp *param2 =
+        buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
 
-  func_call_stmt1 = buildFunctionCallStmt("XOMP_critical_start",
-                                          buildVoidType(), param1, scope);
-  func_call_stmt2 = buildFunctionCallStmt("XOMP_critical_end", buildVoidType(),
-                                          param2, scope);
+    func_call_stmt1 = buildFunctionCallStmt("XOMP_critical_start",
+                                            buildVoidType(), param1, scope);
+    func_call_stmt2 = buildFunctionCallStmt("XOMP_critical_end",
+                                            buildVoidType(), param2, scope);
+  } else {
+    SgStatement *kmpc_global_tid_init = NULL;
+    SgVariableDeclaration *kmpc_global_tid_declaration =
+        get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
+    SgName tid_name = getFirstVariable(*kmpc_global_tid_declaration).get_name();
 
+    insertStatement(target, kmpc_global_tid_declaration);
+    kmpc_global_tid_declaration->set_parent(target->get_parent());
+    if (kmpc_global_tid_init != NULL)
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+
+    SgExpression *lock_ref1 =
+        buildCastExp(buildVarRefExp(sym), buildPointerType(buildVoidType()),
+                     SgCastExp::e_C_style_cast);
+    SgExpression *lock_ref2 =
+        buildCastExp(buildVarRefExp(sym), buildPointerType(buildVoidType()),
+                     SgCastExp::e_C_style_cast);
+
+    SgExprListExp *param1 = buildExprListExp(
+        buildIntVal(0), buildVarRefExp(tid_name, scope), lock_ref1);
+    SgExprListExp *param2 = buildExprListExp(
+        buildIntVal(0), buildVarRefExp(tid_name, scope), lock_ref2);
+
+    func_call_stmt1 = buildFunctionCallStmt("__kmpc_critical", buildVoidType(),
+                                            param1, scope);
+    func_call_stmt2 = buildFunctionCallStmt("__kmpc_end_critical",
+                                            buildVoidType(), param2, scope);
+  }
+
+  replaceStatement(target, body, true);
   insertStatementBefore(body, func_call_stmt1);
   insertStatementAfter(body, func_call_stmt2);
 }
@@ -5491,8 +6601,32 @@ void transOmpTaskwait(SgNode *node) {
   ROSE_ASSERT(target != NULL);
   SgScopeStatement *scope = target->get_scope();
   ROSE_ASSERT(scope != NULL);
-  SgExprStatement *func_call_stmt =
-      buildFunctionCallStmt("XOMP_taskwait", buildVoidType(), NULL, scope);
+
+  SgStatement *kmpc_global_tid_init = NULL;
+  SgVariableDeclaration *kmpc_global_tid_declaration =
+      get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
+  SgExpression *thread_global_tid = buildVarRefExp(
+      getFirstVariable(*kmpc_global_tid_declaration).get_name(), scope);
+
+  if (SageInterface::is_Fortran_language()) {
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                              scope);
+  } else {
+    insertStatement(target, kmpc_global_tid_declaration);
+    kmpc_global_tid_declaration->set_parent(target->get_parent());
+  }
+
+  if (kmpc_global_tid_init != NULL) {
+    if (SageInterface::is_Fortran_language())
+      insertStatement(target, kmpc_global_tid_init);
+    else
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+  }
+
+  SgExprListExp *parameters =
+      buildExprListExp(buildIntVal(0), thread_global_tid);
+  SgExprStatement *func_call_stmt = buildFunctionCallStmt(
+      "__kmpc_omp_taskwait", buildVoidType(), parameters, scope);
   replaceStatement(target, func_call_stmt, true);
 }
 
@@ -5504,9 +6638,31 @@ void transOmpBarrier(SgNode *node) {
   SgScopeStatement *scope = target->get_scope();
   ROSE_ASSERT(scope != NULL);
 
-  // test new translation targeting a middle layer of runtime library
-  SgExprStatement *func_call_stmt =
-      buildFunctionCallStmt("XOMP_barrier", buildVoidType(), NULL, scope);
+  SgStatement *kmpc_global_tid_init = NULL;
+  SgVariableDeclaration *kmpc_global_tid_declaration =
+      get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
+  SgExpression *thread_global_tid = buildVarRefExp(
+      getFirstVariable(*kmpc_global_tid_declaration).get_name(), scope);
+
+  if (SageInterface::is_Fortran_language()) {
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                              scope);
+  } else {
+    insertStatement(target, kmpc_global_tid_declaration);
+    kmpc_global_tid_declaration->set_parent(target->get_parent());
+  }
+
+  if (kmpc_global_tid_init != NULL) {
+    if (SageInterface::is_Fortran_language())
+      insertStatement(target, kmpc_global_tid_init);
+    else
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+  }
+
+  SgExprListExp *parameters =
+      buildExprListExp(buildIntVal(0), thread_global_tid);
+  SgExprStatement *func_call_stmt = buildFunctionCallStmt(
+      "__kmpc_barrier", buildVoidType(), parameters, scope);
   replaceStatement(target, func_call_stmt, true);
 }
 
@@ -5518,13 +6674,13 @@ void transOmpFlush(SgNode *node) {
   SgScopeStatement *scope = target->get_scope();
   ROSE_ASSERT(scope != NULL);
 
-#ifdef ENABLE_XOMP
-  SgExprStatement *func_call_stmt =
-      buildFunctionCallStmt("XOMP_flush_all", buildVoidType(), NULL, scope);
-#else
-  SgExprStatement *func_call_stmt =
-      buildFunctionCallStmt("__sync_synchronize", buildVoidType(), NULL, scope);
-#endif
+  SgExprStatement *func_call_stmt = NULL;
+  if (SageInterface::is_Fortran_language())
+    func_call_stmt =
+        buildFunctionCallStmt("XOMP_flush_all", buildVoidType(), NULL, scope);
+  else
+    func_call_stmt = buildFunctionCallStmt("__sync_synchronize",
+                                           buildVoidType(), NULL, scope);
   replaceStatement(target, func_call_stmt, true);
 }
 
@@ -5888,13 +7044,35 @@ SgInitializedNamePtrList collectClauseVariables(SgStatement *clause_stmt,
        i++) // can have multiple reduction clauses of different reduction
             // operations
   {
+    SgOmpVariablesClause *vars_clause = isSgOmpVariablesClause(p_clause[i]);
+    if (vars_clause == NULL)
+      continue;
+    SgExprListExp *vars = vars_clause->get_variables();
+    if (vars == NULL)
+      continue;
     // get initialized name from varRefExp
-    SgExpressionPtrList refs =
-        isSgOmpVariablesClause(p_clause[i])->get_variables()->get_expressions();
+    SgExpressionPtrList refs = vars->get_expressions();
+    const VariantT clause_variant = p_clause[i]->variantT();
+    const bool allow_designators = clause_variant == V_SgOmpMapClause ||
+                                   clause_variant == V_SgOmpToClause ||
+                                   clause_variant == V_SgOmpFromClause;
     result2.clear();
-    for (size_t j = 0; j < refs.size(); j++)
-      result2.push_back(
-          isSgVarRefExp(refs[j])->get_symbol()->get_declaration());
+    for (size_t j = 0; j < refs.size(); j++) {
+      SgVariableSymbol *symbol = NULL;
+      if (allow_designators) {
+        symbol = extractClauseVariableSymbol(refs[j]);
+      } else {
+        SgExpression *expr = stripNoopCastsAndParens(refs[j]);
+        SgVarRefExp *var_ref = isSgVarRefExp(expr);
+        if (var_ref != NULL) {
+          symbol = isSgVariableSymbol(var_ref->get_symbol());
+        }
+      }
+      if (symbol == NULL) {
+        continue;
+      }
+      result2.push_back(symbol->get_declaration());
+    }
     std::copy(result2.begin(), result2.end(), back_inserter(result));
   }
   return result;
@@ -5971,9 +7149,13 @@ getReductionOperationType(SgInitializedName *init_name,
         isSgOmpVariablesClause(r_clause)->get_variables()->get_expressions();
     SgInitializedNamePtrList
         var_list; //= isSgOmpVariablesClause(r_clause)->get_variables();
-    for (size_t j = 0; j < refs.size(); j++)
-      var_list.push_back(
-          isSgVarRefExp(refs[j])->get_symbol()->get_declaration());
+    for (size_t j = 0; j < refs.size(); j++) {
+      SgExpression *expr = stripNoopCastsAndParens(refs[j]);
+      SgVarRefExp *var_ref = isSgVarRefExp(expr);
+      if (var_ref == NULL || var_ref->get_symbol() == NULL)
+        continue;
+      var_list.push_back(var_ref->get_symbol()->get_declaration());
+    }
     SgInitializedNamePtrList::const_iterator iter =
         find(var_list.begin(), var_list.end(), init_name);
     if (iter != var_list.end()) {
@@ -6075,6 +7257,18 @@ static void insertOmpLastprivateCopyBackStmts(
     SgBasicBlock *bb1, SgInitializedName *orig_var,
     SgVariableDeclaration *local_decl, SgExpression *orig_loop_upper) {
   SgStatement *save_stmt = NULL;
+  SgExpression *orig_var_exp = buildVarRefExp(orig_var, bb1);
+  if (SgOmpExecStatement *target = isSgOmpExecStatement(ompStmt)) {
+    std::map<SgOmpExecStatement *, std::map<SgInitializedName *, SgExpression *>
+                                       *>::const_iterator map_iter =
+        clause_variable_renaming_record.find(target);
+    if (map_iter != clause_variable_renaming_record.end()) {
+      std::map<SgInitializedName *, SgExpression *>::const_iterator var_iter =
+          map_iter->second->find(orig_var);
+      if (var_iter != map_iter->second->end())
+        orig_var_exp = copyExpression(var_iter->second);
+    }
+  }
   if (isSgOmpForStatement(ompStmt)) {
     ROSE_ASSERT(orig_loop_upper != NULL);
     Rose_STL_Container<SgNode *> loops =
@@ -6125,7 +7319,7 @@ static void insertOmpLastprivateCopyBackStmts(
         buildAndOp(buildNotEqualOp(buildVarRefExp(loop_index, bb1),
                                    copyExpression(loop_lower)),
                    if_cond));
-    SgStatement *true_body = buildAssignStatement(buildVarRefExp(orig_var, bb1),
+    SgStatement *true_body = buildAssignStatement(copyExpression(orig_var_exp),
                                                   buildVarRefExp(local_decl));
     save_stmt = buildIfStmt(if_cond_stmt, true_body, NULL);
   } else if (isSgOmpSectionsStatement(ompStmt)) {
@@ -6152,7 +7346,7 @@ static void insertOmpLastprivateCopyBackStmts(
         buildEqualityOp(buildVarRefExp((switch_index_name + "_save"), bb1),
                         orig_loop_upper); // no need copy orig_loop_upper here
     if_cond_stmt = buildExprStatement(if_cond);
-    SgStatement *true_body = buildAssignStatement(buildVarRefExp(orig_var, bb1),
+    SgStatement *true_body = buildAssignStatement(copyExpression(orig_var_exp),
                                                   buildVarRefExp(local_decl));
     save_stmt = buildIfStmt(if_cond_stmt, true_body, NULL);
   } else {
@@ -6187,34 +7381,46 @@ static void insertOmpReductionCopyBackStmts(
       buildFunctionCallStmt("__kmpc_atomic_start", buildVoidType(), NULL, bb1);
   end_stmt_list.push_back(atomic_start_stmt);
   SgExpression *r_exp = NULL;
-  SgExpression *orig_var_exp = buildVarRefExp(orig_var, bb1);
+  SgExpression *orig_var_exp_template = buildVarRefExp(orig_var, bb1);
   SgOmpExecStatement *target = isSgOmpExecStatement(node);
-  if (clause_variable_renaming_record.count(target))
-    orig_var_exp = clause_variable_renaming_record[target]->at(orig_var);
+  if (clause_variable_renaming_record.count(target)) {
+    std::map<SgInitializedName *, SgExpression *> *name_mapping =
+        clause_variable_renaming_record[target];
+    std::map<SgInitializedName *, SgExpression *>::const_iterator map_iter =
+        name_mapping->find(orig_var);
+    if (map_iter != name_mapping->end())
+      orig_var_exp_template = map_iter->second;
+  }
+
+  // Build distinct trees for assignment lhs and rhs to avoid reusing the same
+  // expression node in two places.
+  SgExpression *orig_var_lhs_exp = copyExpression(orig_var_exp_template);
+  SgExpression *orig_var_rhs_exp = copyExpression(orig_var_exp_template);
+
   switch (r_operator) {
   case SgOmpClause::e_omp_reduction_plus:
-    r_exp = buildAddOp(orig_var_exp, buildVarRefExp(local_decl));
+    r_exp = buildAddOp(orig_var_rhs_exp, buildVarRefExp(local_decl));
     break;
   case SgOmpClause::e_omp_reduction_mul:
-    r_exp = buildMultiplyOp(orig_var_exp, buildVarRefExp(local_decl));
+    r_exp = buildMultiplyOp(orig_var_rhs_exp, buildVarRefExp(local_decl));
     break;
   case SgOmpClause::e_omp_reduction_minus:
-    r_exp = buildSubtractOp(orig_var_exp, buildVarRefExp(local_decl));
+    r_exp = buildSubtractOp(orig_var_rhs_exp, buildVarRefExp(local_decl));
     break;
   case SgOmpClause::e_omp_reduction_bitand:
-    r_exp = buildBitAndOp(orig_var_exp, buildVarRefExp(local_decl));
+    r_exp = buildBitAndOp(orig_var_rhs_exp, buildVarRefExp(local_decl));
     break;
   case SgOmpClause::e_omp_reduction_bitor:
-    r_exp = buildBitOrOp(orig_var_exp, buildVarRefExp(local_decl));
+    r_exp = buildBitOrOp(orig_var_rhs_exp, buildVarRefExp(local_decl));
     break;
   case SgOmpClause::e_omp_reduction_bitxor:
-    r_exp = buildBitXorOp(orig_var_exp, buildVarRefExp(local_decl));
+    r_exp = buildBitXorOp(orig_var_rhs_exp, buildVarRefExp(local_decl));
     break;
   case SgOmpClause::e_omp_reduction_logand:
-    r_exp = buildAndOp(orig_var_exp, buildVarRefExp(local_decl));
+    r_exp = buildAndOp(orig_var_rhs_exp, buildVarRefExp(local_decl));
     break;
   case SgOmpClause::e_omp_reduction_logor:
-    r_exp = buildOrOp(orig_var_exp, buildVarRefExp(local_decl));
+    r_exp = buildOrOp(orig_var_rhs_exp, buildVarRefExp(local_decl));
     break;
     // TODO Fortran operators.
   case SgOmpClause::e_omp_reduction_and: // Fortran .and.
@@ -6232,7 +7438,7 @@ static void insertOmpReductionCopyBackStmts(
     cerr << "Illegal or unhandled reduction operator type:" << r_operator
          << endl;
   }
-  SgStatement *reduction_stmt = buildAssignStatement(orig_var_exp, r_exp);
+  SgStatement *reduction_stmt = buildAssignStatement(orig_var_lhs_exp, r_exp);
   end_stmt_list.push_back(reduction_stmt);
   SgExprStatement *atomic_end_stmt =
       buildFunctionCallStmt("__kmpc_atomic_end", buildVoidType(), NULL, bb1);
@@ -6510,6 +7716,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
   var_list.erase(new_end, var_list.end());
   VariableSymbolMap_t var_map;
   ASTtools::VarSymSet_t var_set;
+  std::set<SgVariableSymbol *> scalar_locals_from_pointer_symbols;
 
   vector<SgStatement *> front_stmt_list, end_stmt_list, front_init_list;
 
@@ -6517,14 +7724,62 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
   // should move this to the correct caller place
   //      per_block_declarations.clear(); // must reset to empty or wrong
   //      reference to stale content generated previously
+  std::map<std::string, SgVariableSymbol *> visible_symbols_by_name;
+  if (const SgFunctionDeclaration *enclosing_decl =
+          getEnclosingFunctionDeclaration(bb1)) {
+    ASTtools::VarSymSet_t visible_syms;
+    ASTtools::collectLocalVisibleVarSyms(enclosing_decl, bb1, visible_syms);
+    for (ASTtools::VarSymSet_t::const_iterator i = visible_syms.begin();
+         i != visible_syms.end(); ++i) {
+      const SgVariableSymbol *sym = *i;
+      if (sym == NULL)
+        continue;
+      const std::string name = sym->get_name().getString();
+      if (visible_symbols_by_name.count(name) == 0)
+        visible_symbols_by_name[name] = const_cast<SgVariableSymbol *>(sym);
+    }
+  }
+
   for (size_t i = 0; i < var_list.size(); i++) {
     SgInitializedName *orig_var = var_list[i];
     ROSE_ASSERT(orig_var != NULL);
+    SgVariableSymbol *visible_symbol =
+        lookupVariableSymbolInParentScopes(orig_var->get_name(), bb1);
+    if (visible_symbol == NULL) {
+      std::map<std::string, SgVariableSymbol *>::const_iterator visible_it =
+          visible_symbols_by_name.find(orig_var->get_name().getString());
+      if (visible_it != visible_symbols_by_name.end())
+        visible_symbol = visible_it->second;
+    }
     string orig_name = orig_var->get_name().getString();
-    SgType *orig_type = orig_var->get_type();
     SgVariableSymbol *orig_symbol =
         isSgVariableSymbol(orig_var->get_symbol_from_symbol_table());
+    if (orig_symbol == NULL) {
+      SgScopeStatement *decl_scope = orig_var->get_scope();
+      if (decl_scope != NULL)
+        orig_symbol = decl_scope->lookup_var_symbol(orig_var->get_name());
+    }
+    if (orig_symbol == NULL && visible_symbol != NULL)
+      orig_symbol = visible_symbol;
     ROSE_ASSERT(orig_symbol != NULL);
+    SgVariableSymbol *active_symbol =
+        visible_symbol != NULL ? visible_symbol : orig_symbol;
+    ROSE_ASSERT(active_symbol != NULL);
+    SgType *orig_type = orig_var->get_type();
+    SgExpression *orig_var_exp = buildVarRefExp(active_symbol);
+    if (SgOmpExecStatement *target = isSgOmpExecStatement(clause_stmt)) {
+      std::map<SgOmpExecStatement *,
+               std::map<SgInitializedName *, SgExpression *> *>::const_iterator
+          map_iter = clause_variable_renaming_record.find(target);
+      if (map_iter != clause_variable_renaming_record.end() &&
+          map_iter->second != NULL) {
+        std::map<SgInitializedName *, SgExpression *>::const_iterator var_iter =
+            map_iter->second->find(orig_var);
+        if (var_iter != map_iter->second->end()) {
+          orig_var_exp = copyExpression(var_iter->second);
+        }
+      }
+    }
 
     VariantVector vvt(V_SgOmpPrivateClause);
     vvt.push_back(V_SgOmpReductionClause);
@@ -6568,8 +7823,17 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
     //   (*M)[0][0] = 4;
     // }
     if (isInClauseVariableList(orig_var, clause_stmt, vvt)) {
-      if (!(isSgArrayType(orig_type) &&
-            isSgFunctionDefinition(orig_var->get_scope()))) {
+      SgType *effective_type = orig_type;
+      if (SgReferenceType *ref_type = isSgReferenceType(orig_type))
+        effective_type = ref_type->get_base_type();
+
+      const bool is_function_scope_array =
+          isSgArrayType(effective_type) &&
+          isSgFunctionDefinition(orig_var->get_scope());
+      const bool is_firstprivate = isInClauseVariableList(
+          orig_var, clause_stmt, V_SgOmpFirstprivateClause);
+
+      if (!is_function_scope_array) {
         SgInitializer *init = NULL;
         // use copy constructor for firstprivate on C++ class object variables
         // For simplicity, we handle C and C++ scalar variables the same way
@@ -6577,10 +7841,25 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
         // But here is one exception: an array type firstprivate variable should
         // be initialized element-by-element
         // Liao, 4/12/2010
-        if (isInClauseVariableList(orig_var, clause_stmt,
-                                   V_SgOmpFirstprivateClause) &&
-            !isSgArrayType(orig_type)) {
-          init = buildAssignInitializer(buildVarRefExp(orig_var, bb1));
+        if (is_firstprivate && !isSgArrayType(effective_type)) {
+          // Nested task outlining can leave firstprivate clause variables bound
+          // to stale declaration types while body references use the visible
+          // in-scope symbol. Keep the local firstprivate declaration type and
+          // initializer consistent with the active symbol in this specific
+          // situation.
+          if (isSgOmpTaskStatement(clause_stmt) != NULL &&
+              stripTypeAliases(active_symbol->get_type()) !=
+                  stripTypeAliases(effective_type)) {
+            SgExpression *active_value = nullptr;
+            if (buildExpressionMatchingTypeFromActiveSymbol(
+                    active_symbol, effective_type, active_value)) {
+              init = buildAssignInitializer(active_value);
+            } else {
+              init = buildAssignInitializer(copyExpression(orig_var_exp));
+            }
+          } else {
+            init = buildAssignInitializer(copyExpression(orig_var_exp));
+          }
         }
 
         string private_name;
@@ -6596,19 +7875,57 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
               private_name + "_" + StringUtility::numberToString(nCounter);
 
           // Special handling for variable declarations in Fortran
-          local_decl = buildAndInsertDeclarationForOmp(private_name, orig_type,
-                                                       init, bb1);
+          local_decl = buildAndInsertDeclarationForOmp(
+              private_name, effective_type, init, bb1);
         } else {
           private_name = "_p_" + orig_name;
           local_decl =
-              buildVariableDeclaration(private_name, orig_type, init, bb1);
+              buildVariableDeclaration(private_name, effective_type, init, bb1);
           front_stmt_list.push_back(local_decl);
         }
         // record the map from old to new symbol
-        var_map.insert(VariableSymbolMap_t::value_type(
-            orig_symbol, getFirstVarSym(local_decl)));
+        SgVariableSymbol *local_symbol = getFirstVarSym(local_decl);
+        ROSE_ASSERT(local_symbol != NULL);
+        var_map.insert(
+            VariableSymbolMap_t::value_type(active_symbol, local_symbol));
+        if (orig_symbol != NULL && orig_symbol != active_symbol)
+          var_map.insert(
+              VariableSymbolMap_t::value_type(orig_symbol, local_symbol));
+        if (isPointerBackedType(active_symbol->get_type()) &&
+            isSgPointerType(stripTypeAliases(local_symbol->get_type())) ==
+                NULL) {
+          scalar_locals_from_pointer_symbols.insert(local_symbol);
+        }
+      } else if (is_firstprivate && !SageInterface::is_Fortran_language()) {
+        // C/C++ function parameters declared as arrays decay to pointers. For
+        // firstprivate, create a local pointer copy instead of rewriting uses
+        // with an extra dereference, which can create invalid forms such as
+        // *(*M) or *(*v2) after outlining.
+        SgArrayType *array_type = isSgArrayType(effective_type);
+        ROSE_ASSERT(array_type != NULL);
+        SgType *local_type = buildPointerType(array_type->get_base_type());
+        SgInitializer *init =
+            buildAssignInitializer(copyExpression(orig_var_exp));
+        string private_name = "_p_" + orig_name;
+        local_decl =
+            buildVariableDeclaration(private_name, local_type, init, bb1);
+        front_stmt_list.push_back(local_decl);
+        SgVariableSymbol *local_symbol = getFirstVarSym(local_decl);
+        ROSE_ASSERT(local_symbol != NULL);
+        var_map.insert(
+            VariableSymbolMap_t::value_type(active_symbol, local_symbol));
+        if (orig_symbol != NULL && orig_symbol != active_symbol)
+          var_map.insert(
+              VariableSymbolMap_t::value_type(orig_symbol, local_symbol));
+        if (isPointerBackedType(active_symbol->get_type()) &&
+            isSgPointerType(stripTypeAliases(local_symbol->get_type())) ==
+                NULL) {
+          scalar_locals_from_pointer_symbols.insert(local_symbol);
+        }
       } else {
-        var_set.insert(orig_symbol);
+        var_set.insert(active_symbol);
+        if (orig_symbol != NULL && orig_symbol != active_symbol)
+          var_set.insert(orig_symbol);
       }
     }
     // step 2. Initialize the local copy for array-type firstprivate variables
@@ -6710,6 +8027,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
   replaceVariablesWithPointerDereference(
       bb1,
       var_set); // Variables that must be replaced by a pointer to the variable
+  normalizeScalarLocalDerefUses(bb1, scalar_locals_from_pointer_symbols);
 
   // We delay the insertion of declaration, initialization , and save-back
   // statements until variable replacement is done in order to avoid replacing
@@ -6735,6 +8053,8 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
       case V_SgVariableDeclaration: {
         // Reset the scopes on any SgInitializedName objects.
         SgVariableDeclaration *varDecl = isSgVariableDeclaration(declaration);
+        bool is_extern_decl =
+            varDecl->get_declarationModifier().get_storageModifier().isExtern();
         SgInitializedNamePtrList &l = varDecl->get_variables();
         for (SgInitializedNamePtrList::iterator i = l.begin(); i != l.end();
              i++) {
@@ -6742,6 +8062,9 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
           // scope in a separate namespace of a static class member defined
           // external to its class, etc. I don't want to worry about those cases
           // right now.
+          if (!is_extern_decl && (*i)->get_scope() != bb1) {
+            (*i)->set_scope(bb1);
+          }
           ROSE_ASSERT((*i)->get_scope() == bb1);
         }
         break;
@@ -6770,22 +8093,49 @@ void transOmpMaster(SgNode *node) {
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
 
-#ifdef ENABLE_XOMP
-  SgFunctionCallExp *func_call =
-      buildFunctionCallExp("XOMP_master", buildIntType(), NULL, scope);
   SgIfStmt *if_stmt = NULL;
-  if (SageInterface::is_Fortran_language())
-    if_stmt =
-        buildIfStmt(buildEqualityOp(func_call, buildIntVal(1)), body, NULL);
-  else
-    if_stmt = buildIfStmt(func_call, body, NULL);
-#else
+  SgStatement *kmpc_global_tid_init = NULL;
+  SgVariableDeclaration *kmpc_global_tid_declaration =
+      get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
+  SgName tid_name = getFirstVariable(*kmpc_global_tid_declaration).get_name();
+
+  if (SageInterface::is_Fortran_language()) {
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+    ROSE_ASSERT(func_def != NULL);
+    ensure_fortran_variable_declaration(
+        func_def->get_body(), SgName("__kmpc_master"), buildIntType());
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                              scope);
+  } else {
+    insertStatement(target, kmpc_global_tid_declaration);
+    kmpc_global_tid_declaration->set_parent(target->get_parent());
+  }
+
+  if (kmpc_global_tid_init != NULL) {
+    if (SageInterface::is_Fortran_language())
+      insertStatement(target, kmpc_global_tid_init);
+    else
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+  }
+
+  SgExprListExp *parameters =
+      buildExprListExp(buildIntVal(0), buildVarRefExp(tid_name, scope));
   SgExpression *func_exp =
-      buildFunctionCallExp("omp_get_thread_num", buildIntType(), NULL, scope);
-  SgIfStmt *if_stmt =
-      buildIfStmt(buildEqualityOp(func_exp, buildIntVal(0)), body, NULL);
-#endif
+      buildFunctionCallExp("__kmpc_master", buildIntType(), parameters, scope);
+  if (SageInterface::is_Fortran_language()) {
+    if_stmt =
+        buildIfStmt(buildEqualityOp(func_exp, buildIntVal(1)), body, NULL);
+  } else {
+    if_stmt = buildIfStmt(func_exp, body, NULL);
+  }
+
   replaceStatement(target, if_stmt, true);
+  SgExprListExp *end_parameters =
+      buildExprListExp(buildIntVal(0), buildVarRefExp(tid_name, scope));
+  SgExprStatement *end_master_call = buildFunctionCallStmt(
+      "__kmpc_end_master", buildVoidType(), end_parameters, scope);
+  SgBasicBlock *true_body = ensureBasicBlockAsTrueBodyOfIf(if_stmt);
+  appendStatement(end_master_call, true_body);
   moveUpPreprocessingInfo(if_stmt, target, PreprocessingInfo::before);
   if (isLast) // the preprocessing info after the last statement may be attached
               // to the inside of its parent scope
@@ -6822,42 +8172,59 @@ void transOmpSingle(SgNode *node) {
 
   SgIfStmt *if_stmt = NULL;
 
-  SgExprListExp *parameters = NULL;
+  SgStatement *kmpc_global_tid_init = NULL;
   SgVariableDeclaration *kmpc_global_tid_declaration =
-      get_kmpc_global_tid(node, scope);
+      get_kmpc_global_tid(node, scope, &kmpc_global_tid_init);
   SgExpression *thread_global_tid = buildVarRefExp(
       getFirstVariable(*kmpc_global_tid_declaration).get_name(), scope);
-  insertStatement(target, kmpc_global_tid_declaration);
-  kmpc_global_tid_declaration->set_parent(target->get_parent());
-  parameters = buildExprListExp(buildIntVal(0), thread_global_tid);
+  if (SageInterface::is_Fortran_language()) {
+    insert_fortran_declaration_into_procedure(kmpc_global_tid_declaration,
+                                              scope);
+  } else {
+    insertStatement(target, kmpc_global_tid_declaration);
+    kmpc_global_tid_declaration->set_parent(target->get_parent());
+  }
+  if (kmpc_global_tid_init != NULL) {
+    if (SageInterface::is_Fortran_language())
+      insertStatement(target, kmpc_global_tid_init);
+    else
+      insertStatementAfter(kmpc_global_tid_declaration, kmpc_global_tid_init);
+  }
+  SgExprListExp *single_parameters =
+      buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
 
   if (SageInterface::is_Fortran_language()) {
-    SgExpression *func_exp =
-        buildFunctionCallExp("XOMP_single", buildIntType(), NULL, scope);
-
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+    ROSE_ASSERT(func_def != NULL);
+    ensure_fortran_variable_declaration(
+        func_def->get_body(), SgName("__kmpc_single"), buildIntType());
+    SgExpression *func_exp = buildFunctionCallExp(
+        "__kmpc_single", buildIntType(), single_parameters, scope);
     if_stmt =
         buildIfStmt(buildEqualityOp(func_exp, buildIntVal(1)), body, NULL);
   } else // C/C++
   {
     SgExpression *func_exp = buildFunctionCallExp(
-        "__kmpc_single", buildBoolType(), parameters, scope);
+        "__kmpc_single", buildBoolType(), single_parameters, scope);
     if_stmt = buildIfStmt(func_exp, body, NULL);
   }
 
   replaceStatement(target, if_stmt, true);
   SgBasicBlock *true_body = ensureBasicBlockAsTrueBodyOfIf(if_stmt);
-  if (SageInterface::is_Fortran_language())
-    insert_libxompf_h(if_stmt); // need prototype for xomp runtime function
   transOmpVariables(target, true_body);
 
+  SgExprListExp *end_single_parameters =
+      buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
   SgExprStatement *end_single_call = buildFunctionCallStmt(
-      "__kmpc_end_single", buildVoidType(), parameters, scope);
+      "__kmpc_end_single", buildVoidType(), end_single_parameters, scope);
   insertStatementAfter(body, end_single_call);
 
   // handle nowait
   if (!hasClause(target, V_SgOmpNowaitClause)) {
+    SgExprListExp *barrier_parameters =
+        buildExprListExp(buildIntVal(0), copyExpression(thread_global_tid));
     SgExprStatement *barrier_call = buildFunctionCallStmt(
-        "__kmpc_barrier", buildVoidType(), parameters, scope);
+        "__kmpc_barrier", buildVoidType(), barrier_parameters, scope);
     insertStatementAfter(if_stmt, barrier_call);
   }
 }
@@ -6983,8 +8350,9 @@ int patchUpPrivateVariables(SgStatement *omp_loop) {
     for_node = isSgOmpClauseBodyStatement(omp_loop);
     break;
   default:
-    std::cout << "Unexpected statement: " << omp_loop->sage_class_name()
-              << "\n";
+    MLOG_ERROR_CXX("ompLowering")
+        << "Unexpected statement kind in patchUpPrivateVariables(): "
+        << omp_loop->sage_class_name();
     ROSE_ABORT();
   }
 
@@ -7032,9 +8400,22 @@ int patchUpPrivateVariables(SgStatement *omp_loop) {
       default:
         ROSE_ABORT();
       }
-      isPrivateInRegion = isInClauseVariableList(
-          index_var, isSgOmpClauseBodyStatement(omp_stmt),
-          V_SgOmpPrivateClause);
+      // Orphaned omp do/for constructs can be outside an explicit enclosing
+      // parallel clause body in the local AST context.
+      if (omp_stmt != NULL) {
+        isPrivateInRegion = isInClauseVariableList(
+            index_var, isSgOmpClauseBodyStatement(omp_stmt),
+            V_SgOmpPrivateClause);
+      }
+      // Keep enclosing parallel region consistent with worksharing default
+      // loop-index privatization so outlining does not treat loop indices as
+      // shared parameters.
+      if (omp_stmt != NULL && !isPrivateInRegion) {
+        addClauseVariable(index_var, isSgOmpClauseBodyStatement(omp_stmt),
+                          V_SgOmpPrivateClause);
+        isPrivateInRegion = true;
+        result++;
+      }
       // add it into the private variable list only if it is not specified as
       // private in both the loop and region levels.
       if (!isPrivateInRegion &&
@@ -7082,6 +8463,11 @@ void transOmpCollapse(SgStatement *node) {
 
   if (for_loop == NULL)
     return;
+
+  // Keep collapse normalization/canonical checks working in target outlined
+  // kernels where induction variables can be represented as pointer
+  // dereferences.
+  rewritePointerBasedForIndices(for_loop);
 
   ROSE_ASSERT(getScope(for_loop)->get_parent()->get_parent() != NULL);
 
@@ -7145,6 +8531,9 @@ void transOmpCollapse(SgStatement *node) {
         SgOmpClause::omp_map_operator_enum map_operator =
             temp_map_clause->get_operation();
         if (map_operator == SgOmpClause::e_omp_map_to ||
+            map_operator == SgOmpClause::e_omp_map_present ||
+            map_operator == SgOmpClause::e_omp_map_self ||
+            map_operator == SgOmpClause::e_omp_map_unknown ||
             map_operator == SgOmpClause::e_omp_map_tofrom) {
           map_to = temp_map_clause;
           break;
@@ -7202,6 +8591,10 @@ bool isInOmpTargetOffloadingFunc(SgNode *node) {
 //                SgOmpParallelStatement
 void lower_omp(SgSourceFile *file) {
   ROSE_ASSERT(file != NULL);
+  bool saved_case_insensitive =
+      SageBuilder::symbol_table_case_insensitive_semantics;
+  if (file->get_Fortran_only())
+    SageBuilder::symbol_table_case_insensitive_semantics = true;
 
   // Liao 12/2/2010, Fortran does not require function prototypes
   if (!SageInterface::is_Fortran_language())
@@ -7249,7 +8642,9 @@ void lower_omp(SgSourceFile *file) {
       bool isVariant = isSgOmpWhenClause(node->get_parent()) ||
                        isSgOmpDefaultClause(node->get_parent());
       if (isVariant) {
-        std::cout << "It is a variant, which should have been transformed.\n";
+        MLOG_ERROR_CXX("ompLowering")
+            << "Unexpected variant node in lowering pipeline; expected prior "
+            << "metadirective transformation";
         ROSE_ABORT();
       }
 
@@ -7416,16 +8811,31 @@ void lower_omp(SgSourceFile *file) {
           break;
         }
         default: {
-          std::cout << "Unexpected OpenMP construct: "
-                    << node->sage_class_name() << "\n";
+          MLOG_ERROR_CXX("ompLowering")
+              << "Unexpected OpenMP construct in lowering pass: "
+              << node->sage_class_name();
           ROSE_ABORT();
         }
         } // switch
     }
   } while (omp_nodes.size() != 0);
 
+  if (file->get_Fortran_only()) {
+    normalize_fortran_if_statements(file);
+    Rose_STL_Container<SgNode *> scopes =
+        NodeQuery::querySubTree(file, V_SgScopeStatement);
+    for (Rose_STL_Container<SgNode *>::const_iterator it = scopes.begin();
+         it != scopes.end(); ++it) {
+      SgScopeStatement *scope = isSgScopeStatement(*it);
+      ROSE_ASSERT(scope != NULL);
+      if (!scope->isCaseInsensitive() && scope->symbol_table_size() == 0)
+        scope->setCaseInsensitive(true);
+    }
+  }
+
   // post processing
   post_processing(file);
+  SageBuilder::symbol_table_case_insensitive_semantics = saved_case_insensitive;
 }
 
 } // namespace OmpSupport
@@ -7435,14 +8845,35 @@ void lower_omp(SgSourceFile *file) {
 // each OpenMP statement has such an id with unique name
 // "__global_tid_<enclosing function name>_<original statement line number>_<tid
 // index>"
+static std::string sanitize_identifier_component(const std::string &name) {
+  std::string result;
+  result.reserve(name.size());
+  for (char c : name) {
+    unsigned char uc = static_cast<unsigned char>(c);
+    if (std::isalnum(uc) || c == '_')
+      result.push_back(c);
+    else
+      result.push_back('_');
+  }
+
+  if (result.empty())
+    return std::string("scope");
+
+  if (std::isdigit(static_cast<unsigned char>(result[0])))
+    result.insert(result.begin(), '_');
+
+  return result;
+}
+
 static SgVariableDeclaration *get_kmpc_global_tid(SgNode *target,
-                                                  SgScopeStatement *scope) {
+                                                  SgScopeStatement *scope,
+                                                  SgStatement **init_stmt) {
 
   const Sg_File_Info *info = target->get_startOfConstruct();
   SgFunctionDeclaration *enclosing_function =
       getEnclosingFunctionDeclaration(target);
   std::string enclosing_function_name =
-      enclosing_function->get_name().getString();
+      sanitize_identifier_component(enclosing_function->get_name().getString());
   std::stringstream statement_line_number;
   statement_line_number << info->get_line();
   std::stringstream kmpc_global_tid_number;
@@ -7451,15 +8882,179 @@ static SgVariableDeclaration *get_kmpc_global_tid(SgNode *target,
   std::string kmpc_tid_name = "__global_tid_" + enclosing_function_name + "_" +
                               statement_line_number.str() + "_" +
                               kmpc_global_tid_number.str();
+  if (SageInterface::is_Fortran_language()) {
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+    ROSE_ASSERT(func_def != NULL);
+    ensure_fortran_variable_declaration(func_def->get_body(),
+                                        SgName("__kmpc_global_thread_num"),
+                                        buildIntType());
+  }
   SgExprStatement *global_tid_statement =
       buildFunctionCallStmt("__kmpc_global_thread_num", buildIntType(),
                             buildExprListExp(buildIntVal(0)), scope);
   SgExpression *get_thread_global_tid = global_tid_statement->get_expression();
-  SgVariableDeclaration *kmpc_tid_declaration = buildVariableDeclaration(
-      SgName(kmpc_tid_name), buildIntType(),
-      buildAssignInitializer(get_thread_global_tid), scope);
+  SgVariableDeclaration *kmpc_tid_declaration = NULL;
+  if (SageInterface::is_Fortran_language()) {
+    kmpc_tid_declaration = buildVariableDeclaration(
+        SgName(kmpc_tid_name), buildIntType(), NULL, scope);
+    if (init_stmt != NULL)
+      *init_stmt = buildAssignStatement(
+          buildVarRefExp(getFirstVariable(*kmpc_tid_declaration).get_name(),
+                         scope),
+          copyExpression(get_thread_global_tid));
+  } else {
+    kmpc_tid_declaration = buildVariableDeclaration(
+        SgName(kmpc_tid_name), buildIntType(),
+        buildAssignInitializer(get_thread_global_tid), scope);
+    if (init_stmt != NULL)
+      *init_stmt = NULL;
+  }
 
   return kmpc_tid_declaration;
+}
+
+static bool has_fortran_variable_declaration(SgBasicBlock *body,
+                                             const SgName &name) {
+  ROSE_ASSERT(body != NULL);
+  const SgStatementPtrList &stmts = body->get_statements();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgVariableDeclaration *decl = isSgVariableDeclaration(*it);
+    if (decl == NULL)
+      continue;
+    const SgInitializedNamePtrList &vars = decl->get_variables();
+    for (SgInitializedNamePtrList::const_iterator vit = vars.begin();
+         vit != vars.end(); ++vit) {
+      if ((*vit)->get_name() == name)
+        return true;
+    }
+  }
+  return false;
+}
+
+static SgProcedureHeaderStatement *
+find_fortran_procedure_declaration(SgBasicBlock *body, const SgName &name) {
+  ROSE_ASSERT(body != NULL);
+  const SgStatementPtrList &stmts = body->get_statements();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgProcedureHeaderStatement *proc = isSgProcedureHeaderStatement(*it);
+    if (proc != NULL && proc->get_name() == name)
+      return proc;
+  }
+  return NULL;
+}
+
+static void ensure_fortran_variable_declaration(SgBasicBlock *body,
+                                                const SgName &name,
+                                                SgType *type) {
+  ROSE_ASSERT(body != NULL);
+  ROSE_ASSERT(type != NULL);
+  if (has_fortran_variable_declaration(body, name))
+    return;
+
+  SgProcedureHeaderStatement *proc =
+      find_fortran_procedure_declaration(body, name);
+  if (proc != NULL) {
+    if (proc->get_subprogram_kind() ==
+        SgProcedureHeaderStatement::e_function_subprogram_kind)
+      return;
+
+    fprintf(stderr,
+            "REX OpenMP lowering: conflicting Fortran declaration for '%s' "
+            "(existing subroutine declaration)\n",
+            name.getString().c_str());
+    ROSE_ABORT();
+  }
+
+  SgVariableDeclaration *decl =
+      buildVariableDeclaration(name, type, NULL, body);
+  SgStatement *last_decl = findLastDeclarationStatement(body);
+  if (last_decl != NULL)
+    insertStatementAfter(last_decl, decl);
+  else
+    prependStatement(decl, body);
+}
+
+static void
+insert_fortran_declaration_into_procedure(SgVariableDeclaration *decl,
+                                          SgScopeStatement *scope) {
+  ROSE_ASSERT(decl != NULL);
+  ROSE_ASSERT(scope != NULL);
+  SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+  ROSE_ASSERT(func_def != NULL);
+  SgBasicBlock *func_body = func_def->get_body();
+  ROSE_ASSERT(func_body != NULL);
+
+  SgStatement *last_decl = findLastDeclarationStatement(func_body);
+  if (last_decl != NULL)
+    insertStatementAfter(last_decl, decl);
+  else
+    prependStatement(decl, func_body);
+}
+
+static void
+normalize_fortran_external_subroutine_declarations(SgBasicBlock *body) {
+  ROSE_ASSERT(body != NULL);
+  std::vector<SgProcedureHeaderStatement *> declarations;
+  const SgStatementPtrList &stmts = body->get_statements();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgProcedureHeaderStatement *proc = isSgProcedureHeaderStatement(*it);
+    if (proc == NULL)
+      continue;
+    if (proc->get_definition() != NULL)
+      continue;
+    if (proc->get_subprogram_kind() !=
+        SgProcedureHeaderStatement::e_subroutine_subprogram_kind)
+      continue;
+    declarations.push_back(proc);
+  }
+
+  for (std::vector<SgProcedureHeaderStatement *>::const_iterator it =
+           declarations.begin();
+       it != declarations.end(); ++it) {
+    SgProcedureHeaderStatement *proc = *it;
+    // These nondefining subroutine declarations are outlining artifacts.
+    // Keeping them changes procedure binding semantics (e.g., forcing CALL
+    // abort to resolve as abort_) and can also emit invalid declaration forms
+    // in fixed-form Fortran. Drop them and preserve the original unit's
+    // implicit procedure resolution.
+    SageInterface::removeStatement(proc, true);
+  }
+}
+
+static void normalize_fortran_if_statements(SgSourceFile *file) {
+  ROSE_ASSERT(file != NULL);
+  Rose_STL_Container<SgNode *> if_nodes =
+      NodeQuery::querySubTree(file, V_SgIfStmt);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = if_nodes.begin();
+       it != if_nodes.end(); ++it) {
+    SgIfStmt *if_stmt = isSgIfStmt(*it);
+    ROSE_ASSERT(if_stmt != NULL);
+
+    SgStatement *true_body = if_stmt->get_true_body();
+    ROSE_ASSERT(true_body != NULL);
+    if (!isSgBasicBlock(true_body)) {
+      SgBasicBlock *wrapped_true = buildBasicBlock();
+      appendStatement(true_body, wrapped_true);
+      if_stmt->set_true_body(wrapped_true);
+      wrapped_true->set_parent(if_stmt);
+    }
+
+    SgStatement *false_body = if_stmt->get_false_body();
+    if (false_body != NULL && !isSgBasicBlock(false_body) &&
+        !isSgIfStmt(false_body)) {
+      SgBasicBlock *wrapped_false = buildBasicBlock();
+      appendStatement(false_body, wrapped_false);
+      if_stmt->set_false_body(wrapped_false);
+      wrapped_false->set_parent(if_stmt);
+    }
+
+    if_stmt->set_use_then_keyword(true);
+    if (!isSgIfStmt(if_stmt->get_false_body()))
+      if_stmt->set_has_end_statement(true);
+  }
 }
 
 // insert a parameter to the outlined function
@@ -7472,13 +9067,9 @@ static void insert_function_parameter(std::string name, SgType *parameter_type,
   // prepare the parameter
   SgName parameter_name(name);
   SgFunctionParameterList *params = function->get_parameterList();
-  SgFunctionDefinition *function_definition = function->get_definition();
   SgInitializedName *parameter =
-      new SgInitializedName(NULL, parameter_name, parameter_type, 0, function,
-                            function_definition, 0);
+      SageBuilder::buildInitializedName(parameter_name, parameter_type);
   setOneSourcePositionForTransformation(parameter);
-  SgVariableSymbol *parameter_symbol = new SgVariableSymbol(parameter);
-  function_definition->insert_symbol(parameter_name, parameter_symbol);
 
   // insert the parameter at the end or the beginning
   if (to_append) {
@@ -7486,6 +9077,13 @@ static void insert_function_parameter(std::string name, SgType *parameter_type,
   } else {
     prependArg(params, parameter);
   };
+
+  if (SageInterface::is_Fortran_language()) {
+    SgFunctionDefinition *func_def = function->get_definition();
+    ROSE_ASSERT(func_def != NULL);
+    ensure_fortran_variable_declaration(func_def->get_body(), parameter_name,
+                                        parameter_type);
+  }
 
   // update the function metadata
   SgType *stale_func_type = function->get_type();
@@ -7531,10 +9129,8 @@ move_outlined_function(SgFunctionDeclaration *outlined_func,
   extern_header->get_declarationModifier().get_storageModifier().setExtern();
 
   // remove the outlined function in the original file and perform post
-  // processing in the new file
+  // processing later once the outlined-file transformations are complete
   removeStatement(outlined_func);
-
-  AstPostProcessing(new_file);
   return new_outlined_function;
 }
 
@@ -7564,6 +9160,9 @@ generate_outlined_function_file(SgFunctionDeclaration *outlined_func,
       "rex_lib_" + original_file_name + "." + file_extension;
   new_file->get_file_info()->set_filenameString(new_file_name);
   new_file->set_unparse_output_filename(new_file_name);
+  // Outlined files are synthesized/renamed after parsing, so token-stream
+  // mappings from the original source are not valid for them.
+  new_file->set_unparse_tokens(false);
 
   // insert REX runtime header to the new file (C/C++ only)
   SgGlobal *new_scope = new_file->get_globalScope();
@@ -7584,7 +9183,6 @@ generate_outlined_function_file(SgFunctionDeclaration *outlined_func,
   }
 
   fix_storage_modifier(new_file);
-  AstPostProcessing(new_file);
 
   return new_file;
 }
@@ -7668,11 +9266,16 @@ static void post_processing(SgSourceFile *file) {
   };
 
   if (!file->get_Fortran_only()) {
-    SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::before, false,
-                                g_scope);
+    // Insert host runtime header through the global-scope overload.  The
+    // source-file overload can hit null preprocessing attributes on files with
+    // sparse/conditional header structure.
+    SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::after,
+                                /*isSystemHeader=*/false, g_scope);
   }
   if (new_file != NULL) {
+    removeUnbalancedConditionalDirectives(new_file);
     AstPostProcessing(new_file);
   };
+  removeUnbalancedConditionalDirectives(file);
   AstPostProcessing(file);
 };

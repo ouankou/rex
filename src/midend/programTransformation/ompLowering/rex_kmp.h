@@ -1,6 +1,11 @@
+#ifndef REX_KMP_H
+#define REX_KMP_H
+
 #include <stddef.h>
 
 #include <stdint.h>
+
+#include "libxomp.h"
 
 typedef struct ident {
   int reserved_1;
@@ -39,21 +44,36 @@ struct __tgt_bin_desc {
 extern "C" {
 #endif
 
-void __kmpc_fork_call(ident_t *, int, void *, ...);
+typedef void (*kmpc_micro_t)(int *, int *, ...);
+void __kmpc_fork_call(ident_t *, int, kmpc_micro_t, ...);
 void __kmpc_atomic_start(void);
 void __kmpc_atomic_end(void);
 void __kmpc_push_num_threads(ident_t *, int, int);
 int __kmpc_global_thread_num(ident_t *);
 int __kmpc_single(ident_t *, int);
 void __kmpc_end_single(ident_t *, int);
+int __kmpc_master(ident_t *, int);
+void __kmpc_end_master(ident_t *, int);
 void __kmpc_barrier(ident_t *, int);
+void __kmpc_critical(ident_t *, int, void *);
+void __kmpc_end_critical(ident_t *, int, void *);
+void __kmpc_flush(ident_t *);
 int __kmpc_serialized_parallel(ident_t *, int);
 void __kmpc_end_serialized_parallel(ident_t *, int);
+void *__kmpc_omp_task_alloc(ident_t *, int, int, size_t, size_t, void *);
+int __kmpc_omp_task(ident_t *, int, void *);
+int __kmpc_omp_taskwait(ident_t *, int);
 void __kmpc_for_static_init_4(ident_t *, int, int, int *, int *, int *, int *,
                               int, int);
+void __kmpc_for_static_init_8(ident_t *, int, int, int *, int64_t *, int64_t *,
+                              int64_t *, int64_t, int64_t);
 void __kmpc_for_static_fini(ident_t *, int);
 void __kmpc_dispatch_init_4(ident_t *, int, int, int, int, int, int);
+void __kmpc_dispatch_init_8(ident_t *, int, int, int64_t, int64_t, int64_t,
+                            int64_t);
 int __kmpc_dispatch_next_4(ident_t *, int, int *, int *, int *, int *);
+int __kmpc_dispatch_next_8(ident_t *, int, int *, int64_t *, int64_t *,
+                           int64_t *);
 
 int __tgt_target_teams(int64_t device_id, void *host_ptr, int32_t arg_num,
                        void **args_base, void **args, int64_t *arg_sizes,
@@ -87,3 +107,5 @@ struct __tgt_bin_desc *register_cubin(const char *);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* REX_KMP_H */

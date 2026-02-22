@@ -73,8 +73,12 @@ set(CLANG_BUILTIN_HEADERS
   clang-builtin-cpp.hpp
   clang-builtin-cuda.hpp
   clang-builtin-opencl.h
+  clang-builtin-openmp-compat.h
   irs.h
   irsctl.h
+)
+set(CLANG_OPENMP_COMPAT_HEADERS
+  openmp-compat/omp.h
 )
 
 # Copy builtin headers to staging directory for build-tree usage
@@ -86,6 +90,15 @@ foreach(header IN LISTS CLANG_BUILTIN_HEADERS)
     COPYONLY)
 endforeach()
 
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include-staging/openmp-compat)
+foreach(header IN LISTS CLANG_OPENMP_COMPAT_HEADERS)
+  get_filename_component(_header_name ${header} NAME)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/${header}
+    ${CMAKE_BINARY_DIR}/include-staging/openmp-compat/${_header_name}
+    COPYONLY)
+endforeach()
+unset(_header_name)
+
 # Install headers
 install(FILES ${CLANG_FRONTEND_HEADERS}
   DESTINATION ${INCLUDE_INSTALL_DIR})
@@ -93,5 +106,8 @@ install(FILES ${CLANG_FRONTEND_HEADERS}
 # Install builtin headers
 install(FILES ${CLANG_BUILTIN_HEADERS}
   DESTINATION ${INCLUDE_INSTALL_DIR}/clang)
+
+install(FILES ${CLANG_OPENMP_COMPAT_HEADERS}
+  DESTINATION ${INCLUDE_INSTALL_DIR_FOR_INTRINSICS}/clang/openmp-compat)
 
 message(STATUS "Clang frontend configured successfully")

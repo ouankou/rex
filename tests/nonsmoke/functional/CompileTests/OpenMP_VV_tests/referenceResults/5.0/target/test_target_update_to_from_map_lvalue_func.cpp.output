@@ -1,0 +1,6 @@
+#pragma omp declare target
+#pragma omp end declare target
+#pragma omp target map(from:before_value) map(returnRef())
+#pragma omp target update to(returnRef())
+#pragma omp target map(from:after_value)
+#pragma omp target update from(returnRef())

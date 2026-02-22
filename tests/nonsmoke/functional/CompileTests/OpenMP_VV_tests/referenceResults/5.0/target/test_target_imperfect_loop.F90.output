@@ -1,0 +1,4 @@
+!$omp target map(tofrom:data1,data2)
+!$omp parallel do collapse(2)
+!$omp end parallel do
+!$omp end target

@@ -94,6 +94,7 @@ inline void mlogAssertFail_C(const char *subject, const char *expr,
 extern void mlogMore_C(const char *format, ...);
 extern const char *mlogLevelToString_C[];
 extern std::string mlogLevelToString_CXX(MLOG_LEVEL_t level);
+extern std::ostream &mlogNullStream_CXX();
 
 #define WHEREARG __FILE__, __LINE__, __func__
 
@@ -156,13 +157,14 @@ extern std::string mlogLevelToString_CXX(MLOG_LEVEL_t level);
   std::cerr << mlogLevelToString_CXX(level) << ": " << subject << " ["         \
             << __FILE__ << ":" << __LINE__ << "," << __func__ << "]\033[0m "
 #define MLOG_LEVEL_CXX(level, subject)                                         \
-  (level > mlogLevel) ? std::cerr : MLOG_LEVEL_HEADER_CXX(level, subject)
+  ((level > mlogLevel) ? mlogNullStream_CXX()                                  \
+                       : MLOG_LEVEL_HEADER_CXX(level, subject))
 
 //*__MORE_CXX API is used to add more lines for the mlog msg that is already
 // started by MLOG_*_CXX
 #define MLOG_MORE_CXX() std::cerr << "\t"
 #define MLOG_LEVEL_MORE_CXX(level)                                             \
-  (level > mlogLevel) ? std::cerr : std::cerr << "\t"
+  ((level > mlogLevel) ? mlogNullStream_CXX() : std::cerr << "\t")
 
 // C++-style API for mandatory fatal/error/warning/debugging mlogging
 #define MLOG_FATAL_CXX(SUBJECT) MLOG_LEVEL_HEADER_CXX(MLOG_LEVEL_FATAL, SUBJECT)

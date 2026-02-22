@@ -51,11 +51,10 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${_rth}
     srcdir=${CMAKE_CURRENT_SOURCE_DIR}
-    blddir=${CMAKE_CURRENT_BINARY_DIR}
+    EXE=$<TARGET_FILE:testQuery>
     ${CMAKE_CURRENT_SOURCE_DIR}/test1.conf
     test1.passed
 )
-set_tests_properties(astQuery_test1_conf PROPERTIES DISABLED TRUE)
 
 add_test(
   NAME astQuery_test2_input1
@@ -67,7 +66,6 @@ add_test(
     ${_exit_status}
     test2.passed
 )
-set_tests_properties(astQuery_test2_input1 PROPERTIES DISABLED TRUE)
 
 set(_rose_include_flags)
 foreach(entry IN LISTS ROSE_INCLUDES)

@@ -6,8 +6,10 @@
 
 #include "sage3basic.h"
 
+#include "FortranLineWrapSupport.h"
 #include "unparser.h"
 
+#include <cctype>
 #include <limits>
 
 // DQ (10/14/2010):  This should only be included by source files that require
@@ -611,22 +613,45 @@ void FortranCodeGeneration_locatedNode::unparseImportStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgImportStatement *importStatement = isSgImportStatement(stmt);
   SgExpressionPtrList &importList = importStatement->get_import_list();
-  SgExpressionPtrList::iterator i = importList.begin();
+  auto isValidImportItem = [](SgExpression *expr) -> bool {
+    if (SgVarRefExp *varRef = isSgVarRefExp(expr)) {
+      SgVariableSymbol *rawSymbol = varRef->get_symbol();
+      if (rawSymbol == nullptr) {
+        return false;
+      }
+      SgVariableSymbol *varSymbol = isSgVariableSymbol(rawSymbol);
+      if (varSymbol == nullptr) {
+        return false;
+      }
+      if (varSymbol->get_declaration() == nullptr) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  std::size_t validItems = 0;
+  for (SgExpression *expr : importList) {
+    if (isValidImportItem(expr)) {
+      ++validItems;
+    }
+  }
 
   curprint("import ");
-  if (importList.size() > 0)
+  if (validItems > 0) {
     curprint(":: ");
+  }
 
-  while (i != importList.end()) {
-    unparseExpression(*i, info);
-
-    i++;
-
-    // Put a little space before the next name (it there are multiple names
-    // specified)
-    if (i != importList.end()) {
+  bool needComma = false;
+  for (SgExpression *expr : importList) {
+    if (!isValidImportItem(expr)) {
+      continue;
+    }
+    if (needComma) {
       curprint(", ");
     }
+    unparseExpression(expr, info);
+    needComma = true;
   }
 
   unp->cur.insert_newline(1);
@@ -4602,15 +4627,12 @@ void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
     // check whether line wrapping is needed
     int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
     int free_cols = usable_cols - used_cols;
-    auto is_comment_line = [&]() {
-      size_t first = str.find_first_not_of(' ');
-      if (first == std::string::npos) {
-        return false;
-      }
-      return str[first] == '!' || str[first] == '#';
-    };
-
     if (str.size() > free_cols) {
+      if (FortranLineWrapSupport::isDirectiveChunk(str, used_cols)) {
+        unp->u_sage->curprint(str);
+        return;
+      }
+
       if (is_fixed_format) {
         // only noncomment lines need wrapping
         if (!(used_cols == 0 && str[0] != ' ')) {
@@ -4624,7 +4646,7 @@ void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
           unp->u_sage->curprint("     &");
         }
       } else if (is_free_format) {
-        if (is_comment_line()) {
+        if (FortranLineWrapSupport::isCommentLine(str)) {
           unp->u_sage->curprint(str);
           return;
         }
@@ -4687,12 +4709,58 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
   // optional clauses
+  SgOmpDeclareMapperStatement *mapper_stmt =
+      isSgOmpDeclareMapperStatement(stmt);
+  const SgOmpClausePtrList *clause_ptr_list = nullptr;
   if (isSgOmpClauseBodyStatement(stmt)) {
-    const SgOmpClausePtrList &clause_ptr_list =
-        isSgOmpClauseBodyStatement(stmt)->get_clauses();
+    clause_ptr_list = &isSgOmpClauseBodyStatement(stmt)->get_clauses();
+  } else if (isSgOmpDeclareSimdStatement(stmt)) {
+    clause_ptr_list = &isSgOmpDeclareSimdStatement(stmt)->get_clauses();
+  } else if (mapper_stmt != nullptr) {
+    clause_ptr_list = &mapper_stmt->get_clauses();
+  } else if (isSgOmpDeclareTargetStatement(stmt)) {
+    clause_ptr_list = &isSgOmpDeclareTargetStatement(stmt)->get_clauses();
+  } else if (isSgOmpTaskwaitStatement(stmt)) {
+    clause_ptr_list = &isSgOmpTaskwaitStatement(stmt)->get_clauses();
+  } else if (isSgOmpClauseStatement(stmt)) {
+    clause_ptr_list = &isSgOmpClauseStatement(stmt)->get_clauses();
+  } else if (isSgOmpRequiresStatement(stmt)) {
+    clause_ptr_list = &isSgOmpRequiresStatement(stmt)->get_clauses();
+  }
+
+  if (mapper_stmt != nullptr) {
+    curprint(" (");
+    switch (mapper_stmt->get_identifier()) {
+    case SgOmpClause::e_omp_declare_mapper_identifier_default:
+      curprint("default: ");
+      break;
+    case SgOmpClause::e_omp_declare_mapper_identifier_user:
+      if (mapper_stmt->get_user_defined_identifier() != nullptr) {
+        unparseExpression(mapper_stmt->get_user_defined_identifier(), info);
+      }
+      curprint(": ");
+      break;
+    case SgOmpClause::e_omp_declare_mapper_identifier_unspecified:
+      break;
+    default:
+      ROSE_ABORT();
+    }
+    if (mapper_stmt->get_mapper_type() != nullptr) {
+      unparseExpression(mapper_stmt->get_mapper_type(), info);
+    }
+    if (mapper_stmt->get_mapper_variable() != nullptr) {
+      if (mapper_stmt->get_mapper_type() != nullptr) {
+        curprint(" :: ");
+      }
+      unparseExpression(mapper_stmt->get_mapper_variable(), info);
+    }
+    curprint(")");
+  }
+
+  if (clause_ptr_list != nullptr) {
     SgOmpClausePtrList::const_iterator i;
     bool first_clause = true;
-    for (i = clause_ptr_list.begin(); i != clause_ptr_list.end(); i++) {
+    for (i = clause_ptr_list->begin(); i != clause_ptr_list->end(); i++) {
       SgOmpClause *c_clause = *i;
       if (isSgOmpNowaitClause(c_clause) || isSgOmpCopyprivateClause(c_clause))
         continue;
@@ -4701,6 +4769,28 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
         first_clause = false;
       }
       unparseOmpClause(c_clause, info);
+    }
+  }
+  if (isSgOmpDeclareTargetStatement(stmt)) {
+    const SgOmpClause::omp_when_context_kind_enum device_type_kind =
+        isSgOmpDeclareTargetStatement(stmt)->get_device_type_kind();
+    if (device_type_kind != SgOmpClause::e_omp_when_context_kind_unknown) {
+      curprint(" ");
+      curprint("device_type(");
+      switch (device_type_kind) {
+      case SgOmpClause::e_omp_when_context_kind_host:
+        curprint("host");
+        break;
+      case SgOmpClause::e_omp_when_context_kind_nohost:
+        curprint("nohost");
+        break;
+      case SgOmpClause::e_omp_when_context_kind_any:
+        curprint("any");
+        break;
+      default:
+        ROSE_ABORT();
+      }
+      curprint(")");
     }
   }
   unp->u_sage->curprint_newline();

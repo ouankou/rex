@@ -5558,6 +5558,7 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
           bcls->get_global_qualification_required());
 
       SgName nameQualifier = bcls->get_qualified_name_prefix();
+      bool is_pack_expansion_base = bcls->get_pack_expansion();
 
       SgNonrealBaseClass *nr_bcls = isSgNonrealBaseClass(bcls);
       if (nr_bcls != NULL) {
@@ -5601,6 +5602,10 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
           curprint(tmp_decl->get_name().str());
         }
       }
+      if (is_pack_expansion_base) {
+        curprint("...");
+      }
+
       p++;
 
       if (p != classdefn_stmt->get_inheritances().end()) {
@@ -8458,6 +8463,10 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
   // optional clauses
   SgOmpClauseBodyStatement *bodystmt = isSgOmpClauseBodyStatement(stmt);
   SgOmpDeclareSimdStatement *simdstmt = isSgOmpDeclareSimdStatement(stmt);
+  SgOmpDeclareMapperStatement *mapperstmt = isSgOmpDeclareMapperStatement(stmt);
+  SgOmpDeclareTargetStatement *declaretargetstmt =
+      isSgOmpDeclareTargetStatement(stmt);
+  SgOmpTaskwaitStatement *taskwaitstmt = isSgOmpTaskwaitStatement(stmt);
   SgOmpClauseStatement *clausestmt = isSgOmpClauseStatement(stmt);
   SgOmpRequiresStatement *requiresstmt = isSgOmpRequiresStatement(stmt);
   const SgOmpClausePtrList *clause_ptr_list = nullptr;
@@ -8465,14 +8474,71 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
     clause_ptr_list = &bodystmt->get_clauses();
   } else if (simdstmt != nullptr) {
     clause_ptr_list = &simdstmt->get_clauses();
+  } else if (mapperstmt != nullptr) {
+    clause_ptr_list = &mapperstmt->get_clauses();
+  } else if (declaretargetstmt != nullptr) {
+    clause_ptr_list = &declaretargetstmt->get_clauses();
+  } else if (taskwaitstmt != nullptr) {
+    clause_ptr_list = &taskwaitstmt->get_clauses();
   } else if (clausestmt != nullptr) {
     clause_ptr_list = &clausestmt->get_clauses();
   } else if (requiresstmt != nullptr) {
     clause_ptr_list = &requiresstmt->get_clauses();
   }
+  if (mapperstmt != nullptr) {
+    curprint(string("("));
+    switch (mapperstmt->get_identifier()) {
+    case SgOmpClause::e_omp_declare_mapper_identifier_default:
+      curprint(string("default : "));
+      break;
+    case SgOmpClause::e_omp_declare_mapper_identifier_user:
+      if (mapperstmt->get_user_defined_identifier() != nullptr) {
+        unparseExpression(mapperstmt->get_user_defined_identifier(), info);
+      }
+      curprint(string(" : "));
+      break;
+    case SgOmpClause::e_omp_declare_mapper_identifier_unspecified:
+      break;
+    default:
+      ROSE_ABORT();
+    }
+
+    if (mapperstmt->get_mapper_type() != nullptr) {
+      unparseExpression(mapperstmt->get_mapper_type(), info);
+    }
+    if (mapperstmt->get_mapper_variable() != nullptr) {
+      if (mapperstmt->get_mapper_type() != nullptr) {
+        curprint(string(" "));
+      }
+      unparseExpression(mapperstmt->get_mapper_variable(), info);
+    }
+    curprint(string(")"));
+  }
+
   if (clause_ptr_list != nullptr && !clause_ptr_list->empty()) {
     for (SgOmpClause *c_clause : *clause_ptr_list) {
       unparseOmpClause(c_clause, info);
+    }
+  }
+  if (declaretargetstmt != nullptr) {
+    const SgOmpClause::omp_when_context_kind_enum device_type_kind =
+        declaretargetstmt->get_device_type_kind();
+    if (device_type_kind != SgOmpClause::e_omp_when_context_kind_unknown) {
+      curprint(string(" device_type("));
+      switch (device_type_kind) {
+      case SgOmpClause::e_omp_when_context_kind_host:
+        curprint(string("host"));
+        break;
+      case SgOmpClause::e_omp_when_context_kind_nohost:
+        curprint(string("nohost"));
+        break;
+      case SgOmpClause::e_omp_when_context_kind_any:
+        curprint(string("any"));
+        break;
+      default:
+        ROSE_ABORT();
+      }
+      curprint(string(")"));
     }
   }
 }

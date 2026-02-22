@@ -40,13 +40,9 @@ int makeDataSharingExplicit(SgFile *);
 
 // last edited by Hongyi on 07/24/2012.
 
-//! The type of target runtime libraries (not yet in use)
-// We support both Omni and GCC OpenMP runtime libraries
-enum omp_rtl_enum { e_gomp, e_omni, e_last_rtl };
 extern unsigned int nCounter; // translation generated variable counter, used to
                               // avoid name collision
 
-extern omp_rtl_enum rtl_type;
 typedef std::map<const SgVariableSymbol *, SgVariableSymbol *>
     VariableSymbolMap_t;
 
@@ -158,7 +154,8 @@ SgFunctionDeclaration *
 generateOutlinedTask(SgNode *node, std::string &wrapper_name,
                      std::set<const SgVariableSymbol *> &syms,
                      std::set<const SgVariableSymbol *> &pdSyms3,
-                     bool use_task_param = false);
+                     bool use_task_param = false,
+                     bool insert_runtime_ids = true);
 
 //! Translate OpenMP variables associated with an OpenMP pragma, such as
 //! private, firstprivate, lastprivate, reduction, etc. bb1 is the translation
@@ -252,14 +249,14 @@ getReductionOperationType(SgInitializedName *init_name,
 ROSE_DLL_API SgExpression *
 createInitialValueExp(SgOmpClause::omp_reduction_identifier_enum r_operator);
 
-//! Generate GOMP loop schedule start function's name
+//! Generate XOMP loop schedule start function's name
 ROSE_DLL_API std::string
-generateGOMPLoopStartFuncName(bool isOrdered,
+generateXOMPLoopStartFuncName(bool isOrdered,
                               SgOmpClause::omp_schedule_kind_enum s_kind);
 
-//! Generate GOMP loop schedule next function's name
+//! Generate XOMP loop schedule next function's name
 ROSE_DLL_API std::string
-generateGOMPLoopNextFuncName(bool isOrdered,
+generateXOMPLoopNextFuncName(bool isOrdered,
                              SgOmpClause::omp_schedule_kind_enum s_kind);
 
 //! Convert a schedule kind enum value to a small case string

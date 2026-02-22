@@ -465,6 +465,7 @@ SgOpenclAccessModeModifier
 SgOpenStatement
 SgOptions
 SgOrOp
+SgPackExpansionExpr
 SgParameterStatement
 SgPartialFunctionModifierType
 SgPartialFunctionType

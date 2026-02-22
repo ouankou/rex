@@ -1,0 +1,2 @@
+#pragma omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) shared(x,y,z,num_threads) map(tofrom:x,y,z,num_threads)
+#pragma omp master taskloop

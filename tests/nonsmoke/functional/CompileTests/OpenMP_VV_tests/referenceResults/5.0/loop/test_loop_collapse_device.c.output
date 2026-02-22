@@ -1,0 +1,4 @@
+#pragma omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:a[:N][:N],b[:N][:N+1])
+#pragma omp loop collapse(1)
+#pragma omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:a[:N][:N][:N],b[:N][:N][:N+1],num_threads)
+#pragma omp loop collapse(2)

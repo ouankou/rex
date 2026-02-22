@@ -1,0 +1,4 @@
+#pragma omp parallel for simd reduction(inscan,+:x) num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp scan inclusive(x)
+#pragma omp parallel for simd reduction(inscan,+:x) num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp scan exclusive(x)

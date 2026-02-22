@@ -1,0 +1,2 @@
+#pragma omp target data map(tofrom:A[0:ELMTS],HostVar,errors) device(gpu)
+#pragma omp target parallel for firstprivate(HostVar) device(gpu)

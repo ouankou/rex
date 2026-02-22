@@ -52,4 +52,5 @@ set(OPENMP_FORTRAN_TESTCODES
   ompdo-multiple.f
   shared-array.f
   collapse.f90
+  requires_dynamic_allocators_type.f90
 )

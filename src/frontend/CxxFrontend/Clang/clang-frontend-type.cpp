@@ -127,6 +127,52 @@ bool scopeIsWithinNamespaceChain(SgScopeStatement *scope,
   return true;
 }
 
+std::string normalizeTemplateTypeParamName(std::string name) {
+  if (isImplicitAutoPlaceholderTemplateParamName(name)) {
+    return "auto";
+  }
+  return name;
+}
+
+bool shouldPreserveDependentDecltypeExpression(
+    const clang::DecltypeType *decltype_type) {
+  if (decltype_type == nullptr) {
+    return false;
+  }
+
+  const clang::Expr *underlying_expr = decltype_type->getUnderlyingExpr();
+  if (underlying_expr == nullptr) {
+    return false;
+  }
+
+  const clang::Expr *stripped_expr = underlying_expr->IgnoreParenImpCasts();
+  const clang::DeclRefExpr *decl_ref =
+      llvm::dyn_cast<clang::DeclRefExpr>(stripped_expr);
+  if (decl_ref == nullptr) {
+    return false;
+  }
+
+  const clang::ParmVarDecl *param_decl =
+      llvm::dyn_cast<clang::ParmVarDecl>(decl_ref->getDecl());
+  if (param_decl == nullptr) {
+    return false;
+  }
+
+  if (param_decl->isParameterPack()) {
+    return true;
+  }
+
+  clang::QualType param_type = param_decl->getType();
+  if (param_type.isNull()) {
+    return false;
+  }
+  if (param_type->getContainedAutoType() != nullptr) {
+    return true;
+  }
+
+  return param_type->isDependentType();
+}
+
 clang::NestedNameSpecifier *
 buildNamespaceQualifierForDeclContext(clang::DeclContext *context,
                                       clang::ASTContext &ast_context) {
@@ -1906,8 +1952,37 @@ bool ClangToSageTranslator::VisitDecltypeType(
   bool res = true;
 
   clang::QualType underlying_type = decltype_type->getUnderlyingType();
+  SgType *sg_underlying_type = nullptr;
   if (!underlying_type.isNull()) {
-    *node = buildTypeFromQualifiedType(underlying_type);
+    sg_underlying_type = buildTypeFromQualifiedType(underlying_type);
+  }
+
+  SgType *sg_decltype = nullptr;
+  bool preserve_decltype_expression =
+      isSgAutoType(sg_underlying_type) != nullptr ||
+      shouldPreserveDependentDecltypeExpression(decltype_type);
+
+  // Preserve decltype(expr) when the deduced underlying type is still auto.
+  // This is required for generic-lambda placeholders such as decltype(r),
+  // where reducing to plain "auto" would lose semantics.
+  if (preserve_decltype_expression) {
+    if (const clang::Expr *underlying_expr =
+            decltype_type->getUnderlyingExpr()) {
+      SgNode *expr_node = Traverse(const_cast<clang::Expr *>(underlying_expr));
+      if (SgExpression *expr = isSgExpression(expr_node)) {
+        SgExpression *expr_copy = SageInterface::deepCopy(expr);
+        if (expr_copy != nullptr) {
+          sg_decltype =
+              SageBuilder::buildDeclType(expr_copy, sg_underlying_type);
+        }
+      }
+    }
+  }
+
+  if (sg_decltype != nullptr) {
+    *node = sg_decltype;
+  } else if (sg_underlying_type != nullptr) {
+    *node = sg_underlying_type;
   } else {
     *node = SageBuilder::buildUnknownType();
   }
@@ -5525,22 +5600,92 @@ bool ClangToSageTranslator::VisitTemplateTypeParmType(
 #endif
   bool res = true;
 
-  // CLANG FRONTEND FIX: Proper template type parameter support
-  // Get the template parameter declaration to extract the name
   const clang::TemplateTypeParmDecl *param_decl =
       template_type_parm_type->getDecl();
-  std::string param_name;
 
-  if (param_decl && param_decl->getDeclName().isIdentifier()) {
-    // Use the actual template parameter name (e.g., "T")
+  if (param_decl != nullptr && param_decl->isImplicit() &&
+      isImplicitAutoPlaceholderTemplateParamName(
+          param_decl->getNameAsString())) {
+    *node = SageBuilder::buildAutoType();
+    return VisitType(template_type_parm_type, node) && res;
+  }
+
+  auto lookup_mapped_template_param =
+      [&](clang::NamedDecl *decl) -> SgTemplateParameter * {
+    if (decl == nullptr) {
+      return nullptr;
+    }
+    auto it = p_decl_translation_map.find(decl);
+    if (it == p_decl_translation_map.end()) {
+      return nullptr;
+    }
+    return isSgTemplateParameter(it->second);
+  };
+
+  SgTemplateParameter *mapped_param = nullptr;
+  if (param_decl != nullptr) {
+    auto *mutable_param_decl =
+        const_cast<clang::TemplateTypeParmDecl *>(param_decl);
+
+    mapped_param = lookup_mapped_template_param(mutable_param_decl);
+    if (mapped_param == nullptr) {
+      if (const clang::NamedDecl *canonical = llvm::dyn_cast<clang::NamedDecl>(
+              mutable_param_decl->getCanonicalDecl())) {
+        mapped_param = lookup_mapped_template_param(
+            const_cast<clang::NamedDecl *>(canonical));
+      }
+    }
+    if (mapped_param == nullptr) {
+      if (clang::TemplateTypeParmDecl *recent =
+              llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
+                  mutable_param_decl->getMostRecentDecl())) {
+        mapped_param = lookup_mapped_template_param(recent);
+      }
+    }
+    if (mapped_param == nullptr) {
+      for (clang::Decl *redecl_decl : mutable_param_decl->redecls()) {
+        if (clang::TemplateTypeParmDecl *redecl =
+                llvm::dyn_cast_or_null<clang::TemplateTypeParmDecl>(
+                    redecl_decl)) {
+          mapped_param = lookup_mapped_template_param(redecl);
+          if (mapped_param != nullptr) {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  std::string param_name;
+  if (mapped_param != nullptr) {
+    if (SgTemplateType *mapped_type =
+            isSgTemplateType(mapped_param->get_type());
+        mapped_type != nullptr) {
+      param_name = mapped_type->get_name().getString();
+    }
+    if (param_name.empty()) {
+      if (SgInitializedName *mapped_init = mapped_param->get_initializedName();
+          mapped_init != nullptr) {
+        param_name = mapped_init->get_name().getString();
+      }
+    }
+    param_name = normalizeTemplateTypeParamName(param_name);
+  }
+
+  if (param_name.empty() && param_decl != nullptr &&
+      param_decl->getDeclName().isIdentifier()) {
     param_name = param_decl->getNameAsString();
-  } else {
-    // Fallback to a generic name if we can't get the actual name
+  }
+  if (param_name.empty() && param_decl != nullptr) {
+    param_name = normalizeTemplateTypeParamName(param_decl->getNameAsString());
+  }
+  if (param_name.empty()) {
     param_name = "template_type_param";
   }
 
-  // Create a proper template type with the actual parameter name
-  *node = SageBuilder::buildTemplateType(SgName(param_name));
+  SgTemplateType *template_type =
+      SageBuilder::buildTemplateType(SgName(param_name));
+  *node = template_type;
 
   return VisitType(template_type_parm_type, node) && res;
 }

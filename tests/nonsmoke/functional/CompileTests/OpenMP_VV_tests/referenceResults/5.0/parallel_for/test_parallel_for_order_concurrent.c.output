@@ -1,0 +1,1 @@
+#pragma omp parallel for order(concurrent) num_threads(OMPVV_NUM_THREADS_HOST) shared(x,y,z)

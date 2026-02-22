@@ -1147,6 +1147,7 @@ foreach(specimen IN LISTS TAINT_ANALYSIS_SPECIMENS)
     COMMAND ${_rth}
       INPUT=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
       ANSWER=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}.ans
+      TAINT_ANALYSIS_TEST=$<TARGET_FILE:taintAnalysisTest>
       ${_taint_conf}
       cxxta_${specimen}.passed
   )
@@ -1161,7 +1162,7 @@ foreach(specimen IN LISTS CXX_CONSTPROP_LOCAL_SPECIMENS)
     NAME gdf_constprop_local_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:constantPropagationTest> -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -c \"${CMAKE_CURRENT_SOURCE_DIR}/${specimen}\""
       ${_exit_status}
       cxxcpls_${specimen}.passed
   )
@@ -1176,7 +1177,7 @@ foreach(specimen IN LISTS CXX_CONSTPROP_SPECIMENS)
     NAME gdf_cxx_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:constantPropagationTest> -I${_cxx_test_dir} -c ${_cxx_test_dir}/${specimen}"
+      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -I \"${_cxx_test_dir}\" -c \"${_cxx_test_dir}/${specimen}\""
       ${_exit_status}
       cxxcp_${specimen}.passed
   )
@@ -1195,7 +1196,7 @@ foreach(specimen IN LISTS _cxx_constprop_disabled)
     NAME gdf_cxx_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:constantPropagationTest> -I${_cxx_test_dir} -c ${_cxx_test_dir}/${specimen}"
+      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -I \"${_cxx_test_dir}\" -c \"${_cxx_test_dir}/${specimen}\""
       ${_exit_status}
       cxxcp_${specimen}.passed
   )
@@ -1215,7 +1216,7 @@ foreach(specimen IN LISTS _c_constprop_disabled)
     NAME gdf_c_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="cp ${_cxx_test_dir}/${specimen} ${_c_specimen} && ./constantPropagationTest -I${_cxx_test_dir} -c ${_c_specimen}"
+      CMD="cp \"${_cxx_test_dir}/${specimen}\" \"${_c_specimen}\" && \"$<TARGET_FILE:constantPropagationTest>\" -I \"${_cxx_test_dir}\" -c \"${_c_specimen}\""
       ${_exit_status}
       ccp_${specimen}.passed
   )
@@ -1234,7 +1235,7 @@ foreach(specimen IN LISTS _c99_constprop_disabled)
     NAME gdf_c99_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:constantPropagationTest> -I${_c99_test_dir} -c ${_c99_test_dir}/${specimen}"
+      CMD="\"$<TARGET_FILE:constantPropagationTest>\" -I \"${_c99_test_dir}\" -c \"${_c99_test_dir}/${specimen}\""
       ${_exit_status}
       c99cp_${specimen}.passed
   )
@@ -1254,7 +1255,7 @@ if(enable-fortran)
       NAME gdf_f77_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="$<TARGET_FILE:constantPropagationTest> -rose:fortran_std=f77 -c ${_f77_test_dir}/${specimen}"
+        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:fortran_std=f77 -c \"${_f77_test_dir}/${specimen}\""
         ${_exit_status}
         f77cp_${specimen}.passed
     )
@@ -1270,7 +1271,7 @@ if(enable-fortran)
       NAME gdf_f77_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="$<TARGET_FILE:constantPropagationTest> -rose:fortran_std=f77 -c ${_f77_test_dir}/${specimen}"
+        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:fortran_std=f77 -c \"${_f77_test_dir}/${specimen}\""
         ${_exit_status}
         f77cp_${specimen}.passed
     )
@@ -1286,7 +1287,7 @@ if(enable-fortran)
       NAME gdf_f03_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="$<TARGET_FILE:constantPropagationTest> -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c ${_f03_test_dir}/${specimen}"
+        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
         ${_exit_status}
         f03cp_${specimen}.passed
     )
@@ -1302,7 +1303,7 @@ if(enable-fortran)
       NAME gdf_f03_constprop_${_name}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND ${_rth}
-        CMD="$<TARGET_FILE:constantPropagationTest> -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c ${_f03_test_dir}/${specimen}"
+        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skip_syntax_check -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
         ${_exit_status}
         f03cp_${specimen}.passed
     )
@@ -1317,7 +1318,7 @@ foreach(specimen IN LISTS CXX_LIVENESS_SPECIMENS)
     NAME gdf_liveness_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:liveDeadVarAnalysisTest> -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="\"$<TARGET_FILE:liveDeadVarAnalysisTest>\" -c \"${CMAKE_CURRENT_SOURCE_DIR}/${specimen}\""
       ${_exit_status}
       cxxla_${specimen}.passed
   )
@@ -1332,7 +1333,7 @@ foreach(specimen IN LISTS CXX_POINTER_ALIAS_SPECIMENS)
     NAME gdf_pointer_alias_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:pointerAliasAnalysisTest> -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="\"$<TARGET_FILE:pointerAliasAnalysisTest>\" -c \"${CMAKE_CURRENT_SOURCE_DIR}/${specimen}\""
       ${_exit_status}
       cxxpa_${specimen}.passed
   )
@@ -1360,13 +1361,3 @@ add_test(
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
 set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f03-constprop PROPERTIES DEPENDS gdf_f03_constprop_test2007_37_f03 )
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f77-constprop
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=gdf_f77_constprop_test2007_222_f
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_generalDataFlowAnalysisTests_check-f77-constprop PROPERTIES DEPENDS gdf_f77_constprop_test2007_222_f )

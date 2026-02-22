@@ -1,0 +1,2 @@
+#pragma omp target data map(to:array_device[0:N]) use_device_ptr(array_device)
+#pragma omp target is_device_ptr(array_device) map(tofrom:array_host[0:N])

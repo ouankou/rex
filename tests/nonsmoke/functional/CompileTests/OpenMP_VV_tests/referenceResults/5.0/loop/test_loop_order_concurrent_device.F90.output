@@ -1,0 +1,4 @@
+!$omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:a,num_threads,wait_errors) map(to:b,c)
+!$omp loop order(concurrent)
+!$omp atomic update
+!$omp end target parallel

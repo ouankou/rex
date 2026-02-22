@@ -1,0 +1,6 @@
+!$omp declare target to(a,b,c,i)
+!$omp declare target to(update) device_type(host)
+!$omp target update to(a,b,c)
+!$omp target
+!$omp end target
+!$omp target update from(a,b,c)

@@ -5249,6 +5249,36 @@ void SageInterface::transferSymbols(SgScopeStatement *from_scope,
   if (symtab == nullptr) {
     return;
   }
+  auto rehome_decl = [&](SgDeclarationStatement *decl) {
+    if (decl == nullptr) {
+      return;
+    }
+
+    auto rehome_one = [&](SgDeclarationStatement *d) {
+      if (d == nullptr) {
+        return;
+      }
+      if (d->get_scope() == from_scope) {
+        d->set_scope(to_scope);
+      }
+      if (d->get_parent() == from_scope) {
+        d->set_parent(to_scope);
+      }
+    };
+
+    rehome_one(decl);
+
+    SgDeclarationStatement *first_nondef =
+        decl->get_firstNondefiningDeclaration();
+    if (first_nondef != decl) {
+      rehome_one(first_nondef);
+    }
+
+    SgDeclarationStatement *def = decl->get_definingDeclaration();
+    if (def != decl) {
+      rehome_one(def);
+    }
+  };
   std::set<SgNode *> symbols = symtab->get_symbols();
   for (SgNode *symNode : symbols) {
     SgSymbol *symbol = isSgSymbol(symNode);
@@ -5262,11 +5292,6 @@ void SageInterface::transferSymbols(SgScopeStatement *from_scope,
     if (to_scope->symbol_exists(name)) {
       continue;
     }
-    from_scope->remove_symbol(symbol);
-    to_scope->insert_symbol(name, symbol);
-    if (symbol->get_parent() != to_scope->get_symbol_table()) {
-      symbol->set_parent(to_scope->get_symbol_table());
-    }
     if (auto *varSym = isSgVariableSymbol(symbol)) {
       if (SgInitializedName *initName = varSym->get_declaration()) {
         if (initName->get_scope() == from_scope) {
@@ -5276,6 +5301,15 @@ void SageInterface::transferSymbols(SgScopeStatement *from_scope,
           initName->set_parent(to_scope);
         }
       }
+    }
+    if (SgDeclarationStatement *decl =
+            isSgDeclarationStatement(symbol->get_symbol_basis())) {
+      rehome_decl(decl);
+    }
+    from_scope->remove_symbol(symbol);
+    to_scope->insert_symbol(name, symbol);
+    if (symbol->get_parent() != to_scope->get_symbol_table()) {
+      symbol->set_parent(to_scope->get_symbol_table());
     }
   }
 }
@@ -10124,6 +10158,47 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
   SgStatement *surroundingStatement = targetStmt;
   int surroundingStatement_fileId =
       Sg_File_Info::BAD_FILE_ID; // No file id can have this value.
+  int targetStatement_fileId = Sg_File_Info::BAD_FILE_ID;
+
+  if (Sg_File_Info *target_file_info = targetStmt->get_file_info()) {
+    targetStatement_fileId = target_file_info->get_file_id();
+    if (targetStatement_fileId < 0) {
+      int physical_file_id = target_file_info->get_physical_file_id();
+      if (physical_file_id > 0) {
+        targetStatement_fileId = physical_file_id;
+      }
+    }
+  }
+
+  if (targetStatement_fileId < 0) {
+    if (AttachedPreprocessingInfoType *attached_comments =
+            targetStmt->getAttachedPreprocessingInfo()) {
+      for (AttachedPreprocessingInfoType::iterator it =
+               attached_comments->begin();
+           it != attached_comments->end(); ++it) {
+        PreprocessingInfo *pp_info = *it;
+        if (pp_info == NULL) {
+          continue;
+        }
+        Sg_File_Info *pp_file_info = pp_info->get_file_info();
+        if (pp_file_info == NULL) {
+          continue;
+        }
+
+        int pp_file_id = pp_file_info->get_file_id();
+        if (pp_file_id >= 0) {
+          targetStatement_fileId = pp_file_id;
+          break;
+        }
+
+        int pp_physical_file_id = pp_file_info->get_physical_file_id();
+        if (pp_physical_file_id > 0) {
+          targetStatement_fileId = pp_physical_file_id;
+          break;
+        }
+      }
+    }
+  }
 
 #if REMOVE_STATEMENT_DEBUG || 0
   printf("TOP of findSurroundingStatementFromSameFile(): "
@@ -10135,12 +10210,12 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
 
   // Only handle relocation for statements that exist in the file (at least for
   // now while debugging).
-  if (targetStmt->get_file_info()->get_file_id() >= 0) {
+  if (targetStatement_fileId >= 0) {
     surroundingStatementPreceedsTargetStatement = true;
 
 #if REMOVE_STATEMENT_DEBUG
     printf("   targetStmt->get_file_info()->get_file_id()           = %d \n",
-           targetStmt->get_file_info()->get_file_id());
+           targetStatement_fileId);
 #endif
 #if REMOVE_STATEMENT_DEBUG
     printf("Before loop: surroundingStatement = %p = %s name = %s "
@@ -10154,8 +10229,7 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
     // targetStmt->get_file_info()->get_file_id())
     while ((returningNullSurroundingStatement == false) &&
            (surroundingStatement != NULL) &&
-           surroundingStatement_fileId !=
-               targetStmt->get_file_info()->get_file_id() &&
+           surroundingStatement_fileId != targetStatement_fileId &&
            surroundingStatement_fileId !=
                Sg_File_Info::TRANSFORMATION_FILE_ID) {
       // Start by going up in the source sequence.
@@ -10255,8 +10329,7 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
         // (surroundingStatement->get_file_info()->get_file_id() !=
         // targetStmt->get_file_info()->get_file_id()) )
         while ((surroundingStatement != NULL) &&
-               (surroundingStatement_fileId !=
-                targetStmt->get_file_info()->get_file_id())) {
+               (surroundingStatement_fileId != targetStatement_fileId)) {
           // DQ (11/15/2020): Eliminate the infinite loop that is possible when
           // we iterate over a loop of statements.
           if (forwardVisitedStatementSet.find(surroundingStatement) !=
@@ -10333,8 +10406,12 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
   } else {
     printf("This is a special statement (not associated with the original "
            "source code, comment relocation is not supported for these "
-           "statements) targetStmt file id = %d \n",
-           targetStmt->get_file_info()->get_file_id());
+           "statements) targetStmt file id = %d (physical file id = %d)\n",
+           targetStmt->get_file_info() ? targetStmt->get_file_info()->get_file_id()
+                                       : Sg_File_Info::BAD_FILE_ID,
+           targetStmt->get_file_info()
+               ? targetStmt->get_file_info()->get_physical_file_id()
+               : Sg_File_Info::BAD_FILE_ID);
     surroundingStatement = NULL;
   }
 
@@ -12619,7 +12696,13 @@ bool SageInterface::isCanonicalForLoop(
   SgVarRefExp *testvar = isSgVarRefExp(SkipCasting(test->get_lhs_operand()));
   if (testvar == NULL)
     return false;
-  if (testvar->get_symbol() != ivarname->get_symbol_from_symbol_table())
+  SgVariableSymbol *loop_index_symbol =
+      isSgVariableSymbol(ivarname->get_symbol_from_symbol_table());
+  SgVariableSymbol *test_symbol = isSgVariableSymbol(testvar->get_symbol());
+  if (test_symbol == NULL)
+    return false;
+  if (test_symbol != loop_index_symbol &&
+      test_symbol->get_declaration() != ivarname)
     return false;
   // grab the upper bound
   ubast = test->get_rhs_operand();
@@ -12691,7 +12774,11 @@ bool SageInterface::isCanonicalForLoop(
 
   if (incr_var == NULL)
     return false;
-  if (incr_var->get_symbol() != ivarname->get_symbol_from_symbol_table())
+  SgVariableSymbol *incr_symbol = isSgVariableSymbol(incr_var->get_symbol());
+  if (incr_symbol == NULL)
+    return false;
+  if (incr_symbol != loop_index_symbol &&
+      incr_symbol->get_declaration() != ivarname)
     return false;
 
   // single entry and single exit?
@@ -14923,6 +15010,16 @@ int SageInterface::fixVariableReferences(SgNode *root,
     SgScopeStatement *scope = findScopeForNode(ref);
     return scope != nullptr ? scope : fallback_scope;
   };
+  auto isNodeWithinScope = [](SgNode *node, SgScopeStatement *scope) -> bool {
+    if (scope == nullptr)
+      return false;
+    for (SgNode *parent = node; parent != nullptr;
+         parent = parent->get_parent()) {
+      if (parent == scope)
+        return true;
+    }
+    return false;
+  };
   Rose_STL_Container<SgNode *> reflist =
       NodeQuery::querySubTree(root, V_SgVarRefExp);
   for (Rose_STL_Container<SgNode *>::iterator i = reflist.begin();
@@ -14947,7 +15044,27 @@ int SageInterface::fixVariableReferences(SgNode *root,
         continue;
       }
     }
-    if (initname->get_type() == SgTypeUnknown::createType())
+    bool has_out_of_scope_local_symbol = false;
+    if (initname != NULL) {
+      SgScopeStatement *decl_scope = initname->get_scope();
+      // Local/parameter symbols from a different function/block can survive
+      // AST moves during outlining and must be rebound to the nearest visible
+      // symbol in the new scope.
+      if (decl_scope != NULL && !isNodeWithinScope(varRef, decl_scope) &&
+          !isSgGlobal(decl_scope) &&
+          !isSgNamespaceDefinitionStatement(decl_scope) &&
+          !isSgClassDefinition(decl_scope)) {
+        has_out_of_scope_local_symbol = true;
+      }
+    }
+
+    const bool is_in_omp_clause =
+        getEnclosingNode<SgOmpClause>(varRef, true) != NULL;
+    const bool needs_out_of_scope_rebind =
+        has_out_of_scope_local_symbol && !is_in_omp_clause;
+
+    if (initname->get_type() == SgTypeUnknown::createType() ||
+        needs_out_of_scope_rebind)
     //    if ((initname->get_scope()==NULL) &&
     //    (initname->get_type()==SgTypeUnknown::createType()))
     {
@@ -15051,17 +15168,13 @@ int SageInterface::fixVariableReferences(SgNode *root,
         // cerr<<"Error: cannot find a symbol for "<<varName.getString()<<endl;
         // ROSE_ASSERT(realSymbol);
       } else {
-        // release placeholder initname and symbol
-        ROSE_ASSERT(realSymbol != (varRef->get_symbol()));
-
-        // CH (2010/7/26): We cannot delete those initname and symbol here,
-        // since there may be other variable references which point to them. We
-        // will delay this clear just before AstTests.
-
-        // std::cout << "Fixed variable reference: " <<
-        // realSymbol->get_name().str() << std::endl;
-        varRef->set_symbol(isSgVariableSymbol(realSymbol));
-        counter++;
+        if (realSymbol != varRef->get_symbol()) {
+          // CH (2010/7/26): We cannot delete those initname and symbol here,
+          // since there may be other variable references which point to them.
+          // We will delay this clear just before AstTests.
+          varRef->set_symbol(isSgVariableSymbol(realSymbol));
+          counter++;
+        }
       }
     }
   } // end for
@@ -21296,6 +21409,15 @@ static void moveOneStatement(SgScopeStatement *sourceBlock,
     case V_SgFortranIncludeLine:
     case V_SgImplicitStatement: // TODO: implicit statement with letter-list
     case V_SgPragmaDeclaration:
+    case V_SgOmpThreadprivateStatement:
+    case V_SgOmpRequiresStatement:
+    case V_SgOmpTaskwaitStatement:
+    case V_SgOmpDeclareSimdStatement:
+    case V_SgOmpDeclareMapperStatement:
+    case V_SgOmpDeclareTargetStatement:
+    case V_SgOmpEndDeclareTargetStatement:
+      declaration->set_parent(targetBlock);
+      declaration->set_scope(targetBlock);
       break;
     default: {
       printf("Moving this declaration = %p = %s = %s between blocks is not yet "
@@ -25882,7 +26004,7 @@ SgFunctionDeclaration *SageInterface::buildFunctionPrototype(
 // want to mark it for output or template unparsing from the AST).
 SgFunctionDeclaration *
 SageInterface::replaceDefiningFunctionDeclarationWithFunctionPrototype(
-    SgFunctionDeclaration *functionDeclaration) {
+    SgFunctionDeclaration *functionDeclaration, bool movePreprocessingInfo) {
   SgFunctionDeclaration *nondefiningFunctionDeclaration = NULL;
   ROSE_ASSERT(functionDeclaration != NULL);
 
@@ -25937,17 +26059,6 @@ SageInterface::replaceDefiningFunctionDeclarationWithFunctionPrototype(
       // Likely we should build a new nondefining function declaration instead
       // of reusing the existing non-defining declaration.
       // removeStatement(functionDeclaration);
-      // DQ (11/22/2020): Note that this step will move the comments and CPP
-      // directives to the new statement (better in this step than in the copy
-      // of the pointer to the list above, which cause an iterator invalidation
-      // error). DQ (10/21/2020): I think we may want to return the orignal
-      // defining function declaration. DQ (12/2/2019): Need to support member
-      // functions which can't be declared when outside of their class. DQ
-      // (11/15/2020): Note that the default is false, and we need true.
-      bool movePreprocessingInfo = true;
-      replaceStatement(functionDeclaration, nondefiningFunctionDeclaration,
-                       movePreprocessingInfo);
-
       // DQ (11/25/2020): This is the cause of a problem in the outliner caught
       // in the resetParentPointer.C (definingDeclaration->get_parent() !=
       // __null). DQ (11/24/2020): Maybe we should set the parent of the
@@ -25956,6 +26067,11 @@ SageInterface::replaceDefiningFunctionDeclarationWithFunctionPrototype(
       // functionDeclaration is inserted into global scope and the name
       // qualification is not computed correctly (since the parent was still the
       // namespace scope where it was originally.
+      //
+      // Replace old function definition with non-defining declaration.
+      replaceStatement(functionDeclaration, nondefiningFunctionDeclaration,
+                       movePreprocessingInfo);
+
       ROSE_ASSERT(nondefiningFunctionDeclaration->get_parent() != NULL);
     }
   } else {

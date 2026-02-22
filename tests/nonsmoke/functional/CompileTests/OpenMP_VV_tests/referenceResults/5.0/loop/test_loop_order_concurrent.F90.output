@@ -1,0 +1,4 @@
+!$omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+!$omp loop order(concurrent)
+!$omp atomic update
+!$omp end parallel

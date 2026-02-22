@@ -1,2 +1,1 @@
-#pragma omp parallel
-#pragma omp for reduction(+ : sum)
+#pragma omp parallel for reduction(+ : sum)

@@ -1,0 +1,2 @@
+#pragma omp target map(tofrom : a[0:n])
+#pragma omp metadirective when(device={arch("nvptx")} : parallel for) default(parallel for)

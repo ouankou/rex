@@ -231,6 +231,12 @@ buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
 }
 
 static std::string getDeclarationNameAsString(clang::DeclarationName name) {
+  if (name.isEmpty()) {
+    return "";
+  }
+  if (const clang::IdentifierInfo *identifier = name.getAsIdentifierInfo()) {
+    return identifier->getName().str();
+  }
   if (name.getCXXOverloadedOperator() != clang::OO_None) {
     return buildOverloadedOperatorName(name.getCXXOverloadedOperator());
   }
@@ -2474,48 +2480,86 @@ void ClangToSageTranslator::appendUnattachedOpenMPPragmas() {
   };
 
   auto insert_pragma_in_scope = [&](SgPragmaDeclaration *pragma_decl,
-                                    SgScopeStatement *scope, unsigned line) {
+                                    SgScopeStatement *scope,
+                                    const std::string &filename,
+                                    unsigned line) {
     if (pragma_decl == nullptr || scope == nullptr) {
       return;
     }
     if (SgDeclarationStatementPtrList *decls =
             getScopeDeclarationListForPragma(scope)) {
-      auto it = decls->begin();
-      for (; it != decls->end(); ++it) {
+      auto insert_it = decls->end();
+      auto last_same_file_it = decls->end();
+
+      for (auto it = decls->begin(); it != decls->end(); ++it) {
         SgDeclarationStatement *decl = *it;
         if (decl == nullptr) {
           continue;
         }
-        unsigned decl_line = getLineForStatement(decl);
-        if (decl_line == 0) {
+        std::string decl_filename;
+        unsigned decl_line = 0;
+        if (!getLocatedNodeFilenameAndLine(decl, decl_filename, decl_line) ||
+            decl_line == 0 || !filenamesMatch(decl_filename, filename)) {
           continue;
         }
         if (decl_line > line) {
+          insert_it = it;
           break;
         }
+        last_same_file_it = it;
       }
-      decls->insert(it, pragma_decl);
+
+      if (insert_it == decls->end()) {
+        if (last_same_file_it != decls->end()) {
+          insert_it = last_same_file_it;
+          ++insert_it;
+        } else {
+          // Avoid cross-file placement when this scope has no declarations
+          // from the pragma's source file.
+          insert_it = decls->end();
+        }
+      }
+
+      decls->insert(insert_it, pragma_decl);
       pragma_decl->set_parent(scope);
       pragma_decl->set_scope(scope);
       return;
     }
 
     SgStatementPtrList &stmts = scope->getStatementList();
-    auto it = stmts.begin();
-    for (; it != stmts.end(); ++it) {
+    auto insert_it = stmts.end();
+    auto last_same_file_it = stmts.end();
+
+    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
       SgStatement *stmt = *it;
       if (stmt == nullptr) {
         continue;
       }
-      unsigned stmt_line = getLineForStatement(stmt);
-      if (stmt_line == 0) {
+      std::string stmt_filename;
+      unsigned stmt_line = 0;
+      if (!getLocatedNodeFilenameAndLine(stmt, stmt_filename, stmt_line) ||
+          stmt_line == 0 || !filenamesMatch(stmt_filename, filename)) {
         continue;
       }
       if (stmt_line > line) {
+        insert_it = it;
         break;
       }
+      last_same_file_it = it;
     }
-    stmts.insert(it, pragma_decl);
+
+    if (insert_it == stmts.end()) {
+      if (last_same_file_it != stmts.end()) {
+        insert_it = last_same_file_it;
+        ++insert_it;
+      } else {
+        // Avoid cross-file placement when this scope has no statements from
+        // the pragma's source file.
+        insert_it = stmts.end();
+      }
+    }
+
+    stmts.insert(insert_it, pragma_decl);
     pragma_decl->set_parent(scope);
     pragma_decl->set_scope(scope);
   };
@@ -2538,7 +2582,7 @@ void ClangToSageTranslator::appendUnattachedOpenMPPragmas() {
     if (pragma_decl == nullptr) {
       continue;
     }
-    insert_pragma_in_scope(pragma_decl, scope, entry.line);
+    insert_pragma_in_scope(pragma_decl, scope, entry.filename, entry.line);
     p_consumed_openmp_lines.insert(std::make_pair(entry.file_id, entry.line));
   }
 }
@@ -6617,6 +6661,33 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
 
   ROSE_ASSERT(expr != nullptr);
 
+  // Materialize implicit scalar-to-bool conversions as compiler-generated cast
+  // nodes. This preserves CFG/AST node parity for control-flow conditions while
+  // keeping unparsing unchanged (compiler-generated C-style casts are skipped).
+  switch (implicit_cast_expr->getCastKind()) {
+  case clang::CK_IntegralToBoolean:
+  case clang::CK_FloatingToBoolean:
+  case clang::CK_PointerToBoolean:
+  case clang::CK_MemberPointerToBoolean:
+  case clang::CK_IntegralToFloating: {
+    SgType *target_type =
+        buildTypeFromQualifiedType(implicit_cast_expr->getType());
+    if (target_type != nullptr) {
+      SgCastExp *cast_expr = SageBuilder::buildCastExp(
+          expr, target_type, SgCastExp::e_C_style_cast);
+      ROSE_ASSERT(cast_expr != nullptr);
+      setCompilerGeneratedFileInfo(cast_expr, true);
+      ROSE_ASSERT(cast_expr->get_file_info() != nullptr);
+      cast_expr->get_file_info()->setImplicitCast();
+      *node = cast_expr;
+      return VisitExpr(implicit_cast_expr, node);
+    }
+    break;
+  }
+  default:
+    break;
+  }
+
   // FIX: Pass through implicit casts without creating SgCastExp nodes
   // Legacy frontend doesn't create explicit cast nodes for implicit casts
   // Creating them breaks parent pointer relationships (e.g., FunctionRefExp
@@ -8114,6 +8185,12 @@ bool ClangToSageTranslator::VisitCXXUnresolvedConstructExpr(
           false,        // need_parenthesis_after_name
           class_unknown // associated_class_unknown for non class-like types
       );
+
+  // Preserve list-initialization form for unresolved constructor expressions
+  // so template definitions keep braces where required (e.g., aggregate
+  // initialization through dependent base packs in C++17).
+  ctor_init->set_is_braced_initialized(
+      cxx_unresolved_construct_expr->isListInitialization());
 
   *node = ctor_init;
 
@@ -10855,69 +10932,6 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
 #endif
   bool res = true;
 
-  auto detach_declaration_from_scope =
-      [](SgDeclarationStatement *decl) -> SgScopeStatement * {
-    if (decl == nullptr) {
-      return nullptr;
-    }
-
-    SgScopeStatement *original_scope = decl->get_scope();
-
-    // Remove any symbol that was registered for this declaration in the
-    // enclosing scope.
-    if (SgSymbol *associated_symbol =
-            decl->search_for_symbol_from_symbol_table()) {
-      if (SgScopeStatement *symbol_scope = associated_symbol->get_scope()) {
-        symbol_scope->remove_symbol(associated_symbol);
-      } else if (SgSymbolTable *table =
-                     isSgSymbolTable(associated_symbol->get_parent())) {
-        if (table->exists(associated_symbol)) {
-          table->remove(associated_symbol);
-        }
-      }
-      delete associated_symbol;
-    }
-
-    auto is_attached_to_parent_container = [](SgStatement *stmt) -> bool {
-      if (stmt == nullptr || stmt->get_parent() == nullptr) {
-        return false;
-      }
-
-      SgNode *parent = stmt->get_parent();
-      if (SgBasicBlock *bb = isSgBasicBlock(parent)) {
-        const SgStatementPtrList &stmts = bb->get_statements();
-        return std::find(stmts.begin(), stmts.end(), stmt) != stmts.end();
-      }
-
-      if (SgGlobal *global = isSgGlobal(parent)) {
-        const SgDeclarationStatementPtrList &decls = global->get_declarations();
-        return std::find(decls.begin(), decls.end(), stmt) != decls.end();
-      }
-
-      if (SgNamespaceDefinitionStatement *ns =
-              isSgNamespaceDefinitionStatement(parent)) {
-        const SgDeclarationStatementPtrList &decls = ns->get_declarations();
-        return std::find(decls.begin(), decls.end(), stmt) != decls.end();
-      }
-
-      if (SgClassDefinition *class_def = isSgClassDefinition(parent)) {
-        const SgDeclarationStatementPtrList &members = class_def->get_members();
-        return std::find(members.begin(), members.end(), stmt) != members.end();
-      }
-
-      return false;
-    };
-
-    if (original_scope != nullptr) {
-      if (is_attached_to_parent_container(decl)) {
-        SageInterface::removeStatement(decl, false);
-      }
-      decl->set_parent(nullptr);
-    }
-
-    return original_scope;
-  };
-
   // Get the lambda class (closure type) from Clang
   const clang::CXXRecordDecl *clang_lambda_class =
       lambda_expr->getLambdaClass();
@@ -10928,47 +10942,98 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
 
   // Convert Clang lambda class to ROSE class declaration
   SgClassDeclaration *lambda_closure_class = nullptr;
-  SgScopeStatement *lambda_closure_lexical_scope = nullptr;
+  auto mark_lambda_closure_class_hidden =
+      [this](SgClassDeclaration *class_decl) {
+        std::unordered_set<SgClassDeclaration *> visited;
+        std::vector<SgClassDeclaration *> worklist;
+        if (class_decl != nullptr) {
+          worklist.push_back(class_decl);
+        }
+
+        while (!worklist.empty()) {
+          SgClassDeclaration *current = worklist.back();
+          worklist.pop_back();
+          if (current == nullptr || !visited.insert(current).second) {
+            continue;
+          }
+
+          current->set_isAutonomousDeclaration(false);
+          setCompilerGeneratedFileInfo(current, false);
+          suppress_unparse_output(current);
+          if (Sg_File_Info *decl_fi = current->get_file_info()) {
+            decl_fi->setFrontendSpecific();
+          }
+
+          if (SgClassDefinition *class_def = current->get_definition()) {
+            setCompilerGeneratedFileInfo(class_def, false);
+            suppress_unparse_output(class_def);
+            if (Sg_File_Info *def_fi = class_def->get_file_info()) {
+              def_fi->setFrontendSpecific();
+            }
+          }
+
+          if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+                  current->get_firstNondefiningDeclaration())) {
+            worklist.push_back(first_nondef);
+          }
+          if (SgClassDeclaration *defining =
+                  isSgClassDeclaration(current->get_definingDeclaration())) {
+            worklist.push_back(defining);
+          }
+        }
+      };
+
   if (clang_lambda_class != nullptr) {
     SgNode *tmp_class =
         Traverse(const_cast<clang::CXXRecordDecl *>(clang_lambda_class));
     lambda_closure_class = isSgClassDeclaration(tmp_class);
+    if (lambda_closure_class != nullptr) {
+      if (SgClassDeclaration *defining_decl = isSgClassDeclaration(
+              lambda_closure_class->get_definingDeclaration())) {
+        lambda_closure_class = defining_decl;
+      }
+      mark_lambda_closure_class_hidden(lambda_closure_class);
+      if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+              lambda_closure_class->get_firstNondefiningDeclaration())) {
+        if (SgScopeStatement *closure_scope =
+                lambda_closure_class->get_scope()) {
+          first_nondef->set_scope(closure_scope);
+        }
+        if (SgScopeStatement *first_scope = first_nondef->get_scope()) {
+          ensureDeclInScopeChildListPreserveScope(
+              first_nondef, first_scope, "VisitLambdaExpr:lambda-first-nondef");
 
-    // Remove from enclosing scope using SageInterface so symbols/scopes stay
-    // consistent
-    lambda_closure_lexical_scope =
-        detach_declaration_from_scope(lambda_closure_class);
-
-    // Preserve a valid scope so downstream lookups don't see nullptr after
-    // detachment.
-    if (lambda_closure_class != nullptr &&
-        lambda_closure_lexical_scope != nullptr) {
-      lambda_closure_class->set_scope(lambda_closure_lexical_scope);
-      if (SgClassDefinition *class_def =
-              lambda_closure_class->get_definition()) {
-        class_def->set_scope(lambda_closure_lexical_scope);
+          if (SgBasicBlock *bb = isSgBasicBlock(first_scope)) {
+            SgStatementPtrList &stmts = bb->get_statements();
+            if (std::find(stmts.begin(), stmts.end(), first_nondef) ==
+                stmts.end()) {
+              stmts.push_back(first_nondef);
+            }
+            if (first_nondef->get_parent() != bb) {
+              first_nondef->set_parent(bb);
+            }
+          }
+        }
       }
     }
   }
 
   // Convert Clang call operator to ROSE function declaration
   SgFunctionDeclaration *lambda_function = nullptr;
-  SgScopeStatement *lambda_function_scope = nullptr;
   if (clang_call_operator != nullptr) {
     SgNode *tmp_func =
         Traverse(const_cast<clang::CXXMethodDecl *>(clang_call_operator));
     lambda_function = isSgFunctionDeclaration(tmp_func);
-
-    lambda_function_scope = detach_declaration_from_scope(lambda_function);
-
-    // Restore the scope pointer for operator() so later queries succeed.
     if (lambda_function != nullptr) {
-      if (lambda_function_scope != nullptr) {
-        lambda_function->set_scope(lambda_function_scope);
-      } else if (lambda_closure_class != nullptr &&
-                 lambda_closure_class->get_definition() != nullptr) {
-        lambda_function->set_scope(lambda_closure_class->get_definition());
+      if (SgFunctionDeclaration *defining_decl = isSgFunctionDeclaration(
+              lambda_function->get_definingDeclaration())) {
+        lambda_function = defining_decl;
       }
+    }
+    if (lambda_function != nullptr && lambda_function->get_scope() == nullptr &&
+        lambda_closure_class != nullptr &&
+        lambda_closure_class->get_definition() != nullptr) {
+      lambda_function->set_scope(lambda_closure_class->get_definition());
     }
   }
 
@@ -11063,6 +11128,9 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
   built_lambda->set_capture_default(has_default_capture);
   built_lambda->set_default_is_by_reference(capture_default ==
                                             clang::LCD_ByRef);
+  built_lambda->set_has_parameter_decl(lambda_expr->hasExplicitParameters());
+  built_lambda->set_is_mutable(lambda_expr->isMutable());
+  built_lambda->set_explicit_return_type(lambda_expr->hasExplicitResultType());
 
   *node = built_lambda;
 
@@ -12165,6 +12233,15 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
   }
 
   auto build_single_overload_function_ref = [&]() -> SgExpression * {
+    // Keep unresolved ADL/dependent lookups in nonreal form. Even when Clang
+    // exposes a single ordinary-lookup candidate, ADL or template-dependent
+    // context can still change the selected callee at instantiation time.
+    if (unresolved_lookup_expr->requiresADL() ||
+        unresolved_lookup_expr->isTypeDependent() ||
+        unresolved_lookup_expr->isValueDependent()) {
+      return nullptr;
+    }
+
     if (unresolved_lookup_expr->getName().getCXXOverloadedOperator() !=
         clang::OO_None) {
       return nullptr;
@@ -12364,19 +12441,23 @@ bool ClangToSageTranslator::VisitPackExpansionExpr(
 #endif
   bool res = true;
 
-  // ROOT CAUSE FIX: Pack expansion expressions (e.g., f(args...) where args is
-  // a pack) Traverse the pattern expression (the expression before the ...)
+  // Translate pack expansion structurally as an explicit AST node.
   clang::Expr *pattern = pack_expansion_expr->getPattern();
   if (pattern != nullptr) {
     SgNode *tmp_node = Traverse(pattern);
     SgExpression *pattern_expr = isSgExpression(tmp_node);
     if (pattern_expr != nullptr) {
-      *node = pattern_expr;
+      SgPackExpansionExpr *pack_expr = new SgPackExpansionExpr(pattern_expr);
+      if (pattern_expr->get_parent() == nullptr) {
+        pattern_expr->set_parent(pack_expr);
+      }
+      applySourceRange(pack_expr, pack_expansion_expr->getSourceRange());
+      *node = pack_expr;
       return VisitExpr(pack_expansion_expr, node) && res;
     }
   }
 
-  // Fallback if pattern can't be traversed
+  // Preserve AST validity if the pattern cannot be translated.
   *node = buildFallbackExpression(pack_expansion_expr);
 
   return VisitExpr(pack_expansion_expr, node) && res;

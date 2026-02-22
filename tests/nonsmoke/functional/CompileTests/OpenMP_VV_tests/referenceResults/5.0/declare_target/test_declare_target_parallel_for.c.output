@@ -1,0 +1,4 @@
+#pragma omp declare target
+#pragma omp parallel for num_threads(OMPVV_NUM_THREADS_DEVICE) shared(num_threads)
+#pragma omp end declare target
+#pragma omp target map(tofrom:x,y,z,num_threads)

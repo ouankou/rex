@@ -129,7 +129,6 @@ set(CXX20_TESTCODES
   rex_test2026_concepts_requires.cpp
 )
 set(CXX20_DISABLED_TESTCODES
-  test2020_02.C
   test2020_05.C
   test2020_07.C
   test2020_10.C
@@ -138,11 +137,7 @@ set(CXX20_DISABLED_TESTCODES
   test2020_13.C
   test2020_21.C
   test2020_22.C
-  test2020_24.C
-  test2020_25.C
   test2020_26.C
-  test2020_28.C
-  test2020_29.C
   test2020_32.C
   test2020_33.C
   test2020_34.C

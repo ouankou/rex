@@ -6,6 +6,40 @@
 #include <iostream>
 using namespace std;
 
+namespace {
+bool canRemoveStatementFromAst(SgStatement *statement) {
+  if (statement == NULL) {
+    return false;
+  }
+
+  // Mutation APIs only support statements that are attached to a statement
+  // list.
+  if (statement->get_parent() == NULL ||
+      isSgStatement(statement->get_parent()) == NULL) {
+    return false;
+  }
+
+  return SageInterface::isRemovableStatement(statement);
+}
+} // namespace
+
+void CreateSlice::queueStatementForRemoval(SgStatement *statement) {
+  if (statement != NULL) {
+    statementsPendingRemoval.push_back(statement);
+  }
+}
+
+void CreateSlice::applyPendingRemovals() {
+  for (std::vector<SgStatement *>::iterator statement =
+           statementsPendingRemoval.begin();
+       statement != statementsPendingRemoval.end(); ++statement) {
+    if (canRemoveStatementFromAst(*statement)) {
+      SageInterface::removeStatement(*statement);
+    }
+  }
+  statementsPendingRemoval.clear();
+}
+
 void printSgNode(SgNode *node) {
   cout << "\"";
   if (isSgInitializedName(node))
@@ -145,8 +179,10 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
           //                                              ())
           if (currentFile &&
               (*cand)->get_file_info()->isSameFile(currentFile)) {
-            // LowLevelRewrite::remove(isSgStatement(*cand));
-            SageInterface::removeStatement(isSgStatement(*cand));
+            SgStatement *candidateStatement = isSgStatement(*cand);
+            // Defer AST mutation until traversal finishes to keep successor
+            // container indexing stable.
+            queueStatementForRemoval(candidateStatement);
             //                                      delete
             //                                      (*cand);
           }
@@ -196,8 +232,10 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
         //                                              ()->isOutputInCodeGeneration
         //                                              ())
         if (currentFile && node->get_file_info()->isSameFile(currentFile)) {
-          // LowLevelRewrite::remove(isSgStatement(node));
-          SageInterface::removeStatement(isSgStatement(node));
+          SgStatement *currentStatement = isSgStatement(node);
+          // Defer AST mutation until traversal finishes to keep successor
+          // container indexing stable.
+          queueStatementForRemoval(currentStatement);
         }
         //      delete(node);
       }
