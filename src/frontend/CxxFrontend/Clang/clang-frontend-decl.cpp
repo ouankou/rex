@@ -3359,6 +3359,35 @@ SgSymbol *find_function_symbol_in_scope(SgScopeStatement *scope,
   return matches.empty() ? nullptr : matches.front();
 }
 
+SgFunctionDeclaration *function_declaration_from_symbol(SgSymbol *symbol) {
+  if (symbol == nullptr) {
+    return nullptr;
+  }
+
+  if (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
+    symbol = alias->get_alias();
+  }
+  if (symbol == nullptr) {
+    return nullptr;
+  }
+
+  if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(symbol)) {
+    return func_sym->get_declaration();
+  }
+  if (SgTemplateFunctionSymbol *tmpl_sym = isSgTemplateFunctionSymbol(symbol)) {
+    return isSgFunctionDeclaration(tmpl_sym->get_declaration());
+  }
+  if (SgMemberFunctionSymbol *member_sym = isSgMemberFunctionSymbol(symbol)) {
+    return member_sym->get_declaration();
+  }
+  if (SgTemplateMemberFunctionSymbol *tmpl_mem_sym =
+          isSgTemplateMemberFunctionSymbol(symbol)) {
+    return isSgFunctionDeclaration(tmpl_mem_sym->get_declaration());
+  }
+
+  return nullptr;
+}
+
 bool function_symbol_matches_declaration(SgSymbol *symbol,
                                          SgFunctionDeclaration *decl) {
   if (symbol == nullptr || decl == nullptr) {
@@ -3384,9 +3413,52 @@ bool function_symbol_matches_declaration(SgSymbol *symbol,
   return isSgFunctionSymbol(symbol) != nullptr;
 }
 
-void rebind_function_like_symbol_declaration(SgSymbol *symbol,
-                                             SgFunctionDeclaration *decl) {
+enum FunctionSymbolBindingPolicy {
+  BIND_ALLOW_SAME_FUNCTION,
+  BIND_REQUIRE_SAME_DECL_CHAIN
+};
+
+bool function_symbol_can_bind_to_declaration(
+    SgSymbol *symbol, SgFunctionDeclaration *decl,
+    FunctionSymbolBindingPolicy binding_policy = BIND_ALLOW_SAME_FUNCTION) {
+  if (!function_symbol_matches_declaration(symbol, decl)) {
+    return false;
+  }
+
+  SgFunctionDeclaration *sym_decl = function_declaration_from_symbol(symbol);
+  if (sym_decl == nullptr || decl == nullptr) {
+    return true;
+  }
+
+  SgFunctionDeclaration *sym_first =
+      isSgFunctionDeclaration(sym_decl->get_firstNondefiningDeclaration());
+  if (sym_first == nullptr) {
+    sym_first = sym_decl;
+  }
+
+  SgFunctionDeclaration *decl_first =
+      isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration());
+  if (decl_first == nullptr) {
+    decl_first = decl;
+  }
+
+  if (sym_first == decl_first) {
+    return true;
+  }
+  if (binding_policy == BIND_REQUIRE_SAME_DECL_CHAIN) {
+    return false;
+  }
+  return SageInterface::isSameFunction(sym_first, decl_first);
+}
+
+void rebind_function_like_symbol_declaration(
+    SgSymbol *symbol, SgFunctionDeclaration *decl,
+    FunctionSymbolBindingPolicy binding_policy = BIND_ALLOW_SAME_FUNCTION) {
   if (symbol == nullptr || decl == nullptr) {
+    return;
+  }
+
+  if (!function_symbol_can_bind_to_declaration(symbol, decl, binding_policy)) {
     return;
   }
 
@@ -14809,7 +14881,8 @@ void ClangToSageTranslator::repairMissingFunctionSymbols() {
       if (sym == nullptr) {
         return;
       }
-      rebind_function_like_symbol_declaration(sym, symbol_decl);
+      rebind_function_like_symbol_declaration(sym, symbol_decl,
+                                              BIND_REQUIRE_SAME_DECL_CHAIN);
       SgSymbolTable *target_table = symbol_scope->get_symbol_table();
       bool parent_mismatch =
           target_table != nullptr && sym->get_parent() != target_table;
@@ -19630,11 +19703,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           isSgFunctionDeclaration(sg_function_decl->get_definingDeclaration()));
 
       if (scope_for_symbol_table != nullptr) {
-        std::vector<SgSymbol *> scope_symbols = find_function_symbols_in_scope(
-            scope_for_symbol_table, first_symbol_decl);
-        for (SgSymbol *scope_symbol : scope_symbols) {
-          rebind_function_like_symbol_declaration(scope_symbol,
-                                                  first_symbol_decl);
+        if (SgFunctionSymbol *scope_symbol =
+                scope_for_symbol_table->lookup_function_symbol(
+                    name, sg_function_decl->get_type())) {
+          if (scope_symbol->get_declaration() != first_symbol_decl) {
+            scope_symbol->set_declaration(first_symbol_decl);
+          }
         }
       }
     }
