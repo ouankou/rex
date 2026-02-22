@@ -6548,8 +6548,13 @@ void transOmpCritical(SgNode *node) {
       if (candidate == NULL)
         return false;
       if (isSgModuleStatement(candidate) != NULL ||
-          isSgModuleDefinition(candidate) != NULL)
+          candidate->sage_class_name() == "SgModuleDefinition")
         return true;
+      if (SgDeclarationStatement *parent_decl =
+              isSgDeclarationStatement(candidate->get_parent())) {
+        if (isSgModuleStatement(parent_decl) != NULL)
+          return true;
+      }
       if (SgClassDefinition *class_def = isSgClassDefinition(candidate)) {
         SgDeclarationStatement *decl = class_def->get_declaration();
         return isSgModuleStatement(decl) != NULL;
@@ -9110,7 +9115,9 @@ find_fortran_procedure_declaration(SgBasicBlock *body, const SgName &name) {
 }
 
 static bool is_fortran_data_specification_statement(const SgStatement *stmt) {
-  if (isSgDataStatement(stmt) != NULL)
+  // Some ROSE trees represent DATA as dedicated nodes, others attach DATA
+  // groups under SgAttributeSpecificationStatement.
+  if (stmt->sage_class_name() == "SgDataStatement")
     return true;
 
   const SgAttributeSpecificationStatement *attr_spec =
