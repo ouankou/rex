@@ -3384,6 +3384,57 @@ bool function_symbol_matches_declaration(SgSymbol *symbol,
   return isSgFunctionSymbol(symbol) != nullptr;
 }
 
+void rebind_function_like_symbol_declaration(SgSymbol *symbol,
+                                             SgFunctionDeclaration *decl) {
+  if (symbol == nullptr || decl == nullptr) {
+    return;
+  }
+
+  if (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
+    symbol = alias->get_alias();
+  }
+  if (symbol == nullptr) {
+    return;
+  }
+
+  if (SgTemplateMemberFunctionSymbol *tmpl_mem_sym =
+          isSgTemplateMemberFunctionSymbol(symbol)) {
+    if (SgTemplateMemberFunctionDeclaration *tmpl_mem_decl =
+            isSgTemplateMemberFunctionDeclaration(decl)) {
+      if (tmpl_mem_sym->get_declaration() != tmpl_mem_decl) {
+        tmpl_mem_sym->set_declaration(tmpl_mem_decl);
+      }
+    }
+    return;
+  }
+
+  if (SgTemplateFunctionSymbol *tmpl_sym = isSgTemplateFunctionSymbol(symbol)) {
+    if (SgTemplateFunctionDeclaration *tmpl_decl =
+            isSgTemplateFunctionDeclaration(decl)) {
+      if (tmpl_sym->get_declaration() != tmpl_decl) {
+        tmpl_sym->set_declaration(tmpl_decl);
+      }
+    }
+    return;
+  }
+
+  if (SgMemberFunctionSymbol *member_sym = isSgMemberFunctionSymbol(symbol)) {
+    if (SgMemberFunctionDeclaration *member_decl =
+            isSgMemberFunctionDeclaration(decl)) {
+      if (member_sym->get_declaration() != member_decl) {
+        member_sym->set_declaration(member_decl);
+      }
+    }
+    return;
+  }
+
+  if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(symbol)) {
+    if (func_sym->get_declaration() != decl) {
+      func_sym->set_declaration(decl);
+    }
+  }
+}
+
 enum RehomeFunctionSymbolMode {
   REHOME_REQUIRE_SOURCE_SYMBOLS,
   REHOME_ALLOW_EMPTY_SOURCE
@@ -14758,13 +14809,7 @@ void ClangToSageTranslator::repairMissingFunctionSymbols() {
       if (sym == nullptr) {
         return;
       }
-      if (symbol_decl->variantT() == V_SgFunctionDeclaration) {
-        if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
-          if (func_sym->get_declaration() != symbol_decl) {
-            func_sym->set_declaration(symbol_decl);
-          }
-        }
-      }
+      rebind_function_like_symbol_declaration(sym, symbol_decl);
       SgSymbolTable *target_table = symbol_scope->get_symbol_table();
       bool parent_mismatch =
           target_table != nullptr && sym->get_parent() != target_table;
@@ -19575,12 +19620,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         if (decl == nullptr || first_symbol_decl == nullptr) {
           return;
         }
-        if (SgFunctionSymbol *sym =
-                isSgFunctionSymbol(decl->get_symbol_from_symbol_table())) {
-          if (sym->get_declaration() != first_symbol_decl) {
-            sym->set_declaration(first_symbol_decl);
-          }
-        }
+        rebind_function_like_symbol_declaration(
+            decl->get_symbol_from_symbol_table(), first_symbol_decl);
       };
 
       rebind_symbol_to_first_decl(first_symbol_decl);
@@ -19589,12 +19630,11 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           isSgFunctionDeclaration(sg_function_decl->get_definingDeclaration()));
 
       if (scope_for_symbol_table != nullptr) {
-        if (SgFunctionSymbol *scope_symbol =
-                scope_for_symbol_table->lookup_function_symbol(
-                    name, sg_function_decl->get_type())) {
-          if (scope_symbol->get_declaration() != first_symbol_decl) {
-            scope_symbol->set_declaration(first_symbol_decl);
-          }
+        std::vector<SgSymbol *> scope_symbols = find_function_symbols_in_scope(
+            scope_for_symbol_table, first_symbol_decl);
+        for (SgSymbol *scope_symbol : scope_symbols) {
+          rebind_function_like_symbol_declaration(scope_symbol,
+                                                  first_symbol_decl);
         }
       }
     }
