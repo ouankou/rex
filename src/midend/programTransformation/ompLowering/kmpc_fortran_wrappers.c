@@ -336,6 +336,38 @@ void __kmpc_barrier_(int *loc_ref, int *gtid_ref) {
   __kmpc_barrier(NULL, *gtid_ref);
 }
 
+void xomp_critical_start(int *lock_ref);
+void xomp_critical_end(int *lock_ref);
+void xomp_flush(void);
+#pragma weak xomp_critical_start_ = xomp_critical_start
+#pragma weak xomp_critical_end_ = xomp_critical_end
+#pragma weak xomp_flush_ = xomp_flush
+
+void xomp_critical_start(int *lock_ref) {
+  if (lock_ref == NULL) {
+    fprintf(stderr, "REX Fortran OpenMP lowering: null critical lock\n");
+    ROSE_ABORT();
+  }
+  int gtid = __kmpc_global_thread_num(NULL);
+  __kmpc_critical(NULL, gtid, (void *)lock_ref);
+}
+
+void xomp_critical_end(int *lock_ref) {
+  if (lock_ref == NULL) {
+    fprintf(stderr, "REX Fortran OpenMP lowering: null critical lock\n");
+    ROSE_ABORT();
+  }
+  int gtid = __kmpc_global_thread_num(NULL);
+  __kmpc_end_critical(NULL, gtid, (void *)lock_ref);
+}
+
+void xomp_flush(void) { __kmpc_flush(NULL); }
+
+void __kmpc_flush_(int *loc_ref) {
+  (void)loc_ref;
+  xomp_flush();
+}
+
 int __kmpc_single_(int *loc_ref, int *gtid_ref) {
   (void)loc_ref;
   return __kmpc_single(NULL, *gtid_ref);

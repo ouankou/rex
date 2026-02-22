@@ -797,6 +797,8 @@ static void insert_function_parameter(std::string, SgType *,
                                       SgFunctionDeclaration *, bool);
 static void ensure_fortran_variable_declaration(SgBasicBlock *, const SgName &,
                                                 SgType *);
+static void insert_fortran_statement_in_specification_part(SgStatement *,
+                                                           SgBasicBlock *);
 static void insert_fortran_declaration_into_procedure(SgVariableDeclaration *,
                                                       SgScopeStatement *);
 static void normalize_fortran_external_subroutine_declarations(SgBasicBlock *);
@@ -6518,6 +6520,8 @@ void transOmpOrdered(SgNode *node) {
 //  work()
 //  GOMP_critical_name_end (&gomp_critical_user_aaa);
 //
+static const int kKmpCriticalNameWords = 8; // kmp_critical_name is int32_t[8]
+
 void transOmpCritical(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpCriticalStatement *target = isSgOmpCriticalStatement(node);
@@ -6533,28 +6537,136 @@ void transOmpCritical(SgNode *node) {
 
   // Assign a default lock variable name for unnamed critical directives.
   string g_lock_name = "xomp_critical_user_" + c_name;
-  SgGlobal *global = getGlobalScope(target);
-  ROSE_ASSERT(global != NULL);
-  SgVariableSymbol *sym =
-      lookupVariableSymbolInParentScopes(SgName(g_lock_name), global);
-  if (sym == NULL) {
-    SgType *lock_type = NULL;
-    if (SageInterface::is_Fortran_language())
-      lock_type = buildPointerType(buildVoidType());
-    else
-      lock_type = buildArrayType(buildIntType(), buildIntVal(8));
-    SgVariableDeclaration *vardecl =
-        buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
-    setStatic(vardecl);
-    prependStatement(vardecl, global);
-    sym = getFirstVarSym(vardecl);
+  SgVariableSymbol *sym = NULL;
+  if (SageInterface::is_Fortran_language()) {
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+    ROSE_ASSERT(func_def != NULL);
+    SgBasicBlock *proc_body = func_def->get_body();
+    ROSE_ASSERT(proc_body != NULL);
+
+    auto is_direct_module_scope = [](SgScopeStatement *candidate) -> bool {
+      if (candidate == NULL)
+        return false;
+      if (isSgModuleStatement(candidate) != NULL)
+        return true;
+      if (SgDeclarationStatement *parent_decl =
+              isSgDeclarationStatement(candidate->get_parent())) {
+        if (isSgModuleStatement(parent_decl) != NULL)
+          return true;
+      }
+      if (SgClassDefinition *class_def = isSgClassDefinition(candidate)) {
+        SgDeclarationStatement *decl = class_def->get_declaration();
+        return isSgModuleStatement(decl) != NULL;
+      }
+      return false;
+    };
+
+    auto is_symbol_from_current_procedure =
+        [&](SgVariableSymbol *candidate) -> bool {
+      if (candidate == NULL)
+        return false;
+
+      SgScopeStatement *decl_scope = NULL;
+      if (SgInitializedName *candidate_decl = candidate->get_declaration())
+        decl_scope = candidate_decl->get_scope();
+      if (decl_scope == NULL)
+        decl_scope = candidate->get_scope();
+      if (decl_scope == NULL)
+        return false;
+
+      SgFunctionDefinition *decl_func_def =
+          getEnclosingFunctionDefinition(decl_scope);
+      return decl_func_def != NULL && decl_func_def == func_def;
+    };
+
+    auto ensure_local_fortran_lock_symbol = [&]() -> SgVariableSymbol * {
+      SgExprListExp *lock_dims =
+          buildExprListExp(buildIntVal(kKmpCriticalNameWords));
+      SgType *lock_type = buildArrayType(buildIntType(), lock_dims);
+      SgVariableDeclaration *vardecl =
+          buildVariableDeclaration(g_lock_name, lock_type, NULL, proc_body);
+      insert_fortran_declaration_into_procedure(vardecl, proc_body);
+      return getFirstVarSym(vardecl);
+    };
+
+    sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), scope);
+    bool symbol_is_module_entity = false;
+    bool symbol_is_current_procedure_entity = false;
+    if (sym != NULL) {
+      symbol_is_module_entity = is_direct_module_scope(sym->get_scope());
+      if (!symbol_is_module_entity) {
+        if (SgInitializedName *sym_decl = sym->get_declaration()) {
+          symbol_is_module_entity =
+              is_direct_module_scope(sym_decl->get_scope());
+        }
+      }
+      symbol_is_current_procedure_entity =
+          is_symbol_from_current_procedure(sym);
+    }
+
+    // Host-associated variables from parent procedures cannot appear in COMMON
+    // inside this procedure. If we found such a symbol, create a local lock
+    // declaration to provide valid COMMON-backed global storage semantics.
+    if (sym == NULL ||
+        (!symbol_is_module_entity && !symbol_is_current_procedure_entity)) {
+      sym = ensure_local_fortran_lock_symbol();
+      symbol_is_module_entity = false;
+      symbol_is_current_procedure_entity = true;
+    }
+    ROSE_ASSERT(sym != NULL);
+
+    if (!symbol_is_module_entity) {
+      // Fortran COMMON provides global storage semantics for named/unnamed
+      // critical locks across procedures in a translation unit.
+      const std::string common_block_name = "xomp_critical_block_" + c_name;
+      bool has_common_block = false;
+      const SgStatementPtrList &stmts = proc_body->get_statements();
+      for (SgStatementPtrList::const_iterator it = stmts.begin();
+           it != stmts.end(); ++it) {
+        SgCommonBlock *common_block = isSgCommonBlock(*it);
+        if (common_block == NULL)
+          continue;
+
+        const SgCommonBlockObjectPtrList &blocks =
+            common_block->get_block_list();
+        for (SgCommonBlockObjectPtrList::const_iterator bit = blocks.begin();
+             bit != blocks.end(); ++bit) {
+          if ((*bit)->get_block_name() == common_block_name) {
+            has_common_block = true;
+            break;
+          }
+        }
+        if (has_common_block)
+          break;
+      }
+
+      if (!has_common_block) {
+        SgExprListExp *common_vars = buildExprListExp(buildVarRefExp(sym));
+        SgCommonBlockObject *common_obj =
+            buildCommonBlockObject(common_block_name, common_vars);
+        SgCommonBlock *common_decl = buildCommonBlock(common_obj);
+        insert_fortran_statement_in_specification_part(common_decl, proc_body);
+      }
+    }
+  } else {
+    SgGlobal *global = getGlobalScope(target);
+    ROSE_ASSERT(global != NULL);
+    sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), global);
+    if (sym == NULL) {
+      SgType *lock_type =
+          buildArrayType(buildIntType(), buildIntVal(kKmpCriticalNameWords));
+      SgVariableDeclaration *vardecl =
+          buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
+      setStatic(vardecl);
+      prependStatement(vardecl, global);
+      sym = getFirstVarSym(vardecl);
+    }
   }
+  ROSE_ASSERT(sym != NULL);
 
   if (SageInterface::is_Fortran_language()) {
-    SgExprListExp *param1 =
-        buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
-    SgExprListExp *param2 =
-        buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
+    SgExprListExp *param1 = buildExprListExp(buildVarRefExp(sym));
+    SgExprListExp *param2 = buildExprListExp(buildVarRefExp(sym));
 
     func_call_stmt1 = buildFunctionCallStmt("XOMP_critical_start",
                                             buildVoidType(), param1, scope);
@@ -6675,10 +6787,10 @@ void transOmpFlush(SgNode *node) {
   ROSE_ASSERT(scope != NULL);
 
   SgExprStatement *func_call_stmt = NULL;
-  if (SageInterface::is_Fortran_language())
+  if (SageInterface::is_Fortran_language()) {
     func_call_stmt =
-        buildFunctionCallStmt("XOMP_flush_all", buildVoidType(), NULL, scope);
-  else
+        buildFunctionCallStmt("XOMP_flush", buildVoidType(), NULL, scope);
+  } else
     func_call_stmt = buildFunctionCallStmt("__sync_synchronize",
                                            buildVoidType(), NULL, scope);
   replaceStatement(target, func_call_stmt, true);
@@ -7269,24 +7381,80 @@ static void insertOmpLastprivateCopyBackStmts(
         orig_var_exp = copyExpression(var_iter->second);
     }
   }
-  if (isSgOmpForStatement(ompStmt)) {
+  if (isSgOmpForStatement(ompStmt) || isSgOmpDoStatement(ompStmt)) {
     ROSE_ASSERT(orig_loop_upper != NULL);
-    Rose_STL_Container<SgNode *> loops =
+    SgInitializedName *loop_index = NULL;
+    SgExpression *loop_lower = NULL;
+    SgExpression *loop_upper = NULL;
+    SgExpression *loop_step = NULL;
+    SgStatement *loop_body = NULL;
+    bool isIncremental = true;
+    bool isInclusiveBound = false;
+    bool isCanonical = false;
+
+    SgStatement *selected_loop = NULL;
+    size_t selected_loop_depth = 0;
+    bool has_selected_loop = false;
+    auto consider_loop_candidate = [&](SgStatement *candidate) {
+      if (candidate == NULL)
+        return;
+      size_t depth = 0;
+      SgNode *cursor = candidate;
+      while (cursor != NULL && cursor != bb1) {
+        cursor = cursor->get_parent();
+        ++depth;
+      }
+      if (cursor != bb1)
+        return;
+      if (!has_selected_loop || depth < selected_loop_depth) {
+        selected_loop = candidate;
+        selected_loop_depth = depth;
+        has_selected_loop = true;
+      }
+    };
+
+    Rose_STL_Container<SgNode *> c_loops =
         NodeQuery::querySubTree(bb1, V_SgForStatement);
-    ROSE_ASSERT(loops.size() !=
-                0); // there must be 1 for loop under SgOmpForStatement
-    SgForStatement *top_loop = isSgForStatement(loops[0]);
-    ROSE_ASSERT(top_loop != NULL);
-    // Get essential loop information
-    SgInitializedName *loop_index;
-    SgExpression *loop_lower, *loop_upper, *loop_step;
-    SgStatement *loop_body;
-    bool isIncremental;
-    bool isInclusiveBound;
-    bool isCanonical = SageInterface::isCanonicalForLoop(
-        top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step, &loop_body,
-        &isIncremental, &isInclusiveBound);
-    ROSE_ASSERT(isCanonical == true);
+    for (Rose_STL_Container<SgNode *>::const_iterator it = c_loops.begin();
+         it != c_loops.end(); ++it)
+      consider_loop_candidate(isSgStatement(*it));
+
+    Rose_STL_Container<SgNode *> f_loops =
+        NodeQuery::querySubTree(bb1, V_SgFortranDo);
+    for (Rose_STL_Container<SgNode *>::const_iterator it = f_loops.begin();
+         it != f_loops.end(); ++it)
+      consider_loop_candidate(isSgStatement(*it));
+
+    if (selected_loop == NULL) {
+      MLOG_ERROR_CXX("ompLowering") << "Failed to find a lowered loop under "
+                                    << ompStmt->sage_class_name()
+                                    << " while inserting lastprivate copy-back";
+      ROSE_ABORT();
+      return;
+    }
+
+    if (SgForStatement *top_loop = isSgForStatement(selected_loop)) {
+      isCanonical = SageInterface::isCanonicalForLoop(
+          top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step,
+          &loop_body, &isIncremental, &isInclusiveBound);
+    } else if (SgFortranDo *top_loop = isSgFortranDo(selected_loop)) {
+      isCanonical = SageInterface::isCanonicalDoLoop(
+          top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step,
+          &loop_body, &isIncremental, &isInclusiveBound);
+    } else {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Selected non-loop node " << selected_loop->sage_class_name()
+          << " while inserting lastprivate copy-back";
+      ROSE_ABORT();
+      return;
+    }
+    if (!isCanonical) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Non-canonical lowered loop under " << ompStmt->sage_class_name()
+          << " while inserting lastprivate copy-back";
+      ROSE_ABORT();
+      return;
+    }
     SgExpression *if_cond = NULL;
     SgStatement *if_cond_stmt = NULL;
     // we need the original upper bound!!
@@ -8945,6 +9113,62 @@ find_fortran_procedure_declaration(SgBasicBlock *body, const SgName &name) {
   return NULL;
 }
 
+static bool is_fortran_data_specification_statement(const SgStatement *stmt) {
+  // Some ROSE trees represent DATA as dedicated nodes, others attach DATA
+  // groups under SgAttributeSpecificationStatement.
+  if (std::string(stmt->sage_class_name()) == "SgDataStatement")
+    return true;
+
+  const SgAttributeSpecificationStatement *attr_spec =
+      isSgAttributeSpecificationStatement(stmt);
+  if (attr_spec == NULL)
+    return false;
+
+  if (attr_spec->get_attribute_kind() ==
+      SgAttributeSpecificationStatement::e_dataStatement)
+    return true;
+
+  return !attr_spec->get_data_statement_group_list().empty();
+}
+
+static SgStatement *
+find_fortran_specification_insertion_anchor(SgBasicBlock *body) {
+  ROSE_ASSERT(body != NULL);
+  SgStatement *anchor = NULL;
+  const SgStatementPtrList &stmts = body->get_statements();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgStatement *stmt = *it;
+    ROSE_ASSERT(stmt != NULL);
+
+    // Declarations and COMMON must remain in the specification part and before
+    // DATA statements or internal subprogram definitions.
+    if (is_fortran_data_specification_statement(stmt))
+      break;
+    if (SgProcedureHeaderStatement *proc = isSgProcedureHeaderStatement(stmt)) {
+      if (proc->get_definition() != NULL)
+        break;
+    }
+    if (!isSgDeclarationStatement(stmt))
+      break;
+
+    anchor = stmt;
+  }
+  return anchor;
+}
+
+static void insert_fortran_statement_in_specification_part(SgStatement *stmt,
+                                                           SgBasicBlock *body) {
+  ROSE_ASSERT(stmt != NULL);
+  ROSE_ASSERT(body != NULL);
+
+  SgStatement *anchor = find_fortran_specification_insertion_anchor(body);
+  if (anchor != NULL)
+    insertStatementAfter(anchor, stmt);
+  else
+    prependStatement(stmt, body);
+}
+
 static void ensure_fortran_variable_declaration(SgBasicBlock *body,
                                                 const SgName &name,
                                                 SgType *type) {
@@ -8969,11 +9193,7 @@ static void ensure_fortran_variable_declaration(SgBasicBlock *body,
 
   SgVariableDeclaration *decl =
       buildVariableDeclaration(name, type, NULL, body);
-  SgStatement *last_decl = findLastDeclarationStatement(body);
-  if (last_decl != NULL)
-    insertStatementAfter(last_decl, decl);
-  else
-    prependStatement(decl, body);
+  insert_fortran_statement_in_specification_part(decl, body);
 }
 
 static void
@@ -8986,11 +9206,7 @@ insert_fortran_declaration_into_procedure(SgVariableDeclaration *decl,
   SgBasicBlock *func_body = func_def->get_body();
   ROSE_ASSERT(func_body != NULL);
 
-  SgStatement *last_decl = findLastDeclarationStatement(func_body);
-  if (last_decl != NULL)
-    insertStatementAfter(last_decl, decl);
-  else
-    prependStatement(decl, func_body);
+  insert_fortran_statement_in_specification_part(decl, func_body);
 }
 
 static void
