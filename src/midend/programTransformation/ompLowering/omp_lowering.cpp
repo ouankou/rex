@@ -6547,8 +6547,7 @@ void transOmpCritical(SgNode *node) {
     auto is_direct_module_scope = [](SgScopeStatement *candidate) -> bool {
       if (candidate == NULL)
         return false;
-      if (isSgModuleStatement(candidate) != NULL ||
-          std::string(candidate->sage_class_name()) == "SgModuleDefinition")
+      if (isSgModuleStatement(candidate) != NULL)
         return true;
       if (SgDeclarationStatement *parent_decl =
               isSgDeclarationStatement(candidate->get_parent())) {
