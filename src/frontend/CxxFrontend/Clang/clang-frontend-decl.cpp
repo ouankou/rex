@@ -20049,65 +20049,12 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       if (sym == nullptr) {
         return;
       }
-      if (SgTemplateMemberFunctionSymbol *tmpl_mem_sym =
-              isSgTemplateMemberFunctionSymbol(sym)) {
-        normalize_decl_scope(
-            isSgFunctionDeclaration(tmpl_mem_sym->get_declaration()));
-        normalize_decl_scope(isSgFunctionDeclaration(
-            tmpl_mem_sym->get_declaration()
-                ? tmpl_mem_sym->get_declaration()
-                      ->get_firstNondefiningDeclaration()
-                : nullptr));
-        normalize_decl_scope(isSgFunctionDeclaration(
-            tmpl_mem_sym->get_declaration()
-                ? tmpl_mem_sym->get_declaration()->get_definingDeclaration()
-                : nullptr));
-        return;
-      }
-      if (SgTemplateFunctionSymbol *tmpl_sym =
-              isSgTemplateFunctionSymbol(sym)) {
-        normalize_decl_scope(
-            isSgFunctionDeclaration(tmpl_sym->get_declaration()));
-        normalize_decl_scope(isSgFunctionDeclaration(
-            tmpl_sym->get_declaration()
-                ? tmpl_sym->get_declaration()->get_firstNondefiningDeclaration()
-                : nullptr));
-        normalize_decl_scope(isSgFunctionDeclaration(
-            tmpl_sym->get_declaration()
-                ? tmpl_sym->get_declaration()->get_definingDeclaration()
-                : nullptr));
-        return;
-      }
-      if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
-        normalize_decl_scope(
-            isSgFunctionDeclaration(func_sym->get_declaration()));
-        normalize_decl_scope(isSgFunctionDeclaration(
-            func_sym->get_declaration()
-                ? func_sym->get_declaration()->get_firstNondefiningDeclaration()
-                : nullptr));
-        normalize_decl_scope(isSgFunctionDeclaration(
-            func_sym->get_declaration()
-                ? func_sym->get_declaration()->get_definingDeclaration()
-                : nullptr));
-      }
-    };
-    auto function_decl_from_symbol =
-        [&](SgSymbol *sym) -> SgFunctionDeclaration * {
-      if (sym == nullptr) {
-        return nullptr;
-      }
-      if (SgTemplateMemberFunctionSymbol *tmpl_mem_sym =
-              isSgTemplateMemberFunctionSymbol(sym)) {
-        return isSgFunctionDeclaration(tmpl_mem_sym->get_declaration());
-      }
-      if (SgTemplateFunctionSymbol *tmpl_sym =
-              isSgTemplateFunctionSymbol(sym)) {
-        return isSgFunctionDeclaration(tmpl_sym->get_declaration());
-      }
-      if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
-        return isSgFunctionDeclaration(func_sym->get_declaration());
-      }
-      return nullptr;
+      SgFunctionDeclaration *sym_decl = function_declaration_from_symbol(sym);
+      normalize_decl_scope(sym_decl);
+      normalize_decl_scope(isSgFunctionDeclaration(
+          sym_decl ? sym_decl->get_firstNondefiningDeclaration() : nullptr));
+      normalize_decl_scope(isSgFunctionDeclaration(
+          sym_decl ? sym_decl->get_definingDeclaration() : nullptr));
     };
     auto bind_symbol_association = [&](SgFunctionDeclaration *candidate,
                                        SgFunctionDeclaration *symbol_decl) {
@@ -20123,31 +20070,6 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         return;
       }
       candidate->set_firstNondefiningDeclaration(canonical_symbol_decl);
-    };
-    auto set_symbol_declaration = [&](SgSymbol *sym,
-                                      SgFunctionDeclaration *symbol_decl) {
-      if (sym == nullptr || symbol_decl == nullptr) {
-        return;
-      }
-      if (SgTemplateMemberFunctionSymbol *tmpl_mem_sym =
-              isSgTemplateMemberFunctionSymbol(sym)) {
-        if (SgTemplateMemberFunctionDeclaration *decl =
-                isSgTemplateMemberFunctionDeclaration(symbol_decl)) {
-          tmpl_mem_sym->set_declaration(decl);
-        }
-        return;
-      }
-      if (SgTemplateFunctionSymbol *tmpl_sym =
-              isSgTemplateFunctionSymbol(sym)) {
-        if (SgTemplateFunctionDeclaration *decl =
-                isSgTemplateFunctionDeclaration(symbol_decl)) {
-          tmpl_sym->set_declaration(decl);
-        }
-        return;
-      }
-      if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
-        func_sym->set_declaration(symbol_decl);
-      }
     };
 
     if (matching_symbol == nullptr) {
@@ -20257,13 +20179,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
 
     normalize_symbol_decl_scope(matching_symbol);
     if (SgFunctionDeclaration *symbol_decl =
-            function_decl_from_symbol(matching_symbol)) {
+            function_declaration_from_symbol(matching_symbol)) {
       SgFunctionDeclaration *canonical_symbol_decl = isSgFunctionDeclaration(
           symbol_decl->get_firstNondefiningDeclaration());
       if (canonical_symbol_decl == nullptr) {
         canonical_symbol_decl = symbol_decl;
       }
-      set_symbol_declaration(matching_symbol, canonical_symbol_decl);
+      rebind_function_like_symbol_declaration(
+          matching_symbol, canonical_symbol_decl, BIND_REQUIRE_SAME_DECL_CHAIN);
       bind_symbol_association(canonical_symbol_decl, canonical_symbol_decl);
       bind_symbol_association(
           isSgFunctionDeclaration(
