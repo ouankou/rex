@@ -6547,7 +6547,8 @@ void transOmpCritical(SgNode *node) {
     auto is_direct_module_scope = [](SgScopeStatement *candidate) -> bool {
       if (candidate == NULL)
         return false;
-      if (isSgModuleStatement(candidate) != NULL)
+      if (isSgModuleStatement(candidate) != NULL ||
+          isSgModuleDefinition(candidate) != NULL)
         return true;
       if (SgClassDefinition *class_def = isSgClassDefinition(candidate)) {
         SgDeclarationStatement *decl = class_def->get_declaration();
@@ -9109,6 +9110,9 @@ find_fortran_procedure_declaration(SgBasicBlock *body, const SgName &name) {
 }
 
 static bool is_fortran_data_specification_statement(const SgStatement *stmt) {
+  if (isSgDataStatement(stmt) != NULL)
+    return true;
+
   const SgAttributeSpecificationStatement *attr_spec =
       isSgAttributeSpecificationStatement(stmt);
   if (attr_spec == NULL)
