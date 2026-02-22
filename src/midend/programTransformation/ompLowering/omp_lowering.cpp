@@ -6743,9 +6743,8 @@ void transOmpFlush(SgNode *node) {
 
   SgExprStatement *func_call_stmt = NULL;
   if (SageInterface::is_Fortran_language()) {
-    SgExprListExp *parameters = buildExprListExp(buildIntVal(0));
-    func_call_stmt = buildFunctionCallStmt("__kmpc_flush", buildVoidType(),
-                                           parameters, scope);
+    func_call_stmt =
+        buildFunctionCallStmt("XOMP_flush", buildVoidType(), NULL, scope);
   } else
     func_call_stmt = buildFunctionCallStmt("__sync_synchronize",
                                            buildVoidType(), NULL, scope);
@@ -7348,30 +7347,61 @@ static void insertOmpLastprivateCopyBackStmts(
     bool isInclusiveBound = false;
     bool isCanonical = false;
 
+    SgStatement *selected_loop = NULL;
+    size_t selected_loop_depth = 0;
+    bool has_selected_loop = false;
+    auto consider_loop_candidate = [&](SgStatement *candidate) {
+      if (candidate == NULL)
+        return;
+      size_t depth = 0;
+      SgNode *cursor = candidate;
+      while (cursor != NULL && cursor != bb1) {
+        cursor = cursor->get_parent();
+        ++depth;
+      }
+      if (cursor != bb1)
+        return;
+      if (!has_selected_loop || depth < selected_loop_depth) {
+        selected_loop = candidate;
+        selected_loop_depth = depth;
+        has_selected_loop = true;
+      }
+    };
+
     Rose_STL_Container<SgNode *> c_loops =
         NodeQuery::querySubTree(bb1, V_SgForStatement);
-    if (!c_loops.empty()) {
-      SgForStatement *top_loop = isSgForStatement(c_loops[0]);
-      ROSE_ASSERT(top_loop != NULL);
+    for (Rose_STL_Container<SgNode *>::const_iterator it = c_loops.begin();
+         it != c_loops.end(); ++it)
+      consider_loop_candidate(isSgStatement(*it));
+
+    Rose_STL_Container<SgNode *> f_loops =
+        NodeQuery::querySubTree(bb1, V_SgFortranDo);
+    for (Rose_STL_Container<SgNode *>::const_iterator it = f_loops.begin();
+         it != f_loops.end(); ++it)
+      consider_loop_candidate(isSgStatement(*it));
+
+    if (selected_loop == NULL) {
+      MLOG_ERROR_CXX("ompLowering") << "Failed to find a lowered loop under "
+                                    << ompStmt->sage_class_name()
+                                    << " while inserting lastprivate copy-back";
+      ROSE_ABORT();
+      return;
+    }
+
+    if (SgForStatement *top_loop = isSgForStatement(selected_loop)) {
       isCanonical = SageInterface::isCanonicalForLoop(
           top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step,
           &loop_body, &isIncremental, &isInclusiveBound);
-    } else {
-      Rose_STL_Container<SgNode *> f_loops =
-          NodeQuery::querySubTree(bb1, V_SgFortranDo);
-      if (f_loops.empty()) {
-        MLOG_ERROR_CXX("ompLowering")
-            << "Failed to find a lowered loop under "
-            << ompStmt->sage_class_name()
-            << " while inserting lastprivate copy-back";
-        ROSE_ABORT();
-        return;
-      }
-      SgFortranDo *top_loop = isSgFortranDo(f_loops[0]);
-      ROSE_ASSERT(top_loop != NULL);
+    } else if (SgFortranDo *top_loop = isSgFortranDo(selected_loop)) {
       isCanonical = SageInterface::isCanonicalDoLoop(
           top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step,
           &loop_body, &isIncremental, &isInclusiveBound);
+    } else {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Selected non-loop node " << selected_loop->sage_class_name()
+          << " while inserting lastprivate copy-back";
+      ROSE_ABORT();
+      return;
     }
     if (!isCanonical) {
       MLOG_ERROR_CXX("ompLowering")

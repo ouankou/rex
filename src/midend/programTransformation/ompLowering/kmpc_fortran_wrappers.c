@@ -338,11 +338,10 @@ void __kmpc_barrier_(int *loc_ref, int *gtid_ref) {
 
 void xomp_critical_start(int *lock_ref);
 void xomp_critical_end(int *lock_ref);
+void xomp_flush(void);
 #pragma weak xomp_critical_start_ = xomp_critical_start
 #pragma weak xomp_critical_end_ = xomp_critical_end
-
-static ident_t rex_fortran_critical_loc = {0, 0, 0, 0,
-                                           ";unknown;unknown;0;0;;"};
+#pragma weak xomp_flush_ = xomp_flush
 
 void xomp_critical_start(int *lock_ref) {
   if (lock_ref == NULL) {
@@ -350,7 +349,7 @@ void xomp_critical_start(int *lock_ref) {
     ROSE_ABORT();
   }
   int gtid = __kmpc_global_thread_num(NULL);
-  __kmpc_critical(&rex_fortran_critical_loc, gtid, (void *)lock_ref);
+  __kmpc_critical(NULL, gtid, (void *)lock_ref);
 }
 
 void xomp_critical_end(int *lock_ref) {
@@ -359,13 +358,14 @@ void xomp_critical_end(int *lock_ref) {
     ROSE_ABORT();
   }
   int gtid = __kmpc_global_thread_num(NULL);
-  __kmpc_end_critical(&rex_fortran_critical_loc, gtid, (void *)lock_ref);
+  __kmpc_end_critical(NULL, gtid, (void *)lock_ref);
 }
 
+void xomp_flush(void) { __kmpc_flush(NULL); }
+
 void __kmpc_flush_(int *loc_ref) {
-  static ident_t rex_fortran_flush_loc = {0, 0, 0, 0, ";unknown;unknown;0;0;;"};
   (void)loc_ref;
-  __kmpc_flush(&rex_fortran_flush_loc);
+  xomp_flush();
 }
 
 int __kmpc_single_(int *loc_ref, int *gtid_ref) {
