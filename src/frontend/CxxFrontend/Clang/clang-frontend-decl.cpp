@@ -14903,19 +14903,66 @@ void ClangToSageTranslator::repairMissingFunctionSymbols() {
     }
   };
 
+  // Repair declarations that are not reachable from the translated AST
+  // (e.g., declarations retained only through symbol-table references).
+  // Postprocessing passes can still rely on these nodes, so they must share
+  // the same symbol canonicalization invariants.
+  struct FunctionDeclCollector : public ROSE_VisitTraversal {
+    std::vector<SgFunctionDeclaration *> declarations;
+    std::set<SgFunctionDeclaration *> seen;
+    void visit(SgNode *node) override {
+      if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(node)) {
+        if (seen.insert(decl).second) {
+          declarations.push_back(decl);
+        }
+      }
+    }
+  } memory_pool_funcs;
+
+  SgFunctionDeclaration::traverseMemoryPoolNodes(memory_pool_funcs);
+  SgMemberFunctionDeclaration::traverseMemoryPoolNodes(memory_pool_funcs);
+  SgTemplateFunctionDeclaration::traverseMemoryPoolNodes(memory_pool_funcs);
+  SgTemplateMemberFunctionDeclaration::traverseMemoryPoolNodes(
+      memory_pool_funcs);
+  SgTemplateInstantiationFunctionDecl::traverseMemoryPoolNodes(
+      memory_pool_funcs);
+  SgTemplateInstantiationMemberFunctionDecl::traverseMemoryPoolNodes(
+      memory_pool_funcs);
+
+  std::set<SgFunctionDeclaration *> repaired_symbol_decls;
+  auto canonicalize_symbol_decl =
+      [&](SgFunctionDeclaration *decl) -> SgFunctionDeclaration * {
+    if (decl == nullptr) {
+      return nullptr;
+    }
+    if (SgFunctionDeclaration *first_decl =
+            isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration())) {
+      return first_decl;
+    }
+    return decl;
+  };
+
+  for (SgFunctionDeclaration *func_decl : memory_pool_funcs.declarations) {
+    SgFunctionDeclaration *symbol_decl = canonicalize_symbol_decl(func_decl);
+    if (symbol_decl == nullptr) {
+      continue;
+    }
+    if (repaired_symbol_decls.insert(symbol_decl).second) {
+      rehome_symbol_to_decl_scope(symbol_decl);
+    }
+  }
+
   Rose_STL_Container<SgNode *> funcs =
       NodeQuery::querySubTree(global_scope, V_SgFunctionDeclaration);
   for (SgNode *node : funcs) {
-    SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(node);
-    if (func_decl == nullptr) {
+    SgFunctionDeclaration *symbol_decl =
+        canonicalize_symbol_decl(isSgFunctionDeclaration(node));
+    if (symbol_decl == nullptr) {
       continue;
     }
-    SgFunctionDeclaration *symbol_decl =
-        isSgFunctionDeclaration(func_decl->get_firstNondefiningDeclaration());
-    if (symbol_decl == nullptr) {
-      symbol_decl = func_decl;
+    if (repaired_symbol_decls.insert(symbol_decl).second) {
+      rehome_symbol_to_decl_scope(symbol_decl);
     }
-    rehome_symbol_to_decl_scope(symbol_decl);
 
     if (symbol_decl->get_symbol_from_symbol_table() != nullptr) {
       continue;
