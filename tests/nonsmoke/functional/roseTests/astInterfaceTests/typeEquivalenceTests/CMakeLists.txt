@@ -10,7 +10,6 @@ add_executable(typecounter countDifferentTypes.cpp)
 target_link_libraries(typecounter ROSE_DLL ${link_with_libraries})
 
 set_target_properties(variableTypeTest functionTypeTest typecounter PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   BUILD_WITH_INSTALL_RPATH OFF
   BUILD_RPATH "${CMAKE_BINARY_DIR}/lib"
 )
