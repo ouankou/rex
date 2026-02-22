@@ -8180,11 +8180,15 @@ bool ClangToSageTranslator::VisitCXXUnresolvedConstructExpr(
           nullptr, // declaration will be nullptr for unresolved/dependent
                    // constructors
           args, type,
-          false,        // need_name
+          true,         // need_name
           false,        // need_qualifier
           false,        // need_parenthesis_after_name
           class_unknown // associated_class_unknown for non class-like types
       );
+
+  // Unresolved constructor expressions are source-level cast-like syntax
+  // (`T(args)` / `T{args}`) and must keep the type name when unparsing.
+  ctor_init->set_is_explicit_cast(true);
 
   // Preserve list-initialization form for unresolved constructor expressions
   // so template definitions keep braces where required (e.g., aggregate
