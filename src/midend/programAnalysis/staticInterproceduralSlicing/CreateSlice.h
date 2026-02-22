@@ -25,6 +25,8 @@
 
 #include <stack>
 
+#include <vector>
+
 class BooleanSafeKeeper {
 public:
   BooleanSafeKeeper() : boolean(false) {}
@@ -42,10 +44,19 @@ public:
   // bool traverse(SgNode * node) {return traverse(node, false);}
   bool traverse(SgNode *node) {
     currentFile = NULL;
+    statementsPendingRemoval.clear();
+    // No explicit targets means there is no slice to materialize.
+    // Keep the AST unchanged instead of attempting destructive pruning.
+    if (_toSave.empty()) {
+      return false;
+    }
     //              return traverse(node,BooleanSafeKeeper(false));
-    return AstTopDownBottomUpProcessing<BooleanSafeKeeper, BooleanSafeKeeper>::
-        traverse(node, BooleanSafeKeeper(false))
-            .boolean;
+    bool traversalResult =
+        AstTopDownBottomUpProcessing<BooleanSafeKeeper, BooleanSafeKeeper>::
+            traverse(node, BooleanSafeKeeper(false))
+                .boolean;
+    applyPendingRemovals();
+    return traversalResult;
   }
 
 protected:
@@ -62,6 +73,9 @@ protected:
     return inh;
   }
   std::stack<std::list<SgNode *>> delayedRemoveListStack;
+  void queueStatementForRemoval(SgStatement *statement);
+  void applyPendingRemovals();
+  std::vector<SgStatement *> statementsPendingRemoval;
   /*    virtual bool defaultSynthesizedAttribute()
     {
     return false;
