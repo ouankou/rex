@@ -6535,17 +6535,56 @@ void transOmpCritical(SgNode *node) {
   string g_lock_name = "xomp_critical_user_" + c_name;
   SgVariableSymbol *sym = NULL;
   if (SageInterface::is_Fortran_language()) {
+    SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+    ROSE_ASSERT(func_def != NULL);
+    SgBasicBlock *proc_body = func_def->get_body();
+    ROSE_ASSERT(proc_body != NULL);
+
     sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), scope);
     if (sym == NULL) {
-      SgBasicBlock *proc_body = getEnclosingRegionOrFuncDefinition(scope);
-      ROSE_ASSERT(proc_body != NULL);
       SgExprListExp *lock_dims = buildExprListExp(buildIntVal(8));
       SgType *lock_type = buildArrayType(buildIntType(), lock_dims);
       SgVariableDeclaration *vardecl =
           buildVariableDeclaration(g_lock_name, lock_type, NULL, proc_body);
-      setStatic(vardecl);
       insert_fortran_declaration_into_procedure(vardecl, proc_body);
       sym = getFirstVarSym(vardecl);
+    }
+    ROSE_ASSERT(sym != NULL);
+
+    // Fortran COMMON provides global storage semantics for named/unnamed
+    // critical locks across procedures in a translation unit.
+    const std::string common_block_name = "xomp_critical_block_" + c_name;
+    bool has_common_block = false;
+    const SgStatementPtrList &stmts = proc_body->get_statements();
+    for (SgStatementPtrList::const_iterator it = stmts.begin();
+         it != stmts.end(); ++it) {
+      SgCommonBlock *common_block = isSgCommonBlock(*it);
+      if (common_block == NULL)
+        continue;
+
+      const SgCommonBlockObjectPtrList &blocks = common_block->get_block_list();
+      for (SgCommonBlockObjectPtrList::const_iterator bit = blocks.begin();
+           bit != blocks.end(); ++bit) {
+        if ((*bit)->get_block_name() == common_block_name) {
+          has_common_block = true;
+          break;
+        }
+      }
+      if (has_common_block)
+        break;
+    }
+
+    if (!has_common_block) {
+      SgExprListExp *common_vars = buildExprListExp(buildVarRefExp(sym));
+      SgCommonBlockObject *common_obj =
+          buildCommonBlockObject(common_block_name, common_vars);
+      SgCommonBlock *common_decl = buildCommonBlock(common_obj);
+
+      SgStatement *last_decl = findLastDeclarationStatement(proc_body);
+      if (last_decl != NULL)
+        insertStatementAfter(last_decl, common_decl);
+      else
+        prependStatement(common_decl, proc_body);
     }
   } else {
     SgGlobal *global = getGlobalScope(target);
