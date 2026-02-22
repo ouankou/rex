@@ -25,6 +25,12 @@ foreach(testcode IN LISTS COLLECT_COMMENTS_TEST_SOURCES)
   )
 endforeach()
 
+# Guard the historical template-qualifier mangling regression (Issue #233).
+set_tests_properties(
+  compiler_options_collect_comments_test2005_12_C
+  PROPERTIES
+    FAIL_REGULAR_EXPRESSION "In mangleQualifiersToString\\(\\):")
+
 foreach(testcode IN LISTS COLLECT_COMMENTS_DISABLED_TEST_SOURCES)
   string(REPLACE "." "_" _collect_name ${testcode})
   add_test(
