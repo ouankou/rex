@@ -6533,28 +6533,38 @@ void transOmpCritical(SgNode *node) {
 
   // Assign a default lock variable name for unnamed critical directives.
   string g_lock_name = "xomp_critical_user_" + c_name;
-  SgGlobal *global = getGlobalScope(target);
-  ROSE_ASSERT(global != NULL);
-  SgVariableSymbol *sym =
-      lookupVariableSymbolInParentScopes(SgName(g_lock_name), global);
-  if (sym == NULL) {
-    SgType *lock_type = NULL;
-    if (SageInterface::is_Fortran_language())
-      lock_type = buildPointerType(buildVoidType());
-    else
-      lock_type = buildArrayType(buildIntType(), buildIntVal(8));
-    SgVariableDeclaration *vardecl =
-        buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
-    setStatic(vardecl);
-    prependStatement(vardecl, global);
-    sym = getFirstVarSym(vardecl);
+  SgVariableSymbol *sym = NULL;
+  if (SageInterface::is_Fortran_language()) {
+    sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), scope);
+    if (sym == NULL) {
+      SgBasicBlock *proc_body = getEnclosingRegionOrFuncDefinition(scope);
+      ROSE_ASSERT(proc_body != NULL);
+      SgExprListExp *lock_dims = buildExprListExp(buildIntVal(8));
+      SgType *lock_type = buildArrayType(buildIntType(), lock_dims);
+      SgVariableDeclaration *vardecl =
+          buildVariableDeclaration(g_lock_name, lock_type, NULL, proc_body);
+      setStatic(vardecl);
+      insert_fortran_declaration_into_procedure(vardecl, proc_body);
+      sym = getFirstVarSym(vardecl);
+    }
+  } else {
+    SgGlobal *global = getGlobalScope(target);
+    ROSE_ASSERT(global != NULL);
+    sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), global);
+    if (sym == NULL) {
+      SgType *lock_type = buildArrayType(buildIntType(), buildIntVal(8));
+      SgVariableDeclaration *vardecl =
+          buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
+      setStatic(vardecl);
+      prependStatement(vardecl, global);
+      sym = getFirstVarSym(vardecl);
+    }
   }
+  ROSE_ASSERT(sym != NULL);
 
   if (SageInterface::is_Fortran_language()) {
-    SgExprListExp *param1 =
-        buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
-    SgExprListExp *param2 =
-        buildExprListExp(buildAddressOfOp(buildVarRefExp(sym)));
+    SgExprListExp *param1 = buildExprListExp(buildVarRefExp(sym));
+    SgExprListExp *param2 = buildExprListExp(buildVarRefExp(sym));
 
     func_call_stmt1 = buildFunctionCallStmt("XOMP_critical_start",
                                             buildVoidType(), param1, scope);
@@ -6675,10 +6685,11 @@ void transOmpFlush(SgNode *node) {
   ROSE_ASSERT(scope != NULL);
 
   SgExprStatement *func_call_stmt = NULL;
-  if (SageInterface::is_Fortran_language())
-    func_call_stmt =
-        buildFunctionCallStmt("XOMP_flush_all", buildVoidType(), NULL, scope);
-  else
+  if (SageInterface::is_Fortran_language()) {
+    SgExprListExp *parameters = buildExprListExp(buildIntVal(0));
+    func_call_stmt = buildFunctionCallStmt("__kmpc_flush", buildVoidType(),
+                                           parameters, scope);
+  } else
     func_call_stmt = buildFunctionCallStmt("__sync_synchronize",
                                            buildVoidType(), NULL, scope);
   replaceStatement(target, func_call_stmt, true);
@@ -7269,23 +7280,35 @@ static void insertOmpLastprivateCopyBackStmts(
         orig_var_exp = copyExpression(var_iter->second);
     }
   }
-  if (isSgOmpForStatement(ompStmt)) {
+  if (isSgOmpForStatement(ompStmt) || isSgOmpDoStatement(ompStmt)) {
     ROSE_ASSERT(orig_loop_upper != NULL);
-    Rose_STL_Container<SgNode *> loops =
+    SgInitializedName *loop_index = NULL;
+    SgExpression *loop_lower = NULL;
+    SgExpression *loop_upper = NULL;
+    SgExpression *loop_step = NULL;
+    SgStatement *loop_body = NULL;
+    bool isIncremental = true;
+    bool isInclusiveBound = false;
+    bool isCanonical = false;
+
+    Rose_STL_Container<SgNode *> c_loops =
         NodeQuery::querySubTree(bb1, V_SgForStatement);
-    ROSE_ASSERT(loops.size() !=
-                0); // there must be 1 for loop under SgOmpForStatement
-    SgForStatement *top_loop = isSgForStatement(loops[0]);
-    ROSE_ASSERT(top_loop != NULL);
-    // Get essential loop information
-    SgInitializedName *loop_index;
-    SgExpression *loop_lower, *loop_upper, *loop_step;
-    SgStatement *loop_body;
-    bool isIncremental;
-    bool isInclusiveBound;
-    bool isCanonical = SageInterface::isCanonicalForLoop(
-        top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step, &loop_body,
-        &isIncremental, &isInclusiveBound);
+    if (!c_loops.empty()) {
+      SgForStatement *top_loop = isSgForStatement(c_loops[0]);
+      ROSE_ASSERT(top_loop != NULL);
+      isCanonical = SageInterface::isCanonicalForLoop(
+          top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step,
+          &loop_body, &isIncremental, &isInclusiveBound);
+    } else {
+      Rose_STL_Container<SgNode *> f_loops =
+          NodeQuery::querySubTree(bb1, V_SgFortranDo);
+      ROSE_ASSERT(!f_loops.empty());
+      SgFortranDo *top_loop = isSgFortranDo(f_loops[0]);
+      ROSE_ASSERT(top_loop != NULL);
+      isCanonical = SageInterface::isCanonicalDoLoop(
+          top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step,
+          &loop_body, &isIncremental, &isInclusiveBound);
+    }
     ROSE_ASSERT(isCanonical == true);
     SgExpression *if_cond = NULL;
     SgStatement *if_cond_stmt = NULL;

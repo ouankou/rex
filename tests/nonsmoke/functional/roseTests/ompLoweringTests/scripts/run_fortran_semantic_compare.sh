@@ -106,6 +106,191 @@ EOF
       end
 EOF
       ;;
+    continuation.f90|paralleldo.f90|paralleldo-1.f90)
+      cat > "${out_driver}" <<'EOF'
+program main
+  implicit none
+  integer, parameter :: n = 96
+  integer :: i
+  real :: a(n), b(n), total
+  external a1
+
+  do i = 1, n
+    a(i) = real(i)
+    b(i) = 0.0
+  enddo
+
+  call a1(a, b, n)
+  total = sum(b)
+  print *, 'sum', total
+end program main
+EOF
+      ;;
+    schedule.f)
+      cat > "${out_driver}" <<'EOF'
+      program main
+      integer n, i
+      parameter (n = 128)
+      real a(n), b(n), total
+      external a1
+
+      do i = 1, n
+        a(i) = real(i)
+        b(i) = 0.0
+      enddo
+
+      call a1(n, a, b)
+      total = 0.0
+      do i = 1, n
+        total = total + b(i)
+      enddo
+      print *, 'sum', total
+      end
+EOF
+      ;;
+    exampleA11f.f)
+      cat > "${out_driver}" <<'EOF'
+      program main
+      integer n, i
+      parameter (n = 128)
+      real a(n), b(n), total
+      external a1
+
+      do i = 1, n
+        a(i) = real(i)
+        b(i) = 0.0
+      enddo
+
+      call a1(n, a, b)
+      total = 0.0
+      do i = 1, n
+        total = total + b(i)
+      enddo
+      print *, 'sum', total
+      end
+EOF
+      ;;
+    critical.f90)
+      cat > "${out_driver}" <<'EOF'
+subroutine dequeue()
+  implicit none
+end subroutine dequeue
+
+subroutine work()
+  implicit none
+end subroutine work
+
+program main
+  implicit none
+  real :: x(8), y(8)
+  call a16(x, y)
+  print *, 'done'
+end program main
+EOF
+      ;;
+    default.f)
+      cat > "${out_driver}" <<'EOF'
+      program main
+      integer a
+      external a28
+
+      a = 0
+      call a28(a)
+      print *, 'done'
+      end
+EOF
+      ;;
+    exampleA134f.f90)
+      cat > "${out_driver}" <<'EOF'
+program main
+  implicit none
+  integer :: fib
+  external fib
+  print *, 'fib', fib(10)
+end program main
+EOF
+      ;;
+    exampleA161f.f90)
+      cat > "${out_driver}" <<'EOF'
+subroutine dequeue(idx, arr)
+  implicit none
+  integer :: idx
+  real :: arr(*)
+  idx = 1
+end subroutine dequeue
+
+subroutine work(idx, arr)
+  implicit none
+  integer :: idx
+  real :: arr(*)
+  arr(idx) = arr(idx) + 1.0
+end subroutine work
+
+program main
+  implicit none
+  integer :: i
+  real :: x(8), y(8)
+  do i = 1, 8
+    x(i) = 0.0
+    y(i) = 0.0
+  enddo
+  call a16(x, y)
+  print *, 'sumx', sum(x)
+  print *, 'sumy', sum(y)
+end program main
+EOF
+      ;;
+    exampleA251f.f)
+      cat > "${out_driver}" <<'EOF'
+      program main
+      integer v
+      integer increment_counter
+      external increment_counter
+
+      v = increment_counter()
+      print *, 'counter', v
+      end
+EOF
+      ;;
+    exampleA281f.f)
+      cat > "${out_driver}" <<'EOF'
+      program main
+      integer a
+      integer x, y, z(1000)
+      integer i
+      common /BLOCKX/ x
+      common /BLOCKY/ y
+      common /BLOCKZ/ z
+      external a28
+
+      a = 0
+      x = 0
+      y = 3
+      do i = 1, 1000
+        z(i) = i
+      enddo
+
+      call a28(a)
+      print *, 'a', a
+      print *, 'x', x
+      print *, 'z1', z(1)
+      print *, 'z10', z(10)
+      end
+EOF
+      ;;
+    testNewOFP.f)
+      cat > "${out_driver}" <<'EOF'
+      program main
+      integer n, m
+      external initialize
+
+      n = 64
+      m = 64
+      call initialize(n, m)
+      print *, 'done'
+      end
+EOF
+      ;;
     *)
       echo "ERROR(${case_id}): subroutine-only semantic driver is not defined" >&2
       return 1
