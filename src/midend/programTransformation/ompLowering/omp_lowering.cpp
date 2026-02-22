@@ -6548,7 +6548,7 @@ void transOmpCritical(SgNode *node) {
       if (candidate == NULL)
         return false;
       if (isSgModuleStatement(candidate) != NULL ||
-          candidate->variantT() == V_SgModuleDefinition)
+          std::string(candidate->sage_class_name()) == "SgModuleDefinition")
         return true;
       if (SgDeclarationStatement *parent_decl =
               isSgDeclarationStatement(candidate->get_parent())) {
@@ -9117,7 +9117,7 @@ find_fortran_procedure_declaration(SgBasicBlock *body, const SgName &name) {
 static bool is_fortran_data_specification_statement(const SgStatement *stmt) {
   // Some ROSE trees represent DATA as dedicated nodes, others attach DATA
   // groups under SgAttributeSpecificationStatement.
-  if (stmt->variantT() == V_SgDataStatement)
+  if (std::string(stmt->sage_class_name()) == "SgDataStatement")
     return true;
 
   const SgAttributeSpecificationStatement *attr_spec =
