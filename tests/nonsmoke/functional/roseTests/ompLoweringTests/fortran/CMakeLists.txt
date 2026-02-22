@@ -18,7 +18,7 @@ set(OMP_FORTRAN_SEMANTIC_EXCLUDED_CASES
   exampleA134f.f90
   exampleA251f.f
   exampleA281f.f
-  exmpaleA221f.f
+  exampleA221f.f
   flush.f
   flush2.f
   single-copyprivate.f90)
