@@ -9071,9 +9071,14 @@ find_fortran_procedure_declaration(SgBasicBlock *body, const SgName &name) {
 static bool is_fortran_data_specification_statement(const SgStatement *stmt) {
   const SgAttributeSpecificationStatement *attr_spec =
       isSgAttributeSpecificationStatement(stmt);
-  return attr_spec != NULL &&
-         attr_spec->get_attribute_kind() ==
-             SgAttributeSpecificationStatement::e_dataStatement;
+  if (attr_spec == NULL)
+    return false;
+
+  if (attr_spec->get_attribute_kind() ==
+      SgAttributeSpecificationStatement::e_dataStatement)
+    return true;
+
+  return !attr_spec->get_data_statement_group_list().empty();
 }
 
 static SgStatement *

@@ -20,7 +20,7 @@ fail() {
 [[ -f "${rose_file}" ]] || fail "missing lowered host file '${rose_file}'"
 
 # Lowered sources must not retain active OpenMP pragmas.
-if grep -Eiq '^[[:space:]]*(#[[:space:]]*pragma[[:space:]]+omp\b|!\$omp\b)' "${rose_file}"; then
+if grep -Eiq '^[[:space:]]*(#[[:space:]]*pragma[[:space:]]+omp\b|[!c*]\$omp\b)' "${rose_file}"; then
   fail "active OpenMP pragma remained in lowered host output"
 fi
 
@@ -33,7 +33,7 @@ fi
 # Lowered code should contain at least one OpenMP runtime call for sources
 # that contain active OpenMP pragmas.
 runtime_count="$(grep -Ec '__kmpc_|\bXOMP_' "${rose_file}" || true)"
-input_pragma_count="$(grep -Eic '^[[:space:]]*(#[[:space:]]*pragma[[:space:]]+omp\b|!\$omp\b)' "${input_file}" || true)"
+input_pragma_count="$(grep -Eic '^[[:space:]]*(#[[:space:]]*pragma[[:space:]]+omp\b|[!c*]\$omp\b)' "${input_file}" || true)"
 if [[ "${input_pragma_count}" -gt 0 && "${runtime_count}" -eq 0 ]]; then
   fail "no OpenMP runtime calls found in lowered host output"
 fi
