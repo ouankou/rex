@@ -6518,6 +6518,8 @@ void transOmpOrdered(SgNode *node) {
 //  work()
 //  GOMP_critical_name_end (&gomp_critical_user_aaa);
 //
+static const int kKmpCriticalNameWords = 8; // kmp_critical_name is int32_t[8]
+
 void transOmpCritical(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpCriticalStatement *target = isSgOmpCriticalStatement(node);
@@ -6542,7 +6544,8 @@ void transOmpCritical(SgNode *node) {
 
     sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), scope);
     if (sym == NULL) {
-      SgExprListExp *lock_dims = buildExprListExp(buildIntVal(8));
+      SgExprListExp *lock_dims =
+          buildExprListExp(buildIntVal(kKmpCriticalNameWords));
       SgType *lock_type = buildArrayType(buildIntType(), lock_dims);
       SgVariableDeclaration *vardecl =
           buildVariableDeclaration(g_lock_name, lock_type, NULL, proc_body);
@@ -6591,7 +6594,8 @@ void transOmpCritical(SgNode *node) {
     ROSE_ASSERT(global != NULL);
     sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), global);
     if (sym == NULL) {
-      SgType *lock_type = buildArrayType(buildIntType(), buildIntVal(8));
+      SgType *lock_type =
+          buildArrayType(buildIntType(), buildIntVal(kKmpCriticalNameWords));
       SgVariableDeclaration *vardecl =
           buildVariableDeclaration(g_lock_name, lock_type, NULL, global);
       setStatic(vardecl);
@@ -7341,14 +7345,27 @@ static void insertOmpLastprivateCopyBackStmts(
     } else {
       Rose_STL_Container<SgNode *> f_loops =
           NodeQuery::querySubTree(bb1, V_SgFortranDo);
-      ROSE_ASSERT(!f_loops.empty());
+      if (f_loops.empty()) {
+        MLOG_ERROR_CXX("ompLowering")
+            << "Failed to find a lowered loop under "
+            << ompStmt->sage_class_name()
+            << " while inserting lastprivate copy-back";
+        ROSE_ABORT();
+        return;
+      }
       SgFortranDo *top_loop = isSgFortranDo(f_loops[0]);
       ROSE_ASSERT(top_loop != NULL);
       isCanonical = SageInterface::isCanonicalDoLoop(
           top_loop, &loop_index, &loop_lower, &loop_upper, &loop_step,
           &loop_body, &isIncremental, &isInclusiveBound);
     }
-    ROSE_ASSERT(isCanonical == true);
+    if (!isCanonical) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Non-canonical lowered loop under " << ompStmt->sage_class_name()
+          << " while inserting lastprivate copy-back";
+      ROSE_ABORT();
+      return;
+    }
     SgExpression *if_cond = NULL;
     SgStatement *if_cond_stmt = NULL;
     // we need the original upper bound!!
