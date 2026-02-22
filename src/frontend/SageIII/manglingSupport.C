@@ -221,13 +221,14 @@ static string normalizeNameForMangledNameSupport(const string &name) {
 
   const bool hasTemplateSyntax = SageInterface::hasTemplateSyntax(normalized);
   const bool hasScopeSyntax = normalized.find("::") != string::npos;
+  const bool hasColonSyntax = normalized.find(':') != string::npos;
   const bool hasTemplateSeparators = normalized.find(',') != string::npos;
   const bool hasTypeDecorators = normalized.find('&') != string::npos ||
                                  normalized.find('*') != string::npos ||
                                  normalized.find("_-") != string::npos;
   const bool hasLiteralQuotes = normalized.find('"') != string::npos;
-  if (!hasTemplateSyntax && !hasScopeSyntax && !hasTemplateSeparators &&
-      !hasTypeDecorators && !hasLiteralQuotes) {
+  if (!hasTemplateSyntax && !hasScopeSyntax && !hasColonSyntax &&
+      !hasTemplateSeparators && !hasTypeDecorators && !hasLiteralQuotes) {
     return normalized;
   }
 
@@ -549,6 +550,7 @@ string mangleQualifiersToString(const SgScopeStatement *scope) {
 
   // ROSE_ASSERT(mangled_name.find('<') == string::npos);
   ROSE_ASSERT(SageInterface::hasTemplateSyntax(mangled_name) == false);
+  ROSE_ASSERT(mangled_name.find(':') == string::npos);
 
   return mangled_name;
 }
