@@ -14734,27 +14734,17 @@ void ClangToSageTranslator::repairMissingFunctionSymbols() {
     return;
   }
 
-  auto rehome_symbol_to_decl_scope = [&](SgFunctionDeclaration *decl) {
-    if (decl == nullptr) {
+  auto rehome_symbol_to_decl_scope = [&](SgFunctionDeclaration *symbol_decl) {
+    if (symbol_decl == nullptr) {
       return;
     }
 
-    SgFunctionDeclaration *symbol_decl =
-        isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration());
-    if (symbol_decl == nullptr) {
-      symbol_decl = decl;
-    }
     if (symbol_decl->get_firstNondefiningDeclaration() == nullptr) {
       symbol_decl->set_firstNondefiningDeclaration(symbol_decl);
     }
-    if (SgFunctionDeclaration *def_decl =
-            isSgFunctionDeclaration(symbol_decl->get_definingDeclaration())) {
-      if (def_decl->variantT() == symbol_decl->variantT() &&
-          def_decl->get_firstNondefiningDeclaration() != symbol_decl) {
-        def_decl->set_firstNondefiningDeclaration(symbol_decl);
-      }
-    }
 
+    // Keep symbol ownership consistent with the declaration scope used by
+    // template-name reset and other postprocessing passes.
     SgScopeStatement *symbol_scope = symbol_decl->get_scope();
     if (symbol_scope == nullptr) {
       symbol_scope = global_scope;
@@ -14763,14 +14753,12 @@ void ClangToSageTranslator::repairMissingFunctionSymbols() {
     if (symbol_scope == nullptr) {
       return;
     }
-    const bool can_rebind_function_symbol =
-        symbol_decl->variantT() == V_SgFunctionDeclaration;
 
     auto rebind_and_rehome = [&](SgSymbol *sym) {
       if (sym == nullptr) {
         return;
       }
-      if (can_rebind_function_symbol) {
+      if (symbol_decl->variantT() == V_SgFunctionDeclaration) {
         if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
           if (func_sym->get_declaration() != symbol_decl) {
             func_sym->set_declaration(symbol_decl);
@@ -14791,48 +14779,11 @@ void ClangToSageTranslator::repairMissingFunctionSymbols() {
     for (SgSymbol *scope_symbol : scope_symbols) {
       rebind_and_rehome(scope_symbol);
     }
-
     if (SgSymbol *existing_symbol =
             symbol_decl->get_symbol_from_symbol_table()) {
       rebind_and_rehome(existing_symbol);
     }
   };
-
-  // Fix symbols even for declarations not currently attached to the global
-  // scope tree (e.g., declarations only reachable via symbol tables).
-  struct FunctionDeclCollector : public ROSE_VisitTraversal {
-    std::vector<SgFunctionDeclaration *> declarations;
-    std::set<SgFunctionDeclaration *> seen;
-    void visit(SgNode *node) override {
-      if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(node)) {
-        if (seen.insert(decl).second) {
-          declarations.push_back(decl);
-        }
-      }
-    }
-  } memory_pool_funcs;
-
-  SgFunctionDeclaration::traverseMemoryPoolNodes(memory_pool_funcs);
-  SgMemberFunctionDeclaration::traverseMemoryPoolNodes(memory_pool_funcs);
-  SgTemplateFunctionDeclaration::traverseMemoryPoolNodes(memory_pool_funcs);
-  SgTemplateMemberFunctionDeclaration::traverseMemoryPoolNodes(
-      memory_pool_funcs);
-  SgTemplateInstantiationFunctionDecl::traverseMemoryPoolNodes(
-      memory_pool_funcs);
-  SgTemplateInstantiationMemberFunctionDecl::traverseMemoryPoolNodes(
-      memory_pool_funcs);
-
-  for (SgFunctionDeclaration *func_decl : memory_pool_funcs.declarations) {
-    if (func_decl == nullptr) {
-      continue;
-    }
-    SgFunctionDeclaration *symbol_decl =
-        isSgFunctionDeclaration(func_decl->get_firstNondefiningDeclaration());
-    if (symbol_decl == nullptr) {
-      symbol_decl = func_decl;
-    }
-    rehome_symbol_to_decl_scope(symbol_decl);
-  }
 
   Rose_STL_Container<SgNode *> funcs =
       NodeQuery::querySubTree(global_scope, V_SgFunctionDeclaration);
