@@ -6544,18 +6544,6 @@ void transOmpCritical(SgNode *node) {
     SgBasicBlock *proc_body = func_def->get_body();
     ROSE_ASSERT(proc_body != NULL);
 
-    sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), scope);
-    if (sym == NULL) {
-      SgExprListExp *lock_dims =
-          buildExprListExp(buildIntVal(kKmpCriticalNameWords));
-      SgType *lock_type = buildArrayType(buildIntType(), lock_dims);
-      SgVariableDeclaration *vardecl =
-          buildVariableDeclaration(g_lock_name, lock_type, NULL, proc_body);
-      insert_fortran_declaration_into_procedure(vardecl, proc_body);
-      sym = getFirstVarSym(vardecl);
-    }
-    ROSE_ASSERT(sym != NULL);
-
     auto is_direct_module_scope = [](SgScopeStatement *candidate) -> bool {
       if (candidate == NULL)
         return false;
@@ -6568,12 +6556,59 @@ void transOmpCritical(SgNode *node) {
       return false;
     };
 
-    bool symbol_is_module_entity = is_direct_module_scope(sym->get_scope());
-    if (!symbol_is_module_entity) {
-      if (SgInitializedName *sym_decl = sym->get_declaration()) {
-        symbol_is_module_entity = is_direct_module_scope(sym_decl->get_scope());
+    auto is_symbol_from_current_procedure =
+        [&](SgVariableSymbol *candidate) -> bool {
+      if (candidate == NULL)
+        return false;
+
+      SgScopeStatement *decl_scope = NULL;
+      if (SgInitializedName *candidate_decl = candidate->get_declaration())
+        decl_scope = candidate_decl->get_scope();
+      if (decl_scope == NULL)
+        decl_scope = candidate->get_scope();
+      if (decl_scope == NULL)
+        return false;
+
+      SgFunctionDefinition *decl_func_def =
+          getEnclosingFunctionDefinition(decl_scope);
+      return decl_func_def != NULL && decl_func_def == func_def;
+    };
+
+    auto ensure_local_fortran_lock_symbol = [&]() -> SgVariableSymbol * {
+      SgExprListExp *lock_dims =
+          buildExprListExp(buildIntVal(kKmpCriticalNameWords));
+      SgType *lock_type = buildArrayType(buildIntType(), lock_dims);
+      SgVariableDeclaration *vardecl =
+          buildVariableDeclaration(g_lock_name, lock_type, NULL, proc_body);
+      insert_fortran_declaration_into_procedure(vardecl, proc_body);
+      return getFirstVarSym(vardecl);
+    };
+
+    sym = lookupVariableSymbolInParentScopes(SgName(g_lock_name), scope);
+    bool symbol_is_module_entity = false;
+    bool symbol_is_current_procedure_entity = false;
+    if (sym != NULL) {
+      symbol_is_module_entity = is_direct_module_scope(sym->get_scope());
+      if (!symbol_is_module_entity) {
+        if (SgInitializedName *sym_decl = sym->get_declaration()) {
+          symbol_is_module_entity =
+              is_direct_module_scope(sym_decl->get_scope());
+        }
       }
+      symbol_is_current_procedure_entity =
+          is_symbol_from_current_procedure(sym);
     }
+
+    // Host-associated variables from parent procedures cannot appear in COMMON
+    // inside this procedure. If we found such a symbol, create a local lock
+    // declaration to provide valid COMMON-backed global storage semantics.
+    if (sym == NULL ||
+        (!symbol_is_module_entity && !symbol_is_current_procedure_entity)) {
+      sym = ensure_local_fortran_lock_symbol();
+      symbol_is_module_entity = false;
+      symbol_is_current_procedure_entity = true;
+    }
+    ROSE_ASSERT(sym != NULL);
 
     if (!symbol_is_module_entity) {
       // Fortran COMMON provides global storage semantics for named/unnamed
