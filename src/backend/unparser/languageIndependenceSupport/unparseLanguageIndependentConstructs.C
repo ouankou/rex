@@ -3430,6 +3430,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               // the AST, then we should add a CR and maybe later some
               // indentation. curprint("\n/* added at CR and indentation */");
               emit_forced_newline(unp);
+              // Preserve the historical extra separation this site produced
+              // (formerly two "\n " prints) without reintroducing space hacks.
+              unp->cur.insert_newline(2);
             }
           }
         }
