@@ -2309,12 +2309,46 @@ void finishSageAST(ClangToSageTranslator &translator) {
       if (!location_leq(start, end)) {
         std::swap(start, end);
       }
+      if (start->get_line() == end->get_line() &&
+          start->get_col() == end->get_col()) {
+        // Some frontend nodes only carry a start location. Treat these as
+        // spanning the rest of their source line so trailing line comments
+        // anchor to the statement they follow instead of the next declaration.
+        if (!is_same_file(start, cursor) ||
+            cursor->get_line() != start->get_line()) {
+          return false;
+        }
+        return cursor->get_col() >= start->get_col();
+      }
       return location_leq(start, cursor) && location_leq(cursor, end);
     };
     std::function<SgLocatedNode *(SgLocatedNode *, Sg_File_Info *)>
         find_deepest_anchor;
     find_deepest_anchor = [&](SgLocatedNode *node,
                               Sg_File_Info *cursor) -> SgLocatedNode * {
+      if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(node)) {
+        if (SgFunctionDefinition *defn = func_decl->get_definition()) {
+          SgLocatedNode *defn_node = isSgLocatedNode(defn);
+          if (cursor_inside_node(defn_node, cursor)) {
+            if (SgLocatedNode *nested =
+                    find_deepest_anchor(defn_node, cursor)) {
+              return nested;
+            }
+            return defn_node;
+          }
+          if (SgBasicBlock *body = defn->get_body()) {
+            SgLocatedNode *body_node = isSgLocatedNode(body);
+            if (cursor_inside_node(body_node, cursor)) {
+              if (SgLocatedNode *nested =
+                      find_deepest_anchor(body_node, cursor)) {
+                return nested;
+              }
+              return body_node;
+            }
+          }
+        }
+      }
+
       if (!cursor_inside_node(node, cursor)) {
         return nullptr;
       }
@@ -2340,20 +2374,6 @@ void finishSageAST(ClangToSageTranslator &translator) {
         return nullptr;
       };
 
-      if (SgFunctionDeclaration *func_decl = isSgFunctionDeclaration(node)) {
-        if (SgFunctionDefinition *defn = func_decl->get_definition()) {
-          if (SgLocatedNode *nested =
-                  find_deepest_anchor(isSgLocatedNode(defn), cursor)) {
-            return nested;
-          }
-          if (SgBasicBlock *body = defn->get_body()) {
-            if (SgLocatedNode *nested =
-                    find_deepest_anchor(isSgLocatedNode(body), cursor)) {
-              return nested;
-            }
-          }
-        }
-      }
       if (SgFunctionDefinition *defn = isSgFunctionDefinition(node)) {
         if (SgBasicBlock *body = defn->get_body()) {
           if (SgLocatedNode *nested =
@@ -4425,6 +4445,16 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     return type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
            type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
   };
+  auto is_comment_directive = [](const PreprocessingInfo *info) -> bool {
+    if (info == nullptr) {
+      return false;
+    }
+    PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
+    return type == PreprocessingInfo::C_StyleComment ||
+           type == PreprocessingInfo::CplusplusStyleComment ||
+           type == PreprocessingInfo::FortranStyleComment ||
+           type == PreprocessingInfo::F90StyleComment;
+  };
   auto promote_include_target =
       [&](SgLocatedNode *node,
           PreprocessingInfo *directive) -> SgLocatedNode * {
@@ -5211,6 +5241,26 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
               }
             }
           }
+        }
+      }
+      if (!is_include_directive(inheritedValue->next_to_insert) &&
+          is_comment_directive(inheritedValue->next_to_insert) &&
+          inheritedValue->cursor != nullptr &&
+          inheritedValue->candidat != nullptr &&
+          inheritedValue->candidat != loc_node) {
+        SgLocatedNode *candidate_node = inheritedValue->candidat;
+        Sg_File_Info *candidate_end = candidate_node->get_endOfConstruct();
+        if (candidate_end == nullptr || candidate_end->get_line() <= 0) {
+          candidate_end = get_effective_file_info(candidate_node);
+        }
+        if (candidate_end != nullptr && candidate_end->get_line() > 0 &&
+            is_same_file(candidate_end, inheritedValue->cursor) &&
+            candidate_end->get_line() == inheritedValue->cursor->get_line() &&
+            candidate_end->get_col() > 0 &&
+            candidate_end->get_col() < inheritedValue->cursor->get_col()) {
+          attach_node = candidate_node;
+          inheritedValue->next_to_insert->setRelativePosition(
+              PreprocessingInfo::after);
         }
       }
       bool is_include = is_include_directive(inheritedValue->next_to_insert);

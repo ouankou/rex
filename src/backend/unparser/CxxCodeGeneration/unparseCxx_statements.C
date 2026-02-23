@@ -3284,8 +3284,10 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
       // curprint ( string(") "));
       if (SgProject::get_verbose() > 0)
         curprint("/* syntax from AST */ ) ");
-      else
+      else if (isSgBasicBlock(if_stmt->get_true_body()) != nullptr)
         curprint(") ");
+      else
+        curprint(")");
 
       // DQ (9/24/2020): Adding support to unparse attached pragmas.
       unparsePragmaAttribute(if_stmt);
@@ -6604,7 +6606,7 @@ void Unparse_ExprStmt::unparseBreakStmt(SgStatement *stmt, SgUnparse_Info &) {
   SgBreakStmt *break_stmt = isSgBreakStmt(stmt);
   ASSERT_not_null(break_stmt);
 
-  curprint("break; ");
+  curprint("break;");
 }
 
 void Unparse_ExprStmt::unparseContinueStmt(SgStatement *stmt,
