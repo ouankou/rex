@@ -3371,18 +3371,18 @@ SgFunctionDeclaration *function_declaration_from_symbol(SgSymbol *symbol) {
     return nullptr;
   }
 
-  if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(symbol)) {
-    return func_sym->get_declaration();
-  }
-  if (SgTemplateFunctionSymbol *tmpl_sym = isSgTemplateFunctionSymbol(symbol)) {
-    return isSgFunctionDeclaration(tmpl_sym->get_declaration());
+  if (SgTemplateMemberFunctionSymbol *tmpl_mem_sym =
+          isSgTemplateMemberFunctionSymbol(symbol)) {
+    return isSgFunctionDeclaration(tmpl_mem_sym->get_declaration());
   }
   if (SgMemberFunctionSymbol *member_sym = isSgMemberFunctionSymbol(symbol)) {
     return member_sym->get_declaration();
   }
-  if (SgTemplateMemberFunctionSymbol *tmpl_mem_sym =
-          isSgTemplateMemberFunctionSymbol(symbol)) {
-    return isSgFunctionDeclaration(tmpl_mem_sym->get_declaration());
+  if (SgTemplateFunctionSymbol *tmpl_sym = isSgTemplateFunctionSymbol(symbol)) {
+    return isSgFunctionDeclaration(tmpl_sym->get_declaration());
+  }
+  if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(symbol)) {
+    return func_sym->get_declaration();
   }
 
   return nullptr;
