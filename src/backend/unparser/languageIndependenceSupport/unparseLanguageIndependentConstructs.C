@@ -3432,7 +3432,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               emit_forced_newline(unp);
               // Preserve the historical extra separation this site produced
               // (formerly two "\n " prints) without reintroducing space hacks.
-              unp->cur.insert_newline(2);
+              unp->cur.insert_newline(1);
             }
           }
         }
