@@ -24,6 +24,7 @@ RUN apt-get update \
       libclang-cpp${LLVM_VERSION}-dev \
       libflang-${LLVM_VERSION}-dev \
       libhpdf-dev \
+      libomp-${LLVM_VERSION}-dev \
       libtool \
       lldb-${LLVM_VERSION} \
       llvm-${LLVM_VERSION} \

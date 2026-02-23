@@ -54,22 +54,12 @@ jobs:
 
             git config --global --add safe.directory /work
 
-            JOBS="$(nproc 2>/dev/null || echo 4)"
-            if [ "${JOBS}" -gt 32 ]; then
-              JOBS=32
-            fi
-            export NUM_JOBS="${JOBS}"
+            CTEST_JOBS="$(nproc)"
 
             ./build-rex.sh /work/rex_install Debug
 
-            # RTH tests default to a 15-minute timeout; scale for QEMU user-mode emulation.
-            export ROSE_TEST_TIMEOUT_SCALE=3
-            # CTest also has a global 1500s timeout; keep it in sync with the RTH timeout scaling.
-            CTEST_TIMEOUT="$((1500 * ROSE_TEST_TIMEOUT_SCALE))"
-            ctest --test-dir /work/build \
-              -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" \
-              --exclude-regex "omp_lowering|gdf_f77_constprop_test2007_189_f|gdf_f77_constprop_test2007_227_f" \
+            ctest --test-dir build \
+              -R "rex|astInterface|testQuery|fortran|f90|f03|OMPVV_5_0_|OMPLOWERING_RODINIA_" \
               --output-on-failure \
-              --timeout "${CTEST_TIMEOUT}" \
-              -j"${JOBS}"
+              -j"${CTEST_JOBS}"
           '
