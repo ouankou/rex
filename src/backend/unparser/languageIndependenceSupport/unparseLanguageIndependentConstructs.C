@@ -25,6 +25,20 @@
 using namespace std;
 using namespace Rose;
 
+namespace {
+void emit_forced_newline(Unparser *unp) {
+  if (unp == nullptr) {
+    return;
+  }
+  // Only emit a newline when text is present on the current line.
+  // At column 0 we are already on a fresh line; forcing another newline would
+  // introduce an extra blank line.
+  if (unp->cur.current_col() > 0) {
+    unp->cur.insert_newline(1);
+  }
+}
+} // namespace
+
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
 #define OUTPUT_HIDDEN_LIST_DATA 0
 #define OUTPUT_DEBUGGING_INFORMATION 0
@@ -3314,7 +3328,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             // string, so adding extra space fixes this temporarily.
             // unp->cur.insert_newline(1);
             // curprint ("// new line added \n  ");
-            curprint("\n ");
+            emit_forced_newline(unp);
           }
 #if DEBUG_UNPARSE_STATEMENT
           printf("In unparseStatement(): calling "
@@ -3415,8 +3429,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               // token stream, and the current statement will be unparsed from
               // the AST, then we should add a CR and maybe later some
               // indentation. curprint("\n/* added at CR and indentation */");
-              curprint("\n ");
-              curprint("\n ");
+              emit_forced_newline(unp);
             }
           }
         }
@@ -3808,7 +3821,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 #if DEBUG_USING_CURPRINT || 0
               curprint("\n /* added CR */\n");
 #endif
-              curprint("\n ");
+              emit_forced_newline(unp);
             }
 
             unparseAttachedPreprocessingInfo(lastStatement, info,
@@ -4069,7 +4082,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                      "PreprocessingInfo::after added CR */\n");
 #endif
             if (!skip_extra_newline) {
-              curprint("\n ");
+              emit_forced_newline(unp);
             }
           }
 
