@@ -2314,7 +2314,8 @@ void finishSageAST(ClangToSageTranslator &translator) {
         // Some frontend nodes only carry a start location. Treat these as
         // spanning the rest of their source line so trailing line comments
         // anchor to the statement they follow instead of the next declaration.
-        if (cursor->get_line() != start->get_line()) {
+        if (!is_same_file(start, cursor) ||
+            cursor->get_line() != start->get_line()) {
           return false;
         }
         return cursor->get_col() >= start->get_col();
