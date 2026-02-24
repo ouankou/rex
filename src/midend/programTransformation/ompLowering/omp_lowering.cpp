@@ -526,8 +526,7 @@ static bool isOpenMPPragmaText(const std::string &raw_text) {
     return true;
 
   if (text.rfind("omp ", 0) == 0 || text.rfind("omp\t", 0) == 0 ||
-      text.rfind("omp\n", 0) == 0 || text.rfind("omp\r", 0) == 0 ||
-      text.rfind("omp$", 0) == 0) {
+      text.rfind("omp\n", 0) == 0 || text.rfind("omp\r", 0) == 0) {
     return true;
   }
 
