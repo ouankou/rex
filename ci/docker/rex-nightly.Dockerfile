@@ -1,9 +1,11 @@
 ARG BASE_IMAGE=ghcr.io/ouankou/rex:base
-FROM ${BASE_IMAGE}
+ARG LLVM_VERSION=21
+
+FROM ${BASE_IMAGE} AS rex-base
 
 LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
-ARG LLVM_VERSION=21
+ARG LLVM_VERSION
 ENV LLVM_VERSION=${LLVM_VERSION}
 ENV REX_ROOT=/opt/rex
 ENV REX_SOURCE_DIR=${REX_ROOT}/src
@@ -16,6 +18,8 @@ ENV CC=clang-${LLVM_VERSION}
 ENV CXX=clang++-${LLVM_VERSION}
 ENV FC=flang-${LLVM_VERSION}
 ENV LD_LIBRARY_PATH=${REX_INSTALL_DIR}/lib:/usr/lib/llvm-${LLVM_VERSION}/lib
+
+FROM rex-base AS builder
 
 WORKDIR ${REX_SOURCE_DIR}
 COPY . ${REX_SOURCE_DIR}
@@ -30,6 +34,11 @@ RUN cmake -S "${REX_SOURCE_DIR}" -B "${REX_BUILD_DIR}" \
       -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     && cmake --build "${REX_BUILD_DIR}" -j"$(nproc)" \
     && cmake --install "${REX_BUILD_DIR}"
+
+FROM rex-base
+
+COPY --from=builder ${REX_INSTALL_DIR} ${REX_INSTALL_DIR}
+COPY --from=builder ${REX_SOURCE_DIR} ${REX_SOURCE_DIR}
 
 RUN set -eux; \
     JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"; \
