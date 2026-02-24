@@ -11759,6 +11759,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     ExplicitTemplateArgumentSourceInfo source_info =
         scanExplicitTemplateArgumentsInSourceRange(
             member_expr->getSourceRange(), sm, lang_opts);
+    if (!source_info.has_template_argument_list) {
+      source_info = scanExplicitTemplateArgumentsAfterLoc(
+          member_expr->getEndLoc(), sm, lang_opts);
+    }
     if (source_info.has_template_argument_list) {
       explicit_arg_count = source_info.argument_count;
       has_explicit_template_args = true;
