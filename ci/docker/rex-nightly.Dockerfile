@@ -35,10 +35,9 @@ RUN cmake -S "${REX_SOURCE_DIR}" -B "${REX_BUILD_DIR}" \
     && cmake --build "${REX_BUILD_DIR}" -j"$(nproc)" \
     && cmake --install "${REX_BUILD_DIR}"
 
-FROM rex-base
+FROM rex-base AS runtime
 
 COPY --from=builder ${REX_INSTALL_DIR} ${REX_INSTALL_DIR}
-COPY --from=builder ${REX_SOURCE_DIR} ${REX_SOURCE_DIR}
 
 RUN set -eux; \
     JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"; \
@@ -49,4 +48,12 @@ RUN set -eux; \
       > /etc/ld.so.conf.d/rex.conf; \
     ldconfig
 
+WORKDIR /
+
+FROM runtime AS test
+
+COPY --from=builder ${REX_SOURCE_DIR} ${REX_SOURCE_DIR}
+
 WORKDIR ${REX_BUILD_DIR}
+
+FROM runtime
