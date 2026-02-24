@@ -185,9 +185,6 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
   }
   }
 
-  // FIXME should be handle by Clang ?
-  define_list.push_back("__I__=_Complex_I");
-
   const size_t estimated_argc =
       define_list.size() + inc_dirs_list.size() + inc_list.size();
   std::vector<std::string> args_storage;

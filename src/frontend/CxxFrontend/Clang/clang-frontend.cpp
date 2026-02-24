@@ -1136,9 +1136,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   assertRequiredPreincludeConfigured(inc_list, language,
                                      "driver argument construction");
 
-  // FIXME should be handle by Clang ?
-  define_list.push_back("__I__=_Complex_I");
-
   // Avoid staged Clang resource headers that cause include_next loops.
   filter_staged_resource_dirs(sys_dirs_list);
 
