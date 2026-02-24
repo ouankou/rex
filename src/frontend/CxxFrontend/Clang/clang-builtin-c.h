@@ -15,11 +15,11 @@
 #endif
 
 #ifndef __NAN__
-#define __NAN__ __builtin_nanf("")
+#define __NAN__ __builtin_nan("")
 #endif
 
 #ifndef __INFINITY__
-#define __INFINITY__ __builtin_inff()
+#define __INFINITY__ __builtin_inf()
 #endif
 
 #if !__has_builtin(__builtin_va_start)
