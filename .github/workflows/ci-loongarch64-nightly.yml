@@ -27,9 +27,9 @@ jobs:
     - name: Run core tests from prebuilt image (loong64 via QEMU)
       run: |
         set -euo pipefail
-        docker pull --platform=linux/loong64 ghcr.io/${{ github.repository_owner }}/rex:latest-test
+        docker pull --platform=linux/loong64 ghcr.io/${{ github.repository_owner }}/rex:dev
         docker run --rm --platform=linux/loong64 \
-          ghcr.io/${{ github.repository_owner }}/rex:latest-test \
+          ghcr.io/${{ github.repository_owner }}/rex:dev \
           bash -lc '
             set -euo pipefail
             cd /opt/rex/src

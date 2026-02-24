@@ -24,7 +24,7 @@ jobs:
     env:
       IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
       REX_RUNTIME_TAG: latest
-      REX_TEST_TAG: latest-test
+      REX_DEV_TAG: dev
 
     steps:
     - uses: actions/checkout@v4
@@ -112,11 +112,11 @@ jobs:
           "${IMAGE_REPO}@${{ steps.build-runtime-loong64.outputs.digest }}"
         docker buildx imagetools inspect "${IMAGE_REPO}:${REX_RUNTIME_TAG}"
 
-    - name: Publish multi-arch test manifest (latest-test tag)
+    - name: Publish multi-arch dev manifest (dev tag)
       run: |
         set -euo pipefail
         docker buildx imagetools create \
-          -t "${IMAGE_REPO}:${REX_TEST_TAG}" \
+          -t "${IMAGE_REPO}:${REX_DEV_TAG}" \
           "${IMAGE_REPO}@${{ steps.build-test-riscv64.outputs.digest }}" \
           "${IMAGE_REPO}@${{ steps.build-test-loong64.outputs.digest }}"
-        docker buildx imagetools inspect "${IMAGE_REPO}:${REX_TEST_TAG}"
+        docker buildx imagetools inspect "${IMAGE_REPO}:${REX_DEV_TAG}"
