@@ -407,6 +407,236 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
                                               buffer_or->getBufferIdentifier());
 }
 
+// Clang 21 rejects `_Alignas/alignas` when it appears after a record
+// definition, e.g. `struct S { ... } _Alignas(16) x;`, even though this form
+// is accepted by GCC and heavily used in legacy ROSE tests. Normalize those
+// declarations by moving the alignment specifier sequence in front of the
+// record keyword before parsing.
+std::unique_ptr<llvm::MemoryBuffer>
+maybeNormalizePostRecordAlignas(clang::SourceManager &source_manager,
+                                clang::FileID file_id,
+                                const clang::LangOptions &lang_opts) {
+  auto buffer_or = source_manager.getBufferOrNone(file_id);
+  if (!buffer_or) {
+    return nullptr;
+  }
+
+  clang::Lexer lexer(file_id, *buffer_or, source_manager, lang_opts);
+  std::vector<TokenWithOffset> tokens;
+  tokens.reserve(256);
+
+  clang::Token token;
+  while (true) {
+    lexer.LexFromRawLexer(token);
+    if (token.is(clang::tok::eof)) {
+      break;
+    }
+    if (source_manager.getFileID(token.getLocation()) != file_id) {
+      continue;
+    }
+    tokens.push_back(
+        {token, source_manager.getFileOffset(token.getLocation())});
+  }
+
+  if (tokens.empty()) {
+    return nullptr;
+  }
+
+  llvm::StringRef source_text = buffer_or->getBuffer();
+  auto token_spelling = [&](const clang::Token &tok) {
+    return clang::Lexer::getSpelling(tok, source_manager, lang_opts);
+  };
+  auto token_is_spelling = [&](const clang::Token &tok, llvm::StringRef text) {
+    return tok.isOneOf(clang::tok::identifier, clang::tok::raw_identifier) &&
+           token_spelling(tok) == text;
+  };
+  auto next_significant = [&](size_t index) {
+    while (index < tokens.size() &&
+           tokens[index].token.is(clang::tok::comment)) {
+      ++index;
+    }
+    return index;
+  };
+  auto is_record_keyword = [&](size_t index) {
+    if (index >= tokens.size()) {
+      return false;
+    }
+    const clang::Token &tok = tokens[index].token;
+    return tok.isOneOf(clang::tok::kw_struct, clang::tok::kw_union,
+                       clang::tok::kw_enum) ||
+           token_is_spelling(tok, "struct") ||
+           token_is_spelling(tok, "union") || token_is_spelling(tok, "enum");
+  };
+  auto is_alignas_start = [&](size_t index) {
+    if (index >= tokens.size()) {
+      return false;
+    }
+    const clang::Token &tok = tokens[index].token;
+    if (tok.is(clang::tok::kw__Alignas)) {
+      return true;
+    }
+    return token_is_spelling(tok, "alignas") ||
+           token_is_spelling(tok, "_Alignas");
+  };
+  auto token_end_offset = [&](size_t index) {
+    return tokens[index].offset + tokens[index].token.getLength();
+  };
+
+  struct AlignasRewrite {
+    unsigned insert_offset;
+    unsigned remove_begin;
+    unsigned remove_end;
+    std::string moved_text;
+  };
+  std::vector<AlignasRewrite> rewrites;
+  rewrites.reserve(4);
+
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    if (!is_record_keyword(i)) {
+      continue;
+    }
+
+    size_t l_brace = tokens.size();
+    int paren_depth = 0;
+    for (size_t j = i + 1; j < tokens.size(); ++j) {
+      const clang::Token &candidate = tokens[j].token;
+      if (candidate.is(clang::tok::comment)) {
+        continue;
+      }
+      if (candidate.is(clang::tok::l_paren)) {
+        ++paren_depth;
+        continue;
+      }
+      if (candidate.is(clang::tok::r_paren)) {
+        if (paren_depth > 0) {
+          --paren_depth;
+        }
+        continue;
+      }
+      if (paren_depth > 0) {
+        continue;
+      }
+      if (candidate.is(clang::tok::l_brace)) {
+        l_brace = j;
+        break;
+      }
+      if (candidate.isOneOf(clang::tok::semi, clang::tok::comma,
+                            clang::tok::equal, clang::tok::colon)) {
+        break;
+      }
+    }
+    if (l_brace == tokens.size()) {
+      continue;
+    }
+
+    int brace_depth = 1;
+    size_t r_brace = tokens.size();
+    for (size_t j = l_brace + 1; j < tokens.size(); ++j) {
+      const clang::Token &candidate = tokens[j].token;
+      if (candidate.is(clang::tok::comment)) {
+        continue;
+      }
+      if (candidate.is(clang::tok::l_brace)) {
+        ++brace_depth;
+      } else if (candidate.is(clang::tok::r_brace)) {
+        --brace_depth;
+        if (brace_depth == 0) {
+          r_brace = j;
+          break;
+        }
+      }
+    }
+    if (r_brace == tokens.size()) {
+      continue;
+    }
+
+    size_t align_start = next_significant(r_brace + 1);
+    if (!is_alignas_start(align_start)) {
+      i = r_brace;
+      continue;
+    }
+
+    size_t scan = align_start;
+    size_t align_end = tokens.size();
+    bool parse_ok = true;
+    while (scan < tokens.size() && is_alignas_start(scan)) {
+      size_t l_paren = next_significant(scan + 1);
+      if (l_paren >= tokens.size() ||
+          !tokens[l_paren].token.is(clang::tok::l_paren)) {
+        parse_ok = false;
+        break;
+      }
+      int align_paren_depth = 1;
+      size_t r_paren = tokens.size();
+      for (size_t cursor = l_paren + 1; cursor < tokens.size(); ++cursor) {
+        const clang::Token &paren_tok = tokens[cursor].token;
+        if (paren_tok.is(clang::tok::comment)) {
+          continue;
+        }
+        if (paren_tok.is(clang::tok::l_paren)) {
+          ++align_paren_depth;
+        } else if (paren_tok.is(clang::tok::r_paren)) {
+          --align_paren_depth;
+          if (align_paren_depth == 0) {
+            r_paren = cursor;
+            break;
+          }
+        }
+      }
+      if (r_paren == tokens.size()) {
+        parse_ok = false;
+        break;
+      }
+      align_end = r_paren;
+      scan = next_significant(r_paren + 1);
+    }
+    if (!parse_ok || align_end == tokens.size()) {
+      i = r_brace;
+      continue;
+    }
+
+    if (scan >= tokens.size()) {
+      i = r_brace;
+      continue;
+    }
+    const clang::Token &after_align = tokens[scan].token;
+    if (!after_align.isOneOf(clang::tok::identifier, clang::tok::raw_identifier,
+                             clang::tok::semi, clang::tok::star,
+                             clang::tok::l_paren, clang::tok::l_square,
+                             clang::tok::kw___attribute) &&
+        !token_is_spelling(after_align, "__attribute__")) {
+      i = r_brace;
+      continue;
+    }
+
+    unsigned remove_begin = tokens[align_start].offset;
+    unsigned remove_end = token_end_offset(align_end);
+    rewrites.push_back(
+        {tokens[i].offset, remove_begin, remove_end,
+         source_text.substr(remove_begin, remove_end - remove_begin).str()});
+    i = r_brace;
+  }
+
+  if (rewrites.empty()) {
+    return nullptr;
+  }
+
+  std::sort(rewrites.begin(), rewrites.end(),
+            [](const AlignasRewrite &lhs, const AlignasRewrite &rhs) {
+              return lhs.remove_begin > rhs.remove_begin;
+            });
+
+  std::string updated = source_text.str();
+  for (const AlignasRewrite &rewrite : rewrites) {
+    updated.erase(rewrite.remove_begin,
+                  rewrite.remove_end - rewrite.remove_begin);
+    updated.insert(rewrite.insert_offset, rewrite.moved_text + " ");
+  }
+
+  return llvm::MemoryBuffer::getMemBufferCopy(updated,
+                                              buffer_or->getBufferIdentifier());
+}
+
 struct SuppressedIncludeDirective {
   size_t hash_offset;
   size_t line_start;
@@ -1860,7 +2090,19 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     sageFile.set_unparse_tokens(true);
   }
 
+  bool normalized_post_record_alignas = false;
   std::vector<SuppressedIncludeDirective> suppressed_includes;
+  if (language == ClangToSageTranslator::C) {
+    if (auto fixed_buffer = maybeNormalizePostRecordAlignas(
+            compiler_instance->getSourceManager(), mainFileID, lang_opts)) {
+      compiler_instance->getSourceManager().overrideFileContents(
+          input_file_entry, std::move(fixed_buffer));
+      // The token stream no longer matches the on-disk source; unparse from
+      // the AST to preserve normalized C11 alignment declarations.
+      sageFile.set_unparse_tokens(false);
+      normalized_post_record_alignas = true;
+    }
+  }
   if (language == ClangToSageTranslator::CPLUSPLUS ||
       language == ClangToSageTranslator::CUDA) {
     std::vector<unsigned> missing_template_offsets;
@@ -2062,6 +2304,19 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // 6 - Finish the AST (fixup phase)
 
   finishSageAST(*translator);
+
+  if (normalized_post_record_alignas && global_scope != NULL) {
+    // Parsing consumed an in-memory normalized buffer. Force AST-based
+    // unparsing so output reflects the normalized form instead of raw on-disk
+    // tokens.
+    sageFile.set_unparse_tokens(false);
+    global_scope->setTransformation();
+    global_scope->set_isModified(true);
+    if (Sg_File_Info *scope_info = global_scope->get_file_info()) {
+      scope_info->setTransformation();
+      scope_info->setOutputInCodeGeneration();
+    }
+  }
 
   // 7 - OpenMP Processing
   //
