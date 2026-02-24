@@ -1298,8 +1298,8 @@ void RecordSourcePragmaAtSource(SourcePragmaLineIndex &pragma_line_index,
 bool IsStructuredDirectiveEnd(const std::string &directiveText) {
   std::string lowered = ToLowerCopy(directiveText);
   TrimLeft(lowered);
-  if (lowered.rfind("omp end", 0) == 0 || lowered.rfind("acc end", 0) == 0 ||
-      lowered.rfind("cuf end", 0) == 0) {
+  if (lowered.find("omp end", 0) == 0 || lowered.find("acc end", 0) == 0 ||
+      lowered.find("cuf end", 0) == 0) {
     return true;
   }
   return false;
