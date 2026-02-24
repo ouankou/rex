@@ -1295,6 +1295,110 @@ void RecordSourcePragmaAtSource(SourcePragmaLineIndex &pragma_line_index,
   pragma_line_index[startPos.line].insert(NormalizeSourcePath(startPos.path));
 }
 
+bool IsStructuredDirectiveEnd(const std::string &directiveText) {
+  std::string lowered = ToLowerCopy(directiveText);
+  TrimLeft(lowered);
+  if (lowered.find("omp end", 0) == 0 || lowered.find("acc end", 0) == 0 ||
+      lowered.find("cuf end", 0) == 0) {
+    return true;
+  }
+  return false;
+}
+
+bool CanInsertDirectiveBefore(SgStatement *stmt) {
+  if (stmt == nullptr || isSgPragmaDeclaration(stmt) != nullptr ||
+      isSgGlobal(stmt) != nullptr || isSgClassDefinition(stmt) != nullptr ||
+      isSgNamespaceDefinitionStatement(stmt) != nullptr ||
+      isSgFunctionParameterList(stmt) != nullptr ||
+      isSgFunctionDefinition(stmt) != nullptr ||
+      isSgCtorInitializerList(stmt) != nullptr) {
+    return false;
+  }
+
+  SgNode *parent = stmt->get_parent();
+  if (SgLabelStatement *label = isSgLabelStatement(parent)) {
+    parent = label->get_parent();
+  }
+  if (isSgFunctionDefinition(parent) != nullptr ||
+      isSgTypedefDeclaration(parent) != nullptr ||
+      isSgSwitchStatement(parent) != nullptr ||
+      isSgVariableDeclaration(parent) != nullptr) {
+    return false;
+  }
+
+  return isSgScopeStatement(parent) != nullptr;
+}
+
+SgScopeStatement *NormalizeDirectiveInsertionScope(SgScopeStatement *scope,
+                                                   SgSourceFile *source) {
+  if (scope == nullptr) {
+    return source != nullptr ? source->get_globalScope() : nullptr;
+  }
+  if (SgFunctionDefinition *def = isSgFunctionDefinition(scope)) {
+    if (SgBasicBlock *body = def->get_body()) {
+      return body;
+    }
+  }
+  return scope;
+}
+
+SgStatement *FindDirectiveInsertionTarget(SgScopeStatement *scope,
+                                          SgSourceFile *source,
+                                          const SourcePosition &anchor,
+                                          bool strictAfter) {
+  if (scope == nullptr || source == nullptr || anchor.line <= 0) {
+    return nullptr;
+  }
+
+  const std::string target_path = NormalizeSourcePath(anchor.path);
+  SgStatement *best_stmt = nullptr;
+  int best_line = std::numeric_limits<int>::max();
+  int best_col = std::numeric_limits<int>::max();
+
+  const SgStatementPtrList &stmts = scope->generateStatementList();
+  for (SgStatement *stmt : stmts) {
+    if (!CanInsertDirectiveBefore(stmt)) {
+      continue;
+    }
+
+    Sg_File_Info *info = stmt->get_file_info();
+    if (info == nullptr || info->get_line() <= 0) {
+      continue;
+    }
+    if (info->isSameFile(source) == false) {
+      continue;
+    }
+
+    const std::string stmt_path =
+        NormalizeSourcePath(info->get_filenameString());
+    if (!target_path.empty() && !stmt_path.empty() &&
+        stmt_path != target_path) {
+      continue;
+    }
+
+    const int stmt_line = info->get_line();
+    if (strictAfter) {
+      if (stmt_line <= anchor.line) {
+        continue;
+      }
+    } else {
+      if (stmt_line < anchor.line) {
+        continue;
+      }
+    }
+
+    const int stmt_col = info->get_col();
+    if (stmt_line < best_line ||
+        (stmt_line == best_line && stmt_col < best_col)) {
+      best_stmt = stmt;
+      best_line = stmt_line;
+      best_col = stmt_col;
+    }
+  }
+
+  return best_stmt;
+}
+
 bool EndsWithContinuationAmpersand(const std::string &line) {
   size_t end = line.find_last_not_of(" \t\r");
   return end != std::string::npos && line[end] == '&';
@@ -1546,20 +1650,27 @@ SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
     int start_line = start->get_line();
     const int end_line = end->get_line();
 
-    // A Fortran function/program body basic block can start after the
-    // specification-part comments/directives. Treat the enclosing
-    // function-definition start line as part of the block's effective span.
+    // A Fortran basic block can start after leading directives/comments that
+    // are semantically attached to its owning construct. Expand the block's
+    // effective start line to include its owner so directive recovery can place
+    // pragmas inside the intended nested region.
     if (SgBasicBlock *body = isSgBasicBlock(scope)) {
+      const Sg_File_Info *owner_start = nullptr;
       if (SgFunctionDefinition *def =
               isSgFunctionDefinition(body->get_parent())) {
-        const Sg_File_Info *def_start = def->get_startOfConstruct();
-        if (def_start == nullptr) {
-          def_start = def->get_file_info();
+        owner_start = def->get_startOfConstruct();
+        if (owner_start == nullptr) {
+          owner_start = def->get_file_info();
         }
-        if (def_start != nullptr && def_start->isSameFile(source) &&
-            def_start->get_line() > 0) {
-          start_line = std::min(start_line, def_start->get_line());
+      } else if (SgStatement *owner_stmt = isSgStatement(body->get_parent())) {
+        owner_start = owner_stmt->get_startOfConstruct();
+        if (owner_start == nullptr) {
+          owner_start = owner_stmt->get_file_info();
         }
+      }
+      if (owner_start != nullptr && owner_start->isSameFile(source) &&
+          owner_start->get_line() > 0) {
+        start_line = std::min(start_line, owner_start->get_line());
       }
     }
 
@@ -1632,34 +1743,35 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
       }
     }
 
-    if (ScopeHasPragmaAtSource(scope, directive.start, directive.text)) {
-      continue;
+    const bool strict_after = IsStructuredDirectiveEnd(directive.text);
+    const SourcePosition &anchor_pos =
+        strict_after ? directive.end : directive.start;
+    SgScopeStatement *insertion_scope =
+        NormalizeDirectiveInsertionScope(scope, source);
+    SgStatement *target = FindDirectiveInsertionTarget(
+        insertion_scope, source, anchor_pos, strict_after);
+    if (target != nullptr) {
+      if (SgScopeStatement *target_scope =
+              isSgScopeStatement(target->get_parent())) {
+        insertion_scope =
+            NormalizeDirectiveInsertionScope(target_scope, source);
+      } else {
+        target = nullptr;
+      }
+    }
+    if (insertion_scope == nullptr) {
+      insertion_scope = source->get_globalScope();
     }
 
     SgPragmaDeclaration *pragma =
-        SageBuilder::buildPragmaDeclaration(directive.text, scope);
+        SageBuilder::buildPragmaDeclaration(directive.text, insertion_scope);
     ASSERT_not_null(pragma);
     builder.setSourcePosition(pragma, directive.start, directive.end);
-
-    SgStatement *target = nullptr;
-    const SgStatementPtrList &scope_stmts = scope->generateStatementList();
-    for (SgStatement *stmt : scope_stmts) {
-      if (stmt == nullptr || stmt->get_file_info() == nullptr) {
-        continue;
-      }
-      if (stmt->get_file_info()->isSameFile(source) == false) {
-        continue;
-      }
-      if (stmt->get_file_info()->get_line() >= directive.start.line) {
-        target = stmt;
-        break;
-      }
-    }
 
     if (target != nullptr) {
       SageInterface::insertStatementBefore(target, pragma);
     } else {
-      SageInterface::appendStatement(pragma, scope);
+      SageInterface::appendStatement(pragma, insertion_scope);
     }
     RecordSourcePragmaAtSource(pragma_line_index, directive.start);
   }
@@ -10759,14 +10871,22 @@ void BuildVisitor::Build(parser::OmpBeginBlockDirective &x) {
   if (x.source.empty()) {
     return;
   }
-  AppendPragmasFromCharBlockIfMissing(x.source);
+  // For primary sources we recover OpenMP pragmas after the full AST is built
+  // so we can place them in the innermost lexical scope by source line.
+  // Keep eager insertion only for included files, which the source-recovery
+  // pass intentionally does not rescan.
+  if (IsFromIncludedFile(x.source)) {
+    AppendPragmasFromCharBlockIfMissing(x.source);
+  }
 }
 
 void BuildVisitor::Build(parser::OmpBeginLoopDirective &x) {
   if (x.source.empty()) {
     return;
   }
-  AppendPragmasFromCharBlockIfMissing(x.source);
+  if (IsFromIncludedFile(x.source)) {
+    AppendPragmasFromCharBlockIfMissing(x.source);
+  }
 }
 
 void Build(parser::AccEndCombinedDirective &x) { static_cast<void>(x); }

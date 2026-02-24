@@ -1,0 +1,122 @@
+name: Nightly REX Images
+
+on:
+  schedule:
+    # Every day at 08:00 UTC (01:00 PDT)
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-rex-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-images:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
+      REX_RUNTIME_TAG: latest
+      REX_DEV_TAG: dev
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        persist-credentials: false
+
+    - name: Set up QEMU (riscv64, loong64)
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: riscv64,loong64
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push REX runtime image (riscv64)
+      id: build-runtime-riscv64
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: linux/riscv64
+        target: runtime
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build and push REX test image (riscv64)
+      id: build-test-riscv64
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: linux/riscv64
+        target: test
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build and push REX runtime image (loong64)
+      id: build-runtime-loong64
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: linux/loong64
+        target: runtime
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Build and push REX test image (loong64)
+      id: build-test-loong64
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ci/docker/rex-nightly.Dockerfile
+        platforms: linux/loong64
+        target: test
+        pull: true
+        provenance: false
+        build-args: |
+          BASE_IMAGE=${{ env.IMAGE_REPO }}:base
+        outputs: type=registry,name=${{ env.IMAGE_REPO }},push-by-digest=true
+
+    - name: Publish multi-arch runtime manifest (latest tag)
+      run: |
+        set -euo pipefail
+        docker buildx imagetools create \
+          -t "${IMAGE_REPO}:${REX_RUNTIME_TAG}" \
+          "${IMAGE_REPO}@${{ steps.build-runtime-riscv64.outputs.digest }}" \
+          "${IMAGE_REPO}@${{ steps.build-runtime-loong64.outputs.digest }}"
+        docker buildx imagetools inspect "${IMAGE_REPO}:${REX_RUNTIME_TAG}"
+
+    - name: Publish multi-arch dev manifest (dev tag)
+      run: |
+        set -euo pipefail
+        docker buildx imagetools create \
+          -t "${IMAGE_REPO}:${REX_DEV_TAG}" \
+          "${IMAGE_REPO}@${{ steps.build-test-riscv64.outputs.digest }}" \
+          "${IMAGE_REPO}@${{ steps.build-test-loong64.outputs.digest }}"
+        docker buildx imagetools inspect "${IMAGE_REPO}:${REX_DEV_TAG}"
