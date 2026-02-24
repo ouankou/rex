@@ -51,7 +51,7 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         context: .
-        file: ci/docker/rex-nightly-riscv64.Dockerfile
+        file: ci/docker/rex-nightly.Dockerfile
         platforms: linux/riscv64
         pull: true
         provenance: false
@@ -64,7 +64,7 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         context: .
-        file: ci/docker/rex-nightly-loongarch64.Dockerfile
+        file: ci/docker/rex-nightly.Dockerfile
         platforms: linux/loong64
         pull: true
         provenance: false
