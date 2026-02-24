@@ -3517,7 +3517,7 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
     insert_function_parameter("__global_tid", thread_id_type, result, false);
   }
 
-  if (SageInterface::is_Fortran_language() && target2 != NULL) {
+  if (SageInterface::is_Fortran_language()) {
     normalize_fortran_parallel_outlined_pointer_formals(result, syms);
   }
 
