@@ -1342,11 +1342,11 @@ SgScopeStatement *NormalizeDirectiveInsertionScope(SgScopeStatement *scope,
   return scope;
 }
 
-SgStatement *FindDirectiveInsertionTarget(SgSourceFile *source,
+SgStatement *FindDirectiveInsertionTarget(SgScopeStatement *scope,
+                                          SgSourceFile *source,
                                           const SourcePosition &anchor,
                                           bool strictAfter) {
-  if (source == nullptr || source->get_globalScope() == nullptr ||
-      anchor.line <= 0) {
+  if (scope == nullptr || source == nullptr || anchor.line <= 0) {
     return nullptr;
   }
 
@@ -1355,10 +1355,8 @@ SgStatement *FindDirectiveInsertionTarget(SgSourceFile *source,
   int best_line = std::numeric_limits<int>::max();
   int best_col = std::numeric_limits<int>::max();
 
-  std::vector<SgNode *> stmts =
-      NodeQuery::querySubTree(source->get_globalScope(), V_SgStatement);
-  for (SgNode *node : stmts) {
-    SgStatement *stmt = isSgStatement(node);
+  const SgStatementPtrList &stmts = scope->generateStatementList();
+  for (SgStatement *stmt : stmts) {
     if (!CanInsertDirectiveBefore(stmt)) {
       continue;
     }
@@ -1748,11 +1746,10 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
     const bool strict_after = IsStructuredDirectiveEnd(directive.text);
     const SourcePosition &anchor_pos =
         strict_after ? directive.end : directive.start;
-    SgStatement *target =
-        FindDirectiveInsertionTarget(source, anchor_pos, strict_after);
-
     SgScopeStatement *insertion_scope =
         NormalizeDirectiveInsertionScope(scope, source);
+    SgStatement *target = FindDirectiveInsertionTarget(
+        insertion_scope, source, anchor_pos, strict_after);
     if (target != nullptr) {
       if (SgScopeStatement *target_scope =
               isSgScopeStatement(target->get_parent())) {
