@@ -31,10 +31,13 @@ if [[ "${include_count}" -gt 1 ]]; then
 fi
 
 # Lowered code should contain at least one OpenMP runtime call for sources
-# that contain active OpenMP pragmas.
+# that contain runtime-lowered OpenMP directives. Compile-time directives
+# such as threadprivate/requires are excluded from this requirement.
 runtime_count="$(grep -Ec '__kmpc_|\bXOMP_' "${rose_file}" || true)"
-input_pragma_count="$(grep -Eic '^[[:space:]]*(#[[:space:]]*pragma[[:space:]]+omp\b|[!c*]\$omp\b)' "${input_file}" || true)"
-if [[ "${input_pragma_count}" -gt 0 && "${runtime_count}" -eq 0 ]]; then
+input_runtime_pragma_count="$(
+  grep -Eic '^[[:space:]]*(#[[:space:]]*pragma[[:space:]]+omp[[:space:]]+(parallel|for|sections|single|master|critical|barrier|task|taskwait|atomic|ordered|flush)\b|[!c*]\$omp[[:space:]]+(parallel|do|sections|single|master|critical|barrier|task|taskwait|atomic|ordered|flush)\b)' "${input_file}" || true
+)"
+if [[ "${input_runtime_pragma_count}" -gt 0 && "${runtime_count}" -eq 0 ]]; then
   fail "no OpenMP runtime calls found in lowered host output"
 fi
 
