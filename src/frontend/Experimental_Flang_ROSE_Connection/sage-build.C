@@ -1305,6 +1305,43 @@ bool IsStructuredDirectiveEnd(const std::string &directiveText) {
   return false;
 }
 
+bool CanInsertDirectiveBefore(SgStatement *stmt) {
+  if (stmt == nullptr || isSgPragmaDeclaration(stmt) != nullptr ||
+      isSgGlobal(stmt) != nullptr || isSgClassDefinition(stmt) != nullptr ||
+      isSgNamespaceDefinitionStatement(stmt) != nullptr ||
+      isSgFunctionParameterList(stmt) != nullptr ||
+      isSgFunctionDefinition(stmt) != nullptr ||
+      isSgCtorInitializerList(stmt) != nullptr) {
+    return false;
+  }
+
+  SgNode *parent = stmt->get_parent();
+  if (SgLabelStatement *label = isSgLabelStatement(parent)) {
+    parent = label->get_parent();
+  }
+  if (isSgFunctionDefinition(parent) != nullptr ||
+      isSgTypedefDeclaration(parent) != nullptr ||
+      isSgSwitchStatement(parent) != nullptr ||
+      isSgVariableDeclaration(parent) != nullptr) {
+    return false;
+  }
+
+  return isSgScopeStatement(parent) != nullptr;
+}
+
+SgScopeStatement *NormalizeDirectiveInsertionScope(SgScopeStatement *scope,
+                                                   SgSourceFile *source) {
+  if (scope == nullptr) {
+    return source != nullptr ? source->get_globalScope() : nullptr;
+  }
+  if (SgFunctionDefinition *def = isSgFunctionDefinition(scope)) {
+    if (SgBasicBlock *body = def->get_body()) {
+      return body;
+    }
+  }
+  return scope;
+}
+
 SgStatement *FindDirectiveInsertionTarget(SgSourceFile *source,
                                           const SourcePosition &anchor,
                                           bool strictAfter) {
@@ -1322,8 +1359,7 @@ SgStatement *FindDirectiveInsertionTarget(SgSourceFile *source,
       NodeQuery::querySubTree(source->get_globalScope(), V_SgStatement);
   for (SgNode *node : stmts) {
     SgStatement *stmt = isSgStatement(node);
-    if (stmt == nullptr || isSgPragmaDeclaration(stmt) != nullptr ||
-        isSgGlobal(stmt) != nullptr) {
+    if (!CanInsertDirectiveBefore(stmt)) {
       continue;
     }
 
@@ -1715,11 +1751,15 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
     SgStatement *target =
         FindDirectiveInsertionTarget(source, anchor_pos, strict_after);
 
-    SgScopeStatement *insertion_scope = scope;
+    SgScopeStatement *insertion_scope =
+        NormalizeDirectiveInsertionScope(scope, source);
     if (target != nullptr) {
       if (SgScopeStatement *target_scope =
               isSgScopeStatement(target->get_parent())) {
-        insertion_scope = target_scope;
+        insertion_scope =
+            NormalizeDirectiveInsertionScope(target_scope, source);
+      } else {
+        target = nullptr;
       }
     }
     if (insertion_scope == nullptr) {
