@@ -305,6 +305,101 @@ bool buildExpressionMatchingTypeFromActiveSymbol(
   return false;
 }
 
+static void normalize_fortran_parallel_outlined_pointer_formals(
+    SgFunctionDeclaration *outlined_func,
+    const ASTtools::VarSymSet_t &captured_symbols) {
+  if (!SageInterface::is_Fortran_language() || outlined_func == NULL)
+    return;
+
+  SgFunctionDefinition *func_def = outlined_func->get_definition();
+  ROSE_ASSERT(func_def != NULL);
+
+  std::map<std::string, SgVariableSymbol *> captured_by_name;
+  for (ASTtools::VarSymSet_t::const_iterator it = captured_symbols.begin();
+       it != captured_symbols.end(); ++it) {
+    SgVariableSymbol *sym = const_cast<SgVariableSymbol *>(*it);
+    if (sym == NULL)
+      continue;
+    std::string lowered_name =
+        StringUtility::convertToLowerCase(sym->get_name().getString());
+    if (captured_by_name.count(lowered_name) == 0)
+      captured_by_name[lowered_name] = sym;
+  }
+
+  SgFunctionParameterList *params = outlined_func->get_parameterList();
+  ROSE_ASSERT(params != NULL);
+  SgInitializedNamePtrList &args = params->get_args();
+  for (SgInitializedNamePtrList::iterator it = args.begin(); it != args.end();
+       ++it) {
+    SgInitializedName *arg = *it;
+    if (arg == NULL)
+      continue;
+
+    const std::string name = arg->get_name().getString();
+    const std::string lowered_arg_name =
+        StringUtility::convertToLowerCase(name);
+    if (lowered_arg_name == "__global_tid" ||
+        lowered_arg_name == "__bound_tid" || lowered_arg_name == "task")
+      continue;
+
+    std::map<std::string, SgVariableSymbol *>::const_iterator captured_it =
+        captured_by_name.find(lowered_arg_name);
+    if (captured_it == captured_by_name.end())
+      continue;
+
+    SgType *captured_type =
+        stripTypeAliasesAndReferences(captured_it->second->get_type());
+    SgPointerType *captured_ptr = isSgPointerType(captured_type);
+    if (captured_ptr == NULL)
+      continue;
+
+    SgType *arg_type = stripTypeAliasesAndReferences(arg->get_type());
+    SgPointerType *arg_ptr = isSgPointerType(arg_type);
+    if (arg_ptr == NULL)
+      continue;
+
+    SgType *arg_base_type =
+        stripTypeAliasesAndReferences(arg_ptr->get_base_type());
+    ROSE_ASSERT(arg_base_type != NULL);
+    arg->set_type(arg_base_type);
+  }
+
+  // Keep non-defining declarations and symbol links synchronized after the
+  // parameter type updates.
+  SgFunctionDeclaration *nondef =
+      isSgFunctionDeclaration(outlined_func->get_firstNondefiningDeclaration());
+  if (nondef != NULL && nondef != outlined_func) {
+    SgInitializedNamePtrList &ndef_args =
+        nondef->get_parameterList()->get_args();
+    if (ndef_args.size() == args.size()) {
+      for (size_t i = 0; i < args.size(); ++i) {
+        ROSE_ASSERT(ndef_args[i] != NULL);
+        ROSE_ASSERT(args[i] != NULL);
+        ndef_args[i]->set_type(args[i]->get_type());
+      }
+    }
+  }
+
+  // Keep function type signatures synchronized with updated formal types.
+  SgFunctionType *updated_def_type = buildFunctionType(
+      outlined_func->get_type()->get_return_type(),
+      buildFunctionParameterTypeList(outlined_func->get_parameterList()));
+  outlined_func->set_type(updated_def_type);
+  if (nondef != NULL && nondef != outlined_func) {
+    SgInitializedNamePtrList &ndef_args =
+        nondef->get_parameterList()->get_args();
+    if (ndef_args.size() == args.size()) {
+      nondef->set_type(updated_def_type);
+    } else {
+      nondef->set_type(buildFunctionType(
+          nondef->get_type()->get_return_type(),
+          buildFunctionParameterTypeList(nondef->get_parameterList())));
+    }
+  }
+
+  SageInterface::fixVariableReferences(func_def->get_body());
+}
+
 bool rewritePointerBasedForIndex(SgForStatement *for_loop) {
   if (for_loop == nullptr || for_loop->get_for_init_stmt() == nullptr) {
     return false;
@@ -425,6 +520,114 @@ bool isConditionalPreprocessingDirective(const PreprocessingInfo *info) {
   }
 
   return false;
+}
+
+static std::string trimCopy(const std::string &input) {
+  const std::string::size_type first = input.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos)
+    return std::string();
+  const std::string::size_type last = input.find_last_not_of(" \t\r\n");
+  return input.substr(first, last - first + 1);
+}
+
+static std::string toLowerCopy(const std::string &input) {
+  std::string lowered(input);
+  std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return lowered;
+}
+
+static bool isOpenMPPragmaText(const std::string &raw_text) {
+  const std::string text = toLowerCopy(trimCopy(raw_text));
+  if (text.empty())
+    return false;
+
+  if (text == "omp")
+    return true;
+
+  if (text.rfind("omp ", 0) == 0 || text.rfind("omp\t", 0) == 0 ||
+      text.rfind("omp\n", 0) == 0 || text.rfind("omp\r", 0) == 0) {
+    return true;
+  }
+
+  return false;
+}
+
+static bool isOpenMPDirectivePreprocessingInfo(const PreprocessingInfo *info) {
+  if (info == nullptr)
+    return false;
+
+  const std::string text = toLowerCopy(trimCopy(info->getString()));
+  if (text.empty())
+    return false;
+
+  // C/C++ pragma forms.
+  if (text.rfind("#pragma omp", 0) == 0 ||
+      text.rfind("// #pragma omp", 0) == 0 ||
+      text.rfind("/* #pragma omp", 0) == 0) {
+    return true;
+  }
+
+  // Fortran directive sentinel forms (free/fixed form).
+  if (text.rfind("!$omp", 0) == 0 || text.rfind("c$omp", 0) == 0 ||
+      text.rfind("*$omp", 0) == 0) {
+    return true;
+  }
+
+  return false;
+}
+
+static void removeOpenMPPragmaDeclarations(SgNode *root) {
+  if (root == nullptr)
+    return;
+
+  Rose_STL_Container<SgNode *> pragmas =
+      NodeQuery::querySubTree(root, V_SgPragmaDeclaration);
+  std::vector<SgPragmaDeclaration *> to_remove;
+  for (Rose_STL_Container<SgNode *>::const_iterator it = pragmas.begin();
+       it != pragmas.end(); ++it) {
+    SgPragmaDeclaration *pragma_decl = isSgPragmaDeclaration(*it);
+    if (pragma_decl == nullptr)
+      continue;
+    SgPragma *pragma = pragma_decl->get_pragma();
+    if (pragma == nullptr)
+      continue;
+    if (isOpenMPPragmaText(pragma->get_pragma()))
+      to_remove.push_back(pragma_decl);
+  }
+
+  for (std::vector<SgPragmaDeclaration *>::const_iterator it =
+           to_remove.begin();
+       it != to_remove.end(); ++it) {
+    SageInterface::removeStatement(*it, true);
+  }
+}
+
+static void removeOpenMPDirectivePreprocessingInfo(SgNode *root) {
+  if (root == nullptr)
+    return;
+
+  auto filter_attached = [](AttachedPreprocessingInfoType *attached) {
+    if (attached == nullptr)
+      return;
+    attached->erase(std::remove_if(attached->begin(), attached->end(),
+                                   [](PreprocessingInfo *info) {
+                                     return isOpenMPDirectivePreprocessingInfo(
+                                         info);
+                                   }),
+                    attached->end());
+  };
+
+  if (SgLocatedNode *located_root = isSgLocatedNode(root))
+    filter_attached(located_root->getAttachedPreprocessingInfo());
+
+  Rose_STL_Container<SgNode *> located_nodes =
+      NodeQuery::querySubTree(root, V_SgLocatedNode);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = located_nodes.begin();
+       it != located_nodes.end(); ++it) {
+    if (SgLocatedNode *located = isSgLocatedNode(*it))
+      filter_attached(located->getAttachedPreprocessingInfo());
+  }
 }
 
 void stripConditionalDirectivesFromList(AttachedPreprocessingInfoType &list) {
@@ -3312,6 +3515,10 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
     }
 
     insert_function_parameter("__global_tid", thread_id_type, result, false);
+  }
+
+  if (SageInterface::is_Fortran_language()) {
+    normalize_fortran_parallel_outlined_pointer_formals(result, syms);
   }
 
   // insert the forward declaration
@@ -8003,6 +8210,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
 
       if (!is_function_scope_array) {
         SgInitializer *init = NULL;
+        SgExpression *fortran_firstprivate_value = NULL;
         // use copy constructor for firstprivate on C++ class object variables
         // For simplicity, we handle C and C++ scalar variables the same way
         //
@@ -8010,6 +8218,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
         // be initialized element-by-element
         // Liao, 4/12/2010
         if (is_firstprivate && !isSgArrayType(effective_type)) {
+          SgExpression *init_value = NULL;
           // Nested task outlining can leave firstprivate clause variables bound
           // to stale declaration types while body references use the visible
           // in-scope symbol. Keep the local firstprivate declaration type and
@@ -8018,15 +8227,21 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
           if (isSgOmpTaskStatement(clause_stmt) != NULL &&
               stripTypeAliases(active_symbol->get_type()) !=
                   stripTypeAliases(effective_type)) {
-            SgExpression *active_value = nullptr;
+            SgExpression *active_value = NULL;
             if (buildExpressionMatchingTypeFromActiveSymbol(
                     active_symbol, effective_type, active_value)) {
-              init = buildAssignInitializer(active_value);
+              init_value = active_value;
             } else {
-              init = buildAssignInitializer(copyExpression(orig_var_exp));
+              init_value = copyExpression(orig_var_exp);
             }
           } else {
-            init = buildAssignInitializer(copyExpression(orig_var_exp));
+            init_value = copyExpression(orig_var_exp);
+          }
+
+          if (SageInterface::is_Fortran_language()) {
+            fortran_firstprivate_value = init_value;
+          } else {
+            init = buildAssignInitializer(init_value);
           }
         }
 
@@ -8054,6 +8269,13 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
         // record the map from old to new symbol
         SgVariableSymbol *local_symbol = getFirstVarSym(local_decl);
         ROSE_ASSERT(local_symbol != NULL);
+
+        if (fortran_firstprivate_value != NULL) {
+          SgExprStatement *init_stmt = buildAssignStatement(
+              buildVarRefExp(local_symbol), fortran_firstprivate_value);
+          front_init_list.push_back(init_stmt);
+        }
+
         var_map.insert(
             VariableSymbolMap_t::value_type(active_symbol, local_symbol));
         if (orig_symbol != NULL && orig_symbol != active_symbol)
@@ -8786,20 +9008,41 @@ void lower_omp(SgSourceFile *file) {
     // Collect all the OpenMP nodes
     Rose_STL_Container<SgNode *> nodeList =
         NodeQuery::querySubTree(file, V_SgOmpExecStatement);
+    nodeList = mergeSgNodeList(
+        nodeList, NodeQuery::querySubTree(file, V_SgOmpThreadprivateStatement));
     if (cpu_outlined_file != NULL) {
       nodeList = mergeSgNodeList(
           nodeList,
           NodeQuery::querySubTree(cpu_outlined_file, V_SgOmpExecStatement));
+      nodeList = mergeSgNodeList(
+          nodeList, NodeQuery::querySubTree(cpu_outlined_file,
+                                            V_SgOmpThreadprivateStatement));
     }
     // Collect all the OpenMP nodes without OpenMP parent
     for (iter = nodeList.begin(); iter != nodeList.end(); iter++) {
       SgOmpExecStatement *omp_node = isSgOmpExecStatement(*iter);
-      ROSE_ASSERT(omp_node != NULL);
-      SgOmpExecStatement *omp_parent =
-          isSgOmpExecStatement(omp_node->get_omp_parent());
-      if (omp_parent == NULL) {
-        omp_nodes.push_back(omp_node);
+      if (omp_node != NULL) {
+        SgOmpExecStatement *omp_parent =
+            isSgOmpExecStatement(omp_node->get_omp_parent());
+        if (omp_parent == NULL) {
+          omp_nodes.push_back(omp_node);
+        }
+      } else if (isSgOmpThreadprivateStatement(*iter) != NULL) {
+        omp_nodes.push_back(*iter);
       }
+    }
+
+    // Some transformed trees can carry stale OpenMP parent links for orphaned
+    // nodes. If no roots are detected but OpenMP nodes still exist, force
+    // progress by processing one node and rebuilding the OpenMP tree in the
+    // next iteration.
+    if (omp_nodes.empty() && !nodeList.empty()) {
+      SgStatement *fallback = isSgStatement(nodeList.front());
+      ROSE_ASSERT(fallback != NULL);
+      MLOG_WARN_CXX("ompLowering")
+          << "Recovering from stale OpenMP parent links while lowering "
+          << fallback->sage_class_name();
+      omp_nodes.push_back(fallback);
     }
 
     for (iter = omp_nodes.begin(); iter != omp_nodes.end(); iter++) {
@@ -9489,9 +9732,15 @@ static void post_processing(SgSourceFile *file) {
                                 /*isSystemHeader=*/false, g_scope);
   }
   if (new_file != NULL) {
+    removeOpenMPPragmaDeclarations(new_file);
+    if (new_file->get_Fortran_only())
+      removeOpenMPDirectivePreprocessingInfo(new_file);
     removeUnbalancedConditionalDirectives(new_file);
     AstPostProcessing(new_file);
   };
+  removeOpenMPPragmaDeclarations(file);
+  if (file->get_Fortran_only())
+    removeOpenMPDirectivePreprocessingInfo(file);
   removeUnbalancedConditionalDirectives(file);
   AstPostProcessing(file);
 };
