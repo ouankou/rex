@@ -434,6 +434,17 @@ maybeNormalizePostRecordAlignas(clang::SourceManager &source_manager,
     if (source_manager.getFileID(token.getLocation()) != file_id) {
       continue;
     }
+    if (token.is(clang::tok::unknown)) {
+      std::string spelling =
+          clang::Lexer::getSpelling(token, source_manager, lang_opts);
+      if (!spelling.empty() &&
+          std::all_of(spelling.begin(), spelling.end(),
+                      [](unsigned char c) { return std::isspace(c) != 0; })) {
+        // Raw lexer exposes whitespace as tok::unknown. Ignore pure whitespace
+        // so alignment-specifier detection is not blocked by spacing/newlines.
+        continue;
+      }
+    }
     tokens.push_back(
         {token, source_manager.getFileOffset(token.getLocation())});
   }
@@ -552,7 +563,6 @@ maybeNormalizePostRecordAlignas(clang::SourceManager &source_manager,
 
     size_t align_start = next_significant(r_brace + 1);
     if (!is_alignas_start(align_start)) {
-      i = r_brace;
       continue;
     }
 
@@ -591,12 +601,10 @@ maybeNormalizePostRecordAlignas(clang::SourceManager &source_manager,
       scan = next_significant(r_paren + 1);
     }
     if (!parse_ok || align_end == tokens.size()) {
-      i = r_brace;
       continue;
     }
 
     if (scan >= tokens.size()) {
-      i = r_brace;
       continue;
     }
     const clang::Token &after_align = tokens[scan].token;
@@ -605,7 +613,6 @@ maybeNormalizePostRecordAlignas(clang::SourceManager &source_manager,
                              clang::tok::l_paren, clang::tok::l_square,
                              clang::tok::kw___attribute) &&
         !token_is_spelling(after_align, "__attribute__")) {
-      i = r_brace;
       continue;
     }
 
@@ -614,23 +621,78 @@ maybeNormalizePostRecordAlignas(clang::SourceManager &source_manager,
     rewrites.push_back(
         {tokens[i].offset, remove_begin, remove_end,
          source_text.substr(remove_begin, remove_end - remove_begin).str()});
-    i = r_brace;
   }
 
   if (rewrites.empty()) {
     return nullptr;
   }
 
-  std::sort(rewrites.begin(), rewrites.end(),
-            [](const AlignasRewrite &lhs, const AlignasRewrite &rhs) {
-              return lhs.remove_begin > rhs.remove_begin;
-            });
-
-  std::string updated = source_text.str();
+  struct EraseRange {
+    unsigned begin;
+    unsigned end;
+  };
+  std::vector<EraseRange> erase_ranges;
+  erase_ranges.reserve(rewrites.size());
+  std::vector<std::pair<unsigned, std::string>> insertions;
+  insertions.reserve(rewrites.size());
+  size_t inserted_bytes = 0;
   for (const AlignasRewrite &rewrite : rewrites) {
-    updated.erase(rewrite.remove_begin,
-                  rewrite.remove_end - rewrite.remove_begin);
-    updated.insert(rewrite.insert_offset, rewrite.moved_text + " ");
+    erase_ranges.push_back({rewrite.remove_begin, rewrite.remove_end});
+    insertions.emplace_back(rewrite.insert_offset, rewrite.moved_text + " ");
+    inserted_bytes += insertions.back().second.size();
+  }
+
+  std::sort(erase_ranges.begin(), erase_ranges.end(),
+            [](const EraseRange &lhs, const EraseRange &rhs) {
+              return lhs.begin < rhs.begin;
+            });
+  std::stable_sort(
+      insertions.begin(), insertions.end(),
+      [](const auto &lhs, const auto &rhs) { return lhs.first < rhs.first; });
+
+  unsigned previous_end = 0;
+  for (size_t idx = 0; idx < erase_ranges.size(); ++idx) {
+    const EraseRange &range = erase_ranges[idx];
+    if (range.begin > range.end) {
+      return nullptr;
+    }
+    if (idx != 0 && range.begin < previous_end) {
+      return nullptr;
+    }
+    previous_end = range.end;
+  }
+
+  std::string updated;
+  updated.reserve(source_text.size() + inserted_bytes);
+  size_t cursor = 0;
+  size_t erase_idx = 0;
+  size_t insert_idx = 0;
+  auto append_insertions_at = [&](size_t offset) {
+    while (insert_idx < insertions.size() &&
+           static_cast<size_t>(insertions[insert_idx].first) == offset) {
+      updated += insertions[insert_idx].second;
+      ++insert_idx;
+    }
+  };
+
+  while (cursor < source_text.size()) {
+    append_insertions_at(cursor);
+    if (erase_idx < erase_ranges.size() &&
+        cursor == static_cast<size_t>(erase_ranges[erase_idx].begin)) {
+      cursor = erase_ranges[erase_idx].end;
+      ++erase_idx;
+      continue;
+    }
+    updated.push_back(source_text[cursor]);
+    ++cursor;
+  }
+
+  append_insertions_at(source_text.size());
+  while (insert_idx < insertions.size()) {
+    if (insertions[insert_idx].first <= source_text.size()) {
+      updated += insertions[insert_idx].second;
+    }
+    ++insert_idx;
   }
 
   return llvm::MemoryBuffer::getMemBufferCopy(updated,
