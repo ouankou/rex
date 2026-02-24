@@ -282,6 +282,21 @@ SgProject *FlangModuleInfo::getCurrentProject() { return currentProject; }
 string FlangModuleInfo::find_file_from_inputDirs(const string &basename) {
   std::string module_name = Rose::StringUtility::convertToLowerCase(
       std::filesystem::path(basename).filename().string());
+
+  // Prefer the compiler-provided intrinsic module for ISO_C_BINDING when
+  // available. The bundled ROSE fallback hardcodes target-specific kind values
+  // that can be invalid on non-x86 targets (e.g., loong64/riscv64).
+  if (module_name == "iso_c_binding") {
+    const std::string flang_intrinsic_dir = find_flang_intrinsic_module_dir();
+    if (!flang_intrinsic_dir.empty()) {
+      const std::string flang_candidate = find_existing_module_file(
+          (std::filesystem::path(flang_intrinsic_dir) / module_name).string());
+      if (!flang_candidate.empty()) {
+        return flang_candidate;
+      }
+    }
+  }
+
   std::string module_source =
       find_module_source_by_name(module_name, sourceDirs);
   if (!module_source.empty()) {

@@ -1,0 +1,41 @@
+name: Nightly LoongArch64 CI
+
+on:
+  schedule:
+    # Every day at 14:00 UTC (07:00 PDT)
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-loongarch64-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test-loong64:
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+    - name: Set up QEMU (loong64)
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: loong64
+
+    - name: Run core tests from prebuilt image (loong64 via QEMU)
+      run: |
+        set -euo pipefail
+        docker pull --platform=linux/loong64 ghcr.io/${{ github.repository_owner }}/rex
+        docker run --rm --platform=linux/loong64 \
+          ghcr.io/${{ github.repository_owner }}/rex \
+          bash -lc '
+            set -euo pipefail
+            cd /opt/rex/src
+            CTEST_JOBS="$(nproc)"
+            ctest --test-dir build \
+              -R "rex|astInterface|testQuery|fortran|f90|f03|caf|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPVV_5_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_" \
+              --output-on-failure \
+              -j"${CTEST_JOBS}"
+          '

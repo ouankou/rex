@@ -58,7 +58,7 @@ function(add_omp_translate_only_test test_name translator input_file work_subdir
             ${_omp_test_dir}/${input_file}
             ${CMAKE_CURRENT_BINARY_DIR}/${work_subdir}
             ${input_file})
-  set_tests_properties(${test_name} PROPERTIES TIMEOUT 180)
+  set_tests_properties(${test_name} PROPERTIES TIMEOUT 540)
   _label_omp_compile_only(${test_name})
 endfunction()
 
@@ -77,7 +77,7 @@ function(add_omp_semantic_test test_name translator compiler input_file mode lan
             ${_omp_lowering_inc}
             ${input_file}
             ${language})
-  set_tests_properties(${test_name} PROPERTIES TIMEOUT 300)
+  set_tests_properties(${test_name} PROPERTIES TIMEOUT 900)
   _label_omp_semantic(${test_name})
 endfunction()
 
@@ -417,7 +417,7 @@ if(ENABLE-C)
         omp_lowering_invariant_${_omp_name}
         PROPERTIES
           DEPENDS ${_invariant_dep}
-          TIMEOUT 180)
+          TIMEOUT 540)
       _label_omp_invariant(omp_lowering_invariant_${_omp_name})
     endif()
   endforeach()

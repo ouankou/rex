@@ -166,7 +166,7 @@ function(add_omp_fortran_translate_test specimen)
             ${_workdir}
             ${specimen}
             ${_translator_flags})
-  set_tests_properties(${_test_name} PROPERTIES TIMEOUT 180)
+  set_tests_properties(${_test_name} PROPERTIES TIMEOUT 540)
   set_property(TEST ${_test_name} APPEND PROPERTY LABELS
                "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_LEGACY_TRANSLATE;OMPLOWERING_COMPILE_ONLY;OMPLOWERING_FORTRAN")
 endfunction()
@@ -189,7 +189,7 @@ function(add_omp_fortran_semantic_test specimen)
             $<TARGET_FILE:kmpc_fortran_abi>
             ${specimen}
             60)
-  set_tests_properties(${_test_name} PROPERTIES TIMEOUT 360)
+  set_tests_properties(${_test_name} PROPERTIES TIMEOUT 1080)
   set_property(TEST ${_test_name} APPEND PROPERTY LABELS
                "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_SEMANTIC;OMPLOWERING_FORTRAN")
 endfunction()
@@ -205,7 +205,7 @@ function(add_omp_fortran_invariant_test specimen semantic_test_name)
             ${_workdir}
             ${specimen})
   set_tests_properties(${_inv_name}
-    PROPERTIES DEPENDS ${semantic_test_name} TIMEOUT 120)
+    PROPERTIES DEPENDS ${semantic_test_name} TIMEOUT 360)
   set_property(TEST ${_inv_name} APPEND PROPERTY LABELS
                "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_INVARIANT;OMPLOWERING_FORTRAN")
 endfunction()
