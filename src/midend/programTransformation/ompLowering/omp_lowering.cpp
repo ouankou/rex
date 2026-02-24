@@ -9714,12 +9714,14 @@ static void post_processing(SgSourceFile *file) {
   }
   if (new_file != NULL) {
     removeOpenMPPragmaDeclarations(new_file);
-    removeOpenMPDirectivePreprocessingInfo(new_file);
+    if (new_file->get_Fortran_only())
+      removeOpenMPDirectivePreprocessingInfo(new_file);
     removeUnbalancedConditionalDirectives(new_file);
     AstPostProcessing(new_file);
   };
   removeOpenMPPragmaDeclarations(file);
-  removeOpenMPDirectivePreprocessingInfo(file);
+  if (file->get_Fortran_only())
+    removeOpenMPDirectivePreprocessingInfo(file);
   removeUnbalancedConditionalDirectives(file);
   AstPostProcessing(file);
 };
