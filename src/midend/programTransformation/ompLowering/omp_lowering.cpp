@@ -336,11 +336,14 @@ static void normalize_fortran_parallel_outlined_pointer_formals(
       continue;
 
     const std::string name = arg->get_name().getString();
-    if (name == "__global_tid" || name == "__bound_tid" || name == "task")
+    const std::string lowered_arg_name =
+        StringUtility::convertToLowerCase(name);
+    if (lowered_arg_name == "__global_tid" ||
+        lowered_arg_name == "__bound_tid" || lowered_arg_name == "task")
       continue;
 
     std::map<std::string, SgVariableSymbol *>::const_iterator captured_it =
-        captured_by_name.find(StringUtility::convertToLowerCase(name));
+        captured_by_name.find(lowered_arg_name);
     if (captured_it == captured_by_name.end())
       continue;
 
@@ -374,6 +377,23 @@ static void normalize_fortran_parallel_outlined_pointer_formals(
         ROSE_ASSERT(args[i] != NULL);
         ndef_args[i]->set_type(args[i]->get_type());
       }
+    }
+  }
+
+  // Keep function type signatures synchronized with updated formal types.
+  SgFunctionType *updated_def_type = buildFunctionType(
+      outlined_func->get_type()->get_return_type(),
+      buildFunctionParameterTypeList(outlined_func->get_parameterList()));
+  outlined_func->set_type(updated_def_type);
+  if (nondef != NULL && nondef != outlined_func) {
+    SgInitializedNamePtrList &ndef_args =
+        nondef->get_parameterList()->get_args();
+    if (ndef_args.size() == args.size()) {
+      nondef->set_type(updated_def_type);
+    } else {
+      nondef->set_type(buildFunctionType(
+          nondef->get_type()->get_return_type(),
+          buildFunctionParameterTypeList(nondef->get_parameterList())));
     }
   }
 
