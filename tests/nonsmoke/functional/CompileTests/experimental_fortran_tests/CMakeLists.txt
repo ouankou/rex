@@ -38,7 +38,6 @@ set(_experimental_fortran_todo_tests
 )
 
 function(add_experimental_fortran_test specimen)
-  string(JOIN " " extra_flags ${ARGN})
   string(REPLACE "." "_" _name "${specimen}")
   add_test(
     NAME experimental_fortran_${_name}
@@ -47,7 +46,7 @@ function(add_experimental_fortran_test specimen)
       "-DTEST_TRANSLATOR=$<TARGET_FILE:testTranslator>"
       "-DSPECIMEN=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       "-DROSE_OUTPUT=rose_${specimen}"
-      "-DEXTRA_FLAGS=${extra_flags}"
+      "-DEXTRA_FLAGS=${ARGN}"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/run_experimental_fortran.cmake"
   )
   set_tests_properties(experimental_fortran_${_name} PROPERTIES LABELS experimental_fortran)

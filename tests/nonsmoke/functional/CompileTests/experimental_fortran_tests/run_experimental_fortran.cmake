@@ -12,8 +12,7 @@ endif()
 
 set(_translator_args -rose:experimental_flang_frontend)
 if(EXTRA_FLAGS)
-  separate_arguments(_extra_flags_list NATIVE_COMMAND "${EXTRA_FLAGS}")
-  list(APPEND _translator_args ${_extra_flags_list})
+  list(APPEND _translator_args ${EXTRA_FLAGS})
 endif()
 list(APPEND _translator_args -c "${SPECIMEN}")
 
@@ -28,6 +27,9 @@ execute_process(
 )
 
 if(NOT "${_translator_status}" STREQUAL "0")
+  # Escape '$' so translator output is reported verbatim by CMake message().
+  string(REPLACE "$" "$$" _translator_stdout "${_translator_stdout}")
+  string(REPLACE "$" "$$" _translator_stderr "${_translator_stderr}")
   message(
     FATAL_ERROR
       "testTranslator failed for ${SPECIMEN}\n"
