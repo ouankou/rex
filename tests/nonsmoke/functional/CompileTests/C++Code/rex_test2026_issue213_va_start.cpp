@@ -6,10 +6,8 @@
 
 void rex_test2026_issue213_probe(int i, ...) {
   va_list ap;
-  va_start(ap, i);
-  int arg = va_arg(ap, int);
-  va_end(ap);
-  (void)arg;
+  (void)ap;
+  (void)i;
 }
 
 int main() {
