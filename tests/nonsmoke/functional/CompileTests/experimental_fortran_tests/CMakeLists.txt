@@ -37,19 +37,25 @@ set(_experimental_fortran_todo_tests
   type_def_1.f90
 )
 
-function(add_experimental_fortran_test specimen extra_flags)
+function(add_experimental_fortran_test specimen)
+  # ARGN is a CMake list. Any literal semicolon in a flag value must be escaped
+  # as '\;' at the call site to avoid list splitting.
   string(REPLACE "." "_" _name "${specimen}")
   add_test(
     NAME experimental_fortran_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND sh -c
-      "$<TARGET_FILE:testTranslator> -rose:experimental_flang_frontend ${extra_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen} && test -s rose_${specimen}"
+    COMMAND "${CMAKE_COMMAND}"
+      "-DTEST_TRANSLATOR=$<TARGET_FILE:testTranslator>"
+      "-DSPECIMEN=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      "-DROSE_OUTPUT=rose_${specimen}"
+      "-DEXTRA_FLAGS_LIST=${ARGN}"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/run_experimental_fortran.cmake"
   )
   set_tests_properties(experimental_fortran_${_name} PROPERTIES LABELS experimental_fortran)
 endfunction()
 
 foreach(specimen IN LISTS _experimental_fortran_tests)
-  add_experimental_fortran_test(${specimen} "")
+  add_experimental_fortran_test(${specimen})
 endforeach()
 
 foreach(specimen IN LISTS _experimental_fortran_20xx_tests)
@@ -57,5 +63,5 @@ foreach(specimen IN LISTS _experimental_fortran_20xx_tests)
 endforeach()
 
 foreach(specimen IN LISTS _experimental_fortran_todo_tests)
-  add_experimental_fortran_test(${specimen} "")
+  add_experimental_fortran_test(${specimen})
 endforeach()
