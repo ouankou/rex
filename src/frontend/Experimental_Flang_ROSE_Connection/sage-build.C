@@ -1556,9 +1556,23 @@ bool DirectiveLikelyRequiresLoopBody(const std::string &directive_text) {
 }
 
 bool IsLoopBodyStatementCandidate(SgStatement *stmt) {
-  return stmt != nullptr &&
-         (isSgFortranDo(stmt) != nullptr || isSgForStatement(stmt) != nullptr ||
-          isSgWhileStmt(stmt) != nullptr || isSgDoWhileStmt(stmt) != nullptr);
+  if (stmt == nullptr) {
+    return false;
+  }
+
+  if (isSgFortranDo(stmt) != nullptr || isSgForStatement(stmt) != nullptr ||
+      isSgWhileStmt(stmt) != nullptr || isSgDoWhileStmt(stmt) != nullptr) {
+    return true;
+  }
+
+  // Flang models DO CONCURRENT with SgForAllStatement carrying an explicit
+  // statement-kind discriminator.
+  if (SgForAllStatement *forall_stmt = isSgForAllStatement(stmt)) {
+    return forall_stmt->get_forall_statement_kind() ==
+           SgForAllStatement::e_do_concurrent_statement;
+  }
+
+  return false;
 }
 
 SgStatement *FindNearestLoopInsertionTarget(SgScopeStatement *scope,

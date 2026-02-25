@@ -77,6 +77,7 @@ fortran_block_end [ ]*[^a-zA-Z0-9_]
 [.][Gg][Tt][.] { return ('>'); }
 [.][Aa][Nn][Dd][.] { return (LOGAND); }
 [.][Oo][Rr][.] { return (LOGOR); }
+[.][Xx][Oo][Rr][.] { return (LOGXOR); }
 
 "="             { return ('='); }
 "("             { return ('('); }
@@ -91,12 +92,13 @@ fortran_block_end [ ]*[^a-zA-Z0-9_]
 \/\*([^*]|\*+[^*/])*\*+\/ { /* Ignore C-style block comments */ }
 "//"[^\n]*      { /* Ignore C++-style line comments */ }
 "/"             { return ('/'); }
-"%"             {
+"%"/[ \t]*{id}  {
                   if (SageInterface::is_Fortran_language()) {
                     return ('.');
                   }
                   return ('%');
                 }
+"%"             { return ('%'); }
 "-"             { return ('-'); }
 "&"             { return ('&'); }
 "^"             { return ('^'); }

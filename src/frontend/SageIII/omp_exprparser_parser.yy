@@ -445,7 +445,7 @@ corresponding C type is union name defaults to YYSTYPE.
 /*Some operators have a suffix 2 to avoid name conflicts with ROSE's existing types, We may want to reuse them if it is proper. 
   experimental BEGIN END are defined by default, we use TARGET_BEGIN TARGET_END instead. 
   Liao*/
-%token  '(' ')' ',' ':' '+' '*' '-' '&' '^' '|' LOGAND LOGOR SHLEFT SHRIGHT PLUSPLUS MINUSMINUS PTR_TO '.'
+%token  '(' ')' ',' ':' '+' '*' '-' '&' '^' '|' LOGAND LOGOR LOGXOR SHLEFT SHRIGHT PLUSPLUS MINUSMINUS PTR_TO '.'
         LE_OP2 GE_OP2 EQ_OP2 NE_OP2 RIGHT_ASSIGN2 LEFT_ASSIGN2 ADD_ASSIGN2
         SUB_ASSIGN2 MUL_ASSIGN2 DIV_ASSIGN2 MOD_ASSIGN2 AND_ASSIGN2 
         XOR_ASSIGN2 OR_ASSIGN2 DEPEND IN OUT INOUT MERGEABLE
@@ -647,6 +647,13 @@ exclusive_or_expr : and_expr
                       );
                       $$ = current_exp;
                     }
+                  | exclusive_or_expr LOGXOR and_expr {
+                      current_exp = SageBuilder::buildBitXorOp(
+                        (SgExpression*)($1),
+                        (SgExpression*)($3)
+                      );
+                      $$ = current_exp;
+                    }
                   ;
 
 and_expr : equality_expr
@@ -803,6 +810,12 @@ primary_expr : ICONSTANT {
                SgScopeStatement* scope = SageInterface::getScope(omp_directive_node);
                ROSE_ASSERT(scope != NULL);
                current_exp = SageBuilder::buildOpaqueVarRefExp(".and.", scope);
+               $$ = current_exp;
+              }
+             | LOGXOR {
+               SgScopeStatement* scope = SageInterface::getScope(omp_directive_node);
+               ROSE_ASSERT(scope != NULL);
+               current_exp = SageBuilder::buildOpaqueVarRefExp(".xor.", scope);
                $$ = current_exp;
               }
              | ID_EXPRESSION {

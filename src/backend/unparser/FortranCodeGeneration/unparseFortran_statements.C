@@ -4730,8 +4730,9 @@ static bool fortranOmpDirectiveUsesExplicitEnd(SgStatement *stmt) {
   case V_SgOmpOrderedStatement:
   case V_SgOmpWorkshareStatement:
   case V_SgOmpSingleStatement:
-  case V_SgOmpTaskStatement:
     return true;
+  case V_SgOmpTaskStatement:
+    return false;
   default:
     return false;
   }

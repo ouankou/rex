@@ -2226,9 +2226,10 @@ static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {
   case OMPD_do:
   case OMPD_parallel_do:
   case OMPD_parallel_loop:
-  case OMPD_target_simd:
   case OMPD_declare_target:
     return true;
+  case OMPD_target_simd:
+    return false;
   default:
     return false;
   }
@@ -8397,7 +8398,7 @@ static bool consumeFortranTextOperator(const std::string &text, std::size_t pos,
   static const OperatorSpelling kOps[] = {
       {".eqv.", "=="}, {".neqv.", "!="}, {".eq.", "=="}, {".ne.", "!="},
       {".ge.", ">="},  {".gt.", ">"},    {".le.", "<="}, {".lt.", "<"},
-      {".and.", "&&"}, {".or.", "||"},   {".not.", "!"}};
+      {".and.", "&&"}, {".or.", "||"},   {".not.", "!"}, {".xor.", "^"}};
 
   const std::size_t remaining = text.size() - pos;
   for (const OperatorSpelling &op : kOps) {
@@ -8698,6 +8699,10 @@ static bool tryMapFortranReductionUserIdentifier(
     sg_identifier = SgOmpClause::e_omp_reduction_neqv;
     return true;
   }
+  if (lowered == ".xor.") {
+    sg_identifier = SgOmpClause::e_omp_reduction_bitxor;
+    return true;
+  }
   return false;
 }
 
@@ -8719,6 +8724,10 @@ static bool tryMapFortranInReductionUserIdentifier(
     sg_identifier = SgOmpClause::e_omp_in_reduction_identifier_neqv;
     return true;
   }
+  if (lowered == ".xor.") {
+    sg_identifier = SgOmpClause::e_omp_in_reduction_identifier_bitxor;
+    return true;
+  }
   return false;
 }
 
@@ -8738,6 +8747,10 @@ static bool tryMapFortranTaskReductionUserIdentifier(
   }
   if (lowered == ".neqv.") {
     sg_identifier = SgOmpClause::e_omp_task_reduction_identifier_neqv;
+    return true;
+  }
+  if (lowered == ".xor.") {
+    sg_identifier = SgOmpClause::e_omp_task_reduction_identifier_bitxor;
     return true;
   }
   return false;
