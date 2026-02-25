@@ -630,7 +630,6 @@ set(TOKEN_CXX_TESTCODES_REQUIRED
   test2005_108.C
   test2005_109.C
   test2005_110.C
-  test2005_111.C
   test2005_113.C
   test2005_114.C
   test2005_116.C
