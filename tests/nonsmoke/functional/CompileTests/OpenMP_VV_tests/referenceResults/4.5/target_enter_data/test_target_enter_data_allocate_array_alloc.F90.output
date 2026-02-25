@@ -1,0 +1,18 @@
+!$omp target enter data map(alloc:my1DPtr(:))
+!$omp target
+!$omp end target
+!$omp target map(from:my1DArr)
+!$omp end target
+!$omp target exit data map(delete:my1DPtr)
+!$omp target enter data map(alloc:my2DPtr(:,:))
+!$omp target
+!$omp end target
+!$omp target map(from:my2DArr)
+!$omp end target
+!$omp target exit data map(delete:my2DPtr)
+!$omp target enter data map(alloc:my3DPtr(:,:,:))
+!$omp target
+!$omp end target
+!$omp target map(from:my3DArr)
+!$omp end target
+!$omp target exit data map(delete:my3DPtr)

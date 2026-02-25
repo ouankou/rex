@@ -1,0 +1,2 @@
+#pragma omp target map(to:a[0:DimA],b[0:DimB]) map(from:c[0:DimC])
+#pragma omp teams distribute parallel for simd collapse(2) private(k)

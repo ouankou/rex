@@ -1774,6 +1774,33 @@ int replaceVariableReferences(SgNode *root, SgVariableSymbol *oldVar,
   return replaceVariableReferences(root, varRemap);
 }
 
+static bool shouldSkipOpenMPClauseVarRefRewrite(const SgVarRefExp *ref_orig) {
+  return ref_orig != NULL && getEnclosingNode<SgOmpClause>(
+                                 const_cast<SgVarRefExp *>(ref_orig)) != NULL;
+}
+
+static void clearOpenMPClauseOriginalExpressionTrees(SgNode *root) {
+  if (root == NULL) {
+    return;
+  }
+
+  Rose_STL_Container<SgNode *> expr_nodes =
+      NodeQuery::querySubTree(root, V_SgExpression);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = expr_nodes.begin();
+       it != expr_nodes.end(); ++it) {
+    SgExpression *expr = isSgExpression(*it);
+    if (expr == NULL) {
+      continue;
+    }
+    if (getEnclosingNode<SgOmpClause>(expr) == NULL) {
+      continue;
+    }
+    if (expr->get_originalExpressionTree() != NULL) {
+      expr->set_originalExpressionTree(NULL);
+    }
+  }
+}
+
 //! Replace variable references within root based on a map from old symbols to
 //! new symbols
 /* This function is mostly used by transOmpVariables() to handle private,
@@ -1788,6 +1815,9 @@ int replaceVariableReferences(SgNode *root, VariableSymbolMap_t varRemap) {
   for (NodeList_t::iterator i = refs.begin(); i != refs.end(); ++i) {
     SgVarRefExp *ref_orig = isSgVarRefExp(*i);
     ROSE_ASSERT(ref_orig);
+    if (shouldSkipOpenMPClauseVarRefRewrite(ref_orig)) {
+      continue;
+    }
     VariableSymbolMap_t::const_iterator iter =
         varRemap.find(ref_orig->get_symbol());
     if (iter != varRemap.end()) {
@@ -1807,6 +1837,9 @@ int replaceVariablesWithPointerDereference(SgNode *root,
   for (NodeList_t::iterator i = refs.begin(); i != refs.end(); ++i) {
     SgVarRefExp *ref_orig = isSgVarRefExp(*i);
     ROSE_ASSERT(ref_orig);
+    if (shouldSkipOpenMPClauseVarRefRewrite(ref_orig)) {
+      continue;
+    }
     ASTtools::VarSymSet_t::const_iterator ii =
         vars.find(ref_orig->get_symbol());
     if (ii != vars.end()) {
@@ -3989,6 +4022,9 @@ static int replaceVariableReferences(
   for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
        i != nodeList.end(); i++) {
     SgVarRefExp *vRef = isSgVarRefExp((*i));
+    if (shouldSkipOpenMPClauseVarRefRewrite(vRef)) {
+      continue;
+    }
     // skip compiler generated references to the original variables which meant
     // to be kept.
     // TODO: maybe a better way is to match a pattern: if it is the first
@@ -8141,6 +8177,14 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
         visible_symbol != NULL ? visible_symbol : orig_symbol;
     ROSE_ASSERT(active_symbol != NULL);
     SgType *orig_type = orig_var->get_type();
+    if (orig_type == NULL ||
+        isSgTypeUnknown(stripTypeAliases(orig_type)) != NULL) {
+      SgType *active_type = active_symbol->get_type();
+      if (active_type != NULL &&
+          isSgTypeUnknown(stripTypeAliases(active_type)) == NULL) {
+        orig_type = active_type;
+      }
+    }
     SgExpression *orig_var_exp = buildVarRefExp(active_symbol);
     if (SgOmpExecStatement *target = isSgOmpExecStatement(clause_stmt)) {
       std::map<SgOmpExecStatement *,
@@ -9003,6 +9047,10 @@ void lower_omp(SgSourceFile *file) {
     OmpSupport::createOmpStatementTree(file);
     if (cpu_outlined_file != NULL) {
       OmpSupport::createOmpStatementTree(cpu_outlined_file);
+    }
+    clearOpenMPClauseOriginalExpressionTrees(file);
+    if (cpu_outlined_file != NULL) {
+      clearOpenMPClauseOriginalExpressionTrees(cpu_outlined_file);
     }
     Rose_STL_Container<SgNode *>::iterator iter;
     // Collect all the OpenMP nodes

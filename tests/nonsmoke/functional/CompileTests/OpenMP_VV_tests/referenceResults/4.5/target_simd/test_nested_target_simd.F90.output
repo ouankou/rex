@@ -1,0 +1,3 @@
+!$omp target map(to:b(1:ARRAY_SIZE),c(1:ARRAY_SIZE)) map(tofrom:a(1:ARRAY_SIZE))
+!$omp simd
+!$omp end target

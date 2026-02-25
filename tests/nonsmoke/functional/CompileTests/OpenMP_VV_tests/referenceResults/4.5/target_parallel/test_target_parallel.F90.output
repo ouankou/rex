@@ -1,0 +1,2 @@
+!$omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(from:summation,thread_id)
+!$omp end target parallel

@@ -1,0 +1,4 @@
+!$omp target teams distribute map(from:num_teams) map(tofrom:a(1:N)) dist_schedule(static,CHUNK_SIZE)
+!$omp end target teams distribute
+!$omp target teams distribute map(from:num_teams) map(tofrom:b(1:N)) dist_schedule(static)
+!$omp end target teams distribute

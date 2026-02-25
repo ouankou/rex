@@ -1,0 +1,4 @@
+!$omp target map(myStruct,cpyStruct)
+!$omp end target
+!$omp target map(myStruct,cpyStruct)
+!$omp end target

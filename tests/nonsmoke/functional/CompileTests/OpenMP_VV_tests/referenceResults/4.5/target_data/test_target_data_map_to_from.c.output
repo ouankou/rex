@@ -1,0 +1,2 @@
+#pragma omp target data map(to:h_array_h[0:N]) map(from:h_array2_h[0:N])
+#pragma omp target

@@ -1,0 +1,10 @@
+#pragma omp target enter data map(alloc:h_array_h[0:N]) map(alloc:h_array_s[0:N])
+#pragma omp target map(ptr_h_array_h[0:N],ptr_h_array_s[0:N])
+#pragma omp target map(ptr_h_array_h[:0],ptr_h_array_s[:0])
+#pragma omp target
+#pragma omp target exit data map(from:h_array_h[0:N]) map(from:h_array_s[0:N])
+#pragma omp target map(ptr_h_array_h[0:N],ptr_h_array_s[0:N])
+#pragma omp target map(ptr_h_array_h[:0],ptr_h_array_s[:0])
+#pragma omp target
+#pragma omp target enter data map(alloc:h_array_h[0:N]) map(alloc:h_array_s[0:N])
+#pragma omp target exit data map(from:h_array_h[0:N]) map(from:h_array_s[0:N])

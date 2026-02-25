@@ -1,0 +1,6 @@
+#pragma omp target enter data map(to:x[:N])
+#pragma omp target
+#pragma omp target exit data map(from:x[:N])
+#pragma omp target data map(tofrom:x[:N]) map(from:y[:N])
+#pragma omp target exit data map(delete:x[:N])
+#pragma omp target map(to:x[:N])

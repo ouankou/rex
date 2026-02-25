@@ -1,0 +1,2 @@
+!$omp target teams distribute parallel do
+!$omp atomic write

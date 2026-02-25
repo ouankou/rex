@@ -1,0 +1,21 @@
+!$omp task depend(out:in_1_ptr) shared(in_1_ptr)
+!$omp end task
+!$omp task depend(out:in_2_ptr) shared(in_2_ptr)
+!$omp end task
+!$omp target enter data map(alloc:h_array) map(to:in_1_ptr) map(to:in_2_ptr) depend(out:h_array) depend(in:in_1_ptr) depend(in:in_2_ptr)
+!$omp task shared(h_array,in_1_ptr,in_2_ptr) depend(inout:h_array) depend(in:in_1_ptr) depend(in:in_2_ptr)
+!$omp target
+!$omp end target
+!$omp end task
+!$omp target exit data map(from:h_array) depend(inout:h_array)
+!$omp task depend(in:h_array) shared(summation,h_array)
+!$omp end task
+!$omp taskwait
+!$omp target exit data map(release:h_array) map(release:in_1_ptr) map(release:in_2_ptr)
+!$omp target enter data map(alloc:h_array2) depend(out:h_array2)
+!$omp target enter data map(to:val) depend(out:val)
+!$omp target depend(inout:h_array2) depend(in:val)
+!$omp end target
+!$omp target exit data map(from:h_array2) depend(in:h_array2)
+!$omp taskwait
+!$omp target exit data map(release:val)

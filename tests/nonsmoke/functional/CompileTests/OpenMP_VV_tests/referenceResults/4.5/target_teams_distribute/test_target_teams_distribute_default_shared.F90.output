@@ -1,0 +1,7 @@
+!$omp target data map(to:a(1:N)) map(tofrom:share,num_teams)
+!$omp target teams distribute default(shared) defaultmap(tofrom:scalar) num_teams(OMPVV_NUM_TEAMS_DEVICE)
+!$omp atomic
+!$omp end target data
+!$omp target data map(tofrom:a(1:N),share)
+!$omp target teams distribute default(shared) defaultmap(tofrom:scalar) num_teams(OMPVV_NUM_TEAMS_DEVICE)
+!$omp end target data

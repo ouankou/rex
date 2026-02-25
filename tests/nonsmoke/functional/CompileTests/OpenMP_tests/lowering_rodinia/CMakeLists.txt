@@ -9,12 +9,16 @@ set(RODINIA_LOWERING_CASES
     rodinia_btree_kernel_like
 )
 
+set(_omp_rodinia_test_output_dir "${CMAKE_CURRENT_BINARY_DIR}/test-output")
+file(MAKE_DIRECTORY "${_omp_rodinia_test_output_dir}")
+
 function(add_rodinia_lowering_test case_name)
   set(_input_file ${CMAKE_CURRENT_SOURCE_DIR}/inputs/${case_name}.c)
-  set(_workdir ${CMAKE_CURRENT_BINARY_DIR}/${case_name})
+  set(_workdir ${_omp_rodinia_test_output_dir}/${case_name})
 
   add_test(
     NAME OMPLOWERING_RODINIA_${case_name}
+    WORKING_DIRECTORY "${_omp_rodinia_test_output_dir}"
     COMMAND ${BASH_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_and_check.sh
             $<TARGET_FILE:parseOmp>

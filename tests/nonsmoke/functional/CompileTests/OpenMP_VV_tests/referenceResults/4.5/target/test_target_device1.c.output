@@ -1,0 +1,2 @@
+#pragma omp target data map(tofrom:A[0:N]) device(gpu)
+#pragma omp target parallel for device(gpu)

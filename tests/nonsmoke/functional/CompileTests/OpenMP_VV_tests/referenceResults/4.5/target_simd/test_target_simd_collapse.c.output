@@ -1,0 +1,2 @@
+#pragma omp target simd map(to:a[0:ARRAY_SIZE][0:ARRAY_SIZE]) map(tofrom:b[0:ARRAY_SIZE][0:ARRAY_SIZE+1]) collapse(1)
+#pragma omp target simd map(to:a[0:ARRAY_SIZE][0:ARRAY_SIZE][0:ARRAY_SIZE]) map(tofrom:b[0:ARRAY_SIZE][0:ARRAY_SIZE][0:ARRAY_SIZE+1],num_teams) collapse(2)

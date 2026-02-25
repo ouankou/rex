@@ -1,0 +1,3 @@
+#pragma omp parallel num_threads(NUM_THREADS)
+#pragma omp single
+#pragma omp taskloop if(M==THRESHOLD)

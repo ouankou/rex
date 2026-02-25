@@ -1,0 +1,1 @@
+#pragma omp target teams distribute map(tofrom:a[0:N],num_teams[0:N]) map(to:b[0:N])

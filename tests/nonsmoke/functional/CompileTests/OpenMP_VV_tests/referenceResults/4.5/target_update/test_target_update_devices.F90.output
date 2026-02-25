@@ -1,0 +1,12 @@
+!$omp target enter data map(alloc:h_matrix)
+!$omp target update to(h_matrix)
+!$omp target map(alloc:h_matrix) map(tofrom:isHost(dev))
+!$omp end target
+!$omp target update from(h_matrix)
+!$omp target exit data map(delete:h_matrix)
+!$omp target enter data map(alloc:h_matrix) device(dev)
+!$omp target update to(h_matrix) device(dev)
+!$omp target map(alloc:h_matrix) map(tofrom:isHost(dev)) device(dev)
+!$omp end target
+!$omp target update from(h_matrix) device(dev)
+!$omp target exit data map(delete:h_matrix) device(dev)

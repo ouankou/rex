@@ -1,0 +1,6 @@
+!$omp target data map(to:a(1:N),b(1:N)) map(tofrom:c(1:N))
+!$omp target teams distribute lastprivate(privatized) map(alloc:a(1:N),b(1:N),c(1:N)) defaultmap(tofrom:scalar)
+!$omp end target data
+!$omp target data map(to:a(1:N),b(1:N),c(1:N)) map(tofrom:privatized(1:2))
+!$omp target teams distribute lastprivate(privatized) map(alloc:a(1:N),b(1:N),c(1:N))
+!$omp end target data

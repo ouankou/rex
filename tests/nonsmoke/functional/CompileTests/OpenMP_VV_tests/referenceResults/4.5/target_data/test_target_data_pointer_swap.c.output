@@ -1,0 +1,5 @@
+#pragma omp target data map(tofrom:a[0:N]) map(to:b[0:N])
+#pragma omp target map(alloc:a[0:N],b[0:N])
+#pragma omp target data map(tofrom:a[0:N]) map(to:b[0:N])
+#pragma omp target map(alloc:a[0:N],b[0:N])
+#pragma omp target update from(a[0:N])

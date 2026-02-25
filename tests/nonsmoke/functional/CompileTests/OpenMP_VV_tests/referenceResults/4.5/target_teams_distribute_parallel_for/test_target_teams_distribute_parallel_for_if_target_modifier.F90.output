@@ -1,0 +1,1 @@
+!$omp target teams distribute parallel do if(target:attempt .gt. ATTEMPT_THRESHOLD) map(tofrom:a) num_threads(OMPVV_NUM_THREADS_DEVICE)

@@ -1,0 +1,2 @@
+!$omp target map(tofrom:array(1:N)) device(dev)
+!$omp end target

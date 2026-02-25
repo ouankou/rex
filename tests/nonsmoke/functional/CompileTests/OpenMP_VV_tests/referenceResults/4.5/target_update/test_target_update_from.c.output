@@ -1,0 +1,4 @@
+#pragma omp target data map(to:a[:N],b[:N])
+#pragma omp target
+#pragma omp target update from(b[:N])
+#pragma omp target

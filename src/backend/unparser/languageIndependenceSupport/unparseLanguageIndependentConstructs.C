@@ -115,6 +115,10 @@ void UnparseLanguageIndependentConstructs::curprint(
              ? MAX_F90_LINE_LEN_FREE - 1 // reserve a column in free-format for
                                          // possible trailing '&'
              : unp->cur.get_linewrap());
+    const int configured_wrap = unp->cur.get_linewrap();
+    if (configured_wrap > 0 && configured_wrap < usable_cols) {
+      usable_cols = configured_wrap;
+    }
 
     // check whether line wrapping is needed
     int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
@@ -9529,11 +9533,18 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgOmpToClause: {
       is_to = true;
       SgUnparse_Info ninfo(info);
-      curprint(string(" to("));
-      if (isSgOmpToClause(c)->get_kind() !=
-          SgOmpClause::e_omp_to_kind_unknown) {
+      SgOmpToClause *to_clause = isSgOmpToClause(c);
+      static const char *const kOmpDeclareTargetExtendedListAttrName =
+          "omp_declare_target_extended_list";
+      const bool is_declare_target_extended_list =
+          to_clause != NULL &&
+          to_clause->getAttribute(kOmpDeclareTargetExtendedListAttrName) !=
+              NULL;
+      curprint(is_declare_target_extended_list ? string("(") : string(" to("));
+      if (!is_declare_target_extended_list &&
+          to_clause->get_kind() != SgOmpClause::e_omp_to_kind_unknown) {
         curprint("mapper (");
-        unparseExpression(isSgOmpToClause(c)->get_mapper_identifier(), info);
+        unparseExpression(to_clause->get_mapper_identifier(), info);
         curprint(")");
         curprint(string(" : "));
       }
@@ -9618,12 +9629,17 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         SgUnparse_Info ninfo(info);
         unparseExpression(aref, ninfo);
       } else if (SgVarRefExp *vref = isSgVarRefExp(*p)) {
-        SgInitializedName *init_name = vref->get_symbol()->get_declaration();
-        SgName tmp_name = init_name->get_name();
-        curprint(tmp_name.str());
-        SgVariableSymbol *sym = isSgVarRefExp(*p)->get_symbol();
-        ROSE_ASSERT(sym != NULL);
-        if (is_map) {
+        SgVariableSymbol *sym = vref->get_symbol();
+        if (vref->get_originalExpressionTree() != NULL || sym == NULL ||
+            sym->get_declaration() == NULL) {
+          SgUnparse_Info ninfo(info);
+          unparseExpression(vref, ninfo);
+        } else {
+          SgInitializedName *init_name = sym->get_declaration();
+          SgName tmp_name = init_name->get_name();
+          curprint(tmp_name.str());
+        }
+        if (sym != NULL && is_map) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
           if (bounds.size() > 0) {
@@ -9659,7 +9675,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             } // end for
           } // end if has bounds
         } // end if map
-        else if (is_depend) {
+        else if (sym != NULL && is_depend) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
           if (bounds.size() > 0) {
@@ -9684,7 +9700,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               curprint(string("]"));
             } // end for
           } // end if has bounds
-        } else if (is_to) {
+        } else if (sym != NULL && is_to) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
           if (bounds.size() > 0) {
@@ -9709,7 +9725,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               curprint(string("]"));
             } // end for
           } // end if has bounds
-        } else if (is_from) {
+        } else if (sym != NULL && is_from) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
           if (bounds.size() > 0) {
@@ -9734,7 +9750,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               curprint(string("]"));
             } // end for
           } // end if has bounds
-        } else if (is_affinity) {
+        } else if (sym != NULL && is_affinity) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
           if (bounds.size() > 0) {
@@ -9882,12 +9898,17 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         SgUnparse_Info ninfo(info);
         unparseExpression(aref, ninfo);
       } else if (SgVarRefExp *vref = isSgVarRefExp(*p)) {
-        SgInitializedName *init_name = vref->get_symbol()->get_declaration();
-        SgName tmp_name = init_name->get_name();
-        curprint(tmp_name.str());
-        SgVariableSymbol *sym = isSgVarRefExp(*p)->get_symbol();
-        ASSERT_not_null(sym);
-        if (is_map) {
+        SgVariableSymbol *sym = vref->get_symbol();
+        if (vref->get_originalExpressionTree() != NULL || sym == NULL ||
+            sym->get_declaration() == NULL) {
+          SgUnparse_Info ninfo(info);
+          unparseExpression(vref, ninfo);
+        } else {
+          SgInitializedName *init_name = sym->get_declaration();
+          SgName tmp_name = init_name->get_name();
+          curprint(tmp_name.str());
+        }
+        if (sym != NULL && is_map) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
           if (bounds.size() > 0) {
@@ -9919,7 +9940,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
             } // end for
           } // end if has bounds
         } // end if map
-        else if (is_depend) {
+        else if (sym != NULL && is_depend) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
           if (bounds.size() > 0) {
@@ -10884,7 +10905,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
          isSgOmpSectionsStatement(nested_stmt) != nullptr ||
          isSgOmpWorkshareStatement(nested_stmt) != nullptr);
     const bool has_combined_parallel_shape =
-        !SageInterface::is_Fortran_language() &&
         isSgOmpParallelStatement(stmt) != nullptr && has_known_nested_omp &&
         combined_nested_variant != nullptr &&
         combined_nested_variant->getValue() ==
@@ -10908,6 +10928,26 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         unp->u_sage->curprint_newline();
         SgUnparse_Info ninfo(info);
         unparseStatement(nested_body_stmt->get_body(), ninfo);
+        static const char *const kOmpFortranEndAttributeName =
+            "omp_fortran_end";
+        const bool emit_fortran_combined_end =
+            SageInterface::is_Fortran_language() &&
+            stmt->getAttribute(kOmpFortranEndAttributeName) != nullptr;
+        if (emit_fortran_combined_end) {
+          unp->u_sage->curprint_newline();
+          unparseOmpPrefix(info);
+          curprint(string("end "));
+          const bool saved_end_variant = isVariant;
+          isVariant = true;
+          unparseOmpDirectivePrefixAndName(stmt, info);
+          curprint(string(" "));
+          unparseOmpDirectivePrefixAndName(nested_stmt, info);
+          isVariant = saved_end_variant;
+          // Combined Fortran constructs carry end-clause state on the nested
+          // worksharing part (e.g., nowait on do/sections).
+          unparseOmpEndDirectiveClauses(nested_stmt, info);
+          emit_forced_newline(unp);
+        }
       }
       return;
     }
@@ -10929,7 +10969,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     };
     // unparse the body, if exists.
     SgOmpBodyStatement *b_stmt = isSgOmpBodyStatement(stmt);
-    if (!isVariant && b_stmt) {
+    if (!isVariant && b_stmt && b_stmt->get_body() != nullptr) {
       SgUnparse_Info ninfo(info);
       unparseStatement(b_stmt->get_body(), ninfo);
     } else {

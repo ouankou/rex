@@ -1,0 +1,4 @@
+#pragma omp parallel num_threads(NUM_THREADS)
+#pragma omp single
+#pragma omp taskloop collapse(NUM_COLLAPSE)
+#pragma omp atomic

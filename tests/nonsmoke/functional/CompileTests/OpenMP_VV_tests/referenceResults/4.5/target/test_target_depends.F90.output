@@ -1,0 +1,11 @@
+!$omp target depend(out:dep_1) map(tofrom:dep_1(1:N))
+!$omp end target
+!$omp target depend(out:dep_2) map(tofrom:dep_2(1:N))
+!$omp end target
+!$omp task depend(inout:dep_1) depend(inout:dep_2) shared(dep_1,dep_2)
+!$omp end task
+!$omp target depend(inout:dep_1) depend(inout:dep_2) map(tofrom:dep_1(1:N),dep_2(1:N))
+!$omp end target
+!$omp target depend(in:dep_1) depend(in:dep_2) map(tofrom:dep_1(1:N)) map(tofrom:dep_2(1:N))
+!$omp end target
+!$omp taskwait

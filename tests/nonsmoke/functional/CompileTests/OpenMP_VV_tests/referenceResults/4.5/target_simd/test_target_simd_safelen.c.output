@@ -1,0 +1,7 @@
+#pragma omp target simd safelen(1) map(tofrom:A[0:ARRAY_SIZE])
+#pragma omp target simd safelen(5) map(tofrom:A[0:ARRAY_SIZE])
+#pragma omp target simd safelen(8) map(tofrom:A[0:ARRAY_SIZE])
+#pragma omp target simd safelen(13) map(tofrom:A[0:ARRAY_SIZE])
+#pragma omp target simd safelen(16) map(tofrom:A[0:ARRAY_SIZE])
+#pragma omp target simd safelen(100) map(tofrom:A[0:ARRAY_SIZE])
+#pragma omp target simd safelen(128) map(tofrom:A[0:ARRAY_SIZE])

@@ -1,0 +1,6 @@
+#pragma omp target enter data map(to:single) map(to:array[0:ARRAY_SIZE])
+#pragma omp target map(from:singleCopy) map(from:arrayCopy[0:ARRAY_SIZE]) map(tofrom:isHost) map(alloc:single,array[0:ARRAY_SIZE])
+#pragma omp target exit data map(delete:single,array[0:ARRAY_SIZE])
+#pragma omp target enter data map(to:single) map(to:array[0:ARRAY_SIZE])
+#pragma omp target map(from:singleCopy) map(from:arrayCopy[0:ARRAY_SIZE]) map(tofrom:isHost) map(alloc:single,array[0:ARRAY_SIZE])
+#pragma omp target exit data map(delete:single,array[0:ARRAY_SIZE])

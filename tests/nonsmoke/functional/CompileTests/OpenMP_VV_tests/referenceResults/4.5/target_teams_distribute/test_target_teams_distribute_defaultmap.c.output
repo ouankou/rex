@@ -1,0 +1,5 @@
+#pragma omp target teams distribute defaultmap(tofrom:scalar) map(from:char_array[0:ARRAY_SIZE],short_array[0:ARRAY_SIZE],int_array[0:ARRAY_SIZE],float_array[0:ARRAY_SIZE],double_array[0:ARRAY_SIZE],enum_array[0:ARRAY_SIZE])
+#pragma omp target teams distribute defaultmap(tofrom:scalar) map(tofrom:char_array[0:ARRAY_SIZE],short_array[0:ARRAY_SIZE],int_array[0:ARRAY_SIZE],float_array[0:ARRAY_SIZE],double_array[0:ARRAY_SIZE],enum_array[0:ARRAY_SIZE])
+#pragma omp target teams distribute map(tofrom:char_array_a[0:ARRAY_SIZE],char_array_b[0:ARRAY_SIZE],short_array_a[0:ARRAY_SIZE],short_array_b[0:ARRAY_SIZE],int_array_a[0:ARRAY_SIZE],int_array_b[0:ARRAY_SIZE],float_array_a[0:ARRAY_SIZE],float_array_b[0:ARRAY_SIZE],double_array_a[0:ARRAY_SIZE],double_array_b[0:ARRAY_SIZE],enum_array_a[0:ARRAY_SIZE],enum_array_b[0:ARRAY_SIZE])
+#pragma omp target teams distribute map(tofrom:char_array_a[0:ARRAY_SIZE],short_array_a[0:ARRAY_SIZE],int_array_a[0:ARRAY_SIZE],float_array_a[0:ARRAY_SIZE],double_array_a[0:ARRAY_SIZE],enum_array_a[0:ARRAY_SIZE])
+#pragma omp target teams distribute

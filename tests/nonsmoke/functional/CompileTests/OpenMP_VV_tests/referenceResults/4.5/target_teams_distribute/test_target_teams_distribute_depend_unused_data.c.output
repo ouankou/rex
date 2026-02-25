@@ -1,0 +1,4 @@
+#pragma omp target data map(to:a[0:N],b[0:N]) map(alloc:c[0:N],random_data[0:1]) map(from:d[0:N])
+#pragma omp target teams distribute nowait depend(out:random_data) map(alloc:a[0:N],b[0:N],c[0:N])
+#pragma omp target teams distribute nowait depend(out:random_data) map(alloc:b[0:N],c[0:N],d[0:N])
+#pragma omp taskwait

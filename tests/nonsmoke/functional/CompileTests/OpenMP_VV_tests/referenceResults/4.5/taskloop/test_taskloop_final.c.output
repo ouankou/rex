@@ -1,0 +1,6 @@
+#pragma omp parallel num_threads(NUM_THREADS)
+#pragma omp single
+#pragma omp taskloop final(M==THRESHOLD)
+#pragma omp task
+#pragma omp task
+#pragma omp task

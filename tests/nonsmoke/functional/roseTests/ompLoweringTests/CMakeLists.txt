@@ -21,6 +21,9 @@ set(_omp_semantic_script
   ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_semantic_compare.sh)
 set(_omp_invariant_script
   ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_invariant_check.sh)
+set(_omp_lowering_test_output_dir
+  ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_omp_lowering_test_output_dir})
 
 set(_omp_legacy_labels
   OMPLOWERING
@@ -53,10 +56,11 @@ endfunction()
 function(add_omp_translate_only_test test_name translator input_file work_subdir)
   add_test(
     NAME ${test_name}
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
     COMMAND ${BASH_EXECUTABLE} ${_omp_translate_script}
             ${translator}
             ${_omp_test_dir}/${input_file}
-            ${CMAKE_CURRENT_BINARY_DIR}/${work_subdir}
+            ${_omp_lowering_test_output_dir}/${work_subdir}
             ${input_file})
   set_tests_properties(${test_name} PROPERTIES TIMEOUT 540)
   _label_omp_compile_only(${test_name})
@@ -66,11 +70,12 @@ function(add_omp_semantic_test test_name translator compiler input_file mode lan
          work_subdir)
   add_test(
     NAME ${test_name}
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
     COMMAND ${BASH_EXECUTABLE} ${_omp_semantic_script}
             ${translator}
             ${compiler}
             ${_omp_test_dir}/${input_file}
-            ${CMAKE_CURRENT_BINARY_DIR}/${work_subdir}
+            ${_omp_lowering_test_output_dir}/${work_subdir}
             ${mode}
             ${ROSE_LLVM_OPENMP_INCLUDE_DIR}
             ${ROSE_LLVM_OPENMP_RUNTIME_DIR}
@@ -408,10 +413,11 @@ if(ENABLE-C)
 
       add_test(
         NAME omp_lowering_invariant_${_omp_name}
+        WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
         COMMAND ${BASH_EXECUTABLE} ${_omp_invariant_script}
                 $<TARGET_FILE:roseomp>
                 ${_omp_test_dir}/${testcode}
-                ${CMAKE_CURRENT_BINARY_DIR}/legacy_invariants/${_omp_name}
+                ${_omp_lowering_test_output_dir}/legacy_invariants/${_omp_name}
                 ${testcode})
       set_tests_properties(
         omp_lowering_invariant_${_omp_name}

@@ -1,0 +1,4 @@
+#pragma omp target data map(to:a[0:SIZE],b[0:SIZE]) map(tofrom:c[0:SIZE])
+#pragma omp target teams distribute lastprivate(privatized) map(alloc:a[0:SIZE],b[0:SIZE],c[0:SIZE]) defaultmap(tofrom:scalar)
+#pragma omp target data map(to:a[0:SIZE],b[0:SIZE],c[0:SIZE]) map(tofrom:privatized_array[0:2])
+#pragma omp target teams distribute lastprivate(privatized_array) map(alloc:a[0:SIZE],b[0:SIZE],c[0:SIZE])

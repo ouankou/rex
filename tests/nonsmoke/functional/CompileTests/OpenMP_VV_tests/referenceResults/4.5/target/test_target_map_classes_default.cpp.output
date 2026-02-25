@@ -1,0 +1,5 @@
+#pragma omp target map(theArray[0:N]) map(theSize)
+#pragma omp declare target
+#pragma omp end declare target
+#pragma omp target map(tofrom:res)
+#pragma omp target map(tofrom:value)

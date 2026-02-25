@@ -1,0 +1,2 @@
+!$omp target if(s>THRESHOLD) map(to:s,a(1:s),b(1:s)) map(tofrom:c(1:s),isHost)
+!$omp end target

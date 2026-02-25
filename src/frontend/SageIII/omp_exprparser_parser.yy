@@ -72,11 +72,125 @@ static bool arraySection=true;
 static SgSubscriptExpression* buildOpenMPArraySectionSubscript(
     SgExpression* lower, SgExpression* length, SgExpression* stride = NULL) {
     ROSE_ASSERT(lower != NULL);
-    ROSE_ASSERT(length != NULL);
+    if (length == NULL) {
+        length = SageBuilder::buildNullExpression_nfi();
+    }
     if (stride == NULL) {
         stride = SageBuilder::buildIntVal(1);
     }
     return SageBuilder::buildSubscriptExpression_nfi(lower, length, stride);
+}
+
+static bool isKnownVariableSymbolType(SgVariableSymbol *symbol);
+static SgVariableSymbol *lookupVariableSymbolPreferTyped(
+    const std::string &name, SgScopeStatement *scope);
+
+static bool containsFortranArraySectionArgument(SgExprListExp *args) {
+    if (args == NULL) {
+        return false;
+    }
+    const SgExpressionPtrList &exprs = args->get_expressions();
+    for (SgExpression *expr : exprs) {
+        if (isSgSubscriptExpression(expr) != NULL) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool isFortranArrayLikeType(SgType *type) {
+    if (type == NULL) {
+        return false;
+    }
+
+    type = type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                           SgType::STRIP_TYPEDEF_TYPE |
+                           SgType::STRIP_REFERENCE_TYPE |
+                           SgType::STRIP_RVALUE_REFERENCE_TYPE);
+    if (isSgArrayType(type) != NULL) {
+        return true;
+    }
+
+    if (SgPointerType *ptr_type = isSgPointerType(type)) {
+        SgType *base_type = ptr_type->get_base_type();
+        if (base_type != NULL) {
+            base_type = base_type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                                             SgType::STRIP_TYPEDEF_TYPE |
+                                             SgType::STRIP_REFERENCE_TYPE |
+                                             SgType::STRIP_RVALUE_REFERENCE_TYPE);
+            if (isSgArrayType(base_type) != NULL) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+static SgVariableSymbol *lookupFortranTypedVariableSymbolFromExpression(
+    SgExpression *expr) {
+    if (!SageInterface::is_Fortran_language() || expr == NULL) {
+        return NULL;
+    }
+
+    SgVarRefExp *vref = isSgVarRefExp(expr);
+    if (vref == NULL) {
+        return NULL;
+    }
+
+    if (SgVariableSymbol *symbol = isSgVariableSymbol(vref->get_symbol())) {
+        if (isKnownVariableSymbolType(symbol)) {
+            return symbol;
+        }
+        SgScopeStatement *scope = SageInterface::getScope(omp_directive_node);
+        if (scope != NULL) {
+            SgVariableSymbol *resolved =
+                lookupVariableSymbolPreferTyped(symbol->get_name().getString(),
+                                                scope);
+            if (resolved != NULL) {
+                return resolved;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static bool shouldTreatFortranParenAsArrayRef(SgExpression *base,
+                                              SgExprListExp *args) {
+    if (!SageInterface::is_Fortran_language() || base == NULL || args == NULL) {
+        return false;
+    }
+
+    if (containsFortranArraySectionArgument(args)) {
+        return true;
+    }
+
+    if (SgVariableSymbol *symbol =
+            lookupFortranTypedVariableSymbolFromExpression(base)) {
+        if (isFortranArrayLikeType(symbol->get_type())) {
+            return true;
+        }
+    }
+
+    return isFortranArrayLikeType(base->get_type());
+}
+
+static SgExpression* buildPostfixParenExpression(SgExpression *base,
+                                                 SgExprListExp *args) {
+    if (base == NULL || args == NULL) {
+        return NULL;
+    }
+
+    if (shouldTreatFortranParenAsArrayRef(base, args)) {
+        arraySection = containsFortranArraySectionArgument(args);
+        // Keep Fortran multi-dimensional subscripts as one list node so
+        // unparsing preserves "a(i,j,k)" rather than "a(i)(j)(k)".
+        return SageBuilder::buildPntrArrRefExp(base, args);
+    }
+
+    arraySection = false;
+    return SageBuilder::buildFunctionCallExp(base, args);
 }
 
 // mark whether it is for ompparser
@@ -87,6 +201,117 @@ static bool addOmpVariable(const char*);
 static bool addOmpVariableExpr(SgExpression*);
 std::vector<std::pair<std::string, SgNode*> > omp_variable_list;
 std::map<SgSymbol*,  std::vector < std::pair <SgExpression*, SgExpression*> > >  array_dimensions;  
+
+static std::string lowercaseIdentifier(const std::string &text) {
+    std::string lowered(text);
+    for (char &ch : lowered) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return lowered;
+}
+
+static std::string uppercaseIdentifier(const std::string &text) {
+    std::string upper(text);
+    for (char &ch : upper) {
+        ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    }
+    return upper;
+}
+
+static bool isKnownVariableSymbolType(SgVariableSymbol *symbol) {
+    if (symbol == NULL) {
+        return false;
+    }
+    SgType *type = symbol->get_type();
+    if (type == NULL) {
+        return false;
+    }
+    type = type->stripType(SgType::STRIP_MODIFIER_TYPE |
+                           SgType::STRIP_TYPEDEF_TYPE |
+                           SgType::STRIP_REFERENCE_TYPE |
+                           SgType::STRIP_RVALUE_REFERENCE_TYPE);
+    return isSgTypeUnknown(type) == NULL;
+}
+
+static SgVariableSymbol *lookupVariableSymbolInScopeWithVariants(
+    SgScopeStatement *scope, const std::string &name) {
+    if (scope == NULL || name.empty()) {
+        return NULL;
+    }
+
+    if (SgVariableSymbol *symbol = scope->lookup_var_symbol(name)) {
+        return symbol;
+    }
+
+    if (!SageInterface::is_Fortran_language()) {
+        return NULL;
+    }
+
+    const std::string lower = lowercaseIdentifier(name);
+    if (lower != name) {
+        if (SgVariableSymbol *symbol = scope->lookup_var_symbol(lower)) {
+            return symbol;
+        }
+    }
+
+    const std::string upper = uppercaseIdentifier(name);
+    if (upper != name) {
+        if (SgVariableSymbol *symbol = scope->lookup_var_symbol(upper)) {
+            return symbol;
+        }
+    }
+
+    return NULL;
+}
+
+static SgVariableSymbol *lookupVariableSymbolPreferTyped(
+    const std::string &name, SgScopeStatement *scope) {
+    if (scope == NULL || name.empty()) {
+        return NULL;
+    }
+
+    SgVariableSymbol *symbol = lookupVariableSymbolInParentScopes(name, scope);
+    if (isKnownVariableSymbolType(symbol)) {
+        return symbol;
+    }
+
+    SgVariableSymbol *fallback = symbol;
+    SgScopeStatement *current_scope = scope;
+    while (current_scope != NULL) {
+        SgVariableSymbol *candidate =
+            lookupVariableSymbolInScopeWithVariants(current_scope, name);
+        if (candidate == NULL) {
+            SgScopeStatement *next_scope = current_scope->get_scope();
+            if (next_scope == current_scope) {
+                break;
+            }
+            current_scope = next_scope;
+            continue;
+        }
+        if (fallback == NULL) {
+            fallback = candidate;
+        }
+        if (isKnownVariableSymbolType(candidate)) {
+            return candidate;
+        }
+
+        SgScopeStatement *next_scope = current_scope->get_scope();
+        if (next_scope == current_scope) {
+            break;
+        }
+        current_scope = next_scope;
+    }
+
+    return fallback;
+}
+
+static bool namesMatchInCurrentLanguage(const std::string &lhs,
+                                        const std::string &rhs) {
+    if (SageInterface::is_Fortran_language()) {
+        return lowercaseIdentifier(lhs) == lowercaseIdentifier(rhs);
+    }
+    return lhs == rhs;
+}
 
 static SgFunctionDeclaration* findNextDeclareSimdFunction(SgStatement* pragma_stmt) {
     if (pragma_stmt == NULL) {
@@ -243,6 +468,8 @@ corresponding C type is union name defaults to YYSTYPE.
               shift_expr additive_expr multiplicative_expr 
               primary_expr unary_expr postfix_expr
               argument_expression_list argument_expression_list_opt
+              parenthesized_argument_list parenthesized_argument_list_opt
+              parenthesized_argument_item fortran_subscript_item
 
 /* start point for the parsing */
 %start openmp_expression
@@ -566,10 +793,36 @@ primary_expr : ICONSTANT {
                free(const_cast<char*>($1));
                $$ = current_exp;
               }
+             | LOGOR {
+               SgScopeStatement* scope = SageInterface::getScope(omp_directive_node);
+               ROSE_ASSERT(scope != NULL);
+               current_exp = SageBuilder::buildOpaqueVarRefExp(".or.", scope);
+               $$ = current_exp;
+              }
+             | LOGAND {
+               SgScopeStatement* scope = SageInterface::getScope(omp_directive_node);
+               ROSE_ASSERT(scope != NULL);
+               current_exp = SageBuilder::buildOpaqueVarRefExp(".and.", scope);
+               $$ = current_exp;
+              }
              | ID_EXPRESSION {
                SgScopeStatement* scope = SageInterface::getScope(omp_directive_node);
                ROSE_ASSERT(scope != NULL);
-               if (SgVariableSymbol* symbol = lookupVariableSymbolInParentScopes((const char*)($1), scope)) {
+               if (SageInterface::is_Fortran_language()) {
+                 SgVarRefExp* source_spelling_ref =
+                     SageBuilder::buildDanglingVarRefExp(
+                         SgName((const char*)($1)), scope);
+                 if (SgVariableSymbol* symbol =
+                         lookupVariableSymbolPreferTyped((const char*)($1), scope)) {
+                   current_exp = SageBuilder::buildVarRefExp(symbol);
+                   // Keep semantic symbol resolution while preserving original
+                   // source spelling for Fortran directive unparsing.
+                   current_exp->set_originalExpressionTree(source_spelling_ref);
+                 } else {
+                   current_exp = source_spelling_ref;
+                 }
+               } else if (SgVariableSymbol* symbol =
+                              lookupVariableSymbolPreferTyped((const char*)($1), scope)) {
                  current_exp = SageBuilder::buildVarRefExp(symbol);
                } else {
                  current_exp = SageBuilder::buildOpaqueVarRefExp((const char*)($1), scope);
@@ -635,14 +888,90 @@ argument_expression_list
               }
             ;
 
+parenthesized_argument_list_opt
+            : /* empty */ {
+                $$ = SageBuilder::buildExprListExp_nfi();
+              }
+            | parenthesized_argument_list {
+                $$ = $1;
+              }
+            ;
+
+parenthesized_argument_list
+            : parenthesized_argument_item {
+                SgExprListExp* args = SageBuilder::buildExprListExp_nfi();
+                args->append_expression((SgExpression*)($1));
+                $$ = args;
+              }
+            | parenthesized_argument_list ',' parenthesized_argument_item {
+                SgExprListExp* args = isSgExprListExp((SgNode*)($1));
+                ROSE_ASSERT(args != NULL);
+                args->append_expression((SgExpression*)($3));
+                $$ = args;
+              }
+            ;
+
+parenthesized_argument_item
+            : assignment_expr {
+                $$ = $1;
+              }
+            | fortran_subscript_item {
+                $$ = $1;
+              }
+            ;
+
+fortran_subscript_item
+            : expression ':' expression {
+                $$ = buildOpenMPArraySectionSubscript((SgExpression*)($1),
+                                                      (SgExpression*)($3));
+              }
+            | expression ':' expression ':' expression {
+                $$ = buildOpenMPArraySectionSubscript((SgExpression*)($1),
+                                                      (SgExpression*)($3),
+                                                      (SgExpression*)($5));
+              }
+            | ':' expression {
+                $$ = buildOpenMPArraySectionSubscript(
+                    SageBuilder::buildNullExpression_nfi(),
+                    (SgExpression*)($2));
+              }
+            | ':' expression ':' expression {
+                $$ = buildOpenMPArraySectionSubscript(
+                    SageBuilder::buildNullExpression_nfi(),
+                    (SgExpression*)($2),
+                    (SgExpression*)($4));
+              }
+            | expression ':' {
+                $$ = buildOpenMPArraySectionSubscript(
+                    (SgExpression*)($1),
+                    SageBuilder::buildNullExpression_nfi());
+              }
+            | expression ':' ':' expression {
+                $$ = buildOpenMPArraySectionSubscript(
+                    (SgExpression*)($1),
+                    SageBuilder::buildNullExpression_nfi(),
+                    (SgExpression*)($4));
+              }
+            | ':' {
+                $$ = buildOpenMPArraySectionSubscript(
+                    SageBuilder::buildNullExpression_nfi(),
+                    SageBuilder::buildNullExpression_nfi());
+              }
+            | ':' ':' expression {
+                $$ = buildOpenMPArraySectionSubscript(
+                    SageBuilder::buildNullExpression_nfi(),
+                    SageBuilder::buildNullExpression_nfi(),
+                    (SgExpression*)($3));
+              }
+            ;
+
 postfix_expr:primary_expr {
                arraySection= false; 
                  current_exp = (SgExpression*)($1);
                  $$ = current_exp;
              }
-            | postfix_expr '(' argument_expression_list_opt ')' {
-               arraySection = false;
-               current_exp = SageBuilder::buildFunctionCallExp(
+            | postfix_expr '(' parenthesized_argument_list_opt ')' {
+               current_exp = buildPostfixParenExpression(
                    (SgExpression*)($1), (SgExprListExp*)($3));
                $$ = current_exp;
              }
@@ -737,6 +1066,41 @@ postfix_expr:primary_expr {
                }
                lower_exp = SageBuilder::buildNullExpression_nfi();
                length_exp = (SgExpression*)($4);
+               SgExpression* stride_exp = (SgExpression*)($6);
+               assert (lower_exp && length_exp && stride_exp);
+               SgSubscriptExpression* subscript =
+                 buildOpenMPArraySectionSubscript(lower_exp, length_exp, stride_exp);
+               current_exp = SageBuilder::buildPntrArrRefExp((SgExpression*)($1), subscript);
+               $$ = current_exp;
+             }
+            | postfix_expr '[' expression ':' ']'
+             {
+               arraySection= true; // array section expression with omitted length
+               if (array_symbol == NULL)
+               {
+                 if (SgVarRefExp* vref = isSgVarRefExp((SgExpression*)($1))) {
+                   array_symbol = isSgVariableSymbol(vref->get_symbol());
+                 }
+               }
+               lower_exp = (SgExpression*)($3);
+               length_exp = SageBuilder::buildNullExpression_nfi();
+               assert (lower_exp && length_exp);
+               SgSubscriptExpression* subscript =
+                 buildOpenMPArraySectionSubscript(lower_exp, length_exp);
+               current_exp = SageBuilder::buildPntrArrRefExp((SgExpression*)($1), subscript);
+               $$ = current_exp;
+             }
+            | postfix_expr '[' expression ':' ':' expression ']'
+             {
+               arraySection= true; // array section expression with omitted length and explicit stride
+               if (array_symbol == NULL)
+               {
+                 if (SgVarRefExp* vref = isSgVarRefExp((SgExpression*)($1))) {
+                   array_symbol = isSgVariableSymbol(vref->get_symbol());
+                 }
+               }
+               lower_exp = (SgExpression*)($3);
+               length_exp = SageBuilder::buildNullExpression_nfi();
                SgExpression* stride_exp = (SgExpression*)($6);
                assert (lower_exp && length_exp && stride_exp);
                SgSubscriptExpression* subscript =
@@ -960,7 +1324,8 @@ static bool addOmpVariable(const char* var)  {
         if (params != NULL) {
             const SgInitializedNamePtrList& args = params->get_args();
             for (SgInitializedName* arg : args) {
-                if (arg != NULL && arg->get_name() == var) {
+                if (arg != NULL &&
+                    namesMatchInCurrentLanguage(arg->get_name().getString(), var)) {
                     sgvar = arg;
                     symbol = isSgVariableSymbol(arg->get_symbol_from_symbol_table());
                     break;
@@ -969,7 +1334,7 @@ static bool addOmpVariable(const char* var)  {
         }
     }
     if (sgvar == NULL) {
-        symbol = lookupVariableSymbolInParentScopes(var, scope);
+        symbol = lookupVariableSymbolPreferTyped(var, scope);
         if (symbol != NULL) {
             sgvar = symbol->get_declaration();
             if (sgvar != NULL) {
@@ -1025,27 +1390,52 @@ static bool collectArraySectionMetadata(
             return false;
         }
 
-        SgSubscriptExpression* subscript =
-            isSgSubscriptExpression(array_ref->get_rhs_operand());
-        if (subscript == NULL) {
-            return false;
-        }
-
-        SgExpression* lower = subscript->get_lowerBound();
-        SgExpression* length = subscript->get_upperBound();
-        if (lower == NULL || length == NULL) {
-            return false;
-        }
-
-        if (SgExpression* stride = subscript->get_stride()) {
-            SgIntVal* int_stride = isSgIntVal(stride);
-            if (int_stride == NULL || int_stride->get_value() != 1) {
-                has_explicit_stride = true;
+        SgExpression* rhs = array_ref->get_rhs_operand();
+        if (SgSubscriptExpression* subscript = isSgSubscriptExpression(rhs)) {
+            SgExpression* lower = subscript->get_lowerBound();
+            SgExpression* length = subscript->get_upperBound();
+            if (lower == NULL || length == NULL) {
+                return false;
             }
+
+            if (SgExpression* stride = subscript->get_stride()) {
+                SgIntVal* int_stride = isSgIntVal(stride);
+                if (int_stride == NULL || int_stride->get_value() != 1) {
+                    has_explicit_stride = true;
+                }
+            }
+
+            dimensions.push_back(std::make_pair(lower, length));
+            return true;
         }
 
-        dimensions.push_back(std::make_pair(lower, length));
-        return true;
+        if (SgExprListExp* expr_list = isSgExprListExp(rhs)) {
+            const SgExpressionPtrList& exprs = expr_list->get_expressions();
+            for (SgExpression* item : exprs) {
+                SgSubscriptExpression* subscript = isSgSubscriptExpression(item);
+                if (subscript == NULL) {
+                    continue;
+                }
+
+                SgExpression* lower = subscript->get_lowerBound();
+                SgExpression* length = subscript->get_upperBound();
+                if (lower == NULL || length == NULL) {
+                    return false;
+                }
+
+                if (SgExpression* stride = subscript->get_stride()) {
+                    SgIntVal* int_stride = isSgIntVal(stride);
+                    if (int_stride == NULL || int_stride->get_value() != 1) {
+                        has_explicit_stride = true;
+                    }
+                }
+
+                dimensions.push_back(std::make_pair(lower, length));
+            }
+            return true;
+        }
+
+        return false;
     }
 
     if (SgVarRefExp* vref = isSgVarRefExp(expr)) {
@@ -1058,13 +1448,26 @@ static bool collectArraySectionMetadata(
 
 static bool addOmpVariableExpr(SgExpression* expr) {
     if (expr == NULL) {
+        array_symbol = NULL;
         return false;
     }
 
     if (SgVarRefExp* vref = isSgVarRefExp(expr)) {
         if (SgVariableSymbol* sym = isSgVariableSymbol(vref->get_symbol())) {
+            if (SageInterface::is_Fortran_language()) {
+                // Keep the parsed expression node so Fortran clause entities
+                // preserve original directive spelling (case/signature).
+                std::string key = expr->unparseToString();
+                if (key.empty()) {
+                    key = sym->get_name().getString();
+                }
+                omp_variable_list.push_back(std::make_pair(key, expr));
+                array_symbol = sym;
+                return true;
+            }
             std::string name = sym->get_name().getString();
             if (!name.empty() && addOmpVariable(name.c_str())) {
+                array_symbol = NULL;
                 return true;
             }
         }
@@ -1088,24 +1491,19 @@ static bool addOmpVariableExpr(SgExpression* expr) {
                     mapped_symbol = sym;
                 }
 
-                // Keep explicit-stride array sections as expressions in the
-                // variable list to preserve faithful AST/unparse form, while
-                // still recording dimension metadata for analysis/lowering.
-                if (has_explicit_stride) {
-                    std::string key = expr->unparseToString();
-                    if (key.empty()) {
-                        key = sym->get_name().getString();
-                    }
-                    omp_variable_list.push_back(std::make_pair(key, expr));
-                    array_dimensions[mapped_symbol] = dimensions;
-                    return true;
+                std::string key = expr->unparseToString();
+                if (key.empty()) {
+                    key = sym->get_name().getString();
                 }
-
-                std::string name = sym->get_name().getString();
-                if (!name.empty() && addOmpVariable(name.c_str())) {
+                omp_variable_list.push_back(std::make_pair(key, expr));
+                // array_dimensions stores only (lower, length) pairs. Preserve
+                // explicit-stride sections in expression form instead of
+                // recording lossy metadata.
+                if (mapped_symbol != NULL && !has_explicit_stride) {
                     array_dimensions[mapped_symbol] = dimensions;
-                    return true;
                 }
+                array_symbol = NULL;
+                return true;
             }
         }
     }
@@ -1115,6 +1513,7 @@ static bool addOmpVariableExpr(SgExpression* expr) {
             std::string name = sym->get_name().getString();
             if (!name.empty()) {
                 omp_variable_list.push_back(std::make_pair(name, expr));
+                array_symbol = NULL;
                 return true;
             }
         }
@@ -1127,6 +1526,7 @@ static bool addOmpVariableExpr(SgExpression* expr) {
         key = expr->class_name();
     }
     omp_variable_list.push_back(std::make_pair(key, expr));
+    array_symbol = NULL;
     return true;
 }
 

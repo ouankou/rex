@@ -1,0 +1,4 @@
+#pragma omp target data map(from:array[0:N]) map(tofrom:obj[0:1])
+#pragma omp target
+#pragma omp target data map(from:array[0:N]) map(tofrom:obj)
+#pragma omp target

@@ -1,0 +1,7 @@
+!$omp target data map(to:a,b) map(from:c)
+!$omp target
+!$omp end target
+!$omp end target data
+!$omp target update to(b)
+!$omp target
+!$omp end target

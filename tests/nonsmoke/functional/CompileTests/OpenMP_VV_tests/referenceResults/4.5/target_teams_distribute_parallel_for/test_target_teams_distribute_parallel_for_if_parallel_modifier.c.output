@@ -1,0 +1,3 @@
+#pragma omp target teams distribute parallel for num_threads(OMPVV_NUM_THREADS_DEVICE)
+#pragma omp parallel for num_threads(OMPVV_NUM_THREADS_DEVICE)
+#pragma omp target teams distribute parallel for if(parallel:attempt>=ATTEMPT_THRESHOLD) map(tofrom:a,warning) num_threads(OMPVV_NUM_THREADS_DEVICE)

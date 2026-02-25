@@ -1,0 +1,2 @@
+#pragma omp target data map(from:d[0:SIZE]) map(to:a[0:SIZE],b[0:SIZE],c[0:SIZE])
+#pragma omp target teams distribute private(privatized) map(alloc:a[0:SIZE],b[0:SIZE],c[0:SIZE],d[0:SIZE]) map(tofrom:num_teams) num_teams(OMPVV_NUM_TEAMS_DEVICE)

@@ -25,6 +25,7 @@ extern int omp_exprparser_lex();
 #include <cstdlib>
 #include <string>
 #include <string.h>
+#include "sage3basic.h"
 #include "omp_exprparser_parser.hh"
 
 static const char* ompparserinput = NULL;
@@ -90,7 +91,12 @@ fortran_block_end [ ]*[^a-zA-Z0-9_]
 \/\*([^*]|\*+[^*/])*\*+\/ { /* Ignore C-style block comments */ }
 "//"[^\n]*      { /* Ignore C++-style line comments */ }
 "/"             { return ('/'); }
-"%"             { return ('%'); }
+"%"             {
+                  if (SageInterface::is_Fortran_language()) {
+                    return ('.');
+                  }
+                  return ('%');
+                }
 "-"             { return ('-'); }
 "&"             { return ('&'); }
 "^"             { return ('^'); }
