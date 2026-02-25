@@ -41,6 +41,8 @@ function(add_experimental_fortran_test specimen)
   # ARGN is a CMake list. Any literal semicolon in a flag value must be escaped
   # as '\;' at the call site to avoid list splitting.
   string(REPLACE "." "_" _name "${specimen}")
+  set(_flags_file "${CMAKE_CURRENT_BINARY_DIR}/${_name}_flags.cmake")
+  file(GENERATE OUTPUT "${_flags_file}" CONTENT "set(EXTRA_FLAGS_LIST [==[${ARGN}]==])\n")
   add_test(
     NAME experimental_fortran_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -48,7 +50,7 @@ function(add_experimental_fortran_test specimen)
       "-DTEST_TRANSLATOR=$<TARGET_FILE:testTranslator>"
       "-DSPECIMEN=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       "-DROSE_OUTPUT=rose_${specimen}"
-      "-DEXTRA_FLAGS=${ARGN}"
+      "-DEXTRA_FLAGS_FILE=${_flags_file}"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/run_experimental_fortran.cmake"
   )
   set_tests_properties(experimental_fortran_${_name} PROPERTIES LABELS experimental_fortran)
