@@ -282,6 +282,7 @@ scanExplicitTemplateArgumentsInText(llvm::StringRef text) {
   bool in_args = false;
   int depth = 0;
   bool saw_top_level_arg_token = false;
+  bool last_was_comma = false;
 
   for (size_t i = 0; i < text.size(); ++i) {
     const unsigned char ch = static_cast<unsigned char>(text[i]);
@@ -295,6 +296,7 @@ scanExplicitTemplateArgumentsInText(llvm::StringRef text) {
         in_args = true;
         depth = 1;
         saw_top_level_arg_token = false;
+        last_was_comma = false;
         continue;
       }
       if (c == '(' || c == '[' || c == ')' || c == ';' || c == '{') {
@@ -306,13 +308,14 @@ scanExplicitTemplateArgumentsInText(llvm::StringRef text) {
     if (c == '<') {
       if (depth == 1) {
         saw_top_level_arg_token = true;
+        last_was_comma = false;
       }
       ++depth;
       continue;
     }
 
     if (c == '>') {
-      if (depth == 1 && saw_top_level_arg_token) {
+      if (depth == 1 && (saw_top_level_arg_token || last_was_comma)) {
         ++info.argument_count;
       }
       --depth;
@@ -323,6 +326,7 @@ scanExplicitTemplateArgumentsInText(llvm::StringRef text) {
       if (depth < 0) {
         break;
       }
+      last_was_comma = false;
       continue;
     }
 
@@ -330,10 +334,14 @@ scanExplicitTemplateArgumentsInText(llvm::StringRef text) {
       // Conservative fallback for malformed spellings.
       ++info.argument_count;
       saw_top_level_arg_token = false;
+      last_was_comma = true;
       continue;
     }
 
-    if (depth == 1 && !std::isspace(ch)) {
+    if (depth > 0 && !std::isspace(ch)) {
+      if (depth == 1) {
+        last_was_comma = false;
+      }
       saw_top_level_arg_token = true;
     }
   }
@@ -411,6 +419,27 @@ scanExplicitTemplateArgumentsInSourceRange(
   }
 
   return scanExplicitTemplateArgumentsInText(text);
+}
+
+static ExplicitTemplateArgumentSourceInfo
+scanExplicitTemplateArgumentsForExprSource(
+    clang::SourceRange range, clang::SourceLocation trailing_loc,
+    clang::CompilerInstance *compiler_instance) {
+  if (compiler_instance == nullptr) {
+    return {};
+  }
+
+  clang::SourceManager &sm = compiler_instance->getSourceManager();
+  const clang::LangOptions &lang_opts = compiler_instance->getLangOpts();
+
+  ExplicitTemplateArgumentSourceInfo source_info =
+      scanExplicitTemplateArgumentsInSourceRange(range, sm, lang_opts);
+  if (!source_info.has_template_argument_list) {
+    source_info =
+        scanExplicitTemplateArgumentsAfterLoc(trailing_loc, sm, lang_opts);
+  }
+
+  return source_info;
 }
 
 static void ensure_function_param_list(SgFunctionDeclaration *decl,
@@ -9499,18 +9528,10 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         }
       }
       if (has_explicit_template_args || has_deduced_template_args) {
-        ExplicitTemplateArgumentSourceInfo source_info;
-        if (p_compiler_instance != nullptr) {
-          clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-          const clang::LangOptions &lang_opts =
-              p_compiler_instance->getLangOpts();
-          source_info = scanExplicitTemplateArgumentsInSourceRange(
-              decl_ref_expr->getSourceRange(), sm, lang_opts);
-          if (!source_info.has_template_argument_list) {
-            source_info = scanExplicitTemplateArgumentsAfterLoc(
-                decl_ref_expr->getEndLoc(), sm, lang_opts);
-          }
-        }
+        ExplicitTemplateArgumentSourceInfo source_info =
+            scanExplicitTemplateArgumentsForExprSource(
+                decl_ref_expr->getSourceRange(), decl_ref_expr->getEndLoc(),
+                p_compiler_instance);
         if (source_info.has_template_argument_list) {
           explicit_arg_count = source_info.argument_count;
           has_explicit_template_args = true;
@@ -9527,6 +9548,27 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       const bool should_build_instantiation =
           has_explicit_template_args &&
           (!decl_ref_expr->hasQualifier() || is_member_function_decl);
+      auto build_template_args_for_instantiation =
+          [&]() -> SgTemplateArgumentPtrList {
+        if (has_explicit_template_args) {
+          SgTemplateArgumentPtrList template_args =
+              buildTemplateArguments(explicit_arg_info, true);
+          if (template_args.empty() && !has_explicit_empty_template_id &&
+              clang_func != nullptr && deduced_args != nullptr &&
+              deduced_args->size() != 0) {
+            template_args =
+                buildTemplateArguments(*deduced_args, explicit_arg_count);
+          }
+          return template_args;
+        }
+
+        if (clang_func != nullptr && deduced_args != nullptr &&
+            deduced_args->size() != 0) {
+          return buildTemplateArguments(*deduced_args, explicit_arg_count);
+        }
+
+        return buildTemplateArguments(explicit_arg_info, true);
+      };
       auto get_decl_namespace_scope =
           [&](clang::NamedDecl *clang_decl) -> SgScopeStatement * {
         if (clang_decl == nullptr) {
@@ -9574,21 +9616,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           bool template_args_built = false;
           auto ensure_template_args = [&]() -> SgTemplateArgumentPtrList * {
             if (!template_args_built) {
-              if (has_explicit_template_args) {
-                template_args = buildTemplateArguments(explicit_arg_info, true);
-                if (template_args.empty() && !has_explicit_empty_template_id &&
-                    clang_func != nullptr && deduced_args != nullptr &&
-                    deduced_args->size() != 0) {
-                  template_args =
-                      buildTemplateArguments(*deduced_args, explicit_arg_count);
-                }
-              } else if (clang_func != nullptr && deduced_args != nullptr &&
-                         deduced_args->size() != 0) {
-                template_args =
-                    buildTemplateArguments(*deduced_args, explicit_arg_count);
-              } else {
-                template_args = buildTemplateArguments(explicit_arg_info, true);
-              }
+              template_args = build_template_args_for_instantiation();
               template_args_built = true;
             }
             return &template_args;
@@ -9881,21 +9909,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           bool template_args_built = false;
           auto ensure_template_args = [&]() -> SgTemplateArgumentPtrList * {
             if (!template_args_built) {
-              if (has_explicit_template_args) {
-                template_args = buildTemplateArguments(explicit_arg_info, true);
-                if (template_args.empty() && !has_explicit_empty_template_id &&
-                    clang_func != nullptr && deduced_args != nullptr &&
-                    deduced_args->size() != 0) {
-                  template_args =
-                      buildTemplateArguments(*deduced_args, explicit_arg_count);
-                }
-              } else if (clang_func != nullptr && deduced_args != nullptr &&
-                         deduced_args->size() != 0) {
-                template_args =
-                    buildTemplateArguments(*deduced_args, explicit_arg_count);
-              } else {
-                template_args = buildTemplateArguments(explicit_arg_info, true);
-              }
+              template_args = build_template_args_for_instantiation();
               template_args_built = true;
             }
             return &template_args;
@@ -11752,17 +11766,11 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           deduced_args != nullptr && deduced_args->size() != 0;
     }
   }
-  if ((has_explicit_template_args || has_deduced_template_args) &&
-      p_compiler_instance != nullptr) {
-    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
-    const clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
+  if (has_explicit_template_args || has_deduced_template_args) {
     ExplicitTemplateArgumentSourceInfo source_info =
-        scanExplicitTemplateArgumentsInSourceRange(
-            member_expr->getSourceRange(), sm, lang_opts);
-    if (!source_info.has_template_argument_list) {
-      source_info = scanExplicitTemplateArgumentsAfterLoc(
-          member_expr->getEndLoc(), sm, lang_opts);
-    }
+        scanExplicitTemplateArgumentsForExprSource(
+            member_expr->getSourceRange(), member_expr->getEndLoc(),
+            p_compiler_instance);
     if (source_info.has_template_argument_list) {
       explicit_arg_count = source_info.argument_count;
       has_explicit_template_args = true;
