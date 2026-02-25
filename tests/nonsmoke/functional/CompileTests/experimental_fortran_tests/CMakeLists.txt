@@ -42,7 +42,7 @@ function(add_experimental_fortran_test specimen)
   # as '\;' at the call site to avoid list splitting.
   string(REPLACE "." "_" _name "${specimen}")
   set(_flags_file "${CMAKE_CURRENT_BINARY_DIR}/${_name}_flags.cmake")
-  file(GENERATE OUTPUT "${_flags_file}" CONTENT "set(EXTRA_FLAGS_LIST [==[${ARGN}]==])\n")
+  file(WRITE "${_flags_file}" "set(EXTRA_FLAGS_LIST [==[${ARGN}]==])\n")
   add_test(
     NAME experimental_fortran_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
