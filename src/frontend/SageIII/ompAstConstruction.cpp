@@ -18,6 +18,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <tuple>
 #include <unordered_map>
@@ -284,8 +285,10 @@ std::string stripTrailingCppLineContinuation(const std::string &line) {
 
 std::string getRawOpenMPCppDirectiveText(
     SgPragmaDeclaration *pragma_declaration,
-    std::unordered_map<std::string, std::vector<std::string>>
-        &source_lines_cache) {
+    std::unordered_map<std::string,
+                       std::shared_ptr<const std::vector<std::string>>>
+        &source_lines_cache,
+    std::mutex &source_lines_cache_mutex) {
   if (pragma_declaration == nullptr) {
     return "";
   }
@@ -422,28 +425,36 @@ std::string getRawOpenMPCppDirectiveText(
   const std::string expected_signature =
       build_directive_signature(pragma_declaration->get_pragma()->get_pragma());
 
-  auto get_cached_lines =
-      [&](const std::string &filename) -> const std::vector<std::string> * {
-    auto cache_it = source_lines_cache.find(filename);
-    if (cache_it == source_lines_cache.end()) {
-      std::ifstream input(filename.c_str());
-      if (!input.is_open()) {
-        return nullptr;
+  auto get_cached_lines = [&](const std::string &filename)
+      -> std::shared_ptr<const std::vector<std::string>> {
+    {
+      std::lock_guard<std::mutex> lock(source_lines_cache_mutex);
+      auto cache_it = source_lines_cache.find(filename);
+      if (cache_it != source_lines_cache.end()) {
+        return cache_it->second;
       }
-
-      std::vector<std::string> lines;
-      std::string line;
-      while (std::getline(input, line)) {
-        if (!line.empty() && line.back() == '\r') {
-          line.pop_back();
-        }
-        lines.push_back(line);
-      }
-      cache_it =
-          source_lines_cache.insert(std::make_pair(filename, std::move(lines)))
-              .first;
     }
-    return &cache_it->second;
+
+    std::ifstream input(filename.c_str());
+    if (!input.is_open()) {
+      return nullptr;
+    }
+
+    std::vector<std::string> lines;
+    std::string line;
+    while (std::getline(input, line)) {
+      if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+      }
+      lines.push_back(line);
+    }
+    std::shared_ptr<const std::vector<std::string>> cached_lines =
+        std::make_shared<const std::vector<std::string>>(std::move(lines));
+
+    std::lock_guard<std::mutex> lock(source_lines_cache_mutex);
+    auto insert_result =
+        source_lines_cache.insert(std::make_pair(filename, cached_lines));
+    return insert_result.first->second;
   };
 
   auto extract_directive_text_at = [&](const std::vector<std::string> &lines,
@@ -486,9 +497,9 @@ std::string getRawOpenMPCppDirectiveText(
   };
 
   for (const CandidateLocation &candidate : candidates) {
-    const std::vector<std::string> *lines =
+    const std::shared_ptr<const std::vector<std::string>> lines =
         get_cached_lines(candidate.filename);
-    if (lines == nullptr || lines->empty()) {
+    if (!lines || lines->empty()) {
       continue;
     }
 
@@ -4895,8 +4906,10 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   } else { // For C/C++, search pragma declarations for OpenMP directives
     std::vector<SgNode *> all_pragmas =
         NodeQuery::querySubTree(sageFilePtr, V_SgPragmaDeclaration);
-    std::unordered_map<std::string, std::vector<std::string>>
+    std::unordered_map<std::string,
+                       std::shared_ptr<const std::vector<std::string>>>
         source_lines_cache;
+    std::mutex source_lines_cache_mutex;
     std::vector<SgNode *>::iterator iter;
     for (iter = all_pragmas.begin(); iter != all_pragmas.end(); iter++) {
       SgPragmaDeclaration *pragmaDeclaration = isSgPragmaDeclaration(*iter);
@@ -4904,8 +4917,8 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
       const std::string preprocessedPragmaString =
           pragmaDeclaration->get_pragma()->get_pragma();
       string pragmaString = preprocessedPragmaString;
-      const std::string rawPragmaString =
-          getRawOpenMPCppDirectiveText(pragmaDeclaration, source_lines_cache);
+      const std::string rawPragmaString = getRawOpenMPCppDirectiveText(
+          pragmaDeclaration, source_lines_cache, source_lines_cache_mutex);
       if (!rawPragmaString.empty()) {
         pragmaString = rawPragmaString;
       }
