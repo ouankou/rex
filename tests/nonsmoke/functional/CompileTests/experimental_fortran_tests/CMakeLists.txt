@@ -38,6 +38,8 @@ set(_experimental_fortran_todo_tests
 )
 
 function(add_experimental_fortran_test specimen)
+  # ARGN is a CMake list. Any literal semicolon in a flag value must be escaped
+  # as '\;' at the call site to avoid list splitting.
   string(REPLACE "." "_" _name "${specimen}")
   add_test(
     NAME experimental_fortran_${_name}
