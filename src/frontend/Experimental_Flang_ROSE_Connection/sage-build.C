@@ -971,64 +971,33 @@ SourcePosition ChooseCommentAnchor(const std::optional<SourcePosition> &begin,
   return end;
 }
 
-bool StartsWithOmp(const std::string &text) {
-  auto starts_with_keyword = [&](const char *keyword) -> bool {
-    const std::size_t len = std::strlen(keyword);
-    if (text.size() < len) {
+static bool StartsWithKeyword(const std::string &text, const char *keyword) {
+  const std::size_t len = std::strlen(keyword);
+  if (text.size() < len) {
+    return false;
+  }
+  for (std::size_t i = 0; i < len; ++i) {
+    if (std::tolower(static_cast<unsigned char>(text[i])) != keyword[i]) {
       return false;
     }
-    for (std::size_t i = 0; i < len; ++i) {
-      if (std::tolower(static_cast<unsigned char>(text[i])) != keyword[i]) {
-        return false;
-      }
-    }
-    if (text.size() == len) {
-      return true;
-    }
-    const unsigned char next = static_cast<unsigned char>(text[len]);
-    return !std::isalnum(next) && next != '_';
-  };
-  return starts_with_keyword("omp");
+  }
+  if (text.size() == len) {
+    return true;
+  }
+  const unsigned char next = static_cast<unsigned char>(text[len]);
+  return !std::isalnum(next) && next != '_';
+}
+
+bool StartsWithOmp(const std::string &text) {
+  return StartsWithKeyword(text, "omp");
 }
 
 bool StartsWithAcc(const std::string &text) {
-  auto starts_with_keyword = [&](const char *keyword) -> bool {
-    const std::size_t len = std::strlen(keyword);
-    if (text.size() < len) {
-      return false;
-    }
-    for (std::size_t i = 0; i < len; ++i) {
-      if (std::tolower(static_cast<unsigned char>(text[i])) != keyword[i]) {
-        return false;
-      }
-    }
-    if (text.size() == len) {
-      return true;
-    }
-    const unsigned char next = static_cast<unsigned char>(text[len]);
-    return !std::isalnum(next) && next != '_';
-  };
-  return starts_with_keyword("acc");
+  return StartsWithKeyword(text, "acc");
 }
 
 bool StartsWithCuf(const std::string &text) {
-  auto starts_with_keyword = [&](const char *keyword) -> bool {
-    const std::size_t len = std::strlen(keyword);
-    if (text.size() < len) {
-      return false;
-    }
-    for (std::size_t i = 0; i < len; ++i) {
-      if (std::tolower(static_cast<unsigned char>(text[i])) != keyword[i]) {
-        return false;
-      }
-    }
-    if (text.size() == len) {
-      return true;
-    }
-    const unsigned char next = static_cast<unsigned char>(text[len]);
-    return !std::isalnum(next) && next != '_';
-  };
-  return starts_with_keyword("cuf");
+  return StartsWithKeyword(text, "cuf");
 }
 
 size_t FindFortranDirectivePayloadStart(const std::string &text) {

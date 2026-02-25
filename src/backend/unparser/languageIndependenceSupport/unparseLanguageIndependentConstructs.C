@@ -37,6 +37,20 @@ void emit_forced_newline(Unparser *unp) {
     unp->cur.insert_newline(1);
   }
 }
+
+SgVariableSymbol *unparse_omp_var_ref(UnparseLanguageIndependentConstructs &unp,
+                                      SgVarRefExp *vref, SgUnparse_Info &info) {
+  ASSERT_not_null(vref);
+  SgVariableSymbol *sym = vref->get_symbol();
+  if (vref->get_originalExpressionTree() != NULL || sym == NULL ||
+      sym->get_declaration() == NULL) {
+    SgUnparse_Info ninfo(info);
+    unp.unparseExpression(vref, ninfo);
+  } else {
+    unp.curprint(sym->get_declaration()->get_name().str());
+  }
+  return sym;
+}
 } // namespace
 
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
@@ -9629,16 +9643,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         SgUnparse_Info ninfo(info);
         unparseExpression(aref, ninfo);
       } else if (SgVarRefExp *vref = isSgVarRefExp(*p)) {
-        SgVariableSymbol *sym = vref->get_symbol();
-        if (vref->get_originalExpressionTree() != NULL || sym == NULL ||
-            sym->get_declaration() == NULL) {
-          SgUnparse_Info ninfo(info);
-          unparseExpression(vref, ninfo);
-        } else {
-          SgInitializedName *init_name = sym->get_declaration();
-          SgName tmp_name = init_name->get_name();
-          curprint(tmp_name.str());
-        }
+        SgVariableSymbol *sym = unparse_omp_var_ref(*this, vref, info);
         if (sym != NULL && is_map) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
@@ -9898,16 +9903,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         SgUnparse_Info ninfo(info);
         unparseExpression(aref, ninfo);
       } else if (SgVarRefExp *vref = isSgVarRefExp(*p)) {
-        SgVariableSymbol *sym = vref->get_symbol();
-        if (vref->get_originalExpressionTree() != NULL || sym == NULL ||
-            sym->get_declaration() == NULL) {
-          SgUnparse_Info ninfo(info);
-          unparseExpression(vref, ninfo);
-        } else {
-          SgInitializedName *init_name = sym->get_declaration();
-          SgName tmp_name = init_name->get_name();
-          curprint(tmp_name.str());
-        }
+        SgVariableSymbol *sym = unparse_omp_var_ref(*this, vref, info);
         if (sym != NULL && is_map) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
               dims[sym];
