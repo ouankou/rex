@@ -93,8 +93,8 @@
             .C test2005_103.C test2005_104.C test2005_105.C test2005_106
             .C test2005_107.C test2005_108.C test2005_109.C test2005_110
             .C rex_test2026_issue213_va_start.cpp test2005_112.C test2005_113
-            .C test2005_114.C test2005_116.C test2005_117.C test2005_118
-            .C test2005_119.C test2005_120.C test2005_121.C test2005_122
+            .C test2005_114.C.C test2005_116.C test2005_117.C test2005_118
+            .C test2005_119.C test2005_120.C test2005_121.C test2005_122.C
             .C test2005_123.C test2005_124.C test2005_125.C test2005_126
             .C test2005_127.C test2005_128.C test2005_129.C test2005_130
             .C test2005_131.C test2005_132.C test2005_133.C test2005_134
