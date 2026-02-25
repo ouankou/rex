@@ -1,0 +1,3 @@
+#pragma omp target enter data if(size>SIZE_THRESHOLD) map(to:size) map(to:c[0:size])
+#pragma omp target if(size>SIZE_THRESHOLD) map(to:a[0:size],b[0:size]) map(to:c[0:size])
+#pragma omp target exit data if(size>SIZE_THRESHOLD) map(from:c[0:size])

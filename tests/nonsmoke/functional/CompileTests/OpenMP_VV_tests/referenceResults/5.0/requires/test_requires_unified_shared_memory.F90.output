@@ -1,4 +1,3 @@
 !$omp requires unified_shared_memory
-!$omp requires unified_shared_memory
 !$omp target map(tofrom:test_var)
 !$omp end target

@@ -1,0 +1,2 @@
+#pragma omp target data map(tofrom:array[0:N]) device(dev)
+#pragma omp target map(alloc:array[0:N]) device(dev)

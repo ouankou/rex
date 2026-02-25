@@ -1,0 +1,8 @@
+#pragma omp target data map(h_array_h[0:N]) map(h_array_s[0:N])
+#pragma omp target map(ptr_h_array_h[0:N],ptr_h_array_s[0:N])
+#pragma omp target map(ptr_h_array_h[:0],ptr_h_array_s[:0])
+#pragma omp target
+#pragma omp target map(ptr_h_array_h[0:N],ptr_h_array_s[0:N])
+#pragma omp target map(ptr_h_array_h[:0],ptr_h_array_s[:0])
+#pragma omp target
+#pragma omp target data map(h_array_h[0:N]) map(h_array_s[0:N])

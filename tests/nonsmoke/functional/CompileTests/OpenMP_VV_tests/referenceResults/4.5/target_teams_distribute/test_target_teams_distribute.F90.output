@@ -1,0 +1,1 @@
+!$omp target teams distribute map(tofrom:a(1:N),num_teams(1:N)) map(to:b(1:N))

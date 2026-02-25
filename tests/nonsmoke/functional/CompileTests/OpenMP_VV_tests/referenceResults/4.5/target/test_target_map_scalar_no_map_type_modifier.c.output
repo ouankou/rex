@@ -1,0 +1,2 @@
+#pragma omp target map(from:compute_array) map(asclr)
+#pragma omp target map(new_scalar)

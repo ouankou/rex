@@ -1,0 +1,20 @@
+!$omp target data map(to:a(1:N),b(1:N)) map(alloc:c(1:N)) map(from:d(1:N))
+!$omp target teams distribute nowait depend(out:c) map(alloc:a(1:N),b(1:N),c(1:N))
+!$omp target teams distribute nowait depend(out:c) map(alloc:b(1:N),c(1:N),d(1:N))
+!$omp taskwait
+!$omp end target data
+!$omp target data map(to:a(1:N),b(1:N)) map(alloc:c(1:N)) map(from:d(1:N))
+!$omp target teams distribute nowait depend(out:c) map(alloc:a(1:N),b(1:N),c(1:N))
+!$omp target teams distribute nowait depend(inout:c) map(alloc:a(1:N),c(1:N),d(1:N))
+!$omp taskwait
+!$omp end target data
+!$omp target data map(to:a(1:N),b(1:N)) map(alloc:c(1:N)) map(from:d(1:N))
+!$omp target teams distribute nowait depend(inout:c) map(alloc:a(1:N),b(1:N),c(1:N))
+!$omp target teams distribute nowait depend(out:c) map(alloc:b(1:N),c(1:N),d(1:N))
+!$omp taskwait
+!$omp end target data
+!$omp target data map(to:a(1:N),b(1:N)) map(alloc:c(1:N)) map(from:d(1:N))
+!$omp target teams distribute nowait depend(inout:c) map(alloc:a(1:N),b(1:N),c(1:N))
+!$omp target teams distribute nowait depend(inout:c) map(alloc:a(1:N),c(1:N),d(1:N))
+!$omp taskwait
+!$omp end target data

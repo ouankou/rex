@@ -1,0 +1,3 @@
+#pragma omp target enter data map(to:a[dev][0:ARRAY_SIZE],b[0:ARRAY_SIZE],num_teams[dev:1]) device(dev)
+#pragma omp target teams distribute map(alloc:a[dev][0:ARRAY_SIZE],b[0:ARRAY_SIZE],num_teams[dev:1]) device(dev)
+#pragma omp target exit data map(from:a[dev][0:ARRAY_SIZE],num_teams[dev:1]) map(delete:b[0:ARRAY_SIZE]) device(dev)

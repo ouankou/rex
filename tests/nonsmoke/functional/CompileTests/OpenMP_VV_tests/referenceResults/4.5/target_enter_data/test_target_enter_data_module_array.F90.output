@@ -1,0 +1,20 @@
+!$omp target enter data map(to:array_1d) map(to:array_2d,array_3d)
+!$omp target map(from:mod_helper_array_1d) map(from:mod_helper_array_2d,mod_helper_array_3d)
+!$omp end target
+!$omp target exit data map(delete:array_1d,array_2d) map(delete:array_3d)
+!$omp target enter data map(alloc:array_1d) map(alloc:array_2d,array_3d)
+!$omp target
+!$omp end target
+!$omp target map(from:mod_helper_array_1d) map(from:mod_helper_array_2d,mod_helper_array_3d)
+!$omp end target
+!$omp target exit data map(delete:array_1d,array_2d) map(delete:array_3d)
+!$omp target enter data map(to:array_1d) map(to:array_2d,array_3d)
+!$omp target map(from:helper_array_1d) map(from:helper_array_2d,helper_array_3d)
+!$omp end target
+!$omp target exit data map(delete:array_1d,array_2d) map(delete:array_3d)
+!$omp target enter data map(alloc:array_1d) map(alloc:array_2d,array_3d)
+!$omp target
+!$omp end target
+!$omp target map(from:helper_array_1d) map(from:helper_array_2d,helper_array_3d)
+!$omp end target
+!$omp target exit data map(delete:array_1d,array_2d) map(delete:array_3d)

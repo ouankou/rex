@@ -1,0 +1,1 @@
+#pragma omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(from:num_threads[0:OMPVV_NUM_THREADS_DEVICE])

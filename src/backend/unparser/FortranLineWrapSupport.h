@@ -11,6 +11,7 @@ bool startsWithCaseInsensitive(const std::string &text, size_t pos,
                                const char *token);
 bool isCommentLine(const std::string &text);
 bool isDirectiveChunk(const std::string &text, int used_cols);
+int clampUsableColumnsToConfiguredWrap(int usable_cols, int configured_wrap);
 
 } // namespace FortranLineWrapSupport
 } // namespace Rose

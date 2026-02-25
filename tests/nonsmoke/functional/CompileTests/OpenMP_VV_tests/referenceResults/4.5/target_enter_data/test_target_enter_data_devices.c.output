@@ -1,0 +1,8 @@
+#pragma omp target enter data map(alloc:h_matrix[dev][0:N])
+#pragma omp target map(alloc:h_matrix[dev][0:N]) map(tofrom:isHost[dev:1])
+#pragma omp target map(from:h_matrix_copy[dev][0:N]) map(alloc:h_matrix[dev][0:N])
+#pragma omp target exit data map(delete:h_matrix[dev][0:N]) device(dev)
+#pragma omp target enter data map(alloc:h_matrix[dev][0:N]) device(dev)
+#pragma omp target map(alloc:h_matrix[dev][0:N]) map(tofrom:isHost[dev:1]) device(dev)
+#pragma omp target map(from:h_matrix_copy[dev][0:N]) map(alloc:h_matrix[dev][0:N]) device(dev)
+#pragma omp target exit data map(delete:h_matrix[dev][0:N]) device(dev)

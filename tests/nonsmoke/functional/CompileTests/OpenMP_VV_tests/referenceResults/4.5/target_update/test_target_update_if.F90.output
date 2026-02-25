@@ -1,0 +1,7 @@
+!$omp target data map(to:a,b) map(tofrom:c)
+!$omp target
+!$omp end target
+!$omp end target data
+!$omp target update if(change_flag) to(b(:N))
+!$omp target
+!$omp end target

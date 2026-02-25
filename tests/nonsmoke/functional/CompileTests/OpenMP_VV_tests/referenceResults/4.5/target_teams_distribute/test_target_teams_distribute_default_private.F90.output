@@ -1,0 +1,1 @@
+!$omp target teams distribute default(private) shared(a,b,c,d) num_teams(OMPVV_NUM_TEAMS_DEVICE)

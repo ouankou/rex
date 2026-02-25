@@ -1,0 +1,4 @@
+#pragma omp target data map(from:h_matrix[dev*N:N])
+#pragma omp target map(alloc:h_matrix[dev*N:N])
+#pragma omp target data map(from:h_matrix[dev*N:N]) device(dev)
+#pragma omp target map(alloc:h_matrix[dev*N:N]) device(dev)

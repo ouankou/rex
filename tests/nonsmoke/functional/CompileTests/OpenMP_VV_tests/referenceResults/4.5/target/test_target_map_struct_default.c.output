@@ -1,0 +1,2 @@
+#pragma omp target
+#pragma omp target

@@ -1,0 +1,2 @@
+#pragma omp target data map(alloc:h_array_h[0:N])
+#pragma omp target is_device_ptr(d_sum)

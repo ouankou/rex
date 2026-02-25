@@ -15,8 +15,10 @@
 #include "FlangModuleInfo.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -969,31 +971,33 @@ SourcePosition ChooseCommentAnchor(const std::optional<SourcePosition> &begin,
   return end;
 }
 
-bool StartsWithOmp(const std::string &text) {
-  if (text.size() < 3) {
+static bool StartsWithKeyword(const std::string &text, const char *keyword) {
+  const std::size_t len = std::strlen(keyword);
+  if (text.size() < len) {
     return false;
   }
-  return std::tolower(static_cast<unsigned char>(text[0])) == 'o' &&
-         std::tolower(static_cast<unsigned char>(text[1])) == 'm' &&
-         std::tolower(static_cast<unsigned char>(text[2])) == 'p';
+  for (std::size_t i = 0; i < len; ++i) {
+    if (std::tolower(static_cast<unsigned char>(text[i])) != keyword[i]) {
+      return false;
+    }
+  }
+  if (text.size() == len) {
+    return true;
+  }
+  const unsigned char next = static_cast<unsigned char>(text[len]);
+  return !std::isalnum(next) && next != '_';
+}
+
+bool StartsWithOmp(const std::string &text) {
+  return StartsWithKeyword(text, "omp");
 }
 
 bool StartsWithAcc(const std::string &text) {
-  if (text.size() < 3) {
-    return false;
-  }
-  return std::tolower(static_cast<unsigned char>(text[0])) == 'a' &&
-         std::tolower(static_cast<unsigned char>(text[1])) == 'c' &&
-         std::tolower(static_cast<unsigned char>(text[2])) == 'c';
+  return StartsWithKeyword(text, "acc");
 }
 
 bool StartsWithCuf(const std::string &text) {
-  if (text.size() < 3) {
-    return false;
-  }
-  return std::tolower(static_cast<unsigned char>(text[0])) == 'c' &&
-         std::tolower(static_cast<unsigned char>(text[1])) == 'u' &&
-         std::tolower(static_cast<unsigned char>(text[2])) == 'f';
+  return StartsWithKeyword(text, "cuf");
 }
 
 size_t FindFortranDirectivePayloadStart(const std::string &text) {
@@ -1141,6 +1145,26 @@ struct OmpPragmaLine {
   std::string text;
 };
 
+static const char *const kFortranOmpSourceTextAttributeName =
+    "fortran_omp_source_text";
+
+void AttachFortranDirectiveSourceText(SgPragmaDeclaration *pragma,
+                                      const std::string &text) {
+  if (pragma == nullptr) {
+    return;
+  }
+
+  if (AstValueAttribute<std::string> *attr =
+          dynamic_cast<AstValueAttribute<std::string> *>(
+              pragma->getAttribute(kFortranOmpSourceTextAttributeName))) {
+    attr->set(text);
+    return;
+  }
+
+  pragma->addNewAttribute(kFortranOmpSourceTextAttributeName,
+                          new AstValueAttribute<std::string>(text));
+}
+
 std::vector<OmpPragmaLine>
 CollectOmpPragmaLines(const std::string &directive,
                       const SourcePosition &startPos) {
@@ -1201,6 +1225,7 @@ void AppendPragmasFromCharBlock(const Fortran::parser::CharBlock &source) {
     SgPragmaDeclaration *pragma =
         SageBuilder::buildPragmaDeclaration(pragma_text, scope);
     ASSERT_not_null(pragma);
+    AttachFortranDirectiveSourceText(pragma, pragma_text);
     SageInterface::setSourcePosition(pragma);
     SageInterface::appendStatement(pragma, scope);
     return;
@@ -1211,6 +1236,7 @@ void AppendPragmasFromCharBlock(const Fortran::parser::CharBlock &source) {
     SgPragmaDeclaration *pragma =
         SageBuilder::buildPragmaDeclaration(line_info.text, scope);
     ASSERT_not_null(pragma);
+    AttachFortranDirectiveSourceText(pragma, line_info.text);
     SourcePosition line_start_pos{startPos.path, line_info.line,
                                   line_info.column};
     SourcePosition line_end_pos{startPos.path, line_info.line,
@@ -1245,11 +1271,19 @@ bool ScopeHasPragmaAtSource(SgScopeStatement *scope,
 }
 
 using SourcePragmaLineIndex = std::unordered_map<int, std::set<std::string>>;
+using SourcePragmaNodeIndex =
+    std::unordered_map<int, std::vector<SgPragmaDeclaration *>>;
 
-SourcePragmaLineIndex BuildSourcePragmaLineIndex(const SgSourceFile *source) {
+struct SourcePragmaIndices {
+  SourcePragmaLineIndex line_index;
+  SourcePragmaNodeIndex node_index;
+};
+
+SourcePragmaIndices BuildSourcePragmaIndices(const SgSourceFile *source) {
   SourcePragmaLineIndex pragma_line_index;
+  SourcePragmaNodeIndex pragma_node_index;
   if (source == nullptr) {
-    return pragma_line_index;
+    return SourcePragmaIndices{pragma_line_index, pragma_node_index};
   }
 
   std::vector<SgNode *> pragmas = NodeQuery::querySubTree(
@@ -1266,8 +1300,9 @@ SourcePragmaLineIndex BuildSourcePragmaLineIndex(const SgSourceFile *source) {
     const std::string pragma_path =
         NormalizeSourcePath(info->get_filenameString());
     pragma_line_index[info->get_line()].insert(pragma_path);
+    pragma_node_index[info->get_line()].push_back(pragmaStmt);
   }
-  return pragma_line_index;
+  return SourcePragmaIndices{pragma_line_index, pragma_node_index};
 }
 
 bool SourceHasPragmaAtSource(const SourcePragmaLineIndex &pragma_line_index,
@@ -1293,6 +1328,36 @@ void RecordSourcePragmaAtSource(SourcePragmaLineIndex &pragma_line_index,
     return;
   }
   pragma_line_index[startPos.line].insert(NormalizeSourcePath(startPos.path));
+}
+
+SgPragmaDeclaration *
+FindSourcePragmaAtSource(const SourcePragmaNodeIndex &pragma_node_index,
+                         const SourcePosition &startPos) {
+  if (startPos.line <= 0) {
+    return nullptr;
+  }
+  const auto pragma_it = pragma_node_index.find(startPos.line);
+  if (pragma_it == pragma_node_index.end()) {
+    return nullptr;
+  }
+
+  const std::string normalized_target_path = NormalizeSourcePath(startPos.path);
+  for (SgPragmaDeclaration *pragmaStmt : pragma_it->second) {
+    if (pragmaStmt == nullptr) {
+      continue;
+    }
+    Sg_File_Info *info = pragmaStmt->get_file_info();
+    if (info == nullptr || info->get_line() != startPos.line) {
+      continue;
+    }
+    const std::string pragma_path =
+        NormalizeSourcePath(info->get_filenameString());
+    if (normalized_target_path.empty() || pragma_path.empty() ||
+        pragma_path == normalized_target_path) {
+      return pragmaStmt;
+    }
+  }
+  return nullptr;
 }
 
 bool IsStructuredDirectiveEnd(const std::string &directiveText) {
@@ -1351,32 +1416,106 @@ SgStatement *FindDirectiveInsertionTarget(SgScopeStatement *scope,
   }
 
   const std::string target_path = NormalizeSourcePath(anchor.path);
+  std::string source_path;
+  if (source != nullptr) {
+    source_path = NormalizeSourcePath(source->get_sourceFileNameWithPath());
+    if (source_path.empty()) {
+      source_path = NormalizeSourcePath(source->getFileName());
+    }
+  }
   SgStatement *best_stmt = nullptr;
   int best_line = std::numeric_limits<int>::max();
   int best_col = std::numeric_limits<int>::max();
 
+  auto extract_stmt_anchor = [&](SgStatement *stmt, int &stmt_line,
+                                 int &stmt_col) -> bool {
+    if (stmt == nullptr) {
+      return false;
+    }
+
+    const std::array<const Sg_File_Info *, 3> infos = {
+        stmt->get_startOfConstruct(), stmt->get_file_info(),
+        stmt->get_endOfConstruct()};
+    int best_match_line = std::numeric_limits<int>::max();
+    int best_match_col = std::numeric_limits<int>::max();
+    int best_fallback_line = std::numeric_limits<int>::max();
+    int best_fallback_col = std::numeric_limits<int>::max();
+    for (const Sg_File_Info *info : infos) {
+      if (info == nullptr || info->get_line() <= 0) {
+        continue;
+      }
+
+      const int line = info->get_line();
+      const int col = info->get_col();
+      if (line < best_fallback_line ||
+          (line == best_fallback_line && col < best_fallback_col)) {
+        best_fallback_line = line;
+        best_fallback_col = col;
+      }
+
+      bool matches_source = info->isSameFile(source);
+      const std::string stmt_path =
+          NormalizeSourcePath(info->get_filenameString());
+      if (!target_path.empty()) {
+        if (!stmt_path.empty()) {
+          matches_source = (stmt_path == target_path);
+        }
+      } else if (!source_path.empty() && !stmt_path.empty()) {
+        matches_source = (stmt_path == source_path);
+      } else if (stmt_path.empty()) {
+        matches_source = true;
+      }
+
+      if (!matches_source) {
+        continue;
+      }
+
+      if (line < best_match_line ||
+          (line == best_match_line && col < best_match_col)) {
+        best_match_line = line;
+        best_match_col = col;
+      }
+    }
+
+    if (best_match_line != std::numeric_limits<int>::max()) {
+      stmt_line = best_match_line;
+      stmt_col = best_match_col;
+      return true;
+    }
+    if (best_fallback_line != std::numeric_limits<int>::max()) {
+      stmt_line = best_fallback_line;
+      stmt_col = best_fallback_col;
+      return true;
+    }
+    return false;
+  };
+
   const SgStatementPtrList &stmts = scope->generateStatementList();
   for (SgStatement *stmt : stmts) {
-    if (!CanInsertDirectiveBefore(stmt)) {
+    SgStatement *insertion_stmt = stmt;
+    SgNode *parent = insertion_stmt != nullptr ? insertion_stmt->get_parent()
+                                               : static_cast<SgNode *>(nullptr);
+    while (parent != nullptr && parent != scope) {
+      SgStatement *parent_stmt = isSgStatement(parent);
+      if (parent_stmt == nullptr) {
+        insertion_stmt = nullptr;
+        break;
+      }
+      insertion_stmt = parent_stmt;
+      parent = insertion_stmt->get_parent();
+    }
+    if (insertion_stmt == nullptr || parent != scope) {
+      continue;
+    }
+    if (!CanInsertDirectiveBefore(insertion_stmt)) {
       continue;
     }
 
-    Sg_File_Info *info = stmt->get_file_info();
-    if (info == nullptr || info->get_line() <= 0) {
+    int stmt_line = 0;
+    int stmt_col = 0;
+    if (!extract_stmt_anchor(insertion_stmt, stmt_line, stmt_col)) {
       continue;
     }
-    if (info->isSameFile(source) == false) {
-      continue;
-    }
-
-    const std::string stmt_path =
-        NormalizeSourcePath(info->get_filenameString());
-    if (!target_path.empty() && !stmt_path.empty() &&
-        stmt_path != target_path) {
-      continue;
-    }
-
-    const int stmt_line = info->get_line();
     if (strictAfter) {
       if (stmt_line <= anchor.line) {
         continue;
@@ -1387,10 +1526,9 @@ SgStatement *FindDirectiveInsertionTarget(SgScopeStatement *scope,
       }
     }
 
-    const int stmt_col = info->get_col();
     if (stmt_line < best_line ||
         (stmt_line == best_line && stmt_col < best_col)) {
-      best_stmt = stmt;
+      best_stmt = insertion_stmt;
       best_line = stmt_line;
       best_col = stmt_col;
     }
@@ -1399,9 +1537,202 @@ SgStatement *FindDirectiveInsertionTarget(SgScopeStatement *scope,
   return best_stmt;
 }
 
+bool DirectiveLikelyRequiresLoopBody(const std::string &directive_text) {
+  std::string lowered = ToLowerCopy(directive_text);
+  TrimLeft(lowered);
+  if (lowered.find("omp ", 0) == 0 || lowered.find("acc ", 0) == 0 ||
+      lowered.find("cuf ", 0) == 0) {
+    lowered.erase(0, 4);
+    TrimLeft(lowered);
+  }
+
+  return lowered.find("distribute") != std::string::npos ||
+         lowered.find(" loop") != std::string::npos ||
+         lowered.find(" simd") != std::string::npos ||
+         lowered.find(" do") != std::string::npos ||
+         lowered.find(" for") != std::string::npos ||
+         lowered.find("do ") == 0 || lowered.find("for ") == 0 ||
+         lowered.find("loop ") == 0 || lowered.find("simd ") == 0;
+}
+
+bool IsLoopBodyStatementCandidate(SgStatement *stmt) {
+  if (stmt == nullptr) {
+    return false;
+  }
+
+  if (isSgFortranDo(stmt) != nullptr || isSgForStatement(stmt) != nullptr ||
+      isSgWhileStmt(stmt) != nullptr || isSgDoWhileStmt(stmt) != nullptr) {
+    return true;
+  }
+
+  // Flang models DO CONCURRENT with SgForAllStatement carrying an explicit
+  // statement-kind discriminator.
+  if (SgForAllStatement *forall_stmt = isSgForAllStatement(stmt)) {
+    return forall_stmt->get_forall_statement_kind() ==
+           SgForAllStatement::e_do_concurrent_statement;
+  }
+
+  return false;
+}
+
+SgStatement *FindNearestLoopInsertionTarget(SgScopeStatement *scope,
+                                            SgSourceFile *source,
+                                            const SourcePosition &anchor) {
+  if (scope == nullptr || source == nullptr || anchor.line <= 0) {
+    return nullptr;
+  }
+
+  const std::string target_path = NormalizeSourcePath(anchor.path);
+  std::string source_path =
+      NormalizeSourcePath(source->get_sourceFileNameWithPath());
+  if (source_path.empty()) {
+    source_path = NormalizeSourcePath(source->getFileName());
+  }
+
+  auto extract_stmt_line = [&](SgStatement *stmt, int &stmt_line) -> bool {
+    if (stmt == nullptr) {
+      return false;
+    }
+
+    const std::array<const Sg_File_Info *, 3> infos = {
+        stmt->get_startOfConstruct(), stmt->get_file_info(),
+        stmt->get_endOfConstruct()};
+    int best_match_line = std::numeric_limits<int>::max();
+    int best_fallback_line = std::numeric_limits<int>::max();
+    for (const Sg_File_Info *info : infos) {
+      if (info == nullptr || info->get_line() <= 0) {
+        continue;
+      }
+
+      if (info->get_line() < best_fallback_line) {
+        best_fallback_line = info->get_line();
+      }
+
+      bool matches_source = info->isSameFile(source);
+      const std::string stmt_path =
+          NormalizeSourcePath(info->get_filenameString());
+      if (!target_path.empty()) {
+        if (!stmt_path.empty()) {
+          matches_source = (stmt_path == target_path);
+        }
+      } else if (!source_path.empty() && !stmt_path.empty()) {
+        matches_source = (stmt_path == source_path);
+      } else if (stmt_path.empty()) {
+        matches_source = true;
+      }
+
+      if (!matches_source) {
+        continue;
+      }
+
+      if (info->get_line() < best_match_line) {
+        best_match_line = info->get_line();
+      }
+    }
+
+    if (best_match_line != std::numeric_limits<int>::max()) {
+      stmt_line = best_match_line;
+      return true;
+    }
+    if (best_fallback_line != std::numeric_limits<int>::max()) {
+      stmt_line = best_fallback_line;
+      return true;
+    }
+    return false;
+  };
+
+  SgStatement *best_after = nullptr;
+  int best_after_line = std::numeric_limits<int>::max();
+  SgStatement *best_before = nullptr;
+  int best_before_line = std::numeric_limits<int>::min();
+
+  const SgStatementPtrList &stmts = scope->generateStatementList();
+  for (SgStatement *stmt : stmts) {
+    SgStatement *candidate = stmt;
+    SgNode *parent = candidate != nullptr ? candidate->get_parent()
+                                          : static_cast<SgNode *>(nullptr);
+    while (parent != nullptr && parent != scope) {
+      SgStatement *parent_stmt = isSgStatement(parent);
+      if (parent_stmt == nullptr) {
+        candidate = nullptr;
+        break;
+      }
+      candidate = parent_stmt;
+      parent = candidate->get_parent();
+    }
+    if (candidate == nullptr || parent != scope) {
+      continue;
+    }
+    if (!CanInsertDirectiveBefore(candidate) ||
+        !IsLoopBodyStatementCandidate(candidate)) {
+      continue;
+    }
+
+    int stmt_line = 0;
+    if (!extract_stmt_line(candidate, stmt_line)) {
+      continue;
+    }
+
+    if (stmt_line >= anchor.line) {
+      if (stmt_line < best_after_line) {
+        best_after_line = stmt_line;
+        best_after = candidate;
+      }
+    } else {
+      if (stmt_line > best_before_line) {
+        best_before_line = stmt_line;
+        best_before = candidate;
+      }
+    }
+  }
+
+  if (best_after != nullptr) {
+    return best_after;
+  }
+  return best_before;
+}
+
+SgStatement *FindNearestPrecedingLoopInScope(SgScopeStatement *scope,
+                                             SgStatement *target) {
+  if (scope == nullptr || target == nullptr) {
+    return nullptr;
+  }
+
+  SgStatement *best = nullptr;
+  const SgStatementPtrList &stmts = scope->generateStatementList();
+  for (SgStatement *stmt : stmts) {
+    if (stmt == target) {
+      break;
+    }
+    if (!CanInsertDirectiveBefore(stmt) ||
+        !IsLoopBodyStatementCandidate(stmt)) {
+      continue;
+    }
+    best = stmt;
+  }
+  return best;
+}
+
 bool EndsWithContinuationAmpersand(const std::string &line) {
   size_t end = line.find_last_not_of(" \t\r");
   return end != std::string::npos && line[end] == '&';
+}
+
+bool EndsWithIdentifierBeforeContinuationAmpersand(const std::string &line) {
+  size_t end = line.find_last_not_of(" \t\r");
+  if (end == std::string::npos || line[end] != '&') {
+    return false;
+  }
+
+  while (end > 0 && std::isspace(static_cast<unsigned char>(line[end - 1]))) {
+    --end;
+  }
+  if (end == 0) {
+    return false;
+  }
+
+  const unsigned char before = static_cast<unsigned char>(line[end - 1]);
+  return std::isalnum(before) || before == '_';
 }
 
 std::string StripTrailingContinuationAmpersand(std::string text) {
@@ -1575,6 +1906,8 @@ CollectRawFortranDirectivesFromSource(const SgSourceFile *source) {
     SourcePosition end = current_line.end;
 
     bool continued = EndsWithContinuationAmpersand(current);
+    bool join_without_space =
+        EndsWithIdentifierBeforeContinuationAmpersand(current);
     std::string combined = normalized;
     while (continued && (i + 1) < lines.size()) {
       const RecoveredSourceLine &next_line = lines[i + 1];
@@ -1599,12 +1932,13 @@ CollectRawFortranDirectivesFromSource(const SgSourceFile *source) {
       continuation = StripDirectivePrefixForContinuation(continuation);
       continuation = StripTrailingContinuationAmpersand(continuation);
       if (!continuation.empty()) {
-        if (!combined.empty()) {
+        if (!combined.empty() && !join_without_space) {
           combined += " ";
         }
         combined += continuation;
       }
       continued = EndsWithContinuationAmpersand(next);
+      join_without_space = EndsWithIdentifierBeforeContinuationAmpersand(next);
     }
 
     if (!combined.empty()) {
@@ -1619,6 +1953,10 @@ SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
   if (source == nullptr || source->get_globalScope() == nullptr) {
     return nullptr;
   }
+
+  auto has_valid_line_info = [&](const Sg_File_Info *info) -> bool {
+    return info != nullptr && info->isSameFile(source) && info->get_line() > 0;
+  };
 
   SgScopeStatement *best_scope = source->get_globalScope();
   int best_span = std::numeric_limits<int>::max();
@@ -1636,42 +1974,67 @@ SgScopeStatement *FindInnermostScopeForLine(SgSourceFile *source, int line) {
         isSgFunctionDefinition(scope) == nullptr) {
       continue;
     }
-    Sg_File_Info *start = scope->get_file_info();
-    Sg_File_Info *end = scope->get_endOfConstruct();
-    if (start == nullptr || end == nullptr) {
-      continue;
-    }
-    if (start->isSameFile(source) == false) {
-      continue;
-    }
-    if (start->get_line() <= 0 || end->get_line() <= 0) {
-      continue;
-    }
-    int start_line = start->get_line();
-    const int end_line = end->get_line();
 
-    // A Fortran basic block can start after leading directives/comments that
-    // are semantically attached to its owning construct. Expand the block's
-    // effective start line to include its owner so directive recovery can place
-    // pragmas inside the intended nested region.
+    // Inline Fortran IF statements ("IF (c) stmt") use a synthetic basic block
+    // for the single-statement body. These are not valid anchors for recovered
+    // directive placement and can capture unrelated later directives.
     if (SgBasicBlock *body = isSgBasicBlock(scope)) {
-      const Sg_File_Info *owner_start = nullptr;
-      if (SgFunctionDefinition *def =
-              isSgFunctionDefinition(body->get_parent())) {
-        owner_start = def->get_startOfConstruct();
-        if (owner_start == nullptr) {
-          owner_start = def->get_file_info();
-        }
-      } else if (SgStatement *owner_stmt = isSgStatement(body->get_parent())) {
-        owner_start = owner_stmt->get_startOfConstruct();
-        if (owner_start == nullptr) {
-          owner_start = owner_stmt->get_file_info();
+      if (SgIfStmt *if_parent = isSgIfStmt(body->get_parent())) {
+        if (!if_parent->get_use_then_keyword() &&
+            !if_parent->get_has_end_statement()) {
+          continue;
         }
       }
-      if (owner_start != nullptr && owner_start->isSameFile(source) &&
-          owner_start->get_line() > 0) {
-        start_line = std::min(start_line, owner_start->get_line());
+    }
+
+    const Sg_File_Info *start = scope->get_file_info();
+    const Sg_File_Info *end = scope->get_endOfConstruct();
+
+    SgStatement *owner_stmt = isSgStatement(scope->get_parent());
+    const Sg_File_Info *owner_start = nullptr;
+    const Sg_File_Info *owner_end = nullptr;
+    if (owner_stmt != nullptr) {
+      owner_start = owner_stmt->get_startOfConstruct();
+      if (owner_start == nullptr) {
+        owner_start = owner_stmt->get_file_info();
       }
+      owner_end = owner_stmt->get_endOfConstruct();
+      if (owner_end == nullptr) {
+        owner_end = owner_stmt->get_file_info();
+      }
+    }
+
+    // Do/if/etc. basic-block scopes conceptually begin after the owning
+    // statement line. Avoid assigning directives from the owner line (or
+    // earlier) to the inner block.
+    if (isSgBasicBlock(scope) != nullptr && owner_stmt != nullptr &&
+        isSgFunctionDefinition(owner_stmt) == nullptr &&
+        has_valid_line_info(owner_start) && line <= owner_start->get_line()) {
+      continue;
+    }
+
+    // Some nested Fortran scopes (notably loop/while bodies) do not carry
+    // reliable line info on the scope node itself. Recover from the owning
+    // statement so directives are inserted in the true lexical region.
+    if (!has_valid_line_info(start) || !has_valid_line_info(end)) {
+      if (owner_stmt != nullptr) {
+        if (!has_valid_line_info(start) && has_valid_line_info(owner_start)) {
+          start = owner_start;
+        }
+        if (!has_valid_line_info(end) && has_valid_line_info(owner_end)) {
+          end = owner_end;
+        }
+      }
+    }
+
+    if (!has_valid_line_info(start) || !has_valid_line_info(end)) {
+      continue;
+    }
+
+    int start_line = start->get_line();
+    int end_line = end->get_line();
+    if (end_line < start_line) {
+      std::swap(start_line, end_line);
     }
 
     if (line < start_line || line > end_line) {
@@ -1698,9 +2061,24 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
     return;
   }
 
-  SourcePragmaLineIndex pragma_line_index = BuildSourcePragmaLineIndex(source);
+  SourcePragmaIndices pragma_indices = BuildSourcePragmaIndices(source);
+  SourcePragmaLineIndex &pragma_line_index = pragma_indices.line_index;
+  SourcePragmaNodeIndex &pragma_node_index = pragma_indices.node_index;
+  std::unordered_map<SgStatement *, bool> targets_with_inserted_pragmas;
 
   for (const RawFortranDirective &directive : directives) {
+    if (SgPragmaDeclaration *existing =
+            FindSourcePragmaAtSource(pragma_node_index, directive.start)) {
+      if (SgPragma *pragma = existing->get_pragma()) {
+        if (pragma->get_pragma() != directive.text) {
+          SageInterface::setPragma(existing,
+                                   SageBuilder::buildPragma(directive.text));
+        }
+      }
+      RecordSourcePragmaAtSource(pragma_line_index, directive.start);
+      continue;
+    }
+
     if (SourceHasPragmaAtSource(pragma_line_index, directive.start)) {
       continue;
     }
@@ -1750,14 +2128,33 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
         NormalizeDirectiveInsertionScope(scope, source);
     SgStatement *target = FindDirectiveInsertionTarget(
         insertion_scope, source, anchor_pos, strict_after);
-    if (target != nullptr) {
-      if (SgScopeStatement *target_scope =
-              isSgScopeStatement(target->get_parent())) {
-        insertion_scope =
-            NormalizeDirectiveInsertionScope(target_scope, source);
-      } else {
-        target = nullptr;
+
+    const bool has_prior_for_target =
+        target != nullptr && targets_with_inserted_pragmas.find(target) !=
+                                 targets_with_inserted_pragmas.end();
+    if (!strict_after && DirectiveLikelyRequiresLoopBody(directive.text) &&
+        (target == nullptr || !IsLoopBodyStatementCandidate(target)) &&
+        !has_prior_for_target) {
+      SgStatement *loop_target = nullptr;
+      if (target != nullptr) {
+        loop_target = FindNearestPrecedingLoopInScope(insertion_scope, target);
       }
+      if (loop_target == nullptr) {
+        loop_target =
+            FindNearestLoopInsertionTarget(insertion_scope, source, anchor_pos);
+      }
+      if (loop_target != nullptr) {
+        target = loop_target;
+      }
+    }
+
+    if (target != nullptr &&
+        isSgScopeStatement(target->get_parent()) == nullptr) {
+      target = nullptr;
+    }
+    if (target != nullptr) {
+      insertion_scope = NormalizeDirectiveInsertionScope(
+          isSgScopeStatement(target->get_parent()), source);
     }
     if (insertion_scope == nullptr) {
       insertion_scope = source->get_globalScope();
@@ -1766,14 +2163,17 @@ void InjectFortranDirectivePragmasFromSource(SgSourceFile *source) {
     SgPragmaDeclaration *pragma =
         SageBuilder::buildPragmaDeclaration(directive.text, insertion_scope);
     ASSERT_not_null(pragma);
+    AttachFortranDirectiveSourceText(pragma, directive.text);
     builder.setSourcePosition(pragma, directive.start, directive.end);
 
     if (target != nullptr) {
       SageInterface::insertStatementBefore(target, pragma);
+      targets_with_inserted_pragmas[target] = true;
     } else {
       SageInterface::appendStatement(pragma, insertion_scope);
     }
     RecordSourcePragmaAtSource(pragma_line_index, directive.start);
+    pragma_node_index[directive.start.line].push_back(pragma);
   }
 }
 
@@ -1804,6 +2204,7 @@ void AppendPragmasFromCharBlockIfMissing(
       SgPragmaDeclaration *pragma =
           SageBuilder::buildPragmaDeclaration(line_info.text, scope);
       ASSERT_not_null(pragma);
+      AttachFortranDirectiveSourceText(pragma, line_info.text);
       SourcePosition line_start_pos{startPos.path, line_info.line,
                                     line_info.column};
       SourcePosition line_end_pos{startPos.path, line_info.line,

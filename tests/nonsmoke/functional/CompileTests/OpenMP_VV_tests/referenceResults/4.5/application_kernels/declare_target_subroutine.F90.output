@@ -1,0 +1,3 @@
+!$omp target map(tofrom:sum) map(to:a)
+!$omp end target
+!$omp declare target

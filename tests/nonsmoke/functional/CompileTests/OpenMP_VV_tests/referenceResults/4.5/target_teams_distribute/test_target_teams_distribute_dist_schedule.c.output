@@ -1,0 +1,2 @@
+#pragma omp target teams distribute map(from:num_teams) map(tofrom:a[0:N]) dist_schedule(static,CHUNK_SIZE)
+#pragma omp target teams distribute map(from:num_teams) map(tofrom:b[0:N]) dist_schedule(static)

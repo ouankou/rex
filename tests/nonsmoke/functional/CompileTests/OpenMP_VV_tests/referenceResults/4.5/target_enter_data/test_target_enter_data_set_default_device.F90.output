@@ -1,0 +1,6 @@
+!$omp target enter data map(to:anArray(1:N))
+!$omp target map(alloc:anArray(1:N))
+!$omp end target
+!$omp target map(from:anotherArray(1:N))
+!$omp end target
+!$omp target exit data map(delete:anArray(1:N)) device(dev_data)

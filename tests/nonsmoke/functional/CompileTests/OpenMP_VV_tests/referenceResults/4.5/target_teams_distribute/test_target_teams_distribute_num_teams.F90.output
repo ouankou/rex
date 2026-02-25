@@ -1,0 +1,2 @@
+!$omp target teams distribute map(tofrom:default_num_teams,c(1:N)) map(to:a(1:N),b(1:N))
+!$omp target teams distribute num_teams(default_num_teams/2) map(to:a(1:N),b(1:N)) map(from:c(1:N),num_team(1:N))

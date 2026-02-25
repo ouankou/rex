@@ -1,0 +1,7 @@
+!$omp target teams distribute defaultmap(tofrom:scalar) map(tofrom:byte_array(1:N),short_array(1:N),int_array(1:N),long_int_array(1:N),float_array(1:N),double_array(1:N),logical_array(1:N),logical_kind4_array(1:N),logical_kind8_array(1:N),complex_array(1:N))
+!$omp end target teams distribute
+!$omp target teams distribute defaultmap(tofrom:scalar)
+!$omp end target teams distribute
+!$omp target teams distribute map(tofrom:byte_array_a(1:N),byte_array_b(1:N),short_array_a(1:N),short_array_b(1:N),int_array_a(1:N),int_array_b(1:N),float_array_a(1:N),float_array_b(1:N),double_array_a(1:N),double_array_b(1:N),logical_array_a(1:N,1:16),logical_array_b(1:N),logical_kind4_array_a(1:N,1:16),logical_kind4_array_b(1:N),logical_kind8_array_a(1:N,1:16),logical_kind8_array_b(1:N),complex_array_a(1:N),complex_array_b(1:N))
+!$omp target teams distribute map(tofrom:byte_array_a(1:N),short_array_a(1:N),int_array_a(1:N),long_int_array_a(1:N),float_array_a(1:N),double_array_a(1:N),logical_array_b(1:N),logical_kind4_array_b(1:N),logical_kind8_array_b(1:N),complex_array_a(1:N))
+!$omp target teams distribute

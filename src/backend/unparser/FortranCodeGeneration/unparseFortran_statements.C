@@ -4623,6 +4623,8 @@ void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
              ? MAX_F90_LINE_LEN_FREE - 1 // reserve a column in free-format for
                                          // possible trailing '&'
              : unp->cur.get_linewrap());
+    usable_cols = FortranLineWrapSupport::clampUsableColumnsToConfiguredWrap(
+        usable_cols, unp->cur.get_linewrap());
 
     // check whether line wrapping is needed
     int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
@@ -4704,6 +4706,38 @@ void FortranCodeGeneration_locatedNode::unparseOmpPrefix(SgUnparse_Info &info) {
   curprint(string("!$omp "));
 }
 
+static bool fortranOmpDirectiveUsesExplicitEnd(SgStatement *stmt) {
+  if (stmt == nullptr) {
+    return false;
+  }
+
+  static const char *const kOmpFortranEndAttributeName = "omp_fortran_end";
+  if (stmt->getAttribute(kOmpFortranEndAttributeName) != nullptr) {
+    return true;
+  }
+
+  switch (stmt->variantT()) {
+  // OpenMP Fortran permits implicit end for these constructs.
+  case V_SgOmpParallelStatement:
+  case V_SgOmpDoStatement:
+    return false;
+
+  // Combined forms are represented as nested parallel/do statements in Sage,
+  // so the source-end attribute decides whether to emit a combined END line.
+  case V_SgOmpCriticalStatement:
+  case V_SgOmpSectionsStatement:
+  case V_SgOmpMasterStatement:
+  case V_SgOmpOrderedStatement:
+  case V_SgOmpWorkshareStatement:
+  case V_SgOmpSingleStatement:
+    return true;
+  case V_SgOmpTaskStatement:
+    return false;
+  default:
+    return false;
+  }
+}
+
 // Just skip nowait and copyprivate clauses for Fortran
 void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
@@ -4760,10 +4794,14 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
   if (clause_ptr_list != nullptr) {
     SgOmpClausePtrList::const_iterator i;
     bool first_clause = true;
+    const bool move_nowait_to_end = fortranOmpDirectiveUsesExplicitEnd(stmt);
     for (i = clause_ptr_list->begin(); i != clause_ptr_list->end(); i++) {
       SgOmpClause *c_clause = *i;
-      if (isSgOmpNowaitClause(c_clause) || isSgOmpCopyprivateClause(c_clause))
+      if ((isSgOmpNowaitClause(c_clause) ||
+           isSgOmpCopyprivateClause(c_clause)) &&
+          move_nowait_to_end) {
         continue;
+      }
       if (first_clause) {
         curprint(" ");
         first_clause = false;
@@ -4793,13 +4831,15 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
       curprint(")");
     }
   }
-  unp->u_sage->curprint_newline();
 }
 
 // Only unparse nowait or copyprivate clauses here
 void FortranCodeGeneration_locatedNode::unparseOmpEndDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
+  if (!fortranOmpDirectiveUsesExplicitEnd(stmt)) {
+    return;
+  }
   // optional clauses
   if (isSgOmpClauseBodyStatement(stmt)) {
     const SgOmpClausePtrList &clause_ptr_list =
@@ -4876,6 +4916,9 @@ void FortranCodeGeneration_locatedNode::unparseOmpFlushStatement(
 void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
+  if (!fortranOmpDirectiveUsesExplicitEnd(stmt)) {
+    return;
+  }
   switch (stmt->variantT()) {
   case V_SgOmpParallelStatement:
   case V_SgOmpCriticalStatement:
@@ -5018,6 +5061,7 @@ void FortranCodeGeneration_locatedNode::unparseOmpDoStatement(
 
   unparseOmpDirectivePrefixAndName(stmt, info);
   unparseOmpBeginDirectiveClauses(stmt, info);
+  unp->u_sage->curprint_newline();
 
   SgUnparse_Info ninfo(info);
   if (d_stmt->get_body()) {

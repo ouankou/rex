@@ -1,0 +1,24 @@
+!$omp target data map(from:my1DPtr(10:N-10)) map(from:my1DPtr2(10:),my1DPtr3(:N-10))
+!$omp target map(alloc:my1DPtr(10:N-10)) map(alloc:my1DPtr2(10:),my1DPtr3(:N-10)) map(tofrom:myTmpArray)
+!$omp end target
+!$omp end target data
+!$omp target data map(from:my2DPtr(10:N-10,i)) map(from:my2DPtr2(10:,i),my2DPtr3(:N-10,i)) map(tofrom:myTmpArray)
+!$omp target map(alloc:my2DPtr(10:N-10,i)) map(alloc:my2DPtr2(10:,i),my2DPtr3(:N-10,i)) map(tofrom:myTmpArray)
+!$omp end target
+!$omp end target data
+!$omp target data map(from:my3DPtr(10:N-10,i,j)) map(from:my3DPtr2(10:,i,j),my3DPtr3(:N-10,i,j)) map(tofrom:myTmpArray)
+!$omp target map(alloc:my3DPtr(10:N-10,i,j)) map(alloc:my3DPtr2(10:,i,j),my3DPtr3(:N-10,i,j)) map(tofrom:myTmpArray)
+!$omp end target
+!$omp end target data
+!$omp target data map(from:my1DArray(10:N-10)) map(from:my1DArray2(10:),my1DArray3(:N-10)) map(tofrom:myTmpArray)
+!$omp target map(alloc:my1DArray(10:N-10)) map(alloc:my1DArray2(10:),my1DArray3(:N-10)) map(tofrom:myTmpArray)
+!$omp end target
+!$omp end target data
+!$omp target data map(from:my2DArray(10:N-10,i)) map(from:my2DArray2(10:,i),my2DArray3(:N-10,i)) map(tofrom:myTmpArray)
+!$omp target map(alloc:my2DArray(10:N-10,i)) map(alloc:my2DArray2(10:,i),my2DArray3(:N-10,i)) map(tofrom:myTmpArray)
+!$omp end target
+!$omp end target data
+!$omp target data map(from:my3DArray(10:N-10,i,j)) map(from:my3DArray2(10:,i,j),my3DArray3(:N-10,i,j)) map(tofrom:myTmpArray)
+!$omp target map(alloc:my3DArray(10:N-10,i,j)) map(alloc:my3DArray2(10:,i,j),my3DArray3(:N-10,i,j)) map(tofrom:myTmpArray)
+!$omp end target
+!$omp end target data

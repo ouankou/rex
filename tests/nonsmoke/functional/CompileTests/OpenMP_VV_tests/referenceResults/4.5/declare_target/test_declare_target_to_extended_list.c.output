@@ -1,0 +1,3 @@
+#pragma omp declare target to(aint)
+#pragma omp declare target to(compute_array)
+#pragma omp target map(from:x) map(to:y,z)

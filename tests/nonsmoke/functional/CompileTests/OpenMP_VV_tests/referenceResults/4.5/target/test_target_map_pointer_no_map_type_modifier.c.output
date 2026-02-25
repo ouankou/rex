@@ -1,0 +1,1 @@
+#pragma omp target map(p[0:N])

@@ -1,0 +1,2 @@
+#pragma omp target map(to:b[0:ARRAY_SIZE],c[0:ARRAY_SIZE]) map(tofrom:a[0:ARRAY_SIZE])
+#pragma omp simd

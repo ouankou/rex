@@ -1,0 +1,4 @@
+#pragma omp parallel num_threads(NUM_THREADS)
+#pragma omp single
+#pragma omp taskloop shared(shared_var)
+#pragma omp atomic

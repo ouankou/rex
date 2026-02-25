@@ -1,0 +1,6 @@
+#pragma omp target data map(to:a[0:N],b[0:N]) map(tofrom:c[0:N],d[0:N])
+#pragma omp target teams distribute nowait depend(in:d) map(alloc:a[0:N],b[0:N],d[0:N])
+#pragma omp atomic
+#pragma omp target teams distribute nowait depend(in:d) map(alloc:a[0:N],b[0:N],c[0:N],d[0:N])
+#pragma omp atomic
+#pragma omp taskwait

@@ -1,0 +1,1 @@
+#pragma omp target teams distribute is_device_ptr(c) map(tofrom:a[0:ARRAY_SIZE]) map(to:b[0:ARRAY_SIZE])

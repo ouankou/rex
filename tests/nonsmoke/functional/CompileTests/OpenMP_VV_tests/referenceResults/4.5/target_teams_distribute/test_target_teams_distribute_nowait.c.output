@@ -1,0 +1,5 @@
+#pragma omp target enter data map(to:ticket[0:1],order[0:N_TASKS])
+#pragma omp target teams distribute map(alloc:work_storage[i][0:N],ticket[0:1]) nowait
+#pragma omp atomic capture
+#pragma omp taskwait
+#pragma omp target exit data map(from:ticket[0:1],order[0:N_TASKS])

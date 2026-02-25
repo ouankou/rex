@@ -35,7 +35,7 @@ jobs:
             cd /opt/rex/src
             CTEST_JOBS="$(nproc)"
             ctest --test-dir build \
-              -R "rex|astInterface|testQuery|fortran|f90|f03|caf|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPVV_5_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_" \
+              -R "rex|astInterface|testQuery|fortran|f90|f03|caf|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPVV_5_0_|OMPVV_4_5_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_" \
               --output-on-failure \
               -j"${CTEST_JOBS}"
           '

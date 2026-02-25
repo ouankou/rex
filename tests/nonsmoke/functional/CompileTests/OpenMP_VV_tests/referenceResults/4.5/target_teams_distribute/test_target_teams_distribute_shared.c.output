@@ -1,0 +1,5 @@
+#pragma omp target teams distribute num_teams(OMPVV_NUM_TEAMS_DEVICE) shared(share,num_teams) map(to:a[0:SIZE]) defaultmap(tofrom:scalar)
+#pragma omp atomic write
+#pragma omp atomic
+#pragma omp target data map(tofrom:a[0:SIZE]) map(tofrom:share)
+#pragma omp target teams distribute num_teams(OMPVV_NUM_TEAMS_DEVICE) shared(share)

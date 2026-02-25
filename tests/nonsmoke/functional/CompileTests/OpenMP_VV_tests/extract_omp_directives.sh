@@ -74,19 +74,8 @@ for (my $i = 0; $i <= $#lines; ++$i) {
         next;
     }
 
-    # OpenMP directives embedded in preprocessor macro definitions.
-    # OMPVV Fortran tests use this pattern for module-level `requires`.
-    if ($line =~ /^[ \t]*\#\s*define\b.*[!cC\*]\$omp\b/i) {
-        my $directive = $line;
-        $directive =~ s/^[^!cC\*]*([!cC\*]\$omp\b.*)$/$1/i;
-        $directive =~ s/^[ \t]*[!cC\*]\$omp\b[ \t]*/!\$omp /i;
-        $directive = canonicalize_directive($directive);
-        push @directives, $directive if length $directive;
-        next;
-    }
-
     # Fortran directives, including free-form continuation via trailing '&' and
-    # following '!$omp&' lines.
+    # following '!$omp&' or plain '&' continuation lines.
     if ($line =~ /^[ \t]*[!cC\*]\$omp\b/i) {
         my $segment = $line;
         $segment =~ s/^[ \t]*[!cC\*]\$omp\b[ \t]*/!\$omp /i;
@@ -94,17 +83,31 @@ for (my $i = 0; $i <= $#lines; ++$i) {
         $segment =~ s/[ \t]+!.*$//;
         my $directive = trim($segment);
         my $continued = ($line =~ /&[ \t]*$/) ? 1 : 0;
+        my $join_without_space = ($line =~ /[A-Za-z0-9_][ \t]*&[ \t]*$/) ? 1 : 0;
 
-        while ($continued && $i + 1 <= $#lines &&
-               $lines[$i + 1] =~ /^[ \t]*[!cC\*]\$omp\b/i) {
+        while ($continued && $i + 1 <= $#lines) {
+            my $next_raw = $lines[$i + 1];
+            my $is_omp_cont = ($next_raw =~ /^[ \t]*[!cC\*]\$omp\b/i);
+            my $is_amp_cont = ($next_raw =~ /^[ \t]*&/);
+            last unless ($is_omp_cont || $is_amp_cont);
+
             ++$i;
             my $next = $lines[$i];
+            my $next_join_without_space =
+                ($next =~ /[A-Za-z0-9_][ \t]*&[ \t]*$/) ? 1 : 0;
             $continued = ($next =~ /&[ \t]*$/) ? 1 : 0;
-            $next =~ s/^[ \t]*[!cC\*]\$omp\b[ \t]*&?[ \t]*//i;
+            if ($is_omp_cont) {
+                $next =~ s/^[ \t]*[!cC\*]\$omp\b[ \t]*&?[ \t]*//i;
+            } else {
+                $next =~ s/^[ \t]*&[ \t]*//;
+            }
             $next =~ s/[ \t]*&[ \t]*$//;
             $next =~ s/[ \t]+!.*$//;
             $next = trim($next);
-            $directive .= " $next" if length $next;
+            if (length $next) {
+                $directive .= ($join_without_space ? "" : " ") . $next;
+            }
+            $join_without_space = $next_join_without_space;
         }
 
         $directive = canonicalize_directive($directive);

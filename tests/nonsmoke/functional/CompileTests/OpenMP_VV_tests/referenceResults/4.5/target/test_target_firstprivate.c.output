@@ -1,0 +1,2 @@
+#pragma omp parallel private(i)
+#pragma omp target map(tofrom:compute_array[p_val:1][0:N]) firstprivate(p_val)

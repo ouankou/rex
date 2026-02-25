@@ -1,0 +1,4 @@
+!$omp target teams distribute parallel do defaultmap(tofrom:scalar)
+!$omp target teams distribute parallel do defaultmap(tofrom:scalar)
+!$omp target teams distribute parallel do
+!$omp target teams distribute parallel do

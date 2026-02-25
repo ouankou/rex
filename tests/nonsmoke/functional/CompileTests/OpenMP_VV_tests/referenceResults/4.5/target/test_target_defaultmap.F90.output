@@ -1,0 +1,7 @@
+!$omp declare target
+!$omp declare target
+!$omp declare target
+!$omp target defaultmap(tofrom:scalar)
+!$omp end target
+!$omp target map(tofrom:firstprivateCheck)
+!$omp end target

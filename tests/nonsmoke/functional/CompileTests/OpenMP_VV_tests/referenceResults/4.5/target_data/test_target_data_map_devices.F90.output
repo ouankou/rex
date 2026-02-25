@@ -1,0 +1,8 @@
+!$omp target data map(tofrom:anArray(1:N))
+!$omp target map(alloc:anArray(1:N))
+!$omp end target
+!$omp end target data
+!$omp target data map(tofrom:anArray(1:N)) device(dev_data)
+!$omp target map(alloc:anArray(1:N)) device(dev_comp)
+!$omp end target
+!$omp end target data

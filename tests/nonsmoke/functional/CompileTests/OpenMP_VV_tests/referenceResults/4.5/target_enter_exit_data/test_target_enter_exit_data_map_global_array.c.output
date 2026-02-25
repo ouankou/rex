@@ -1,0 +1,6 @@
+#pragma omp target enter data map(to:A)
+#pragma omp target
+#pragma omp target exit data map(from:A)
+#pragma omp target data map(tofrom:A) map(from:B)
+#pragma omp target exit data map(delete:A)
+#pragma omp target map(to:A)

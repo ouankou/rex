@@ -1,0 +1,4 @@
+!$omp target teams distribute map(to:a(1:N,1:N)) map(tofrom:b(1:N,1:N+1)) map(from:num_teams) collapse(1) num_teams(OMPVV_NUM_TEAMS_DEVICE)
+!$omp end target teams distribute
+!$omp target teams distribute map(to:a(1:N,1:N,1:N)) map(tofrom:b(1:N,1:N,1:N+1)) collapse(2) num_teams(OMPVV_NUM_TEAMS_DEVICE)
+!$omp end target teams distribute

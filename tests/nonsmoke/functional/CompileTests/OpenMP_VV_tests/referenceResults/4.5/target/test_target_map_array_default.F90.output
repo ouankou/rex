@@ -1,0 +1,2 @@
+!$omp target map(compute_array)
+!$omp end target

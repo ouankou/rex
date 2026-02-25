@@ -1,5 +1,4 @@
 !$omp requires reverse_offload
-!$omp requires reverse_offload
 !$omp target map(tofrom:errors2) map(to:a,which_device,is_shared_env)
 !$omp target device(ancestor:1) map(to:a) map(to:which_device)
 !$omp end target

@@ -1,0 +1,4 @@
+#pragma omp target data map(to:a[:N],b[:N]) map(tofrom:c)
+#pragma omp target
+#pragma omp target update if(change_flag) to(b[:N])
+#pragma omp target

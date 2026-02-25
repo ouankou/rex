@@ -1,0 +1,7 @@
+!$omp target data map(to:a(1:N),b(1:N)) map(tofrom:c(1:N),d(1:N))
+!$omp target teams distribute nowait depend(in:d) map(alloc:a(1:N),b(1:N),d(1:N))
+!$omp atomic
+!$omp target teams distribute nowait depend(in:d) map(alloc:a(1:N),b(1:N),c(1:N),d(1:N))
+!$omp atomic
+!$omp taskwait
+!$omp end target data

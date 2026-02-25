@@ -121,6 +121,8 @@ file(MAKE_DIRECTORY "${_omp_header_stage_dir}")
 configure_file("${_llvm_omp_header}" "${_omp_header_stage_dir}/omp.h" COPYONLY)
 
 set(_cpu_compare_script "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_cpu_compare.sh")
+set(_omp_cpu_test_output_dir "${CMAKE_CURRENT_BINARY_DIR}/test-output")
+file(MAKE_DIRECTORY "${_omp_cpu_test_output_dir}")
 
 function(add_omp_lowering_cpu_compare_test input_file mode)
   string(REPLACE "." "_" _name "${input_file}")
@@ -128,11 +130,12 @@ function(add_omp_lowering_cpu_compare_test input_file mode)
 
   add_test(
     NAME OMPLOWERING_CPU_${_name}
+    WORKING_DIRECTORY "${_omp_cpu_test_output_dir}"
     COMMAND "${BASH_EXECUTABLE}" "${_cpu_compare_script}"
             "$<TARGET_FILE:parseOmp>"
             "${_omp_cpu_compiler}"
             "${CMAKE_CURRENT_SOURCE_DIR}/../${input_file}"
-            "${CMAKE_CURRENT_BINARY_DIR}/${_name}"
+            "${_omp_cpu_test_output_dir}/${_name}"
             "${mode}"
             "${_omp_header_stage_dir}"
             "${_iomp_dir}"

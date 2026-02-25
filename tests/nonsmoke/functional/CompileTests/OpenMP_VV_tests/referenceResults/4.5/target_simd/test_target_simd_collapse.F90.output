@@ -1,0 +1,2 @@
+!$omp target simd map(to:b(1:ARRAY_SIZE,1:ARRAY_SIZE),c(1:ARRAY_SIZE,1:ARRAY_SIZE)) map(tofrom:a(1:ARRAY_SIZE,1:ARRAY_SIZE)) collapse(2)
+!$omp end target simd

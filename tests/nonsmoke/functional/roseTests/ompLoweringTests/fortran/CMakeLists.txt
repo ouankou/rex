@@ -2,6 +2,9 @@ set(_omp_fortran_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests/fortran)
 
 include(${_omp_fortran_dir}/OpenMP_fortran_Testcodes.cmake)
+set(_omp_fortran_lowering_output_dir
+  ${CMAKE_CURRENT_BINARY_DIR}/test-output)
+file(MAKE_DIRECTORY ${_omp_fortran_lowering_output_dir})
 
 set(OMP_FORTRAN_LOWERING_EXCLUDED_CASES
   requires_dynamic_allocators_type.f90)
@@ -139,13 +142,14 @@ endif()
 function(add_omp_fortran_translate_test specimen)
   _omp_sanitize_name(_omp_name ${specimen})
   set(_test_name omp_lowering_fortran_translate_${_omp_name})
-  set(_workdir ${CMAKE_CURRENT_BINARY_DIR}/translate/${_omp_name})
+  set(_workdir ${_omp_fortran_lowering_output_dir}/translate/${_omp_name})
   set(_translator_flags)
   if(_omp_fortran_omp_include)
     list(APPEND _translator_flags -I${_omp_fortran_omp_include})
   endif()
   add_test(
     NAME ${_test_name}
+    WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
     COMMAND ${BASH_EXECUTABLE} ${OMP_LOWERING_TRANSLATE_SCRIPT}
             $<TARGET_FILE:roseomp>
             ${_omp_fortran_dir}/${specimen}
@@ -160,9 +164,10 @@ endfunction()
 function(add_omp_fortran_semantic_test specimen)
   _omp_sanitize_name(_omp_name ${specimen})
   set(_test_name omp_lowering_fortran_semantic_${_omp_name})
-  set(_workdir ${CMAKE_CURRENT_BINARY_DIR}/semantic/${_omp_name})
+  set(_workdir ${_omp_fortran_lowering_output_dir}/semantic/${_omp_name})
   add_test(
     NAME ${_test_name}
+    WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
     COMMAND ${BASH_EXECUTABLE} ${OMP_LOWERING_FORTRAN_SEMANTIC_SCRIPT}
             $<TARGET_FILE:roseomp>
             ${_omp_fortran_compiler}
@@ -185,6 +190,7 @@ function(add_omp_fortran_invariant_test specimen dependency_test_name workdir)
   set(_inv_name omp_lowering_fortran_invariant_${_omp_name})
   add_test(
     NAME ${_inv_name}
+    WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
     COMMAND ${BASH_EXECUTABLE} ${OMP_LOWERING_INVARIANT_VERIFY_SCRIPT}
             ${_omp_fortran_dir}/${specimen}
             ${workdir}
@@ -204,7 +210,7 @@ if(enable-fortran)
         add_omp_fortran_invariant_test(
           ${specimen}
           omp_lowering_fortran_semantic_${_omp_name}
-          ${CMAKE_CURRENT_BINARY_DIR}/semantic/${_omp_name})
+          ${_omp_fortran_lowering_output_dir}/semantic/${_omp_name})
       endif()
     else()
       add_omp_fortran_translate_test(${specimen})
@@ -212,7 +218,7 @@ if(enable-fortran)
         add_omp_fortran_invariant_test(
           ${specimen}
           omp_lowering_fortran_translate_${_omp_name}
-          ${CMAKE_CURRENT_BINARY_DIR}/translate/${_omp_name})
+          ${_omp_fortran_lowering_output_dir}/translate/${_omp_name})
       endif()
     endif()
   endforeach()

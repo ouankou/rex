@@ -1,0 +1,4 @@
+#pragma omp target data if(map_size>SIZE_THRESHOLD) map(to:map_size) map(tofrom:c[0:map_size]) map(to:a[0:map_size],b[0:map_size])
+#pragma omp target if(map_size>SIZE_THRESHOLD) map(tofrom:isHost) map(alloc:a[0:map_size],b[0:map_size],c[0:map_size])
+#pragma omp target data if(map_size>SIZE_THRESHOLD) map(to:map_size) map(tofrom:c[0:map_size]) map(to:a[0:map_size],b[0:map_size])
+#pragma omp target map(tofrom:isHost) map(alloc:a[0:map_size],b[0:map_size],c[0:map_size])
