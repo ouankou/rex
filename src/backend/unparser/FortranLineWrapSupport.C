@@ -52,5 +52,12 @@ bool isDirectiveChunk(const std::string &text, int used_cols) {
                             startsWithCaseInsensitive(text, first, "acc"));
 }
 
+int clampUsableColumnsToConfiguredWrap(int usable_cols, int configured_wrap) {
+  if (configured_wrap > 0 && configured_wrap < usable_cols) {
+    return configured_wrap;
+  }
+  return usable_cols;
+}
+
 } // namespace FortranLineWrapSupport
 } // namespace Rose

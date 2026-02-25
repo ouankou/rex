@@ -4623,10 +4623,8 @@ void FortranCodeGeneration_locatedNode::curprint(const std::string &str) const {
              ? MAX_F90_LINE_LEN_FREE - 1 // reserve a column in free-format for
                                          // possible trailing '&'
              : unp->cur.get_linewrap());
-    const int configured_wrap = unp->cur.get_linewrap();
-    if (configured_wrap > 0 && configured_wrap < usable_cols) {
-      usable_cols = configured_wrap;
-    }
+    usable_cols = FortranLineWrapSupport::clampUsableColumnsToConfiguredWrap(
+        usable_cols, unp->cur.get_linewrap());
 
     // check whether line wrapping is needed
     int used_cols = unp->cur.current_col(); // 'current_col' is zero-based
