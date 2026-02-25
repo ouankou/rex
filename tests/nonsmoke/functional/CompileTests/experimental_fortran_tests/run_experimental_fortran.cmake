@@ -11,10 +11,9 @@ if(NOT DEFINED ROSE_OUTPUT OR ROSE_OUTPUT STREQUAL "")
 endif()
 
 set(_translator_args -rose:experimental_flang_frontend)
-if(DEFINED EXTRA_FLAGS AND NOT EXTRA_FLAGS STREQUAL "")
-  set(_extra_flags "${EXTRA_FLAGS}")
-  separate_arguments(_extra_flags NATIVE_COMMAND "${_extra_flags}")
-  list(APPEND _translator_args ${_extra_flags})
+if(EXTRA_FLAGS)
+  separate_arguments(_extra_flags_list NATIVE_COMMAND "${EXTRA_FLAGS}")
+  list(APPEND _translator_args ${_extra_flags_list})
 endif()
 list(APPEND _translator_args -c "${SPECIMEN}")
 

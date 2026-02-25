@@ -37,7 +37,8 @@ set(_experimental_fortran_todo_tests
   type_def_1.f90
 )
 
-function(add_experimental_fortran_test specimen extra_flags)
+function(add_experimental_fortran_test specimen)
+  string(JOIN " " extra_flags ${ARGN})
   string(REPLACE "." "_" _name "${specimen}")
   add_test(
     NAME experimental_fortran_${_name}
@@ -53,7 +54,7 @@ function(add_experimental_fortran_test specimen extra_flags)
 endfunction()
 
 foreach(specimen IN LISTS _experimental_fortran_tests)
-  add_experimental_fortran_test(${specimen} "")
+  add_experimental_fortran_test(${specimen})
 endforeach()
 
 foreach(specimen IN LISTS _experimental_fortran_20xx_tests)
@@ -61,5 +62,5 @@ foreach(specimen IN LISTS _experimental_fortran_20xx_tests)
 endforeach()
 
 foreach(specimen IN LISTS _experimental_fortran_todo_tests)
-  add_experimental_fortran_test(${specimen} "")
+  add_experimental_fortran_test(${specimen})
 endforeach()
