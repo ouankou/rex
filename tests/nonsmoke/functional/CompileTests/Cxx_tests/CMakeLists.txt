@@ -400,7 +400,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2005_109.C
   test2005_11.C
   test2005_110.C
-  test2005_111.C
+  rex_test2026_issue213_va_start.cpp
   test2005_112.C
   test2005_113.C
   test2005_114.C

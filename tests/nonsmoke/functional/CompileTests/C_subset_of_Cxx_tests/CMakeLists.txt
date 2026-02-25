@@ -19,7 +19,7 @@ else()
         test2004_153.C test2004_154.C test2004_163.C test2005_16.C
         test2005_20.C test2005_21.C test2005_22.C test2005_23.C test2005_26.C
         test2005_48.C test2005_62.C test2005_84.C test2005_92.C
-        test2005_95.C test2005_100.C test2005_111.C test2005_116.C
+        test2005_95.C test2005_100.C rex_test2026_issue213_va_start.cpp test2005_116.C
         test2005_125.C test2005_157.C test2005_159.C test2005_164.C
         test2005_165.C test2005_169.C test2005_170.C test2005_176.C
         test2005_180.C test2005_182.C test2005_184.C test2005_187.C
@@ -54,7 +54,7 @@ else()
         test2004_153.C test2004_154.C test2004_163.C test2005_16.C
         test2005_20.C test2005_21.C test2005_22.C test2005_23.C test2005_26.C
         test2005_48.C test2005_62.C test2005_84.C test2005_92.C
-        test2005_95.C test2005_100.C test2005_111.C test2005_116.C
+        test2005_95.C test2005_100.C rex_test2026_issue213_va_start.cpp test2005_116.C
         test2005_125.C test2005_157.C test2005_159.C test2005_164.C
         test2005_165.C test2005_169.C test2005_170.C test2005_176.C
         test2005_180.C test2005_182.C test2005_184.C test2005_187.C
@@ -81,7 +81,7 @@ function(compile_test_in_binary_dir input_file label)
   get_filename_component(test_name ${input_file} NAME_WE)
 
   configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${test_name}.C
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${input_file}
     ${CMAKE_CURRENT_BINARY_DIR}/${test_name}.c
     COPYONLY)
 
