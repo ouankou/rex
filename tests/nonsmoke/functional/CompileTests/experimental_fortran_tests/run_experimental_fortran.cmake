@@ -27,8 +27,12 @@ execute_process(
 )
 
 if(NOT "${_translator_status}" STREQUAL "0")
-  # Escape '$' so translator output is reported verbatim by CMake message().
+  # Escape characters so translator output is reported verbatim by CMake message().
+  string(REPLACE "\\" "\\\\" _translator_stdout "${_translator_stdout}")
+  string(REPLACE "\"" "\\\"" _translator_stdout "${_translator_stdout}")
   string(REPLACE "$" "$$" _translator_stdout "${_translator_stdout}")
+  string(REPLACE "\\" "\\\\" _translator_stderr "${_translator_stderr}")
+  string(REPLACE "\"" "\\\"" _translator_stderr "${_translator_stderr}")
   string(REPLACE "$" "$$" _translator_stderr "${_translator_stderr}")
   message(
     FATAL_ERROR
