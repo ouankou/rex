@@ -10,6 +10,12 @@ if(NOT DEFINED ROSE_OUTPUT OR ROSE_OUTPUT STREQUAL "")
   message(FATAL_ERROR "ROSE_OUTPUT is required")
 endif()
 
+macro(escape_for_message_verbatim var)
+  string(REPLACE "\\" "\\\\" ${var} "${${var}}")
+  string(REPLACE "\"" "\\\"" ${var} "${${var}}")
+  string(REPLACE "$" "$$" ${var} "${${var}}")
+endmacro()
+
 set(_translator_args -rose:experimental_flang_frontend)
 if(EXTRA_FLAGS)
   list(APPEND _translator_args ${EXTRA_FLAGS})
@@ -28,12 +34,8 @@ execute_process(
 
 if(NOT "${_translator_status}" STREQUAL "0")
   # Escape characters so translator output is reported verbatim by CMake message().
-  string(REPLACE "\\" "\\\\" _translator_stdout "${_translator_stdout}")
-  string(REPLACE "\"" "\\\"" _translator_stdout "${_translator_stdout}")
-  string(REPLACE "$" "$$" _translator_stdout "${_translator_stdout}")
-  string(REPLACE "\\" "\\\\" _translator_stderr "${_translator_stderr}")
-  string(REPLACE "\"" "\\\"" _translator_stderr "${_translator_stderr}")
-  string(REPLACE "$" "$$" _translator_stderr "${_translator_stderr}")
+  escape_for_message_verbatim(_translator_stdout)
+  escape_for_message_verbatim(_translator_stderr)
   message(
     FATAL_ERROR
       "testTranslator failed for ${SPECIMEN}\n"
