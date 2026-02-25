@@ -42,12 +42,12 @@ function(add_experimental_fortran_test specimen extra_flags)
   add_test(
     NAME experimental_fortran_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${CMAKE_COMMAND}
+    COMMAND "${CMAKE_COMMAND}"
       "-DTEST_TRANSLATOR=$<TARGET_FILE:testTranslator>"
       "-DSPECIMEN=${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       "-DROSE_OUTPUT=rose_${specimen}"
       "-DEXTRA_FLAGS=${extra_flags}"
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/run_experimental_fortran.cmake
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/run_experimental_fortran.cmake"
   )
   set_tests_properties(experimental_fortran_${_name} PROPERTIES LABELS experimental_fortran)
 endfunction()

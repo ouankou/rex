@@ -28,7 +28,7 @@ execute_process(
   ERROR_VARIABLE _translator_stderr
 )
 
-if(NOT _translator_status EQUAL 0)
+if(NOT "${_translator_status}" STREQUAL "0")
   message(
     FATAL_ERROR
       "testTranslator failed for ${SPECIMEN}\n"
