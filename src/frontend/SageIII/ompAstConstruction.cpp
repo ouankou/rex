@@ -1725,20 +1725,52 @@ SgVariableSymbol *extractDirectArraySectionSymbol(SgNode *node) {
     }
 
     if (SgPntrArrRefExp *array_ref = isSgPntrArrRefExp(expression)) {
-      SgSubscriptExpression *subscript =
-          isSgSubscriptExpression(array_ref->get_rhs_operand());
-      if (subscript == nullptr) {
-        return nullptr;
-      }
-      if (subscript->get_lowerBound() == nullptr ||
-          subscript->get_upperBound() == nullptr) {
-        return nullptr;
-      }
-      if (SgExpression *stride = subscript->get_stride()) {
-        const SgIntVal *int_stride = isSgIntVal(stride);
-        if (int_stride == nullptr || int_stride->get_value() != 1) {
+      SgExpression *rhs = array_ref->get_rhs_operand();
+      bool rhs_has_section = false;
+      if (SgSubscriptExpression *subscript = isSgSubscriptExpression(rhs)) {
+        if (subscript->get_lowerBound() == nullptr ||
+            subscript->get_upperBound() == nullptr) {
           return nullptr;
         }
+        if (SgExpression *stride = subscript->get_stride()) {
+          const SgIntVal *int_stride = isSgIntVal(stride);
+          if (int_stride == nullptr || int_stride->get_value() != 1) {
+            return nullptr;
+          }
+        }
+        rhs_has_section = true;
+      } else if (SgExprListExp *expr_list = isSgExprListExp(rhs)) {
+        const SgExpressionPtrList &items = expr_list->get_expressions();
+        for (SgExpression *item : items) {
+          if (item == nullptr) {
+            return nullptr;
+          }
+          SgSubscriptExpression *subscript = isSgSubscriptExpression(item);
+          if (subscript == nullptr) {
+            // Plain index dimensions are allowed for mixed Fortran sections
+            // (e.g., a(i,1:n)).
+            continue;
+          }
+          if (subscript->get_lowerBound() == nullptr ||
+              subscript->get_upperBound() == nullptr) {
+            return nullptr;
+          }
+          if (SgExpression *stride = subscript->get_stride()) {
+            const SgIntVal *int_stride = isSgIntVal(stride);
+            if (int_stride == nullptr || int_stride->get_value() != 1) {
+              return nullptr;
+            }
+          }
+          rhs_has_section = true;
+        }
+      } else {
+        return nullptr;
+      }
+
+      // Reject plain element references (e.g., a(i,j)); this path only
+      // canonicalizes direct array sections.
+      if (!rhs_has_section) {
+        return nullptr;
       }
       saw_array_section = true;
       expression = array_ref->get_lhs_operand();
