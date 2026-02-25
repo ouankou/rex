@@ -2226,10 +2226,9 @@ static bool allowsImplicitFortranEnd(OpenMPDirectiveKind kind) {
   case OMPD_do:
   case OMPD_parallel_do:
   case OMPD_parallel_loop:
+  case OMPD_target_simd:
   case OMPD_declare_target:
     return true;
-  case OMPD_target_simd:
-    return false;
   default:
     return false;
   }
