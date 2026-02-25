@@ -1,0 +1,4 @@
+#pragma omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp loop collapse(1)
+#pragma omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp loop collapse(2)

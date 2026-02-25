@@ -1,0 +1,3 @@
+#pragma omp requires dynamic_allocators
+#pragma omp target map(from:saved_x)
+#pragma omp parallel for simd simdlen(16) aligned(x:64)

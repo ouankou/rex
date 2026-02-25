@@ -1,0 +1,2 @@
+!$omp target defaultmap(firstprivate)
+!$omp end target

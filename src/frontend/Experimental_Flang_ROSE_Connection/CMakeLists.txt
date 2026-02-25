@@ -19,6 +19,15 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     target_compile_definitions(flang_frontend PRIVATE ${ROSE_FLANG_ENDIAN_DEFINES})
   endif()
 
+  if(FLANG_INCLUDE_DIRS)
+    list(GET FLANG_INCLUDE_DIRS 0 ROSE_FLANG_INCLUDEDIR_HINT)
+    if(ROSE_FLANG_INCLUDEDIR_HINT)
+      target_compile_definitions(
+        flang_frontend PRIVATE
+        "ROSE_FLANG_INCLUDEDIR_HINT=\"${ROSE_FLANG_INCLUDEDIR_HINT}\"")
+    endif()
+  endif()
+
   add_dependencies(flang_frontend rosetta_generated)
   target_compile_features(flang_frontend PRIVATE cxx_std_17)
 endif()

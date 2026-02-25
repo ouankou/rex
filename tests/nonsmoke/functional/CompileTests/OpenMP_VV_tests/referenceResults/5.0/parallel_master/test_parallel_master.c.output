@@ -1,0 +1,2 @@
+#pragma omp parallel master num_threads(OMPVV_NUM_THREADS_HOST) shared(x,y,z,num_threads)
+#pragma omp taskloop

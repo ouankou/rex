@@ -5363,6 +5363,8 @@ void Grammar::setUpStatements() {
       "SOURCE_OMP_CANCELLATION_POINT_STATEMENT", "../Grammar/Statement.code");
   OmpOrderedDependStatement.setFunctionSource(
       "SOURCE_OMP_ORDERED_DEPEND_STATEMENT", "../Grammar/Statement.code");
+  OmpDeclareMapperStatement.setFunctionPrototype(
+      "HEADER_OMP_DECLARE_MAPPER_STATEMENT", "../Grammar/Statement.code");
   OmpDeclareMapperStatement.setFunctionSource(
       "SOURCE_OMP_DECLARE_MAPPER_STATEMENT", "../Grammar/Statement.code");
   OmpCancelStatement.setFunctionSource("SOURCE_OMP_CANCEL_STATEMENT",
@@ -5527,9 +5529,31 @@ void Grammar::setUpStatements() {
   OmpDeclareSimdStatement.setDataPrototype(
       "SgOmpClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  OmpDeclareMapperStatement.setDataPrototype(
+      "SgOmpClause::omp_declare_mapper_identifier_enum", "identifier",
+      "=SgOmpClause::e_omp_declare_mapper_identifier_unspecified",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
+  OmpDeclareMapperStatement.setDataPrototype(
+      "SgExpression*", "user_defined_identifier", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, CLONE_PTR);
+  OmpDeclareMapperStatement.setDataPrototype(
+      "SgExpression*", "mapper_type", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpDeclareMapperStatement.setDataPrototype(
+      "SgExpression*", "mapper_variable", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpDeclareMapperStatement.setDataPrototype(
+      "SgOmpClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   OmpDeclareTargetStatement.setDataPrototype(
       "SgOmpClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  OmpDeclareTargetStatement.setDataPrototype(
+      "SgOmpClause::omp_when_context_kind_enum", "device_type_kind",
+      "=SgOmpClause::e_omp_when_context_kind_unknown", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   OmpDeclareTargetStatement.setDataPrototype(
       "SgStatementPtrList", "statements", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);

@@ -1,0 +1,4 @@
+!$omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) shared(x,y,z,num_threads) map(tofrom:x,num_threads) map(to:y,z)
+!$omp master taskloop simd
+!$omp end master taskloop simd
+!$omp end target parallel

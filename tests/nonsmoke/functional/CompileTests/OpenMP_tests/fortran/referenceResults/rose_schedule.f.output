@@ -7,7 +7,7 @@
 !$omp end do
 !$omp end parallel
 !$omp parallel
-!$omp do  schedule(guided , n)
+!$omp do  schedule(guided , N)
 !$omp end do
 !$omp end parallel
 !$omp parallel

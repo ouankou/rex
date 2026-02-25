@@ -1,0 +1,4 @@
+!$omp declare target to(parallel_for_fun)
+!$omp declare target to(parallel_for_fun)
+!$omp target map(tofrom:x,y,z,num_threads)
+!$omp end target

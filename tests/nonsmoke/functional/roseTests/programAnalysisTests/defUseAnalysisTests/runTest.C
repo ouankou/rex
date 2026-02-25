@@ -526,11 +526,11 @@ int main(int argc, char *argv[]) {
       results.clear();
       useresults.clear();
       results.insert(pair<string, int>("i", 12));
-      results.insert(pair<string, int>("i", 24));
-      results.insert(pair<string, int>("index", 24));
+      results.insert(pair<string, int>("i", 23));
+      results.insert(pair<string, int>("index", 23));
       results.insert(pair<string, int>("index", 8));
       useresults.insert(pair<string, int>("i", 14));
-      testOneFunction("::foo", argvList, debug, 26, results, useresults);
+      testOneFunction("::foo", argvList, debug, 25, results, useresults);
     }
 
     if (startNr <= 18 && 18 <= stopNr) {
@@ -577,7 +577,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test20.C";
       results.clear();
       useresults.clear();
-      testOneFunction("::bar", argvList, debug, 8, results, useresults);
+      testOneFunction("::bar", argvList, debug, 7, results, useresults);
     }
 
     if (startNr <= 21 && 21 <= stopNr) {
@@ -597,7 +597,7 @@ int main(int argc, char *argv[]) {
       results.clear();
       useresults.clear();
       results.insert(pair<string, int>("b", 9));
-      testOneFunction("::func", argvList, debug, 19, results, useresults);
+      testOneFunction("::func", argvList, debug, 18, results, useresults);
     }
 
     if (startNr <= 23 && 23 <= stopNr) {
@@ -606,9 +606,9 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test23.C";
       results.clear();
       useresults.clear();
-      results.insert(pair<string, int>("a", 16));
-      results.insert(pair<string, int>("a", 35));
-      testOneFunction("::func", argvList, debug, 44, results, useresults);
+      results.insert(pair<string, int>("a", 15));
+      results.insert(pair<string, int>("a", 32));
+      testOneFunction("::func", argvList, debug, 40, results, useresults);
     }
 
     if (startNr <= 24 && 24 <= stopNr) {
@@ -631,10 +631,10 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test25.C";
       results.clear();
       useresults.clear();
-      results.insert(pair<string, int>("x", 16));
-      results.insert(pair<string, int>("y", 22));
-      useresults.insert(pair<string, int>("x", 21));
-      testOneFunction("::foo", argvList, debug, 31, results, useresults);
+      results.insert(pair<string, int>("x", 22));
+      results.insert(pair<string, int>("y", 26));
+      useresults.insert(pair<string, int>("x", 25));
+      testOneFunction("::foo", argvList, debug, 34, results, useresults);
     }
   }
 

@@ -1,0 +1,1 @@
+#pragma omp target parallel loop private(priv_val) num_threads(OMPVV_NUM_THREADS_DEVICE)

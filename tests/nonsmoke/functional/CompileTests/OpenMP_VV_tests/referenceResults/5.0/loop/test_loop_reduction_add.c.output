@@ -1,0 +1,3 @@
+#pragma omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp loop reduction(+:total)
+#pragma omp for

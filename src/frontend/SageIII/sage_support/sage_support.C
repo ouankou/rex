@@ -226,7 +226,7 @@ static bool isFlangFortranSourceSuffix(const std::string &suffix) {
   return lower == "f" || lower == "ff" || lower == "f90" || lower == "ff90" ||
          lower == "f95" || lower == "ff95" || lower == "f18" ||
          lower == "ff18" || lower == "cuf" || lower == "rmod" ||
-         lower == "rcmp";
+         lower == "rcmp" || lower == "mod";
 }
 
 static bool needsFlangFortranExtensionFix(const std::string &path) {
@@ -1027,9 +1027,13 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
       SageBuilder::symbol_table_case_insensitive_semantics = true;
 
       // determine whether to run this file through the C preprocessor
+      const std::string lowerExtension = toLowerCopy(filenameExtension);
+      bool is_module_file_suffix =
+          (lowerExtension == "rmod" || lowerExtension == "rcmp" ||
+           lowerExtension == "mod");
       bool requires_C_preprocessor =
-          // DXN (02/20/2011): rmod file should never require it
-          (filenameExtension != "rmod") &&
+          // Module interface files should never require preprocessing.
+          !is_module_file_suffix &&
           (
               // if the file extension implies it
               CommandlineProcessing::isFortranFileNameSuffixRequiringCPP(
@@ -3537,14 +3541,12 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
                                                               false, false)
                  .c_str());
     }
-    // DQ (7/7/2021): This can be useful to have an output, but in general it
-    // must be supressed. I need the exact command line used to compile the
-    // generate code with the backendcompiler (so that I can reuse it to test
-    // the generated code).
-    printf("SgFile::compileOutput(): compilerCmdLine = \n%s\n",
-           CommandlineProcessing::generateStringFromArgList(compilerCmdLine,
+    MLOG_TRACE_CXX("sage_support")
+        << "SgFile::compileOutput(): compilerCmdLine =\n"
+        << CommandlineProcessing::generateStringFromArgList(compilerCmdLine,
                                                             false, false)
-               .c_str());
+        << std::endl;
+
     // DQ (4/18/2015): Adding support to add compile only mode to the processing
     // of each file when multiple files are processed.
     if (get_compileOnly() == true) {
@@ -3646,9 +3648,10 @@ int SgFile::compileOutput(vector<string> &argv, int fileNameIndex) {
     // correct and shouldn't be compilerCmdLine
     returnValueForCompiler = systemFromVector(compilerCmdLine);
 
-    printf("In SgFile::compileOutput(): Calling systemFromVector(): "
-           "returnValueForCompiler = %d \n",
-           returnValueForCompiler);
+    MLOG_TRACE_CXX("sage_support")
+        << "SgFile::compileOutput(): systemFromVector() returnValueForCompiler "
+           "= "
+        << returnValueForCompiler << std::endl;
 
     // TOO1 (05/14/2013): Handling for -rose:keep_going
     //
@@ -4245,35 +4248,26 @@ int SgProject::link(const std::vector<std::string> &argv,
   // will be no SgFile at all in this case but we still want to append relevant
   // linking options for OpenMP
   if (get_openmp_linking()) {
-// Sara Royuela 12/10/2012:  Add GCC version check
-#ifdef USE_ROSE_GOMP_OPENMP_LIBRARY
-#if (__GNUC__ < 4 || (__GNUC__ == 4 && (__GNUC_MINOR__ < 4)))
-#warning "GNU version lower than expected"
-    printf("GCC version must be 4.4.0 or later when linking with GOMP OpenMP "
-           "Runtime Library \n(OpenMP tasking calls are not implemented in "
-           "previous versions)\n");
-    ROSE_ABORT();
-#endif
-
     linkingCommand.push_back(resolveXompArchivePath());
+#ifdef ROSE_LLVM_OPENMP_RUNTIME_LIBRARY
+    string llvm_openmp_runtime_library(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY);
+    if (llvm_openmp_runtime_library.empty()) {
+      printf("Error: OpenMP lowering requires LLVM OpenMP runtime library.\n");
+      ROSE_ABORT();
+    }
 
-    // lib path is available if --with-gomp_omp_runtime_library=XXX is used
-    string gomp_lib_path(GCC_GOMP_OPENMP_LIB_PATH);
-    ROSE_ASSERT(gomp_lib_path.size() != 0);
-    linkingCommand.push_back(gomp_lib_path + "/libgomp.a");
+    linkingCommand.push_back(llvm_openmp_runtime_library);
+    string llvm_openmp_runtime_dir =
+        std::filesystem::path(llvm_openmp_runtime_library)
+            .parent_path()
+            .string();
+    if (!llvm_openmp_runtime_dir.empty()) {
+      linkingCommand.push_back("-Wl,-rpath," + llvm_openmp_runtime_dir);
+    }
     linkingCommand.push_back("-lpthread");
 #else
-// GOMP has higher priority when both GOMP and OMNI are specified (wrongfully)
-#ifdef OMNI_OPENMP_LIB_PATH
-    linkingCommand.push_back(resolveXompArchivePath());
-
-    string omni_lib_path(OMNI_OPENMP_LIB_PATH);
-    ROSE_ASSERT(omni_lib_path.size() != 0);
-    linkingCommand.push_back(omni_lib_path + "/libgompc.a");
-    linkingCommand.push_back("-lpthread");
-    printf("Warning: OpenMP lowering is requested but no target runtime "
-           "library is specified!\n");
-#endif
+    printf("Error: OpenMP lowering requires LLVM OpenMP runtime library.\n");
+    ROSE_ABORT();
 #endif
   }
 

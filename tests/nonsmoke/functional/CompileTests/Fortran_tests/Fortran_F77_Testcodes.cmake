@@ -92,7 +92,7 @@ set(F77_TESTCODES
   jacobi.f
   default.f
   flush.f
-  exmpaleA221f.f
+  exampleA221f.f
   exampleA251f.f
   schedule.f
   testNewOFP.f

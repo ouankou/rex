@@ -1,0 +1,4 @@
+#pragma omp requires atomic_default_mem_order(acq_rel)
+#pragma omp target parallel num_threads(2) map(tofrom:x,y,errors)
+#pragma omp atomic write
+#pragma omp atomic read

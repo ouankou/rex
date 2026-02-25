@@ -1,0 +1,6 @@
+!$omp parallel private(thrd,tmp)
+!$omp atomic write release
+!$omp end atomic
+!$omp atomic read acquire
+!$omp end atomic
+!$omp end parallel

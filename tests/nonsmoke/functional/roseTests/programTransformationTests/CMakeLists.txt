@@ -93,7 +93,6 @@ foreach(file_to_test ${function_normalization_tests})
     COMMAND testFunctionNormalization -rose:verbose 0
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
-  set_tests_properties(functionNormalization_${file_to_test} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------

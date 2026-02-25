@@ -1,9 +1,10 @@
 const int a=10;
 int foo(int);
 
-main(){
+int main(){
    int x=1;
    foo(x);
+   return 0;
 }
 
 int foo(int x){

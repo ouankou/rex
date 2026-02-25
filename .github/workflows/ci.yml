@@ -60,6 +60,7 @@ jobs:
           libclang-${{ matrix.llvm }}-dev \
           libclang-cpp${{ matrix.llvm }}-dev \
           libhpdf-dev \
+          libomp-${{ matrix.llvm }}-dev \
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \
@@ -89,8 +90,9 @@ jobs:
       run: |
         cd $GITHUB_WORKSPACE
         CTEST_JOBS="$(nproc)"
-        ctest --test-dir build -R "rex|astInterface|testQuery|fortran|f90|f03|f77|caf|gfortran" --exclude-regex "omp_lowering" --output-on-failure -j"${CTEST_JOBS}"
-        ctest --test-dir build/tests/nonsmoke/functional/CompileTests/OpenMP_tests --output-on-failure -j"${CTEST_JOBS}"
+
+        # Single CI sweep: core + OpenMP AST + OpenMP lowering suites.
+        ctest --test-dir build -R "rex|astInterface|testQuery|fortran|f90|f03|caf|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPVV_5_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_" --output-on-failure -j"${CTEST_JOBS}"
 
   fortran-only-config:
     strategy:
@@ -137,6 +139,7 @@ jobs:
           libclang-${{ matrix.llvm }}-dev \
           libclang-cpp${{ matrix.llvm }}-dev \
           libhpdf-dev \
+          libomp-${{ matrix.llvm }}-dev \
           libtool \
           llvm-${{ matrix.llvm }} \
           llvm-${{ matrix.llvm }}-dev \

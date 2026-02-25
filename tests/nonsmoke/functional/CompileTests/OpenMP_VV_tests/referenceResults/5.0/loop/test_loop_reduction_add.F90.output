@@ -1,0 +1,6 @@
+!$omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+!$omp loop reduction(+:total)
+!$omp end loop
+!$omp do
+!$omp end do
+!$omp end parallel

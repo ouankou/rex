@@ -23,6 +23,8 @@
 
 #include "rose_path_resolver.h"
 
+#include "clang-include-option.h"
+
 #include "Outliner.hh"
 
 using namespace Rose; // temporary, until this file lives in namespace Rose
@@ -487,6 +489,26 @@ static void split_string(std::string const &str, T &res, char sep = ',',
     }
   }
   res.push_back(f(str.substr(prev, pos - prev)));
+}
+
+static const char *const rexClangFrontendOptions[] = {
+    "-rex:clang:continue-on-error", "-rex:clang:disable-access-control",
+    "-rex:clang:delayed-template-parsing", "-rex:clang:respect-rtti-flags"};
+
+static void removeRexClangFrontendOptions(std::vector<std::string> &argv) {
+  for (const char *option : rexClangFrontendOptions) {
+    CommandlineProcessing::removeArgs(argv, option);
+  }
+}
+
+static bool isRexClangFrontendOption(const std::string &arg) {
+  for (const char *option : rexClangFrontendOptions) {
+    if (arg == option) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /*-----------------------------------------------------------------------------
@@ -1553,7 +1575,8 @@ void SgFile::usage() {
         "     -rose:OpenMP:lowering, -rose:openmp:lowering\n"
         "                             on top of -rose:openmp:ast_only, "
         "transform AST with OpenMP nodes into multithreaded code \n"
-        "                             targeting GCC GOMP runtime library\n"
+        "                             targeting LLVM OpenMP runtime "
+        "(__kmpc/libomp)\n"
         "     -rose:OpenACC, -rose:openacc\n"
         "                             follow OpenACC 3.0 specification for "
         "Fortran, perform one of the following actions:\n"
@@ -2102,6 +2125,21 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
     if (SgProject::get_verbose() >= 1)
       printf("skip parser mode ON \n");
     set_skip_parser(true);
+  }
+
+  // Skip all ROSE frontend processing and preserve only command line
+  // bookkeeping. This is used by frontendShell() to build project/file nodes
+  // without invoking parsing, transformation, or backend compilation.
+  if (CommandlineProcessing::isOption(argv, "-rose:", "(skip_rose)", true) ==
+          true ||
+      CommandlineProcessing::isOption(argv, "--rose:", "(skip_rose)", true) ==
+          true) {
+    if (SgProject::get_verbose() >= 1)
+      printf("skip rose mode ON \n");
+    set_useBackendOnly(true);
+    set_skip_transformation(true);
+    set_skipfinalCompileStep(true);
+    set_skip_commentsAndDirectives(true);
   }
 
   //
@@ -3635,8 +3673,7 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   //----------------------------------------------------------------------------
 
   Rose::Cmdline::StripRoseOptions(argv);
-  CommandlineProcessing::removeArgs(argv, "-rex:clang:continue-on-error");
-  CommandlineProcessing::removeArgs(argv, "-rex:clang:disable-access-control");
+  removeRexClangFrontendOptions(argv);
   CommandlineProcessing::removeArgsWithParameters(argv, "-outputdir");
 
   //----------------------------------------------------------------------------
@@ -3759,6 +3796,8 @@ void SgFile::stripRoseCommandLineOptions(vector<string> &argv) {
   optionCount = sla(argv, "-rose:", "($)", "(skip_transformation)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(skip_unparse)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(skip_parser)", 1);
+  optionCount = sla(argv, "-rose:", "($)", "(skip_rose)", 1);
+  optionCount = sla(argv, "--rose:", "($)", "(skip_rose)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(unparse_includes)", 1);
   optionCount = sla(argv, "-rose:", "($)", "(unparse_line_directives)", 1);
   optionCount = sla(argv, "-rose:", "($)",
@@ -4158,9 +4197,14 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
   std::vector<std::string> clang_frontend_args;
   std::vector<std::string> sys_dirs_list;
   std::string input_file;
+  const bool respect_rtti_flags =
+      std::find(argv.begin(), argv.end(), "-rex:clang:respect-rtti-flags") !=
+      argv.end();
 
   for (size_t i = 0; i < argv.size(); i++) {
     std::string current_arg(argv[i]);
+    Rose::Cmdline::IncludeOptionParseResult include_parse_result =
+        Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption;
     if (current_arg.find("-I") == 0) {
       if (current_arg.length() > 2) {
         inc_dirs_list.push_back(current_arg.substr(2));
@@ -4195,9 +4239,18 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
       ++i;
       if (i >= argv.size())
         break;
+    } else if ((include_parse_result =
+                    Rose::Cmdline::normalizeAndAppendIncludeOption(
+                        current_arg, i, argv.size(),
+                        [&argv](size_t arg_index) { return argv[arg_index]; },
+                        clang_frontend_args)) !=
+               Rose::Cmdline::IncludeOptionParseResult::NotIncludeOption) {
+      if (include_parse_result ==
+          Rose::Cmdline::IncludeOptionParseResult::MissingArgument) {
+        break;
+      }
     } else if (current_arg.rfind("-std=", 0) == 0) {
-      // Standard selection is handled earlier during command-line
-      // processing.
+      // Standard selection is handled earlier during command-line processing.
     } else if (current_arg.find("-c") == 0) {
     } else if (current_arg.find("-o") == 0) {
       if (current_arg.length() == 2) {
@@ -4214,14 +4267,19 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
              current_arg == "-fopenmp-simd") {
     } else if (current_arg.find("--rex-omp-") == 0) {
     } else if (current_arg == "-fexceptions" ||
-               current_arg == "-fno-exceptions" ||
-               current_arg == "-fcxx-exceptions" ||
-               current_arg == "-fno-cxx-exceptions" ||
-               current_arg == "-frtti" || current_arg == "-fno-rtti") {
+               current_arg == "-fcxx-exceptions" || current_arg == "-frtti") {
       clang_frontend_args.push_back(current_arg);
-    } else if (current_arg == "-rex:clang:continue-on-error") {
-      clang_frontend_args.push_back(current_arg);
-    } else if (current_arg == "-rex:clang:disable-access-control") {
+    } else if (current_arg == "-fno-rtti") {
+      // Keep -fno-rtti backend-only unless frontend enforcement is explicitly
+      // requested.
+      if (respect_rtti_flags) {
+        clang_frontend_args.push_back(current_arg);
+      }
+    } else if (current_arg == "-fno-exceptions" ||
+               current_arg == "-fno-cxx-exceptions") {
+      // Keep exceptions enabled in frontend parsing to build a complete C++
+      // AST; disabling remains a backend concern.
+    } else if (isRexClangFrontendOption(current_arg)) {
       clang_frontend_args.push_back(current_arg);
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // Ignore other frontend/driver flags that Clang cc1 doesn't accept.
@@ -4835,6 +4893,61 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
       string ompmacro =
           "-D_OPENMP=" + StringUtility::numberToString(OMPVERSION);
       compilerNameString.push_back(ompmacro);
+    }
+
+    if ((get_openmp() || get_openmp_lowering()) && !get_Fortran_only()) {
+      const RosePathRoots roots = resolveRosePaths(nullptr);
+      const string openmp_compat_include_dir =
+          roots.compiler_header_root + "openmp-compat";
+      const std::filesystem::path openmp_compat_header =
+          std::filesystem::path(openmp_compat_include_dir) / "omp.h";
+      if (std::filesystem::exists(openmp_compat_header)) {
+        bool has_openmp_compat_include = false;
+        for (size_t idx = 0; idx < compilerNameString.size(); ++idx) {
+          const string &arg = compilerNameString[idx];
+          if ((arg == "-I" || arg == "-isystem") &&
+              (idx + 1) < compilerNameString.size() &&
+              compilerNameString[idx + 1] == openmp_compat_include_dir) {
+            has_openmp_compat_include = true;
+            break;
+          }
+          if (arg == "-I" + openmp_compat_include_dir ||
+              arg == "-isystem" + openmp_compat_include_dir) {
+            has_openmp_compat_include = true;
+            break;
+          }
+        }
+        if (!has_openmp_compat_include) {
+          // Ensure backend compilations resolve <omp.h> to the same REX
+          // compatibility wrapper used in the frontend.
+          compilerNameString.push_back("-I");
+          compilerNameString.push_back(openmp_compat_include_dir);
+        }
+      }
+
+#ifdef LLVM_OPENMP_INCLUDE_PATH
+      const string llvm_openmp_include_dir = LLVM_OPENMP_INCLUDE_PATH;
+      if (!llvm_openmp_include_dir.empty()) {
+        bool has_llvm_openmp_include = false;
+        for (size_t idx = 0; idx < compilerNameString.size(); ++idx) {
+          const string &arg = compilerNameString[idx];
+          if (arg == "-isystem" && (idx + 1) < compilerNameString.size() &&
+              compilerNameString[idx + 1] == llvm_openmp_include_dir) {
+            has_llvm_openmp_include = true;
+            break;
+          }
+          if (arg == "-I" + llvm_openmp_include_dir ||
+              arg == "-isystem" + llvm_openmp_include_dir) {
+            has_llvm_openmp_include = true;
+            break;
+          }
+        }
+        if (!has_llvm_openmp_include) {
+          compilerNameString.push_back("-isystem");
+          compilerNameString.push_back(llvm_openmp_include_dir);
+        }
+      }
+#endif
     }
   }
 
@@ -5923,11 +6036,8 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
       iter_last_inc++; // accommodate the insert-before-an-iterator semantics
                        // used in vector::insert()
 
-    // Liao 7/14/2014. Justin changed installation path of headers to
-    // install/rose, Liao, 9/22/2009, we also specify the search path for
-    // libgomp_g.h, libxomp.h etc, which are installed under $ROSE_INS/include
-    // and the path to libgomp.a/libgomp.so, which are located in
-    // $GCC_GOMP_OPENMP_LIB_PATH
+    // Keep REX OpenMP lowering headers reachable from the installation include
+    // tree (LLVM runtime only path).
 
     static const RosePathRoots roots = resolveRosePaths(nullptr);
     if (roots.in_install_tree && !roots.rose_include_root.empty()) {
@@ -5972,13 +6082,15 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     std::string objectFileName = get_objectFileNameWithoutPath();
     if (objectFileName.length() == 0) {
       objectFileName = generateOutputFileName();
-      printf(" --- get_objectFileNameWithoutPath() returned empty string, "
-             "using generateOutputFileName(): objectFileName = %s \n",
-             objectFileName.c_str());
+      MLOG_TRACE_CXX("sage_support")
+          << "get_objectFileNameWithoutPath() returned empty string; "
+             "using generateOutputFileName(): objectFileName = "
+          << objectFileName << std::endl;
     } else {
-      printf(" --- using value from get_objectFileNameWithoutPath(): "
-             "objectFileName = %s \n",
-             objectFileName.c_str());
+      MLOG_TRACE_CXX("sage_support")
+          << "using value from get_objectFileNameWithoutPath(): objectFileName "
+             "= "
+          << objectFileName << std::endl;
     }
 #if DEBUG_COMPILER_COMMAND_LINE
     printf("In buildCompilerCommandLineOptions: test 5.5: objectNameSpecified "

@@ -116,7 +116,8 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
             suffix == "f95" || suffix == "F95" || suffix == "ff95" ||
             suffix == "cuf" || suffix == "CUF" || suffix == "f18" ||
             suffix == "F18" || suffix == "ff18" || suffix == "rmod" ||
-            suffix == "rcmp" || suffix == "RMOD" || suffix == "RCMP") {
+            suffix == "rcmp" || suffix == "mod" || suffix == "RMOD" ||
+            suffix == "RCMP" || suffix == "MOD") {
           ctx.fortranSources.push_back(arg);
         } else if (suffix == "o" || suffix == "a") {
           ctx.relocatables.push_back(arg);

@@ -2637,7 +2637,8 @@ ROSE_DLL_API void convertFunctionDefinitionsToFunctionPrototypes(SgNode *node);
 // SgFunctionDeclaration* functionDeclaration );
 ROSE_DLL_API SgFunctionDeclaration *
 replaceDefiningFunctionDeclarationWithFunctionPrototype(
-    SgFunctionDeclaration *functionDeclaration);
+    SgFunctionDeclaration *functionDeclaration,
+    bool movePreprocessingInfo = true);
 ROSE_DLL_API std::vector<SgFunctionDeclaration *>
 generateFunctionDefinitionsList(SgNode *node);
 

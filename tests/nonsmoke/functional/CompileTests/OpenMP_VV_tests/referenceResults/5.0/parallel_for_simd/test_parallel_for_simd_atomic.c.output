@@ -1,0 +1,2 @@
+#pragma omp parallel for simd shared(x) num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp atomic update

@@ -1,0 +1,4 @@
+#pragma omp requires reverse_offload
+#pragma omp target map(tofrom:errors2) map(to:a,which_device,is_shared_env)
+#pragma omp target device(ancestor:1) map(to:a) map(to:which_device)
+#pragma omp target device(device_num:first_device_num) map(tofrom:b,target_device_num)

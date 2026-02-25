@@ -59,6 +59,23 @@ SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   }
   return nullptr;
 }
+
+bool shouldSkipImplicitDataSharingVar(const SgInitializedName *init_var) {
+  if (init_var == nullptr) {
+    return true;
+  }
+  if (const Sg_File_Info *fi = init_var->get_file_info()) {
+    if (fi->isCompilerGenerated() || fi->isTransformation()) {
+      return true;
+    }
+  }
+
+  // Clang may materialize predefined function-name expressions as internal
+  // declarations. They are not user data-sharing candidates.
+  const std::string name = init_var->get_name().getString();
+  return name == "__PRETTY_FUNCTION__" || name == "__func__" ||
+         name == "__FUNCTION__";
+}
 } // namespace
 
 Rose_STL_Container<SgNode *>
@@ -262,6 +279,8 @@ static bool isSharedInEnclosingConstructs(SgInitializedName *init_var,
   bool result = false;
   ROSE_ASSERT(init_var != NULL);
   ROSE_ASSERT(start_stmt != NULL);
+  if (shouldSkipImplicitDataSharingVar(init_var))
+    return true;
   SgScopeStatement *var_scope = init_var->get_scope();
   //    SgScopeStatement* directive_scope = start_stmt->get_scope();
   // locally declared variables are private to the start_stmt
@@ -481,6 +500,8 @@ int patchUpFirstprivateVariables(SgFile *file) {
       ROSE_ASSERT(var_ref->get_symbol() != NULL);
       SgInitializedName *init_var = var_ref->get_symbol()->get_declaration();
       ROSE_ASSERT(init_var != NULL);
+      if (shouldSkipImplicitDataSharingVar(init_var))
+        continue;
       SgScopeStatement *var_scope = init_var->get_scope();
       ROSE_ASSERT(var_scope != NULL);
 
@@ -543,6 +564,8 @@ int patchUpImplicitMappingVariables(SgFile *file) {
       ROSE_ASSERT(var_ref->get_symbol() != NULL);
       SgInitializedName *init_var = var_ref->get_symbol()->get_declaration();
       ROSE_ASSERT(init_var != NULL);
+      if (shouldSkipImplicitDataSharingVar(init_var))
+        continue;
       SgScopeStatement *var_scope = init_var->get_scope();
       ROSE_ASSERT(var_scope != NULL);
 
@@ -583,7 +606,14 @@ int patchUpImplicitMappingVariables(SgFile *file) {
         Rose_STL_Container<SgOmpClause *>::const_iterator iter;
         for (iter = map_clauses.begin(); iter != map_clauses.end(); iter++) {
           SgOmpMapClause *temp_map_clause = isSgOmpMapClause(*iter);
-          if (temp_map_clause->get_operation() == SgOmpClause::e_omp_map_to) {
+          if (temp_map_clause->get_operation() == SgOmpClause::e_omp_map_to ||
+              temp_map_clause->get_operation() ==
+                  SgOmpClause::e_omp_map_present ||
+              temp_map_clause->get_operation() == SgOmpClause::e_omp_map_self ||
+              temp_map_clause->get_operation() ==
+                  SgOmpClause::e_omp_map_tofrom ||
+              temp_map_clause->get_operation() ==
+                  SgOmpClause::e_omp_map_unknown) {
             map_clause = temp_map_clause;
             array_dimensions = map_clause->get_array_dimensions();
             explist = map_clause->get_variables();
@@ -607,7 +637,8 @@ int patchUpImplicitMappingVariables(SgFile *file) {
       SgExpressionPtrList expression_list = explist->get_expressions();
       for (iter = expression_list.begin(); iter != expression_list.end();
            iter++) {
-        if (isSgVarRefExp(*iter)->get_symbol() == sym) {
+        SgVarRefExp *mapped_ref = extractVarRefFromExpression(*iter);
+        if (mapped_ref != nullptr && mapped_ref->get_symbol() == sym) {
           has_mapped = true;
           break;
         }
@@ -671,6 +702,8 @@ int patchUpImplicitSharedVariables(SgFile *file) {
       ROSE_ASSERT(var_ref->get_symbol() != NULL);
       SgInitializedName *init_var = var_ref->get_symbol()->get_declaration();
       ROSE_ASSERT(init_var != NULL);
+      if (shouldSkipImplicitDataSharingVar(init_var))
+        continue;
       SgScopeStatement *var_scope = init_var->get_scope();
       ROSE_ASSERT(var_scope != NULL);
 
@@ -737,7 +770,13 @@ int normalizeOmpMapVariables(SgFile *file, VariantVector clause_vv,
       Rose_STL_Container<SgOmpClause *>::const_iterator iter;
       for (iter = map_clauses.begin(); iter != map_clauses.end(); iter++) {
         SgOmpMapClause *temp_map_clause = isSgOmpMapClause(*iter);
-        if (temp_map_clause->get_operation() == SgOmpClause::e_omp_map_to) {
+        if (temp_map_clause->get_operation() == SgOmpClause::e_omp_map_to ||
+            temp_map_clause->get_operation() ==
+                SgOmpClause::e_omp_map_present ||
+            temp_map_clause->get_operation() == SgOmpClause::e_omp_map_self ||
+            temp_map_clause->get_operation() == SgOmpClause::e_omp_map_tofrom ||
+            temp_map_clause->get_operation() ==
+                SgOmpClause::e_omp_map_unknown) {
           map_clause = temp_map_clause;
           explist = map_clause->get_variables();
           has_map_to_clause = true;

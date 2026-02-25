@@ -1,0 +1,3 @@
+#pragma omp target data map(tofrom:result[0:N])
+#pragma omp target update to(result[0:N/2:2])
+#pragma omp target map(alloc:result[0:N])

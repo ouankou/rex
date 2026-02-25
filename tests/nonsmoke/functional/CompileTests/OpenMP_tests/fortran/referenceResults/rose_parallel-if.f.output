@@ -1,6 +1,6 @@
-!$omp parallel  if(i .EQ. 0)
+!$omp parallel  if(i.eq.0)
 !$omp end parallel
-!$omp parallel  if(i .NE. 0)
+!$omp parallel  if(i.ne.0)
 !$omp single
 !$omp end single
 !$omp end parallel

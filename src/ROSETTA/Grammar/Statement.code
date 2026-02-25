@@ -16128,10 +16128,81 @@ SgOmpOrderedDependStatement::post_construction_initialization()
    {}
 SOURCE_OMP_ORDERED_DEPEND_STATEMENT_END
 
+HEADER_OMP_DECLARE_MAPPER_STATEMENT_START
+//! Required for any declaration statement
+     virtual SgName get_mangled_name(void) const override;
+HEADER_OMP_DECLARE_MAPPER_STATEMENT_END
+
 SOURCE_OMP_DECLARE_MAPPER_STATEMENT_START
 void
 SgOmpDeclareMapperStatement::post_construction_initialization()
    {}
+
+SgName
+SgOmpDeclareMapperStatement::get_mangled_name(void) const
+   {
+     SgName returnName;
+       // The semantics of get_scope is that it can never be NULL (SgGlobal returns itself as its scope!)
+     SgScopeStatement* scope = get_scope();
+     ROSE_ASSERT(scope != NULL);
+
+     std::string identifier_component = "unspecified";
+     std::string type_component = "unknown";
+     std::string signature_data =
+         "_identifier_kind_" +
+         Rose::StringUtility::numberToString(static_cast<int>(get_identifier()));
+
+     if (SgExpression* user_identifier = get_user_defined_identifier()) {
+       signature_data += "_identifier_expr_" + user_identifier->unparseToString();
+       if (SgVarRefExp* vref = isSgVarRefExp(user_identifier)) {
+         if (SgVariableSymbol* sym = isSgVariableSymbol(vref->get_symbol())) {
+           if (SgInitializedName* decl = sym->get_declaration()) {
+             identifier_component = decl->get_mangled_name().str();
+           }
+         }
+       }
+       if (identifier_component == "unspecified") {
+         identifier_component =
+             "expr_" + Rose::StringUtility::numberToString(
+                           Rose::StringUtility::generate_checksum(
+                               user_identifier->unparseToString()));
+       }
+     } else if (get_identifier() ==
+                SgOmpClause::e_omp_declare_mapper_identifier_default) {
+       identifier_component = "default";
+     }
+
+     if (SgExpression* mapper_type = get_mapper_type()) {
+       signature_data += "_mapper_type_expr_" + mapper_type->unparseToString();
+       if (SgType* type = mapper_type->get_type()) {
+         SgName type_mangled = type->get_mangled();
+         if (type_mangled.is_null() == false) {
+           type_component = type_mangled.str();
+           signature_data += "_mapper_type_mangled_" + type_component;
+         }
+       }
+       if (type_component == "unknown") {
+         type_component =
+             "expr_" + Rose::StringUtility::numberToString(
+                           Rose::StringUtility::generate_checksum(
+                               mapper_type->unparseToString()));
+       }
+     }
+
+     if (SgExpression* mapper_variable = get_mapper_variable()) {
+       signature_data += "_mapper_variable_" + mapper_variable->unparseToString();
+     }
+
+     const std::string signature_suffix = Rose::StringUtility::numberToString(
+         Rose::StringUtility::generate_checksum(signature_data));
+     returnName = scope->get_mangled_name() +
+                  SgName("_omp_declaration_mapper_identifier_") +
+                  SgName(identifier_component) + SgName("_type_") +
+                  SgName(type_component) + SgName("_signature_") +
+                  SgName(signature_suffix);
+     return returnName;
+   }
+
 SOURCE_OMP_DECLARE_MAPPER_STATEMENT_END
 
 SOURCE_OMP_CANCEL_STATEMENT_START
@@ -16269,6 +16340,8 @@ SgOmpDeclareTargetStatement::get_mangled_name(void) const
 SOURCE_OMP_DECLARE_TARGET_STATEMENT_END
 
 HEADER_OMP_END_DECLARE_TARGET_STATEMENT_START
+//! Required for any declaration statement
+     virtual SgName get_mangled_name(void) const override;
 
 HEADER_OMP_END_DECLARE_TARGET_STATEMENT_END
 
@@ -16276,6 +16349,65 @@ SOURCE_OMP_END_DECLARE_TARGET_STATEMENT_START
 void
 SgOmpEndDeclareTargetStatement::post_construction_initialization()
    {}
+
+SgName
+SgOmpEndDeclareTargetStatement::get_mangled_name(void) const
+   {
+     SgName returnName;
+       // The semantics of get_scope is that it can never be NULL (SgGlobal returns itself as its scope!)
+     SgScopeStatement* scope = get_scope();
+     ROSE_ASSERT(scope != NULL);
+
+     std::string signature_suffix;
+     if (Sg_File_Info* fi = get_file_info()) {
+       if (fi->get_line() > 0) {
+         std::string signature_data = fi->get_filenameString() + ":" +
+             Rose::StringUtility::numberToString(fi->get_line()) + ":" +
+             Rose::StringUtility::numberToString(fi->get_col());
+         signature_suffix = Rose::StringUtility::numberToString(
+             Rose::StringUtility::generate_checksum(signature_data));
+       }
+     }
+
+     if (signature_suffix.empty()) {
+       bool found_in_scope = false;
+       unsigned long long scope_local_index = 0;
+
+       if (scope->containsOnlyDeclarations() == true) {
+         const SgDeclarationStatementPtrList &decls =
+             scope->getDeclarationList();
+         for (SgDeclarationStatementPtrList::const_iterator it = decls.begin();
+              it != decls.end(); ++it, ++scope_local_index) {
+           if (*it == this) {
+             found_in_scope = true;
+             break;
+           }
+         }
+       } else {
+         const SgStatementPtrList &stmts = scope->getStatementList();
+         for (SgStatementPtrList::const_iterator it = stmts.begin();
+              it != stmts.end(); ++it, ++scope_local_index) {
+           if (*it == this) {
+             found_in_scope = true;
+             break;
+           }
+         }
+       }
+
+       if (found_in_scope == true) {
+         signature_suffix =
+             "scope_index_" +
+             Rose::StringUtility::numberToString(scope_local_index);
+       } else {
+         signature_suffix = "scope_index_unknown";
+       }
+     }
+
+     returnName = scope->get_mangled_name() +
+                  SgName("_omp_end_declaration_target_") +
+                  SgName(signature_suffix);
+     return returnName;
+   }
 
 SOURCE_OMP_END_DECLARE_TARGET_STATEMENT_END
 

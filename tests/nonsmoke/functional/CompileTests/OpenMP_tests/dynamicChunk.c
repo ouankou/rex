@@ -1,7 +1,7 @@
 #include <omp.h>
-int foo(void)
 #include <stdio.h>
-{
+
+int foo(void) {
   double a[1000];
   int i;
   int n;

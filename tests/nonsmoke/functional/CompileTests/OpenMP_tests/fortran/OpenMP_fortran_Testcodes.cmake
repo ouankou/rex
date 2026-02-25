@@ -41,7 +41,7 @@ set(OPENMP_FORTRAN_TESTCODES
   exampleA102f.f90
   exampleA161f.f90
   flush2.f
-  exmpaleA221f.f
+  exampleA221f.f
   conditional.f
   exampleA41f.f90
   exampleA134f.f90
@@ -52,4 +52,5 @@ set(OPENMP_FORTRAN_TESTCODES
   ompdo-multiple.f
   shared-array.f
   collapse.f90
+  requires_dynamic_allocators_type.f90
 )

@@ -1,0 +1,4 @@
+!$omp parallel num_threads(OMPVV_NUM_THREADS_HOST)
+!$omp loop private(privatized)
+!$omp end loop
+!$omp end parallel

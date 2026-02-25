@@ -10,9 +10,13 @@
 
 #include "sage3basic.h"
 
+#include "abiStuff.h"
+
 #include "sageBuilder.h"
 
+#include <limits>
 #include <sstream>
+#include <string>
 
 using namespace std;
 using namespace Rose;
@@ -23,11 +27,328 @@ using namespace OmpSupport;
 extern std::vector<SgFunctionDeclaration *> *target_outlined_function_list;
 extern std::vector<SgDeclarationStatement *> *target_outlined_struct_list;
 
+static bool equals_ignore_case(const std::string &lhs, const std::string &rhs) {
+  if (lhs.size() != rhs.size())
+    return false;
+  for (size_t i = 0; i < lhs.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(lhs[i])) !=
+        std::tolower(static_cast<unsigned char>(rhs[i])))
+      return false;
+  }
+  return true;
+}
+
+static bool has_fortran_external_decl(SgBasicBlock *body,
+                                      const std::string &name) {
+  ROSE_ASSERT(body != NULL);
+  for (SgStatement *stmt : body->get_statements()) {
+    SgAttributeSpecificationStatement *attr =
+        isSgAttributeSpecificationStatement(stmt);
+    if (attr == NULL ||
+        attr->get_attribute_kind() !=
+            SgAttributeSpecificationStatement::e_externalStatement)
+      continue;
+
+    SgExprListExp *parameter_list = attr->get_parameter_list();
+    if (parameter_list == NULL)
+      continue;
+
+    for (SgExpression *expr : parameter_list->get_expressions()) {
+      std::string symbol_name;
+      if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
+        ROSE_ASSERT(func_ref->get_symbol() != NULL);
+        symbol_name = func_ref->get_symbol()->get_name().getString();
+      } else if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+        ROSE_ASSERT(var_ref->get_symbol() != NULL);
+        symbol_name = var_ref->get_symbol()->get_name().getString();
+      } else {
+        continue;
+      }
+
+      if (equals_ignore_case(symbol_name, name))
+        return true;
+    }
+  }
+
+  return false;
+}
+
+static void append_fortran_external_decl(SgBasicBlock *body,
+                                         SgFunctionDeclaration *func_decl) {
+  ROSE_ASSERT(body != NULL);
+  ROSE_ASSERT(func_decl != NULL);
+
+  std::string func_name = func_decl->get_name().getString();
+  if (has_fortran_external_decl(body, func_name))
+    return;
+
+  SgAttributeSpecificationStatement *external_stmt =
+      buildAttributeSpecificationStatement(
+          SgAttributeSpecificationStatement::e_externalStatement);
+  SgFunctionRefExp *func_ref = buildFunctionRefExp(func_decl);
+  external_stmt->get_parameter_list()->prepend_expression(func_ref);
+  func_ref->set_parent(external_stmt->get_parameter_list());
+
+  SgStatement *last_decl = findLastDeclarationStatement(body);
+  if (last_decl != NULL)
+    insertStatementAfter(last_decl, external_stmt);
+  else
+    prependStatement(external_stmt, body);
+}
+
+static void insert_libxompf_h_for_task(SgNode *start_node) {
+  ROSE_ASSERT(start_node != NULL);
+  ROSE_ASSERT(SageInterface::is_Fortran_language() == true);
+  ROSE_ASSERT(isSgFunctionDefinition(start_node) == NULL);
+
+  SgBasicBlock *body = getEnclosingRegionOrFuncDefinition(start_node);
+  ROSE_ASSERT(body != NULL);
+
+  SgStatement *existing_include = NULL;
+  for (SgStatement *stmt : body->get_statements()) {
+    SgFortranIncludeLine *f_inc = isSgFortranIncludeLine(stmt);
+    if (f_inc == NULL)
+      continue;
+
+    std::string include_name =
+        StringUtility::stripPathFromFileName(f_inc->get_filename());
+    if (include_name == "libxompf.fh" || include_name == "libxompf.h") {
+      existing_include = f_inc;
+      break;
+    }
+  }
+
+  if (existing_include == NULL) {
+    SgFortranIncludeLine *inc_line = buildFortranIncludeLine("libxompf.fh");
+    SgStatement *last_decl = findLastDeclarationStatement(body);
+    if (last_decl != NULL)
+      insertStatementAfter(last_decl, inc_line);
+    else
+      prependStatement(inc_line, body);
+  }
+}
+
+static bool is_32_bit_target(const SgNode *context) {
+  SgProject *project = SageInterface::getProject(context);
+  ROSE_ASSERT(project != NULL);
+  return project->get_mode_32_bit();
+}
+
+static StructLayoutInfo get_target_layout_info(SgType *type,
+                                               const SgNode *context) {
+  ROSE_ASSERT(type != NULL);
+
+  if (is_32_bit_target(context)) {
+    I386PrimitiveTypeLayoutGenerator primitive_generator(NULL);
+    NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
+    return layout_generator.layoutType(type);
+  }
+
+  X86_64PrimitiveTypeLayoutGenerator primitive_generator(NULL);
+  NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
+  return layout_generator.layoutType(type);
+}
+
+static int get_target_type_size_bytes(SgType *type, const SgNode *context) {
+  StructLayoutInfo layout = get_target_layout_info(type, context);
+  if (layout.size == 0 ||
+      layout.size > static_cast<size_t>(std::numeric_limits<int>::max()))
+    return -1;
+  return static_cast<int>(layout.size);
+}
+
+static int get_fortran_value_parameter_size(SgType *type,
+                                            const SgNode *context) {
+  ROSE_ASSERT(type != NULL);
+  SgType *base_type =
+      type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE);
+  ROSE_ASSERT(base_type != NULL);
+  return get_target_type_size_bytes(base_type, context);
+}
+
+static int get_fortran_pointer_parameter_size(const SgNode *context) {
+  return get_target_type_size_bytes(buildPointerType(buildVoidType()), context);
+}
+
+static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
+  ROSE_ASSERT(target != NULL);
+
+  SgStatement *body = target->get_body();
+  ROSE_ASSERT(body != NULL);
+
+  insert_libxompf_h_for_task(target);
+
+  AttachedPreprocessingInfoType save_buf1, save_buf2;
+  cutPreprocessingInfo(target, PreprocessingInfo::before, save_buf1);
+  cutPreprocessingInfo(target, PreprocessingInfo::after, save_buf2);
+
+  std::string wrapper_name;
+  ASTtools::VarSymSet_t syms;
+  ASTtools::VarSymSet_t pdSyms3;
+  SgFunctionDeclaration *outlined_func =
+      generateOutlinedTask(target, wrapper_name, syms, pdSyms3, false, false);
+  ROSE_ASSERT(outlined_func != NULL);
+
+  SgBasicBlock *enclosing_body = getEnclosingRegionOrFuncDefinition(target);
+  ROSE_ASSERT(enclosing_body != NULL);
+  append_fortran_external_decl(enclosing_body, outlined_func);
+
+  SgScopeStatement *task_scope = target->get_scope();
+  ROSE_ASSERT(task_scope != NULL);
+
+  int pointer_size = get_fortran_pointer_parameter_size(target);
+  if (pointer_size <= 0) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "transOmpTaskForFortran(): unable to determine target pointer size";
+    ROSE_ABORT();
+  }
+  if (syms.size() >
+      static_cast<size_t>(std::numeric_limits<int>::max() / pointer_size)) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "transOmpTaskForFortran(): outlined task parameter size overflow";
+    ROSE_ABORT();
+  }
+
+  SgExpression *parameter_cpyfn = buildIntVal(0);
+  SgExpression *parameter_arg_size =
+      buildIntVal(static_cast<int>(syms.size() * pointer_size));
+  SgExpression *parameter_arg_align = buildIntVal(4);
+  SgExpression *parameter_if_clause = buildIntVal(1);
+  if (hasClause(target, V_SgOmpIfClause)) {
+    Rose_STL_Container<SgOmpClause *> clauses =
+        getClause(target, V_SgOmpIfClause);
+    ROSE_ASSERT(clauses.size() == 1);
+    SgOmpIfClause *if_clause = isSgOmpIfClause(clauses[0]);
+    ROSE_ASSERT(if_clause != NULL);
+    ROSE_ASSERT(if_clause->get_expression() != NULL);
+    parameter_if_clause = copyExpression(if_clause->get_expression());
+  }
+
+  SgExpression *parameter_untied =
+      hasClause(target, V_SgOmpUntiedClause) ? buildIntVal(1) : buildIntVal(0);
+
+  SgExprListExp *parameters = buildExprListExp(
+      buildFunctionRefExp(outlined_func), parameter_cpyfn, parameter_arg_size,
+      parameter_arg_align, parameter_if_clause, parameter_untied);
+  appendExpression(parameters, buildIntVal(static_cast<int>(syms.size() * 3)));
+
+  for (ASTtools::VarSymSet_t::iterator iter = syms.begin(); iter != syms.end();
+       ++iter) {
+    const SgVariableSymbol *sym = *iter;
+    ROSE_ASSERT(sym != NULL);
+    ROSE_ASSERT(sym->get_declaration() != NULL);
+
+    bool pass_by_value = isLoopIndexVariable(sym->get_declaration(), target);
+    appendExpression(parameters, buildIntVal(pass_by_value ? 1 : 0));
+
+    if (pass_by_value) {
+      int value_size =
+          get_fortran_value_parameter_size(sym->get_type(), target);
+      if (value_size < 0) {
+        MLOG_ERROR_CXX("ompLowering")
+            << "transOmpTaskForFortran(): unsupported pass-by-value type for "
+            << "variable " << sym->get_name().getString() << " of type "
+            << sym->get_type()->class_name();
+        ROSE_ABORT();
+      }
+      appendExpression(parameters, buildIntVal(value_size));
+    } else {
+      appendExpression(parameters, buildIntVal(pointer_size));
+    }
+
+    appendExpression(parameters,
+                     buildVarRefExp(const_cast<SgVariableSymbol *>(sym)));
+  }
+
+  SgExprStatement *task_call = buildFunctionCallStmt(
+      "xomp_task", buildVoidType(), parameters, task_scope);
+  SageInterface::replaceStatement(target, task_call, true);
+
+  pastePreprocessingInfo(task_call, PreprocessingInfo::before, save_buf1);
+  pastePreprocessingInfo(task_call, PreprocessingInfo::after, save_buf2);
+}
+
+static void transOmpTaskForC(SgOmpTaskStatement *target) {
+  ROSE_ASSERT(target != NULL);
+  SgStatement *body = target->get_body();
+  ROSE_ASSERT(body != NULL);
+
+  AttachedPreprocessingInfoType save_buf1, save_buf2;
+  cutPreprocessingInfo(target, PreprocessingInfo::before, save_buf1);
+  cutPreprocessingInfo(target, PreprocessingInfo::after, save_buf2);
+
+  std::string wrapper_name;
+  ASTtools::VarSymSet_t syms;
+  ASTtools::VarSymSet_t pdSyms3;
+  SgFunctionDeclaration *outlined_func =
+      generateOutlinedTask(target, wrapper_name, syms, pdSyms3, false, false);
+  ROSE_ASSERT(outlined_func != NULL);
+
+  SgScopeStatement *task_scope = target->get_scope();
+  ROSE_ASSERT(task_scope != NULL);
+
+  SgExpression *parameter_data = NULL;
+  SgExpression *parameter_cpyfn = buildIntVal(0);
+  SgExpression *parameter_arg_size = NULL;
+  SgExpression *parameter_arg_align = NULL;
+  size_t parameter_count = syms.size();
+  if (parameter_count == 0) {
+    parameter_data = buildIntVal(0);
+    parameter_arg_size = buildIntVal(0);
+    parameter_arg_align = buildIntVal(0);
+  } else {
+    SgVarRefExp *data_ref = buildVarRefExp(wrapper_name, task_scope);
+    ROSE_ASSERT(data_ref != NULL);
+    parameter_data = buildAddressOfOp(data_ref);
+    parameter_arg_size = buildSizeOfOp(data_ref->get_type());
+    parameter_arg_align = buildIntVal(4);
+  }
+
+  SgExpression *parameter_if_clause = buildIntVal(1);
+  if (hasClause(target, V_SgOmpIfClause)) {
+    Rose_STL_Container<SgOmpClause *> clauses =
+        getClause(target, V_SgOmpIfClause);
+    ROSE_ASSERT(clauses.size() == 1);
+    SgOmpIfClause *if_clause = isSgOmpIfClause(clauses[0]);
+    ROSE_ASSERT(if_clause != NULL);
+    ROSE_ASSERT(if_clause->get_expression() != NULL);
+    parameter_if_clause = copyExpression(if_clause->get_expression());
+  }
+
+  SgExpression *parameter_untied =
+      hasClause(target, V_SgOmpUntiedClause) ? buildIntVal(1) : buildIntVal(0);
+
+  SgType *task_callback_type = buildPointerType(buildFunctionType(
+      buildVoidType(),
+      buildFunctionParameterTypeList(buildPointerType(buildVoidType()))));
+  SgExpression *task_callback =
+      buildCastExp(buildFunctionRefExp(outlined_func), task_callback_type,
+                   SgCastExp::e_C_style_cast);
+
+  SgExprListExp *parameters = buildExprListExp(
+      task_callback, parameter_data, parameter_cpyfn, parameter_arg_size,
+      parameter_arg_align, parameter_if_clause, parameter_untied);
+  SgExprStatement *task_call = buildFunctionCallStmt(
+      "XOMP_task", buildVoidType(), parameters, task_scope);
+  SageInterface::replaceStatement(target, task_call, true);
+
+  pastePreprocessingInfo(task_call, PreprocessingInfo::before, save_buf1);
+  pastePreprocessingInfo(task_call, PreprocessingInfo::after, save_buf2);
+}
+
 //! Translate omp task
 void OmpSupport::transOmpTask(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpTaskStatement *target = isSgOmpTaskStatement(node);
   ROSE_ASSERT(target != NULL);
+
+  if (SageInterface::is_Fortran_language()) {
+    transOmpTaskForFortran(target);
+    return;
+  }
+
+  transOmpTaskForC(target);
+  return;
 
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);

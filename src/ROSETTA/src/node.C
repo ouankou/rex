@@ -1547,6 +1547,21 @@ void Grammar::setUpNodes() {
   OmpMapClause.setDataPrototype(
       "SgOmpClause::omp_map_operator_enum", "operation", "=e_omp_map_unknown",
       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OmpMapClause.setDataPrototype(
+      "SgOmpClause::omp_map_modifier_enum", "modifier1",
+      "=e_omp_map_modifier_unspecified", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OmpMapClause.setDataPrototype(
+      "SgOmpClause::omp_map_modifier_enum", "modifier2",
+      "=e_omp_map_modifier_unspecified", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OmpMapClause.setDataPrototype(
+      "SgOmpClause::omp_map_modifier_enum", "modifier3",
+      "=e_omp_map_modifier_unspecified", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OmpMapClause.setDataPrototype(
+      "SgExpression*", "mapper_identifier", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
   // TODO how to traverse this map?  the bound variables may need to be visited.
   OmpMapClause.setDataPrototype(
       "std::map<SgSymbol*,  std::vector < std::pair <SgExpression*, "

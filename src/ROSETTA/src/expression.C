@@ -1346,6 +1346,18 @@ void Grammar::setUpExpressions() {
                                    "../Grammar/Expression.code");
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  NEW_TERMINAL_MACRO(PackExpansionExpr, "PackExpansionExpr",
+                     "PACK_EXPANSION_EXPR");
+  PackExpansionExpr.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  PackExpansionExpr.setDataPrototype(
+      "SgExpression*", "pattern_expression", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  PackExpansionExpr.setFunctionSource("SOURCE_PACK_EXPANSION_EXPRESSION",
+                                      "../Grammar/Expression.code");
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // DQ (8/8/2014): Added support for C++11 decltype which references a function
   // parameter.
   NEW_TERMINAL_MACRO(FunctionParameterRefExp, "FunctionParameterRefExp",
@@ -3617,7 +3629,7 @@ void Grammar::setUpExpressions() {
           AlignOfOp | RangeExp | TypeTraitBuiltinOperator | CompoundLiteralExp |
           TypeExpression | ClassExp | FunctionParameterRefExp | LambdaExp |
           NoexceptOp | RequiresExpr | NonrealRefExp | FoldExpression |
-          AwaitExpression | ChooseExpression,
+          PackExpansionExpr | AwaitExpression | ChooseExpression,
       "Expression", "ExpressionTag", false);
 
   // DQ (5/20/2004): Add need_paren to all expression objects so that we can

@@ -16,6 +16,26 @@
 
 int mlogLevel = DEFAULT_MLOG_LEVEL;
 
+namespace {
+class MlogNullBuffer : public std::streambuf {
+public:
+  int overflow(int c) override { return traits_type::not_eof(c); }
+};
+
+class MlogNullStream : public std::ostream {
+public:
+  MlogNullStream() : std::ostream(&buffer_) {}
+
+private:
+  MlogNullBuffer buffer_;
+};
+} // namespace
+
+std::ostream &mlogNullStream_CXX() {
+  static MlogNullStream stream;
+  return stream;
+}
+
 /**
  * this array is used to get the string of each level, thus
  * it must be matching the value of each element of the MLOG_LEVEL enum

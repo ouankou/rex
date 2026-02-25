@@ -14,10 +14,15 @@ set_source_files_properties(
 
 add_library(xomp STATIC ${xomp_sources})
 
+add_library(kmpc_fortran_abi STATIC kmpc_fortran_wrappers.c)
+
 install(TARGETS xomp
+  ARCHIVE DESTINATION ${LIB_INSTALL_DIR})
+
+install(TARGETS kmpc_fortran_abi
   ARCHIVE DESTINATION ${LIB_INSTALL_DIR})
 
 ########### install files ###############
 
-install(FILES  omp_lowering.h libgomp_g.h libompc.h libxompf.h libxomp.h
+install(FILES  omp_lowering.h libxompf.fh libxomp.h rex_kmp.h
         DESTINATION ${INCLUDE_INSTALL_DIR})

@@ -1,0 +1,8 @@
+!$omp parallel num_threads(2) default(shared)
+!$omp atomic hint(4)
+!$omp end atomic
+!$omp end parallel
+!$omp parallel num_threads(OMPVV_NUM_THREADS_HOST) default(shared)
+!$omp atomic hint(4132)
+!$omp end atomic
+!$omp end parallel

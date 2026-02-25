@@ -60,6 +60,11 @@ public:
 inline constexpr char kExplicitGlobalQualifierAttributeName[] =
     "rex_explicit_global_qualifier";
 
+inline bool
+isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
+  return name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0;
+}
+
 struct ConstraintSatisfactionResult {
   bool evaluated = false;
   bool satisfied = true;

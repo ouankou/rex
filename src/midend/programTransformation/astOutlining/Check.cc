@@ -53,7 +53,10 @@ static bool checkType(const SgStatement *s) {
     case V_SgWhereStatement:
     case V_SgWhileStmt:
     case V_SgWriteStatement:
+    case V_SgOmpDoStatement:
     case V_SgOmpForStatement:
+    case V_SgOmpSectionStatement:
+    case V_SgOmpSectionsStatement:
       return true;
     default:
       break;

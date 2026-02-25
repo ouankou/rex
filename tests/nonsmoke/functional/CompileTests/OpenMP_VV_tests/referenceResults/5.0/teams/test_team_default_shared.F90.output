@@ -1,0 +1,3 @@
+!$omp target teams distribute default(shared) num_teams(OMPVV_NUM_TEAMS_DEVICE)
+!$omp atomic
+!$omp end atomic

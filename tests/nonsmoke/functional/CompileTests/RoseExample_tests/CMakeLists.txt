@@ -1,10 +1,19 @@
 set(files_to_test
   testRoseHeaders_00.C testRoseHeaders_01.C testRoseHeaders_02.C
   testRoseHeaders_03.C testRoseHeaders_04.C testRoseHeaders_05.C
-  testRoseHeaders_06.C testRoseHeaders_07.C testRoseHeaders_08.C
+  testRoseHeaders_06.C testRoseHeaders_09.C testRoseHeaders_14.C
   test2003_33.C test2003_34.C test2004_46.C test2006_43.C)
 
 set(ROSE_FLAGS  -w )
+
+foreach(file_to_test ${files_to_test})
+  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}")
+    message(
+      FATAL_ERROR
+        "RoseExample_tests references missing source '${file_to_test}' in ${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+  endif()
+endforeach()
 
 foreach(file_to_test ${files_to_test})
   compile_test(${file_to_test} rose_example)

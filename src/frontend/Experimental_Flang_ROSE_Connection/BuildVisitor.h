@@ -49,7 +49,7 @@ public:
     EndStatementSource();
   }
 
-  template <typename T> bool Pre(T &x) {
+  template <typename T> bool PreImpl(T &x) {
     if constexpr (std::is_void_v<decltype(Build(x))>) {
       // There is a local definition of Build() for this type.  It
       // overrides the parse tree walker's default Walk() over the descendents.
@@ -76,6 +76,24 @@ public:
       return true; // there's no Build() defined here, Walk() the descendents
     }
   }
+  template <typename T> bool Pre(Fortran::parser::Statement<T> &x) {
+    if (ShouldSkipIncludedSource(x.source)) {
+      BeginStatementSource(x.source);
+      EndStatementSource();
+      label_ = std::nullopt;
+      return false;
+    }
+    return PreImpl(x);
+  }
+  template <typename T> bool Pre(Fortran::parser::UnlabeledStatement<T> &x) {
+    if (ShouldSkipIncludedSource(x.source)) {
+      BeginStatementSource(x.source);
+      EndStatementSource();
+      return false;
+    }
+    return PreImpl(x);
+  }
+  template <typename T> bool Pre(T &x) { return PreImpl(x); }
   template <typename T> void Post(T &) {}
 
   void setKindSelectorType(std::optional<Fortran::parser::KindSelector> &x) {
@@ -245,7 +263,9 @@ public:
   void Build(Fortran::parser::ProcedureDeclarationStmt &);
   void Build(Fortran::parser::ArithmeticIfStmt &);
 
-  void Done() const { std::cerr << "Done()\n"; }
+  void Done() const {
+    MLOG_TRACE_CXX(MLOG_FRONTEND) << "BuildVisitor::Done()\n";
+  }
 
   void BuildPrefix(std::list<Fortran::parser::PrefixSpec> &,
                    LanguageTranslation::FunctionModifierList &, SgType *&);
@@ -288,6 +308,7 @@ private:
   void BeginStatementSource(const Fortran::parser::CharBlock &source);
   void EndStatementSource();
   void MaybeInsertIncludeLine(const Fortran::parser::CharBlock &source);
+  bool ShouldSkipIncludedSource(const Fortran::parser::CharBlock &source);
   void ApplyStatementLabel(SgStatement *stmt, SgScopeStatement *scope) const;
   void ApplyCurrentStatementSource(SgLocatedNode *node);
 

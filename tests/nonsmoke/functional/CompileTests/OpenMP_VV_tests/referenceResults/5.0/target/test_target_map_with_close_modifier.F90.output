@@ -1,0 +1,2 @@
+!$omp target map(close,tofrom:scalar,a,member)
+!$omp end target

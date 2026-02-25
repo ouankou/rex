@@ -1,2 +1,1 @@
-#pragma omp parallel if(mcco->_params.simulationParams.mpiThreadMultiple == 1)
-#pragma omp for schedule(static)
+#pragma omp parallel for schedule(static) if(mcco->_params.simulationParams.mpiThreadMultiple == 1)

@@ -11,6 +11,8 @@
 
 #include <list>
 
+#include <sstream>
+
 #include <string>
 
 #include "Outliner.hh"
@@ -27,8 +29,26 @@ using namespace std;
 // =====================================================================
 static void dump(const ASTtools::VarSymSet_t &V, const std::string &tag) {
   //  if (SgProject::get_verbose () >= 2)
-  if (Outliner::enable_debug)
-    cerr << tag << '{' << ASTtools::toString(V) << '}' << endl;
+  if (Outliner::enable_debug) {
+    std::ostringstream out;
+    out << tag << '{';
+    bool first = true;
+    for (ASTtools::VarSymSet_t::const_iterator i = V.begin(); i != V.end();
+         ++i) {
+      const SgVariableSymbol *sym = *i;
+      if (!first)
+        out << ", ";
+      first = false;
+      if (sym == NULL) {
+        out << "(null)";
+        continue;
+      }
+      const SgInitializedName *decl = sym->get_declaration();
+      out << sym->get_name().getString() << "@sym=" << sym << "/decl=" << decl;
+    }
+    out << '}';
+    MLOG_DEBUG_CXX("Outliner") << out.str();
+  }
 }
 
 //! Collect the variables to be passed if 's' is to be outlined
@@ -93,11 +113,37 @@ void Outliner::collectVars(
             "visible at s) = ");
 
     // (U - L) \cap Q = {variables that need to be passed as parameters to the
-    // outlined function} This is a subset of variables that are not globally
-    // visible (no need to pass at all) It excludes the variables with a scope
-    // between global and the enclosing function
-    set_intersection(diff_U_L.begin(), diff_U_L.end(), Q.begin(), Q.end(),
-                     inserter(syms, syms.begin()));
+    // outlined function}
+    //
+    // Use declaration-identity matching instead of raw symbol-pointer
+    // intersection. Frontend/normalization paths may materialize distinct
+    // symbol objects for the same declaration, which would otherwise drop valid
+    // captures.
+    std::map<const SgInitializedName *, const SgVariableSymbol *> q_by_decl;
+    for (ASTtools::VarSymSet_t::const_iterator i = Q.begin(); i != Q.end();
+         ++i) {
+      const SgVariableSymbol *sym = *i;
+      if (sym == NULL)
+        continue;
+      const SgInitializedName *decl = sym->get_declaration();
+      if (decl != NULL)
+        q_by_decl[decl] = sym;
+    }
+
+    for (ASTtools::VarSymSet_t::const_iterator i = diff_U_L.begin();
+         i != diff_U_L.end(); ++i) {
+      const SgVariableSymbol *sym = *i;
+      if (sym == NULL)
+        continue;
+      const SgInitializedName *decl = sym->get_declaration();
+      if (decl == NULL)
+        continue;
+      std::map<const SgInitializedName *,
+               const SgVariableSymbol *>::const_iterator where =
+          q_by_decl.find(decl);
+      if (where != q_by_decl.end())
+        syms.insert(where->second);
+    }
     dump(syms, "(U - L) InterSection Q [the variables to be passed into the "
                "outlined function]= ");
   }

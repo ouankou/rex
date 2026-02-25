@@ -1,0 +1,8 @@
+!$omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:a,b)
+!$omp loop collapse(1)
+!$omp end loop
+!$omp end target parallel
+!$omp target parallel num_threads(OMPVV_NUM_THREADS_DEVICE) map(tofrom:a,b,num_threads)
+!$omp loop collapse(2)
+!$omp end loop
+!$omp end target parallel
