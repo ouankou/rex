@@ -10,6 +10,18 @@
 #define __has_builtin(x) 0
 #endif
 
+#ifndef __I__
+#define __I__ (__extension__ 1.0iF)
+#endif
+
+#ifndef __NAN__
+#define __NAN__ __builtin_nanf("")
+#endif
+
+#ifndef __INFINITY__
+#define __INFINITY__ __builtin_inff()
+#endif
+
 #if !__has_builtin(__builtin_va_start)
 void __builtin_va_start(__builtin_va_list, ...);
 #endif

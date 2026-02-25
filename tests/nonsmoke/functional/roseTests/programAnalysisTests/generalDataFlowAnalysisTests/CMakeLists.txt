@@ -248,7 +248,7 @@ set(FAILING_CXX_CONSTPROP_SPECIMENS
   test2005_109.C
   test2005_11.C
   test2005_110.C
-  test2005_111.C
+  rex_test2026_issue213_va_start.cpp
   test2005_113.C
   test2005_116.C
   test2005_117.C
@@ -909,7 +909,7 @@ set(FAILING_C_CONSTPROP_SPECIMENS
   test2004_74.C
   test2004_94.C
   test2004_96.C
-  test2005_111.C
+  rex_test2026_issue213_va_start.cpp
   test2005_116.C
   test2005_125.C
   test2005_157.C

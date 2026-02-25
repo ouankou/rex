@@ -320,7 +320,7 @@ set(UNINIT_CXX_TEST_SOURCES
   test2005_109.C
   test2005_11.C
   test2005_110.C
-  test2005_111.C
+  rex_test2026_issue213_va_start.cpp
   test2005_112.C
   test2005_113.C
   test2005_114.C
@@ -2527,7 +2527,7 @@ set(UNINIT_C_TEST_SOURCES
   test2005_92.C
   test2005_95.C
   test2005_100.C
-  test2005_111.C
+  rex_test2026_issue213_va_start.cpp
   test2005_116.C
   test2005_125.C
   test2005_157.C
