@@ -1359,6 +1359,38 @@ static bool collectArraySectionMetadata(
     std::vector<std::pair<SgExpression*, SgExpression*> >& dimensions,
     bool& has_explicit_stride);
 
+static bool appendArraySectionDimension(
+    SgExpression* item,
+    std::vector<std::pair<SgExpression*, SgExpression*> >& dimensions,
+    bool& has_explicit_stride) {
+    if (item == NULL) {
+        return false;
+    }
+
+    if (SgSubscriptExpression* subscript = isSgSubscriptExpression(item)) {
+        SgExpression* lower = subscript->get_lowerBound();
+        SgExpression* length = subscript->get_upperBound();
+        if (lower == NULL || length == NULL) {
+            return false;
+        }
+
+        if (SgExpression* stride = subscript->get_stride()) {
+            SgIntVal* int_stride = isSgIntVal(stride);
+            if (int_stride == NULL || int_stride->get_value() != 1) {
+                has_explicit_stride = true;
+            }
+        }
+
+        dimensions.push_back(std::make_pair(lower, length));
+        return true;
+    }
+
+    // Plain indices in Fortran mixed sections (e.g., a(i,1:n)) still occupy
+    // one dimension. Preserve them as [index:1] metadata entries.
+    dimensions.push_back(std::make_pair(item, SageBuilder::buildIntVal(1)));
+    return true;
+}
+
 static bool collectArraySectionMetadata(
     SgExpression* expr,
     SgVarRefExp*& base_var_ref,
@@ -1391,46 +1423,19 @@ static bool collectArraySectionMetadata(
         }
 
         SgExpression* rhs = array_ref->get_rhs_operand();
-        if (SgSubscriptExpression* subscript = isSgSubscriptExpression(rhs)) {
-            SgExpression* lower = subscript->get_lowerBound();
-            SgExpression* length = subscript->get_upperBound();
-            if (lower == NULL || length == NULL) {
-                return false;
-            }
-
-            if (SgExpression* stride = subscript->get_stride()) {
-                SgIntVal* int_stride = isSgIntVal(stride);
-                if (int_stride == NULL || int_stride->get_value() != 1) {
-                    has_explicit_stride = true;
-                }
-            }
-
-            dimensions.push_back(std::make_pair(lower, length));
-            return true;
+        if (isSgSubscriptExpression(rhs) != NULL) {
+            return appendArraySectionDimension(rhs, dimensions,
+                                               has_explicit_stride);
         }
 
         if (SgExprListExp* expr_list = isSgExprListExp(rhs)) {
             const SgExpressionPtrList& exprs = expr_list->get_expressions();
             for (SgExpression* item : exprs) {
-                SgSubscriptExpression* subscript = isSgSubscriptExpression(item);
-                if (subscript == NULL) {
-                    continue;
-                }
-
-                SgExpression* lower = subscript->get_lowerBound();
-                SgExpression* length = subscript->get_upperBound();
-                if (lower == NULL || length == NULL) {
+                if (!appendArraySectionDimension(item,
+                                                 dimensions,
+                                                 has_explicit_stride)) {
                     return false;
                 }
-
-                if (SgExpression* stride = subscript->get_stride()) {
-                    SgIntVal* int_stride = isSgIntVal(stride);
-                    if (int_stride == NULL || int_stride->get_value() != 1) {
-                        has_explicit_stride = true;
-                    }
-                }
-
-                dimensions.push_back(std::make_pair(lower, length));
             }
             return true;
         }
