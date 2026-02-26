@@ -449,8 +449,18 @@ maybeNormalizeImaginaryTypeSpecifiers(clang::SourceManager &source_manager,
     return nullptr;
   }
 
-  auto token_spelling = [&](const clang::Token &tok) {
-    return clang::Lexer::getSpelling(tok, source_manager, lang_opts);
+  llvm::StringRef source_text = buffer_or->getBuffer();
+  auto token_spelling = [&](size_t index) -> llvm::StringRef {
+    if (index >= tokens.size()) {
+      return llvm::StringRef();
+    }
+    const TokenWithOffset &entry = tokens[index];
+    size_t begin = entry.offset;
+    size_t length = entry.token.getLength();
+    if (begin > source_text.size() || length > source_text.size() - begin) {
+      return llvm::StringRef();
+    }
+    return source_text.substr(begin, length);
   };
   auto next_significant = [&](size_t index) {
     while (index < tokens.size() &&
@@ -478,54 +488,174 @@ maybeNormalizeImaginaryTypeSpecifiers(clang::SourceManager &source_manager,
            spelling == "_Float128x" || spelling == "_Decimal32" ||
            spelling == "_Decimal64" || spelling == "_Decimal128";
   };
-  auto is_attribute_keyword = [&](const clang::Token &tok) {
-    return tok.is(clang::tok::kw___attribute) ||
-           token_spelling(tok) == "__attribute__";
+  auto is_identifier_like = [](const clang::Token &tok) {
+    return tok.isOneOf(clang::tok::identifier, clang::tok::raw_identifier);
   };
-  auto is_imag_type_specifier = [&](size_t index) {
-    const clang::Token &tok = tokens[index].token;
-    std::string spelling = token_spelling(tok);
-    if (spelling == "_Imaginary") {
-      return true;
+  auto is_attribute_keyword = [&](size_t index) {
+    if (index >= tokens.size()) {
+      return false;
     }
-    if (spelling != "__imag__") {
+    const clang::Token &tok = tokens[index].token;
+    return tok.is(clang::tok::kw___attribute) ||
+           token_spelling(index) == "__attribute__";
+  };
+  auto skip_decl_modifiers = [&](size_t index) {
+    size_t cursor = index;
+    while (cursor < tokens.size()) {
+      llvm::StringRef spelling = token_spelling(cursor);
+      if (is_type_qualifier_spelling(spelling) || spelling == "__extension__") {
+        cursor = next_significant(cursor + 1);
+        continue;
+      }
+      if (is_attribute_keyword(cursor)) {
+        cursor = next_significant(cursor + 1);
+        continue;
+      }
+      break;
+    }
+    return cursor;
+  };
+  std::map<std::string, std::string> floating_typedef_base_types;
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    if (token_spelling(i) != "typedef") {
+      continue;
+    }
+
+    size_t first = skip_decl_modifiers(next_significant(i + 1));
+    if (first >= tokens.size()) {
+      continue;
+    }
+    size_t second = skip_decl_modifiers(next_significant(first + 1));
+    if (second >= tokens.size()) {
+      continue;
+    }
+    size_t third = skip_decl_modifiers(next_significant(second + 1));
+    if (third >= tokens.size()) {
+      continue;
+    }
+
+    llvm::StringRef first_spelling = token_spelling(first);
+    if ((first_spelling == "float" || first_spelling == "double") &&
+        is_identifier_like(tokens[second].token) &&
+        tokens[third].token.is(clang::tok::semi)) {
+      floating_typedef_base_types[token_spelling(second).str()] =
+          first_spelling.str();
+      continue;
+    }
+
+    size_t fourth = skip_decl_modifiers(next_significant(third + 1));
+    if (first_spelling == "long" && token_spelling(second) == "double" &&
+        is_identifier_like(tokens[third].token) && fourth < tokens.size() &&
+        tokens[fourth].token.is(clang::tok::semi)) {
+      floating_typedef_base_types[token_spelling(third).str()] = "long double";
+      continue;
+    }
+
+    if (is_identifier_like(tokens[first].token) &&
+        is_identifier_like(tokens[second].token) &&
+        tokens[third].token.is(clang::tok::semi)) {
+      auto base_it = floating_typedef_base_types.find(first_spelling.str());
+      if (base_it != floating_typedef_base_types.end()) {
+        floating_typedef_base_types[token_spelling(second).str()] =
+            base_it->second;
+      }
+    }
+  }
+
+  auto looks_like_typedef_declarator = [&](size_t index) {
+    if (index >= tokens.size()) {
       return false;
     }
 
-    size_t cursor = next_significant(index + 1);
-    while (cursor < tokens.size()) {
-      const clang::Token &candidate = tokens[cursor].token;
-      std::string candidate_spelling = token_spelling(candidate);
-      if (is_type_qualifier_spelling(candidate_spelling) ||
-          candidate_spelling == "__extension__") {
-        cursor = next_significant(cursor + 1);
-        continue;
-      }
-      if (is_attribute_keyword(candidate)) {
-        cursor = next_significant(cursor + 1);
-        continue;
-      }
-      return is_builtin_type_spelling(candidate_spelling) ||
-             candidate_spelling == "struct" || candidate_spelling == "union" ||
-             candidate_spelling == "enum" || candidate_spelling == "typeof" ||
-             candidate_spelling == "__typeof" ||
-             candidate_spelling == "__typeof__";
+    const clang::Token &tok = tokens[index].token;
+    if (is_identifier_like(tok)) {
+      return true;
+    }
+    if (!tok.is(clang::tok::l_paren)) {
+      return false;
     }
 
-    return false;
+    size_t probe = next_significant(index + 1);
+    if (probe >= tokens.size() || !tokens[probe].token.is(clang::tok::star)) {
+      return false;
+    }
+    probe = next_significant(probe + 1);
+    return probe < tokens.size() && is_identifier_like(tokens[probe].token);
+  };
+
+  struct ImaginaryTypeSpecifierMatch {
+    bool matched;
+    size_t typedef_token_index;
+    std::string canonical_base_type;
+  };
+  auto classify_imag_type_specifier = [&](size_t index) {
+    ImaginaryTypeSpecifierMatch match{false, tokens.size(), ""};
+
+    llvm::StringRef spelling = token_spelling(index);
+    if (spelling == "_Imaginary") {
+      match.matched = true;
+      return match;
+    }
+    if (spelling != "__imag__") {
+      return match;
+    }
+
+    size_t candidate_index = skip_decl_modifiers(next_significant(index + 1));
+    if (candidate_index >= tokens.size()) {
+      return match;
+    }
+
+    llvm::StringRef candidate_spelling = token_spelling(candidate_index);
+    if (is_builtin_type_spelling(candidate_spelling) ||
+        candidate_spelling == "struct" || candidate_spelling == "union" ||
+        candidate_spelling == "enum" || candidate_spelling == "typeof" ||
+        candidate_spelling == "__typeof" ||
+        candidate_spelling == "__typeof__") {
+      match.matched = true;
+      return match;
+    }
+
+    if (!is_identifier_like(tokens[candidate_index].token)) {
+      return match;
+    }
+
+    size_t declarator =
+        skip_decl_modifiers(next_significant(candidate_index + 1));
+    if (!looks_like_typedef_declarator(declarator)) {
+      return match;
+    }
+
+    auto base_it = floating_typedef_base_types.find(candidate_spelling.str());
+    if (base_it == floating_typedef_base_types.end()) {
+      return match;
+    }
+
+    match.matched = true;
+    match.typedef_token_index = candidate_index;
+    match.canonical_base_type = base_it->second;
+    return match;
   };
 
   struct Replacement {
     unsigned offset;
     unsigned length;
+    std::string text;
   };
   std::vector<Replacement> replacements;
-  replacements.reserve(8);
+  replacements.reserve(12);
   for (size_t i = 0; i < tokens.size(); ++i) {
-    if (!is_imag_type_specifier(i)) {
+    ImaginaryTypeSpecifierMatch match = classify_imag_type_specifier(i);
+    if (!match.matched) {
       continue;
     }
-    replacements.push_back({tokens[i].offset, tokens[i].token.getLength()});
+    replacements.push_back(
+        {tokens[i].offset, tokens[i].token.getLength(), "_Complex"});
+    if (match.typedef_token_index < tokens.size()) {
+      replacements.push_back(
+          {tokens[match.typedef_token_index].offset,
+           tokens[match.typedef_token_index].token.getLength(),
+           match.canonical_base_type});
+    }
   }
 
   if (replacements.empty()) {
@@ -539,13 +669,20 @@ maybeNormalizeImaginaryTypeSpecifiers(clang::SourceManager &source_manager,
   replacements.erase(
       std::unique(replacements.begin(), replacements.end(),
                   [](const Replacement &lhs, const Replacement &rhs) {
-                    return lhs.offset == rhs.offset;
+                    return lhs.offset == rhs.offset &&
+                           lhs.length == rhs.length && lhs.text == rhs.text;
                   }),
       replacements.end());
 
-  llvm::StringRef source_text = buffer_or->getBuffer();
+  size_t delta = 0;
+  for (const Replacement &replacement : replacements) {
+    if (replacement.text.size() > replacement.length) {
+      delta += replacement.text.size() - replacement.length;
+    }
+  }
+
   std::string updated;
-  updated.reserve(source_text.size() + replacements.size());
+  updated.reserve(source_text.size() + delta);
 
   size_t cursor = 0;
   for (const Replacement &replacement : replacements) {
@@ -554,7 +691,7 @@ maybeNormalizeImaginaryTypeSpecifiers(clang::SourceManager &source_manager,
       return nullptr;
     }
     updated += source_text.substr(cursor, replacement.offset - cursor).str();
-    updated += "_Complex";
+    updated += replacement.text;
     cursor = replacement.offset + replacement.length;
   }
   updated += source_text.substr(cursor).str();
