@@ -1,0 +1,4 @@
+#pragma omp parallel num_threads(threads)
+#pragma omp atomic read
+#pragma omp masked
+#pragma omp atomic

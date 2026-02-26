@@ -1,0 +1,4 @@
+!$omp target data map(tofrom:a,new_struct)
+!$omp target map(tofrom:errors) defaultmap(present:aggregate)
+!$omp end target
+!$omp end target data

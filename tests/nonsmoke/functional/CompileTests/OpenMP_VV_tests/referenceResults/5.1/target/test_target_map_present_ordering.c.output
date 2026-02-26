@@ -1,0 +1,2 @@
+#pragma omp target data map(tofrom:x)
+#pragma omp target map(present,to:x) map(from:x)

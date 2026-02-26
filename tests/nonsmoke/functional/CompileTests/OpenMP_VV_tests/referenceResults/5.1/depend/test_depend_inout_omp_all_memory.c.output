@@ -1,0 +1,8 @@
+#pragma omp target map(tofrom:errors) map(to:x,y)
+#pragma omp parallel
+#pragma omp single
+#pragma omp task depend(out:x)
+#pragma omp task depend(out:y)
+#pragma omp task depend(inout:omp_all_memory)
+#pragma omp task depend(out:x)
+#pragma omp task depend(out:y)

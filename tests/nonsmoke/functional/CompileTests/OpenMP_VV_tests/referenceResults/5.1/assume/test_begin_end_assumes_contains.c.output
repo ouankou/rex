@@ -1,0 +1,5 @@
+#pragma omp begin assumes contains(target,parallel,for)
+#pragma omp end assumes
+#pragma omp target map(tofrom:arr)
+#pragma omp parallel num_threads(OMPVV_NUM_THREADS_DEVICE)
+#pragma omp for

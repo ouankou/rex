@@ -1,0 +1,2 @@
+#pragma omp teams
+#pragma omp teams num_teams(OMPVV_NUM_TEAMS_HOST)

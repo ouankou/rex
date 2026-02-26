@@ -1,0 +1,5 @@
+#pragma omp parallel
+#pragma omp single
+#pragma omp task depend(out:arr[i])
+#pragma omp task depend(inoutset:arr[i])
+#pragma omp task depend(inoutset:arr[i])

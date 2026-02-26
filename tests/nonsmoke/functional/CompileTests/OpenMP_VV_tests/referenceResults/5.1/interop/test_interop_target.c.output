@@ -1,0 +1,4 @@
+#pragma omp interop init(targetsync:obj) device(device) depend(inout:A[0:N])
+#pragma omp target depend(inout:A[0:N]) nowait map(tofrom:A[0:N]) device(device)
+#pragma omp atomic
+#pragma omp interop destroy(obj) depend(out:A[0:N])

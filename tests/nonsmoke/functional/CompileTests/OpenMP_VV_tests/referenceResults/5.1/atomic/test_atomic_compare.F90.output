@@ -1,0 +1,4 @@
+!$omp parallel do shared(pmax) private(oldval,assume,newval)
+!$omp atomic compare capture
+!$omp end atomic
+!$omp end parallel do

@@ -1,0 +1,6 @@
+#pragma omp target map(tofrom:x,y)
+#pragma omp parallel
+#pragma omp single
+#pragma omp taskloop simd order(unconstrained:concurrent)
+#pragma omp single
+#pragma omp taskloop simd order(unconstrained:concurrent)

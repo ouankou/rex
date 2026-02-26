@@ -1,0 +1,2 @@
+!$omp target map(iterator(it=1:N),tofrom:test_lst(it)%ptr) map(test_lst)
+!$omp end target

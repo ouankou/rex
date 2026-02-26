@@ -1,0 +1,5 @@
+!$omp parallel num_threads(threads) private(tot)
+!$omp atomic read
+!$omp masked filter(3)
+!$omp end masked
+!$omp end parallel

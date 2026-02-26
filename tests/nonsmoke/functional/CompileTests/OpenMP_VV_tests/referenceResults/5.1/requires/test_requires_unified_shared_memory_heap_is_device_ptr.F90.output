@@ -1,0 +1,3 @@
+!$omp requires unified_shared_memory
+!$omp target is_device_ptr(aPtr)
+!$omp target is_device_ptr(aPtr)

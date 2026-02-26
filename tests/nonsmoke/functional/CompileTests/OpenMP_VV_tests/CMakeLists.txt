@@ -126,3 +126,4 @@ endfunction()
 
 add_ompvv_version_tests("5.0")
 add_ompvv_version_tests("4.5")
+add_ompvv_version_tests("5.1")

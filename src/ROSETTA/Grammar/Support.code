@@ -117,7 +117,8 @@ HEADER_OMP_CLAUSE_START
             e_omp_defaultmap_behavior_tofrom,
             e_omp_defaultmap_behavior_firstprivate,
             e_omp_defaultmap_behavior_none,
-            e_omp_defaultmap_behavior_default
+            e_omp_defaultmap_behavior_default,
+            e_omp_defaultmap_behavior_present
         };
 
         enum omp_defaultmap_category_enum
@@ -275,13 +276,17 @@ HEADER_OMP_CLAUSE_START
         enum omp_to_kind_enum
          {
              e_omp_to_kind_unknown,
-             e_omp_to_kind_mapper
+             e_omp_to_kind_mapper,
+             e_omp_to_kind_iterator,
+             e_omp_to_kind_present
          };
 
          enum omp_from_kind_enum
          {
              e_omp_from_kind_unknown,
-             e_omp_from_kind_mapper
+             e_omp_from_kind_mapper,
+             e_omp_from_kind_iterator,
+             e_omp_from_kind_present
          };
 
         enum omp_dependence_type_enum
@@ -290,6 +295,7 @@ HEADER_OMP_CLAUSE_START
             e_omp_depend_in,
             e_omp_depend_out,
             e_omp_depend_inout,
+            e_omp_depend_inoutset,
             e_omp_depend_mutexinoutset,
             e_omp_depend_depobj,
             e_omp_depend_source,
@@ -437,10 +443,37 @@ HEADER_OMP_CLAUSE_START
             e_omp_atomic_default_mem_order_kind_relaxed
         };
 
+        enum omp_fail_memory_order_kind_enum
+        {
+            e_omp_fail_memory_order_kind_unspecified,
+            e_omp_fail_memory_order_kind_seq_cst,
+            e_omp_fail_memory_order_kind_acquire,
+            e_omp_fail_memory_order_kind_relaxed
+        };
+
         enum omp_order_kind_enum
         {
           e_omp_order_kind_unspecified,
           e_omp_order_kind_concurrent,
+        };
+
+        enum omp_order_modifier_enum
+        {
+          e_omp_order_modifier_unspecified,
+          e_omp_order_modifier_reproducible,
+          e_omp_order_modifier_unconstrained
+        };
+
+        enum omp_grainsize_modifier_enum
+        {
+          e_omp_grainsize_modifier_unspecified,
+          e_omp_grainsize_modifier_strict
+        };
+
+        enum omp_num_tasks_modifier_enum
+        {
+          e_omp_num_tasks_modifier_unspecified,
+          e_omp_num_tasks_modifier_strict
         };
 
         enum omp_dist_schedule_kind_enum

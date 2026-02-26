@@ -2155,6 +2155,38 @@ bool ClangToSageTranslator::VisitCapturedStmt(
   return VisitStmt(captured_stmt, node) && res;
 }
 
+static bool isStandaloneOpenMPEndDirective(const std::string &directive_text) {
+  std::string trimmed = trimWhitespace(directive_text);
+  if (trimmed.empty()) {
+    return false;
+  }
+
+  auto lower_at = [](char c) -> char {
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  };
+  auto starts_with_keyword = [&](const std::string &text,
+                                 const std::string &keyword) -> bool {
+    if (text.size() < keyword.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < keyword.size(); ++i) {
+      if (lower_at(text[i]) != keyword[i]) {
+        return false;
+      }
+    }
+    if (text.size() == keyword.size()) {
+      return true;
+    }
+    return std::isspace(static_cast<unsigned char>(text[keyword.size()])) != 0;
+  };
+
+  if (!starts_with_keyword(trimmed, "omp")) {
+    return false;
+  }
+  trimmed = trimWhitespace(trimmed.substr(3));
+  return starts_with_keyword(trimmed, "end");
+}
+
 bool ClangToSageTranslator::collectOpenMPPragmas(
     clang::Stmt *stmt, std::vector<CapturedPragma> &pragmas) {
   pragmas.clear();
@@ -2197,6 +2229,9 @@ bool ClangToSageTranslator::collectOpenMPPragmas(
         std::string extracted = extractOpenMPDirective(pragma_text);
         if (extracted.empty()) {
           continue;
+        }
+        if (isStandaloneOpenMPEndDirective(extracted)) {
+          break;
         }
         directive_text = extracted;
         p_consumed_openmp_lines.insert(std::make_pair(file_id, search_line));
@@ -2423,11 +2458,13 @@ void ClangToSageTranslator::appendUnattachedOpenMPPragmas() {
     if (!p_openmp_pragma_callback->isOpenMPPragmaAtLine(file_id, line)) {
       continue;
     }
-    if (p_consumed_openmp_lines.count(entry.first) != 0) {
-      continue;
-    }
     std::string directive = extractOpenMPDirective(entry.second);
     if (directive.empty()) {
+      continue;
+    }
+    const bool is_standalone_end = isStandaloneOpenMPEndDirective(directive);
+    const bool is_consumed = p_consumed_openmp_lines.count(entry.first) != 0;
+    if (!is_standalone_end && is_consumed) {
       continue;
     }
     std::string filename;

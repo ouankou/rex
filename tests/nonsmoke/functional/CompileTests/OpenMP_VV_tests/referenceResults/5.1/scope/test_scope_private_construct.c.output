@@ -1,0 +1,2 @@
+#pragma omp parallel shared(test_int)
+#pragma omp scope private(test_int)

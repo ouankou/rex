@@ -1,0 +1,1 @@
+#pragma omp parallel default(firstprivate) num_threads(OMPVV_NUM_THREADS_HOST)
