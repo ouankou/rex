@@ -982,14 +982,29 @@ set(CXX11_DISABLED_TESTCODES
   test_1.C
 )
 
-set(ROSE_FLAGS
+set(CXX11_TESTCODES_CXX03
+  # This test intentionally uses legacy access declarations (A::foo;).
+  test2019_56.C
+)
+list(REMOVE_ITEM CXX11_TESTCODES ${CXX11_TESTCODES_CXX03})
+
+set(ROSE_FLAGS_CXX11
   -w -rose:verbose 0 -rose:skip_unparse_asm_commands -std=c++11)
+set(ROSE_FLAGS_CXX03
+  -w -rose:verbose 0 -rose:skip_unparse_asm_commands -std=c++03)
+set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
 
 set(ROSE_DISABLED_TESTCODES ${CXX11_DISABLED_TESTCODES})
 
 foreach(file_to_test ${CXX11_TESTCODES})
   compile_test(${file_to_test} "Cxx11_tests")
 endforeach()
+
+set(ROSE_FLAGS ${ROSE_FLAGS_CXX03})
+foreach(file_to_test ${CXX11_TESTCODES_CXX03})
+  compile_test(${file_to_test} "Cxx11_tests")
+endforeach()
+set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
 
 set(_multi_file_tests
   test2019_196_ab;test2019_196_a.C;test2019_196_b.C
