@@ -228,8 +228,6 @@ string get_type_name(SgType *t) {
   }
 
   case T_IMAGINARY: {
-    SgTypeImaginary *imaginaryType = isSgTypeImaginary(t);
-    ASSERT_not_null(imaginaryType);
     MLOG_FATAL_CXX(MLOG_UNPARSER)
         << "Unsupported T_IMAGINARY type encountered during unparsing. "
         << "Legacy imaginary type specifiers are no longer supported by REX.\n";
