@@ -988,10 +988,12 @@ set(CXX11_TESTCODES_CXX03
 )
 list(REMOVE_ITEM CXX11_TESTCODES ${CXX11_TESTCODES_CXX03})
 
+set(ROSE_FLAGS_BASE
+  -w -rose:verbose 0 -rose:skip_unparse_asm_commands)
 set(ROSE_FLAGS_CXX11
-  -w -rose:verbose 0 -rose:skip_unparse_asm_commands -std=c++11)
+  ${ROSE_FLAGS_BASE} -std=c++11)
 set(ROSE_FLAGS_CXX03
-  -w -rose:verbose 0 -rose:skip_unparse_asm_commands -std=c++03)
+  ${ROSE_FLAGS_BASE} -std=c++03)
 set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
 
 set(ROSE_DISABLED_TESTCODES ${CXX11_DISABLED_TESTCODES})
