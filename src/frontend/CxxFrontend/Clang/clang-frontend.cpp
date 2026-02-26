@@ -407,6 +407,162 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
                                               buffer_or->getBufferIdentifier());
 }
 
+// Clang lexes C99 `_Imaginary` but rejects the type semantically. Legacy ROSE
+// test inputs also use GNU `__imag__` in declaration-specifier position (e.g.
+// `__imag__ float x;`). Normalize both forms to `_Complex` before parsing.
+std::unique_ptr<llvm::MemoryBuffer>
+maybeNormalizeImaginaryTypeSpecifiers(clang::SourceManager &source_manager,
+                                      clang::FileID file_id,
+                                      const clang::LangOptions &lang_opts) {
+  auto buffer_or = source_manager.getBufferOrNone(file_id);
+  if (!buffer_or) {
+    return nullptr;
+  }
+
+  clang::Lexer lexer(file_id, *buffer_or, source_manager, lang_opts);
+  std::vector<TokenWithOffset> tokens;
+  tokens.reserve(256);
+
+  clang::Token token;
+  while (true) {
+    lexer.LexFromRawLexer(token);
+    if (token.is(clang::tok::eof)) {
+      break;
+    }
+    if (source_manager.getFileID(token.getLocation()) != file_id) {
+      continue;
+    }
+    if (token.is(clang::tok::unknown)) {
+      std::string spelling =
+          clang::Lexer::getSpelling(token, source_manager, lang_opts);
+      if (!spelling.empty() &&
+          std::all_of(spelling.begin(), spelling.end(),
+                      [](unsigned char c) { return std::isspace(c) != 0; })) {
+        continue;
+      }
+    }
+    tokens.push_back(
+        {token, source_manager.getFileOffset(token.getLocation())});
+  }
+
+  if (tokens.empty()) {
+    return nullptr;
+  }
+
+  auto token_spelling = [&](const clang::Token &tok) {
+    return clang::Lexer::getSpelling(tok, source_manager, lang_opts);
+  };
+  auto next_significant = [&](size_t index) {
+    while (index < tokens.size() &&
+           tokens[index].token.is(clang::tok::comment)) {
+      ++index;
+    }
+    return index;
+  };
+  auto is_type_qualifier_spelling = [](llvm::StringRef spelling) {
+    return spelling == "const" || spelling == "volatile" ||
+           spelling == "restrict" || spelling == "__restrict" ||
+           spelling == "__restrict__" || spelling == "__const" ||
+           spelling == "__const__" || spelling == "__volatile" ||
+           spelling == "__volatile__" || spelling == "_Atomic";
+  };
+  auto is_builtin_type_spelling = [](llvm::StringRef spelling) {
+    return spelling == "void" || spelling == "_Bool" || spelling == "char" ||
+           spelling == "short" || spelling == "int" || spelling == "long" ||
+           spelling == "float" || spelling == "double" ||
+           spelling == "__int128" || spelling == "signed" ||
+           spelling == "unsigned" || spelling == "_Complex" ||
+           spelling == "_Float16" || spelling == "_Float32" ||
+           spelling == "_Float64" || spelling == "_Float128" ||
+           spelling == "_Float32x" || spelling == "_Float64x" ||
+           spelling == "_Float128x" || spelling == "_Decimal32" ||
+           spelling == "_Decimal64" || spelling == "_Decimal128";
+  };
+  auto is_attribute_keyword = [&](const clang::Token &tok) {
+    return tok.is(clang::tok::kw___attribute) ||
+           token_spelling(tok) == "__attribute__";
+  };
+  auto is_imag_type_specifier = [&](size_t index) {
+    const clang::Token &tok = tokens[index].token;
+    std::string spelling = token_spelling(tok);
+    if (spelling == "_Imaginary") {
+      return true;
+    }
+    if (spelling != "__imag__") {
+      return false;
+    }
+
+    size_t cursor = next_significant(index + 1);
+    while (cursor < tokens.size()) {
+      const clang::Token &candidate = tokens[cursor].token;
+      std::string candidate_spelling = token_spelling(candidate);
+      if (is_type_qualifier_spelling(candidate_spelling) ||
+          candidate_spelling == "__extension__") {
+        cursor = next_significant(cursor + 1);
+        continue;
+      }
+      if (is_attribute_keyword(candidate)) {
+        cursor = next_significant(cursor + 1);
+        continue;
+      }
+      return is_builtin_type_spelling(candidate_spelling) ||
+             candidate_spelling == "struct" || candidate_spelling == "union" ||
+             candidate_spelling == "enum" || candidate_spelling == "typeof" ||
+             candidate_spelling == "__typeof" ||
+             candidate_spelling == "__typeof__";
+    }
+
+    return false;
+  };
+
+  struct Replacement {
+    unsigned offset;
+    unsigned length;
+  };
+  std::vector<Replacement> replacements;
+  replacements.reserve(8);
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    if (!is_imag_type_specifier(i)) {
+      continue;
+    }
+    replacements.push_back({tokens[i].offset, tokens[i].token.getLength()});
+  }
+
+  if (replacements.empty()) {
+    return nullptr;
+  }
+
+  std::sort(replacements.begin(), replacements.end(),
+            [](const Replacement &lhs, const Replacement &rhs) {
+              return lhs.offset < rhs.offset;
+            });
+  replacements.erase(
+      std::unique(replacements.begin(), replacements.end(),
+                  [](const Replacement &lhs, const Replacement &rhs) {
+                    return lhs.offset == rhs.offset;
+                  }),
+      replacements.end());
+
+  llvm::StringRef source_text = buffer_or->getBuffer();
+  std::string updated;
+  updated.reserve(source_text.size() + replacements.size());
+
+  size_t cursor = 0;
+  for (const Replacement &replacement : replacements) {
+    if (replacement.offset < cursor ||
+        replacement.offset + replacement.length > source_text.size()) {
+      return nullptr;
+    }
+    updated += source_text.substr(cursor, replacement.offset - cursor).str();
+    updated += "_Complex";
+    cursor = replacement.offset + replacement.length;
+  }
+  updated += source_text.substr(cursor).str();
+
+  return llvm::MemoryBuffer::getMemBufferCopy(updated,
+                                              buffer_or->getBufferIdentifier());
+}
+
 // Clang 21 rejects `_Alignas/alignas` when it appears after a record
 // definition, e.g. `struct S { ... } _Alignas(16) x;`, even though this form
 // is accepted by GCC and heavily used in legacy ROSE tests. Normalize those
@@ -2150,8 +2306,18 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   }
 
   bool normalized_post_record_alignas = false;
+  bool normalized_imaginary_type_specifiers = false;
   std::vector<SuppressedIncludeDirective> suppressed_includes;
   if (language == ClangToSageTranslator::C) {
+    if (auto fixed_buffer = maybeNormalizeImaginaryTypeSpecifiers(
+            compiler_instance->getSourceManager(), mainFileID, lang_opts)) {
+      compiler_instance->getSourceManager().overrideFileContents(
+          input_file_entry, std::move(fixed_buffer));
+      // The token stream no longer matches the on-disk source; unparse from
+      // the AST to preserve normalized C99 imaginary declarations.
+      sageFile.set_unparse_tokens(false);
+      normalized_imaginary_type_specifiers = true;
+    }
     if (auto fixed_buffer = maybeNormalizePostRecordAlignas(
             compiler_instance->getSourceManager(), mainFileID, lang_opts)) {
       compiler_instance->getSourceManager().overrideFileContents(
@@ -2364,8 +2530,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
 
   finishSageAST(*translator);
 
-  if (normalized_post_record_alignas && global_scope != NULL) {
-    // Parsing consumed an in-memory normalized buffer. Force AST-based
+  if ((normalized_post_record_alignas ||
+       normalized_imaginary_type_specifiers) &&
+      global_scope != NULL) {
+    // Parsing consumed an in-memory normalized buffer for C compatibility.
+    // Force AST-based
     // unparsing so output reflects the normalized form instead of raw on-disk
     // tokens.
     sageFile.set_unparse_tokens(false);
