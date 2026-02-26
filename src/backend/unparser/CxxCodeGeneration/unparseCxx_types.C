@@ -234,7 +234,6 @@ string get_type_name(SgType *t) {
         << "Unsupported T_IMAGINARY type encountered during unparsing. "
         << "Legacy imaginary type specifiers are no longer supported by REX.\n";
     ROSE_ABORT();
-    return string();
   }
 
   case T_DEFAULT: {
