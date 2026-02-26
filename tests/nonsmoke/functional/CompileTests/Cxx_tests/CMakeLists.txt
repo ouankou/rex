@@ -3227,13 +3227,24 @@ set(CXX_TESTCODES_ALWAYS_RUN
 list(APPEND CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_ALWAYS_RUN})
 list(REMOVE_DUPLICATES CXX_TESTCODES_TO_RUN)
 
-set(CXX_TESTCODES_GNUXX14
-  test2013_13.C
-  test2013_15.C
-  test2013_24.C
-  test2013_30.C
+set(CXX_TESTCODES_GNUXX03
+  # Legacy access declarations (e.g., A::foo;) require pre-C++11 mode.
+  test2020_31.C
 )
-list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX14})
+list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX03})
+
+set(CXX_TESTCODES_GNUXX17
+  # These use C++17 library/features (variant/filesystem/*_v traits/CTAD).
+  rex_test2026_template_features.cpp
+  rex_test2026_stl_map.cpp
+  rex_test2026_stl_meta.cpp
+  rex_test2026_stl_type_traits.cpp
+  rex_test2026_stl_variant.cpp
+  rex_test2026_deduction_guide.cpp
+  rex_test2026_std_filesystem.cpp
+  rex_test2026_std_variant_visit.cpp
+)
+list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_GNUXX17})
 
 set(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING
   test2016_85.C
@@ -3250,6 +3261,10 @@ set(ROSE_FLAGS
   -rose:skip_unparse_cc_commands
   )
 
+set(_rose_flags_base ${ROSE_FLAGS})
+set(_rose_flags_default ${_rose_flags_base} -std=gnu++14)
+set(ROSE_FLAGS ${_rose_flags_default})
+
 set(ROSE_TEST_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/rose_output)
 file(MAKE_DIRECTORY ${ROSE_TEST_OUTPUT_DIR})
 set(ROSE_OUTPUT_TO_BUILD_TESTCODES
@@ -3265,9 +3280,18 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
-set(_rose_flags_default ${ROSE_FLAGS})
-set(ROSE_FLAGS ${_rose_flags_default} -std=gnu++14)
-foreach(file_to_test ${CXX_TESTCODES_GNUXX14})
+set(ROSE_FLAGS ${_rose_flags_base} -std=gnu++03)
+foreach(file_to_test ${CXX_TESTCODES_GNUXX03})
+  compile_test(${file_to_test} "Cxx_tests")
+  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
+  rex_lock_test_for_input(${_test_name} ${file_to_test})
+  set_tests_properties(${_test_name} PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endforeach()
+set(ROSE_FLAGS ${_rose_flags_default})
+
+set(ROSE_FLAGS ${_rose_flags_base} -std=gnu++17)
+foreach(file_to_test ${CXX_TESTCODES_GNUXX17})
   compile_test(${file_to_test} "Cxx_tests")
   rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
@@ -3305,7 +3329,14 @@ list(REMOVE_DUPLICATES _unfolded_constants_tests)
 
 foreach(file_to_test ${_unfolded_constants_tests})
   set(_unfolded_target "${file_to_test}.unfoldedConstants-o")
-  set(_unfolded_flags ${ROSE_FLAGS})
+  set(_unfolded_flags ${_rose_flags_base})
+  if(file_to_test IN_LIST CXX_TESTCODES_GNUXX03)
+    list(APPEND _unfolded_flags -std=gnu++03)
+  elseif(file_to_test IN_LIST CXX_TESTCODES_GNUXX17)
+    list(APPEND _unfolded_flags -std=gnu++17)
+  else()
+    list(APPEND _unfolded_flags -std=gnu++14)
+  endif()
   if(file_to_test IN_LIST CXX_TESTCODES_DELAYED_TEMPLATE_PARSING)
     list(APPEND _unfolded_flags -rex:clang:delayed-template-parsing)
   endif()
