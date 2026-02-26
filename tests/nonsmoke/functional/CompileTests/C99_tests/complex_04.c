@@ -12,7 +12,7 @@
  */
 
 /* Relavant C99 types:
-   "_Bool", "_Complex", "_Imaginary", "__I__", "__NAN__", "__INFINITY__",
+   "_Bool", "_Complex", "__I__", "__NAN__", "__INFINITY__",
 */
 
 #include <complex.h>
@@ -43,12 +43,12 @@ int main(void) {
 
   __I__;
 
-  // This is now to specify imaginary numbers in legacy frontend, not
-  // supported in GNU, so the code generation using GNU aas a backend drops
-  // the "_Imaginary" prefix.
-  _Imaginary float x_imaginary = 0.0;
-  _Imaginary double y_imaginary = 0.0;
-  _Imaginary long double z_imaginary = 0.0;
+  float x_imaginary = __imag__ x;
+  double y_imaginary = __imag__ y;
+  long double z_imaginary = __imag__ z;
+  (void)x_imaginary;
+  (void)y_imaginary;
+  (void)z_imaginary;
 
   _Complex float x1 = 1.0;
   _Complex double y1 = 2.0;

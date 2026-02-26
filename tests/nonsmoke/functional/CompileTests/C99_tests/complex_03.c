@@ -17,16 +17,7 @@ int main(void) {
   // ROSE does not yet support the imaginary add operator
   _Complex float a_complex_value = 0.0;
 
-#ifndef __INTEL_COMPILER
-  // This is now to specify imaginary numbers in legacy frontend, not
-  // supported in GNU, so the code generation using GNU as a backend drops
-  // the "_Imaginary" prefix.
-  __imag__ float c99_imaginary = 0.0;
-  _Imaginary float x_imaginary = 0.0;
-  _Imaginary double y_imaginary = 0.0;
-  _Imaginary long double z_imaginary = 0.0;
-
-  a_complex_value = 4.0 + x_imaginary;
+  float imag_part = __imag__ another_i_new_syntax;
+  a_complex_value = 4.0f + imag_part * __I__;
+  return 0;
 }
-
-#endif

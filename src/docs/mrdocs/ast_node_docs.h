@@ -9148,8 +9148,8 @@ class SgTypeDefault;
 
 /** @brief This class represents a C99 complex type.
  *
- * This type can be used in only C and C99 codes, the syntax is "_Imaginary".
- * This is added to support C and C99 complex support.
+ * This is a legacy ROSE IR type node for an imaginary scalar base type.
+ * It is retained for IR/API compatibility.
  * - See also:
  * Example of using a SgTypeImaginary object
  *

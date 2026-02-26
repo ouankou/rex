@@ -5,7 +5,7 @@
  */
 
 /* Relavant C99 types:
-   "_Bool", "_Complex", "_Imaginary", "__I__", "__NAN__", "__INFINITY__",
+   "_Bool", "_Complex", "__I__", "__NAN__", "__INFINITY__",
 */
 
 #include <complex.h>
