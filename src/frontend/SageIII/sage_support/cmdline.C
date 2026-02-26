@@ -2305,7 +2305,10 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       true) {
     printf("WARNING: Command line option -rose:C89 is deprecated!\n");
 
-    set_C89_only();
+    // Keep legacy ROSE C89 compatibility semantics for deprecated -rose:C89:
+    // historical test inputs rely on GNU89 extensions (e.g., inline) and
+    // implicit-declaration warnings rather than hard errors.
+    set_C89_gnu_only();
   }
 
   if (CommandlineProcessing::isOption(argv, "-rose:", "(C99|C99_only)", true) ==
