@@ -2365,7 +2365,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   finishSageAST(*translator);
 
   if (normalized_post_record_alignas && global_scope != NULL) {
-    // Parsing consumed an in-memory normalized buffer. Force AST-based
+    // Parsing consumed an in-memory normalized buffer for C compatibility.
+    // Force AST-based
     // unparsing so output reflects the normalized form instead of raw on-disk
     // tokens.
     sageFile.set_unparse_tokens(false);

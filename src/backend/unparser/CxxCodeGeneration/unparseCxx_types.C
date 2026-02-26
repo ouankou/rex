@@ -227,36 +227,11 @@ string get_type_name(SgType *t) {
     return returnString;
   }
 
-    // DQ (8/27/2006): Added require imaginary support to complete the complex
-    // support.
   case T_IMAGINARY: {
-    SgTypeImaginary *imaginaryType = isSgTypeImaginary(t);
-    ASSERT_not_null(imaginaryType);
-    string returnString = get_type_name(imaginaryType->get_base_type());
-
-    bool usingGcc = false;
-#ifdef USE_CMAKE
-#ifdef CMAKE_COMPILER_IS_GNUCC
-    usingGcc = true;
-#endif
-#else
-    // DQ (2/1/2016): Make the behavior of ROSE independent of the exact name of
-    // the backend compiler (problem when packages name compilers such as
-    // "g++-4.8"). string backEndCompiler =
-    // BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH; usingGcc = (backEndCompiler ==
-    // "g++" || backEndCompiler == "gcc" || backEndCompiler == "mpicc" ||
-    // backEndCompiler == "mpicxx");
-#if BACKEND_CXX_IS_GNU_COMPILER
-    usingGcc = true;
-#endif
-#endif
-
-    if (usingGcc) {
-      // Handle special case of GNU compilers
-    } else {
-      returnString += " _Imaginary";
-    }
-    return returnString;
+    MLOG_FATAL_CXX(MLOG_UNPARSER)
+        << "Unsupported T_IMAGINARY type encountered during unparsing. "
+        << "Legacy imaginary type specifiers are no longer supported by REX.\n";
+    ROSE_ABORT();
   }
 
   case T_DEFAULT: {

@@ -19,7 +19,7 @@ double c;
 long double d;
 
 double _Complex cplx;
-long double _Imaginary imgry;
+long double _Complex imgry;
 
 struct A {
   long v;
@@ -65,5 +65,3 @@ struct D {
   int t;
 };
 struct D h;
-
-
