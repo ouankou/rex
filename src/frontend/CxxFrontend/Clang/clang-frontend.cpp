@@ -559,6 +559,122 @@ private:
     return cursor;
   }
 
+  bool classifyFloatingTypedefBase(size_t typedef_index,
+                                   std::string &base_type_out,
+                                   size_t &declarator_begin_out) const {
+    size_t first = skipDeclModifiers(nextSignificant(typedef_index + 1));
+    if (first >= tokens_.size()) {
+      return false;
+    }
+
+    llvm::StringRef first_spelling = tokenSpelling(first);
+    if (first_spelling == "float" || first_spelling == "double") {
+      base_type_out = first_spelling.str();
+      declarator_begin_out = skipDeclModifiers(nextSignificant(first + 1));
+      return declarator_begin_out < tokens_.size();
+    }
+
+    size_t second = skipDeclModifiers(nextSignificant(first + 1));
+    if (first_spelling == "long" && second < tokens_.size() &&
+        tokenSpelling(second) == "double") {
+      base_type_out = "long double";
+      declarator_begin_out = skipDeclModifiers(nextSignificant(second + 1));
+      return declarator_begin_out < tokens_.size();
+    }
+
+    if (!isIdentifierLike(tokens_[first].token)) {
+      return false;
+    }
+
+    auto base_it = floating_typedef_base_types_.find(first_spelling);
+    if (base_it == floating_typedef_base_types_.end()) {
+      return false;
+    }
+
+    base_type_out = base_it->second;
+    declarator_begin_out = skipDeclModifiers(nextSignificant(first + 1));
+    return declarator_begin_out < tokens_.size();
+  }
+
+  size_t findTypedefDeclaratorTerminator(size_t declarator_begin) const {
+    size_t cursor = declarator_begin;
+    int paren_depth = 0;
+    int bracket_depth = 0;
+    int brace_depth = 0;
+
+    while (cursor < tokens_.size()) {
+      const clang::Token &tok = tokens_[cursor].token;
+      if (tok.is(clang::tok::l_paren)) {
+        ++paren_depth;
+      } else if (tok.is(clang::tok::r_paren)) {
+        paren_depth = std::max(paren_depth - 1, 0);
+      } else if (tok.is(clang::tok::l_square)) {
+        ++bracket_depth;
+      } else if (tok.is(clang::tok::r_square)) {
+        bracket_depth = std::max(bracket_depth - 1, 0);
+      } else if (tok.is(clang::tok::l_brace)) {
+        ++brace_depth;
+      } else if (tok.is(clang::tok::r_brace)) {
+        brace_depth = std::max(brace_depth - 1, 0);
+      } else if (paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 &&
+                 tok.isOneOf(clang::tok::comma, clang::tok::semi)) {
+        return cursor;
+      }
+
+      cursor = nextSignificant(cursor + 1);
+    }
+
+    return tokens_.size();
+  }
+
+  bool extractSimpleTypedefName(size_t declarator_begin, size_t declarator_end,
+                                size_t &identifier_index_out) const {
+    if (declarator_begin >= declarator_end || declarator_end > tokens_.size()) {
+      return false;
+    }
+
+    size_t cursor = skipDeclModifiers(declarator_begin);
+    if (cursor >= declarator_end || !isIdentifierLike(tokens_[cursor].token)) {
+      return false;
+    }
+
+    size_t tail = skipDeclModifiers(nextSignificant(cursor + 1));
+    if (tail != declarator_end) {
+      return false;
+    }
+
+    identifier_index_out = cursor;
+    return true;
+  }
+
+  void recordFloatingTypedefDeclarators(size_t declarator_begin,
+                                        llvm::StringRef canonical_base_type) {
+    size_t cursor = declarator_begin;
+    while (cursor < tokens_.size()) {
+      cursor = skipDeclModifiers(cursor);
+      if (cursor >= tokens_.size() ||
+          tokens_[cursor].token.is(clang::tok::semi)) {
+        return;
+      }
+
+      size_t terminator = findTypedefDeclaratorTerminator(cursor);
+      if (terminator >= tokens_.size()) {
+        return;
+      }
+
+      size_t identifier_index = tokens_.size();
+      if (extractSimpleTypedefName(cursor, terminator, identifier_index)) {
+        floating_typedef_base_types_[tokenSpelling(identifier_index)] =
+            canonical_base_type.str();
+      }
+
+      if (tokens_[terminator].token.is(clang::tok::semi)) {
+        return;
+      }
+      cursor = nextSignificant(terminator + 1);
+    }
+  }
+
   void analyzeFloatingTypedefs() {
     floating_typedef_base_types_.clear();
 
@@ -567,44 +683,13 @@ private:
         continue;
       }
 
-      size_t first = skipDeclModifiers(nextSignificant(i + 1));
-      if (first >= tokens_.size()) {
-        continue;
-      }
-      size_t second = skipDeclModifiers(nextSignificant(first + 1));
-      if (second >= tokens_.size()) {
-        continue;
-      }
-      size_t third = skipDeclModifiers(nextSignificant(second + 1));
-      if (third >= tokens_.size()) {
+      std::string base_type;
+      size_t declarator_begin = tokens_.size();
+      if (!classifyFloatingTypedefBase(i, base_type, declarator_begin)) {
         continue;
       }
 
-      llvm::StringRef first_spelling = tokenSpelling(first);
-      if ((first_spelling == "float" || first_spelling == "double") &&
-          isIdentifierLike(tokens_[second].token) &&
-          tokens_[third].token.is(clang::tok::semi)) {
-        floating_typedef_base_types_[tokenSpelling(second)] =
-            first_spelling.str();
-        continue;
-      }
-
-      size_t fourth = skipDeclModifiers(nextSignificant(third + 1));
-      if (first_spelling == "long" && tokenSpelling(second) == "double" &&
-          isIdentifierLike(tokens_[third].token) && fourth < tokens_.size() &&
-          tokens_[fourth].token.is(clang::tok::semi)) {
-        floating_typedef_base_types_[tokenSpelling(third)] = "long double";
-        continue;
-      }
-
-      if (isIdentifierLike(tokens_[first].token) &&
-          isIdentifierLike(tokens_[second].token) &&
-          tokens_[third].token.is(clang::tok::semi)) {
-        auto base_it = floating_typedef_base_types_.find(first_spelling);
-        if (base_it != floating_typedef_base_types_.end()) {
-          floating_typedef_base_types_[tokenSpelling(second)] = base_it->second;
-        }
-      }
+      recordFloatingTypedefDeclarators(declarator_begin, base_type);
     }
   }
 
