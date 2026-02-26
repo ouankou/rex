@@ -998,14 +998,18 @@ set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
 
 set(ROSE_DISABLED_TESTCODES ${CXX11_DISABLED_TESTCODES})
 
-foreach(file_to_test ${CXX11_TESTCODES})
-  compile_test(${file_to_test} "Cxx11_tests")
-endforeach()
+macro(compile_with_flags test_files_var_name flags_var_name)
+  set(_saved_rose_flags ${ROSE_FLAGS})
+  set(ROSE_FLAGS ${${flags_var_name}})
+  foreach(file_to_test ${${test_files_var_name}})
+    compile_test(${file_to_test} "Cxx11_tests")
+  endforeach()
+  set(ROSE_FLAGS ${_saved_rose_flags})
+  unset(_saved_rose_flags)
+endmacro()
 
-set(ROSE_FLAGS ${ROSE_FLAGS_CXX03})
-foreach(file_to_test ${CXX11_TESTCODES_CXX03})
-  compile_test(${file_to_test} "Cxx11_tests")
-endforeach()
+compile_with_flags(CXX11_TESTCODES ROSE_FLAGS_CXX11)
+compile_with_flags(CXX11_TESTCODES_CXX03 ROSE_FLAGS_CXX03)
 set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
 
 set(_multi_file_tests
