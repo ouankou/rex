@@ -607,15 +607,15 @@ private:
       if (tok.is(clang::tok::l_paren)) {
         ++paren_depth;
       } else if (tok.is(clang::tok::r_paren)) {
-        paren_depth = std::max(paren_depth - 1, 0);
+        --paren_depth;
       } else if (tok.is(clang::tok::l_square)) {
         ++bracket_depth;
       } else if (tok.is(clang::tok::r_square)) {
-        bracket_depth = std::max(bracket_depth - 1, 0);
+        --bracket_depth;
       } else if (tok.is(clang::tok::l_brace)) {
         ++brace_depth;
       } else if (tok.is(clang::tok::r_brace)) {
-        brace_depth = std::max(brace_depth - 1, 0);
+        --brace_depth;
       } else if (paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 &&
                  tok.isOneOf(clang::tok::comma, clang::tok::semi)) {
         return cursor;
@@ -789,7 +789,13 @@ private:
   applyReplacements(std::vector<Replacement> replacements) const {
     std::sort(replacements.begin(), replacements.end(),
               [](const Replacement &lhs, const Replacement &rhs) {
-                return lhs.offset < rhs.offset;
+                if (lhs.offset != rhs.offset) {
+                  return lhs.offset < rhs.offset;
+                }
+                if (lhs.length != rhs.length) {
+                  return lhs.length < rhs.length;
+                }
+                return lhs.text < rhs.text;
               });
     replacements.erase(
         std::unique(replacements.begin(), replacements.end(),
