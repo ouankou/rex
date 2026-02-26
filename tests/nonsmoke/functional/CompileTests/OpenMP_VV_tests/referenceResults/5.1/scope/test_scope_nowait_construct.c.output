@@ -1,0 +1,5 @@
+#pragma omp parallel shared(test1,test2)
+#pragma omp scope
+#pragma omp for
+#pragma omp scope nowait
+#pragma omp for

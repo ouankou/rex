@@ -454,11 +454,6 @@ corresponding C type is union name defaults to YYSTYPE.
 /*We ignore NEWLINE since we only care about the pragma string , We relax the syntax check by allowing it as part of line continuation */
 %token <stype> ICONSTANT EXPRESSION ID_EXPRESSION HEXCONSTANT STRING_LITERAL
 
-/* associativity and precedence */
-%left '<' '>' '=' "!=" "<=" ">="
-%left '+' '-'
-%left '*' '/' '%'
-
 /* nonterminals names, types for semantic values, only for nonterminals representing expressions!! not for clauses with expressions.
  */
 %type <ptype> expression assignment_expr conditional_expr 
@@ -467,7 +462,6 @@ corresponding C type is union name defaults to YYSTYPE.
               equality_expr relational_expr 
               shift_expr additive_expr multiplicative_expr 
               primary_expr unary_expr postfix_expr
-              argument_expression_list argument_expression_list_opt
               parenthesized_argument_list parenthesized_argument_list_opt
               parenthesized_argument_item fortran_subscript_item
 
@@ -877,32 +871,8 @@ unary_expr : postfix_expr {
             }
 
            ;
-/* Follow ANSI-C yacc grammar */                
-argument_expression_list_opt
-            : /* empty */ {
-                $$ = SageBuilder::buildExprListExp_nfi();
-              }
-            | argument_expression_list {
-                $$ = $1;
-              }
-            ;
-
-argument_expression_list
-            : assignment_expr {
-                SgExprListExp* args = SageBuilder::buildExprListExp_nfi();
-                args->append_expression((SgExpression*)($1));
-                $$ = args;
-              }
-            | argument_expression_list ',' assignment_expr {
-                SgExprListExp* args = isSgExprListExp((SgNode*)($1));
-                ROSE_ASSERT(args != NULL);
-                args->append_expression((SgExpression*)($3));
-                $$ = args;
-              }
-            ;
-
 parenthesized_argument_list_opt
-            : /* empty */ {
+            : %empty {
                 $$ = SageBuilder::buildExprListExp_nfi();
               }
             | parenthesized_argument_list {

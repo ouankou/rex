@@ -1,0 +1,2 @@
+#pragma omp teams
+#pragma omp parallel masked

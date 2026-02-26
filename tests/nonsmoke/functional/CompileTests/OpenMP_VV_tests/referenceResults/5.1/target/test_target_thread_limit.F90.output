@@ -1,0 +1,6 @@
+!$omp target map(tofrom:num_teams,errors) thread_limit(testing_thread_limit)
+!$omp teams num_teams(OMPVV_NUM_TEAMS_DEVICE)
+!$omp parallel
+!$omp end parallel
+!$omp end teams
+!$omp end target

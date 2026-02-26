@@ -1,0 +1,4 @@
+!$omp taskwait
+!$omp target is_device_ptr(devRect) device(t)
+!$omp end target
+!$omp taskwait

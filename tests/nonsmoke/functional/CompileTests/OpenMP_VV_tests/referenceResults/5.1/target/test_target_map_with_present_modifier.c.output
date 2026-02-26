@@ -1,0 +1,2 @@
+#pragma omp target data map(tofrom:scalar,a,member)
+#pragma omp target map(present,tofrom:scalar,a,member)

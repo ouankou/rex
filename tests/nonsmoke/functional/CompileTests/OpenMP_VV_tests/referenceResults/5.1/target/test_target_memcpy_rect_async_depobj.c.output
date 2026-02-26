@@ -1,0 +1,5 @@
+#pragma omp depobj(obj) depend(inout:devRect)
+#pragma omp taskwait depend(depobj:obj)
+#pragma omp target is_device_ptr(devRect) device(t) depend(depobj:obj)
+#pragma omp taskwait depend(depobj:obj)
+#pragma omp depobj(obj) destroy

@@ -1,0 +1,3 @@
+#pragma omp target enter data map(to:scalar_var,float_var,double_var)
+#pragma omp target map(tofrom:errors) defaultmap(present:scalar)
+#pragma omp target exit data map(delete:scalar_var,float_var,double_var)

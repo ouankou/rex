@@ -1,0 +1,4 @@
+#pragma omp parallel shared(s)
+#pragma omp for
+#pragma omp single
+#pragma omp scope reduction(+:s)

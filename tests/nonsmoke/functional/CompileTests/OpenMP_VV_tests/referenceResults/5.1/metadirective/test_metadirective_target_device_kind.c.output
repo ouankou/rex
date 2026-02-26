@@ -1,0 +1,1 @@
+#pragma omp metadirective when(target_device={kind(gpu)}:target defaultmap(none) map(tofrom:A)) when(target_device={kind(nohost)}:target defaultmap(none) map(tofrom:A)) default(target defaultmap(none) map(to:A))

@@ -1,0 +1,5 @@
+#pragma omp target enter data map(to:new_struct.data[:N])
+#pragma omp target map(to:new_struct,new_struct.data[:N]) map(tofrom:A[:N])
+#pragma omp target update to(iterator(it=0:N):new_struct.data[it])
+#pragma omp target map(tofrom:A[:N])
+#pragma omp target exit data map(delete:new_struct.data[:N])

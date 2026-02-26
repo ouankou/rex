@@ -1,1 +1,1 @@
-#pragma omp parallel for private(i) schedule(static) ordered default(none) shared(V,totalSize)
+#pragma omp parallel for default(none) shared(V,totalSize) private(i) schedule(static) ordered

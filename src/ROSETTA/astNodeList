@@ -399,6 +399,9 @@ SgOmpNowaitClause
 SgOmpReadClause
 SgOmpWriteClause
 SgOmpUpdateClause
+SgOmpCompareClause
+SgOmpWeakClause
+SgOmpFailClause
 SgOmpDepobjUpdateClause
 SgOmpDestroyClause
 SgOmpCaptureClause
@@ -433,6 +436,7 @@ SgOmpExclusiveClause
 SgOmpIsDevicePtrClause
 SgOmpUseDevicePtrClause
 SgOmpUseDeviceAddrClause
+SgOmpHasDeviceAddrClause
 SgOmpThreadLimitClause
 SgOmpOrderedClause
 SgOmpPrivateClause

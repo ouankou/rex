@@ -7993,6 +7993,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       curprint(string("}"));
       has_trait_set = true;
     };
+    const std::string device_selector_name =
+        c->get_target_device_selector() ? "target_device" : "device";
     bool has_device = false;
     SgExpression *device_arch = c->get_device_arch();
     if (device_arch != NULL) {
@@ -8000,7 +8002,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         curprint(string(", "));
       };
       if (!has_device) {
-        curprint(string("device={"));
+        curprint(device_selector_name + string("={"));
         has_device = true;
       };
       curprint(string("arch("));
@@ -8013,7 +8015,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         curprint(string(", "));
       };
       if (!has_device) {
-        curprint(string("device={"));
+        curprint(device_selector_name + string("={"));
         has_device = true;
       };
       curprint(string("isa("));
@@ -8026,7 +8028,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         curprint(string(", "));
       };
       if (!has_device) {
-        curprint(string("device={"));
+        curprint(device_selector_name + string("={"));
         has_device = true;
       };
       curprint(string("kind("));
@@ -8061,9 +8063,23 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       };
       curprint(string(")"));
     }
+    SgExpression *device_num = c->get_device_num();
+    if (device_num != NULL) {
+      if (has_trait_set) {
+        curprint(string(", "));
+      };
+      if (!has_device) {
+        curprint(device_selector_name + string("={"));
+        has_device = true;
+      };
+      curprint(string("device_num("));
+      unparseExpression(device_num, ninfo);
+      curprint(string(")"));
+    }
     if (has_device) {
       curprint(string("}"));
       has_device = false;
+      has_trait_set = true;
     };
 
     bool has_implementation = false;
@@ -8217,6 +8233,27 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     SgOmpOrderClause *c = isSgOmpOrderClause(clause);
     ROSE_ASSERT(c != NULL);
     curprint(string(" order("));
+    SgOmpClause::omp_order_modifier_enum modifier = c->get_modifier();
+    switch (modifier) {
+    case SgOmpClause::e_omp_order_modifier_unspecified: {
+      break;
+    }
+    case SgOmpClause::e_omp_order_modifier_reproducible: {
+      curprint(string("reproducible:"));
+      break;
+    }
+    case SgOmpClause::e_omp_order_modifier_unconstrained: {
+      curprint(string("unconstrained:"));
+      break;
+    }
+    default: {
+      cerr << "Error: "
+              "UnparseLanguageIndependentConstructs::unparseOmpOrderClause() "
+              "meets unacceptable modifier value:"
+           << modifier << endl;
+      ROSE_ABORT();
+    }
+    }
     SgOmpClause::omp_order_kind_enum dv = c->get_kind();
     switch (dv) {
     case SgOmpClause::e_omp_order_kind_concurrent: {
@@ -8776,6 +8813,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       result = "default";
       break;
     }
+    case SgOmpClause::e_omp_defaultmap_behavior_present: {
+      result = "present";
+      break;
+    }
     default: {
       cerr << "Error: unhandled operator type defaultmapBehaviorToString():"
            << rm << endl;
@@ -8958,6 +8999,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
     case SgOmpClause::e_omp_depend_inout: {
       result = "inout";
+      break;
+    }
+    case SgOmpClause::e_omp_depend_inoutset: {
+      result = "inoutset";
       break;
     }
     case SgOmpClause::e_omp_depend_mutexinoutset: {
@@ -9276,6 +9321,46 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     curprint(string(")"));
   }
 
+  static void unparseOmpIteratorDefinitions(
+      UnparseLanguageIndependentConstructs & unparser,
+      const std::list<std::list<SgExpression *>> &iterator_definitions,
+      SgUnparse_Info &info) {
+    bool first_definition = true;
+    for (const std::list<SgExpression *> &definition : iterator_definitions) {
+      if (!first_definition) {
+        unparser.curprint(string(","));
+      }
+
+      int count = 0;
+      for (SgExpression *expr : definition) {
+        if (count == 0 && expr != NULL) {
+          unparser.unparseExpression(expr, info);
+          unparser.curprint(string(" "));
+        } else if (count == 1) {
+          if (expr != NULL) {
+            unparser.unparseExpression(expr, info);
+          }
+          unparser.curprint(string("="));
+        } else if (count == 2) {
+          if (expr != NULL) {
+            unparser.unparseExpression(expr, info);
+          }
+          unparser.curprint(string(":"));
+        } else if (count == 3) {
+          if (expr != NULL) {
+            unparser.unparseExpression(expr, info);
+          }
+        } else if (count == 4 && expr != NULL) {
+          unparser.curprint(string(":"));
+          unparser.unparseExpression(expr, info);
+        }
+        ++count;
+      }
+
+      first_definition = false;
+    }
+  }
+
   //! Unparse an OpenMP clause with a variable list
   void UnparseLanguageIndependentConstructs::unparseOmpVariablesClause(
       SgOmpClause * clause, SgUnparse_Info & info) {
@@ -9315,6 +9400,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       break;
     case V_SgOmpUseDeviceAddrClause:
       curprint(string(" use_device_addr("));
+      break;
+    case V_SgOmpHasDeviceAddrClause:
+      curprint(string(" has_device_addr("));
       break;
     case V_SgOmpPrivateClause:
       curprint(string(" private("));
@@ -9518,6 +9606,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
               } else {
                 curprint(string("mapper"));
               }
+            } else if (modifier == SgOmpClause::e_omp_map_modifier_iterator) {
+              curprint(string("iterator("));
+              SgUnparse_Info ninfo(info);
+              unparseOmpIteratorDefinitions(*this, map_clause->get_iterator(),
+                                            ninfo);
+              curprint(string(")"));
             } else {
               curprint(mapModifierToString(modifier));
             }
@@ -9544,7 +9638,6 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
     case V_SgOmpToClause: {
       is_to = true;
-      SgUnparse_Info ninfo(info);
       SgOmpToClause *to_clause = isSgOmpToClause(c);
       static const char *const kOmpDeclareTargetExtendedListAttrName =
           "omp_declare_target_extended_list";
@@ -9555,23 +9648,81 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       curprint(is_declare_target_extended_list ? string("(") : string(" to("));
       if (!is_declare_target_extended_list &&
           to_clause->get_kind() != SgOmpClause::e_omp_to_kind_unknown) {
-        curprint("mapper (");
-        unparseExpression(to_clause->get_mapper_identifier(), info);
-        curprint(")");
-        curprint(string(" : "));
+        SgUnparse_Info ninfo(info);
+        switch (to_clause->get_kind()) {
+        case SgOmpClause::e_omp_to_kind_mapper: {
+          curprint(string("mapper("));
+          if (to_clause->get_mapper_identifier() != NULL) {
+            unparseExpression(to_clause->get_mapper_identifier(), ninfo);
+          }
+          curprint(string(")"));
+          break;
+        }
+        case SgOmpClause::e_omp_to_kind_iterator: {
+          curprint(string("iterator("));
+          unparseOmpIteratorDefinitions(*this, to_clause->get_iterator(),
+                                        ninfo);
+          curprint(string(")"));
+          break;
+        }
+        case SgOmpClause::e_omp_to_kind_present: {
+          curprint(string("present"));
+          break;
+        }
+        case SgOmpClause::e_omp_to_kind_unknown: {
+          break;
+        }
+        default: {
+          cerr << "Error: unhandled to-clause kind in "
+                  "UnparseLanguageIndependentConstructs::"
+                  "unparseOmpVariablesClause():"
+               << to_clause->get_kind() << endl;
+          ROSE_ABORT();
+        }
+        }
+        curprint(string(":"));
       }
       break;
     }
     case V_SgOmpFromClause: {
       is_from = true;
-      SgUnparse_Info ninfo(info);
       curprint(string(" from("));
-      if (isSgOmpFromClause(c)->get_kind() !=
-          SgOmpClause::e_omp_from_kind_unknown) {
-        curprint("mapper (");
-        unparseExpression(isSgOmpFromClause(c)->get_mapper_identifier(), info);
-        curprint(")");
-        curprint(string(" : "));
+      SgOmpFromClause *from_clause = isSgOmpFromClause(c);
+      ROSE_ASSERT(from_clause != NULL);
+      if (from_clause->get_kind() != SgOmpClause::e_omp_from_kind_unknown) {
+        SgUnparse_Info ninfo(info);
+        switch (from_clause->get_kind()) {
+        case SgOmpClause::e_omp_from_kind_mapper: {
+          curprint(string("mapper("));
+          if (from_clause->get_mapper_identifier() != NULL) {
+            unparseExpression(from_clause->get_mapper_identifier(), ninfo);
+          }
+          curprint(string(")"));
+          break;
+        }
+        case SgOmpClause::e_omp_from_kind_iterator: {
+          curprint(string("iterator("));
+          unparseOmpIteratorDefinitions(*this, from_clause->get_iterator(),
+                                        ninfo);
+          curprint(string(")"));
+          break;
+        }
+        case SgOmpClause::e_omp_from_kind_present: {
+          curprint(string("present"));
+          break;
+        }
+        case SgOmpClause::e_omp_from_kind_unknown: {
+          break;
+        }
+        default: {
+          cerr << "Error: unhandled from-clause kind in "
+                  "UnparseLanguageIndependentConstructs::"
+                  "unparseOmpVariablesClause():"
+               << from_clause->get_kind() << endl;
+          ROSE_ABORT();
+        }
+        }
+        curprint(string(":"));
       }
       break;
     }
@@ -10092,6 +10243,16 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       ROSE_ABORT();
     }
 
+    if (isSgOmpGrainsizeClause(c) &&
+        isSgOmpGrainsizeClause(c)->get_modifier() ==
+            SgOmpClause::e_omp_grainsize_modifier_strict) {
+      curprint(string("strict:"));
+    } else if (isSgOmpNumTasksClause(c) &&
+               isSgOmpNumTasksClause(c)->get_modifier() ==
+                   SgOmpClause::e_omp_num_tasks_modifier_strict) {
+      curprint(string("strict:"));
+    }
+
     // unparse the expression
     SgUnparse_Info ninfo(info);
     if (isSgOmpSizesClause(c)) {
@@ -10255,6 +10416,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       curprint(string(" capture"));
       break;
     }
+    case V_SgOmpCompareClause: {
+      curprint(string(" compare"));
+      break;
+    }
+    case V_SgOmpWeakClause: {
+      curprint(string(" weak"));
+      break;
+    }
     case V_SgOmpSeqCstClause: {
       curprint(string(" seq_cst"));
       break;
@@ -10275,6 +10444,35 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       curprint(string(" relaxed"));
       break;
     }
+    case V_SgOmpFailClause: {
+      SgOmpFailClause *fail_clause = isSgOmpFailClause(clause);
+      ROSE_ASSERT(fail_clause != NULL);
+      curprint(string(" fail"));
+      switch (fail_clause->get_memory_order()) {
+      case SgOmpClause::e_omp_fail_memory_order_kind_unspecified: {
+        break;
+      }
+      case SgOmpClause::e_omp_fail_memory_order_kind_seq_cst: {
+        curprint(string("(seq_cst)"));
+        break;
+      }
+      case SgOmpClause::e_omp_fail_memory_order_kind_acquire: {
+        curprint(string("(acquire)"));
+        break;
+      }
+      case SgOmpClause::e_omp_fail_memory_order_kind_relaxed: {
+        curprint(string("(relaxed)"));
+        break;
+      }
+      default: {
+        cerr << "Error: unacceptable fail clause memory order in "
+                "UnparseLanguageIndependentConstructs::unparseOmpClause():"
+             << fail_clause->get_memory_order() << endl;
+        ROSE_ABORT();
+      }
+      }
+      break;
+    }
     case V_SgOmpParallelClause: {
       curprint(string(" parallel"));
       break;
@@ -10289,6 +10487,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
     case V_SgOmpTaskgroupClause: {
       curprint(string(" taskgroup"));
+      break;
+    }
+    case V_SgOmpFullClause: {
+      curprint(string(" full"));
       break;
     }
     case V_SgOmpInbranchClause: {
@@ -10364,6 +10566,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgOmpIsDevicePtrClause:
     case V_SgOmpUseDevicePtrClause:
     case V_SgOmpUseDeviceAddrClause:
+    case V_SgOmpHasDeviceAddrClause:
     case V_SgOmpLastprivateClause:
     case V_SgOmpPrivateClause:
     case V_SgOmpReductionClause:
@@ -10543,10 +10746,23 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   void UnparseLanguageIndependentConstructs::unparseOmpDirectivePrefixAndName(
       SgStatement * stmt, SgUnparse_Info & info) {
     ROSE_ASSERT(stmt != NULL);
+    static const char *const kOmpDirectiveSpellingOverrideAttrName =
+        "omp_directive_spelling_override";
     if (!isVariant) {
       unp->u_sage->curprint_newline();
       unparseOmpPrefix(info);
     };
+
+    if (AstValueAttribute<std::string> *override_attr =
+            dynamic_cast<AstValueAttribute<std::string> *>(
+                stmt->getAttribute(kOmpDirectiveSpellingOverrideAttrName))) {
+      const std::string spelling = override_attr->get();
+      if (!spelling.empty()) {
+        curprint(spelling);
+        return;
+      }
+    }
+
     switch (stmt->variantT()) {
     case V_SgOmpAtomicStatement: {
       curprint(string("atomic"));
@@ -10908,6 +11124,88 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         nested_body_stmt != nullptr && nested_body_stmt->get_body() != nullptr;
     const bool emit_combined_variant_selector =
         has_combined_parallel_shape && isVariant;
+    static const char *const kOmpClauseOriginalOrderAttrName =
+        "omp_clause_original_order";
+
+    auto unparse_combined_clauses_in_original_order =
+        [&](SgStatement *outer_stmt, SgStatement *inner_stmt) -> bool {
+      struct ClauseWithOrder {
+        SgOmpClause *clause = nullptr;
+        int order = std::numeric_limits<int>::max();
+        size_t stable_index = 0;
+      };
+
+      std::vector<ClauseWithOrder> ordered_clauses;
+      size_t stable_index = 0;
+      bool has_explicit_order = false;
+
+      auto collect_clauses = [&](SgStatement *clause_stmt) {
+        if (SgOmpClauseBodyStatement *omp_clause_body_stmt =
+                isSgOmpClauseBodyStatement(clause_stmt)) {
+          for (SgOmpClause *clause : omp_clause_body_stmt->get_clauses()) {
+            if (clause == nullptr) {
+              continue;
+            }
+            ClauseWithOrder item;
+            item.clause = clause;
+            item.stable_index = stable_index++;
+            if (AstIntAttribute *order_attr = dynamic_cast<AstIntAttribute *>(
+                    clause->getAttribute(kOmpClauseOriginalOrderAttrName))) {
+              item.order = order_attr->getValue();
+              has_explicit_order = true;
+            }
+            ordered_clauses.push_back(item);
+          }
+          return;
+        }
+
+        if (SgOmpClauseStatement *omp_clause_stmt =
+                isSgOmpClauseStatement(clause_stmt)) {
+          for (SgOmpClause *clause : omp_clause_stmt->get_clauses()) {
+            if (clause == nullptr) {
+              continue;
+            }
+            ClauseWithOrder item;
+            item.clause = clause;
+            item.stable_index = stable_index++;
+            if (AstIntAttribute *order_attr = dynamic_cast<AstIntAttribute *>(
+                    clause->getAttribute(kOmpClauseOriginalOrderAttrName))) {
+              item.order = order_attr->getValue();
+              has_explicit_order = true;
+            }
+            ordered_clauses.push_back(item);
+          }
+        }
+      };
+
+      collect_clauses(outer_stmt);
+      collect_clauses(inner_stmt);
+
+      if (!has_explicit_order) {
+        return false;
+      }
+
+      std::stable_sort(
+          ordered_clauses.begin(), ordered_clauses.end(),
+          [](const ClauseWithOrder &lhs, const ClauseWithOrder &rhs) {
+            const bool lhs_has_order =
+                lhs.order != std::numeric_limits<int>::max();
+            const bool rhs_has_order =
+                rhs.order != std::numeric_limits<int>::max();
+            if (lhs_has_order != rhs_has_order) {
+              return lhs_has_order;
+            }
+            if (lhs.order != rhs.order) {
+              return lhs.order < rhs.order;
+            }
+            return lhs.stable_index < rhs.stable_index;
+          });
+
+      for (const ClauseWithOrder &item : ordered_clauses) {
+        unparseOmpClause(item.clause, info);
+      }
+      return true;
+    };
 
     if (emit_combined_with_body || emit_combined_variant_selector) {
       unparseOmpDirectivePrefixAndName(stmt, info);
@@ -10916,8 +11214,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       isVariant = true;
       unparseOmpDirectivePrefixAndName(nested_stmt, info);
       isVariant = saved_is_variant;
-      unparseOmpBeginDirectiveClauses(nested_stmt, info);
-      unparseOmpBeginDirectiveClauses(stmt, info);
+      if (!unparse_combined_clauses_in_original_order(stmt, nested_stmt)) {
+        unparseOmpBeginDirectiveClauses(stmt, info);
+        unparseOmpBeginDirectiveClauses(nested_stmt, info);
+      }
       if (emit_combined_with_body) {
         unp->u_sage->curprint_newline();
         SgUnparse_Info ninfo(info);

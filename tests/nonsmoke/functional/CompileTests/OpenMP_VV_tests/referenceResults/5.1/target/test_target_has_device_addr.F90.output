@@ -1,0 +1,10 @@
+!$omp target enter data map(to:x,arr)
+!$omp target data use_device_addr(x,arr)
+!$omp end target data
+!$omp target map(from:cptr_scalar2,cptr_arr2) map(to:x,arr) has_device_addr(first_scalar_device_addr,first_arr_device_addr) map(errors)
+!$omp end target
+!$omp target data use_device_addr(x,arr)
+!$omp target map(from:cptr_scalar3,cptr_arr3) has_device_addr(x,arr) has_device_addr(first_scalar_device_addr,first_arr_device_addr) has_device_addr(second_scalar_device_addr,second_arr_device_addr) map(errors)
+!$omp end target
+!$omp end target data
+!$omp target exit data map(release:x,arr)

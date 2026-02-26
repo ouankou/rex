@@ -1,0 +1,3 @@
+#pragma omp target map(tofrom:num_teams,errors)
+#pragma omp teams num_teams(OMPVV_NUM_TEAMS_DEVICE) thread_limit(testing_thread_limit)
+#pragma omp parallel

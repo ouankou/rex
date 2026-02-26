@@ -91,6 +91,7 @@ if(ENABLE-CPP)
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/src/frontend/SageIII/omp_exprparser_parser.cc
     COMMAND ${BISON_EXECUTABLE}
+      -Wall -Werror
       ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/omp_exprparser_parser.yy -o
       ${CMAKE_BINARY_DIR}/src/frontend/SageIII/omp_exprparser_parser.cc
       #    && mv omp_exprparser_parser.H omp_exprparser_parser.hh

@@ -1,0 +1,2 @@
+#pragma omp target map(tofrom:x)
+#pragma omp parallel loop order(unconstrained:concurrent)

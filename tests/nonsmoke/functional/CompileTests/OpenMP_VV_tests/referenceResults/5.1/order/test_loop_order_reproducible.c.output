@@ -1,0 +1,4 @@
+#pragma omp target map(tofrom:x,y)
+#pragma omp parallel
+#pragma omp loop order(reproducible:concurrent)
+#pragma omp loop order(reproducible:concurrent)

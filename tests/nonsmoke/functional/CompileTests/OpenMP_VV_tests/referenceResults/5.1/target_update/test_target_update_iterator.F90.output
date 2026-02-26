@@ -1,0 +1,7 @@
+!$omp target enter data map(to:new_struct%data)
+!$omp target map(to:new_struct,new_struct%data) map(tofrom:A)
+!$omp end target
+!$omp target update to(iterator(it=1:N):new_struct%data(it))
+!$omp target map(tofrom:A)
+!$omp end target
+!$omp target exit data map(delete:new_struct%data)

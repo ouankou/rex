@@ -1,0 +1,4 @@
+#pragma omp target map(tofrom:x,y)
+#pragma omp parallel
+#pragma omp for order(reproducible:concurrent) nowait
+#pragma omp for order(reproducible:concurrent)

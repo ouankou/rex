@@ -1,0 +1,8 @@
+#pragma omp begin declare variant match(construct={parallel})
+#pragma omp for
+#pragma omp end declare variant
+#pragma omp begin declare variant match(construct={target})
+#pragma omp for
+#pragma omp end declare variant
+#pragma omp parallel
+#pragma omp target map(tofrom:arr)

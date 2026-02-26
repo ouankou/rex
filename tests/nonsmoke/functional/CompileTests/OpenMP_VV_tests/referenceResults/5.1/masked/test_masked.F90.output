@@ -1,0 +1,5 @@
+!$omp parallel num_threads(threads)
+!$omp atomic read
+!$omp masked
+!$omp end masked
+!$omp end parallel
