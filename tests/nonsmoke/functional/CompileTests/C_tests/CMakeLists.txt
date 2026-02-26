@@ -882,7 +882,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2009_06.c
   test2009_19.c
   test2010_02.c
-  test2010_03.c
   test2010_04.c
   test2010_05.c
   test2010_12.c
