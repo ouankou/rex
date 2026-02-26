@@ -935,8 +935,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_139.c
   test2015_14.c
   test2015_140.c
-  test2015_141.c
-  test2015_142.c
   test2015_143.c
   test2015_144.c
   test2015_146.c
