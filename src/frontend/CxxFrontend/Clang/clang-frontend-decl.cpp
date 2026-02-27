@@ -16636,9 +16636,38 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     ret_type = specialized_ret;
   }
 
+  auto infer_parameter_source_range = [&]() -> clang::SourceRange {
+    if (clang::TypeSourceInfo *type_info = function_decl->getTypeSourceInfo()) {
+      for (clang::TypeLoc type_loc = type_info->getTypeLoc();
+           !type_loc.isNull(); type_loc = type_loc.getNextTypeLoc()) {
+        clang::TypeLoc::TypeLocClass type_loc_class =
+            type_loc.getTypeLocClass();
+        if (type_loc_class == clang::TypeLoc::FunctionNoProto ||
+            type_loc_class == clang::TypeLoc::FunctionProto) {
+          clang::FunctionTypeLoc function_type_loc =
+              type_loc.castAs<clang::FunctionTypeLoc>();
+          clang::SourceLocation l_paren = function_type_loc.getLParenLoc();
+          clang::SourceLocation r_paren = function_type_loc.getRParenLoc();
+          if (l_paren.isValid() && r_paren.isValid()) {
+            return clang::SourceRange(l_paren, r_paren);
+          }
+        }
+      }
+    }
+    return function_decl->getParametersSourceRange();
+  };
+
   SgFunctionParameterList *param_list =
       SageBuilder::buildFunctionParameterList_nfi();
-  applySourceRange(param_list, function_decl->getParametersSourceRange());
+  const clang::SourceRange parameter_source_range =
+      infer_parameter_source_range();
+  if (parameter_source_range.isValid()) {
+    applySourceRange(param_list, parameter_source_range);
+  } else {
+    // Missing Clang parameter ranges are structural placeholders; keep them
+    // compiler-generated but non-output.
+    setCompilerGeneratedFileInfo(param_list, false);
+  }
 
   const bool is_definition_decl_for_params =
       function_decl->isThisDeclarationADefinition() &&

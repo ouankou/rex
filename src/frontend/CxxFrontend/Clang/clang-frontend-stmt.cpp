@@ -3689,7 +3689,7 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
 
     if (for_init_stmt_list.size() == 0) {
       SgNullStatement *nullStmt = SageBuilder::buildNullStatement_nfi();
-      setCompilerGeneratedFileInfo(nullStmt, true);
+      setCompilerGeneratedFileInfo(nullStmt, false);
       for_init_stmt_list.push_back(nullStmt);
     }
 
@@ -3710,9 +3710,11 @@ bool ClangToSageTranslator::VisitForStmt(clang::ForStmt *for_stmt,
     if (for_stmt->getInit() != nullptr)
       applySourceRange(for_init_stmt, for_stmt->getInit()->getSourceRange());
     else
-      setCompilerGeneratedFileInfo(for_init_stmt, true);
-    if (for_init_stmt->get_startOfConstruct() == nullptr) {
-      setCompilerGeneratedFileInfo(for_init_stmt, true);
+      setCompilerGeneratedFileInfo(for_init_stmt, false);
+    Sg_File_Info *for_init_fi = for_init_stmt->get_file_info();
+    if (for_init_stmt->get_startOfConstruct() == nullptr ||
+        for_init_fi == nullptr || for_init_fi->isCompilerGenerated()) {
+      setCompilerGeneratedFileInfo(for_init_stmt, false);
     }
 
     // Ensure for-init statements are parented by the SgForInitStatement while
@@ -12876,7 +12878,14 @@ bool ClangToSageTranslator::VisitStmtExpr(clang::StmtExpr *stmt_expr,
     res = false;
   }
 
-  *node = new SgStatementExpression(substmt);
+  SgStatementExpression *statement_expression =
+      new SgStatementExpression(substmt);
+  if (substmt != nullptr) {
+    // SgStatementExpression does not parent p_statement in its constructor.
+    // GNU statement-expressions need this parent link for valid scope lookup.
+    substmt->set_parent(statement_expression);
+  }
+  *node = statement_expression;
 
   return VisitExpr(stmt_expr, node) && res;
 }

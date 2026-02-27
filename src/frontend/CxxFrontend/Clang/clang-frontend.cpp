@@ -4536,6 +4536,8 @@ void ClangToSageTranslator::setCompilerGeneratedFileInfo(SgNode *node,
 
   start_fi->setCompilerGenerated();
   end_fi->setCompilerGenerated();
+  start_fi->unsetOutputInCodeGeneration();
+  end_fi->unsetOutputInCodeGeneration();
 
   if (to_be_unparse) {
     start_fi->setOutputInCodeGeneration();
@@ -4585,6 +4587,7 @@ void ClangToSageTranslator::setCompilerGeneratedFileInfo(SgNode *node,
       Sg_File_Info *op_fi =
           Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
       op_fi->setCompilerGenerated();
+      op_fi->unsetOutputInCodeGeneration();
       if (to_be_unparse) {
         op_fi->setOutputInCodeGeneration();
       }
