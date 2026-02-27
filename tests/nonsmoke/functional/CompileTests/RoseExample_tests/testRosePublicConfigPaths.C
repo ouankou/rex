@@ -1,5 +1,4 @@
 #include "rosePublicConfig.h"
-#include "rosedefs.h"
 
 #include <cstddef>
 
