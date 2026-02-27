@@ -1004,7 +1004,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_41.c
   test2014_66.c
   test2014_91.c
-  test2015_09.c
   test2015_156.c
   test2015_157.c
   test2015_23.c
