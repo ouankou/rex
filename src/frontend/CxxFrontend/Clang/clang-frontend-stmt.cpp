@@ -3982,7 +3982,6 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
       res = false;
     } else if (sg_init_expr != nullptr) {
       sg_init_stmt = SageBuilder::buildExprStatement(sg_init_expr);
-      applySourceRange(sg_init_stmt, clang_if_init_stmt->getSourceRange());
     }
 
     if (sg_init_stmt == nullptr) {
