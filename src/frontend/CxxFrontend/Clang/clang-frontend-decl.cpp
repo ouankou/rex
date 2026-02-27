@@ -16640,18 +16640,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     if (clang::TypeSourceInfo *type_info = function_decl->getTypeSourceInfo()) {
       for (clang::TypeLoc type_loc = type_info->getTypeLoc();
            !type_loc.isNull(); type_loc = type_loc.getNextTypeLoc()) {
-        if (clang::FunctionNoProtoTypeLoc no_proto_loc =
-                type_loc.getAs<clang::FunctionNoProtoTypeLoc>()) {
-          clang::SourceLocation l_paren = no_proto_loc.getLParenLoc();
-          clang::SourceLocation r_paren = no_proto_loc.getRParenLoc();
-          if (l_paren.isValid() && r_paren.isValid()) {
-            return clang::SourceRange(l_paren, r_paren);
-          }
-        }
-        if (clang::FunctionProtoTypeLoc proto_loc =
-                type_loc.getAs<clang::FunctionProtoTypeLoc>()) {
-          clang::SourceLocation l_paren = proto_loc.getLParenLoc();
-          clang::SourceLocation r_paren = proto_loc.getRParenLoc();
+        clang::TypeLoc::TypeLocClass type_loc_class =
+            type_loc.getTypeLocClass();
+        if (type_loc_class == clang::TypeLoc::FunctionNoProto ||
+            type_loc_class == clang::TypeLoc::FunctionProto) {
+          clang::FunctionTypeLoc function_type_loc =
+              type_loc.castAs<clang::FunctionTypeLoc>();
+          clang::SourceLocation l_paren = function_type_loc.getLParenLoc();
+          clang::SourceLocation r_paren = function_type_loc.getRParenLoc();
           if (l_paren.isValid() && r_paren.isValid()) {
             return clang::SourceRange(l_paren, r_paren);
           }
