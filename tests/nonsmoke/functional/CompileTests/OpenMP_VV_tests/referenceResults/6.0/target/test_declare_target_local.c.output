@@ -1,0 +1,3 @@
+#pragma omp declare target local(local_var)
+#pragma omp target
+#pragma omp target map(tofrom:device_value)

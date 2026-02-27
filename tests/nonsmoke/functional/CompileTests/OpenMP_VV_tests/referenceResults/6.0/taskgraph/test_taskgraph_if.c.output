@@ -1,0 +1,4 @@
+#pragma omp parallel shared(x,y)
+#pragma omp single
+#pragma omp taskgraph if(i!=1)
+#pragma omp task shared(y)

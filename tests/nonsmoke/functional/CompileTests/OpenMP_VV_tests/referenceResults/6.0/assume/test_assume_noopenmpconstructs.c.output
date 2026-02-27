@@ -1,0 +1,5 @@
+#pragma omp assume no_openmp_constructs(cannot_assume)
+#pragma omp parallel for
+#pragma omp assume no_openmp_constructs(can_assume)
+#pragma omp assume no_openmp_constructs(can_assume)
+#pragma omp assume no_openmp_constructs

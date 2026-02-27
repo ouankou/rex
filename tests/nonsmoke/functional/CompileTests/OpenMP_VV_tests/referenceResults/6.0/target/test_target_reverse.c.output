@@ -1,0 +1,2 @@
+#pragma omp target map(tofrom:arrayReverse[:N])
+#pragma omp reverse

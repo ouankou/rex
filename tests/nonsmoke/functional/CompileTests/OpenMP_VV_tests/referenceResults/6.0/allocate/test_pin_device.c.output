@@ -1,0 +1,1 @@
+#pragma omp target map(tofrom:arr[0:N])

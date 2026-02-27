@@ -1,0 +1,1 @@
+#pragma omp fuse looprange(2,2)

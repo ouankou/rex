@@ -1,0 +1,6 @@
+#pragma omp target_data map(tofrom:a)
+#pragma omp target map(tofrom:a) nowait
+#pragma omp target_data map(tofrom:a) nogroup
+#pragma omp target map(tofrom:a) nowait
+#pragma omp target_data map(tofrom:a) depend(inout:a)
+#pragma omp target map(tofrom:a) nowait depend(out:a)

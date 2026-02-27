@@ -1,0 +1,2 @@
+#pragma omp target map(array[0:N]) device(first_dev)
+#pragma omp target map(array[0:N]) device(second_dev)

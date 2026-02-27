@@ -1,0 +1,3 @@
+#pragma omp declare variant(target_func) match(device={kind(nohost)})
+#pragma omp groupprivate(group_sum) device_type(nohost)
+#pragma omp target teams num_teams(OMPVV_NUM_TEAMS_DEVICE) map(tofrom:team_sum,errors) reduction(+:team_sum)

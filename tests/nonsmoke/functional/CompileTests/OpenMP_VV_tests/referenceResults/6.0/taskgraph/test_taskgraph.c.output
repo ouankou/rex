@@ -1,0 +1,5 @@
+#pragma omp parallel shared(x,y)
+#pragma omp single
+#pragma omp taskgraph
+#pragma omp task shared(y)
+#pragma omp atomic

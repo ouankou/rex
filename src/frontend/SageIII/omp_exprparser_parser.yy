@@ -1038,6 +1038,23 @@ postfix_expr:primary_expr {
                current_exp = SageBuilder::buildPntrArrRefExp((SgExpression*)($1), subscript);
                $$ = current_exp;
              }
+            | postfix_expr '[' ':' ']'
+             {
+               arraySection= true; // array section expression with omitted lower bound and length
+               if (array_symbol == NULL)
+               {
+                 if (SgVarRefExp* vref = isSgVarRefExp((SgExpression*)($1))) {
+                   array_symbol = isSgVariableSymbol(vref->get_symbol());
+                 }
+               }
+               lower_exp = SageBuilder::buildNullExpression_nfi();
+               length_exp = SageBuilder::buildNullExpression_nfi();
+               assert (lower_exp && length_exp);
+               SgSubscriptExpression* subscript =
+                 buildOpenMPArraySectionSubscript(lower_exp, length_exp);
+               current_exp = SageBuilder::buildPntrArrRefExp((SgExpression*)($1), subscript);
+               $$ = current_exp;
+             }
             | postfix_expr '[' ':' expression ':' expression ']'
              {
                arraySection= true; // array section expression with omitted lower bound
@@ -1050,6 +1067,24 @@ postfix_expr:primary_expr {
                lower_exp = SageBuilder::buildNullExpression_nfi();
                length_exp = (SgExpression*)($4);
                SgExpression* stride_exp = (SgExpression*)($6);
+               assert (lower_exp && length_exp && stride_exp);
+               SgSubscriptExpression* subscript =
+                 buildOpenMPArraySectionSubscript(lower_exp, length_exp, stride_exp);
+               current_exp = SageBuilder::buildPntrArrRefExp((SgExpression*)($1), subscript);
+               $$ = current_exp;
+             }
+            | postfix_expr '[' ':' ':' expression ']'
+             {
+               arraySection= true; // array section expression with omitted lower bound and length, explicit stride
+               if (array_symbol == NULL)
+               {
+                 if (SgVarRefExp* vref = isSgVarRefExp((SgExpression*)($1))) {
+                   array_symbol = isSgVariableSymbol(vref->get_symbol());
+                 }
+               }
+               lower_exp = SageBuilder::buildNullExpression_nfi();
+               length_exp = SageBuilder::buildNullExpression_nfi();
+               SgExpression* stride_exp = (SgExpression*)($5);
                assert (lower_exp && length_exp && stride_exp);
                SgSubscriptExpression* subscript =
                  buildOpenMPArraySectionSubscript(lower_exp, length_exp, stride_exp);

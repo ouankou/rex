@@ -4738,6 +4738,27 @@ static bool fortranOmpDirectiveUsesExplicitEnd(SgStatement *stmt) {
   }
 }
 
+static bool fortranOmpCanEmitEndDirectivePrefix(SgStatement *stmt) {
+  if (stmt == nullptr) {
+    return false;
+  }
+
+  switch (stmt->variantT()) {
+  case V_SgOmpParallelStatement:
+  case V_SgOmpCriticalStatement:
+  case V_SgOmpSectionsStatement:
+  case V_SgOmpMasterStatement:
+  case V_SgOmpOrderedStatement:
+  case V_SgOmpWorkshareStatement:
+  case V_SgOmpSingleStatement:
+  case V_SgOmpTaskStatement:
+  case V_SgOmpDoStatement:
+    return true;
+  default:
+    return false;
+  }
+}
+
 // Just skip nowait and copyprivate clauses for Fortran
 void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
@@ -4794,7 +4815,8 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
   if (clause_ptr_list != nullptr) {
     SgOmpClausePtrList::const_iterator i;
     bool first_clause = true;
-    const bool move_nowait_to_end = fortranOmpDirectiveUsesExplicitEnd(stmt);
+    const bool move_nowait_to_end = fortranOmpDirectiveUsesExplicitEnd(stmt) &&
+                                    fortranOmpCanEmitEndDirectivePrefix(stmt);
     for (i = clause_ptr_list->begin(); i != clause_ptr_list->end(); i++) {
       SgOmpClause *c_clause = *i;
       if ((isSgOmpNowaitClause(c_clause) ||
@@ -4837,7 +4859,8 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
 void FortranCodeGeneration_locatedNode::unparseOmpEndDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
-  if (!fortranOmpDirectiveUsesExplicitEnd(stmt)) {
+  if (!fortranOmpDirectiveUsesExplicitEnd(stmt) ||
+      !fortranOmpCanEmitEndDirectivePrefix(stmt)) {
     return;
   }
   // optional clauses
@@ -4916,21 +4939,8 @@ void FortranCodeGeneration_locatedNode::unparseOmpFlushStatement(
 void FortranCodeGeneration_locatedNode::unparseOmpEndDirectivePrefixAndName(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
-  if (!fortranOmpDirectiveUsesExplicitEnd(stmt)) {
-    return;
-  }
-  switch (stmt->variantT()) {
-  case V_SgOmpParallelStatement:
-  case V_SgOmpCriticalStatement:
-  case V_SgOmpSectionsStatement:
-  case V_SgOmpMasterStatement:
-  case V_SgOmpOrderedStatement:
-  case V_SgOmpWorkshareStatement:
-  case V_SgOmpSingleStatement:
-  case V_SgOmpTaskStatement:
-  case V_SgOmpDoStatement:
-    break;
-  default:
+  if (!fortranOmpDirectiveUsesExplicitEnd(stmt) ||
+      !fortranOmpCanEmitEndDirectivePrefix(stmt)) {
     return;
   }
   unp->u_sage->curprint_newline();

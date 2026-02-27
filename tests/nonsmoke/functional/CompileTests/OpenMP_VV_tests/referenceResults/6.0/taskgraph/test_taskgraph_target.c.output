@@ -1,0 +1,6 @@
+#pragma omp parallel shared(x,y)
+#pragma omp single
+#pragma omp taskgraph
+#pragma omp target nowait map(tofrom:y) depend(out:y) shared(y)
+#pragma omp task depend(out:y) shared(y)
+#pragma omp target nowait map(tofrom:y) depend(out:y) shared(y)

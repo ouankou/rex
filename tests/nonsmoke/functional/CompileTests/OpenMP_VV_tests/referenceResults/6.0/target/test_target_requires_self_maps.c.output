@@ -1,0 +1,3 @@
+#pragma omp requires self_maps
+#pragma omp target
+#pragma omp target

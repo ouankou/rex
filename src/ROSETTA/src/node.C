@@ -180,12 +180,12 @@ void Grammar::setUpNodes() {
 
   NEW_NONTERMINAL_MACRO(
       OmpExpressionClause,
-      OmpOrderedClause | OmpCollapseClause | OmpIfClause | OmpNumThreadsClause |
-          OmpNumTeamsClause | OmpThreadLimitClause | OmpDeviceClause |
-          OmpHintClause | OmpGrainsizeClause | OmpNumTasksClause |
-          OmpDetachClause | OmpSafelenClause | OmpSimdlenClause |
-          OmpFinalClause | OmpPriorityClause | OmpPartialClause |
-          OmpSizesClause,
+      OmpNowaitClause | OmpOrderedClause | OmpCollapseClause | OmpIfClause |
+          OmpNumThreadsClause | OmpNumTeamsClause | OmpThreadLimitClause |
+          OmpDeviceClause | OmpHintClause | OmpGrainsizeClause |
+          OmpNumTasksClause | OmpDetachClause | OmpSafelenClause |
+          OmpSimdlenClause | OmpFinalClause | OmpPriorityClause |
+          OmpPartialClause | OmpSizesClause,
       "OmpExpressionClause", "OmpExpressionClauseTag", false);
 
   NEW_TERMINAL_MACRO(OmpCopyprivateClause, "OmpCopyprivateClause",
@@ -246,20 +246,19 @@ void Grammar::setUpNodes() {
                      "OmpUsesAllocatorsDefinationTag");
   NEW_NONTERMINAL_MACRO(
       OmpClause,
-      OmpNowaitClause | OmpReadClause | OmpThreadsClause | OmpSimdClause |
-          OmpCompareClause | OmpWeakClause | OmpFailClause | OmpWriteClause |
-          OmpUpdateClause | OmpDepobjUpdateClause | OmpDestroyClause |
-          OmpCaptureClause | OmpBeginClause | OmpEndClause | OmpUntiedClause |
-          OmpSeqCstClause | OmpAcqRelClause | OmpReleaseClause |
-          OmpAcquireClause | OmpRelaxedClause | OmpReverseOffloadClause |
-          OmpUnifiedAddressClause | OmpUnifiedSharedMemoryClause |
-          OmpDynamicAllocatorsClause | OmpParallelClause | OmpSectionsClause |
-          OmpForClause | OmpTaskgroupClause | OmpNogroupClause |
-          OmpDefaultClause | OmpAllocatorClause | OmpAtomicClause |
-          OmpProcBindClause | OmpBindClause | OmpOrderClause |
-          OmpDistScheduleClause | OmpExpressionClause | OmpInbranchClause |
-          OmpNotinbranchClause | OmpDefaultmapClause |
-          OmpAtomicDefaultMemOrderClause |
+      OmpReadClause | OmpThreadsClause | OmpSimdClause | OmpCompareClause |
+          OmpWeakClause | OmpFailClause | OmpWriteClause | OmpUpdateClause |
+          OmpDepobjUpdateClause | OmpDestroyClause | OmpCaptureClause |
+          OmpBeginClause | OmpEndClause | OmpUntiedClause | OmpSeqCstClause |
+          OmpAcqRelClause | OmpReleaseClause | OmpAcquireClause |
+          OmpRelaxedClause | OmpReverseOffloadClause | OmpUnifiedAddressClause |
+          OmpUnifiedSharedMemoryClause | OmpDynamicAllocatorsClause |
+          OmpParallelClause | OmpSectionsClause | OmpForClause |
+          OmpTaskgroupClause | OmpNogroupClause | OmpDefaultClause |
+          OmpAllocatorClause | OmpAtomicClause | OmpProcBindClause |
+          OmpBindClause | OmpOrderClause | OmpDistScheduleClause |
+          OmpExpressionClause | OmpInbranchClause | OmpNotinbranchClause |
+          OmpDefaultmapClause | OmpAtomicDefaultMemOrderClause |
           OmpExtImplementationDefinedRequirementClause |
           OmpUsesAllocatorsDefination | OmpVariablesClause | OmpScheduleClause |
           OmpMergeableClause | OmpWhenClause | OmpUsesAllocatorsClause |
