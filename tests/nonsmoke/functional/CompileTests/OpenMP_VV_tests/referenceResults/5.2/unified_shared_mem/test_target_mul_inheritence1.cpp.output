@@ -1,0 +1,5 @@
+#pragma omp requires unified_shared_memory
+#pragma omp target data map(tofrom:Errors) device(dev)
+#pragma omp target device(dev)
+#pragma omp target data map(tofrom:Errors) device(dev)
+#pragma omp target device(dev)

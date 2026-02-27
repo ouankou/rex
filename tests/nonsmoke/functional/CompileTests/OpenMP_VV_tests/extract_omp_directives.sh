@@ -75,10 +75,16 @@ for (my $i = 0; $i <= $#lines; ++$i) {
     }
 
     # Fortran directives, including free-form continuation via trailing '&' and
-    # following '!$omp&' or plain '&' continuation lines.
-    if ($line =~ /^[ \t]*[!cC\*]\$omp\b/i) {
+    # following '!$omp&'/'!$ompx&' or plain '&' continuation lines.
+    if ($line =~ /^[ \t]*[!cC\*]\$(omp|ompx)\b/i) {
+        my $sentinel = lc($1);
         my $segment = $line;
-        $segment =~ s/^[ \t]*[!cC\*]\$omp\b[ \t]*/!\$omp /i;
+        $segment =~ s/^[ \t]*[!cC\*]\$(?:omp|ompx)\b[ \t]*//i;
+        if ($sentinel eq "ompx") {
+            $segment = "!\$ompx " . $segment;
+        } else {
+            $segment = "!\$omp " . $segment;
+        }
         $segment =~ s/[ \t]*&[ \t]*$//;
         $segment =~ s/[ \t]+!.*$//;
         my $directive = trim($segment);
@@ -87,7 +93,7 @@ for (my $i = 0; $i <= $#lines; ++$i) {
 
         while ($continued && $i + 1 <= $#lines) {
             my $next_raw = $lines[$i + 1];
-            my $is_omp_cont = ($next_raw =~ /^[ \t]*[!cC\*]\$omp\b/i);
+            my $is_omp_cont = ($next_raw =~ /^[ \t]*[!cC\*]\$(?:omp|ompx)\b/i);
             my $is_amp_cont = ($next_raw =~ /^[ \t]*&/);
             last unless ($is_omp_cont || $is_amp_cont);
 
@@ -97,7 +103,7 @@ for (my $i = 0; $i <= $#lines; ++$i) {
                 ($next =~ /[A-Za-z0-9_][ \t]*&[ \t]*$/) ? 1 : 0;
             $continued = ($next =~ /&[ \t]*$/) ? 1 : 0;
             if ($is_omp_cont) {
-                $next =~ s/^[ \t]*[!cC\*]\$omp\b[ \t]*&?[ \t]*//i;
+                $next =~ s/^[ \t]*[!cC\*]\$(?:omp|ompx)\b[ \t]*&?[ \t]*//i;
             } else {
                 $next =~ s/^[ \t]*&[ \t]*//;
             }
