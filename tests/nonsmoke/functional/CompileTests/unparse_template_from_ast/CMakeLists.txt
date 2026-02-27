@@ -22,9 +22,7 @@ set(_unparse_template_tests
   ${_unparse_template_failing}
 )
 
-set(_unparse_template_flags
-  -std=c++ -rose:unparse_template_ast -DSKIP_ROSE_BUILTIN_DECLARATIONS)
-list(JOIN _unparse_template_flags " " _unparse_template_flags_str)
+set(_unparse_template_flags "-std=c++ -rose:unparse_template_ast -DSKIP_ROSE_BUILTIN_DECLARATIONS")
 
 foreach(specimen IN LISTS _unparse_template_tests)
   set(_target ${specimen}.passed)
@@ -32,7 +30,7 @@ foreach(specimen IN LISTS _unparse_template_tests)
     NAME unparse_template_${specimen}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:testTranslator> ${_unparse_template_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:testTranslator> ${_unparse_template_flags} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       TITLE="TEST: testTranslator ${specimen}"
       ${_exit_status}
       ${_target}
