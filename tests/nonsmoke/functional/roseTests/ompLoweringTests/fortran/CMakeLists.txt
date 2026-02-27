@@ -169,6 +169,8 @@ function(add_omp_fortran_semantic_test specimen)
   _omp_sanitize_name(_omp_name ${specimen})
   set(_test_name omp_lowering_fortran_semantic_${_omp_name})
   set(_workdir ${_omp_fortran_lowering_output_dir}/semantic/${_omp_name})
+  # 6 iterations = 2 thread counts * 3 repeats in run_fortran_semantic_compare.sh
+  math(EXPR _total_timeout "6 * ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS}")
   add_test(
     NAME ${_test_name}
     WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
@@ -184,7 +186,7 @@ function(add_omp_fortran_semantic_test specimen)
             $<TARGET_FILE:kmpc_fortran_abi>
             ${specimen}
             ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS})
-  set_tests_properties(${_test_name} PROPERTIES TIMEOUT 1080)
+  set_tests_properties(${_test_name} PROPERTIES TIMEOUT ${_total_timeout})
   set_property(TEST ${_test_name} APPEND PROPERTY LABELS
                "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_SEMANTIC;OMPLOWERING_FORTRAN")
 endfunction()
