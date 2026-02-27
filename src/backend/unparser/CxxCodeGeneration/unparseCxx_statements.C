@@ -5381,16 +5381,17 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       }
     };
 
+    SgTemplateInstantiationDecl *inst_decl =
+        isSgTemplateInstantiationDecl(classdecl_stmt);
     bool needs_enclosing_template_headers =
         !info.SkipClassDefinition() &&
         classdecl_stmt->get_definition() != NULL &&
         classdecl_stmt->get_parent() != classdecl_stmt->get_scope() &&
         isSgTemplateClassDeclaration(classdecl_stmt) == NULL &&
-        isSgTemplateInstantiationDecl(classdecl_stmt) == NULL;
+        inst_decl == NULL;
     bool needs_specialization_enclosing_headers =
-        !info.SkipClassDefinition() &&
-        isSgTemplateInstantiationDecl(classdecl_stmt) != NULL &&
-        isSgTemplateInstantiationDecl(classdecl_stmt)->isSpecialization() &&
+        !info.SkipClassDefinition() && inst_decl != NULL &&
+        inst_decl->isSpecialization() &&
         classdecl_stmt->get_parent() != classdecl_stmt->get_scope();
     if (needs_enclosing_template_headers ||
         needs_specialization_enclosing_headers) {
