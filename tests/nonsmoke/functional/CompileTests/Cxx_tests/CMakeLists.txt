@@ -3982,6 +3982,24 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2025_issue160_extern_class_instantiation_unparse
   rex_test2025_issue160_extern_class_instantiation.cpp)
 
+# Helper for Cxx unparse tests that run translator, then shell checks on rose_ output.
+function(rex_add_cxx_unparse_check_test base_name shell_check_command)
+  string(CONCAT _unparse_command "\"$@\" && " "${shell_check_command}")
+  add_test(
+    NAME Cxx_tests_${base_name}_unparse
+    COMMAND
+      sh -c
+      "${_unparse_command}"
+      dummy
+      $<TARGET_FILE:${translator}>
+      ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+      -I${CMAKE_CURRENT_SOURCE_DIR}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/${base_name}.cpp
+  )
+  set_tests_properties(Cxx_tests_${base_name}_unparse PROPERTIES LABELS Cxx_tests)
+  rex_lock_test_for_input(Cxx_tests_${base_name}_unparse ${base_name}.cpp)
+endfunction()
+
 # Issue 160/#268: Keep explicit system-header instantiation in the template's namespace.
 set(_issue160_system_header_class_instantiation_base
     "rex_test2025_issue160_system_header_class_instantiation")
@@ -3991,29 +4009,14 @@ set(_issue160_grep_pattern
     "^[[:space:]]*template[[:space:]]+(class|struct)[[:space:]]+${_issue160_system_header_class_instantiation_namespace}::Box[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*;")
 set(_issue160_generated_file
     "rose_${_issue160_system_header_class_instantiation_base}.cpp")
-string(CONCAT _issue160_system_header_class_instantiation_unparse_command
-  "\"$@\" && "
+string(CONCAT _issue160_system_header_class_instantiation_check_command
   "grep -E \"${_issue160_grep_pattern}\" \"${_issue160_generated_file}\" && "
   "\"${CMAKE_CXX_COMPILER}\" -std=c++20 -I\"${CMAKE_CURRENT_SOURCE_DIR}\" -c \"${_issue160_generated_file}\""
 )
-add_test(
-  NAME Cxx_tests_${_issue160_system_header_class_instantiation_base}_unparse
-  COMMAND
-    sh -c
-    "${_issue160_system_header_class_instantiation_unparse_command}"
-    dummy
-    $<TARGET_FILE:${translator}>
-    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
-    -I${CMAKE_CURRENT_SOURCE_DIR}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/${_issue160_system_header_class_instantiation_base}.cpp
+rex_add_cxx_unparse_check_test(
+  "${_issue160_system_header_class_instantiation_base}"
+  "${_issue160_system_header_class_instantiation_check_command}"
 )
-set_tests_properties(
-  Cxx_tests_${_issue160_system_header_class_instantiation_base}_unparse
-  PROPERTIES LABELS Cxx_tests
-)
-rex_lock_test_for_input(
-  Cxx_tests_${_issue160_system_header_class_instantiation_base}_unparse
-  ${_issue160_system_header_class_instantiation_base}.cpp)
 
 # Issue 62: Mangled qualifiers must never contain template syntax.
 rex_compile_test_name(_issue62_test "Cxx_tests" rex_test2025_mangle_qualifiers_no_template_syntax.cpp)

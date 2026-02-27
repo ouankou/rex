@@ -1210,7 +1210,8 @@ endforeach()
 # C constant propagation tests from CXX test directory
 foreach(specimen IN LISTS C_CONSTPROP_SPECIMENS)
   string(REPLACE "." "_" _name ${specimen})
-  string(REPLACE ".C" ".c" _c_specimen ${specimen})
+  get_filename_component(_name_we ${specimen} NAME_WE)
+  set(_c_specimen "${_name_we}.c")
   add_test(
     NAME gdf_c_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -1229,7 +1230,8 @@ set(_c_constprop_disabled
 )
 foreach(specimen IN LISTS _c_constprop_disabled)
   string(REPLACE "." "_" _name ${specimen})
-  string(REPLACE ".C" ".c" _c_specimen ${specimen})
+  get_filename_component(_name_we ${specimen} NAME_WE)
+  set(_c_specimen "${_name_we}.c")
   add_test(
     NAME gdf_c_constprop_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
