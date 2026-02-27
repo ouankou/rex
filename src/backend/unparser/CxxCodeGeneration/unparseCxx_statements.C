@@ -75,6 +75,28 @@ SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   }
   return try_stmt;
 }
+
+size_t count_top_level_template_ids_in_qualified_prefix(
+    const std::string &qualified_prefix) {
+  size_t template_id_count = 0;
+  int template_depth = 0;
+  for (char ch : qualified_prefix) {
+    if (ch == '<') {
+      if (template_depth == 0) {
+        ++template_id_count;
+      }
+      ++template_depth;
+      continue;
+    }
+
+    if (ch == '>') {
+      if (template_depth > 0) {
+        --template_depth;
+      }
+    }
+  }
+  return template_id_count;
+}
 } // namespace
 
 Unparse_ExprStmt::Unparse_ExprStmt(Unparser *unp, std::string fname)
@@ -4734,6 +4756,24 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     if (SgTemplateInstantiationMemberFunctionDecl *inst =
             isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt)) {
       if (inst->isSpecialization()) {
+        std::string qualified_prefix =
+            mfuncdecl_stmt->get_qualified_name_prefix().getString();
+        size_t template_id_count =
+            count_top_level_template_ids_in_qualified_prefix(qualified_prefix);
+        if (template_id_count == 0) {
+          return;
+        }
+
+        // The declaration-level specialization specifier emitted via
+        // printSpecifier contributes one `template<>`. Emit only the remaining
+        // headers required by enclosing specialized class scopes.
+        size_t extra_headers =
+            template_id_count > 0 ? template_id_count - 1 : 0;
+
+        for (size_t i = 0; i < extra_headers; ++i) {
+          curprint("template<>");
+          curprint("\n");
+        }
         return;
       }
     }
@@ -5275,6 +5315,22 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         return;
       }
 
+      if (SgTemplateInstantiationDecl *inst_decl =
+              isSgTemplateInstantiationDecl(classdecl_stmt)) {
+        if (inst_decl->isSpecialization()) {
+          std::string qualified_prefix =
+              classdecl_stmt->get_qualified_name_prefix().getString();
+          size_t enclosing_template_ids =
+              count_top_level_template_ids_in_qualified_prefix(
+                  qualified_prefix);
+          for (size_t i = 0; i < enclosing_template_ids; ++i) {
+            curprint("template<>");
+            curprint("\n");
+          }
+          return;
+        }
+      }
+
       std::vector<SgTemplateClassDeclaration *> template_chain;
       auto add_template = [&](SgTemplateClassDeclaration *tmpl) {
         if (tmpl == NULL) {
@@ -5331,7 +5387,13 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         classdecl_stmt->get_parent() != classdecl_stmt->get_scope() &&
         isSgTemplateClassDeclaration(classdecl_stmt) == NULL &&
         isSgTemplateInstantiationDecl(classdecl_stmt) == NULL;
-    if (needs_enclosing_template_headers) {
+    bool needs_specialization_enclosing_headers =
+        !info.SkipClassDefinition() &&
+        isSgTemplateInstantiationDecl(classdecl_stmt) != NULL &&
+        isSgTemplateInstantiationDecl(classdecl_stmt)->isSpecialization() &&
+        classdecl_stmt->get_parent() != classdecl_stmt->get_scope();
+    if (needs_enclosing_template_headers ||
+        needs_specialization_enclosing_headers) {
       unparse_enclosing_template_headers();
     }
 
