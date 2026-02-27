@@ -199,7 +199,7 @@ ArtificialFrontierTraversal::evaluateInheritedAttribute(
       // Real-source statements may already be marked for output by frontend
       // source attachment. The invariant here is that compiler-generated
       // scaffolding should not start as output during frontier testing.
-      if (statement_fi != nullptr && statement_fi->isCompilerGenerated() &&
+      if (statement_fi->isCompilerGenerated() &&
           isSgNullStatement(statement) == nullptr) {
         ASSERT_require(statement->isOutputInCodeGeneration() == false);
       }
