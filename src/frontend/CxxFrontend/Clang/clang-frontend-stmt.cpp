@@ -3974,8 +3974,11 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
     SgNode *tmp_init = Traverse(clang_if_init_stmt);
     SgStatement *sg_init_stmt = isSgStatement(tmp_init);
     SgExpression *sg_init_expr = isSgExpression(tmp_init);
-    if (tmp_init != nullptr && sg_init_stmt == nullptr &&
-        sg_init_expr == nullptr) {
+    if (tmp_init == nullptr) {
+      std::cerr << "Runtime error: if-init translation returned nullptr"
+                << std::endl;
+      res = false;
+    } else if (sg_init_stmt == nullptr && sg_init_expr == nullptr) {
       std::cerr << "Runtime error: if-init did not translate to SgStatement or "
                    "SgExpression ("
                 << tmp_init->class_name() << ")" << std::endl;
