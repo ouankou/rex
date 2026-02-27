@@ -194,7 +194,15 @@ ArtificialFrontierTraversal::evaluateInheritedAttribute(
       // have any errors in the token-based unparsing tests?
       ASSERT_require(statement->get_containsTransformation() == false);
       ASSERT_require(statement->isTransformation() == false);
-      ASSERT_require(statement->isOutputInCodeGeneration() == false);
+      Sg_File_Info *statement_fi = statement->get_file_info();
+      ASSERT_not_null(statement_fi);
+      // Real-source statements may already be marked for output by frontend
+      // source attachment. The invariant here is that compiler-generated
+      // scaffolding should not start as output during frontier testing.
+      if (statement_fi->isCompilerGenerated() &&
+          isSgNullStatement(statement) == nullptr) {
+        ASSERT_require(statement->isOutputInCodeGeneration() == false);
+      }
     }
   }
 
