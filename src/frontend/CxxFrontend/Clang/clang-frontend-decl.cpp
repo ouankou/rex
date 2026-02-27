@@ -165,71 +165,47 @@ clone_or_build_compiler_generated_file_info(const Sg_File_Info *prototype) {
   return fi;
 }
 
-static void ensure_source_range(SgLocatedNode *located) {
-  if (located == nullptr) {
+template <typename NodeWithSourceRange>
+static void ensure_source_range_for_node(NodeWithSourceRange *node) {
+  if (node == nullptr) {
     return;
   }
 
-  Sg_File_Info *start = located->get_startOfConstruct();
-  Sg_File_Info *end = located->get_endOfConstruct();
+  Sg_File_Info *start = node->get_startOfConstruct();
+  Sg_File_Info *end = node->get_endOfConstruct();
   const Sg_File_Info *seed =
       start != nullptr
           ? start
           : (end != nullptr
                  ? end
-                 : static_cast<const Sg_File_Info *>(located->get_file_info()));
+                 : static_cast<const Sg_File_Info *>(node->get_file_info()));
 
   if (start == nullptr) {
     Sg_File_Info *start_fi = clone_or_build_compiler_generated_file_info(seed);
-    located->set_startOfConstruct(start_fi);
-    start_fi->set_parent(located);
+    node->set_startOfConstruct(start_fi);
+    start_fi->set_parent(node);
     start = start_fi;
   } else if (start->get_parent() == nullptr) {
-    start->set_parent(located);
+    start->set_parent(node);
   }
 
   if (end == nullptr) {
     const Sg_File_Info *end_seed = start != nullptr ? start : seed;
     Sg_File_Info *end_fi =
         clone_or_build_compiler_generated_file_info(end_seed);
-    located->set_endOfConstruct(end_fi);
-    end_fi->set_parent(located);
+    node->set_endOfConstruct(end_fi);
+    end_fi->set_parent(node);
   } else if (end->get_parent() == nullptr) {
-    end->set_parent(located);
+    end->set_parent(node);
   }
 }
 
+static void ensure_source_range(SgLocatedNode *located) {
+  ensure_source_range_for_node(located);
+}
+
 static void ensure_source_range(SgInitializedName *init_name) {
-  if (init_name == nullptr) {
-    return;
-  }
-
-  Sg_File_Info *start = init_name->get_startOfConstruct();
-  Sg_File_Info *end = init_name->get_endOfConstruct();
-  const Sg_File_Info *seed =
-      start != nullptr ? start
-                       : (end != nullptr ? end
-                                         : static_cast<const Sg_File_Info *>(
-                                               init_name->get_file_info()));
-
-  if (start == nullptr) {
-    Sg_File_Info *start_fi = clone_or_build_compiler_generated_file_info(seed);
-    init_name->set_startOfConstruct(start_fi);
-    start_fi->set_parent(init_name);
-    start = start_fi;
-  } else if (start->get_parent() == nullptr) {
-    start->set_parent(init_name);
-  }
-
-  if (end == nullptr) {
-    const Sg_File_Info *end_seed = start != nullptr ? start : seed;
-    Sg_File_Info *end_fi =
-        clone_or_build_compiler_generated_file_info(end_seed);
-    init_name->set_endOfConstruct(end_fi);
-    end_fi->set_parent(init_name);
-  } else if (end->get_parent() == nullptr) {
-    end->set_parent(init_name);
-  }
+  ensure_source_range_for_node(init_name);
 }
 
 static void suppress_unparse_output(SgLocatedNode *n) {
