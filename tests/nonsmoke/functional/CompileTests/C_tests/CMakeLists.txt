@@ -996,7 +996,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2012_82.c
   test2013_07.c
   test2013_08.c
-  test2013_17.c
   test2013_46.c
   test2013_47.c
   test2013_76.c

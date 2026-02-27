@@ -35,6 +35,14 @@ list(REMOVE_ITEM OMP_FORTRAN_INVARIANT_CASES
 set(OMP_FORTRAN_TRANSLATE_INVARIANT_EXCLUDED_CASES
   exampleA134f.f90)
 
+# Semantic runs execute lowered and original binaries multiple times and can
+# legitimately run longer when the full OMP lowering suite is parallelized.
+set(OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS 180)
+# run_fortran_semantic_compare.sh executes:
+# 2 binaries (orig/lowered) * 2 thread counts * 3 repeats = 12 total runs.
+set(OMP_FORTRAN_SEMANTIC_TOTAL_RUNS 12)
+set(OMP_FORTRAN_SEMANTIC_COMPILE_OVERHEAD_SECONDS 360)
+
 list(REMOVE_DUPLICATES OMP_FORTRAN_ALL_CASES)
 list(REMOVE_DUPLICATES OMP_FORTRAN_LOWERING_EXCLUDED_CASES)
 list(REMOVE_DUPLICATES OMP_FORTRAN_SEMANTIC_CASES)
@@ -165,6 +173,9 @@ function(add_omp_fortran_semantic_test specimen)
   _omp_sanitize_name(_omp_name ${specimen})
   set(_test_name omp_lowering_fortran_semantic_${_omp_name})
   set(_workdir ${_omp_fortran_lowering_output_dir}/semantic/${_omp_name})
+  # Total timeout = compile/translation overhead + timed semantic runs.
+  math(EXPR _total_timeout
+       "${OMP_FORTRAN_SEMANTIC_COMPILE_OVERHEAD_SECONDS} + ${OMP_FORTRAN_SEMANTIC_TOTAL_RUNS} * ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS}")
   add_test(
     NAME ${_test_name}
     WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
@@ -179,8 +190,8 @@ function(add_omp_fortran_semantic_test specimen)
             ${OMP_LOWERING_INC_DIR}
             $<TARGET_FILE:kmpc_fortran_abi>
             ${specimen}
-            60)
-  set_tests_properties(${_test_name} PROPERTIES TIMEOUT 1080)
+            ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS})
+  set_tests_properties(${_test_name} PROPERTIES TIMEOUT ${_total_timeout})
   set_property(TEST ${_test_name} APPEND PROPERTY LABELS
                "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_SEMANTIC;OMPLOWERING_FORTRAN")
 endfunction()
