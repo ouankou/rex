@@ -169,8 +169,8 @@ function(add_omp_fortran_semantic_test specimen)
   _omp_sanitize_name(_omp_name ${specimen})
   set(_test_name omp_lowering_fortran_semantic_${_omp_name})
   set(_workdir ${_omp_fortran_lowering_output_dir}/semantic/${_omp_name})
-  # 6 iterations = 2 thread counts * 3 repeats in run_fortran_semantic_compare.sh
-  math(EXPR _total_timeout "6 * ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS}")
+  # 6 iterations * 2 runs/iteration (orig + lowered) = 12 timed runs.
+  math(EXPR _total_timeout "12 * ${OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS}")
   add_test(
     NAME ${_test_name}
     WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
