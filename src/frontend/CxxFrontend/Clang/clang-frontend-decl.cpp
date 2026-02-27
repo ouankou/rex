@@ -6689,52 +6689,51 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
             llvm::dyn_cast<clang::RecordType>(friendType)) {
       clang::RecordDecl *recordDecl = record_type->getDecl();
       if (recordDecl != nullptr) {
-        if (SgClassSymbol *class_sym =
-                isSgClassSymbol(GetSymbolFromSymbolTable(recordDecl))) {
-          if (class_sym->get_declaration() != nullptr) {
-            SgClassDeclaration::class_types type_of_class =
-                SgClassDeclaration::e_class;
-            switch (recordDecl->getTagKind()) {
-            case clang::TagTypeKind::Struct:
-              type_of_class = SgClassDeclaration::e_struct;
-              break;
-            case clang::TagTypeKind::Class:
-              type_of_class = SgClassDeclaration::e_class;
-              break;
-            case clang::TagTypeKind::Union:
-              type_of_class = SgClassDeclaration::e_union;
-              break;
-            default:
-              MLOG_ERROR_C(MLOG_FRONTEND, "Runtime error: RecordDecl can only "
-                                          "be a struct/class/union.\n");
-              res = false;
-            }
+        // Ensure the record exists in the translation map before we create a
+        // friend entry tied to the current lexical class scope.
+        SgNode *friend_record_node = Traverse(recordDecl);
 
-            SgName recordName(recordDecl->getNameAsString());
-            SgScopeStatement *scope = friend_scope;
-            if (isSgClassDefinition(current_scope) != nullptr ||
-                isSgTemplateClassDefinition(current_scope) != nullptr) {
-              scope = current_scope;
-            }
-            if (scope == nullptr) {
-              scope = getGlobalScope();
-            }
-            SgClassDeclaration *sg_friend_class_decl =
-                SageBuilder::buildNondefiningClassDeclaration_nfi(
-                    recordName, type_of_class, scope,
-                    /*buildTemplateInstantiation=*/false, nullptr);
-            if (sg_friend_class_decl != nullptr) {
-              if (current_scope != nullptr) {
-                sg_friend_class_decl->set_parent(current_scope);
-              }
-              sg_friend_class_decl->get_declarationModifier().setFriend();
-              sg_decl = sg_friend_class_decl;
-              skip_friend_propagation = true;
-            }
+        SgClassDeclaration::class_types type_of_class =
+            SgClassDeclaration::e_class;
+        switch (recordDecl->getTagKind()) {
+        case clang::TagTypeKind::Struct:
+          type_of_class = SgClassDeclaration::e_struct;
+          break;
+        case clang::TagTypeKind::Class:
+          type_of_class = SgClassDeclaration::e_class;
+          break;
+        case clang::TagTypeKind::Union:
+          type_of_class = SgClassDeclaration::e_union;
+          break;
+        default:
+          MLOG_ERROR_C(MLOG_FRONTEND, "Runtime error: RecordDecl can only "
+                                      "be a struct/class/union.\n");
+          res = false;
+        }
+
+        SgName recordName(recordDecl->getNameAsString());
+        SgScopeStatement *scope = friend_scope;
+        if (isSgClassDefinition(current_scope) != nullptr ||
+            isSgTemplateClassDefinition(current_scope) != nullptr) {
+          scope = current_scope;
+        }
+        if (scope == nullptr) {
+          scope = getGlobalScope();
+        }
+        SgClassDeclaration *sg_friend_class_decl =
+            SageBuilder::buildNondefiningClassDeclaration_nfi(
+                recordName, type_of_class, scope,
+                /*buildTemplateInstantiation=*/false, nullptr);
+        if (sg_friend_class_decl != nullptr) {
+          if (current_scope != nullptr) {
+            sg_friend_class_decl->set_parent(current_scope);
           }
+          sg_friend_class_decl->get_declarationModifier().setFriend();
+          sg_decl = sg_friend_class_decl;
+          skip_friend_propagation = true;
         }
         if (sg_decl == nullptr) {
-          sg_decl = isSgDeclarationStatement(Traverse(recordDecl));
+          sg_decl = isSgDeclarationStatement(friend_record_node);
         }
       }
     }
@@ -10934,7 +10933,8 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
     class_scope = primary_scope;
   }
   if (specialization_kind == clang::TSK_ExplicitSpecialization &&
-      instantiation_scope != nullptr) {
+      instantiation_scope != nullptr &&
+      (decl_context == nullptr || !decl_context->isRecord())) {
     class_scope = instantiation_scope;
   }
 

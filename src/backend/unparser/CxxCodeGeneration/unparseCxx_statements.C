@@ -75,6 +75,70 @@ SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   }
   return try_stmt;
 }
+
+SgClassDeclaration *
+enclosing_class_declaration_from_scope(SgScopeStatement *scope) {
+  if (scope == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return class_def->get_declaration();
+  }
+
+  if (SgTemplateClassDefinition *template_def =
+          isSgTemplateClassDefinition(scope)) {
+    return template_def->get_declaration();
+  }
+
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return isSgClassDeclaration(inst_def->get_declaration());
+  }
+
+  return NULL;
+}
+
+size_t count_template_instantiation_class_chain_levels(
+    SgClassDeclaration *class_decl) {
+  size_t level_count = 0;
+  std::set<SgClassDeclaration *> visited_classes;
+  for (SgClassDeclaration *current = class_decl;
+       current != NULL && visited_classes.insert(current).second;) {
+    if (isSgTemplateInstantiationDecl(current) != NULL) {
+      ++level_count;
+    }
+
+    current = enclosing_class_declaration_from_scope(current->get_scope());
+  }
+
+  return level_count;
+}
+
+size_t count_enclosing_template_instantiation_levels_for_class_specialization(
+    SgTemplateInstantiationDecl *inst_decl) {
+  if (inst_decl == NULL) {
+    return 0;
+  }
+
+  SgTemplateClassDeclaration *template_decl =
+      inst_decl->get_templateDeclaration();
+  if (template_decl == NULL) {
+    return 0;
+  }
+
+  size_t level_count = 0;
+  std::set<SgScopeStatement *> visited_scopes;
+  for (SgScopeStatement *scope = template_decl->get_scope();
+       scope != NULL && visited_scopes.insert(scope).second;
+       scope = scope->get_scope()) {
+    if (isSgTemplateInstantiationDefn(scope) != NULL) {
+      ++level_count;
+    }
+  }
+
+  return level_count;
+}
 } // namespace
 
 Unparse_ExprStmt::Unparse_ExprStmt(Unparser *unp, std::string fname)
@@ -4734,6 +4798,24 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     if (SgTemplateInstantiationMemberFunctionDecl *inst =
             isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt)) {
       if (inst->isSpecialization()) {
+        SgClassDeclaration *assoc_class = isSgClassDeclaration(
+            mfuncdecl_stmt->get_associatedClassDeclaration());
+        size_t template_id_count =
+            count_template_instantiation_class_chain_levels(assoc_class);
+        if (template_id_count == 0) {
+          return;
+        }
+
+        // The declaration-level specialization specifier emitted via
+        // printSpecifier contributes one `template<>`. Emit only the remaining
+        // headers required by enclosing specialized class scopes.
+        size_t extra_headers =
+            template_id_count > 0 ? template_id_count - 1 : 0;
+
+        for (size_t i = 0; i < extra_headers; ++i) {
+          curprint("template<>");
+          curprint("\n");
+        }
         return;
       }
     }
@@ -5275,6 +5357,20 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         return;
       }
 
+      if (SgTemplateInstantiationDecl *inst_decl =
+              isSgTemplateInstantiationDecl(classdecl_stmt)) {
+        if (inst_decl->isSpecialization()) {
+          size_t enclosing_template_ids =
+              count_enclosing_template_instantiation_levels_for_class_specialization(
+                  inst_decl);
+          for (size_t i = 0; i < enclosing_template_ids; ++i) {
+            curprint("template<>");
+            curprint("\n");
+          }
+          return;
+        }
+      }
+
       std::vector<SgTemplateClassDeclaration *> template_chain;
       auto add_template = [&](SgTemplateClassDeclaration *tmpl) {
         if (tmpl == NULL) {
@@ -5325,13 +5421,20 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       }
     };
 
+    SgTemplateInstantiationDecl *inst_decl =
+        isSgTemplateInstantiationDecl(classdecl_stmt);
     bool needs_enclosing_template_headers =
         !info.SkipClassDefinition() &&
         classdecl_stmt->get_definition() != NULL &&
         classdecl_stmt->get_parent() != classdecl_stmt->get_scope() &&
         isSgTemplateClassDeclaration(classdecl_stmt) == NULL &&
-        isSgTemplateInstantiationDecl(classdecl_stmt) == NULL;
-    if (needs_enclosing_template_headers) {
+        inst_decl == NULL;
+    bool needs_specialization_enclosing_headers =
+        !info.SkipClassDefinition() && inst_decl != NULL &&
+        inst_decl->isSpecialization() &&
+        classdecl_stmt->get_parent() != classdecl_stmt->get_scope();
+    if (needs_enclosing_template_headers ||
+        needs_specialization_enclosing_headers) {
       unparse_enclosing_template_headers();
     }
 
