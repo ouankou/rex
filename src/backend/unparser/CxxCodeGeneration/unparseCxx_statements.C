@@ -76,26 +76,68 @@ SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   return try_stmt;
 }
 
-size_t count_top_level_template_ids_in_qualified_prefix(
-    const std::string &qualified_prefix) {
-  size_t template_id_count = 0;
-  int template_depth = 0;
-  for (char ch : qualified_prefix) {
-    if (ch == '<') {
-      if (template_depth == 0) {
-        ++template_id_count;
-      }
-      ++template_depth;
-      continue;
+SgClassDeclaration *
+enclosing_class_declaration_from_scope(SgScopeStatement *scope) {
+  if (scope == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return class_def->get_declaration();
+  }
+
+  if (SgTemplateClassDefinition *template_def =
+          isSgTemplateClassDefinition(scope)) {
+    return template_def->get_declaration();
+  }
+
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return isSgClassDeclaration(inst_def->get_declaration());
+  }
+
+  return NULL;
+}
+
+size_t count_template_instantiation_class_chain_levels(
+    SgClassDeclaration *class_decl) {
+  size_t level_count = 0;
+  std::set<SgClassDeclaration *> visited_classes;
+  for (SgClassDeclaration *current = class_decl;
+       current != NULL && visited_classes.insert(current).second;) {
+    if (isSgTemplateInstantiationDecl(current) != NULL) {
+      ++level_count;
     }
 
-    if (ch == '>') {
-      if (template_depth > 0) {
-        --template_depth;
-      }
+    current = enclosing_class_declaration_from_scope(current->get_scope());
+  }
+
+  return level_count;
+}
+
+size_t count_enclosing_template_instantiation_levels_for_class_specialization(
+    SgTemplateInstantiationDecl *inst_decl) {
+  if (inst_decl == NULL) {
+    return 0;
+  }
+
+  SgTemplateClassDeclaration *template_decl =
+      inst_decl->get_templateDeclaration();
+  if (template_decl == NULL) {
+    return 0;
+  }
+
+  size_t level_count = 0;
+  std::set<SgScopeStatement *> visited_scopes;
+  for (SgScopeStatement *scope = template_decl->get_scope();
+       scope != NULL && visited_scopes.insert(scope).second;
+       scope = scope->get_scope()) {
+    if (isSgTemplateInstantiationDefn(scope) != NULL) {
+      ++level_count;
     }
   }
-  return template_id_count;
+
+  return level_count;
 }
 } // namespace
 
@@ -4756,10 +4798,10 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     if (SgTemplateInstantiationMemberFunctionDecl *inst =
             isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt)) {
       if (inst->isSpecialization()) {
-        std::string qualified_prefix =
-            mfuncdecl_stmt->get_qualified_name_prefix().getString();
+        SgClassDeclaration *assoc_class = isSgClassDeclaration(
+            mfuncdecl_stmt->get_associatedClassDeclaration());
         size_t template_id_count =
-            count_top_level_template_ids_in_qualified_prefix(qualified_prefix);
+            count_template_instantiation_class_chain_levels(assoc_class);
         if (template_id_count == 0) {
           return;
         }
@@ -5318,11 +5360,9 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       if (SgTemplateInstantiationDecl *inst_decl =
               isSgTemplateInstantiationDecl(classdecl_stmt)) {
         if (inst_decl->isSpecialization()) {
-          std::string qualified_prefix =
-              classdecl_stmt->get_qualified_name_prefix().getString();
           size_t enclosing_template_ids =
-              count_top_level_template_ids_in_qualified_prefix(
-                  qualified_prefix);
+              count_enclosing_template_instantiation_levels_for_class_specialization(
+                  inst_decl);
           for (size_t i = 0; i < enclosing_template_ids; ++i) {
             curprint("template<>");
             curprint("\n");
