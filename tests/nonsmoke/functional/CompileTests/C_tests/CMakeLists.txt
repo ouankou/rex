@@ -1017,7 +1017,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2018_24.c
   test2018_31.c
   test2018_33.c
-  test2019_15.c
   test2020_14.c
   test2020_15.c
   test2020_16.c

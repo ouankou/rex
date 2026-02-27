@@ -1,22 +1,16 @@
 
 
-struct X
-   {
-     struct Y
-        {
-          one, two
-        };
-   };
+struct X {
+  struct Y {
+    enum { one, two };
+  };
+};
 
-
-struct Z
-   {
+struct Z {
   // Note that for C, types are always in global scope.
-     struct YY
-        {
-          one, two
-        };
-   };
-
+  struct YY {
+    enum { three, four };
+  };
+};
 
 struct Y number;
