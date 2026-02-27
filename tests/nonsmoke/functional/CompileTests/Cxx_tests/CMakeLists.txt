@@ -3986,7 +3986,7 @@ rex_lock_test_for_input(
 string(CONCAT rex_test2025_issue160_system_header_class_instantiation_unparse_command
   "\"$@\" && "
   "grep -E \"^[[:space:]]*template[[:space:]]+(class|struct)[[:space:]]+rex_test2025_issue160::Box[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*;\" rose_rex_test2025_issue160_system_header_class_instantiation.cpp && "
-  "${CMAKE_CXX_COMPILER} -std=c++20 -I\"${CMAKE_CURRENT_SOURCE_DIR}\" -c rose_rex_test2025_issue160_system_header_class_instantiation.cpp"
+  "\"${CMAKE_CXX_COMPILER}\" -std=c++20 -I\"${CMAKE_CURRENT_SOURCE_DIR}\" -c rose_rex_test2025_issue160_system_header_class_instantiation.cpp"
 )
 add_test(
   NAME Cxx_tests_rex_test2025_issue160_system_header_class_instantiation_unparse
