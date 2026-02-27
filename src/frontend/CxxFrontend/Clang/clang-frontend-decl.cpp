@@ -152,6 +152,62 @@ static bool symbol_present_in_table(SgSymbolTable *table, SgSymbol *sym) {
   return table->exists(sym->get_name(), sym);
 }
 
+static Sg_File_Info *
+clone_or_build_compiler_generated_file_info(const Sg_File_Info *prototype) {
+  if (prototype != nullptr) {
+    return new Sg_File_Info(*prototype);
+  }
+
+  Sg_File_Info *fi =
+      Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
+  fi->setCompilerGenerated();
+  fi->unsetOutputInCodeGeneration();
+  return fi;
+}
+
+template <typename NodeWithSourceRange>
+static void ensure_source_range_for_node(NodeWithSourceRange *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  Sg_File_Info *start = node->get_startOfConstruct();
+  Sg_File_Info *end = node->get_endOfConstruct();
+  const Sg_File_Info *seed =
+      start != nullptr
+          ? start
+          : (end != nullptr
+                 ? end
+                 : static_cast<const Sg_File_Info *>(node->get_file_info()));
+
+  if (start == nullptr) {
+    Sg_File_Info *start_fi = clone_or_build_compiler_generated_file_info(seed);
+    node->set_startOfConstruct(start_fi);
+    start_fi->set_parent(node);
+    start = start_fi;
+  } else if (start->get_parent() == nullptr) {
+    start->set_parent(node);
+  }
+
+  if (end == nullptr) {
+    const Sg_File_Info *end_seed = start != nullptr ? start : seed;
+    Sg_File_Info *end_fi =
+        clone_or_build_compiler_generated_file_info(end_seed);
+    node->set_endOfConstruct(end_fi);
+    end_fi->set_parent(node);
+  } else if (end->get_parent() == nullptr) {
+    end->set_parent(node);
+  }
+}
+
+static void ensure_source_range(SgLocatedNode *located) {
+  ensure_source_range_for_node(located);
+}
+
+static void ensure_source_range(SgInitializedName *init_name) {
+  ensure_source_range_for_node(init_name);
+}
+
 static void suppress_unparse_output(SgLocatedNode *n) {
   if (n == nullptr) {
     return;
@@ -180,6 +236,7 @@ static void mark_compiler_generated_frontend_specific(SgNode *n) {
     }
   };
   if (SgLocatedNode *located = isSgLocatedNode(n)) {
+    ensure_source_range(located);
     mark_fi(located->get_file_info());
     mark_fi(located->get_startOfConstruct());
     mark_fi(located->get_endOfConstruct());
@@ -188,6 +245,7 @@ static void mark_compiler_generated_frontend_specific(SgNode *n) {
     }
   }
   if (SgInitializedName *init_name = isSgInitializedName(n)) {
+    ensure_source_range(init_name);
     mark_fi(init_name->get_file_info());
     mark_fi(init_name->get_startOfConstruct());
     mark_fi(init_name->get_endOfConstruct());
@@ -3067,6 +3125,7 @@ void mark_compiler_generated_and_suppress_unparse(SgLocatedNode *n) {
   if (n == nullptr) {
     return;
   }
+  ensure_source_range(n);
 
   auto mark = [](Sg_File_Info *fi) {
     if (fi == nullptr) {
