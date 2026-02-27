@@ -1,0 +1,3 @@
+#pragma omp target enter data map(A[:N],B[:N],D[:N])
+#pragma omp target map(tofrom:errors)
+#pragma omp target exit data map(B[:N],A[:N],D[:N])

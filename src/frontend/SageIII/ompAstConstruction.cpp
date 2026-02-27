@@ -2124,6 +2124,31 @@ static bool startsWithCaseInsensitive(const std::string &text,
   return true;
 }
 
+static bool startsWithKeywordBoundaryCaseInsensitive(const std::string &text,
+                                                     const char *keyword) {
+  const size_t keyword_len = std::strlen(keyword);
+  if (text.size() < keyword_len) {
+    return false;
+  }
+  for (size_t i = 0; i < keyword_len; ++i) {
+    const unsigned char lhs = static_cast<unsigned char>(text[i]);
+    const unsigned char rhs = static_cast<unsigned char>(keyword[i]);
+    if (std::tolower(lhs) != std::tolower(rhs)) {
+      return false;
+    }
+  }
+  if (text.size() == keyword_len) {
+    return true;
+  }
+  const unsigned char next = static_cast<unsigned char>(text[keyword_len]);
+  return !std::isalnum(next) && next != '_';
+}
+
+static bool startsWithOpenMPDirectiveKeyword(const std::string &text) {
+  return startsWithKeywordBoundaryCaseInsensitive(text, "omp") ||
+         startsWithKeywordBoundaryCaseInsensitive(text, "ompx");
+}
+
 static size_t findCaseInsensitive(const std::string &haystack,
                                   const std::string &needle, size_t pos) {
   if (needle.empty()) {
@@ -2261,7 +2286,10 @@ static void postProcessMergedAccContinuation(std::string &buffer) {
 
 static std::string stripOmpPrefix(std::string text) {
   trimLeft(text);
-  if (startsWithCaseInsensitive(text, "omp")) {
+  if (startsWithKeywordBoundaryCaseInsensitive(text, "ompx")) {
+    text.erase(0, 4);
+    trimLeft(text);
+  } else if (startsWithKeywordBoundaryCaseInsensitive(text, "omp")) {
     text.erase(0, 3);
     trimLeft(text);
   }
@@ -2281,21 +2309,33 @@ static bool extractFortranOpenMPDirectivePayload(std::string &text) {
   trimLeft(candidate);
   stripFortranDirectiveSentinel(candidate);
   trimLeft(candidate);
-  if (startsWithCaseInsensitive(candidate, "omp")) {
+  if (startsWithOpenMPDirectiveKeyword(candidate)) {
     text = candidate;
     return true;
   }
 
   // Accept embedded sentinels only from preprocessor-like lines (e.g.
   // "#define X !$omp ..."), not from regular comments that merely mention
-  // "!$omp ...".
+  // "!$omp ..." or "!$ompx ...".
   std::string leading = text;
   trimLeft(leading);
   if (leading.empty() || leading.front() != '#') {
     return false;
   }
 
-  size_t marker = findCaseInsensitive(text, "!$omp", 0);
+  size_t marker = findCaseInsensitive(text, "!$ompx", 0);
+  if (marker == std::string::npos) {
+    marker = findCaseInsensitive(text, "c$ompx", 0);
+  }
+  if (marker == std::string::npos) {
+    marker = findCaseInsensitive(text, "d$ompx", 0);
+  }
+  if (marker == std::string::npos) {
+    marker = findCaseInsensitive(text, "*$ompx", 0);
+  }
+  if (marker == std::string::npos) {
+    marker = findCaseInsensitive(text, "!$omp", 0);
+  }
   if (marker == std::string::npos) {
     marker = findCaseInsensitive(text, "c$omp", 0);
   }
@@ -2312,7 +2352,7 @@ static bool extractFortranOpenMPDirectivePayload(std::string &text) {
   candidate = text.substr(marker);
   stripFortranDirectiveSentinel(candidate);
   trimLeft(candidate);
-  if (!startsWithCaseInsensitive(candidate, "omp")) {
+  if (!startsWithOpenMPDirectiveKeyword(candidate)) {
     return false;
   }
 
@@ -2668,7 +2708,7 @@ static bool isFortranOpenMPPragmaDeclaration(SgPragmaDeclaration *decl) {
   std::string pragma_text = decl->get_pragma()->get_pragma();
   stripFortranDirectiveSentinel(pragma_text);
   trimLeft(pragma_text);
-  return startsWithCaseInsensitive(pragma_text, "omp");
+  return startsWithOpenMPDirectiveKeyword(pragma_text);
 }
 
 static SgPragmaDeclaration *
@@ -5329,6 +5369,11 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   case OMPD_threadprivate: {
     result = convertOmpThreadprivateStatement(current_OpenMPIR_to_SageIII);
+    break;
+  }
+  case OMPD_ompx: {
+    // Keep implementation-defined extension directives as source pragmas.
+    result = NULL;
     break;
   }
   default: {
@@ -9580,7 +9625,8 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_threadprivate:
   case OMPD_workshare:
   case OMPD_tile:
-  case OMPD_unroll: {
+  case OMPD_unroll:
+  case OMPD_ompx: {
     break;
   }
   default: {

@@ -1,0 +1,2 @@
+#pragma omp target parallel map(tofrom:errors)
+#pragma omp scope firstprivate(test_int)

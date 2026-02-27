@@ -988,8 +988,20 @@ static bool StartsWithKeyword(const std::string &text, const char *keyword) {
   return !std::isalnum(next) && next != '_';
 }
 
+static bool StartsWithKeywordAt(const std::string &text, size_t offset,
+                                const char *keyword) {
+  if (offset >= text.size()) {
+    return false;
+  }
+  return StartsWithKeyword(text.substr(offset), keyword);
+}
+
 bool StartsWithOmp(const std::string &text) {
   return StartsWithKeyword(text, "omp");
+}
+
+bool StartsWithOmpx(const std::string &text) {
+  return StartsWithKeyword(text, "ompx");
 }
 
 bool StartsWithAcc(const std::string &text) {
@@ -1044,13 +1056,15 @@ bool IsOpenMpOrAccDirectiveLine(const std::string &line) {
   }
   const size_t payload = FindFortranDirectivePayloadStart(lower);
   if (payload != std::string::npos) {
-    if (lower.compare(payload, 3, "omp") == 0 ||
-        lower.compare(payload, 3, "acc") == 0 ||
-        lower.compare(payload, 3, "cuf") == 0) {
+    if (StartsWithKeywordAt(lower, payload, "omp") ||
+        StartsWithKeywordAt(lower, payload, "ompx") ||
+        StartsWithKeywordAt(lower, payload, "acc") ||
+        StartsWithKeywordAt(lower, payload, "cuf")) {
       return true;
     }
   }
-  if (StartsWithOmp(lower) || StartsWithAcc(lower) || StartsWithCuf(lower)) {
+  if (StartsWithOmp(lower) || StartsWithOmpx(lower) || StartsWithAcc(lower) ||
+      StartsWithCuf(lower)) {
     return true;
   }
   return false;
@@ -1082,19 +1096,14 @@ std::string NormalizeOmpDirectiveLine(const std::string &line) {
   if (text.empty()) {
     return text;
   }
-  bool had_sentinel = false;
   const size_t payload = FindFortranDirectivePayloadStart(text);
   if (payload != std::string::npos) {
-    had_sentinel = true;
     text.erase(0, payload);
     TrimLeft(text);
   }
-  if (text.empty() || StartsWithOmp(text) || StartsWithAcc(text) ||
-      StartsWithCuf(text)) {
+  if (text.empty() || StartsWithOmp(text) || StartsWithOmpx(text) ||
+      StartsWithAcc(text) || StartsWithCuf(text)) {
     return text;
-  }
-  if (had_sentinel) {
-    return std::string("omp ") + text;
   }
   return text;
 }
@@ -1105,22 +1114,9 @@ bool IsOpenMpOrAccCommentText(const std::string &text) {
   if (trimmed.size() < 4 || trimmed.front() != '$') {
     return false;
   }
-  const char first =
-      static_cast<char>(std::tolower(static_cast<unsigned char>(trimmed[1])));
-  const char second =
-      static_cast<char>(std::tolower(static_cast<unsigned char>(trimmed[2])));
-  const char third =
-      static_cast<char>(std::tolower(static_cast<unsigned char>(trimmed[3])));
-  if (first == 'o' && second == 'm' && third == 'p') {
-    return true;
-  }
-  if (first == 'a' && second == 'c' && third == 'c') {
-    return true;
-  }
-  if (first == 'c' && second == 'u' && third == 'f') {
-    return true;
-  }
-  return false;
+  const std::string payload = trimmed.substr(1);
+  return StartsWithOmp(payload) || StartsWithOmpx(payload) ||
+         StartsWithAcc(payload) || StartsWithCuf(payload);
 }
 
 bool GetSourceRangeForCharBlock(const Fortran::parser::CharBlock &source,
@@ -1753,11 +1749,13 @@ std::string StripTrailingContinuationAmpersand(std::string text) {
 std::string StripDirectivePrefixForContinuation(const std::string &line) {
   std::string text = line;
   TrimLeft(text);
-  if (StartsWithOmp(text) || StartsWithAcc(text) || StartsWithCuf(text)) {
-    if (text.size() >= 3) {
-      text.erase(0, 3);
-      TrimLeft(text);
-    }
+  if (StartsWithOmpx(text)) {
+    text.erase(0, 4);
+    TrimLeft(text);
+  } else if (StartsWithOmp(text) || StartsWithAcc(text) ||
+             StartsWithCuf(text)) {
+    text.erase(0, 3);
+    TrimLeft(text);
   }
   if (!text.empty() && text.front() == '&') {
     text.erase(0, 1);
