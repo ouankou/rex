@@ -75,6 +75,7 @@
 #endif
 
 #include <algorithm> // for set operations
+#include <cctype>
 #include <cstring>
 
 #include <iostream>
@@ -549,20 +550,35 @@ bool SageInterface::hasTemplateSyntax(const SgName &name) {
   bool usingTemplateSyntax = false;
   string nameString = name.getString();
 
-  // DQ (6/7/2012): We need to avoid the identification of the "operator<()" as
-  // valid template syntax.
-  usingTemplateSyntax = (nameString.find('<') != string::npos) &&
-                        (nameString.find('>') != string::npos);
-
   // DQ (5/10/2016): Debugging case of C++11 using the Intel v16 compiler and
   // it's associated mutex header file. See Cxx11_tests/test2016_32.C for an
   // example that demonstrates this problem.
   if (nameString == "<unnamed>") {
     printf("In SageInterface::hasTemplateSyntax(): Identified case of name == "
            "<unnamed> \n");
-
-    usingTemplateSyntax = false;
+    return false;
   }
+
+  // DQ (6/7/2012): We need to avoid identifying operator<=> as template syntax.
+  string normalizedName = nameString;
+  normalizedName.erase(
+      remove_if(normalizedName.begin(), normalizedName.end(),
+                [](unsigned char c) { return std::isspace(c) != 0; }),
+      normalizedName.end());
+
+  static const char *operatorSpellingsWithAngles[] = {"operator<=>"};
+
+  for (const char *operatorSpelling : operatorSpellingsWithAngles) {
+    const string spelling(operatorSpelling);
+    size_t pos = 0;
+    while ((pos = normalizedName.find(spelling, pos)) != string::npos) {
+      normalizedName.replace(pos, spelling.size(), "operator");
+      pos += strlen("operator");
+    }
+  }
+
+  usingTemplateSyntax = (normalizedName.find('<') != string::npos) &&
+                        (normalizedName.find('>') != string::npos);
 
   // return (name.getString().find('<') == string::npos);
   return usingTemplateSyntax;
