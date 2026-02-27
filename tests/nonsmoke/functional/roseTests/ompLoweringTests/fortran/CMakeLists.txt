@@ -38,6 +38,8 @@ set(OMP_FORTRAN_TRANSLATE_INVARIANT_EXCLUDED_CASES
 # Semantic runs execute lowered and original binaries multiple times and can
 # legitimately run longer when the full OMP lowering suite is parallelized.
 set(OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS 180)
+# run_fortran_semantic_compare.sh executes:
+# 2 binaries (orig/lowered) * 2 thread counts * 3 repeats = 12 total runs.
 set(OMP_FORTRAN_SEMANTIC_TOTAL_RUNS 12)
 set(OMP_FORTRAN_SEMANTIC_COMPILE_OVERHEAD_SECONDS 360)
 
