@@ -6632,7 +6632,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
       if (recordDecl != nullptr) {
         // Ensure the record exists in the translation map before we create a
         // friend entry tied to the current lexical class scope.
-        Traverse(recordDecl);
+        SgNode *friend_record_node = Traverse(recordDecl);
 
         SgClassDeclaration::class_types type_of_class =
             SgClassDeclaration::e_class;
@@ -6674,7 +6674,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
           skip_friend_propagation = true;
         }
         if (sg_decl == nullptr) {
-          sg_decl = isSgDeclarationStatement(Traverse(recordDecl));
+          sg_decl = isSgDeclarationStatement(friend_record_node);
         }
       }
     }
