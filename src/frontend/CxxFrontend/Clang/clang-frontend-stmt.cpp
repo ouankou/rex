@@ -10405,9 +10405,17 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
     if (D->isFieldDesignator()) {
       // getField() was renamed to getFieldDecl()
       clang::FieldDecl *field_decl = D->getFieldDecl();
+      ROSE_ASSERT(field_decl != nullptr);
       SgSymbol *symbol = GetSymbolFromSymbolTable(field_decl);
       SgVariableSymbol *var_sym = isSgVariableSymbol(symbol);
-      if (var_sym == nullptr && field_decl != nullptr) {
+      if (var_sym == nullptr &&
+          p_decl_translation_in_progress.find(field_decl) ==
+              p_decl_translation_in_progress.end()) {
+        TraverseOnDemand(field_decl);
+        symbol = GetSymbolFromSymbolTable(field_decl);
+        var_sym = isSgVariableSymbol(symbol);
+      }
+      if (var_sym == nullptr) {
         SgNode *field_node = nullptr;
         auto it_decl = p_decl_translation_map.find(field_decl);
         if (it_decl != p_decl_translation_map.end()) {
@@ -10422,32 +10430,24 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
             init_name = SageInterface::getFirstInitializedName(var_decl);
           }
         }
-        if (init_name != nullptr) {
-          SgScopeStatement *decl_scope = init_name->get_scope();
+        ROSE_ASSERT(init_name != nullptr);
+        SgScopeStatement *decl_scope = init_name->get_scope();
+        if (decl_scope == nullptr) {
+          decl_scope = resolveScopeFromDeclContext(
+              field_decl->getDeclContext(), SageBuilder::topScopeStack());
           if (decl_scope != nullptr) {
-            var_sym = decl_scope->lookup_variable_symbol(init_name->get_name());
-          }
-          if (var_sym == nullptr) {
-            var_sym = new SgVariableSymbol(init_name);
-            if (decl_scope != nullptr) {
-              attachSymbolToScopeOrOrphan(var_sym, decl_scope);
-            } else {
-              attachSymbolToScopeOrOrphan(var_sym, nullptr);
-            }
+            init_name->set_scope(decl_scope);
           }
         }
-      }
-      if (var_sym == nullptr) {
-        std::string field_name =
-            field_decl ? field_decl->getNameAsString() : "";
-        if (field_name.empty()) {
-          field_name = "undefined";
+        ROSE_ASSERT(decl_scope != nullptr);
+        var_sym = decl_scope->lookup_variable_symbol(init_name->get_name());
+        if (var_sym == nullptr) {
+          var_sym = new SgVariableSymbol(init_name);
+          attachSymbolToScopeOrOrphan(var_sym, decl_scope);
         }
-        expr = SageBuilder::buildDanglingVarRefExp(
-            SgName(field_name), SageBuilder::topScopeStack());
-      } else {
-        expr = SageBuilder::buildVarRefExp_nfi(var_sym);
       }
+      ROSE_ASSERT(var_sym != nullptr);
+      expr = SageBuilder::buildVarRefExp_nfi(var_sym);
     } else if (D->isArrayDesignator()) {
       SgNode *tmp_expr = Traverse(designated_init_expr->getArrayIndex(*D));
       expr = isSgExpression(tmp_expr);
