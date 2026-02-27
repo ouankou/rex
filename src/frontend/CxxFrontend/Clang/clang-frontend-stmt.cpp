@@ -3985,6 +3985,11 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
       res = false;
     } else if (sg_init_expr != nullptr) {
       sg_init_stmt = SageBuilder::buildExprStatement(sg_init_expr);
+      if (sg_init_stmt == nullptr) {
+        std::cerr << "Runtime error: if-init buildExprStatement failed"
+                  << std::endl;
+        res = false;
+      }
     }
 
     if (sg_init_stmt == nullptr) {
