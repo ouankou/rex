@@ -22,7 +22,12 @@ set(_unparse_template_tests
   ${_unparse_template_failing}
 )
 
-set(_unparse_template_flags "-std=c++ -rose:unparse_template_ast -DSKIP_ROSE_BUILTIN_DECLARATIONS")
+set(_unparse_template_flags
+  -std=c++
+  -rose:unparse_template_ast
+  -DSKIP_ROSE_BUILTIN_DECLARATIONS
+)
+list(JOIN _unparse_template_flags " " _unparse_template_flags)
 
 foreach(specimen IN LISTS _unparse_template_tests)
   set(_target ${specimen}.passed)
