@@ -3987,10 +3987,14 @@ set(_issue160_system_header_class_instantiation_base
     "rex_test2025_issue160_system_header_class_instantiation")
 set(_issue160_system_header_class_instantiation_namespace
     "rex_test2025_issue160")
+set(_issue160_grep_pattern
+    "^[[:space:]]*template[[:space:]]+(class|struct)[[:space:]]+${_issue160_system_header_class_instantiation_namespace}::Box[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*;")
+set(_issue160_generated_file
+    "rose_${_issue160_system_header_class_instantiation_base}.cpp")
 string(CONCAT _issue160_system_header_class_instantiation_unparse_command
   "\"$@\" && "
-  "grep -E \"^[[:space:]]*template[[:space:]]+(class|struct)[[:space:]]+${_issue160_system_header_class_instantiation_namespace}::Box[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*;\" rose_${_issue160_system_header_class_instantiation_base}.cpp && "
-  "\"${CMAKE_CXX_COMPILER}\" -std=c++20 -I\"${CMAKE_CURRENT_SOURCE_DIR}\" -c rose_${_issue160_system_header_class_instantiation_base}.cpp"
+  "grep -E \"${_issue160_grep_pattern}\" \"${_issue160_generated_file}\" && "
+  "\"${CMAKE_CXX_COMPILER}\" -std=c++20 -I\"${CMAKE_CURRENT_SOURCE_DIR}\" -c \"${_issue160_generated_file}\""
 )
 add_test(
   NAME Cxx_tests_${_issue160_system_header_class_instantiation_base}_unparse

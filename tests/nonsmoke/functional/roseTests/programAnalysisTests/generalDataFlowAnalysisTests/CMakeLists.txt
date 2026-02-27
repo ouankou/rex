@@ -69,6 +69,7 @@ set(CXX_POINTER_ALIAS_SPECIMENS
 set(CXX_CONSTPROP_SPECIMENS
   test2001_29.C
   test2011_133.C
+  rex_test2026_issue213_va_start.cpp
 )
 
 set(FAILING_CXX_CONSTPROP_SPECIMENS
@@ -248,7 +249,6 @@ set(FAILING_CXX_CONSTPROP_SPECIMENS
   test2005_109.C
   test2005_11.C
   test2005_110.C
-  rex_test2026_issue213_va_start.cpp
   test2005_113.C
   test2005_116.C
   test2005_117.C
@@ -855,6 +855,10 @@ set(CXX_CONSTPROP_SPECIMENS_HANGING
   test2005_114.C
 )
 
+set(C_CONSTPROP_SPECIMENS
+  rex_test2026_issue213_va_start.cpp
+)
+
 set(FAILING_C_CONSTPROP_SPECIMENS
   X.C
   test2001_02.C
@@ -909,7 +913,6 @@ set(FAILING_C_CONSTPROP_SPECIMENS
   test2004_74.C
   test2004_94.C
   test2004_96.C
-  rex_test2026_issue213_va_start.cpp
   test2005_116.C
   test2005_125.C
   test2005_157.C
@@ -1201,6 +1204,21 @@ foreach(specimen IN LISTS _cxx_constprop_disabled)
       cxxcp_${specimen}.passed
   )
   set_tests_properties(gdf_cxx_constprop_${_name} PROPERTIES DISABLED TRUE)
+endforeach()
+
+#-------------------------------------------------------------------------------
+# C constant propagation tests from CXX test directory
+foreach(specimen IN LISTS C_CONSTPROP_SPECIMENS)
+  string(REPLACE "." "_" _name ${specimen})
+  string(REPLACE ".C" ".c" _c_specimen ${specimen})
+  add_test(
+    NAME gdf_c_constprop_${_name}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${_rth}
+      CMD="cp \"${_cxx_test_dir}/${specimen}\" \"${_c_specimen}\" && \"$<TARGET_FILE:constantPropagationTest>\" -I \"${_cxx_test_dir}\" -c \"${_c_specimen}\""
+      ${_exit_status}
+      ccp_${specimen}.passed
+  )
 endforeach()
 
 #-------------------------------------------------------------------------------
