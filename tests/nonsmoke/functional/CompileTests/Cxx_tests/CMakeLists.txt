@@ -3983,29 +3983,33 @@ rex_lock_test_for_input(
   rex_test2025_issue160_extern_class_instantiation.cpp)
 
 # Issue 160/#268: Keep explicit system-header instantiation in the template's namespace.
-string(CONCAT rex_test2025_issue160_system_header_class_instantiation_unparse_command
+set(_issue160_system_header_class_instantiation_base
+    "rex_test2025_issue160_system_header_class_instantiation")
+set(_issue160_system_header_class_instantiation_namespace
+    "rex_test2025_issue160")
+string(CONCAT _issue160_system_header_class_instantiation_unparse_command
   "\"$@\" && "
-  "grep -E \"^[[:space:]]*template[[:space:]]+(class|struct)[[:space:]]+rex_test2025_issue160::Box[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*;\" rose_rex_test2025_issue160_system_header_class_instantiation.cpp && "
-  "\"${CMAKE_CXX_COMPILER}\" -std=c++20 -I\"${CMAKE_CURRENT_SOURCE_DIR}\" -c rose_rex_test2025_issue160_system_header_class_instantiation.cpp"
+  "grep -E \"^[[:space:]]*template[[:space:]]+(class|struct)[[:space:]]+${_issue160_system_header_class_instantiation_namespace}::Box[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*;\" rose_${_issue160_system_header_class_instantiation_base}.cpp && "
+  "\"${CMAKE_CXX_COMPILER}\" -std=c++20 -I\"${CMAKE_CURRENT_SOURCE_DIR}\" -c rose_${_issue160_system_header_class_instantiation_base}.cpp"
 )
 add_test(
-  NAME Cxx_tests_rex_test2025_issue160_system_header_class_instantiation_unparse
+  NAME Cxx_tests_${_issue160_system_header_class_instantiation_base}_unparse
   COMMAND
     sh -c
-    "${rex_test2025_issue160_system_header_class_instantiation_unparse_command}"
+    "${_issue160_system_header_class_instantiation_unparse_command}"
     dummy
     $<TARGET_FILE:${translator}>
     ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue160_system_header_class_instantiation.cpp
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/${_issue160_system_header_class_instantiation_base}.cpp
 )
 set_tests_properties(
-  Cxx_tests_rex_test2025_issue160_system_header_class_instantiation_unparse
+  Cxx_tests_${_issue160_system_header_class_instantiation_base}_unparse
   PROPERTIES LABELS Cxx_tests
 )
 rex_lock_test_for_input(
-  Cxx_tests_rex_test2025_issue160_system_header_class_instantiation_unparse
-  rex_test2025_issue160_system_header_class_instantiation.cpp)
+  Cxx_tests_${_issue160_system_header_class_instantiation_base}_unparse
+  ${_issue160_system_header_class_instantiation_base}.cpp)
 
 # Issue 62: Mangled qualifiers must never contain template syntax.
 rex_compile_test_name(_issue62_test "Cxx_tests" rex_test2025_mangle_qualifiers_no_template_syntax.cpp)
