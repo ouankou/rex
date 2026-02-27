@@ -10370,6 +10370,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
     case V_SgOmpNowaitClause: {
       curprint(string(" nowait"));
+      if (SgOmpExpressionClause *expr_clause =
+              isSgOmpExpressionClause(clause)) {
+        if (expr_clause->get_expression() != NULL) {
+          curprint(string("("));
+          unparseExpression(expr_clause->get_expression(), info);
+          curprint(string(")"));
+        }
+      }
       break;
     }
     case V_SgOmpNogroupClause: {

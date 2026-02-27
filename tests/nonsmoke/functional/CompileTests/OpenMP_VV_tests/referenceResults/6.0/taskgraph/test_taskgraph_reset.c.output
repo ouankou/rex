@@ -1,0 +1,6 @@
+#pragma omp parallel shared(x,y)
+#pragma omp single
+#pragma omp taskgraph graph_reset(i%2==0)
+#pragma omp atomic
+#pragma omp task depend(out:y) shared(y)
+#pragma omp atomic

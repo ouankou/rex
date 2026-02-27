@@ -1,0 +1,7 @@
+#pragma omp declare_target local(sum,x)
+#pragma omp begin declare_target
+#pragma omp for reduction(+:sum)
+#pragma omp end declare target
+#pragma omp target parallel device(i)
+#pragma omp taskwait
+#pragma omp target map(tofrom:errors_arr[i]) device(i)

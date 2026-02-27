@@ -1,0 +1,2 @@
+#pragma omp target data map(tofrom:array[0:N])
+#pragma omp target parallel for map(pointer[:])

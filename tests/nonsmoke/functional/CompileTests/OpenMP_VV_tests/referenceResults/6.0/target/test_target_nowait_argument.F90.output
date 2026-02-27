@@ -1,0 +1,4 @@
+!$omp target map(tofrom:x) nowait(is_deferred)
+!$omp end target
+!$omp taskwait
+!$omp declare target

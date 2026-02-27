@@ -1,0 +1,6 @@
+#pragma omp parallel shared(x) num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp single
+#pragma omp task shared(x,errors) transparent(omp_impex)
+#pragma omp task shared(x,errors) depend(out:x)
+#pragma omp task shared(x,errors) transparent(omp_impex)
+#pragma omp task shared(x,errors) depend(out:x)

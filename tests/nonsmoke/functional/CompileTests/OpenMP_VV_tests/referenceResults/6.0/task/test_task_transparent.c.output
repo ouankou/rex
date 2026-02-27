@@ -1,0 +1,12 @@
+#pragma omp parallel shared(x) num_threads(OMPVV_NUM_THREADS_HOST)
+#pragma omp single
+#pragma omp task shared(x) transparent
+#pragma omp atomic
+#pragma omp task shared(x) transparent(omp_not_impex)
+#pragma omp atomic
+#pragma omp task shared(x) transparent(omp_import)
+#pragma omp atomic
+#pragma omp task shared(x) transparent(omp_export)
+#pragma omp atomic
+#pragma omp task shared(x) transparent(omp_impex)
+#pragma omp atomic

@@ -1,0 +1,3 @@
+#pragma omp target enter data map(to:a)
+#pragma omp target map(present:a)
+#pragma omp target exit data map(from:a)

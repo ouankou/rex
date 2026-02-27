@@ -1,0 +1,6 @@
+!$omp target teams workdistribute map(to:x) map(tofrom:y)
+!$omp end target teams workdistribute
+!$omp target teams workdistribute map(to:bb,dd,ee) map(tofrom:cc) map(from:aa,ff)
+!$omp end target teams workdistribute
+!$omp target teams workdistribute map(to:bb,cc) map(from:aa,dd,f,ee)
+!$omp end target teams workdistribute

@@ -5485,7 +5485,43 @@ convertSimpleClause(SgStatement *directive,
   OpenMPClauseKind clause_kind = current_omp_clause->getKind();
   switch (clause_kind) {
   case OMPC_nowait: {
-    sg_clause = new SgOmpNowaitClause();
+    SgOmpNowaitClause *nowait_clause =
+        new SgOmpNowaitClause((SgExpression *)NULL);
+    SgExpression *nowait_expression = NULL;
+    const std::vector<const OmpParsedExpression *> *parsed_nodes =
+        getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                       current_omp_clause);
+    if (parsed_nodes != nullptr) {
+      for (const OmpParsedExpression *parsed : *parsed_nodes) {
+        if (parsed == nullptr) {
+          continue;
+        }
+        nowait_expression = cloneParsedExpressionNode(parsed);
+        if (nowait_expression != NULL) {
+          break;
+        }
+      }
+    }
+    if (nowait_expression == NULL) {
+      std::vector<const char *> *current_expressions =
+          current_omp_clause->getExpressions();
+      if (current_expressions != NULL && !current_expressions->empty()) {
+        const char *expression_text = current_expressions->front();
+        if (expression_text != NULL && expression_text[0] != '\0') {
+          nowait_expression = parseOmpExpression(
+              current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+              expression_text);
+        }
+      }
+    }
+    if (nowait_expression != NULL) {
+      SgOmpExpressionClause *expression_clause =
+          isSgOmpExpressionClause(nowait_clause);
+      ROSE_ASSERT(expression_clause != NULL);
+      expression_clause->set_expression(nowait_expression);
+      nowait_expression->set_parent(expression_clause);
+    }
+    sg_clause = nowait_clause;
     break;
   }
   case OMPC_nogroup: {
