@@ -1162,7 +1162,7 @@ foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
     NAME tokenStreamMapping_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="./tokenStreamMapping ${_rose_flags_str} -rose:unparse_using_leading_and_trailing_token_mappings -c ${_c_test_dir}/${file_to_test} && gcc -I${_c_test_dir} -c token_leading_${file_to_test} && gcc -I${_c_test_dir} -c token_trailing_${file_to_test}"
+      CMD="$<TARGET_FILE:tokenStreamMapping> ${_rose_flags_str} -rose:unparse_using_leading_and_trailing_token_mappings -c ${_c_test_dir}/${file_to_test} && gcc -I${_c_test_dir} -c token_leading_${file_to_test} && gcc -I${_c_test_dir} -c token_trailing_${file_to_test}"
       ${_exit_status}
       ${_target}
   )
@@ -1289,7 +1289,7 @@ foreach(file_to_test IN LISTS TOKEN_CXX_TOKEN_UNPARSER_TESTCODES)
     NAME tokenUnparserTransformations_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="./testTokenUnparserTransformations -rose:unparse_tokens -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}"
+      CMD="$<TARGET_FILE:testTokenUnparserTransformations> -rose:unparse_tokens -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}"
       ${_exit_status}
       ${_target}
   )
@@ -1302,7 +1302,7 @@ add_test(
   NAME testTokenMapping
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND bash -c
-    "${_rth} CMD=\\\"./tokenStreamMapping ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c\\\" ${_exit_status} test2003_12.c.mapping.passed && ./tokenStreamMapping -rose:C89 -rose:unparse_tokens -c ${_c_test_dir}/test2003_12.c"
+    "${_rth} CMD=\\\"$<TARGET_FILE:tokenStreamMapping> ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c\\\" ${_exit_status} test2003_12.c.mapping.passed && $<TARGET_FILE:tokenStreamMapping> -rose:C89 -rose:unparse_tokens -c ${_c_test_dir}/test2003_12.c"
 )
 set_tests_properties(testTokenMapping PROPERTIES DISABLED TRUE)
 
@@ -1310,7 +1310,7 @@ add_test(
   NAME test_binary_after_token_unparsing
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND bash -c
-    "gcc ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c -o gcc_test2003_12.o && ./tokenStreamMapping ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c && gcc -c GlobalScopeDeclarationTokenStream.c -o rose_test2003_12.o && diff ${_c_test_dir}/test2003_12.c GlobalScopeDeclarationTokenStream.c && diff gcc_test2003_12.o rose_test2003_12.o"
+    "gcc ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c -o gcc_test2003_12.o && $<TARGET_FILE:tokenStreamMapping> ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c && gcc -c GlobalScopeDeclarationTokenStream.c -o rose_test2003_12.o && diff ${_c_test_dir}/test2003_12.c GlobalScopeDeclarationTokenStream.c && diff gcc_test2003_12.o rose_test2003_12.o"
 )
 set_tests_properties(test_binary_after_token_unparsing PROPERTIES DISABLED TRUE)
 

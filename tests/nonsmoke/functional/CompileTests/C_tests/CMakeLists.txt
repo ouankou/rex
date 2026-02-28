@@ -1365,3 +1365,5 @@ add_test(
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
 set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-pthread.passed PROPERTIES DEPENDS C_tests_check_pthread )
+
+unset(ROSE_C89_TESTCODES)
