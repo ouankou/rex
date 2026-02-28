@@ -767,6 +767,291 @@ static bool parseIncludeDirective(llvm::StringRef line, size_t hash_col,
   return true;
 }
 
+static void skipDirectiveWhitespace(llvm::StringRef line, size_t *pos) {
+  while (*pos < line.size() && (line[*pos] == ' ' || line[*pos] == '\t' ||
+                                line[*pos] == '\f' || line[*pos] == '\r')) {
+    ++(*pos);
+  }
+}
+
+static bool consumeDirectiveWord(llvm::StringRef line, size_t *pos,
+                                 llvm::StringRef word) {
+  skipDirectiveWhitespace(line, pos);
+  if (!line.substr(*pos).starts_with(word)) {
+    return false;
+  }
+  const size_t end = *pos + word.size();
+  if (end < line.size()) {
+    char boundary = line[end];
+    if (boundary != ' ' && boundary != '\t' && boundary != '\f' &&
+        boundary != '\r') {
+      return false;
+    }
+  }
+  *pos = end;
+  return true;
+}
+
+static bool parseOpenMPDeclareVariantBoundary(llvm::StringRef line,
+                                              bool *is_begin, bool *is_end) {
+  size_t hash_col = 0;
+  if (!isDirectiveLine(line, &hash_col)) {
+    return false;
+  }
+  size_t pos = hash_col + 1;
+  if (!consumeDirectiveWord(line, &pos, "pragma")) {
+    return false;
+  }
+  if (!consumeDirectiveWord(line, &pos, "omp")) {
+    return false;
+  }
+
+  bool begin = false;
+  bool end = false;
+  if (consumeDirectiveWord(line, &pos, "begin")) {
+    begin = true;
+  } else if (consumeDirectiveWord(line, &pos, "end")) {
+    end = true;
+  } else {
+    return false;
+  }
+
+  if (!consumeDirectiveWord(line, &pos, "declare")) {
+    return false;
+  }
+  if (!consumeDirectiveWord(line, &pos, "variant")) {
+    return false;
+  }
+
+  if (is_begin != nullptr) {
+    *is_begin = begin;
+  }
+  if (is_end != nullptr) {
+    *is_end = end;
+  }
+  return true;
+}
+
+// In pragma-only OpenMP mode (no -fopenmp), begin/end declare variant blocks
+// appear as multiple plain C function definitions with the same signature. To
+// keep diagnostics fatal and still parse these files, normalize enclosed
+// variant definitions to unique internal names.
+std::unique_ptr<llvm::MemoryBuffer>
+maybeNormalizeOpenMPDeclareVariantDefinitions(
+    clang::SourceManager &source_manager, clang::FileID file_id,
+    const clang::LangOptions &lang_opts) {
+  auto buffer_or = source_manager.getBufferOrNone(file_id);
+  if (!buffer_or) {
+    return nullptr;
+  }
+
+  llvm::StringRef content = buffer_or->getBuffer();
+  if (!content.contains("declare variant")) {
+    return nullptr;
+  }
+
+  struct OffsetRange {
+    unsigned begin;
+    unsigned end;
+  };
+  std::vector<OffsetRange> variant_ranges;
+  variant_ranges.reserve(8);
+
+  int variant_depth = 0;
+  size_t current_variant_begin = 0;
+  size_t pos = 0;
+  while (pos < content.size()) {
+    size_t line_end = content.find_first_of("\r\n", pos);
+    if (line_end == llvm::StringRef::npos) {
+      line_end = content.size();
+    }
+    size_t next_pos = line_end;
+    if (next_pos < content.size()) {
+      if (content[next_pos] == '\r' && next_pos + 1 < content.size() &&
+          content[next_pos + 1] == '\n') {
+        next_pos += 2;
+      } else {
+        next_pos += 1;
+      }
+    }
+
+    llvm::StringRef line = content.slice(pos, line_end);
+    bool is_begin = false;
+    bool is_end = false;
+    if (parseOpenMPDeclareVariantBoundary(line, &is_begin, &is_end)) {
+      if (is_begin) {
+        if (variant_depth == 0) {
+          current_variant_begin = next_pos;
+        }
+        ++variant_depth;
+      } else if (variant_depth > 0) {
+        --variant_depth;
+        if (variant_depth == 0 && current_variant_begin < pos) {
+          variant_ranges.push_back(
+              OffsetRange{static_cast<unsigned>(current_variant_begin),
+                          static_cast<unsigned>(pos)});
+        }
+      }
+    }
+
+    pos = next_pos;
+  }
+
+  if (variant_ranges.empty()) {
+    return nullptr;
+  }
+
+  clang::Lexer lexer(file_id, *buffer_or, source_manager, lang_opts);
+  std::vector<TokenWithOffset> tokens;
+  tokens.reserve(512);
+
+  clang::Token token;
+  while (true) {
+    lexer.LexFromRawLexer(token);
+    if (token.is(clang::tok::eof)) {
+      break;
+    }
+    if (source_manager.getFileID(token.getLocation()) != file_id) {
+      continue;
+    }
+    tokens.push_back(
+        {token, source_manager.getFileOffset(token.getLocation())});
+  }
+
+  if (tokens.empty()) {
+    return nullptr;
+  }
+
+  auto in_variant_range = [&](unsigned offset) {
+    for (const auto &range : variant_ranges) {
+      if (offset >= range.begin && offset < range.end) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  auto next_significant = [&](size_t index, size_t *out) -> bool {
+    if (out == nullptr) {
+      return false;
+    }
+    while (index < tokens.size() &&
+           tokens[index].token.is(clang::tok::comment)) {
+      ++index;
+    }
+    if (index >= tokens.size()) {
+      return false;
+    }
+    *out = index;
+    return true;
+  };
+
+  struct Replacement {
+    unsigned offset;
+    unsigned length;
+    std::string text;
+  };
+  std::vector<Replacement> replacements;
+  replacements.reserve(8);
+  std::set<unsigned> replaced_offsets;
+
+  unsigned rename_counter = 0;
+  int brace_depth = 0;
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    const clang::Token &tok = tokens[i].token;
+    if (tok.is(clang::tok::l_brace)) {
+      ++brace_depth;
+      continue;
+    }
+    if (tok.is(clang::tok::r_brace)) {
+      if (brace_depth > 0) {
+        --brace_depth;
+      }
+      continue;
+    }
+    if (brace_depth != 0 || !in_variant_range(tokens[i].offset)) {
+      continue;
+    }
+    if (!tok.isOneOf(clang::tok::identifier, clang::tok::raw_identifier)) {
+      continue;
+    }
+
+    size_t open_paren_index = 0;
+    if (!next_significant(i + 1, &open_paren_index) ||
+        !tokens[open_paren_index].token.is(clang::tok::l_paren)) {
+      continue;
+    }
+
+    int paren_depth = 1;
+    size_t close_paren_index = open_paren_index;
+    while (++close_paren_index < tokens.size()) {
+      const clang::Token &scan_tok = tokens[close_paren_index].token;
+      if (scan_tok.is(clang::tok::l_paren)) {
+        ++paren_depth;
+      } else if (scan_tok.is(clang::tok::r_paren)) {
+        --paren_depth;
+        if (paren_depth == 0) {
+          break;
+        }
+      }
+    }
+    if (paren_depth != 0) {
+      continue;
+    }
+
+    size_t signature_end_index = 0;
+    if (!next_significant(close_paren_index + 1, &signature_end_index)) {
+      continue;
+    }
+    while (signature_end_index < tokens.size() &&
+           !tokens[signature_end_index].token.isOneOf(clang::tok::semi,
+                                                      clang::tok::l_brace)) {
+      ++signature_end_index;
+    }
+    if (signature_end_index >= tokens.size() ||
+        tokens[signature_end_index].token.is(clang::tok::semi) ||
+        !in_variant_range(tokens[signature_end_index].offset)) {
+      continue;
+    }
+
+    const unsigned offset = tokens[i].offset;
+    if (replaced_offsets.find(offset) != replaced_offsets.end()) {
+      continue;
+    }
+    replaced_offsets.insert(offset);
+
+    const std::string name =
+        clang::Lexer::getSpelling(tok, source_manager, lang_opts);
+    if (name.empty()) {
+      continue;
+    }
+    ++rename_counter;
+    replacements.push_back(Replacement{offset, tok.getLength(),
+                                       name + "__rex_omp_variant_" +
+                                           std::to_string(rename_counter)});
+  }
+
+  if (replacements.empty()) {
+    return nullptr;
+  }
+
+  std::sort(replacements.begin(), replacements.end(),
+            [](const Replacement &lhs, const Replacement &rhs) {
+              return lhs.offset < rhs.offset;
+            });
+
+  std::string updated = content.str();
+  size_t shift = 0;
+  for (const auto &replacement : replacements) {
+    updated.replace(replacement.offset + shift, replacement.length,
+                    replacement.text);
+    shift += replacement.text.size() - replacement.length;
+  }
+
+  return llvm::MemoryBuffer::getMemBufferCopy(updated,
+                                              buffer_or->getBufferIdentifier());
+}
+
 std::unique_ptr<llvm::MemoryBuffer> maybeSuppressMisplacedIncludes(
     clang::SourceManager &source_manager, clang::FileID file_id,
     std::vector<SuppressedIncludeDirective> *suppressed_out) {
@@ -2183,6 +2468,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     }
   }
   if (openmp_ast_mode) {
+    if (auto fixed_buffer = maybeNormalizeOpenMPDeclareVariantDefinitions(
+            compiler_instance->getSourceManager(), mainFileID, lang_opts)) {
+      compiler_instance->getSourceManager().overrideFileContents(
+          input_file_entry, std::move(fixed_buffer));
+      // Source normalization changed in-memory tokens, so force AST-based
+      // unparsing.
+      sageFile.set_unparse_tokens(false);
+    }
     if (auto fixed_buffer = maybeSuppressMisplacedIncludes(
             compiler_instance->getSourceManager(), mainFileID,
             &suppressed_includes)) {

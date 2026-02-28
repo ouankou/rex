@@ -29,4 +29,19 @@
 #undef ROSE_RESTORE_OPENMP
 #endif
 
+/*
+ * Some OpenMP 6.0 runtime entry points are conditionally declared by vendor
+ * omp.h implementations based on _OPENMP. In pragma-only mode we intentionally
+ * hide _OPENMP while including omp.h, so provide stable forward declarations
+ * needed by parser-only frontends.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+int omp_is_free_agent(void);
+int omp_ancestor_is_free_agent(int);
+#ifdef __cplusplus
+}
+#endif
+
 #endif
