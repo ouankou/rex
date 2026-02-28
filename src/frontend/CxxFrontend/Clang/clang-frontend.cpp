@@ -1176,11 +1176,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       (sageFile.get_openacc() &&
        (sageFile.get_openacc_ast_only() || sageFile.get_openacc_parse_only()));
   bool is_secondary_parse = false;
-  if (!continue_on_error && openmp_ast_mode) {
-    // OpenMP/OpenACC AST-only parsing should tolerate frontend errors so pragma
-    // processing and unparse can proceed on partially recovered ASTs.
-    continue_on_error = true;
-  }
   if (sageFile.get_parent() != NULL) {
     SgProject *project = isSgProject(sageFile.get_parent()->get_parent());
     if (project != NULL) {

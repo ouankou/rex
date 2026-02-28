@@ -1,9 +1,7 @@
 #include <assert.h>
 
 #include <omp.h>
-int main()
-#include <stdlib.h>
-{
+int main() {
   int res = 0, n = 10;
 #pragma omp teams num_teams(n) reduction(+ : res)
   {
@@ -12,4 +10,5 @@ int main()
       n = omp_get_num_teams();
   }
   assert(res == (n * (n - 1)) / 2); // Sum of first n-1 natural numbers
+  return 0;
 }
