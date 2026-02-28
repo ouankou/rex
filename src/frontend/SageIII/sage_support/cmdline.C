@@ -4467,10 +4467,6 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
   if (get_Fortran_only() == true) {
     SgFile::stripFortranCommandLineOptions(backendArgv);
   }
-  auto has_backend_flag = [&](const std::string &flag) {
-    return std::find(backendArgv.begin(), backendArgv.end(), flag) !=
-           backendArgv.end();
-  };
 
   // To use rose in place of a C or C++ compiler specify the compiler name using
   //      rose -compiler <originalCompilerName> ...
@@ -4780,12 +4776,6 @@ SgFile::buildCompilerCommandLineOptions(vector<string> &argv, int fileNameIndex,
     compilerNameString.push_back("-Wno-error=dynamic-exception-spec");
     compilerNameString.push_back("-Wno-register");
     compilerNameString.push_back("-Wno-dynamic-exception-spec");
-  }
-  if (get_C_only() == true && get_standard() == e_c89_standard &&
-      !has_backend_flag("-Werror=int-conversion")) {
-    // Keep C89/gnu89 compatibility with legacy ROSE/GCC behavior: preserve the
-    // int-conversion diagnostic as a warning instead of a hard error.
-    compilerNameString.push_back("-Wno-error=int-conversion");
   }
 #endif
 

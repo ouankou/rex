@@ -316,6 +316,10 @@ set(TOKEN_C_FAILING_TESTCODES
   test2012_163.c
 )
 
+set(TOKEN_C_C89_RECOVERY_TESTCODES
+  test2013_46.c
+)
+
 set(TOKEN_CXX_TESTCODES_REQUIRED
   test_CplusplusMacro_Cpp.C
   test2001_01.C
@@ -1158,11 +1162,17 @@ target_link_libraries(tokenStreamMapping ROSE_DLL ${link_with_libraries})
 foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
   string(REPLACE "." "_" _name ${file_to_test})
   set(_target ${file_to_test}.mapping.passed)
+  set(_token_mapping_extra_flags)
+  set(_token_mapping_c_std_flags)
+  if(file_to_test IN_LIST TOKEN_C_C89_RECOVERY_TESTCODES)
+    set(_token_mapping_extra_flags -rex:clang:continue-on-error)
+    set(_token_mapping_c_std_flags -std=gnu89)
+  endif()
   add_test(
     NAME tokenStreamMapping_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="\"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} -rose:unparse_using_leading_and_trailing_token_mappings -c ${_c_test_dir}/${file_to_test} && gcc -I${_c_test_dir} -c token_leading_${file_to_test} && gcc -I${_c_test_dir} -c token_trailing_${file_to_test}"
+      CMD="\"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} ${_token_mapping_extra_flags} -rose:unparse_using_leading_and_trailing_token_mappings -c ${_c_test_dir}/${file_to_test} && gcc ${_token_mapping_c_std_flags} -I${_c_test_dir} -c token_leading_${file_to_test} && gcc ${_token_mapping_c_std_flags} -I${_c_test_dir} -c token_trailing_${file_to_test}"
       ${_exit_status}
       ${_target}
   )

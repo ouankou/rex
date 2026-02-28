@@ -1299,10 +1299,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   };
   bool relax_register_diag = false;
   bool relax_dynamic_exception_diag = false;
-  bool relax_c89_int_conversion_diag = false;
-  const bool c89_compat_mode =
-      language == ClangToSageTranslator::C &&
-      sageFile.get_standard() == SgFile::e_c89_standard;
 
   auto has_passthrough_flag = [&](const std::string &flag) {
     return std::find(passthrough_args.begin(), passthrough_args.end(), flag) !=
@@ -1337,14 +1333,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       add_passthrough_flag_if_missing("-Wno-dynamic-exception-spec");
       relax_dynamic_exception_diag = true;
     }
-  }
-
-  if (c89_compat_mode && !has_passthrough_flag("-Werror=int-conversion")) {
-    // Clang 21 promotes int->pointer scalar initialization to an error even in
-    // C89/gnu89 mode. Keep this diagnostic visible, but preserve legacy ROSE
-    // parsing behavior by downgrading it to a warning in C89 compatibility.
-    add_passthrough_flag_if_missing("-Wno-error=int-conversion");
-    relax_c89_int_conversion_diag = true;
   }
 
   if (exception_mode == ExceptionMode::Unspecified &&
@@ -1889,11 +1877,6 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                                 clang::diag::Severity::Warning);
       diags.setDiagnosticGroupWarningAsError("dynamic-exception-spec", false);
     }
-  }
-  if (c89_compat_mode && relax_c89_int_conversion_diag) {
-    diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
-                              "int-conversion", clang::diag::Severity::Warning);
-    diags.setDiagnosticGroupWarningAsError("int-conversion", false);
   }
   diags.setSeverity(clang::diag::err_alignment_not_power_of_two,
                     clang::diag::Severity::Warning, clang::SourceLocation());
