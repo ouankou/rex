@@ -1302,7 +1302,7 @@ add_test(
   NAME testTokenMapping
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND bash -c
-    "${_rth} CMD=\\\"$<TARGET_FILE:tokenStreamMapping> ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c\\\" ${_exit_status} test2003_12.c.mapping.passed && \\\"$<TARGET_FILE:tokenStreamMapping>\\\" -rose:C89 -rose:unparse_tokens -c ${_c_test_dir}/test2003_12.c"
+    "${_rth} CMD=\"\\\"$<TARGET_FILE:tokenStreamMapping>\\\" ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c\" ${_exit_status} test2003_12.c.mapping.passed && \"$<TARGET_FILE:tokenStreamMapping>\" -rose:C89 -rose:unparse_tokens -c ${_c_test_dir}/test2003_12.c"
 )
 set_tests_properties(testTokenMapping PROPERTIES DISABLED TRUE)
 
@@ -1310,7 +1310,7 @@ add_test(
   NAME test_binary_after_token_unparsing
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND bash -c
-    "gcc ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c -o gcc_test2003_12.o && \\\"$<TARGET_FILE:tokenStreamMapping>\\\" ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c && gcc -c GlobalScopeDeclarationTokenStream.c -o rose_test2003_12.o && diff ${_c_test_dir}/test2003_12.c GlobalScopeDeclarationTokenStream.c && diff gcc_test2003_12.o rose_test2003_12.o"
+    "gcc ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c -o gcc_test2003_12.o && \"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c && gcc -c GlobalScopeDeclarationTokenStream.c -o rose_test2003_12.o && diff ${_c_test_dir}/test2003_12.c GlobalScopeDeclarationTokenStream.c && diff gcc_test2003_12.o rose_test2003_12.o"
 )
 set_tests_properties(test_binary_after_token_unparsing PROPERTIES DISABLED TRUE)
 
