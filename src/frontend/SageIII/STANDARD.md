@@ -96,6 +96,10 @@ ROSE also recognize:
  * -std=c++
  * -std=gnu++
 
+Legacy C compatibility mapping:
+ * `-std=c`  -> GNU89 compatibility mode (`-std=gnu89`)
+ * `-std=gnu` -> GNU89 compatibility mode (`-std=gnu89`)
+
 #### Proposed?
 
 Does it make sense to support language extension using the same technique:

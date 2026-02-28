@@ -1297,8 +1297,18 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       return false;
     }
   };
+  auto is_legacy_c89_or_c90 = [](SgFile::standard_enum std) {
+    switch (std) {
+    case SgFile::e_c89_standard:
+    case SgFile::e_c90_standard:
+      return true;
+    default:
+      return false;
+    }
+  };
   bool relax_register_diag = false;
   bool relax_dynamic_exception_diag = false;
+  bool relax_int_conversion_diag = false;
 
   auto has_passthrough_flag = [&](const std::string &flag) {
     return std::find(passthrough_args.begin(), passthrough_args.end(), flag) !=
@@ -1332,6 +1342,17 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       add_passthrough_flag_if_missing("-Wno-error=dynamic-exception-spec");
       add_passthrough_flag_if_missing("-Wno-dynamic-exception-spec");
       relax_dynamic_exception_diag = true;
+    }
+  }
+
+  if (language == ClangToSageTranslator::C &&
+      is_legacy_c89_or_c90(sageFile.get_standard())) {
+    // Legacy C89/C90 compatibility mode: Clang classifies int-to-pointer
+    // conversions as hard errors, which rejects long-standing ROSE C tests
+    // that rely on implicit-declaration-era behavior.
+    if (!has_passthrough_flag("-Werror=int-conversion")) {
+      add_passthrough_flag_if_missing("-Wno-error=int-conversion");
+      relax_int_conversion_diag = true;
     }
   }
 
@@ -1877,6 +1898,11 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
                                 clang::diag::Severity::Warning);
       diags.setDiagnosticGroupWarningAsError("dynamic-exception-spec", false);
     }
+  }
+  if (language == ClangToSageTranslator::C && relax_int_conversion_diag) {
+    diags.setSeverityForGroup(clang::diag::Flavor::WarningOrError,
+                              "int-conversion", clang::diag::Severity::Warning);
+    diags.setDiagnosticGroupWarningAsError("int-conversion", false);
   }
   diags.setSeverity(clang::diag::err_alignment_not_power_of_two,
                     clang::diag::Severity::Warning, clang::SourceLocation());

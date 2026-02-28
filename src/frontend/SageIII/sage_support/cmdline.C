@@ -2296,9 +2296,10 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
       true) {
     printf("WARNING: Command line option -rose:C is deprecated!\n");
 
-    set_C_only(true);
-    set_Cxx_only(false);
-    Rose::is_Cxx_language = false;
+    // Keep legacy ROSE compatibility for generic C selection. Historically
+    // this mode accepted C89-era code patterns (including implicit
+    // declarations) that Clang rejects under modern default C dialects.
+    set_C89_gnu_only();
   }
 
   if (CommandlineProcessing::isOption(argv, "-rose:", "(C89|C89_only)", true) ==
@@ -2461,13 +2462,15 @@ void SgFile::processRoseCommandLineOptions(vector<string> &argv) {
 
   for (unsigned int i = 1; i < argv.size(); i++) {
     if (argv[i] == "-std=c") {
-      set_C_only(true);
-      Rose::is_Cxx_language = false;
-      Rose::is_C_language = true;
+      // ROSE's generic C selector is a legacy compatibility mode; map it to
+      // GNU89 explicitly so frontend and backend do not diverge on default
+      // dialect behavior.
+      set_C89_gnu_only();
 
     } else if (argv[i] == "-std=gnu") {
-      set_C_only(true);
-      set_gnu_standard();
+      // Keep legacy GNU C mode aligned with ROSE's long-standing C89
+      // compatibility behavior.
+      set_C89_gnu_only();
 
     } else if (argv[i] == "-std=c++") {
       set_Cxx_only(true);
