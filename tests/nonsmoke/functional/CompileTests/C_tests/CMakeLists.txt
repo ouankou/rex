@@ -4,6 +4,11 @@
 set(C_TEST_LANG_FLAGS)
 set(C_TEST_ROSE_FLAGS -std=c -w -rose:verbose 0)
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
+# test2012_32.c is an autoconf-style probe using implicit-int main(),
+# which is valid in C89 and intentionally exercised as such.
+set(ROSE_C89_TESTCODES
+  test2012_32.c
+)
 set(C_TEST_TRANSLATOR $<TARGET_FILE:testTranslator>)
 string(JOIN " " _c_tests_lang_flags_str ${C_TEST_LANG_FLAGS})
 string(JOIN " " _c_tests_rose_flags_str ${C_TEST_ROSE_FLAGS})
