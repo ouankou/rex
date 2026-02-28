@@ -851,8 +851,8 @@ maybeNormalizeOpenMPDeclareVariantDefinitions(
   }
 
   struct OffsetRange {
-    unsigned begin;
-    unsigned end;
+    size_t begin;
+    size_t end;
   };
   std::vector<OffsetRange> variant_ranges;
   variant_ranges.reserve(8);
@@ -887,9 +887,7 @@ maybeNormalizeOpenMPDeclareVariantDefinitions(
       } else if (variant_depth > 0) {
         --variant_depth;
         if (variant_depth == 0 && current_variant_begin < pos) {
-          variant_ranges.push_back(
-              OffsetRange{static_cast<unsigned>(current_variant_begin),
-                          static_cast<unsigned>(pos)});
+          variant_ranges.push_back(OffsetRange{current_variant_begin, pos});
         }
       }
     }
@@ -922,7 +920,7 @@ maybeNormalizeOpenMPDeclareVariantDefinitions(
     return nullptr;
   }
 
-  auto in_variant_range = [&](unsigned offset) {
+  auto in_variant_range = [&](size_t offset) {
     for (const auto &range : variant_ranges) {
       if (offset >= range.begin && offset < range.end) {
         return true;
