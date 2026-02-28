@@ -3,8 +3,13 @@
 
 set(C_TEST_LANG_FLAGS)
 set(C_TEST_ROSE_FLAGS -std=c -w -rose:verbose 0)
-set(C_TEST_ROSE_FLAGS_GNU89 -std=gnu89 -w -rose:verbose 0)
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
+# test2012_32.c is an autoconf-style probe using implicit-int main(),
+# which is exercised under the GNU89 dialect (C89 plus GNU extensions),
+# not strict ISO C89 (e.g., it uses // comments that strict C89 forbids).
+set(ROSE_GNU89_TESTCODES
+  test2012_32.c
+)
 set(C_TEST_TRANSLATOR $<TARGET_FILE:testTranslator>)
 string(JOIN " " _c_tests_lang_flags_str ${C_TEST_LANG_FLAGS})
 string(JOIN " " _c_tests_rose_flags_str ${C_TEST_ROSE_FLAGS})
@@ -1068,21 +1073,14 @@ set(C_TESTCODES_REQUIRE_GNU89
   test2018_63.c
 )
 
-function(set_rose_test_flags test_file)
-  if("${test_file}" IN_LIST C_TESTCODES_REQUIRE_GNU89)
-    set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS_GNU89} PARENT_SCOPE)
-  else()
-    set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS} PARENT_SCOPE)
-  endif()
-endfunction()
+list(APPEND ROSE_GNU89_TESTCODES ${C_TESTCODES_REQUIRE_GNU89})
+list(REMOVE_DUPLICATES ROSE_GNU89_TESTCODES)
 
 foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
-  set_rose_test_flags(${file_to_test})
   compile_test(${file_to_test} "C_tests_failing")
 endforeach()
 
 foreach(file_to_test ${C_TESTCODES_TO_RUN})
-  set_rose_test_flags(${file_to_test})
   compile_test(${file_to_test} "C_tests")
 endforeach()
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
@@ -1402,3 +1400,5 @@ add_test(
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
 set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-pthread.passed PROPERTIES DEPENDS C_tests_check_pthread )
+
+unset(ROSE_GNU89_TESTCODES)

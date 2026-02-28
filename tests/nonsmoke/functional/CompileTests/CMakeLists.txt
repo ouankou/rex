@@ -16,6 +16,11 @@ function(compile_test input_file label)
   string(REPLACE "." "_" _test_key "${_test_key}")
   set(test_id ${label}_${_test_key})
   set(_rose_flags ${ROSE_FLAGS})
+  if(DEFINED ROSE_GNU89_TESTCODES AND input_file IN_LIST ROSE_GNU89_TESTCODES)
+    # Allow per-test GNU89-based C89 dialect classification without changing global defaults.
+    list(FILTER _rose_flags EXCLUDE REGEX "^-std=.*")
+    list(APPEND _rose_flags "-std=gnu89")
+  endif()
   if(DEFINED ROSE_OUTPUT_TO_BUILD_TESTCODES AND
      input_file IN_LIST ROSE_OUTPUT_TO_BUILD_TESTCODES)
     set(_output_dir "${ROSE_TEST_OUTPUT_DIR}")

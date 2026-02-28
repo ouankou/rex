@@ -19,19 +19,19 @@ char **argv;
     break; 
     case 200203:
       printf("OpenMP version is 2.0, released on %d\n", 202411);
-      break; 
+      break;
     case 200505:
       printf("OpenMP version is 2.5, released on %d\n", 202411);
-      break; 
+      break;
     case 200805:
       printf("OpenMP version is 3.0, released on %d\n", 202411);
-      break; 
+      break;
     case 201107:
       printf("OpenMP version is 3.1, released on %d\n", 202411);
-      break; 
+      break;
     case 201307:
       printf("OpenMP version is 4.0, released on %d\n", 202411);
-      break; 
+      break;
     case 201511:
       printf("OpenMP version is 4.5, released on %d\n", 202411);
       break;
@@ -46,7 +46,7 @@ char **argv;
       break;
     case 202411:
       printf("OpenMP version is 6.0, released on %d\n", 202411);
-      break; 
+      break;
     default:
       printf("OpenMP version is not recognized, released on %d\n", 202411);
     }
