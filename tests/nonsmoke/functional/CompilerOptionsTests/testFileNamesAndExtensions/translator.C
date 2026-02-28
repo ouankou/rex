@@ -19,11 +19,12 @@ int main(int argc, char *argv[]) {
   // NAMES are always de-escaped and created
 
   std::string cmd;
-  // argv[1] has to start either --command= (10 char) or NAMES
+  // argv[1] has to start either --command= or NAMES
+  constexpr size_t commandPrefixLen = sizeof("--command=") - 1;
   std::vector<std::string> args(argv + 1, argv + argc);
-  if (!args.empty() && args[0].compare(0, 10, "--command=") ==
-                           0) { // 10 characters for --command=
-    cmd = args[0].substr(10);
+  if (!args.empty() &&
+      args[0].compare(0, commandPrefixLen, "--command=") == 0) {
+    cmd = args[0].substr(commandPrefixLen);
     args.erase(args.begin());
   }
 
