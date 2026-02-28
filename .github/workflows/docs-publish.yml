@@ -13,6 +13,9 @@ concurrency:
   group: docs-publish-main
   cancel-in-progress: true
 
+env:
+  LLVM_VERSION: 21
+
 jobs:
   docs:
     runs-on: ubuntu-latest
@@ -24,6 +27,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Add LLVM apt repository
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc > /dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -31,16 +39,17 @@ jobs:
             antlr4 \
             bison \
             build-essential \
-            clang-20 \
+            clang-${LLVM_VERSION} \
             cmake \
             curl \
             flex \
-            libflang-20-dev \
-            libclang-20-dev \
+            libflang-${LLVM_VERSION}-dev \
+            libclang-${LLVM_VERSION}-dev \
+            libomp-${LLVM_VERSION}-dev \
             libantlr4-runtime-dev \
             libhpdf-dev \
-            llvm-20 \
-            llvm-20-dev \
+            llvm-${LLVM_VERSION} \
+            llvm-${LLVM_VERSION}-dev \
             perl \
             asciidoctor \
             pkg-config
@@ -64,11 +73,11 @@ jobs:
 
       - name: Build docs (shared script)
         env:
-          PATH: /usr/lib/llvm-20/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-          CMAKE_PREFIX_PATH: /usr/lib/llvm-20
-          LLVM_DIR: /usr/lib/llvm-20
-          CC: clang-20
-          CXX: clang++-20
+          PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}
+          LLVM_DIR: /usr/lib/llvm-${{ env.LLVM_VERSION }}
+          CC: clang-${{ env.LLVM_VERSION }}
+          CXX: clang++-${{ env.LLVM_VERSION }}
           DOCS_ANTLR4_EXECUTABLE: ${{ github.workspace }}/.tools/antlr4/antlr4
           DOCS_JOBS: 32
         run: bash scripts/ci-docs-build

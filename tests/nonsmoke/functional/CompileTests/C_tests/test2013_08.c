@@ -1,14 +1,13 @@
 
 #define STACKBUF_LEN 42
-typedef unsigned long size_t;
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 int errno = 0;
 #define EINVAL 7
 
-int strlen(const char*);
-
-int abort();
-int sprintf(char*,char*,int);
+const char *strerror_override(int);
 
 // int verify(int);
 #include "verify.h"

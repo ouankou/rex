@@ -22,6 +22,10 @@
 #define __INFINITY__ __builtin_inff()
 #endif
 
+#ifndef offsetof
+#define offsetof(type, member) __builtin_offsetof(type, member)
+#endif
+
 #if !__has_builtin(__builtin_va_start)
 void __builtin_va_start(__builtin_va_list, ...);
 #endif

@@ -81,7 +81,8 @@ function(add_omp_semantic_test test_name translator compiler input_file mode lan
             ${ROSE_LLVM_OPENMP_RUNTIME_DIR}
             ${_omp_lowering_inc}
             ${input_file}
-            ${language})
+            ${language}
+            ${ROSE_OPENMP_VERSION})
   set_tests_properties(${test_name} PROPERTIES TIMEOUT 900)
   _label_omp_semantic(${test_name})
 endfunction()

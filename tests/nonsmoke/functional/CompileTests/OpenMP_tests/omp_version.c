@@ -30,7 +30,19 @@ int main()
       break; 
     case 201511: 
       printf ("OpenMP version is 4.5, released on %d\n", _OPENMP);
-      break; 
+      break;
+    case 201811:
+      printf("OpenMP version is 5.0, released on %d\n", _OPENMP);
+      break;
+    case 202011:
+      printf("OpenMP version is 5.1, released on %d\n", _OPENMP);
+      break;
+    case 202111:
+      printf("OpenMP version is 5.2, released on %d\n", _OPENMP);
+      break;
+    case 202411:
+      printf("OpenMP version is 6.0, released on %d\n", _OPENMP);
+      break;
     default:
       printf ("OpenMP version is not recognized, released on %d\n", _OPENMP);
   }
