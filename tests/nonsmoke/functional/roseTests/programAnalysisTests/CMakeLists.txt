@@ -35,14 +35,6 @@ target_link_libraries(VirtualFunctionAnalysisTest ROSE_DLL ${link_with_libraries
 add_executable(ReachingDefinitionFacadeTest ReachingDefinitionFacadeTest.C)
 target_link_libraries(ReachingDefinitionFacadeTest ROSE_DLL ${link_with_libraries})
 
-set(_annotation_lang_dir ${CMAKE_SOURCE_DIR}/src/midend/programAnalysis/annotationLanguageParser)
-if(EXISTS "${_annotation_lang_dir}/broadway.h")
-  include_directories(${_annotation_lang_dir})
-  add_executable(AnnotationLanguageParserTest AnnotationLanguageParserTest.C)
-  target_link_libraries(AnnotationLanguageParserTest ROSE_DLL ${link_with_libraries})
-endif()
-unset(_annotation_lang_dir)
-
 add_subdirectory(defUseAnalysisTests)
 add_subdirectory(generalDataFlowAnalysisTests)
 add_subdirectory(staticInterproceduralSlicingTests)
