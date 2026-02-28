@@ -22,8 +22,8 @@ set(_frontend_disabled_c_tests
 
 # Additional include paths keyed by specimen name (with "." replaced by "_").
 set(_frontend_extra_includes_test2005_168_c
-  -I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing
-  -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII
+  "-I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing"
+  "-I${CMAKE_SOURCE_DIR}/src/frontend/SageIII"
 )
 
 foreach(specimen IN LISTS FRONTEND_INTEGRATION_C_TESTS)
