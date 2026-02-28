@@ -197,7 +197,7 @@ install(EXPORT RoseTargets
 )
 install(
   FILES
-    featureTests.h rose.h roseInternal.h
+    escape.h featureTests.h rewrite.h rose.h roseInternal.h
     ${CMAKE_BINARY_DIR}/rosePublicConfig.h
   DESTINATION ${INCLUDE_INSTALL_DIR})
 
