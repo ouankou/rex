@@ -4,6 +4,8 @@
 #ifndef BDWY_PROPERTY_H
 #define BDWY_PROPERTY_H
 
+#include "ann.h"
+
 #include <string>
 
 /** @brief A dataflow analysis property

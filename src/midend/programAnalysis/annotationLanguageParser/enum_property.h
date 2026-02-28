@@ -4,6 +4,8 @@
 #ifndef BDWY_ENUM_PROPERTY_H
 #define BDWY_ENUM_PROPERTY_H
 
+#include "property.h"
+
 #include <bitset>
 #include <iostream>
 #include <list>
