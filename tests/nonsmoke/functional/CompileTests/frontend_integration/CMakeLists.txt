@@ -23,17 +23,31 @@ set(_frontend_disabled_c_tests
 # Map of specimen file names to their extra include paths via aligned key/value lists.
 set(_specimen_include_keys
   "test2005_168.c"
+  "test2005_168.c"
 )
 set(_specimen_include_values
-  "-I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing\\;-I${CMAKE_SOURCE_DIR}/src/frontend/SageIII"
+  "-I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing"
+  "-I${CMAKE_SOURCE_DIR}/src/frontend/SageIII"
 )
+
+# Verify that the key and value lists are synchronized.
+list(LENGTH _specimen_include_keys _keys_len)
+list(LENGTH _specimen_include_values _values_len)
+if(NOT _keys_len EQUAL _values_len)
+  message(FATAL_ERROR "Mismatch between _specimen_include_keys and _specimen_include_values lists size.")
+endif()
 
 foreach(specimen IN LISTS FRONTEND_INTEGRATION_C_TESTS)
   set(_extra_includes -I${_frontend_c_tests_dir})
-  list(FIND _specimen_include_keys "${specimen}" _specimen_index)
-  if(NOT _specimen_index EQUAL -1)
-    list(GET _specimen_include_values ${_specimen_index} _specimen_includes)
-    list(APPEND _extra_includes ${_specimen_includes})
+  if(_keys_len GREATER 0)
+    math(EXPR _last_pair_index "${_keys_len} - 1")
+    foreach(_pair_index RANGE ${_last_pair_index})
+      list(GET _specimen_include_keys ${_pair_index} _specimen_key)
+      if("${specimen}" STREQUAL "${_specimen_key}")
+        list(GET _specimen_include_values ${_pair_index} _specimen_include)
+        list(APPEND _extra_includes ${_specimen_include})
+      endif()
+    endforeach()
   endif()
   add_test(
     NAME frontend_integration_c_${specimen}
