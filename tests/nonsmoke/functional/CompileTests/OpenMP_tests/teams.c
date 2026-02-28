@@ -11,5 +11,5 @@ int main()
     if (omp_get_team_num() == 0)
       n = omp_get_num_teams();
   }
-  Assert(res == (n * (n - 1)) / 2); // Sum of first n-1 natural numbers
+  assert(res == (n * (n - 1)) / 2); // Sum of first n-1 natural numbers
 }
