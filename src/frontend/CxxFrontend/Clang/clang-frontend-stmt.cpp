@@ -4110,6 +4110,9 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
 
     SageBuilder::popScopeStack();
     *node = if_init_wrapper;
+    // Avoid VisitStmt(if_stmt, node) here: it would overwrite the wrapper's
+    // explicit init-to-end source range with if_stmt->getSourceRange().
+    return res;
   }
 
   return VisitStmt(if_stmt, node) && res;
