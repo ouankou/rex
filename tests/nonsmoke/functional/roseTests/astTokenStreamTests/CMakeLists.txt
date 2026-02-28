@@ -1140,6 +1140,7 @@ foreach(specimen IN LISTS _linearization_specimens)
     NAME tokenLinearization_${_specimen_id}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
+      EXE=$<TARGET_FILE:testLinearization>
       SPECIMEN=${specimen}
       ${_linearization_conf}
       ${_target}
