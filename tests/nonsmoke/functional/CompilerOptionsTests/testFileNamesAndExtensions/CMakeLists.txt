@@ -37,6 +37,7 @@ foreach(specimen IN LISTS _specimen_c_and_cxx_names)
     NAME compiler_options_file_names_${specimen}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
+      TRANSLATOR=$<TARGET_FILE:translator>
       CC=${CMAKE_C_COMPILER}
       CXX=${CMAKE_CXX_COMPILER}
       SPECIMEN=${specimen}
@@ -50,6 +51,7 @@ foreach(specimen IN LISTS _specimen_only_cxx_names)
     NAME compiler_options_file_names_cxx_${specimen}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
+      TRANSLATOR=$<TARGET_FILE:translator>
       CC=
       CXX=${CMAKE_CXX_COMPILER}
       SPECIMEN=${specimen}
