@@ -1302,7 +1302,7 @@ add_test(
   NAME testTokenMapping
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND bash -c
-    "${_rth} CMD=\"\\\"$<TARGET_FILE:tokenStreamMapping>\\\" ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c\" ${_exit_status} test2003_12.c.mapping.passed && \"$<TARGET_FILE:tokenStreamMapping>\" -rose:C89 -rose:unparse_tokens -c ${_c_test_dir}/test2003_12.c"
+    "${_rth} CMD=\"\\\"\\\"$<TARGET_FILE:tokenStreamMapping>\\\" ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c\\\"\" ${_exit_status} test2003_12.c.mapping.passed && \"$<TARGET_FILE:tokenStreamMapping>\" -rose:C89 -rose:unparse_tokens -c ${_c_test_dir}/test2003_12.c"
 )
 set_tests_properties(testTokenMapping PROPERTIES DISABLED TRUE)
 
