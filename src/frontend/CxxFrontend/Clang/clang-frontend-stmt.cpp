@@ -3959,6 +3959,51 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
 
   // TODO if_stmt->getConditionVariable() appears when a variable is declared in
   // the condition...
+  //
+  // C++17 if-init statements (if (init; cond)) are represented by getInit().
+  // Since SgIfStmt does not directly model init-statements, lower this shape to
+  // an equivalent block:
+  //   { init; if (cond) ... }
+  clang::Stmt *clang_if_init_stmt = if_stmt->getInit();
+  SgBasicBlock *if_init_wrapper = nullptr;
+  if (clang_if_init_stmt != nullptr) {
+    if_init_wrapper = SageBuilder::buildBasicBlock_nfi();
+    if_init_wrapper->set_parent(SageBuilder::topScopeStack());
+    SageBuilder::pushScopeStack(if_init_wrapper);
+
+    SgNode *tmp_init = Traverse(clang_if_init_stmt);
+    SgStatement *sg_init_stmt = isSgStatement(tmp_init);
+    SgExpression *sg_init_expr = isSgExpression(tmp_init);
+    if (tmp_init == nullptr) {
+      MLOG_ERROR_CXX(MLOG_FRONTEND)
+          << "Runtime error: if-init translation returned nullptr."
+          << std::endl;
+      res = false;
+    } else if (sg_init_stmt == nullptr && sg_init_expr == nullptr) {
+      MLOG_ERROR_CXX(MLOG_FRONTEND)
+          << "Runtime error: if-init did not translate to SgStatement or "
+             "SgExpression ("
+          << tmp_init->class_name() << ")." << std::endl;
+      res = false;
+    } else if (sg_init_expr != nullptr) {
+      sg_init_stmt = SageBuilder::buildExprStatement(sg_init_expr);
+      if (sg_init_stmt == nullptr) {
+        MLOG_ERROR_CXX(MLOG_FRONTEND)
+            << "Runtime error: if-init buildExprStatement failed." << std::endl;
+        res = false;
+      }
+    }
+
+    if (sg_init_stmt == nullptr) {
+      sg_init_stmt = SageBuilder::buildNullStatement_nfi();
+      setCompilerGeneratedFileInfo(sg_init_stmt, true);
+    } else {
+      applySourceRange(sg_init_stmt, clang_if_init_stmt->getSourceRange());
+    }
+
+    sg_init_stmt->set_parent(if_init_wrapper);
+    if_init_wrapper->append_statement(sg_init_stmt);
+  }
 
   *node = SageBuilder::buildIfStmt_nfi(nullptr, nullptr, nullptr);
 
@@ -4049,6 +4094,25 @@ bool ClangToSageTranslator::VisitIfStmt(clang::IfStmt *if_stmt, SgNode **node) {
   if (else_stmt != nullptr) {
     else_stmt->set_parent(*node);
     isSgIfStmt(*node)->set_false_body(else_stmt);
+  }
+
+  if (if_init_wrapper != nullptr) {
+    SgStatement *if_statement = isSgStatement(*node);
+    ROSE_ASSERT(if_statement != nullptr);
+    if_statement->set_parent(if_init_wrapper);
+    if_init_wrapper->append_statement(if_statement);
+    if (clang_if_init_stmt->getBeginLoc().isValid() &&
+        if_stmt->getEndLoc().isValid()) {
+      applySourceRange(if_init_wrapper,
+                       clang::SourceRange(clang_if_init_stmt->getBeginLoc(),
+                                          if_stmt->getEndLoc()));
+    }
+
+    SageBuilder::popScopeStack();
+    *node = if_init_wrapper;
+    // Avoid VisitStmt(if_stmt, node) here: it would overwrite the wrapper's
+    // explicit init-to-end source range with if_stmt->getSourceRange().
+    return res;
   }
 
   return VisitStmt(if_stmt, node) && res;
@@ -6413,7 +6477,8 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
 
       bool use_operator_syntax = !is_member_callee;
       if (use_operator_syntax &&
-          (has_explicit_template_args || callee_has_template_args(callee))) {
+          (has_explicit_template_args || callee_has_template_args(callee)) &&
+          cxx_operator_call_expr->getOperator() != clang::OO_Spaceship) {
         use_operator_syntax = false;
       }
       funcCall->set_uses_operator_syntax(use_operator_syntax);
