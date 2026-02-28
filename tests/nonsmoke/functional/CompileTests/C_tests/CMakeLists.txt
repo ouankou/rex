@@ -3,6 +3,7 @@
 
 set(C_TEST_LANG_FLAGS)
 set(C_TEST_ROSE_FLAGS -std=c -w -rose:verbose 0)
+set(C_TEST_ROSE_FLAGS_GNU89 -std=gnu89 -w -rose:verbose 0)
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
 set(C_TEST_TRANSLATOR $<TARGET_FILE:testTranslator>)
 string(JOIN " " _c_tests_lang_flags_str ${C_TEST_LANG_FLAGS})
@@ -1037,13 +1038,54 @@ list(REMOVE_ITEM C_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
 set(ROSE_DISABLED_TESTCODES ${TESTCODES_REQUIRED_TO_PASS_DISABLED})
 set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
 
+# These legacy C tests rely on GNU89/C89 behavior (e.g., implicit function
+# declarations and GNU extensions). Keep default C mode for the rest of
+# C_tests and opt these files into GNU89 explicitly.
+set(C_TESTCODES_REQUIRE_GNU89
+  test2009_04.c
+  test2010_01.c
+  test2012_135.c
+  test2012_79.c
+  test2012_80.c
+  test2013_41.c
+  test2013_53.c
+  test2013_56.c
+  test2013_57.c
+  test2013_58.c
+  test2013_59.c
+  test2013_60.c
+  test2013_61.c
+  test2013_63.c
+  test2013_105.c
+  test2013_106.c
+  test2013_107.c
+  test2013_108.c
+  test2013_109.c
+  test2013_111.c
+  test2014_06.c
+  test2015_28.c
+  test2017_12.c
+  test2018_63.c
+)
+
 foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
+  if(file_to_test IN_LIST C_TESTCODES_REQUIRE_GNU89)
+    set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS_GNU89})
+  else()
+    set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
+  endif()
   compile_test(${file_to_test} "C_tests_failing")
 endforeach()
 
 foreach(file_to_test ${C_TESTCODES_TO_RUN})
+  if(file_to_test IN_LIST C_TESTCODES_REQUIRE_GNU89)
+    set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS_GNU89})
+  else()
+    set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
+  endif()
   compile_test(${file_to_test} "C_tests")
 endforeach()
+set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
 
 set(_c_tests_disable_m32 FALSE)
 if(CMAKE_C_COMPILER_ID MATCHES "Intel")
