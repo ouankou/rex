@@ -28,7 +28,7 @@ set(_frontend_extra_includes_test2005_168_c
 
 foreach(specimen IN LISTS FRONTEND_INTEGRATION_C_TESTS)
   set(_extra_includes -I${_frontend_c_tests_dir})
-  string(REGEX REPLACE "[^a-zA-Z0-9_]" "_" _specimen_key "${specimen}")
+  string(REPLACE "." "_" _specimen_key "${specimen}")
   if(_frontend_extra_includes_${_specimen_key})
     list(APPEND _extra_includes ${_frontend_extra_includes_${_specimen_key}})
   endif()
