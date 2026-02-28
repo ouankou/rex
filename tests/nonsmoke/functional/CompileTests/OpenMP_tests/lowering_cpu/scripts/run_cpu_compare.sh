@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 9 ]]; then
-  echo "usage: $0 <parseOmp> <compiler> <input.c> <workdir> <mode> <omp_header_dir> <omp_runtime_dir> <lowering_inc> <case_name>" >&2
+if [[ $# -ne 10 ]]; then
+  echo "usage: $0 <parseOmp> <compiler> <input.c> <workdir> <mode> <omp_header_dir> <omp_runtime_dir> <lowering_inc> <case_name> <openmp_version>" >&2
   exit 2
 fi
 
@@ -15,6 +15,7 @@ omp_header_dir="$6"
 omp_runtime_dir="$7"
 lowering_inc="$8"
 case_name="$9"
+openmp_version="${10}"
 
 if [[ "$mode" != "exact" && "$mode" != "sort" ]]; then
   echo "ERROR(${case_name}): invalid mode '$mode'" >&2
@@ -33,6 +34,7 @@ compile_flags=(
   -fopenmp=libiomp5
   -O0
   -g
+  "-D_OPENMP=${openmp_version}"
   "-I${omp_header_dir}"
   "-L${omp_runtime_dir}"
   "-Wl,-rpath,${omp_runtime_dir}"
