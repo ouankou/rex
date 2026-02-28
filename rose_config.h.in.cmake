@@ -51,9 +51,6 @@
 /* Define if Capstone is available. */
 #cmakedefine ROSE_HAVE_CAPSTONE
 
-/* Define if Cereal is available. */
-#cmakedefine ROSE_HAVE_CEREAL
-
 /* Define if libreadline is available. */
 #cmakedefine ROSE_HAVE_LIBREADLINE
 
@@ -502,9 +499,6 @@
 
 /* The size of `void *', as computed by sizeof. */
 #define SIZEOF_VOID_P ${SIZEOF_VOID_P}
-
-/* Define to 1 if you have the ANSI C header files. */
-#cmakedefine STDC_HEADERS 1
 
 /* Define to 1 if you can safely include both <sys/time.h> and <time.h>. */
 #cmakedefine TIME_WITH_SYS_TIME 1

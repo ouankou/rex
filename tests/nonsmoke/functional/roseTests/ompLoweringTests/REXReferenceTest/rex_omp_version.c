@@ -13,30 +13,42 @@ int argc;
 char **argv;
 {
   int status = 0;
-  switch(201511){
-    case 199810:
-    printf("OpenMP version is 1.0, released on %d\n",201511);
+  switch (202411) {
+  case 199810:
+    printf("OpenMP version is 1.0, released on %d\n", 202411);
     break; 
     case 200203:
-    printf("OpenMP version is 2.0, released on %d\n",201511);
-    break; 
+      printf("OpenMP version is 2.0, released on %d\n", 202411);
+      break; 
     case 200505:
-    printf("OpenMP version is 2.5, released on %d\n",201511);
-    break; 
+      printf("OpenMP version is 2.5, released on %d\n", 202411);
+      break; 
     case 200805:
-    printf("OpenMP version is 3.0, released on %d\n",201511);
-    break; 
+      printf("OpenMP version is 3.0, released on %d\n", 202411);
+      break; 
     case 201107:
-    printf("OpenMP version is 3.1, released on %d\n",201511);
-    break; 
+      printf("OpenMP version is 3.1, released on %d\n", 202411);
+      break; 
     case 201307:
-    printf("OpenMP version is 4.0, released on %d\n",201511);
-    break; 
+      printf("OpenMP version is 4.0, released on %d\n", 202411);
+      break; 
     case 201511:
-    printf("OpenMP version is 4.5, released on %d\n",201511);
-    break; 
+      printf("OpenMP version is 4.5, released on %d\n", 202411);
+      break;
+    case 201811:
+      printf("OpenMP version is 5.0, released on %d\n", 202411);
+      break;
+    case 202011:
+      printf("OpenMP version is 5.1, released on %d\n", 202411);
+      break;
+    case 202111:
+      printf("OpenMP version is 5.2, released on %d\n", 202411);
+      break;
+    case 202411:
+      printf("OpenMP version is 6.0, released on %d\n", 202411);
+      break; 
     default:
-    printf("OpenMP version is not recognized, released on %d\n",201511);
-  }
+      printf("OpenMP version is not recognized, released on %d\n", 202411);
+    }
   return 0;
 }

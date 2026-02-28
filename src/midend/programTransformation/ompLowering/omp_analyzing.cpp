@@ -76,6 +76,12 @@ bool shouldSkipImplicitDataSharingVar(const SgInitializedName *init_var) {
   return name == "__PRETTY_FUNCTION__" || name == "__func__" ||
          name == "__FUNCTION__";
 }
+
+bool scheduleKindUsesImplicitChunkOne(
+    SgOmpClause::omp_schedule_kind_enum schedule_kind) {
+  return schedule_kind == SgOmpClause::e_omp_schedule_kind_dynamic ||
+         schedule_kind == SgOmpClause::e_omp_schedule_kind_guided;
+}
 } // namespace
 
 Rose_STL_Container<SgNode *>
@@ -110,7 +116,6 @@ void analyzeOmpMetadirective(SgNode *node) {
   cutPreprocessingInfo(target, PreprocessingInfo::after, save_buf2);
 
   cutPreprocessingInfo(target, PreprocessingInfo::inside, save_buf_inside);
-  std::cout << "Metadirective IR is caught.\n";
 
   SgIfStmt *root_if_statement = NULL;
   SgStatement *variant_directive;
@@ -166,40 +171,38 @@ void analyzeOmpMetadirective(SgNode *node) {
 
 void normalizeOmpLoop(SgStatement *node) {
   ROSE_ASSERT(node != NULL);
-  SgOmpForStatement *target = isSgOmpForStatement(node);
+  SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
+  switch (node->variantT()) {
+  case V_SgOmpForStatement:
+  case V_SgOmpDoStatement:
+  case V_SgOmpTargetParallelForStatement:
+  case V_SgOmpTargetTeamsDistributeParallelForStatement:
+    break;
+  default:
+    return;
+  }
 
   SgScopeStatement *p_scope = target->get_scope();
   ROSE_ASSERT(p_scope != NULL);
-  SgForStatement *loop = isSgForStatement(target->get_body());
+  SgStatement *loop = target->get_body();
   ROSE_ASSERT(loop != NULL);
+  ROSE_ASSERT(isSgForStatement(loop) != NULL || isSgFortranDo(loop) != NULL);
 
   Rose_STL_Container<SgOmpClause *> clauses =
       getClause(target, V_SgOmpScheduleClause);
   if (clauses.size() != 0) {
+    ROSE_ASSERT(clauses.size() == 1);
     SgOmpScheduleClause *s_clause = isSgOmpScheduleClause(clauses[0]);
     ROSE_ASSERT(s_clause);
     SgOmpClause::omp_schedule_kind_enum sg_kind = s_clause->get_kind();
-    SgExpression *orig_chunk_size = s_clause->get_chunk_size();
-    if (!orig_chunk_size) {
-      if (sg_kind == SgOmpClause::e_omp_schedule_kind_dynamic ||
-          sg_kind == SgOmpClause::e_omp_schedule_kind_guided) {
-        printf("A default chunk size is added.\n");
-        SgExpression *chunk_size = buildIntVal(1);
-        s_clause->set_chunk_size(chunk_size);
-      }
-
-      printf("A default schedule modifier is added.\n");
-      SgOmpClause::omp_schedule_modifier_enum sg_modifier1 =
-          s_clause->get_modifier1();
-      if (sg_modifier1 == SgOmpClause::e_omp_schedule_modifier_unspecified) {
-        sg_modifier1 = SgOmpClause::e_omp_schedule_modifier_nonmonotonic;
-      }
-      s_clause->set_modifier1(sg_modifier1);
+    if (!s_clause->get_chunk_size() &&
+        scheduleKindUsesImplicitChunkOne(sg_kind)) {
+      s_clause->set_chunk_size(buildIntVal(1));
     }
   } else {
     SgOmpClause::omp_schedule_modifier_enum sg_modifier1 =
-        SgOmpClause::e_omp_schedule_modifier_nonmonotonic;
+        SgOmpClause::e_omp_schedule_modifier_unspecified;
     SgOmpClause::omp_schedule_modifier_enum sg_modifier2 =
         SgOmpClause::e_omp_schedule_modifier_unspecified;
     SgOmpClause::omp_schedule_kind_enum sg_kind =
@@ -212,7 +215,6 @@ void normalizeOmpLoop(SgStatement *node) {
     setOneSourcePositionForTransformation(sg_clause);
     target->get_clauses().push_back(sg_clause);
     sg_clause->set_parent(target);
-    printf("A default schedule clause is added.\n");
   }
 }
 
@@ -994,8 +996,12 @@ void analyze_omp(SgSourceFile *file) {
   clause_vv.push_back(V_SgOmpSharedClause);
   normalizeOmpMapVariables(file, clause_vv, SgOmpClause::e_omp_map_to);
 
+  VariantVector loop_directive_vv = VariantVector(V_SgOmpForStatement);
+  loop_directive_vv.push_back(V_SgOmpDoStatement);
+  loop_directive_vv.push_back(V_SgOmpTargetParallelForStatement);
+  loop_directive_vv.push_back(V_SgOmpTargetTeamsDistributeParallelForStatement);
   Rose_STL_Container<SgNode *> node_list =
-      NodeQuery::querySubTree(file, V_SgOmpForStatement);
+      NodeQuery::querySubTree(file, loop_directive_vv);
   for (node_list_iterator = node_list.begin();
        node_list_iterator != node_list.end(); node_list_iterator++) {
     SgStatement *node = isSgStatement(*node_list_iterator);

@@ -199,29 +199,6 @@ CHECK_TYPE_SIZE(short          SIZEOF_SHORT)
 CHECK_TYPE_SIZE(int            SIZEOF_INT)
 CHECK_TYPE_SIZE(long           SIZEOF_LONG)
 
-if(NOT CMAKE_REQUIRED_QUIET)
-  message(STATUS "Checking whether system has ANSI C header files")
-endif()
-
-check_include_files("stdlib.h;stdarg.h;string.h;float.h" StandardHeadersExist)
-if(StandardHeadersExist)
-  check_prototype_exists(memchr string.h memchrExists)
-  if(memchrExists)
-    check_prototype_exists(free stdlib.h freeExists)
-    if(freeExists)
-#      include(TestForHighBitCharacters)
-#      if(CMAKE_HIGH_BIT_CHARACTERS)
-        message(STATUS "ANSI C header files - found")
-        set(STDC_HEADERS 1 CACHE INTERNAL "System has ANSI C header files")
-#      endif(CMAKE_HIGH_BIT_CHARACTERS)
-    endif(freeExists)
- endif(memchrExists)
-endif(StandardHeadersExist)
-if(NOT STDC_HEADERS)
-  message(STATUS "ANSI C header files - not found")
-  set(STDC_HEADERS 0 CACHE INTERNAL "System has ANSI C header files")
-endif(NOT STDC_HEADERS)
-
 # Define to 1 if you can safely include both <sys/time.h> and <time.h>
 if(HAVE_SYS_TIME_H)
   check_include_files("sys/time.h;time.h" TIME_WITH_SYS_TIME)
@@ -289,4 +266,3 @@ check_cxx_source_compiles(
 	int main(){return 0;}
 	"
 SIZEOF_WCHAR_T_IS_4)
-
