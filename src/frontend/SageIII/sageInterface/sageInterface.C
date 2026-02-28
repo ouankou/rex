@@ -554,8 +554,6 @@ bool SageInterface::hasTemplateSyntax(const SgName &name) {
   // it's associated mutex header file. See Cxx11_tests/test2016_32.C for an
   // example that demonstrates this problem.
   if (nameString == "<unnamed>") {
-    printf("In SageInterface::hasTemplateSyntax(): Identified case of name == "
-           "<unnamed> \n");
     return false;
   }
 
