@@ -5,8 +5,9 @@ set(C_TEST_LANG_FLAGS)
 set(C_TEST_ROSE_FLAGS -std=c -w -rose:verbose 0)
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
 # test2012_32.c is an autoconf-style probe using implicit-int main(),
-# which is valid in C89 and intentionally exercised as such.
-set(ROSE_C89_TESTCODES
+# which is exercised under the GNU89 dialect (C89 plus GNU extensions),
+# not strict ISO C89 (e.g., it uses // comments that strict C89 forbids).
+set(ROSE_GNU89_TESTCODES
   test2012_32.c
 )
 set(C_TEST_TRANSLATOR $<TARGET_FILE:testTranslator>)
@@ -1366,4 +1367,4 @@ add_test(
 )
 set_tests_properties(nonsmoke_functional_CompileTests_C_tests_check-pthread.passed PROPERTIES DEPENDS C_tests_check_pthread )
 
-unset(ROSE_C89_TESTCODES)
+unset(ROSE_GNU89_TESTCODES)
