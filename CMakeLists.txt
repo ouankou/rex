@@ -1118,6 +1118,8 @@ if(ENABLE-C)
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET)
 
+  set(_rose_llvm_openmp_runtime_names
+    libiomp5.so libomp.so libomp.so.5 libomp5.so libiomp5.a libomp.a)
   set(_rose_llvm_openmp_runtime_hints "")
   if(WITH-LLVM-OMP-RUNTIME-LIBRARY)
     file(TO_CMAKE_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}"
@@ -1125,6 +1127,26 @@ if(ENABLE-C)
     list(APPEND _rose_llvm_openmp_runtime_hints
       "${ROSE_LLVM_OPENMP_RUNTIME_DIR}")
   endif()
+  foreach(_rose_omp_probe_name IN LISTS _rose_llvm_openmp_runtime_names)
+    execute_process(
+      COMMAND "${_rose_llvm_openmp_driver}" -print-file-name=${_rose_omp_probe_name}
+      OUTPUT_VARIABLE _rose_omp_probe_path
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+    if(_rose_omp_probe_path)
+      file(TO_CMAKE_PATH "${_rose_omp_probe_path}" _rose_omp_probe_path_norm)
+      if(IS_ABSOLUTE "${_rose_omp_probe_path_norm}" AND
+         EXISTS "${_rose_omp_probe_path_norm}")
+        get_filename_component(_rose_omp_probe_dir
+          "${_rose_omp_probe_path_norm}" DIRECTORY)
+        list(APPEND _rose_llvm_openmp_runtime_hints
+          "${_rose_omp_probe_dir}")
+        unset(_rose_omp_probe_dir)
+      endif()
+      unset(_rose_omp_probe_path_norm)
+    endif()
+    unset(_rose_omp_probe_path)
+  endforeach()
   if(LLVM_LIBRARY_DIRS)
     list(APPEND _rose_llvm_openmp_runtime_hints ${LLVM_LIBRARY_DIRS})
   endif()
@@ -1135,6 +1157,14 @@ if(ENABLE-C)
       "${_rose_llvm_openmp_driver_dir}/../lib"
       "${_rose_llvm_openmp_driver_dir}/../lib64")
   endif()
+  foreach(_rose_implicit_libdir IN LISTS
+    CMAKE_C_IMPLICIT_LINK_DIRECTORIES
+    CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES
+    CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES)
+    if(_rose_implicit_libdir)
+      list(APPEND _rose_llvm_openmp_runtime_hints "${_rose_implicit_libdir}")
+    endif()
+  endforeach()
   if(_rose_clang_resource_dir)
     get_filename_component(_rose_clang_lib_dir
       "${_rose_clang_resource_dir}" DIRECTORY)
@@ -1155,8 +1185,7 @@ if(ENABLE-C)
   set(_rose_mismatched_openmp_runtime_library "")
   set(_rose_mismatched_openmp_runtime_major "")
   foreach(_rose_omp_runtime_dir IN LISTS _rose_llvm_openmp_runtime_hints)
-    foreach(_rose_omp_lib_name
-      libiomp5.so libomp.so libomp.so.5 libiomp5.a libomp.a)
+    foreach(_rose_omp_lib_name IN LISTS _rose_llvm_openmp_runtime_names)
       if(EXISTS "${_rose_omp_runtime_dir}/${_rose_omp_lib_name}")
         file(REAL_PATH "${_rose_omp_runtime_dir}/${_rose_omp_lib_name}"
           _rose_runtime_candidate)
