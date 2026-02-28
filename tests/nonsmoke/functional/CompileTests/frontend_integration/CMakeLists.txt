@@ -29,9 +29,8 @@ set(_frontend_extra_includes_test2005_168_c
 foreach(specimen IN LISTS FRONTEND_INTEGRATION_C_TESTS)
   set(_extra_includes -I${_frontend_c_tests_dir})
   string(REPLACE "." "_" _specimen_key "${specimen}")
-  set(_specimen_extra_includes "_frontend_extra_includes_${_specimen_key}")
-  if(DEFINED ${_specimen_extra_includes})
-    list(APPEND _extra_includes ${${_specimen_extra_includes}})
+  if(DEFINED _frontend_extra_includes_${_specimen_key})
+    list(APPEND _extra_includes ${_frontend_extra_includes_${_specimen_key}})
   endif()
   add_test(
     NAME frontend_integration_c_${specimen}
