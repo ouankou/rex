@@ -1,6 +1,9 @@
 add_executable(parseOmp parseOmp.C)
 target_link_libraries(parseOmp ROSE_DLL ${link_with_libraries})
 
+add_executable(checkOmpAnalyzing checkOmpAnalyzing.C)
+target_link_libraries(checkOmpAnalyzing ROSE_DLL ${link_with_libraries})
+
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; OpenMP_tests require bash")
@@ -96,6 +99,8 @@ set(ROSE_CXX_FLAGS -rose:openmp:ast_only -w -rose:verbose 0)
 set(_omp_test_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_test_output_dir})
 
+set(ROSE_OMP_ANALYZING_FLAGS -rose:openmp:analyzing -rose:skipfinalCompileStep -w -rose:verbose 0)
+
 foreach(file_to_test ${TESTCODES})
   if(file_to_test MATCHES "\\.c$")
     set(_rose_flags ${ROSE_C_FLAGS})
@@ -180,6 +185,46 @@ endforeach()
 add_omp_output_diff_tests(bonds-2.c OMPTEST_bonds-2 OMPTEST)
 
 add_omp_output_diff_tests(macroIds.c OMPTEST_macroIds OMPTEST)
+
+# Focused OpenMP analyzer regressions.
+add_test(
+  NAME OMPANALYZE_schedule_default_for
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND checkOmpAnalyzing
+          --rex-check=schedule-default-for
+          ${ROSE_OMP_ANALYZING_FLAGS}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/ompfor-default.c)
+set_tests_properties(OMPANALYZE_schedule_default_for PROPERTIES LABELS OMPANALYZE)
+
+add_test(
+  NAME OMPANALYZE_schedule_dynamic_for
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND checkOmpAnalyzing
+          --rex-check=schedule-dynamic-for
+          ${ROSE_OMP_ANALYZING_FLAGS}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/ompfor4.c)
+set_tests_properties(OMPANALYZE_schedule_dynamic_for PROPERTIES LABELS OMPANALYZE)
+
+if(ENABLE-FORTRAN)
+  add_test(
+    NAME OMPANALYZE_schedule_default_do
+    WORKING_DIRECTORY ${_omp_test_output_dir}
+    COMMAND checkOmpAnalyzing
+            --rex-check=schedule-default-do
+            ${ROSE_OMP_ANALYZING_FLAGS}
+            -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII
+            -c ${CMAKE_CURRENT_SOURCE_DIR}/fortran/ompdo-default.f)
+  set_tests_properties(OMPANALYZE_schedule_default_do PROPERTIES LABELS OMPANALYZE)
+endif()
+
+add_test(
+  NAME OMPANALYZE_target_implicit_map
+  WORKING_DIRECTORY ${_omp_test_output_dir}
+  COMMAND checkOmpAnalyzing
+          --rex-check=target-implicit-map
+          ${ROSE_OMP_ANALYZING_FLAGS}
+          -c ${CMAKE_CURRENT_SOURCE_DIR}/analyzing_target_implicit_map.c)
+set_tests_properties(OMPANALYZE_target_implicit_map PROPERTIES LABELS OMPANALYZE)
 
 # Rodinia-derived OpenMP lowering regressions (separate from AST output refs).
 add_subdirectory(lowering_rodinia)

@@ -140,7 +140,8 @@ function(add_omp_lowering_cpu_compare_test input_file mode)
             "${_omp_header_stage_dir}"
             "${_iomp_dir}"
             "${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering"
-            "${input_file}")
+            "${input_file}"
+            "${ROSE_OPENMP_VERSION}")
 
   set_tests_properties(
     OMPLOWERING_CPU_${_name}

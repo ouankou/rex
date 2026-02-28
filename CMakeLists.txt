@@ -205,6 +205,20 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Distro LLVM packages often enable optional LibEdit/CURL probes in
+# LLVMConfig.cmake. Disable these optional dependency lookups by default to
+# avoid unnecessary configure noise for REX consumers. Users can override with:
+#   -DCMAKE_DISABLE_FIND_PACKAGE_LibEdit=OFF
+#   -DCMAKE_DISABLE_FIND_PACKAGE_CURL=OFF
+if(NOT DEFINED CMAKE_DISABLE_FIND_PACKAGE_LibEdit)
+  set(CMAKE_DISABLE_FIND_PACKAGE_LibEdit ON CACHE BOOL
+    "Disable optional LibEdit package lookup during CMake configure")
+endif()
+if(NOT DEFINED CMAKE_DISABLE_FIND_PACKAGE_CURL)
+  set(CMAKE_DISABLE_FIND_PACKAGE_CURL ON CACHE BOOL
+    "Disable optional CURL package lookup during CMake configure")
+endif()
+
 option(BUILD_SHARED_LIBS "Build all libraries shared" FALSE)
 
 option(use-lib64-paths "Should ROSE be installed in lib64 paths? (Some Linux distributes expect this)" OFF)
@@ -223,7 +237,8 @@ set(ROSE_TOP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
 # Keep OpenMP version in CMake as the single source of truth and use it
 # to generate both C++ and Fortran OpenMP interfaces.
-set(ROSE_OPENMP_VERSION 202011 CACHE INTERNAL
+# OpenMP 6.0 corresponds to _OPENMP=202411.
+set(ROSE_OPENMP_VERSION 202411 CACHE INTERNAL
   "OpenMP version used by ROSE-generated OpenMP interfaces")
 message(STATUS "ROSE OpenMP version: ${ROSE_OPENMP_VERSION}")
 
@@ -365,6 +380,13 @@ if(ENABLE-C)
   set(ROSE_BUILD_C_LANGUAGE_SUPPORT 1)
 endif()
 
+# Honor LLVM_HOME early so both C and Fortran feature detection resolve the
+# same LLVM installation.
+if(DEFINED ENV{LLVM_HOME})
+  set(LLVM_ROOT "$ENV{LLVM_HOME}")
+  set(Clang_ROOT "$ENV{LLVM_HOME}")
+endif()
+
 # CUDA
 option(ENABLE-CUDA "Enable CUDA analysis" OFF) # OFF because lack of CUDA is not handled properly
 if(ENABLE-CUDA)
@@ -387,7 +409,13 @@ if(ENABLE-FORTRAN AND NOT ENABLE-FORTRAN-FLANG)
 endif()
 
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
-  if(NOT LLVM_FOUND)
+  # Import LLVM exactly once. ClangConfig imports the matching LLVMConfig, so
+  # when C/C++ support is enabled we load Clang and reuse LLVM from there.
+  if(ENABLE-C)
+    if(NOT Clang_FOUND)
+      find_package(Clang REQUIRED CONFIG)
+    endif()
+  elseif(NOT LLVM_FOUND)
     find_package(LLVM REQUIRED CONFIG)
   endif()
 
@@ -546,15 +574,10 @@ if(ENABLE-C)
 # Set ROSE_USE_CLANG_FRONTEND for backward compatibility with existing code
 set(ROSE_USE_CLANG_FRONTEND 1)
 
-# Honor LLVM_HOME if provided for consistent LLVM/Clang discovery.
-if(DEFINED ENV{LLVM_HOME})
-  set(LLVM_ROOT "$ENV{LLVM_HOME}")
-  set(Clang_ROOT "$ENV{LLVM_HOME}")
-endif()
-
 # Find LLVM/Clang (required for C/C++ support)
-find_package(LLVM REQUIRED CONFIG)
-find_package(Clang REQUIRED CONFIG)
+if(NOT Clang_FOUND)
+  find_package(Clang REQUIRED CONFIG)
+endif()
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -764,16 +787,6 @@ include(ConfigureChecks)
 set(CMAKE_REQUIRED_QUIET FALSE)
 
 find_package(Perl REQUIRED)
-
-# Optional Cereal serialization support (header-only)
-set(CEREAL_ROOT "" CACHE PATH "Cereal installation directory (empty to auto-detect, 'no' to disable)")
-include(FindCereal)
-find_cereal()
-if(CEREAL_FOUND)
-  set(ROSE_HAVE_CEREAL 1)
-else()
-  unset(ROSE_HAVE_CEREAL)
-endif()
 
 ########################################################################################################################
 # Miscellaneous user-selectable features
@@ -1082,63 +1095,167 @@ if(ENABLE-C)
     message(FATAL_ERROR
       "Unable to locate a Clang executable to resolve LLVM OpenMP paths.")
   endif()
-
-  if(WITH-LLVM-OMP-RUNTIME-LIBRARY)
-    file(TO_CMAKE_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}" ROSE_LLVM_OPENMP_RUNTIME_DIR)
-    foreach(_rose_omp_lib_name libiomp5.so libiomp5.a libomp.so libomp.a)
-      if(EXISTS "${ROSE_LLVM_OPENMP_RUNTIME_DIR}/${_rose_omp_lib_name}")
-        set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY
-          "${ROSE_LLVM_OPENMP_RUNTIME_DIR}/${_rose_omp_lib_name}")
-        break()
-      endif()
-    endforeach()
-    unset(_rose_omp_lib_name)
-  else()
-    execute_process(
-      COMMAND "${_rose_llvm_openmp_driver}" -fopenmp=libiomp5 -print-file-name=libiomp5.so
-      OUTPUT_VARIABLE _rose_iomp_lib
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET)
-    if(_rose_iomp_lib AND NOT _rose_iomp_lib STREQUAL "libiomp5.so" AND EXISTS "${_rose_iomp_lib}")
-      set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "${_rose_iomp_lib}")
-    else()
-      execute_process(
-        COMMAND "${_rose_llvm_openmp_driver}" -fopenmp=libiomp5 -print-file-name=libomp.so
-        OUTPUT_VARIABLE _rose_iomp_lib
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET)
-      if(_rose_iomp_lib AND NOT _rose_iomp_lib STREQUAL "libomp.so" AND EXISTS "${_rose_iomp_lib}")
-        set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "${_rose_iomp_lib}")
-      endif()
-    endif()
-    unset(_rose_iomp_lib)
-    if(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY)
-      get_filename_component(ROSE_LLVM_OPENMP_RUNTIME_DIR
-        "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}" DIRECTORY)
-      set(WITH-LLVM-OMP-RUNTIME-LIBRARY "${ROSE_LLVM_OPENMP_RUNTIME_DIR}" CACHE PATH
-        "LLVM OpenMP runtime library directory" FORCE)
+  execute_process(
+    COMMAND "${_rose_llvm_openmp_driver}" -dumpversion
+    OUTPUT_VARIABLE _rose_llvm_openmp_driver_version
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+  if(_rose_llvm_openmp_driver_version)
+    string(REGEX MATCH "^[0-9]+" _rose_llvm_openmp_driver_major
+      "${_rose_llvm_openmp_driver_version}")
+    if(_rose_llvm_openmp_driver_major AND
+       NOT _rose_llvm_openmp_driver_major STREQUAL "${CLANG_VERSION_MAJOR}")
+      message(FATAL_ERROR
+        "OpenMP path resolution driver ${_rose_llvm_openmp_driver} reports "
+        "major version ${_rose_llvm_openmp_driver_major}, but REX is "
+        "configured for LLVM/Clang ${CLANG_VERSION_MAJOR}.")
     endif()
   endif()
-
-  if(NOT ROSE_LLVM_OPENMP_RUNTIME_DIR OR
-     NOT ROSE_LLVM_OPENMP_RUNTIME_LIBRARY OR
-     NOT EXISTS "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
-    message(FATAL_ERROR
-      "LLVM OpenMP runtime library (libiomp5/libomp) not found. "
-      "Install LLVM OpenMP runtime for ${_rose_llvm_openmp_driver} or set "
-      "WITH-LLVM-OMP-RUNTIME-LIBRARY.")
-  endif()
-  file(REAL_PATH "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}" ROSE_LLVM_OPENMP_RUNTIME_LIBRARY)
-  get_filename_component(ROSE_LLVM_OPENMP_RUNTIME_DIR
-    "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}" DIRECTORY)
-  set(WITH-LLVM-OMP-RUNTIME-LIBRARY "${ROSE_LLVM_OPENMP_RUNTIME_DIR}" CACHE PATH
-    "LLVM OpenMP runtime library directory" FORCE)
 
   execute_process(
     COMMAND "${_rose_llvm_openmp_driver}" --print-resource-dir
     OUTPUT_VARIABLE _rose_clang_resource_dir
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET)
+
+  set(_rose_llvm_openmp_runtime_hints "")
+  if(WITH-LLVM-OMP-RUNTIME-LIBRARY)
+    file(TO_CMAKE_PATH "${WITH-LLVM-OMP-RUNTIME-LIBRARY}"
+      ROSE_LLVM_OPENMP_RUNTIME_DIR)
+    list(APPEND _rose_llvm_openmp_runtime_hints
+      "${ROSE_LLVM_OPENMP_RUNTIME_DIR}")
+  endif()
+  if(LLVM_LIBRARY_DIRS)
+    list(APPEND _rose_llvm_openmp_runtime_hints ${LLVM_LIBRARY_DIRS})
+  endif()
+  get_filename_component(_rose_llvm_openmp_driver_dir
+    "${_rose_llvm_openmp_driver}" DIRECTORY)
+  if(_rose_llvm_openmp_driver_dir)
+    list(APPEND _rose_llvm_openmp_runtime_hints
+      "${_rose_llvm_openmp_driver_dir}/../lib"
+      "${_rose_llvm_openmp_driver_dir}/../lib64")
+  endif()
+  if(_rose_clang_resource_dir)
+    get_filename_component(_rose_clang_lib_dir
+      "${_rose_clang_resource_dir}" DIRECTORY)
+    get_filename_component(_rose_clang_lib_dir
+      "${_rose_clang_lib_dir}" DIRECTORY)
+    list(APPEND _rose_llvm_openmp_runtime_hints "${_rose_clang_lib_dir}")
+    unset(_rose_clang_lib_dir)
+  endif()
+  if(CMAKE_LIBRARY_ARCHITECTURE)
+    foreach(_rose_libdir IN LISTS _rose_llvm_openmp_runtime_hints)
+      list(APPEND _rose_llvm_openmp_runtime_hints
+        "${_rose_libdir}/${CMAKE_LIBRARY_ARCHITECTURE}")
+    endforeach()
+  endif()
+  list(REMOVE_DUPLICATES _rose_llvm_openmp_runtime_hints)
+
+  set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "")
+  set(_rose_mismatched_openmp_runtime_library "")
+  set(_rose_mismatched_openmp_runtime_major "")
+  foreach(_rose_omp_runtime_dir IN LISTS _rose_llvm_openmp_runtime_hints)
+    foreach(_rose_omp_lib_name
+      libiomp5.so libomp.so libomp.so.5 libiomp5.a libomp.a)
+      if(EXISTS "${_rose_omp_runtime_dir}/${_rose_omp_lib_name}")
+        file(REAL_PATH "${_rose_omp_runtime_dir}/${_rose_omp_lib_name}"
+          _rose_runtime_candidate)
+        set(_rose_runtime_candidate_major "")
+        if(CLANG_VERSION_MAJOR)
+          string(REGEX MATCH "/llvm-([0-9]+)/" _rose_runtime_candidate_match
+            "${_rose_runtime_candidate}")
+          if(_rose_runtime_candidate_match)
+            set(_rose_runtime_candidate_major "${CMAKE_MATCH_1}")
+          endif()
+        endif()
+        if(_rose_runtime_candidate_major AND
+           NOT _rose_runtime_candidate_major STREQUAL "${CLANG_VERSION_MAJOR}")
+          if(NOT _rose_mismatched_openmp_runtime_library)
+            set(_rose_mismatched_openmp_runtime_library
+              "${_rose_runtime_candidate}")
+            set(_rose_mismatched_openmp_runtime_major
+              "${_rose_runtime_candidate_major}")
+          endif()
+          unset(_rose_runtime_candidate)
+          unset(_rose_runtime_candidate_major)
+          unset(_rose_runtime_candidate_match)
+          continue()
+        endif()
+        set(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY "${_rose_runtime_candidate}")
+        unset(_rose_runtime_candidate)
+        unset(_rose_runtime_candidate_major)
+        unset(_rose_runtime_candidate_match)
+        break()
+      endif()
+    endforeach()
+    if(ROSE_LLVM_OPENMP_RUNTIME_LIBRARY)
+      break()
+    endif()
+  endforeach()
+  if(NOT ROSE_LLVM_OPENMP_RUNTIME_LIBRARY)
+    if(_rose_mismatched_openmp_runtime_library)
+      message(FATAL_ERROR
+        "Found LLVM OpenMP runtime from llvm-${_rose_mismatched_openmp_runtime_major}: "
+        "${_rose_mismatched_openmp_runtime_library}, but REX is configured for "
+        "LLVM/Clang ${CLANG_VERSION_MAJOR}. Install the matching LLVM OpenMP "
+        "runtime (e.g., libomp-${CLANG_VERSION_MAJOR}-dev), or set "
+        "WITH-LLVM-OMP-RUNTIME-LIBRARY.")
+    endif()
+    if(_rose_llvm_openmp_runtime_hints)
+      string(REPLACE ";" "\n  " _rose_openmp_hint_lines
+        "${_rose_llvm_openmp_runtime_hints}")
+    else()
+      set(_rose_openmp_hint_lines "<none>")
+    endif()
+    message(FATAL_ERROR
+      "LLVM OpenMP runtime library (libiomp5/libomp) not found for LLVM/Clang "
+      "${CLANG_VERSION_MAJOR}. Searched:\n  ${_rose_openmp_hint_lines}\n"
+      "Install libomp-${CLANG_VERSION_MAJOR}-dev (or equivalent), or set "
+      "WITH-LLVM-OMP-RUNTIME-LIBRARY.")
+  endif()
+
+  unset(_rose_mismatched_openmp_runtime_library)
+  unset(_rose_mismatched_openmp_runtime_major)
+  get_filename_component(ROSE_LLVM_OPENMP_RUNTIME_DIR
+    "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}" DIRECTORY)
+  set(_rose_runtime_build_line "")
+  if(CLANG_VERSION_MAJOR)
+    set(_rose_runtime_llvm_major "")
+    string(REGEX MATCH "/llvm-([0-9]+)/" _rose_runtime_llvm_match
+      "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
+    if(_rose_runtime_llvm_match)
+      set(_rose_runtime_llvm_major "${CMAKE_MATCH_1}")
+    endif()
+    if(NOT _rose_runtime_llvm_major)
+      find_program(_rose_strings_exec NAMES strings)
+      if(_rose_strings_exec)
+        execute_process(
+          COMMAND "${_rose_strings_exec}" -a "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}"
+          COMMAND grep -m1 "LLVM OMP build compiler: Clang "
+          OUTPUT_VARIABLE _rose_runtime_build_line
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+          ERROR_QUIET)
+        if(_rose_runtime_build_line)
+          string(REGEX MATCH "Clang ([0-9]+)" _rose_runtime_build_match
+            "${_rose_runtime_build_line}")
+          if(_rose_runtime_build_match)
+            set(_rose_runtime_llvm_major "${CMAKE_MATCH_1}")
+          endif()
+        endif()
+      endif()
+    endif()
+    if(_rose_runtime_llvm_major AND
+       NOT _rose_runtime_llvm_major STREQUAL "${CLANG_VERSION_MAJOR}")
+      message(FATAL_ERROR
+        "Resolved LLVM OpenMP runtime from llvm-${_rose_runtime_llvm_major}: "
+        "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}, but REX is configured for "
+        "LLVM/Clang ${CLANG_VERSION_MAJOR}. Install the matching LLVM OpenMP "
+        "runtime or set WITH-LLVM-OMP-RUNTIME-LIBRARY.")
+    endif()
+  endif()
+  set(WITH-LLVM-OMP-RUNTIME-LIBRARY "${ROSE_LLVM_OPENMP_RUNTIME_DIR}" CACHE PATH
+    "LLVM OpenMP runtime library directory" FORCE)
+
   if(_rose_clang_resource_dir AND EXISTS "${_rose_clang_resource_dir}/include/omp.h")
     set(ROSE_LLVM_OPENMP_INCLUDE_DIR "${_rose_clang_resource_dir}/include")
   endif()
@@ -1206,11 +1323,33 @@ if(ENABLE-C)
     "LLVM OpenMP runtime library selected by REX")
   set(ROSE_LLVM_OPENMP_INCLUDE_DIR "${ROSE_LLVM_OPENMP_INCLUDE_DIR}" CACHE INTERNAL
     "Directory containing the LLVM OpenMP header used by REX")
-  message(STATUS "Using LLVM OpenMP runtime: ${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
+  if(_rose_runtime_build_line)
+    message(STATUS "Using LLVM OpenMP runtime: ${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY} (${_rose_runtime_build_line})")
+  else()
+    message(STATUS "Using LLVM OpenMP runtime: ${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
+  endif()
   message(STATUS "Using LLVM OpenMP header dir: ${ROSE_LLVM_OPENMP_INCLUDE_DIR}")
+  unset(_rose_runtime_build_line)
+  unset(_rose_runtime_build_match)
+  unset(_rose_strings_exec)
+  unset(_rose_runtime_llvm_major)
+  unset(_rose_runtime_llvm_match)
   unset(_rose_clang_resource_include_dir)
   unset(_rose_clang_resource_dir)
+  unset(_rose_llvm_openmp_driver_version)
+  unset(_rose_llvm_openmp_driver_major)
   unset(_rose_llvm_openmp_driver)
+  unset(_rose_llvm_openmp_driver_dir)
+  unset(_rose_llvm_openmp_runtime_hints)
+  unset(_rose_openmp_hint_lines)
+  unset(_rose_omp_runtime_dir)
+  unset(_rose_omp_lib_name)
+  unset(_rose_runtime_candidate)
+  unset(_rose_runtime_candidate_major)
+  unset(_rose_runtime_candidate_match)
+  unset(_rose_mismatched_openmp_runtime_library)
+  unset(_rose_mismatched_openmp_runtime_major)
+  unset(_rose_libdir)
 endif()
 
 if(WITH-LLVM-OMP-RUNTIME-LIBRARY AND NOT LLVM_OPENMP_LIB_PATH)

@@ -381,7 +381,7 @@ int main(int argc, char *const argv[]) {
       driver.warnOnSuspiciousUsage = true;
     } else if (arg == "-fopenmp") {
       options.features.Enable(Fortran::common::LanguageFeature::OpenMP);
-      options.predefinitions.emplace_back("_OPENMP", "202011");
+      options.predefinitions.emplace_back("_OPENMP", "202411");
     } else if (arg == "-Werror") {
       driver.warningsAreErrors = true;
     } else if (arg == "-ed") {
