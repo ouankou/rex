@@ -20,17 +20,20 @@ set(_frontend_disabled_c_tests
   zpagccp.c
 )
 
-# Additional include paths keyed by a sanitized C identifier derived from specimen.
-set(_frontend_extra_includes_test2005_168_c
-  -I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing
-  -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII
+# Map of specimen file names to their extra include paths.
+# Each entry is a pair: <filename> and a semicolon-separated list of include paths.
+set(_specimen_extra_includes
+  "test2005_168.c"
+  "-I${CMAKE_SOURCE_DIR}/src/util/commandlineProcessing\\;-I${CMAKE_SOURCE_DIR}/src/frontend/SageIII"
 )
 
 foreach(specimen IN LISTS FRONTEND_INTEGRATION_C_TESTS)
   set(_extra_includes -I${_frontend_c_tests_dir})
-  string(MAKE_C_IDENTIFIER "${specimen}" _specimen_key)
-  if(_frontend_extra_includes_${_specimen_key})
-    list(APPEND _extra_includes ${_frontend_extra_includes_${_specimen_key}})
+  list(FIND _specimen_extra_includes "${specimen}" _specimen_index)
+  if(NOT _specimen_index EQUAL -1)
+    math(EXPR _includes_index "${_specimen_index} + 1")
+    list(GET _specimen_extra_includes ${_includes_index} _specimen_includes)
+    list(APPEND _extra_includes ${_specimen_includes})
   endif()
   add_test(
     NAME frontend_integration_c_${specimen}
