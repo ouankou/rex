@@ -122,20 +122,6 @@ set(TESTCODES
 
 set(TESTCODE_INCLUDES "")
 
-foreach(file_to_test ${TESTCODES})
-	configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test}
-    ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test}
-    COPYONLY)
-
-  add_test(
-    NAME SOURCEPOSITIONTEST_${file_to_test}
-    COMMAND statements ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
-      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
-      -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
-  set_tests_properties(SOURCEPOSITIONTEST_${file_to_test} PROPERTIES LABELS SOURCEPOSITIONTEST)
-endforeach()
-
 set(_source_position_disabled_tests
   lexPhase2003_02.C
   test2004_25.C
@@ -177,6 +163,30 @@ set(_source_position_disabled_tests
   test2006_176.C
   test2006_177.C
 )
+
+# Build enabled tests from the union of declared tests and disabled tests,
+# then subtract disabled entries to prevent accidental overlap.
+set(_source_position_all_tests ${TESTCODES} ${_source_position_disabled_tests})
+list(REMOVE_DUPLICATES _source_position_all_tests)
+
+set(TESTCODES ${_source_position_all_tests})
+foreach(file_to_test ${_source_position_disabled_tests})
+  list(REMOVE_ITEM TESTCODES ${file_to_test})
+endforeach()
+
+foreach(file_to_test ${TESTCODES})
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test}
+    ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test}
+    COPYONLY)
+
+  add_test(
+    NAME SOURCEPOSITIONTEST_${file_to_test}
+    COMMAND statements ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
+      -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
+  set_tests_properties(SOURCEPOSITIONTEST_${file_to_test} PROPERTIES LABELS SOURCEPOSITIONTEST)
+endforeach()
 
 foreach(file_to_test ${_source_position_disabled_tests})
   configure_file(
