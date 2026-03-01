@@ -2216,7 +2216,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     PP.addPPCallbacks(std::move(omp_callback_owner));
 
     auto preprocessor_recorder_owner = std::make_unique<SagePreprocessorRecord>(
-        &(compiler_instance->getSourceManager()));
+        &(compiler_instance->getSourceManager()), &PP);
     preprocessor_recorder = preprocessor_recorder_owner.get();
     if (!is_secondary_parse) {
       PP.addPPCallbacks(std::move(preprocessor_recorder_owner));
@@ -5628,9 +5628,9 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
 // class SagePreprocessorRecord
 
 SagePreprocessorRecord::SagePreprocessorRecord(
-    clang::SourceManager *source_manager)
-    : p_source_manager(source_manager), p_preprocessor_record_list(),
-      p_preprocessor_record_list_sorted(true) {}
+    clang::SourceManager *source_manager, clang::Preprocessor *preprocessor)
+    : p_source_manager(source_manager), p_preprocessor(preprocessor),
+      p_preprocessor_record_list(), p_preprocessor_record_list_sorted(true) {}
 
 void SagePreprocessorRecord::sortRecordedDirectives() {
   if (p_preprocessor_record_list_sorted || p_preprocessor_record_list.empty()) {
@@ -6168,11 +6168,12 @@ void SagePreprocessorRecord::Defined(const clang::Token &MacroNameTok,
 void SagePreprocessorRecord::SourceRangeSkipped(
     clang::SourceRange Range, clang::SourceLocation EndifLoc) {
   (void)EndifLoc;
-  if (p_source_manager == nullptr || !Range.isValid()) {
+  if (p_source_manager == nullptr || p_preprocessor == nullptr ||
+      !Range.isValid()) {
     return;
   }
 
-  clang::LangOptions lang_opts;
+  const clang::LangOptions &lang_opts = p_preprocessor->getLangOpts();
   clang::SourceLocation begin = Range.getBegin();
   clang::SourceLocation end = Range.getEnd();
   if (begin.isMacroID()) {

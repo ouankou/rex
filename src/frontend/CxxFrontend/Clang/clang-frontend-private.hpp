@@ -1782,6 +1782,7 @@ class SagePreprocessorRecord : public clang::PPCallbacks,
                                public clang::CommentHandler {
 protected:
   clang::SourceManager *p_source_manager;
+  clang::Preprocessor *p_preprocessor;
 
   std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
       p_preprocessor_record_list;
@@ -1795,7 +1796,8 @@ protected:
                        const std::string &text);
 
 public:
-  SagePreprocessorRecord(clang::SourceManager *source_manager);
+  SagePreprocessorRecord(clang::SourceManager *source_manager,
+                         clang::Preprocessor *preprocessor);
   void sortRecordedDirectives();
   void recordInjectedDirective(clang::SourceLocation loc,
                                PreprocessingInfo::DirectiveType directive_type,
