@@ -7863,6 +7863,11 @@ void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
   if (mapIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() &&
       mapIt->second != NULL) {
     tokenStreamSequenceMapPointer = mapIt->second;
+    for (std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::const_iterator
+             it = tokenStreamSequenceMapPointer->begin();
+         it != tokenStreamSequenceMapPointer->end(); ++it) {
+      delete it->second;
+    }
     tokenStreamSequenceMapPointer->clear();
   } else {
     tokenStreamSequenceMapPointer =
