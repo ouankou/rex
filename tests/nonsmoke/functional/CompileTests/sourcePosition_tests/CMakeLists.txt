@@ -164,15 +164,9 @@ set(_source_position_disabled_tests
   test2006_177.C
 )
 
-# Build enabled tests from the union of declared tests and disabled tests,
-# then subtract disabled entries to prevent accidental overlap.
-set(_source_position_all_tests ${TESTCODES} ${_source_position_disabled_tests})
-list(REMOVE_DUPLICATES _source_position_all_tests)
-
-set(TESTCODES ${_source_position_all_tests})
-foreach(file_to_test ${_source_position_disabled_tests})
-  list(REMOVE_ITEM TESTCODES ${file_to_test})
-endforeach()
+# Ensure disabled tests are not included in the enabled test set by removing
+# them from the TESTCODES list.
+list(REMOVE_ITEM TESTCODES ${_source_position_disabled_tests})
 
 foreach(file_to_test ${TESTCODES})
   configure_file(
