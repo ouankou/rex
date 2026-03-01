@@ -1313,9 +1313,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   if (language == ClangToSageTranslator::C ||
       language == ClangToSageTranslator::CPLUSPLUS ||
       language == ClangToSageTranslator::CUDA) {
-    // Keep frontend macro state aligned with backend compilation.
+    // Frontend parsing should only see the generic ROSE marker.
+    // USE_ROSE_BACKEND is reserved for backend compiler invocations.
     add_passthrough_flag_if_missing("-DUSE_ROSE");
-    add_passthrough_flag_if_missing("-DUSE_ROSE_BACKEND");
   }
 
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
@@ -2216,7 +2216,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     PP.addPPCallbacks(std::move(omp_callback_owner));
 
     auto preprocessor_recorder_owner = std::make_unique<SagePreprocessorRecord>(
-        &(compiler_instance->getSourceManager()));
+        &(compiler_instance->getSourceManager()), &PP);
     preprocessor_recorder = preprocessor_recorder_owner.get();
     if (!is_secondary_parse) {
       PP.addPPCallbacks(std::move(preprocessor_recorder_owner));
@@ -5628,9 +5628,9 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
 // class SagePreprocessorRecord
 
 SagePreprocessorRecord::SagePreprocessorRecord(
-    clang::SourceManager *source_manager)
-    : p_source_manager(source_manager), p_preprocessor_record_list(),
-      p_preprocessor_record_list_sorted(true) {}
+    clang::SourceManager *source_manager, clang::Preprocessor *preprocessor)
+    : p_source_manager(source_manager), p_preprocessor(preprocessor),
+      p_preprocessor_record_list(), p_preprocessor_record_list_sorted(true) {}
 
 void SagePreprocessorRecord::sortRecordedDirectives() {
   if (p_preprocessor_record_list_sorted || p_preprocessor_record_list.empty()) {
@@ -6167,8 +6167,135 @@ void SagePreprocessorRecord::Defined(const clang::Token &MacroNameTok,
 
 void SagePreprocessorRecord::SourceRangeSkipped(
     clang::SourceRange Range, clang::SourceLocation EndifLoc) {
-  (void)Range;
   (void)EndifLoc;
+  if (p_source_manager == nullptr || p_preprocessor == nullptr ||
+      !Range.isValid()) {
+    return;
+  }
+
+  const clang::LangOptions &lang_opts = p_preprocessor->getLangOpts();
+  clang::SourceLocation begin = Range.getBegin();
+  clang::SourceLocation end = Range.getEnd();
+  if (begin.isMacroID()) {
+    begin = p_source_manager->getSpellingLoc(begin);
+  }
+  if (end.isMacroID()) {
+    end = p_source_manager->getSpellingLoc(end);
+  }
+  if (!begin.isValid() || !end.isValid()) {
+    return;
+  }
+
+  clang::SourceLocation end_of_token =
+      clang::Lexer::getLocForEndOfToken(end, 0, *p_source_manager, lang_opts);
+  if (end_of_token.isValid()) {
+    end = end_of_token;
+  }
+
+  clang::CharSourceRange char_range =
+      clang::CharSourceRange::getCharRange(begin, end);
+  clang::CharSourceRange file_range =
+      clang::Lexer::makeFileCharRange(char_range, *p_source_manager, lang_opts);
+  if (file_range.isInvalid()) {
+    return;
+  }
+
+  begin = file_range.getBegin();
+  end = file_range.getEnd();
+  if (!begin.isValid() || !end.isValid() ||
+      !p_source_manager->isBeforeInTranslationUnit(begin, end)) {
+    return;
+  }
+
+  clang::FileID file_id = p_source_manager->getFileID(begin);
+  if (!file_id.isValid()) {
+    return;
+  }
+
+  clang::SourceLocation cursor = begin;
+  unsigned current_line = 0;
+  bool line_has_content = false;
+  bool expecting_undef = false;
+  clang::SourceLocation hash_loc;
+
+  auto is_identifier_named_undef = [&](const clang::Token &token) -> bool {
+    if (!token.isAnyIdentifier()) {
+      return false;
+    }
+    if (token.is(clang::tok::identifier)) {
+      const clang::IdentifierInfo *ident = token.getIdentifierInfo();
+      return ident != nullptr && ident->getName() == "undef";
+    }
+    bool invalid_spelling = false;
+    std::string spelling = clang::Lexer::getSpelling(
+        token, *p_source_manager, lang_opts, &invalid_spelling);
+    return !invalid_spelling && spelling == "undef";
+  };
+
+  while (cursor.isValid() &&
+         p_source_manager->isBeforeInTranslationUnit(cursor, end)) {
+    clang::Token token;
+    if (clang::Lexer::getRawToken(cursor, token, *p_source_manager, lang_opts,
+                                  /*IgnoreWhiteSpace=*/true)) {
+      break;
+    }
+
+    if (token.is(clang::tok::eof) || token.getLength() == 0) {
+      break;
+    }
+
+    clang::SourceLocation token_loc = token.getLocation();
+    if (!token_loc.isValid() ||
+        !p_source_manager->isBeforeInTranslationUnit(token_loc, end)) {
+      break;
+    }
+
+    clang::FileID token_file_id = p_source_manager->getFileID(token_loc);
+    if (token_file_id != file_id) {
+      cursor = token_loc.getLocWithOffset(token.getLength());
+      continue;
+    }
+
+    bool invalid_line = false;
+    unsigned token_line =
+        p_source_manager->getSpellingLineNumber(token_loc, &invalid_line);
+    if (invalid_line || token_line == 0) {
+      cursor = token_loc.getLocWithOffset(token.getLength());
+      continue;
+    }
+
+    if (token_line != current_line) {
+      current_line = token_line;
+      line_has_content = false;
+      expecting_undef = false;
+      hash_loc = clang::SourceLocation();
+    }
+
+    if (token.is(clang::tok::comment)) {
+      cursor = token_loc.getLocWithOffset(token.getLength());
+      continue;
+    }
+
+    if (!line_has_content) {
+      line_has_content = true;
+      if (token.is(clang::tok::hash)) {
+        expecting_undef = true;
+        hash_loc = token_loc;
+      }
+    } else if (expecting_undef) {
+      if (is_identifier_named_undef(token)) {
+        std::string directive_text = collectDirectiveText(hash_loc);
+        if (!directive_text.empty()) {
+          recordDirective(hash_loc,
+                          PreprocessingInfo::CpreprocessorUndefDeclaration,
+                          directive_text);
+        }
+      }
+      expecting_undef = false;
+    }
+
+    cursor = token_loc.getLocWithOffset(token.getLength());
+  }
 }
 
 void SagePreprocessorRecord::If(
