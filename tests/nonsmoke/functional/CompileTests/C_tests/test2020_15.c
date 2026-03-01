@@ -1,5 +1,5 @@
 void foobar() {
-  int count = 0;
+  int count = 40;
 
   switch (count) {
   case 40:
