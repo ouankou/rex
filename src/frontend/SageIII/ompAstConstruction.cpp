@@ -85,6 +85,22 @@ public:
     return new KeepFortranOpenMPPragmaAttribute(*this);
   }
 };
+
+class OmpOwnedIntAttribute : public AstIntAttribute {
+public:
+  OmpOwnedIntAttribute() : AstIntAttribute() {}
+  explicit OmpOwnedIntAttribute(int value) : AstIntAttribute(value) {}
+  OmpOwnedIntAttribute(const OmpOwnedIntAttribute &other)
+      : AstIntAttribute(other) {}
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  AstAttribute *copy() const override {
+    return new OmpOwnedIntAttribute(*this);
+  }
+};
 std::vector<std::tuple<SgLocatedNode *, PreprocessingInfo *, OpenMPDirective *>>
     fortran_omp_pragma_list;
 
@@ -2019,6 +2035,117 @@ static void clearClauseParseCacheForSourceFile(SgSourceFile *source_file) {
 
   for (OpenMPDirective *directive : directives_to_clear) {
     g_omp_clause_nodes.erase(directive);
+  }
+}
+
+static bool belongsToSourceFile(SgNode *node, SgSourceFile *source_file) {
+  if (node == nullptr || source_file == nullptr) {
+    return false;
+  }
+  return getEnclosingSourceFile(node) == source_file;
+}
+
+static void releaseOpenMPParseStateForSourceFile(SgSourceFile *source_file) {
+  if (source_file == nullptr) {
+    return;
+  }
+
+  clearClauseParseCacheForSourceFile(source_file);
+
+  std::unordered_set<OpenMPDirective *> omp_directives_to_delete;
+  std::unordered_set<OpenACCDirective *> acc_directives_to_delete;
+
+  auto track_openmp_directive = [&](OpenMPDirective *directive) {
+    if (directive != nullptr) {
+      omp_directives_to_delete.insert(directive);
+    }
+  };
+  auto track_openacc_directive = [&](OpenACCDirective *directive) {
+    if (directive != nullptr) {
+      acc_directives_to_delete.insert(directive);
+    }
+  };
+
+  for (auto it = OpenMPIR_list.begin(); it != OpenMPIR_list.end();) {
+    if (belongsToSourceFile(it->first, source_file)) {
+      track_openmp_directive(it->second);
+      it = OpenMPIR_list.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = OpenACCIR_list.begin(); it != OpenACCIR_list.end();) {
+    if (belongsToSourceFile(it->first, source_file)) {
+      track_openacc_directive(it->second);
+      it = OpenACCIR_list.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = fortran_omp_pragma_list.begin();
+       it != fortran_omp_pragma_list.end();) {
+    SgLocatedNode *loc = std::get<0>(*it);
+    if (belongsToSourceFile(loc, source_file)) {
+      track_openmp_directive(std::get<2>(*it));
+      it = fortran_omp_pragma_list.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = fortran_paired_pragma_dict.begin();
+       it != fortran_paired_pragma_dict.end();) {
+    if (belongsToSourceFile(it->first, source_file)) {
+      track_openmp_directive(it->second);
+      it = fortran_paired_pragma_dict.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = fortran_acc_paired_pragma_dict.begin();
+       it != fortran_acc_paired_pragma_dict.end();) {
+    if (belongsToSourceFile(it->first, source_file)) {
+      track_openacc_directive(it->second);
+      it = fortran_acc_paired_pragma_dict.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = omp_pragma_list.begin(); it != omp_pragma_list.end();) {
+    if (belongsToSourceFile(*it, source_file)) {
+      it = omp_pragma_list.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = g_pending_commented_directive_relocations.begin();
+       it != g_pending_commented_directive_relocations.end();) {
+    if (belongsToSourceFile(it->first, source_file)) {
+      it = g_pending_commented_directive_relocations.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (auto it = g_omp_directive_source_text_by_pragma.begin();
+       it != g_omp_directive_source_text_by_pragma.end();) {
+    if (belongsToSourceFile(it->first, source_file)) {
+      it = g_omp_directive_source_text_by_pragma.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  for (OpenMPDirective *directive : omp_directives_to_delete) {
+    delete directive;
+  }
+  for (OpenACCDirective *directive : acc_directives_to_delete) {
+    delete directive;
   }
 }
 
@@ -5160,7 +5287,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_parse_only() = %s \n",
              sageFilePtr->get_openmp_parse_only() ? "true" : "false");
     }
-    clearClauseParseCacheForSourceFile(sageFilePtr);
+    releaseOpenMPParseStateForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
@@ -5203,7 +5330,7 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_ast_only() = %s \n",
              sageFilePtr->get_openmp_ast_only() ? "true" : "false");
     }
-    clearClauseParseCacheForSourceFile(sageFilePtr);
+    releaseOpenMPParseStateForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
@@ -5218,13 +5345,13 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
              "sageFilePtr->get_openmp_analyzing() = %s \n",
              sageFilePtr->get_openmp_analyzing() ? "true" : "false");
     }
-    clearClauseParseCacheForSourceFile(sageFilePtr);
+    releaseOpenMPParseStateForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
   }
 
   lower_omp(sageFilePtr);
-  clearClauseParseCacheForSourceFile(sageFilePtr);
+  releaseOpenMPParseStateForSourceFile(sageFilePtr);
   mark_processed(sageFilePtr);
 }
 
@@ -9459,7 +9586,7 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
   second_stmt->set_parent(first_stmt);
   first_stmt->addNewAttribute(
       kOmpCombinedParallelNestedVariantAttrName,
-      new AstIntAttribute(static_cast<int>(second_stmt->variantT())));
+      new OmpOwnedIntAttribute(static_cast<int>(second_stmt->variantT())));
 
   static const char *const kOmpClauseOriginalOrderAttrName =
       "omp_clause_original_order";
@@ -9484,7 +9611,7 @@ SgOmpParallelStatement *convertOmpParallelStatementFromCombinedDirectives(
     }
 
     clause->addNewAttribute(kOmpClauseOriginalOrderAttrName,
-                            new AstIntAttribute(order_index));
+                            new OmpOwnedIntAttribute(order_index));
   };
 
   std::vector<OpenMPClause *>::iterator citer;

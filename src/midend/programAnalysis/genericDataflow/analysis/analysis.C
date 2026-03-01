@@ -706,6 +706,10 @@ void MergeAllReturnStates::visit(const Function &func, const DataflowNode &n,
     if (analysisDebugLevel >= 1)
       Dbg::dbg << "    Merging dataflow state of return value\n";
     modified = mergeLats(mergedLatsRetVal, exprLats) || modified;
+    for (vector<Lattice *>::iterator l = exprLats.begin(); l != exprLats.end();
+         l++) {
+      delete *l;
+    }
   }
   // If this is the end of a function, which is an implicit return that has no
   // return value
@@ -945,7 +949,7 @@ bool ContextInsensitiveInterProceduralDataflow::transfer(
         Dbg::dbg << "      After modified = " << modified << "calleeL=["
                  << calleeL << "] " << calleeL->str("        ") << endl;
 
-      //!!!           delete remappedL;
+      delete remappedL;
     }
 
     // If this resulted in the dataflow information before the callee changing,
@@ -1022,7 +1026,7 @@ bool ContextInsensitiveInterProceduralDataflow::transfer(
       // Dbg::dbg << "      calleeL-after=["<<calleeL<<"] "<<calleeL->str("
       // ")<<endl;
       modified = true;
-      //!!!           delete remappedL;
+      delete remappedL;
     }
 
     // Point retState to the lattices of the function's return values

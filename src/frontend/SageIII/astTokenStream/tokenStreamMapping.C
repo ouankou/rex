@@ -121,18 +121,15 @@ bool TokenStreamSequenceToNodeMapping_key::operator==(
 
 #define DEBUG_OPERATOR_EQUALS 0
 
-  // Allow matching to happen in the same child list (of the same parent).
-  // bool result = (X.node == node) && (X.lower_bound == lower_bound) &&
-  // (X.upper_bound == upper_bound);
-  bool result =
-      ((X.node == node) || (node->get_parent() == X.node->get_parent())) &&
-      (X.lower_bound == lower_bound) && (X.upper_bound == upper_bound);
+  // Use the parent as the key when available so siblings share one interval.
+  // Fallback to the node itself for roots (no parent) to preserve uniqueness.
+  auto keyNode = [](SgNode *n) -> SgNode * {
+    return (n != NULL && n->get_parent() != NULL) ? n->get_parent() : n;
+  };
 
-  // DQ (4/21/2021): We need to include the SgSourceFile to allow header files
-  // to be supported.
-  if (X.sourceFile != sourceFile) {
-    result = false;
-  }
+  bool result =
+      (X.sourceFile == sourceFile) && (X.lower_bound == lower_bound) &&
+      (X.upper_bound == upper_bound) && (keyNode(X.node) == keyNode(node));
 
 #if DEBUG_OPERATOR_EQUALS
   printf("In TokenStreamSequenceToNodeMapping_key::operator==(X): \n");
@@ -151,16 +148,6 @@ bool TokenStreamSequenceToNodeMapping_key::operator==(
   printf("   --- result        = %s \n", result ? "true" : "false");
 #endif
 
-  // DQ (4/18/2021): I think this might be a problem for token sequences
-  // associated with nodes in the global socpe (which is shared).
-  if ((X.node != node) && (node->get_parent() == X.node->get_parent())) {
-    printf("In TokenStreamSequenceToNodeMapping_key::operator==(): Note that "
-           "X.node != node, but node->get_parent() == X.node->get_parent() \n");
-
-    printf("Exiting as a test! \n");
-    ROSE_ABORT();
-  }
-
   return result;
 }
 
@@ -169,33 +156,22 @@ bool TokenStreamSequenceToNodeMapping_key::operator<(
 
 #define DEBUG_OPERATOR_LESS_THAN 0
 
+  // Keep ordering strict and deterministic for std::map.
+  auto keyNode = [](SgNode *n) -> SgNode * {
+    return (n != NULL && n->get_parent() != NULL) ? n->get_parent() : n;
+  };
+
   bool result = false;
-  if (lower_bound < X.lower_bound) {
-    result = true;
+  if (sourceFile != X.sourceFile) {
+    result = std::less<SgSourceFile *>()(sourceFile, X.sourceFile);
+  } else if (lower_bound != X.lower_bound) {
+    result = lower_bound < X.lower_bound;
+  } else if (upper_bound != X.upper_bound) {
+    result = upper_bound < X.upper_bound;
   } else {
-    if ((lower_bound == X.lower_bound) && (upper_bound < X.upper_bound)) {
-      result = true;
-    } else {
-      if ((lower_bound == X.lower_bound) && (upper_bound == X.upper_bound)) {
-        // This is the test that makes the same range different for a same
-        // interval expressed at different levels in the AST (and the same if
-        // the IR nodes are siblings).
-        if (node->get_parent() == X.node->get_parent()) {
-          // DQ (4/21/2021): We need to include the SgSourceFile to allow header
-          // files to be supported.
-          if (sourceFile->get_file_info()->get_file_id() <
-              X.sourceFile->get_file_info()->get_file_id()) {
-            result = true;
-          } else {
-            result = false;
-          }
-        } else {
-          // DQ (4/21/2021): We need to include the SgSourceFile to allow header
-          // files to be supported.
-          result = true;
-        }
-      }
-    }
+    SgNode *thisKeyNode = keyNode(node);
+    SgNode *otherKeyNode = keyNode(X.node);
+    result = std::less<SgNode *>()(thisKeyNode, otherKeyNode);
   }
 
 #if DEBUG_OPERATOR_LESS_THAN
@@ -7880,8 +7856,24 @@ void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
   // Rose::tokenSubsequenceMapOfMapsBySourceFile container (for all SgSourceFile
   // pointers).
   std::map<SgNode *, TokenStreamSequenceToNodeMapping *>
-      *tokenStreamSequenceMapPointer =
-          new std::map<SgNode *, TokenStreamSequenceToNodeMapping *>();
+      *tokenStreamSequenceMapPointer = NULL;
+  std::map<SgSourceFile *,
+           std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>::iterator
+      mapIt = Rose::tokenSubsequenceMapOfMapsBySourceFile.find(sourceFile);
+  if (mapIt != Rose::tokenSubsequenceMapOfMapsBySourceFile.end() &&
+      mapIt->second != NULL) {
+    tokenStreamSequenceMapPointer = mapIt->second;
+    for (std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::const_iterator
+             it = tokenStreamSequenceMapPointer->begin();
+         it != tokenStreamSequenceMapPointer->end(); ++it) {
+      delete it->second;
+    }
+    tokenStreamSequenceMapPointer->clear();
+  } else {
+    tokenStreamSequenceMapPointer =
+        new std::map<SgNode *, TokenStreamSequenceToNodeMapping *>();
+    sourceFile->set_tokenSubsequenceMap(tokenStreamSequenceMapPointer);
+  }
   ROSE_ASSERT(tokenStreamSequenceMapPointer != NULL);
 
 #if DEBUG_TOKEN_STREAM_MAPPING
@@ -8088,21 +8080,7 @@ void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
   // requirements of the generated serialization that is a part of the AST File
   // I/O.
   // sourceFile->set_tokenSubsequenceMap(tokenMappingTraversal.tokenStreamSequenceMap);
-  if (Rose::tokenSubsequenceMapOfMapsBySourceFile.find(sourceFile) !=
-      Rose::tokenSubsequenceMapOfMapsBySourceFile.end()) {
-    // Reuse the existing map instead of asserting. Clear and populate with the
-    // new traversal results.
-    std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *existingMap =
-        Rose::tokenSubsequenceMapOfMapsBySourceFile[sourceFile];
-    if (existingMap != NULL) {
-      existingMap->clear();
-      existingMap->insert(tokenMappingTraversal.tokenStreamSequenceMap.begin(),
-                          tokenMappingTraversal.tokenStreamSequenceMap.end());
-    }
-  } else {
-    sourceFile->set_tokenSubsequenceMap(
-        &(tokenMappingTraversal.tokenStreamSequenceMap));
-  }
+  sourceFile->set_tokenSubsequenceMap(tokenStreamSequenceMapPointer);
 
 #if DEBUG_TOKEN_STREAM_MAPPING
   // DQ (1/19/2021): This is redundant so that we don't have to call the

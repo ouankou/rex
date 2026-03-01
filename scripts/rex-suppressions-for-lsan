@@ -4,3 +4,7 @@
 leak:libjvm.so
 leak:libjava.so
 leak:libzip.so
+
+# Upstream LLVM/Clang 21 process-exit leak in template deduction diagnostics.
+# Reproduced in astInterface tuple/variant tests via clang::MakeDeductionFailureInfo.
+leak:clang::MakeDeductionFailureInfo

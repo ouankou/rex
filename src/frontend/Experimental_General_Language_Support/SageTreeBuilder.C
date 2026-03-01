@@ -959,6 +959,11 @@ SageTreeBuilder::SageTreeBuilder(SgSourceFile *source, LanguageEnum language,
   tokens_ = new TokenStream(tokens);
 }
 
+SageTreeBuilder::~SageTreeBuilder() {
+  delete tokens_;
+  tokens_ = nullptr;
+}
+
 void SageTreeBuilder::setTokens(std::vector<Token> tokens) {
   delete tokens_;
   tokens_ = new TokenStream(std::move(tokens));

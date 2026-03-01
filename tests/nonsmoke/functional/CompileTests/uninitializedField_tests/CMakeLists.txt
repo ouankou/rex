@@ -74,7 +74,16 @@ foreach(testcode IN LISTS UNINIT_C_TEST_SOURCES)
     NAME uninit_fields_c_${_uninit_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${BASH_EXECUTABLE} -c
-      "cp ${_uninit_cxx_dir}/${testcode} ${testcode}.temp.c && $<TARGET_FILE:testUninitializedFields> ${_uninit_flags} -I${_uninit_cxx_dir} ${_uninit_includes} -c ${testcode}.temp.c"
+      "cp \"$1\" \"$2\" && shift 2 && \"$@\""
+      dummy
+      ${_uninit_cxx_dir}/${testcode}
+      ${testcode}.temp.c
+      $<TARGET_FILE:testUninitializedFields>
+      ${_uninit_flags}
+      -I${_uninit_cxx_dir}
+      ${_uninit_includes}
+      -c
+      ${testcode}.temp.c
   )
 endforeach()
 
@@ -84,7 +93,16 @@ foreach(testcode IN LISTS UNINIT_C99_TEST_SOURCES)
     NAME uninit_fields_c99_${_uninit_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${BASH_EXECUTABLE} -c
-      "cp ${_uninit_c99_dir}/${testcode} ${testcode}.temp.c && $<TARGET_FILE:testUninitializedFields> ${_uninit_flags} -I${_uninit_c99_dir} ${_uninit_includes} -c ${testcode}.temp.c"
+      "cp \"$1\" \"$2\" && shift 2 && \"$@\""
+      dummy
+      ${_uninit_c99_dir}/${testcode}
+      ${testcode}.temp.c
+      $<TARGET_FILE:testUninitializedFields>
+      ${_uninit_flags}
+      -I${_uninit_c99_dir}
+      ${_uninit_includes}
+      -c
+      ${testcode}.temp.c
   )
 endforeach()
 

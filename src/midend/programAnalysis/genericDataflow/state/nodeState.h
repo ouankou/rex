@@ -141,6 +141,7 @@ public:
   {}*/
 
   NodeState() {}
+  ~NodeState();
 
   /*      void initialize(Analysis* analysis, int latticeName)
           {
@@ -313,6 +314,8 @@ private:
   static bool nodeStateMapInit;
 
 public:
+  static void clearNodeStateMap();
+
   // returns the NodeState object associated with the given dataflow node.
   // index is used when multiple NodeState objects are associated with a given
   // node (ex: SgFunctionCallExp has 3 NodeStates: entry, function body, exit)

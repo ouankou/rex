@@ -369,8 +369,7 @@ void ASTtools::moveUpPreprocInfo(SgStatement *stmt1, SgStatement *stmt2) {
   ROSE_ASSERT(stmt2 != NULL);
   AttachedPreprocessingInfoType *infoList =
       stmt2->getAttachedPreprocessingInfo();
-  AttachedPreprocessingInfoType *infoToRemoveList =
-      new AttachedPreprocessingInfoType();
+  AttachedPreprocessingInfoType infoToRemoveList;
 
   if (infoList == NULL)
     return;
@@ -401,13 +400,13 @@ void ASTtools::moveUpPreprocInfo(SgStatement *stmt1, SgStatement *stmt2) {
         (info->getTypeOfDirective() ==
          PreprocessingInfo::CpreprocessorEndifDeclaration)) {
       stmt1->addToAttachedPreprocessingInfo(info, PreprocessingInfo::after);
-      (*infoToRemoveList).push_back(*i);
+      infoToRemoveList.push_back(*i);
     } // end if
   } // end for
 
   // Remove the element from the list of comments at the current astNode
   AttachedPreprocessingInfoType::iterator j;
-  for (j = (*infoToRemoveList).begin(); j != (*infoToRemoveList).end(); j++) {
+  for (j = infoToRemoveList.begin(); j != infoToRemoveList.end(); j++) {
     // (*infoList).remove (*j);
     // infoList->erase(find(infoToRemoveList->begin(),infoToRemoveList->end(),*j));
     // Liao, 10/2/07, segmentation fault for the stmt above
