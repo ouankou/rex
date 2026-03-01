@@ -12313,7 +12313,7 @@ SgTemplateInstantiationFunctionDecl::SgTemplateInstantiationFunctionDecl ( SgNam
      p_templateDeclaration = nullptr;
      p_templateArguments = templateArguments;
      p_deducedTemplateArguments = SgTemplateArgumentPtrList();
-     p_specializedTemplateDeclaration = NULL;
+     p_specializedTemplateDeclaration = nullptr;
      p_constraintSatisfactionEvaluated = false;
      p_constraintSatisfactionSatisfied = true;
      p_constraintSatisfactionContainsErrors = false;
@@ -12406,10 +12406,10 @@ SgTemplateInstantiationMemberFunctionDecl::SgTemplateInstantiationMemberFunction
 
   // Same code as in generated constructor.
      p_templateName = "";
-     p_templateDeclaration = NULL;
+     p_templateDeclaration = nullptr;
      p_templateArguments = templateArguments;
      p_deducedTemplateArguments = SgTemplateArgumentPtrList();
-     p_specializedTemplateDeclaration = NULL;
+     p_specializedTemplateDeclaration = nullptr;
      p_constraintSatisfactionEvaluated = false;
      p_constraintSatisfactionSatisfied = true;
      p_constraintSatisfactionContainsErrors = false;
@@ -14199,7 +14199,7 @@ SgTemplateVariableDeclaration::SgTemplateVariableDeclaration( const SgName& var_
      p_templateParameters = SgTemplateParameterPtrList();
      p_templateSpecializationArguments = SgTemplateArgumentPtrList();
      p_deducedTemplateArguments = SgTemplateArgumentPtrList();
-     p_specializedTemplateDeclaration = NULL;
+     p_specializedTemplateDeclaration = nullptr;
      p_constraintSatisfactionEvaluated = false;
      p_constraintSatisfactionSatisfied = true;
      p_constraintSatisfactionContainsErrors = false;
