@@ -1,10 +1,9 @@
+#include <stddef.h>
+#include <stdint.h>
+
 typedef struct CirrusVGAState {
   int x[5];
 } CirrusVGAState;
-
-typedef unsigned long size_t;
-typedef unsigned long uintptr_t;
-typedef unsigned char uint8_t;
 
 typedef struct VMStateDescription VMStateDescription;
 
