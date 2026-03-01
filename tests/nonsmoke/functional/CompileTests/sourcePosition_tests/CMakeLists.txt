@@ -168,32 +168,27 @@ set(_source_position_disabled_tests
 # them from the TESTCODES list.
 list(REMOVE_ITEM TESTCODES ${_source_position_disabled_tests})
 
-foreach(file_to_test ${TESTCODES})
+function(add_source_position_test test_file)
   configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test}
-    ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${test_file}
+    ${CMAKE_CURRENT_BINARY_DIR}/${test_file}
     COPYONLY)
 
   add_test(
-    NAME SOURCEPOSITIONTEST_${file_to_test}
+    NAME SOURCEPOSITIONTEST_${test_file}
     COMMAND statements ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
-      -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
-  set_tests_properties(SOURCEPOSITIONTEST_${file_to_test} PROPERTIES LABELS SOURCEPOSITIONTEST)
+      -c ${CMAKE_CURRENT_BINARY_DIR}/${test_file})
+
+  set_tests_properties(SOURCEPOSITIONTEST_${test_file} PROPERTIES LABELS SOURCEPOSITIONTEST ${ARGN})
+endfunction()
+
+foreach(file_to_test ${TESTCODES})
+  add_source_position_test(${file_to_test})
 endforeach()
 
 foreach(file_to_test ${_source_position_disabled_tests})
-  configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test}
-    ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test}
-    COPYONLY)
-
-  add_test(
-    NAME SOURCEPOSITIONTEST_${file_to_test}
-    COMMAND statements ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
-      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
-      -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
-  set_tests_properties(SOURCEPOSITIONTEST_${file_to_test} PROPERTIES DISABLED TRUE LABELS SOURCEPOSITIONTEST)
+  add_source_position_test(${file_to_test} DISABLED TRUE)
 endforeach()
 
 # Makefile check targets.
