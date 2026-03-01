@@ -1313,9 +1313,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   if (language == ClangToSageTranslator::C ||
       language == ClangToSageTranslator::CPLUSPLUS ||
       language == ClangToSageTranslator::CUDA) {
-    // Keep frontend macro state aligned with backend compilation.
+    // Frontend parsing should only see the generic ROSE marker.
+    // USE_ROSE_BACKEND is reserved for backend compiler invocations.
     add_passthrough_flag_if_missing("-DUSE_ROSE");
-    add_passthrough_flag_if_missing("-DUSE_ROSE_BACKEND");
   }
 
   if ((language == ClangToSageTranslator::CPLUSPLUS ||
@@ -6167,8 +6167,85 @@ void SagePreprocessorRecord::Defined(const clang::Token &MacroNameTok,
 
 void SagePreprocessorRecord::SourceRangeSkipped(
     clang::SourceRange Range, clang::SourceLocation EndifLoc) {
-  (void)Range;
   (void)EndifLoc;
+  if (p_source_manager == nullptr || !Range.isValid()) {
+    return;
+  }
+
+  clang::SourceLocation begin = Range.getBegin();
+  clang::SourceLocation end = Range.getEnd();
+  if (begin.isMacroID()) {
+    begin = p_source_manager->getSpellingLoc(begin);
+  }
+  if (end.isMacroID()) {
+    end = p_source_manager->getSpellingLoc(end);
+  }
+  if (!begin.isValid() || !end.isValid()) {
+    return;
+  }
+
+  clang::FileID file_id = p_source_manager->getFileID(begin);
+  if (!file_id.isValid()) {
+    return;
+  }
+
+  clang::PresumedLoc begin_loc = p_source_manager->getPresumedLoc(begin);
+  if (!begin_loc.isValid() || begin_loc.getLine() == 0) {
+    return;
+  }
+  const unsigned begin_line = begin_loc.getLine();
+
+  auto is_undef_directive = [](const std::string &line) -> bool {
+    size_t pos = line.find_first_not_of(" \t");
+    if (pos == std::string::npos || line[pos] != '#') {
+      return false;
+    }
+    ++pos;
+    while (pos < line.size() &&
+           std::isspace(static_cast<unsigned char>(line[pos]))) {
+      ++pos;
+    }
+    static const std::string keyword = "undef";
+    if (line.compare(pos, keyword.size(), keyword) != 0) {
+      return false;
+    }
+    pos += keyword.size();
+    return pos >= line.size() ||
+           std::isspace(static_cast<unsigned char>(line[pos]));
+  };
+
+  clang::CharSourceRange char_range =
+      clang::CharSourceRange::getCharRange(begin, end);
+  bool invalid = false;
+  llvm::StringRef skipped_text = clang::Lexer::getSourceText(
+      char_range, *p_source_manager, clang::LangOptions(), &invalid);
+  if (invalid || skipped_text.empty()) {
+    return;
+  }
+
+  std::istringstream stream(skipped_text.str());
+  std::string line_text;
+  unsigned line_offset = 0;
+  while (std::getline(stream, line_text)) {
+    std::string directive_text = line_text;
+    if (!directive_text.empty() && directive_text.back() == '\r') {
+      directive_text.pop_back();
+    }
+    if (!is_undef_directive(directive_text)) {
+      ++line_offset;
+      continue;
+    }
+
+    clang::SourceLocation directive_loc = p_source_manager->translateLineCol(
+        file_id, begin_line + line_offset, 1);
+    if (!directive_loc.isValid()) {
+      directive_loc = begin;
+    }
+    recordDirective(directive_loc,
+                    PreprocessingInfo::CpreprocessorUndefDeclaration,
+                    directive_text);
+    ++line_offset;
+  }
 }
 
 void SagePreprocessorRecord::If(
