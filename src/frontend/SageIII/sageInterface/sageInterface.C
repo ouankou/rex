@@ -79,7 +79,9 @@
 
 #include <iostream>
 
+#include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ManagedStatic.h>
+#include <llvm/Support/Timer.h>
 
 #include <map>
 
@@ -19523,6 +19525,15 @@ bool isAstTeardownEnabledInternal() {
 #if ROSE_USE_SANITIZER
     enabled = true;
 #endif
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(leak_sanitizer) ||       \
+    __has_feature(undefined_behavior_sanitizer)
+    enabled = true;
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__)
+    enabled = true;
+#endif
   }
 
   g_astTeardownEnabledCached = enabled;
@@ -19535,6 +19546,8 @@ void llvmShutdownAtExit() {
     return;
   }
   g_llvmShutdownComplete = true;
+  llvm::TimerGroup::clearAll();
+  llvm::cl::ResetCommandLineParser();
   llvm::llvm_shutdown();
 }
 
@@ -20963,9 +20976,16 @@ void clearTokenStreamGlobalMaps() {
   }
   Rose::tokenSubsequenceMapOfMapsBySourceFile.clear();
 
+  for (auto &entry : TokenStreamSequenceToNodeMapping::tokenSequencePool) {
+    delete entry.second;
+  }
+  TokenStreamSequenceToNodeMapping::tokenSequencePool.clear();
+
   Rose::includeFileMapForUnparsing.clear();
   Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.clear();
 }
+
+void clearTokenStreamGlobalMapsAtExit() { clearTokenStreamGlobalMaps(); }
 
 class ProjectCollector : public ROSE_VisitorPatternDefaultBase {
 public:
@@ -21087,6 +21107,12 @@ void SageInterface::tearDownAst(SgProject *project) {
 }
 
 void SageInterface::registerAstTeardownAtExit() {
+  static bool token_maps_registered = false;
+  if (!token_maps_registered) {
+    token_maps_registered = true;
+    std::atexit(clearTokenStreamGlobalMapsAtExit);
+  }
+
   if (!isAstTeardownEnabledInternal()) {
     return;
   }

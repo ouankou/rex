@@ -59,16 +59,16 @@ Use `ctest -N -R "<regex>"` to list tests before running memcheck.
 
 Some toolchain/runtime components allocate process-lifetime memory that LSan
 cannot attribute cleanly. To keep sanitizer runs actionable, REX ships
-`scripts/rose-suppressions-for-lsan` and CTest applies it automatically when
-`ENABLE-SANITIZER` includes `leak`. If you run tests manually, set:
-`LSAN_OPTIONS=suppressions=<path-to>/scripts/rose-suppressions-for-lsan`.
+`scripts/rex-suppressions-for-lsan`. Weekly sanitizer CI exports this via
+`LSAN_OPTIONS`. If you run tests manually, set:
+`LSAN_OPTIONS=suppressions=<path-to>/scripts/rex-suppressions-for-lsan`.
 
 ## How memcheck works in REX
 
 When configured with Valgrind, CTest uses the build’s memcheck settings:
 - `CTEST_MEMORYCHECK_COMMAND` is set to the Valgrind binary.
 - Options include leak checking, all leak kinds, `--error-exitcode=1`, and `--trace-children=yes`.
-- Suppressions live in `scripts/rose-suppressions-for-valgrind`.
+- Valgrind suppressions live in `scripts/rex-suppressions-for-valgrind`.
 
 Because child tracing is enabled, helper processes (Perl, Python, shell scripts) can be checked too. This can surface non-ROSE leaks; those should be handled via suppressions when they are clearly external and process-lifetime only.
 
@@ -90,7 +90,7 @@ Death tests intentionally abort to validate hard invariants, which leaves “sti
   - A real issue in ROSE (e.g., pools or caches not released after AST teardown).
   - External/runtime process-lifetime allocations (e.g., `/usr/bin/perl`, LLVM managed statics).
 
-If “still reachable” comes from ROSE-owned structures, treat it as a real issue. If it is from external runtimes and cannot be cleaned up safely, suppress it explicitly in `scripts/rose-suppressions-for-valgrind`.
+If “still reachable” comes from ROSE-owned structures, treat it as a real issue. If it is from external runtimes and cannot be cleaned up safely, suppress it explicitly in `scripts/rex-suppressions-for-valgrind`.
 
 ## Triage workflow in an actively developed tree
 
@@ -99,6 +99,7 @@ If “still reachable” comes from ROSE-owned structures, treat it as a real is
 3. Inspect memcheck logs to distinguish memory defects from functional failures.
 4. Fix ROSE leaks at the root cause (prefer CFE fixes when the bug originates there).
 5. Only add suppressions for third-party or process-lifetime allocations outside ROSE.
+6. Keep all Valgrind suppressions in `scripts/rex-suppressions-for-valgrind` and require root-cause justification for each entry.
 
 ## Development guidelines for memory correctness
 

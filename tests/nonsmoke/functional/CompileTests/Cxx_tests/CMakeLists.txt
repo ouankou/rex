@@ -4250,9 +4250,7 @@ if(UNIX AND NOT APPLE)
   add_test(
     NAME Cxx_tests_rex_test2026_shared_llvm_linkage
     COMMAND
-      sh -c "ldd \"$1\" | grep -E 'libLLVM([^[:space:]]*)\\.so' >/dev/null"
-      dummy
-      $<TARGET_FILE:rex_test2025_cfe_token_stream_mapping_translator>
+      sh -c "readelf -d $<TARGET_FILE:ROSE_DLL> | grep -E 'NEEDED.*libLLVM([^[:space:]]*)\\.so' >/dev/null"
   )
   set_tests_properties(Cxx_tests_rex_test2026_shared_llvm_linkage PROPERTIES LABELS Cxx_tests)
 endif()

@@ -25,6 +25,7 @@
 
 #include <libgen.h> /* basename(), dirame()               */
 
+#include <cstdlib>
 #include <filesystem>
 
 using namespace std;
@@ -199,8 +200,13 @@ void visitorTraversal::visit(SgNode *n) {
     string filename = statement->get_file_info()->get_filename();
 
     // CH (2/1/2010): Get the real filename (not a symlink)
-    if (std::filesystem::exists(filename))
-      filename = realpath(filename.c_str(), NULL);
+    if (std::filesystem::exists(filename)) {
+      char *resolved_path = realpath(filename.c_str(), NULL);
+      if (resolved_path != NULL) {
+        filename = resolved_path;
+        free(resolved_path);
+      }
+    }
 
     // Skip the case of compiler generated Sg_File_Info objects.
     // if (previousFilename != filename && filename !=

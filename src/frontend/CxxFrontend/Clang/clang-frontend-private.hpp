@@ -91,6 +91,10 @@ public:
     return new ConstraintSatisfactionAttribute(*this);
   }
 
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
   std::string toString() override {
     std::string text = result_.satisfied ? "satisfied" : "unsatisfied";
     if (result_.contains_errors) {

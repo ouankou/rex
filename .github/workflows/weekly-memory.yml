@@ -57,6 +57,7 @@ jobs:
           libclang-cpp${LLVM_VERSION}-dev \
           libhpdf-dev \
           libtool \
+          libomp-${LLVM_VERSION}-dev \
           llvm-${LLVM_VERSION} \
           llvm-${LLVM_VERSION}-dev \
           openjdk-25-jdk \
@@ -64,13 +65,13 @@ jobs:
 
     - name: Configure (Debug)
       env:
-        PATH: /usr/lib/llvm-${LLVM_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${LLVM_VERSION}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-${LLVM_VERSION}
-        LLVM_DIR: /usr/lib/llvm-${LLVM_VERSION}
-        CC: clang-${LLVM_VERSION}
-        CXX: clang++-${LLVM_VERSION}
-        FC: flang-${LLVM_VERSION}
+        PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}
+        LLVM_DIR: /usr/lib/llvm-${{ env.LLVM_VERSION }}
+        CC: clang-${{ env.LLVM_VERSION }}
+        CXX: clang++-${{ env.LLVM_VERSION }}
+        FC: flang-${{ env.LLVM_VERSION }}
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \
@@ -146,6 +147,7 @@ jobs:
           libclang-cpp${LLVM_VERSION}-dev \
           libhpdf-dev \
           libtool \
+          libomp-${LLVM_VERSION}-dev \
           llvm-${LLVM_VERSION} \
           llvm-${LLVM_VERSION}-dev \
           openjdk-25-jdk \
@@ -154,13 +156,13 @@ jobs:
 
     - name: Configure (Debug + Valgrind)
       env:
-        PATH: /usr/lib/llvm-${LLVM_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${LLVM_VERSION}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-${LLVM_VERSION}
-        LLVM_DIR: /usr/lib/llvm-${LLVM_VERSION}
-        CC: clang-${LLVM_VERSION}
-        CXX: clang++-${LLVM_VERSION}
-        FC: flang-${LLVM_VERSION}
+        PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}
+        LLVM_DIR: /usr/lib/llvm-${{ env.LLVM_VERSION }}
+        CC: clang-${{ env.LLVM_VERSION }}
+        CXX: clang++-${{ env.LLVM_VERSION }}
+        FC: flang-${{ env.LLVM_VERSION }}
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \
@@ -176,9 +178,11 @@ jobs:
       run: cmake --build build -j"$(nproc)"
 
     - name: Run memcheck on CI selection
+      env:
+        ROSE_TEST_TIMEOUT_SCALE: "4"
       run: |
         set -o pipefail
-        ctest --test-dir build -T memcheck -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --output-on-failure 2>&1 | tee ctest-memcheck.log
+        ctest --test-dir build -T memcheck -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --timeout 5400 --output-on-failure 2>&1 | tee ctest-memcheck.log
 
     - name: Upload memcheck logs
       if: ${{ always() }}
@@ -232,6 +236,7 @@ jobs:
           libclang-cpp${LLVM_VERSION}-dev \
           libhpdf-dev \
           libtool \
+          libomp-${LLVM_VERSION}-dev \
           llvm-${LLVM_VERSION} \
           llvm-${LLVM_VERSION}-dev \
           openjdk-25-jdk \
@@ -239,13 +244,13 @@ jobs:
 
     - name: Configure (Debug + Sanitizers)
       env:
-        PATH: /usr/lib/llvm-${LLVM_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        LD_LIBRARY_PATH: /usr/lib/llvm-${LLVM_VERSION}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
-        CMAKE_PREFIX_PATH: /usr/lib/llvm-${LLVM_VERSION}
-        LLVM_DIR: /usr/lib/llvm-${LLVM_VERSION}
-        CC: clang-${LLVM_VERSION}
-        CXX: clang++-${LLVM_VERSION}
-        FC: flang-${LLVM_VERSION}
+        PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        LD_LIBRARY_PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}/lib:/usr/lib/jvm/java-25-openjdk-amd64/lib/server
+        CMAKE_PREFIX_PATH: /usr/lib/llvm-${{ env.LLVM_VERSION }}
+        LLVM_DIR: /usr/lib/llvm-${{ env.LLVM_VERSION }}
+        CC: clang-${{ env.LLVM_VERSION }}
+        CXX: clang++-${{ env.LLVM_VERSION }}
+        FC: flang-${{ env.LLVM_VERSION }}
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=Debug \
@@ -262,6 +267,8 @@ jobs:
       run: cmake --build build -j"$(nproc)"
 
     - name: Run sanitizer on CI selection
+      env:
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/scripts/rex-suppressions-for-lsan
       run: |
         set -o pipefail
         ctest --test-dir build -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --output-on-failure 2>&1 | tee ctest-sanitizer.log

@@ -904,16 +904,19 @@ void VarsExprsProductLattice::copy(const VarsExprsProductLattice *that) {
   // Remove all lattices in lattices/varLatticeIndex that don't appear in
   // that.lattices/that.varLatticeIndex
   varsToDelete.clear();
-  for (map<varID, int>::const_iterator varIdx = that->varLatticeIndex.begin();
-       varIdx != that->varLatticeIndex.end(); varIdx++) {
+  for (map<varID, int>::const_iterator varIdx = varLatticeIndex.begin();
+       varIdx != varLatticeIndex.end(); varIdx++) {
     if (that->varLatticeIndex.find(varIdx->first) ==
         that->varLatticeIndex.end())
       varsToDelete.insert(varIdx->first);
   }
   for (set<varID>::iterator var = varsToDelete.begin();
        var != varsToDelete.end(); var++) {
-    delete constVarLattices[*var];
-    constVarLattices.erase(*var);
+    map<varID, int>::iterator varIdx = varLatticeIndex.find(*var);
+    ROSE_ASSERT(varIdx != varLatticeIndex.end());
+    ROSE_ASSERT(varIdx->second >= 0 &&
+                static_cast<size_t>(varIdx->second) < lattices.size());
+    delete lattices[varIdx->second];
   }
 
   // Dbg::dbg << "VarsExprsProductLattice::copy()

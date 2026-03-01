@@ -194,6 +194,23 @@ public:
   }
 };
 
+class FortranOwnedStringAttribute : public AstValueAttribute<std::string> {
+public:
+  using AstValueAttribute<std::string>::AstValueAttribute;
+
+  AstAttribute *copy() const override {
+    return new FortranOwnedStringAttribute(*this);
+  }
+
+  std::string attribute_class_name() const override {
+    return "FortranOwnedStringAttribute";
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+};
+
 void MarkFortranImplicitDeclaration(SgVariableDeclaration *decl) {
   ASSERT_not_null(decl);
   if (decl->getAttribute(kFortranImplicitDeclAttr) != nullptr) {
@@ -1158,7 +1175,7 @@ void AttachFortranDirectiveSourceText(SgPragmaDeclaration *pragma,
   }
 
   pragma->addNewAttribute(kFortranOmpSourceTextAttributeName,
-                          new AstValueAttribute<std::string>(text));
+                          new FortranOwnedStringAttribute(text));
 }
 
 std::vector<OmpPragmaLine>
@@ -3431,7 +3448,7 @@ void BuildVisitor::Build(parser::Submodule &x) {
   SgModuleStatement *module{nullptr};
   builder.Enter(module, submoduleName);
   module->addNewAttribute(kFortranSubmoduleParentAttr,
-                          new AstValueAttribute<std::string>(parentName));
+                          new FortranOwnedStringAttribute(parentName));
 
   ApplyFortranBoundaryLabels(module, module->get_definition(), stmt.label,
                              end.label);

@@ -10,6 +10,69 @@
 
 using namespace std;
 
+NodeState::~NodeState() {
+#ifdef THREADED
+  for (LatticeMap::iterator it = dfInfoAbove.begin(); it != dfInfoAbove.end();
+       ++it) {
+    for (vector<Lattice *>::iterator l = it->second.begin();
+         l != it->second.end(); ++l) {
+      delete *l;
+    }
+    it->second.clear();
+  }
+  dfInfoAbove.clear();
+
+  for (LatticeMap::iterator it = dfInfoBelow.begin(); it != dfInfoBelow.end();
+       ++it) {
+    for (vector<Lattice *>::iterator l = it->second.begin();
+         l != it->second.end(); ++l) {
+      delete *l;
+    }
+    it->second.clear();
+  }
+  dfInfoBelow.clear();
+
+  for (NodeFactMap::iterator it = facts.begin(); it != facts.end(); ++it) {
+    for (vector<NodeFact *>::iterator f = it->second.begin();
+         f != it->second.end(); ++f) {
+      delete *f;
+    }
+    it->second.clear();
+  }
+  facts.clear();
+
+  initializedAnalyses.clear();
+#else
+  for (LatticeMap::iterator it = dfInfoAbove.begin(); it != dfInfoAbove.end();
+       ++it) {
+    for (vector<Lattice *>::iterator l = it->second.begin();
+         l != it->second.end(); ++l) {
+      delete *l;
+    }
+  }
+  dfInfoAbove.clear();
+
+  for (LatticeMap::iterator it = dfInfoBelow.begin(); it != dfInfoBelow.end();
+       ++it) {
+    for (vector<Lattice *>::iterator l = it->second.begin();
+         l != it->second.end(); ++l) {
+      delete *l;
+    }
+  }
+  dfInfoBelow.clear();
+
+  for (NodeFactMap::iterator it = facts.begin(); it != facts.end(); ++it) {
+    for (vector<NodeFact *>::iterator f = it->second.begin();
+         f != it->second.end(); ++f) {
+      delete *f;
+    }
+  }
+  facts.clear();
+
+  initializedAnalyses.clear();
+#endif
+}
+
 // Records that this analysis has initialized its state at this node
 void NodeState::initialized(Analysis *analysis) {
 #ifdef THREADED
@@ -44,28 +107,35 @@ Lattice* l)
 void NodeState::setLattices(const Analysis *analysis,
                             vector<Lattice *> &lattices) {
   vector<Lattice *> tmp;
+  auto clearOwnedLattices = [](vector<Lattice *> &owned) {
+    for (vector<Lattice *>::iterator it = owned.begin(); it != owned.end();
+         ++it) {
+      delete *it;
+    }
+    owned.clear();
+  };
 
 // Empty out the current mappings of analysis in dfInfoAbove and  dfInfoBelow
 #ifdef THREADED
   LatticeMap::accessor wA, wB;
 
   if (dfInfoAbove.find(wA, (Analysis *)analysis))
-    wA->second.clear();
+    clearOwnedLattices(wA->second);
   else
     wA->second = tmp;
 
   if (dfInfoBelow.find(wB, (Analysis *)analysis))
-    wB->second.clear();
+    clearOwnedLattices(wB->second);
   else
     wB->second = tmp;
 #else
   if (dfInfoAbove.find((Analysis *)analysis) != dfInfoAbove.end())
-    dfInfoAbove[(Analysis *)analysis].clear();
+    clearOwnedLattices(dfInfoAbove[(Analysis *)analysis]);
   else
     dfInfoAbove[(Analysis *)analysis] = tmp;
 
   if (dfInfoBelow.find((Analysis *)analysis) != dfInfoBelow.end())
-    dfInfoBelow[(Analysis *)analysis].clear();
+    clearOwnedLattices(dfInfoBelow[(Analysis *)analysis]);
   else
     dfInfoBelow[(Analysis *)analysis] = tmp;
 #endif
@@ -771,6 +841,28 @@ void NodeState::deleteState(const Analysis *analysis) {
 // ====== STATIC ======
 map<DataflowNode, vector<NodeState *>> NodeState::nodeStateMap;
 bool NodeState::nodeStateMapInit = false;
+
+void NodeState::clearNodeStateMap() {
+  for (map<DataflowNode, vector<NodeState *>>::iterator it =
+           nodeStateMap.begin();
+       it != nodeStateMap.end(); ++it) {
+    for (vector<NodeState *>::iterator ns = it->second.begin();
+         ns != it->second.end(); ++ns) {
+      delete *ns;
+    }
+    it->second.clear();
+  }
+  nodeStateMap.clear();
+  nodeStateMapInit = false;
+}
+
+namespace {
+struct NodeStateMapCleanupAtExit {
+  ~NodeStateMapCleanupAtExit() { NodeState::clearNodeStateMap(); }
+};
+
+NodeStateMapCleanupAtExit nodeStateMapCleanupAtExit;
+} // namespace
 
 // returns the NodeState object associated with the given dataflow node.
 // index is used when multiple NodeState objects are associated with a given

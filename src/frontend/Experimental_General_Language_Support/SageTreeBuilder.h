@@ -121,6 +121,7 @@ public:
 
   SageTreeBuilder(SgSourceFile *source, LanguageEnum language,
                   std::istringstream &tokens);
+  ~SageTreeBuilder();
 
   // WARNING: this constructor requires source_ to be set before usage (called
   // by flang main)

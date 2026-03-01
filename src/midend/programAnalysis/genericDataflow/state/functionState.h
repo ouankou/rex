@@ -40,6 +40,9 @@ public:
   // returns a set of all the functions whose declarations are in the project
   static std::set<FunctionState *> &getAllFuncs();
 
+  // releases cached FunctionState objects and resets cached lookup sets
+  static void clearFunctionStateCache();
+
   // returns the FunctionState associated with the given function
   // func may be any defined function
   static FunctionState *getDefinedFuncState(const Function &func);

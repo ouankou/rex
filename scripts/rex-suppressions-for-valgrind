@@ -448,3 +448,66 @@
    fun:_dl_new_object
    ...
 }
+
+{
+   rex_upstream_clang21_function_proto_uninit_cond_c1
+   Memcheck:Cond
+   fun:_ZN5clang17FunctionProtoTypeC1ENS_8QualTypeEN4llvm8ArrayRefIS1_EES1_RKNS0_12ExtProtoInfoE
+   fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_clang21_function_proto_uninit_cond_c2
+   Memcheck:Cond
+   fun:_ZN5clang17FunctionProtoTypeC2ENS_8QualTypeEN4llvm8ArrayRefIS1_EES1_RKNS0_12ExtProtoInfoE
+   fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
+   obj:*/libclang-cpp.so.*
+}
+
+{
+   rex_upstream_llvm_timergroup_managed_static_leak
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:*llvm::cl::Option::addArgument*
+   ...
+   fun:*llvm::TimerGroup::~TimerGroup*
+   obj:*/libLLVM.so.*
+}
+
+{
+   rex_upstream_llvm21_timergroup_managed_static_reachable_new
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:_Znwm*
+   ...
+   fun:_ZNK4llvm17ManagedStaticBase21RegisterManagedStaticEPFPvvEPFvS1_E
+   fun:_ZN4llvm10TimerGroupD1Ev
+   ...
+   obj:*/libLLVM.so.*
+}
+
+{
+   rex_upstream_llvm21_timergroup_managed_static_reachable_calloc
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:_ZN4llvm13StringMapImpl15LookupBucketForENS_9StringRefEj
+   ...
+   fun:_ZN4llvm2cl6Option11addArgumentEv
+   ...
+   fun:_ZN4llvm10TimerGroupD1Ev
+   ...
+   obj:*/libLLVM.so.*
+}
+
+{
+   rex_upstream_clang21_make_deduction_failure_info_leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:_ZN4llvm15SmallVectorBaseIjE8grow_podEPvmm
+   ...
+   fun:_ZN5clang24MakeDeductionFailureInfoERNS_10ASTContextENS_23TemplateDeductionResultERNS_4sema21TemplateDeductionInfoE
+   obj:*/libclang-cpp.so.*
+}

@@ -12311,8 +12311,17 @@ SgTemplateInstantiationFunctionDecl::SgTemplateInstantiationFunctionDecl ( SgNam
   // Same code as in generated constructor.
      p_templateName = "";
      p_templateDeclaration = nullptr;
-
      p_templateArguments = templateArguments;
+     p_deducedTemplateArguments = SgTemplateArgumentPtrList();
+     p_specializedTemplateDeclaration = NULL;
+     p_constraintSatisfactionEvaluated = false;
+     p_constraintSatisfactionSatisfied = true;
+     p_constraintSatisfactionContainsErrors = false;
+     p_constraintSatisfactionSubstitutionFailure = false;
+     p_constraintSatisfactionSummary = "";
+     p_sfinaeEvaluated = false;
+     p_sfinaeSubstitutionFailure = false;
+     p_sfinaeSummary = "";
      p_nameResetFromMangledForm = false;
      p_template_argument_list_is_explicit = false;
 
@@ -12399,6 +12408,16 @@ SgTemplateInstantiationMemberFunctionDecl::SgTemplateInstantiationMemberFunction
      p_templateName = "";
      p_templateDeclaration = NULL;
      p_templateArguments = templateArguments;
+     p_deducedTemplateArguments = SgTemplateArgumentPtrList();
+     p_specializedTemplateDeclaration = NULL;
+     p_constraintSatisfactionEvaluated = false;
+     p_constraintSatisfactionSatisfied = true;
+     p_constraintSatisfactionContainsErrors = false;
+     p_constraintSatisfactionSubstitutionFailure = false;
+     p_constraintSatisfactionSummary = "";
+     p_sfinaeEvaluated = false;
+     p_sfinaeSubstitutionFailure = false;
+     p_sfinaeSummary = "";
      p_nameResetFromMangledForm = false;
      p_template_argument_list_is_explicit = false;
 
@@ -14176,6 +14195,20 @@ SgTemplateVariableDeclaration::SgTemplateVariableDeclaration( const SgName& var_
   // DQ (11/10/2006): Ultimately, i think this constructor should be eliminated since it will be
   // redundant with a higher level interface which is planned and it is not automatically generated.
      ROSE_ASSERT (this != NULL);
+
+     p_templateParameters = SgTemplateParameterPtrList();
+     p_templateSpecializationArguments = SgTemplateArgumentPtrList();
+     p_deducedTemplateArguments = SgTemplateArgumentPtrList();
+     p_specializedTemplateDeclaration = NULL;
+     p_constraintSatisfactionEvaluated = false;
+     p_constraintSatisfactionSatisfied = true;
+     p_constraintSatisfactionContainsErrors = false;
+     p_constraintSatisfactionSubstitutionFailure = false;
+     p_constraintSatisfactionSummary = "";
+     p_sfinaeEvaluated = false;
+     p_sfinaeSubstitutionFailure = false;
+     p_sfinaeSummary = "";
+     p_string = "";
 
   // printf ("Inside of SgTemplateVariableDeclaration constructor taking all parameters \n");
   // initializeData (NULL,var_name,type,initializer);
