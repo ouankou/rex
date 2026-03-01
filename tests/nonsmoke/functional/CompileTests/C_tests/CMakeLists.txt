@@ -1008,9 +1008,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_91.c
   test2015_156.c
   test2015_157.c
-  test2015_23.c
-  test2015_29.c
-  test2015_30.c
   test2017_17.c
   test2018_08.c
   test2018_09.c
