@@ -85,12 +85,8 @@ set(CXX17_DISABLED_TESTCODES
   test2018_13.C
   test2018_14.C
   test2018_20.C
-  test2018_21.C
-  test2018_22.C
   test2018_24.C
-  test2018_25.C
   test2018_28.C
-  test2018_29.C
   test2018_30.C
   test2018_31.C
   test2018_32.C
@@ -100,7 +96,6 @@ set(CXX17_DISABLED_TESTCODES
   test2018_36.C
   test2018_37.C
   test2018_38.C
-  test2018_41.C
   test2018_42.C
   test2018_43.C
   test2018_44.C
