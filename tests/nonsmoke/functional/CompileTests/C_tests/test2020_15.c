@@ -1,13 +1,13 @@
-void foobar() 
-   {
-     int count;
+void foobar() {
+  int count;
 
-     switch (count)
-        {
-          case 40: 41;
-            // #pragma XXX
-            __attribute__((__fallthrough__));
-            int abc;
-          case 42: 43;
-        }
-   }
+  switch (count) {
+  case 40:
+    41;
+    // #pragma XXX
+    int abc;
+    __attribute__((__fallthrough__));
+  case 42:
+    43;
+  }
+}
