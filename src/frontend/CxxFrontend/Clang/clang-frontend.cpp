@@ -6172,6 +6172,7 @@ void SagePreprocessorRecord::SourceRangeSkipped(
     return;
   }
 
+  clang::LangOptions lang_opts;
   clang::SourceLocation begin = Range.getBegin();
   clang::SourceLocation end = Range.getEnd();
   if (begin.isMacroID()) {
@@ -6184,67 +6185,115 @@ void SagePreprocessorRecord::SourceRangeSkipped(
     return;
   }
 
+  clang::SourceLocation end_of_token =
+      clang::Lexer::getLocForEndOfToken(end, 0, *p_source_manager, lang_opts);
+  if (end_of_token.isValid()) {
+    end = end_of_token;
+  }
+
+  clang::CharSourceRange char_range =
+      clang::CharSourceRange::getCharRange(begin, end);
+  clang::CharSourceRange file_range =
+      clang::Lexer::makeFileCharRange(char_range, *p_source_manager, lang_opts);
+  if (file_range.isInvalid()) {
+    return;
+  }
+
+  begin = file_range.getBegin();
+  end = file_range.getEnd();
+  if (!begin.isValid() || !end.isValid() ||
+      !p_source_manager->isBeforeInTranslationUnit(begin, end)) {
+    return;
+  }
+
   clang::FileID file_id = p_source_manager->getFileID(begin);
   if (!file_id.isValid()) {
     return;
   }
 
-  clang::PresumedLoc begin_loc = p_source_manager->getPresumedLoc(begin);
-  if (!begin_loc.isValid() || begin_loc.getLine() == 0) {
-    return;
-  }
-  const unsigned begin_line = begin_loc.getLine();
+  clang::SourceLocation cursor = begin;
+  unsigned current_line = 0;
+  bool line_has_content = false;
+  bool expecting_undef = false;
+  clang::SourceLocation hash_loc;
 
-  auto is_undef_directive = [](const std::string &line) -> bool {
-    size_t pos = line.find_first_not_of(" \t");
-    if (pos == std::string::npos || line[pos] != '#') {
+  auto is_identifier_named_undef = [&](const clang::Token &token) -> bool {
+    if (!token.isAnyIdentifier()) {
       return false;
     }
-    ++pos;
-    while (pos < line.size() &&
-           std::isspace(static_cast<unsigned char>(line[pos]))) {
-      ++pos;
+    if (token.is(clang::tok::identifier)) {
+      const clang::IdentifierInfo *ident = token.getIdentifierInfo();
+      return ident != nullptr && ident->getName() == "undef";
     }
-    static const std::string keyword = "undef";
-    if (line.compare(pos, keyword.size(), keyword) != 0) {
-      return false;
-    }
-    pos += keyword.size();
-    return pos >= line.size() ||
-           std::isspace(static_cast<unsigned char>(line[pos]));
+    bool invalid_spelling = false;
+    std::string spelling = clang::Lexer::getSpelling(
+        token, *p_source_manager, lang_opts, &invalid_spelling);
+    return !invalid_spelling && spelling == "undef";
   };
 
-  clang::CharSourceRange char_range =
-      clang::CharSourceRange::getCharRange(begin, end);
-  bool invalid = false;
-  llvm::StringRef skipped_text = clang::Lexer::getSourceText(
-      char_range, *p_source_manager, clang::LangOptions(), &invalid);
-  if (invalid || skipped_text.empty()) {
-    return;
-  }
-
-  std::istringstream stream(skipped_text.str());
-  std::string line_text;
-  unsigned line_offset = 0;
-  while (std::getline(stream, line_text)) {
-    std::string directive_text = line_text;
-    if (!directive_text.empty() && directive_text.back() == '\r') {
-      directive_text.pop_back();
+  while (cursor.isValid() &&
+         p_source_manager->isBeforeInTranslationUnit(cursor, end)) {
+    clang::Token token;
+    if (clang::Lexer::getRawToken(cursor, token, *p_source_manager, lang_opts,
+                                  /*IgnoreWhiteSpace=*/true)) {
+      break;
     }
-    if (!is_undef_directive(directive_text)) {
-      ++line_offset;
+
+    if (token.is(clang::tok::eof) || token.getLength() == 0) {
+      break;
+    }
+
+    clang::SourceLocation token_loc = token.getLocation();
+    if (!token_loc.isValid() ||
+        !p_source_manager->isBeforeInTranslationUnit(token_loc, end)) {
+      break;
+    }
+
+    clang::FileID token_file_id = p_source_manager->getFileID(token_loc);
+    if (token_file_id != file_id) {
+      cursor = token_loc.getLocWithOffset(token.getLength());
       continue;
     }
 
-    clang::SourceLocation directive_loc = p_source_manager->translateLineCol(
-        file_id, begin_line + line_offset, 1);
-    if (!directive_loc.isValid()) {
-      directive_loc = begin;
+    bool invalid_line = false;
+    unsigned token_line =
+        p_source_manager->getSpellingLineNumber(token_loc, &invalid_line);
+    if (invalid_line || token_line == 0) {
+      cursor = token_loc.getLocWithOffset(token.getLength());
+      continue;
     }
-    recordDirective(directive_loc,
-                    PreprocessingInfo::CpreprocessorUndefDeclaration,
-                    directive_text);
-    ++line_offset;
+
+    if (token_line != current_line) {
+      current_line = token_line;
+      line_has_content = false;
+      expecting_undef = false;
+      hash_loc = clang::SourceLocation();
+    }
+
+    if (token.is(clang::tok::comment)) {
+      cursor = token_loc.getLocWithOffset(token.getLength());
+      continue;
+    }
+
+    if (!line_has_content) {
+      line_has_content = true;
+      if (token.is(clang::tok::hash)) {
+        expecting_undef = true;
+        hash_loc = token_loc;
+      }
+    } else if (expecting_undef) {
+      if (is_identifier_named_undef(token)) {
+        std::string directive_text = collectDirectiveText(hash_loc);
+        if (!directive_text.empty()) {
+          recordDirective(hash_loc,
+                          PreprocessingInfo::CpreprocessorUndefDeclaration,
+                          directive_text);
+        }
+      }
+      expecting_undef = false;
+    }
+
+    cursor = token_loc.getLocWithOffset(token.getLength());
   }
 }
 
