@@ -116,25 +116,11 @@ set(TESTCODES
   test2006_151.C test2006_152.C test2006_153.C test2006_154.C test2006_155.C
   test2006_156.C test2006_157.C test2006_158.C test2006_159.C test2006_160.C
   test2006_161.C test2006_162.C test2006_163.C test2006_164.C test2006_165.C
-  test2006_166.C test2006_180.C test_int_lexemes.C
+  test2006_166.C test2006_171.C test2006_180.C test_int_lexemes.C
   test_int_lexemes_donot_pass.C test_simple_int.C test_wchars.C
   lexPhase2003_01.C math.C inputForLoopLocator.C)
 
 set(TESTCODE_INCLUDES "")
-
-foreach(file_to_test ${TESTCODES})
-	configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test}
-    ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test}
-    COPYONLY)
-
-  add_test(
-    NAME SOURCEPOSITIONTEST_${file_to_test}
-    COMMAND statements ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
-      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
-      -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
-  set_tests_properties(SOURCEPOSITIONTEST_${file_to_test} PROPERTIES LABELS SOURCEPOSITIONTEST)
-endforeach()
 
 set(_source_position_disabled_tests
   lexPhase2003_02.C
@@ -170,7 +156,6 @@ set(_source_position_disabled_tests
   test2006_168.C
   test2006_169.C
   test2006_170.C
-  test2006_171.C
   test2006_172.C
   test2006_173.C
   test2006_174.C
@@ -179,18 +164,31 @@ set(_source_position_disabled_tests
   test2006_177.C
 )
 
-foreach(file_to_test ${_source_position_disabled_tests})
+# Ensure disabled tests are not included in the enabled test set by removing
+# them from the TESTCODES list.
+list(REMOVE_ITEM TESTCODES ${_source_position_disabled_tests})
+
+function(add_source_position_test test_file)
   configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${file_to_test}
-    ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${test_file}
+    ${CMAKE_CURRENT_BINARY_DIR}/${test_file}
     COPYONLY)
 
   add_test(
-    NAME SOURCEPOSITIONTEST_${file_to_test}
+    NAME SOURCEPOSITIONTEST_${test_file}
     COMMAND statements ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
       -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests
-      -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
-  set_tests_properties(SOURCEPOSITIONTEST_${file_to_test} PROPERTIES DISABLED TRUE LABELS SOURCEPOSITIONTEST)
+      -c ${CMAKE_CURRENT_BINARY_DIR}/${test_file})
+
+  set_tests_properties(SOURCEPOSITIONTEST_${test_file} PROPERTIES LABELS SOURCEPOSITIONTEST ${ARGN})
+endfunction()
+
+foreach(file_to_test ${TESTCODES})
+  add_source_position_test(${file_to_test})
+endforeach()
+
+foreach(file_to_test ${_source_position_disabled_tests})
+  add_source_position_test(${file_to_test} DISABLED TRUE)
 endforeach()
 
 # Makefile check targets.
