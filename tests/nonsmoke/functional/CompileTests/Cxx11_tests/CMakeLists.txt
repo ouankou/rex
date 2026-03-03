@@ -1011,6 +1011,7 @@ endfunction()
 
 assert_cxx11_specimens_exist(CXX11_TESTCODES)
 assert_cxx11_specimens_exist(CXX11_TESTCODES_CXX03)
+assert_cxx11_specimens_exist(CXX11_DISABLED_TESTCODES)
 
 set(ROSE_FLAGS_BASE
   -w -rose:verbose 0 -rose:skip_unparse_asm_commands)
