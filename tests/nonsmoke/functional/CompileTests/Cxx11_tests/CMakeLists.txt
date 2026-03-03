@@ -496,7 +496,6 @@ set(CXX11_TESTCODES
   test2019_343.C
   test2019_347.C
   test2019_349.C
-  test2019_350.C
   test2019_351.C
   test2019_352.C
   test2019_353.C
@@ -922,7 +921,6 @@ set(CXX11_TESTCODES
   test2020_20.C
   test2020_21.C
   test2018_100.C
-  test_1.C
 )
 set(CXX11_DISABLED_TESTCODES
   test2012_24.C
@@ -979,7 +977,6 @@ set(CXX11_DISABLED_TESTCODES
   test2020_91.C
   test2020_95.C
   test2018_100.C
-  test_1.C
 )
 
 set(CXX11_TESTCODES_CXX03
@@ -987,6 +984,26 @@ set(CXX11_TESTCODES_CXX03
   test2019_56.C
 )
 list(REMOVE_ITEM CXX11_TESTCODES ${CXX11_TESTCODES_CXX03})
+
+function(assert_cxx11_specimens_exist test_files_var_name)
+  set(_missing_specimens)
+  foreach(_specimen IN LISTS ${test_files_var_name})
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_specimen}")
+      list(APPEND _missing_specimens "${_specimen}")
+    endif()
+  endforeach()
+
+  if(_missing_specimens)
+    string(REPLACE ";" "\n  " _missing_specimens_pretty "${_missing_specimens}")
+    message(FATAL_ERROR
+      "Cxx11 test list '${test_files_var_name}' references missing specimen file(s):\n"
+      "  ${_missing_specimens_pretty}\n"
+      "Please update Cxx11_tests/CMakeLists.txt to match available specimens.")
+  endif()
+endfunction()
+
+assert_cxx11_specimens_exist(CXX11_TESTCODES)
+assert_cxx11_specimens_exist(CXX11_TESTCODES_CXX03)
 
 set(ROSE_FLAGS_BASE
   -w -rose:verbose 0 -rose:skip_unparse_asm_commands)
