@@ -986,19 +986,23 @@ set(CXX11_TESTCODES_CXX03
 list(REMOVE_ITEM CXX11_TESTCODES ${CXX11_TESTCODES_CXX03})
 
 function(assert_cxx11_specimens_exist test_files_var_name)
+  # Build the specimen set once and reuse it for all list validations.
+  if(NOT DEFINED _cxx11_tests_all_specimens)
+    file(GLOB _specimens
+      RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/*.C"
+      "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+    set(_cxx11_tests_all_specimens "${_specimens}" CACHE INTERNAL
+      "List of all C/C++ specimens in Cxx11_tests")
+  endif()
+
   set(_missing_specimens)
   foreach(_specimen IN LISTS ${test_files_var_name})
-    # Reset cached lookup each iteration to avoid stale find_file results.
-    unset(_specimen_path CACHE)
-    find_file(_specimen_path
-      NAMES "${_specimen}"
-      PATHS "${CMAKE_CURRENT_SOURCE_DIR}"
-      NO_DEFAULT_PATH)
-    if(NOT _specimen_path)
+    list(FIND _cxx11_tests_all_specimens "${_specimen}" _specimen_index)
+    if(_specimen_index EQUAL -1)
       list(APPEND _missing_specimens "${_specimen}")
     endif()
   endforeach()
-  unset(_specimen_path CACHE)
 
   if(_missing_specimens)
     string(REPLACE ";" "\n  " _missing_specimens_pretty "${_missing_specimens}")
