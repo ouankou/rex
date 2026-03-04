@@ -9,6 +9,17 @@ set(REX_FRONTEND_ERROR_TESTS
   rex_test2025_cfe_error_exit_code.cpp
   # Issue 99: Friend function template lookup requires error-tolerant mode.
   rex_test2025_issue99.cpp
+  # Issue 441: Builtin redeclarations produce diagnostics; keep frontend alive.
+  test2017_02.c
+  test2018_26.c
+  test2016_35.C
+)
+
+# These are intentionally exercised via dedicated tests with explicit pass/fail
+# semantics and should not be auto-added to default compile_test loops.
+set(REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT
+  rex_test2025_cfe_error_exit_code.cpp
+  rex_test2025_issue99.cpp
 )
 
 add_executable(testTranslator testTranslator.C)

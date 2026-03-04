@@ -6893,11 +6893,56 @@ bool ClangToSageTranslator::VisitChooseExpr(clang::ChooseExpr *choose_expr,
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitChooseExpr" << std::endl;
 #endif
-  bool res = true;
+  clang::Expr *cond_sub_expr = choose_expr->getCond();
+  clang::Expr *true_sub_expr = choose_expr->getLHS();
+  clang::Expr *false_sub_expr = choose_expr->getRHS();
+  if (cond_sub_expr == nullptr || true_sub_expr == nullptr ||
+      false_sub_expr == nullptr) {
+    ROSE_ASSERT(!"ChooseExpr has null subexpression");
+    return false;
+  }
 
-  // TODO
+  // __builtin_choose_expr is compile-time conditional selection.
+  // For non-dependent conditions, evaluate and translate only the chosen arm.
+  if (!choose_expr->isConditionDependent() &&
+      !choose_expr->isValueDependent() && p_compiler_instance != nullptr) {
+    clang::Expr::EvalResult eval_result;
+    if (cond_sub_expr->EvaluateAsInt(eval_result,
+                                     p_compiler_instance->getASTContext())) {
+      const llvm::APSInt &value = eval_result.Val.getInt();
+      clang::Expr *chosen_sub_expr =
+          value != 0 ? true_sub_expr : false_sub_expr;
+      ROSE_ASSERT(chosen_sub_expr != nullptr);
 
-  return VisitExpr(choose_expr, node) && res;
+      *node = Traverse(chosen_sub_expr);
+      ROSE_ASSERT(*node != nullptr);
+      applySourceRange(*node, choose_expr->getSourceRange());
+
+      return VisitExpr(choose_expr, node);
+    }
+  }
+
+  SgExpression *cond_expr = isSgExpression(Traverse(cond_sub_expr));
+  ROSE_ASSERT(cond_expr != nullptr);
+
+  SgExpression *true_expr = isSgExpression(Traverse(true_sub_expr));
+  ROSE_ASSERT(true_expr != nullptr);
+
+  SgExpression *false_expr = isSgExpression(Traverse(false_sub_expr));
+  ROSE_ASSERT(false_expr != nullptr);
+
+  // Clang has already computed the final conditional-result type (after
+  // standard conversions/promotions). Preserve that exact type in ROSE.
+  SgType *result_type = buildTypeFromQualifiedType(choose_expr->getType());
+  ROSE_ASSERT(result_type != nullptr);
+
+  SgConditionalExp *cond_exp = SageBuilder::buildConditionalExp_nfi(
+      cond_expr, true_expr, false_expr, result_type);
+  ROSE_ASSERT(cond_exp != nullptr);
+  applySourceRange(cond_exp, choose_expr->getSourceRange());
+  *node = cond_exp;
+
+  return VisitExpr(choose_expr, node);
 }
 
 bool ClangToSageTranslator::VisitCompoundLiteralExpr(
