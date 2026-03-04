@@ -174,7 +174,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_75.C
   test2020_82.C
   test2020_99.C
-  test2020_109.C
   test2020_112.C
   test2020_113.C
   test2020_117.C

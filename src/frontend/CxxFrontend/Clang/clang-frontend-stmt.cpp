@@ -5217,6 +5217,9 @@ bool ClangToSageTranslator::VisitBinaryOperator(
   case clang::BO_Shr:
     *node = SageBuilder::buildRshiftOp(lhs, rhs);
     break;
+  case clang::BO_Cmp:
+    *node = SageBuilder::buildSpaceshipOp(lhs, rhs);
+    break;
   case clang::BO_LT:
     *node = SageBuilder::buildLessThanOp(lhs, rhs);
     break;
