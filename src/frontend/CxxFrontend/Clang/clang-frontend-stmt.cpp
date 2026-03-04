@@ -6893,11 +6893,31 @@ bool ClangToSageTranslator::VisitChooseExpr(clang::ChooseExpr *choose_expr,
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitChooseExpr" << std::endl;
 #endif
-  bool res = true;
+  SgExpression *cond_expr = isSgExpression(Traverse(choose_expr->getCond()));
+  ROSE_ASSERT(cond_expr != nullptr);
 
-  // TODO
+  SgExpression *true_expr = isSgExpression(Traverse(choose_expr->getLHS()));
+  ROSE_ASSERT(true_expr != nullptr);
 
-  return VisitExpr(choose_expr, node) && res;
+  SgExpression *false_expr = isSgExpression(Traverse(choose_expr->getRHS()));
+  ROSE_ASSERT(false_expr != nullptr);
+
+  SgType *cond_type = buildTypeFromQualifiedType(choose_expr->getType());
+  if (cond_type == nullptr) {
+    cond_type = true_expr->get_type();
+  }
+  if (cond_type == nullptr) {
+    cond_type = false_expr->get_type();
+  }
+  ROSE_ASSERT(cond_type != nullptr);
+
+  SgConditionalExp *cond_exp = SageBuilder::buildConditionalExp_nfi(
+      cond_expr, true_expr, false_expr, cond_type);
+  ROSE_ASSERT(cond_exp != nullptr);
+  applySourceRange(cond_exp, choose_expr->getSourceRange());
+  *node = cond_exp;
+
+  return VisitExpr(choose_expr, node);
 }
 
 bool ClangToSageTranslator::VisitCompoundLiteralExpr(
