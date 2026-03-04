@@ -818,11 +818,9 @@ set(TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2009_06.c
   test2010_05.c
   test2010_16.c
-  test2017_02.c
   test2017_03.c
   test2017_05.c
   test2017_16.c
-  test2018_26.c
   test2018_27.c
   test2018_34.c
   test2018_40.c
@@ -976,11 +974,9 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_81.c
   test2015_82.c
   test2015_83.c
-  test2017_02.c
   test2017_03.c
   test2017_05.c
   test2017_16.c
-  test2018_26.c
   test2018_27.c
   test2018_34.c
   test2018_40.c
