@@ -148,7 +148,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_42.C
   test2020_43.C
   test2020_44.C
-  test2020_45.C
   test2020_46.C
   test2020_48.C
   test2020_49.C
@@ -189,10 +188,50 @@ set(ROSE_DISABLED_TESTCODES ${CXX20_DISABLED_TESTCODES})
 set(ROSE_EXPECTED_FAIL_TESTCODES ${CXX20_EXPECTED_FAIL_TESTCODES})
 
 foreach(file_to_test ${CXX20_TESTCODES})
+  if(file_to_test STREQUAL "test2020_45.C")
+    continue()
+  endif()
   compile_test(${file_to_test} "Cxx20_tests")
   rex_compile_test_name(_test_name "Cxx20_tests" ${file_to_test})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
 endforeach()
+
+set(_test2020_45_source "${CMAKE_CURRENT_SOURCE_DIR}/test2020_45.C")
+set(_test2020_45_module_source "${CMAKE_CURRENT_SOURCE_DIR}/test2020_45_module.C")
+set(_test2020_45_module_dir "${CMAKE_CURRENT_BINARY_DIR}/test2020_45_modules")
+set(_test2020_45_iostream_pcm "${_test2020_45_module_dir}/iostream.pcm")
+set(_test2020_45_module_pcm "${_test2020_45_module_dir}/test2020_45_module.pcm")
+
+string(CONCAT _test2020_45_command
+  "set -eu; "
+  "module_dir=\"${_test2020_45_module_dir}\"; "
+  "mkdir -p \"$module_dir\"; "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -xc++-system-header --precompile iostream "
+  "-o \"${_test2020_45_iostream_pcm}\"; "
+  "${CMAKE_CXX_COMPILER} -std=c++20 -x c++-module --precompile "
+  "\"${_test2020_45_module_source}\" "
+  "-fmodule-file=\"${_test2020_45_iostream_pcm}\" "
+  "-o \"${_test2020_45_module_pcm}\"; "
+  "translator=\"$1\"; shift; "
+  "exec \"$translator\" "
+  "-fmodule-file=\"${_test2020_45_iostream_pcm}\" "
+  "-fmodule-file=test2020_45_module=${_test2020_45_module_pcm} "
+  "\"$@\"")
+
+add_test(
+  NAME Cxx20_tests_test2020_45_C
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    sh -c
+    "${_test2020_45_command}"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${_test2020_45_source}
+)
+set_tests_properties(Cxx20_tests_test2020_45_C PROPERTIES LABELS Cxx20_tests)
+rex_lock_test_for_input(Cxx20_tests_test2020_45_C test2020_45.C)
 
 # Makefile check targets.
 set(_cxx20_make_tests)

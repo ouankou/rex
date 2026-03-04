@@ -4203,6 +4203,16 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
   const bool respect_rtti_flags =
       std::find(argv.begin(), argv.end(), "-rex:clang:respect-rtti-flags") !=
       argv.end();
+  auto is_split_module_option = [](const std::string &arg) {
+    return arg == "-fmodule-file" || arg == "-fprebuilt-module-path" ||
+           arg == "-fmodule-map-file";
+  };
+  auto is_module_option = [&](const std::string &arg) {
+    return arg.rfind("-fmodule", 0) == 0 || arg.rfind("-fmodules", 0) == 0 ||
+           arg.rfind("-fcxx-modules", 0) == 0 ||
+           arg.rfind("-fimplicit-module", 0) == 0 ||
+           arg.rfind("-fprebuilt-module-path", 0) == 0;
+  };
 
   for (size_t i = 0; i < argv.size(); i++) {
     std::string current_arg(argv[i]);
@@ -4283,6 +4293,16 @@ void SgFile::build_CLANG_CommandLine(vector<string> &inputCommandLine,
       // Keep exceptions enabled in frontend parsing to build a complete C++
       // AST; disabling remains a backend concern.
     } else if (isRexClangFrontendOption(current_arg)) {
+      clang_frontend_args.push_back(current_arg);
+    } else if (is_split_module_option(current_arg)) {
+      clang_frontend_args.push_back(current_arg);
+      ++i;
+      if (i < argv.size()) {
+        clang_frontend_args.push_back(argv[i]);
+      } else {
+        break;
+      }
+    } else if (is_module_option(current_arg)) {
       clang_frontend_args.push_back(current_arg);
     } else if (!current_arg.empty() && current_arg[0] == '-') {
       // Ignore other frontend/driver flags that Clang cc1 doesn't accept.
