@@ -6893,6 +6893,27 @@ bool ClangToSageTranslator::VisitChooseExpr(clang::ChooseExpr *choose_expr,
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitChooseExpr" << std::endl;
 #endif
+  // __builtin_choose_expr is compile-time conditional selection.
+  // For non-dependent conditions, evaluate and translate only the chosen arm.
+  if (!choose_expr->isConditionDependent() &&
+      !choose_expr->isValueDependent() && p_compiler_instance != nullptr &&
+      choose_expr->getCond() != nullptr) {
+    clang::Expr::EvalResult eval_result;
+    if (choose_expr->getCond()->EvaluateAsInt(
+            eval_result, p_compiler_instance->getASTContext())) {
+      const llvm::APSInt &value = eval_result.Val.getInt();
+      clang::Expr *chosen_sub_expr =
+          value != 0 ? choose_expr->getLHS() : choose_expr->getRHS();
+      ROSE_ASSERT(chosen_sub_expr != nullptr);
+
+      *node = Traverse(chosen_sub_expr);
+      ROSE_ASSERT(*node != nullptr);
+      applySourceRange(*node, choose_expr->getSourceRange());
+
+      return VisitExpr(choose_expr, node);
+    }
+  }
+
   SgExpression *cond_expr = isSgExpression(Traverse(choose_expr->getCond()));
   ROSE_ASSERT(cond_expr != nullptr);
 
@@ -6902,17 +6923,17 @@ bool ClangToSageTranslator::VisitChooseExpr(clang::ChooseExpr *choose_expr,
   SgExpression *false_expr = isSgExpression(Traverse(choose_expr->getRHS()));
   ROSE_ASSERT(false_expr != nullptr);
 
-  SgType *cond_type = buildTypeFromQualifiedType(choose_expr->getType());
-  if (cond_type == nullptr) {
-    cond_type = true_expr->get_type();
+  SgType *result_type = buildTypeFromQualifiedType(choose_expr->getType());
+  if (result_type == nullptr) {
+    result_type = true_expr->get_type();
   }
-  if (cond_type == nullptr) {
-    cond_type = false_expr->get_type();
+  if (result_type == nullptr) {
+    result_type = false_expr->get_type();
   }
-  ROSE_ASSERT(cond_type != nullptr);
+  ROSE_ASSERT(result_type != nullptr);
 
   SgConditionalExp *cond_exp = SageBuilder::buildConditionalExp_nfi(
-      cond_expr, true_expr, false_expr, cond_type);
+      cond_expr, true_expr, false_expr, result_type);
   ROSE_ASSERT(cond_exp != nullptr);
   applySourceRange(cond_exp, choose_expr->getSourceRange());
   *node = cond_exp;
