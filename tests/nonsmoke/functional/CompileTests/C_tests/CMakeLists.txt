@@ -825,8 +825,6 @@ set(TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2018_26.c
   test2018_27.c
   test2018_34.c
-  test2018_38.c
-  test2018_39.c
   test2018_40.c
   test2020_20.c
   test2020_23.c
@@ -985,8 +983,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2018_26.c
   test2018_27.c
   test2018_34.c
-  test2018_38.c
-  test2018_39.c
   test2018_40.c
   test2020_20.c
   test2020_23.c
