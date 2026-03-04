@@ -6923,13 +6923,9 @@ bool ClangToSageTranslator::VisitChooseExpr(clang::ChooseExpr *choose_expr,
   SgExpression *false_expr = isSgExpression(Traverse(choose_expr->getRHS()));
   ROSE_ASSERT(false_expr != nullptr);
 
+  // Clang has already computed the final conditional-result type (after
+  // standard conversions/promotions). Preserve that exact type in ROSE.
   SgType *result_type = buildTypeFromQualifiedType(choose_expr->getType());
-  if (result_type == nullptr) {
-    result_type = true_expr->get_type();
-  }
-  if (result_type == nullptr) {
-    result_type = false_expr->get_type();
-  }
   ROSE_ASSERT(result_type != nullptr);
 
   SgConditionalExp *cond_exp = SageBuilder::buildConditionalExp_nfi(
