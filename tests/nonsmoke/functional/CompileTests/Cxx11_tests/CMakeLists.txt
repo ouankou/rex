@@ -986,25 +986,24 @@ set(CXX11_TESTCODES_CXX03
 list(REMOVE_ITEM CXX11_TESTCODES ${CXX11_TESTCODES_CXX03})
 
 function(assert_cxx11_specimens_exist test_files_var_name)
-  # Build the specimen set once and reuse it for all list validations.
-  if(NOT DEFINED _cxx11_tests_all_specimens)
-    file(GLOB _specimens
-      RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-      "${CMAKE_CURRENT_SOURCE_DIR}/*.C"
-      "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
-    set(_cxx11_tests_all_specimens "${_specimens}" CACHE INTERNAL
-      "List of all C/C++ specimens in Cxx11_tests")
-  endif()
+  # Find all C/C++ specimen files in the current directory.
+  file(GLOB _specimens
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.C"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
 
   set(_missing_specimens ${${test_files_var_name}})
-  list(REMOVE_ITEM _missing_specimens ${_cxx11_tests_all_specimens})
+  list(REMOVE_ITEM _missing_specimens ${_specimens})
 
   if(_missing_specimens)
-    string(REPLACE ";" "\n  " _missing_specimens_pretty "${_missing_specimens}")
-    message(FATAL_ERROR
-      "Cxx11 test list '${test_files_var_name}' references missing specimen file(s):\n"
-      "  ${_missing_specimens_pretty}\n"
-      "Please update Cxx11_tests/CMakeLists.txt to match available specimens.")
+    set(_error_message
+      "Cxx11 test list '${test_files_var_name}' references missing specimen file(s):")
+    foreach(_file IN LISTS _missing_specimens)
+      set(_error_message "${_error_message}\n  ${_file}")
+    endforeach()
+    set(_error_message
+      "${_error_message}\nPlease update Cxx11_tests/CMakeLists.txt to match available specimens.")
+    message(FATAL_ERROR "${_error_message}")
   endif()
 endfunction()
 
