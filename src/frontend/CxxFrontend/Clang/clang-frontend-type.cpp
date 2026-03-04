@@ -2831,13 +2831,18 @@ bool ClangToSageTranslator::VisitRecordType(clang::RecordType *record_type,
     }
   }
 
+  // Preserve whether the symbol was missing before the post-translation
+  // refresh. This drives first-seen tracking for contexts like sizeof(type),
+  // where ROSE may need to emit an inline base-type defining declaration.
+  const bool class_symbol_missing_before_refresh = (class_sym == NULL);
+
   // After translating the declaration, the symbol should now exist; refresh the
-  // lookup for the first-seen tracking (matches historical behavior).
+  // lookup for downstream users.
   if (class_sym == NULL) {
     class_sym = isSgClassSymbol(GetSymbolFromSymbolTable(lookup_decl));
   }
 
-  bool first_see_in_type = (class_sym == NULL);
+  bool first_see_in_type = class_symbol_missing_before_refresh;
   if (isSgClassType(*node) != NULL) {
     p_class_type_decl_first_see_in_type.insert(std::pair<SgClassType *, bool>(
         isSgClassType(*node), first_see_in_type));
