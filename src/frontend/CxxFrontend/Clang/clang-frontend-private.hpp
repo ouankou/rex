@@ -985,6 +985,10 @@ protected:
   void attachSFINAEFailure(SgNode *node, const SFINAEFailureResult &result);
   bool shouldSkipSymbolForConstraints(const SgDeclarationStatement *decl) const;
   void pruneSymbolsForConstraints(SgDeclarationStatement *decl);
+  bool buildCoroutineAwaitExpression(clang::Expr *operand,
+                                     clang::SourceRange source_range,
+                                     const char *operand_description,
+                                     SgNode **node);
 
 public:
   ClangToSageTranslator(clang::CompilerInstance *compiler_instance,

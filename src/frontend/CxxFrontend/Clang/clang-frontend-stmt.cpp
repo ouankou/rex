@@ -3,6 +3,7 @@
 
 #include "clang-to-rose-support.hpp"
 
+#include "rex_coroutine_attributes.h"
 #include "sage3basic.h"
 
 #include <algorithm>
@@ -55,15 +56,12 @@ static void suppress_unparse_output(SgLocatedNode *n) {
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
-inline constexpr char kCoroutineKeywordAttributeName[] =
-    "rex_coroutine_keyword";
-
 static void setCoroutineKeywordAttribute(SgNode *node,
                                          const char *keyword_spelling) {
   if (node == nullptr || keyword_spelling == nullptr) {
     return;
   }
-  node->setAttribute(kCoroutineKeywordAttributeName,
+  node->setAttribute(Rose::kCoroutineKeywordAttributeName,
                      new AstValueAttribute<std::string>(keyword_spelling));
 }
 
@@ -7253,21 +7251,21 @@ bool ClangToSageTranslator::VisitConvertVectorExpr(
   return VisitExpr(convert_vector_expr, node) && res;
 }
 
-bool ClangToSageTranslator::VisitCoroutineSuspendExpr(
-    clang::CoroutineSuspendExpr *coroutine_suspend_expr, SgNode **node) {
-#if DEBUG_VISIT_STMT
-  std::cerr << "ClangToSageTranslator::VisitCoroutineSuspendExpr" << std::endl;
-#endif
-  bool res = true;
+bool ClangToSageTranslator::buildCoroutineAwaitExpression(
+    clang::Expr *operand, clang::SourceRange source_range,
+    const char *operand_description, SgNode **node) {
+  ROSE_ASSERT(node != nullptr);
 
+  bool res = true;
   SgExpression *operand_expr = nullptr;
-  if (clang::Expr *operand = coroutine_suspend_expr->getOperand()) {
+  if (operand != nullptr) {
     SgNode *tmp_operand = Traverse(operand);
     operand_expr = isSgExpression(tmp_operand);
     if (tmp_operand != nullptr && operand_expr == nullptr) {
-      std::cerr << "Runtime error: coroutine operand did not translate into "
-                   "SgExpression"
-                << std::endl;
+      std::cerr << "Runtime error: "
+                << (operand_description != nullptr ? operand_description
+                                                   : "coroutine operand")
+                << " did not translate into SgExpression" << std::endl;
       res = false;
     }
   }
@@ -7282,8 +7280,20 @@ bool ClangToSageTranslator::VisitCoroutineSuspendExpr(
   if (operand_expr->get_parent() == nullptr) {
     operand_expr->set_parent(await_expr);
   }
-  applySourceRange(await_expr, coroutine_suspend_expr->getSourceRange());
+  applySourceRange(await_expr, source_range);
   *node = await_expr;
+
+  return res;
+}
+
+bool ClangToSageTranslator::VisitCoroutineSuspendExpr(
+    clang::CoroutineSuspendExpr *coroutine_suspend_expr, SgNode **node) {
+#if DEBUG_VISIT_STMT
+  std::cerr << "ClangToSageTranslator::VisitCoroutineSuspendExpr" << std::endl;
+#endif
+  bool res = buildCoroutineAwaitExpression(
+      coroutine_suspend_expr->getOperand(),
+      coroutine_suspend_expr->getSourceRange(), "coroutine operand", node);
 
   return VisitExpr(coroutine_suspend_expr, node) && res;
 }
@@ -7325,31 +7335,10 @@ bool ClangToSageTranslator::VisitCoyieldExpr(clang::CoyieldExpr *coyield_expr,
     }
   }
 
-  SgExpression *operand_expr = nullptr;
-  if (operand != nullptr) {
-    SgNode *tmp_operand = Traverse(operand);
-    operand_expr = isSgExpression(tmp_operand);
-    if (tmp_operand != nullptr && operand_expr == nullptr) {
-      std::cerr << "Runtime error: co_yield operand did not translate into "
-                   "SgExpression"
-                << std::endl;
-      res = false;
-    }
-  }
-
-  if (operand_expr == nullptr) {
-    operand_expr = SageBuilder::buildNullExpression();
-  }
-
-  SgAwaitExpression *await_expr = SageBuilder::buildAwaitExpression_nfi();
-  ROSE_ASSERT(await_expr != nullptr);
-  await_expr->set_value(operand_expr);
-  if (operand_expr->get_parent() == nullptr) {
-    operand_expr->set_parent(await_expr);
-  }
-  setCoroutineKeywordAttribute(await_expr, "co_yield");
-  applySourceRange(await_expr, coyield_expr->getSourceRange());
-  *node = await_expr;
+  res = buildCoroutineAwaitExpression(operand, coyield_expr->getSourceRange(),
+                                      "co_yield operand", node) &&
+        res;
+  setCoroutineKeywordAttribute(*node, "co_yield");
 
   return VisitExpr(coyield_expr, node) && res;
 }
@@ -10528,33 +10517,11 @@ bool ClangToSageTranslator::VisitDependentCoawaitExpr(
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitDependentCoawaitExpr" << std::endl;
 #endif
-  bool res = true;
-
-  SgExpression *operand_expr = nullptr;
-  if (clang::Expr *operand = dependent_coawait_expr->getOperand()) {
-    SgNode *tmp_operand = Traverse(operand);
-    operand_expr = isSgExpression(tmp_operand);
-    if (tmp_operand != nullptr && operand_expr == nullptr) {
-      std::cerr << "Runtime error: dependent co_await operand did not "
-                   "translate into SgExpression"
-                << std::endl;
-      res = false;
-    }
-  }
-
-  if (operand_expr == nullptr) {
-    operand_expr = SageBuilder::buildNullExpression();
-  }
-
-  SgAwaitExpression *await_expr = SageBuilder::buildAwaitExpression_nfi();
-  ROSE_ASSERT(await_expr != nullptr);
-  await_expr->set_value(operand_expr);
-  if (operand_expr->get_parent() == nullptr) {
-    operand_expr->set_parent(await_expr);
-  }
-  setCoroutineKeywordAttribute(await_expr, "co_await");
-  applySourceRange(await_expr, dependent_coawait_expr->getSourceRange());
-  *node = await_expr;
+  bool res =
+      buildCoroutineAwaitExpression(dependent_coawait_expr->getOperand(),
+                                    dependent_coawait_expr->getSourceRange(),
+                                    "dependent co_await operand", node);
+  setCoroutineKeywordAttribute(*node, "co_await");
 
   return VisitExpr(dependent_coawait_expr, node) && res;
 }

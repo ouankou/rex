@@ -11,6 +11,7 @@
  *
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
+#include "rex_coroutine_attributes.h"
 #include "sage3basic.h"
 
 #include "unparser.h"
@@ -31,9 +32,6 @@ using namespace Rose;
 #define OUTPUT_DEBUGGING_INFORMATION 0
 
 namespace {
-inline constexpr char kCoroutineKeywordAttributeName[] =
-    "rex_coroutine_keyword";
-
 bool isBinaryOperatorName(const string &func_name) {
   return func_name == "operator+" || func_name == "operator-" ||
          func_name == "operator*" || func_name == "operator/" ||

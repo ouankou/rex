@@ -14,6 +14,7 @@
  *
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
+#include "rex_coroutine_attributes.h"
 #include "sage3basic.h"
 
 #include "unparser.h"
@@ -54,9 +55,6 @@ using namespace Rose;
 #define ENABLE_unparsedPartiallyUsingTokenStream 1
 
 namespace {
-inline constexpr char kCoroutineKeywordAttributeName[] =
-    "rex_coroutine_keyword";
-
 SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   if (definition == NULL) {
     return NULL;
