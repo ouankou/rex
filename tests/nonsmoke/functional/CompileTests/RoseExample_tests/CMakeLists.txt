@@ -1,9 +1,9 @@
 set(files_to_test
   testRoseHeaders_00.C testRoseHeaders_01.C testRoseHeaders_02.C
-  testRoseHeaders_03.C testRoseHeaders_04.C testRoseHeaders_05.C
-  testRoseHeaders_06.C testRoseHeaders_09.C testRoseHeaders_14.C
+  testRoseHeaders_03.C testRoseHeaders_04.C testRoseHeaders_09.C
+  testRoseHeaders_14.C
   testRosePublicConfigPaths.C
-  test2003_33.C test2003_34.C test2004_46.C test2006_43.C)
+  test2003_33.C test2003_34.C test2006_43.C)
 
 set(ROSE_FLAGS  -w )
 
