@@ -14,6 +14,7 @@
  *
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
+#include "rex_coroutine_attributes.h"
 #include "sage3basic.h"
 
 #include "unparser.h"
@@ -6725,18 +6726,26 @@ void Unparse_ExprStmt::unparseReturnStmt(SgStatement *stmt,
   SgReturnStmt *return_stmt = isSgReturnStmt(stmt);
   ASSERT_not_null(return_stmt);
 
-  curprint("return ");
-  SgUnparse_Info ninfo(info);
+  std::string keyword = "return";
+  if (AstValueAttribute<std::string> *keyword_attr =
+          dynamic_cast<AstValueAttribute<std::string> *>(
+              return_stmt->getAttribute(
+                  Rose::kCoroutineKeywordAttributeName))) {
+    keyword = keyword_attr->get();
+  }
+  curprint(keyword);
 
-  // DQ (3/26/2012): Added assertion.
-  ASSERT_not_null(return_stmt->get_expression());
+  SgUnparse_Info ninfo(info);
 
   // DQ (6/4/2011): Set this in case the initializer is an expression that
   // requires name qualification (e.g. SgConstructorInitializer).  See
   // test2005_42.C for an example.
   // ninfo.set_reference_node_for_qualification(return_stmt);
 
-  if (return_stmt->get_expression()) {
+  if (SgExpression *return_expr = return_stmt->get_expression();
+      return_expr != nullptr && isSgNullExpression(return_expr) == nullptr) {
+    curprint(" ");
+
     // DQ (2/8/2019): Restricting output of definitions in the return statement.
     ninfo.set_SkipDefinition();
 
@@ -6745,7 +6754,7 @@ void Unparse_ExprStmt::unparseReturnStmt(SgStatement *stmt,
     ROSE_ASSERT(ninfo.SkipEnumDefinition() == true);
     ROSE_ASSERT(ninfo.SkipDefinition() == true);
 
-    unparseExpression(return_stmt->get_expression(), ninfo);
+    unparseExpression(return_expr, ninfo);
   }
 
   if (!ninfo.SkipSemiColon()) {

@@ -1,7 +1,3 @@
-// DQ (7/21/2020): Coroutine support is not available in legacy frontend 6.0 or
-// the headers are not available in GNU 6.1.
+#include "test2020_coroutine_support.hpp"
 
-lazy<int> f() {
-  co_return 7;
-}
-
+lazy<int> f() { co_return 7; }

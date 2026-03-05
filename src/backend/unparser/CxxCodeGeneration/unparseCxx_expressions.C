@@ -11,6 +11,7 @@
  *
  */
 // tps (01/14/2010) : Switching from rose.h to sage3.
+#include "rex_coroutine_attributes.h"
 #include "sage3basic.h"
 
 #include "unparser.h"
@@ -5086,10 +5087,24 @@ void Unparse_ExprStmt::unparseSpaceshipOp(SgExpression *expr,
 }
 
 // DQ (7/26/2020): Adding support for C++20 await expression.
-void Unparse_ExprStmt::unparseAwaitExpression(SgExpression *,
-                                              SgUnparse_Info &) {
-  printf("C++20 await expression unparse support not implemented \n");
-  ROSE_ABORT();
+void Unparse_ExprStmt::unparseAwaitExpression(SgExpression *expr,
+                                              SgUnparse_Info &info) {
+  SgAwaitExpression *await_expr = isSgAwaitExpression(expr);
+  ASSERT_not_null(await_expr);
+
+  std::string keyword = "co_await";
+  if (AstValueAttribute<std::string> *keyword_attr =
+          dynamic_cast<AstValueAttribute<std::string> *>(
+              await_expr->getAttribute(Rose::kCoroutineKeywordAttributeName))) {
+    keyword = keyword_attr->get();
+  }
+
+  curprint(keyword);
+  if (SgExpression *value = await_expr->get_value()) {
+    curprint(" ");
+    SgUnparse_Info ninfo(info);
+    unparseExpression(value, ninfo);
+  }
 }
 
 // DQ (7/26/2020): Adding support for C++20 choose expression.
