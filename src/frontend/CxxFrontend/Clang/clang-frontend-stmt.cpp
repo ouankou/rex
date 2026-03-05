@@ -7336,9 +7336,10 @@ bool ClangToSageTranslator::VisitCoyieldExpr(clang::CoyieldExpr *coyield_expr,
   }
 
   res = buildCoroutineAwaitExpression(operand, coyield_expr->getSourceRange(),
-                                      "co_yield operand", node) &&
-        res;
-  setCoroutineKeywordAttribute(*node, "co_yield");
+                                      "co_yield operand", node);
+  if (res) {
+    setCoroutineKeywordAttribute(*node, "co_yield");
+  }
 
   return VisitExpr(coyield_expr, node) && res;
 }
@@ -10521,7 +10522,9 @@ bool ClangToSageTranslator::VisitDependentCoawaitExpr(
       buildCoroutineAwaitExpression(dependent_coawait_expr->getOperand(),
                                     dependent_coawait_expr->getSourceRange(),
                                     "dependent co_await operand", node);
-  setCoroutineKeywordAttribute(*node, "co_await");
+  if (res) {
+    setCoroutineKeywordAttribute(*node, "co_await");
+  }
 
   return VisitExpr(dependent_coawait_expr, node) && res;
 }
