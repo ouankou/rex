@@ -1588,6 +1588,8 @@ public:
   virtual bool
   VisitPackExpansionExpr(clang::PackExpansionExpr *pack_expansion_expr,
                          SgNode **node);
+  virtual bool VisitCXXParenListInitExpr(
+      clang::CXXParenListInitExpr *cxx_paren_list_init_expr, SgNode **node);
   virtual bool VisitParenExpr(clang::ParenExpr *paren_expr, SgNode **node);
   virtual bool VisitParenListExpr(clang::ParenListExpr *paran_list_expr,
                                   SgNode **node);

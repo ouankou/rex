@@ -145,9 +145,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_36.C
   test2020_38.C
   test2020_41.C
-  test2020_42.C
-  test2020_43.C
-  test2020_44.C
   test2020_46.C
   test2020_48.C
   test2020_49.C
@@ -173,7 +170,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_75.C
   test2020_82.C
   test2020_99.C
-  test2020_112.C
   test2020_113.C
   test2020_117.C
   test2020_123.C

@@ -55,6 +55,18 @@ static void suppress_unparse_output(SgLocatedNode *n) {
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
+inline constexpr char kCoroutineKeywordAttributeName[] =
+    "rex_coroutine_keyword";
+
+static void setCoroutineKeywordAttribute(SgNode *node,
+                                         const char *keyword_spelling) {
+  if (node == nullptr || keyword_spelling == nullptr) {
+    return;
+  }
+  node->setAttribute(kCoroutineKeywordAttributeName,
+                     new AstValueAttribute<std::string>(keyword_spelling));
+}
+
 static bool canLexTrailingToken(clang::SourceLocation loc,
                                 clang::SourceManager &sm) {
   if (!loc.isValid() || loc.isMacroID()) {
@@ -1258,6 +1270,11 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
     ret_status = VisitCoreturnStmt((clang::CoreturnStmt *)stmt, &result);
     ROSE_ASSERT(result != nullptr);
     break;
+  case clang::Stmt::CoroutineBodyStmtClass:
+    ret_status =
+        VisitCoroutineBodyStmt((clang::CoroutineBodyStmt *)stmt, &result);
+    ROSE_ASSERT(result != nullptr);
+    break;
   case clang::Stmt::CXXCatchStmtClass:
     ret_status = VisitCXXCatchStmt((clang::CXXCatchStmt *)stmt, &result);
     ROSE_ASSERT(result != nullptr);
@@ -1500,6 +1517,11 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   case clang::Stmt::CXXTemporaryObjectExprClass:
     ret_status = VisitCXXTemporaryObjectExpr(
         (clang::CXXTemporaryObjectExpr *)stmt, &result);
+    ROSE_ASSERT(result != nullptr);
+    break;
+  case clang::Stmt::CXXParenListInitExprClass:
+    ret_status =
+        VisitCXXParenListInitExpr((clang::CXXParenListInitExpr *)stmt, &result);
     ROSE_ASSERT(result != nullptr);
     break;
   case clang::Stmt::CXXDefaultArgExprClass:
@@ -2903,7 +2925,23 @@ bool ClangToSageTranslator::VisitCoreturnStmt(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
+  SgExpression *return_expr = nullptr;
+  if (clang::Expr *operand = core_turn_stmt->getOperand()) {
+    SgNode *tmp_expr = Traverse(operand);
+    return_expr = isSgExpression(tmp_expr);
+    if (tmp_expr != nullptr && return_expr == nullptr) {
+      std::cerr << "Runtime error: co_return operand did not translate into "
+                   "SgExpression"
+                << std::endl;
+      res = false;
+    }
+  }
+
+  SgReturnStmt *return_stmt = SageBuilder::buildReturnStmt(return_expr);
+  applySourceRangeWithTrailingSemicolon(return_stmt, core_turn_stmt);
+  setCoroutineKeywordAttribute(return_stmt, "co_return");
+  *node = return_stmt;
+
   return VisitStmt(core_turn_stmt, node) && res;
 }
 
@@ -2914,7 +2952,27 @@ bool ClangToSageTranslator::VisitCoroutineBodyStmt(
 #endif
   bool res = true;
 
-  ROSE_ASSERT(FAIL_TODO == 0); // TODO
+  SgNode *tmp_body = Traverse(coroutine_body_stmt->getBody());
+  SgStatement *body = isSgStatement(tmp_body);
+  if (body == nullptr && tmp_body != nullptr) {
+    if (SgExpression *expr = isSgExpression(tmp_body)) {
+      body = SageBuilder::buildExprStatement(expr);
+      applySourceRange(body, coroutine_body_stmt->getBody()->getSourceRange());
+    } else {
+      std::cerr << "Runtime error: CoroutineBodyStmt body did not translate "
+                   "into SgStatement or SgExpression"
+                << std::endl;
+      res = false;
+    }
+  }
+
+  if (body == nullptr) {
+    body = SageBuilder::buildNullStatement();
+  }
+
+  applySourceRange(body, coroutine_body_stmt->getSourceRange());
+  *node = body;
+
   return VisitStmt(coroutine_body_stmt, node) && res;
 }
 
@@ -7202,7 +7260,30 @@ bool ClangToSageTranslator::VisitCoroutineSuspendExpr(
 #endif
   bool res = true;
 
-  // TODO
+  SgExpression *operand_expr = nullptr;
+  if (clang::Expr *operand = coroutine_suspend_expr->getOperand()) {
+    SgNode *tmp_operand = Traverse(operand);
+    operand_expr = isSgExpression(tmp_operand);
+    if (tmp_operand != nullptr && operand_expr == nullptr) {
+      std::cerr << "Runtime error: coroutine operand did not translate into "
+                   "SgExpression"
+                << std::endl;
+      res = false;
+    }
+  }
+
+  if (operand_expr == nullptr) {
+    operand_expr = SageBuilder::buildNullExpression();
+  }
+
+  SgAwaitExpression *await_expr = SageBuilder::buildAwaitExpression_nfi();
+  ROSE_ASSERT(await_expr != nullptr);
+  await_expr->set_value(operand_expr);
+  if (operand_expr->get_parent() == nullptr) {
+    operand_expr->set_parent(await_expr);
+  }
+  applySourceRange(await_expr, coroutine_suspend_expr->getSourceRange());
+  *node = await_expr;
 
   return VisitExpr(coroutine_suspend_expr, node) && res;
 }
@@ -7212,11 +7293,11 @@ bool ClangToSageTranslator::VisitCoawaitExpr(clang::CoawaitExpr *coawait_expr,
 #if DEBUG_VISIT_STMT
   std::cerr << "ClangToSageTranslator::VisitCoawaitExpr" << std::endl;
 #endif
-  bool res = true;
-
-  // TODO
-
-  return VisitCoroutineSuspendExpr(coawait_expr, node) && res;
+  bool res = VisitCoroutineSuspendExpr(coawait_expr, node);
+  if (res) {
+    setCoroutineKeywordAttribute(*node, "co_await");
+  }
+  return res;
 }
 
 bool ClangToSageTranslator::VisitCoyieldExpr(clang::CoyieldExpr *coyield_expr,
@@ -7226,9 +7307,51 @@ bool ClangToSageTranslator::VisitCoyieldExpr(clang::CoyieldExpr *coyield_expr,
 #endif
   bool res = true;
 
-  // TODO
+  clang::Expr *operand = coyield_expr->getOperand();
+  if (operand != nullptr) {
+    if (clang::Expr *stripped = operand->IgnoreParenImpCasts()) {
+      if (auto *member_call =
+              llvm::dyn_cast<clang::CXXMemberCallExpr>(stripped)) {
+        if (member_call->getNumArgs() == 1) {
+          if (auto *member_expr = llvm::dyn_cast<clang::MemberExpr>(
+                  member_call->getCallee()->IgnoreParenImpCasts())) {
+            if (member_expr->getMemberNameInfo().getAsString() ==
+                "yield_value") {
+              operand = member_call->getArg(0);
+            }
+          }
+        }
+      }
+    }
+  }
 
-  return VisitCoroutineSuspendExpr(coyield_expr, node) && res;
+  SgExpression *operand_expr = nullptr;
+  if (operand != nullptr) {
+    SgNode *tmp_operand = Traverse(operand);
+    operand_expr = isSgExpression(tmp_operand);
+    if (tmp_operand != nullptr && operand_expr == nullptr) {
+      std::cerr << "Runtime error: co_yield operand did not translate into "
+                   "SgExpression"
+                << std::endl;
+      res = false;
+    }
+  }
+
+  if (operand_expr == nullptr) {
+    operand_expr = SageBuilder::buildNullExpression();
+  }
+
+  SgAwaitExpression *await_expr = SageBuilder::buildAwaitExpression_nfi();
+  ROSE_ASSERT(await_expr != nullptr);
+  await_expr->set_value(operand_expr);
+  if (operand_expr->get_parent() == nullptr) {
+    operand_expr->set_parent(await_expr);
+  }
+  setCoroutineKeywordAttribute(await_expr, "co_yield");
+  applySourceRange(await_expr, coyield_expr->getSourceRange());
+  *node = await_expr;
+
+  return VisitExpr(coyield_expr, node) && res;
 }
 
 bool ClangToSageTranslator::VisitCXXBindTemporaryExpr(
@@ -10407,7 +10530,31 @@ bool ClangToSageTranslator::VisitDependentCoawaitExpr(
 #endif
   bool res = true;
 
-  // TODO
+  SgExpression *operand_expr = nullptr;
+  if (clang::Expr *operand = dependent_coawait_expr->getOperand()) {
+    SgNode *tmp_operand = Traverse(operand);
+    operand_expr = isSgExpression(tmp_operand);
+    if (tmp_operand != nullptr && operand_expr == nullptr) {
+      std::cerr << "Runtime error: dependent co_await operand did not "
+                   "translate into SgExpression"
+                << std::endl;
+      res = false;
+    }
+  }
+
+  if (operand_expr == nullptr) {
+    operand_expr = SageBuilder::buildNullExpression();
+  }
+
+  SgAwaitExpression *await_expr = SageBuilder::buildAwaitExpression_nfi();
+  ROSE_ASSERT(await_expr != nullptr);
+  await_expr->set_value(operand_expr);
+  if (operand_expr->get_parent() == nullptr) {
+    operand_expr->set_parent(await_expr);
+  }
+  setCoroutineKeywordAttribute(await_expr, "co_await");
+  applySourceRange(await_expr, dependent_coawait_expr->getSourceRange());
+  *node = await_expr;
 
   return VisitExpr(dependent_coawait_expr, node) && res;
 }
@@ -12770,6 +12917,54 @@ bool ClangToSageTranslator::VisitParenListExpr(
   }
 
   return VisitExpr(paran_list_expr, node) && res;
+}
+
+bool ClangToSageTranslator::VisitCXXParenListInitExpr(
+    clang::CXXParenListInitExpr *cxx_paren_list_init_expr, SgNode **node) {
+#if DEBUG_VISIT_STMT
+  std::cerr << "ClangToSageTranslator::VisitCXXParenListInitExpr" << std::endl;
+#endif
+  bool res = true;
+
+  SgType *constructed_type =
+      buildTypeFromQualifiedType(cxx_paren_list_init_expr->getType());
+
+  SgExprListExp *args = SageBuilder::buildExprListExp_nfi();
+  for (clang::Expr *clang_arg : cxx_paren_list_init_expr->getInitExprs()) {
+    if (clang_arg == nullptr) {
+      continue;
+    }
+    SgNode *tmp_arg = Traverse(clang_arg);
+    SgExpression *arg_expr = isSgExpression(tmp_arg);
+    if (arg_expr != nullptr) {
+      args->append_expression(arg_expr);
+    } else if (tmp_arg != nullptr) {
+      std::cerr << "Runtime error: CXXParenListInitExpr argument did not "
+                   "translate into SgExpression"
+                << std::endl;
+      res = false;
+    }
+  }
+
+  bool class_unknown = false;
+  if (constructed_type == nullptr ||
+      (isSgTypedefType(constructed_type) == nullptr &&
+       isSgClassType(constructed_type) == nullptr)) {
+    class_unknown = true;
+  }
+
+  SgConstructorInitializer *ctor_init =
+      SageBuilder::buildConstructorInitializer_nfi(
+          nullptr, args, constructed_type,
+          false,        // need_name
+          false,        // need_qualifier
+          false,        // need_parenthesis_after_name
+          class_unknown // associated_class_unknown
+      );
+  applySourceRange(ctor_init, cxx_paren_list_init_expr->getSourceRange());
+  *node = ctor_init;
+
+  return VisitExpr(cxx_paren_list_init_expr, node) && res;
 }
 
 bool ClangToSageTranslator::VisitPredefinedExpr(
