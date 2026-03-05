@@ -5095,7 +5095,7 @@ void Unparse_ExprStmt::unparseAwaitExpression(SgExpression *expr,
   std::string keyword = "co_await";
   if (AstValueAttribute<std::string> *keyword_attr =
           dynamic_cast<AstValueAttribute<std::string> *>(
-              await_expr->getAttribute(kCoroutineKeywordAttributeName))) {
+              await_expr->getAttribute(Rose::kCoroutineKeywordAttributeName))) {
     keyword = keyword_attr->get();
   }
 

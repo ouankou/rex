@@ -6729,7 +6729,8 @@ void Unparse_ExprStmt::unparseReturnStmt(SgStatement *stmt,
   std::string keyword = "return";
   if (AstValueAttribute<std::string> *keyword_attr =
           dynamic_cast<AstValueAttribute<std::string> *>(
-              return_stmt->getAttribute(kCoroutineKeywordAttributeName))) {
+              return_stmt->getAttribute(
+                  Rose::kCoroutineKeywordAttributeName))) {
     keyword = keyword_attr->get();
   }
   curprint(keyword);
