@@ -584,17 +584,34 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
     // same as the definingDeclaration (if they are non-null)
     if (firstNondefiningDeclaration != NULL &&
         firstNondefiningDeclaration == definingDeclaration) {
-      // reset this to NULL since it is not a non-defining declaration (we might
-      // later want to build a non-defining declaration to have be referenced
-      // here, but it is not clear that that is required).
-      declaration->set_firstNondefiningDeclaration(NULL);
+      bool allow_self_nondef_for_template_instantiation =
+          isSgTemplateInstantiationDecl(declaration) != NULL ||
+          isSgTemplateInstantiationFunctionDecl(declaration) != NULL ||
+          isSgTemplateInstantiationMemberFunctionDecl(declaration) != NULL;
+      if (allow_self_nondef_for_template_instantiation) {
+        // Template instantiations can legitimately exist as a single
+        // declaration where defining/nondefining links both point to self.
+        // Preserve a non-null firstNondefiningDeclaration for mangling and
+        // unparse paths that require declaration-chain anchors.
+        declaration->set_firstNondefiningDeclaration(declaration);
+        firstNondefiningDeclaration =
+            declaration->get_firstNondefiningDeclaration();
+      } else {
+        // reset this to NULL since it is not a non-defining declaration (we
+        // might later want to build a non-defining declaration to have be
+        // referenced here, but it is not clear that that is required).
+        declaration->set_firstNondefiningDeclaration(NULL);
 
-      // reset the firstNondefiningDeclaration
-      firstNondefiningDeclaration =
-          declaration->get_firstNondefiningDeclaration();
+        // reset the firstNondefiningDeclaration
+        firstNondefiningDeclaration =
+            declaration->get_firstNondefiningDeclaration();
+      }
     }
 
-    if (firstNondefiningDeclaration == definingDeclaration) {
+    if (firstNondefiningDeclaration == definingDeclaration &&
+        isSgTemplateInstantiationDecl(declaration) == NULL &&
+        isSgTemplateInstantiationFunctionDecl(declaration) == NULL &&
+        isSgTemplateInstantiationMemberFunctionDecl(declaration) == NULL) {
       MLOG_WARN_CXX("astPostProcessing")
           << "firstNondefiningDeclaration == definingDeclaration failed for "
              "node of"

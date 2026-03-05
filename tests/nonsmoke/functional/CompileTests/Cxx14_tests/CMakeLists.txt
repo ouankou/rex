@@ -28,9 +28,7 @@ set(CXX14_TESTCODES
 )
 set(CXX14_DISABLED_TESTCODES
   test2016_01.C
-  test2016_12.C
   test2016_13.C
-  test2016_16.C
   test2016_17.C
   test2016_22.C
   test2017_01.C
