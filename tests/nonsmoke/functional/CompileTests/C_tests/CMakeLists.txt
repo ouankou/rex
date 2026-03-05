@@ -1000,9 +1000,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_156.c
   test2015_157.c
   test2017_17.c
-  test2018_08.c
-  test2018_09.c
-  test2018_10.c
   test2018_24.c
   test2018_31.c
   test2018_33.c
