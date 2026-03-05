@@ -710,6 +710,8 @@ SgExpression *GetFirstOperand(SgExpression *expr) {
   SgFunctionCallExp *func_call = isSgFunctionCallExp(expr);
   if (func_call != NULL)
     return func_call->get_function();
+  else if (SgPackExpansionExpr *pack_expansion = isSgPackExpansionExpr(expr))
+    return pack_expansion->get_pattern_expression();
   else {
     SgUnaryOp *op1 = isSgUnaryOp(expr);
     if (op1 != 0)

@@ -691,6 +691,54 @@ SgName SageBuilder::appendTemplateArgumentsToName(
     // for template instantiations.
     SgTemplateArgument *templateArgument = *i;
     ROSE_ASSERT(templateArgument != NULL);
+    auto initialized_name_is_pack = [](SgInitializedName *init_name) -> bool {
+      if (init_name == NULL) {
+        return false;
+      }
+      if (init_name->get_is_pack_element() ||
+          init_name->get_is_parameter_pack()) {
+        return true;
+      }
+      if (SgTemplateParameter *owner_param =
+              isSgTemplateParameter(init_name->get_parent())) {
+        return owner_param->get_is_parameter_pack();
+      }
+      return false;
+    };
+    bool argument_is_pack_expansion = templateArgument->get_is_pack_element();
+    if (argument_is_pack_expansion == false) {
+      if (templateArgument->get_argumentType() ==
+          SgTemplateArgument::type_argument) {
+        if (SgTemplateType *templateType =
+                isSgTemplateType(templateArgument->get_type())) {
+          argument_is_pack_expansion = templateType->get_packed();
+        }
+      } else if (templateArgument->get_argumentType() ==
+                 SgTemplateArgument::nontype_argument) {
+        if (SgInitializedName *argumentName =
+                templateArgument->get_initializedName()) {
+          argument_is_pack_expansion = initialized_name_is_pack(argumentName);
+        }
+        if (argument_is_pack_expansion == false) {
+          if (SgExpression *argumentExpression =
+                  templateArgument->get_expression()) {
+            argument_is_pack_expansion =
+                isSgPackExpansionExpr(argumentExpression) != NULL;
+            if (argument_is_pack_expansion == false) {
+              if (SgVarRefExp *var_ref = isSgVarRefExp(argumentExpression)) {
+                if (SgVariableSymbol *var_symbol = var_ref->get_symbol()) {
+                  if (SgInitializedName *argument_init_name =
+                          var_symbol->get_declaration()) {
+                    argument_is_pack_expansion =
+                        initialized_name_is_pack(argument_init_name);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
 
     switch (templateArgument->get_argumentType()) {
     case SgTemplateArgument::type_argument: {
@@ -915,6 +963,17 @@ SgName SageBuilder::appendTemplateArgumentsToName(
              "evaluateNameQualificationForTemplateArgumentList \n");
       ROSE_ABORT();
     }
+    }
+
+    if (used_fully_qualified_name == true &&
+        argument_is_pack_expansion == true) {
+      std::string argument_suffix = Rose::StringUtility::trim(returnName.str());
+      bool has_pack_suffix =
+          argument_suffix.size() >= 3 &&
+          argument_suffix.compare(argument_suffix.size() - 3, 3, "...") == 0;
+      if (!has_pack_suffix) {
+        returnName += "...";
+      }
     }
 
     // DQ (2/5/2022): if it is not set above then use the old way without name

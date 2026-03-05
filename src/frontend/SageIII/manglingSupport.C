@@ -1115,7 +1115,14 @@ string mangleExpression(const SgExpression *expr) {
       ROSE_ASSERT(vsym != NULL);
       SgInitializedName *iname = vsym->get_declaration();
       ROSE_ASSERT(iname != NULL);
-      mangled_name << iname->get_mangled_name().str();
+      // Avoid recursive mangling when dependent decltype expressions reference
+      // function parameters whose mangled names depend on the enclosing
+      // function declaration.
+      std::string variable_name = iname->get_qualified_name().str();
+      if (variable_name.empty()) {
+        variable_name = iname->get_name().str();
+      }
+      mangled_name << replaceNonAlphaNum(variable_name);
       break;
     }
     case V_SgFunctionRefExp: {
@@ -1477,6 +1484,18 @@ string mangleExpression(const SgExpression *expr) {
                    << "_op_" << fold->get_operator_token() << "_assoc_"
                    << (fold->get_is_left_associative() ? "left" : "right")
                    << "_efold_";
+      break;
+    }
+    case V_SgPackExpansionExpr: {
+      const SgPackExpansionExpr *pack_expansion = isSgPackExpansionExpr(expr);
+      mangled_name << "_bPackExpansionExpr_";
+      if (pack_expansion->get_pattern_expression() != NULL) {
+        mangled_name << mangleExpression(
+            pack_expansion->get_pattern_expression());
+      } else {
+        mangled_name << "null_pattern_expression";
+      }
+      mangled_name << "_ePackExpansionExpr_";
       break;
     }
     default: {

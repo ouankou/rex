@@ -65,6 +65,88 @@ isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
   return name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0;
 }
 
+inline bool isClangSyntheticTemplateParamName(const std::string &name) {
+  auto is_synthetic_with_prefix = [&](const std::string &prefix,
+                                      char separator) -> bool {
+    if (name.rfind(prefix, 0) != 0) {
+      return false;
+    }
+    std::string suffix = name.substr(prefix.size());
+    if (suffix.empty()) {
+      return true;
+    }
+    for (char c : suffix) {
+      if (!(std::isdigit(static_cast<unsigned char>(c)) || c == separator)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  return is_synthetic_with_prefix("type-parameter-", '-') ||
+         is_synthetic_with_prefix("value-parameter-", '-') ||
+         is_synthetic_with_prefix("template-parameter-", '-') ||
+         is_synthetic_with_prefix("type_parameter_", '_') ||
+         is_synthetic_with_prefix("value_parameter_", '_') ||
+         is_synthetic_with_prefix("template_parameter_", '_') ||
+         is_synthetic_with_prefix("template_type_param_", '_');
+}
+
+inline std::string normalizeClangTemplateParamName(std::string name) {
+  if (isClangSyntheticTemplateParamName(name)) {
+    std::replace(name.begin(), name.end(), '-', '_');
+  }
+  return name;
+}
+
+inline bool parseTemplateParamDepthAndIndex(const std::string &name,
+                                            unsigned *depth, unsigned *index) {
+  if (depth == nullptr || index == nullptr) {
+    return false;
+  }
+
+  auto parse_with_prefix = [&](const std::string &prefix,
+                               char separator) -> bool {
+    if (name.rfind(prefix, 0) != 0) {
+      return false;
+    }
+    std::string tail = name.substr(prefix.size());
+    if (tail.empty()) {
+      return false;
+    }
+    size_t sep_pos = tail.find(separator);
+    if (sep_pos == std::string::npos) {
+      return false;
+    }
+    std::string depth_text = tail.substr(0, sep_pos);
+    std::string index_text = tail.substr(sep_pos + 1);
+    if (depth_text.empty() || index_text.empty()) {
+      return false;
+    }
+    for (char c : depth_text) {
+      if (!std::isdigit(static_cast<unsigned char>(c))) {
+        return false;
+      }
+    }
+    for (char c : index_text) {
+      if (!std::isdigit(static_cast<unsigned char>(c))) {
+        return false;
+      }
+    }
+    *depth = static_cast<unsigned>(std::stoul(depth_text));
+    *index = static_cast<unsigned>(std::stoul(index_text));
+    return true;
+  };
+
+  return parse_with_prefix("type-parameter-", '-') ||
+         parse_with_prefix("value-parameter-", '-') ||
+         parse_with_prefix("template-parameter-", '-') ||
+         parse_with_prefix("type_parameter_", '_') ||
+         parse_with_prefix("value_parameter_", '_') ||
+         parse_with_prefix("template_parameter_", '_') ||
+         parse_with_prefix("template_type_param_", '_');
+}
+
 struct ConstraintSatisfactionResult {
   bool evaluated = false;
   bool satisfied = true;

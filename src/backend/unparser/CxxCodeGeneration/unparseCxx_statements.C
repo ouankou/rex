@@ -76,6 +76,24 @@ SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   return try_stmt;
 }
 
+bool requiresTrailingReturnTypeSyntax(const SgType *return_type) {
+  const SgDeclType *decl_type = isSgDeclType(return_type);
+  if (decl_type == NULL) {
+    return false;
+  }
+
+  const SgExpression *base_expression = decl_type->get_base_expression();
+  if (base_expression == NULL) {
+    return false;
+  }
+
+  // Function return types spelled as decltype(...) are safest to preserve
+  // using trailing return syntax ("auto f(...) -> decltype(...)"), especially
+  // when the expression references function parameters that are not in scope
+  // for prefix return-type position.
+  return true;
+}
+
 SgClassDeclaration *
 enclosing_class_declaration_from_scope(SgScopeStatement *scope) {
   if (scope == NULL) {
@@ -1988,6 +2006,18 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
   SgDeclarationStatement *declarationStatement =
       usingDeclaration->get_declaration();
   SgInitializedName *initializedName = usingDeclaration->get_initializedName();
+  auto inheriting_ctor_terminal_name =
+      [&](const std::string &raw_name) -> std::string {
+    if (usingDeclaration->get_is_inheriting_constructor() != true) {
+      return raw_name;
+    }
+    std::string trimmed_name = Rose::StringUtility::trim(raw_name);
+    size_t template_args_pos = trimmed_name.find('<');
+    if (template_args_pos != std::string::npos) {
+      trimmed_name = trimmed_name.substr(0, template_args_pos);
+    }
+    return trimmed_name;
+  };
 
   // Enforce that only one is a vaild pointer
   ROSE_ASSERT(declarationStatement != NULL || initializedName != NULL);
@@ -2010,7 +2040,7 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
     SgName nameQualifier = usingDeclaration->get_qualified_name_prefix();
 
     curprint(nameQualifier.str());
-    curprint(initializedName->get_name().str());
+    curprint(inheriting_ctor_terminal_name(initializedName->get_name().str()));
   }
 
   if (declarationStatement != NULL) {
@@ -2082,7 +2112,9 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
           isSgMemberFunctionDeclaration(declarationStatement);
       ASSERT_not_null(memberFunctionDeclaration);
       SgName memberFunctionName = memberFunctionDeclaration->get_name();
-      curprint(memberFunctionName.str());
+      std::string using_name =
+          inheriting_ctor_terminal_name(memberFunctionName.str());
+      curprint(using_name);
       break;
     }
 
@@ -2091,14 +2123,7 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
           isSgClassDeclaration(declarationStatement);
       ASSERT_not_null(classDeclaration);
       SgName className = classDeclaration->get_name();
-
-      // DQ (1/11/2019): Adding support for C++11 inheriting constructor.
-      if (usingDeclaration->get_is_inheriting_constructor() == true) {
-        curprint(className.str());
-        curprint("::");
-      }
-
-      curprint(className.str());
+      curprint(inheriting_ctor_terminal_name(className.str()));
       break;
     }
 
@@ -2119,7 +2144,7 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
           isSgTemplateClassDeclaration(declarationStatement);
       ASSERT_not_null(templateDeclaration);
       SgName templateName = templateDeclaration->get_name();
-      curprint(templateName.str());
+      curprint(inheriting_ctor_terminal_name(templateName.str()));
       break;
     }
 
@@ -2137,7 +2162,9 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
       // ASSERT_not_null(templateDeclaration);
       if (templateDeclaration != NULL) {
         SgName templateName = templateDeclaration->get_name();
-        curprint(templateName.str());
+        std::string using_name =
+            inheriting_ctor_terminal_name(templateName.str());
+        curprint(using_name);
       } else {
         // printf ("NOTE: In unparseUsingDeclarationStatement():
         // declarationStatement = %s templateDeclaration == NULL
@@ -4234,6 +4261,8 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     // available,
     //   and from type() otherwise.
     SgType *rtype = funcdecl_stmt->get_orig_return_type();
+    bool use_trailing_return_type_syntax =
+        !is_deduction_guide && requiresTrailingReturnTypeSyntax(rtype);
 
     SgUnparse_Info ninfo_for_type(ninfo);
     if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true) {
@@ -4251,8 +4280,12 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
         funcdecl_stmt->get_type_elaboration_required_for_return_type());
 
     if (!is_deduction_guide) {
-      ninfo_for_type.set_isTypeFirstPart();
-      unp->u_type->unparseType(rtype, ninfo_for_type);
+      if (use_trailing_return_type_syntax) {
+        curprint("auto ");
+      } else {
+        ninfo_for_type.set_isTypeFirstPart();
+        unp->u_type->unparseType(rtype, ninfo_for_type);
+      }
     }
 
     if (funcdecl_stmt->isForward() == false) {
@@ -4276,7 +4309,7 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     unparse_helper(funcdecl_stmt, ninfo);
 
     ninfo.set_declstatement_ptr(NULL);
-    if (is_deduction_guide) {
+    if (is_deduction_guide || use_trailing_return_type_syntax) {
       curprint(" -> ");
       SgUnparse_Info trailing_type_info(ninfo_for_type);
       trailing_type_info.set_isTypeFirstPart();
@@ -4658,55 +4691,62 @@ void Unparse_ExprStmt::unparseReturnType(SgFunctionDeclaration *funcdecl_stmt,
     rtype = funcdecl_stmt->get_orig_return_type();
     ASSERT_not_null(rtype);
 
-    ninfo.set_isTypeFirstPart();
-    ninfo.set_SkipClassSpecifier();
+    bool use_trailing_return_type_syntax =
+        requiresTrailingReturnTypeSyntax(rtype);
+    if (use_trailing_return_type_syntax) {
+      curprint("auto ");
+    } else {
+      ninfo.set_isTypeFirstPart();
+      ninfo.set_SkipClassSpecifier();
 
-    SgUnparse_Info ninfo_for_type(ninfo);
+      SgUnparse_Info ninfo_for_type(ninfo);
 
-    // DQ (6/10/2007): set the declaration pointer so that the name
-    // qualification can see if this is the declaration (so that exceptions to
-    // qualification can be tracked).
-    ASSERT_not_null(ninfo_for_type.get_declstatement_ptr());
+      // DQ (6/10/2007): set the declaration pointer so that the name
+      // qualification can see if this is the declaration (so that exceptions to
+      // qualification can be tracked).
+      ASSERT_not_null(ninfo_for_type.get_declstatement_ptr());
 
-    // DQ (12/20/2006): This is used to specify global qualification separately
-    // from the more general name qualification mechanism.  Note that
-    // SgVariableDeclarations don't use the
-    // requiresGlobalNameQualificationOnType on the SgInitializedNames in their
-    // list since the SgVariableDeclaration IR nodes is marked directly.
-    // curprint ( string("\n/*
-    // funcdecl_stmt->get_requiresNameQualificationOnReturnType() = " +
-    // (mfuncdecl_stmt->get_requiresNameQualificationOnReturnType() ? "true" :
-    // "false") + " */ \n";
-    if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true)
-    // if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true ||
-    // isSgNonrealType(rtype->stripType()))
-    {
-      // Output the name qualification for the type in the variable declaration.
-      // But we have to do so after any modifiers are output, so in
-      // unp->u_type->unparseType(). printf ("In
-      // Unparse_ExprStmt::unparseMemberFunctionDeclaration(): This return type
-      // requires a global qualifier \n");
+      // DQ (12/20/2006): This is used to specify global qualification
+      // separately from the more general name qualification mechanism.  Note
+      // that SgVariableDeclarations don't use the
+      // requiresGlobalNameQualificationOnType on the SgInitializedNames in
+      // their list since the SgVariableDeclaration IR nodes is marked directly.
+      // curprint ( string("\n/*
+      // funcdecl_stmt->get_requiresNameQualificationOnReturnType() = " +
+      // (mfuncdecl_stmt->get_requiresNameQualificationOnReturnType() ? "true" :
+      // "false") + " */ \n";
+      if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true)
+      // if (funcdecl_stmt->get_requiresNameQualificationOnReturnType() == true
+      // || isSgNonrealType(rtype->stripType()))
+      {
+        // Output the name qualification for the type in the variable
+        // declaration. But we have to do so after any modifiers are output, so
+        // in unp->u_type->unparseType(). printf ("In
+        // Unparse_ExprStmt::unparseMemberFunctionDeclaration(): This return
+        // type requires a global qualifier \n");
 
-      // Note that general qualification of types is separated from the use of
-      // globl qualification.
-      ninfo_for_type.set_requiresGlobalNameQualification();
+        // Note that general qualification of types is separated from the use of
+        // globl qualification.
+        ninfo_for_type.set_requiresGlobalNameQualification();
+      }
+
+      // DQ (5/30/2011): Added support for name qualification.
+      ninfo_for_type.set_reference_node_for_qualification(funcdecl_stmt);
+      ASSERT_not_null(ninfo_for_type.get_reference_node_for_qualification());
+
+      ninfo_for_type.set_name_qualification_length(
+          funcdecl_stmt->get_name_qualification_length_for_return_type());
+      ninfo_for_type.set_global_qualification_required(
+          funcdecl_stmt->get_global_qualification_required_for_return_type());
+      ninfo_for_type.set_type_elaboration_required(
+          funcdecl_stmt->get_type_elaboration_required_for_return_type());
+
+      // unp->u_type->unparseType(rtype, ninfo);
+      unp->u_type->unparseType(rtype, ninfo_for_type);
+
+      ninfo.unset_SkipClassSpecifier();
     }
 
-    // DQ (5/30/2011): Added support for name qualification.
-    ninfo_for_type.set_reference_node_for_qualification(funcdecl_stmt);
-    ASSERT_not_null(ninfo_for_type.get_reference_node_for_qualification());
-
-    ninfo_for_type.set_name_qualification_length(
-        funcdecl_stmt->get_name_qualification_length_for_return_type());
-    ninfo_for_type.set_global_qualification_required(
-        funcdecl_stmt->get_global_qualification_required_for_return_type());
-    ninfo_for_type.set_type_elaboration_required(
-        funcdecl_stmt->get_type_elaboration_required_for_return_type());
-
-    // unp->u_type->unparseType(rtype, ninfo);
-    unp->u_type->unparseType(rtype, ninfo_for_type);
-
-    ninfo.unset_SkipClassSpecifier();
     // printf ("In unparser: DONE with NOT a constructor, destructor or
     // conversion operator \n");
   } else {
@@ -4942,9 +4982,18 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     curprint(string(")"));
 
     if (rtype != NULL) {
-      SgUnparse_Info ninfo3(ninfo);
-      ninfo3.set_isTypeSecondPart();
-      unp->u_type->unparseType(rtype, ninfo3);
+      if (requiresTrailingReturnTypeSyntax(rtype)) {
+        curprint(" -> ");
+        SgUnparse_Info trailing_type_info(ninfo);
+        trailing_type_info.set_isTypeFirstPart();
+        unp->u_type->unparseType(rtype, trailing_type_info);
+        trailing_type_info.set_isTypeSecondPart();
+        unp->u_type->unparseType(rtype, trailing_type_info);
+      } else {
+        SgUnparse_Info ninfo3(ninfo);
+        ninfo3.set_isTypeSecondPart();
+        unp->u_type->unparseType(rtype, ninfo3);
+      }
     }
 
     unparseTrailingFunctionModifiers(mfuncdecl_stmt, info);
@@ -5672,6 +5721,26 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
 
         curprint(nameQualifier.str());
         curprint(nr_decl->get_name().str());
+        if (!nr_decl->get_tpl_args().empty()) {
+          curprint("<");
+          bool need_separator = false;
+          for (SgTemplateArgument *argument : nr_decl->get_tpl_args()) {
+            if (argument == NULL ||
+                argument->get_argumentType() ==
+                    SgTemplateArgument::start_of_pack_expansion_argument) {
+              continue;
+            }
+            if (need_separator) {
+              curprint(",");
+            }
+            unparseTemplateArgument(argument, tmp_ninfo);
+            if (argument->get_is_pack_element()) {
+              curprint("...");
+            }
+            need_separator = true;
+          }
+          curprint(">");
+        }
       } else {
         SgClassDeclaration *tmp_decl = bcls->get_base_class();
         ASSERT_not_null(tmp_decl);
@@ -8359,7 +8428,7 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       ninfo.set_declstatement_ptr(NULL);
 
       if (rtype != NULL) {
-        if (is_deduction_guide) {
+        if (is_deduction_guide || requiresTrailingReturnTypeSyntax(rtype)) {
           curprint(" -> ");
           SgUnparse_Info trailing_type_info(ninfo);
           trailing_type_info.set_isTypeFirstPart();
@@ -8484,10 +8553,18 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       ninfo.set_declstatement_ptr(NULL);
 
       if (rtype != NULL) {
-        SgUnparse_Info ninfo3(ninfo);
-        ninfo3.set_isTypeSecondPart();
-
-        unp->u_type->unparseType(rtype, ninfo3);
+        if (requiresTrailingReturnTypeSyntax(rtype)) {
+          curprint(" -> ");
+          SgUnparse_Info trailing_type_info(ninfo);
+          trailing_type_info.set_isTypeFirstPart();
+          unp->u_type->unparseType(rtype, trailing_type_info);
+          trailing_type_info.set_isTypeSecondPart();
+          unp->u_type->unparseType(rtype, trailing_type_info);
+        } else {
+          SgUnparse_Info ninfo3(ninfo);
+          ninfo3.set_isTypeSecondPart();
+          unp->u_type->unparseType(rtype, ninfo3);
+        }
       }
 
       unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,

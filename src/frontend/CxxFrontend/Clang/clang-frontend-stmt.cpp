@@ -19,6 +19,8 @@
 
 #include <sstream>
 
+#include <set>
+
 #include <utility>
 
 #include <unordered_set>
@@ -695,6 +697,148 @@ std::string trimWhitespace(const std::string &input) {
     --end;
   }
   return input.substr(start, end - start);
+}
+
+const SgTemplateParameterPtrList *
+template_parameters_for_stmt_scope_decl(const SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  if (const SgTemplateClassDeclaration *tmpl_class =
+          isSgTemplateClassDeclaration(decl)) {
+    return &tmpl_class->get_templateParameters();
+  }
+  if (const SgTemplateFunctionDeclaration *tmpl_func =
+          isSgTemplateFunctionDeclaration(decl)) {
+    return &tmpl_func->get_templateParameters();
+  }
+  if (const SgTemplateMemberFunctionDeclaration *tmpl_member =
+          isSgTemplateMemberFunctionDeclaration(decl)) {
+    return &tmpl_member->get_templateParameters();
+  }
+  if (const SgTemplateVariableDeclaration *tmpl_var =
+          isSgTemplateVariableDeclaration(decl)) {
+    return &tmpl_var->get_templateParameters();
+  }
+  if (const SgTemplateDeclaration *tmpl_decl = isSgTemplateDeclaration(decl)) {
+    return &tmpl_decl->get_templateParameters();
+  }
+  if (const SgNonrealDecl *nonreal_decl = isSgNonrealDecl(decl)) {
+    return &nonreal_decl->get_tpl_params();
+  }
+
+  return nullptr;
+}
+
+std::string
+template_parameter_name_from_stmt_scope(const SgTemplateParameter *param) {
+  if (param == nullptr) {
+    return "";
+  }
+
+  if (const SgTemplateType *template_type =
+          isSgTemplateType(param->get_type())) {
+    std::string name = template_type->get_name().getString();
+    if (!name.empty()) {
+      return normalizeClangTemplateParamName(name);
+    }
+  }
+
+  if (const SgInitializedName *init_name = param->get_initializedName()) {
+    std::string name = init_name->get_name().getString();
+    if (!name.empty()) {
+      return normalizeClangTemplateParamName(name);
+    }
+  }
+
+  return "";
+}
+
+std::string resolve_template_parameter_name_from_stmt_scope(
+    SgScopeStatement *scope, unsigned depth, unsigned index) {
+  if (scope == nullptr) {
+    return "";
+  }
+
+  std::vector<const SgTemplateParameterPtrList *> template_levels;
+  std::set<const SgDeclarationStatement *> visited_template_decls;
+
+  for (SgNode *node = scope; node != nullptr; node = node->get_parent()) {
+    const SgDeclarationStatement *decl = isSgDeclarationStatement(node);
+    if (decl == nullptr) {
+      if (const SgClassDefinition *class_def = isSgClassDefinition(node)) {
+        decl = class_def->get_declaration();
+      } else if (const SgTemplateClassDefinition *template_def =
+                     isSgTemplateClassDefinition(node)) {
+        decl = template_def->get_declaration();
+      } else if (const SgFunctionDefinition *function_def =
+                     isSgFunctionDefinition(node)) {
+        decl = function_def->get_declaration();
+      } else if (const SgDeclarationScope *decl_scope =
+                     isSgDeclarationScope(node)) {
+        decl = isSgDeclarationStatement(decl_scope->get_parent());
+      }
+    }
+
+    if (decl == nullptr || !visited_template_decls.insert(decl).second) {
+      continue;
+    }
+
+    if (const SgTemplateParameterPtrList *params =
+            template_parameters_for_stmt_scope_decl(decl)) {
+      template_levels.push_back(params);
+    }
+  }
+
+  if (depth >= template_levels.size()) {
+    return "";
+  }
+
+  const SgTemplateParameterPtrList *params = template_levels[depth];
+  if (params == nullptr || index >= params->size()) {
+    return "";
+  }
+
+  return template_parameter_name_from_stmt_scope((*params)[index]);
+}
+
+std::string
+resolve_synthetic_template_param_token_in_stmt_scope(std::string token,
+                                                     SgScopeStatement *scope) {
+  token = normalizeClangTemplateParamName(trimWhitespace(token));
+  if (token.empty()) {
+    return token;
+  }
+
+  unsigned depth = 0;
+  unsigned index = 0;
+  if (!parseTemplateParamDepthAndIndex(token, &depth, &index)) {
+    return token;
+  }
+
+  std::string resolved =
+      resolve_template_parameter_name_from_stmt_scope(scope, depth, index);
+  return resolved.empty() ? token : resolved;
+}
+
+std::string
+resolve_synthetic_template_param_name_in_stmt_scope(std::string name,
+                                                    SgScopeStatement *scope) {
+  name = trimWhitespace(name);
+  if (name.empty()) {
+    return name;
+  }
+
+  static const std::string operator_prefix = "operator ";
+  if (name.rfind(operator_prefix, 0) == 0) {
+    std::string suffix = name.substr(operator_prefix.size());
+    suffix =
+        resolve_synthetic_template_param_token_in_stmt_scope(suffix, scope);
+    return operator_prefix + suffix;
+  }
+
+  return resolve_synthetic_template_param_token_in_stmt_scope(name, scope);
 }
 
 std::string
@@ -6103,6 +6247,21 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     call_type = expr->get_type();
   }
 
+  auto is_implicit_conversion_call = [&]() -> bool {
+    clang::FunctionDecl *direct_callee = call_expr->getDirectCallee();
+    if (direct_callee == nullptr ||
+        !llvm::isa<clang::CXXConversionDecl>(direct_callee)) {
+      return false;
+    }
+
+    std::string spelled_call = getSourceText(call_expr->getSourceRange());
+    if (spelled_call.empty()) {
+      return true;
+    }
+
+    return spelled_call.find("operator") == std::string::npos;
+  };
+
   SgFunctionCallExp *call_exp =
       new SgFunctionCallExp(expr, param_list, call_type);
   if (call_exp != nullptr) {
@@ -6113,6 +6272,9 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       param_list->set_parent(call_exp);
     }
     SageInterface::setOneSourcePositionNull(call_exp);
+    if (is_implicit_conversion_call()) {
+      setCompilerGeneratedFileInfo(call_exp, true);
+    }
   }
   *node = call_exp;
 
@@ -7546,6 +7708,9 @@ bool ClangToSageTranslator::VisitCXXDependentScopeMemberExpr(
   }
   ROSE_ASSERT(current_scope != nullptr);
 
+  member_name = resolve_synthetic_template_param_name_in_stmt_scope(
+      member_name, current_scope);
+
   SgExpression *base_expr = nullptr;
   if (!cxx_dependent_scope_member_expr->isImplicitAccess()) {
     SgNode *tmp_base = Traverse(cxx_dependent_scope_member_expr->getBase());
@@ -8494,12 +8659,14 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           if (const clang::NonTypeTemplateParmDecl *canonical_nttp =
                   llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(
                       canonical_decl)) {
-            canonical_name = canonical_nttp->getNameAsString();
+            canonical_name = normalizeClangTemplateParamName(
+                canonical_nttp->getNameAsString());
           }
         }
       }
       if (canonical_name.empty()) {
-        canonical_name = non_type_param->getNameAsString();
+        canonical_name =
+            normalizeClangTemplateParamName(non_type_param->getNameAsString());
       }
       param_val->set_valueString(canonical_name);
       if (sg_param->get_type() != nullptr) {
@@ -10433,6 +10600,9 @@ bool ClangToSageTranslator::VisitDependentScopeDeclRefExpr(
     current_scope = getGlobalScope();
   }
   ROSE_ASSERT(current_scope != nullptr);
+
+  decl_name = resolve_synthetic_template_param_name_in_stmt_scope(
+      decl_name, current_scope);
 
   SgTemplateArgumentPtrList template_args;
   const SgTemplateArgumentPtrList *template_args_ptr = nullptr;
@@ -12470,6 +12640,9 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
   }
   ROSE_ASSERT(current_scope != nullptr);
 
+  function_name = resolve_synthetic_template_param_name_in_stmt_scope(
+      function_name, current_scope);
+
   clang::NestedNameSpecifierLoc qualifier_loc =
       unresolved_lookup_expr->getQualifierLoc();
   const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
@@ -12483,6 +12656,12 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
   }
 
   auto build_single_overload_function_ref = [&]() -> SgExpression * {
+    // Preserve explicit qualification (e.g., std::distance) by keeping the
+    // call target in nonreal form with qualifier metadata.
+    if (lookup_qualifier != nullptr) {
+      return nullptr;
+    }
+
     // Keep unresolved ADL/dependent lookups in nonreal form. Even when Clang
     // exposes a single ordinary-lookup candidate, ADL or template-dependent
     // context can still change the selected callee at instantiation time.
@@ -12636,6 +12815,9 @@ bool ClangToSageTranslator::VisitUnresolvedMemberExpr(
   }
   ROSE_ASSERT(current_scope != nullptr);
 
+  member_name = resolve_synthetic_template_param_name_in_stmt_scope(
+      member_name, current_scope);
+
   // Handle the base expression (the object/pointer being accessed)
   SgExpression *base_expr = nullptr;
   if (!unresolved_member_expr->isImplicitAccess()) {
@@ -12701,6 +12883,7 @@ bool ClangToSageTranslator::VisitPackExpansionExpr(
       if (pattern_expr->get_parent() == nullptr) {
         pattern_expr->set_parent(pack_expr);
       }
+      pack_expr->set_need_paren(false);
       applySourceRange(pack_expr, pack_expansion_expr->getSourceRange());
       *node = pack_expr;
       return VisitExpr(pack_expansion_expr, node) && res;

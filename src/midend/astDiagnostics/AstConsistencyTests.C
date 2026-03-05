@@ -1575,10 +1575,14 @@ void TestAstTemplateProperties::visit(SgNode *astNode) {
       ROSE_ASSERT((*i)->get_parent() != NULL);
       ROSE_ASSERT((*i)->get_parent() == classDefinition);
 
-      // skip this check for SgExpBaseClasses, which don't need to define
-      // p_base_class
+      // SgExpBaseClass and SgNonrealBaseClass do not populate p_base_class.
+      // They carry their own expression/nonreal representation instead.
       if (isSgExpBaseClass(*i) != NULL)
         continue;
+      if (SgNonrealBaseClass *nonrealBaseClass = isSgNonrealBaseClass(*i)) {
+        ROSE_ASSERT(nonrealBaseClass->get_base_class_nonreal() != NULL);
+        continue;
+      }
 
       // Calling resetTemplateName()
       SgClassDeclaration *baseClassDeclaration = (*i)->get_base_class();

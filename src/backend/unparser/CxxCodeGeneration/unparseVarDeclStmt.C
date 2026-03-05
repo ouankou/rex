@@ -359,6 +359,11 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
 
   unparse_enclosing_template_headers();
 
+  // Recompute access-specifier emission for each declaration.
+  // This prevents CheckAccess state inherited from class-member contexts from
+  // leaking into function-local declarations (which would unparse `public:` in
+  // local blocks).
+  ninfo.unset_CheckAccess();
   SgClassDefinition *classDefinition =
       isSgClassDefinition(vardecl_stmt->get_parent());
   if (classDefinition != nullptr &&
