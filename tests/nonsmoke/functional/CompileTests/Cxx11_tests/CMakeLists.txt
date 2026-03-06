@@ -923,7 +923,6 @@ set(CXX11_TESTCODES
   test2018_100.C
 )
 set(CXX11_DISABLED_TESTCODES
-  test2012_24.C
   test2016_41.C
   test2019_16.C
   test2019_34.C
@@ -934,7 +933,6 @@ set(CXX11_DISABLED_TESTCODES
   test2019_132.C
   test2019_148.C
   test2019_149.C
-  test2019_203.C
   test2019_243.C
   test2019_244.C
   test2019_245.C
@@ -961,14 +959,12 @@ set(CXX11_DISABLED_TESTCODES
   test2019_313.C
   test2019_345.C
   test2019_346.C
-  test2019_366.C
   test2019_382.C
   test2019_388.C
   test2019_453.C
   test2019_492.C
   test2019_504.C
   test2019_506.C
-  test2019_511.C
   test2020_40.C
   test2020_71.C
   test2020_73.C

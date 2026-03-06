@@ -923,6 +923,17 @@ void Unparse_ExprStmt::unparseTemplateFuncRef(SgExpression *expr,
   SgTemplateFunctionRefExp *func_ref = isSgTemplateFunctionRefExp(expr);
   ASSERT_not_null(func_ref);
 
+  if (info.get_current_function_call() != NULL &&
+      info.get_current_function_call()->get_uses_operator_syntax() == true &&
+      func_ref->get_symbol() != NULL &&
+      func_ref->get_symbol()->get_declaration() != NULL &&
+      func_ref->get_symbol()
+          ->get_declaration()
+          ->get_specialFunctionModifier()
+          .isUldOperator()) {
+    return;
+  }
+
   // Calling the template function unparseFuncRef<SgFunctionRefExp>(func_ref);
   unparseFuncRefSupport<SgTemplateFunctionRefExp>(expr, info);
 }
@@ -930,6 +941,21 @@ void Unparse_ExprStmt::unparseTemplateFuncRef(SgExpression *expr,
 // DQ (4/25/2012): Added support for new template IR nodes.
 void Unparse_ExprStmt::unparseTemplateMFuncRef(SgExpression *expr,
                                                SgUnparse_Info &info) {
+  SgTemplateMemberFunctionRefExp *mfunc_ref =
+      isSgTemplateMemberFunctionRefExp(expr);
+  ASSERT_not_null(mfunc_ref);
+
+  if (info.get_current_function_call() != NULL &&
+      info.get_current_function_call()->get_uses_operator_syntax() == true &&
+      mfunc_ref->get_symbol() != NULL &&
+      mfunc_ref->get_symbol()->get_declaration() != NULL &&
+      mfunc_ref->get_symbol()
+          ->get_declaration()
+          ->get_specialFunctionModifier()
+          .isUldOperator()) {
+    return;
+  }
+
   unparseMFuncRefSupport<SgTemplateMemberFunctionRefExp>(expr, info);
 }
 
@@ -957,6 +983,13 @@ void Unparse_ExprStmt::unparseTemplateFunctionName(
   // DQ (6/21/2011): Generated this function from refactored call to
   // unparseTemplateArgumentList
   ASSERT_not_null(templateInstantiationFunctionDeclaration);
+
+  if (info.get_current_function_call() != NULL &&
+      info.get_current_function_call()->get_uses_operator_syntax() == true &&
+      templateInstantiationFunctionDeclaration->get_specialFunctionModifier()
+          .isUldOperator()) {
+    return;
+  }
 
   std::string function_name =
       templateInstantiationFunctionDeclaration->get_templateName().str();
@@ -997,6 +1030,14 @@ void Unparse_ExprStmt::unparseTemplateMemberFunctionName(
   // DQ (5/25/2013): Generated this function to match that of
   // unparseTemplateFunctionName().
   ASSERT_not_null(templateInstantiationMemberFunctionDeclaration);
+
+  if (info.get_current_function_call() != NULL &&
+      info.get_current_function_call()->get_uses_operator_syntax() == true &&
+      templateInstantiationMemberFunctionDeclaration
+          ->get_specialFunctionModifier()
+          .isUldOperator()) {
+    return;
+  }
 
   string function_name =
       templateInstantiationMemberFunctionDeclaration->get_templateName();
@@ -2780,6 +2821,10 @@ void Unparse_ExprStmt::unparseFuncRefSupport(SgExpression *expr,
     if (functionDeclaration->get_specialFunctionModifier().isUldOperator() ==
         true) {
       is_literal_operator = true;
+    }
+
+    if (uses_operator_syntax == true && is_literal_operator == true) {
+      return;
     }
 
     // check that this an operator overloading function
@@ -4653,6 +4698,32 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
         info.unset_nested_expression();
 
       SgUnparse_Info newinfo(info);
+      std::string user_defined_literal_suffix;
+
+      auto record_user_defined_literal_suffix =
+          [&](SgFunctionDeclaration *decl) {
+            if (decl == NULL ||
+                decl->get_specialFunctionModifier().isUldOperator() == false) {
+              return;
+            }
+
+            std::string name = decl->get_name().str();
+            if (SgTemplateInstantiationFunctionDecl *inst =
+                    isSgTemplateInstantiationFunctionDecl(decl)) {
+              name = inst->get_templateName().str();
+            } else if (SgTemplateInstantiationMemberFunctionDecl *inst =
+                           isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+              name = inst->get_templateName().str();
+            }
+            size_t quotes = name.find("\"\"");
+            if (quotes != std::string::npos) {
+              size_t suffix_pos = quotes + 2;
+              while (suffix_pos < name.size() && name[suffix_pos] == ' ') {
+                ++suffix_pos;
+              }
+              user_defined_literal_suffix = name.substr(suffix_pos);
+            }
+          };
 
       // now check if the overload option is off and that the function is dot
       // binary expression. If so, check if the rhs is an operator= overloading
@@ -4803,6 +4874,10 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
               isSgFunctionRefExp(func_call->get_function());
           SgMemberFunctionRefExp *mfunc_ref =
               isSgMemberFunctionRefExp(func_call->get_function());
+          SgTemplateFunctionRefExp *template_func_ref =
+              isSgTemplateFunctionRefExp(func_call->get_function());
+          SgTemplateMemberFunctionRefExp *template_mfunc_ref =
+              isSgTemplateMemberFunctionRefExp(func_call->get_function());
 
           // DQ (2/12/2019): Adding support for C++11 uld operators.
           if ((func_ref != NULL) && func_ref->get_symbol()
@@ -4811,6 +4886,8 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
                                         .isUldOperator()) {
             print_paren = false;
             newinfo.set_user_defined_literal(true);
+            record_user_defined_literal_suffix(
+                func_ref->get_symbol()->get_declaration());
             // printFunctionArguments = false;
           }
 
@@ -4821,7 +4898,30 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
                                          .isUldOperator()) {
             print_paren = false;
             newinfo.set_user_defined_literal(true);
+            record_user_defined_literal_suffix(
+                mfunc_ref->get_symbol()->get_declaration());
             // printFunctionArguments = false;
+          }
+
+          if ((template_func_ref != NULL) && template_func_ref->get_symbol()
+                                                 ->get_declaration()
+                                                 ->get_specialFunctionModifier()
+                                                 .isUldOperator()) {
+            print_paren = false;
+            newinfo.set_user_defined_literal(true);
+            record_user_defined_literal_suffix(
+                template_func_ref->get_symbol()->get_declaration());
+          }
+
+          if ((template_mfunc_ref != NULL) &&
+              template_mfunc_ref->get_symbol()
+                  ->get_declaration()
+                  ->get_specialFunctionModifier()
+                  .isUldOperator()) {
+            print_paren = false;
+            newinfo.set_user_defined_literal(true);
+            record_user_defined_literal_suffix(
+                template_mfunc_ref->get_symbol()->get_declaration());
           }
         }
       }
@@ -4929,6 +5029,10 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
             }
           }
         }
+      }
+
+      if (!user_defined_literal_suffix.empty()) {
+        curprint(user_defined_literal_suffix);
       }
 
       if (print_paren) {

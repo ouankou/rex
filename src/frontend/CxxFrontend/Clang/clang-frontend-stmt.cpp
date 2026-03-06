@@ -6047,6 +6047,14 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         ensure_function_param_list(inst_decl, param_list);
         if (inst_decl != nullptr) {
           sync_member_instantiation_args(inst_decl);
+          if (base_decl != nullptr) {
+            if (base_decl->get_specialFunctionModifier().isOperator()) {
+              inst_decl->get_specialFunctionModifier().setOperator();
+            }
+            if (base_decl->get_specialFunctionModifier().isUldOperator()) {
+              inst_decl->get_specialFunctionModifier().setUldOperator();
+            }
+          }
           if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                   isSgTemplateMemberFunctionDeclaration(base_decl)) {
             inst_decl->set_templateDeclaration(tmpl_decl);
@@ -6068,6 +6076,17 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       } else {
         sync_member_instantiation_args(
             isSgMemberFunctionDeclaration(inst_sym->get_declaration()));
+        if (SgMemberFunctionDeclaration *inst_decl =
+                isSgMemberFunctionDeclaration(inst_sym->get_declaration())) {
+          if (base_decl != nullptr) {
+            if (base_decl->get_specialFunctionModifier().isOperator()) {
+              inst_decl->get_specialFunctionModifier().setOperator();
+            }
+            if (base_decl->get_specialFunctionModifier().isUldOperator()) {
+              inst_decl->get_specialFunctionModifier().setUldOperator();
+            }
+          }
+        }
       }
 
       if (inst_sym != nullptr) {
@@ -6121,6 +6140,14 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         ensure_function_param_list(inst_decl, param_list);
         if (inst_decl != nullptr) {
           sync_function_instantiation_args(inst_decl);
+          if (base_decl != nullptr) {
+            if (base_decl->get_specialFunctionModifier().isOperator()) {
+              inst_decl->get_specialFunctionModifier().setOperator();
+            }
+            if (base_decl->get_specialFunctionModifier().isUldOperator()) {
+              inst_decl->get_specialFunctionModifier().setUldOperator();
+            }
+          }
           if (SgTemplateFunctionDeclaration *tmpl_decl =
                   isSgTemplateFunctionDeclaration(base_decl)) {
             inst_decl->set_templateDeclaration(tmpl_decl);
@@ -6142,6 +6169,17 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       } else {
         sync_function_instantiation_args(
             isSgFunctionDeclaration(inst_sym->get_declaration()));
+        if (SgFunctionDeclaration *inst_decl =
+                isSgFunctionDeclaration(inst_sym->get_declaration())) {
+          if (base_decl != nullptr) {
+            if (base_decl->get_specialFunctionModifier().isOperator()) {
+              inst_decl->get_specialFunctionModifier().setOperator();
+            }
+            if (base_decl->get_specialFunctionModifier().isUldOperator()) {
+              inst_decl->get_specialFunctionModifier().setUldOperator();
+            }
+          }
+        }
       }
 
       if (inst_sym != nullptr) {
@@ -6618,9 +6656,242 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
 #endif
   bool res = true;
 
-  // TODO
+  res = VisitCallExpr(user_defined_literal, node) && res;
 
-  return VisitExpr(user_defined_literal, node) && res;
+  SgFunctionCallExp *call = isSgFunctionCallExp(*node);
+  if (call == nullptr) {
+    return res;
+  }
+
+  if (SgTemplateFunctionRefExp *template_ref =
+          isSgTemplateFunctionRefExp(call->get_function())) {
+    if (template_ref->get_symbol() != nullptr) {
+      if (SgFunctionDeclaration *decl =
+              template_ref->get_symbol()->get_declaration()) {
+        SgFunctionRefExp *function_ref = SageBuilder::buildFunctionRefExp(decl);
+        call->set_function(function_ref);
+        function_ref->set_parent(call);
+      }
+    }
+  }
+
+  auto mark_literal_operator_decl = [&](SgExpression *callee,
+                                        auto &&self) -> void {
+    if (callee == nullptr) {
+      return;
+    }
+
+    auto mark_decl = [](SgFunctionDeclaration *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      decl->get_specialFunctionModifier().setUldOperator();
+      if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+              decl->get_firstNondefiningDeclaration())) {
+        first_nondef->get_specialFunctionModifier().setUldOperator();
+      }
+      if (SgTemplateInstantiationFunctionDecl *inst =
+              isSgTemplateInstantiationFunctionDecl(decl)) {
+        inst->set_template_argument_list_is_explicit(false);
+        inst->get_templateArguments().clear();
+      } else if (SgTemplateInstantiationMemberFunctionDecl *inst =
+                     isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+        inst->set_template_argument_list_is_explicit(false);
+        inst->get_templateArguments().clear();
+      }
+    };
+
+    if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(callee)) {
+      mark_decl(func_ref->get_symbol()
+                    ? func_ref->get_symbol()->get_declaration()
+                    : nullptr);
+      return;
+    }
+    if (SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(callee)) {
+      mark_decl(mfunc_ref->get_symbol()
+                    ? mfunc_ref->get_symbol()->get_declaration()
+                    : nullptr);
+      return;
+    }
+    if (SgTemplateFunctionRefExp *template_ref =
+            isSgTemplateFunctionRefExp(callee)) {
+      mark_decl(template_ref->get_symbol()
+                    ? template_ref->get_symbol()->get_declaration()
+                    : nullptr);
+      return;
+    }
+    if (SgTemplateMemberFunctionRefExp *template_mref =
+            isSgTemplateMemberFunctionRefExp(callee)) {
+      mark_decl(template_mref->get_symbol()
+                    ? template_mref->get_symbol()->get_declaration()
+                    : nullptr);
+      return;
+    }
+    if (SgDotExp *dot_exp = isSgDotExp(callee)) {
+      self(dot_exp->get_rhs_operand(), self);
+      return;
+    }
+    if (SgArrowExp *arrow_exp = isSgArrowExp(callee)) {
+      self(arrow_exp->get_rhs_operand(), self);
+    }
+  };
+  mark_literal_operator_decl(call->get_function(), mark_literal_operator_decl);
+
+  std::string literal_spelling =
+      getSourceText(user_defined_literal->getSourceRange());
+  std::string suffix_spelling;
+  if (const clang::IdentifierInfo *suffix =
+          user_defined_literal->getUDSuffix()) {
+    suffix_spelling = suffix->getName().str();
+  }
+  std::string literal_body = literal_spelling;
+  if (!suffix_spelling.empty() &&
+      literal_body.size() >= suffix_spelling.size() &&
+      literal_body.compare(literal_body.size() - suffix_spelling.size(),
+                           suffix_spelling.size(), suffix_spelling) == 0) {
+    literal_body.resize(literal_body.size() - suffix_spelling.size());
+  }
+
+  auto starts_with = [](const std::string &text, const char *prefix) -> bool {
+    return text.rfind(prefix, 0) == 0;
+  };
+
+  auto build_literal_operand = [&]() -> SgExpression * {
+    auto build_string_literal =
+        [&](const std::string &spelling) -> SgExpression * {
+      SgStringVal *string_val = SageBuilder::buildStringVal("");
+      if (starts_with(spelling, "LR\"") || starts_with(spelling, "L\"")) {
+        string_val->set_wcharString(true);
+      } else if (starts_with(spelling, "uR\"") ||
+                 starts_with(spelling, "u\"")) {
+        string_val->set_is16bitString(true);
+      } else if (starts_with(spelling, "UR\"") ||
+                 starts_with(spelling, "U\"")) {
+        string_val->set_is32bitString(true);
+      }
+      size_t first_quote = spelling.find('\"');
+      size_t last_quote = spelling.rfind('\"');
+      if (first_quote != std::string::npos && last_quote != std::string::npos &&
+          last_quote > first_quote) {
+        string_val->set_value(
+            spelling.substr(first_quote + 1, last_quote - first_quote - 1));
+      }
+      return string_val;
+    };
+
+    auto build_char_literal =
+        [&](const std::string &spelling) -> SgExpression * {
+      if (starts_with(spelling, "L'") || starts_with(spelling, "L\"")) {
+        return SageBuilder::buildWcharVal_nfi(0, spelling);
+      }
+      if (starts_with(spelling, "u'") || starts_with(spelling, "u\"")) {
+        return SageBuilder::buildChar16Val_nfi(0, spelling);
+      }
+      if (starts_with(spelling, "U'") || starts_with(spelling, "U\"")) {
+        return SageBuilder::buildChar32Val_nfi(0, spelling);
+      }
+      return SageBuilder::buildCharVal_nfi(0, spelling);
+    };
+
+    auto has_quote = [](const std::string &text, char quote) -> bool {
+      return text.find(quote) != std::string::npos;
+    };
+
+    clang::UserDefinedLiteral::LiteralOperatorKind kind =
+        user_defined_literal->getLiteralOperatorKind();
+    switch (kind) {
+    case clang::UserDefinedLiteral::LOK_String:
+      return build_string_literal(literal_body);
+    case clang::UserDefinedLiteral::LOK_Character:
+      return build_char_literal(literal_body);
+    case clang::UserDefinedLiteral::LOK_Floating:
+      return SageBuilder::buildLongDoubleVal_nfi(0.0L, literal_body);
+    case clang::UserDefinedLiteral::LOK_Integer:
+      return SageBuilder::buildIntVal_nfi(0, literal_body);
+    case clang::UserDefinedLiteral::LOK_Raw:
+    case clang::UserDefinedLiteral::LOK_Template:
+      if (has_quote(literal_body, '\"')) {
+        return build_string_literal(literal_body);
+      }
+      if (has_quote(literal_body, '\'')) {
+        return build_char_literal(literal_body);
+      }
+      if (literal_body.find('.') != std::string::npos ||
+          literal_body.find('e') != std::string::npos ||
+          literal_body.find('E') != std::string::npos ||
+          literal_body.find('p') != std::string::npos ||
+          literal_body.find('P') != std::string::npos) {
+        return SageBuilder::buildLongDoubleVal_nfi(0.0L, literal_body);
+      }
+      return SageBuilder::buildIntVal_nfi(0, literal_body);
+    }
+
+    ROSE_ABORT();
+  };
+
+  auto update_literal_value_string = [&](SgExpression *expr,
+                                         const std::string &spelling) {
+    if (auto *int_val = isSgIntVal(expr)) {
+      int_val->set_valueString(spelling);
+    } else if (auto *ll_val = isSgLongLongIntVal(expr)) {
+      ll_val->set_valueString(spelling);
+    } else if (auto *ull_val = isSgUnsignedLongLongIntVal(expr)) {
+      ull_val->set_valueString(spelling);
+    } else if (auto *long_val = isSgLongIntVal(expr)) {
+      long_val->set_valueString(spelling);
+    } else if (auto *ulong_val = isSgUnsignedLongVal(expr)) {
+      ulong_val->set_valueString(spelling);
+    } else if (auto *uint_val = isSgUnsignedIntVal(expr)) {
+      uint_val->set_valueString(spelling);
+    } else if (auto *float_val = isSgFloatVal(expr)) {
+      float_val->set_valueString(spelling);
+    } else if (auto *double_val = isSgDoubleVal(expr)) {
+      double_val->set_valueString(spelling);
+    } else if (auto *long_double_val = isSgLongDoubleVal(expr)) {
+      long_double_val->set_valueString(spelling);
+    } else if (auto *char_val = isSgCharVal(expr)) {
+      char_val->set_valueString(spelling);
+    } else if (auto *wchar_val = isSgWcharVal(expr)) {
+      wchar_val->set_valueString(spelling);
+    } else if (auto *char16_val = isSgChar16Val(expr)) {
+      char16_val->set_valueString(spelling);
+    } else if (auto *char32_val = isSgChar32Val(expr)) {
+      char32_val->set_valueString(spelling);
+    }
+  };
+
+  clang::UserDefinedLiteral::LiteralOperatorKind literal_kind =
+      user_defined_literal->getLiteralOperatorKind();
+  std::string operand_spelling = literal_body;
+
+  SgExpression *operand = nullptr;
+  if (literal_kind != clang::UserDefinedLiteral::LOK_Raw &&
+      literal_kind != clang::UserDefinedLiteral::LOK_Template &&
+      user_defined_literal->getCookedLiteral() != nullptr) {
+    clang::Expr *cooked_literal = user_defined_literal->getCookedLiteral();
+    operand = isSgExpression(Traverse(cooked_literal));
+    update_literal_value_string(operand, operand_spelling);
+  } else {
+    operand = build_literal_operand();
+  }
+
+  if (operand != nullptr) {
+    setCompilerGeneratedFileInfo(operand, true);
+  }
+
+  SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
+  applySourceRange(param_list, user_defined_literal->getSourceRange());
+  if (operand != nullptr) {
+    param_list->append_expression(operand);
+  } else {
+    res = false;
+  }
+  call->set_args(param_list);
+  param_list->set_parent(call);
+
+  call->set_uses_operator_syntax(true);
+
+  return res;
 }
 
 bool ClangToSageTranslator::VisitCastExpr(clang::CastExpr *cast_expr,
@@ -13314,9 +13585,78 @@ bool ClangToSageTranslator::VisitStringLiteral(
         }
       }
     }
-  } else if (string_literal->isUTF16() || string_literal->isUTF32()) {
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    res = false;
+  } else if (string_literal->isUTF16()) {
+    void *memadrs = (void *)rawdata;
+    char16_t const *newText = (char16_t const *)memadrs;
+    for (int ii = 0; ii < string_literal->getLength(); ++ii) {
+      unsigned contentVal = static_cast<unsigned>(newText[ii]);
+      std::stringstream ss;
+      bool passUCharRule =
+          !((contentVal < 0xA0 && (contentVal != 0x24 && contentVal != 0x40 &&
+                                   contentVal != 0x60)) ||
+            (contentVal >= 0xD800 && contentVal <= 0xDFFF));
+      if (passUCharRule) {
+        ss << std::setfill('0') << std::setw(4) << std::uppercase << std::hex
+           << (contentVal & 0xFFFF);
+        newstr.append("\\u" + ss.str());
+      } else {
+        switch (char(contentVal)) {
+        case '\\':
+          newstr.append("\\\\");
+          break;
+        case '\n':
+          newstr.append("\\n");
+          break;
+        case '\r':
+          newstr.append("\\r");
+          break;
+        case '"':
+          newstr.append("\\\"");
+          break;
+        case '\0':
+          newstr.append("\0");
+          break;
+        default:
+          newstr.push_back(char(contentVal));
+        }
+      }
+    }
+  } else if (string_literal->isUTF32()) {
+    void *memadrs = (void *)rawdata;
+    char32_t const *newText = (char32_t const *)memadrs;
+    for (int ii = 0; ii < string_literal->getLength(); ++ii) {
+      unsigned contentVal = static_cast<unsigned>(newText[ii]);
+      std::stringstream ss;
+      bool passUCharRule =
+          !((contentVal < 0xA0 && (contentVal != 0x24 && contentVal != 0x40 &&
+                                   contentVal != 0x60)) ||
+            (contentVal >= 0xD800 && contentVal <= 0xDFFF));
+      if (passUCharRule) {
+        ss << std::setfill('0') << std::setw(8) << std::uppercase << std::hex
+           << contentVal;
+        newstr.append("\\U" + ss.str());
+      } else {
+        switch (char(contentVal)) {
+        case '\\':
+          newstr.append("\\\\");
+          break;
+        case '\n':
+          newstr.append("\\n");
+          break;
+        case '\r':
+          newstr.append("\\r");
+          break;
+        case '"':
+          newstr.append("\\\"");
+          break;
+        case '\0':
+          newstr.append("\0");
+          break;
+        default:
+          newstr.push_back(char(contentVal));
+        }
+      }
+    }
   } else // ordinary
   {
     for (auto aa : rawstr) {
@@ -13345,6 +13685,10 @@ bool ClangToSageTranslator::VisitStringLiteral(
 
   if (string_literal->isWide())
     sgStrVal->set_wcharString(true);
+  if (string_literal->isUTF16())
+    sgStrVal->set_is16bitString(true);
+  if (string_literal->isUTF32())
+    sgStrVal->set_is32bitString(true);
   *node = sgStrVal;
 
   return VisitExpr(string_literal, node) && res;
