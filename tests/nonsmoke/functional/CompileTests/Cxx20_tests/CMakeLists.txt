@@ -229,12 +229,6 @@ add_test(
 set_tests_properties(Cxx20_tests_test2020_45_C PROPERTIES LABELS Cxx20_tests)
 rex_lock_test_for_input(Cxx20_tests_test2020_45_C test2020_45.C)
 
-# Makefile check targets.
-set(_cxx20_make_tests)
-foreach(file_to_test IN LISTS CXX20_TESTCODES)
-  list(APPEND _cxx20_make_tests "nonsmoke_functional_CompileTests_Cxx20_tests_${file_to_test}")
-endforeach()
-
 add_test(
   NAME nonsmoke_functional_CompileTests_Cxx20_tests_check-local
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
