@@ -1279,8 +1279,14 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
 
   std::map<clang::Stmt *, SgNode *>::iterator it =
       p_stmt_translation_map.find(stmt);
-  if (it != p_stmt_translation_map.end())
+  if (it != p_stmt_translation_map.end()) {
+    if (stmt->getStmtClass() == clang::Stmt::OpaqueValueExprClass) {
+      SgExpression *expr = isSgExpression(it->second);
+      ROSE_ASSERT(expr != nullptr);
+      return SageInterface::copyExpression(expr);
+    }
     return it->second;
+  }
 
   SgNode *result = nullptr;
   bool ret_status = false;
@@ -12556,14 +12562,23 @@ bool ClangToSageTranslator::VisitOpaqueValueExpr(
 #endif
   bool res = true;
 
-  // ROOT CAUSE FIX: OpaqueValueExpr is a Clang internal node representing a
-  // value that appears multiple times in the AST but should only be evaluated
-  // once. It's used for desugaring constructs like the conditional operator and
-  // range-based for. We just traverse the source expression and return it.
+  // OpaqueValueExpr is a Clang internal reference to a previously computed
+  // value. The same Clang node can appear multiple times inside one enclosing
+  // expression (for example in GNU `a ?: b`), but the ROSE AST must remain a
+  // tree. Returning the translated source expression directly would reuse the
+  // same SgExpression node in multiple parents via the statement translation
+  // cache, which later breaks analyses such as CFG consistency checks.
+  // Translate the source expression once, then return a deep copy for each
+  // OpaqueValueExpr occurrence.
 
   clang::Expr *source_expr = opaque_value_expr->getSourceExpr();
   if (source_expr) {
-    *node = Traverse(source_expr);
+    SgExpression *source = isSgExpression(Traverse(source_expr));
+    ROSE_ASSERT(source != nullptr);
+
+    SgExpression *copy = SageInterface::copyExpression(source);
+    applySourceRange(copy, opaque_value_expr->getSourceRange());
+    *node = copy;
   } else {
     // No source expression - OpaqueValueExpr is used as a placeholder
     // Create a fallback expression for ROSE
