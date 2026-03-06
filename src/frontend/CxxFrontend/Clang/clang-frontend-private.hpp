@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <set>
 #include <string>
@@ -105,6 +106,29 @@ inline bool parseTemplateParamDepthAndIndex(const std::string &name,
     return false;
   }
 
+  auto parse_decimal_unsigned = [](const std::string &text,
+                                   unsigned *value) -> bool {
+    if (value == nullptr || text.empty()) {
+      return false;
+    }
+
+    unsigned parsed = 0;
+    constexpr unsigned kMaxUnsigned = std::numeric_limits<unsigned>::max();
+    for (char c : text) {
+      if (!std::isdigit(static_cast<unsigned char>(c))) {
+        return false;
+      }
+      unsigned digit = static_cast<unsigned>(c - '0');
+      if (parsed > (kMaxUnsigned - digit) / 10) {
+        return false;
+      }
+      parsed = parsed * 10 + digit;
+    }
+
+    *value = parsed;
+    return true;
+  };
+
   auto parse_with_prefix = [&](const std::string &prefix,
                                char separator) -> bool {
     if (name.rfind(prefix, 0) != 0) {
@@ -123,19 +147,8 @@ inline bool parseTemplateParamDepthAndIndex(const std::string &name,
     if (depth_text.empty() || index_text.empty()) {
       return false;
     }
-    for (char c : depth_text) {
-      if (!std::isdigit(static_cast<unsigned char>(c))) {
-        return false;
-      }
-    }
-    for (char c : index_text) {
-      if (!std::isdigit(static_cast<unsigned char>(c))) {
-        return false;
-      }
-    }
-    *depth = static_cast<unsigned>(std::stoul(depth_text));
-    *index = static_cast<unsigned>(std::stoul(index_text));
-    return true;
+    return parse_decimal_unsigned(depth_text, depth) &&
+           parse_decimal_unsigned(index_text, index);
   };
 
   return parse_with_prefix("type-parameter-", '-') ||
