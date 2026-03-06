@@ -318,106 +318,16 @@ template_argument_needs_pack_ellipsis(const clang::TemplateArgument &arg) {
   }
 }
 
-static const SgTemplateParameterPtrList *
-template_parameters_for_sg_declaration(const SgDeclarationStatement *decl) {
-  if (decl == nullptr) {
-    return nullptr;
-  }
-  if (const SgTemplateClassDeclaration *tmpl_class =
-          isSgTemplateClassDeclaration(decl)) {
-    return &tmpl_class->get_templateParameters();
-  }
-  if (const SgTemplateFunctionDeclaration *tmpl_func =
-          isSgTemplateFunctionDeclaration(decl)) {
-    return &tmpl_func->get_templateParameters();
-  }
-  if (const SgTemplateMemberFunctionDeclaration *tmpl_member =
-          isSgTemplateMemberFunctionDeclaration(decl)) {
-    return &tmpl_member->get_templateParameters();
-  }
-  if (const SgTemplateVariableDeclaration *tmpl_var =
-          isSgTemplateVariableDeclaration(decl)) {
-    return &tmpl_var->get_templateParameters();
-  }
-  if (const SgTemplateDeclaration *tmpl_decl = isSgTemplateDeclaration(decl)) {
-    return &tmpl_decl->get_templateParameters();
-  }
-  if (const SgNonrealDecl *nonreal_decl = isSgNonrealDecl(decl)) {
-    return &nonreal_decl->get_tpl_params();
-  }
-  return nullptr;
-}
-
 static std::string
 template_parameter_name_from_sg(const SgTemplateParameter *param) {
-  if (param == nullptr) {
-    return "";
-  }
-
-  if (const SgTemplateType *template_type =
-          isSgTemplateType(param->get_type())) {
-    std::string name = template_type->get_name().getString();
-    if (!name.empty()) {
-      return normalizeClangTemplateParamName(name);
-    }
-  }
-
-  if (const SgInitializedName *init_name = param->get_initializedName()) {
-    std::string name = init_name->get_name().getString();
-    if (!name.empty()) {
-      return normalizeClangTemplateParamName(name);
-    }
-  }
-
-  return "";
+  return templateParameterNameFromSageShared(param,
+                                             normalizeClangTemplateParamName);
 }
 
 static std::string resolve_template_parameter_name_from_sage_scope(
     SgScopeStatement *scope, unsigned depth, unsigned index) {
-  if (scope == nullptr) {
-    return "";
-  }
-
-  std::vector<const SgTemplateParameterPtrList *> template_levels;
-  std::set<const SgDeclarationStatement *> visited_template_decls;
-
-  for (SgNode *node = scope; node != nullptr; node = node->get_parent()) {
-    const SgDeclarationStatement *decl = isSgDeclarationStatement(node);
-    if (decl == nullptr) {
-      if (const SgClassDefinition *class_def = isSgClassDefinition(node)) {
-        decl = class_def->get_declaration();
-      } else if (const SgTemplateClassDefinition *template_def =
-                     isSgTemplateClassDefinition(node)) {
-        decl = template_def->get_declaration();
-      } else if (const SgFunctionDefinition *function_def =
-                     isSgFunctionDefinition(node)) {
-        decl = function_def->get_declaration();
-      } else if (const SgDeclarationScope *decl_scope =
-                     isSgDeclarationScope(node)) {
-        decl = isSgDeclarationStatement(decl_scope->get_parent());
-      }
-    }
-
-    if (decl == nullptr || !visited_template_decls.insert(decl).second) {
-      continue;
-    }
-
-    if (const SgTemplateParameterPtrList *params =
-            template_parameters_for_sg_declaration(decl)) {
-      template_levels.push_back(params);
-    }
-  }
-
-  if (depth >= template_levels.size()) {
-    return "";
-  }
-
-  const SgTemplateParameterPtrList *params = template_levels[depth];
-  if (params == nullptr || index >= params->size()) {
-    return "";
-  }
-
-  return template_parameter_name_from_sg((*params)[index]);
+  return resolveTemplateParameterNameFromSageScopeShared(
+      scope, depth, index, normalizeClangTemplateParamName);
 }
 
 static Sg_File_Info *
