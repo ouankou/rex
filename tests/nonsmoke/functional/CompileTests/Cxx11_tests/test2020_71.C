@@ -27,7 +27,8 @@ template <typename Value> struct Struct_1 {
 
 } // namespace demo
 
-template <typename T> std::size_t func_2(demo::vector<demo::string> &parm_2) {
+template <typename T>
+std::size_t func_2(const demo::vector<demo::string> &parm_2) {
   return parm_2.size();
 }
 
