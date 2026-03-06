@@ -13578,7 +13578,7 @@ bool ClangToSageTranslator::VisitStringLiteral(
           newstr.append("\\\"");
           break;
         case '\0':
-          newstr.append("\0");
+          newstr.push_back('\0');
           break;
         default:
           newstr.push_back(char(contentVal));
@@ -13614,7 +13614,7 @@ bool ClangToSageTranslator::VisitStringLiteral(
           newstr.append("\\\"");
           break;
         case '\0':
-          newstr.append("\0");
+          newstr.push_back('\0');
           break;
         default:
           newstr.push_back(char(contentVal));
@@ -13650,7 +13650,7 @@ bool ClangToSageTranslator::VisitStringLiteral(
           newstr.append("\\\"");
           break;
         case '\0':
-          newstr.append("\0");
+          newstr.push_back('\0');
           break;
         default:
           newstr.push_back(char(contentVal));
@@ -13674,7 +13674,7 @@ bool ClangToSageTranslator::VisitStringLiteral(
         newstr.append("\\\"");
         break;
       case '\0':
-        newstr.append("\0");
+        newstr.push_back('\0');
         break;
       default:
         newstr.push_back(aa);

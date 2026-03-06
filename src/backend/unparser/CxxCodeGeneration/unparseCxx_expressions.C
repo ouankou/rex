@@ -4903,10 +4903,12 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
             // printFunctionArguments = false;
           }
 
-          if ((template_func_ref != NULL) && template_func_ref->get_symbol()
-                                                 ->get_declaration()
-                                                 ->get_specialFunctionModifier()
-                                                 .isUldOperator()) {
+          if ((template_func_ref != NULL) && template_func_ref->get_symbol() &&
+              template_func_ref->get_symbol()->get_declaration() &&
+              template_func_ref->get_symbol()
+                  ->get_declaration()
+                  ->get_specialFunctionModifier()
+                  .isUldOperator()) {
             print_paren = false;
             newinfo.set_user_defined_literal(true);
             record_user_defined_literal_suffix(
@@ -4914,6 +4916,8 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
           }
 
           if ((template_mfunc_ref != NULL) &&
+              template_mfunc_ref->get_symbol() &&
+              template_mfunc_ref->get_symbol()->get_declaration() &&
               template_mfunc_ref->get_symbol()
                   ->get_declaration()
                   ->get_specialFunctionModifier()
