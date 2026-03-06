@@ -1,96 +1,39 @@
 // ROSE-1989
 
-
+#include <cstddef>
 #include <initializer_list>
 
-namespace std {
+namespace demo {
 
-    typedef int string;
+typedef int string;
 
- 
+template <typename T> struct Vector_base {};
 
-    template<class _E>
+template <typename T> class vector : Vector_base<T> {
+public:
+  typedef T value_type;
 
- // DQ (8/22/2020): It is required to use the initializer_list header file.
- // class initializer_list { };
- 
+  vector(std::initializer_list<value_type> values) : size_(values.size()) {}
 
-    template<typename _Tp>
+  std::size_t size() const { return size_; }
 
-    struct _Vector_base { };
-
- 
-
-    template<typename _Tp>
-
-    class vector
-
-// NEEDED:
-
-            : _Vector_base<_Tp> {
-
-    public:
-
-        typedef _Tp value_type;
-
-        vector(initializer_list<value_type> __l) { }
-
- 
-
-        int
-
-        size() { }
-
-     };
-
- 
-
-    template<typename _Value>
-
-    struct Struct_1 {
-
-    public:
-
-// NEEDED:
-
-        void
-
-        func_3(initializer_list<_Value> parm_3)
-
-        { }
-
-    };
-
-}
-
- 
-
-template < typename T >
-
-int func_2(std::vector<std::string> &parm_2)  {
-
-// NEEDED:
-
-    int i = parm_2.size();
-
-}
-
- 
-
-class Class_1 {
-
-// NEEDED:
-
-    std::Struct_1<std::string> member_1;
-
+private:
+  std::size_t size_;
 };
 
- 
+template <typename Value> struct Struct_1 {
+  void func_3(std::initializer_list<Value>) {}
+};
 
-// NEEDED:
+} // namespace demo
 
-void
+template <typename T>
+std::size_t func_2(const demo::vector<demo::string> &parm_2) {
+  return parm_2.size();
+}
 
-func_1(std::vector<std::string>& parm_1);
+class Class_1 {
+  demo::Struct_1<demo::string> member_1;
+};
 
- 
+void func_1(demo::vector<demo::string> &parm_1);
