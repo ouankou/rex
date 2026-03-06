@@ -6618,9 +6618,11 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
 #endif
   bool res = true;
 
-  // TODO
-
-  return VisitExpr(user_defined_literal, node) && res;
+  // User-defined literals are CallExpr subclasses whose callee/arguments carry
+  // the full semantic structure. Translating them through the regular CallExpr
+  // path preserves both builtin and library literal operators (e.g. "abc"s)
+  // without inventing a parallel ROSE node kind.
+  return VisitCallExpr(user_defined_literal, node) && res;
 }
 
 bool ClangToSageTranslator::VisitCastExpr(clang::CastExpr *cast_expr,
@@ -7229,16 +7231,13 @@ bool ClangToSageTranslator::VisitConceptSpecializationExpr(
   bool res = true;
 
   SgTemplateArgumentPtrList template_args;
-  if (const clang::ASTTemplateArgumentListInfo *args_written =
-          concept_specialization_expr->getTemplateArgsAsWritten()) {
+  const clang::ASTTemplateArgumentListInfo *args_written =
+      concept_specialization_expr->getTemplateArgsAsWritten();
+  if (args_written != nullptr && args_written->getLAngleLoc().isValid() &&
+      args_written->getRAngleLoc().isValid()) {
     for (const clang::TemplateArgumentLoc &arg_loc :
          args_written->arguments()) {
       appendTemplateArguments(template_args, arg_loc, true);
-    }
-  } else {
-    for (const clang::TemplateArgument &arg :
-         concept_specialization_expr->getTemplateArguments()) {
-      appendTemplateArguments(template_args, arg, false);
     }
   }
 

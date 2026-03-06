@@ -145,28 +145,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_36.C
   test2020_38.C
   test2020_41.C
-  test2020_46.C
-  test2020_48.C
-  test2020_49.C
-  test2020_50.C
-  test2020_51.C
-  test2020_52.C
-  test2020_53.C
-  test2020_54.C
-  test2020_55.C
-  test2020_56.C
-  test2020_57.C
-  test2020_58.C
-  test2020_59.C
-  test2020_60.C
-  test2020_61.C
-  test2020_62.C
-  test2020_63.C
-  test2020_64.C
-  test2020_65.C
-  test2020_66.C
-  test2020_67.C
-  test2020_68.C
   test2020_75.C
   test2020_82.C
   test2020_99.C
@@ -176,6 +154,22 @@ set(CXX20_DISABLED_TESTCODES
 )
 set(CXX20_EXPECTED_FAIL_TESTCODES
   test2020_47.C
+)
+
+list(APPEND REX_FRONTEND_ERROR_TESTS
+  test2020_46.C
+  test2020_49.C
+  test2020_56.C
+  test2020_59.C
+  test2020_66.C
+)
+
+set(ROSE_SKIP_FINAL_COMPILE_TESTCODES
+  test2020_46.C
+  test2020_49.C
+  test2020_56.C
+  test2020_59.C
+  test2020_66.C
 )
 
 set(ROSE_FLAGS -w -rose:verbose 0 -std=c++20)

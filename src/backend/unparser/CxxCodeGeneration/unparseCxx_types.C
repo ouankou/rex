@@ -3240,6 +3240,11 @@ void Unparse_Type::unparseAutoType(SgType *type, SgUnparse_Info &info) {
   bool unparse_type = info.isTypeFirstPart() ||
                       (!info.isTypeFirstPart() && !info.isTypeSecondPart());
   if (unparse_type) {
+    std::string constraint = SageInterface::getAutoTypeConstraint(auto_type);
+    if (!constraint.empty()) {
+      curprint(constraint);
+      curprint(" ");
+    }
     curprint("auto ");
   }
 }

@@ -63,7 +63,18 @@ inline constexpr char kExplicitGlobalQualifierAttributeName[] =
 
 inline bool
 isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
-  return name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0;
+  if (name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0) {
+    return true;
+  }
+  if (name.rfind("auto:", 0) == 0 && name.size() > 5) {
+    for (size_t i = 5; i < name.size(); ++i) {
+      if (!std::isdigit(static_cast<unsigned char>(name[i]))) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
 }
 
 inline bool isClangSyntheticTemplateParamName(const std::string &name) {
@@ -94,6 +105,10 @@ inline bool isClangSyntheticTemplateParamName(const std::string &name) {
 }
 
 inline std::string normalizeClangTemplateParamName(std::string name) {
+  if (isImplicitAutoPlaceholderTemplateParamName(name)) {
+    std::replace(name.begin(), name.end(), ':', '_');
+    return name;
+  }
   if (isClangSyntheticTemplateParamName(name)) {
     std::replace(name.begin(), name.end(), '-', '_');
   }
