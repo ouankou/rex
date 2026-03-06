@@ -28,6 +28,8 @@
 
 #include <vector>
 
+#include <clang/Basic/CharInfo.h>
+
 #include <clang/Basic/OperatorKinds.h>
 
 #include "markLhsValues.h"
@@ -13532,7 +13534,6 @@ bool ClangToSageTranslator::VisitStringLiteral(
   bool res = true;
 
   std::string rawstr = string_literal->getBytes().str();
-  const char *rawdata = string_literal->getBytes().data();
   std::string newstr;
 #if DEBUG_VISIT_STMT
   std::cerr << "In ClangToSageTranslator string_literal length: "
@@ -13540,121 +13541,82 @@ bool ClangToSageTranslator::VisitStringLiteral(
             << " byteLength:" << string_literal->getByteLength() << std::endl;
 #endif
 
-  // Pei-Hung (09/30/2022) handled wchar_t support.
-  // Supports for UTF-8, UTF-16, UTF-32 might just follow this, but need more
-  // examples.
-  if (string_literal->isWide()) {
-    void *memadrs = (void *)rawdata;
-    wchar_t const *newText = (wchar_t const *)memadrs;
-    for (int ii = 0; ii < string_literal->getLength(); ++ii) {
-      unsigned contentVal = static_cast<unsigned>(newText[ii]);
-      std::stringstream ss;
-      /*
-      C99 6.4.3p2: A universal character name shall not specify a character
-      whose short identifier is less than 00A0 other than 0024 ($), 0040 (@), or
-      0060 (`), nor one in the range D800 through DFFF inclusive.)
-      */
-      bool passUCharRule = false;
-      passUCharRule =
-          !((contentVal < 0xA0 && (contentVal != 0x24 && contentVal != 0x40 &&
-                                   contentVal != 0x60)) ||
-            (contentVal >= 0xD800 && contentVal <= 0xDFFF));
-      if (passUCharRule) {
-        ss << std::setfill('0') << std::setw(4) << std::uppercase << std::hex
-           << (contentVal & 0xFF);
-        newstr.append("\\u" + ss.str());
+  if (string_literal->isWide() || string_literal->isUTF16() ||
+      string_literal->isUTF32()) {
+    auto append_unicode_escape = [&](uint32_t code_point) {
+      std::stringstream escape;
+      escape << std::uppercase << std::hex << std::setfill('0');
+      if (code_point <= 0xFFFF) {
+        escape << "\\u" << std::setw(4) << code_point;
       } else {
-        switch (char(contentVal)) {
-        case '\\':
-          newstr.append("\\\\");
-          break;
-        case '\n':
-          newstr.append("\\n");
-          break;
-        case '\r':
-          newstr.append("\\r");
-          break;
-        case '"':
-          newstr.append("\\\"");
-          break;
-        case '\0':
-          newstr.push_back('\0');
-          break;
-        default:
-          newstr.push_back(char(contentVal));
+        escape << "\\U" << std::setw(8) << code_point;
+      }
+      newstr.append(escape.str());
+    };
+
+    auto append_hex_escape = [&](uint32_t code_unit) {
+      std::stringstream escape;
+      escape << "\\x" << std::uppercase << std::hex << code_unit;
+      newstr.append(escape.str());
+    };
+
+    auto append_octal_escape = [&](uint32_t code_unit) {
+      ROSE_ASSERT(code_unit <= 0xFF);
+      std::stringstream escape;
+      escape << '\\' << std::setfill('0') << std::setw(3) << std::oct
+             << code_unit;
+      newstr.append(escape.str());
+    };
+
+    bool last_hex_escape = false;
+    for (unsigned ii = 0; ii < string_literal->getLength(); ++ii) {
+      uint32_t content_val = string_literal->getCodeUnit(ii);
+      bool use_hex_escape = false;
+      bool use_octal_escape = false;
+
+      if (string_literal->isUTF16() && content_val >= 0xD800 &&
+          content_val <= 0xDBFF && ii + 1 < string_literal->getLength()) {
+        uint32_t low_surrogate = string_literal->getCodeUnit(ii + 1);
+        if (low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
+          content_val = 0x10000 + (((content_val & 0x3FF) << 10) |
+                                   (low_surrogate & 0x3FF));
+          ++ii;
         }
       }
-    }
-  } else if (string_literal->isUTF16()) {
-    void *memadrs = (void *)rawdata;
-    char16_t const *newText = (char16_t const *)memadrs;
-    for (int ii = 0; ii < string_literal->getLength(); ++ii) {
-      unsigned contentVal = static_cast<unsigned>(newText[ii]);
-      std::stringstream ss;
-      bool passUCharRule =
-          !((contentVal < 0xA0 && (contentVal != 0x24 && contentVal != 0x40 &&
-                                   contentVal != 0x60)) ||
-            (contentVal >= 0xD800 && contentVal <= 0xDFFF));
-      if (passUCharRule) {
-        ss << std::setfill('0') << std::setw(4) << std::uppercase << std::hex
-           << (contentVal & 0xFFFF);
-        newstr.append("\\u" + ss.str());
+
+      if (content_val >= 0xD800 && content_val <= 0xDFFF) {
+        use_hex_escape = true;
+      } else if (!string_literal->isWide() && content_val > 0xFF) {
+        append_unicode_escape(content_val);
+        last_hex_escape = false;
+        continue;
+      } else if (content_val == 0 && last_hex_escape) {
+        use_octal_escape = true;
+      } else if (auto escaped = clang::escapeCStyle<clang::EscapeChar::Double>(
+                     content_val);
+                 !escaped.empty()) {
+        newstr.append(escaped.str());
+        last_hex_escape = false;
+        continue;
+      } else if (content_val > 0xFF ||
+                 (last_hex_escape && content_val <= 0xFF &&
+                  std::isxdigit(static_cast<unsigned char>(content_val)))) {
+        use_hex_escape = true;
+      } else if (content_val > 0xFF ||
+                 !clang::isPrintable(static_cast<unsigned char>(content_val))) {
+        use_octal_escape = true;
       } else {
-        switch (char(contentVal)) {
-        case '\\':
-          newstr.append("\\\\");
-          break;
-        case '\n':
-          newstr.append("\\n");
-          break;
-        case '\r':
-          newstr.append("\\r");
-          break;
-        case '"':
-          newstr.append("\\\"");
-          break;
-        case '\0':
-          newstr.push_back('\0');
-          break;
-        default:
-          newstr.push_back(char(contentVal));
-        }
+        newstr.push_back(static_cast<char>(content_val));
+        last_hex_escape = false;
+        continue;
       }
-    }
-  } else if (string_literal->isUTF32()) {
-    void *memadrs = (void *)rawdata;
-    char32_t const *newText = (char32_t const *)memadrs;
-    for (int ii = 0; ii < string_literal->getLength(); ++ii) {
-      unsigned contentVal = static_cast<unsigned>(newText[ii]);
-      std::stringstream ss;
-      bool passUCharRule =
-          !((contentVal < 0xA0 && (contentVal != 0x24 && contentVal != 0x40 &&
-                                   contentVal != 0x60)) ||
-            (contentVal >= 0xD800 && contentVal <= 0xDFFF));
-      if (passUCharRule) {
-        ss << std::setfill('0') << std::setw(8) << std::uppercase << std::hex
-           << contentVal;
-        newstr.append("\\U" + ss.str());
+
+      if (use_hex_escape) {
+        append_hex_escape(content_val);
+        last_hex_escape = true;
       } else {
-        switch (char(contentVal)) {
-        case '\\':
-          newstr.append("\\\\");
-          break;
-        case '\n':
-          newstr.append("\\n");
-          break;
-        case '\r':
-          newstr.append("\\r");
-          break;
-        case '"':
-          newstr.append("\\\"");
-          break;
-        case '\0':
-          newstr.push_back('\0');
-          break;
-        default:
-          newstr.push_back(char(contentVal));
-        }
+        append_octal_escape(content_val);
+        last_hex_escape = false;
       }
     }
   } else // ordinary
