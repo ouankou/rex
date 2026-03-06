@@ -2022,8 +2022,17 @@ void Unparse_ExprStmt::unparseTemplateArgument(
 
       // DQ (1/5/2007): test2007_01.C demonstrated where this expression
       // argument requires qualification.
-      unp->u_exprStmt->unparseExpression(templateArgument->get_expression(),
-                                         newInfo);
+      SgExpression *template_arg_expr = templateArgument->get_expression();
+      bool need_paren = isSgBinaryOp(template_arg_expr) != NULL ||
+                        isSgConditionalExp(template_arg_expr) != NULL ||
+                        isSgCommaOpExp(template_arg_expr) != NULL;
+      if (need_paren) {
+        curprint("(");
+      }
+      unp->u_exprStmt->unparseExpression(template_arg_expr, newInfo);
+      if (need_paren) {
+        curprint(")");
+      }
     } else {
       // Unparse this case of a SgInitializedName.
       SgType *type = templateArgument->get_initializedName()->get_type();
@@ -5182,6 +5191,26 @@ void Unparse_ExprStmt::unparseSizeOfOp(SgExpression *expr,
   // if (sizeof_op->get_operand_expr() != NULL)
   if (sizeofExpression != NULL) {
     ASSERT_not_null(sizeofExpression);
+
+    if (sizeof_op->get_is_sizeof_pack()) {
+      if (SgTemplateParameterVal *pack_parameter_value =
+              isSgTemplateParameterVal(sizeofExpression)) {
+        std::string pack_name = pack_parameter_value->get_valueString();
+        if (!pack_name.empty()) {
+          curprint(pack_name);
+          curprint(")");
+          return;
+        }
+      }
+
+      if (SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(sizeofExpression)) {
+        if (nonreal_ref->get_symbol() != NULL) {
+          curprint(nonreal_ref->get_symbol()->get_name().str());
+          curprint(")");
+          return;
+        }
+      }
+    }
 
     // DQ (1/12/2019): Adding support for C++11 feature (see test2019_10.C).
     if (sizeof_op->get_is_objectless_nonstatic_data_member_reference() ==
