@@ -21348,11 +21348,29 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
-  if (function_decl->getLiteralIdentifier() != nullptr) {
-    sg_function_decl->get_specialFunctionModifier().setUldOperator();
-    if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
-            sg_function_decl->get_firstNondefiningDeclaration())) {
-      first_nondef->get_specialFunctionModifier().setUldOperator();
+  if (function_decl->getLiteralIdentifier() != nullptr ||
+      function_decl->getDeclName().getNameKind() ==
+          clang::DeclarationName::CXXLiteralOperatorName) {
+    auto mark_uld_operator = [](SgFunctionDeclaration *decl) {
+      if (decl != nullptr) {
+        decl->get_specialFunctionModifier().setUldOperator();
+      }
+    };
+
+    mark_uld_operator(sg_function_decl);
+    mark_uld_operator(isSgFunctionDeclaration(
+        sg_function_decl->get_firstNondefiningDeclaration()));
+
+    if (template_decl != nullptr) {
+      auto it = p_decl_translation_map.find(template_decl);
+      if (it != p_decl_translation_map.end()) {
+        if (SgFunctionDeclaration *template_function_decl =
+                isSgFunctionDeclaration(it->second)) {
+          mark_uld_operator(template_function_decl);
+          mark_uld_operator(isSgFunctionDeclaration(
+              template_function_decl->get_firstNondefiningDeclaration()));
+        }
+      }
     }
   }
 

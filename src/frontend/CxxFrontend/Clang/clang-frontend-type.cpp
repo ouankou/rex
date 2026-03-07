@@ -2227,8 +2227,8 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
     *node = SageBuilder::buildLongLongType();
     break;
 
-  // Wide character and Unicode types - use wchar for wide chars, int/long for
-  // char16/32
+  // Wide character and Unicode types map to their dedicated ROSE scalar
+  // types so the unparser can preserve the source spelling.
   case clang::BuiltinType::Char_U:
     *node = SageBuilder::buildCharType();
     break;
@@ -2239,11 +2239,11 @@ bool ClangToSageTranslator::VisitBuiltinType(clang::BuiltinType *builtin_type,
     *node = SageBuilder::buildWcharType();
     break;
   case clang::BuiltinType::Char16:
-    *node = SageBuilder::buildUnsignedShortType();
-    break; // char16_t is typically 16-bit
+    *node = SageBuilder::buildChar16Type();
+    break;
   case clang::BuiltinType::Char32:
-    *node = SageBuilder::buildUnsignedIntType();
-    break; // char32_t is typically 32-bit
+    *node = SageBuilder::buildChar32Type();
+    break;
 
   case clang::BuiltinType::Dependent: {
     SgScopeStatement *scope = SageBuilder::topScopeStack();

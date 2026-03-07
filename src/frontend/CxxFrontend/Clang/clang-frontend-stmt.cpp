@@ -8,6 +8,8 @@
 
 #include <algorithm>
 
+#include <array>
+
 #include <cctype>
 
 #include <functional>
@@ -27,6 +29,8 @@
 #include <unordered_set>
 
 #include <vector>
+
+#include <clang/Basic/CharInfo.h>
 
 #include <clang/Basic/OperatorKinds.h>
 
@@ -55,6 +59,8 @@ static void suppress_unparse_output(SgLocatedNode *n) {
 #include <clang/Basic/TypeTraits.h>
 
 #include <clang/Lex/Lexer.h>
+
+#include <clang/Lex/LiteralSupport.h>
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
@@ -133,6 +139,247 @@ static clang::SourceLocation findMatchingLParen(clang::SourceLocation rparen,
   }
 
   return clang::SourceLocation();
+}
+
+static void
+propagateSpecialFunctionModifiers(SgFunctionDeclaration *base_decl,
+                                  SgFunctionDeclaration *inst_decl) {
+  if (base_decl == nullptr || inst_decl == nullptr) {
+    return;
+  }
+
+  if (base_decl->get_specialFunctionModifier().isOperator()) {
+    inst_decl->get_specialFunctionModifier().setOperator();
+  }
+  if (base_decl->get_specialFunctionModifier().isUldOperator()) {
+    inst_decl->get_specialFunctionModifier().setUldOperator();
+  }
+}
+
+static std::string
+escapeOrdinaryStringLiteralContentsForUnparse(llvm::StringRef contents) {
+  std::string escaped;
+  escaped.reserve(contents.size());
+  bool last_hex_escape = false;
+
+  for (unsigned char ch : contents) {
+    switch (ch) {
+    case '\\':
+      escaped.append("\\\\");
+      last_hex_escape = false;
+      break;
+    case '\n':
+      escaped.append("\\n");
+      last_hex_escape = false;
+      break;
+    case '\r':
+      escaped.append("\\r");
+      last_hex_escape = false;
+      break;
+    case '"':
+      escaped.append("\\\"");
+      last_hex_escape = false;
+      break;
+    default:
+      if (!clang::isPrintable(ch) || (last_hex_escape && std::isxdigit(ch))) {
+        std::stringstream escape;
+        escape << "\\x" << std::uppercase << std::hex << std::setw(2)
+               << std::setfill('0') << static_cast<unsigned>(ch);
+        escaped.append(escape.str());
+        last_hex_escape = true;
+      } else {
+        escaped.push_back(static_cast<char>(ch));
+        last_hex_escape = false;
+      }
+      break;
+    }
+  }
+
+  return escaped;
+}
+
+static void appendUnicodeEscape(std::string &escaped, uint32_t code_point) {
+  std::stringstream escape;
+  escape << std::uppercase << std::hex << std::setfill('0');
+  if (code_point <= 0xFFFF) {
+    escape << "\\u" << std::setw(4) << code_point;
+  } else {
+    escape << "\\U" << std::setw(8) << code_point;
+  }
+  escaped.append(escape.str());
+}
+
+static void appendHexEscape(std::string &escaped, uint32_t code_unit) {
+  std::stringstream escape;
+  escape << "\\x" << std::uppercase << std::hex << code_unit;
+  escaped.append(escape.str());
+}
+
+static void appendOctalEscape(std::string &escaped, uint32_t code_unit) {
+  ROSE_ASSERT(code_unit <= 0xFF);
+  std::stringstream escape;
+  escape << '\\' << std::setfill('0') << std::setw(3) << std::oct << code_unit;
+  escaped.append(escape.str());
+}
+
+static std::string escapeWideStringLiteralCodeUnitsForUnparse(
+    const std::vector<uint32_t> &code_units, bool is_wide, bool is_utf16) {
+  std::string escaped;
+  bool last_hex_escape = false;
+
+  for (size_t ii = 0; ii < code_units.size(); ++ii) {
+    uint32_t content_val = code_units[ii];
+    bool use_hex_escape = false;
+    bool use_octal_escape = false;
+
+    if (is_utf16 && content_val >= 0xD800 && content_val <= 0xDBFF &&
+        ii + 1 < code_units.size()) {
+      uint32_t low_surrogate = code_units[ii + 1];
+      if (low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
+        content_val =
+            0x10000 + (((content_val & 0x3FF) << 10) | (low_surrogate & 0x3FF));
+        ++ii;
+      }
+    }
+
+    if (content_val >= 0xD800 && content_val <= 0xDFFF) {
+      use_hex_escape = true;
+    } else if (!is_wide && content_val > 0xFF) {
+      appendUnicodeEscape(escaped, content_val);
+      last_hex_escape = false;
+      continue;
+    } else if (content_val == 0 && last_hex_escape) {
+      use_octal_escape = true;
+    } else if (auto mapped =
+                   clang::escapeCStyle<clang::EscapeChar::Double>(content_val);
+               !mapped.empty()) {
+      escaped.append(mapped.str());
+      last_hex_escape = false;
+      continue;
+    } else if (content_val > 0xFF ||
+               (last_hex_escape && content_val <= 0xFF &&
+                std::isxdigit(static_cast<unsigned char>(content_val)))) {
+      use_hex_escape = true;
+    } else if (content_val > 0xFF ||
+               !clang::isPrintable(static_cast<unsigned char>(content_val))) {
+      use_octal_escape = true;
+    } else {
+      escaped.push_back(static_cast<char>(content_val));
+      last_hex_escape = false;
+      continue;
+    }
+
+    if (use_hex_escape) {
+      appendHexEscape(escaped, content_val);
+      last_hex_escape = true;
+    } else {
+      appendOctalEscape(escaped, content_val);
+      last_hex_escape = false;
+    }
+  }
+
+  return escaped;
+}
+
+static clang::Token lexStringLiteralToken(const std::string &spelling,
+                                          const clang::LangOptions &lang_opts) {
+  clang::Token token;
+  token.startToken();
+
+  const char *buffer_begin = spelling.data();
+  const char *buffer_end = buffer_begin + spelling.size();
+  clang::Lexer lexer(clang::SourceLocation(), lang_opts, buffer_begin,
+                     buffer_begin, buffer_end);
+  lexer.LexFromRawLexer(token);
+
+  ROSE_ASSERT(token.isOneOf(
+      clang::tok::string_literal, clang::tok::wide_string_literal,
+      clang::tok::utf8_string_literal, clang::tok::utf16_string_literal,
+      clang::tok::utf32_string_literal));
+  ROSE_ASSERT(token.getLength() == spelling.size());
+
+  clang::Token eof_token;
+  eof_token.startToken();
+  lexer.LexFromRawLexer(eof_token);
+  ROSE_ASSERT(eof_token.is(clang::tok::eof));
+
+  return token;
+}
+
+static std::vector<uint32_t>
+extractStringLiteralCodeUnits(const clang::StringLiteralParser &parser,
+                              const clang::TargetInfo &target) {
+  unsigned code_unit_width = 0;
+  if (parser.isWide()) {
+    code_unit_width = target.getWCharWidth();
+  } else if (parser.isUTF16()) {
+    code_unit_width = target.getChar16Width();
+  } else {
+    ROSE_ASSERT(parser.isUTF32());
+    code_unit_width = target.getChar32Width();
+  }
+
+  ROSE_ASSERT(code_unit_width % 8 == 0);
+  unsigned code_unit_bytes = code_unit_width / 8;
+  ROSE_ASSERT(code_unit_bytes > 0);
+  ROSE_ASSERT(code_unit_bytes <= sizeof(uint32_t));
+
+  llvm::StringRef bytes = parser.GetString();
+  ROSE_ASSERT(bytes.size() % code_unit_bytes == 0);
+
+  std::vector<uint32_t> code_units;
+  code_units.reserve(bytes.size() / code_unit_bytes);
+  bool little_endian = target.isLittleEndian();
+
+  for (size_t offset = 0; offset < bytes.size(); offset += code_unit_bytes) {
+    uint32_t code_unit = 0;
+    for (unsigned ii = 0; ii < code_unit_bytes; ++ii) {
+      unsigned shift = little_endian ? 8 * ii : 8 * (code_unit_bytes - 1 - ii);
+      code_unit |=
+          static_cast<uint32_t>(static_cast<unsigned char>(bytes[offset + ii]))
+          << shift;
+    }
+    code_units.push_back(code_unit);
+  }
+
+  ROSE_ASSERT(parser.GetNumStringChars() == code_units.size());
+  return code_units;
+}
+
+static std::string
+extractStringLiteralValue(const std::string &spelling,
+                          const clang::CompilerInstance *compiler_instance) {
+  ROSE_ASSERT(compiler_instance != nullptr);
+
+  clang::Token token =
+      lexStringLiteralToken(spelling, compiler_instance->getLangOpts());
+  std::array<clang::Token, 1> tokens = {token};
+  clang::StringLiteralParser parser(
+      tokens, compiler_instance->getSourceManager(),
+      compiler_instance->getLangOpts(), compiler_instance->getTarget(),
+      &compiler_instance->getDiagnostics());
+  ROSE_ASSERT(!parser.hadError);
+
+  if (parser.isOrdinary() || parser.isUTF8()) {
+    return escapeOrdinaryStringLiteralContentsForUnparse(parser.GetString());
+  }
+
+  return escapeWideStringLiteralCodeUnitsForUnparse(
+      extractStringLiteralCodeUnits(parser, compiler_instance->getTarget()),
+      parser.isWide(), parser.isUTF16());
+}
+
+static bool isFloatingLiteralForUdlSpelling(
+    const std::string &spelling,
+    const clang::CompilerInstance *compiler_instance) {
+  ROSE_ASSERT(compiler_instance != nullptr);
+
+  clang::NumericLiteralParser parser(
+      spelling, clang::SourceLocation(), compiler_instance->getSourceManager(),
+      compiler_instance->getLangOpts(), compiler_instance->getTarget(),
+      compiler_instance->getDiagnostics());
+  ROSE_ASSERT(!parser.hadError);
+  return parser.isFloatingLiteral();
 }
 
 static void rejectClangOpenMPStmt(const clang::Stmt *stmt) {
@@ -6113,6 +6360,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         ensure_function_param_list(inst_decl, param_list);
         if (inst_decl != nullptr) {
           sync_member_instantiation_args(inst_decl);
+          propagateSpecialFunctionModifiers(base_decl, inst_decl);
           if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                   isSgTemplateMemberFunctionDeclaration(base_decl)) {
             inst_decl->set_templateDeclaration(tmpl_decl);
@@ -6134,6 +6382,10 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       } else {
         sync_member_instantiation_args(
             isSgMemberFunctionDeclaration(inst_sym->get_declaration()));
+        if (SgMemberFunctionDeclaration *inst_decl =
+                isSgMemberFunctionDeclaration(inst_sym->get_declaration())) {
+          propagateSpecialFunctionModifiers(base_decl, inst_decl);
+        }
       }
 
       if (inst_sym != nullptr) {
@@ -6187,6 +6439,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         ensure_function_param_list(inst_decl, param_list);
         if (inst_decl != nullptr) {
           sync_function_instantiation_args(inst_decl);
+          propagateSpecialFunctionModifiers(base_decl, inst_decl);
           if (SgTemplateFunctionDeclaration *tmpl_decl =
                   isSgTemplateFunctionDeclaration(base_decl)) {
             inst_decl->set_templateDeclaration(tmpl_decl);
@@ -6208,6 +6461,10 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
       } else {
         sync_function_instantiation_args(
             isSgFunctionDeclaration(inst_sym->get_declaration()));
+        if (SgFunctionDeclaration *inst_decl =
+                isSgFunctionDeclaration(inst_sym->get_declaration())) {
+          propagateSpecialFunctionModifiers(base_decl, inst_decl);
+        }
       }
 
       if (inst_sym != nullptr) {
@@ -6684,11 +6941,255 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
 #endif
   bool res = true;
 
-  // User-defined literals are CallExpr subclasses whose callee/arguments carry
-  // the full semantic structure. Translating them through the regular CallExpr
-  // path preserves both builtin and library literal operators (e.g. "abc"s)
-  // without inventing a parallel ROSE node kind.
-  return VisitCallExpr(user_defined_literal, node) && res;
+  // User-defined literals first go through regular CallExpr
+  // translation, then raw/template literal operands are normalized here so
+  // ROSE preserves correct operand spelling and literal-operator metadata.
+  res = VisitCallExpr(user_defined_literal, node) && res;
+
+  SgFunctionCallExp *call = isSgFunctionCallExp(*node);
+  if (call == nullptr) {
+    return res;
+  }
+
+  if (SgTemplateFunctionRefExp *template_ref =
+          isSgTemplateFunctionRefExp(call->get_function())) {
+    if (template_ref->get_symbol() != nullptr) {
+      if (SgFunctionDeclaration *decl =
+              template_ref->get_symbol()->get_declaration()) {
+        SgFunctionRefExp *function_ref = SageBuilder::buildFunctionRefExp(decl);
+        call->set_function(function_ref);
+        function_ref->set_parent(call);
+      }
+    }
+  }
+
+  auto mark_literal_operator_decl = [&](SgExpression *callee,
+                                        auto &&self) -> void {
+    if (callee == nullptr) {
+      return;
+    }
+
+    auto mark_decl = [](SgFunctionDeclaration *decl) {
+      if (decl == nullptr) {
+        return;
+      }
+      decl->get_specialFunctionModifier().setUldOperator();
+      if (SgFunctionDeclaration *first_nondef = isSgFunctionDeclaration(
+              decl->get_firstNondefiningDeclaration())) {
+        first_nondef->get_specialFunctionModifier().setUldOperator();
+      }
+      if (SgTemplateInstantiationFunctionDecl *inst =
+              isSgTemplateInstantiationFunctionDecl(decl)) {
+        inst->set_template_argument_list_is_explicit(false);
+        inst->get_templateArguments().clear();
+      } else if (SgTemplateInstantiationMemberFunctionDecl *inst =
+                     isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+        inst->set_template_argument_list_is_explicit(false);
+        inst->get_templateArguments().clear();
+      }
+    };
+
+    if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(callee)) {
+      mark_decl(func_ref->get_symbol()
+                    ? func_ref->get_symbol()->get_declaration()
+                    : nullptr);
+      return;
+    }
+    if (SgMemberFunctionRefExp *mfunc_ref = isSgMemberFunctionRefExp(callee)) {
+      mark_decl(mfunc_ref->get_symbol()
+                    ? mfunc_ref->get_symbol()->get_declaration()
+                    : nullptr);
+      return;
+    }
+    if (SgTemplateFunctionRefExp *template_ref =
+            isSgTemplateFunctionRefExp(callee)) {
+      mark_decl(template_ref->get_symbol()
+                    ? template_ref->get_symbol()->get_declaration()
+                    : nullptr);
+      return;
+    }
+    if (SgTemplateMemberFunctionRefExp *template_mref =
+            isSgTemplateMemberFunctionRefExp(callee)) {
+      mark_decl(template_mref->get_symbol()
+                    ? template_mref->get_symbol()->get_declaration()
+                    : nullptr);
+      return;
+    }
+    if (SgDotExp *dot_exp = isSgDotExp(callee)) {
+      self(dot_exp->get_rhs_operand(), self);
+      return;
+    }
+    if (SgArrowExp *arrow_exp = isSgArrowExp(callee)) {
+      self(arrow_exp->get_rhs_operand(), self);
+      return;
+    }
+  };
+  mark_literal_operator_decl(call->get_function(), mark_literal_operator_decl);
+
+  std::string literal_spelling =
+      getSourceText(user_defined_literal->getSourceRange());
+  std::string suffix_spelling;
+  if (const clang::IdentifierInfo *suffix =
+          user_defined_literal->getUDSuffix()) {
+    suffix_spelling = suffix->getName().str();
+  }
+  std::string literal_body = literal_spelling;
+  if (!suffix_spelling.empty() &&
+      literal_body.size() >= suffix_spelling.size() &&
+      literal_body.compare(literal_body.size() - suffix_spelling.size(),
+                           suffix_spelling.size(), suffix_spelling) == 0) {
+    literal_body.resize(literal_body.size() - suffix_spelling.size());
+  }
+
+  auto starts_with = [](const std::string &text, const char *prefix) -> bool {
+    return text.rfind(prefix, 0) == 0;
+  };
+
+  auto build_literal_operand = [&]() -> SgExpression * {
+    auto build_string_literal =
+        [&](const std::string &spelling) -> SgExpression * {
+      SgStringVal *string_val = SageBuilder::buildStringVal("");
+      if (starts_with(spelling, "LR\"") || starts_with(spelling, "L\"")) {
+        string_val->set_wcharString(true);
+      } else if (starts_with(spelling, "uR\"") ||
+                 starts_with(spelling, "u\"")) {
+        string_val->set_is16bitString(true);
+      } else if (starts_with(spelling, "UR\"") ||
+                 starts_with(spelling, "U\"")) {
+        string_val->set_is32bitString(true);
+      }
+      string_val->set_value(
+          extractStringLiteralValue(spelling, p_compiler_instance));
+      return string_val;
+    };
+
+    auto build_char_literal =
+        [&](const std::string &spelling) -> SgExpression * {
+      if (starts_with(spelling, "L'")) {
+        return SageBuilder::buildWcharVal_nfi(0, spelling);
+      }
+      if (starts_with(spelling, "u'")) {
+        return SageBuilder::buildChar16Val_nfi(0, spelling);
+      }
+      if (starts_with(spelling, "U'")) {
+        return SageBuilder::buildChar32Val_nfi(0, spelling);
+      }
+      return SageBuilder::buildCharVal_nfi(0, spelling);
+    };
+    auto is_string_literal_spelling = [&](const std::string &spelling) {
+      return starts_with(spelling, "u8R\"") || starts_with(spelling, "uR\"") ||
+             starts_with(spelling, "UR\"") || starts_with(spelling, "LR\"") ||
+             starts_with(spelling, "R\"") || starts_with(spelling, "u8\"") ||
+             starts_with(spelling, "u\"") || starts_with(spelling, "U\"") ||
+             starts_with(spelling, "L\"") || starts_with(spelling, "\"");
+    };
+
+    auto is_character_literal_spelling = [&](const std::string &spelling) {
+      return starts_with(spelling, "u'") || starts_with(spelling, "U'") ||
+             starts_with(spelling, "L'") || starts_with(spelling, "'");
+    };
+
+    clang::UserDefinedLiteral::LiteralOperatorKind kind =
+        user_defined_literal->getLiteralOperatorKind();
+    switch (kind) {
+    case clang::UserDefinedLiteral::LOK_String:
+      return build_string_literal(literal_body);
+    case clang::UserDefinedLiteral::LOK_Character:
+      return build_char_literal(literal_body);
+    case clang::UserDefinedLiteral::LOK_Floating:
+      return SageBuilder::buildLongDoubleVal_nfi(0.0L, literal_body);
+    case clang::UserDefinedLiteral::LOK_Integer:
+      return SageBuilder::buildIntVal_nfi(0, literal_body);
+    case clang::UserDefinedLiteral::LOK_Raw:
+    case clang::UserDefinedLiteral::LOK_Template:
+      if (is_string_literal_spelling(literal_body)) {
+        return build_string_literal(literal_body);
+      }
+      if (is_character_literal_spelling(literal_body)) {
+        return build_char_literal(literal_body);
+      }
+      if (isFloatingLiteralForUdlSpelling(literal_body, p_compiler_instance)) {
+        return SageBuilder::buildLongDoubleVal_nfi(0.0L, literal_body);
+      }
+      return SageBuilder::buildIntVal_nfi(0, literal_body);
+    }
+
+    ROSE_ABORT();
+  };
+
+  auto update_literal_value_string = [&](SgExpression *expr,
+                                         const std::string &spelling) {
+    if (auto *int_val = isSgIntVal(expr)) {
+      int_val->set_valueString(spelling);
+    } else if (auto *ll_val = isSgLongLongIntVal(expr)) {
+      ll_val->set_valueString(spelling);
+    } else if (auto *ull_val = isSgUnsignedLongLongIntVal(expr)) {
+      ull_val->set_valueString(spelling);
+    } else if (auto *long_val = isSgLongIntVal(expr)) {
+      long_val->set_valueString(spelling);
+    } else if (auto *ulong_val = isSgUnsignedLongVal(expr)) {
+      ulong_val->set_valueString(spelling);
+    } else if (auto *uint_val = isSgUnsignedIntVal(expr)) {
+      uint_val->set_valueString(spelling);
+    } else if (auto *float_val = isSgFloatVal(expr)) {
+      float_val->set_valueString(spelling);
+    } else if (auto *double_val = isSgDoubleVal(expr)) {
+      double_val->set_valueString(spelling);
+    } else if (auto *long_double_val = isSgLongDoubleVal(expr)) {
+      long_double_val->set_valueString(spelling);
+    } else if (auto *char_val = isSgCharVal(expr)) {
+      char_val->set_valueString(spelling);
+    } else if (auto *wchar_val = isSgWcharVal(expr)) {
+      wchar_val->set_valueString(spelling);
+    } else if (auto *char16_val = isSgChar16Val(expr)) {
+      char16_val->set_valueString(spelling);
+    } else if (auto *char32_val = isSgChar32Val(expr)) {
+      char32_val->set_valueString(spelling);
+    }
+  };
+
+  clang::UserDefinedLiteral::LiteralOperatorKind literal_kind =
+      user_defined_literal->getLiteralOperatorKind();
+  std::string operand_spelling = literal_body;
+
+  if (literal_kind != clang::UserDefinedLiteral::LOK_Raw &&
+      literal_kind != clang::UserDefinedLiteral::LOK_Template &&
+      user_defined_literal->getCookedLiteral() != nullptr) {
+    SgExprListExp *param_list = call->get_args();
+    if (param_list != nullptr && !param_list->get_expressions().empty()) {
+      SgExpression *operand =
+          isSgExpression(Traverse(user_defined_literal->getCookedLiteral()));
+      if (operand != nullptr) {
+        update_literal_value_string(operand, operand_spelling);
+        setCompilerGeneratedFileInfo(operand, true);
+        operand->set_parent(param_list);
+        param_list->get_expressions().front() = operand;
+      } else {
+        res = false;
+      }
+    } else {
+      res = false;
+    }
+  } else {
+    SgExpression *operand = build_literal_operand();
+    if (operand != nullptr) {
+      setCompilerGeneratedFileInfo(operand, true);
+    }
+
+    SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
+    applySourceRange(param_list, user_defined_literal->getSourceRange());
+    if (operand != nullptr) {
+      param_list->append_expression(operand);
+    } else {
+      res = false;
+    }
+    call->set_args(param_list);
+    param_list->set_parent(call);
+  }
+
+  call->set_uses_operator_syntax(true);
+
+  return res;
 }
 
 bool ClangToSageTranslator::VisitCastExpr(clang::CastExpr *cast_expr,
@@ -13342,7 +13843,6 @@ bool ClangToSageTranslator::VisitStringLiteral(
   bool res = true;
 
   std::string rawstr = string_literal->getBytes().str();
-  const char *rawdata = string_literal->getBytes().data();
   std::string newstr;
 #if DEBUG_VISIT_STMT
   std::cerr << "In ClangToSageTranslator string_literal length: "
@@ -13350,82 +13850,26 @@ bool ClangToSageTranslator::VisitStringLiteral(
             << " byteLength:" << string_literal->getByteLength() << std::endl;
 #endif
 
-  // Pei-Hung (09/30/2022) handled wchar_t support.
-  // Supports for UTF-8, UTF-16, UTF-32 might just follow this, but need more
-  // examples.
-  if (string_literal->isWide()) {
-    void *memadrs = (void *)rawdata;
-    wchar_t const *newText = (wchar_t const *)memadrs;
-    for (int ii = 0; ii < string_literal->getLength(); ++ii) {
-      unsigned contentVal = static_cast<unsigned>(newText[ii]);
-      std::stringstream ss;
-      /*
-      C99 6.4.3p2: A universal character name shall not specify a character
-      whose short identifier is less than 00A0 other than 0024 ($), 0040 (@), or
-      0060 (`), nor one in the range D800 through DFFF inclusive.)
-      */
-      bool passUCharRule = false;
-      passUCharRule =
-          !((contentVal < 0xA0 && (contentVal != 0x24 && contentVal != 0x40 &&
-                                   contentVal != 0x60)) ||
-            (contentVal >= 0xD800 && contentVal <= 0xDFFF));
-      if (passUCharRule) {
-        ss << std::setfill('0') << std::setw(4) << std::uppercase << std::hex
-           << (contentVal & 0xFF);
-        newstr.append("\\u" + ss.str());
-      } else {
-        switch (char(contentVal)) {
-        case '\\':
-          newstr.append("\\\\");
-          break;
-        case '\n':
-          newstr.append("\\n");
-          break;
-        case '\r':
-          newstr.append("\\r");
-          break;
-        case '"':
-          newstr.append("\\\"");
-          break;
-        case '\0':
-          newstr.append("\0");
-          break;
-        default:
-          newstr.push_back(char(contentVal));
-        }
-      }
+  if (string_literal->isWide() || string_literal->isUTF16() ||
+      string_literal->isUTF32()) {
+    std::vector<uint32_t> code_units;
+    code_units.reserve(string_literal->getLength());
+    for (unsigned ii = 0; ii < string_literal->getLength(); ++ii) {
+      code_units.push_back(string_literal->getCodeUnit(ii));
     }
-  } else if (string_literal->isUTF16() || string_literal->isUTF32()) {
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    res = false;
-  } else // ordinary
-  {
-    for (auto aa : rawstr) {
-      switch (aa) {
-      case '\\':
-        newstr.append("\\\\");
-        break;
-      case '\n':
-        newstr.append("\\n");
-        break;
-      case '\r':
-        newstr.append("\\r");
-        break;
-      case '"':
-        newstr.append("\\\"");
-        break;
-      case '\0':
-        newstr.append("\0");
-        break;
-      default:
-        newstr.push_back(aa);
-      }
-    }
+    newstr = escapeWideStringLiteralCodeUnitsForUnparse(
+        code_units, string_literal->isWide(), string_literal->isUTF16());
+  } else {
+    newstr = escapeOrdinaryStringLiteralContentsForUnparse(rawstr);
   }
   SgStringVal *sgStrVal = SageBuilder::buildStringVal(newstr);
 
   if (string_literal->isWide())
     sgStrVal->set_wcharString(true);
+  if (string_literal->isUTF16())
+    sgStrVal->set_is16bitString(true);
+  if (string_literal->isUTF32())
+    sgStrVal->set_is32bitString(true);
   *node = sgStrVal;
 
   return VisitExpr(string_literal, node) && res;
