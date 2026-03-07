@@ -13504,20 +13504,27 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
     const clang::Type *argument_type = argument_qual_type.getTypePtrOrNull();
     bool is_complete_defined = false;
 
-    while (argument_type != nullptr &&
-           (llvm::isa<clang::ElaboratedType>(argument_type) ||
-            llvm::isa<clang::PointerType>(argument_type) ||
-            llvm::isa<clang::ArrayType>(argument_type))) {
-      if (const clang::ElaboratedType *elaborated_type =
-              llvm::dyn_cast<clang::ElaboratedType>(argument_type)) {
+    while (argument_type != nullptr) {
+      if (const clang::ParenType *paren_type =
+              llvm::dyn_cast<clang::ParenType>(argument_type)) {
+        argument_qual_type = paren_type->getInnerType();
+      } else if (const clang::ElaboratedType *elaborated_type =
+                     llvm::dyn_cast<clang::ElaboratedType>(argument_type)) {
         argument_qual_type = elaborated_type->getNamedType();
       } else if (const clang::PointerType *pointer_type =
                      llvm::dyn_cast<clang::PointerType>(argument_type)) {
         argument_qual_type = pointer_type->getPointeeType();
-      } else {
-        const clang::ArrayType *array_type =
-            llvm::cast<clang::ArrayType>(argument_type);
+      } else if (const clang::ArrayType *array_type =
+                     llvm::dyn_cast<clang::ArrayType>(argument_type)) {
         argument_qual_type = array_type->getElementType();
+      } else if (const clang::AttributedType *attributed_type =
+                     llvm::dyn_cast<clang::AttributedType>(argument_type)) {
+        argument_qual_type = attributed_type->getModifiedType();
+      } else if (const clang::AdjustedType *adjusted_type =
+                     llvm::dyn_cast<clang::AdjustedType>(argument_type)) {
+        argument_qual_type = adjusted_type->getOriginalType();
+      } else {
+        break;
       }
       argument_type = argument_qual_type.getTypePtrOrNull();
     }
