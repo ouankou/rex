@@ -8,6 +8,8 @@
 
 #include <algorithm>
 
+#include <array>
+
 #include <cctype>
 
 #include <functional>
@@ -57,6 +59,8 @@ static void suppress_unparse_output(SgLocatedNode *n) {
 #include <clang/Basic/TypeTraits.h>
 
 #include <clang/Lex/Lexer.h>
+
+#include <clang/Lex/LiteralSupport.h>
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
@@ -153,52 +157,203 @@ propagateSpecialFunctionModifiers(SgFunctionDeclaration *base_decl,
 }
 
 static std::string
-escapeStringLiteralContentsForUnparse(const std::string &contents) {
+escapeOrdinaryStringLiteralContentsForUnparse(llvm::StringRef contents) {
   std::string escaped;
   escaped.reserve(contents.size());
-  for (unsigned char ch : contents) {
-    if (ch == '\0') {
-      escaped.append("\\000");
-      continue;
+  for (char ch : contents) {
+    switch (ch) {
+    case '\\':
+      escaped.append("\\\\");
+      break;
+    case '\n':
+      escaped.append("\\n");
+      break;
+    case '\r':
+      escaped.append("\\r");
+      break;
+    case '"':
+      escaped.append("\\\"");
+      break;
+    case '\0':
+      escaped.push_back('\0');
+      break;
+    default:
+      escaped.push_back(ch);
+      break;
     }
-    if (auto mapped = clang::escapeCStyle<clang::EscapeChar::Double>(ch);
-        !mapped.empty()) {
-      escaped.append(mapped.str());
-      continue;
-    }
-    escaped.push_back(static_cast<char>(ch));
   }
   return escaped;
 }
 
-static std::string extractStringLiteralValue(const std::string &spelling) {
-  size_t first_quote = spelling.find('"');
-  size_t last_quote = spelling.rfind('"');
-  ROSE_ASSERT(first_quote != std::string::npos);
-  ROSE_ASSERT(last_quote != std::string::npos);
-  ROSE_ASSERT(last_quote > first_quote);
+static void appendUnicodeEscape(std::string &escaped, uint32_t code_point) {
+  std::stringstream escape;
+  escape << std::uppercase << std::hex << std::setfill('0');
+  if (code_point <= 0xFFFF) {
+    escape << "\\u" << std::setw(4) << code_point;
+  } else {
+    escape << "\\U" << std::setw(8) << code_point;
+  }
+  escaped.append(escape.str());
+}
 
-  bool is_raw_string = first_quote > 0 && spelling[first_quote - 1] == 'R';
-  if (!is_raw_string) {
-    return spelling.substr(first_quote + 1, last_quote - first_quote - 1);
+static void appendHexEscape(std::string &escaped, uint32_t code_unit) {
+  std::stringstream escape;
+  escape << "\\x" << std::uppercase << std::hex << code_unit;
+  escaped.append(escape.str());
+}
+
+static void appendOctalEscape(std::string &escaped, uint32_t code_unit) {
+  ROSE_ASSERT(code_unit <= 0xFF);
+  std::stringstream escape;
+  escape << '\\' << std::setfill('0') << std::setw(3) << std::oct << code_unit;
+  escaped.append(escape.str());
+}
+
+static std::string escapeWideStringLiteralCodeUnitsForUnparse(
+    const std::vector<uint32_t> &code_units, bool is_wide, bool is_utf16) {
+  std::string escaped;
+  bool last_hex_escape = false;
+
+  for (size_t ii = 0; ii < code_units.size(); ++ii) {
+    uint32_t content_val = code_units[ii];
+    bool use_hex_escape = false;
+    bool use_octal_escape = false;
+
+    if (is_utf16 && content_val >= 0xD800 && content_val <= 0xDBFF &&
+        ii + 1 < code_units.size()) {
+      uint32_t low_surrogate = code_units[ii + 1];
+      if (low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
+        content_val =
+            0x10000 + (((content_val & 0x3FF) << 10) | (low_surrogate & 0x3FF));
+        ++ii;
+      }
+    }
+
+    if (content_val >= 0xD800 && content_val <= 0xDFFF) {
+      use_hex_escape = true;
+    } else if (!is_wide && content_val > 0xFF) {
+      appendUnicodeEscape(escaped, content_val);
+      last_hex_escape = false;
+      continue;
+    } else if (content_val == 0 && last_hex_escape) {
+      use_octal_escape = true;
+    } else if (auto mapped =
+                   clang::escapeCStyle<clang::EscapeChar::Double>(content_val);
+               !mapped.empty()) {
+      escaped.append(mapped.str());
+      last_hex_escape = false;
+      continue;
+    } else if (content_val > 0xFF ||
+               (last_hex_escape && content_val <= 0xFF &&
+                std::isxdigit(static_cast<unsigned char>(content_val)))) {
+      use_hex_escape = true;
+    } else if (content_val > 0xFF ||
+               !clang::isPrintable(static_cast<unsigned char>(content_val))) {
+      use_octal_escape = true;
+    } else {
+      escaped.push_back(static_cast<char>(content_val));
+      last_hex_escape = false;
+      continue;
+    }
+
+    if (use_hex_escape) {
+      appendHexEscape(escaped, content_val);
+      last_hex_escape = true;
+    } else {
+      appendOctalEscape(escaped, content_val);
+      last_hex_escape = false;
+    }
   }
 
-  size_t open_paren = spelling.find('(', first_quote + 1);
-  ROSE_ASSERT(open_paren != std::string::npos);
+  return escaped;
+}
 
-  std::string delimiter =
-      spelling.substr(first_quote + 1, open_paren - first_quote - 1);
-  ROSE_ASSERT(std::all_of(delimiter.begin(), delimiter.end(), [](char ch) {
-    return clang::isRawStringDelimBody(static_cast<unsigned char>(ch));
-  }));
+static clang::Token lexStringLiteralToken(const std::string &spelling,
+                                          const clang::LangOptions &lang_opts) {
+  clang::Token token;
+  token.startToken();
 
-  std::string closing_marker = ")" + delimiter + '"';
-  size_t closing_marker_pos = spelling.rfind(closing_marker);
-  ROSE_ASSERT(closing_marker_pos != std::string::npos);
-  ROSE_ASSERT(closing_marker_pos >= open_paren + 1);
+  const char *buffer_begin = spelling.data();
+  const char *buffer_end = buffer_begin + spelling.size();
+  clang::Lexer lexer(clang::SourceLocation(), lang_opts, buffer_begin,
+                     buffer_begin, buffer_end);
+  lexer.LexFromRawLexer(token);
 
-  return escapeStringLiteralContentsForUnparse(
-      spelling.substr(open_paren + 1, closing_marker_pos - open_paren - 1));
+  ROSE_ASSERT(token.isOneOf(
+      clang::tok::string_literal, clang::tok::wide_string_literal,
+      clang::tok::utf8_string_literal, clang::tok::utf16_string_literal,
+      clang::tok::utf32_string_literal));
+  ROSE_ASSERT(token.getLength() == spelling.size());
+
+  clang::Token eof_token;
+  eof_token.startToken();
+  lexer.LexFromRawLexer(eof_token);
+  ROSE_ASSERT(eof_token.is(clang::tok::eof));
+
+  return token;
+}
+
+static std::vector<uint32_t>
+extractStringLiteralCodeUnits(const clang::StringLiteralParser &parser,
+                              const clang::TargetInfo &target) {
+  unsigned code_unit_width = 0;
+  if (parser.isWide()) {
+    code_unit_width = target.getWCharWidth();
+  } else if (parser.isUTF16()) {
+    code_unit_width = target.getChar16Width();
+  } else {
+    ROSE_ASSERT(parser.isUTF32());
+    code_unit_width = target.getChar32Width();
+  }
+
+  ROSE_ASSERT(code_unit_width % 8 == 0);
+  unsigned code_unit_bytes = code_unit_width / 8;
+  ROSE_ASSERT(code_unit_bytes > 0);
+  ROSE_ASSERT(code_unit_bytes <= sizeof(uint32_t));
+
+  llvm::StringRef bytes = parser.GetString();
+  ROSE_ASSERT(bytes.size() % code_unit_bytes == 0);
+
+  std::vector<uint32_t> code_units;
+  code_units.reserve(bytes.size() / code_unit_bytes);
+  bool little_endian = target.isLittleEndian();
+
+  for (size_t offset = 0; offset < bytes.size(); offset += code_unit_bytes) {
+    uint32_t code_unit = 0;
+    for (unsigned ii = 0; ii < code_unit_bytes; ++ii) {
+      unsigned shift = little_endian ? 8 * ii : 8 * (code_unit_bytes - 1 - ii);
+      code_unit |=
+          static_cast<uint32_t>(static_cast<unsigned char>(bytes[offset + ii]))
+          << shift;
+    }
+    code_units.push_back(code_unit);
+  }
+
+  ROSE_ASSERT(parser.GetNumStringChars() == code_units.size());
+  return code_units;
+}
+
+static std::string
+extractStringLiteralValue(const std::string &spelling,
+                          const clang::CompilerInstance *compiler_instance) {
+  ROSE_ASSERT(compiler_instance != nullptr);
+
+  clang::Token token =
+      lexStringLiteralToken(spelling, compiler_instance->getLangOpts());
+  std::array<clang::Token, 1> tokens = {token};
+  clang::StringLiteralParser parser(
+      tokens, compiler_instance->getSourceManager(),
+      compiler_instance->getLangOpts(), compiler_instance->getTarget(),
+      &compiler_instance->getDiagnostics());
+  ROSE_ASSERT(!parser.hadError);
+
+  if (parser.isOrdinary() || parser.isUTF8()) {
+    return escapeOrdinaryStringLiteralContentsForUnparse(parser.GetString());
+  }
+
+  return escapeWideStringLiteralCodeUnitsForUnparse(
+      extractStringLiteralCodeUnits(parser, compiler_instance->getTarget()),
+      parser.isWide(), parser.isUTF16());
 }
 
 static void rejectClangOpenMPStmt(const clang::Stmt *stmt) {
@@ -6807,7 +6962,8 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
                  starts_with(spelling, "U\"")) {
         string_val->set_is32bitString(true);
       }
-      string_val->set_value(extractStringLiteralValue(spelling));
+      string_val->set_value(
+          extractStringLiteralValue(spelling, p_compiler_instance));
       return string_val;
     };
 
@@ -13573,105 +13729,15 @@ bool ClangToSageTranslator::VisitStringLiteral(
 
   if (string_literal->isWide() || string_literal->isUTF16() ||
       string_literal->isUTF32()) {
-    auto append_unicode_escape = [&](uint32_t code_point) {
-      std::stringstream escape;
-      escape << std::uppercase << std::hex << std::setfill('0');
-      if (code_point <= 0xFFFF) {
-        escape << "\\u" << std::setw(4) << code_point;
-      } else {
-        escape << "\\U" << std::setw(8) << code_point;
-      }
-      newstr.append(escape.str());
-    };
-
-    auto append_hex_escape = [&](uint32_t code_unit) {
-      std::stringstream escape;
-      escape << "\\x" << std::uppercase << std::hex << code_unit;
-      newstr.append(escape.str());
-    };
-
-    auto append_octal_escape = [&](uint32_t code_unit) {
-      ROSE_ASSERT(code_unit <= 0xFF);
-      std::stringstream escape;
-      escape << '\\' << std::setfill('0') << std::setw(3) << std::oct
-             << code_unit;
-      newstr.append(escape.str());
-    };
-
-    bool last_hex_escape = false;
+    std::vector<uint32_t> code_units;
+    code_units.reserve(string_literal->getLength());
     for (unsigned ii = 0; ii < string_literal->getLength(); ++ii) {
-      uint32_t content_val = string_literal->getCodeUnit(ii);
-      bool use_hex_escape = false;
-      bool use_octal_escape = false;
-
-      if (string_literal->isUTF16() && content_val >= 0xD800 &&
-          content_val <= 0xDBFF && ii + 1 < string_literal->getLength()) {
-        uint32_t low_surrogate = string_literal->getCodeUnit(ii + 1);
-        if (low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
-          content_val = 0x10000 + (((content_val & 0x3FF) << 10) |
-                                   (low_surrogate & 0x3FF));
-          ++ii;
-        }
-      }
-
-      if (content_val >= 0xD800 && content_val <= 0xDFFF) {
-        use_hex_escape = true;
-      } else if (!string_literal->isWide() && content_val > 0xFF) {
-        append_unicode_escape(content_val);
-        last_hex_escape = false;
-        continue;
-      } else if (content_val == 0 && last_hex_escape) {
-        use_octal_escape = true;
-      } else if (auto escaped = clang::escapeCStyle<clang::EscapeChar::Double>(
-                     content_val);
-                 !escaped.empty()) {
-        newstr.append(escaped.str());
-        last_hex_escape = false;
-        continue;
-      } else if (content_val > 0xFF ||
-                 (last_hex_escape && content_val <= 0xFF &&
-                  std::isxdigit(static_cast<unsigned char>(content_val)))) {
-        use_hex_escape = true;
-      } else if (content_val > 0xFF ||
-                 !clang::isPrintable(static_cast<unsigned char>(content_val))) {
-        use_octal_escape = true;
-      } else {
-        newstr.push_back(static_cast<char>(content_val));
-        last_hex_escape = false;
-        continue;
-      }
-
-      if (use_hex_escape) {
-        append_hex_escape(content_val);
-        last_hex_escape = true;
-      } else {
-        append_octal_escape(content_val);
-        last_hex_escape = false;
-      }
+      code_units.push_back(string_literal->getCodeUnit(ii));
     }
-  } else // ordinary
-  {
-    for (auto aa : rawstr) {
-      switch (aa) {
-      case '\\':
-        newstr.append("\\\\");
-        break;
-      case '\n':
-        newstr.append("\\n");
-        break;
-      case '\r':
-        newstr.append("\\r");
-        break;
-      case '"':
-        newstr.append("\\\"");
-        break;
-      case '\0':
-        newstr.push_back('\0');
-        break;
-      default:
-        newstr.push_back(aa);
-      }
-    }
+    newstr = escapeWideStringLiteralCodeUnitsForUnparse(
+        code_units, string_literal->isWide(), string_literal->isUTF16());
+  } else {
+    newstr = escapeOrdinaryStringLiteralContentsForUnparse(rawstr);
   }
   SgStringVal *sgStrVal = SageBuilder::buildStringVal(newstr);
 
