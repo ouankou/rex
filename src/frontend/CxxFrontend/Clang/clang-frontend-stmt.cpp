@@ -10525,7 +10525,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           }
 
           ROSE_ASSERT(enum_decl != nullptr);
-          SgName name = enum_sym->get_name();
+          SgName name(decl_ref_expr->getNameInfo().getName().getAsString());
           SgExpression *ref_exp =
               SageBuilder::buildEnumVal_nfi(enum_value, enum_decl, name);
           attach_explicit_qualifier(ref_exp);
