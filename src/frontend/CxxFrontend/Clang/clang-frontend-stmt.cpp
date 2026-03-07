@@ -369,6 +369,19 @@ extractStringLiteralValue(const std::string &spelling,
       parser.isWide(), parser.isUTF16());
 }
 
+static bool isFloatingLiteralForUdlSpelling(
+    const std::string &spelling,
+    const clang::CompilerInstance *compiler_instance) {
+  ROSE_ASSERT(compiler_instance != nullptr);
+
+  clang::NumericLiteralParser parser(
+      spelling, clang::SourceLocation(), compiler_instance->getSourceManager(),
+      compiler_instance->getLangOpts(), compiler_instance->getTarget(),
+      compiler_instance->getDiagnostics());
+  ROSE_ASSERT(!parser.hadError);
+  return parser.isFloatingLiteral();
+}
+
 static void rejectClangOpenMPStmt(const clang::Stmt *stmt) {
   std::cerr
       << "Error: OpenMP/OpenACC constructs must be handled via pragma capture "
@@ -7017,11 +7030,7 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
       if (has_quote(literal_body, '\'')) {
         return build_char_literal(literal_body);
       }
-      if (literal_body.find('.') != std::string::npos ||
-          literal_body.find('e') != std::string::npos ||
-          literal_body.find('E') != std::string::npos ||
-          literal_body.find('p') != std::string::npos ||
-          literal_body.find('P') != std::string::npos) {
+      if (isFloatingLiteralForUdlSpelling(literal_body, p_compiler_instance)) {
         return SageBuilder::buildLongDoubleVal_nfi(0.0L, literal_body);
       }
       return SageBuilder::buildIntVal_nfi(0, literal_body);
