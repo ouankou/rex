@@ -4985,22 +4985,82 @@ bool ClangToSageTranslator::VisitBinaryConditionalOperator(
 #endif
   bool res = true;
 
-  SgNode *tmp_cond = Traverse(binary_conditional_operator->getCond());
-  SgExpression *cond_expr = isSgExpression(tmp_cond);
-  ROSE_ASSERT(cond_expr);
-  SgNode *tmp_true = Traverse(binary_conditional_operator->getTrueExpr());
-  SgExpression *true_expr = isSgExpression(tmp_true);
-  ROSE_ASSERT(true_expr);
-  SgNode *tmp_false = Traverse(binary_conditional_operator->getFalseExpr());
-  SgExpression *false_expr = isSgExpression(tmp_false);
-  ROSE_ASSERT(false_expr);
+  SgExpression *common_expr =
+      isSgExpression(Traverse(binary_conditional_operator->getCommon()));
+  ROSE_ASSERT(common_expr != nullptr);
 
-  SgType *cond_type =
+  SgExpression *false_expr =
+      isSgExpression(Traverse(binary_conditional_operator->getFalseExpr()));
+  ROSE_ASSERT(false_expr != nullptr);
+
+  SgType *common_type = buildTypeFromQualifiedType(
+      binary_conditional_operator->getCommon()->getType());
+  ROSE_ASSERT(common_type != nullptr);
+
+  SgType *result_type =
       buildTypeFromQualifiedType(binary_conditional_operator->getType());
-  SgConditionalExp *cond_exp = SageBuilder::buildConditionalExp_nfi(
-      cond_expr, true_expr, false_expr, cond_type);
-  applySourceRange(cond_exp, binary_conditional_operator->getSourceRange());
-  *node = cond_exp;
+  ROSE_ASSERT(result_type != nullptr);
+
+  SgBasicBlock *block = SageBuilder::buildBasicBlock();
+  ROSE_ASSERT(block != nullptr);
+
+  const std::string temp_name =
+      SageInterface::generateUniqueVariableName(block, "gnu_binary_cond");
+
+  SgExpression *result_expr = nullptr;
+  if (binary_conditional_operator->isLValue()) {
+    SgType *pointer_common_type = SageBuilder::buildPointerType(common_type);
+    SgType *pointer_result_type = SageBuilder::buildPointerType(result_type);
+    ROSE_ASSERT(pointer_common_type != nullptr);
+    ROSE_ASSERT(pointer_result_type != nullptr);
+
+    SgExpression *common_addr = SageBuilder::buildAddressOfOp(common_expr);
+    SgAssignInitializer *initializer =
+        SageBuilder::buildAssignInitializer(common_addr);
+    SgVariableDeclaration *temp_decl = SageBuilder::buildVariableDeclaration(
+        temp_name, pointer_common_type, initializer, block);
+    ROSE_ASSERT(temp_decl != nullptr);
+    SageInterface::appendStatement(temp_decl, block);
+
+    SgExpression *cond_expr = SageBuilder::buildPointerDerefExp(
+        SageBuilder::buildVarRefExp(temp_decl));
+    SgExpression *true_expr = SageBuilder::buildVarRefExp(temp_decl);
+    SgExpression *false_ptr_expr = SageBuilder::buildAddressOfOp(false_expr);
+    SgConditionalExp *pointer_conditional =
+        SageBuilder::buildConditionalExp_nfi(
+            cond_expr, true_expr, false_ptr_expr, pointer_result_type);
+    ROSE_ASSERT(pointer_conditional != nullptr);
+
+    SageInterface::appendStatement(
+        SageBuilder::buildExprStatement(pointer_conditional), block);
+
+    SgStatementExpression *statement_expression =
+        SageBuilder::buildStatementExpression_nfi(block);
+    ROSE_ASSERT(statement_expression != nullptr);
+    result_expr = SageBuilder::buildPointerDerefExp(statement_expression);
+  } else {
+    SgAssignInitializer *initializer =
+        SageBuilder::buildAssignInitializer(common_expr);
+    SgVariableDeclaration *temp_decl = SageBuilder::buildVariableDeclaration(
+        temp_name, common_type, initializer, block);
+    ROSE_ASSERT(temp_decl != nullptr);
+    SageInterface::appendStatement(temp_decl, block);
+
+    SgExpression *cond_expr = SageBuilder::buildVarRefExp(temp_decl);
+    SgExpression *true_expr = SageBuilder::buildVarRefExp(temp_decl);
+    SgConditionalExp *conditional = SageBuilder::buildConditionalExp_nfi(
+        cond_expr, true_expr, false_expr, result_type);
+    ROSE_ASSERT(conditional != nullptr);
+
+    SageInterface::appendStatement(SageBuilder::buildExprStatement(conditional),
+                                   block);
+
+    result_expr = SageBuilder::buildStatementExpression_nfi(block);
+  }
+
+  ROSE_ASSERT(result_expr != nullptr);
+  applySourceRange(result_expr, binary_conditional_operator->getSourceRange());
+  *node = result_expr;
 
   return VisitAbstractConditionalOperator(binary_conditional_operator, node) &&
          res;
