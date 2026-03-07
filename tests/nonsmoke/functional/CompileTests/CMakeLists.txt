@@ -25,6 +25,10 @@ function(compile_test input_file label)
     # Keep translating when Clang reports recoverable diagnostics for this input.
     list(APPEND _rose_flags "-rex:clang:continue-on-error")
   endif()
+  if(DEFINED ROSE_SKIP_FINAL_COMPILE_TESTCODES AND
+     input_file IN_LIST ROSE_SKIP_FINAL_COMPILE_TESTCODES)
+    list(APPEND _rose_flags "-rose:skipfinalCompileStep")
+  endif()
   if(DEFINED ROSE_OUTPUT_TO_BUILD_TESTCODES AND
      input_file IN_LIST ROSE_OUTPUT_TO_BUILD_TESTCODES)
     set(_output_dir "${ROSE_TEST_OUTPUT_DIR}")

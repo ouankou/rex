@@ -1278,6 +1278,128 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
 
   const bool enable_default_template_args = false;
 
+  auto build_auto_type_constraint_text =
+      [&](clang::AutoTypeLoc auto_loc) -> std::string {
+    if (!auto_loc.isConstrained()) {
+      return std::string();
+    }
+
+    clang::SourceLocation begin = auto_loc.getConceptNameLoc();
+    if (clang::NestedNameSpecifierLoc nested =
+            auto_loc.getNestedNameSpecifierLoc()) {
+      begin = nested.getBeginLoc();
+    }
+
+    clang::SourceLocation end = auto_loc.getConceptNameLoc();
+    if (auto_loc.hasExplicitTemplateArgs() &&
+        auto_loc.getLAngleLoc().isValid() &&
+        auto_loc.getRAngleLoc().isValid()) {
+      end = auto_loc.getRAngleLoc();
+    }
+
+    std::string text;
+    if (begin.isValid() && end.isValid()) {
+      text = trimWhitespace(getSourceText(clang::SourceRange(begin, end)));
+    }
+
+    if (text.empty()) {
+      if (clang::ConceptReference *concept_ref =
+              auto_loc.getConceptReference()) {
+        clang::PrintingPolicy policy =
+            p_compiler_instance != nullptr
+                ? p_compiler_instance->getASTContext().getPrintingPolicy()
+                : clang::PrintingPolicy(clang::LangOptions());
+        llvm::raw_string_ostream os(text);
+        concept_ref->print(os, policy);
+        os.flush();
+        text = trimWhitespace(text);
+      }
+    }
+
+    if (text.empty()) {
+      if (clang::NestedNameSpecifierLoc nested =
+              auto_loc.getNestedNameSpecifierLoc()) {
+        text += getSourceText(nested.getSourceRange());
+      }
+      if (clang::ConceptDecl *concept_decl = auto_loc.getNamedConcept()) {
+        text += concept_decl->getNameAsString();
+      }
+      if (auto_loc.hasExplicitTemplateArgs() &&
+          auto_loc.getLAngleLoc().isValid() &&
+          auto_loc.getRAngleLoc().isValid()) {
+        text += getSourceText(clang::SourceRange(auto_loc.getLAngleLoc(),
+                                                 auto_loc.getRAngleLoc()));
+      }
+      text = trimWhitespace(text);
+    }
+
+    return text;
+  };
+
+  auto annotate_auto_type_constraints = [&](SgType *sg_type) {
+    if (sg_type == nullptr) {
+      return;
+    }
+
+    std::vector<SgAutoType *> auto_types;
+    auto collect_auto_types = [&](auto &&self, SgType *current) -> void {
+      if (current == nullptr) {
+        return;
+      }
+      if (SgAutoType *auto_type = isSgAutoType(current)) {
+        auto_types.push_back(auto_type);
+        return;
+      }
+      if (SgModifierType *modifier_type = isSgModifierType(current)) {
+        self(self, modifier_type->get_base_type());
+        return;
+      }
+      if (SgPointerType *pointer_type = isSgPointerType(current)) {
+        self(self, pointer_type->get_base_type());
+        return;
+      }
+      if (SgPointerMemberType *pointer_member_type =
+              isSgPointerMemberType(current)) {
+        self(self, pointer_member_type->get_base_type());
+        return;
+      }
+      if (SgReferenceType *reference_type = isSgReferenceType(current)) {
+        self(self, reference_type->get_base_type());
+        return;
+      }
+      if (SgRvalueReferenceType *rvalue_reference_type =
+              isSgRvalueReferenceType(current)) {
+        self(self, rvalue_reference_type->get_base_type());
+        return;
+      }
+      if (SgArrayType *array_type = isSgArrayType(current)) {
+        self(self, array_type->get_base_type());
+        return;
+      }
+      if (SgTypedefType *typedef_type = isSgTypedefType(current)) {
+        self(self, typedef_type->get_base_type());
+        return;
+      }
+    };
+
+    collect_auto_types(collect_auto_types, sg_type);
+    if (auto_types.empty()) {
+      return;
+    }
+
+    size_t auto_index = 0;
+    for (clang::TypeLoc current_loc = type_loc;
+         !current_loc.isNull() && auto_index < auto_types.size();
+         current_loc = current_loc.getNextTypeLoc()) {
+      if (clang::AutoTypeLoc auto_loc =
+              current_loc.getAs<clang::AutoTypeLoc>()) {
+        SageInterface::setAutoTypeConstraint(
+            auto_types[auto_index], build_auto_type_constraint_text(auto_loc));
+        ++auto_index;
+      }
+    }
+  };
+
   auto build_nonreal_template_type =
       [&](const std::string &base_name, clang::NestedNameSpecifier *qualifier,
           bool has_template_keyword, SgTemplateArgumentPtrList &tpl_args,
@@ -1571,7 +1693,9 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
     }
   }
 
-  return buildTypeFromQualifiedType(type_loc.getType());
+  SgType *result = buildTypeFromQualifiedType(type_loc.getType());
+  annotate_auto_type_constraints(result);
+  return result;
 }
 
 SgNode *ClangToSageTranslator::Traverse(const clang::Type *type) {
@@ -2275,6 +2399,27 @@ bool ClangToSageTranslator::VisitAutoType(clang::AutoType *auto_type,
 
   // Represent C++ auto explicitly so we do not synthesize an opaque typedef.
   *node = SageBuilder::buildAutoType();
+  if (SgAutoType *sg_auto = isSgAutoType(*node)) {
+    if (auto_type->isConstrained()) {
+      std::string constraint_text;
+      if (clang::ConceptDecl *concept_decl =
+              auto_type->getTypeConstraintConcept()) {
+        constraint_text = concept_decl->getQualifiedNameAsString();
+        llvm::ArrayRef<clang::TemplateArgument> constraint_args =
+            auto_type->getTypeConstraintArguments();
+        if (!constraint_args.empty()) {
+          constraint_text += "<";
+          bool need_separator = false;
+          for (const clang::TemplateArgument &arg : constraint_args) {
+            appendTemplateInstantiationArg(constraint_text, need_separator,
+                                           arg);
+          }
+          constraint_text += ">";
+        }
+      }
+      SageInterface::setAutoTypeConstraint(sg_auto, constraint_text);
+    }
+  }
 
   return VisitDeducedType(auto_type, node) && res;
 }

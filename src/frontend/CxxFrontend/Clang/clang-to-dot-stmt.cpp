@@ -1922,9 +1922,7 @@ bool ClangToDotTranslator::VisitUserDefinedLiteral(
 
   node_desc.kind_hierarchy.push_back("UserDefinedLiteral");
 
-  // TODO
-
-  return VisitExpr(user_defined_literal, node_desc) && res;
+  return VisitCallExpr(user_defined_literal, node_desc) && res;
 }
 
 bool ClangToDotTranslator::VisitCastExpr(clang::CastExpr *cast_expr,
