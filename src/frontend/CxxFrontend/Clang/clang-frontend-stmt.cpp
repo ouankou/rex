@@ -6961,6 +6961,7 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
     }
     if (SgArrowExp *arrow_exp = isSgArrowExp(callee)) {
       self(arrow_exp->get_rhs_operand(), self);
+      return;
     }
   };
   mark_literal_operator_decl(call->get_function(), mark_literal_operator_decl);
