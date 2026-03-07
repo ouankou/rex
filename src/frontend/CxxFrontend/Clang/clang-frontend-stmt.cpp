@@ -1526,8 +1526,14 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
 
   std::map<clang::Stmt *, SgNode *>::iterator it =
       p_stmt_translation_map.find(stmt);
-  if (it != p_stmt_translation_map.end())
+  if (it != p_stmt_translation_map.end()) {
+    if (stmt->getStmtClass() == clang::Stmt::OpaqueValueExprClass) {
+      SgExpression *expr = isSgExpression(it->second);
+      ROSE_ASSERT(expr != nullptr);
+      return SageInterface::copyExpression(expr);
+    }
     return it->second;
+  }
 
   SgNode *result = nullptr;
   bool ret_status = false;
@@ -6875,6 +6881,9 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
 #endif
   bool res = true;
 
+  // User-defined literals first go through regular CallExpr
+  // translation, then raw/template literal operands are normalized here so
+  // ROSE preserves correct operand spelling and literal-operator metadata.
   res = VisitCallExpr(user_defined_literal, node) && res;
 
   SgFunctionCallExp *call = isSgFunctionCallExp(*node);
@@ -7710,16 +7719,13 @@ bool ClangToSageTranslator::VisitConceptSpecializationExpr(
   bool res = true;
 
   SgTemplateArgumentPtrList template_args;
-  if (const clang::ASTTemplateArgumentListInfo *args_written =
-          concept_specialization_expr->getTemplateArgsAsWritten()) {
+  const clang::ASTTemplateArgumentListInfo *args_written =
+      concept_specialization_expr->getTemplateArgsAsWritten();
+  if (args_written != nullptr && args_written->getLAngleLoc().isValid() &&
+      args_written->getRAngleLoc().isValid()) {
     for (const clang::TemplateArgumentLoc &arg_loc :
          args_written->arguments()) {
       appendTemplateArguments(template_args, arg_loc, true);
-    }
-  } else {
-    for (const clang::TemplateArgument &arg :
-         concept_specialization_expr->getTemplateArguments()) {
-      appendTemplateArguments(template_args, arg, false);
     }
   }
 
@@ -10985,6 +10991,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           // correctly to an SgEnumType
           SgInitializedName *init_name = enum_sym->get_declaration();
           SgEnumDeclaration *enum_decl = nullptr;
+          long long enum_value = 0;
 
           if (init_name != nullptr && init_name->get_type() != nullptr) {
             SgEnumType *enum_type = isSgEnumType(init_name->get_type());
@@ -10998,10 +11005,16 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
             enum_decl = isSgEnumDeclaration(init_name->get_parent());
           }
 
+          if (const clang::EnumConstantDecl *enum_const_decl =
+                  llvm::dyn_cast<clang::EnumConstantDecl>(
+                      decl_ref_expr->getDecl())) {
+            enum_value = enum_const_decl->getInitVal().getExtValue();
+          }
+
           ROSE_ASSERT(enum_decl != nullptr);
-          SgName name = enum_sym->get_name();
+          SgName name(decl_ref_expr->getNameInfo().getName().getAsString());
           SgExpression *ref_exp =
-              SageBuilder::buildEnumVal_nfi(0, enum_decl, name);
+              SageBuilder::buildEnumVal_nfi(enum_value, enum_decl, name);
           attach_explicit_qualifier(ref_exp);
           *node = ref_exp;
         } else {
@@ -13037,14 +13050,23 @@ bool ClangToSageTranslator::VisitOpaqueValueExpr(
 #endif
   bool res = true;
 
-  // ROOT CAUSE FIX: OpaqueValueExpr is a Clang internal node representing a
-  // value that appears multiple times in the AST but should only be evaluated
-  // once. It's used for desugaring constructs like the conditional operator and
-  // range-based for. We just traverse the source expression and return it.
+  // OpaqueValueExpr is a Clang internal reference to a previously computed
+  // value. The same Clang node can appear multiple times inside one enclosing
+  // expression (for example in GNU `a ?: b`), but the ROSE AST must remain a
+  // tree. Returning the translated source expression directly would reuse the
+  // same SgExpression node in multiple parents via the statement translation
+  // cache, which later breaks analyses such as CFG consistency checks.
+  // Translate the source expression once, then return a deep copy for each
+  // OpaqueValueExpr occurrence.
 
   clang::Expr *source_expr = opaque_value_expr->getSourceExpr();
   if (source_expr) {
-    *node = Traverse(source_expr);
+    SgExpression *source = isSgExpression(Traverse(source_expr));
+    ROSE_ASSERT(source != nullptr);
+
+    SgExpression *copy = SageInterface::copyExpression(source);
+    applySourceRange(copy, opaque_value_expr->getSourceRange());
+    *node = copy;
   } else {
     // No source expression - OpaqueValueExpr is used as a placeholder
     // Create a fallback expression for ROSE
@@ -13914,6 +13936,58 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
   SgExpression *expr = nullptr;
   SgType *type = nullptr;
 
+  auto mark_first_seen_class_type = [&](SgType *rose_type,
+                                        const auto &set_definition_flag) {
+    clang::QualType argument_qual_type =
+        unary_expr_or_type_trait_expr->getArgumentType();
+    const clang::Type *argument_type = argument_qual_type.getTypePtrOrNull();
+    bool is_complete_defined = false;
+
+    while (argument_type != nullptr) {
+      if (const clang::ParenType *paren_type =
+              llvm::dyn_cast<clang::ParenType>(argument_type)) {
+        argument_qual_type = paren_type->getInnerType();
+      } else if (const clang::ElaboratedType *elaborated_type =
+                     llvm::dyn_cast<clang::ElaboratedType>(argument_type)) {
+        argument_qual_type = elaborated_type->getNamedType();
+      } else if (const clang::PointerType *pointer_type =
+                     llvm::dyn_cast<clang::PointerType>(argument_type)) {
+        argument_qual_type = pointer_type->getPointeeType();
+      } else if (const clang::ArrayType *array_type =
+                     llvm::dyn_cast<clang::ArrayType>(argument_type)) {
+        argument_qual_type = array_type->getElementType();
+      } else if (const clang::AttributedType *attributed_type =
+                     llvm::dyn_cast<clang::AttributedType>(argument_type)) {
+        argument_qual_type = attributed_type->getModifiedType();
+      } else if (const clang::AdjustedType *adjusted_type =
+                     llvm::dyn_cast<clang::AdjustedType>(argument_type)) {
+        argument_qual_type = adjusted_type->getOriginalType();
+      } else {
+        break;
+      }
+      argument_type = argument_qual_type.getTypePtrOrNull();
+    }
+
+    if (const clang::RecordType *argument_record_type =
+            llvm::dyn_cast_or_null<clang::RecordType>(argument_type)) {
+      const clang::RecordDecl *record_declaration =
+          argument_record_type->getDecl();
+      ROSE_ASSERT(record_declaration != nullptr);
+      is_complete_defined = record_declaration->isCompleteDefinition();
+    }
+
+    if (SgClassType *class_type = isSgClassType(rose_type);
+        class_type != nullptr && is_complete_defined) {
+      std::map<SgClassType *, bool>::iterator bool_it =
+          p_class_type_decl_first_see_in_type.find(class_type);
+      ROSE_ASSERT(bool_it != p_class_type_decl_first_see_in_type.end());
+      if (bool_it->second) {
+        set_definition_flag();
+        bool_it->second = false;
+      }
+    }
+  };
+
   if (unary_expr_or_type_trait_expr->isArgumentType()) {
     type = buildTypeFromQualifiedType(
         unary_expr_or_type_trait_expr->getArgumentType());
@@ -13935,51 +14009,9 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
     if (type != nullptr) {
       SgSizeOfOp *sizeof_op = SageBuilder::buildSizeOfOp_nfi(type);
 
-      // Follow the underlying clang type to decide whether the first class
-      // definition should be emitted by this sizeof expression.
-      clang::QualType argument_qual_type =
-          unary_expr_or_type_trait_expr->getArgumentType();
-      const clang::Type *argument_type = argument_qual_type.getTypePtrOrNull();
-      bool is_complete_defined = false;
-
-      while (argument_type != nullptr &&
-             (llvm::isa<clang::ElaboratedType>(argument_type) ||
-              llvm::isa<clang::PointerType>(argument_type) ||
-              llvm::isa<clang::ArrayType>(argument_type))) {
-        if (const clang::ElaboratedType *elaborated_type =
-                llvm::dyn_cast<clang::ElaboratedType>(argument_type)) {
-          argument_qual_type = elaborated_type->getNamedType();
-        } else if (const clang::PointerType *pointer_type =
-                       llvm::dyn_cast<clang::PointerType>(argument_type)) {
-          argument_qual_type = pointer_type->getPointeeType();
-        } else {
-          const clang::ArrayType *array_type =
-              llvm::cast<clang::ArrayType>(argument_type);
-          argument_qual_type = array_type->getElementType();
-        }
-        argument_type = argument_qual_type.getTypePtrOrNull();
-      }
-
-      if (const clang::RecordType *argument_record_type =
-              llvm::dyn_cast_or_null<clang::RecordType>(argument_type)) {
-        const clang::RecordDecl *record_declaration =
-            argument_record_type->getDecl();
-        ROSE_ASSERT(record_declaration != nullptr);
-        is_complete_defined = record_declaration->isCompleteDefinition();
-      }
-
-      if (SgClassType *class_type = isSgClassType(type);
-          class_type != nullptr && is_complete_defined) {
-        std::map<SgClassType *, bool>::iterator bool_it =
-            p_class_type_decl_first_see_in_type.find(class_type);
-        ROSE_ASSERT(bool_it != p_class_type_decl_first_see_in_type.end());
-        if (bool_it->second) {
-          // If this is the first appearance, emit the class definition in
-          // the sizeof expression.
-          sizeof_op->set_sizeOfContainsBaseTypeDefiningDeclaration(true);
-          bool_it->second = false;
-        }
-      }
+      mark_first_seen_class_type(type, [&]() {
+        sizeof_op->set_sizeOfContainsBaseTypeDefiningDeclaration(true);
+      });
 
       *node = sizeof_op;
     } else if (expr != nullptr) {
@@ -13991,12 +14023,15 @@ bool ClangToSageTranslator::VisitUnaryExprOrTypeTraitExpr(
   case clang::UETT_AlignOf:
   case clang::UETT_PreferredAlignOf:
     if (type != nullptr) {
-      *node = SageBuilder::buildSizeOfOp_nfi(type);
-      ROSE_ASSERT(FAIL_FIXME ==
-                  0); // difference between AlignOf and PreferredAlignOf is not
-                      // represented in ROSE
+      SgAlignOfOp *alignof_op = SageBuilder::buildAlignOfOp_nfi(type);
+
+      mark_first_seen_class_type(type, [&]() {
+        alignof_op->set_alignOfContainsBaseTypeDefiningDeclaration(true);
+      });
+
+      *node = alignof_op;
     } else if (expr != nullptr) {
-      *node = SageBuilder::buildSizeOfOp_nfi(expr);
+      *node = SageBuilder::buildAlignOfOp_nfi(expr);
     } else {
       res = false;
     }

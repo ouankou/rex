@@ -141,6 +141,14 @@ ROSE_DLL_API void setTemplateParameterKeyword(SgTemplateParameter *param,
                                               std::string kw);
 ROSE_DLL_API std::string
 getTemplateParameterKeyword(SgTemplateParameter *param);
+ROSE_DLL_API void
+setAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param,
+                                        bool is_abbreviated_placeholder = true);
+ROSE_DLL_API bool
+isAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param);
+ROSE_DLL_API void setAutoTypeConstraint(SgAutoType *type,
+                                        std::string constraint);
+ROSE_DLL_API std::string getAutoTypeConstraint(SgAutoType *type);
 
 //------------------------------------------------------------------------
 //@{

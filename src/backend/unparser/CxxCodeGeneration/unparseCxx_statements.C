@@ -77,6 +77,86 @@ SgTryStmt *getFunctionTryStmt(SgFunctionDefinition *definition) {
   return try_stmt;
 }
 
+std::string trimRequiresClauseText(const std::string &text) {
+  size_t begin = 0;
+  while (begin < text.size() &&
+         std::isspace(static_cast<unsigned char>(text[begin]))) {
+    ++begin;
+  }
+
+  size_t end = text.size();
+  while (end > begin &&
+         std::isspace(static_cast<unsigned char>(text[end - 1]))) {
+    --end;
+  }
+
+  return text.substr(begin, end - begin);
+}
+
+void unparseRequiresClauseExpression(Unparse_ExprStmt *expr_unparser,
+                                     SgExpression *requires_clause,
+                                     SgUnparse_Info &info);
+
+bool isParenthesizedRequiresClauseText(const std::string &text) {
+  std::string trimmed = trimRequiresClauseText(text);
+  if (trimmed.size() < 2 || trimmed.front() != '(' || trimmed.back() != ')') {
+    return false;
+  }
+
+  int depth = 0;
+  for (size_t i = 0; i < trimmed.size(); ++i) {
+    if (trimmed[i] == '(') {
+      ++depth;
+    } else if (trimmed[i] == ')') {
+      --depth;
+      if (depth == 0 && i + 1 != trimmed.size()) {
+        return false;
+      }
+      if (depth < 0) {
+        return false;
+      }
+    }
+  }
+
+  return depth == 0;
+}
+
+void unparseTrailingRequiresClauseIfPresent(
+    Unparse_ExprStmt *expr_unparser, SgFunctionDeclaration *funcdecl_stmt,
+    SgUnparse_Info &info) {
+  ASSERT_not_null(expr_unparser);
+  ASSERT_not_null(funcdecl_stmt);
+
+  if (SgExpression *requires_clause =
+          funcdecl_stmt->get_trailingRequiresClause()) {
+    SgUnparse_Info rinfo(info);
+    rinfo.set_SkipClassDefinition();
+    rinfo.set_SkipEnumDefinition();
+    expr_unparser->curprint(" requires ");
+    unparseRequiresClauseExpression(expr_unparser, requires_clause, rinfo);
+  }
+}
+
+void unparseRequiresClauseExpression(Unparse_ExprStmt *expr_unparser,
+                                     SgExpression *requires_clause,
+                                     SgUnparse_Info &info) {
+  ASSERT_not_null(expr_unparser);
+  ASSERT_not_null(requires_clause);
+
+  bool needs_grouping = true;
+  if (SgRequiresExpr *req = isSgRequiresExpr(requires_clause)) {
+    needs_grouping =
+        !isParenthesizedRequiresClauseText(req->get_expressionString());
+  }
+  if (needs_grouping) {
+    expr_unparser->curprint("(");
+  }
+  expr_unparser->unparseExpression(requires_clause, info);
+  if (needs_grouping) {
+    expr_unparser->curprint(")");
+  }
+}
+
 bool requiresTrailingReturnTypeSyntax(const SgType *return_type) {
   const SgDeclType *decl_type = isSgDeclType(return_type);
   if (decl_type == NULL) {
@@ -4336,14 +4416,7 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
       curprint(string("\")"));
     }
 
-    if (SgExpression *requires_clause =
-            funcdecl_stmt->get_trailingRequiresClause()) {
-      SgUnparse_Info rinfo(info);
-      rinfo.set_SkipClassDefinition();
-      rinfo.set_SkipEnumDefinition();
-      curprint(" requires ");
-      unparseExpression(requires_clause, rinfo);
-    }
+    unparseTrailingRequiresClauseIfPresent(this, funcdecl_stmt, info);
 
     const bool is_function_try_block =
         info.SkipFunctionDefinition() && !funcdecl_stmt->isForward() &&
@@ -5195,7 +5268,7 @@ void Unparse_ExprStmt::unparseTrailingFunctionModifiers(
     rinfo.set_SkipClassDefinition();
     rinfo.set_SkipEnumDefinition();
     curprint(" requires ");
-    unparseExpression(requires_clause, rinfo);
+    unparseRequiresClauseExpression(this, requires_clause, rinfo);
   }
 
   // if (mfuncdecl_stmt->isPure())
@@ -8214,9 +8287,15 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
   printf("In unparseTemplateHeader(decl = %p = %s) \n", decl,
          decl->class_name().c_str());
 #endif
-  if (!decl->get_templateParameters().empty()) {
+  SgTemplateParameterPtrList tlist;
+  for (SgTemplateParameter *param : decl->get_templateParameters()) {
+    if (!SageInterface::isAbbreviatedFunctionTemplateParameter(param)) {
+      tlist.push_back(param);
+    }
+  }
+
+  if (!tlist.empty()) {
     curprint("template ");
-    SgTemplateParameterPtrList tlist = decl->get_templateParameters();
     SgUnparse_Info tinfo(info);
     tinfo.set_declstatement_ptr(NULL);
     tinfo.set_declstatement_ptr(decl);
@@ -8226,7 +8305,7 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
       SgUnparse_Info rinfo(info);
       rinfo.set_SkipClassDefinition();
       rinfo.set_SkipEnumDefinition();
-      unparseExpression(requires_clause, rinfo);
+      unparseRequiresClauseExpression(this, requires_clause, rinfo);
       curprint(" ");
     }
     curprint("\n");
@@ -8454,6 +8533,9 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       if (templateMemberFunctionDeclaration != NULL) {
         unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,
                                          ninfo);
+      } else {
+        unparseTrailingRequiresClauseIfPresent(this, functionDeclaration,
+                                               ninfo);
       }
 
       SgFunctionDefinition *functionDefn =

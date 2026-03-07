@@ -967,7 +967,6 @@ set(CXX11_DISABLED_TESTCODES
   test2019_504.C
   test2019_506.C
   test2020_40.C
-  test2020_71.C
   test2020_73.C
   test2020_80.C
   test2020_82.C

@@ -2677,7 +2677,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2009_34.C
   test2009_35.C
   test2009_36.C
-  test2009_38.C
   test2009_43.C
   test2009_44.C
   test2009_46.C
@@ -2995,7 +2994,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2009_34.C
   test2009_35.C
   test2009_36.C
-  test2009_38.C
   test2009_43.C
   test2009_44.C
   test2009_46.C
