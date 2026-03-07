@@ -160,28 +160,41 @@ static std::string
 escapeOrdinaryStringLiteralContentsForUnparse(llvm::StringRef contents) {
   std::string escaped;
   escaped.reserve(contents.size());
-  for (char ch : contents) {
+  bool last_hex_escape = false;
+
+  for (unsigned char ch : contents) {
     switch (ch) {
     case '\\':
       escaped.append("\\\\");
+      last_hex_escape = false;
       break;
     case '\n':
       escaped.append("\\n");
+      last_hex_escape = false;
       break;
     case '\r':
       escaped.append("\\r");
+      last_hex_escape = false;
       break;
     case '"':
       escaped.append("\\\"");
-      break;
-    case '\0':
-      escaped.push_back('\0');
+      last_hex_escape = false;
       break;
     default:
-      escaped.push_back(ch);
+      if (!clang::isPrintable(ch) || (last_hex_escape && std::isxdigit(ch))) {
+        std::stringstream escape;
+        escape << "\\x" << std::uppercase << std::hex << std::setw(2)
+               << std::setfill('0') << static_cast<unsigned>(ch);
+        escaped.append(escape.str());
+        last_hex_escape = true;
+      } else {
+        escaped.push_back(static_cast<char>(ch));
+        last_hex_escape = false;
+      }
       break;
     }
   }
+
   return escaped;
 }
 

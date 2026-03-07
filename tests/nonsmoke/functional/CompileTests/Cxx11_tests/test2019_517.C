@@ -20,6 +20,9 @@ next line)wide"_raw;
   int f = "quote\" slash\\ tab\t"_tmpl;
   int g = u"wide\ntext"_tmpl;
   int h = U"utf32\ntext"_tmpl;
+  int i = "nul\0A"_tmpl;
+
+  static_assert("nul\0A"_tmpl == 5, "embedded NUL must remain distinct");
 
   (void)a;
   (void)b;
@@ -29,4 +32,5 @@ next line)wide"_raw;
   (void)f;
   (void)g;
   (void)h;
+  (void)i;
 }
