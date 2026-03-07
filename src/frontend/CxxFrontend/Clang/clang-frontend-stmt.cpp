@@ -6813,13 +6813,13 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
 
     auto build_char_literal =
         [&](const std::string &spelling) -> SgExpression * {
-      if (starts_with(spelling, "L'") || starts_with(spelling, "L\"")) {
+      if (starts_with(spelling, "L'")) {
         return SageBuilder::buildWcharVal_nfi(0, spelling);
       }
-      if (starts_with(spelling, "u'") || starts_with(spelling, "u\"")) {
+      if (starts_with(spelling, "u'")) {
         return SageBuilder::buildChar16Val_nfi(0, spelling);
       }
-      if (starts_with(spelling, "U'") || starts_with(spelling, "U\"")) {
+      if (starts_with(spelling, "U'")) {
         return SageBuilder::buildChar32Val_nfi(0, spelling);
       }
       return SageBuilder::buildCharVal_nfi(0, spelling);
