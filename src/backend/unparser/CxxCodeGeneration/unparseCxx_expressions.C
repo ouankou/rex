@@ -71,6 +71,37 @@ bool isMemberOperatorCall(SgFunctionCallExp *func_call,
   return isSgDotStarOp(function) != nullptr ||
          isSgArrowStarOp(function) != nullptr;
 }
+
+bool isUldOperatorCall(const SgUnparse_Info &info,
+                       const SgFunctionDeclaration *decl) {
+  if (decl == nullptr) {
+    return false;
+  }
+
+  const SgFunctionCallExp *call = info.get_current_function_call();
+  return call != nullptr && call->get_uses_operator_syntax() &&
+         decl->get_specialFunctionModifier().isUldOperator();
+}
+
+template <typename RefType>
+SgFunctionDeclaration *getReferencedFunctionDeclaration(RefType *ref) {
+  if (ref == nullptr || ref->get_symbol() == nullptr) {
+    return nullptr;
+  }
+
+  return ref->get_symbol()->get_declaration();
+}
+
+template <typename RefType, typename RecordSuffixFn>
+void handleUldOperatorRef(RefType *ref, bool &print_paren, SgUnparse_Info &info,
+                          RecordSuffixFn &&record_suffix) {
+  if (SgFunctionDeclaration *decl = getReferencedFunctionDeclaration(ref);
+      decl != nullptr && decl->get_specialFunctionModifier().isUldOperator()) {
+    print_paren = false;
+    info.set_user_defined_literal(true);
+    record_suffix(decl);
+  }
+}
 } // namespace
 
 // DQ (10/14/2010):  This should only be included by source files that require
@@ -923,14 +954,7 @@ void Unparse_ExprStmt::unparseTemplateFuncRef(SgExpression *expr,
   SgTemplateFunctionRefExp *func_ref = isSgTemplateFunctionRefExp(expr);
   ASSERT_not_null(func_ref);
 
-  if (info.get_current_function_call() != NULL &&
-      info.get_current_function_call()->get_uses_operator_syntax() == true &&
-      func_ref->get_symbol() != NULL &&
-      func_ref->get_symbol()->get_declaration() != NULL &&
-      func_ref->get_symbol()
-          ->get_declaration()
-          ->get_specialFunctionModifier()
-          .isUldOperator()) {
+  if (isUldOperatorCall(info, getReferencedFunctionDeclaration(func_ref))) {
     return;
   }
 
@@ -945,14 +969,7 @@ void Unparse_ExprStmt::unparseTemplateMFuncRef(SgExpression *expr,
       isSgTemplateMemberFunctionRefExp(expr);
   ASSERT_not_null(mfunc_ref);
 
-  if (info.get_current_function_call() != NULL &&
-      info.get_current_function_call()->get_uses_operator_syntax() == true &&
-      mfunc_ref->get_symbol() != NULL &&
-      mfunc_ref->get_symbol()->get_declaration() != NULL &&
-      mfunc_ref->get_symbol()
-          ->get_declaration()
-          ->get_specialFunctionModifier()
-          .isUldOperator()) {
+  if (isUldOperatorCall(info, getReferencedFunctionDeclaration(mfunc_ref))) {
     return;
   }
 
@@ -984,10 +1001,7 @@ void Unparse_ExprStmt::unparseTemplateFunctionName(
   // unparseTemplateArgumentList
   ASSERT_not_null(templateInstantiationFunctionDeclaration);
 
-  if (info.get_current_function_call() != NULL &&
-      info.get_current_function_call()->get_uses_operator_syntax() == true &&
-      templateInstantiationFunctionDeclaration->get_specialFunctionModifier()
-          .isUldOperator()) {
+  if (isUldOperatorCall(info, templateInstantiationFunctionDeclaration)) {
     return;
   }
 
@@ -1031,11 +1045,7 @@ void Unparse_ExprStmt::unparseTemplateMemberFunctionName(
   // unparseTemplateFunctionName().
   ASSERT_not_null(templateInstantiationMemberFunctionDeclaration);
 
-  if (info.get_current_function_call() != NULL &&
-      info.get_current_function_call()->get_uses_operator_syntax() == true &&
-      templateInstantiationMemberFunctionDeclaration
-          ->get_specialFunctionModifier()
-          .isUldOperator()) {
+  if (isUldOperatorCall(info, templateInstantiationMemberFunctionDeclaration)) {
     return;
   }
 
@@ -4879,54 +4889,14 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
           SgTemplateMemberFunctionRefExp *template_mfunc_ref =
               isSgTemplateMemberFunctionRefExp(func_call->get_function());
 
-          // DQ (2/12/2019): Adding support for C++11 uld operators.
-          if ((func_ref != NULL) && func_ref->get_symbol()
-                                        ->get_declaration()
-                                        ->get_specialFunctionModifier()
-                                        .isUldOperator()) {
-            print_paren = false;
-            newinfo.set_user_defined_literal(true);
-            record_user_defined_literal_suffix(
-                func_ref->get_symbol()->get_declaration());
-            // printFunctionArguments = false;
-          }
-
-          // DQ (2/12/2019): Adding support for C++11 uld operators.
-          if ((mfunc_ref != NULL) && mfunc_ref->get_symbol()
-                                         ->get_declaration()
-                                         ->get_specialFunctionModifier()
-                                         .isUldOperator()) {
-            print_paren = false;
-            newinfo.set_user_defined_literal(true);
-            record_user_defined_literal_suffix(
-                mfunc_ref->get_symbol()->get_declaration());
-            // printFunctionArguments = false;
-          }
-
-          if ((template_func_ref != NULL) && template_func_ref->get_symbol() &&
-              template_func_ref->get_symbol()->get_declaration() &&
-              template_func_ref->get_symbol()
-                  ->get_declaration()
-                  ->get_specialFunctionModifier()
-                  .isUldOperator()) {
-            print_paren = false;
-            newinfo.set_user_defined_literal(true);
-            record_user_defined_literal_suffix(
-                template_func_ref->get_symbol()->get_declaration());
-          }
-
-          if ((template_mfunc_ref != NULL) &&
-              template_mfunc_ref->get_symbol() &&
-              template_mfunc_ref->get_symbol()->get_declaration() &&
-              template_mfunc_ref->get_symbol()
-                  ->get_declaration()
-                  ->get_specialFunctionModifier()
-                  .isUldOperator()) {
-            print_paren = false;
-            newinfo.set_user_defined_literal(true);
-            record_user_defined_literal_suffix(
-                template_mfunc_ref->get_symbol()->get_declaration());
-          }
+          handleUldOperatorRef(func_ref, print_paren, newinfo,
+                               record_user_defined_literal_suffix);
+          handleUldOperatorRef(mfunc_ref, print_paren, newinfo,
+                               record_user_defined_literal_suffix);
+          handleUldOperatorRef(template_func_ref, print_paren, newinfo,
+                               record_user_defined_literal_suffix);
+          handleUldOperatorRef(template_mfunc_ref, print_paren, newinfo,
+                               record_user_defined_literal_suffix);
         }
       }
 

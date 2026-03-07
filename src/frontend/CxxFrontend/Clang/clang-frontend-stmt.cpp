@@ -137,6 +137,21 @@ static clang::SourceLocation findMatchingLParen(clang::SourceLocation rparen,
   return clang::SourceLocation();
 }
 
+static void
+propagateSpecialFunctionModifiers(SgFunctionDeclaration *base_decl,
+                                  SgFunctionDeclaration *inst_decl) {
+  if (base_decl == nullptr || inst_decl == nullptr) {
+    return;
+  }
+
+  if (base_decl->get_specialFunctionModifier().isOperator()) {
+    inst_decl->get_specialFunctionModifier().setOperator();
+  }
+  if (base_decl->get_specialFunctionModifier().isUldOperator()) {
+    inst_decl->get_specialFunctionModifier().setUldOperator();
+  }
+}
+
 static void rejectClangOpenMPStmt(const clang::Stmt *stmt) {
   std::cerr
       << "Error: OpenMP/OpenACC constructs must be handled via pragma capture "
@@ -6049,14 +6064,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         ensure_function_param_list(inst_decl, param_list);
         if (inst_decl != nullptr) {
           sync_member_instantiation_args(inst_decl);
-          if (base_decl != nullptr) {
-            if (base_decl->get_specialFunctionModifier().isOperator()) {
-              inst_decl->get_specialFunctionModifier().setOperator();
-            }
-            if (base_decl->get_specialFunctionModifier().isUldOperator()) {
-              inst_decl->get_specialFunctionModifier().setUldOperator();
-            }
-          }
+          propagateSpecialFunctionModifiers(base_decl, inst_decl);
           if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
                   isSgTemplateMemberFunctionDeclaration(base_decl)) {
             inst_decl->set_templateDeclaration(tmpl_decl);
@@ -6080,14 +6088,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
             isSgMemberFunctionDeclaration(inst_sym->get_declaration()));
         if (SgMemberFunctionDeclaration *inst_decl =
                 isSgMemberFunctionDeclaration(inst_sym->get_declaration())) {
-          if (base_decl != nullptr) {
-            if (base_decl->get_specialFunctionModifier().isOperator()) {
-              inst_decl->get_specialFunctionModifier().setOperator();
-            }
-            if (base_decl->get_specialFunctionModifier().isUldOperator()) {
-              inst_decl->get_specialFunctionModifier().setUldOperator();
-            }
-          }
+          propagateSpecialFunctionModifiers(base_decl, inst_decl);
         }
       }
 
@@ -6142,14 +6143,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         ensure_function_param_list(inst_decl, param_list);
         if (inst_decl != nullptr) {
           sync_function_instantiation_args(inst_decl);
-          if (base_decl != nullptr) {
-            if (base_decl->get_specialFunctionModifier().isOperator()) {
-              inst_decl->get_specialFunctionModifier().setOperator();
-            }
-            if (base_decl->get_specialFunctionModifier().isUldOperator()) {
-              inst_decl->get_specialFunctionModifier().setUldOperator();
-            }
-          }
+          propagateSpecialFunctionModifiers(base_decl, inst_decl);
           if (SgTemplateFunctionDeclaration *tmpl_decl =
                   isSgTemplateFunctionDeclaration(base_decl)) {
             inst_decl->set_templateDeclaration(tmpl_decl);
@@ -6173,14 +6167,7 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
             isSgFunctionDeclaration(inst_sym->get_declaration()));
         if (SgFunctionDeclaration *inst_decl =
                 isSgFunctionDeclaration(inst_sym->get_declaration())) {
-          if (base_decl != nullptr) {
-            if (base_decl->get_specialFunctionModifier().isOperator()) {
-              inst_decl->get_specialFunctionModifier().setOperator();
-            }
-            if (base_decl->get_specialFunctionModifier().isUldOperator()) {
-              inst_decl->get_specialFunctionModifier().setUldOperator();
-            }
-          }
+          propagateSpecialFunctionModifiers(base_decl, inst_decl);
         }
       }
 
