@@ -7015,9 +7015,17 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
       }
       return SageBuilder::buildCharVal_nfi(0, spelling);
     };
+    auto is_string_literal_spelling = [&](const std::string &spelling) {
+      return starts_with(spelling, "u8R\"") || starts_with(spelling, "uR\"") ||
+             starts_with(spelling, "UR\"") || starts_with(spelling, "LR\"") ||
+             starts_with(spelling, "R\"") || starts_with(spelling, "u8\"") ||
+             starts_with(spelling, "u\"") || starts_with(spelling, "U\"") ||
+             starts_with(spelling, "L\"") || starts_with(spelling, "\"");
+    };
 
-    auto has_quote = [](const std::string &text, char quote) -> bool {
-      return text.find(quote) != std::string::npos;
+    auto is_character_literal_spelling = [&](const std::string &spelling) {
+      return starts_with(spelling, "u'") || starts_with(spelling, "U'") ||
+             starts_with(spelling, "L'") || starts_with(spelling, "'");
     };
 
     clang::UserDefinedLiteral::LiteralOperatorKind kind =
@@ -7033,10 +7041,10 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
       return SageBuilder::buildIntVal_nfi(0, literal_body);
     case clang::UserDefinedLiteral::LOK_Raw:
     case clang::UserDefinedLiteral::LOK_Template:
-      if (has_quote(literal_body, '\"')) {
+      if (is_string_literal_spelling(literal_body)) {
         return build_string_literal(literal_body);
       }
-      if (has_quote(literal_body, '\'')) {
+      if (is_character_literal_spelling(literal_body)) {
         return build_char_literal(literal_body);
       }
       if (isFloatingLiteralForUdlSpelling(literal_body, p_compiler_instance)) {
