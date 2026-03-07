@@ -4946,6 +4946,8 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
       // take an argument to control prefix/postfix, but which should never be
       // output unless we are trying to reproduce the operator function call
       // syntax e.g. "x.operator++(0)" or "x.operator++(1)").
+      const bool is_user_defined_literal_call =
+          uses_operator_syntax == true && !user_defined_literal_suffix.empty();
       if ((printFunctionArguments == true) && (func_call->get_args() != NULL)) {
         SgExpressionPtrList &list = func_call->get_args()->get_expressions();
         SgExpressionPtrList::iterator arg = list.begin();
@@ -4977,6 +4979,9 @@ void Unparse_ExprStmt::unparseFuncCall(SgExpression *expr,
 
           if (unparseArg == true) {
             unparseExpression((*arg), newinfo);
+            if (is_user_defined_literal_call) {
+              break;
+            }
           }
 
           arg++;

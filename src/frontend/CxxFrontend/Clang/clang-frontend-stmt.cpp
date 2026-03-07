@@ -7083,30 +7083,40 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
       user_defined_literal->getLiteralOperatorKind();
   std::string operand_spelling = literal_body;
 
-  SgExpression *operand = nullptr;
   if (literal_kind != clang::UserDefinedLiteral::LOK_Raw &&
       literal_kind != clang::UserDefinedLiteral::LOK_Template &&
       user_defined_literal->getCookedLiteral() != nullptr) {
-    clang::Expr *cooked_literal = user_defined_literal->getCookedLiteral();
-    operand = isSgExpression(Traverse(cooked_literal));
-    update_literal_value_string(operand, operand_spelling);
+    SgExprListExp *param_list = call->get_args();
+    if (param_list != nullptr && !param_list->get_expressions().empty()) {
+      SgExpression *operand =
+          isSgExpression(Traverse(user_defined_literal->getCookedLiteral()));
+      if (operand != nullptr) {
+        update_literal_value_string(operand, operand_spelling);
+        setCompilerGeneratedFileInfo(operand, true);
+        operand->set_parent(param_list);
+        param_list->get_expressions().front() = operand;
+      } else {
+        res = false;
+      }
+    } else {
+      res = false;
+    }
   } else {
-    operand = build_literal_operand();
-  }
+    SgExpression *operand = build_literal_operand();
+    if (operand != nullptr) {
+      setCompilerGeneratedFileInfo(operand, true);
+    }
 
-  if (operand != nullptr) {
-    setCompilerGeneratedFileInfo(operand, true);
+    SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
+    applySourceRange(param_list, user_defined_literal->getSourceRange());
+    if (operand != nullptr) {
+      param_list->append_expression(operand);
+    } else {
+      res = false;
+    }
+    call->set_args(param_list);
+    param_list->set_parent(call);
   }
-
-  SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
-  applySourceRange(param_list, user_defined_literal->getSourceRange());
-  if (operand != nullptr) {
-    param_list->append_expression(operand);
-  } else {
-    res = false;
-  }
-  call->set_args(param_list);
-  param_list->set_parent(call);
 
   call->set_uses_operator_syntax(true);
 
