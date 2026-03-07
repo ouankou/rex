@@ -152,6 +152,55 @@ propagateSpecialFunctionModifiers(SgFunctionDeclaration *base_decl,
   }
 }
 
+static std::string
+escapeStringLiteralContentsForUnparse(const std::string &contents) {
+  std::string escaped;
+  escaped.reserve(contents.size());
+  for (unsigned char ch : contents) {
+    if (ch == '\0') {
+      escaped.append("\\000");
+      continue;
+    }
+    if (auto mapped = clang::escapeCStyle<clang::EscapeChar::Double>(ch);
+        !mapped.empty()) {
+      escaped.append(mapped.str());
+      continue;
+    }
+    escaped.push_back(static_cast<char>(ch));
+  }
+  return escaped;
+}
+
+static std::string extractStringLiteralValue(const std::string &spelling) {
+  size_t first_quote = spelling.find('"');
+  size_t last_quote = spelling.rfind('"');
+  ROSE_ASSERT(first_quote != std::string::npos);
+  ROSE_ASSERT(last_quote != std::string::npos);
+  ROSE_ASSERT(last_quote > first_quote);
+
+  bool is_raw_string = first_quote > 0 && spelling[first_quote - 1] == 'R';
+  if (!is_raw_string) {
+    return spelling.substr(first_quote + 1, last_quote - first_quote - 1);
+  }
+
+  size_t open_paren = spelling.find('(', first_quote + 1);
+  ROSE_ASSERT(open_paren != std::string::npos);
+
+  std::string delimiter =
+      spelling.substr(first_quote + 1, open_paren - first_quote - 1);
+  ROSE_ASSERT(std::all_of(delimiter.begin(), delimiter.end(), [](char ch) {
+    return clang::isRawStringDelimBody(static_cast<unsigned char>(ch));
+  }));
+
+  std::string closing_marker = ")" + delimiter + '"';
+  size_t closing_marker_pos = spelling.rfind(closing_marker);
+  ROSE_ASSERT(closing_marker_pos != std::string::npos);
+  ROSE_ASSERT(closing_marker_pos >= open_paren + 1);
+
+  return escapeStringLiteralContentsForUnparse(
+      spelling.substr(open_paren + 1, closing_marker_pos - open_paren - 1));
+}
+
 static void rejectClangOpenMPStmt(const clang::Stmt *stmt) {
   std::cerr
       << "Error: OpenMP/OpenACC constructs must be handled via pragma capture "
@@ -6758,13 +6807,7 @@ bool ClangToSageTranslator::VisitUserDefinedLiteral(
                  starts_with(spelling, "U\"")) {
         string_val->set_is32bitString(true);
       }
-      size_t first_quote = spelling.find('\"');
-      size_t last_quote = spelling.rfind('\"');
-      if (first_quote != std::string::npos && last_quote != std::string::npos &&
-          last_quote > first_quote) {
-        string_val->set_value(
-            spelling.substr(first_quote + 1, last_quote - first_quote - 1));
-      }
+      string_val->set_value(extractStringLiteralValue(spelling));
       return string_val;
     };
 

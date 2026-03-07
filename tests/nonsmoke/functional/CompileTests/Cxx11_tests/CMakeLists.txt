@@ -779,6 +779,7 @@ set(CXX11_TESTCODES
   test2019_438.C
   test2019_505.C
   test2019_516.C
+  test2019_517.C
   test2019_523.C
   test2020_51a.C
   test2020_51b.C
