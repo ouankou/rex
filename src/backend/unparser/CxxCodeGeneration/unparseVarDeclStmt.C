@@ -4,6 +4,7 @@
 #include "sage3basic.h"
 
 #include "rose_config.h"
+#include "structuredBindingSupport.h"
 
 #define DEBUG__unparse_alignas 0
 #define DEBUG__setup_decl_item_type_unparse_infos 0
@@ -123,6 +124,15 @@ static bool setup_decl_item_type_unparse_infos(SgUnparse_Info &ninfo_for_type,
 }
 
 std::string build_decl_item_name(SgInitializedName *decl_item) {
+  if (decl_item != nullptr) {
+    if (AstValueAttribute<std::string> *pattern_attr =
+            dynamic_cast<AstValueAttribute<std::string> *>(
+                decl_item->getAttribute(
+                    Rose::kStructuredBindingPatternAttributeName))) {
+      return pattern_attr->get();
+    }
+  }
+
   std::string decl_name = decl_item->get_name().getString();
 #if DEBUG__build_decl_item_name
   printf("Enter build_decl_item_name()\n");

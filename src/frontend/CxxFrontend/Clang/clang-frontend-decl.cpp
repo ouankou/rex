@@ -2,6 +2,7 @@
 
 #include "fixupTemplateArguments.h"
 #include "sage3basic.h"
+#include "structuredBindingSupport.h"
 #include "unparser.h"
 
 #include <algorithm>
@@ -36,6 +37,54 @@
 #include <vector>
 
 namespace {
+static void setStructuredBindingPatternAttribute(SgInitializedName *init_name,
+                                                 const std::string &pattern) {
+  if (init_name == nullptr || pattern.empty()) {
+    return;
+  }
+
+  AstAttribute *existing =
+      init_name->getAttribute(Rose::kStructuredBindingPatternAttributeName);
+  if (AstValueAttribute<std::string> *value =
+          dynamic_cast<AstValueAttribute<std::string> *>(existing)) {
+    value->set(pattern);
+    return;
+  }
+
+  init_name->setAttribute(Rose::kStructuredBindingPatternAttributeName,
+                          new AstValueAttribute<std::string>(pattern));
+}
+
+static std::string buildStructuredBindingPattern(
+    const clang::DecompositionDecl *decomposition_decl) {
+  if (decomposition_decl == nullptr) {
+    return std::string();
+  }
+
+  std::string pattern = "[";
+  bool first = true;
+  for (const clang::BindingDecl *binding_decl :
+       decomposition_decl->bindings()) {
+    if (binding_decl == nullptr) {
+      continue;
+    }
+
+    const std::string name = binding_decl->getNameAsString();
+    if (name.empty()) {
+      continue;
+    }
+
+    if (!first) {
+      pattern += ", ";
+    }
+    pattern += name;
+    first = false;
+  }
+
+  pattern += "]";
+  return first ? std::string() : pattern;
+}
+
 std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
   const char *spelling = clang::getOperatorSpelling(op);
   ROSE_ASSERT(spelling != nullptr);
@@ -6237,6 +6286,9 @@ bool ClangToSageTranslator::TraverseForDeclContext(
        it++) {
     clang::Decl *decl = (*it);
     if (decl == nullptr) {
+      continue;
+    }
+    if (llvm::isa<clang::BindingDecl>(decl)) {
       continue;
     }
 
@@ -14894,7 +14946,10 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
 
   clang::Expr *binding_expr = binding_decl->getBinding();
   SgInitializer *init = nullptr;
-  if (binding_expr != nullptr) {
+  // BindingDecl is Clang's helper declaration for one element of a structured
+  // binding. It is not a standalone user-visible declaration in the output.
+  const bool is_structured_binding_component = true;
+  if (!is_structured_binding_component && binding_expr != nullptr) {
     SgNode *tmp_init = Traverse(binding_expr);
     if (SgInitializer *tmp_init_initializer = isSgInitializer(tmp_init)) {
       init = tmp_init_initializer;
@@ -14976,6 +15031,13 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
   }
 
   *node = sg_var_decl;
+
+  if (is_structured_binding_component) {
+    mark_compiler_generated_and_suppress_unparse(sg_var_decl);
+    if (SgVariableDefinition *var_def = sg_var_decl->get_definition()) {
+      mark_compiler_generated_and_suppress_unparse(var_def);
+    }
+  }
 
   return VisitValueDecl(binding_decl, node) && res;
 }
@@ -23547,10 +23609,28 @@ bool ClangToSageTranslator::VisitDecompositionDecl(
 #endif
   bool res = true;
 
-  // ROOT CAUSE FIX: Allow delegation to work - disabled FAIL_TODO
-  // ROSE_ASSERT(FAIL_TODO == 0); // TODO
+  bool visit_res = VisitVarDecl(decomposition_decl, node);
 
-  return VisitVarDecl(decomposition_decl, node) && res;
+  if (SgVariableDeclaration *sg_var_decl = isSgVariableDeclaration(*node)) {
+    if (!sg_var_decl->get_variables().empty()) {
+      SgInitializedName *init_name = sg_var_decl->get_variables().front();
+      const std::string pattern =
+          buildStructuredBindingPattern(decomposition_decl);
+      setStructuredBindingPatternAttribute(init_name, pattern);
+      if (!pattern.empty()) {
+        init_name->set_name(SgName(pattern));
+      }
+    }
+  }
+
+  for (clang::BindingDecl *binding_decl : decomposition_decl->bindings()) {
+    if (binding_decl == nullptr) {
+      continue;
+    }
+    Traverse(binding_decl);
+  }
+
+  return visit_res && res;
 }
 
 bool ClangToSageTranslator::VisitImplicitParamDecl(
