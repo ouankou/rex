@@ -7,21 +7,19 @@
 
 namespace {
 SgSourceFile *findMainFile(SgProject *project) {
+  SgSourceFile *first_source_file = NULL;
   for (SgFile *file : project->get_fileList()) {
-    SgSourceFile *source = isSgSourceFile(file);
-    if (source == NULL) {
-      continue;
-    }
-    if (!source->get_isHeaderFile()) {
-      return source;
+    if (SgSourceFile *source = isSgSourceFile(file)) {
+      if (!source->get_isHeaderFile()) {
+        return source;
+      }
+      if (first_source_file == NULL) {
+        first_source_file = source;
+      }
     }
   }
 
-  if (!project->get_fileList().empty()) {
-    return isSgSourceFile(project->get_fileList().front());
-  }
-
-  return NULL;
+  return first_source_file;
 }
 
 bool isFromFile(SgLocatedNode *node, SgSourceFile *source_file) {
