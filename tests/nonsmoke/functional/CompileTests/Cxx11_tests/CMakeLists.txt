@@ -958,8 +958,6 @@ set(CXX11_DISABLED_TESTCODES
   test2019_306.C
   test2019_311.C
   test2019_313.C
-  test2019_345.C
-  test2019_346.C
   test2019_382.C
   test2019_388.C
   test2019_453.C
