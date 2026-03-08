@@ -2638,14 +2638,12 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_56.C
   test2007_58.C
   test2007_60.C
-  test2007_61.C
   test2007_62.C
   test2007_63.C
   test2007_64.C
   test2007_65.C
   test2007_66.C
   test2007_67.C
-  test2007_68.C
   test2007_69.C
   test2007_71.C
   test2007_73.C
@@ -2952,14 +2950,12 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_54.C
   test2007_58.C
   test2007_60.C
-  test2007_61.C
   test2007_62.C
   test2007_63.C
   test2007_64.C
   test2007_65.C
   test2007_66.C
   test2007_67.C
-  test2007_68.C
   test2007_69.C
   test2007_71.C
   test2007_73.C
