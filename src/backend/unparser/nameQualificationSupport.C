@@ -2031,8 +2031,6 @@ int NameQualificationTraversal::nameQualificationDepth(
               "******** Found a member function template instantiation that is "
               "a part of a SgTemplateInstantiationDirectiveStatement \n");
 #endif
-          MLOG_WARN_C(MLOG_UNPARSER, "Exiting as a test! \n");
-          ROSE_ABORT();
         }
 
         SgFunctionType *functionType = functionDeclaration->get_type();
