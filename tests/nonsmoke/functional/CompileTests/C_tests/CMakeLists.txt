@@ -955,9 +955,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_40.c
   test2015_41.c
   test2015_42.c
-  test2015_43.c
-  test2015_44.c
-  test2015_45.c
   test2015_47.c
   test2015_48.c
   test2015_49.c
