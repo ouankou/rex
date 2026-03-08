@@ -5447,11 +5447,10 @@ bool ClangToSageTranslator::VisitArrayInitLoopExpr(
           array_init_loop_expr->getCommonExpr()) {
     SgNode *tmp_common = Traverse(common_expr);
     SgExpression *common = isSgExpression(tmp_common);
-    if (tmp_common != nullptr && common == nullptr) {
-      std::cerr << "Runtime error: tmp_common != nullptr && common == nullptr"
-                << std::endl;
-      res = false;
-    } else if (common != nullptr) {
+    if (tmp_common != nullptr) {
+      ROSE_ASSERT(common != nullptr &&
+                  "Traversed common expression of ArrayInitLoopExpr must be an "
+                  "SgExpression");
       applySourceRange(common, array_init_loop_expr->getSourceRange());
       *node = common;
     }

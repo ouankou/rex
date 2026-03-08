@@ -14947,29 +14947,8 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
   clang::Expr *binding_expr = binding_decl->getBinding();
   SgInitializer *init = nullptr;
   // BindingDecl is Clang's helper declaration for one element of a structured
-  // binding. It is not a standalone user-visible declaration in the output.
-  const bool is_structured_binding_component = true;
-  if (!is_structured_binding_component && binding_expr != nullptr) {
-    SgNode *tmp_init = Traverse(binding_expr);
-    if (SgInitializer *tmp_init_initializer = isSgInitializer(tmp_init)) {
-      init = tmp_init_initializer;
-    } else {
-      SgExpression *expr = isSgExpression(tmp_init);
-      if (tmp_init != nullptr && expr == nullptr) {
-        std::cerr << "Runtime error: not a SgInitializer..." << std::endl;
-        res = false;
-      } else if (expr != nullptr) {
-        if (SgExprListExp *expr_list_expr = isSgExprListExp(expr)) {
-          init = SageBuilder::buildAggregateInitializer(expr_list_expr, type);
-        } else if (SgInitializer *existing_init = isSgInitializer(expr)) {
-          init = existing_init;
-        } else {
-          init =
-              SageBuilder::buildAssignInitializer_nfi(expr, expr->get_type());
-        }
-      }
-    }
-  }
+  // binding. Its user-visible initializer is represented by the enclosing
+  // DecompositionDecl, so do not translate an initializer here.
 
   if (init != nullptr) {
     sg_var_decl->reset_initializer(init);
@@ -15032,11 +15011,9 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
 
   *node = sg_var_decl;
 
-  if (is_structured_binding_component) {
-    mark_compiler_generated_and_suppress_unparse(sg_var_decl);
-    if (SgVariableDefinition *var_def = sg_var_decl->get_definition()) {
-      mark_compiler_generated_and_suppress_unparse(var_def);
-    }
+  mark_compiler_generated_and_suppress_unparse(sg_var_decl);
+  if (SgVariableDefinition *var_def = sg_var_decl->get_definition()) {
+    mark_compiler_generated_and_suppress_unparse(var_def);
   }
 
   return VisitValueDecl(binding_decl, node) && res;
