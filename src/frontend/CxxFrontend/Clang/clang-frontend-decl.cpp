@@ -3098,6 +3098,19 @@ static bool scope_prefers_source_ordering(SgScopeStatement *scope) {
          isSgNamespaceDefinitionStatement(scope) != nullptr;
 }
 
+static SgDeclarationStatement *unwrap_template_instantiation_directive_decl(
+    SgDeclarationStatement *decl_stmt) {
+  if (SgTemplateInstantiationDecl *inst_decl =
+          isSgTemplateInstantiationDecl(decl_stmt)) {
+    if (SgTemplateInstantiationDirectiveStatement *directive =
+            isSgTemplateInstantiationDirectiveStatement(
+                inst_decl->get_parent())) {
+      return directive;
+    }
+  }
+  return decl_stmt;
+}
+
 void ensure_decl_in_scope_child_list(
     SgDeclarationStatement *decl, SgScopeStatement *scope,
     const char *context = "ClangToSageTranslator") {
@@ -6293,31 +6306,9 @@ bool ClangToSageTranslator::TraverseForDeclContext(
 
     SgNode *child = Traverse(decl);
 
-    SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(child);
-    if (SgTemplateInstantiationDecl *inst_decl =
-            isSgTemplateInstantiationDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
-    if (SgTemplateInstantiationFunctionDecl *inst_decl =
-            isSgTemplateInstantiationFunctionDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
-    if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
-            isSgTemplateInstantiationMemberFunctionDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
+    SgDeclarationStatement *decl_stmt =
+        unwrap_template_instantiation_directive_decl(
+            isSgDeclarationStatement(child));
 
     if (decl_stmt == nullptr && child != nullptr) {
       std::cerr << "Runtime error: the node produce for a clang::Decl is not a "
@@ -9275,31 +9266,9 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
 
   auto attach_template_specialization = [&](SgNode *spec_node,
                                             const char *context) {
-    SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(spec_node);
-    if (SgTemplateInstantiationDecl *inst_decl =
-            isSgTemplateInstantiationDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
-    if (SgTemplateInstantiationFunctionDecl *inst_decl =
-            isSgTemplateInstantiationFunctionDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
-    if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
-            isSgTemplateInstantiationMemberFunctionDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
+    SgDeclarationStatement *decl_stmt =
+        unwrap_template_instantiation_directive_decl(
+            isSgDeclarationStatement(spec_node));
     if (decl_stmt != nullptr) {
       SgScopeStatement *lexical_scope =
           isSgScopeStatement(decl_stmt->get_parent());
@@ -9474,31 +9443,9 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(
 
   auto attach_template_specialization = [&](SgNode *spec_node,
                                             const char *context) {
-    SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(spec_node);
-    if (SgTemplateInstantiationDecl *inst_decl =
-            isSgTemplateInstantiationDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
-    if (SgTemplateInstantiationFunctionDecl *inst_decl =
-            isSgTemplateInstantiationFunctionDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
-    if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
-            isSgTemplateInstantiationMemberFunctionDecl(decl_stmt)) {
-      if (SgTemplateInstantiationDirectiveStatement *directive =
-              isSgTemplateInstantiationDirectiveStatement(
-                  inst_decl->get_parent())) {
-        decl_stmt = directive;
-      }
-    }
+    SgDeclarationStatement *decl_stmt =
+        unwrap_template_instantiation_directive_decl(
+            isSgDeclarationStatement(spec_node));
     if (decl_stmt != nullptr) {
       SgScopeStatement *lexical_scope =
           isSgScopeStatement(decl_stmt->get_parent());
@@ -9543,23 +9490,9 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(
     if (kind == clang::TSK_ExplicitInstantiationDeclaration ||
         kind == clang::TSK_ExplicitInstantiationDefinition) {
       SgNode *spec_node = Traverse(spec);
-      SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(spec_node);
-      if (SgTemplateInstantiationFunctionDecl *inst_decl =
-              isSgTemplateInstantiationFunctionDecl(decl_stmt)) {
-        if (SgTemplateInstantiationDirectiveStatement *directive =
-                isSgTemplateInstantiationDirectiveStatement(
-                    inst_decl->get_parent())) {
-          decl_stmt = directive;
-        }
-      }
-      if (SgTemplateInstantiationMemberFunctionDecl *inst_decl =
-              isSgTemplateInstantiationMemberFunctionDecl(decl_stmt)) {
-        if (SgTemplateInstantiationDirectiveStatement *directive =
-                isSgTemplateInstantiationDirectiveStatement(
-                    inst_decl->get_parent())) {
-          decl_stmt = directive;
-        }
-      }
+      SgDeclarationStatement *decl_stmt =
+          unwrap_template_instantiation_directive_decl(
+              isSgDeclarationStatement(spec_node));
 
       SgScopeStatement *attach_scope = nullptr;
       if (clang::CXXMethodDecl *method_spec =
