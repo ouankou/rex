@@ -3087,7 +3087,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_19.C
   test2013_195.C
   test2013_197.C
-  test2013_243.C
   test2013_245.C
   test2013_248.C
   test2013_249.C
