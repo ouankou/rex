@@ -1,6 +1,6 @@
 #include <new>
 
-namespace std {
+namespace my_test {
 
 template <typename _T1, typename _T2>
 inline void _Construct(_T1 *__p, const _T2 &__value) {
@@ -8,12 +8,14 @@ inline void _Construct(_T1 *__p, const _T2 &__value) {
   // 402. wrong new expression in [some_]allocator::construct
   ::new (static_cast<void *>(__p)) _T1(__value);
 }
-} // namespace std
+} // namespace my_test
 
 void foo() {
-  int *x_ptr;
-  int y;
-  std::_Construct<int, int>(x_ptr, y);
+  alignas(int) unsigned char buffer[sizeof(int)];
+  int *x_ptr = reinterpret_cast<int *>(buffer);
+  int y = 0;
+  my_test::_Construct<int, int>(x_ptr, y);
 
   int *a = ::new (static_cast<void *>(x_ptr)) int(y);
+  (void)a;
 }
