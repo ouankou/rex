@@ -2,7 +2,6 @@
 
 #include "fixupTemplateArguments.h"
 #include "sage3basic.h"
-#include "structuredBindingSupport.h"
 #include "unparser.h"
 
 #include <algorithm>
@@ -37,46 +36,39 @@
 #include <vector>
 
 namespace {
-static void setStructuredBindingPatternAttribute(SgInitializedName *init_name,
-                                                 const std::string &pattern) {
-  if (init_name == nullptr || pattern.empty()) {
-    return;
-  }
+struct StructuredBindingComponent {
+  const clang::BindingDecl *binding_decl = nullptr;
+  SgInitializedName *initialized_name = nullptr;
+};
 
-  AstAttribute *existing =
-      init_name->getAttribute(Rose::kStructuredBindingPatternAttributeName);
-  if (AstValueAttribute<std::string> *value =
-          dynamic_cast<AstValueAttribute<std::string> *>(existing)) {
-    value->set(pattern);
-    return;
-  }
-
-  init_name->setAttribute(Rose::kStructuredBindingPatternAttributeName,
-                          new AstValueAttribute<std::string>(pattern));
-}
-
-static std::string buildStructuredBindingPattern(
-    const clang::DecompositionDecl *decomposition_decl) {
+static SgExprListExp *buildStructuredBindingPattern(
+    const clang::DecompositionDecl *decomposition_decl,
+    const std::vector<StructuredBindingComponent> &components,
+    SgScopeStatement *scope) {
   if (decomposition_decl == nullptr) {
-    return std::string();
+    return nullptr;
   }
 
-  std::string pattern = "[";
-  bool first = true;
-  for (const clang::BindingDecl *binding_decl :
-       decomposition_decl->bindings()) {
-    if (first) {
-      first = false;
+  if (scope == nullptr) {
+    scope = SageBuilder::topScopeStack();
+  }
+  ROSE_ASSERT(scope != nullptr);
+
+  SgExprListExp *pattern = SageBuilder::buildExprListExp_nfi();
+  ROSE_ASSERT(pattern != nullptr);
+
+  for (const StructuredBindingComponent &component : components) {
+    SgExpression *element = nullptr;
+    if (component.initialized_name != nullptr) {
+      element = SageBuilder::buildVarRefExp(component.initialized_name, scope);
+      ROSE_ASSERT(element != nullptr);
     } else {
-      pattern += ", ";
+      element = SageBuilder::buildNullExpression_nfi();
     }
 
-    if (binding_decl != nullptr) {
-      pattern += binding_decl->getNameAsString();
-    }
+    SageInterface::appendExpression(pattern, element);
   }
 
-  pattern += "]";
   return pattern;
 }
 
@@ -15027,20 +15019,9 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
                                                 SageBuilder::topScopeStack());
   sg_var_decl->set_isAssociatedWithDeclarationList(true);
 
-  clang::Expr *binding_expr = binding_decl->getBinding();
-  SgInitializer *init = nullptr;
   // BindingDecl is Clang's helper declaration for one element of a structured
   // binding. Its user-visible initializer is represented by the enclosing
-  // DecompositionDecl, so do not translate an initializer here.
-
-  if (init != nullptr) {
-    sg_var_decl->reset_initializer(init);
-  }
-  if (init != nullptr && binding_expr != nullptr) {
-    if (!llvm::isa<clang::CXXConstructExpr>(binding_expr)) {
-      applySourceRange(init, binding_expr->getSourceRange());
-    }
-  }
+  // DecompositionDecl, so no initializer is attached here.
 
   sg_var_decl->set_firstNondefiningDeclaration(sg_var_decl);
   sg_var_decl->set_parent(SageBuilder::topScopeStack());
@@ -15051,10 +15032,6 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
   if (init_name->get_scope() == nullptr) {
     init_name->set_scope(SageBuilder::topScopeStack());
   }
-  if (init != nullptr) {
-    init->set_parent(init_name);
-  }
-
   applySourceRange(init_name, binding_decl->getSourceRange());
 
   SgVariableDefinition *var_def =
@@ -23692,20 +23669,31 @@ bool ClangToSageTranslator::VisitDecompositionDecl(
 
   bool visit_res = VisitVarDecl(decomposition_decl, node);
 
+  std::vector<StructuredBindingComponent> components;
+  for (clang::BindingDecl *binding_decl : decomposition_decl->bindings()) {
+    StructuredBindingComponent component;
+    component.binding_decl = binding_decl;
+
+    if (binding_decl != nullptr) {
+      SgVariableDeclaration *binding_var_decl =
+          isSgVariableDeclaration(Traverse(binding_decl));
+      ROSE_ASSERT(binding_var_decl != nullptr);
+      ROSE_ASSERT(!binding_var_decl->get_variables().empty());
+
+      if (!binding_decl->getNameAsString().empty()) {
+        component.initialized_name = binding_var_decl->get_variables().front();
+      }
+    }
+
+    components.push_back(component);
+  }
+
   if (SgVariableDeclaration *sg_var_decl = isSgVariableDeclaration(*node)) {
     if (!sg_var_decl->get_variables().empty()) {
       SgInitializedName *init_name = sg_var_decl->get_variables().front();
-      const std::string pattern =
-          buildStructuredBindingPattern(decomposition_decl);
-      setStructuredBindingPatternAttribute(init_name, pattern);
+      init_name->set_structured_binding_pattern(buildStructuredBindingPattern(
+          decomposition_decl, components, init_name->get_scope()));
     }
-  }
-
-  for (clang::BindingDecl *binding_decl : decomposition_decl->bindings()) {
-    if (binding_decl == nullptr) {
-      continue;
-    }
-    Traverse(binding_decl);
   }
 
   return visit_res && res;

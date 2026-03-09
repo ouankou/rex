@@ -1069,6 +1069,13 @@ void Grammar::setUpNodes() {
       "SgType *", "auto_decltype", "= NULL", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
+  // REX (3/9/2026): Preserve the user-visible binding pattern for C++
+  // structured bindings as typed AST instead of an ad-hoc string attribute.
+  InitializedName.setDataPrototype(
+      "SgExprListExp*", "structured_binding_pattern", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, CLONE_PTR);
+
   // DQ (1/24/2016): Adding support to mark this to use the __device__ keyword.
   InitializedName.setDataPrototype(
       "bool", "using_device_keyword", "= false", NO_CONSTRUCTOR_PARAMETER,
