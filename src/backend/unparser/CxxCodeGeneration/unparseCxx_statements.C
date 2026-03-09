@@ -2368,32 +2368,15 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
         isSgMemberFunctionDeclaration(declarationStatement);
     ASSERT_not_null(memberFunctionDeclaration);
 
-    // DQ (5/31/2005): for now we will only output directives for template
-    // member functions and not non-template member functions.  In the case of a
-    // template class NOT output as a specialization then the template
-    // instantiation directive for a non-templated member function is allows
-    // (likely is just instatiates the class).
-    if (memberFunctionDeclaration->isTemplateFunction() == true) {
-      // DQ (8/29/2005): "template" keyword now output by
-      // Unparse_ExprStmt::outputTemplateSpecializationSpecifier() curprint (
-      // string("template ";
-      SgUnparse_Info ninfo(info);
-      ninfo.set_SkipFunctionDefinition();
-      ninfo.set_AddSemiColonAfterDeclaration();
-      unparseMFuncDeclStmt(memberFunctionDeclaration, ninfo);
-    } else {
-      // It seems that if the class declaration is not specialized then the
-      // non-member function template instantiation directive is allowed. But we
-      // don't at this point know if the class declaration has been output so
-      // skip all template instantiations of non-template member functions (in
-      // general). Issue a warning message for now!
-#if PRINT_DEVELOPER_WARNINGS
-      printf("Warning: Skipping output of directived to build non-template "
-             "member functions! \n");
-      curprint(string("\n/* Warning: Skipping output of directived to build "
-                      "non-template member functions! */"));
-#endif
-    }
+    // Explicit instantiation directives remain directives regardless of
+    // whether the instantiated declaration is itself still a template at the
+    // ROSE level.  Emit the member declaration unconditionally and let the
+    // directive parent drive the leading `template` / `extern template`
+    // syntax.
+    SgUnparse_Info ninfo(info);
+    ninfo.set_SkipFunctionDefinition();
+    ninfo.set_AddSemiColonAfterDeclaration();
+    unparseMFuncDeclStmt(memberFunctionDeclaration, ninfo);
     break;
   }
 
