@@ -124,13 +124,14 @@ static bool setup_decl_item_type_unparse_infos(SgUnparse_Info &ninfo_for_type,
 }
 
 std::string build_decl_item_name(SgInitializedName *decl_item) {
-  if (decl_item != nullptr) {
-    if (AstValueAttribute<std::string> *pattern_attr =
-            dynamic_cast<AstValueAttribute<std::string> *>(
-                decl_item->getAttribute(
-                    Rose::kStructuredBindingPatternAttributeName))) {
-      return pattern_attr->get();
-    }
+  if (decl_item == nullptr) {
+    return "";
+  }
+  if (AstValueAttribute<std::string> *pattern_attr =
+          dynamic_cast<AstValueAttribute<std::string> *>(
+              decl_item->getAttribute(
+                  Rose::kStructuredBindingPatternAttributeName))) {
+    return pattern_attr->get();
   }
 
   std::string decl_name = decl_item->get_name().getString();
