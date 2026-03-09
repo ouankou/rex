@@ -3587,8 +3587,21 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
 
   bool res = true;
 
-  if (decl_stmt->isSingleDecl()) {
-    *node = Traverse(decl_stmt->getSingleDecl());
+  std::vector<clang::Decl *> visible_decls;
+  for (clang::Decl *decl : decl_stmt->decls()) {
+    if (decl == nullptr) {
+      continue;
+    }
+    if (llvm::isa<clang::BindingDecl>(decl)) {
+      continue;
+    }
+    visible_decls.push_back(decl);
+  }
+
+  if (visible_decls.empty()) {
+    *node = nullptr;
+  } else if (visible_decls.size() == 1) {
+    *node = Traverse(visible_decls.front());
 #if DEBUG_VISIT_STMT
     printf("In VisitDeclStmt(): *node = %p = %s \n", *node,
            (*node)->class_name().c_str());
@@ -3600,8 +3613,9 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
 
     SgScopeStatement *scope = SageBuilder::topScopeStack();
 
-    for (it = decl_stmt->decl_begin(); it != decl_stmt->decl_end() - 1; it++) {
-      clang::Decl *decl = (*it);
+    for (auto visible_it = visible_decls.begin();
+         visible_it != visible_decls.end() - 1; ++visible_it) {
+      clang::Decl *decl = *visible_it;
       if (decl == nullptr)
         continue;
       SgNode *child = Traverse(decl);
@@ -3631,9 +3645,7 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
       }
     }
     // last declaration in scope
-    it = decl_stmt->decl_end();
-    --it;
-    SgNode *lastDecl = Traverse((clang::Decl *)(*it));
+    SgNode *lastDecl = Traverse(visible_decls.back());
     SgDeclarationStatement *last_decl_Stmt = isSgDeclarationStatement(lastDecl);
     if (lastDecl != nullptr && last_decl_Stmt == nullptr) {
       std::cerr
@@ -5520,7 +5532,19 @@ bool ClangToSageTranslator::VisitArrayInitLoopExpr(
 #endif
   bool res = true;
 
-  // TODO
+  if (clang::OpaqueValueExpr *common_expr =
+          array_init_loop_expr->getCommonExpr()) {
+    SgNode *tmp_common = Traverse(common_expr);
+    SgExpression *common = isSgExpression(tmp_common);
+    if (tmp_common != nullptr) {
+      ROSE_ASSERT(common != nullptr &&
+                  "Traversed common expression of ArrayInitLoopExpr must be an "
+                  "SgExpression");
+      applySourceRange(common, array_init_loop_expr->getSourceRange());
+      *node = common;
+      return res;
+    }
+  }
 
   return VisitExpr(array_init_loop_expr, node) && res;
 }
