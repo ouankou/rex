@@ -5652,6 +5652,10 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
           (string(classdecl_stmt->get_name()).substr(0, 14) ==
            "__anonymous_0x") &&
           (classdecl_stmt->get_class_type() == SgClassDeclaration::e_union);
+      bool allowUnnamedInternalName =
+          info.PrintName() &&
+          (isSgTypedefDeclaration(classdecl_stmt->get_parent()) != NULL ||
+           isSgVariableDeclaration(classdecl_stmt->get_parent()) != NULL);
       // DQ (8/19/2014): Adding code to output the template instantiation with
       // template arguments processed to support name qualification.
       if (templateInstantiation != NULL) {
@@ -5682,11 +5686,11 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
           curprint(nameQualifier.str());
           curprint(classdecl_stmt->get_name() + " ");
         } else {
-          // DQ (11/21/2021): Need to handle the case of multiple names used to
-          // name the anonymous class declaration in a typedef (see
-          // test2021_14.c). printf ("Skip the output of the class name = %s
-          // (unless explicitly required) \n",classdecl_stmt->get_name().str());
-          if (info.PrintName() == true) {
+          // Keep synthesized names available for internal symbol-table use, but
+          // only surface them when an unnamed declaration is embedded in a
+          // typedef or variable declaration that needs a disambiguating type
+          // name.
+          if (allowUnnamedInternalName) {
             curprint(classdecl_stmt->get_name() + " ");
           }
         }

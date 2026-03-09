@@ -1683,7 +1683,21 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
     // SgName nm = decl->get_name();
     SgName nm;
 
-    if (decl->get_isUnNamed() == false || info.PrintName() == true) {
+    bool allowUnnamedInternalName = false;
+    if (info.PrintName() == true) {
+      SgInitializedName *referenceDecl =
+          isSgInitializedName(info.get_reference_node_for_qualification());
+      if (referenceDecl != NULL) {
+        std::string referenceName = referenceDecl->get_name().getString();
+        bool referenceIsAnonymous =
+            referenceName.empty() || referenceName.find("__anonymous_0x") == 0;
+        allowUnnamedInternalName = !referenceIsAnonymous;
+      } else {
+        allowUnnamedInternalName = true;
+      }
+    }
+
+    if (decl->get_isUnNamed() == false || allowUnnamedInternalName) {
       nm = decl->get_name();
 
 #if DEBUG_UNPARSE_CLASS_TYPE
