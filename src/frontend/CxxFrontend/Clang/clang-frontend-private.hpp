@@ -998,6 +998,8 @@ protected:
 
   SgScopeStatement *resolveScopeFromDeclContext(clang::DeclContext *context,
                                                 SgScopeStatement *fallback);
+  SgScopeStatement *
+  resolveMethodEnclosingScope(clang::CXXMethodDecl *method_decl);
 
   SgNode *lookupUsingDeclTargetNode(clang::Decl *decl);
   SgNode *resolveUsingDeclTargetNode(clang::Decl *decl);

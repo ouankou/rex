@@ -45,6 +45,22 @@ foreach(specimen IN LISTS SINGLE_STMT_BLOCK_TEST_SOURCES)
   endif()
 endforeach()
 
+set(_single_stmt_issue432_output_dir
+  ${CMAKE_CURRENT_BINARY_DIR}/issue432_explicit_instantiation_output)
+add_test(
+  NAME normalizationTranslator_test2005_155_explicit_instantiation_output
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_TRANSLATOR=${CMAKE_BINARY_DIR}/bin/normalizationTranslator
+    -DREX_INPUT=${_single_stmt_tests_dir}/test2005_155.C
+    -DREX_INCLUDE_DIR=${_single_stmt_tests_dir}
+    -DREX_WORKDIR=${_single_stmt_issue432_output_dir}
+    "-DREX_EXPECTED_REGEX=template[ ]+void[ ]+X::foo<int>\\(int i,int j,int k\\)"
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/check_unparsed_contains.cmake
+)
+list(APPEND _single_stmt_test_targets
+  normalizationTranslator_test2005_155_explicit_instantiation_output)
+
 # Makefile check targets.
 list(JOIN _single_stmt_test_targets "\;" _single_stmt_group_tests)
 add_test(
