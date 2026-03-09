@@ -5453,6 +5453,7 @@ bool ClangToSageTranslator::VisitArrayInitLoopExpr(
                   "SgExpression");
       applySourceRange(common, array_init_loop_expr->getSourceRange());
       *node = common;
+      return res;
     }
   }
 
