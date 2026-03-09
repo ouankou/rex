@@ -6,8 +6,8 @@
 struct S {
   S() = default;
   explicit constexpr S(int value) noexcept : i(value) {}
-  S(const S &) = default;
-  S &operator=(const S &) = default;
+  S(const S &) noexcept = default;
+  S &operator=(const S &) noexcept = default;
   ~S() noexcept = default;
 
   constexpr int value() const noexcept { return i; }
@@ -23,6 +23,8 @@ constexpr int construct_value() {
 
 static_assert(std::is_same_v<
               decltype(std::declval<S &>() = std::declval<const S &>()), S &>);
+static_assert(std::is_nothrow_copy_constructible_v<S>);
+static_assert(std::is_nothrow_copy_assignable_v<S>);
 static_assert(std::is_nothrow_destructible_v<S>);
 static_assert(construct_value() == 17);
 
