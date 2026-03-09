@@ -63,30 +63,20 @@ static std::string buildStructuredBindingPattern(
 
   std::string pattern = "[";
   bool first = true;
-  bool has_binding = false;
   for (const clang::BindingDecl *binding_decl :
        decomposition_decl->bindings()) {
-    has_binding = true;
-    if (binding_decl == nullptr) {
-      continue;
-    }
-
-    const std::string name = binding_decl->getNameAsString();
-    if (name.empty()) {
-      continue;
-    }
-
-    if (!first) {
+    if (first) {
+      first = false;
+    } else {
       pattern += ", ";
     }
-    pattern += name;
-    first = false;
+
+    if (binding_decl != nullptr) {
+      pattern += binding_decl->getNameAsString();
+    }
   }
 
   pattern += "]";
-  if (first && has_binding) {
-    return std::string();
-  }
   return pattern;
 }
 
