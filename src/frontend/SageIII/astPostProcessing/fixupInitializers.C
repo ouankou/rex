@@ -288,10 +288,12 @@ FixupInitializersUsingIncludeFilesTraversal::evaluateInheritedAttribute(
         SgIfStmt *ifStatementScope = isSgIfStmt(scope);
         SgRangeBasedForStatement *rangeBasedForStatement =
             isSgRangeBasedForStatement(scope);
+        SgSwitchStatement *switchStatementScope = isSgSwitchStatement(scope);
 
         bool ignoreThisScope = (forStatementScope != nullptr) ||
                                (rangeBasedForStatement != nullptr) ||
-                               (ifStatementScope != nullptr);
+                               (ifStatementScope != nullptr) ||
+                               (switchStatementScope != nullptr);
 
         if (ignoreThisScope == false) {
           SgStatement *next_statement = SageInterface::getNextStatement(

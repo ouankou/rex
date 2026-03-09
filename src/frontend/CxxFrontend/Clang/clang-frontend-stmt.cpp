@@ -5075,6 +5075,78 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
 
   bool res = true;
 
+  clang::Stmt *clang_switch_init_stmt = switch_stmt->getInit();
+  // SgSwitchStatement has no dedicated child for a C++17 init-statement.
+  // Lower it into an enclosing block so the translated AST remains
+  // structurally valid while preserving the initializer's scope for the switch
+  // body.
+  SgBasicBlock *switch_init_wrapper = nullptr;
+  if (clang_switch_init_stmt != nullptr) {
+    switch_init_wrapper = SageBuilder::buildBasicBlock_nfi();
+    switch_init_wrapper->set_parent(SageBuilder::topScopeStack());
+    SageBuilder::pushScopeStack(switch_init_wrapper);
+  }
+
+  auto ensure_decl_scope = [](SgStatement *stmt, SgScopeStatement *scope) {
+    if (stmt == nullptr || scope == nullptr) {
+      return;
+    }
+
+    if (SgDeclarationStatement *decl = isSgDeclarationStatement(stmt)) {
+      decl->set_scope(scope);
+      if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(decl)) {
+        for (SgInitializedName *init_name : var_decl->get_variables()) {
+          if (init_name != nullptr) {
+            init_name->set_scope(scope);
+          }
+        }
+      }
+    }
+  };
+
+  auto translate_wrapper_stmt = [&](clang::Stmt *clang_stmt) -> SgStatement * {
+    if (clang_stmt == nullptr) {
+      return nullptr;
+    }
+
+    SgNode *tmp_stmt = Traverse(clang_stmt);
+    SgStatement *sg_stmt = isSgStatement(tmp_stmt);
+    SgExpression *sg_expr = isSgExpression(tmp_stmt);
+    if (tmp_stmt == nullptr) {
+      return nullptr;
+    }
+    if (sg_stmt == nullptr && sg_expr == nullptr) {
+      MLOG_ERROR_CXX(MLOG_FRONTEND)
+          << "Runtime error: switch init did not translate to SgStatement or "
+             "SgExpression ("
+          << tmp_stmt->class_name() << ")." << std::endl;
+      res = false;
+      return nullptr;
+    }
+    if (sg_expr != nullptr) {
+      sg_stmt = SageBuilder::buildExprStatement(sg_expr);
+    }
+    if (sg_stmt == nullptr) {
+      return nullptr;
+    }
+
+    applySourceRange(sg_stmt, clang_stmt->getSourceRange());
+    sg_stmt->set_parent(switch_init_wrapper);
+    ensure_decl_scope(sg_stmt, switch_init_wrapper);
+    switch_init_wrapper->append_statement(sg_stmt);
+    return sg_stmt;
+  };
+
+  if (switch_init_wrapper != nullptr && clang_switch_init_stmt != nullptr) {
+    SgStatement *sg_init_stmt = translate_wrapper_stmt(clang_switch_init_stmt);
+    if (sg_init_stmt == nullptr) {
+      sg_init_stmt = SageBuilder::buildNullStatement_nfi();
+      setCompilerGeneratedFileInfo(sg_init_stmt, true);
+      sg_init_stmt->set_parent(switch_init_wrapper);
+      switch_init_wrapper->append_statement(sg_init_stmt);
+    }
+  }
+
   SgSwitchStatement *sg_switch_stmt =
       SageBuilder::buildSwitchStatement_nfi(nullptr, nullptr);
   sg_switch_stmt->set_parent(SageBuilder::topScopeStack());
@@ -5149,6 +5221,23 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
   // Pei-Hung (07/29/2024) In the case of test2001_14.C, body can be the
   // SgDefaultStmt and the parent needs to be set properly.
   body->set_parent(sg_switch_stmt);
+
+  if (switch_init_wrapper != nullptr) {
+    applySourceRange(sg_switch_stmt, switch_stmt->getSourceRange());
+    sg_switch_stmt->set_parent(switch_init_wrapper);
+    switch_init_wrapper->append_statement(sg_switch_stmt);
+
+    if (clang_switch_init_stmt->getBeginLoc().isValid() &&
+        switch_stmt->getEndLoc().isValid()) {
+      applySourceRange(switch_init_wrapper,
+                       clang::SourceRange(clang_switch_init_stmt->getBeginLoc(),
+                                          switch_stmt->getEndLoc()));
+    }
+
+    SageBuilder::popScopeStack();
+    *node = switch_init_wrapper;
+    return res;
+  }
 
   *node = sg_switch_stmt;
 
