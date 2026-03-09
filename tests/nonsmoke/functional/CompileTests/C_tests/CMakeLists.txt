@@ -1066,7 +1066,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "Intel")
   set(_c_tests_disable_m32 TRUE)
 endif()
 
-set(_c_tests_string_macro -DSTRING_MACRO=\\\"some_text\\\")
+set(_c_tests_string_macro [[-DSTRING_MACRO="some_text"]])
 
 add_test(
   NAME C_tests_check_pthread
