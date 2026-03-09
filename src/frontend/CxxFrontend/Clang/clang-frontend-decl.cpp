@@ -22756,6 +22756,13 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   // Create the SAGE node: SgVariableDeclaration
 
   SgName name(var_decl->getNameAsString());
+  if (name.getString().empty() &&
+      llvm::isa<clang::DecompositionDecl>(var_decl)) {
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    ROSE_ASSERT(scope != nullptr);
+    name = SgName(
+        SageInterface::generateUniqueVariableName(scope, "structured_binding"));
+  }
 
   clang::QualType varQualType = var_decl->getType();
 
@@ -23594,9 +23601,6 @@ bool ClangToSageTranslator::VisitDecompositionDecl(
       const std::string pattern =
           buildStructuredBindingPattern(decomposition_decl);
       setStructuredBindingPatternAttribute(init_name, pattern);
-      if (!pattern.empty()) {
-        init_name->set_name(SgName(pattern));
-      }
     }
   }
 
