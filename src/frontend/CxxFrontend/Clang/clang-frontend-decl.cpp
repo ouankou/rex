@@ -63,8 +63,10 @@ static std::string buildStructuredBindingPattern(
 
   std::string pattern = "[";
   bool first = true;
+  bool has_binding = false;
   for (const clang::BindingDecl *binding_decl :
        decomposition_decl->bindings()) {
+    has_binding = true;
     if (binding_decl == nullptr) {
       continue;
     }
@@ -82,7 +84,10 @@ static std::string buildStructuredBindingPattern(
   }
 
   pattern += "]";
-  return first ? std::string() : pattern;
+  if (first && has_binding) {
+    return std::string();
+  }
+  return pattern;
 }
 
 std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
