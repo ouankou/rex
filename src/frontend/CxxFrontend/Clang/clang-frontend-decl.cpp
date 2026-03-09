@@ -9497,19 +9497,7 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(
       SgScopeStatement *attach_scope = nullptr;
       if (clang::CXXMethodDecl *method_spec =
               llvm::dyn_cast<clang::CXXMethodDecl>(spec)) {
-        clang::DeclContext *context = nullptr;
-        if (clang::CXXRecordDecl *parent_record = method_spec->getParent()) {
-          context = parent_record->getDeclContext();
-        }
-        while (context != nullptr && context->isRecord()) {
-          context = context->getParent();
-        }
-        if (context == nullptr || context->isTranslationUnit()) {
-          attach_scope = getGlobalScope();
-        } else if (context->isNamespace()) {
-          attach_scope = normalizeNamespaceScope(
-              resolveScopeFromDeclContext(context, getGlobalScope()));
-        }
+        attach_scope = resolveMethodEnclosingScope(method_spec);
       }
       if (decl_stmt != nullptr) {
         if (attach_scope == nullptr) {
@@ -14191,6 +14179,31 @@ bool ClangToSageTranslator::VisitUnresolvedUsingTypenameDecl(
   ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
 
   return VisitTypeDecl(unresolved_using_type_name_decl, node) && res;
+}
+
+SgScopeStatement *ClangToSageTranslator::resolveMethodEnclosingScope(
+    clang::CXXMethodDecl *method_decl) {
+  if (method_decl == nullptr) {
+    return nullptr;
+  }
+
+  clang::DeclContext *context = nullptr;
+  if (clang::CXXRecordDecl *parent_record = method_decl->getParent()) {
+    context = parent_record->getDeclContext();
+  }
+  while (context != nullptr && context->isRecord()) {
+    context = context->getParent();
+  }
+
+  if (context == nullptr || context->isTranslationUnit()) {
+    return getGlobalScope();
+  }
+  if (context->isNamespace()) {
+    return normalizeNamespaceScope(
+        resolveScopeFromDeclContext(context, getGlobalScope()));
+  }
+
+  return nullptr;
 }
 
 SgNode *ClangToSageTranslator::lookupUsingDeclTargetNode(clang::Decl *decl) {
@@ -21687,20 +21700,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       if (is_class_like_scope(directive_scope)) {
         if (clang::CXXMethodDecl *method_decl =
                 llvm::dyn_cast<clang::CXXMethodDecl>(function_decl)) {
-          clang::DeclContext *context = nullptr;
-          if (clang::CXXRecordDecl *parent_record = method_decl->getParent()) {
-            context = parent_record->getDeclContext();
-          }
-          while (context != nullptr && context->isRecord()) {
-            context = context->getParent();
-          }
-          if (context == nullptr || context->isTranslationUnit()) {
-            directive_scope = getGlobalScope();
-          } else if (context->isNamespace()) {
-            if (SgScopeStatement *resolved =
-                    resolveScopeFromDeclContext(context, getGlobalScope())) {
-              directive_scope = normalizeNamespaceScope(resolved);
-            }
+          if (SgScopeStatement *resolved =
+                  resolveMethodEnclosingScope(method_decl)) {
+            directive_scope = resolved;
           }
         }
         if (is_class_like_scope(directive_scope)) {
