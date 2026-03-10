@@ -831,6 +831,9 @@ void VarsExprsProductLattice::copy(Lattice *that_arg) {
 // Overwrites the state of this Lattice with that of that Lattice
 void VarsExprsProductLattice::copy(const VarsExprsProductLattice *that) {
   ROSE_ASSERT(that);
+  if (that == this)
+    return;
+
   level = that->level;
   ldva = that->ldva;
 
@@ -877,79 +880,34 @@ void VarsExprsProductLattice::copy(const VarsExprsProductLattice *that) {
   // Dbg::dbg << "        that="<<((VarsExprsProductLattice*)that)->str("
   // ")<<endl;
 
-  // Remove all lattices in constVarLattices that don't appear in
-  // that->constVarLattices
-  set<varID> varsToDelete;
+  // Rebuild constVarLattices from scratch to avoid stale pointers.
   for (map<varID, Lattice *>::iterator var = constVarLattices.begin();
-       var != constVarLattices.end(); var++) {
-    if (that->constVarLattices.find(var->first) == that->constVarLattices.end())
-      varsToDelete.insert(var->first);
+       var != constVarLattices.end(); ++var) {
+    delete var->second;
   }
-  for (set<varID>::iterator var = varsToDelete.begin();
-       var != varsToDelete.end(); var++) {
-    delete constVarLattices[*var];
-    constVarLattices.erase(*var);
-  }
-
-  // Copy all lattices in that->constVarLattices to This
+  constVarLattices.clear();
   for (map<varID, Lattice *>::const_iterator var =
            that->constVarLattices.begin();
-       var != that->constVarLattices.end(); var++) {
-    if (constVarLattices[var->first])
-      constVarLattices[var->first]->copy(var->second);
-    else
-      constVarLattices.insert(make_pair(var->first, var->second->copy()));
+       var != that->constVarLattices.end(); ++var) {
+    ROSE_ASSERT(var->second != NULL);
+    constVarLattices.insert(make_pair(var->first, var->second->copy()));
   }
 
-  // Remove all lattices in lattices/varLatticeIndex that don't appear in
-  // that.lattices/that.varLatticeIndex
-  varsToDelete.clear();
-  for (map<varID, int>::const_iterator varIdx = that->varLatticeIndex.begin();
-       varIdx != that->varLatticeIndex.end(); varIdx++) {
-    if (that->varLatticeIndex.find(varIdx->first) ==
-        that->varLatticeIndex.end())
-      varsToDelete.insert(varIdx->first);
+  // Rebuild per-variable lattices and index mappings from scratch to ensure
+  // there are no dangling pointers or stale indices after copy.
+  for (vector<Lattice *>::iterator lat = lattices.begin();
+       lat != lattices.end(); ++lat) {
+    delete *lat;
   }
-  for (set<varID>::iterator var = varsToDelete.begin();
-       var != varsToDelete.end(); var++) {
-    delete constVarLattices[*var];
-    constVarLattices.erase(*var);
-  }
-
-  // Dbg::dbg << "VarsExprsProductLattice::copy()
-  // lattices.size()="<<lattices.size()<<"
-  // varLatticeIndex.size()="<<varLatticeIndex.size()<<endl; Dbg::dbg <<"
-  // varLatticeIndex="<<endl; for(map<varID, int>::iterator
-  // varIdx=varLatticeIndex.begin(); varIdx!=varLatticeIndex.end(); varIdx++)
-  //       Dbg::dbg << "        "<<varIdx->first<<", "<<varIdx->second<<":
-  //       "<<lattices[varIdx->second]<<endl;
-  // Dbg::dbg <<"     that->varLatticeIndex
-  // lattices.size()="<<that->lattices.size()<<"
-  // varLatticeIndex.size()="<<that->varLatticeIndex.size()<<endl;
-  // for(map<varID, int>::const_iterator varIdx=that->varLatticeIndex.begin();
-  // varIdx!=that->varLatticeIndex.end(); varIdx++) {
-  //       Dbg::dbg << "        "<<varIdx->first<<", "<<varIdx->second<<" :
-  //       "<<that->lattices[varIdx->second]<<endl;
-  // }
-
-  // Copy all lattices in that->lattices/that->varLatticeIndex to This, placing
-  // the lattices in This in the same order as they had in That
-  vector<Lattice *> newLattices;
-  newLattices.resize(that->lattices.size());
-  for (map<varID, int>::const_iterator varIdx = that->varLatticeIndex.begin();
-       varIdx != that->varLatticeIndex.end(); varIdx++) {
-    if (varLatticeIndex.find(varIdx->first) != varLatticeIndex.end()) {
-      ROSE_ASSERT(that->lattices[varIdx->second]);
-      ROSE_ASSERT(lattices[varLatticeIndex[varIdx->first]]);
-      lattices[varLatticeIndex[varIdx->first]]->copy(
-          that->lattices[varIdx->second]);
-      newLattices[varIdx->second] = lattices[varLatticeIndex[varIdx->first]];
-    } else {
-      newLattices[varIdx->second] = that->lattices[varIdx->second]->copy();
-    }
-  }
+  lattices.clear();
+  varLatticeIndex.clear();
   varLatticeIndex = that->varLatticeIndex;
-  lattices = newLattices;
+  lattices.reserve(that->lattices.size());
+  for (size_t i = 0; i < that->lattices.size(); ++i) {
+    ROSE_ASSERT(that->lattices[i] != NULL);
+    lattices.push_back(that->lattices[i]->copy());
+  }
+  ROSE_ASSERT(lattices.size() == that->lattices.size());
   // Dbg::dbg << "VarsExprsProductLattice::copy() DONE"<<endl;
   // Dbg::dbg << "    varLatticeIndex="<<endl;
   // for(map<varID, int>::iterator varIdx=varLatticeIndex.begin();

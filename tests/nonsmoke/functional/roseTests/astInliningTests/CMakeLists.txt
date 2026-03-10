@@ -103,7 +103,11 @@ set(_test1_conf ${CMAKE_CURRENT_SOURCE_DIR}/test1.conf)
 add_test(
   NAME inlineEverything_test1_conf
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${_rth} ${_test1_conf} test1.passed
+  COMMAND ${_rth}
+    srcdir=${CMAKE_CURRENT_SOURCE_DIR}
+    EXE=$<TARGET_FILE:inlineEverything>
+    ${_test1_conf}
+    test1.passed
 )
 
 # Makefile check targets.

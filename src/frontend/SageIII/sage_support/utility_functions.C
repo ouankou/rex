@@ -1438,6 +1438,15 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
   // function (previous bug fixed, but tested here).
   ROSE_ASSERT(scope != currentStatement);
 
+  if (SgSwitchStatement *switch_scope = isSgSwitchStatement(scope)) {
+    if (switch_scope->get_item_selector() == currentStatement) {
+      SgBasicBlock *switch_body =
+          SageInterface::ensureBasicBlockAsBodyOfSwitch(switch_scope);
+      SgStatementPtrList &body_statements = switch_body->getStatementList();
+      return body_statements.empty() ? nullptr : body_statements.front();
+    }
+  }
+
   switch (currentStatement->variantT()) {
   case V_SgForInitStatement:
   // case V_SgBasicBlock: // Liao 10/20/2010, We should allow users to get a

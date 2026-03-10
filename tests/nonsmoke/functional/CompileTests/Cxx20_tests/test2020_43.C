@@ -1,8 +1,7 @@
-// DQ (7/21/2020): Coroutine support is not available in legacy frontend 6.0 or
-// the headers are not available in GNU 6.1.
+#include "test2020_coroutine_support.hpp"
 
 generator<int> iota(int n = 0) {
-  while(true)
+  while (true) {
     co_yield n++;
+  }
 }
-

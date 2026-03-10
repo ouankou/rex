@@ -1,20 +1,16 @@
-// Lambda Capture of *this by Value as [=,*this]
+// Lambda capture of *this by value as [=, tmp = *this]
 
-class Work 
-   {
-     public:
-          void do_something() const
-             {
-            // for ( int i = 0 ; i < N ; ++i )
-               for( Parallel : 0 , N , [=,tmp=*this]( int i )
-                  {
-                 // A modestly long loop body where
-                 // every reference to a member must be modified
-                 // for qualification with 'tmp.'
-                 // Any mistaken omissions will silently fail
-                 // as references via 'this->'.
-                  }
-               );
-             }
-   };
+class Work {
+public:
+  int bias = 7;
 
+  int do_something(int n) const {
+    auto offset = [=, tmp = *this](int i) { return tmp.bias + i; };
+    return offset(n);
+  }
+};
+
+int use_work() {
+  Work w;
+  return w.do_something(35);
+}

@@ -10463,6 +10463,7 @@ SgInitializedName::SgInitializedName() ROSE_DEPRECATED_FUNCTION
      p_constant_or_type_argument_for_Alignas_keyword(NULL),
      p_using_auto_keyword(false),
      p_auto_decltype(NULL),
+     p_structured_binding_pattern(NULL),
      p_using_device_keyword(false),
      p_is_braced_initialized(false),
      p_is_constexpr_const_implicit(false),
@@ -10621,6 +10622,9 @@ SgInitializedName::post_construction_initialization()
      p_using_auto_keyword = false;
      p_auto_decltype = NULL;
 
+  // REX (3/9/2026): Structured bindings carry an AST pattern only when present.
+     p_structured_binding_pattern = NULL;
+
   // DQ (1/24/2016): Adding support to mark this to use the __device__ keyword.
      p_using_device_keyword = false;
 
@@ -10677,6 +10681,7 @@ SgInitializedName::SgInitializedName (
      p_constant_or_type_argument_for_Alignas_keyword(NULL),
      p_using_auto_keyword(false),
      p_auto_decltype(NULL),
+     p_structured_binding_pattern(NULL),
      p_using_device_keyword(false),
      p_is_braced_initialized(false),
      p_is_constexpr_const_implicit(false),
@@ -10727,6 +10732,7 @@ SgInitializedName::SgInitializedName(
      p_constant_or_type_argument_for_Alignas_keyword(NULL),
      p_using_auto_keyword(false),
      p_auto_decltype(NULL),
+     p_structured_binding_pattern(NULL),
      p_using_device_keyword(false),
      p_is_braced_initialized(false),
      p_is_constexpr_const_implicit(false),
@@ -10832,6 +10838,11 @@ SgInitializedName::SgInitializedName (const SgInitializedName& ptr)
   // DQ (8/2/2014): Adding support for C++11 auto keyword.
      p_using_auto_keyword                     = ptr.p_using_auto_keyword;
      p_auto_decltype                          = ptr.p_auto_decltype;
+     p_structured_binding_pattern             = (ptr.p_structured_binding_pattern != NULL) ? SageInterface::deepCopy(ptr.p_structured_binding_pattern) : NULL;
+     if (p_structured_binding_pattern != NULL)
+        {
+          p_structured_binding_pattern->set_parent(this);
+        }
 
   // DQ (1/24/2016): Adding support to mark this to use the __device__ keyword.
      p_using_device_keyword                   = ptr.p_using_device_keyword;
@@ -10940,6 +10951,11 @@ SgInitializedName::operator= (const SgInitializedName& ptr)
        // DQ (8/2/2014): Adding support for C++11 auto keyword.
           p_using_auto_keyword                     = ptr.p_using_auto_keyword;
           p_auto_decltype                          = ptr.p_auto_decltype;
+          p_structured_binding_pattern             = (ptr.p_structured_binding_pattern != NULL) ? SageInterface::deepCopy(ptr.p_structured_binding_pattern) : NULL;
+          if (p_structured_binding_pattern != NULL)
+             {
+               p_structured_binding_pattern->set_parent(this);
+             }
 
        // DQ (1/24/2016): Adding support to mark this to use the __device__ keyword.
           p_using_device_keyword                   = ptr.p_using_device_keyword;

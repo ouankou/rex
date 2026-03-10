@@ -1683,7 +1683,22 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
     // SgName nm = decl->get_name();
     SgName nm;
 
-    if (decl->get_isUnNamed() == false || info.PrintName() == true) {
+    bool allowUnnamedInternalName = false;
+    if (info.PrintName() == true) {
+      SgInitializedName *referenceDecl =
+          isSgInitializedName(info.get_reference_node_for_qualification());
+      if (referenceDecl != NULL) {
+        std::string referenceName = referenceDecl->get_name().getString();
+        bool referenceIsAnonymous =
+            referenceName.empty() ||
+            hasGeneratedAnonymousNamePrefix(referenceName);
+        allowUnnamedInternalName = !referenceIsAnonymous;
+      } else {
+        allowUnnamedInternalName = true;
+      }
+    }
+
+    if (decl->get_isUnNamed() == false || allowUnnamedInternalName) {
       nm = decl->get_name();
 
 #if DEBUG_UNPARSE_CLASS_TYPE
@@ -3240,6 +3255,11 @@ void Unparse_Type::unparseAutoType(SgType *type, SgUnparse_Info &info) {
   bool unparse_type = info.isTypeFirstPart() ||
                       (!info.isTypeFirstPart() && !info.isTypeSecondPart());
   if (unparse_type) {
+    std::string constraint = SageInterface::getAutoTypeConstraint(auto_type);
+    if (!constraint.empty()) {
+      curprint(constraint);
+      curprint(" ");
+    }
     curprint("auto ");
   }
 }

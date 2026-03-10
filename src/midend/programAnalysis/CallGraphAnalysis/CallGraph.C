@@ -679,7 +679,8 @@ CallTargetSet::solveMemberFunctionPointerCall(
   // SgTemplateType which we should ignore since that means we're trying to do
   // call graph analysis inside a class template, which doesn't make much
   // sense.)
-  if (isSgTemplateType(leftBase) || isSgNonrealType(leftBase)) {
+  if (isSgTemplateType(leftBase) || isSgNonrealType(leftBase) ||
+      isSgTypeUnknown(leftBase)) {
     ASSERT_require(functionList.empty());
     return functionList;
   }

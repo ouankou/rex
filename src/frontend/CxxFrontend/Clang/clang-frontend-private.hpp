@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <set>
 #include <string>
@@ -62,7 +63,223 @@ inline constexpr char kExplicitGlobalQualifierAttributeName[] =
 
 inline bool
 isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
-  return name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0;
+  if (name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0) {
+    return true;
+  }
+  if (name.rfind("auto:", 0) == 0 && name.size() > 5) {
+    for (size_t i = 5; i < name.size(); ++i) {
+      if (!std::isdigit(static_cast<unsigned char>(name[i]))) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+inline bool isClangSyntheticTemplateParamName(const std::string &name) {
+  auto is_synthetic_with_prefix = [&](const std::string &prefix,
+                                      char separator) -> bool {
+    if (name.rfind(prefix, 0) != 0) {
+      return false;
+    }
+    std::string suffix = name.substr(prefix.size());
+    if (suffix.empty()) {
+      return true;
+    }
+    for (char c : suffix) {
+      if (!(std::isdigit(static_cast<unsigned char>(c)) || c == separator)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  return is_synthetic_with_prefix("type-parameter-", '-') ||
+         is_synthetic_with_prefix("value-parameter-", '-') ||
+         is_synthetic_with_prefix("template-parameter-", '-') ||
+         is_synthetic_with_prefix("type_parameter_", '_') ||
+         is_synthetic_with_prefix("value_parameter_", '_') ||
+         is_synthetic_with_prefix("template_parameter_", '_') ||
+         is_synthetic_with_prefix("template_type_param_", '_');
+}
+
+inline std::string normalizeClangTemplateParamName(std::string name) {
+  if (isImplicitAutoPlaceholderTemplateParamName(name)) {
+    std::replace(name.begin(), name.end(), ':', '_');
+    return name;
+  }
+  if (isClangSyntheticTemplateParamName(name)) {
+    std::replace(name.begin(), name.end(), '-', '_');
+  }
+  return name;
+}
+
+inline bool parseTemplateParamDepthAndIndex(const std::string &name,
+                                            unsigned *depth, unsigned *index) {
+  if (depth == nullptr || index == nullptr) {
+    return false;
+  }
+
+  auto parse_decimal_unsigned = [](const std::string &text,
+                                   unsigned *value) -> bool {
+    if (value == nullptr || text.empty()) {
+      return false;
+    }
+
+    unsigned parsed = 0;
+    constexpr unsigned kMaxUnsigned = std::numeric_limits<unsigned>::max();
+    for (char c : text) {
+      if (!std::isdigit(static_cast<unsigned char>(c))) {
+        return false;
+      }
+      unsigned digit = static_cast<unsigned>(c - '0');
+      if (parsed > (kMaxUnsigned - digit) / 10) {
+        return false;
+      }
+      parsed = parsed * 10 + digit;
+    }
+
+    *value = parsed;
+    return true;
+  };
+
+  auto parse_with_prefix = [&](const std::string &prefix,
+                               char separator) -> bool {
+    if (name.rfind(prefix, 0) != 0) {
+      return false;
+    }
+    std::string tail = name.substr(prefix.size());
+    if (tail.empty()) {
+      return false;
+    }
+    size_t sep_pos = tail.find(separator);
+    if (sep_pos == std::string::npos) {
+      return false;
+    }
+    std::string depth_text = tail.substr(0, sep_pos);
+    std::string index_text = tail.substr(sep_pos + 1);
+    if (depth_text.empty() || index_text.empty()) {
+      return false;
+    }
+    return parse_decimal_unsigned(depth_text, depth) &&
+           parse_decimal_unsigned(index_text, index);
+  };
+
+  return parse_with_prefix("type-parameter-", '-') ||
+         parse_with_prefix("value-parameter-", '-') ||
+         parse_with_prefix("template-parameter-", '-') ||
+         parse_with_prefix("type_parameter_", '_') ||
+         parse_with_prefix("value_parameter_", '_') ||
+         parse_with_prefix("template_parameter_", '_') ||
+         parse_with_prefix("template_type_param_", '_');
+}
+
+inline const SgTemplateParameterPtrList *
+templateParametersForSageDeclarationShared(const SgDeclarationStatement *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+  if (const SgTemplateClassDeclaration *tmpl_class =
+          isSgTemplateClassDeclaration(decl)) {
+    return &tmpl_class->get_templateParameters();
+  }
+  if (const SgTemplateFunctionDeclaration *tmpl_func =
+          isSgTemplateFunctionDeclaration(decl)) {
+    return &tmpl_func->get_templateParameters();
+  }
+  if (const SgTemplateMemberFunctionDeclaration *tmpl_member =
+          isSgTemplateMemberFunctionDeclaration(decl)) {
+    return &tmpl_member->get_templateParameters();
+  }
+  if (const SgTemplateVariableDeclaration *tmpl_var =
+          isSgTemplateVariableDeclaration(decl)) {
+    return &tmpl_var->get_templateParameters();
+  }
+  if (const SgTemplateDeclaration *tmpl_decl = isSgTemplateDeclaration(decl)) {
+    return &tmpl_decl->get_templateParameters();
+  }
+  if (const SgNonrealDecl *nonreal_decl = isSgNonrealDecl(decl)) {
+    return &nonreal_decl->get_tpl_params();
+  }
+  return nullptr;
+}
+
+template <typename NameNormalizer>
+inline std::string
+templateParameterNameFromSageShared(const SgTemplateParameter *param,
+                                    NameNormalizer normalize_name) {
+  if (param == nullptr) {
+    return "";
+  }
+
+  if (const SgTemplateType *template_type =
+          isSgTemplateType(param->get_type())) {
+    std::string name = template_type->get_name().getString();
+    if (!name.empty()) {
+      return normalize_name(name);
+    }
+  }
+
+  if (const SgInitializedName *init_name = param->get_initializedName()) {
+    std::string name = init_name->get_name().getString();
+    if (!name.empty()) {
+      return normalize_name(name);
+    }
+  }
+
+  return "";
+}
+
+template <typename NameNormalizer>
+inline std::string
+resolveTemplateParameterNameFromSageScopeShared(SgScopeStatement *scope,
+                                                unsigned depth, unsigned index,
+                                                NameNormalizer normalize_name) {
+  if (scope == nullptr) {
+    return "";
+  }
+
+  std::vector<const SgTemplateParameterPtrList *> template_levels;
+  std::set<const SgDeclarationStatement *> visited_template_decls;
+
+  for (SgNode *node = scope; node != nullptr; node = node->get_parent()) {
+    const SgDeclarationStatement *decl = isSgDeclarationStatement(node);
+    if (decl == nullptr) {
+      if (const SgClassDefinition *class_def = isSgClassDefinition(node)) {
+        decl = class_def->get_declaration();
+      } else if (const SgTemplateClassDefinition *template_def =
+                     isSgTemplateClassDefinition(node)) {
+        decl = template_def->get_declaration();
+      } else if (const SgFunctionDefinition *function_def =
+                     isSgFunctionDefinition(node)) {
+        decl = function_def->get_declaration();
+      } else if (const SgDeclarationScope *decl_scope =
+                     isSgDeclarationScope(node)) {
+        decl = isSgDeclarationStatement(decl_scope->get_parent());
+      }
+    }
+
+    if (decl == nullptr || !visited_template_decls.insert(decl).second) {
+      continue;
+    }
+
+    if (const SgTemplateParameterPtrList *params =
+            templateParametersForSageDeclarationShared(decl)) {
+      template_levels.push_back(params);
+    }
+  }
+
+  if (depth >= template_levels.size()) {
+    return "";
+  }
+
+  const SgTemplateParameterPtrList *params = template_levels[depth];
+  if (params == nullptr || index >= params->size()) {
+    return "";
+  }
+
+  return templateParameterNameFromSageShared((*params)[index], normalize_name);
 }
 
 struct ConstraintSatisfactionResult {
@@ -89,6 +306,10 @@ public:
 
   AstAttribute *copy() const override {
     return new ConstraintSatisfactionAttribute(*this);
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
   }
 
   std::string toString() override {
@@ -777,6 +998,8 @@ protected:
 
   SgScopeStatement *resolveScopeFromDeclContext(clang::DeclContext *context,
                                                 SgScopeStatement *fallback);
+  SgScopeStatement *
+  resolveMethodEnclosingScope(clang::CXXMethodDecl *method_decl);
 
   SgNode *lookupUsingDeclTargetNode(clang::Decl *decl);
   SgNode *resolveUsingDeclTargetNode(clang::Decl *decl);
@@ -981,6 +1204,10 @@ protected:
   void attachSFINAEFailure(SgNode *node, const SFINAEFailureResult &result);
   bool shouldSkipSymbolForConstraints(const SgDeclarationStatement *decl) const;
   void pruneSymbolsForConstraints(SgDeclarationStatement *decl);
+  bool buildCoroutineAwaitExpression(clang::Expr *operand,
+                                     clang::SourceRange source_range,
+                                     const char *operand_description,
+                                     SgNode **node);
 
 public:
   ClangToSageTranslator(clang::CompilerInstance *compiler_instance,
@@ -1584,6 +1811,8 @@ public:
   virtual bool
   VisitPackExpansionExpr(clang::PackExpansionExpr *pack_expansion_expr,
                          SgNode **node);
+  virtual bool VisitCXXParenListInitExpr(
+      clang::CXXParenListInitExpr *cxx_paren_list_init_expr, SgNode **node);
   virtual bool VisitParenExpr(clang::ParenExpr *paren_expr, SgNode **node);
   virtual bool VisitParenListExpr(clang::ParenListExpr *paran_list_expr,
                                   SgNode **node);
@@ -1782,6 +2011,7 @@ class SagePreprocessorRecord : public clang::PPCallbacks,
                                public clang::CommentHandler {
 protected:
   clang::SourceManager *p_source_manager;
+  clang::Preprocessor *p_preprocessor;
 
   std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
       p_preprocessor_record_list;
@@ -1795,7 +2025,8 @@ protected:
                        const std::string &text);
 
 public:
-  SagePreprocessorRecord(clang::SourceManager *source_manager);
+  SagePreprocessorRecord(clang::SourceManager *source_manager,
+                         clang::Preprocessor *preprocessor);
   void sortRecordedDirectives();
   void recordInjectedDirective(clang::SourceLocation loc,
                                PreprocessingInfo::DirectiveType directive_type,

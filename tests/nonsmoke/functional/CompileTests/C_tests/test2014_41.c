@@ -7,4 +7,4 @@
 extern 
 __attribute__((regparm(3))) void x86g_calculate_eflags_c ( int cc_op );
 
-void __attribute__((regparm(1))) x86g_calculate_eflags_c(int cc_op) {}
+void __attribute__((regparm(3))) x86g_calculate_eflags_c(int cc_op) {}

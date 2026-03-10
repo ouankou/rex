@@ -1,21 +1,19 @@
 
 
-class myVector
-   {
-     public:
-          myVector operator/( double x) const;
+enum class vector : int { value = 0 };
 
-          myVector();
+class myVector {
+public:
+  myVector operator/(double x) const;
 
-          myVector operator= (enum class vector &x) const;
-       // myVector operator= (enum vector &x) const;
-   };
+  myVector();
 
-void foo()
-   {
-     myVector a;
+  myVector operator=(vector &x) const;
+};
+
+void foo() {
+  myVector a;
 
   // Problem code
-     myVector b = a / 1.0;
-
-   }
+  myVector b = a / 1.0;
+}

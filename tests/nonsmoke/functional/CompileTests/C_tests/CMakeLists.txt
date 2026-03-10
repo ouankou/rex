@@ -818,15 +818,11 @@ set(TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2009_06.c
   test2010_05.c
   test2010_16.c
-  test2017_02.c
   test2017_03.c
   test2017_05.c
   test2017_16.c
-  test2018_26.c
   test2018_27.c
   test2018_34.c
-  test2018_38.c
-  test2018_39.c
   test2018_40.c
   test2020_20.c
   test2020_23.c
@@ -959,9 +955,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_40.c
   test2015_41.c
   test2015_42.c
-  test2015_43.c
-  test2015_44.c
-  test2015_45.c
   test2015_47.c
   test2015_48.c
   test2015_49.c
@@ -978,15 +971,11 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_81.c
   test2015_82.c
   test2015_83.c
-  test2017_02.c
   test2017_03.c
   test2017_05.c
   test2017_16.c
-  test2018_26.c
   test2018_27.c
   test2018_34.c
-  test2018_38.c
-  test2018_39.c
   test2018_40.c
   test2020_20.c
   test2020_23.c
@@ -1000,30 +989,17 @@ set(TESTCODE_CURRENTLY_FAILING
   test2012_141.c
   test2012_58.c
   test2012_82.c
-  test2013_07.c
   test2013_08.c
-  test2013_46.c
-  test2013_47.c
   test2013_76.c
   test2014_29.c
-  test2014_41.c
-  test2014_66.c
   test2014_91.c
   test2015_156.c
   test2015_157.c
-  test2015_23.c
-  test2015_29.c
-  test2015_30.c
   test2017_17.c
-  test2018_08.c
-  test2018_09.c
-  test2018_10.c
   test2018_24.c
   test2018_31.c
   test2018_33.c
   test2020_14.c
-  test2020_15.c
-  test2020_16.c
   test2021_01.c
   test2022_02.c
   test2022_03.c
@@ -1090,7 +1066,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "Intel")
   set(_c_tests_disable_m32 TRUE)
 endif()
 
-set(_c_tests_string_macro -DSTRING_MACRO=\\\"some_text\\\")
+set(_c_tests_string_macro [[-DSTRING_MACRO="some_text"]])
 
 add_test(
   NAME C_tests_check_pthread

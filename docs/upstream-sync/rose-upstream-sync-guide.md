@@ -517,6 +517,7 @@ Core source subtrees dropped in REX:
 - src/midend/astMatching/
 - src/midend/astRewriteMechanism/
 - src/midend/astSnippet/
+- src/midend/programAnalysis/annotationLanguageParser/
 - src/backend/asmUnparser/
 - src/backend/unparser/AdaCodeGeneration/
 - src/backend/unparser/JavaCodeGeneration/

@@ -2031,8 +2031,6 @@ int NameQualificationTraversal::nameQualificationDepth(
               "******** Found a member function template instantiation that is "
               "a part of a SgTemplateInstantiationDirectiveStatement \n");
 #endif
-          MLOG_WARN_C(MLOG_UNPARSER, "Exiting as a test! \n");
-          ROSE_ABORT();
         }
 
         SgFunctionType *functionType = functionDeclaration->get_type();
@@ -17233,7 +17231,11 @@ string NameQualificationTraversal::setNameQualificationSupport(
             // think). See test2014_222.C for an example.
             SgTemplateArgumentPtrList &templateSpecializationArgumentList =
                 templateClassDeclaration->get_templateSpecializationArguments();
-            if (templateSpecializationArgumentList.empty() == false) {
+            bool use_template_specialization_arguments =
+                templateSpecializationArgumentList.empty() == false &&
+                templateClassDeclaration->get_specialization() !=
+                    SgDeclarationStatement::e_no_specialization;
+            if (use_template_specialization_arguments) {
               // DQ (9/13/2014): I have build overloaded versions of
               // globalUnparseToString() to handle that case of
               // SgTemplateArgumentPtrList.
@@ -17249,11 +17251,75 @@ string NameQualificationTraversal::setNameQualificationSupport(
               SgTemplateParameterPtrList &templateParameterList =
                   templateClassDeclaration->get_templateParameters();
               if (templateParameterList.empty() == false) {
-                // DQ (9/13/2014): I have build overloaded versions of
-                // globalUnparseToString() to handle that case of
-                // SgTemplateParameterPtrList.
-                string template_parameter_list_string = globalUnparseToString(
-                    &templateParameterList, unparseInfoPointer);
+                auto build_template_parameter_argument_list =
+                    [&templateParameterList]() -> std::string {
+                  std::string args = "<";
+                  bool need_separator = false;
+                  for (SgTemplateParameter *param : templateParameterList) {
+                    if (param == NULL) {
+                      continue;
+                    }
+
+                    std::string argument_name;
+                    bool is_pack = param->get_is_parameter_pack();
+                    if (SgInitializedName *init_name =
+                            param->get_initializedName()) {
+                      argument_name = init_name->get_name().str();
+                      is_pack = is_pack || init_name->get_is_parameter_pack() ||
+                                init_name->get_is_pack_element();
+                    }
+
+                    if (argument_name.empty()) {
+                      if (SgTemplateType *template_type =
+                              isSgTemplateType(param->get_type())) {
+                        argument_name = template_type->get_name().str();
+                        is_pack = is_pack || template_type->get_packed();
+                      }
+                    }
+
+                    if (argument_name.empty()) {
+                      if (SgTemplateDeclaration *tpl_decl =
+                              isSgTemplateDeclaration(
+                                  param->get_templateDeclaration())) {
+                        argument_name = tpl_decl->get_name().str();
+                      }
+                    }
+
+                    if (argument_name.empty()) {
+                      continue;
+                    }
+
+                    if (need_separator) {
+                      args += ",";
+                    }
+                    bool has_pack_suffix =
+                        argument_name.size() >= 3 &&
+                        argument_name.compare(argument_name.size() - 3, 3,
+                                              "...") == 0;
+                    args += argument_name;
+                    if (is_pack && !has_pack_suffix) {
+                      args += "...";
+                    }
+                    need_separator = true;
+                  }
+
+                  if (!need_separator) {
+                    return "";
+                  }
+
+                  args += ">";
+                  return args;
+                };
+
+                std::string template_parameter_list_string =
+                    build_template_parameter_argument_list();
+                if (template_parameter_list_string.empty()) {
+                  // DQ (9/13/2014): I have build overloaded versions of
+                  // globalUnparseToString() to handle that case of
+                  // SgTemplateParameterPtrList.
+                  template_parameter_list_string = globalUnparseToString(
+                      &templateParameterList, unparseInfoPointer);
+                }
                 template_name += template_parameter_list_string;
               }
             }

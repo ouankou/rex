@@ -1,8 +1,17 @@
-// Removing Deprecated Exception Specifications from C++17
+// C++17 exception specification compatibility
 
-void (*p)() throw(int);
-void (**pp)() noexcept = &p; // error: cannot convert to pointer to noexcept function
+void maybe_throw();
+void never_throw() noexcept;
 
-struct S { typedef void (*p)(); operator p(); };
-void (*q)() noexcept = S(); // error: cannot convert to pointer to noexcept function
+void (*p)() = &maybe_throw;
+void (*pn)() noexcept = &never_throw;
 
+struct S {
+  using p = void (*)() noexcept;
+
+  static void target() noexcept {}
+
+  operator p() const { return &target; }
+};
+
+void (*q)() noexcept = S{};

@@ -12504,19 +12504,71 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
     if (isSgExprListExp(parentExpr) != NULL) {
       SgFunctionCallExp *argumentCall = isSgFunctionCallExp(expr);
+      SgPackExpansionExpr *argumentPackExpansion = isSgPackExpansionExpr(expr);
       SgFunctionCallExp *parentCall =
           isSgFunctionCallExp(parentExpr->get_parent());
 
-      if (argumentCall != NULL && parentCall != NULL) {
-        SgFunctionRefExp *functionRefExp =
-            isSgFunctionRefExp(parentCall->get_function());
-        SgFunctionDeclaration *functionDeclaration = NULL;
-        if (functionRefExp != NULL && functionRefExp->get_symbol() != NULL) {
-          functionDeclaration = functionRefExp->get_symbol()->get_declaration();
-        }
-        if (functionDeclaration == NULL ||
-            functionDeclaration->get_specialFunctionModifier().isOperator() ==
-                false) {
+      if ((argumentCall != NULL || argumentPackExpansion != NULL) &&
+          parentCall != NULL) {
+        auto getCalledFunctionDeclaration =
+            [](SgFunctionCallExp *call) -> SgFunctionDeclaration * {
+          if (call == NULL) {
+            return NULL;
+          }
+
+          SgExpression *callee = call->get_function();
+          if (callee == NULL) {
+            return NULL;
+          }
+
+          if (SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(callee)) {
+            if (functionRefExp->get_symbol() != NULL) {
+              return functionRefExp->get_symbol()->get_declaration();
+            }
+            return NULL;
+          }
+
+          if (SgMemberFunctionRefExp *memberFunctionRefExp =
+                  isSgMemberFunctionRefExp(callee)) {
+            if (memberFunctionRefExp->get_symbol() != NULL) {
+              return memberFunctionRefExp->get_symbol()->get_declaration();
+            }
+            return NULL;
+          }
+
+          if (SgTemplateFunctionRefExp *templateFunctionRefExp =
+                  isSgTemplateFunctionRefExp(callee)) {
+            if (templateFunctionRefExp->get_symbol() != NULL) {
+              return templateFunctionRefExp->get_symbol()->get_declaration();
+            }
+            return NULL;
+          }
+
+          if (SgTemplateMemberFunctionRefExp *templateMemberFunctionRefExp =
+                  isSgTemplateMemberFunctionRefExp(callee)) {
+            if (templateMemberFunctionRefExp->get_symbol() != NULL) {
+              return templateMemberFunctionRefExp->get_symbol()
+                  ->get_declaration();
+            }
+            return NULL;
+          }
+
+          if (SgNonrealRefExp *nonrealRefExp = isSgNonrealRefExp(callee)) {
+            if (nonrealRefExp->get_symbol() != NULL) {
+              return isSgFunctionDeclaration(
+                  nonrealRefExp->get_symbol()->get_declaration());
+            }
+          }
+
+          return NULL;
+        };
+
+        SgFunctionDeclaration *functionDeclaration =
+            getCalledFunctionDeclaration(parentCall);
+        if (parentCall->get_uses_operator_syntax() == false &&
+            (functionDeclaration == NULL ||
+             functionDeclaration->get_specialFunctionModifier().isOperator() ==
+                 false)) {
           return false;
         }
       }

@@ -20,6 +20,27 @@ set<FunctionState *> FunctionState::allDefinedFuncs;
 set<FunctionState *> FunctionState::allFuncs;
 bool FunctionState::allFuncsComputed = false;
 
+void FunctionState::clearFunctionStateCache() {
+  set<FunctionState *> toDelete = allFuncs;
+  toDelete.insert(allDefinedFuncs.begin(), allDefinedFuncs.end());
+  for (set<FunctionState *>::iterator it = toDelete.begin();
+       it != toDelete.end(); ++it) {
+    delete *it;
+  }
+
+  allDefinedFuncs.clear();
+  allFuncs.clear();
+  allFuncsComputed = false;
+}
+
+namespace {
+struct FunctionStateCleanupAtExit {
+  ~FunctionStateCleanupAtExit() { FunctionState::clearFunctionStateCache(); }
+};
+
+FunctionStateCleanupAtExit functionStateCleanupAtExit;
+} // namespace
+
 // returns a set of all the functions whose bodies are in the project
 set<FunctionState *> &FunctionState::getAllDefinedFuncs() {
   if (allFuncsComputed)
@@ -28,7 +49,7 @@ set<FunctionState *> &FunctionState::getAllDefinedFuncs() {
     CollectFunctions collect(getCallGraph());
     collect.traverse();
     allFuncsComputed = true;
-    return allFuncs;
+    return allDefinedFuncs;
   }
 }
 

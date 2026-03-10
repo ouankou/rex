@@ -80,7 +80,9 @@
 
 #include <iostream>
 
+#include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ManagedStatic.h>
+#include <llvm/Support/Timer.h>
 
 #include <map>
 
@@ -169,18 +171,149 @@ typedef std::set<SgLabelStatement *> SgLabelStatementPtrSet;
 namespace SageInterface {
 ROSE_DLL_API Transformation_Record trans_records;
 
-// REX FIX: Global map for template parameter keywords
+class AutoTypeConstraintAttribute : public AstAttribute {
+public:
+  explicit AutoTypeConstraintAttribute(std::string constraint)
+      : constraint_(std::move(constraint)) {}
+
+  const std::string &constraint() const { return constraint_; }
+
+  AstAttribute *copy() const override {
+    return new AutoTypeConstraintAttribute(*this);
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string toString() override { return constraint_; }
+
+private:
+  std::string constraint_;
+};
+
+static constexpr char kAutoTypeConstraintAttributeName[] =
+    "rex_auto_type_constraint";
+
+// REX FIX: Global maps for frontend-only template placeholder metadata.
 static std::map<SgTemplateParameter *, std::string> templateKeywordMap;
+static std::map<SgTemplateParameter *, bool>
+    abbreviatedFunctionTemplateParameterMap;
 
 void setTemplateParameterKeyword(SgTemplateParameter *param, std::string kw) {
   if (param) {
-    templateKeywordMap[param] = kw;
+    templateKeywordMap[param] = std::move(kw);
   }
 }
 
 std::string getTemplateParameterKeyword(SgTemplateParameter *param) {
   if (param && templateKeywordMap.find(param) != templateKeywordMap.end()) {
     return templateKeywordMap[param];
+  }
+  return "";
+}
+
+void setAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param,
+                                             bool is_abbreviated_placeholder) {
+  if (param) {
+    abbreviatedFunctionTemplateParameterMap[param] = is_abbreviated_placeholder;
+  }
+}
+
+bool isAbbreviatedFunctionTemplateParameter(SgTemplateParameter *param) {
+  auto it = abbreviatedFunctionTemplateParameterMap.find(param);
+  if (it != abbreviatedFunctionTemplateParameterMap.end()) {
+    return it->second;
+  }
+  if (param == nullptr) {
+    return false;
+  }
+
+  auto looks_like_placeholder_name = [](const std::string &name) {
+    if (name.empty()) {
+      return false;
+    }
+    if (name.rfind("auto_", 0) == 0 && name.size() > 5) {
+      for (size_t i = 5; i < name.size(); ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(name[i]))) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return name.size() > 5 && name.compare(name.size() - 5, 5, "_auto") == 0;
+  };
+
+  auto type_contains_auto = [&](auto &&self, SgType *type) -> bool {
+    if (type == nullptr) {
+      return false;
+    }
+    if (isSgAutoType(type) != nullptr) {
+      return true;
+    }
+    if (SgModifierType *modifier_type = isSgModifierType(type)) {
+      return self(self, modifier_type->get_base_type());
+    }
+    if (SgPointerType *pointer_type = isSgPointerType(type)) {
+      return self(self, pointer_type->get_base_type());
+    }
+    if (SgPointerMemberType *pointer_member_type =
+            isSgPointerMemberType(type)) {
+      return self(self, pointer_member_type->get_base_type());
+    }
+    if (SgReferenceType *reference_type = isSgReferenceType(type)) {
+      return self(self, reference_type->get_base_type());
+    }
+    if (SgRvalueReferenceType *rvalue_reference_type =
+            isSgRvalueReferenceType(type)) {
+      return self(self, rvalue_reference_type->get_base_type());
+    }
+    if (SgArrayType *array_type = isSgArrayType(type)) {
+      return self(self, array_type->get_base_type());
+    }
+    return false;
+  };
+
+  if (param->get_parameterType() == SgTemplateParameter::type_parameter) {
+    if (SgTemplateType *template_type = isSgTemplateType(param->get_type())) {
+      return looks_like_placeholder_name(template_type->get_name().getString());
+    }
+  }
+
+  if (param->get_parameterType() == SgTemplateParameter::nontype_parameter) {
+    if (SgInitializedName *init_name = param->get_initializedName()) {
+      std::string name = init_name->get_name().getString();
+      if (looks_like_placeholder_name(name) || name.empty()) {
+        return type_contains_auto(type_contains_auto, init_name->get_type());
+      }
+    }
+  }
+
+  return false;
+}
+
+void setAutoTypeConstraint(SgAutoType *type, std::string constraint) {
+  if (type == nullptr) {
+    return;
+  }
+  if (constraint.empty()) {
+    type->removeAttribute(kAutoTypeConstraintAttributeName);
+    return;
+  }
+  type->setAttribute(kAutoTypeConstraintAttributeName,
+                     new AutoTypeConstraintAttribute(std::move(constraint)));
+}
+
+std::string getAutoTypeConstraint(SgAutoType *type) {
+  if (type == nullptr) {
+    return "";
+  }
+  if (AstAttribute *attr =
+          type->getAttribute(kAutoTypeConstraintAttributeName)) {
+    if (auto *constraint_attr =
+            dynamic_cast<AutoTypeConstraintAttribute *>(attr)) {
+      return constraint_attr->constraint();
+    }
   }
   return "";
 }
@@ -10421,8 +10554,9 @@ SgStatement *SageInterface::findSurroundingStatementFromSameFile(
     printf("This is a special statement (not associated with the original "
            "source code, comment relocation is not supported for these "
            "statements) targetStmt file id = %d (physical file id = %d)\n",
-           targetStmt->get_file_info() ? targetStmt->get_file_info()->get_file_id()
-                                       : Sg_File_Info::BAD_FILE_ID,
+           targetStmt->get_file_info()
+               ? targetStmt->get_file_info()->get_file_id()
+               : Sg_File_Info::BAD_FILE_ID,
            targetStmt->get_file_info()
                ? targetStmt->get_file_info()->get_physical_file_id()
                : Sg_File_Info::BAD_FILE_ID);
@@ -19537,6 +19671,15 @@ bool isAstTeardownEnabledInternal() {
 #if ROSE_USE_SANITIZER
     enabled = true;
 #endif
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(leak_sanitizer) ||       \
+    __has_feature(undefined_behavior_sanitizer)
+    enabled = true;
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_UNDEFINED__)
+    enabled = true;
+#endif
   }
 
   g_astTeardownEnabledCached = enabled;
@@ -19549,6 +19692,8 @@ void llvmShutdownAtExit() {
     return;
   }
   g_llvmShutdownComplete = true;
+  llvm::TimerGroup::clearAll();
+  llvm::cl::ResetCommandLineParser();
   llvm::llvm_shutdown();
 }
 
@@ -20977,9 +21122,16 @@ void clearTokenStreamGlobalMaps() {
   }
   Rose::tokenSubsequenceMapOfMapsBySourceFile.clear();
 
+  for (auto &entry : TokenStreamSequenceToNodeMapping::tokenSequencePool) {
+    delete entry.second;
+  }
+  TokenStreamSequenceToNodeMapping::tokenSequencePool.clear();
+
   Rose::includeFileMapForUnparsing.clear();
   Rose::firstAndLastStatementsToUnparseInScopeMapBySourceFile.clear();
 }
+
+void clearTokenStreamGlobalMapsAtExit() { clearTokenStreamGlobalMaps(); }
 
 class ProjectCollector : public ROSE_VisitorPatternDefaultBase {
 public:
@@ -21101,6 +21253,12 @@ void SageInterface::tearDownAst(SgProject *project) {
 }
 
 void SageInterface::registerAstTeardownAtExit() {
+  static bool token_maps_registered = false;
+  if (!token_maps_registered) {
+    token_maps_registered = true;
+    std::atexit(clearTokenStreamGlobalMapsAtExit);
+  }
+
   if (!isAstTeardownEnabledInternal()) {
     return;
   }

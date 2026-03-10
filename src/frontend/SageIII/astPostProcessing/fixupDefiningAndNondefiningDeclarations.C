@@ -582,19 +582,32 @@ void FixupAstDefiningAndNondefiningDeclarations::visit(SgNode *node) {
     // node requiring a reference to the declaration (which is why it is stored
     // explicitly).  Thus the firstNondefiningDeclaration should never be the
     // same as the definingDeclaration (if they are non-null)
+    bool allow_self_nondef_for_template_instantiation =
+        isSgTemplateInstantiationDecl(declaration) != NULL ||
+        isSgTemplateInstantiationFunctionDecl(declaration) != NULL ||
+        isSgTemplateInstantiationMemberFunctionDecl(declaration) != NULL;
+
     if (firstNondefiningDeclaration != NULL &&
         firstNondefiningDeclaration == definingDeclaration) {
-      // reset this to NULL since it is not a non-defining declaration (we might
-      // later want to build a non-defining declaration to have be referenced
-      // here, but it is not clear that that is required).
-      declaration->set_firstNondefiningDeclaration(NULL);
+      if (allow_self_nondef_for_template_instantiation) {
+        // Template instantiations can be represented as a single declaration.
+        // Preserve the chain anchor for mangling/unparsing paths that depend
+        // on a non-null first-nondefining link.
+        declaration->set_firstNondefiningDeclaration(declaration);
+      } else {
+        // reset this to NULL since it is not a non-defining declaration (we
+        // might later want to build a non-defining declaration to have be
+        // referenced here, but it is not clear that that is required).
+        declaration->set_firstNondefiningDeclaration(NULL);
+      }
 
       // reset the firstNondefiningDeclaration
       firstNondefiningDeclaration =
           declaration->get_firstNondefiningDeclaration();
     }
 
-    if (firstNondefiningDeclaration == definingDeclaration) {
+    if (firstNondefiningDeclaration == definingDeclaration &&
+        !allow_self_nondef_for_template_instantiation) {
       MLOG_WARN_CXX("astPostProcessing")
           << "firstNondefiningDeclaration == definingDeclaration failed for "
              "node of"
