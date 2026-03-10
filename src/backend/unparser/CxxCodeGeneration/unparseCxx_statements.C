@@ -5649,8 +5649,7 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       // != string::npos); bool isAnonymousName =
       // (string(classdecl_stmt->get_name()).substr(0,14) == "__anonymous_0x");
       bool isAnonymousName =
-          (string(classdecl_stmt->get_name()).substr(0, 14) ==
-           "__anonymous_0x") &&
+          hasGeneratedAnonymousNamePrefix(classdecl_stmt->get_name()) &&
           (classdecl_stmt->get_class_type() == SgClassDeclaration::e_union);
       bool allowUnnamedInternalName =
           info.PrintName() &&
@@ -6170,7 +6169,7 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
     // curprint(enum_stmt->get_name() + " ");
     // printf ("We could skip the name of the enum here ... \n");
     bool isAnonymousName =
-        (string(enum_stmt->get_name()).substr(0, 14) == "__anonymous_0x");
+        hasGeneratedAnonymousNamePrefix(enum_stmt->get_name());
     if (isAnonymousName == false) {
       curprint(nameQualifier.str());
       curprint(enum_stmt->get_name() + " ");
@@ -7602,8 +7601,7 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
              enumDeclaration->get_name().str());
 #endif
       bool isAnonymousName =
-          (string(enumDeclaration->get_name()).substr(0, 14) ==
-           "__anonymous_0x");
+          hasGeneratedAnonymousNamePrefix(enumDeclaration->get_name());
       if (isAnonymousName == true) {
 #if DEBUG_TYPEDEF_DECLARATIONS
         printf("internal declarationReference == definingEnumDeclaration: "
@@ -7659,8 +7657,7 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
              classDeclaration->get_name().str());
 #endif
       bool isAnonymousName =
-          (string(classDeclaration->get_name()).substr(0, 14) ==
-           "__anonymous_0x");
+          hasGeneratedAnonymousNamePrefix(classDeclaration->get_name());
       if (isAnonymousName == true) {
 #if DEBUG_TYPEDEF_DECLARATIONS
         printf("internal declarationReference == definingClassDeclaration: "

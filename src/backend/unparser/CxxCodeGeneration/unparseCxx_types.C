@@ -1690,7 +1690,8 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
       if (referenceDecl != NULL) {
         std::string referenceName = referenceDecl->get_name().getString();
         bool referenceIsAnonymous =
-            referenceName.empty() || referenceName.find("__anonymous_0x") == 0;
+            referenceName.empty() ||
+            hasGeneratedAnonymousNamePrefix(referenceName);
         allowUnnamedInternalName = !referenceIsAnonymous;
       } else {
         allowUnnamedInternalName = true;
