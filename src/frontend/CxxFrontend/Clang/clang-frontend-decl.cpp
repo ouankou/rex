@@ -4602,6 +4602,12 @@ void ClangToSageTranslator::populateClassDefinition(
       continue;
     }
 
+    // ConstructorUsingShadowDecls are semantic shadow members attached to the
+    // lexical UsingDecl, not standalone class members.
+    if (llvm::isa<clang::UsingShadowDecl>(inner_decl)) {
+      continue;
+    }
+
     // Clang's semantic DeclContext for a class includes out-of-line member
     // definitions (including nested classes). ROSE's member list is the
     // *lexical* class body and must not include those out-of-line definitions,
@@ -6314,6 +6320,13 @@ bool ClangToSageTranslator::TraverseForDeclContext(
       continue;
     }
 
+    // UsingShadowDecls are semantic artifacts of a user-written UsingDecl.
+    // Traversing them as standalone declarations duplicates the source using
+    // declaration and can force translation of implicit support constructors.
+    if (llvm::isa<clang::UsingShadowDecl>(decl)) {
+      continue;
+    }
+
     if (namespace_scope != nullptr) {
       const clang::DeclContext *lexical_ctx = decl->getLexicalDeclContext();
       if (const clang::NamespaceDecl *lexical_ns =
@@ -7993,6 +8006,10 @@ bool ClangToSageTranslator::VisitLinkageSpecDecl(
     clang::Decl *inner_decl = *it;
     if (inner_decl == nullptr)
       continue;
+
+    if (llvm::isa<clang::UsingShadowDecl>(inner_decl)) {
+      continue;
+    }
 
     SgNode *child = Traverse(inner_decl);
     if (SgDeclarationStatement *decl_stmt = isSgDeclarationStatement(child)) {
@@ -14441,9 +14458,46 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
   std::cerr << "ClangToSageTranslator::VisitUsingDecl" << std::endl;
 #endif
   bool res = true;
-  const bool is_inheriting_ctor_using =
+  auto existing_it = p_decl_translation_map.find(using_decl);
+  if (existing_it != p_decl_translation_map.end()) {
+    if (node != nullptr) {
+      *node = existing_it->second;
+    }
+    return true;
+  }
+  bool is_inheriting_ctor_using =
       using_decl != nullptr && using_decl->getDeclName().getNameKind() ==
                                    clang::DeclarationName::CXXConstructorName;
+  if (!is_inheriting_ctor_using && using_decl != nullptr) {
+    for (clang::UsingShadowDecl *shadow : using_decl->shadows()) {
+      if (shadow == nullptr) {
+        continue;
+      }
+      if (llvm::isa<clang::ConstructorUsingShadowDecl>(shadow)) {
+        is_inheriting_ctor_using = true;
+        break;
+      }
+      clang::NamedDecl *target = shadow->getTargetDecl();
+      if (target == nullptr) {
+        continue;
+      }
+      if (clang::NamedDecl *underlying = target->getUnderlyingDecl()) {
+        target = underlying;
+      }
+      if (llvm::isa<clang::CXXConstructorDecl>(target)) {
+        is_inheriting_ctor_using = true;
+        break;
+      }
+      if (clang::FunctionTemplateDecl *function_template =
+              llvm::dyn_cast<clang::FunctionTemplateDecl>(target)) {
+        if (llvm::isa<clang::CXXConstructorDecl>(
+                function_template->getTemplatedDecl())) {
+          is_inheriting_ctor_using = true;
+          break;
+        }
+      }
+    }
+  }
 
   // ROOT CAUSE FIX: Resolve using declarations through their shadow
   // declarations and bind to the underlying declaration or initialized name.
@@ -14478,6 +14532,137 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
   }
   if (current_scope == nullptr) {
     current_scope = getGlobalScope();
+  }
+
+  if (is_inheriting_ctor_using) {
+    clang::CXXRecordDecl *nominated_base = nullptr;
+    for (clang::UsingShadowDecl *shadow : using_decl->shadows()) {
+      if (clang::ConstructorUsingShadowDecl *ctor_shadow =
+              llvm::dyn_cast_or_null<clang::ConstructorUsingShadowDecl>(
+                  shadow)) {
+        nominated_base = ctor_shadow->getNominatedBaseClass();
+        if (nominated_base != nullptr) {
+          break;
+        }
+      }
+
+      clang::NamedDecl *target =
+          shadow != nullptr ? shadow->getTargetDecl() : nullptr;
+      if (target == nullptr) {
+        continue;
+      }
+      if (clang::NamedDecl *underlying = target->getUnderlyingDecl()) {
+        target = underlying;
+      }
+
+      if (clang::CXXConstructorDecl *ctor_decl =
+              llvm::dyn_cast<clang::CXXConstructorDecl>(target)) {
+        nominated_base = ctor_decl->getParent();
+        break;
+      }
+
+      if (clang::FunctionTemplateDecl *function_template =
+              llvm::dyn_cast<clang::FunctionTemplateDecl>(target)) {
+        if (clang::CXXConstructorDecl *ctor_decl =
+                llvm::dyn_cast_or_null<clang::CXXConstructorDecl>(
+                    function_template->getTemplatedDecl())) {
+          nominated_base = ctor_decl->getParent();
+          break;
+        }
+      }
+    }
+
+    SgDeclarationStatement *sg_target_decl = nullptr;
+    SgInitializedName *sg_init_name = nullptr;
+    if (nominated_base != nullptr) {
+      clang::Decl *base_decl = nominated_base;
+      if (clang::CXXRecordDecl *definition = nominated_base->getDefinition()) {
+        base_decl = definition;
+      } else if (clang::CXXRecordDecl *canonical =
+                     llvm::dyn_cast<clang::CXXRecordDecl>(
+                         nominated_base->getCanonicalDecl())) {
+        base_decl = canonical;
+      }
+
+      SgNode *target_node = resolveUsingDeclTargetNode(base_decl);
+      bool resolved =
+          extractUsingTargetFromNode(target_node, sg_target_decl, sg_init_name);
+      if (!resolved) {
+        if (SgSymbol *symbol = GetSymbolFromSymbolTable(nominated_base)) {
+          resolved = extractUsingTargetFromSymbol(symbol, sg_target_decl,
+                                                  sg_init_name);
+        }
+      }
+    }
+
+    auto build_inheriting_ctor_name =
+        [](SgDeclarationStatement *target_decl,
+           SgInitializedName *target_init) -> SgInitializedName * {
+      SgName ctor_name;
+      SgScopeStatement *target_scope = nullptr;
+
+      if (SgClassDeclaration *class_decl = isSgClassDeclaration(target_decl)) {
+        ctor_name = class_decl->get_name();
+        target_scope = class_decl->get_definition();
+      } else if (SgTemplateClassDeclaration *template_class_decl =
+                     isSgTemplateClassDeclaration(target_decl)) {
+        ctor_name = template_class_decl->get_name();
+        target_scope = template_class_decl->get_definition();
+      } else if (SgTemplateInstantiationDecl *inst_decl =
+                     isSgTemplateInstantiationDecl(target_decl)) {
+        ctor_name = inst_decl->get_name();
+        target_scope = inst_decl->get_definition();
+      } else if (target_init != nullptr) {
+        ctor_name = target_init->get_name();
+        target_scope = target_init->get_scope();
+      }
+
+      if (target_scope == nullptr || ctor_name.getString().empty()) {
+        return nullptr;
+      }
+
+      SgInitializedName *ctor_name_node = SageBuilder::buildInitializedName(
+          ctor_name, SageBuilder::buildUnknownType());
+      ctor_name_node->set_scope(target_scope);
+      return ctor_name_node;
+    };
+
+    SgInitializedName *sg_ctor_name =
+        build_inheriting_ctor_name(sg_target_decl, sg_init_name);
+
+    if (sg_ctor_name == nullptr) {
+      std::string name_str = using_decl->getNameAsString();
+      MLOG_ERROR_C(MLOG_FRONTEND,
+                   "Runtime error: unable to resolve inheriting constructor "
+                   "UsingDecl target '%s'.\n",
+                   name_str.c_str());
+      *node = nullptr;
+      return false;
+    }
+
+    SgUsingDeclarationStatement *using_stmt =
+        new SgUsingDeclarationStatement(nullptr, sg_ctor_name);
+    sg_ctor_name->set_parent(using_stmt);
+    applySourceRange(sg_ctor_name, using_decl->getSourceRange());
+    using_stmt->set_is_inheriting_constructor(true);
+    using_stmt->set_definingDeclaration(using_stmt);
+    using_stmt->set_firstNondefiningDeclaration(using_stmt);
+    if (current_scope != nullptr) {
+      using_stmt->set_scope(current_scope);
+      using_stmt->set_parent(current_scope);
+    }
+    applySourceRange(using_stmt, using_decl->getSourceRange());
+
+    p_decl_translation_map[using_decl] = using_stmt;
+    for (clang::UsingShadowDecl *shadow : using_decl->shadows()) {
+      if (shadow != nullptr) {
+        p_decl_translation_map[shadow] = using_stmt;
+      }
+    }
+
+    diagnose_null_scope(using_stmt, "UsingDecl");
+    *node = using_stmt;
+    return VisitNamedDecl(using_decl, node) && res;
   }
 
   std::vector<SgUsingDeclarationStatement *> using_statements;
@@ -14588,6 +14773,7 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
   }
 
   SgUsingDeclarationStatement *primary_stmt = using_statements.front();
+  p_decl_translation_map[using_decl] = primary_stmt;
   for (size_t i = 1; i < using_statements.size(); ++i) {
     ensure_decl_in_scope_child_list(using_statements[i], current_scope,
                                     "UsingDecl:shadow");
@@ -14876,7 +15062,22 @@ bool ClangToSageTranslator::VisitUsingShadowDecl(
   // built.
   if (clang::BaseUsingDecl *introducer = using_shadow_decl->getIntroducer()) {
     auto it = p_decl_translation_map.find(introducer);
+    if (it == p_decl_translation_map.end() &&
+        p_decl_translation_in_progress.find(introducer) ==
+            p_decl_translation_in_progress.end() &&
+        p_decl_translation_on_demand.find(introducer) ==
+            p_decl_translation_on_demand.end()) {
+      if (SgNode *translated = Traverse(introducer)) {
+        p_decl_translation_map[using_shadow_decl] = translated;
+        if (node != nullptr) {
+          *node = translated;
+        }
+        return true;
+      }
+      it = p_decl_translation_map.find(introducer);
+    }
     if (it != p_decl_translation_map.end()) {
+      p_decl_translation_map[using_shadow_decl] = it->second;
       if (node != nullptr) {
         *node = it->second;
       }
@@ -22350,9 +22551,14 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
   }
 
+  // Clang assigns implicit C++ member support declarations the surrounding
+  // class location. Keep those compiler-synthesized members out of generated
+  // source without suppressing unrelated implicit free functions.
   const bool is_implicit_support_function =
-      function_decl->isImplicit() && !function_decl->getLocation().isValid();
-  if (visit_res && is_implicit_support_function) {
+      function_decl->isImplicit() &&
+      llvm::isa<clang::CXXMethodDecl>(function_decl);
+  auto suppress_function_decl_chain = [&](SgFunctionDeclaration *root,
+                                          bool mark_compiler_generated) {
     std::unordered_set<SgFunctionDeclaration *> visited;
     std::vector<SgFunctionDeclaration *> worklist;
     auto enqueue_decl = [&](SgFunctionDeclaration *candidate) {
@@ -22374,27 +22580,80 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           isSgFunctionDeclaration(current->get_firstNondefiningDeclaration()));
       enqueue_decl(isSgFunctionDeclaration(current->get_definingDeclaration()));
 
-      mark_compiler_generated_frontend_specific(current);
+      if (mark_compiler_generated) {
+        mark_compiler_generated_frontend_specific(current);
+      }
       suppress_unparse_output(current);
 
       if (SgFunctionParameterList *params = current->get_parameterList()) {
-        mark_compiler_generated_frontend_specific(params);
+        if (mark_compiler_generated) {
+          mark_compiler_generated_frontend_specific(params);
+        }
         suppress_unparse_output(params);
         for (SgInitializedName *param : params->get_args()) {
-          mark_compiler_generated_frontend_specific(param);
+          if (mark_compiler_generated) {
+            mark_compiler_generated_frontend_specific(param);
+          }
           suppress_unparse_output(param);
         }
       }
 
       if (SgFunctionDefinition *def = current->get_definition()) {
-        mark_compiler_generated_frontend_specific(def);
+        if (mark_compiler_generated) {
+          mark_compiler_generated_frontend_specific(def);
+        }
         suppress_unparse_output(def);
         if (SgBasicBlock *body = def->get_body()) {
-          mark_compiler_generated_frontend_specific(body);
+          if (mark_compiler_generated) {
+            mark_compiler_generated_frontend_specific(body);
+          }
           suppress_unparse_output(body);
         }
       }
     }
+  };
+
+  if (visit_res && is_implicit_support_function) {
+    suppress_function_decl_chain(sg_function_decl, true);
+  }
+
+  bool suppress_header_function = false;
+  bool mark_header_function_compiler_generated = false;
+  if (visit_res && !is_implicit_support_function &&
+      p_compiler_instance != nullptr) {
+    clang::SourceManager &sm = p_compiler_instance->getSourceManager();
+    clang::SourceLocation loc = function_decl->getLocation();
+
+    if (loc.isMacroID()) {
+      clang::SourceLocation expansion_loc = sm.getExpansionLoc(loc);
+      if (expansion_loc.isValid() && sm.isWrittenInMainFile(expansion_loc) &&
+          !sm.isInSystemHeader(expansion_loc) &&
+          !sm.isWrittenInBuiltinFile(expansion_loc)) {
+        loc = expansion_loc;
+      } else {
+        loc = sm.getSpellingLoc(loc);
+      }
+    }
+
+    if (!loc.isValid()) {
+      suppress_header_function = true;
+      mark_header_function_compiler_generated = true;
+    } else {
+      if (!sm.isWrittenInMainFile(loc)) {
+        suppress_header_function = true;
+      }
+      if (sm.isInSystemHeader(loc) || sm.isWrittenInBuiltinFile(loc)) {
+        suppress_header_function = true;
+        if (sm.isWrittenInBuiltinFile(loc)) {
+          mark_header_function_compiler_generated = true;
+        }
+      }
+    }
+  }
+
+  if (visit_res && suppress_header_function) {
+    suppress_function_decl_chain(sg_function_decl,
+                                 mark_header_function_compiler_generated);
   }
 
   if (suppress_explicit_specialization_decl_after_visit) {
@@ -24359,17 +24618,41 @@ bool ClangToSageTranslator::VisitUnresolvedUsingValueDecl(
           return tdef->getDecl()->getNameAsString();
         }
       }
+      if (const clang::TemplateTypeParmType *type_param =
+              llvm::dyn_cast<clang::TemplateTypeParmType>(type)) {
+        if (type_param->getDecl() != nullptr) {
+          return type_param->getDecl()->getNameAsString();
+        }
+      }
       return "";
     }
     default:
       return "";
     }
   };
+  auto qualifier_is_template_type_param =
+      [](clang::NestedNameSpecifier *nns) -> bool {
+    return nns != nullptr &&
+           nns->getKind() == clang::NestedNameSpecifier::TypeSpec &&
+           llvm::isa<clang::TemplateTypeParmType>(nns->getAsType());
+  };
+  auto is_type_parameter_placeholder_name = [&](const std::string &raw_name) {
+    std::string stripped_name = strip_template_args(raw_name);
+    return stripped_name.rfind("type-parameter-", 0) == 0;
+  };
   if (!is_inheriting_constructor && qualifier != nullptr) {
     std::string terminal_name = qualifier_terminal_name(qualifier);
     if (!terminal_name.empty() &&
-        strip_template_args(terminal_name) == strip_template_args(name_str)) {
+        (strip_template_args(terminal_name) == strip_template_args(name_str) ||
+         (qualifier_is_template_type_param(qualifier) &&
+          is_type_parameter_placeholder_name(name_str)))) {
       is_inheriting_constructor = true;
+    }
+  }
+  if (is_inheriting_constructor && qualifier != nullptr) {
+    std::string terminal_name = qualifier_terminal_name(qualifier);
+    if (!terminal_name.empty()) {
+      name_str = strip_template_args(terminal_name);
     }
   }
   if (qualifier != nullptr) {
