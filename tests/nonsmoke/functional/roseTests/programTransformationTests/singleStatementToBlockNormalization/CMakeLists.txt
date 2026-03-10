@@ -7,7 +7,7 @@ add_executable(singleStatementToBlockNormalization
 target_link_libraries(singleStatementToBlockNormalization
   ROSE_DLL ${link_with_libraries})
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/singleStatementToBlockNormalization_tests.cmake)
+include(${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/Cxx_transformation_specimens.cmake)
 
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
@@ -26,7 +26,7 @@ set(_single_stmt_disabled
 )
 
 set(_single_stmt_test_targets)
-foreach(specimen IN LISTS SINGLE_STMT_BLOCK_TEST_SOURCES)
+foreach(specimen IN LISTS REX_CXX_TRANSFORMATION_TEST_SOURCES)
   set(_single_stmt_target singleStatementToBlockNormalization_${specimen}.passed)
   add_test(
     NAME singleStatementToBlockNormalization_${specimen}

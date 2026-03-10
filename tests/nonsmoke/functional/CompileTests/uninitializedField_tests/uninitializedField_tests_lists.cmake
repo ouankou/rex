@@ -2401,7 +2401,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test2014_227.C
   test2014_228.C
   test2014_229.C
-  test2014_22.C
   test2014_23.C
   test2014_25.C
   test2014_42.C
@@ -2410,7 +2409,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test2014_51.C
   test2014_52.C
   test2014_59.C
-  test2014_63.C
   test2014_64.C
   test2014_65.C
   test2014_66.C

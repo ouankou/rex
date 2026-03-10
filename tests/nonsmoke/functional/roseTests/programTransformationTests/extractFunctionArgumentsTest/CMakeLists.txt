@@ -5,9 +5,8 @@ add_executable(normalizationTranslator NormalizationTranslator.C)
 target_link_libraries(normalizationTranslator
   ROSE_DLL ${link_with_libraries})
 
-# This populates the list ROSE__CXX_TESTS
-
 set(TESTCODE_DIR ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
+include(${TESTCODE_DIR}/Cxx_transformation_specimens.cmake)
 set(NORMALIZATION_SYSTEM_HEADER_DIR
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like)
 
@@ -21,7 +20,7 @@ set(_normalization_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_test_output)
 file(MAKE_DIRECTORY ${_normalization_output_dir})
 
 set(_normalization_tests
-  ${ROSE__CXX_TESTS}
+  ${REX_CXX_TRANSFORMATION_TEST_SOURCES}
   test2005_50.C
 )
 list(REMOVE_DUPLICATES _normalization_tests)
@@ -57,9 +56,8 @@ foreach(file_to_test ${_normalization_tests})
 endforeach()
 
 # Makefile check targets.
-include(${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/roseTests/programTransformationTests/singleStatementToBlockNormalization/singleStatementToBlockNormalization_tests.cmake)
 set(_single_stmt_test_targets)
-foreach(specimen IN LISTS SINGLE_STMT_BLOCK_TEST_SOURCES)
+foreach(specimen IN LISTS REX_CXX_TRANSFORMATION_TEST_SOURCES)
   list(APPEND _single_stmt_test_targets singleStatementToBlockNormalization_${specimen})
 endforeach()
 set(_extract_args_group_tests ${_normalization_test_targets} ${_single_stmt_test_targets})
