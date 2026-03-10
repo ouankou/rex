@@ -84,6 +84,16 @@ std::string get_output_filename(SgFile &file);
 //! returns the name of type t
 std::string get_type_name(SgType *t);
 
+inline bool hasGeneratedAnonymousNamePrefix(const std::string &name) {
+  static constexpr char kGeneratedAnonymousNamePrefix[] = "__anonymous_0x";
+  return name.compare(0, sizeof(kGeneratedAnonymousNamePrefix) - 1,
+                      kGeneratedAnonymousNamePrefix) == 0;
+}
+
+inline bool hasGeneratedAnonymousNamePrefix(const SgName &name) {
+  return hasGeneratedAnonymousNamePrefix(name.getString());
+}
+
 //! Unparse the declaration as a string for use in prototypes within the AST
 //! rewrite mechanism prefix mechanism
 ROSE_DLL_API std::string

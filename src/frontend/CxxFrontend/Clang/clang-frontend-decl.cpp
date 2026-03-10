@@ -15388,8 +15388,10 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
     if (SgClassType *class_type = isSgClassType(base_type)) {
       auto mark_unnamed = [](SgClassDeclaration *decl) {
         if (decl != nullptr) {
+          // Keep the synthesized internal name so symbol-table lookups for the
+          // anonymous aggregate remain stable; isUnNamed controls user-visible
+          // anonymity.
           decl->set_isUnNamed(true);
-          decl->set_name("");
         }
       };
       if (SgClassDeclaration *decl =
@@ -22974,8 +22976,10 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     if (SgClassType *class_type = isSgClassType(base_type)) {
       auto mark_unnamed = [](SgClassDeclaration *decl) {
         if (decl != nullptr) {
+          // Keep the synthesized internal name so symbol-table lookups for the
+          // anonymous aggregate remain stable; isUnNamed controls user-visible
+          // anonymity.
           decl->set_isUnNamed(true);
-          decl->set_name("");
         }
       };
       if (SgClassDeclaration *decl =
