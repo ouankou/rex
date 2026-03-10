@@ -1,7 +1,6 @@
 #include <omp.h>
-int main(void)
 #include <stdio.h>
-{
+int main(void) {
   int mits = 5000;
 #ifdef _OPENMP
 #pragma omp parallel

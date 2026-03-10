@@ -795,6 +795,14 @@ void Grammar::setUpStatements() {
   // + variable list
   NEW_TERMINAL_MACRO(OmpDeclareSimdStatement, "OmpDeclareSimdStatement",
                      "OMP_DECLARE_SIMD_STMT");
+  NEW_TERMINAL_MACRO(OmpDeclareVariantStatement, "OmpDeclareVariantStatement",
+                     "OMP_DECLARE_VARIANT_STMT");
+  NEW_TERMINAL_MACRO(OmpBeginDeclareVariantStatement,
+                     "OmpBeginDeclareVariantStatement",
+                     "OMP_BEGIN_DECLARE_VARIANT_STMT");
+  NEW_TERMINAL_MACRO(OmpEndDeclareVariantStatement,
+                     "OmpEndDeclareVariantStatement",
+                     "OMP_END_DECLARE_VARIANT_STMT");
   NEW_TERMINAL_MACRO(OmpDeclareTargetStatement, "OmpDeclareTargetStatement",
                      "OMP_DECLARE_TARGET_STMT");
   NEW_TERMINAL_MACRO(OmpEndDeclareTargetStatement,
@@ -838,9 +846,10 @@ void Grammar::setUpStatements() {
           C_PreprocessorDirectiveStatement | OmpThreadprivateStatement |
           OmpRequiresStatement | FortranIncludeLine | OmpTaskwaitStatement |
           StmtDeclarationStatement | StaticAssertionDeclaration |
-          OmpDeclareSimdStatement | NonrealDecl | EmptyDeclaration |
-          OmpDeclareMapperStatement | OmpDeclareTargetStatement |
-          OmpEndDeclareTargetStatement,
+          OmpDeclareSimdStatement | OmpDeclareVariantStatement |
+          OmpBeginDeclareVariantStatement | OmpEndDeclareVariantStatement |
+          NonrealDecl | EmptyDeclaration | OmpDeclareMapperStatement |
+          OmpDeclareTargetStatement | OmpEndDeclareTargetStatement,
       "DeclarationStatement", "DECL_STMT", false);
 
   NEW_NONTERMINAL_MACRO(OmpExecStatement,
@@ -5338,6 +5347,20 @@ void Grammar::setUpStatements() {
       "HEADER_OMP_DECLARE_SIMD_STATEMENT", "../Grammar/Statement.code");
   OmpDeclareSimdStatement.setFunctionSource("SOURCE_OMP_DECLARE_SIMD_STATEMENT",
                                             "../Grammar/Statement.code");
+  OmpDeclareVariantStatement.setFunctionPrototype(
+      "HEADER_OMP_DECLARE_VARIANT_STATEMENT", "../Grammar/Statement.code");
+  OmpDeclareVariantStatement.setFunctionSource(
+      "SOURCE_OMP_DECLARE_VARIANT_STATEMENT", "../Grammar/Statement.code");
+  OmpBeginDeclareVariantStatement.setFunctionPrototype(
+      "HEADER_OMP_BEGIN_DECLARE_VARIANT_STATEMENT",
+      "../Grammar/Statement.code");
+  OmpBeginDeclareVariantStatement.setFunctionSource(
+      "SOURCE_OMP_BEGIN_DECLARE_VARIANT_STATEMENT",
+      "../Grammar/Statement.code");
+  OmpEndDeclareVariantStatement.setFunctionPrototype(
+      "HEADER_OMP_END_DECLARE_VARIANT_STATEMENT", "../Grammar/Statement.code");
+  OmpEndDeclareVariantStatement.setFunctionSource(
+      "SOURCE_OMP_END_DECLARE_VARIANT_STATEMENT", "../Grammar/Statement.code");
   OmpDeclareTargetStatement.setFunctionPrototype(
       "HEADER_OMP_DECLARE_TARGET_STATEMENT", "../Grammar/Statement.code");
   OmpDeclareTargetStatement.setFunctionSource(
@@ -5529,6 +5552,19 @@ void Grammar::setUpStatements() {
   OmpDeclareSimdStatement.setDataPrototype(
       "SgOmpClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  OmpDeclareVariantStatement.setDataPrototype(
+      "SgExpression*", "variant_function_ref", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, CLONE_PTR);
+  OmpDeclareVariantStatement.setDataPrototype(
+      "SgOmpClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  OmpBeginDeclareVariantStatement.setDataPrototype(
+      "SgOmpClausePtrList", "clauses", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+  OmpBeginDeclareVariantStatement.setDataPrototype(
+      "std::string", "captured_region", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   OmpDeclareMapperStatement.setDataPrototype(
       "SgOmpClause::omp_declare_mapper_identifier_enum", "identifier",
       "=SgOmpClause::e_omp_declare_mapper_identifier_unspecified",

@@ -311,6 +311,9 @@ SgOmpDoStatement
 SgOmpFlushStatement
 SgOmpAllocateStatement
 SgOmpDeclareSimdStatement
+SgOmpDeclareVariantStatement
+SgOmpBeginDeclareVariantStatement
+SgOmpEndDeclareVariantStatement
 SgOmpDeclareTargetStatement
 SgOmpEndDeclareTargetStatement
 SgOmpForSimdStatement
@@ -462,6 +465,9 @@ SgOmpNotinbranchClause
 SgOmpDependClause
 SgOmpAffinityClause
 SgOmpWhenClause
+SgOmpMatchClause
+SgOmpAdjustArgsClause
+SgOmpAppendArgsClause
 SgOmpFullClause
 SgOmpPartialClause
 SgOmpSizesClause

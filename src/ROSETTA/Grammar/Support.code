@@ -218,6 +218,12 @@ HEADER_OMP_CLAUSE_START
             e_omp_when_context_vendor_unknown
         };
 
+        enum omp_adjust_args_modifier_enum
+        {
+            e_omp_adjust_args_modifier_unknown = 0,
+            e_omp_adjust_args_modifier_need_device_ptr
+        };
+
         enum omp_declare_mapper_identifier_enum
         {
             e_omp_declare_mapper_identifier_unspecified = 0,

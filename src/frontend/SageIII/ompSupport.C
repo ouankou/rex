@@ -798,6 +798,12 @@ bool isDependenceType(omp_construct_enum omp_type) {
 void addOmpClause(SgStatement *node, SgOmpClause *clause) {
   if (isSgOmpClauseStatement(node)) {
     ((SgOmpClauseStatement *)node)->get_clauses().push_back(clause);
+  } else if (isSgOmpDeclareVariantStatement(node)) {
+    ((SgOmpDeclareVariantStatement *)node)->get_clauses().push_back(clause);
+  } else if (isSgOmpBeginDeclareVariantStatement(node)) {
+    ((SgOmpBeginDeclareVariantStatement *)node)
+        ->get_clauses()
+        .push_back(clause);
   } else if (isSgOmpDeclareMapperStatement(node)) {
     ((SgOmpDeclareMapperStatement *)node)->get_clauses().push_back(clause);
   } else if (isSgOmpClauseBodyStatement(node)) {

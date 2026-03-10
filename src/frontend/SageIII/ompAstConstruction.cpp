@@ -206,6 +206,42 @@ unsigned getLocatedNodeLine(const SgLocatedNode *node) {
   return 0;
 }
 
+const OmpDeclareVariantRegionInfo *
+findDeclareVariantRegionInfo(SgPragmaDeclaration *pragma_declaration) {
+  if (pragma_declaration == nullptr) {
+    return nullptr;
+  }
+
+  SgSourceFile *source_file = getEnclosingSourceFile(pragma_declaration);
+  if (source_file == nullptr) {
+    return nullptr;
+  }
+
+  AstAttribute *attribute =
+      source_file->getAttribute(kOmpDeclareVariantRegionsAttributeName);
+  auto *regions = dynamic_cast<OmpDeclareVariantRegionsAttribute *>(attribute);
+  if (regions == nullptr) {
+    return nullptr;
+  }
+
+  return regions->findByBeginLine(getLocatedNodeLine(pragma_declaration));
+}
+
+SgExpression *
+parseDeclareVariantExpression(SgPragmaDeclaration *directive,
+                              const std::string &expression_text) {
+  const std::string trimmed = trimWhitespaceCopy(expression_text);
+  if (trimmed.empty()) {
+    return nullptr;
+  }
+
+  SgExpression *expr = parseOmpExpression(directive, OMPC_match, trimmed);
+  if (expr == nullptr) {
+    expr = buildOpaqueOpenMPClauseExpression(directive, trimmed);
+  }
+  return expr;
+}
+
 void setDirectiveSpellingOverride(SgStatement *statement,
                                   const std::string &spelling) {
   if (statement == nullptr || spelling.empty()) {
@@ -5474,6 +5510,19 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = convertOmpDeclareSimdDirective(current_OpenMPIR_to_SageIII);
     break;
   }
+  case OMPD_declare_variant: {
+    result = convertOmpDeclareVariantDirective(current_OpenMPIR_to_SageIII);
+    break;
+  }
+  case OMPD_begin_declare_variant: {
+    result =
+        convertOmpBeginDeclareVariantDirective(current_OpenMPIR_to_SageIII);
+    break;
+  }
+  case OMPD_end_declare_variant: {
+    result = convertOmpEndDeclareVariantDirective(current_OpenMPIR_to_SageIII);
+    break;
+  }
   case OMPD_declare_target: {
     result = convertOmpDeclareTargetDirective(current_OpenMPIR_to_SageIII);
     break;
@@ -6383,6 +6432,103 @@ SgStatement *convertOmpDeclareSimdDirective(
     }
     };
   };
+  return result;
+}
+
+SgStatement *convertOmpDeclareVariantDirective(
+    std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+        current_OpenMPIR_to_SageIII) {
+  SgOmpDeclareVariantStatement *result = new SgOmpDeclareVariantStatement();
+  result->set_firstNondefiningDeclaration(result);
+
+  if (auto *declare_variant_directive =
+          dynamic_cast<OpenMPDeclareVariantDirective *>(
+              current_OpenMPIR_to_SageIII.second)) {
+    SgExpression *variant_function_ref = parseDeclareVariantExpression(
+        current_OpenMPIR_to_SageIII.first,
+        declare_variant_directive->getVariantFuncID());
+    result->set_variant_function_ref(variant_function_ref);
+    if (variant_function_ref != nullptr) {
+      variant_function_ref->set_parent(result);
+    }
+  }
+
+  std::vector<OpenMPClause *> *all_clauses =
+      current_OpenMPIR_to_SageIII.second->getClausesInOriginalOrder();
+  for (OpenMPClause *clause : *all_clauses) {
+    if (clause == nullptr) {
+      continue;
+    }
+
+    switch (clause->getKind()) {
+    case OMPC_match:
+      convertMatchClause(isSgStatement(result), current_OpenMPIR_to_SageIII,
+                         clause);
+      break;
+    case OMPC_adjust_args:
+      convertAdjustArgsClause(isSgStatement(result),
+                              current_OpenMPIR_to_SageIII, clause);
+      break;
+    case OMPC_append_args:
+      convertAppendArgsClause(isSgStatement(result),
+                              current_OpenMPIR_to_SageIII, clause);
+      break;
+    default:
+      convertClause(isSgStatement(result), current_OpenMPIR_to_SageIII, clause);
+      break;
+    }
+  }
+
+  return result;
+}
+
+SgStatement *convertOmpBeginDeclareVariantDirective(
+    std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+        current_OpenMPIR_to_SageIII) {
+  SgOmpBeginDeclareVariantStatement *result =
+      new SgOmpBeginDeclareVariantStatement();
+  result->set_firstNondefiningDeclaration(result);
+
+  if (const OmpDeclareVariantRegionInfo *region =
+          findDeclareVariantRegionInfo(current_OpenMPIR_to_SageIII.first)) {
+    result->set_captured_region(region->captured_region);
+  }
+
+  std::vector<OpenMPClause *> *all_clauses =
+      current_OpenMPIR_to_SageIII.second->getClausesInOriginalOrder();
+  for (OpenMPClause *clause : *all_clauses) {
+    if (clause == nullptr) {
+      continue;
+    }
+
+    switch (clause->getKind()) {
+    case OMPC_match:
+      convertMatchClause(isSgStatement(result), current_OpenMPIR_to_SageIII,
+                         clause);
+      break;
+    case OMPC_adjust_args:
+      convertAdjustArgsClause(isSgStatement(result),
+                              current_OpenMPIR_to_SageIII, clause);
+      break;
+    case OMPC_append_args:
+      convertAppendArgsClause(isSgStatement(result),
+                              current_OpenMPIR_to_SageIII, clause);
+      break;
+    default:
+      convertClause(isSgStatement(result), current_OpenMPIR_to_SageIII, clause);
+      break;
+    }
+  }
+
+  return result;
+}
+
+SgStatement *convertOmpEndDeclareVariantDirective(
+    std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+        current_OpenMPIR_to_SageIII) {
+  SgOmpEndDeclareVariantStatement *result =
+      new SgOmpEndDeclareVariantStatement();
+  result->set_firstNondefiningDeclaration(result);
   return result;
 }
 
@@ -7813,217 +7959,376 @@ convertBindClause(SgOmpClauseBodyStatement *clause_body,
   return result;
 }
 
+namespace {
+struct ConvertedVariantClauseData {
+  SgExpression *user_condition = nullptr;
+  SgExpression *user_condition_score = nullptr;
+  std::list<SgStatement *> construct_directives;
+  bool target_device_selector = false;
+  SgExpression *device_arch = nullptr;
+  SgExpression *device_isa = nullptr;
+  SgExpression *device_num = nullptr;
+  SgOmpClause::omp_when_context_kind_enum device_kind =
+      SgOmpClause::e_omp_when_context_kind_unknown;
+  SgOmpClause::omp_when_context_vendor_enum implementation_vendor =
+      SgOmpClause::e_omp_when_context_vendor_unspecified;
+  SgExpression *implementation_user_defined = nullptr;
+  SgExpression *implementation_extension = nullptr;
+};
+
+template <typename VariantClauseT>
+void applyVariantClauseCommonData(VariantClauseT *result,
+                                  const ConvertedVariantClauseData &data) {
+  ROSE_ASSERT(result != nullptr);
+
+  result->set_user_condition(data.user_condition);
+  result->set_user_condition_score(data.user_condition_score);
+  result->set_construct_directives(data.construct_directives);
+  result->set_target_device_selector(data.target_device_selector);
+  result->set_device_arch(data.device_arch);
+  result->set_device_isa(data.device_isa);
+  result->set_device_num(data.device_num);
+  result->set_device_kind(data.device_kind);
+  result->set_implementation_vendor(data.implementation_vendor);
+  result->set_implementation_user_defined(data.implementation_user_defined);
+  result->set_implementation_extension(data.implementation_extension);
+
+  if (data.user_condition != nullptr) {
+    data.user_condition->set_parent(result);
+  }
+  if (data.user_condition_score != nullptr) {
+    data.user_condition_score->set_parent(result);
+  }
+  if (data.device_arch != nullptr) {
+    data.device_arch->set_parent(result);
+  }
+  if (data.device_isa != nullptr) {
+    data.device_isa->set_parent(result);
+  }
+  if (data.device_num != nullptr) {
+    data.device_num->set_parent(result);
+  }
+  if (data.implementation_user_defined != nullptr) {
+    data.implementation_user_defined->set_parent(result);
+  }
+  if (data.implementation_extension != nullptr) {
+    data.implementation_extension->set_parent(result);
+  }
+  for (SgStatement *construct_directive : data.construct_directives) {
+    if (construct_directive != nullptr) {
+      construct_directive->set_parent(result);
+    }
+  }
+}
+
+ConvertedVariantClauseData
+buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+                                 current_OpenMPIR_to_SageIII,
+                             OpenMPClause *current_omp_clause) {
+  ConvertedVariantClauseData data;
+  auto *variant_clause =
+      dynamic_cast<OpenMPVariantClause *>(current_omp_clause);
+  ROSE_ASSERT(variant_clause != nullptr);
+
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
+
+  const std::string user_condition_string =
+      variant_clause->getUserCondition()->expression;
+  if (!user_condition_string.empty()) {
+    data.user_condition = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, user_condition_string);
+  }
+
+  const std::string user_condition_score_string =
+      variant_clause->getUserCondition()->score;
+  if (!user_condition_score_string.empty()) {
+    data.user_condition_score = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, user_condition_score_string);
+  }
+
+  const std::string device_arch_string =
+      variant_clause->getArchExpression()->expression;
+  if (!device_arch_string.empty()) {
+    data.device_arch = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, device_arch_string, true);
+  }
+
+  const std::string device_isa_string =
+      variant_clause->getIsaExpression()->expression;
+  if (!device_isa_string.empty()) {
+    data.device_isa = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, device_isa_string, true);
+  }
+
+  const std::string device_num_string =
+      variant_clause->getDeviceNumExpression()->expression;
+  if (!device_num_string.empty()) {
+    data.device_num = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, device_num_string);
+  }
+
+  switch (variant_clause->getContextKind()->second) {
+  case OMPC_CONTEXT_KIND_host:
+    data.device_kind = SgOmpClause::e_omp_when_context_kind_host;
+    break;
+  case OMPC_CONTEXT_KIND_nohost:
+    data.device_kind = SgOmpClause::e_omp_when_context_kind_nohost;
+    break;
+  case OMPC_CONTEXT_KIND_any:
+    data.device_kind = SgOmpClause::e_omp_when_context_kind_any;
+    break;
+  case OMPC_CONTEXT_KIND_cpu:
+    data.device_kind = SgOmpClause::e_omp_when_context_kind_cpu;
+    break;
+  case OMPC_CONTEXT_KIND_gpu:
+    data.device_kind = SgOmpClause::e_omp_when_context_kind_gpu;
+    break;
+  case OMPC_CONTEXT_KIND_fpga:
+    data.device_kind = SgOmpClause::e_omp_when_context_kind_fpga;
+    break;
+  default:
+    break;
+  }
+
+  switch (variant_clause->getImplementationKind()->second) {
+  case OMPC_CONTEXT_VENDOR_amd:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_amd;
+    break;
+  case OMPC_CONTEXT_VENDOR_arm:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_arm;
+    break;
+  case OMPC_CONTEXT_VENDOR_bsc:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_bsc;
+    break;
+  case OMPC_CONTEXT_VENDOR_cray:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_cray;
+    break;
+  case OMPC_CONTEXT_VENDOR_fujitsu:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_fujitsu;
+    break;
+  case OMPC_CONTEXT_VENDOR_gnu:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_gnu;
+    break;
+  case OMPC_CONTEXT_VENDOR_ibm:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_ibm;
+    break;
+  case OMPC_CONTEXT_VENDOR_intel:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_intel;
+    break;
+  case OMPC_CONTEXT_VENDOR_llvm:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_llvm;
+    break;
+  case OMPC_CONTEXT_VENDOR_nvidia:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_nvidia;
+    break;
+  case OMPC_CONTEXT_VENDOR_pgi:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_pgi;
+    break;
+  case OMPC_CONTEXT_VENDOR_ti:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_ti;
+    break;
+  case OMPC_CONTEXT_VENDOR_unknown:
+    data.implementation_vendor = SgOmpClause::e_omp_when_context_vendor_unknown;
+    break;
+  default:
+    break;
+  }
+
+  const std::string implementation_user_defined_string =
+      variant_clause->getImplementationExpression()->expression;
+  if (!implementation_user_defined_string.empty()) {
+    data.implementation_user_defined = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, implementation_user_defined_string);
+  }
+
+  const std::string implementation_extension_string =
+      variant_clause->getExtensionExpression()->expression;
+  if (!implementation_extension_string.empty()) {
+    data.implementation_extension = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, implementation_extension_string);
+  }
+
+  data.target_device_selector = variant_clause->getIsTargetDeviceSelector();
+
+  std::vector<std::pair<std::string, OpenMPDirective *>> *construct_directive =
+      variant_clause->getConstructDirective();
+  for (const auto &construct_entry : *construct_directive) {
+    std::pair<SgPragmaDeclaration *, OpenMPDirective *> paired_construct =
+        make_pair(current_OpenMPIR_to_SageIII.first, construct_entry.second);
+    SgStatement *converted = convertVariantDirective(paired_construct);
+    if (converted != nullptr) {
+      data.construct_directives.push_back(converted);
+    }
+  }
+
+  return data;
+}
+} // namespace
+
 SgOmpWhenClause *
 convertWhenClause(SgOmpClauseBodyStatement *clause_body,
                   std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                       current_OpenMPIR_to_SageIII,
                   OpenMPClause *current_omp_clause) {
-  SgStatement *variant_directive = NULL;
   auto *when_clause = static_cast<OpenMPWhenClause *>(current_omp_clause);
-  const std::vector<const OmpParsedExpression *> *parsed_nodes =
-      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
-                                     current_omp_clause);
-  OpenMPDirective *variant_OpenMPIR = when_clause->getVariantDirective();
-  if (variant_OpenMPIR) {
+  SgStatement *variant_directive = nullptr;
+  if (OpenMPDirective *variant_OpenMPIR = when_clause->getVariantDirective()) {
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>
         paired_variant_OpenMPIR =
             make_pair(current_OpenMPIR_to_SageIII.first, variant_OpenMPIR);
     variant_directive = convertVariantDirective(paired_variant_OpenMPIR);
-  };
+  }
 
-  SgExpression *user_condition = NULL;
-  std::string user_condition_string =
-      when_clause->getUserCondition()->expression;
-  if (user_condition_string.size()) {
-    user_condition = parseClauseExpressionWithCache(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        parsed_nodes, user_condition_string);
-  };
-  SgExpression *user_condition_score = NULL;
-  std::string user_condition_score_string =
-      when_clause->getUserCondition()->score;
-  if (user_condition_score_string.size()) {
-    user_condition_score = parseClauseExpressionWithCache(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        parsed_nodes, user_condition_score_string);
-  };
-
-  SgExpression *device_arch = NULL;
-  std::string device_arch_string = when_clause->getArchExpression()->expression;
-  if (device_arch_string.size()) {
-    device_arch = parseClauseExpressionWithCache(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        parsed_nodes, device_arch_string, true);
-  };
-
-  SgExpression *device_isa = NULL;
-  std::string device_isa_string = when_clause->getIsaExpression()->expression;
-  if (device_isa_string.size()) {
-    device_isa = parseClauseExpressionWithCache(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        parsed_nodes, device_isa_string, true);
-  };
-
-  SgExpression *device_num = NULL;
-  std::string device_num_string =
-      when_clause->getDeviceNumExpression()->expression;
-  if (device_num_string.size()) {
-    device_num = parseClauseExpressionWithCache(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        parsed_nodes, device_num_string);
-  };
-
-  SgOmpClause::omp_when_context_kind_enum sg_device_kind =
-      SgOmpClause::e_omp_when_context_kind_unknown;
-  OpenMPClauseContextKind device_kind = when_clause->getContextKind()->second;
-  switch (device_kind) {
-  case OMPC_CONTEXT_KIND_host: {
-    sg_device_kind = SgOmpClause::e_omp_when_context_kind_host;
-    break;
-  }
-  case OMPC_CONTEXT_KIND_nohost: {
-    sg_device_kind = SgOmpClause::e_omp_when_context_kind_nohost;
-    break;
-  }
-  case OMPC_CONTEXT_KIND_any: {
-    sg_device_kind = SgOmpClause::e_omp_when_context_kind_any;
-    break;
-  }
-  case OMPC_CONTEXT_KIND_cpu: {
-    sg_device_kind = SgOmpClause::e_omp_when_context_kind_cpu;
-    break;
-  }
-  case OMPC_CONTEXT_KIND_gpu: {
-    sg_device_kind = SgOmpClause::e_omp_when_context_kind_gpu;
-    break;
-  }
-  case OMPC_CONTEXT_KIND_fpga: {
-    sg_device_kind = SgOmpClause::e_omp_when_context_kind_fpga;
-    break;
-  }
-  default: {
-    ;
-  }
-  };
-  SgOmpClause::omp_when_context_vendor_enum sg_implementation_vendor =
-      SgOmpClause::e_omp_when_context_vendor_unspecified;
-  OpenMPClauseContextVendor implementation_vendor =
-      when_clause->getImplementationKind()->second;
-  switch (implementation_vendor) {
-  case OMPC_CONTEXT_VENDOR_amd: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_amd;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_arm: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_arm;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_bsc: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_bsc;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_cray: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_cray;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_fujitsu: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_fujitsu;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_gnu: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_gnu;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_ibm: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_ibm;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_intel: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_intel;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_llvm: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_llvm;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_nvidia: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_nvidia;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_pgi: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_pgi;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_ti: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_ti;
-    break;
-  }
-  case OMPC_CONTEXT_VENDOR_unknown: {
-    sg_implementation_vendor = SgOmpClause::e_omp_when_context_vendor_unknown;
-    break;
-  }
-  default: {
-    ;
-  }
-  };
-
-  SgExpression *implementation_user_defined = NULL;
-  std::string implementation_user_defined_string =
-      when_clause->getImplementationExpression()->expression;
-  if (implementation_user_defined_string.size()) {
-    implementation_user_defined = parseClauseExpressionWithCache(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        parsed_nodes, implementation_user_defined_string);
-  };
-
-  SgExpression *implementation_extension = NULL;
-  std::string implementation_extension_string =
-      when_clause->getExtensionExpression()->expression;
-  if (implementation_extension_string.size()) {
-    implementation_extension = parseClauseExpressionWithCache(
-        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
-        parsed_nodes, implementation_extension_string);
-  };
-
+  ConvertedVariantClauseData data = buildVariantClauseCommonData(
+      current_OpenMPIR_to_SageIII, current_omp_clause);
   SgOmpWhenClause *result = new SgOmpWhenClause(
-      user_condition, user_condition_score, device_arch, device_isa,
-      sg_device_kind, sg_implementation_vendor, implementation_user_defined,
-      implementation_extension, variant_directive);
-  result->set_target_device_selector(when_clause->getIsTargetDeviceSelector());
-  result->set_device_num(device_num);
-  if (device_num != NULL) {
-    device_num->set_parent(result);
-  }
-  std::vector<std::pair<std::string, OpenMPDirective *>> *construct_directive =
-      when_clause->getConstructDirective();
-  if (construct_directive->size()) {
-    std::list<SgStatement *> sg_construct_directives;
-    SgStatement *sg_construct_directive = NULL;
-    for (unsigned int i = 0; i < construct_directive->size(); i++) {
-      std::pair<SgPragmaDeclaration *, OpenMPDirective *>
-          paired_construct_OpenMPIR =
-              make_pair(current_OpenMPIR_to_SageIII.first,
-                        construct_directive->at(i).second);
-      sg_construct_directive =
-          convertVariantDirective(paired_construct_OpenMPIR);
-      if (sg_construct_directive != NULL) {
-        sg_construct_directives.push_back(sg_construct_directive);
-        sg_construct_directive->set_parent(result);
-      }
-    };
-    result->set_construct_directives(sg_construct_directives);
-  };
+      (SgExpression *)NULL, (SgExpression *)NULL, (SgExpression *)NULL,
+      (SgExpression *)NULL, SgOmpClause::e_omp_when_context_kind_unknown,
+      SgOmpClause::e_omp_when_context_vendor_unspecified, (SgExpression *)NULL,
+      (SgExpression *)NULL, (SgStatement *)NULL);
+  applyVariantClauseCommonData(result, data);
+  result->set_variant_directive(variant_directive);
 
   setOneSourcePositionForTransformation(result);
-  if (variant_directive != NULL) {
+  if (variant_directive != nullptr) {
     variant_directive->set_parent(result);
-  };
+  }
 
-  // reconsider the location of following code to attach clause
   SgOmpClause *sg_clause = result;
-  clause_body->get_clauses().push_back(sg_clause);
+  addOmpClause(clause_body, sg_clause);
   sg_clause->set_parent(clause_body);
 
+  return result;
+}
+
+SgOmpMatchClause *
+convertMatchClause(SgStatement *directive,
+                   std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+                       current_OpenMPIR_to_SageIII,
+                   OpenMPClause *current_omp_clause) {
+  ConvertedVariantClauseData data = buildVariantClauseCommonData(
+      current_OpenMPIR_to_SageIII, current_omp_clause);
+  SgOmpMatchClause *result = new SgOmpMatchClause(
+      (SgExpression *)NULL, (SgExpression *)NULL, (SgExpression *)NULL,
+      (SgExpression *)NULL, SgOmpClause::e_omp_when_context_kind_unknown,
+      SgOmpClause::e_omp_when_context_vendor_unspecified, (SgExpression *)NULL,
+      (SgExpression *)NULL);
+  applyVariantClauseCommonData(result, data);
+
+  setOneSourcePositionForTransformation(result);
+  addOmpClause(directive, result);
+  result->set_parent(directive);
+  return result;
+}
+
+SgOmpAdjustArgsClause *
+convertAdjustArgsClause(SgStatement *directive,
+                        std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+                            current_OpenMPIR_to_SageIII,
+                        OpenMPClause *current_omp_clause) {
+  auto *adjust_clause =
+      static_cast<OpenMPAdjustArgsClause *>(current_omp_clause);
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
+
+  SgExprListExp *arguments = buildExprListExp();
+  for (const std::string &argument : adjust_clause->getArguments()) {
+    SgExpression *expression = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, argument);
+    if (expression == nullptr) {
+      expression = buildOpaqueOpenMPClauseExpression(
+          current_OpenMPIR_to_SageIII.first, argument);
+    }
+    ROSE_ASSERT(expression != nullptr);
+    arguments->append_expression(expression);
+  }
+
+  SgOmpClause::omp_adjust_args_modifier_enum modifier =
+      SgOmpClause::e_omp_adjust_args_modifier_unknown;
+  if (adjust_clause->getModifier() == OMPC_ADJUST_ARGS_need_device_ptr) {
+    modifier = SgOmpClause::e_omp_adjust_args_modifier_need_device_ptr;
+  }
+
+  SgOmpAdjustArgsClause *result =
+      new SgOmpAdjustArgsClause(arguments, modifier);
+  arguments->set_parent(result);
+
+  if (modifier == SgOmpClause::e_omp_adjust_args_modifier_unknown &&
+      !adjust_clause->getRawModifier().empty()) {
+    SgExpression *user_defined_modifier = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, adjust_clause->getRawModifier(), true);
+    if (user_defined_modifier == nullptr) {
+      user_defined_modifier = buildOpaqueOpenMPClauseExpression(
+          current_OpenMPIR_to_SageIII.first, adjust_clause->getRawModifier());
+    }
+    result->set_user_defined_modifier(user_defined_modifier);
+    if (user_defined_modifier != nullptr) {
+      user_defined_modifier->set_parent(result);
+    }
+  }
+
+  setOneSourcePositionForTransformation(result);
+  addOmpClause(directive, result);
+  result->set_parent(directive);
+  return result;
+}
+
+SgOmpAppendArgsClause *
+convertAppendArgsClause(SgStatement *directive,
+                        std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+                            current_OpenMPIR_to_SageIII,
+                        OpenMPClause *current_omp_clause) {
+  auto *append_clause =
+      static_cast<OpenMPAppendArgsClause *>(current_omp_clause);
+  const std::vector<const OmpParsedExpression *> *parsed_nodes =
+      getParsedClauseExpressionNodes(current_OpenMPIR_to_SageIII.second,
+                                     current_omp_clause);
+
+  SgExprListExp *arguments = buildExprListExp();
+  for (const std::string &argument : append_clause->getArguments()) {
+    SgExpression *expression = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, argument);
+    if (expression == nullptr) {
+      expression = buildOpaqueOpenMPClauseExpression(
+          current_OpenMPIR_to_SageIII.first, argument);
+    }
+    ROSE_ASSERT(expression != nullptr);
+    arguments->append_expression(expression);
+  }
+
+  SgOmpAppendArgsClause *result = new SgOmpAppendArgsClause(arguments);
+  arguments->set_parent(result);
+
+  if (!append_clause->getLabel().empty()) {
+    SgExpression *label = parseClauseExpressionWithCache(
+        current_OpenMPIR_to_SageIII.first, current_omp_clause->getKind(),
+        parsed_nodes, append_clause->getLabel(), true);
+    if (label == nullptr) {
+      label = buildOpaqueOpenMPClauseExpression(
+          current_OpenMPIR_to_SageIII.first, append_clause->getLabel());
+    }
+    result->set_label(label);
+    if (label != nullptr) {
+      label->set_parent(result);
+    }
+  }
+
+  setOneSourcePositionForTransformation(result);
+  addOmpClause(directive, result);
+  result->set_parent(directive);
   return result;
 }
 
@@ -9719,6 +10024,9 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_critical:
   case OMPD_declare_mapper:
   case OMPD_declare_simd:
+  case OMPD_declare_variant:
+  case OMPD_begin_declare_variant:
+  case OMPD_end_declare_variant:
   case OMPD_declare_target:
   case OMPD_end_declare_target:
   case OMPD_depobj:
@@ -9851,6 +10159,9 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
       case OMPC_order:
       case OMPC_ordered:
       case OMPC_parallel:
+      case OMPC_match:
+      case OMPC_adjust_args:
+      case OMPC_append_args:
       case OMPC_priority:
       case OMPC_private:
       case OMPC_proc_bind:

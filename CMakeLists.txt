@@ -115,6 +115,8 @@ project(ROSE
   LANGUAGES C CXX
 )
 
+include(CheckLinkerFlag)
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Adjust CMake's default optimization, debug, and assertion flags for different build types.
 #
@@ -1783,6 +1785,17 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Set up RPATH so that our executables will be able to find their dependent
 # libraries using relative paths.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  check_linker_flag(CXX "-Wl,--disable-new-dtags" ROSE_LINKER_SUPPORTS_DISABLE_NEW_DTAGS)
+  if(ROSE_LINKER_SUPPORTS_DISABLE_NEW_DTAGS)
+    # Use DT_RPATH instead of DT_RUNPATH so build-tree and install-tree binaries
+    # keep preferring their sibling lib/ directory even when LD_LIBRARY_PATH is set.
+    add_link_options("-Wl,--disable-new-dtags")
+  else()
+    message(WARNING "Linker does not support -Wl,--disable-new-dtags; LD_LIBRARY_PATH may override RPATH for ROSE binaries")
+  endif()
+endif()
+
 if(NOT DEFINED CMAKE_INSTALL_RPATH)
   message(STATUS "Setting CMAKE_INSTALL_RPATH")
   set(origin "$ORIGIN")

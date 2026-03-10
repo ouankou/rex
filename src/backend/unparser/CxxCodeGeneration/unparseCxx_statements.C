@@ -8720,6 +8720,10 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
   // optional clauses
   SgOmpClauseBodyStatement *bodystmt = isSgOmpClauseBodyStatement(stmt);
   SgOmpDeclareSimdStatement *simdstmt = isSgOmpDeclareSimdStatement(stmt);
+  SgOmpDeclareVariantStatement *declarevariantstmt =
+      isSgOmpDeclareVariantStatement(stmt);
+  SgOmpBeginDeclareVariantStatement *begindeclarevariantstmt =
+      isSgOmpBeginDeclareVariantStatement(stmt);
   SgOmpDeclareMapperStatement *mapperstmt = isSgOmpDeclareMapperStatement(stmt);
   SgOmpDeclareTargetStatement *declaretargetstmt =
       isSgOmpDeclareTargetStatement(stmt);
@@ -8731,6 +8735,10 @@ void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
     clause_ptr_list = &bodystmt->get_clauses();
   } else if (simdstmt != nullptr) {
     clause_ptr_list = &simdstmt->get_clauses();
+  } else if (declarevariantstmt != nullptr) {
+    clause_ptr_list = &declarevariantstmt->get_clauses();
+  } else if (begindeclarevariantstmt != nullptr) {
+    clause_ptr_list = &begindeclarevariantstmt->get_clauses();
   } else if (mapperstmt != nullptr) {
     clause_ptr_list = &mapperstmt->get_clauses();
   } else if (declaretargetstmt != nullptr) {

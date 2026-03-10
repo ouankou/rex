@@ -4764,6 +4764,10 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     SgStatement *stmt, SgUnparse_Info &info) {
   ASSERT_not_null(stmt);
   // optional clauses
+  SgOmpDeclareVariantStatement *declare_variant_stmt =
+      isSgOmpDeclareVariantStatement(stmt);
+  SgOmpBeginDeclareVariantStatement *begin_declare_variant_stmt =
+      isSgOmpBeginDeclareVariantStatement(stmt);
   SgOmpDeclareMapperStatement *mapper_stmt =
       isSgOmpDeclareMapperStatement(stmt);
   const SgOmpClausePtrList *clause_ptr_list = nullptr;
@@ -4771,6 +4775,10 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
     clause_ptr_list = &isSgOmpClauseBodyStatement(stmt)->get_clauses();
   } else if (isSgOmpDeclareSimdStatement(stmt)) {
     clause_ptr_list = &isSgOmpDeclareSimdStatement(stmt)->get_clauses();
+  } else if (declare_variant_stmt != nullptr) {
+    clause_ptr_list = &declare_variant_stmt->get_clauses();
+  } else if (begin_declare_variant_stmt != nullptr) {
+    clause_ptr_list = &begin_declare_variant_stmt->get_clauses();
   } else if (mapper_stmt != nullptr) {
     clause_ptr_list = &mapper_stmt->get_clauses();
   } else if (isSgOmpDeclareTargetStatement(stmt)) {

@@ -3529,6 +3529,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           // Liao 10/21/2010. Handle generic OpenMP directive unparsing here.
         case V_SgOmpSectionStatement:
         case V_SgOmpBarrierStatement:
+        case V_SgOmpEndDeclareVariantStatement:
         case V_SgOmpEndDeclareTargetStatement:
           unparseOmpSimpleStatement(stmt, info);
           break;
@@ -3543,6 +3544,12 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           break;
         case V_SgOmpDeclareSimdStatement:
           unparseOmpDeclareSimdStatement(stmt, info);
+          break;
+        case V_SgOmpDeclareVariantStatement:
+          unparseOmpDeclareVariantStatement(stmt, info);
+          break;
+        case V_SgOmpBeginDeclareVariantStatement:
+          unparseOmpBeginDeclareVariantStatement(stmt, info);
           break;
           // Generic OpenMP directives with a format of : begin-directive,
           // begin-clauses, body, end-directive , end-clauses
@@ -7947,50 +7954,53 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     curprint(string(")"));
   }
 
-  void UnparseLanguageIndependentConstructs::unparseOmpWhenClause(
-      SgOmpClause * clause, SgUnparse_Info & info) {
-    ROSE_ASSERT(clause != NULL);
-    SgOmpWhenClause *c = isSgOmpWhenClause(clause);
-    ROSE_ASSERT(c != NULL);
-    curprint(string(" when("));
+  namespace {
+  template <typename VariantClauseT>
+  void unparseOmpVariantClauseCommon(
+      UnparseLanguageIndependentConstructs *unparser, const std::string &name,
+      VariantClauseT *c, SgStatement *variant_directive, SgUnparse_Info &info) {
+    ROSE_ASSERT(unparser != nullptr);
+    ROSE_ASSERT(c != nullptr);
+
+    unparser->curprint(string(" ") + name + string("("));
     SgExpression *user_condition = c->get_user_condition();
     SgExpression *score = NULL;
     SgUnparse_Info ninfo(info);
     bool has_trait_set = false;
     if (user_condition) {
-      curprint(string("user={condition("));
+      unparser->curprint(string("user={condition("));
       score = c->get_user_condition_score();
       if (score) {
-        curprint(string("score("));
-        unparseExpression(score, ninfo);
-        curprint(string("): "));
+        unparser->curprint(string("score("));
+        unparser->unparseExpression(score, ninfo);
+        unparser->curprint(string("): "));
       }
-      unparseExpression(user_condition, ninfo);
-      curprint(string(")}"));
+      unparser->unparseExpression(user_condition, ninfo);
+      unparser->curprint(string(")}"));
       has_trait_set = true;
     };
     std::list<SgStatement *> construct_directives =
         c->get_construct_directives();
     if (construct_directives.size()) {
       if (has_trait_set) {
-        curprint(string(", "));
+        unparser->curprint(string(", "));
       };
-      curprint(string("construct={"));
+      unparser->curprint(string("construct={"));
       std::list<SgStatement *>::iterator iter;
       bool has_trait_selector = false;
       for (iter = construct_directives.begin();
            iter != construct_directives.end(); iter++) {
         if (has_trait_selector) {
-          curprint(string(", "));
+          unparser->curprint(string(", "));
         };
         isVariant = true;
         isConstruct = true;
-        unparseOmpGenericStatement(*iter, info);
+        unparser->unparseOmpGenericStatement(*iter, info);
         isConstruct = false;
         isVariant = false;
         has_trait_selector = true;
       };
-      curprint(string("}"));
+      unparser->curprint(string("}"));
       has_trait_set = true;
     };
     const std::string device_selector_name =
@@ -7999,85 +8009,85 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     SgExpression *device_arch = c->get_device_arch();
     if (device_arch != NULL) {
       if (has_trait_set) {
-        curprint(string(", "));
+        unparser->curprint(string(", "));
       };
       if (!has_device) {
-        curprint(device_selector_name + string("={"));
+        unparser->curprint(device_selector_name + string("={"));
         has_device = true;
       };
-      curprint(string("arch("));
-      unparseExpression(device_arch, ninfo);
-      curprint(string(")"));
+      unparser->curprint(string("arch("));
+      unparser->unparseExpression(device_arch, ninfo);
+      unparser->curprint(string(")"));
     };
     SgExpression *device_isa = c->get_device_isa();
     if (device_isa != NULL) {
       if (has_trait_set) {
-        curprint(string(", "));
+        unparser->curprint(string(", "));
       };
       if (!has_device) {
-        curprint(device_selector_name + string("={"));
+        unparser->curprint(device_selector_name + string("={"));
         has_device = true;
       };
-      curprint(string("isa("));
-      unparseExpression(device_isa, ninfo);
-      curprint(string(")"));
+      unparser->curprint(string("isa("));
+      unparser->unparseExpression(device_isa, ninfo);
+      unparser->curprint(string(")"));
     };
     SgOmpClause::omp_when_context_kind_enum device_kind = c->get_device_kind();
     if (device_kind != SgOmpClause::e_omp_when_context_kind_unknown) {
       if (has_trait_set) {
-        curprint(string(", "));
+        unparser->curprint(string(", "));
       };
       if (!has_device) {
-        curprint(device_selector_name + string("={"));
+        unparser->curprint(device_selector_name + string("={"));
         has_device = true;
       };
-      curprint(string("kind("));
+      unparser->curprint(string("kind("));
       switch (device_kind) {
       case SgOmpClause::e_omp_when_context_kind_host: {
-        curprint(string("host"));
+        unparser->curprint(string("host"));
         break;
       }
       case SgOmpClause::e_omp_when_context_kind_nohost: {
-        curprint(string("nohost"));
+        unparser->curprint(string("nohost"));
         break;
       }
       case SgOmpClause::e_omp_when_context_kind_any: {
-        curprint(string("any"));
+        unparser->curprint(string("any"));
         break;
       }
       case SgOmpClause::e_omp_when_context_kind_cpu: {
-        curprint(string("cpu"));
+        unparser->curprint(string("cpu"));
         break;
       }
       case SgOmpClause::e_omp_when_context_kind_gpu: {
-        curprint(string("gpu"));
+        unparser->curprint(string("gpu"));
         break;
       }
       case SgOmpClause::e_omp_when_context_kind_fpga: {
-        curprint(string("fpga"));
+        unparser->curprint(string("fpga"));
         break;
       }
       default: {
         ;
       }
       };
-      curprint(string(")"));
+      unparser->curprint(string(")"));
     }
     SgExpression *device_num = c->get_device_num();
     if (device_num != NULL) {
       if (has_trait_set) {
-        curprint(string(", "));
+        unparser->curprint(string(", "));
       };
       if (!has_device) {
-        curprint(device_selector_name + string("={"));
+        unparser->curprint(device_selector_name + string("={"));
         has_device = true;
       };
-      curprint(string("device_num("));
-      unparseExpression(device_num, ninfo);
-      curprint(string(")"));
+      unparser->curprint(string("device_num("));
+      unparser->unparseExpression(device_num, ninfo);
+      unparser->curprint(string(")"));
     }
     if (has_device) {
-      curprint(string("}"));
+      unparser->curprint(string("}"));
       has_device = false;
       has_trait_set = true;
     };
@@ -8088,110 +8098,193 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     if (implementation_vendor !=
         SgOmpClause::e_omp_when_context_vendor_unspecified) {
       if (has_trait_set) {
-        curprint(string(", "));
+        unparser->curprint(string(", "));
       };
       if (!has_implementation) {
-        curprint(string("implementation={"));
+        unparser->curprint(string("implementation={"));
         has_implementation = true;
       };
-      curprint(string("vendor("));
+      unparser->curprint(string("vendor("));
       switch (implementation_vendor) {
       case SgOmpClause::e_omp_when_context_vendor_amd: {
-        curprint(string("amd"));
+        unparser->curprint(string("amd"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_arm: {
-        curprint(string("arm"));
+        unparser->curprint(string("arm"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_bsc: {
-        curprint(string("bsc"));
+        unparser->curprint(string("bsc"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_cray: {
-        curprint(string("cray"));
+        unparser->curprint(string("cray"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_fujitsu: {
-        curprint(string("fujitsu"));
+        unparser->curprint(string("fujitsu"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_gnu: {
-        curprint(string("gnu"));
+        unparser->curprint(string("gnu"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_ibm: {
-        curprint(string("ibm"));
+        unparser->curprint(string("ibm"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_intel: {
-        curprint(string("intel"));
+        unparser->curprint(string("intel"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_llvm: {
-        curprint(string("llvm"));
+        unparser->curprint(string("llvm"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_nvidia: {
-        curprint(string("nvidia"));
+        unparser->curprint(string("nvidia"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_pgi: {
-        curprint(string("pgi"));
+        unparser->curprint(string("pgi"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_ti: {
-        curprint(string("ti"));
+        unparser->curprint(string("ti"));
         break;
       }
       case SgOmpClause::e_omp_when_context_vendor_unknown: {
-        curprint(string("unknown"));
+        unparser->curprint(string("unknown"));
         break;
       }
       default: {
         ;
       }
       };
-      curprint(string(")"));
+      unparser->curprint(string(")"));
     };
     SgExpression *implementation_user_defined =
         c->get_implementation_user_defined();
     if (implementation_user_defined != NULL) {
       if (has_trait_set) {
-        curprint(string(", "));
+        unparser->curprint(string(", "));
       };
       if (!has_implementation) {
-        curprint(string("implementation={"));
+        unparser->curprint(string("implementation={"));
         has_implementation = true;
       };
-      unparseExpression(implementation_user_defined, ninfo);
+      unparser->unparseExpression(implementation_user_defined, ninfo);
     };
     SgExpression *implementation_extension = c->get_implementation_extension();
     if (implementation_extension != NULL) {
       if (has_trait_set) {
-        curprint(string(", "));
+        unparser->curprint(string(", "));
       };
       if (!has_implementation) {
-        curprint(string("implementation={"));
+        unparser->curprint(string("implementation={"));
         has_implementation = true;
       };
-      curprint(string("extension("));
-      unparseExpression(implementation_extension, ninfo);
-      curprint(string(")"));
+      unparser->curprint(string("extension("));
+      unparser->unparseExpression(implementation_extension, ninfo);
+      unparser->curprint(string(")"));
     };
     if (has_implementation) {
-      curprint(string("}"));
-      has_device = false;
+      unparser->curprint(string("}"));
     };
 
-    curprint(string(" : "));
-
-    SgStatement *variant_directive = c->get_variant_directive();
     if (variant_directive != NULL) {
+      unparser->curprint(string(" : "));
       isVariant = true;
-      unparseOmpGenericStatement(variant_directive, info);
+      unparser->unparseOmpGenericStatement(variant_directive, info);
       isVariant = false;
-    };
+    }
+    unparser->curprint(string(")"));
+  }
+  } // namespace
+
+  void UnparseLanguageIndependentConstructs::unparseOmpWhenClause(
+      SgOmpClause * clause, SgUnparse_Info & info) {
+    ROSE_ASSERT(clause != NULL);
+    SgOmpWhenClause *c = isSgOmpWhenClause(clause);
+    ROSE_ASSERT(c != NULL);
+    unparseOmpVariantClauseCommon(this, "when", c, c->get_variant_directive(),
+                                  info);
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseOmpMatchClause(
+      SgOmpClause * clause, SgUnparse_Info & info) {
+    ROSE_ASSERT(clause != NULL);
+    SgOmpMatchClause *c = isSgOmpMatchClause(clause);
+    ROSE_ASSERT(c != NULL);
+    unparseOmpVariantClauseCommon(this, "match", c, NULL, info);
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseOmpAdjustArgsClause(
+      SgOmpClause * clause, SgUnparse_Info & info) {
+    ROSE_ASSERT(clause != NULL);
+    SgOmpAdjustArgsClause *c = isSgOmpAdjustArgsClause(clause);
+    ROSE_ASSERT(c != NULL);
+
+    curprint(string(" adjust_args("));
+    bool needs_separator = false;
+    switch (c->get_modifier()) {
+    case SgOmpClause::e_omp_adjust_args_modifier_need_device_ptr:
+      curprint(string("need_device_ptr"));
+      needs_separator = true;
+      break;
+    case SgOmpClause::e_omp_adjust_args_modifier_unknown:
+      if (c->get_user_defined_modifier() != NULL) {
+        unparseExpression(c->get_user_defined_modifier(), info);
+        needs_separator = true;
+      }
+      break;
+    default:
+      ROSE_ABORT();
+    }
+
+    if (c->get_arguments() != NULL) {
+      const SgExpressionPtrList &args = c->get_arguments()->get_expressions();
+      for (SgExpressionPtrList::const_iterator it = args.begin();
+           it != args.end(); ++it) {
+        if (needs_separator) {
+          curprint(string(": "));
+          needs_separator = false;
+        } else if (it != args.begin()) {
+          curprint(string(", "));
+        }
+        unparseExpression(*it, info);
+      }
+    }
+    curprint(string(")"));
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseOmpAppendArgsClause(
+      SgOmpClause * clause, SgUnparse_Info & info) {
+    ROSE_ASSERT(clause != NULL);
+    SgOmpAppendArgsClause *c = isSgOmpAppendArgsClause(clause);
+    ROSE_ASSERT(c != NULL);
+
+    curprint(string(" append_args("));
+    bool needs_separator = false;
+    if (c->get_label() != NULL) {
+      unparseExpression(c->get_label(), info);
+      needs_separator = true;
+    }
+
+    if (c->get_arguments() != NULL) {
+      const SgExpressionPtrList &args = c->get_arguments()->get_expressions();
+      for (SgExpressionPtrList::const_iterator it = args.begin();
+           it != args.end(); ++it) {
+        if (needs_separator) {
+          curprint(string(": "));
+          needs_separator = false;
+        } else if (it != args.begin()) {
+          curprint(string(", "));
+        }
+        unparseExpression(*it, info);
+      }
+    }
     curprint(string(")"));
   }
 
@@ -10596,6 +10689,18 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       unparseOmpWhenClause(isSgOmpWhenClause(clause), info);
       break;
     }
+    case V_SgOmpMatchClause: {
+      unparseOmpMatchClause(isSgOmpMatchClause(clause), info);
+      break;
+    }
+    case V_SgOmpAdjustArgsClause: {
+      unparseOmpAdjustArgsClause(isSgOmpAdjustArgsClause(clause), info);
+      break;
+    }
+    case V_SgOmpAppendArgsClause: {
+      unparseOmpAppendArgsClause(isSgOmpAppendArgsClause(clause), info);
+      break;
+    }
     case V_SgOmpUsesAllocatorsClause: {
       unparseOmpUsesAllocatorsClause(isSgOmpUsesAllocatorsClause(clause), info);
       break;
@@ -10709,6 +10814,18 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     unp->u_sage->curprint_newline();
   }
 
+  static std::string stripSingleTrailingLineBreak(const std::string &text) {
+    std::string result = text;
+    if (result.size() >= 2 && result[result.size() - 2] == '\r' &&
+        result[result.size() - 1] == '\n') {
+      result.erase(result.size() - 2);
+    } else if (!result.empty() &&
+               (result.back() == '\n' || result.back() == '\r')) {
+      result.pop_back();
+    }
+    return result;
+  }
+
   void UnparseLanguageIndependentConstructs::unparseOmpDeclareSimdStatement(
       SgStatement * stmt, SgUnparse_Info & info) {
     ASSERT_not_null(stmt);
@@ -10719,6 +10836,41 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
     unparseOmpBeginDirectiveClauses(stmt, info);
     unp->u_sage->curprint_newline();
+  }
+
+  void UnparseLanguageIndependentConstructs::unparseOmpDeclareVariantStatement(
+      SgStatement * stmt, SgUnparse_Info & info) {
+    ASSERT_not_null(stmt);
+    SgOmpDeclareVariantStatement *s = isSgOmpDeclareVariantStatement(stmt);
+    ASSERT_not_null(s);
+
+    unparseOmpDirectivePrefixAndName(stmt, info);
+    curprint(string("("));
+    if (s->get_variant_function_ref() != nullptr) {
+      unparseExpression(s->get_variant_function_ref(), info);
+    }
+    curprint(string(")"));
+    unparseOmpBeginDirectiveClauses(stmt, info);
+    unp->u_sage->curprint_newline();
+  }
+
+  void
+  UnparseLanguageIndependentConstructs::unparseOmpBeginDeclareVariantStatement(
+      SgStatement * stmt, SgUnparse_Info & info) {
+    ASSERT_not_null(stmt);
+    SgOmpBeginDeclareVariantStatement *s =
+        isSgOmpBeginDeclareVariantStatement(stmt);
+    ASSERT_not_null(s);
+
+    unparseOmpDirectivePrefixAndName(stmt, info);
+    unparseOmpBeginDirectiveClauses(stmt, info);
+
+    const std::string captured_region =
+        stripSingleTrailingLineBreak(s->get_captured_region());
+    if (!captured_region.empty()) {
+      unp->u_sage->curprint_newline();
+      curprint(captured_region);
+    }
   }
 
   void UnparseLanguageIndependentConstructs::unparseOmpThreadprivateStatement(
@@ -10830,6 +10982,18 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
     case V_SgOmpDeclareMapperStatement: {
       curprint(string("declare mapper"));
+      break;
+    }
+    case V_SgOmpDeclareVariantStatement: {
+      curprint(string("declare variant"));
+      break;
+    }
+    case V_SgOmpBeginDeclareVariantStatement: {
+      curprint(string("begin declare variant"));
+      break;
+    }
+    case V_SgOmpEndDeclareVariantStatement: {
+      curprint(string("end declare variant"));
       break;
     }
     case V_SgOmpDeclareTargetStatement: {

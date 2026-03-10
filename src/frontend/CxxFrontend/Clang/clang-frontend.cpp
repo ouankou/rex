@@ -832,222 +832,212 @@ static bool parseOpenMPDeclareVariantBoundary(llvm::StringRef line,
   return true;
 }
 
-// In pragma-only OpenMP mode (no -fopenmp), begin/end declare variant blocks
-// appear as multiple plain C function definitions with the same signature. To
-// keep diagnostics fatal and still parse these files, normalize enclosed
-// variant definitions to unique internal names.
-std::unique_ptr<llvm::MemoryBuffer>
-maybeNormalizeOpenMPDeclareVariantDefinitions(
-    clang::SourceManager &source_manager, clang::FileID file_id,
-    const clang::LangOptions &lang_opts) {
+struct OpenMPDeclareVariantRegionCapture {
+  size_t body_begin_offset = 0;
+  size_t end_directive_offset = 0;
+  unsigned begin_line = 0;
+  unsigned end_line = 0;
+};
+
+struct OpenMPDeclareVariantRewriteResult {
+  std::unique_ptr<llvm::MemoryBuffer> rewritten_buffer;
+  std::vector<OmpDeclareVariantRegionInfo> regions;
+};
+
+static bool lineEndsWithDirectiveContinuation(llvm::StringRef line) {
+  while (!line.empty() && (line.back() == ' ' || line.back() == '\t' ||
+                           line.back() == '\f' || line.back() == '\r')) {
+    line = line.drop_back();
+  }
+  return !line.empty() && line.back() == '\\';
+}
+
+static bool collectLogicalDirectiveText(llvm::StringRef content,
+                                        size_t line_start, size_t line_end,
+                                        size_t *after_directive_out,
+                                        unsigned *line_count_out,
+                                        std::string *directive_text_out) {
+  if (after_directive_out == nullptr || line_count_out == nullptr ||
+      directive_text_out == nullptr) {
+    return false;
+  }
+
+  llvm::StringRef line = content.slice(line_start, line_end);
+  size_t hash_col = 0;
+  if (!isDirectiveLine(line, &hash_col)) {
+    return false;
+  }
+
+  directive_text_out->clear();
+  size_t current_line_start = line_start;
+  size_t current_line_end = line_end;
+  unsigned consumed_lines = 0;
+
+  while (true) {
+    llvm::StringRef current_line =
+        content.slice(current_line_start, current_line_end);
+    size_t effective_end = current_line.size();
+    bool has_continuation = lineEndsWithDirectiveContinuation(current_line);
+    if (has_continuation) {
+      while (effective_end > 0 && (current_line[effective_end - 1] == ' ' ||
+                                   current_line[effective_end - 1] == '\t' ||
+                                   current_line[effective_end - 1] == '\f' ||
+                                   current_line[effective_end - 1] == '\r')) {
+        --effective_end;
+      }
+      if (effective_end > 0 && current_line[effective_end - 1] == '\\') {
+        --effective_end;
+      }
+      while (effective_end > 0 && (current_line[effective_end - 1] == ' ' ||
+                                   current_line[effective_end - 1] == '\t' ||
+                                   current_line[effective_end - 1] == '\f' ||
+                                   current_line[effective_end - 1] == '\r')) {
+        --effective_end;
+      }
+    } else {
+      while (effective_end > 0 && (current_line[effective_end - 1] == ' ' ||
+                                   current_line[effective_end - 1] == '\t' ||
+                                   current_line[effective_end - 1] == '\f' ||
+                                   current_line[effective_end - 1] == '\r')) {
+        --effective_end;
+      }
+    }
+
+    if (!directive_text_out->empty()) {
+      directive_text_out->push_back(' ');
+    }
+    directive_text_out->append(current_line.substr(0, effective_end).str());
+    ++consumed_lines;
+
+    size_t next_pos = current_line_end;
+    if (next_pos >= content.size()) {
+      *after_directive_out = next_pos;
+      *line_count_out = consumed_lines;
+      return true;
+    }
+    if (content[next_pos] == '\r' && next_pos + 1 < content.size() &&
+        content[next_pos + 1] == '\n') {
+      next_pos += 2;
+    } else {
+      next_pos += 1;
+    }
+
+    if (!has_continuation) {
+      *after_directive_out = next_pos;
+      *line_count_out = consumed_lines;
+      return true;
+    }
+
+    current_line_start = next_pos;
+    current_line_end = content.find_first_of("\r\n", current_line_start);
+    if (current_line_end == llvm::StringRef::npos) {
+      current_line_end = content.size();
+    }
+  }
+}
+
+OpenMPDeclareVariantRewriteResult
+captureAndElideOpenMPDeclareVariantRegions(clang::SourceManager &source_manager,
+                                           clang::FileID file_id) {
+  OpenMPDeclareVariantRewriteResult result;
   auto buffer_or = source_manager.getBufferOrNone(file_id);
   if (!buffer_or) {
-    return nullptr;
+    return result;
   }
 
   llvm::StringRef content = buffer_or->getBuffer();
   if (!content.contains("declare variant")) {
-    return nullptr;
+    return result;
   }
 
-  struct OffsetRange {
-    size_t begin;
-    size_t end;
-  };
-  std::vector<OffsetRange> variant_ranges;
-  variant_ranges.reserve(8);
-
+  std::vector<OpenMPDeclareVariantRegionCapture> captures;
+  captures.reserve(8);
   int variant_depth = 0;
-  size_t current_variant_begin = 0;
+  OpenMPDeclareVariantRegionCapture current_region;
   size_t pos = 0;
+  unsigned line_number = 1;
   while (pos < content.size()) {
     size_t line_end = content.find_first_of("\r\n", pos);
     if (line_end == llvm::StringRef::npos) {
       line_end = content.size();
     }
-    size_t next_pos = line_end;
-    if (next_pos < content.size()) {
-      if (content[next_pos] == '\r' && next_pos + 1 < content.size() &&
-          content[next_pos + 1] == '\n') {
-        next_pos += 2;
-      } else {
-        next_pos += 1;
-      }
-    }
 
-    llvm::StringRef line = content.slice(pos, line_end);
+    std::string directive_text;
+    size_t after_directive = pos;
+    unsigned consumed_lines = 1;
     bool is_begin = false;
     bool is_end = false;
-    if (parseOpenMPDeclareVariantBoundary(line, &is_begin, &is_end)) {
+    if (collectLogicalDirectiveText(content, pos, line_end, &after_directive,
+                                    &consumed_lines, &directive_text) &&
+        parseOpenMPDeclareVariantBoundary(directive_text, &is_begin, &is_end)) {
       if (is_begin) {
         if (variant_depth == 0) {
-          current_variant_begin = next_pos;
+          current_region.body_begin_offset = after_directive;
+          current_region.begin_line = line_number;
         }
         ++variant_depth;
       } else if (variant_depth > 0) {
         --variant_depth;
-        if (variant_depth == 0 && current_variant_begin < pos) {
-          variant_ranges.push_back(OffsetRange{current_variant_begin, pos});
+        if (variant_depth == 0) {
+          current_region.end_directive_offset = pos;
+          current_region.end_line = line_number;
+          captures.push_back(current_region);
+          OmpDeclareVariantRegionInfo region;
+          region.begin_line = current_region.begin_line;
+          region.end_line = current_region.end_line;
+          if (current_region.body_begin_offset < pos) {
+            region.captured_region =
+                content
+                    .substr(current_region.body_begin_offset,
+                            pos - current_region.body_begin_offset)
+                    .str();
+          }
+          result.regions.push_back(std::move(region));
         }
       }
-    }
 
-    pos = next_pos;
-  }
-
-  if (variant_ranges.empty()) {
-    return nullptr;
-  }
-
-  clang::Lexer lexer(file_id, *buffer_or, source_manager, lang_opts);
-  std::vector<TokenWithOffset> tokens;
-  tokens.reserve(512);
-
-  clang::Token token;
-  while (true) {
-    lexer.LexFromRawLexer(token);
-    if (token.is(clang::tok::eof)) {
-      break;
-    }
-    if (source_manager.getFileID(token.getLocation()) != file_id) {
+      pos = after_directive;
+      line_number += consumed_lines;
       continue;
     }
-    tokens.push_back(
-        {token, source_manager.getFileOffset(token.getLocation())});
-  }
 
-  if (tokens.empty()) {
-    return nullptr;
-  }
-
-  auto in_variant_range = [&](size_t offset) {
-    for (const auto &range : variant_ranges) {
-      if (offset >= range.begin && offset < range.end) {
-        return true;
+    if (line_end < content.size()) {
+      if (content[line_end] == '\r' && line_end + 1 < content.size() &&
+          content[line_end + 1] == '\n') {
+        pos = line_end + 2;
+      } else {
+        pos = line_end + 1;
       }
+      ++line_number;
+    } else {
+      pos = line_end;
     }
-    return false;
-  };
-
-  auto next_significant = [&](size_t index, size_t *out) -> bool {
-    if (out == nullptr) {
-      return false;
-    }
-    while (index < tokens.size() &&
-           tokens[index].token.is(clang::tok::comment)) {
-      ++index;
-    }
-    if (index >= tokens.size()) {
-      return false;
-    }
-    *out = index;
-    return true;
-  };
-
-  struct Replacement {
-    unsigned offset;
-    unsigned length;
-    std::string text;
-  };
-  std::vector<Replacement> replacements;
-  replacements.reserve(8);
-  std::set<unsigned> replaced_offsets;
-
-  unsigned rename_counter = 0;
-  int brace_depth = 0;
-  for (size_t i = 0; i < tokens.size(); ++i) {
-    const clang::Token &tok = tokens[i].token;
-    if (tok.is(clang::tok::l_brace)) {
-      ++brace_depth;
-      continue;
-    }
-    if (tok.is(clang::tok::r_brace)) {
-      if (brace_depth > 0) {
-        --brace_depth;
-      }
-      continue;
-    }
-    if (brace_depth != 0 || !in_variant_range(tokens[i].offset)) {
-      continue;
-    }
-    if (!tok.isOneOf(clang::tok::identifier, clang::tok::raw_identifier)) {
-      continue;
-    }
-
-    size_t open_paren_index = 0;
-    if (!next_significant(i + 1, &open_paren_index) ||
-        !tokens[open_paren_index].token.is(clang::tok::l_paren)) {
-      continue;
-    }
-
-    int paren_depth = 1;
-    size_t close_paren_index = open_paren_index;
-    while (++close_paren_index < tokens.size()) {
-      const clang::Token &scan_tok = tokens[close_paren_index].token;
-      if (scan_tok.is(clang::tok::l_paren)) {
-        ++paren_depth;
-      } else if (scan_tok.is(clang::tok::r_paren)) {
-        --paren_depth;
-        if (paren_depth == 0) {
-          break;
-        }
-      }
-    }
-    if (paren_depth != 0) {
-      continue;
-    }
-
-    size_t signature_end_index = 0;
-    if (!next_significant(close_paren_index + 1, &signature_end_index)) {
-      continue;
-    }
-    while (signature_end_index < tokens.size() &&
-           !tokens[signature_end_index].token.isOneOf(clang::tok::semi,
-                                                      clang::tok::l_brace)) {
-      ++signature_end_index;
-    }
-    if (signature_end_index >= tokens.size() ||
-        tokens[signature_end_index].token.is(clang::tok::semi) ||
-        !in_variant_range(tokens[signature_end_index].offset)) {
-      continue;
-    }
-
-    const unsigned offset = tokens[i].offset;
-    if (replaced_offsets.find(offset) != replaced_offsets.end()) {
-      continue;
-    }
-    replaced_offsets.insert(offset);
-
-    const std::string name =
-        clang::Lexer::getSpelling(tok, source_manager, lang_opts);
-    if (name.empty()) {
-      continue;
-    }
-    ++rename_counter;
-    replacements.push_back(Replacement{offset, tok.getLength(),
-                                       name + "__rex_omp_variant_" +
-                                           std::to_string(rename_counter)});
   }
 
-  if (replacements.empty()) {
-    return nullptr;
+  if (result.regions.empty()) {
+    return result;
   }
-
-  std::sort(replacements.begin(), replacements.end(),
-            [](const Replacement &lhs, const Replacement &rhs) {
-              return lhs.offset < rhs.offset;
-            });
 
   std::string updated = content.str();
-  size_t shift = 0;
-  for (const auto &replacement : replacements) {
-    updated.replace(replacement.offset + shift, replacement.length,
-                    replacement.text);
-    shift += replacement.text.size() - replacement.length;
+  bool modified = false;
+  for (const OpenMPDeclareVariantRegionCapture &capture : captures) {
+    if (capture.body_begin_offset >= capture.end_directive_offset) {
+      continue;
+    }
+    modified = true;
+    for (size_t offset = capture.body_begin_offset;
+         offset < capture.end_directive_offset; ++offset) {
+      if (updated[offset] != '\n' && updated[offset] != '\r') {
+        updated[offset] = ' ';
+      }
+    }
   }
 
-  return llvm::MemoryBuffer::getMemBufferCopy(updated,
-                                              buffer_or->getBufferIdentifier());
+  if (modified) {
+    result.rewritten_buffer = llvm::MemoryBuffer::getMemBufferCopy(
+        updated, buffer_or->getBufferIdentifier());
+  }
+  return result;
 }
 
 std::unique_ptr<llvm::MemoryBuffer> maybeSuppressMisplacedIncludes(
@@ -2466,12 +2456,20 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     }
   }
   if (openmp_ast_mode) {
-    if (auto fixed_buffer = maybeNormalizeOpenMPDeclareVariantDefinitions(
-            compiler_instance->getSourceManager(), mainFileID, lang_opts)) {
+    OpenMPDeclareVariantRewriteResult declare_variant_rewrite =
+        captureAndElideOpenMPDeclareVariantRegions(
+            compiler_instance->getSourceManager(), mainFileID);
+    if (!declare_variant_rewrite.regions.empty()) {
+      sageFile.addNewAttribute(kOmpDeclareVariantRegionsAttributeName,
+                               new OmpDeclareVariantRegionsAttribute(
+                                   std::move(declare_variant_rewrite.regions)));
+    }
+    if (declare_variant_rewrite.rewritten_buffer) {
       compiler_instance->getSourceManager().overrideFileContents(
-          input_file_entry, std::move(fixed_buffer));
-      // Source normalization changed in-memory tokens, so force AST-based
-      // unparsing.
+          input_file_entry,
+          std::move(declare_variant_rewrite.rewritten_buffer));
+      // The Clang-visible buffer now elides declare-variant bodies while the
+      // Sage AST preserves the original opaque region text for unparsing.
       sageFile.set_unparse_tokens(false);
     }
     if (auto fixed_buffer = maybeSuppressMisplacedIncludes(
