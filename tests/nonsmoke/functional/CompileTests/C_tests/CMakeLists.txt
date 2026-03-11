@@ -955,9 +955,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_40.c
   test2015_41.c
   test2015_42.c
-  test2015_43.c
-  test2015_44.c
-  test2015_45.c
   test2015_47.c
   test2015_48.c
   test2015_49.c
@@ -1069,7 +1066,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "Intel")
   set(_c_tests_disable_m32 TRUE)
 endif()
 
-set(_c_tests_string_macro -DSTRING_MACRO=\\\"some_text\\\")
+set(_c_tests_string_macro [[-DSTRING_MACRO="some_text"]])
 
 add_test(
   NAME C_tests_check_pthread

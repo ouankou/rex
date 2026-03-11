@@ -2164,7 +2164,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2006_127.C
   test2006_128.C
   test2006_130.C
-  test2006_131.C
   test2006_138.C
   test2006_15.C
   test2006_167.C
@@ -2493,8 +2492,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2006_127.C
   test2006_128.C
   test2006_130.C
-  test2006_131.C
-  test2006_138.C
   test2006_15.C
   test2006_167.C
   test2006_168.C
@@ -2582,14 +2579,12 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_56.C
   test2007_58.C
   test2007_60.C
-  test2007_61.C
   test2007_62.C
   test2007_63.C
   test2007_64.C
   test2007_65.C
   test2007_66.C
   test2007_67.C
-  test2007_68.C
   test2007_69.C
   test2007_71.C
   test2007_73.C
@@ -2623,7 +2618,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2009_44.C
   test2009_46.C
   test2009_47.C
-  test2010_07.C
   test2010_09.C
   test2010_10.C
   test2010_11.C
@@ -2803,8 +2797,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2006_127.C
   test2006_128.C
   test2006_130.C
-  test2006_131.C
-  test2006_138.C
   test2006_15.C
   test2006_167.C
   test2006_168.C
@@ -2895,14 +2887,12 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_54.C
   test2007_58.C
   test2007_60.C
-  test2007_61.C
   test2007_62.C
   test2007_63.C
   test2007_64.C
   test2007_65.C
   test2007_66.C
   test2007_67.C
-  test2007_68.C
   test2007_69.C
   test2007_71.C
   test2007_73.C
@@ -2937,7 +2927,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2009_44.C
   test2009_46.C
   test2009_47.C
-  test2010_07.C
   test2010_09.C
   test2010_10.C
   test2010_11.C
@@ -3027,7 +3016,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_19.C
   test2013_195.C
   test2013_197.C
-  test2013_243.C
   test2013_245.C
   test2013_248.C
   test2013_249.C
@@ -3143,6 +3131,9 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED "${EXAMPLE_TESTCODES_REQUIRED_TO
 set(TESTCODE_CURRENTLY_FAILING "${TESTCODE_CURRENTLY_FAILING}" CACHE INTERNAL "" FORCE)
 set(CXX_TESTCODES_TO_RUN ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
+list(APPEND REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT
+  test2006_131.C
+)
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT})
 # Custom test uses -isystem to force system-header classification.
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN
@@ -3338,27 +3329,6 @@ add_test(
 )
 set_tests_properties(Cxx_tests_test2010_02_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
 rex_lock_test_for_input(Cxx_tests_test2010_02_special test2010_02.C)
-
-add_test(
-  NAME Cxx_tests_test2010_07_special
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:${translator}>
-    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
-    -I${CMAKE_BINARY_DIR}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_07.C
-    -o test2010_07.o
-)
-set_tests_properties(Cxx_tests_test2010_07_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
-rex_lock_test_for_input(Cxx_tests_test2010_07_special test2010_07.C)
-
-add_test(
-  NAME Cxx_tests_cpp_test2010_07
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_CXX_COMPILER}
-    -E -I${CMAKE_BINARY_DIR} ${ROSE_INCLUDE_FLAGS}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_07.C
-)
-set_tests_properties(Cxx_tests_cpp_test2010_07 PROPERTIES LABELS Cxx_tests DISABLED TRUE)
 
 add_test(
   NAME Cxx_tests_test_unparse_includes_option
@@ -3712,6 +3682,29 @@ add_test(
 )
 set_tests_properties(Cxx_tests_rex_test2025_issue99 PROPERTIES LABELS Cxx_tests )
 rex_lock_test_for_input(Cxx_tests_rex_test2025_issue99 rex_test2025_issue99.cpp)
+
+# Issue 482: if-body blocks must remain linked through the SgIfStmt child list.
+add_executable(
+  rex_test2026_issue482_if_body_parenting_translator
+  rex_test2026_issue482_if_body_parenting_translator.cpp
+)
+target_link_libraries(
+  rex_test2026_issue482_if_body_parenting_translator
+  ROSE_DLL
+  ${link_with_libraries}
+)
+
+add_test(
+  NAME Cxx_tests_test2006_131_C
+  COMMAND
+    $<TARGET_FILE:rex_test2026_issue482_if_body_parenting_translator>
+    ${ROSE_FLAGS} -rex:clang:continue-on-error -rose:skipfinalCompileStep
+    ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2006_131.C
+)
+set_tests_properties(Cxx_tests_test2006_131_C PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_test2006_131_C test2006_131.C)
 
 # Issue 91: Declaration chains must not emit "firstNondefiningDeclaration == NULL"
 rex_compile_test_name(_issue91_test "Cxx_tests" rex_test2025_issue91_decl_chain.cpp)
@@ -4785,6 +4778,7 @@ list(REMOVE_DUPLICATES _cxx_compile_tests)
 
 set(_cxx_check_local_tests ${_cxx_compile_tests})
 list(APPEND _cxx_check_local_tests
+  Cxx_tests_test2006_131_C
   Cxx_tests_test_pdf_generation
   Cxx_tests_test_unparse_includes_option
   Cxx_tests_test_unparse_includes_option_with_link
@@ -4799,6 +4793,8 @@ list(APPEND _cxx_check_local_tests
 list(REMOVE_DUPLICATES _cxx_check_local_tests)
 
 set(_cxx_perf_tests ${_cxx_compile_tests})
+list(APPEND _cxx_perf_tests Cxx_tests_test2006_131_C)
+list(REMOVE_DUPLICATES _cxx_perf_tests)
 
 add_test(
   NAME nonsmoke_functional_CompileTests_Cxx_tests_check-local

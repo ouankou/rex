@@ -1,12 +1,34 @@
-// Removing Deprecated Exception Specifications from C++17
+// C++17-valid defaulted special members and exception specifications.
+
+#include <type_traits>
+#include <utility>
 
 struct S {
-     constexpr S() = default;            // ill-formed: implicit S() is not constexpr
-     S(int a = 0) = default;             // ill-formed: default argument
-     void operator=(const S&) = default; // ill-formed: non-matching return type
-     ~S() noexcept(false)throw(int) = default;          // deleted: exception specification does not match
-   private:
-     int i;
-     S(S&);                              // OK: private copy constructor
-   };
-   S::S(S&) = default;                   // OK: defines copy constructor
+  S() = default;
+  explicit constexpr S(int value) noexcept : i(value) {}
+  S(const S &) noexcept = default;
+  S &operator=(const S &) noexcept = default;
+  ~S() noexcept = default;
+
+  constexpr int value() const noexcept { return i; }
+
+private:
+  int i = 0;
+};
+
+constexpr int construct_value() {
+  S s(17);
+  return s.value();
+}
+
+static_assert(std::is_same_v<
+              decltype(std::declval<S &>() = std::declval<const S &>()), S &>);
+static_assert(std::is_nothrow_copy_constructible_v<S>);
+static_assert(std::is_nothrow_copy_assignable_v<S>);
+static_assert(std::is_nothrow_destructible_v<S>);
+static_assert(construct_value() == 17);
+
+int use(S lhs, const S &rhs) {
+  lhs = rhs;
+  return lhs.value();
+}

@@ -2368,32 +2368,15 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
         isSgMemberFunctionDeclaration(declarationStatement);
     ASSERT_not_null(memberFunctionDeclaration);
 
-    // DQ (5/31/2005): for now we will only output directives for template
-    // member functions and not non-template member functions.  In the case of a
-    // template class NOT output as a specialization then the template
-    // instantiation directive for a non-templated member function is allows
-    // (likely is just instatiates the class).
-    if (memberFunctionDeclaration->isTemplateFunction() == true) {
-      // DQ (8/29/2005): "template" keyword now output by
-      // Unparse_ExprStmt::outputTemplateSpecializationSpecifier() curprint (
-      // string("template ";
-      SgUnparse_Info ninfo(info);
-      ninfo.set_SkipFunctionDefinition();
-      ninfo.set_AddSemiColonAfterDeclaration();
-      unparseMFuncDeclStmt(memberFunctionDeclaration, ninfo);
-    } else {
-      // It seems that if the class declaration is not specialized then the
-      // non-member function template instantiation directive is allowed. But we
-      // don't at this point know if the class declaration has been output so
-      // skip all template instantiations of non-template member functions (in
-      // general). Issue a warning message for now!
-#if PRINT_DEVELOPER_WARNINGS
-      printf("Warning: Skipping output of directived to build non-template "
-             "member functions! \n");
-      curprint(string("\n/* Warning: Skipping output of directived to build "
-                      "non-template member functions! */"));
-#endif
-    }
+    // Explicit instantiation directives remain directives regardless of
+    // whether the instantiated declaration is itself still a template at the
+    // ROSE level.  Emit the member declaration unconditionally and let the
+    // directive parent drive the leading `template` / `extern template`
+    // syntax.
+    SgUnparse_Info ninfo(info);
+    ninfo.set_SkipFunctionDefinition();
+    ninfo.set_AddSemiColonAfterDeclaration();
+    unparseMFuncDeclStmt(memberFunctionDeclaration, ninfo);
     break;
   }
 
@@ -5666,9 +5649,12 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       // != string::npos); bool isAnonymousName =
       // (string(classdecl_stmt->get_name()).substr(0,14) == "__anonymous_0x");
       bool isAnonymousName =
-          (string(classdecl_stmt->get_name()).substr(0, 14) ==
-           "__anonymous_0x") &&
+          hasGeneratedAnonymousNamePrefix(classdecl_stmt->get_name()) &&
           (classdecl_stmt->get_class_type() == SgClassDeclaration::e_union);
+      bool allowUnnamedInternalName =
+          info.PrintName() &&
+          (isSgTypedefDeclaration(classdecl_stmt->get_parent()) != NULL ||
+           isSgVariableDeclaration(classdecl_stmt->get_parent()) != NULL);
       // DQ (8/19/2014): Adding code to output the template instantiation with
       // template arguments processed to support name qualification.
       if (templateInstantiation != NULL) {
@@ -5699,11 +5685,11 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
           curprint(nameQualifier.str());
           curprint(classdecl_stmt->get_name() + " ");
         } else {
-          // DQ (11/21/2021): Need to handle the case of multiple names used to
-          // name the anonymous class declaration in a typedef (see
-          // test2021_14.c). printf ("Skip the output of the class name = %s
-          // (unless explicitly required) \n",classdecl_stmt->get_name().str());
-          if (info.PrintName() == true) {
+          // Keep synthesized names available for internal symbol-table use, but
+          // only surface them when an unnamed declaration is embedded in a
+          // typedef or variable declaration that needs a disambiguating type
+          // name.
+          if (allowUnnamedInternalName) {
             curprint(classdecl_stmt->get_name() + " ");
           }
         }
@@ -6183,7 +6169,7 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
     // curprint(enum_stmt->get_name() + " ");
     // printf ("We could skip the name of the enum here ... \n");
     bool isAnonymousName =
-        (string(enum_stmt->get_name()).substr(0, 14) == "__anonymous_0x");
+        hasGeneratedAnonymousNamePrefix(enum_stmt->get_name());
     if (isAnonymousName == false) {
       curprint(nameQualifier.str());
       curprint(enum_stmt->get_name() + " ");
@@ -7615,8 +7601,7 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
              enumDeclaration->get_name().str());
 #endif
       bool isAnonymousName =
-          (string(enumDeclaration->get_name()).substr(0, 14) ==
-           "__anonymous_0x");
+          hasGeneratedAnonymousNamePrefix(enumDeclaration->get_name());
       if (isAnonymousName == true) {
 #if DEBUG_TYPEDEF_DECLARATIONS
         printf("internal declarationReference == definingEnumDeclaration: "
@@ -7672,8 +7657,7 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
              classDeclaration->get_name().str());
 #endif
       bool isAnonymousName =
-          (string(classDeclaration->get_name()).substr(0, 14) ==
-           "__anonymous_0x");
+          hasGeneratedAnonymousNamePrefix(classDeclaration->get_name());
       if (isAnonymousName == true) {
 #if DEBUG_TYPEDEF_DECLARATIONS
         printf("internal declarationReference == definingClassDeclaration: "

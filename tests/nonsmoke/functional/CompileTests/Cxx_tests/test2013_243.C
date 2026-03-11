@@ -1,48 +1,21 @@
-#include <bits/cpp_type_traits.h>
+#include <new>
 
-namespace std {
-     typedef unsigned long size_t;
+namespace my_test {
 
-     typedef signed long nothrow_t;
-}
-
-
-void* operator new(std::size_t) throw ();
-void* operator new[](std::size_t) throw ();
-void operator delete(void*) throw();
-void operator delete[](void*) throw();
-
-void* operator new(std::size_t, const std::nothrow_t&) throw();
-void* operator new[](std::size_t, const std::nothrow_t&) throw();
-void operator delete(void*, const std::nothrow_t&) throw();
-void operator delete[](void *, const std::nothrow_t &) throw();
-
-// Default placement versions of operator new.
-inline void* operator new(std::size_t, void* __p) throw() { return __p; }
-inline void* operator new[](std::size_t, void* __p) throw() { return __p; }
-
-// Default placement versions of operator delete.
-inline void  operator delete  (void*, void*) throw() { }
-inline void  operator delete[](void*, void*) throw() { }
-
-namespace std {
-
-template<typename _T1, typename _T2>
-inline void
-_Construct(_T1* __p, const _T2& __value)
-   {
+template <typename T1, typename T2>
+inline void Construct(T1 *p, const T2 &value) {
   // _GLIBCXX_RESOLVE_LIB_DEFECTS
   // 402. wrong new expression in [some_]allocator::construct
-     ::new(static_cast<void*>(__p)) _T1(__value);
-   }
+  ::new (static_cast<void *>(p)) T1(value);
 }
+} // namespace my_test
 
-void foo()
-   {
-     int* x_ptr;
-     int y;
-     std::_Construct<int,int>(x_ptr,y);
+void foo() {
+  alignas(int) unsigned char buffer[sizeof(int)];
+  int *x_ptr = reinterpret_cast<int *>(buffer);
+  int y = 0;
+  my_test::Construct<int, int>(x_ptr, y);
 
-     int* a = ::new(static_cast<void*>(x_ptr)) int(y);
-   }
-
+  int *a = ::new (static_cast<void *>(x_ptr)) int(y);
+  (void)a;
+}

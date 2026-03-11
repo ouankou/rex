@@ -122,7 +122,48 @@ static bool setup_decl_item_type_unparse_infos(SgUnparse_Info &ninfo_for_type,
   return need_unparse;
 }
 
+static std::string
+build_structured_binding_pattern_name(SgInitializedName *decl_item) {
+  SgExprListExp *pattern = decl_item->get_structured_binding_pattern();
+  if (pattern == nullptr) {
+    return "";
+  }
+
+  std::string pattern_name{"["};
+  bool first = true;
+  for (SgExpression *expression : pattern->get_expressions()) {
+    if (first) {
+      first = false;
+    } else {
+      pattern_name += ", ";
+    }
+
+    if (expression == nullptr || isSgNullExpression(expression) != nullptr) {
+      continue;
+    }
+
+    SgVarRefExp *var_ref = isSgVarRefExp(expression);
+    ROSE_ASSERT(var_ref != nullptr);
+    SgVariableSymbol *symbol = var_ref->get_symbol();
+    ROSE_ASSERT(symbol != nullptr);
+    pattern_name += symbol->get_name().getString();
+  }
+
+  pattern_name += "]";
+  return pattern_name;
+}
+
 std::string build_decl_item_name(SgInitializedName *decl_item) {
+  if (decl_item == nullptr) {
+    return "";
+  }
+
+  const std::string structured_binding_pattern =
+      build_structured_binding_pattern_name(decl_item);
+  if (!structured_binding_pattern.empty()) {
+    return structured_binding_pattern;
+  }
+
   std::string decl_name = decl_item->get_name().getString();
 #if DEBUG__build_decl_item_name
   printf("Enter build_decl_item_name()\n");

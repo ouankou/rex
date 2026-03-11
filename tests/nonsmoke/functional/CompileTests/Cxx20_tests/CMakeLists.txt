@@ -132,7 +132,6 @@ set(CXX20_DISABLED_TESTCODES
   test2020_05.C
   test2020_07.C
   test2020_10.C
-  test2020_11.C
   test2020_12.C
   test2020_13.C
   test2020_21.C

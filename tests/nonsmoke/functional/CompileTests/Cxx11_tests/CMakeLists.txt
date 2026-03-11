@@ -925,7 +925,6 @@ set(CXX11_TESTCODES
 )
 set(CXX11_DISABLED_TESTCODES
   test2016_41.C
-  test2019_16.C
   test2019_34.C
   test2019_37.C
   test2019_38.C

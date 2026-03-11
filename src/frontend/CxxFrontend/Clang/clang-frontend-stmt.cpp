@@ -3587,8 +3587,21 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
 
   bool res = true;
 
-  if (decl_stmt->isSingleDecl()) {
-    *node = Traverse(decl_stmt->getSingleDecl());
+  std::vector<clang::Decl *> visible_decls;
+  for (clang::Decl *decl : decl_stmt->decls()) {
+    if (decl == nullptr) {
+      continue;
+    }
+    if (llvm::isa<clang::BindingDecl>(decl)) {
+      continue;
+    }
+    visible_decls.push_back(decl);
+  }
+
+  if (visible_decls.empty()) {
+    *node = nullptr;
+  } else if (visible_decls.size() == 1) {
+    *node = Traverse(visible_decls.front());
 #if DEBUG_VISIT_STMT
     printf("In VisitDeclStmt(): *node = %p = %s \n", *node,
            (*node)->class_name().c_str());
@@ -3600,8 +3613,9 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
 
     SgScopeStatement *scope = SageBuilder::topScopeStack();
 
-    for (it = decl_stmt->decl_begin(); it != decl_stmt->decl_end() - 1; it++) {
-      clang::Decl *decl = (*it);
+    for (auto visible_it = visible_decls.begin();
+         visible_it != visible_decls.end() - 1; ++visible_it) {
+      clang::Decl *decl = *visible_it;
       if (decl == nullptr)
         continue;
       SgNode *child = Traverse(decl);
@@ -3631,9 +3645,7 @@ bool ClangToSageTranslator::VisitDeclStmt(clang::DeclStmt *decl_stmt,
       }
     }
     // last declaration in scope
-    it = decl_stmt->decl_end();
-    --it;
-    SgNode *lastDecl = Traverse((clang::Decl *)(*it));
+    SgNode *lastDecl = Traverse(visible_decls.back());
     SgDeclarationStatement *last_decl_Stmt = isSgDeclarationStatement(lastDecl);
     if (lastDecl != nullptr && last_decl_Stmt == nullptr) {
       std::cerr
@@ -5075,6 +5087,78 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
 
   bool res = true;
 
+  clang::Stmt *clang_switch_init_stmt = switch_stmt->getInit();
+  // SgSwitchStatement has no dedicated child for a C++17 init-statement.
+  // Lower it into an enclosing block so the translated AST remains
+  // structurally valid while preserving the initializer's scope for the switch
+  // body.
+  SgBasicBlock *switch_init_wrapper = nullptr;
+  if (clang_switch_init_stmt != nullptr) {
+    switch_init_wrapper = SageBuilder::buildBasicBlock_nfi();
+    switch_init_wrapper->set_parent(SageBuilder::topScopeStack());
+    SageBuilder::pushScopeStack(switch_init_wrapper);
+  }
+
+  auto ensure_decl_scope = [](SgStatement *stmt, SgScopeStatement *scope) {
+    if (stmt == nullptr || scope == nullptr) {
+      return;
+    }
+
+    if (SgDeclarationStatement *decl = isSgDeclarationStatement(stmt)) {
+      decl->set_scope(scope);
+      if (SgVariableDeclaration *var_decl = isSgVariableDeclaration(decl)) {
+        for (SgInitializedName *init_name : var_decl->get_variables()) {
+          if (init_name != nullptr) {
+            init_name->set_scope(scope);
+          }
+        }
+      }
+    }
+  };
+
+  auto translate_wrapper_stmt = [&](clang::Stmt *clang_stmt) -> SgStatement * {
+    if (clang_stmt == nullptr) {
+      return nullptr;
+    }
+
+    SgNode *tmp_stmt = Traverse(clang_stmt);
+    SgStatement *sg_stmt = isSgStatement(tmp_stmt);
+    SgExpression *sg_expr = isSgExpression(tmp_stmt);
+    if (tmp_stmt == nullptr) {
+      return nullptr;
+    }
+    if (sg_stmt == nullptr && sg_expr == nullptr) {
+      MLOG_ERROR_CXX(MLOG_FRONTEND)
+          << "Runtime error: switch init did not translate to SgStatement or "
+             "SgExpression ("
+          << tmp_stmt->class_name() << ")." << std::endl;
+      res = false;
+      return nullptr;
+    }
+    if (sg_expr != nullptr) {
+      sg_stmt = SageBuilder::buildExprStatement(sg_expr);
+    }
+    if (sg_stmt == nullptr) {
+      return nullptr;
+    }
+
+    applySourceRange(sg_stmt, clang_stmt->getSourceRange());
+    sg_stmt->set_parent(switch_init_wrapper);
+    ensure_decl_scope(sg_stmt, switch_init_wrapper);
+    switch_init_wrapper->append_statement(sg_stmt);
+    return sg_stmt;
+  };
+
+  if (switch_init_wrapper != nullptr && clang_switch_init_stmt != nullptr) {
+    SgStatement *sg_init_stmt = translate_wrapper_stmt(clang_switch_init_stmt);
+    if (sg_init_stmt == nullptr) {
+      sg_init_stmt = SageBuilder::buildNullStatement_nfi();
+      setCompilerGeneratedFileInfo(sg_init_stmt, true);
+      sg_init_stmt->set_parent(switch_init_wrapper);
+      switch_init_wrapper->append_statement(sg_init_stmt);
+    }
+  }
+
   SgSwitchStatement *sg_switch_stmt =
       SageBuilder::buildSwitchStatement_nfi(nullptr, nullptr);
   sg_switch_stmt->set_parent(SageBuilder::topScopeStack());
@@ -5149,6 +5233,23 @@ bool ClangToSageTranslator::VisitSwitchStmt(clang::SwitchStmt *switch_stmt,
   // Pei-Hung (07/29/2024) In the case of test2001_14.C, body can be the
   // SgDefaultStmt and the parent needs to be set properly.
   body->set_parent(sg_switch_stmt);
+
+  if (switch_init_wrapper != nullptr) {
+    applySourceRange(sg_switch_stmt, switch_stmt->getSourceRange());
+    sg_switch_stmt->set_parent(switch_init_wrapper);
+    switch_init_wrapper->append_statement(sg_switch_stmt);
+
+    if (clang_switch_init_stmt->getBeginLoc().isValid() &&
+        switch_stmt->getEndLoc().isValid()) {
+      applySourceRange(switch_init_wrapper,
+                       clang::SourceRange(clang_switch_init_stmt->getBeginLoc(),
+                                          switch_stmt->getEndLoc()));
+    }
+
+    SageBuilder::popScopeStack();
+    *node = switch_init_wrapper;
+    return res;
+  }
 
   *node = sg_switch_stmt;
 
@@ -5431,7 +5532,19 @@ bool ClangToSageTranslator::VisitArrayInitLoopExpr(
 #endif
   bool res = true;
 
-  // TODO
+  if (clang::OpaqueValueExpr *common_expr =
+          array_init_loop_expr->getCommonExpr()) {
+    SgNode *tmp_common = Traverse(common_expr);
+    SgExpression *common = isSgExpression(tmp_common);
+    if (tmp_common != nullptr) {
+      ROSE_ASSERT(common != nullptr &&
+                  "Traversed common expression of ArrayInitLoopExpr must be an "
+                  "SgExpression");
+      applySourceRange(common, array_init_loop_expr->getSourceRange());
+      *node = common;
+      return res;
+    }
+  }
 
   return VisitExpr(array_init_loop_expr, node) && res;
 }

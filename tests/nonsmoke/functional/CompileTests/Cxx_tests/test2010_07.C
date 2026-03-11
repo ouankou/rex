@@ -2,8 +2,7 @@
 // #include "sage3.h"
 // #include "rose.h"
 // #include "sage3basic.h"
-// #include "processSupport.h" // This includes RoseAsserts.h
-
+#include "ROSE_ASSERT.h"
 #include "roseInternal.h"
 
 #include <assert.h>
