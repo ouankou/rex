@@ -632,6 +632,92 @@ struct physical_line_splice {
   std::string lexeme;
 };
 
+static bool
+consume_backslash_line_splice(std::ifstream &input,
+                              int line_num,
+                              int column_num,
+                              physical_line_splice *splice_out)
+   {
+     int next = input.peek();
+     if (next == '\n')
+        {
+          char newline = '\0';
+          input.get(newline);
+          *splice_out = {line_num, column_num, "\\\n"};
+          return true;
+        }
+
+     if (next == '\r')
+        {
+          std::streampos after_backslash = input.tellg();
+          char carriage_return = '\0';
+          input.get(carriage_return);
+          if (input.peek() == '\n')
+             {
+               char newline = '\0';
+               input.get(newline);
+               *splice_out = {line_num, column_num, "\\\r\n"};
+               return true;
+             }
+
+          input.clear();
+          input.seekg(after_backslash);
+        }
+
+     return false;
+   }
+
+static bool
+consume_trigraph_line_splice(std::ifstream &input,
+                             int line_num,
+                             int column_num,
+                             physical_line_splice *splice_out)
+   {
+     std::streampos after_first_question = input.tellg();
+     char second_question = '\0';
+     char slash = '\0';
+
+     if (!input.get(second_question) || second_question != '?')
+        {
+          input.clear();
+          input.seekg(after_first_question);
+          return false;
+        }
+
+     if (!input.get(slash) || slash != '/')
+        {
+          input.clear();
+          input.seekg(after_first_question);
+          return false;
+        }
+
+     int next = input.peek();
+     if (next == '\n')
+        {
+          char newline = '\0';
+          input.get(newline);
+          *splice_out = {line_num, column_num, "??/\n"};
+          return true;
+        }
+
+     if (next == '\r')
+        {
+          char carriage_return = '\0';
+          input.get(carriage_return);
+          if (input.peek() == '\n')
+             {
+               char newline = '\0';
+               input.get(newline);
+               *splice_out = {line_num, column_num, "??/\r\n"};
+               return true;
+             }
+        }
+
+     input.clear();
+     input.seekg(after_first_question);
+     return false;
+   }
+
 static std::vector<physical_line_splice>
 collect_physical_line_splices(const std::string &fileName)
    {
@@ -649,35 +735,27 @@ collect_physical_line_splices(const std::string &fileName)
         {
        // Scan incrementally so large generated sources do not need to be
        // materialized in memory just to find physical splice sites.
+          physical_line_splice splice = {};
+          bool found_splice = false;
           if (current == '\\')
              {
-               int next = input.peek();
-               if (next == '\n')
-                  {
-                    input.get(current);
-                    splices.push_back({line_num, column_num, "\\\n"});
-                    line_num++;
-                    column_num = 1;
-                    continue;
-                  }
+               found_splice =
+                   consume_backslash_line_splice(input, line_num, column_num,
+                                                 &splice);
+             }
+          else if (current == '?')
+             {
+               found_splice =
+                   consume_trigraph_line_splice(input, line_num, column_num,
+                                                &splice);
+             }
 
-               if (next == '\r')
-                  {
-                    std::streampos after_backslash = input.tellg();
-                    char ignored = '\0';
-                    input.get(ignored);
-                    if (input.peek() == '\n')
-                       {
-                         input.get(current);
-                         splices.push_back({line_num, column_num, "\\\r\n"});
-                         line_num++;
-                         column_num = 1;
-                         continue;
-                       }
-
-                    input.clear();
-                    input.seekg(after_backslash);
-                  }
+          if (found_splice == true)
+             {
+               splices.push_back(splice);
+               line_num++;
+               column_num = 1;
+               continue;
              }
 
           if (current == '\r' && input.peek() == '\n')
