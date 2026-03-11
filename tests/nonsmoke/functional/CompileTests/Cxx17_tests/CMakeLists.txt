@@ -121,7 +121,6 @@ set(CXX17_DISABLED_TESTCODES
   test2018_70.C
   test2018_71.C
   test2018_72.C
-  test2018_73.C
 )
 
 set(ROSE_FLAGS -w -rose:verbose 0 -std=c++17)
