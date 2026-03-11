@@ -101,7 +101,6 @@ set(CXX17_DISABLED_TESTCODES
   test2018_49.C
   test2018_50.C
   test2018_51.C
-  test2018_52.C
   test2018_53.C
   test2018_54.C
   test2018_55.C
