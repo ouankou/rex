@@ -115,7 +115,6 @@ set(CXX17_DISABLED_TESTCODES
   test2018_63.C
   test2018_64.C
   test2018_65.C
-  test2018_67.C
   test2018_68.C
   test2018_69.C
   test2018_70.C
@@ -123,10 +122,14 @@ set(CXX17_DISABLED_TESTCODES
   test2018_72.C
   test2018_73.C
 )
+set(CXX17_EXPECTED_FAIL_TESTCODES
+  test2018_67.C
+)
 
 set(ROSE_FLAGS -w -rose:verbose 0 -std=c++17)
 
 set(ROSE_DISABLED_TESTCODES ${CXX17_DISABLED_TESTCODES})
+set(ROSE_EXPECTED_FAIL_TESTCODES ${CXX17_EXPECTED_FAIL_TESTCODES})
 
 foreach(file_to_test ${CXX17_TESTCODES})
   compile_test(${file_to_test} "Cxx17_tests")
