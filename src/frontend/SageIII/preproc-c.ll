@@ -702,6 +702,7 @@ consume_trigraph_line_splice(std::ifstream &input,
 
      if (next == '\r')
         {
+          std::streampos after_trigraph = input.tellg();
           char carriage_return = '\0';
           input.get(carriage_return);
           if (input.peek() == '\n')
@@ -711,6 +712,9 @@ consume_trigraph_line_splice(std::ifstream &input,
                *splice_out = {line_num, column_num, "?\?/\r\n"};
                return true;
              }
+
+          input.clear();
+          input.seekg(after_trigraph);
         }
 
      input.clear();
