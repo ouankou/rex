@@ -642,52 +642,60 @@ collect_physical_line_splices(const std::string &fileName)
           return splices;
         }
 
-     std::string source_text((std::istreambuf_iterator<char>(input)),
-                             std::istreambuf_iterator<char>());
-
      int line_num = 1;
      int column_num = 1;
-     for (size_t i = 0; i < source_text.size(); )
+     char current = '\0';
+     while (input.get(current))
         {
-          if (source_text[i] == '\\')
+       // Scan incrementally so large generated sources do not need to be
+       // materialized in memory just to find physical splice sites.
+          if (current == '\\')
              {
-               if (i + 1 < source_text.size() && source_text[i + 1] == '\n')
+               int next = input.peek();
+               if (next == '\n')
                   {
+                    input.get(current);
                     splices.push_back({line_num, column_num, "\\\n"});
                     line_num++;
                     column_num = 1;
-                    i += 2;
                     continue;
                   }
 
-               if (i + 2 < source_text.size() && source_text[i + 1] == '\r' && source_text[i + 2] == '\n')
+               if (next == '\r')
                   {
-                    splices.push_back({line_num, column_num, "\\\r\n"});
-                    line_num++;
-                    column_num = 1;
-                    i += 3;
-                    continue;
+                    std::streampos after_backslash = input.tellg();
+                    char ignored = '\0';
+                    input.get(ignored);
+                    if (input.peek() == '\n')
+                       {
+                         input.get(current);
+                         splices.push_back({line_num, column_num, "\\\r\n"});
+                         line_num++;
+                         column_num = 1;
+                         continue;
+                       }
+
+                    input.clear();
+                    input.seekg(after_backslash);
                   }
              }
 
-          if (source_text[i] == '\r' && i + 1 < source_text.size() && source_text[i + 1] == '\n')
+          if (current == '\r' && input.peek() == '\n')
              {
+               input.get(current);
                line_num++;
                column_num = 1;
-               i += 2;
                continue;
              }
 
-          if (source_text[i] == '\n')
+          if (current == '\n')
              {
                line_num++;
                column_num = 1;
-               i += 1;
                continue;
              }
 
           column_num++;
-          i += 1;
         }
 
      return splices;
