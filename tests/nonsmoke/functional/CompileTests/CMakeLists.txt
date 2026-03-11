@@ -16,6 +16,11 @@ function(compile_test input_file label)
   string(REPLACE "." "_" _test_key "${_test_key}")
   set(test_id ${label}_${_test_key})
   set(_rose_flags ${ROSE_FLAGS})
+  set(_test_output_dir "${ROSE_TEST_OUTPUT_DIR}")
+  if(_test_output_dir STREQUAL "")
+    set(_test_output_dir "${CMAKE_CURRENT_BINARY_DIR}/rose_output")
+  endif()
+  file(MAKE_DIRECTORY "${_test_output_dir}")
   if(DEFINED ROSE_GNU89_TESTCODES AND input_file IN_LIST ROSE_GNU89_TESTCODES)
     # Allow per-test GNU89-based C89 dialect classification without changing global defaults.
     list(FILTER _rose_flags EXCLUDE REGEX "^-std=.*")
@@ -31,15 +36,10 @@ function(compile_test input_file label)
   endif()
   if(DEFINED ROSE_OUTPUT_TO_BUILD_TESTCODES AND
      input_file IN_LIST ROSE_OUTPUT_TO_BUILD_TESTCODES)
-    set(_output_dir "${ROSE_TEST_OUTPUT_DIR}")
-    if(_output_dir STREQUAL "")
-      set(_output_dir "${CMAKE_CURRENT_BINARY_DIR}")
-    endif()
-    file(MAKE_DIRECTORY "${_output_dir}")
     set(_output_base "${input_file}")
     string(REPLACE "/" "_" _output_base "${_output_base}")
     list(APPEND _rose_flags "-rose:output"
-         "${_output_dir}/rose_${_output_base}")
+         "${_test_output_dir}/rose_${_output_base}")
   endif()
 
   # optional argument to omit include directories
@@ -81,6 +81,8 @@ function(compile_test input_file label)
   endif()
   list(REMOVE_DUPLICATES _labels)
   set_tests_properties(${test_id} PROPERTIES LABELS "${_labels}")
+  set_property(TEST ${test_id} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
 
   if(_expected_fail)
     set_tests_properties(${test_id} PROPERTIES WILL_FAIL TRUE)

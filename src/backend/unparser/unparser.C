@@ -1174,6 +1174,7 @@ void Unparser::unparseFileUsingTokenStream(
   } else {
     outputFilename = "rose_raw_tokens_" + file->get_sourceFileNameWithoutPath();
   }
+  outputFilename = resolveUnparseOutputToTestDir(outputFilename);
 
   fstream ROSE_RawTokenStream_OutputFile(outputFilename.c_str(), ios::out);
   // ROSE_OutputFile.open(s_file.c_str());
@@ -1541,6 +1542,7 @@ void resetSourcePositionToGeneratedCode(SgFile *file,
   } else {
     outputFilename = file->get_unparse_output_filename();
   }
+  outputFilename = resolveUnparseOutputToTestDir(outputFilename);
 
   // Set the output file name, since this may be called before unparse().
   file->set_unparse_output_filename(outputFilename);
@@ -2421,6 +2423,12 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
     ROSE_ASSERT(file->get_unparse_output_filename().empty() == false);
     // assert(file->get_unparse_output_filename().empty() == false);
   }
+  const string resolvedOutputFilename =
+      resolveUnparseOutputToTestDir(file->get_unparse_output_filename());
+  if (resolvedOutputFilename != file->get_unparse_output_filename()) {
+    file->set_unparse_output_filename(resolvedOutputFilename);
+  }
+
   // DQ (2/23/2021): Added assertion.
   ROSE_ASSERT(file->get_unparse_output_filename().empty() == false);
 

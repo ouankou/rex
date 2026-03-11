@@ -192,7 +192,9 @@ write test cases so that
 #include <ctype.h>
 #include <string>
 #include <string.h>
+#include <fstream>
 #include <list>
+#include <vector>
 
 /* DQ (1/21/2008): This now has a single definition in the header file: ROSE/src/frontend/SageIII/general_defs.h */
 #include "general_token_defs.h"
@@ -623,6 +625,263 @@ int popbracestack();
 bool isemptystack();
 
 int num_of_newlines(char*);
+
+struct physical_line_splice {
+  int line_num;
+  int column_num;
+  std::string lexeme;
+};
+
+static bool
+consume_backslash_line_splice(std::ifstream &input,
+                              int line_num,
+                              int column_num,
+                              physical_line_splice *splice_out)
+   {
+     int next = input.peek();
+     if (next == '\n')
+        {
+          char newline = '\0';
+          input.get(newline);
+          *splice_out = {line_num, column_num, "\\\n"};
+          return true;
+        }
+
+     if (next == '\r')
+        {
+          std::streampos after_backslash = input.tellg();
+          char carriage_return = '\0';
+          input.get(carriage_return);
+          if (input.peek() == '\n')
+             {
+               char newline = '\0';
+               input.get(newline);
+               *splice_out = {line_num, column_num, "\\\r\n"};
+               return true;
+             }
+
+          input.clear();
+          input.seekg(after_backslash);
+        }
+
+     return false;
+   }
+
+static bool
+consume_trigraph_line_splice(std::ifstream &input,
+                             int line_num,
+                             int column_num,
+                             physical_line_splice *splice_out)
+   {
+     std::streampos after_first_question = input.tellg();
+     char second_question = '\0';
+     char slash = '\0';
+
+     if (!input.get(second_question) || second_question != '?')
+        {
+          input.clear();
+          input.seekg(after_first_question);
+          return false;
+        }
+
+     if (!input.get(slash) || slash != '/')
+        {
+          input.clear();
+          input.seekg(after_first_question);
+          return false;
+        }
+
+     int next = input.peek();
+     if (next == '\n')
+        {
+          char newline = '\0';
+          input.get(newline);
+          *splice_out = {line_num, column_num, "?\?/\n"};
+          return true;
+        }
+
+     if (next == '\r')
+        {
+          std::streampos after_trigraph = input.tellg();
+          char carriage_return = '\0';
+          input.get(carriage_return);
+          if (input.peek() == '\n')
+             {
+               char newline = '\0';
+               input.get(newline);
+               *splice_out = {line_num, column_num, "?\?/\r\n"};
+               return true;
+             }
+
+          input.clear();
+          input.seekg(after_trigraph);
+        }
+
+     input.clear();
+     input.seekg(after_first_question);
+     return false;
+   }
+
+static std::vector<physical_line_splice>
+collect_physical_line_splices(const std::string &fileName)
+   {
+     std::ifstream input(fileName.c_str(), std::ios::binary);
+     std::vector<physical_line_splice> splices;
+     if (!input)
+        {
+          return splices;
+        }
+
+     int line_num = 1;
+     int column_num = 1;
+     char current = '\0';
+     while (input.get(current))
+        {
+       // Scan incrementally so large generated sources do not need to be
+       // materialized in memory just to find physical splice sites.
+          physical_line_splice splice = {};
+          bool found_splice = false;
+          if (current == '\\')
+             {
+               found_splice =
+                   consume_backslash_line_splice(input, line_num, column_num,
+                                                 &splice);
+             }
+          else if (current == '?')
+             {
+               found_splice =
+                   consume_trigraph_line_splice(input, line_num, column_num,
+                                                &splice);
+             }
+
+          if (found_splice == true)
+             {
+               splices.push_back(splice);
+               line_num++;
+               column_num = 1;
+               continue;
+             }
+
+          if (current == '\r' && input.peek() == '\n')
+             {
+               input.get(current);
+               line_num++;
+               column_num = 1;
+               continue;
+             }
+
+          if (current == '\n')
+             {
+               line_num++;
+               column_num = 1;
+               continue;
+             }
+
+          column_num++;
+        }
+
+     return splices;
+   }
+
+static void preserve_physical_line_splices(const std::string &fileName,
+                                           LexTokenStreamTypePointer token_stream)
+   {
+  // Flex normalizes escaped newlines before token matching, so restore the
+  // original physical splice tokens by correlating the token stream with the
+  // source file after lexing.
+     if (token_stream == NULL || token_stream->empty() == true)
+        {
+          return;
+        }
+
+     std::vector<physical_line_splice> splices =
+         collect_physical_line_splices(fileName);
+     if (splices.empty() == true)
+        {
+          return;
+        }
+
+     SE_ITR token_iterator = token_stream->begin();
+     for (const physical_line_splice &splice : splices)
+        {
+          bool replaced_splice_token = false;
+          while (token_iterator != token_stream->end())
+             {
+               stream_element *element = *token_iterator;
+               if (element == NULL || element->p_tok_elem == NULL)
+                  {
+                    ++token_iterator;
+                    continue;
+                  }
+
+               if (element->beginning_fpi.line_num < splice.line_num)
+                  {
+                    ++token_iterator;
+                    continue;
+                  }
+
+               if (element->beginning_fpi.line_num == splice.line_num &&
+                   element->beginning_fpi.column_num < splice.column_num)
+                  {
+                    ++token_iterator;
+                    continue;
+                  }
+
+               break;
+             }
+
+          if (token_iterator == token_stream->end())
+             {
+               break;
+             }
+
+          SE_ITR lookahead = token_iterator;
+          while (lookahead != token_stream->end())
+             {
+               stream_element *newline_element = *lookahead;
+               if (newline_element == NULL || newline_element->p_tok_elem == NULL)
+                  {
+                    ++lookahead;
+                    continue;
+                  }
+
+               if (newline_element->beginning_fpi.line_num > splice.line_num + 1 ||
+                   (newline_element->beginning_fpi.line_num == splice.line_num &&
+                    newline_element->beginning_fpi.column_num > splice.column_num + 1) ||
+                   (newline_element->beginning_fpi.line_num == splice.line_num + 1 &&
+                    newline_element->beginning_fpi.column_num > 1))
+                  {
+                    break;
+                  }
+
+               std::string &lexeme = newline_element->p_tok_elem->token_lexeme;
+               bool matches_same_line_newline =
+                   newline_element->beginning_fpi.line_num == splice.line_num &&
+                   (newline_element->beginning_fpi.column_num == splice.column_num ||
+                    newline_element->beginning_fpi.column_num == splice.column_num + 1);
+               bool matches_next_line_newline =
+                   newline_element->beginning_fpi.line_num == splice.line_num + 1 &&
+                   newline_element->beginning_fpi.column_num == 1;
+               if ((matches_same_line_newline || matches_next_line_newline) &&
+                   (lexeme == "\n" || lexeme == "\r\n"))
+                  {
+                    lexeme = splice.lexeme;
+                    newline_element->beginning_fpi.line_num = splice.line_num;
+                    newline_element->beginning_fpi.column_num = splice.column_num;
+                    token_iterator = lookahead;
+                    replaced_splice_token = true;
+                    break;
+                  }
+
+               ++lookahead;
+             }
+
+          if (replaced_splice_token == false)
+             {
+               continue;
+             }
+        }
+   }
 
 ROSEAttributesList preprocessorList;
 
@@ -1436,6 +1695,12 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
 #if DEBUG_LEX_PASS
                     printf ("In getPreprocessorDirectives(): DONE: calling yylex() \n");
 #endif
+
+                 // Flex drops the physical backslash from escaped newline
+                 // splices in the raw token stream. Restore those exact
+                 // source characters from the on-disk file so token-based
+                 // unparsing can preserve translation-phase token splicing.
+                    preserve_physical_line_splices(fileName, ROSE_token_stream_pointer);
 
                  // bugfix (9/29/2001)
                  // The semantics required here is to move the elements accumulated into the
