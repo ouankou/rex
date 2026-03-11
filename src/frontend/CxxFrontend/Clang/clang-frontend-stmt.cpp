@@ -8675,6 +8675,11 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
   clang::QualType allocatedType = cxx_new_expr->getAllocatedType();
   SgType *sg_type = buildTypeFromQualifiedType(allocatedType);
 
+  auto classTypeUnknown = [sg_type]() {
+    return sg_type == nullptr || (isSgTypedefType(sg_type) == nullptr &&
+                                  isSgClassType(sg_type) == nullptr);
+  };
+
   SgExprListExp *placementArgs = nullptr;
   if (cxx_new_expr->getNumPlacementArgs() > 0) {
     placementArgs = SageBuilder::buildExprListExp();
@@ -8694,19 +8699,52 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
     constructor_args = isSgConstructorInitializer(constructorInitializer);
   }
 
+  if (constructor_args == nullptr && cxx_new_expr->hasInitializer()) {
+    clang::Expr *initializer = cxx_new_expr->getInitializer();
+    if (initializer != nullptr) {
+      SgNode *translated_initializer = Traverse(initializer);
+      if (SgConstructorInitializer *ctor_init =
+              isSgConstructorInitializer(translated_initializer)) {
+        constructor_args = ctor_init;
+      } else if (SgExpression *expr = isSgExpression(translated_initializer)) {
+        SgExprListExp *args = isSgExprListExp(expr);
+        if (args == nullptr) {
+          args = SageBuilder::buildExprListExp_nfi();
+          args->append_expression(expr);
+        }
+
+        constructor_args = SageBuilder::buildConstructorInitializer_nfi(
+            nullptr, args, sg_type,
+            false,             // need_name
+            false,             // need_qualifier
+            false,             // need_parenthesis_after_name
+            classTypeUnknown() // associated_class_unknown
+        );
+        constructor_args->set_is_braced_initialized(
+            llvm::isa<clang::InitListExpr>(initializer) ||
+            llvm::isa<clang::CXXStdInitializerListExpr>(initializer));
+        applySourceRange(constructor_args, initializer->getSourceRange());
+      } else if (translated_initializer != nullptr) {
+        std::cerr << "Runtime error: CXXNewExpr initializer did not translate "
+                     "into SgExpression."
+                  << std::endl;
+        initializer->dump();
+        ROSE_ABORT();
+      }
+    }
+  }
+
   SgNode *clangFuncDecl = Traverse(cxx_new_expr->getOperatorNew());
-  if (constructor_args && cxx_new_expr->getConstructExpr() != nullptr) {
+  if (constructor_args != nullptr) {
     // (4/28/23 Pei-Hung) The type name is given through sg_type,
     // SgConstructorInitializer doesn't seem to provide name for unparsing.
     constructor_args->set_need_name(false);
-    clangFuncDecl =
-        Traverse(cxx_new_expr->getConstructExpr()->getConstructor());
+    if (const clang::CXXConstructExpr *construct_expr =
+            cxx_new_expr->getConstructExpr()) {
+      clangFuncDecl = Traverse(construct_expr->getConstructor());
+    }
   }
   SgFunctionDeclaration *sgFuncDecl = isSgFunctionDeclaration(clangFuncDecl);
-
-  if (cxx_new_expr->hasInitializer()) {
-    // TODO
-  }
 
   SgExpression *builtin_args = nullptr;
   short int need_global_specifier = (short int)cxx_new_expr->isGlobalNew();

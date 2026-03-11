@@ -114,13 +114,10 @@ set(CXX17_DISABLED_TESTCODES
   test2018_62.C
   test2018_63.C
   test2018_64.C
-  test2018_65.C
   test2018_68.C
-  test2018_69.C
   test2018_70.C
   test2018_71.C
   test2018_72.C
-  test2018_73.C
 )
 set(CXX17_EXPECTED_FAIL_TESTCODES
   test2018_67.C
