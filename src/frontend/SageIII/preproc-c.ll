@@ -696,7 +696,7 @@ consume_trigraph_line_splice(std::ifstream &input,
         {
           char newline = '\0';
           input.get(newline);
-          *splice_out = {line_num, column_num, "?""?/\n"};
+          *splice_out = {line_num, column_num, "?\?/\n"};
           return true;
         }
 
@@ -708,7 +708,7 @@ consume_trigraph_line_splice(std::ifstream &input,
              {
                char newline = '\0';
                input.get(newline);
-               *splice_out = {line_num, column_num, "?""?/\r\n"};
+               *splice_out = {line_num, column_num, "?\?/\r\n"};
                return true;
              }
         }
