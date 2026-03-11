@@ -696,6 +696,9 @@ collect_physical_line_splices(const std::string &fileName)
 static void preserve_physical_line_splices(const std::string &fileName,
                                            LexTokenStreamTypePointer token_stream)
    {
+  // Flex normalizes escaped newlines before token matching, so restore the
+  // original physical splice tokens by correlating the token stream with the
+  // source file after lexing.
      if (token_stream == NULL || token_stream->empty() == true)
         {
           return;
@@ -838,28 +841,6 @@ BEGIN NORMAL;
 #endif
   // DQ (11/29/2018): Adding form feed support to ROSE.
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
-   }
-
-<NORMAL>\\\r\n {
-#if DEBUG_LEX_PASS
-     printf("%s is an escaped CRLF line splice token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
-#endif
-  // Preserve physical line splices in the raw token stream so token-based
-  // unparsing can reconstruct the original source faithfully.
-     add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
-     preproc_line_num  += 1;
-     preproc_column_num = 1;
-   }
-
-<NORMAL>\\\n {
-#if DEBUG_LEX_PASS
-     printf("%s is an escaped line splice token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
-#endif
-  // Preserve physical line splices in the raw token stream so token-based
-  // unparsing can reconstruct the original source faithfully.
-     add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
-     preproc_line_num  += 1;
-     preproc_column_num = 1;
    }
 
 <NORMAL>\r\n { 
