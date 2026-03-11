@@ -117,7 +117,6 @@ set(CXX17_DISABLED_TESTCODES
   test2018_65.C
   test2018_67.C
   test2018_68.C
-  test2018_69.C
   test2018_70.C
   test2018_71.C
   test2018_72.C
