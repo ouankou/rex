@@ -1,5 +1,6 @@
 // aggregate initialization
 
+#include <cstdint>
 #include<string>
 
 // simple example of aggregate initialization
@@ -10,4 +11,3 @@ struct user
 };
 
 user u1{10, "Alice"};
-
