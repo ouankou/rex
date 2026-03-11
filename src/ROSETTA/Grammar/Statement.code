@@ -16248,6 +16248,10 @@ SOURCE_OMP_TASKGROUP_STATEMENT_START
 void SgOmpTaskgroupStatement::post_construction_initialization() {}
 SOURCE_OMP_TASKGROUP_STATEMENT_END
 
+SOURCE_OMP_DISPATCH_STATEMENT_START
+void SgOmpDispatchStatement::post_construction_initialization() {}
+SOURCE_OMP_DISPATCH_STATEMENT_END
+
 SOURCE_OMP_DEPOBJ_STATEMENT_START
 void SgOmpDepobjStatement::post_construction_initialization() {}
 SOURCE_OMP_DEPOBJ_STATEMENT_END
@@ -16364,8 +16368,7 @@ static SgName buildOmpVariantStatementMangledName(const SgStatement *statement,
 void SgOmpDeclareVariantStatement::post_construction_initialization() {}
 
 SgName SgOmpDeclareVariantStatement::get_mangled_name(void) const {
-  return buildOmpVariantStatementMangledName(this,
-                                             "_omp_declaration_variant_");
+  return buildOmpVariantStatementMangledName(this, "_omp_declaration_variant_");
 }
 
 SOURCE_OMP_DECLARE_VARIANT_STATEMENT_END
@@ -16374,8 +16377,8 @@ SOURCE_OMP_BEGIN_DECLARE_VARIANT_STATEMENT_START
 void SgOmpBeginDeclareVariantStatement::post_construction_initialization() {}
 
 SgName SgOmpBeginDeclareVariantStatement::get_mangled_name(void) const {
-  return buildOmpVariantStatementMangledName(
-      this, "_omp_begin_declaration_variant_");
+  return buildOmpVariantStatementMangledName(this,
+                                             "_omp_begin_declaration_variant_");
 }
 
 SOURCE_OMP_BEGIN_DECLARE_VARIANT_STATEMENT_END

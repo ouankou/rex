@@ -5406,6 +5406,7 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   case OMPD_atomic:
   case OMPD_do:
   case OMPD_taskgroup:
+  case OMPD_dispatch:
   case OMPD_master:
   case OMPD_distribute:
   case OMPD_loop:
@@ -6046,6 +6047,10 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpTaskgroupStatement(NULL, body);
     break;
   }
+  case OMPD_dispatch: {
+    result = new SgOmpDispatchStatement(NULL, body);
+    break;
+  }
   case OMPD_master: {
     result = new SgOmpMasterStatement(NULL, body);
     break;
@@ -6289,6 +6294,8 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     case OMPC_detach:
     case OMPC_num_tasks:
     case OMPC_num_threads:
+    case OMPC_nocontext:
+    case OMPC_novariants:
     case OMPC_partial: {
       convertExpressionClause(result, current_OpenMPIR_to_SageIII,
                               *clause_iter);
@@ -7266,6 +7273,10 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     result = new SgOmpParallelStatement(NULL, NULL);
     break;
   }
+  case OMPD_dispatch: {
+    result = new SgOmpDispatchStatement(NULL, NULL);
+    break;
+  }
   case OMPD_parallel_do: {
     SgStatement *second_stmt = new SgOmpDoStatement(NULL, NULL);
     result = new SgOmpParallelStatement(NULL, second_stmt);
@@ -7551,6 +7562,9 @@ convertVariantBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     case OMPC_final:
     case OMPC_priority:
     case OMPC_thread_limit:
+    case OMPC_device:
+    case OMPC_nocontext:
+    case OMPC_novariants:
     case OMPC_num_threads: {
       convertExpressionClause(result, current_OpenMPIR_to_SageIII,
                               *clause_iter);
@@ -9237,6 +9251,20 @@ convertExpressionClause(SgStatement *directive,
     printf("Device Clause added!\n");
     break;
   }
+  case OMPC_nocontext: {
+    SgExpression *nocontext_expression =
+        checkOmpExpressionClause(clause_expression, global, e_num_threads);
+    result = new SgOmpNocontextClause(nocontext_expression);
+    printf("Nocontext Clause added!\n");
+    break;
+  }
+  case OMPC_novariants: {
+    SgExpression *novariants_expression =
+        checkOmpExpressionClause(clause_expression, global, e_num_threads);
+    result = new SgOmpNovariantsClause(novariants_expression);
+    printf("Novariants Clause added!\n");
+    break;
+  }
   case OMPC_partial: {
     SgExpression *partial_expression =
         checkOmpExpressionClause(clause_expression, global, e_num_threads);
@@ -10041,6 +10069,7 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
   case OMPD_declare_target:
   case OMPD_end_declare_target:
   case OMPD_depobj:
+  case OMPD_dispatch:
   case OMPD_distribute:
   case OMPD_do:
   case OMPD_flush:
@@ -10162,8 +10191,10 @@ bool checkOpenMPIR(OpenMPDirective *directive) {
       case OMPC_mergeable:
       case OMPC_nogroup:
       case OMPC_nontemporal:
+      case OMPC_nocontext:
       case OMPC_notinbranch:
       case OMPC_nowait:
+      case OMPC_novariants:
       case OMPC_num_tasks:
       case OMPC_num_teams:
       case OMPC_num_threads:

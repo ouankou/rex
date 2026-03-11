@@ -3585,6 +3585,7 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
         nodeName == "SgOmpDeclareMapperStatement" ||
         nodeName == "SgOmpCancelStatement" ||
         nodeName == "SgOmpTaskgroupStatement" ||
+        nodeName == "SgOmpDispatchStatement" ||
         nodeName == "SgOmpDepobjStatement" ||
         nodeName == "SgOmpDistributeStatement" ||
         nodeName == "SgOmpLoopStatement" ||

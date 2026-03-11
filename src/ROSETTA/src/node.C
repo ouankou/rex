@@ -172,6 +172,10 @@ void Grammar::setUpNodes() {
   NEW_TERMINAL_MACRO(OmpHasDeviceAddrClause, "OmpHasDeviceAddrClause",
                      "OmpHasDeviceAddrClauseTag");
   NEW_TERMINAL_MACRO(OmpDeviceClause, "OmpDeviceClause", "OmpIfDeviceTag");
+  NEW_TERMINAL_MACRO(OmpNocontextClause, "OmpNocontextClause",
+                     "OmpNocontextTag");
+  NEW_TERMINAL_MACRO(OmpNovariantsClause, "OmpNovariantsClause",
+                     "OmpNovariantsTag");
   NEW_TERMINAL_MACRO(OmpSafelenClause, "OmpSafelenClause", "OmpSafelenTag");
   NEW_TERMINAL_MACRO(OmpSimdlenClause, "OmpSimdlenClause", "OmpSimdlenTag");
   NEW_TERMINAL_MACRO(OmpPartialClause, "OmpPartialClause", "OmpPartialTag");
@@ -185,7 +189,8 @@ void Grammar::setUpNodes() {
           OmpDeviceClause | OmpHintClause | OmpGrainsizeClause |
           OmpNumTasksClause | OmpDetachClause | OmpSafelenClause |
           OmpSimdlenClause | OmpFinalClause | OmpPriorityClause |
-          OmpPartialClause | OmpSizesClause,
+          OmpNocontextClause | OmpNovariantsClause | OmpPartialClause |
+          OmpSizesClause,
       "OmpExpressionClause", "OmpExpressionClauseTag", false);
 
   NEW_TERMINAL_MACRO(OmpCopyprivateClause, "OmpCopyprivateClause",

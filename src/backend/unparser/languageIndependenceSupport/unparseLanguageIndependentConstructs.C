@@ -3569,6 +3569,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         case V_SgOmpDeclareTargetStatement:
         case V_SgOmpCancelStatement:
         case V_SgOmpTaskgroupStatement:
+        case V_SgOmpDispatchStatement:
         case V_SgOmpDistributeStatement:
         case V_SgOmpLoopStatement:
         case V_SgOmpScanStatement:
@@ -10321,6 +10322,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       curprint(string(" hint("));
     else if (isSgOmpDeviceClause(c))
       curprint(string(" device("));
+    else if (isSgOmpNocontextClause(c))
+      curprint(string(" nocontext("));
+    else if (isSgOmpNovariantsClause(c))
+      curprint(string(" novariants("));
     else if (isSgOmpSafelenClause(c))
       curprint(string(" safelen("));
     else if (isSgOmpSimdlenClause(c))
@@ -10650,6 +10655,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     case V_SgOmpNumTeamsClause:
     case V_SgOmpHintClause:
     case V_SgOmpThreadLimitClause:
+    case V_SgOmpNocontextClause:
+    case V_SgOmpNovariantsClause:
     case V_SgOmpSafelenClause:
     case V_SgOmpSimdlenClause:
     case V_SgOmpOrderedClause:
@@ -11010,6 +11017,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     }
     case V_SgOmpTaskgroupStatement: {
       curprint(string("taskgroup"));
+      break;
+    }
+    case V_SgOmpDispatchStatement: {
+      curprint(string("dispatch"));
       break;
     }
     case V_SgOmpLoopStatement: {

@@ -347,6 +347,8 @@ void Grammar::setUpStatements() {
                      "OMP_TASKGROUP_STMT");
   NEW_TERMINAL_MACRO(OmpDepobjStatement, "OmpDepobjStatement",
                      "OMP_DEPOBJ_STMT");
+  NEW_TERMINAL_MACRO(OmpDispatchStatement, "OmpDispatchStatement",
+                     "OMP_DISPATCH_STMT");
   NEW_TERMINAL_MACRO(OmpTeamsStatement, "OmpTeamsStatement", "OMP_TEAMS_STMT");
   NEW_TERMINAL_MACRO(OmpCancellationPointStatement,
                      "OmpCancellationPointStatement",
@@ -469,7 +471,7 @@ void Grammar::setUpStatements() {
       OmpParallelStatement | OmpTeamsStatement | OmpSingleStatement |
           OmpAtomicStatement | OmpScanStatement | OmpMetadirectiveStatement |
           OmpLoopStatement | OmpOrderedStatement | OmpTaskgroupStatement |
-          OmpTaskloopStatement | OmpDepobjStatement |
+          OmpDispatchStatement | OmpTaskloopStatement | OmpDepobjStatement |
           OmpTargetEnterDataStatement | OmpTargetExitDataStatement |
           OmpParallelMasterStatement | OmpMasterTaskloopStatement |
           OmpTaskStatement | OmpForStatement | OmpDoStatement |
@@ -5394,6 +5396,8 @@ void Grammar::setUpStatements() {
                                        "../Grammar/Statement.code");
   OmpTaskgroupStatement.setFunctionSource("SOURCE_OMP_TASKGROUP_STATEMENT",
                                           "../Grammar/Statement.code");
+  OmpDispatchStatement.setFunctionSource("SOURCE_OMP_DISPATCH_STATEMENT",
+                                         "../Grammar/Statement.code");
   OmpDepobjStatement.setFunctionSource("SOURCE_OMP_DEPOBJ_STATEMENT",
                                        "../Grammar/Statement.code");
   OmpDistributeStatement.setFunctionSource("SOURCE_OMP_DISTRIBUTE_STATEMENT",
