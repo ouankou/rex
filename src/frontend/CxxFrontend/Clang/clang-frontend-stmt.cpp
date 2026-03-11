@@ -8728,7 +8728,8 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
         std::cerr << "Runtime error: CXXNewExpr initializer did not translate "
                      "into SgExpression."
                   << std::endl;
-        res = false;
+        initializer->dump();
+        ROSE_ABORT();
       }
     }
   }
