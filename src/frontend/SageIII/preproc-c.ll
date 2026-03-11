@@ -730,7 +730,7 @@ static void preserve_physical_line_splices(const std::string &fileName,
                   }
 
                if (element->beginning_fpi.line_num == splice.line_num &&
-                   element->beginning_fpi.column_num < splice.column_num + 1)
+                   element->beginning_fpi.column_num < splice.column_num)
                   {
                     ++token_iterator;
                     continue;
