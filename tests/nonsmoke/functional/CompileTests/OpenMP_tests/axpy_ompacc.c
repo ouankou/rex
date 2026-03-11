@@ -1,6 +1,7 @@
 // Experimental test input for Accelerator directives
 //  simplest scalar*vector operations
 // Liao 1/15/2013
+#include <assert.h>
 #include <math.h>
 
 #include <stdio.h>

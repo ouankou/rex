@@ -16,6 +16,10 @@
 #include <stdlib.h>
 
 #include <string.h>
+
+extern int cudaGetDeviceCount(int *count);
+extern int cudaSetDevice(int device);
+
 #define REAL double
 /* in second */
 #define read_timer() omp_get_wtime()

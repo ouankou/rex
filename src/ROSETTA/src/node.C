@@ -172,6 +172,10 @@ void Grammar::setUpNodes() {
   NEW_TERMINAL_MACRO(OmpHasDeviceAddrClause, "OmpHasDeviceAddrClause",
                      "OmpHasDeviceAddrClauseTag");
   NEW_TERMINAL_MACRO(OmpDeviceClause, "OmpDeviceClause", "OmpIfDeviceTag");
+  NEW_TERMINAL_MACRO(OmpNocontextClause, "OmpNocontextClause",
+                     "OmpNocontextTag");
+  NEW_TERMINAL_MACRO(OmpNovariantsClause, "OmpNovariantsClause",
+                     "OmpNovariantsTag");
   NEW_TERMINAL_MACRO(OmpSafelenClause, "OmpSafelenClause", "OmpSafelenTag");
   NEW_TERMINAL_MACRO(OmpSimdlenClause, "OmpSimdlenClause", "OmpSimdlenTag");
   NEW_TERMINAL_MACRO(OmpPartialClause, "OmpPartialClause", "OmpPartialTag");
@@ -185,7 +189,8 @@ void Grammar::setUpNodes() {
           OmpDeviceClause | OmpHintClause | OmpGrainsizeClause |
           OmpNumTasksClause | OmpDetachClause | OmpSafelenClause |
           OmpSimdlenClause | OmpFinalClause | OmpPriorityClause |
-          OmpPartialClause | OmpSizesClause,
+          OmpNocontextClause | OmpNovariantsClause | OmpPartialClause |
+          OmpSizesClause,
       "OmpExpressionClause", "OmpExpressionClauseTag", false);
 
   NEW_TERMINAL_MACRO(OmpCopyprivateClause, "OmpCopyprivateClause",
@@ -236,6 +241,11 @@ void Grammar::setUpNodes() {
   NEW_TERMINAL_MACRO(OmpScheduleClause, "OmpScheduleClause",
                      "OmpScheduleClauseTag");
   NEW_TERMINAL_MACRO(OmpWhenClause, "OmpWhenClause", "OmpWhenClauseTag");
+  NEW_TERMINAL_MACRO(OmpMatchClause, "OmpMatchClause", "OmpMatchClauseTag");
+  NEW_TERMINAL_MACRO(OmpAdjustArgsClause, "OmpAdjustArgsClause",
+                     "OmpAdjustArgsClauseTag");
+  NEW_TERMINAL_MACRO(OmpAppendArgsClause, "OmpAppendArgsClause",
+                     "OmpAppendArgsClauseTag");
   NEW_TERMINAL_MACRO(OmpDistScheduleClause, "OmpDistScheduleClause",
                      "OmpDistScheduleClauseTag");
   NEW_TERMINAL_MACRO(OmpDefaultmapClause, "OmpDefaultmapClause",
@@ -261,7 +271,8 @@ void Grammar::setUpNodes() {
           OmpDefaultmapClause | OmpAtomicDefaultMemOrderClause |
           OmpExtImplementationDefinedRequirementClause |
           OmpUsesAllocatorsDefination | OmpVariablesClause | OmpScheduleClause |
-          OmpMergeableClause | OmpWhenClause | OmpUsesAllocatorsClause |
+          OmpMergeableClause | OmpWhenClause | OmpMatchClause |
+          OmpAdjustArgsClause | OmpAppendArgsClause | OmpUsesAllocatorsClause |
           OmpFullClause,
       "OmpClause", "OmpClauseTag", false);
 #endif
@@ -1277,10 +1288,6 @@ void Grammar::setUpNodes() {
       "SgExpression*", "user_condition_score", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
   OmpWhenClause.setDataPrototype(
-      "std::list<SgStatement*>", "construct_directives", "",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-  OmpWhenClause.setDataPrototype(
       "bool", "target_device_selector", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   OmpWhenClause.setDataPrototype("SgExpression*", "device_arch", "= NULL",
@@ -1311,6 +1318,68 @@ void Grammar::setUpNodes() {
   OmpWhenClause.setDataPrototype("SgStatement*", "variant_directive", "= NULL",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpWhenClause.setDataPrototype("SgStatementPtrList", "construct_directives",
+                                 "", NO_CONSTRUCTOR_PARAMETER,
+                                 BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+                                 NO_DELETE);
+
+  OmpMatchClause.setDataPrototype("SgExpression*", "user_condition", "= NULL",
+                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                  DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpMatchClause.setDataPrototype(
+      "SgExpression*", "user_condition_score", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpMatchClause.setDataPrototype(
+      "bool", "target_device_selector", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OmpMatchClause.setDataPrototype("SgExpression*", "device_arch", "= NULL",
+                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                  DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpMatchClause.setDataPrototype("SgExpression*", "device_isa", "= NULL",
+                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                  DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpMatchClause.setDataPrototype(
+      "SgExpression*", "device_num", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpMatchClause.setDataPrototype(
+      "SgOmpClause::omp_when_context_kind_enum", "device_kind",
+      "= e_omp_when_context_kind_unknown", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OmpMatchClause.setDataPrototype(
+      "SgOmpClause::omp_when_context_vendor_enum", "implementation_vendor",
+      "= e_omp_when_context_vendor_unspecified", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OmpMatchClause.setDataPrototype("SgExpression*",
+                                  "implementation_user_defined", "= NULL",
+                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                  DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpMatchClause.setDataPrototype("SgExpression*", "implementation_extension",
+                                  "= NULL", CONSTRUCTOR_PARAMETER,
+                                  BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+                                  NO_DELETE, CLONE_PTR);
+  OmpMatchClause.setDataPrototype("SgStatementPtrList", "construct_directives",
+                                  "", NO_CONSTRUCTOR_PARAMETER,
+                                  BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+                                  NO_DELETE);
+
+  OmpAdjustArgsClause.setDataPrototype(
+      "SgExprListExp*", "arguments", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpAdjustArgsClause.setDataPrototype(
+      "SgOmpClause::omp_adjust_args_modifier_enum", "modifier",
+      "=SgOmpClause::e_omp_adjust_args_modifier_unknown", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OmpAdjustArgsClause.setDataPrototype("SgExpression*", "user_defined_modifier",
+                                       "= NULL", NO_CONSTRUCTOR_PARAMETER,
+                                       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+                                       NO_DELETE, CLONE_PTR);
+
+  OmpAppendArgsClause.setDataPrototype(
+      "SgExprListExp*", "arguments", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpAppendArgsClause.setDataPrototype(
+      "SgExpression*", "label", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
 
   // clauses with variable lists
   // Liao 9/27/2010, per user's report, modeling the variable reference use

@@ -6,6 +6,59 @@
 #include "OpenACCIR.h"
 
 #include "OpenMPIR.h"
+
+#include <string>
+#include <utility>
+#include <vector>
+
+inline constexpr char kOmpDeclareVariantRegionsAttributeName[] =
+    "omp_declare_variant_regions";
+
+struct OmpDeclareVariantRegionInfo {
+  unsigned begin_line = 0;
+  unsigned end_line = 0;
+  std::string captured_region;
+};
+
+class OmpDeclareVariantRegionsAttribute : public AstAttribute {
+public:
+  OmpDeclareVariantRegionsAttribute() = default;
+
+  explicit OmpDeclareVariantRegionsAttribute(
+      std::vector<OmpDeclareVariantRegionInfo> regions)
+      : regions_(std::move(regions)) {}
+
+  AstAttribute *copy() const override {
+    return new OmpDeclareVariantRegionsAttribute(*this);
+  }
+
+  OwnershipPolicy getOwnershipPolicy() const override {
+    return CONTAINER_OWNERSHIP;
+  }
+
+  std::string toString() override { return "omp_declare_variant_regions"; }
+
+  const std::vector<OmpDeclareVariantRegionInfo> &regions() const {
+    return regions_;
+  }
+
+  void addRegion(OmpDeclareVariantRegionInfo region) {
+    regions_.push_back(std::move(region));
+  }
+
+  const OmpDeclareVariantRegionInfo *findByBeginLine(unsigned line) const {
+    for (const OmpDeclareVariantRegionInfo &region : regions_) {
+      if (region.begin_line == line) {
+        return &region;
+      }
+    }
+    return nullptr;
+  }
+
+private:
+  std::vector<OmpDeclareVariantRegionInfo> regions_;
+};
+
 namespace OmpSupport {
 class SgVarRefExpVisitor : public AstSimpleProcessing {
 private:
@@ -87,6 +140,12 @@ SgStatement *convertVariantBodyDirective(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>);
 SgStatement *convertOmpDeclareSimdDirective(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>);
+SgStatement *convertOmpDeclareVariantDirective(
+    std::pair<SgPragmaDeclaration *, OpenMPDirective *>);
+SgStatement *convertOmpBeginDeclareVariantDirective(
+    std::pair<SgPragmaDeclaration *, OpenMPDirective *>);
+SgStatement *convertOmpEndDeclareVariantDirective(
+    std::pair<SgPragmaDeclaration *, OpenMPDirective *>);
 SgStatement *convertOmpDeclareTargetDirective(
     std::pair<SgPragmaDeclaration *, OpenMPDirective *>);
 SgStatement *convertOmpEndDeclareTargetDirective(
@@ -109,6 +168,21 @@ convertWhenClause(SgOmpClauseBodyStatement *clause_body,
                   std::pair<SgPragmaDeclaration *, OpenMPDirective *>
                       current_OpenMPIR_to_SageIII,
                   OpenMPClause *current_omp_clause);
+SgOmpMatchClause *
+convertMatchClause(SgStatement *clause_body,
+                   std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+                       current_OpenMPIR_to_SageIII,
+                   OpenMPClause *current_omp_clause);
+SgOmpAdjustArgsClause *
+convertAdjustArgsClause(SgStatement *directive,
+                        std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+                            current_OpenMPIR_to_SageIII,
+                        OpenMPClause *current_omp_clause);
+SgOmpAppendArgsClause *
+convertAppendArgsClause(SgStatement *directive,
+                        std::pair<SgPragmaDeclaration *, OpenMPDirective *>
+                            current_OpenMPIR_to_SageIII,
+                        OpenMPClause *current_omp_clause);
 SgOmpBindClause *
 convertBindClause(SgOmpClauseBodyStatement *clause_body,
                   std::pair<SgPragmaDeclaration *, OpenMPDirective *>

@@ -311,6 +311,9 @@ SgOmpDoStatement
 SgOmpFlushStatement
 SgOmpAllocateStatement
 SgOmpDeclareSimdStatement
+SgOmpDeclareVariantStatement
+SgOmpBeginDeclareVariantStatement
+SgOmpEndDeclareVariantStatement
 SgOmpDeclareTargetStatement
 SgOmpEndDeclareTargetStatement
 SgOmpForSimdStatement
@@ -325,6 +328,7 @@ SgOmpCancellationPointStatement
 SgOmpDeclareMapperStatement
 SgOmpCancelStatement
 SgOmpTaskgroupStatement
+SgOmpDispatchStatement
 SgOmpDepobjStatement
 SgOmpDistributeStatement
 SgOmpLoopStatement
@@ -394,6 +398,8 @@ SgOmpIfClause
 SgOmpFinalClause
 SgOmpPriorityClause
 SgOmpDeviceClause
+SgOmpNocontextClause
+SgOmpNovariantsClause
 SgOmpLastprivateClause
 SgOmpNowaitClause
 SgOmpReadClause
@@ -462,6 +468,9 @@ SgOmpNotinbranchClause
 SgOmpDependClause
 SgOmpAffinityClause
 SgOmpWhenClause
+SgOmpMatchClause
+SgOmpAdjustArgsClause
+SgOmpAppendArgsClause
 SgOmpFullClause
 SgOmpPartialClause
 SgOmpSizesClause

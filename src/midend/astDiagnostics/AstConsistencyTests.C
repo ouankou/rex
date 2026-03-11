@@ -153,6 +153,10 @@ void AstTests::runAllTests(SgProject *sageProject) {
     printf("At TOP of AstTests::runAllTests() \n");
   }
 
+  if (sageProject->get_frontendErrorCode() != 0) {
+    return;
+  }
+
 #ifdef NDEBUG
   // DQ (6/30/20133): If we have compiled with NDEBUG then nothing identified in
   // this function will be caught because every place we detect a problem we

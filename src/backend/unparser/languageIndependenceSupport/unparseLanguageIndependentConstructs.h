@@ -312,6 +312,11 @@ public:
   virtual void unparseOmpOrderClause(SgOmpClause *clause, SgUnparse_Info &info);
   virtual void unparseOmpBindClause(SgOmpClause *clause, SgUnparse_Info &info);
   virtual void unparseOmpWhenClause(SgOmpClause *clause, SgUnparse_Info &info);
+  virtual void unparseOmpMatchClause(SgOmpClause *clause, SgUnparse_Info &info);
+  virtual void unparseOmpAdjustArgsClause(SgOmpClause *clause,
+                                          SgUnparse_Info &info);
+  virtual void unparseOmpAppendArgsClause(SgOmpClause *clause,
+                                          SgUnparse_Info &info);
   virtual void unparseOmpAtomicClause(SgOmpClause *clause,
                                       SgUnparse_Info &info);
   virtual void unparseOmpScheduleClause(SgOmpClause *clause,
@@ -343,6 +348,10 @@ public:
                                            SgUnparse_Info &info);
   virtual void unparseOmpDeclareSimdStatement(SgStatement *stmt,
                                               SgUnparse_Info &info);
+  virtual void unparseOmpDeclareVariantStatement(SgStatement *stmt,
+                                                 SgUnparse_Info &info);
+  virtual void unparseOmpBeginDeclareVariantStatement(SgStatement *stmt,
+                                                      SgUnparse_Info &info);
 
   // This is necessary since some clauses should only appear with the begin part
   // of a directive

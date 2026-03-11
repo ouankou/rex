@@ -778,6 +778,12 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
 
   int finalCombinedExitStatus = 0;
 
+  const int frontendStatus = frontendExitStatus(project);
+  if (frontendStatus != 0) {
+    project->set_backendErrorCode(frontendStatus);
+    return frontendStatus;
+  }
+
   if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL) {
     printf("Inside of backend(SgProject*) \n");
   }

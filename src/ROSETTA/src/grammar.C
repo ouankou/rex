@@ -3564,6 +3564,7 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
         // derived from SgVariableDeclaration.
         || nodeName == "SgTemplateVariableDeclaration" ||
         nodeName == "SgOmpExecStatement" || nodeName == "SgOmpForStatement" ||
+        nodeName == "SgOmpWhenClause" || nodeName == "SgOmpMatchClause" ||
         nodeName == "SgOmpClauseBodyStatement" ||
         nodeName == "SgOmpClauseStatement" ||
         nodeName == "SgAccClauseBodyStatement" ||
@@ -3584,6 +3585,7 @@ Grammar::getGrammarNodeInfo(AstNodeClass *grammarnode) {
         nodeName == "SgOmpDeclareMapperStatement" ||
         nodeName == "SgOmpCancelStatement" ||
         nodeName == "SgOmpTaskgroupStatement" ||
+        nodeName == "SgOmpDispatchStatement" ||
         nodeName == "SgOmpDepobjStatement" ||
         nodeName == "SgOmpDistributeStatement" ||
         nodeName == "SgOmpLoopStatement" ||
