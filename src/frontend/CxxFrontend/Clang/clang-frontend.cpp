@@ -122,6 +122,34 @@ struct TokenWithOffset {
   unsigned offset;
 };
 
+bool sourceFileContainsPhysicalLineSplice(llvm::StringRef input_file) {
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> buffer_or =
+      llvm::MemoryBuffer::getFile(input_file);
+  if (!buffer_or) {
+    return false;
+  }
+
+  llvm::StringRef source_text = (*buffer_or)->getBuffer();
+  for (size_t i = 0; i < source_text.size(); ++i) {
+    if (source_text[i] != '\\') {
+      continue;
+    }
+    size_t next = i + 1;
+    if (next >= source_text.size()) {
+      continue;
+    }
+    if (source_text[next] == '\n') {
+      return true;
+    }
+    if (source_text[next] == '\r' && next + 1 < source_text.size() &&
+        source_text[next + 1] == '\n') {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // Preserve legacy frontend acceptance of explicit member specializations that
 // omit the required template<> header.
 std::unique_ptr<llvm::MemoryBuffer>
@@ -2138,14 +2166,21 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(
       input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
 
-  if ((language == ClangToSageTranslator::C ||
-       language == ClangToSageTranslator::CPLUSPLUS ||
-       language == ClangToSageTranslator::CUDA) &&
-      sageFile.get_skipfinalCompileStep() && !openmp_ast_mode &&
-      !sageFile.get_openmp_lowering()) {
-    // Preserve original spelling for no-backend-compile roundtrip workflows
-    // (e.g., cmp-based translator tests), unless we intentionally rewrite the
-    // in-memory source buffer below.
+  const bool is_c_family_roundtrip_language =
+      language == ClangToSageTranslator::C ||
+      language == ClangToSageTranslator::CPLUSPLUS ||
+      language == ClangToSageTranslator::CUDA;
+  const bool needs_exact_line_splice_roundtrip =
+      is_c_family_roundtrip_language &&
+      sourceFileContainsPhysicalLineSplice(input_file);
+
+  if (is_c_family_roundtrip_language && !openmp_ast_mode &&
+      !sageFile.get_openmp_lowering() &&
+      (sageFile.get_skipfinalCompileStep() ||
+       needs_exact_line_splice_roundtrip)) {
+    // Preserve original spelling for workflows that compare round-tripped
+    // sources directly, and for untouched inputs that depend on physical
+    // line-splice semantics that the AST alone cannot reconstruct.
     sageFile.set_unparse_tokens(true);
   }
 

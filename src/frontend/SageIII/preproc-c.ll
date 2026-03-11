@@ -192,7 +192,9 @@ write test cases so that
 #include <ctype.h>
 #include <string>
 #include <string.h>
+#include <fstream>
 #include <list>
+#include <vector>
 
 /* DQ (1/21/2008): This now has a single definition in the header file: ROSE/src/frontend/SageIII/general_defs.h */
 #include "general_token_defs.h"
@@ -624,6 +626,155 @@ bool isemptystack();
 
 int num_of_newlines(char*);
 
+struct physical_line_splice {
+  int line_num;
+  int column_num;
+  std::string lexeme;
+};
+
+static std::vector<physical_line_splice>
+collect_physical_line_splices(const std::string &fileName)
+   {
+     std::ifstream input(fileName.c_str(), std::ios::binary);
+     std::vector<physical_line_splice> splices;
+     if (!input)
+        {
+          return splices;
+        }
+
+     std::string source_text((std::istreambuf_iterator<char>(input)),
+                             std::istreambuf_iterator<char>());
+
+     int line_num = 1;
+     int column_num = 1;
+     for (size_t i = 0; i < source_text.size(); )
+        {
+          if (source_text[i] == '\\')
+             {
+               if (i + 1 < source_text.size() && source_text[i + 1] == '\n')
+                  {
+                    splices.push_back({line_num, column_num, "\\\n"});
+                    line_num++;
+                    column_num = 1;
+                    i += 2;
+                    continue;
+                  }
+
+               if (i + 2 < source_text.size() && source_text[i + 1] == '\r' && source_text[i + 2] == '\n')
+                  {
+                    splices.push_back({line_num, column_num, "\\\r\n"});
+                    line_num++;
+                    column_num = 1;
+                    i += 3;
+                    continue;
+                  }
+             }
+
+          if (source_text[i] == '\r' && i + 1 < source_text.size() && source_text[i + 1] == '\n')
+             {
+               line_num++;
+               column_num = 1;
+               i += 2;
+               continue;
+             }
+
+          if (source_text[i] == '\n')
+             {
+               line_num++;
+               column_num = 1;
+               i += 1;
+               continue;
+             }
+
+          column_num++;
+          i += 1;
+        }
+
+     return splices;
+   }
+
+static void preserve_physical_line_splices(const std::string &fileName,
+                                           LexTokenStreamTypePointer token_stream)
+   {
+     if (token_stream == NULL || token_stream->empty() == true)
+        {
+          return;
+        }
+
+     std::vector<physical_line_splice> splices =
+         collect_physical_line_splices(fileName);
+     if (splices.empty() == true)
+        {
+          return;
+        }
+
+     SE_ITR token_iterator = token_stream->begin();
+     for (const physical_line_splice &splice : splices)
+        {
+          while (token_iterator != token_stream->end())
+             {
+               stream_element *element = *token_iterator;
+               if (element == NULL || element->p_tok_elem == NULL)
+                  {
+                    ++token_iterator;
+                    continue;
+                  }
+
+               if (element->beginning_fpi.line_num < splice.line_num)
+                  {
+                    ++token_iterator;
+                    continue;
+                  }
+
+               if (element->beginning_fpi.line_num == splice.line_num &&
+                   element->beginning_fpi.column_num < splice.column_num + 1)
+                  {
+                    ++token_iterator;
+                    continue;
+                  }
+
+               break;
+             }
+
+          if (token_iterator == token_stream->end())
+             {
+               break;
+             }
+
+          SE_ITR lookahead = token_iterator;
+          while (lookahead != token_stream->end())
+             {
+               stream_element *newline_element = *lookahead;
+               if (newline_element == NULL || newline_element->p_tok_elem == NULL)
+                  {
+                    ++lookahead;
+                    continue;
+                  }
+
+               if (newline_element->beginning_fpi.line_num > splice.line_num ||
+                   (newline_element->beginning_fpi.line_num == splice.line_num &&
+                    newline_element->beginning_fpi.column_num > splice.column_num + 1))
+                  {
+                    break;
+                  }
+
+               std::string &lexeme = newline_element->p_tok_elem->token_lexeme;
+               if (newline_element->beginning_fpi.line_num == splice.line_num &&
+                   (newline_element->beginning_fpi.column_num == splice.column_num ||
+                    newline_element->beginning_fpi.column_num == splice.column_num + 1) &&
+                   (lexeme == "\n" || lexeme == "\r\n"))
+                  {
+                    lexeme = splice.lexeme;
+                    newline_element->beginning_fpi.column_num = splice.column_num;
+                    token_iterator = lookahead;
+                    break;
+                  }
+
+               ++lookahead;
+             }
+        }
+   }
+
 ROSEAttributesList preprocessorList;
 
 
@@ -687,6 +838,28 @@ BEGIN NORMAL;
 #endif
   // DQ (11/29/2018): Adding form feed support to ROSE.
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
+   }
+
+<NORMAL>\\\r\n {
+#if DEBUG_LEX_PASS
+     printf("%s is an escaped CRLF line splice token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
+#endif
+  // Preserve physical line splices in the raw token stream so token-based
+  // unparsing can reconstruct the original source faithfully.
+     add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
+     preproc_line_num  += 1;
+     preproc_column_num = 1;
+   }
+
+<NORMAL>\\\n {
+#if DEBUG_LEX_PASS
+     printf("%s is an escaped line splice token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
+#endif
+  // Preserve physical line splices in the raw token stream so token-based
+  // unparsing can reconstruct the original source faithfully.
+     add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
+     preproc_line_num  += 1;
+     preproc_column_num = 1;
    }
 
 <NORMAL>\r\n { 
@@ -1436,6 +1609,12 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
 #if DEBUG_LEX_PASS
                     printf ("In getPreprocessorDirectives(): DONE: calling yylex() \n");
 #endif
+
+                 // Flex drops the physical backslash from escaped newline
+                 // splices in the raw token stream. Restore those exact
+                 // source characters from the on-disk file so token-based
+                 // unparsing can preserve translation-phase token splicing.
+                    preserve_physical_line_splices(fileName, ROSE_token_stream_pointer);
 
                  // bugfix (9/29/2001)
                  // The semantics required here is to move the elements accumulated into the
