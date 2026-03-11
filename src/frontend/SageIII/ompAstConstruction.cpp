@@ -8186,12 +8186,14 @@ buildVariantClauseCommonData(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
 
   std::vector<std::pair<std::string, OpenMPDirective *>> *construct_directive =
       variant_clause->getConstructDirective();
-  for (const auto &construct_entry : *construct_directive) {
-    std::pair<SgPragmaDeclaration *, OpenMPDirective *> paired_construct =
-        make_pair(current_OpenMPIR_to_SageIII.first, construct_entry.second);
-    SgStatement *converted = convertVariantDirective(paired_construct);
-    if (converted != nullptr) {
-      data.construct_directives.push_back(converted);
+  if (construct_directive != nullptr) {
+    for (const auto &construct_entry : *construct_directive) {
+      std::pair<SgPragmaDeclaration *, OpenMPDirective *> paired_construct =
+          make_pair(current_OpenMPIR_to_SageIII.first, construct_entry.second);
+      SgStatement *converted = convertVariantDirective(paired_construct);
+      if (converted != nullptr) {
+        data.construct_directives.push_back(converted);
+      }
     }
   }
 
