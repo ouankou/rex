@@ -6,7 +6,7 @@
 static_assert(std::hardware_destructive_interference_size > 0);
 static_assert(std::hardware_constructive_interference_size > 0);
 
-struct alignas(64) over_aligned_data {
+struct alignas(std::hardware_destructive_interference_size) over_aligned_data {
   int value;
 };
 
