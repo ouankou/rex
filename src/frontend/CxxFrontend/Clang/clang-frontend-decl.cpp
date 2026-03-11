@@ -9533,9 +9533,52 @@ bool ClangToSageTranslator::VisitFunctionTemplateDecl(
         spec->getTemplateSpecializationKind();
     if (kind == clang::TSK_ExplicitInstantiationDeclaration ||
         kind == clang::TSK_ExplicitInstantiationDefinition) {
-      // Explicit instantiations are emitted as ordinary declarations in the
-      // enclosing DeclContext walk. Translating them here eagerly causes the
-      // same source declaration to be materialized twice.
+      const bool needs_member_rehoming =
+          spec->getLexicalDeclContext() != nullptr &&
+          spec->getLexicalDeclContext()->isRecord();
+      if (!needs_member_rehoming) {
+        // Non-member explicit instantiations are emitted as ordinary
+        // declarations in the enclosing DeclContext walk. Translating them
+        // here eagerly causes the same source declaration to be materialized
+        // twice.
+        continue;
+      }
+
+      SgNode *spec_node = Traverse(spec);
+      SgDeclarationStatement *decl_stmt =
+          unwrap_template_instantiation_directive_decl(
+              isSgDeclarationStatement(spec_node));
+
+      SgScopeStatement *attach_scope = nullptr;
+      if (clang::CXXMethodDecl *method_spec =
+              llvm::dyn_cast<clang::CXXMethodDecl>(spec)) {
+        attach_scope = resolveMethodEnclosingScope(method_spec);
+      }
+      if (decl_stmt != nullptr) {
+        if (attach_scope == nullptr) {
+          attach_scope = isSgScopeStatement(decl_stmt->get_parent());
+          if (attach_scope == nullptr) {
+            attach_scope = decl_stmt->get_scope();
+          }
+        }
+        if (attach_scope != nullptr) {
+          if (SgScopeStatement *old_parent =
+                  isSgScopeStatement(decl_stmt->get_parent())) {
+            if (old_parent != attach_scope) {
+              detach_decl_from_scope_child_list(decl_stmt, old_parent);
+            }
+          }
+          if (decl_stmt->get_scope() != attach_scope) {
+            decl_stmt->set_scope(attach_scope);
+          }
+          if (decl_stmt->get_parent() != attach_scope) {
+            decl_stmt->set_parent(attach_scope);
+          }
+          ensure_decl_in_scope_child_list_preserve_scope(
+              decl_stmt, attach_scope,
+              "VisitFunctionTemplateDecl:explicit-instantiation");
+        }
+      }
       continue;
     }
     if (kind == clang::TSK_ImplicitInstantiation && !spec->hasBody()) {
