@@ -5618,7 +5618,18 @@ convertVariantDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   SgStatement *result =
       convertVariantBodyDirective(current_OpenMPIR_to_SageIII);
   if (result == NULL) {
-    return NULL;
+    OpenMPDirective *directive = current_OpenMPIR_to_SageIII.second;
+    if (directive == NULL || directive->getKind() == OMPD_end) {
+      return NULL;
+    }
+
+    // Preserve unsupported variant directives opaquely so declare-variant
+    // match/when selectors round-trip instead of silently dropping them.
+    auto *opaque_directive = new SgOmpClauseStatement();
+    std::string opaque_spelling = trimWhitespaceCopy(directive->toString());
+    ROSE_ASSERT(!opaque_spelling.empty());
+    setDirectiveSpellingOverride(opaque_directive, opaque_spelling);
+    result = opaque_directive;
   }
 
   setOneSourcePositionForTransformation(result);

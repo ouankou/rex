@@ -11420,16 +11420,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
 
     // unparse the begin directive
     unparseOmpDirectivePrefixAndName(stmt, info);
-    // unparse the parentheses of construct directive
-    if (isConstruct) {
-      curprint(string("("));
-    };
     // unparse the begin directive's clauses
     unparseOmpBeginDirectiveClauses(stmt, info);
-    // unparse the parentheses of construct directive
-    if (isConstruct) {
-      curprint(string(")"));
-    };
     if (!isVariant) {
       unp->u_sage->curprint_newline();
     };
