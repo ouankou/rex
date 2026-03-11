@@ -696,7 +696,7 @@ consume_trigraph_line_splice(std::ifstream &input,
         {
           char newline = '\0';
           input.get(newline);
-          *splice_out = {line_num, column_num, "??/\n"};
+          *splice_out = {line_num, column_num, "?""?/\n"};
           return true;
         }
 
@@ -708,7 +708,7 @@ consume_trigraph_line_splice(std::ifstream &input,
              {
                char newline = '\0';
                input.get(newline);
-               *splice_out = {line_num, column_num, "??/\r\n"};
+               *splice_out = {line_num, column_num, "?""?/\r\n"};
                return true;
              }
         }
@@ -800,6 +800,7 @@ static void preserve_physical_line_splices(const std::string &fileName,
      SE_ITR token_iterator = token_stream->begin();
      for (const physical_line_splice &splice : splices)
         {
+          bool replaced_splice_token = false;
           while (token_iterator != token_stream->end())
              {
                stream_element *element = *token_iterator;
@@ -840,26 +841,40 @@ static void preserve_physical_line_splices(const std::string &fileName,
                     continue;
                   }
 
-               if (newline_element->beginning_fpi.line_num > splice.line_num ||
+               if (newline_element->beginning_fpi.line_num > splice.line_num + 1 ||
                    (newline_element->beginning_fpi.line_num == splice.line_num &&
-                    newline_element->beginning_fpi.column_num > splice.column_num + 1))
+                    newline_element->beginning_fpi.column_num > splice.column_num + 1) ||
+                   (newline_element->beginning_fpi.line_num == splice.line_num + 1 &&
+                    newline_element->beginning_fpi.column_num > 1))
                   {
                     break;
                   }
 
                std::string &lexeme = newline_element->p_tok_elem->token_lexeme;
-               if (newline_element->beginning_fpi.line_num == splice.line_num &&
+               bool matches_same_line_newline =
+                   newline_element->beginning_fpi.line_num == splice.line_num &&
                    (newline_element->beginning_fpi.column_num == splice.column_num ||
-                    newline_element->beginning_fpi.column_num == splice.column_num + 1) &&
+                    newline_element->beginning_fpi.column_num == splice.column_num + 1);
+               bool matches_next_line_newline =
+                   newline_element->beginning_fpi.line_num == splice.line_num + 1 &&
+                   newline_element->beginning_fpi.column_num == 1;
+               if ((matches_same_line_newline || matches_next_line_newline) &&
                    (lexeme == "\n" || lexeme == "\r\n"))
                   {
                     lexeme = splice.lexeme;
+                    newline_element->beginning_fpi.line_num = splice.line_num;
                     newline_element->beginning_fpi.column_num = splice.column_num;
                     token_iterator = lookahead;
+                    replaced_splice_token = true;
                     break;
                   }
 
                ++lookahead;
+             }
+
+          if (replaced_splice_token == false)
+             {
+               continue;
              }
         }
    }
