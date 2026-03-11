@@ -16334,15 +16334,15 @@ SgName SgOmpDeclareSimdStatement::get_mangled_name(void) const {
 SOURCE_OMP_DECLARE_SIMD_STATEMENT_END
 
 SOURCE_OMP_DECLARE_VARIANT_STATEMENT_START
-void SgOmpDeclareVariantStatement::post_construction_initialization() {}
+static SgName buildOmpVariantStatementMangledName(const SgStatement *statement,
+                                                  const char *namePart) {
+  ROSE_ASSERT(statement != NULL);
 
-SgName SgOmpDeclareVariantStatement::get_mangled_name(void) const {
-  SgName returnName;
-  SgScopeStatement *scope = get_scope();
+  SgScopeStatement *scope = statement->get_scope();
   ROSE_ASSERT(scope != NULL);
 
   std::string signature_suffix;
-  if (Sg_File_Info *fi = get_file_info()) {
+  if (Sg_File_Info *fi = statement->get_file_info()) {
     if (fi->get_line() > 0) {
       std::string signature_data =
           fi->get_filenameString() + ":" +
@@ -16357,10 +16357,15 @@ SgName SgOmpDeclareVariantStatement::get_mangled_name(void) const {
     signature_suffix = "scope_index_unknown";
   }
 
-  returnName = scope->get_mangled_name() +
-               SgName("_omp_declaration_variant_") +
-               SgName(signature_suffix);
-  return returnName;
+  return scope->get_mangled_name() + SgName(namePart) +
+         SgName(signature_suffix);
+}
+
+void SgOmpDeclareVariantStatement::post_construction_initialization() {}
+
+SgName SgOmpDeclareVariantStatement::get_mangled_name(void) const {
+  return buildOmpVariantStatementMangledName(this,
+                                             "_omp_declaration_variant_");
 }
 
 SOURCE_OMP_DECLARE_VARIANT_STATEMENT_END
@@ -16369,30 +16374,8 @@ SOURCE_OMP_BEGIN_DECLARE_VARIANT_STATEMENT_START
 void SgOmpBeginDeclareVariantStatement::post_construction_initialization() {}
 
 SgName SgOmpBeginDeclareVariantStatement::get_mangled_name(void) const {
-  SgName returnName;
-  SgScopeStatement *scope = get_scope();
-  ROSE_ASSERT(scope != NULL);
-
-  std::string signature_suffix;
-  if (Sg_File_Info *fi = get_file_info()) {
-    if (fi->get_line() > 0) {
-      std::string signature_data =
-          fi->get_filenameString() + ":" +
-          Rose::StringUtility::numberToString(fi->get_line()) + ":" +
-          Rose::StringUtility::numberToString(fi->get_col());
-      signature_suffix = Rose::StringUtility::numberToString(
-          Rose::StringUtility::generate_checksum(signature_data));
-    }
-  }
-
-  if (signature_suffix.empty()) {
-    signature_suffix = "scope_index_unknown";
-  }
-
-  returnName = scope->get_mangled_name() +
-               SgName("_omp_begin_declaration_variant_") +
-               SgName(signature_suffix);
-  return returnName;
+  return buildOmpVariantStatementMangledName(
+      this, "_omp_begin_declaration_variant_");
 }
 
 SOURCE_OMP_BEGIN_DECLARE_VARIANT_STATEMENT_END
@@ -16401,30 +16384,8 @@ SOURCE_OMP_END_DECLARE_VARIANT_STATEMENT_START
 void SgOmpEndDeclareVariantStatement::post_construction_initialization() {}
 
 SgName SgOmpEndDeclareVariantStatement::get_mangled_name(void) const {
-  SgName returnName;
-  SgScopeStatement *scope = get_scope();
-  ROSE_ASSERT(scope != NULL);
-
-  std::string signature_suffix;
-  if (Sg_File_Info *fi = get_file_info()) {
-    if (fi->get_line() > 0) {
-      std::string signature_data =
-          fi->get_filenameString() + ":" +
-          Rose::StringUtility::numberToString(fi->get_line()) + ":" +
-          Rose::StringUtility::numberToString(fi->get_col());
-      signature_suffix = Rose::StringUtility::numberToString(
-          Rose::StringUtility::generate_checksum(signature_data));
-    }
-  }
-
-  if (signature_suffix.empty()) {
-    signature_suffix = "scope_index_unknown";
-  }
-
-  returnName = scope->get_mangled_name() +
-               SgName("_omp_end_declaration_variant_") +
-               SgName(signature_suffix);
-  return returnName;
+  return buildOmpVariantStatementMangledName(this,
+                                             "_omp_end_declaration_variant_");
 }
 
 SOURCE_OMP_END_DECLARE_VARIANT_STATEMENT_END
