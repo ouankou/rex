@@ -3203,6 +3203,7 @@ foreach(file_to_test ${CXX_TESTCODES_EXPECTED_FAIL})
   rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
   set_tests_properties(${_test_name} PROPERTIES
+    WILL_FAIL 1
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
@@ -4758,19 +4759,12 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
   rex_compile_test_name(_test_name "Cxx_tests_failing" ${file_to_test})
   list(APPEND _cxx_compile_tests ${_test_name})
 endforeach()
-foreach(file_to_test ${CXX_TESTCODES_GNUXX03})
-  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
-  list(APPEND _cxx_compile_tests ${_test_name})
-endforeach()
-foreach(file_to_test ${CXX_TESTCODES_GNUXX17})
-  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
-  list(APPEND _cxx_compile_tests ${_test_name})
-endforeach()
-foreach(file_to_test ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
-  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
-  list(APPEND _cxx_compile_tests ${_test_name})
-endforeach()
-foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
+foreach(
+  file_to_test
+  ${CXX_TESTCODES_GNUXX03}
+  ${CXX_TESTCODES_GNUXX17}
+  ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING}
+  ${CXX_TESTCODES_TO_RUN})
   rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
   list(APPEND _cxx_compile_tests ${_test_name})
 endforeach()
