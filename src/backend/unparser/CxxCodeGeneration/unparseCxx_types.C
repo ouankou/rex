@@ -3384,9 +3384,6 @@ template void Unparse_Type::outputType(SgInitializedName *, SgType *,
                                        SgUnparse_Info &);
 template void Unparse_Type::outputType(SgTemplateArgument *, SgType *,
                                        SgUnparse_Info &);
-template void Unparse_Type::outputType(SgAggregateInitializer *, SgType *,
-                                       SgUnparse_Info &);
-
 template <typename T>
 void Unparse_Type::outputType(T *referenceNode, SgType *referenceNodeType,
                               SgUnparse_Info &info) {
@@ -3409,11 +3406,11 @@ void Unparse_Type::outputType(T *referenceNode, SgType *referenceNodeType,
   }
 
   ninfo_for_type.set_name_qualification_length(
-      referenceNode->get_name_qualification_length_for_type());
+      referenceNode->get_name_qualification_length());
   ninfo_for_type.set_global_qualification_required(
-      referenceNode->get_global_qualification_required_for_type());
+      referenceNode->get_global_qualification_required());
   ninfo_for_type.set_type_elaboration_required(
-      referenceNode->get_type_elaboration_required_for_type());
+      referenceNode->get_type_elaboration_required());
 
   ninfo_for_type.set_reference_node_for_qualification(referenceNode);
 
@@ -3442,6 +3439,40 @@ void Unparse_Type::outputType(T *referenceNode, SgType *referenceNodeType,
 }
 
 template <>
+void Unparse_Type::outputType<SgAggregateInitializer>(
+    SgAggregateInitializer *referenceNode, SgType *referenceNodeType,
+    SgUnparse_Info &info) {
+  SgUnparse_Info newInfo(info);
+  newInfo.set_isTypeFirstPart();
+  SgUnparse_Info ninfo_for_type(newInfo);
+
+  if (referenceNode->get_requiresGlobalNameQualificationOnType()) {
+    ninfo_for_type.set_requiresGlobalNameQualification();
+  }
+
+  ninfo_for_type.set_name_qualification_length(
+      referenceNode->get_name_qualification_length_for_type());
+  ninfo_for_type.set_global_qualification_required(
+      referenceNode->get_global_qualification_required_for_type());
+  ninfo_for_type.set_type_elaboration_required(
+      referenceNode->get_type_elaboration_required_for_type());
+  ninfo_for_type.set_reference_node_for_qualification(referenceNode);
+
+  if (ninfo_for_type.requiresGlobalNameQualification()) {
+    ninfo_for_type.set_global_qualification_required(true);
+    ninfo_for_type.set_reference_node_for_qualification(NULL);
+  }
+  ROSE_ASSERT(ninfo_for_type.SkipClassDefinition() ==
+              ninfo_for_type.SkipEnumDefinition());
+
+  unp->u_type->unparseType(referenceNodeType, ninfo_for_type);
+
+  newInfo.set_isTypeSecondPart();
+
+  unp->u_type->unparseType(referenceNodeType, newInfo);
+}
+
+template <>
 void Unparse_Type::outputType<SgConstructorInitializer>(
     SgConstructorInitializer *referenceNode, SgType *referenceNodeType,
     SgUnparse_Info &info) {
@@ -3449,6 +3480,12 @@ void Unparse_Type::outputType<SgConstructorInitializer>(
   newInfo.set_isTypeFirstPart();
   SgUnparse_Info ninfo_for_type(newInfo);
 
+  ninfo_for_type.set_name_qualification_length(
+      referenceNode->get_name_qualification_length());
+  ninfo_for_type.set_global_qualification_required(
+      referenceNode->get_global_qualification_required());
+  ninfo_for_type.set_type_elaboration_required(
+      referenceNode->get_type_elaboration_required());
   ninfo_for_type.set_reference_node_for_qualification(referenceNode);
 
   if (ninfo_for_type.requiresGlobalNameQualification()) {

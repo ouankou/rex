@@ -4892,6 +4892,10 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     if (mfuncdecl_stmt->get_parent() == mfuncdecl_stmt->get_scope()) {
       return;
     }
+    if (isSgTemplateInstantiationDirectiveStatement(
+            mfuncdecl_stmt->get_parent()) != NULL) {
+      return;
+    }
     if (SgTemplateInstantiationMemberFunctionDecl *inst =
             isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt)) {
       if (inst->isSpecialization()) {

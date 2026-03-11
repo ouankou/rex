@@ -1446,6 +1446,43 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
     return nrtype;
   };
 
+  auto refresh_type_from_written_template_args =
+      [&](SgType *resolved_type,
+          clang::TemplateSpecializationTypeLoc spec_loc) -> SgType * {
+    if (resolved_type == nullptr || spec_loc.isNull()) {
+      return resolved_type;
+    }
+
+    SgClassType *class_type = isSgClassType(resolved_type);
+    if (class_type == nullptr) {
+      return resolved_type;
+    }
+
+    SgTemplateInstantiationDecl *inst_decl =
+        isSgTemplateInstantiationDecl(class_type->get_declaration());
+    if (inst_decl == nullptr) {
+      return resolved_type;
+    }
+
+    SgTemplateArgumentPtrList written_args;
+    for (unsigned i = 0; i < spec_loc.getNumArgs(); ++i) {
+      appendTemplateArguments(written_args, spec_loc.getArgLoc(i), true);
+    }
+    if (written_args.empty()) {
+      return resolved_type;
+    }
+
+    // Preserve source-faithful written arguments on the declaration without
+    // clobbering semantic deduced arguments, which can legitimately differ
+    // for partial specializations.
+    SageBuilder::setTemplateArgumentsInDeclaration(inst_decl, &written_args);
+    if (SgTemplateInstantiationDecl *def_decl = isSgTemplateInstantiationDecl(
+            inst_decl->get_definingDeclaration())) {
+      SageBuilder::setTemplateArgumentsInDeclaration(def_decl, &written_args);
+    }
+    return resolved_type;
+  };
+
   if (auto elaborated_loc = type_loc.getAs<clang::ElaboratedTypeLoc>()) {
     const clang::ElaboratedType *elaborated = elaborated_loc.getTypePtr();
     clang::NestedNameSpecifier *qualifier =
@@ -1668,7 +1705,14 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
   if (const clang::TemplateSpecializationType *tst =
           type_loc.getType()->getAs<clang::TemplateSpecializationType>()) {
     if (!tst->isDependentType()) {
-      return buildTypeFromQualifiedType(type_loc.getType());
+      SgType *resolved_type = buildTypeFromQualifiedType(type_loc.getType());
+      if (auto spec_loc =
+              type_loc.getAs<clang::TemplateSpecializationTypeLoc>()) {
+        resolved_type =
+            refresh_type_from_written_template_args(resolved_type, spec_loc);
+      }
+      annotate_auto_type_constraints(resolved_type);
+      return resolved_type;
     }
     clang::TemplateName tname = tst->getTemplateName();
     std::string base_name = getTemplateNameBase(tname);
@@ -3592,6 +3636,78 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
   auto build_decl_expr =
       [&](clang::ValueDecl *decl,
           SgInitializedName **out_init_name) -> SgExpression * {
+    auto apply_explicit_qualifier_from_decl_context =
+        [&](SgExpression *expr, const clang::ValueDecl *value_decl) -> void {
+      if (expr == nullptr || value_decl == nullptr) {
+        return;
+      }
+
+      SgStringList tokens;
+      for (const clang::DeclContext *ctx = value_decl->getDeclContext();
+           ctx != nullptr; ctx = ctx->getParent()) {
+        if (ctx->isTranslationUnit()) {
+          break;
+        }
+        if (llvm::isa<clang::LinkageSpecDecl>(ctx)) {
+          continue;
+        }
+        if (const clang::NamespaceDecl *ns =
+                llvm::dyn_cast<clang::NamespaceDecl>(ctx)) {
+          if (!ns->isAnonymousNamespace() && !ns->getName().empty()) {
+            tokens.push_back(ns->getNameAsString());
+          }
+          continue;
+        }
+        if (const clang::NamespaceAliasDecl *alias =
+                llvm::dyn_cast<clang::NamespaceAliasDecl>(ctx)) {
+          if (!alias->getName().empty()) {
+            tokens.push_back(alias->getNameAsString());
+          }
+          continue;
+        }
+        if (const clang::RecordDecl *record =
+                llvm::dyn_cast<clang::RecordDecl>(ctx)) {
+          if (!record->getName().empty()) {
+            tokens.push_back(record->getNameAsString());
+          }
+          continue;
+        }
+      }
+
+      if (tokens.empty()) {
+        return;
+      }
+      std::reverse(tokens.begin(), tokens.end());
+
+      auto apply_tokens = [&](auto *ref) {
+        ref->set_explicit_name_qualification_tokens(tokens);
+        ref->set_explicit_name_qualification_length(
+            static_cast<int>(tokens.size()));
+        ref->set_explicit_global_qualification(false);
+      };
+
+      if (SgTemplateMemberFunctionRefExp *tmpl_member =
+              isSgTemplateMemberFunctionRefExp(expr)) {
+        apply_tokens(tmpl_member);
+        tmpl_member->set_need_qualifier(true);
+      } else if (SgMemberFunctionRefExp *member_ref =
+                     isSgMemberFunctionRefExp(expr)) {
+        apply_tokens(member_ref);
+        member_ref->set_need_qualifier(true);
+      } else if (SgTemplateFunctionRefExp *tmpl_func =
+                     isSgTemplateFunctionRefExp(expr)) {
+        apply_tokens(tmpl_func);
+      } else if (SgFunctionRefExp *func_ref = isSgFunctionRefExp(expr)) {
+        apply_tokens(func_ref);
+      } else if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+        apply_tokens(var_ref);
+      } else if (SgNonrealRefExp *nonreal_ref = isSgNonrealRefExp(expr)) {
+        apply_tokens(nonreal_ref);
+      } else if (SgEnumVal *enum_val = isSgEnumVal(expr)) {
+        apply_tokens(enum_val);
+      }
+    };
+
     if (out_init_name != nullptr) {
       *out_init_name = nullptr;
     }
@@ -3614,14 +3730,20 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
       if (out_init_name != nullptr) {
         *out_init_name = var_sym->get_declaration();
       }
-      return SageBuilder::buildVarRefExp(var_sym);
+      SgExpression *expr = SageBuilder::buildVarRefExp(var_sym);
+      apply_explicit_qualifier_from_decl_context(expr, decl);
+      return expr;
     }
     if (SgMemberFunctionSymbol *member_sym = isSgMemberFunctionSymbol(sym)) {
-      return SageBuilder::buildMemberFunctionRefExp_nfi(member_sym, false,
-                                                        false);
+      SgExpression *expr =
+          SageBuilder::buildMemberFunctionRefExp_nfi(member_sym, false, false);
+      apply_explicit_qualifier_from_decl_context(expr, decl);
+      return expr;
     }
     if (SgFunctionSymbol *func_sym = isSgFunctionSymbol(sym)) {
-      return SageBuilder::buildFunctionRefExp(func_sym);
+      SgExpression *expr = SageBuilder::buildFunctionRefExp(func_sym);
+      apply_explicit_qualifier_from_decl_context(expr, decl);
+      return expr;
     }
     if (SgEnumFieldSymbol *enum_sym = isSgEnumFieldSymbol(sym)) {
       SgInitializedName *init_name = enum_sym->get_declaration();
@@ -3948,12 +4070,19 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
 
   case clang::TemplateArgument::Declaration: {
     clang::ValueDecl *decl = arg.getAsDecl();
-    SgType *param_type = buildTypeFromQualifiedType(arg.getParamTypeForDecl());
+    clang::QualType param_qual_type = arg.getParamTypeForDecl();
+    SgType *param_type = buildTypeFromQualifiedType(param_qual_type);
     if (param_type == nullptr) {
       param_type = SageBuilder::buildIntType();
     }
     SgInitializedName *init_name = nullptr;
     SgExpression *decl_expr = build_decl_expr(decl, &init_name);
+    const bool is_member_pointer_param =
+        !param_qual_type.isNull() && param_qual_type->isMemberPointerType();
+    if (decl_expr != nullptr && is_member_pointer_param &&
+        isSgAddressOfOp(decl_expr) == nullptr) {
+      decl_expr = SageBuilder::buildAddressOfOp(decl_expr);
+    }
     if (decl_expr != nullptr || init_name != nullptr) {
       sg_arg = new SgTemplateArgument(SgTemplateArgument::nontype_argument,
                                       /*isArrayBoundUnknownType=*/false,
@@ -3985,10 +4114,17 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
   }
 
   case clang::TemplateArgument::StructuralValue: {
-    SgType *value_type =
-        buildTypeFromQualifiedType(arg.getStructuralValueType());
+    clang::QualType structural_qual_type = arg.getStructuralValueType();
+    SgType *value_type = buildTypeFromQualifiedType(structural_qual_type);
     const clang::APValue &value = arg.getAsStructuralValue();
     SgExpression *value_expr = build_structural_expr(value, value_type);
+    const bool is_member_pointer_structural =
+        !structural_qual_type.isNull() &&
+        structural_qual_type->isMemberPointerType();
+    if (value_expr != nullptr && is_member_pointer_structural &&
+        isSgAddressOfOp(value_expr) == nullptr) {
+      value_expr = SageBuilder::buildAddressOfOp(value_expr);
+    }
     if (value_expr != nullptr) {
       sg_arg = new SgTemplateArgument(SgTemplateArgument::nontype_argument,
                                       /*isArrayBoundUnknownType=*/false,
@@ -4318,6 +4454,31 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
         SgTemplateArgument *sg_arg = new SgTemplateArgument(
             SgTemplateArgument::nontype_argument,
             /*isArrayBoundUnknownType=*/false, int_type, sg_expr,
+            /*templateDeclaration=*/nullptr, explicitlySpecified);
+        sg_expr->set_parent(sg_arg);
+        return sg_arg;
+      }
+    }
+    break;
+  }
+
+  case clang::TemplateArgument::Declaration: {
+    if (const clang::Expr *expr = arg_loc.getSourceDeclExpression()) {
+      SgNode *node = Traverse(const_cast<clang::Expr *>(expr));
+      if (SgExpression *sg_expr = isSgExpression(node)) {
+        clang::QualType param_qual_type = arg.getParamTypeForDecl();
+        SgType *param_type = buildTypeFromQualifiedType(param_qual_type);
+        if (param_type == nullptr) {
+          param_type = SageBuilder::buildIntType();
+        }
+        const bool is_member_pointer_param =
+            !param_qual_type.isNull() && param_qual_type->isMemberPointerType();
+        if (is_member_pointer_param && isSgAddressOfOp(sg_expr) == nullptr) {
+          sg_expr = SageBuilder::buildAddressOfOp(sg_expr);
+        }
+        SgTemplateArgument *sg_arg = new SgTemplateArgument(
+            SgTemplateArgument::nontype_argument,
+            /*isArrayBoundUnknownType=*/false, param_type, sg_expr,
             /*templateDeclaration=*/nullptr, explicitlySpecified);
         sg_expr->set_parent(sg_arg);
         return sg_arg;
@@ -5362,12 +5523,15 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   if (it != p_template_inst_cache.end()) {
     SgTemplateInstantiationDecl *inst_decl = it->second;
     if (inst_decl != nullptr) {
+      // Preserve any source-faithful argument spelling already attached via
+      // TypeLoc-based reconstruction; canonical template arguments can lose
+      // qualification such as `&foo::member`.
       if (inst_decl->get_templateArguments().empty()) {
         inst_decl->get_templateArguments() = buildTemplateArguments(clang_type);
       }
       if (inst_decl->get_deducedTemplateArguments().empty()) {
         inst_decl->get_deducedTemplateArguments() =
-            buildTemplateArguments(clang_type);
+            inst_decl->get_templateArguments();
       }
       if (inst_decl->get_specializedTemplateDeclaration() == nullptr) {
         inst_decl->set_specializedTemplateDeclaration(template_decl);
