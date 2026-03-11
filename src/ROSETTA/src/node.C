@@ -1283,10 +1283,6 @@ void Grammar::setUpNodes() {
       "SgExpression*", "user_condition_score", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
   OmpWhenClause.setDataPrototype(
-      "std::list<SgStatement*>", "construct_directives", "",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-  OmpWhenClause.setDataPrototype(
       "bool", "target_device_selector", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   OmpWhenClause.setDataPrototype("SgExpression*", "device_arch", "= NULL",
@@ -1317,6 +1313,10 @@ void Grammar::setUpNodes() {
   OmpWhenClause.setDataPrototype("SgStatement*", "variant_directive", "= NULL",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
+  OmpWhenClause.setDataPrototype("SgStatementPtrList", "construct_directives",
+                                 "", NO_CONSTRUCTOR_PARAMETER,
+                                 BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+                                 NO_DELETE);
 
   OmpMatchClause.setDataPrototype("SgExpression*", "user_condition", "= NULL",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
@@ -1324,10 +1324,6 @@ void Grammar::setUpNodes() {
   OmpMatchClause.setDataPrototype(
       "SgExpression*", "user_condition_score", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR);
-  OmpMatchClause.setDataPrototype(
-      "std::list<SgStatement*>", "construct_directives", "",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
   OmpMatchClause.setDataPrototype(
       "bool", "target_device_selector", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1356,6 +1352,10 @@ void Grammar::setUpNodes() {
                                   "= NULL", CONSTRUCTOR_PARAMETER,
                                   BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
                                   NO_DELETE, CLONE_PTR);
+  OmpMatchClause.setDataPrototype("SgStatementPtrList", "construct_directives",
+                                  "", NO_CONSTRUCTOR_PARAMETER,
+                                  BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+                                  NO_DELETE);
 
   OmpAdjustArgsClause.setDataPrototype(
       "SgExprListExp*", "arguments", "= NULL", CONSTRUCTOR_PARAMETER,

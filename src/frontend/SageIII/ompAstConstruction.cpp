@@ -7974,7 +7974,7 @@ namespace {
 struct ConvertedVariantClauseData {
   SgExpression *user_condition = nullptr;
   SgExpression *user_condition_score = nullptr;
-  std::list<SgStatement *> construct_directives;
+  SgStatementPtrList construct_directives;
   bool target_device_selector = false;
   SgExpression *device_arch = nullptr;
   SgExpression *device_isa = nullptr;
@@ -7994,7 +7994,7 @@ void applyVariantClauseCommonData(VariantClauseT *result,
 
   result->set_user_condition(data.user_condition);
   result->set_user_condition_score(data.user_condition_score);
-  result->set_construct_directives(data.construct_directives);
+  result->get_construct_directives() = data.construct_directives;
   result->set_target_device_selector(data.target_device_selector);
   result->set_device_arch(data.device_arch);
   result->set_device_isa(data.device_isa);

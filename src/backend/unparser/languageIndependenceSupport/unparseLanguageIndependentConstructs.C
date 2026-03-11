@@ -7979,14 +7979,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       unparser->curprint(string(")}"));
       has_trait_set = true;
     };
-    std::list<SgStatement *> construct_directives =
+    const SgStatementPtrList &construct_directives =
         c->get_construct_directives();
     if (construct_directives.size()) {
       if (has_trait_set) {
         unparser->curprint(string(", "));
       };
       unparser->curprint(string("construct={"));
-      std::list<SgStatement *>::iterator iter;
+      SgStatementPtrList::const_iterator iter;
       bool has_trait_selector = false;
       for (iter = construct_directives.begin();
            iter != construct_directives.end(); iter++) {
