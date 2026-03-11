@@ -141,20 +141,68 @@ bool sourceFileContainsPhysicalLineSplice(llvm::StringRef input_file) {
            source_text[offset + 1] == '\n';
   };
 
-  for (size_t i = 0;
-       (i = source_text.find_first_of("\\?", i)) != llvm::StringRef::npos;
-       ++i) {
-    if (source_text[i] == '\\') {
-      if (has_line_ending_after(i + 1)) {
-        return true;
+  auto starts_preprocessor_directive = [&](size_t line_start) {
+    size_t i = line_start;
+    while (i < source_text.size()) {
+      char current = source_text[i];
+      if (current == ' ' || current == '\t' || current == '\f' ||
+          current == '\v') {
+        ++i;
+        continue;
       }
+      break;
+    }
+
+    if (i >= source_text.size()) {
+      return false;
+    }
+
+    if (source_text[i] == '#') {
+      return true;
+    }
+
+    return i + 2 < source_text.size() && source_text[i] == '?' &&
+           source_text[i + 1] == '?' && source_text[i + 2] == '=';
+  };
+
+  bool directive_line = starts_preprocessor_directive(0);
+  for (size_t i = 0; i < source_text.size();) {
+    if (source_text[i] == '\n') {
+      ++i;
+      directive_line = starts_preprocessor_directive(i);
       continue;
     }
 
-    if (i + 2 < source_text.size() && source_text[i + 1] == '?' &&
-        source_text[i + 2] == '/' && has_line_ending_after(i + 3)) {
-      return true;
+    if (source_text[i] == '\r' && i + 1 < source_text.size() &&
+        source_text[i + 1] == '\n') {
+      i += 2;
+      directive_line = starts_preprocessor_directive(i);
+      continue;
     }
+
+    if (source_text[i] == '\\') {
+      if (has_line_ending_after(i + 1)) {
+        if (!directive_line) {
+          return true;
+        }
+        i += source_text[i + 1] == '\n' ? 2 : 3;
+        continue;
+      }
+      ++i;
+      continue;
+    }
+
+    if (source_text[i] == '?' && i + 2 < source_text.size() &&
+        source_text[i + 1] == '?' && source_text[i + 2] == '/' &&
+        has_line_ending_after(i + 3)) {
+      if (!directive_line) {
+        return true;
+      }
+      i += source_text[i + 3] == '\n' ? 4 : 5;
+      continue;
+    }
+
+    ++i;
   }
 
   return false;

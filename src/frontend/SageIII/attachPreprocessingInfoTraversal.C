@@ -90,34 +90,6 @@ using namespace Rose;
 // directives and the token stream.
 void buildTokenStreamMapping(SgSourceFile *sourceFile);
 
-namespace {
-bool sourceFileSupportsTokenRoundTrip(const SgSourceFile *sourceFile) {
-  return sourceFile != NULL &&
-         (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
-          sourceFile->get_Cuda_only() || sourceFile->get_OpenCL_only());
-}
-
-bool tokenStreamContainsPhysicalLineSplice(
-    const std::vector<stream_element *> &tokenVector) {
-  for (stream_element *element : tokenVector) {
-    if (element == NULL || element->p_tok_elem == NULL) {
-      continue;
-    }
-
-    const std::string &lexeme = element->p_tok_elem->token_lexeme;
-    if (lexeme == "\\\n" || lexeme == "\\\r\n" ||
-        lexeme == "?"
-                  "?/\n" ||
-        lexeme == "?"
-                  "?/\r\n") {
-      return true;
-    }
-  }
-
-  return false;
-}
-} // namespace
-
 // It is needed because otherwise, the default destructor breaks something.
 
 AttachPreprocessingInfoTreeTrav::~AttachPreprocessingInfoTreeTrav() {
@@ -960,11 +932,6 @@ AttachPreprocessingInfoTreeTrav::buildCommentAndCppDirectiveList(
       // sourceFile->get_unparse_tokens() == false. This code now works and
       // solves the perfoermance problem that was present for ROSE when used
       // without the token-based unparsing.
-      if (sourceFileSupportsTokenRoundTrip(sourceFile) &&
-          tokenStreamContainsPhysicalLineSplice(tokenVector)) {
-        sourceFile->set_unparse_tokens(true);
-      }
-
       if (sourceFile->get_unparse_tokens() == true) {
         // DQ (02/20/2021): Using the performance tracking within ROSE.
         TimingPerformance timer("AST calling buildTokenStreamMapping():");
