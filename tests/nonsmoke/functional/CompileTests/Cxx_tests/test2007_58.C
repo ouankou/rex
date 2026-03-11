@@ -4,10 +4,10 @@ static int gVar;
 
 extern void foo();
 
-__inline__ void foo() {
-   gVar = 5;
-}
+__inline__ void foo() { gVar = 5; }
 
-int main(char argc, char *argv[]) {
-   return 1;
+int main(int argc, char *argv[]) {
+  (void)argc;
+  (void)argv;
+  return 1;
 }

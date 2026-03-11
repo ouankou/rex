@@ -14,7 +14,7 @@ class BB {
    AA *stuff ;
  } ;
 
-int main(int argc, char *argv)
+int main(int argc, char *argv[])
  {
    BB foo ;
    return 0 ;
@@ -24,22 +24,20 @@ int main(int argc, char *argv)
  -Jeff
 */
 
+class AA {
+public:
+  int x;
+};
 
-class AA 
-   {
-     public:
-          int x ;
-   };
+class BB {
+public:
+  BB() : stuff(new AA[50]) {};
+  AA *stuff;
+};
 
-class BB
-   {
-     public:
-          BB() : stuff(new AA[50]) { } ;
-          AA *stuff ;
-   };
-
-int main(int argc, char *argv)
-   {
-     BB foo ;
-     return 0 ;
-   }
+int main(int argc, char *argv[]) {
+  (void)argc;
+  (void)argv;
+  BB foo;
+  return 0;
+}
