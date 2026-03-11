@@ -1,5 +1,6 @@
-# Generated from tests/nonsmoke/functional/input_codes/cxx/Makefile_variables.
-set(SINGLE_STMT_BLOCK_TEST_SOURCES
+# Native CMake-owned transformation specimen list for C++ CompileTests-derived suites.
+# This replaces the old makefile-derived ROSE__CXX_TESTS and stale single-statement snapshot.
+set(REX_CXX_TRANSFORMATION_TEST_SOURCES
   test_CplusplusMacro_Cpp.C
   test2001_01.C
   test2001_02.C
@@ -1321,9 +1322,34 @@ set(SINGLE_STMT_BLOCK_TEST_SOURCES
   X.C
   dynamic_cast.C
   fstream.C
+  lulesh.C
+  luleshTALC.C
   test2005_06.C
   test2005_08.C
   test2012_57.C
   test2012_59.C
   test2013_milind_01.C
+  rex_test2026_template_instantiation_basic.cpp
+  rex_test2026_template_features.cpp
+  rex_test2026_template_decl_wrapper.cpp
+  rex_test2026_for_init_scope.cpp
+  rex_test2026_axpy_system_headers.cpp
+  rex_test2026_stl_incremental.cpp
+  rex_test2026_stl_map.cpp
+  rex_test2026_stl_meta.cpp
+  rex_test2026_stl_regex.cpp
+  rex_test2026_stl_tuple.cpp
+  rex_test2026_stl_type_traits.cpp
+  rex_test2026_stl_variant.cpp
+  rex_test2026_stl_vector.cpp
+  rex_test2026_deduction_guide.cpp
+  rex_test2026_sfinae.cpp
+  rex_test2026_dependent_qualification.cpp
+  rex_test2026_extern_c_brace_roundtrip.cpp
+  rex_test2026_std_filesystem.cpp
+  rex_test2026_std_shared_ptr_enable_shared.cpp
+  rex_test2026_std_bind_function.cpp
+  rex_test2026_std_random.cpp
+  rex_test2026_std_variant_visit.cpp
+  rex_test2026_namespace_qualification.cpp
 )

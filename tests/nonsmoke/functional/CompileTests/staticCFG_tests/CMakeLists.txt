@@ -28,7 +28,7 @@ function(rex_set_disabled_test test_name base_label)
   endif()
 endfunction()
 
-# This populates the list ROSE__CXX_TESTS
+# This uses the native Cxx_tests specimen classification.
 
 set(CXX_TESTCODES_FOR_CFG ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
 list(REMOVE_ITEM CXX_TESTCODES_FOR_CFG ${TESTCODE_CURRENTLY_FAILING})
