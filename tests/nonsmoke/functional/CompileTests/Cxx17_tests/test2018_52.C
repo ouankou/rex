@@ -21,5 +21,6 @@ void *allocate_over_aligned_data() {
 }
 
 void deallocate_over_aligned_data(void *ptr) noexcept {
-  ::operator delete(ptr, std::align_val_t{alignof(over_aligned_data)});
+  ::operator delete(ptr, sizeof(over_aligned_data),
+                    std::align_val_t{alignof(over_aligned_data)});
 }
