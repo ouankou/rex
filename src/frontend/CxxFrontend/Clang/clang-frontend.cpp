@@ -130,13 +130,11 @@ bool sourceFileContainsPhysicalLineSplice(llvm::StringRef input_file) {
   }
 
   llvm::StringRef source_text = (*buffer_or)->getBuffer();
-  for (size_t i = 0; i < source_text.size(); ++i) {
-    if (source_text[i] != '\\') {
-      continue;
-    }
+  for (size_t i = 0; (i = source_text.find('\\', i)) != llvm::StringRef::npos;
+       ++i) {
     size_t next = i + 1;
     if (next >= source_text.size()) {
-      continue;
+      break;
     }
     if (source_text[next] == '\n') {
       return true;
