@@ -8143,8 +8143,18 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
 
   if (ctor_decl != nullptr) {
     // Get the type being constructed
-    SgType *constructed_type =
-        buildTypeFromQualifiedType(cxx_construct_expr->getType());
+    SgType *constructed_type = nullptr;
+    if (clang::CXXTemporaryObjectExpr *temporary_object_expr =
+            llvm::dyn_cast<clang::CXXTemporaryObjectExpr>(cxx_construct_expr)) {
+      if (clang::TypeSourceInfo *type_info =
+              temporary_object_expr->getTypeSourceInfo()) {
+        constructed_type = buildTypeFromTypeLoc(type_info->getTypeLoc());
+      }
+    }
+    if (constructed_type == nullptr) {
+      constructed_type =
+          buildTypeFromQualifiedType(cxx_construct_expr->getType());
+    }
 
     // Build argument list for constructor call
     // Note: Empty argument lists are intentional and valid for default

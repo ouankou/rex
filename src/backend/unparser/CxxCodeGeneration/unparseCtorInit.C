@@ -203,9 +203,11 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
         SgTemplateInstantiationMemberFunctionDecl *tpl_ctor_decl =
             isSgTemplateInstantiationMemberFunctionDecl(ctor_decl);
         if (ctor_class) {
+          SgType *type_for_ctor_name =
+              ctor_type != nullptr ? ctor_type : ctor_class->get_type();
           info_for_typename.set_reference_node_for_qualification(con_init);
           info_for_typename.set_SkipClassSpecifier();
-          unp->u_type->unparseType(ctor_class->get_type(), info_for_typename);
+          unp->u_type->unparseType(type_for_ctor_name, info_for_typename);
         } else if (tpl_ctor_decl != nullptr &&
                    !ctor_decl->get_declarationModifier().isFriend()) {
           unparseTemplateMemberFunctionName(tpl_ctor_decl, info);
