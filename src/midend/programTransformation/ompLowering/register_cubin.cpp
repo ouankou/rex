@@ -1,11 +1,9 @@
 #define REX_KMP_INTERNAL
 #include "rex_kmp.h"
 
+#include <memory>
 #include <stdio.h>
-
-#include <stdlib.h>
-
-#include <string.h>
+#include <vector>
 
 #ifndef REX_CUBIN_NAME
 #define REX_CUBIN_NAME "rex_lib_nvidia.cubin"
@@ -24,16 +22,15 @@ enum RegistrationState {
 };
 
 struct CubinStorage {
-  unsigned char *image = nullptr;
-  size_t image_size = 0;
+  std::vector<unsigned char> image;
   __tgt_device_image device_image{};
   __tgt_bin_desc bin_desc{};
 };
 
 int registration_state = kUnregistered;
-CubinStorage *cubin_storage = nullptr;
+std::unique_ptr<CubinStorage> cubin_storage;
 
-bool readFile(const char *filename, unsigned char **buffer, size_t *size) {
+bool readFile(const char *filename, std::vector<unsigned char> &buffer) {
   FILE *file = fopen(filename, "rb");
   if (file == nullptr) {
     return false;
@@ -52,61 +49,26 @@ bool readFile(const char *filename, unsigned char **buffer, size_t *size) {
     return false;
   }
 
-  unsigned char *image =
-      static_cast<unsigned char *>(malloc(static_cast<size_t>(file_size)));
-  if (image == nullptr && file_size != 0) {
-    fclose(file);
-    return false;
-  }
-
-  size_t bytes_read = fread(image, 1, static_cast<size_t>(file_size), file);
+  buffer.resize(static_cast<size_t>(file_size));
+  size_t bytes_read =
+      fread(buffer.data(), 1, static_cast<size_t>(file_size), file);
   fclose(file);
-  if (bytes_read != static_cast<size_t>(file_size)) {
-    free(image);
-    return false;
-  }
-
-  *buffer = image;
-  *size = static_cast<size_t>(file_size);
-  return true;
+  return bytes_read == buffer.size();
 }
 
-CubinStorage *createCubinStorage(const char *filename) {
+struct __tgt_bin_desc *register_cubin_internal(const char *filename) {
   if (filename == nullptr) {
     return nullptr;
   }
 
-  CubinStorage *storage =
-      static_cast<CubinStorage *>(malloc(sizeof(CubinStorage)));
-  if (storage == nullptr) {
-    return nullptr;
-  }
-  memset(storage, 0, sizeof(CubinStorage));
-
-  if (!readFile(filename, &storage->image, &storage->image_size)) {
-    free(storage);
+  std::unique_ptr<CubinStorage> storage = std::make_unique<CubinStorage>();
+  if (!readFile(filename, storage->image)) {
     return nullptr;
   }
 
-  return storage;
-}
-
-void destroyCubinStorage(CubinStorage *storage) {
-  if (storage == nullptr) {
-    return;
-  }
-  free(storage->image);
-  free(storage);
-}
-
-struct __tgt_bin_desc *register_cubin_internal(const char *filename) {
-  CubinStorage *storage = createCubinStorage(filename);
-  if (storage == nullptr) {
-    return nullptr;
-  }
-
-  storage->device_image.ImageStart = storage->image;
-  storage->device_image.ImageEnd = storage->image + storage->image_size;
+  storage->device_image.ImageStart = storage->image.data();
+  storage->device_image.ImageEnd =
+      storage->image.data() + storage->image.size();
   storage->device_image.EntriesBegin = &__start_omp_offloading_entries;
   storage->device_image.EntriesEnd = &__stop_omp_offloading_entries;
 
@@ -116,8 +78,9 @@ struct __tgt_bin_desc *register_cubin_internal(const char *filename) {
   storage->bin_desc.HostEntriesEnd = &__stop_omp_offloading_entries;
 
   __rex_real___tgt_register_lib(&storage->bin_desc);
-  cubin_storage = storage;
-  return &storage->bin_desc;
+  struct __tgt_bin_desc *desc = &storage->bin_desc;
+  cubin_storage = std::move(storage);
+  return desc;
 }
 
 struct __tgt_bin_desc *ensure_cubin_registered(const char *filename) {
@@ -147,11 +110,9 @@ void unregister_cubin_internal() {
     return;
   }
 
-  CubinStorage *storage = cubin_storage;
-  cubin_storage = nullptr;
-  if (storage != nullptr) {
-    __rex_real___tgt_unregister_lib(&storage->bin_desc);
-    destroyCubinStorage(storage);
+  if (cubin_storage != nullptr) {
+    __rex_real___tgt_unregister_lib(&cubin_storage->bin_desc);
+    cubin_storage.reset();
   }
   __atomic_store_n(&registration_state, kUnregistered, __ATOMIC_RELEASE);
 }
