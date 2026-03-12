@@ -1754,7 +1754,7 @@ int makeDataSharingExplicit(SgFile *file) {
 
 void insertRTLHeaders(SgSourceFile *file) {
   ROSE_ASSERT(file != NULL);
-  if (hasTargetOffloadConstructs(file)) {
+  if (!file->get_Fortran_only()) {
     SageInterface::insertHeader(file, "rex_kmp.h",
                                 /*isSystemHeader=*/false,
                                 /*asLastHeader=*/true);
