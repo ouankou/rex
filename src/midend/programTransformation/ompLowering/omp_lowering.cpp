@@ -1066,6 +1066,17 @@ bool hasTargetOffloadConstructs(SgSourceFile *file) {
   }
   return false;
 }
+
+bool hasOpenMPRuntimeConstructs(SgSourceFile *file) {
+  ROSE_ASSERT(file != nullptr);
+
+  Rose_STL_Container<SgNode *> omp_nodes =
+      NodeQuery::querySubTree(file, V_SgOmpExecStatement);
+  omp_nodes = mergeSgNodeList(
+      omp_nodes, NodeQuery::querySubTree(file, V_SgOmpThreadprivateStatement));
+
+  return !omp_nodes.empty();
+}
 } // namespace
 
 // This is a hack to pass the number of CUDA loop iteration count around
@@ -1754,7 +1765,8 @@ int makeDataSharingExplicit(SgFile *file) {
 
 void insertRTLHeaders(SgSourceFile *file) {
   ROSE_ASSERT(file != NULL);
-  if (!file->get_Fortran_only()) {
+  if (!file->get_Fortran_only() &&
+      (hasOpenMPRuntimeConstructs(file) || hasTargetOffloadConstructs(file))) {
     SageInterface::insertHeader(file, "rex_kmp.h",
                                 /*isSystemHeader=*/false,
                                 /*asLastHeader=*/true);
