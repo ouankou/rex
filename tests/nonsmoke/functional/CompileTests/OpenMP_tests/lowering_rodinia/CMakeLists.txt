@@ -1,4 +1,5 @@
 set(RODINIA_LOWERING_CASES
+    rodinia_axpy_multi_like
     rodinia_bfs_like
     rodinia_gaussian_like
     rodinia_hotspot_like

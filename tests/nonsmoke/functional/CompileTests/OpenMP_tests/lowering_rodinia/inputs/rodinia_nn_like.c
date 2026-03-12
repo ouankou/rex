@@ -1,3 +1,5 @@
+#include <time.h>
+
 #define RODINIA_NN_REC 32
 #define RODINIA_NN_TEAMS 2
 #define RODINIA_NN_THREADS 32
@@ -11,6 +13,7 @@ static LatLong locations[RODINIA_NN_REC];
 static float distances[RODINIA_NN_REC];
 
 int main(void) {
+  long long time0 = clock();
   int i;
   float target_lat = 0.25f;
   float target_long = 0.75f;
@@ -31,5 +34,5 @@ int main(void) {
     distances[i] = dlat * dlat + dlng * dlng;
   }
 
-  return (int)distances[0];
+  return (int)distances[0] + (int)(time0 == 0);
 }

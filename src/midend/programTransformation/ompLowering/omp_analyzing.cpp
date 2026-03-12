@@ -1,3 +1,5 @@
+#include "omp_lowering.h"
+
 #include "sage3basic.h"
 
 using namespace std;
@@ -669,6 +671,7 @@ int patchUpImplicitMappingVariables(SgFile *file) {
           map_clause->set_array_dimensions(array_dimensions);
         }
         explist->append_expression(buildVarRefExp(var_ref->get_symbol()));
+        markImplicitTargetMapVariable(target, init_var);
       }
       result++;
     } // end for each variable reference
@@ -801,6 +804,7 @@ int normalizeOmpMapVariables(SgFile *file, VariantVector clause_vv,
       SgVarRefExp *var_ref = buildVarRefExp(all_vars[i]);
       explist->append_expression(var_ref);
       var_ref->set_parent(map_clause);
+      markImplicitTargetMapVariable(target, all_vars[i]);
       has_mapped = true;
     }
 
@@ -970,6 +974,8 @@ void normalizeOmpTargetOffloadingUnits(SgFile *file) {
 }
 
 void analyze_omp(SgSourceFile *file) {
+  clearImplicitTargetMapVariables();
+
   // Transform omp metadirective to multiple variants.
   Rose_STL_Container<SgNode *> variant_directives =
       NodeQuery::querySubTree(file, V_SgOmpMetadirectiveStatement);

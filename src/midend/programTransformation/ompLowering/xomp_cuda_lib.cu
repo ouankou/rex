@@ -158,9 +158,9 @@ size_t xomp_get_maxThreadBlocksPerMultiprocessor(int devID) {
     printf("Error: xomp_get_maxThreadBlocksPerMultiprocessor(): unhandled "
            "Compute Capability numbers%d.%d \n",
            major, minor);
-    ROSE_ABORT();
+    abort();
   }
-  ROSE_ABORT();
+  abort();
   return 0;
 }
 
@@ -266,7 +266,7 @@ void *xomp_deviceMalloc(size_t size) {
     fprintf(stderr,
             "Error: cudaMalloc() failed to allocate the requested %zu bytes!\n",
             size);
-    ROSE_ABORT();
+    abort();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
@@ -301,7 +301,7 @@ void *xomp_memcpyHostToDevice(void *dest, const void *src, size_t n) {
             "Error: cudaMemcpy() failed to copy memory from Host %p to Device "
             "%p, for %zu bytes!\n",
             src, dest, n);
-    ROSE_ABORT();
+    abort();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
@@ -321,7 +321,7 @@ void *xomp_memcpyDeviceToHost(void *dest, const void *src, size_t n) {
             "%p, for %zu bytes!\n",
             src, dest, n);
     fprintf(stderr, "Error message is =%s\n", cudaGetErrorString(rt));
-    ROSE_ABORT();
+    abort();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
@@ -435,7 +435,7 @@ void *xomp_memcpyDeviceToDevice(void *dest, const void *src, size_t n) {
             "Error: cudaMemcpy() failed to copy from Device %p to Device %p "
             "for requested %zu bytes!\n",
             src, dest, n);
-    ROSE_ABORT();
+    abort();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
@@ -451,7 +451,7 @@ void *xomp_memcpyHostToHost(void *dest, const void *src,
             "Error: cudaMemcpy() failed to copy from Host %p to Host %p for "
             "requested %zu bytes!\n",
             src, dest, n);
-    ROSE_ABORT();
+    abort();
     return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
