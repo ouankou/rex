@@ -160,6 +160,7 @@ size_t xomp_get_maxThreadBlocksPerMultiprocessor(int devID) {
            major, minor);
     abort();
   }
+  return 0; // Unreachable, but keeps conservative compilers quiet.
 }
 
 // max thread per block, useful for 1-D problem
@@ -265,7 +266,6 @@ void *xomp_deviceMalloc(size_t size) {
             "Error: cudaMalloc() failed to allocate the requested %zu bytes!\n",
             size);
     abort();
-    return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
 
@@ -300,7 +300,6 @@ void *xomp_memcpyHostToDevice(void *dest, const void *src, size_t n) {
             "%p, for %zu bytes!\n",
             src, dest, n);
     abort();
-    return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
 
@@ -320,7 +319,6 @@ void *xomp_memcpyDeviceToHost(void *dest, const void *src, size_t n) {
             src, dest, n);
     fprintf(stderr, "Error message is =%s\n", cudaGetErrorString(rt));
     abort();
-    return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
 
@@ -434,7 +432,6 @@ void *xomp_memcpyDeviceToDevice(void *dest, const void *src, size_t n) {
             "for requested %zu bytes!\n",
             src, dest, n);
     abort();
-    return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
 
@@ -450,7 +447,6 @@ void *xomp_memcpyHostToHost(void *dest, const void *src,
             "requested %zu bytes!\n",
             src, dest, n);
     abort();
-    return NULL; // it is a bad idea to silently return a NULL pointer
   }
 }
 
