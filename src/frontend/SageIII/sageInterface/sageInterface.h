@@ -2024,6 +2024,8 @@ getFunctionDeclaration(SgFunctionCallExp *functionCallExp);
 // SgMemberFunctionRefExp nodes. DQ (2/8/2019): Adding support for detecting
 // when to use added name qualification for pointer-to-member expressions.
 ROSE_DLL_API bool isDataMemberReference(SgVarRefExp *varRefExp);
+ROSE_DLL_API bool
+isAddressOfCurrentObjectDataMemberReference(SgVarRefExp *varRefExp);
 // ROSE_DLL_API bool isAddressTaken(SgVarRefExp* varRefExp);
 ROSE_DLL_API bool isAddressTaken(SgExpression *refExp);
 

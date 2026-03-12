@@ -11353,7 +11353,13 @@ NameQualificationTraversal::evaluateInheritedAttribute(
                 isDataMemberReference ? "true" : "false",
                 isAddressTaken ? "true" : "false");
 #endif
-    if (isDataMemberReference == true && isAddressTaken == true) {
+    bool isAddressOfCurrentObjectDataMemberReference =
+        SageInterface::isAddressOfCurrentObjectDataMemberReference(varRefExp);
+    bool nameQualificationInducedByPointerToMember =
+        isDataMemberReference == true && isAddressTaken == true &&
+        isAddressOfCurrentObjectDataMemberReference == false;
+
+    if (nameQualificationInducedByPointerToMember == true) {
       nameQualificationInducedFromPointerMemberType = true;
     } else {
       // DQ (2/15/2019): Debugging Cxx11_tests/test2019_129.C.  Data member
@@ -11376,7 +11382,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
             "Change the starting location for name qualification to the class "
             "where the data member reference is referenced \n");
 #endif
-        ROSE_ASSERT(isAddressTaken == false);
+        ROSE_ASSERT(isAddressTaken == false ||
+                    isAddressOfCurrentObjectDataMemberReference == true);
         // reset the current statement.
 
         // Insead of returning the SgClassType at the end of the chain, we
@@ -11582,14 +11589,17 @@ NameQualificationTraversal::evaluateInheritedAttribute(
                 nameQualificationInducedFromPointerMemberType ? "true"
                                                               : "false");
     MLOG_WARN_C(MLOG_UNPARSER,
-                " --- isDataMemberReference = %s isAddressTaken = %s \n",
+                " --- isDataMemberReference = %s isAddressTaken = %s "
+                "isAddressOfCurrentObjectDataMemberReference = %s \n",
                 isDataMemberReference ? "true" : "false",
-                isAddressTaken ? "true" : "false");
+                isAddressTaken ? "true" : "false",
+                isAddressOfCurrentObjectDataMemberReference ? "true" : "false");
     MLOG_WARN_C(MLOG_UNPARSER, " --- currentStatement = %p \n",
                 currentStatement);
 #endif
 
-    if (isDataMemberReference == false || isAddressTaken == true) {
+    if (isDataMemberReference == false ||
+        nameQualificationInducedByPointerToMember == true) {
       // DQ (7/24/2020): Is this declared above this point?
       // variableDeclaration = NULL;
 
