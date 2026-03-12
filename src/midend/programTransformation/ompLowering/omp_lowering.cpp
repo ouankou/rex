@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <sstream>
 #include <unordered_set>
 
@@ -25,6 +26,9 @@ using namespace SageBuilder;
 using namespace OmpSupport;
 
 namespace {
+std::map<const SgOmpClauseBodyStatement *, std::set<const SgInitializedName *>>
+    implicit_target_map_variables;
+
 SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
   if (expr == nullptr) {
     return nullptr;
@@ -130,6 +134,17 @@ SgVariableSymbol *extractClauseVariableSymbol(SgExpression *expr) {
     return extractClauseVariableSymbol(unary->get_operand());
   }
   return nullptr;
+}
+
+bool isInAnyClauseVariableList(const std::vector<SgOmpMapClause *> &clauses,
+                               SgSymbol *var) {
+  for (std::vector<SgOmpMapClause *>::const_iterator iter = clauses.begin();
+       iter != clauses.end(); ++iter) {
+    if (*iter != NULL && isInClauseVariableList(*iter, var)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 SgExpression *stripNoopCastsAndParens(SgExpression *expr) {
@@ -664,6 +679,84 @@ void stripConditionalDirectivesFromNode(SgLocatedNode *node) {
   }
 }
 
+void rewriteCudaSiblingIncludeDirectives(
+    AttachedPreprocessingInfoType *attached,
+    const std::filesystem::path &source_dir) {
+  if (attached == nullptr) {
+    return;
+  }
+
+  for (AttachedPreprocessingInfoType::iterator it = attached->begin();
+       it != attached->end(); ++it) {
+    PreprocessingInfo *info = *it;
+    if (info == nullptr ||
+        info->getTypeOfDirective() !=
+            PreprocessingInfo::CpreprocessorIncludeDeclaration) {
+      continue;
+    }
+
+    const std::string include_text = info->getString();
+    const std::size_t include_pos = include_text.find("#include");
+    if (include_pos == std::string::npos) {
+      continue;
+    }
+
+    const std::size_t quote_begin = include_text.find('"', include_pos);
+    if (quote_begin == std::string::npos) {
+      continue;
+    }
+    const std::size_t quote_end = include_text.find('"', quote_begin + 1);
+    if (quote_end == std::string::npos || quote_end <= quote_begin + 1) {
+      continue;
+    }
+
+    const std::string include_name =
+        include_text.substr(quote_begin + 1, quote_end - quote_begin - 1);
+    std::filesystem::path include_path(include_name);
+    if (include_path.extension() != ".c") {
+      continue;
+    }
+
+    std::filesystem::path cuda_path(include_path);
+    cuda_path.replace_extension(".cu");
+
+    std::error_code ec;
+    if (!std::filesystem::exists(source_dir / cuda_path, ec) || ec) {
+      continue;
+    }
+
+    info->setString(include_text.substr(0, quote_begin + 1) +
+                    cuda_path.generic_string() +
+                    include_text.substr(quote_end));
+  }
+}
+
+void rewriteCudaSiblingIncludesInOutlinedFile(
+    SgSourceFile *new_file, const std::filesystem::path &source_path) {
+  if (new_file == nullptr) {
+    return;
+  }
+
+  const std::filesystem::path source_dir =
+      source_path.has_parent_path() ? source_path.parent_path()
+                                    : std::filesystem::current_path();
+
+  if (SgGlobal *global = new_file->get_globalScope()) {
+    rewriteCudaSiblingIncludeDirectives(global->getAttachedPreprocessingInfo(),
+                                        source_dir);
+  }
+
+  Rose_STL_Container<SgNode *> located_nodes =
+      NodeQuery::querySubTree(new_file, V_SgLocatedNode);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = located_nodes.begin();
+       it != located_nodes.end(); ++it) {
+    if (SgLocatedNode *located = isSgLocatedNode(*it)) {
+      rewriteCudaSiblingIncludeDirectives(
+          located->getAttachedPreprocessingInfo(), source_dir);
+    }
+  }
+}
+
 void stripConditionalDirectivesFromSubtree(SgNode *root) {
   if (root == nullptr) {
     return;
@@ -951,6 +1044,39 @@ void prependGlobalDeclPreservingLeadingPreproc(SgStatement *decl,
     SageInterface::prependStatement(decl, global_scope);
   }
 }
+
+bool hasTargetOffloadConstructs(SgSourceFile *file) {
+  ROSE_ASSERT(file != nullptr);
+
+  static const VariantT target_variants[] = {
+      V_SgOmpTargetStatement,
+      V_SgOmpTargetTeamsStatement,
+      V_SgOmpTargetParallelStatement,
+      V_SgOmpTargetDataStatement,
+      V_SgOmpTargetUpdateStatement,
+      V_SgOmpTargetTeamsDistributeStatement,
+      V_SgOmpTargetParallelForStatement,
+      V_SgOmpTargetTeamsDistributeParallelForStatement,
+  };
+
+  for (VariantT variant : target_variants) {
+    if (!NodeQuery::querySubTree(file, variant).empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool hasOpenMPRuntimeConstructs(SgSourceFile *file) {
+  ROSE_ASSERT(file != nullptr);
+
+  Rose_STL_Container<SgNode *> omp_nodes =
+      NodeQuery::querySubTree(file, V_SgOmpExecStatement);
+  omp_nodes = mergeSgNodeList(
+      omp_nodes, NodeQuery::querySubTree(file, V_SgOmpThreadprivateStatement));
+
+  return !omp_nodes.empty();
+}
 } // namespace
 
 // This is a hack to pass the number of CUDA loop iteration count around
@@ -1052,6 +1178,41 @@ bool enable_debugging = false;   /* default is not to debug the process */
 bool useDDE = true;
 
 unsigned int nCounter = 0;
+
+void markImplicitTargetMapVariable(SgOmpClauseBodyStatement *target,
+                                   SgInitializedName *var) {
+  if (target == NULL || var == NULL) {
+    return;
+  }
+  implicit_target_map_variables[target].insert(var);
+}
+
+bool isImplicitTargetMapVariable(const SgOmpClauseBodyStatement *target,
+                                 const SgSymbol *sym) {
+  if (target == NULL || sym == NULL) {
+    return false;
+  }
+
+  std::map<const SgOmpClauseBodyStatement *,
+           std::set<const SgInitializedName *>>::const_iterator map_iter =
+      implicit_target_map_variables.find(target);
+  if (map_iter == implicit_target_map_variables.end()) {
+    return false;
+  }
+
+  const SgVariableSymbol *var_sym =
+      isSgVariableSymbol(const_cast<SgSymbol *>(sym));
+  if (var_sym == NULL) {
+    return false;
+  }
+
+  return map_iter->second.find(var_sym->get_declaration()) !=
+         map_iter->second.end();
+}
+
+void clearImplicitTargetMapVariables() {
+  implicit_target_map_variables.clear();
+}
 //------------------------------------
 // Add include "xxxx.h" into source files, right before the first statement from
 // users Lazy approach: assume all files will contain OpenMP runtime library
@@ -1604,11 +1765,19 @@ int makeDataSharingExplicit(SgFile *file) {
 
 void insertRTLHeaders(SgSourceFile *file) {
   ROSE_ASSERT(file != NULL);
-  SgGlobal *globalscope = file->get_globalScope(); // isSgGlobal(*i);
-  ROSE_ASSERT(globalscope != NULL);
-  if (enable_accelerator) // include inlined CUDA device codes
-    SageInterface::insertHeader("xomp_cuda_lib_inlined.cu",
-                                PreprocessingInfo::after, false, globalscope);
+  if (!file->get_Fortran_only() &&
+      (hasOpenMPRuntimeConstructs(file) || hasTargetOffloadConstructs(file))) {
+    SageInterface::insertHeader(file, "rex_kmp.h",
+                                /*isSystemHeader=*/false,
+                                /*asLastHeader=*/true);
+    file->set_processedToIncludeCppDirectivesAndComments(true);
+  }
+  if (enable_accelerator) {
+    SageInterface::insertHeader(file, "xomp_cuda_lib_inlined.cu",
+                                /*isSystemHeader=*/false,
+                                /*asLastHeader=*/true);
+    file->set_processedToIncludeCppDirectivesAndComments(true);
+  }
 }
 
 void insertAcceleratorInit(SgSourceFile *sgfile) {
@@ -1634,10 +1803,21 @@ void insertAcceleratorInit(SgSourceFile *sgfile) {
                                 // declaration of main() is
   // look up symbol tables for symbols
   SgScopeStatement *currentscope = mainDef->get_body();
+  SgBasicBlock *body = isSgBasicBlock(currentscope);
+  ROSE_ASSERT(body != NULL);
 
   SgExprStatement *expStmt = buildFunctionCallStmt(
-      SgName("xomp_acc_init"), buildVoidType(), NULL, currentscope);
+      SgName("rex_offload_init"), buildVoidType(), NULL, currentscope);
+  setSourcePositionForTransformation(expStmt);
+  // Insert before all user statements so one-time cubin registration is not
+  // counted inside declaration initializers such as `long long time0 =
+  // clock();`.
   prependStatement(expStmt, currentscope);
+
+  SgExprStatement *cleanupStmt = buildFunctionCallStmt(
+      SgName("rex_offload_fini"), buildVoidType(), NULL, currentscope);
+  setSourcePositionForTransformation(cleanupStmt);
+  SageInterface::instrumentEndOfFunction(mainDecl, cleanupStmt);
 
   return;
 }
@@ -4207,8 +4387,10 @@ void extractMapClauses(
     std::map<SgSymbol *,
              std::vector<std::pair<SgOmpClause::omp_map_dist_data_enum,
                                    SgExpression *>>> &dist_data_policies,
-    SgOmpMapClause **map_alloc_clause, SgOmpMapClause **map_to_clause,
-    SgOmpMapClause **map_from_clause, SgOmpMapClause **map_tofrom_clause) {
+    std::vector<SgOmpMapClause *> &map_alloc_clauses,
+    std::vector<SgOmpMapClause *> &map_to_clauses,
+    std::vector<SgOmpMapClause *> &map_from_clauses,
+    std::vector<SgOmpMapClause *> &map_tofrom_clauses) {
   if (map_clauses.size() == 0)
     return; // stop if no map clauses at all
 
@@ -4235,16 +4417,16 @@ void extractMapClauses(
         map_operator == SgOmpClause::e_omp_map_storage ||
         map_operator == SgOmpClause::e_omp_map_release ||
         map_operator == SgOmpClause::e_omp_map_delete)
-      *map_alloc_clause = m_cls;
+      map_alloc_clauses.push_back(m_cls);
     else if (map_operator == SgOmpClause::e_omp_map_to)
-      *map_to_clause = m_cls;
+      map_to_clauses.push_back(m_cls);
     else if (map_operator == SgOmpClause::e_omp_map_from)
-      *map_from_clause = m_cls;
+      map_from_clauses.push_back(m_cls);
     else if (map_operator == SgOmpClause::e_omp_map_tofrom ||
              map_operator == SgOmpClause::e_omp_map_present ||
              map_operator == SgOmpClause::e_omp_map_self ||
              map_operator == SgOmpClause::e_omp_map_unknown)
-      *map_tofrom_clause = m_cls;
+      map_tofrom_clauses.push_back(m_cls);
     else {
       cerr << "Error. transOmpMapVariables() from omp_lowering.cpp: found "
               "unacceptable map operator type:"
@@ -4256,9 +4438,10 @@ void extractMapClauses(
 
 static int generate_mapping_variable_type(
     /* the array and the map information */
-    SgSymbol *sym, SgOmpMapClause * /*map_alloc_clause*/,
-    SgOmpMapClause *map_to_clause, SgOmpMapClause *map_from_clause,
-    SgOmpMapClause *map_tofrom_clause,
+    SgSymbol *sym, const std::vector<SgOmpMapClause *> & /*map_alloc_clauses*/,
+    const std::vector<SgOmpMapClause *> &map_to_clauses,
+    const std::vector<SgOmpMapClause *> &map_from_clauses,
+    const std::vector<SgOmpMapClause *> &map_tofrom_clauses,
     std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
         &array_dimensions,
     SgExpression *device_expression,
@@ -4266,12 +4449,12 @@ static int generate_mapping_variable_type(
     SgBasicBlock *insertion_scope, SgStatement *insertion_anchor_stmt) {
   bool needCopyTo = false;
   bool needCopyFrom = false;
-  if (((map_to_clause) && (isInClauseVariableList(map_to_clause, sym))) ||
-      ((map_tofrom_clause) && (isInClauseVariableList(map_tofrom_clause, sym))))
+  if (isInAnyClauseVariableList(map_to_clauses, sym) ||
+      isInAnyClauseVariableList(map_tofrom_clauses, sym))
     needCopyTo = true;
 
-  if (((map_from_clause) && (isInClauseVariableList(map_from_clause, sym))) ||
-      ((map_tofrom_clause) && (isInClauseVariableList(map_tofrom_clause, sym))))
+  if (isInAnyClauseVariableList(map_from_clauses, sym) ||
+      isInAnyClauseVariableList(map_tofrom_clauses, sym))
     needCopyFrom = true;
 
   int type_value = OMP_TGT_MAPTYPE_TARGET_PARAM;
@@ -4326,9 +4509,10 @@ static int generate_mapping_variable_type(
 // environment.
 static void generateMappedArrayMemoryHandling(
     /* the array and the map information */
-    SgSymbol *sym, SgOmpMapClause *map_alloc_clause,
-    SgOmpMapClause *map_to_clause, SgOmpMapClause *map_from_clause,
-    SgOmpMapClause *map_tofrom_clause,
+    SgSymbol *sym, const std::vector<SgOmpMapClause *> &map_alloc_clauses,
+    const std::vector<SgOmpMapClause *> &map_to_clauses,
+    const std::vector<SgOmpMapClause *> &map_from_clauses,
+    const std::vector<SgOmpMapClause *> &map_tofrom_clauses,
     std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
         &array_dimensions,
     SgExpression *device_expression,
@@ -4512,12 +4696,12 @@ static void generateMappedArrayMemoryHandling(
 
   bool needCopyTo = false;
   bool needCopyFrom = false;
-  if (((map_to_clause) && (isInClauseVariableList(map_to_clause, sym))) ||
-      ((map_tofrom_clause) && (isInClauseVariableList(map_tofrom_clause, sym))))
+  if (isInAnyClauseVariableList(map_to_clauses, sym) ||
+      isInAnyClauseVariableList(map_tofrom_clauses, sym))
     needCopyTo = true;
 
-  if (((map_from_clause) && (isInClauseVariableList(map_from_clause, sym))) ||
-      ((map_tofrom_clause) && (isInClauseVariableList(map_tofrom_clause, sym))))
+  if (isInAnyClauseVariableList(map_from_clauses, sym) ||
+      isInAnyClauseVariableList(map_tofrom_clauses, sym))
     needCopyFrom = true;
 
   if (useDDE) {
@@ -4629,8 +4813,8 @@ static void generateMappedArrayMemoryHandling(
   map_variable_size_list->push_back(mapping_variable_total_size);
 
   int mapping_variable_type_enum = generate_mapping_variable_type(
-      sym, map_alloc_clause, map_to_clause, map_from_clause, map_tofrom_clause,
-      array_dimensions, device_expression, insertion_scope,
+      sym, map_alloc_clauses, map_to_clauses, map_from_clauses,
+      map_tofrom_clauses, array_dimensions, device_expression, insertion_scope,
       insertion_anchor_stmt);
   SgExpression *mapping_variable_value =
       buildIntVal(mapping_variable_type_enum);
@@ -4743,10 +4927,10 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
     return all_syms; // stop if no map clauses at all
 
   // store each time of map clause explicitly
-  SgOmpMapClause *map_alloc_clause = NULL;
-  SgOmpMapClause *map_to_clause = NULL;
-  SgOmpMapClause *map_from_clause = NULL;
-  SgOmpMapClause *map_tofrom_clause = NULL;
+  std::vector<SgOmpMapClause *> map_alloc_clauses;
+  std::vector<SgOmpMapClause *> map_to_clauses;
+  std::vector<SgOmpMapClause *> map_from_clauses;
+  std::vector<SgOmpMapClause *> map_tofrom_clauses;
   // dimension map is the same for all the map clauses under the same omp target
   // directive
   std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
@@ -4769,8 +4953,8 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
       getClauseExpression(target, VariantVector(V_SgOmpDeviceClause));
 
   extractMapClauses(map_clauses, array_dimensions, dist_data_policies,
-                    &map_alloc_clause, &map_to_clause, &map_from_clause,
-                    &map_tofrom_clause);
+                    map_alloc_clauses, map_to_clauses, map_from_clauses,
+                    map_tofrom_clauses);
   std::set<SgSymbol *> array_syms; // store clause variable symbols which are
                                    // array types (explicit or as a pointer)
   std::set<SgSymbol *> atom_syms;  // store clause variable symbols which are
@@ -4861,9 +5045,9 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
       all_syms.insert(new_sym);
     // generate memory allocation, copy, free function calls.
     generateMappedArrayMemoryHandling(
-        sym, map_alloc_clause, map_to_clause, map_from_clause,
-        map_tofrom_clause, array_dimensions, device_expression, insertion_scope,
-        insertion_anchor_stmt, true, mapping_array_list,
+        sym, map_alloc_clauses, map_to_clauses, map_from_clauses,
+        map_tofrom_clauses, array_dimensions, device_expression,
+        insertion_scope, insertion_anchor_stmt, true, mapping_array_list,
         mapping_array_base_list, mapping_array_size_list,
         mapping_array_type_list);
 
@@ -4912,6 +5096,10 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
     if (variable_map[var_sym] == true) {
       SgInitializedName *mapping_variable = var_sym->get_declaration();
       SgType *mapping_variable_type = mapping_variable->get_type();
+      const bool is_implicit_pointer_map =
+          isImplicitTargetMapVariable(target, var_sym) &&
+          isPointerType(mapping_variable_type) &&
+          array_dimensions[var_sym].empty();
       SgExpression *mapping_variable_expression = NULL;
       if (isPointerType(mapping_variable_type)) {
         mapping_variable_expression = buildVarRefExp(var_sym);
@@ -4920,15 +5108,27 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
       };
       map_variable_list->append_expression(mapping_variable_expression);
       map_variable_base_list->append_expression(mapping_variable_expression);
-      SgExpression *mapping_variable_size =
-          buildCastExp(buildSizeOfOp(mapping_variable_type),
-                       buildOpaqueType("int64_t", target->get_scope()));
+      SgExpression *mapping_variable_size = NULL;
+      if (is_implicit_pointer_map) {
+        mapping_variable_size = buildCastExp(
+            buildIntVal(0), buildOpaqueType("int64_t", target->get_scope()));
+      } else {
+        mapping_variable_size =
+            buildCastExp(buildSizeOfOp(mapping_variable_type),
+                         buildOpaqueType("int64_t", target->get_scope()));
+      }
       map_variable_size_list->append_expression(mapping_variable_size);
 
-      int mapping_variable_type_enum = generate_mapping_variable_type(
-          var_sym, map_alloc_clause, map_to_clause, map_from_clause,
-          map_tofrom_clause, array_dimensions, device_expression,
-          insertion_scope, insertion_anchor_stmt);
+      int mapping_variable_type_enum = 0;
+      if (is_implicit_pointer_map) {
+        mapping_variable_type_enum =
+            OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_IMPLICIT;
+      } else {
+        mapping_variable_type_enum = generate_mapping_variable_type(
+            var_sym, map_alloc_clauses, map_to_clauses, map_from_clauses,
+            map_tofrom_clauses, array_dimensions, device_expression,
+            insertion_scope, insertion_anchor_stmt);
+      }
       SgExpression *mapping_variable_value =
           buildIntVal(mapping_variable_type_enum);
       map_variable_type_list->append_expression(mapping_variable_value);
@@ -7108,14 +7308,14 @@ void transOmpTargetData(SgNode *node) {
       buildVarRefExp(arg_sizes), buildVarRefExp(arg_types));
   string func_offloading_name = "__tgt_target_data_begin";
   SgExprStatement *func_offloading_stmt = buildFunctionCallStmt(
-      func_offloading_name, buildIntType(), parameters, p_scope);
+      func_offloading_name, buildVoidType(), parameters, p_scope);
   setSourcePositionForTransformation(func_offloading_stmt);
   insertStatementAfter(device_id_decl, func_offloading_stmt);
 
   // call __tgt_target_data_end to end the data mapping region for GPU
   func_offloading_name = "__tgt_target_data_end";
   func_offloading_stmt = buildFunctionCallStmt(
-      func_offloading_name, buildIntType(), parameters, p_scope);
+      func_offloading_name, buildVoidType(), parameters, p_scope);
   setSourcePositionForTransformation(func_offloading_stmt);
   body->append_statement(func_offloading_stmt);
   body->set_parent(NULL);
@@ -7190,7 +7390,7 @@ void transOmpTargetUpdate(SgNode *node) {
       buildVarRefExp(arg_sizes), buildVarRefExp(arg_types));
   string func_offloading_name = "__tgt_target_data_update";
   SgExprStatement *func_offloading_stmt = buildFunctionCallStmt(
-      func_offloading_name, buildIntType(), parameters, p_scope);
+      func_offloading_name, buildVoidType(), parameters, p_scope);
   setSourcePositionForTransformation(func_offloading_stmt);
   insertStatementAfter(device_id_decl, func_offloading_stmt);
 
@@ -9027,6 +9227,7 @@ void lower_omp(SgSourceFile *file) {
   ROSE_ASSERT(file != NULL);
   bool saved_case_insensitive =
       SageBuilder::symbol_table_case_insensitive_semantics;
+  const bool has_target_offload = hasTargetOffloadConstructs(file);
   if (file->get_Fortran_only())
     SageBuilder::symbol_table_case_insensitive_semantics = true;
 
@@ -9035,7 +9236,7 @@ void lower_omp(SgSourceFile *file) {
     insertRTLHeaders(file);
   if (!enable_accelerator)
     insertRTLinitAndCleanCode(file);
-  else
+  if (has_target_offload)
     insertAcceleratorInit(file);
 
   target_outlined_function_list = new std::vector<SgFunctionDeclaration *>();
@@ -9676,17 +9877,25 @@ generate_outlined_function_file(SgFunctionDeclaration *outlined_func,
   bool inserted_header = false;
   if (!new_file->get_Fortran_only()) {
     if (file_extension == "cu") {
-      SageInterface::insertHeader("rex_nvidia.h", PreprocessingInfo::after,
-                                  false, new_scope);
+      SageInterface::insertHeader(new_file, "rex_nvidia.h",
+                                  /*isSystemHeader=*/false,
+                                  /*asLastHeader=*/true);
       inserted_header = true;
     } else {
-      SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::after, false,
-                                  new_scope);
+      SageInterface::insertHeader(new_file, "rex_kmp.h",
+                                  /*isSystemHeader=*/false,
+                                  /*asLastHeader=*/true);
       inserted_header = true;
     }
   }
   if (inserted_header) {
     new_file->set_processedToIncludeCppDirectivesAndComments(true);
+  }
+
+  if (file_extension == "cu") {
+    rewriteCudaSiblingIncludesInOutlinedFile(
+        new_file,
+        std::filesystem::path(cur_file->get_file_info()->get_filenameString()));
   }
 
   fix_storage_modifier(new_file);
@@ -9717,10 +9926,6 @@ static void fix_storage_modifier(SgSourceFile *new_file) {
 };
 
 static void post_processing(SgSourceFile *file) {
-
-  SgGlobal *g_scope = file->get_globalScope();
-  ROSE_ASSERT(g_scope != NULL);
-
   SgSourceFile *new_file = NULL;
 
   // handle the outlined functions for NVIDIA GPU
@@ -9772,13 +9977,6 @@ static void post_processing(SgSourceFile *file) {
     };
   };
 
-  if (!file->get_Fortran_only()) {
-    // Insert host runtime header through the global-scope overload.  The
-    // source-file overload can hit null preprocessing attributes on files with
-    // sparse/conditional header structure.
-    SageInterface::insertHeader("rex_kmp.h", PreprocessingInfo::after,
-                                /*isSystemHeader=*/false, g_scope);
-  }
   if (new_file != NULL) {
     removeOpenMPPragmaDeclarations(new_file);
     if (new_file->get_Fortran_only())

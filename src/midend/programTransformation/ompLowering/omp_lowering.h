@@ -321,8 +321,18 @@ void extractMapClauses(
     std::map<SgSymbol *,
              std::vector<std::pair<SgOmpClause::omp_map_dist_data_enum,
                                    SgExpression *>>> &dist_data_policies,
-    SgOmpMapClause **map_alloc_clause, SgOmpMapClause **map_to_clause,
-    SgOmpMapClause **map_from_clause, SgOmpMapClause **map_tofrom_clause);
+    std::vector<SgOmpMapClause *> &map_alloc_clauses,
+    std::vector<SgOmpMapClause *> &map_to_clauses,
+    std::vector<SgOmpMapClause *> &map_from_clauses,
+    std::vector<SgOmpMapClause *> &map_tofrom_clauses);
+
+ROSE_DLL_API void
+markImplicitTargetMapVariable(SgOmpClauseBodyStatement *target,
+                              SgInitializedName *var);
+ROSE_DLL_API bool
+isImplicitTargetMapVariable(const SgOmpClauseBodyStatement *target,
+                            const SgSymbol *sym);
+ROSE_DLL_API void clearImplicitTargetMapVariables();
 //! Categorize mapped variables
 void categorizeMapClauseVariables(
     const SgInitializedNamePtrList

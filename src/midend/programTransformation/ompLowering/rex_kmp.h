@@ -80,32 +80,80 @@ int __tgt_target_teams(int64_t device_id, void *host_ptr, int32_t arg_num,
                        int64_t *arg_types, int32_t num_teams,
                        int32_t thread_limit);
 
+int __rex_real___tgt_target(int64_t device_id, void *host_ptr, int32_t arg_num,
+                            void **args_base, void **args, int64_t *arg_sizes,
+                            int64_t *arg_types) __asm__("__tgt_target");
+int __rex_real___tgt_target_teams(
+    int64_t device_id, void *host_ptr, int32_t arg_num, void **args_base,
+    void **args, int64_t *arg_sizes, int64_t *arg_types, int32_t num_teams,
+    int32_t thread_limit) __asm__("__tgt_target_teams");
+
 // creates the host to target data mapping, stores it in the
 // libomptarget.so internal structure (an entry in a stack of data maps) and
 // passes the data to the device;
 void __tgt_target_data_begin(int64_t DeviceId, int32_t ArgNum, void **ArgsBase,
                              void **Args, int64_t *ArgSizes, int64_t *ArgTypes);
+void __rex_real___tgt_target_data_begin(
+    int64_t DeviceId, int32_t ArgNum, void **ArgsBase, void **Args,
+    int64_t *ArgSizes, int64_t *ArgTypes) __asm__("__tgt_target_data_begin");
 
 // passes data from the target, release target memory and destroys the
 // host-target mapping (top entry from the stack of data maps) created by
 // the last __tgt_target_data_begin
 void __tgt_target_data_end(int64_t DeviceId, int32_t ArgNum, void **ArgsBase,
                            void **Args, int64_t *ArgSizes, int64_t *ArgTypes);
+void __rex_real___tgt_target_data_end(
+    int64_t DeviceId, int32_t ArgNum, void **ArgsBase, void **Args,
+    int64_t *ArgSizes, int64_t *ArgTypes) __asm__("__tgt_target_data_end");
 
 void __tgt_target_data_update(int64_t DeviceId, int32_t ArgNum, void **ArgsBase,
                               void **Args, int64_t *ArgSizes,
                               int64_t *ArgTypes);
+void __rex_real___tgt_target_data_update(
+    int64_t DeviceId, int32_t ArgNum, void **ArgsBase, void **Args,
+    int64_t *ArgSizes, int64_t *ArgTypes) __asm__("__tgt_target_data_update");
 
 /// adds a target shared library to the target execution image
 void __tgt_register_lib(struct __tgt_bin_desc *Desc);
+void __rex_real___tgt_register_lib(struct __tgt_bin_desc *Desc) __asm__(
+    "__tgt_register_lib");
 
 /// removes a target shared library from the target execution image
 void __tgt_unregister_lib(struct __tgt_bin_desc *Desc);
+void __rex_real___tgt_unregister_lib(struct __tgt_bin_desc *Desc) __asm__(
+    "__tgt_unregister_lib");
+
+int rex___tgt_target(int64_t device_id, void *host_ptr, int32_t arg_num,
+                     void **args_base, void **args, int64_t *arg_sizes,
+                     int64_t *arg_types);
+int rex___tgt_target_teams(int64_t device_id, void *host_ptr, int32_t arg_num,
+                           void **args_base, void **args, int64_t *arg_sizes,
+                           int64_t *arg_types, int32_t num_teams,
+                           int32_t thread_limit);
+void rex___tgt_target_data_begin(int64_t DeviceId, int32_t ArgNum,
+                                 void **ArgsBase, void **Args,
+                                 int64_t *ArgSizes, int64_t *ArgTypes);
+void rex___tgt_target_data_end(int64_t DeviceId, int32_t ArgNum,
+                               void **ArgsBase, void **Args, int64_t *ArgSizes,
+                               int64_t *ArgTypes);
+void rex___tgt_target_data_update(int64_t DeviceId, int32_t ArgNum,
+                                  void **ArgsBase, void **Args,
+                                  int64_t *ArgSizes, int64_t *ArgTypes);
+void rex_offload_init(void);
+void rex_offload_fini(void);
 
 struct __tgt_bin_desc *register_cubin(const char *);
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifndef REX_KMP_INTERNAL
+#define __tgt_target rex___tgt_target
+#define __tgt_target_teams rex___tgt_target_teams
+#define __tgt_target_data_begin rex___tgt_target_data_begin
+#define __tgt_target_data_end rex___tgt_target_data_end
+#define __tgt_target_data_update rex___tgt_target_data_update
 #endif
 
 #endif /* REX_KMP_H */
