@@ -8933,6 +8933,106 @@ bool SageInterface::isDataMemberReference(SgVarRefExp *varRefExp) {
   return returnValue;
 }
 
+static SgClassDeclaration *
+canonicalClassDeclaration(SgClassDeclaration *classDeclaration) {
+  if (classDeclaration == NULL) {
+    return NULL;
+  }
+
+  if (SgClassDeclaration *definingDeclaration =
+          isSgClassDeclaration(classDeclaration->get_definingDeclaration())) {
+    return definingDeclaration;
+  }
+
+  if (SgClassDeclaration *firstNondefiningDeclaration = isSgClassDeclaration(
+          classDeclaration->get_firstNondefiningDeclaration())) {
+    return firstNondefiningDeclaration;
+  }
+
+  return classDeclaration;
+}
+
+static bool isSameOrBaseClassDeclaration(SgClassDeclaration *baseClass,
+                                         SgClassDeclaration *derivedClass) {
+  baseClass = canonicalClassDeclaration(baseClass);
+  derivedClass = canonicalClassDeclaration(derivedClass);
+
+  if (baseClass == NULL || derivedClass == NULL) {
+    return false;
+  }
+
+  if (baseClass == derivedClass) {
+    return true;
+  }
+
+  SgClassDefinition *derivedDefinition = derivedClass->get_definition();
+  if (derivedDefinition == NULL) {
+    return false;
+  }
+
+  for (SgBaseClass *baseSpecifier : derivedDefinition->get_inheritances()) {
+    if (baseSpecifier == NULL) {
+      continue;
+    }
+
+    if (isSameOrBaseClassDeclaration(baseClass,
+                                     baseSpecifier->get_base_class())) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool SageInterface::isAddressOfCurrentObjectDataMemberReference(
+    SgVarRefExp *varRefExp) {
+  ROSE_ASSERT(varRefExp != NULL);
+
+  if (isDataMemberReference(varRefExp) == false ||
+      isAddressTaken(varRefExp) == false) {
+    return false;
+  }
+
+  SgVariableSymbol *variableSymbol = varRefExp->get_symbol();
+  ASSERT_not_null(variableSymbol);
+
+  SgInitializedName *initializedName = variableSymbol->get_declaration();
+  ASSERT_not_null(initializedName);
+
+  SgClassDefinition *declaringClassDefinition =
+      isSgClassDefinition(initializedName->get_scope());
+  if (declaringClassDefinition == NULL) {
+    return false;
+  }
+
+  SgFunctionDefinition *enclosingFunctionDefinition =
+      getEnclosingFunctionDefinition(varRefExp);
+  if (enclosingFunctionDefinition == NULL) {
+    return false;
+  }
+
+  SgMemberFunctionDeclaration *memberFunctionDeclaration =
+      isSgMemberFunctionDeclaration(
+          enclosingFunctionDefinition->get_declaration());
+  if (memberFunctionDeclaration == NULL) {
+    return false;
+  }
+
+  if (memberFunctionDeclaration->get_declarationModifier()
+          .get_storageModifier()
+          .isStatic()) {
+    return false;
+  }
+
+  SgClassDeclaration *memberClassDeclaration = isSgClassDeclaration(
+      memberFunctionDeclaration->get_associatedClassDeclaration());
+  SgClassDeclaration *declaringClassDeclaration =
+      isSgClassDeclaration(declaringClassDefinition->get_declaration());
+
+  return isSameOrBaseClassDeclaration(declaringClassDeclaration,
+                                      memberClassDeclaration);
+}
+
 bool SageInterface::isAddressTaken(SgExpression *refExp) {
   // DQ (2/17/2019): Need to generalize this function to apply to member
   // functions references as well.
