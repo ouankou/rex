@@ -160,8 +160,6 @@ size_t xomp_get_maxThreadBlocksPerMultiprocessor(int devID) {
            major, minor);
     abort();
   }
-  abort();
-  return 0;
 }
 
 // max thread per block, useful for 1-D problem
