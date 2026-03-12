@@ -931,8 +931,6 @@ set(CXX11_DISABLED_TESTCODES
   test2019_103.C
   test2019_104.C
   test2019_132.C
-  test2019_148.C
-  test2019_149.C
   test2019_243.C
   test2019_244.C
   test2019_245.C

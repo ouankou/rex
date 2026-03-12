@@ -1,12 +1,16 @@
-// DQ (2/19/2019): This does not appear to be valid C++11 (or C++14 or C++17)
+// Templates are valid at namespace or class scope.
+template <typename T> struct Container {
+  using value_type = T;
+};
 
-void foobar()
-   {
-  // type alias can introduce a member typedef name
-     template<typename T>
-     struct Container { using value_type = T; };
-  // which can be used in generic programming
-     template<typename Container>
-     void g(const Container& c) { typename Container::value_type n; }
-   }
+template <typename ContainerType> void g(const ContainerType &c) {
+  typename ContainerType::value_type n{};
+  (void)c;
+  (void)n;
+}
 
+void foobar() {
+  // A member typedef introduced by a class template can be used generically.
+  Container<int> c;
+  g(c);
+}
