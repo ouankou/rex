@@ -137,33 +137,27 @@ extern "C" {
 
 struct __tgt_bin_desc *__cubin_desc = nullptr;
 
-static inline bool ensure_rex_cubin_ready(void) {
-  if (__cubin_desc != nullptr) {
-    return true;
-  }
-  return register_cubin(REX_CUBIN_NAME) != nullptr;
-}
-
 struct __tgt_bin_desc *register_cubin(const char *filename) {
   const char *cubin_name = filename == nullptr ? REX_CUBIN_NAME : filename;
-  __cubin_desc = ensure_cubin_registered(cubin_name);
-  return __cubin_desc;
+  struct __tgt_bin_desc *desc = ensure_cubin_registered(cubin_name);
+  __atomic_store_n(&__cubin_desc, desc, __ATOMIC_RELEASE);
+  return desc;
 }
 
-void rex_offload_init(void) { __cubin_desc = register_cubin(REX_CUBIN_NAME); }
+void rex_offload_init(void) { (void)register_cubin(REX_CUBIN_NAME); }
 
 void rex_offload_fini(void) {
   // Standalone generated programs normally rely on process exit for cleanup.
   // Keep explicit teardown available for callers that truly need it inside a
   // longer-lived process.
   unregister_cubin_internal();
-  __cubin_desc = nullptr;
+  __atomic_store_n(&__cubin_desc, nullptr, __ATOMIC_RELEASE);
 }
 
 int rex___tgt_target(int64_t device_id, void *host_ptr, int32_t arg_num,
                      void **args_base, void **args, int64_t *arg_sizes,
                      int64_t *arg_types) {
-  if (!ensure_rex_cubin_ready()) {
+  if (register_cubin(REX_CUBIN_NAME) == nullptr) {
     return -1;
   }
   return __rex_real___tgt_target(device_id, host_ptr, arg_num, args_base, args,
@@ -174,7 +168,7 @@ int rex___tgt_target_teams(int64_t device_id, void *host_ptr, int32_t arg_num,
                            void **args_base, void **args, int64_t *arg_sizes,
                            int64_t *arg_types, int32_t num_teams,
                            int32_t thread_limit) {
-  if (!ensure_rex_cubin_ready()) {
+  if (register_cubin(REX_CUBIN_NAME) == nullptr) {
     return -1;
   }
   return __rex_real___tgt_target_teams(device_id, host_ptr, arg_num, args_base,
@@ -185,7 +179,7 @@ int rex___tgt_target_teams(int64_t device_id, void *host_ptr, int32_t arg_num,
 int rex___tgt_target_kernel(int64_t device_id, int32_t num_teams,
                             int32_t thread_limit, void *host_ptr,
                             struct __tgt_kernel_arguments *kernel_args) {
-  if (!ensure_rex_cubin_ready()) {
+  if (register_cubin(REX_CUBIN_NAME) == nullptr) {
     return -1;
   }
   return __rex_real___tgt_target_kernel(&rex_target_kernel_ident, device_id,
@@ -196,7 +190,7 @@ int rex___tgt_target_kernel(int64_t device_id, int32_t num_teams,
 void rex___tgt_target_data_begin(int64_t DeviceId, int32_t ArgNum,
                                  void **ArgsBase, void **Args,
                                  int64_t *ArgSizes, int64_t *ArgTypes) {
-  if (!ensure_rex_cubin_ready()) {
+  if (register_cubin(REX_CUBIN_NAME) == nullptr) {
     return;
   }
   __rex_real___tgt_target_data_begin(DeviceId, ArgNum, ArgsBase, Args, ArgSizes,
@@ -206,7 +200,7 @@ void rex___tgt_target_data_begin(int64_t DeviceId, int32_t ArgNum,
 void rex___tgt_target_data_end(int64_t DeviceId, int32_t ArgNum,
                                void **ArgsBase, void **Args, int64_t *ArgSizes,
                                int64_t *ArgTypes) {
-  if (!ensure_rex_cubin_ready()) {
+  if (register_cubin(REX_CUBIN_NAME) == nullptr) {
     return;
   }
   __rex_real___tgt_target_data_end(DeviceId, ArgNum, ArgsBase, Args, ArgSizes,
@@ -216,7 +210,7 @@ void rex___tgt_target_data_end(int64_t DeviceId, int32_t ArgNum,
 void rex___tgt_target_data_update(int64_t DeviceId, int32_t ArgNum,
                                   void **ArgsBase, void **Args,
                                   int64_t *ArgSizes, int64_t *ArgTypes) {
-  if (!ensure_rex_cubin_ready()) {
+  if (register_cubin(REX_CUBIN_NAME) == nullptr) {
     return;
   }
   __rex_real___tgt_target_data_update(DeviceId, ArgNum, ArgsBase, Args,
