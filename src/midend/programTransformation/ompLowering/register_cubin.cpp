@@ -1,9 +1,9 @@
 #define REX_KMP_INTERNAL
 #include "rex_kmp.h"
 
-#include <stddef.h>
+#include <memory>
 #include <stdio.h>
-#include <stdlib.h>
+#include <vector>
 
 #ifndef REX_CUBIN_NAME
 #define REX_CUBIN_NAME "rex_lib_nvidia.cubin"
@@ -29,27 +29,15 @@ constexpr int32_t kRexTargetKernelReserved3 = 0;
 constexpr char kRexTargetKernelPSource[] = ";unknown;unknown;0;0;;";
 
 struct CubinStorage {
-  unsigned char *image = nullptr;
-  size_t image_size = 0;
+  std::vector<unsigned char> image;
   __tgt_device_image device_image{};
   __tgt_bin_desc bin_desc{};
 };
 
 int registration_state = kUnregistered;
-CubinStorage cubin_storage;
+std::unique_ptr<CubinStorage> cubin_storage;
 
-void reset_cubin_storage() {
-  cubin_storage.image = nullptr;
-  cubin_storage.image_size = 0;
-  cubin_storage.device_image = __tgt_device_image{};
-  cubin_storage.bin_desc = __tgt_bin_desc{};
-}
-
-bool readFile(const char *filename, unsigned char **buffer,
-              size_t *buffer_size) {
-  if (buffer == nullptr || buffer_size == nullptr) {
-    return false;
-  }
+bool readFile(const char *filename, std::vector<unsigned char> &buffer) {
 
   FILE *file = fopen(filename, "rb");
   if (file == nullptr) {
@@ -69,23 +57,11 @@ bool readFile(const char *filename, unsigned char **buffer,
     return false;
   }
 
-  unsigned char *image =
-      static_cast<unsigned char *>(malloc(static_cast<size_t>(file_size)));
-  if (image == nullptr) {
-    fclose(file);
-    return false;
-  }
-
-  size_t bytes_read = fread(image, 1, static_cast<size_t>(file_size), file);
+  buffer.resize(static_cast<size_t>(file_size));
+  size_t bytes_read =
+      fread(buffer.data(), 1, static_cast<size_t>(file_size), file);
   fclose(file);
-  if (bytes_read != static_cast<size_t>(file_size)) {
-    free(image);
-    return false;
-  }
-
-  *buffer = image;
-  *buffer_size = static_cast<size_t>(file_size);
-  return true;
+  return bytes_read == buffer.size();
 }
 
 struct __tgt_bin_desc *register_cubin_internal(const char *filename) {
@@ -93,31 +69,32 @@ struct __tgt_bin_desc *register_cubin_internal(const char *filename) {
     return nullptr;
   }
 
-  reset_cubin_storage();
-  if (!readFile(filename, &cubin_storage.image, &cubin_storage.image_size)) {
+  std::unique_ptr<CubinStorage> storage = std::make_unique<CubinStorage>();
+  if (!readFile(filename, storage->image)) {
     return nullptr;
   }
 
-  cubin_storage.device_image.ImageStart = cubin_storage.image;
-  cubin_storage.device_image.ImageEnd =
-      cubin_storage.image + cubin_storage.image_size;
-  cubin_storage.device_image.EntriesBegin = &__start_omp_offloading_entries;
-  cubin_storage.device_image.EntriesEnd = &__stop_omp_offloading_entries;
+  storage->device_image.ImageStart = storage->image.data();
+  storage->device_image.ImageEnd =
+      storage->image.data() + storage->image.size();
+  storage->device_image.EntriesBegin = &__start_omp_offloading_entries;
+  storage->device_image.EntriesEnd = &__stop_omp_offloading_entries;
 
-  cubin_storage.bin_desc.NumDeviceImages = 1;
-  cubin_storage.bin_desc.DeviceImages = &cubin_storage.device_image;
-  cubin_storage.bin_desc.HostEntriesBegin = &__start_omp_offloading_entries;
-  cubin_storage.bin_desc.HostEntriesEnd = &__stop_omp_offloading_entries;
+  storage->bin_desc.NumDeviceImages = 1;
+  storage->bin_desc.DeviceImages = &storage->device_image;
+  storage->bin_desc.HostEntriesBegin = &__start_omp_offloading_entries;
+  storage->bin_desc.HostEntriesEnd = &__stop_omp_offloading_entries;
 
-  __rex_real___tgt_register_lib(&cubin_storage.bin_desc);
-  return &cubin_storage.bin_desc;
+  __rex_real___tgt_register_lib(&storage->bin_desc);
+  cubin_storage = std::move(storage);
+  return &cubin_storage->bin_desc;
 }
 
 struct __tgt_bin_desc *ensure_cubin_registered(const char *filename) {
   for (;;) {
     int state = __atomic_load_n(&registration_state, __ATOMIC_ACQUIRE);
     if (state == kRegistered) {
-      return cubin_storage.image == nullptr ? nullptr : &cubin_storage.bin_desc;
+      return cubin_storage == nullptr ? nullptr : &cubin_storage->bin_desc;
     }
     if (state == kUnregistered &&
         __atomic_compare_exchange_n(&registration_state, &state, kBusy, false,
@@ -140,10 +117,9 @@ void unregister_cubin_internal() {
     return;
   }
 
-  if (cubin_storage.image != nullptr) {
-    __rex_real___tgt_unregister_lib(&cubin_storage.bin_desc);
-    free(cubin_storage.image);
-    reset_cubin_storage();
+  if (cubin_storage != nullptr) {
+    __rex_real___tgt_unregister_lib(&cubin_storage->bin_desc);
+    cubin_storage.reset();
   }
   __atomic_store_n(&registration_state, kUnregistered, __ATOMIC_RELEASE);
 }

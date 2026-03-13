@@ -7614,19 +7614,19 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
       SgBasicBlock *cap_threads_body = buildBasicBlock();
       SgVariableDeclaration *launch_granularity_decl = buildVariableDeclaration(
           "__rex_launch_granularity", buildOpaqueType("int64_t", p_scope),
-          buildAssignInitializer(
-              buildCastExp(buildVarRefExp(threads_per_block_decl),
-                           buildOpaqueType("int64_t", p_scope))),
-          cap_threads_body);
+          buildAssignInitializer(buildLongLongIntVal(32)), cap_threads_body);
       cap_threads_body->append_statement(launch_granularity_decl);
 
-      SgBasicBlock *cap_granularity_body = buildBasicBlock();
-      cap_granularity_body->append_statement(buildAssignStatement(
-          buildVarRefExp(launch_granularity_decl), buildLongLongIntVal(32)));
+      SgBasicBlock *use_block_granularity_body = buildBasicBlock();
+      use_block_granularity_body->append_statement(buildAssignStatement(
+          buildVarRefExp(launch_granularity_decl),
+          buildCastExp(buildVarRefExp(threads_per_block_decl),
+                       buildOpaqueType("int64_t", p_scope))));
       cap_threads_body->append_statement(buildIfStmt(
-          buildGreaterThanOp(buildVarRefExp(launch_granularity_decl),
-                             buildLongLongIntVal(32)),
-          cap_granularity_body, NULL));
+          buildLessThanOp(buildCastExp(buildVarRefExp(threads_per_block_decl),
+                                       buildOpaqueType("int64_t", p_scope)),
+                          buildLongLongIntVal(32)),
+          use_block_granularity_body, NULL));
 
       SgExpression *rounded_threads_expr = buildMultiplyOp(
           buildDivideOp(buildSubtractOp(
