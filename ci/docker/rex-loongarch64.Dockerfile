@@ -29,7 +29,7 @@ RUN apt-get update \
       lldb-${LLVM_VERSION} \
       llvm-${LLVM_VERSION} \
       llvm-${LLVM_VERSION}-dev \
-      openjdk-21-jdk \
+      openjdk-21-jdk-headless \
       pkg-config \
     && rm -rf /var/lib/apt/lists/*
 

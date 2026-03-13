@@ -20,7 +20,7 @@ jobs:
 
     steps:
     - name: Set up QEMU (loong64)
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
       with:
         platforms: loong64
 
@@ -35,7 +35,7 @@ jobs:
             cd /opt/rex/src
             CTEST_JOBS="$(nproc)"
             ctest --test-dir build \
-              -R "rex|astInterface|testQuery|OMPTEST_|OMPLOWERING_RODINIA_" \
+              -R "rex|astInterface|OMPLOWERING_RODINIA_" \
               --output-on-failure \
               -j"${CTEST_JOBS}"
           '
