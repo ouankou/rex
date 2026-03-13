@@ -57,10 +57,11 @@ verify_common_cuda_lowering() {
 
   expect_count "${rose_file}" '#include "rex_kmp.h"' 1 "host runtime include count"
   expect_count "${rose_file}" 'rex_offload_init[[:space:]]*\(' 1 "host offload init count"
-  expect_count "${rose_file}" 'rex_offload_fini[[:space:]]*\(' 1 "host offload fini count"
+  expect_count "${rose_file}" 'rex_offload_fini[[:space:]]*\(' 0 "unexpected host offload fini count"
   expect_count "${rose_file}" 'struct[[:space:]]+__tgt_offload_entry[[:space:]]+OUT__' "${kernel_count}" "host offload entry count"
   expect_count "${rose_file}" 'char[[:space:]]+OUT__.*__id__[[:space:]]*=' "${kernel_count}" "host kernel id count"
-  expect_count "${rose_file}" '__tgt_target_teams[[:space:]]*\(' "${kernel_count}" "host target teams call count"
+  expect_count "${rose_file}" '__tgt_target_kernel[[:space:]]*\(' "${kernel_count}" "host target kernel call count"
+  expect_count "${rose_file}" '__tgt_target_teams[[:space:]]*\(' 0 "unexpected host target teams call count"
 
   include_line="$(first_line "${rose_file}" '#include "rex_kmp.h"')"
   offload_entry_line="$(first_line "${rose_file}" 'struct[[:space:]]+__tgt_offload_entry[[:space:]]+OUT__')"
@@ -71,6 +72,8 @@ verify_common_cuda_lowering() {
   expect_count "${cu_file}" '#include "rex_nvidia.h"' 1 "device runtime include count"
   expect_count "${cu_file}" 'extern "C"' 1 "device extern C count"
   expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+OUT__' "${kernel_count}" "device kernel count"
+  expect_count "${cu_file}" '__global__[[:space:]]+void[[:space:]]+OUT__.*\(void[[:space:]]*[*][[:space:]]*__rex_kernel_launch_env' "${kernel_count}" "device hidden launch env parameter count"
+  expect_count "${cu_file}" 'void[[:space:]]*[*][[:space:]]*__rex_kernel_launch_env,[[:space:]]*void[[:space:]]*[*][[:space:]]*__rex_kernel_launch_env' 0 "duplicate hidden launch env parameter count"
 }
 
 case "${case_name}" in
@@ -101,10 +104,22 @@ case "${case_name}" in
     verify_common_cuda_lowering "${rose_file}" "${cu_file}" 2
     ;;
 
+  rodinia_inactive_output_like)
+    rose_file="${workdir}/rose_rodinia_inactive_output_like.c"
+    cu_file="${workdir}/rex_lib_rodinia_inactive_output_like.cu"
+    verify_common_cuda_lowering "${rose_file}" "${cu_file}" 1
+    expect_count "${rose_file}" '#ifdef OUTPUT' 1 "inactive OUTPUT guard count"
+    expect_count "${rose_file}" 'status[[:space:]]*\+=[[:space:]]*report_value[[:space:]]*\([[:space:]]*data\[i\][[:space:]]*\)' 1 "inactive OUTPUT body preservation count"
+    ;;
+
   rodinia_nn_like)
     rose_file="${workdir}/rose_rodinia_nn_like.c"
     cu_file="${workdir}/rex_lib_rodinia_nn_like.cu"
     verify_common_cuda_lowering "${rose_file}" "${cu_file}" 1
+    expect_count "${cu_file}" 'XOMP_static_sched_init[[:space:]]*\(' 0 "unexpected XOMP scheduler init in nn-like device code"
+    expect_count "${cu_file}" 'XOMP_static_sched_next[[:space:]]*\(' 0 "unexpected XOMP scheduler next in nn-like device code"
+    expect_count "${cu_file}" 'getCUDABlockThreadCount[[:space:]]*\(' 0 "unexpected helper-based CUDA thread count in nn-like device code"
+    expect_count "${cu_file}" 'getLoopIndexFromCUDAVariables[[:space:]]*\(' 0 "unexpected helper-based CUDA thread id in nn-like device code"
     time0_line="$(first_line "${rose_file}" 'long long[[:space:]]+time0[[:space:]]*=[[:space:]]*clock[[:space:]]*\(')"
     init_line="$(first_line "${rose_file}" 'rex_offload_init[[:space:]]*\(')"
     [[ -n "${time0_line}" ]] || die "missing timer declaration marker"

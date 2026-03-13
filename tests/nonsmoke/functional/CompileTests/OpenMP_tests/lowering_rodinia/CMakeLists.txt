@@ -3,6 +3,7 @@ set(RODINIA_LOWERING_CASES
     rodinia_bfs_like
     rodinia_gaussian_like
     rodinia_hotspot_like
+    rodinia_inactive_output_like
     rodinia_nn_like
     rodinia_pathfinder_like
     rodinia_srad_comments_like

@@ -25,7 +25,9 @@
 
 #include "rose_config.h"
 
+#include <fstream>
 #include <string.h>
+#include <vector>
 // DQ (8/1/2018): This is the suppport for unparsing of header files.
 #include "FileHelper.h"
 
@@ -38,6 +40,202 @@
 namespace si = SageInterface;
 
 namespace {
+struct ConditionalDirectiveRecord {
+  enum Kind { IfBegin, ElseBranch, ElifBranch, EndIf, Other } kind;
+  std::string text;
+  size_t line_index;
+
+  ConditionalDirectiveRecord(Kind kind, const std::string &text,
+                             size_t line_index)
+      : kind(kind), text(text), line_index(line_index) {}
+};
+
+std::string trimLeadingWhitespace(const std::string &text) {
+  const std::string::size_type first = text.find_first_not_of(" \t\r");
+  if (first == std::string::npos) {
+    return std::string();
+  }
+
+  const std::string::size_type last = text.find_last_not_of(" \t\r");
+  return text.substr(first, last - first + 1);
+}
+
+ConditionalDirectiveRecord::Kind
+classifyConditionalDirective(const std::string &line) {
+  const std::string trimmed = trimLeadingWhitespace(line);
+  if (trimmed.rfind("#ifdef", 0) == 0 || trimmed.rfind("#ifndef", 0) == 0 ||
+      trimmed.rfind("#if", 0) == 0) {
+    return ConditionalDirectiveRecord::IfBegin;
+  }
+  if (trimmed.rfind("#elif", 0) == 0) {
+    return ConditionalDirectiveRecord::ElifBranch;
+  }
+  if (trimmed.rfind("#else", 0) == 0) {
+    return ConditionalDirectiveRecord::ElseBranch;
+  }
+  if (trimmed.rfind("#endif", 0) == 0) {
+    return ConditionalDirectiveRecord::EndIf;
+  }
+
+  return ConditionalDirectiveRecord::Other;
+}
+
+bool readTextFileLines(const std::string &filename,
+                       std::vector<std::string> *lines) {
+  ASSERT_not_null(lines);
+
+  std::ifstream input(filename.c_str());
+  if (!input.is_open()) {
+    return false;
+  }
+
+  std::string line;
+  while (std::getline(input, line)) {
+    if (!line.empty() && line[line.size() - 1] == '\r') {
+      line.erase(line.size() - 1);
+    }
+    lines->push_back(line);
+  }
+
+  return true;
+}
+
+void appendLineRange(std::vector<std::string> *dest,
+                     const std::vector<std::string> &src, size_t begin,
+                     size_t end) {
+  ASSERT_not_null(dest);
+  for (size_t idx = begin; idx < end; ++idx) {
+    dest->push_back(src[idx]);
+  }
+}
+
+bool rangeHasVisibleText(const std::vector<std::string> &lines, size_t begin,
+                         size_t end) {
+  for (size_t idx = begin; idx < end; ++idx) {
+    if (lines[idx].find_first_not_of(" \t\r") != std::string::npos) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+std::vector<ConditionalDirectiveRecord>
+collectConditionalDirectives(const std::vector<std::string> &lines) {
+  std::vector<ConditionalDirectiveRecord> directives;
+  for (size_t idx = 0; idx < lines.size(); ++idx) {
+    const std::string trimmed = trimLeadingWhitespace(lines[idx]);
+    const ConditionalDirectiveRecord::Kind kind =
+        classifyConditionalDirective(trimmed);
+    if (kind == ConditionalDirectiveRecord::Other) {
+      continue;
+    }
+    directives.push_back(ConditionalDirectiveRecord(kind, trimmed, idx));
+  }
+
+  return directives;
+}
+
+bool sameConditionalDirectiveSequence(
+    const std::vector<ConditionalDirectiveRecord> &lhs,
+    const std::vector<ConditionalDirectiveRecord> &rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+
+  for (size_t idx = 0; idx < lhs.size(); ++idx) {
+    if (lhs[idx].kind != rhs[idx].kind || lhs[idx].text != rhs[idx].text) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void writeTextFileLines(const std::string &filename,
+                        const std::vector<std::string> &lines) {
+  std::ofstream output(filename.c_str(), std::ios::out | std::ios::trunc);
+  if (!output.is_open()) {
+    return;
+  }
+
+  for (size_t idx = 0; idx < lines.size(); ++idx) {
+    output << lines[idx] << '\n';
+  }
+}
+
+void restoreEmptyConditionalBodiesInOutput(SgFile *file,
+                                           const std::string &output_filename) {
+  SgSourceFile *source_file = isSgSourceFile(file);
+  if (source_file == NULL) {
+    return;
+  }
+
+  std::vector<std::string> source_lines;
+  std::vector<std::string> output_lines;
+  if (!readTextFileLines(source_file->get_sourceFileNameWithPath(),
+                         &source_lines) ||
+      !readTextFileLines(output_filename, &output_lines)) {
+    return;
+  }
+
+  const std::vector<ConditionalDirectiveRecord> source_directives =
+      collectConditionalDirectives(source_lines);
+  const std::vector<ConditionalDirectiveRecord> output_directives =
+      collectConditionalDirectives(output_lines);
+  if (source_directives.empty() || output_directives.empty() ||
+      !sameConditionalDirectiveSequence(source_directives, output_directives)) {
+    return;
+  }
+
+  std::vector<std::string> rebuilt_output;
+  rebuilt_output.reserve(output_lines.size());
+  appendLineRange(&rebuilt_output, output_lines, 0,
+                  output_directives.front().line_index + 1);
+
+  int conditional_depth = 0;
+  bool changed = false;
+  for (size_t idx = 0; idx + 1 < output_directives.size(); ++idx) {
+    const ConditionalDirectiveRecord::Kind kind = output_directives[idx].kind;
+    if (kind == ConditionalDirectiveRecord::IfBegin) {
+      ++conditional_depth;
+    } else if (kind == ConditionalDirectiveRecord::EndIf) {
+      conditional_depth = std::max(0, conditional_depth - 1);
+    }
+
+    const size_t output_gap_begin = output_directives[idx].line_index + 1;
+    const size_t output_gap_end = output_directives[idx + 1].line_index;
+    const size_t source_gap_begin = source_directives[idx].line_index + 1;
+    const size_t source_gap_end = source_directives[idx + 1].line_index;
+
+    const bool restore_gap =
+        conditional_depth > 0 && source_gap_begin < source_gap_end &&
+        output_gap_begin <= output_gap_end &&
+        rangeHasVisibleText(source_lines, source_gap_begin, source_gap_end) &&
+        !rangeHasVisibleText(output_lines, output_gap_begin, output_gap_end);
+
+    if (restore_gap) {
+      appendLineRange(&rebuilt_output, source_lines, source_gap_begin,
+                      source_gap_end);
+      changed = true;
+    } else {
+      appendLineRange(&rebuilt_output, output_lines, output_gap_begin,
+                      output_gap_end);
+    }
+
+    appendLineRange(&rebuilt_output, output_lines,
+                    output_directives[idx + 1].line_index,
+                    output_directives[idx + 1].line_index + 1);
+  }
+
+  appendLineRange(&rebuilt_output, output_lines,
+                  output_directives.back().line_index + 1, output_lines.size());
+
+  if (changed) {
+    writeTextFileLines(output_filename, rebuilt_output);
+  }
+}
+
 std::string resolveUnparseOutputToTestDir(const std::string &filename) {
   const char *output_dir = std::getenv("ROSE_TEST_OUTPUT_DIR");
   if (output_dir == nullptr || output_dir[0] == '\0') {
@@ -2533,6 +2731,7 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
           &dummyStream, sourceFile->get_file_info()->get_filenameString(),
           dummyOptions, unparseHelp, unparseDelegate);
       rawTokenUnparser.unparseFileUsingTokenStream(sourceFile, &outputFilename);
+      restoreEmptyConditionalBodiesInOutput(file, outputFilename);
     } else {
       fstream ROSE_OutputFile(outputFilename.c_str(), ios::out);
       // ROSE_OutputFile.open(s_file.c_str());
@@ -2674,6 +2873,7 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
 
       // And finally we need to close the file (to flush everything out!)
       ROSE_OutputFile.close();
+      restoreEmptyConditionalBodiesInOutput(file, outputFilename);
 
       // Invoke post-output user-defined callbacks if any.  We must pass the
       // absolute output name because the build system may have changed

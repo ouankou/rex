@@ -32,6 +32,14 @@ string AstUnparseAttribute::toString() {
   return s;
 }
 
+AstAttribute *AstUnparseAttribute::copy() const {
+  return new AstUnparseAttribute(*this);
+}
+
+std::string AstUnparseAttribute::attribute_class_name() const {
+  return "AstUnparseAttribute";
+}
+
 string AstUnparseAttribute::toString(RelativePositionType inputlocation) {
   string s;
   for (StringPositionPairListType::iterator i = stringList.begin();
