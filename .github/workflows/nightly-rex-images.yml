@@ -36,7 +36,7 @@ jobs:
         persist-credentials: false
 
     - name: Set up QEMU (riscv64)
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
       with:
         platforms: riscv64
 
@@ -103,7 +103,7 @@ jobs:
         persist-credentials: false
 
     - name: Set up QEMU (loong64)
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
       with:
         platforms: loong64
 

@@ -30,7 +30,7 @@ RUN apt-get update \
       lldb-${LLVM_VERSION} \
       llvm-${LLVM_VERSION} \
       llvm-${LLVM_VERSION}-dev \
-      openjdk-25-jdk \
+      openjdk-25-jdk-headless \
       pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
