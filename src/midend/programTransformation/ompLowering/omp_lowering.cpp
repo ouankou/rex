@@ -592,6 +592,20 @@ int computeAstDepth(SgNode *node) {
   return depth;
 }
 
+bool isNodeWithinSubtree(SgNode *root, SgNode *node) {
+  if (root == nullptr || node == nullptr) {
+    return false;
+  }
+
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    if (cursor == root) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool isReadOnlyDeviceLoadCandidate(SgExpression *expr,
                                    SgBasicBlock *kernel_body) {
   if (expr == nullptr || kernel_body == nullptr ||
@@ -663,7 +677,7 @@ void rewriteReadOnlyDeviceLoadsWithLdg(SgForStatement *outer_loop) {
   for (std::vector<SgExpression *>::const_iterator it = candidates.begin();
        it != candidates.end(); ++it) {
     SgExpression *expr = *it;
-    if (expr == nullptr || expr->get_parent() == nullptr) {
+    if (!isNodeWithinSubtree(outer_body, expr)) {
       continue;
     }
 
@@ -1934,34 +1948,6 @@ bool hasOpenMPRuntimeConstructs(SgSourceFile *file) {
 }
 } // namespace
 
-// This is a hack to pass the number of CUDA loop iteration count around
-// When translating "omp target" , we need to calculate the number of thread
-// blocks needed. To do that, we need to know how many CUDA threads are needed.
-// We think the number of CUDA threads is the iteration count of the
-// parallelized CUDA loop (peeled off), assuming increment is always 1
-// TODO  Also, the incremental value should be irrevelvant?
-// The loop will be transformed away when we call transOmpTargtLoop since we use
-// bottom-up translation So the loop iteration count needs to be stored globally
-// before transOmpTarget() is called.
-static SgExpression *cuda_loop_iter_count_1 = NULL;
-
-// this is another hack to pass the reduction variables for accelerator model
-// directives We use bottom-up translation for AST with both omp parallel and
-// omp for. reduction is implemented using a two level reduction method: inner
-// thread block level + beyond block level We save the per-block variable and
-// its reduction type integer into a map when generating inner block level
-// reduction. We use the map to help generate beyond block level reduction
-static std::map<SgVariableSymbol *, int> per_block_reduction_map;
-
-// we don't know where to insert the declarations when they are generated as
-// part of transOmpTargetLoop we have to save them and insert them later when
-// kernel launch statement is generated as part of transOmpTargetParallel
-static std::vector<SgVariableDeclaration *> per_block_declarations;
-static ASTtools::VarSymSet_t literal_target_param_syms;
-
-static std::map<string, std::vector<SgExpression *>> offload_array_offset_map;
-static std::map<string, std::vector<SgExpression *>> offload_array_size_map;
-
 size_t get_host_pointer_size_bytes(const SgNode *context) {
   return is_32_bit_target(context) ? 4 : 8;
 }
@@ -2372,6 +2358,18 @@ bool enable_debugging = false;   /* default is not to debug the process */
 bool useDDE = true;
 
 unsigned int nCounter = 0;
+
+struct GpuOffloadLoweringContext {
+  std::map<SgVariableSymbol *, int> per_block_reduction_map;
+  std::vector<SgVariableDeclaration *> per_block_declarations;
+  ASTtools::VarSymSet_t literal_target_param_syms;
+};
+
+static void
+transOmpVariablesWithContext(SgStatement *ompStmt, SgBasicBlock *bb1,
+                             SgExpression *orig_loop_upper = NULL,
+                             bool isAcceleratorModel = false,
+                             GpuOffloadLoweringContext *offload_ctx = NULL);
 
 void markImplicitTargetMapVariable(SgOmpClauseBodyStatement *target,
                                    SgInitializedName *var) {
@@ -4343,14 +4341,6 @@ void transOmpTargetLoop(SgNode *node) {
                           &orig_stride, NULL, &isIncremental, NULL);
   ROSE_ASSERT(is_canonical == true);
 
-  // loop iteration space: upper - lower + 1
-  // This expression will be later used to help generate
-  // xomp_get_max1DBlock(VEC_LEN), which needs iteration count to calculate max
-  // thread block numbers
-  cuda_loop_iter_count_1 =
-      buildAddOp(buildSubtractOp(deepCopy(orig_upper), deepCopy(orig_lower)),
-                 buildIntVal(1));
-
   // also make sure the loop body is a block
   // TODO: we consider peeling off 1 level loop control only, need to be
   // conditional on what the spec. can provide at pragma level
@@ -4431,10 +4421,8 @@ void transOmpTargetLoop(SgNode *node) {
   // handle private variables at this loop level, mostly loop index variables.
   // TODO: this is not very elegant since the outer most loop's loop variable is
   // still translated.
-  // for reduction
-  per_block_declarations.clear(); // must reset to empty or wrong reference to
-                                  // stale content generated previously
-  transOmpVariables(target, bb1, NULL, true);
+  GpuOffloadLoweringContext offload_ctx;
+  transOmpVariablesWithContext(target, bb1, NULL, true, &offload_ctx);
 }
 
 //! Translate omp for or omp do loops affected by the "omp target" directive,
@@ -4552,14 +4540,6 @@ void transOmpTargetLoop_RoundRobin(SgNode *node) {
                           &orig_stride, NULL, &isIncremental, NULL);
   ROSE_ASSERT(is_canonical == true);
 
-  // loop iteration space: upper - lower + 1, not used within this function, but
-  // a global variable used later. This expression will be later used to help
-  // generate xomp_get_max1DBlock(VEC_LEN), which needs iteration count to
-  // calculate max thread block numbers
-  cuda_loop_iter_count_1 =
-      buildAddOp(buildSubtractOp(deepCopy(orig_upper), deepCopy(orig_lower)),
-                 buildIntVal(1));
-
   // TODO: Fortran support later on
   ROSE_ASSERT(for_loop != NULL);
   // SgBasicBlock* loop_body = ensureBasicBlockAsBodyOfFor (for_loop);
@@ -4670,10 +4650,8 @@ void transOmpTargetLoop_RoundRobin(SgNode *node) {
   // handle private variables at this loop level, mostly loop index variables.
   // TODO: this is not very elegant since the outer most loop's loop variable is
   // still translated.
-  // for reduction
-  per_block_declarations.clear(); // must reset to empty or wrong reference to
-                                  // stale content generated previously
-  transOmpVariables(target, bb1, NULL, true);
+  GpuOffloadLoweringContext offload_ctx;
+  transOmpVariablesWithContext(target, bb1, NULL, true, &offload_ctx);
 }
 
 //! Check if an OpenMP statement has a clause of type vvt
@@ -5841,8 +5819,6 @@ static void generateMappedArrayMemoryHandling(
     };
   };
 
-  offload_array_offset_map[dev_var_name] = v_offset;
-
   // generate Dim array
   string dev_var_Dim_name = "_dev_" + orig_name + "_Dim";
   SgVariableDeclaration *dev_var_Dim_decl = NULL;
@@ -5883,8 +5859,6 @@ static void generateMappedArrayMemoryHandling(
         dev_var_Dim_sym->get_declaration()->get_declaration());
 
   // ROSE_ASSERT (dev_var_Dim_decl != NULL);
-  offload_array_size_map[dev_var_name] = v_dimSize;
-
   // Only if we are in the mode of inserting data handling statements
   if (!need_generate_data_stmt)
     return;
@@ -6092,7 +6066,8 @@ ASTtools::VarSymSet_t
 transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
                      SgExprListExp *map_variable_base_list,
                      SgExprListExp *map_variable_size_list,
-                     SgExprListExp *map_variable_type_list) {
+                     SgExprListExp *map_variable_type_list,
+                     GpuOffloadLoweringContext *offload_ctx = NULL) {
   ASTtools::VarSymSet_t all_syms;
   ROSE_ASSERT(all_syms.size() == 0); // it should be empty
 
@@ -6293,8 +6268,8 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
         true) // we should only collect map variables which show up in the
               // current parallel region
       all_syms.insert(var_sym);
-    if (use_literal_target_param) {
-      literal_target_param_syms.insert(var_sym);
+    if (use_literal_target_param && offload_ctx != NULL) {
+      offload_ctx->literal_target_param_syms.insert(var_sym);
     }
 
     // check the type of current variable symbol and calculate its size
@@ -6356,76 +6331,6 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
   appendExpressionList(map_variable_size_list, *mapping_array_size_list);
   appendExpressionList(map_variable_type_list, *mapping_array_type_list);
 
-  /*
-  //Pei-Hung: subtract offset from the subscript in the offloaded array
-  reference if(target_parallel_stmt)
-  {
-    // at this point, the body must be a BB now.
-    SgBasicBlock* body_block = isSgBasicBlock(target_parallel_stmt->get_body());
-  // the body of the affected "omp parallel" ROSE_ASSERT (body_block!= NULL);
-    Rose_STL_Container<SgNode*> nodeList = NodeQuery::querySubTree(body_block,
-  V_SgVarRefExp); for (Rose_STL_Container<SgNode *>::iterator i =
-  nodeList.begin(); i != nodeList.end(); i++)
-    {
-      SgVarRefExp *vRef = isSgVarRefExp((*i));
-      SgVariableSymbol* sym = vRef->get_symbol();
-      SgType* type = sym->get_type();
-      if(offload_array_offset_map.find(vRef->get_symbol()->get_name().getString())
-  != offload_array_offset_map.end())
-      {
-        std::vector<SgExpression*> v_offset =
-  offload_array_offset_map.find(vRef->get_symbol()->get_name().getString())->second;
-        std::vector<SgExpression*> v_size =
-  offload_array_size_map.find(vRef->get_symbol()->get_name().getString())->second;
-        if(isSgPntrArrRefExp(vRef->get_parent()) == NULL)
-          continue;
-        //std::cout << "finding susbscript " <<
-  vRef->get_symbol()->get_name().getString() << " in " <<
-  offload_array_offset_map.size() << std::endl; SgPntrArrRefExp* pntrArrRef =
-  isSgPntrArrRefExp(vRef->get_parent()); std::vector<SgExpression*> arrayType
-  =get_C_array_dimensions(type);
-        //std::cout << "vector size = " << v_offset.size() << " array dim= " <<
-  arrayType.size() << std::endl; if(v_offset.size() == arrayType.size())
-        {
-          for(std::vector<SgExpression*>::reverse_iterator ir =
-  v_offset.rbegin(); ir != v_offset.rend(); ir++)
-          {
-            ROSE_ASSERT(pntrArrRef);
-            SgExpression* subscript = pntrArrRef->get_rhs_operand();
-            SgExpression* newsubscript =
-  buildSubtractOp(deepCopy(subscript),deepCopy(*ir));
-            replaceExpression(subscript,newsubscript,true);
-          }
-        }
-        // collapsed case
-        else
-        {
-          ROSE_ASSERT(pntrArrRef);
-          SgExpression* subscript = pntrArrRef->get_rhs_operand();
-          SgExpression* newsubscript = deepCopy(subscript);
-          std::vector<SgExpression*>::reverse_iterator irsize = v_size.rbegin();
-          for(std::vector<SgExpression*>::reverse_iterator ir =
-  v_offset.rbegin(); ir != v_offset.rend(); ir++)
-          {
-            SgIntVal* intVal = isSgIntVal(*ir);
-            if(intVal && intVal->get_value() == 0)
-            {
-              irsize++;
-              continue;
-            }
-            if(ir ==v_offset.rbegin())
-              newsubscript = buildSubtractOp(newsubscript,deepCopy(*ir));
-            else
-              newsubscript =
-  buildSubtractOp(newsubscript,buildMultiplyOp(deepCopy(*ir),deepCopy(*irsize)));
-            irsize++;
-          }
-          replaceExpression(subscript,newsubscript,true);
-        }
-      }
-    }
-  }
-  */
   return all_syms;
 } // end transOmpMapVariables() for omp target data's map clauses for now
 
@@ -6651,9 +6556,7 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
-
-  per_block_declarations.clear();
-  literal_target_param_syms.clear();
+  GpuOffloadLoweringContext offload_ctx;
 
   // device expression
   SgExpression *device_expression = NULL;
@@ -6714,7 +6617,7 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
 
   all_syms = transOmpMapVariables(
       target, map_variable_list, map_variable_base_list, map_variable_size_list,
-      map_variable_type_list); //, addressOf_syms);
+      map_variable_type_list, &offload_ctx); //, addressOf_syms);
 
   ASTtools::VarSymSet_t
       per_block_reduction_syms; // translation generated per block reduction
@@ -6760,8 +6663,9 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
        iter != all_syms.end(); iter++) {
     if (!isPointerType((*iter)->get_type()) &&
         !isSgArrayType((*iter)->get_type()) &&
-        literal_target_param_syms.find(const_cast<SgVariableSymbol *>(*iter)) ==
-            literal_target_param_syms.end()) {
+        offload_ctx.literal_target_param_syms.find(
+            const_cast<SgVariableSymbol *>(*iter)) ==
+            offload_ctx.literal_target_param_syms.end()) {
       addressOf_syms.insert(*iter);
     };
   };
@@ -6773,7 +6677,8 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   SgFunctionDeclaration *result_decl =
       isSgFunctionDeclaration(result->get_firstNondefiningDeclaration());
   ROSE_ASSERT(result_decl != NULL);
-  lowerLiteralTargetKernelParameters(result, literal_target_param_syms);
+  lowerLiteralTargetKernelParameters(result,
+                                     offload_ctx.literal_target_param_syms);
   maybeRecordTargetKernelLaunchBounds(result, omp_num_threads);
   result_decl->get_functionModifier()
       .setCudaKernel(); // add __global__ modifier
@@ -6815,10 +6720,6 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   outlined_driver_body->append_statement(threads_per_block_decl);
   attachComment(threads_per_block_decl, string("Launch CUDA kernel ..."));
 
-  // dim3 numBlocks (xomp_get_max1DBlock(VEC_LEN));
-  // TODO: handle 2-D or 3-D using dim type
-  // ROSE_ASSERT (cuda_loop_iter_count_1 != NULL);
-
   SgVariableDeclaration *num_blocks_decl =
       buildVariableDeclaration("_num_blocks_", buildIntType(),
                                buildAssignInitializer(omp_num_teams), p_scope);
@@ -6829,15 +6730,15 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   SgExpression *shared_data = NULL; // shared data size expression for CUDA
                                     // kernel execution configuration
   for (std::vector<SgVariableDeclaration *>::iterator iter =
-           per_block_declarations.begin();
-       iter != per_block_declarations.end(); iter++) {
+           offload_ctx.per_block_declarations.begin();
+       iter != offload_ctx.per_block_declarations.end(); iter++) {
     SgVariableDeclaration *decl = *iter;
     insertStatementAfter(num_blocks_decl, decl);
     SgVariableSymbol *sym = getFirstVarSym(decl);
     SgPointerType *pointer_type = isSgPointerType(sym->get_type());
     ROSE_ASSERT(pointer_type != NULL);
     SgType *base_type = pointer_type->get_base_type();
-    if (per_block_declarations.size() > 1) {
+    if (offload_ctx.per_block_declarations.size() > 1) {
       cerr << "Error. multiple reduction variables are not yet handled."
            << endl;
       ROSE_ABORT();
@@ -6976,7 +6877,6 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   replaceStatement(target, outlined_driver_body, true);
 
   target_outlined_function_list->push_back(isSgFunctionDeclaration(result));
-  literal_target_param_syms.clear();
 }
 
 static SgExpression *buildKernelArgNullPtrExpr() {
@@ -7101,8 +7001,6 @@ analyzeTargetLoopForGpu(SgForStatement *for_loop) {
       &info.orig_stride, NULL, &info.is_incremental);
   ROSE_ASSERT(is_canonical == true);
   info.is_inclusive_bound = true;
-
-  cuda_loop_iter_count_1 = buildTargetLoopTripCountExpr(info);
   return info;
 }
 
@@ -7310,9 +7208,12 @@ static void lowerTargetLoopRoundRobin(SgForStatement *for_loop,
 
 // Transform the worksharing loop in a target spmd region
 SgBasicBlock *transOmpTargetLoopBlock(SgNode *node,
-                                      bool *used_direct_grid_stride) {
+                                      bool *used_direct_grid_stride,
+                                      GpuOffloadLoweringContext *offload_ctx) {
   // step 0: Sanity check
   ROSE_ASSERT(node != NULL);
+  ROSE_ASSERT(offload_ctx != NULL);
+  (void)offload_ctx;
   SgForStatement *for_loop = isSgForStatement(node);
   ROSE_ASSERT(for_loop != NULL);
 
@@ -7360,9 +7261,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
-
-  per_block_declarations.clear();
-  literal_target_param_syms.clear();
+  GpuOffloadLoweringContext offload_ctx;
 
   // device expression
   SgExpression *device_expression = NULL;
@@ -7422,7 +7321,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
 
   // The combined directive only has one code block and should only process omp
   // variables once
-  transOmpVariables(target, body_block, NULL, true);
+  transOmpVariablesWithContext(target, body_block, NULL, true, &offload_ctx);
 
   SgExpression *host_loop_iter_count_expr = NULL;
   int direct_launch_thread_cap = 0;
@@ -7473,7 +7372,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
 
   all_syms = transOmpMapVariables(
       target, map_variable_list, map_variable_base_list, map_variable_size_list,
-      map_variable_type_list); //, addressOf_syms);
+      map_variable_type_list, &offload_ctx); //, addressOf_syms);
   /*
   for (std::set<const SgVariableSymbol*>::iterator iter = all_syms.begin(); iter
   != all_syms.end(); iter++) { std::cout << "SPMD worksharing variable: " <<
@@ -7525,8 +7424,9 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
        iter != all_syms.end(); iter++) {
     if (!isPointerType((*iter)->get_type()) &&
         !isSgArrayType((*iter)->get_type()) &&
-        literal_target_param_syms.find(const_cast<SgVariableSymbol *>(*iter)) ==
-            literal_target_param_syms.end()) {
+        offload_ctx.literal_target_param_syms.find(
+            const_cast<SgVariableSymbol *>(*iter)) ==
+            offload_ctx.literal_target_param_syms.end()) {
       addressOf_syms.insert(*iter);
     };
   };
@@ -7538,7 +7438,8 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   SgFunctionDeclaration *result_decl =
       isSgFunctionDeclaration(result->get_firstNondefiningDeclaration());
   ROSE_ASSERT(result_decl != NULL);
-  lowerLiteralTargetKernelParameters(result, literal_target_param_syms);
+  lowerLiteralTargetKernelParameters(result,
+                                     offload_ctx.literal_target_param_syms);
   maybeRecordTargetKernelLaunchBounds(result, omp_num_threads);
   result_decl->get_functionModifier()
       .setCudaKernel(); // add __global__ modifier
@@ -7573,7 +7474,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   // It's the very first loop statement in that function.
   Rose_STL_Container<SgNode *> for_loops =
       NodeQuery::querySubTree(result, V_SgForStatement);
-  transOmpTargetLoopBlock(for_loops[0], NULL);
+  transOmpTargetLoopBlock(for_loops[0], NULL, &offload_ctx);
 
   // create the outlined driver for GPU offloading, which is empty at this point
   SgBasicBlock *outlined_driver_body = omp_target_stmt_body_block;
@@ -7685,15 +7586,15 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   SgExpression *shared_data = NULL; // shared data size expression for CUDA
                                     // kernel execution configuration
   for (std::vector<SgVariableDeclaration *>::iterator iter =
-           per_block_declarations.begin();
-       iter != per_block_declarations.end(); iter++) {
+           offload_ctx.per_block_declarations.begin();
+       iter != offload_ctx.per_block_declarations.end(); iter++) {
     SgVariableDeclaration *decl = *iter;
     insertStatementAfter(num_blocks_decl, decl);
     SgVariableSymbol *sym = getFirstVarSym(decl);
     SgPointerType *pointer_type = isSgPointerType(sym->get_type());
     ROSE_ASSERT(pointer_type != NULL);
     SgType *base_type = pointer_type->get_base_type();
-    if (per_block_declarations.size() > 1) {
+    if (offload_ctx.per_block_declarations.size() > 1) {
       cerr << "Error. multiple reduction variables are not yet handled."
            << endl;
       ROSE_ABORT();
@@ -7861,12 +7762,13 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
     SgExprListExp *parameter_list = buildExprListExp(
         buildVarRefExp(const_cast<SgVariableSymbol *>(current_symbol)),
         buildVarRefExp("_num_blocks_", target->get_scope()),
-        buildIntVal(per_block_reduction_map[const_cast<SgVariableSymbol *>(
-            current_symbol)]));
+        buildIntVal(
+            offload_ctx.per_block_reduction_map[const_cast<SgVariableSymbol *>(
+                current_symbol)]));
     SgStatement *reduce_on_cpu_stmt = generateTargetReduceOnCPU(
         orig_var_name, const_cast<SgVariableSymbol *>(current_symbol),
         num_blocks_decl,
-        per_block_reduction_map[const_cast<SgVariableSymbol *>(
+        offload_ctx.per_block_reduction_map[const_cast<SgVariableSymbol *>(
             current_symbol)]);
     outlined_driver_body->append_statement(reduce_on_cpu_stmt);
 
@@ -7888,8 +7790,6 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   // outlined to a function
   replaceStatement(target, outlined_driver_body, true);
 
-  per_block_declarations.clear();
-  literal_target_param_syms.clear();
   target_outlined_function_list->push_back(isSgFunctionDeclaration(result));
 }
 
@@ -7898,16 +7798,16 @@ void transOmpLoopInTargetRegion(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
+  GpuOffloadLoweringContext offload_ctx;
 
   // At this point, the for loop has been moved to the outlined function.
   // It's the very first loop statement in that function.
   Rose_STL_Container<SgNode *> for_loops =
       NodeQuery::querySubTree(node, V_SgForStatement);
-  SgBasicBlock *loop_block = transOmpTargetLoopBlock(for_loops[0], NULL);
+  SgBasicBlock *loop_block =
+      transOmpTargetLoopBlock(for_loops[0], NULL, &offload_ctx);
 
   replaceStatement(target, loop_block, true);
-  per_block_declarations.clear();
-  literal_target_param_syms.clear();
 }
 
 // FIXME: It's still work-in-progress.
@@ -7916,6 +7816,7 @@ void transOmpSpmdInTargetRegion(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
+  GpuOffloadLoweringContext offload_ctx;
 
   // Now we need to ensure that "omp target " has a basic block as its body
   // so we can insert declarations into an inner block, instead of colliding
@@ -8011,8 +7912,9 @@ void transOmpSpmdInTargetRegion(SgNode *node) {
        iter != all_syms.end(); iter++) {
     if (!isPointerType((*iter)->get_type()) &&
         !isSgArrayType((*iter)->get_type()) &&
-        literal_target_param_syms.find(const_cast<SgVariableSymbol *>(*iter)) ==
-            literal_target_param_syms.end()) {
+        offload_ctx.literal_target_param_syms.find(
+            const_cast<SgVariableSymbol *>(*iter)) ==
+            offload_ctx.literal_target_param_syms.end()) {
       addressOf_syms.insert(*iter);
     };
   };
@@ -8843,6 +8745,7 @@ void transOmpTargetData(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpTargetDataStatement *target = isSgOmpTargetDataStatement(node);
   ROSE_ASSERT(target != NULL);
+  GpuOffloadLoweringContext offload_ctx;
 
   SgScopeStatement *p_scope = target->get_scope();
   ROSE_ASSERT(p_scope != NULL);
@@ -8853,7 +8756,8 @@ void transOmpTargetData(SgNode *node) {
   SgExprListExp *map_variable_type_list = buildExprListExp();
 
   transOmpMapVariables(target, map_variable_list, map_variable_base_list,
-                       map_variable_size_list, map_variable_type_list);
+                       map_variable_size_list, map_variable_type_list,
+                       &offload_ctx);
 
   SgBasicBlock *body = isSgBasicBlock(target->get_body());
   ROSE_ASSERT(body != NULL);
@@ -9663,8 +9567,10 @@ static void insertInnerThreadBlockReduction(
     SgOmpClause::omp_reduction_identifier_enum r_operator,
     vector<SgStatement *> &end_stmt_list, SgBasicBlock *bb1,
     SgInitializedName *orig_var, SgVariableDeclaration *local_decl,
-    SgVariableDeclaration *per_block_decl) {
+    SgVariableDeclaration *per_block_decl,
+    GpuOffloadLoweringContext *offload_ctx) {
   ROSE_ASSERT(bb1 && orig_var && local_decl && per_block_decl);
+  ROSE_ASSERT(offload_ctx != NULL);
   // the integer value representing different reduction operations, defined
   // within libxomp.h for accelerator model
   // TODO refactor the code to have a function converting operand types to
@@ -9720,7 +9626,7 @@ static void insertInnerThreadBlockReduction(
   // TODO: this could be risky. It is better to have our own conversion function
   // to have full control over it.
   string type_str = var_type->get_base_type()->unparseToString();
-  per_block_reduction_map[var_sym] =
+  offload_ctx->per_block_reduction_map[var_sym] =
       op_value; // save the per block symbol and its corresponding reduction
                 // integer value defined in the libxomp.h
   SgIntVal *reduction_op = buildIntVal(op_value);
@@ -9908,9 +9814,11 @@ buildAndInsertDeclarationForOmp(const std::string &name, SgType *type,
 //  model,
 //     We have no concept of firstprivate or lastprivate
 //     reduction is implemented using a two-level reduction algorithm
-void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
-                       SgExpression *orig_loop_upper /*= NULL*/,
-                       bool isAcceleratorModel /*= false*/) {
+static void transOmpVariablesWithContext(
+    SgStatement *ompStmt, SgBasicBlock *bb1,
+    SgExpression *orig_loop_upper /*= NULL*/,
+    bool isAcceleratorModel /*= false*/,
+    GpuOffloadLoweringContext *offload_ctx /*= NULL*/) {
   ROSE_ASSERT(ompStmt != NULL);
   ROSE_ASSERT(bb1 != NULL);
   SgOmpClauseBodyStatement *clause_stmt = isSgOmpClauseBodyStatement(ompStmt);
@@ -9930,10 +9838,6 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
 
   vector<SgStatement *> front_stmt_list, end_stmt_list, front_init_list;
 
-  // this is call by both transOmpTargetParallel and transOmpTargetLoop, we
-  // should move this to the correct caller place
-  //      per_block_declarations.clear(); // must reset to empty or wrong
-  //      reference to stale content generated previously
   std::map<std::string, SgVariableSymbol *> visible_symbols_by_name;
   if (const SgFunctionDeclaration *enclosing_decl =
           getEnclosingFunctionDeclaration(bb1)) {
@@ -10201,6 +10105,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
     // sizeof(REAL));
     SgVariableDeclaration *per_block_decl = NULL;
     if (isReductionVar && isAcceleratorModel) {
+      ROSE_ASSERT(offload_ctx != NULL);
       // SgOmpParallelStatement* enclosing_omp_parallel =
       // getEnclosingNode<SgOmpParallelStatement> (ompStmt);
       SgOmpClauseBodyStatement *enclosing_omp_parallel =
@@ -10232,7 +10137,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
       // be declared later on when translating "omp parallel" enclosed in "omp
       // target" so we insert it  later when the kernel launch statement is
       // inserted. insertStatementAfter(enclosing_omp_parallel, per_block_decl);
-      per_block_declarations.push_back(per_block_decl);
+      offload_ctx->per_block_declarations.push_back(per_block_decl);
       // store all reduction variables at the loop level, they will be used
       // later when translating the enclosing "omp target" to help decide on the
       // variables being passed
@@ -10247,7 +10152,8 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
       // two-level reduction is used for accelerator model
       if (isAcceleratorModel)
         insertInnerThreadBlockReduction(r_operator, end_stmt_list, bb1,
-                                        orig_var, local_decl, per_block_decl);
+                                        orig_var, local_decl, per_block_decl,
+                                        offload_ctx);
       else
         insertOmpReductionCopyBackStmts(r_operator, end_stmt_list, bb1,
                                         orig_var, local_decl, ompStmt);
@@ -10308,7 +10214,14 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
       }
 
   } // end for
-} // end void transOmpVariables()
+} // end void transOmpVariablesWithContext()
+
+void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
+                       SgExpression *orig_loop_upper /*= NULL*/,
+                       bool isAcceleratorModel /*= false*/) {
+  transOmpVariablesWithContext(ompStmt, bb1, orig_loop_upper,
+                               isAcceleratorModel, NULL);
+}
 
 //  if (omp_get_thread_num () == 0)
 //     { ... }
