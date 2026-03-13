@@ -1,6 +1,7 @@
 #ifndef REX_KMP_H
 #define REX_KMP_H
 
+#include <assert.h>
 #include <stddef.h>
 
 #include <stdint.h>
@@ -221,6 +222,10 @@ struct __tgt_bin_desc *register_cubin(const char *);
 #endif
 
 static inline void *rex_pack_literal_arg_bytes(const void *src, size_t size) {
+  assert(size <= sizeof(uintptr_t));
+  if (size > sizeof(uintptr_t)) {
+    return NULL;
+  }
   uintptr_t bits = 0;
   __builtin_memcpy(&bits, src, size);
   return (void *)bits;
