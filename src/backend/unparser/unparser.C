@@ -152,16 +152,18 @@ bool sameConditionalDirectiveSequence(
   return true;
 }
 
-void writeTextFileLines(const std::string &filename,
+bool writeTextFileLines(const std::string &filename,
                         const std::vector<std::string> &lines) {
   std::ofstream output(filename.c_str(), std::ios::out | std::ios::trunc);
   if (!output.is_open()) {
-    return;
+    return false;
   }
 
   for (size_t idx = 0; idx < lines.size(); ++idx) {
     output << lines[idx] << '\n';
   }
+
+  return output.good();
 }
 
 void restoreEmptyConditionalBodiesInOutput(SgFile *file,
@@ -231,8 +233,8 @@ void restoreEmptyConditionalBodiesInOutput(SgFile *file,
   appendLineRange(&rebuilt_output, output_lines,
                   output_directives.back().line_index + 1, output_lines.size());
 
-  if (changed) {
-    writeTextFileLines(output_filename, rebuilt_output);
+  if (changed && !writeTextFileLines(output_filename, rebuilt_output)) {
+    return;
   }
 }
 
