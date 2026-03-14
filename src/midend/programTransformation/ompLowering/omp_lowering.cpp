@@ -11,6 +11,8 @@
 
 #include "abiStuff.h"
 
+#include "astUnparseAttribute.h"
+
 #include "sageBuilder.h"
 
 #include <algorithm>
@@ -228,6 +230,873 @@ SgType *stripTypeAliasesAndReferences(SgType *type) {
 
 bool isPointerBackedType(SgType *type) {
   return isSgPointerType(stripTypeAliasesAndReferences(type)) != nullptr;
+}
+
+bool isDirectVarRefToSymbol(SgExpression *expr, SgVariableSymbol *sym) {
+  if (expr == nullptr || sym == nullptr) {
+    return false;
+  }
+  SgVarRefExp *ref = isSgVarRefExp(stripNoopCastsAndParens(expr));
+  return ref != nullptr && ref->get_symbol() == sym;
+}
+
+SgExpression *getLValueChainRoot(SgExpression *expr) {
+  SgExpression *current = expr;
+  while (current != nullptr && current->get_parent() != nullptr) {
+    SgNode *parent = current->get_parent();
+    if (SgDotExp *dot = isSgDotExp(parent)) {
+      if (dot->get_lhs_operand() == current) {
+        current = dot;
+        continue;
+      }
+    }
+    if (SgArrowExp *arrow = isSgArrowExp(parent)) {
+      if (arrow->get_lhs_operand() == current) {
+        current = arrow;
+        continue;
+      }
+    }
+    if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(parent)) {
+      if (aref->get_lhs_operand() == current) {
+        current = aref;
+        continue;
+      }
+    }
+    break;
+  }
+  return current;
+}
+
+bool isWriteUseOfExpression(SgExpression *expr) {
+  if (expr == nullptr || expr->get_parent() == nullptr) {
+    return false;
+  }
+
+  SgNode *parent = expr->get_parent();
+  if (SgAssignOp *assign = isSgAssignOp(parent)) {
+    return assign->get_lhs_operand() == expr;
+  }
+  if (SgCompoundAssignOp *compound = isSgCompoundAssignOp(parent)) {
+    return compound->get_lhs_operand() == expr;
+  }
+  if (SgPlusPlusOp *inc = isSgPlusPlusOp(parent)) {
+    return inc->get_operand() == expr;
+  }
+  if (SgMinusMinusOp *dec = isSgMinusMinusOp(parent)) {
+    return dec->get_operand() == expr;
+  }
+  return false;
+}
+
+bool isExpressionWrittenThroughChain(SgExpression *expr) {
+  return isWriteUseOfExpression(getLValueChainRoot(expr));
+}
+
+bool isExpressionAddressTaken(SgExpression *expr) {
+  if (expr == nullptr) {
+    return false;
+  }
+  SgExpression *root = getLValueChainRoot(expr);
+  if (root == nullptr || root->get_parent() == nullptr) {
+    return false;
+  }
+  return isSgAddressOfOp(root->get_parent()) != nullptr;
+}
+
+SgExpression *getEnclosingReadOnlyAccessRoot(SgExpression *expr,
+                                             SgVariableSymbol *base_sym) {
+  SgExpression *cursor = stripNoopCastsAndParens(expr);
+  while (cursor != nullptr && cursor->get_parent() != nullptr) {
+    SgExpression *parent = isSgExpression(cursor->get_parent());
+    if (parent == nullptr) {
+      break;
+    }
+
+    if (base_sym != nullptr &&
+        extractClauseVariableSymbol(parent) != base_sym) {
+      break;
+    }
+
+    if (SgCastExp *cast = isSgCastExp(parent)) {
+      if (cast->get_operand() == cursor) {
+        cursor = cast;
+        continue;
+      }
+    }
+
+    if (SgPointerDerefExp *deref = isSgPointerDerefExp(parent)) {
+      if (deref->get_operand() == cursor) {
+        cursor = deref;
+        continue;
+      }
+    }
+
+    if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(parent)) {
+      if (aref->get_lhs_operand() == cursor ||
+          aref->get_rhs_operand() == cursor) {
+        cursor = aref;
+        continue;
+      }
+    }
+
+    if (SgDotExp *dot = isSgDotExp(parent)) {
+      if (dot->get_lhs_operand() == cursor ||
+          dot->get_rhs_operand() == cursor) {
+        cursor = dot;
+        continue;
+      }
+    }
+
+    if (SgArrowExp *arrow = isSgArrowExp(parent)) {
+      if (arrow->get_lhs_operand() == cursor ||
+          arrow->get_rhs_operand() == cursor) {
+        cursor = arrow;
+        continue;
+      }
+    }
+
+    break;
+  }
+  return cursor;
+}
+
+bool mappedArrayUsesAreReadOnlyInScope(SgBasicBlock *body,
+                                       SgVariableSymbol *base_sym) {
+  if (body == nullptr || base_sym == nullptr ||
+      !isPointerBackedType(base_sym->get_type())) {
+    return false;
+  }
+
+  bool saw_supported_access = false;
+  Rose_STL_Container<SgNode *> var_refs =
+      NodeQuery::querySubTree(body, V_SgVarRefExp);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = var_refs.begin();
+       it != var_refs.end(); ++it) {
+    SgVarRefExp *ref = isSgVarRefExp(*it);
+    if (ref == nullptr || ref->get_symbol() != base_sym) {
+      continue;
+    }
+
+    SgExpression *root = getEnclosingReadOnlyAccessRoot(ref, base_sym);
+    if (root == nullptr || extractClauseVariableSymbol(root) != base_sym) {
+      return false;
+    }
+
+    if (isSgPntrArrRefExp(root) == nullptr && isSgDotExp(root) == nullptr &&
+        isSgArrowExp(root) == nullptr && isSgPointerDerefExp(root) == nullptr) {
+      return false;
+    }
+
+    if (isExpressionWrittenThroughChain(root) ||
+        isExpressionAddressTaken(root)) {
+      return false;
+    }
+
+    SgNode *parent = root->get_parent();
+    if (isSgAssignInitializer(parent) != nullptr) {
+      return false;
+    }
+    if (SgExprListExp *args = isSgExprListExp(parent)) {
+      if (isSgFunctionCallExp(args->get_parent()) != nullptr) {
+        return false;
+      }
+    }
+
+    saw_supported_access = true;
+  }
+
+  return saw_supported_access;
+}
+
+bool containsUnsupportedDirectGridStrideControlFlow(SgBasicBlock *body) {
+  if (body == nullptr) {
+    return true;
+  }
+  return !NodeQuery::querySubTree(body, V_SgBreakStmt).empty() ||
+         !NodeQuery::querySubTree(body, V_SgContinueStmt).empty() ||
+         !NodeQuery::querySubTree(body, V_SgGotoStatement).empty() ||
+         !NodeQuery::querySubTree(body, V_SgReturnStmt).empty();
+}
+
+bool isScalarizableDirectGridStrideElementType(SgType *type) {
+  SgType *stripped = stripTypeAliasesAndReferences(type);
+  return stripped != nullptr && isSgClassType(stripped) == nullptr &&
+         isSgArrayType(stripped) == nullptr &&
+         isSgFunctionType(stripped) == nullptr &&
+         isSgTypeVoid(stripped) == nullptr;
+}
+
+bool isAggregateDirectGridStrideElementType(SgType *type) {
+  return isSgClassType(stripTypeAliasesAndReferences(type)) != nullptr;
+}
+
+bool symbolWrittenInsideScope(SgBasicBlock *body, SgVariableSymbol *sym);
+
+bool isPointerToConstType(SgType *type) {
+  SgPointerType *ptr_type =
+      isSgPointerType(stripTypeAliasesAndReferences(type));
+  if (ptr_type == nullptr) {
+    return false;
+  }
+
+  SgType *base_type = ptr_type->get_base_type();
+  return base_type != nullptr && SageInterface::isConstType(base_type);
+}
+
+SgInitializedName *
+findMatchingEnclosingFunctionParameter(SgInitializedName *decl) {
+  if (decl == nullptr) {
+    return nullptr;
+  }
+
+  SgFunctionDeclaration *func = getEnclosingFunctionDeclaration(decl);
+  if (func == nullptr || func->get_parameterList() == nullptr) {
+    return nullptr;
+  }
+
+  const SgInitializedNamePtrList &params =
+      func->get_parameterList()->get_args();
+  for (SgInitializedNamePtrList::const_iterator it = params.begin();
+       it != params.end(); ++it) {
+    SgInitializedName *param = *it;
+    if (param == nullptr || param == decl) {
+      continue;
+    }
+    if (param->get_name() == decl->get_name()) {
+      return param;
+    }
+  }
+
+  return nullptr;
+}
+
+bool exprDerivesFromReadOnlyDevicePointer(
+    SgExpression *expr, SgBasicBlock *kernel_body,
+    std::set<SgVariableSymbol *> &visiting_syms);
+
+bool symbolIsReadOnlyDevicePointer(
+    SgVariableSymbol *sym, SgBasicBlock *kernel_body,
+    std::set<SgVariableSymbol *> &visiting_syms) {
+  if (sym == nullptr || kernel_body == nullptr ||
+      !isPointerToConstType(sym->get_type())) {
+    return false;
+  }
+
+  if (symbolWrittenInsideScope(kernel_body, sym)) {
+    return false;
+  }
+
+  SgInitializedName *decl = sym->get_declaration();
+  if (decl == nullptr) {
+    return false;
+  }
+
+  if (isSgFunctionParameterList(decl->get_parent()) != nullptr) {
+    return true;
+  }
+
+  if (SgInitializedName *param = findMatchingEnclosingFunctionParameter(decl)) {
+    if (isPointerToConstType(param->get_type())) {
+      return true;
+    }
+  }
+
+  if (isSgVariableDeclaration(decl->get_parent()) != nullptr &&
+      decl->get_initializer() == nullptr) {
+    return true;
+  }
+
+  if (!visiting_syms.insert(sym).second) {
+    return false;
+  }
+
+  bool derives_from_read_only_input = false;
+  if (SgAssignInitializer *init =
+          isSgAssignInitializer(decl->get_initializer())) {
+    derives_from_read_only_input = exprDerivesFromReadOnlyDevicePointer(
+        init->get_operand_i(), kernel_body, visiting_syms);
+  }
+
+  visiting_syms.erase(sym);
+  return derives_from_read_only_input;
+}
+
+bool exprDerivesFromReadOnlyDevicePointer(
+    SgExpression *expr, SgBasicBlock *kernel_body,
+    std::set<SgVariableSymbol *> &visiting_syms) {
+  expr = stripNoopCastsAndParens(expr);
+  if (expr == nullptr) {
+    return false;
+  }
+
+  if (SgVarRefExp *var_ref = isSgVarRefExp(expr)) {
+    return symbolIsReadOnlyDevicePointer(
+        isSgVariableSymbol(var_ref->get_symbol()), kernel_body, visiting_syms);
+  }
+
+  if (SgAddressOfOp *addr = isSgAddressOfOp(expr)) {
+    return exprDerivesFromReadOnlyDevicePointer(addr->get_operand(),
+                                                kernel_body, visiting_syms);
+  }
+
+  if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(expr)) {
+    return exprDerivesFromReadOnlyDevicePointer(aref->get_lhs_operand(),
+                                                kernel_body, visiting_syms);
+  }
+
+  if (SgDotExp *dot = isSgDotExp(expr)) {
+    return exprDerivesFromReadOnlyDevicePointer(dot->get_lhs_operand(),
+                                                kernel_body, visiting_syms);
+  }
+
+  if (SgArrowExp *arrow = isSgArrowExp(expr)) {
+    return exprDerivesFromReadOnlyDevicePointer(arrow->get_lhs_operand(),
+                                                kernel_body, visiting_syms);
+  }
+
+  if (SgPointerDerefExp *deref = isSgPointerDerefExp(expr)) {
+    return exprDerivesFromReadOnlyDevicePointer(deref->get_operand(),
+                                                kernel_body, visiting_syms);
+  }
+
+  if (SgAddOp *add = isSgAddOp(expr)) {
+    return exprDerivesFromReadOnlyDevicePointer(add->get_lhs_operand(),
+                                                kernel_body, visiting_syms) ||
+           exprDerivesFromReadOnlyDevicePointer(add->get_rhs_operand(),
+                                                kernel_body, visiting_syms);
+  }
+
+  if (SgSubtractOp *sub = isSgSubtractOp(expr)) {
+    return exprDerivesFromReadOnlyDevicePointer(sub->get_lhs_operand(),
+                                                kernel_body, visiting_syms) ||
+           exprDerivesFromReadOnlyDevicePointer(sub->get_rhs_operand(),
+                                                kernel_body, visiting_syms);
+  }
+
+  if (SgConditionalExp *cond = isSgConditionalExp(expr)) {
+    return exprDerivesFromReadOnlyDevicePointer(cond->get_true_exp(),
+                                                kernel_body, visiting_syms) &&
+           exprDerivesFromReadOnlyDevicePointer(cond->get_false_exp(),
+                                                kernel_body, visiting_syms);
+  }
+
+  return false;
+}
+
+int computeAstDepth(SgNode *node) {
+  int depth = 0;
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    ++depth;
+  }
+  return depth;
+}
+
+bool isNodeWithinSubtree(SgNode *root, SgNode *node) {
+  if (root == nullptr || node == nullptr) {
+    return false;
+  }
+
+  for (SgNode *cursor = node; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    if (cursor == root) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool isReadOnlyDeviceLoadCandidate(SgExpression *expr,
+                                   SgBasicBlock *kernel_body) {
+  if (expr == nullptr || kernel_body == nullptr ||
+      !isScalarizableDirectGridStrideElementType(expr->get_type()) ||
+      isExpressionWrittenThroughChain(expr) || isExpressionAddressTaken(expr)) {
+    return false;
+  }
+
+  SgVariableSymbol *base_sym = extractClauseVariableSymbol(expr);
+  if (base_sym == nullptr) {
+    return false;
+  }
+
+  std::set<SgVariableSymbol *> visiting_syms;
+  return symbolIsReadOnlyDevicePointer(base_sym, kernel_body, visiting_syms);
+}
+
+SgExpression *buildReadOnlyDeviceLoadExpr(SgExpression *expr,
+                                          SgScopeStatement *scope) {
+  ROSE_ASSERT(expr != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+
+  SgType *value_type = stripTypeAliasesAndReferences(expr->get_type());
+  ROSE_ASSERT(value_type != nullptr);
+
+  return buildFunctionCallExp(
+      "__ldg", value_type,
+      buildExprListExp(buildAddressOfOp(copyExpression(expr))), scope);
+}
+
+void rewriteReadOnlyDeviceLoadsWithLdg(SgForStatement *outer_loop) {
+  if (outer_loop == nullptr) {
+    return;
+  }
+
+  SgBasicBlock *outer_body = ensureBasicBlockAsBodyOfFor(outer_loop);
+  if (outer_body == nullptr) {
+    return;
+  }
+
+  std::vector<SgExpression *> candidates;
+  Rose_STL_Container<SgNode *> expr_nodes =
+      NodeQuery::querySubTree(outer_body, V_SgExpression);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = expr_nodes.begin();
+       it != expr_nodes.end(); ++it) {
+    SgExpression *expr = isSgExpression(*it);
+    if (expr == nullptr) {
+      continue;
+    }
+
+    if (isSgPntrArrRefExp(expr) == nullptr && isSgDotExp(expr) == nullptr &&
+        isSgArrowExp(expr) == nullptr && isSgPointerDerefExp(expr) == nullptr) {
+      continue;
+    }
+
+    if (!isReadOnlyDeviceLoadCandidate(expr, outer_body)) {
+      continue;
+    }
+    candidates.push_back(expr);
+  }
+
+  std::sort(candidates.begin(), candidates.end(),
+            [](SgExpression *lhs, SgExpression *rhs) {
+              return computeAstDepth(lhs) > computeAstDepth(rhs);
+            });
+  candidates.erase(std::unique(candidates.begin(), candidates.end()),
+                   candidates.end());
+
+  for (std::vector<SgExpression *>::const_iterator it = candidates.begin();
+       it != candidates.end(); ++it) {
+    SgExpression *expr = *it;
+    if (!isNodeWithinSubtree(outer_body, expr)) {
+      continue;
+    }
+
+    SgScopeStatement *scope = getEnclosingScope(expr);
+    if (scope == nullptr) {
+      scope = outer_body;
+    }
+
+    replaceExpression(expr, buildReadOnlyDeviceLoadExpr(expr, scope));
+  }
+}
+
+bool candidateCoversAllBaseUses(SgBasicBlock *body, SgVariableSymbol *base_sym,
+                                const std::vector<SgPntrArrRefExp *> &refs) {
+  if (body == nullptr || base_sym == nullptr) {
+    return false;
+  }
+
+  Rose_STL_Container<SgNode *> var_refs =
+      NodeQuery::querySubTree(body, V_SgVarRefExp);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = var_refs.begin();
+       it != var_refs.end(); ++it) {
+    SgVarRefExp *ref = isSgVarRefExp(*it);
+    if (ref == nullptr || ref->get_symbol() != base_sym) {
+      continue;
+    }
+    bool covered = false;
+    for (std::vector<SgPntrArrRefExp *>::const_iterator ref_it = refs.begin();
+         ref_it != refs.end(); ++ref_it) {
+      if (isAncestor(*ref_it, ref)) {
+        covered = true;
+        break;
+      }
+    }
+    if (!covered) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool symbolWrittenInsideScope(SgBasicBlock *body, SgVariableSymbol *sym) {
+  if (body == nullptr || sym == nullptr) {
+    return false;
+  }
+
+  Rose_STL_Container<SgNode *> var_refs =
+      NodeQuery::querySubTree(body, V_SgVarRefExp);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = var_refs.begin();
+       it != var_refs.end(); ++it) {
+    SgVarRefExp *ref = isSgVarRefExp(*it);
+    if (ref == nullptr || ref->get_symbol() != sym) {
+      continue;
+    }
+    if (isWriteUseOfExpression(ref)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool isClosestEnclosingLoop(SgForStatement *loop, SgNode *node) {
+  if (loop == nullptr || node == nullptr) {
+    return false;
+  }
+  SgStatement *stmt = getEnclosingStatement(node);
+  if (stmt == nullptr) {
+    return false;
+  }
+  return findEnclosingLoop(stmt) == loop;
+}
+
+struct DirectGridStrideScalarCandidate {
+  SgVariableSymbol *base_sym = nullptr;
+  SgType *element_type = nullptr;
+  std::vector<SgPntrArrRefExp *> refs;
+  bool has_write = false;
+  bool disallowed = false;
+};
+
+void scalarizeDirectGridStrideOuterIndexAccesses(
+    SgForStatement *outer_loop, SgVariableSymbol *outer_index_sym) {
+  if (outer_loop == nullptr || outer_index_sym == nullptr) {
+    return;
+  }
+
+  SgBasicBlock *loop_body = ensureBasicBlockAsBodyOfFor(outer_loop);
+  if (containsUnsupportedDirectGridStrideControlFlow(loop_body)) {
+    return;
+  }
+
+  std::map<SgVariableSymbol *, DirectGridStrideScalarCandidate> candidates;
+  Rose_STL_Container<SgNode *> refs =
+      NodeQuery::querySubTree(loop_body, V_SgPntrArrRefExp);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = refs.begin();
+       it != refs.end(); ++it) {
+    SgPntrArrRefExp *aref = isSgPntrArrRefExp(*it);
+    if (aref == nullptr ||
+        !isDirectVarRefToSymbol(aref->get_rhs_operand(), outer_index_sym)) {
+      continue;
+    }
+
+    SgVariableSymbol *base_sym =
+        extractClauseVariableSymbol(aref->get_lhs_operand());
+    if (base_sym == nullptr) {
+      continue;
+    }
+
+    DirectGridStrideScalarCandidate &candidate = candidates[base_sym];
+    candidate.base_sym = base_sym;
+    if (candidate.element_type == nullptr) {
+      candidate.element_type = stripTypeAliasesAndReferences(aref->get_type());
+    }
+    candidate.refs.push_back(aref);
+    candidate.has_write =
+        candidate.has_write || isExpressionWrittenThroughChain(aref);
+    candidate.disallowed =
+        candidate.disallowed || isExpressionAddressTaken(aref) ||
+        !isScalarizableDirectGridStrideElementType(aref->get_type());
+  }
+
+  for (std::map<SgVariableSymbol *, DirectGridStrideScalarCandidate>::iterator
+           it = candidates.begin();
+       it != candidates.end(); ++it) {
+    DirectGridStrideScalarCandidate &candidate = it->second;
+    if (candidate.disallowed || candidate.refs.empty()) {
+      continue;
+    }
+    if (candidate.refs.size() < 2 && !candidate.has_write) {
+      continue;
+    }
+    if (!candidateCoversAllBaseUses(loop_body, candidate.base_sym,
+                                    candidate.refs)) {
+      continue;
+    }
+
+    std::string cache_name = generateUniqueVariableName(
+        loop_body,
+        "__rex_cached_" + candidate.base_sym->get_name().getString() + "_");
+    SgType *cache_type = candidate.has_write
+                             ? candidate.element_type
+                             : buildConstType(candidate.element_type);
+    SgExpression *init_expr = copyExpression(candidate.refs.front());
+    SgVariableDeclaration *cache_decl = buildVariableDeclaration(
+        cache_name, cache_type, buildAssignInitializer(init_expr, cache_type),
+        loop_body);
+    prependStatement(cache_decl, loop_body);
+    SgVariableSymbol *cache_sym = getFirstVarSym(cache_decl);
+    ROSE_ASSERT(cache_sym != nullptr);
+
+    SgExpression *writeback_lhs = nullptr;
+    if (candidate.has_write) {
+      writeback_lhs = copyExpression(candidate.refs.front());
+    }
+
+    for (std::vector<SgPntrArrRefExp *>::reverse_iterator ref_it =
+             candidate.refs.rbegin();
+         ref_it != candidate.refs.rend(); ++ref_it) {
+      replaceExpression(*ref_it, buildVarRefExp(cache_sym));
+    }
+
+    if (candidate.has_write && writeback_lhs != nullptr) {
+      appendStatement(
+          buildAssignStatement(writeback_lhs, buildVarRefExp(cache_sym)),
+          loop_body);
+    }
+  }
+}
+
+struct InvariantAggregateRefKey {
+  SgVariableSymbol *base_sym = nullptr;
+  SgVariableSymbol *index_sym = nullptr;
+
+  bool operator<(const InvariantAggregateRefKey &other) const {
+    if (base_sym != other.base_sym) {
+      return base_sym < other.base_sym;
+    }
+    return index_sym < other.index_sym;
+  }
+};
+
+struct InvariantAggregateRefCandidate {
+  SgVariableSymbol *base_sym = nullptr;
+  SgVariableSymbol *index_sym = nullptr;
+  SgType *element_type = nullptr;
+  std::vector<SgPntrArrRefExp *> refs;
+  bool disallowed = false;
+};
+
+struct InvariantFieldAccessKey {
+  SgVariableSymbol *base_sym = nullptr;
+  SgSymbol *field_sym = nullptr;
+
+  bool operator<(const InvariantFieldAccessKey &other) const {
+    if (base_sym != other.base_sym) {
+      return base_sym < other.base_sym;
+    }
+    return field_sym < other.field_sym;
+  }
+};
+
+struct InvariantFieldAccessCandidate {
+  SgVariableSymbol *base_sym = nullptr;
+  SgSymbol *field_sym = nullptr;
+  SgType *cache_type = nullptr;
+  std::vector<SgExpression *> refs;
+  bool disallowed = false;
+};
+
+void hoistReadOnlyInvariantAggregateRefsBeforeLoop(SgForStatement *outer_loop) {
+  if (outer_loop == nullptr) {
+    return;
+  }
+
+  SgBasicBlock *outer_body = ensureBasicBlockAsBodyOfFor(outer_loop);
+  Rose_STL_Container<SgNode *> loops =
+      NodeQuery::querySubTree(outer_body, V_SgForStatement);
+  for (Rose_STL_Container<SgNode *>::const_iterator loop_it = loops.begin();
+       loop_it != loops.end(); ++loop_it) {
+    SgForStatement *loop = isSgForStatement(*loop_it);
+    if (loop == nullptr || loop == outer_loop) {
+      continue;
+    }
+
+    SgBasicBlock *loop_body = ensureBasicBlockAsBodyOfFor(loop);
+    SgBasicBlock *parent_block = isSgBasicBlock(loop->get_parent());
+    if (loop_body == nullptr || parent_block == nullptr) {
+      continue;
+    }
+
+    std::map<InvariantAggregateRefKey, InvariantAggregateRefCandidate>
+        candidates;
+    Rose_STL_Container<SgNode *> refs =
+        NodeQuery::querySubTree(loop_body, V_SgPntrArrRefExp);
+    for (Rose_STL_Container<SgNode *>::const_iterator ref_it = refs.begin();
+         ref_it != refs.end(); ++ref_it) {
+      SgPntrArrRefExp *aref = isSgPntrArrRefExp(*ref_it);
+      if (aref == nullptr || !isClosestEnclosingLoop(loop, aref) ||
+          !isAggregateDirectGridStrideElementType(aref->get_type())) {
+        continue;
+      }
+
+      SgVariableSymbol *index_sym = nullptr;
+      SgVarRefExp *index_ref =
+          isSgVarRefExp(stripNoopCastsAndParens(aref->get_rhs_operand()));
+      if (index_ref != nullptr) {
+        index_sym = isSgVariableSymbol(index_ref->get_symbol());
+      }
+      SgVariableSymbol *base_sym =
+          extractClauseVariableSymbol(aref->get_lhs_operand());
+      if (base_sym == nullptr || index_sym == nullptr) {
+        continue;
+      }
+
+      InvariantAggregateRefKey key;
+      key.base_sym = base_sym;
+      key.index_sym = index_sym;
+      InvariantAggregateRefCandidate &candidate = candidates[key];
+      candidate.base_sym = base_sym;
+      candidate.index_sym = index_sym;
+      if (candidate.element_type == nullptr) {
+        candidate.element_type =
+            stripTypeAliasesAndReferences(aref->get_type());
+      }
+      candidate.refs.push_back(aref);
+      candidate.disallowed = candidate.disallowed ||
+                             isExpressionAddressTaken(aref) ||
+                             isExpressionWrittenThroughChain(aref);
+    }
+
+    for (std::map<InvariantAggregateRefKey,
+                  InvariantAggregateRefCandidate>::iterator cand_it =
+             candidates.begin();
+         cand_it != candidates.end(); ++cand_it) {
+      InvariantAggregateRefCandidate &candidate = cand_it->second;
+      if (candidate.disallowed || candidate.refs.size() < 2 ||
+          symbolWrittenInsideScope(loop_body, candidate.index_sym)) {
+        continue;
+      }
+
+      std::string cache_name = generateUniqueVariableName(
+          parent_block,
+          "__rex_ref_" + candidate.base_sym->get_name().getString() + "_");
+      SgType *ptr_type =
+          buildPointerType(buildConstType(candidate.element_type));
+      SgExpression *init_expr =
+          buildAddressOfOp(copyExpression(candidate.refs.front()));
+      SgVariableDeclaration *cache_decl = buildVariableDeclaration(
+          cache_name, ptr_type, buildAssignInitializer(init_expr, ptr_type),
+          parent_block);
+      insertStatementBefore(loop, cache_decl);
+      SgVariableSymbol *cache_sym = getFirstVarSym(cache_decl);
+      ROSE_ASSERT(cache_sym != nullptr);
+
+      for (std::vector<SgPntrArrRefExp *>::reverse_iterator ref_it =
+               candidate.refs.rbegin();
+           ref_it != candidate.refs.rend(); ++ref_it) {
+        replaceExpression(*ref_it,
+                          buildPointerDerefExp(buildVarRefExp(cache_sym)));
+      }
+    }
+  }
+}
+
+void hoistReadOnlyInvariantFieldAccessesBeforeLoop(SgForStatement *outer_loop) {
+  if (outer_loop == nullptr) {
+    return;
+  }
+
+  SgBasicBlock *outer_body = ensureBasicBlockAsBodyOfFor(outer_loop);
+  Rose_STL_Container<SgNode *> loops =
+      NodeQuery::querySubTree(outer_body, V_SgForStatement);
+  for (Rose_STL_Container<SgNode *>::const_iterator loop_it = loops.begin();
+       loop_it != loops.end(); ++loop_it) {
+    SgForStatement *loop = isSgForStatement(*loop_it);
+    if (loop == nullptr || loop == outer_loop) {
+      continue;
+    }
+
+    SgBasicBlock *loop_body = ensureBasicBlockAsBodyOfFor(loop);
+    SgBasicBlock *parent_block = isSgBasicBlock(loop->get_parent());
+    if (loop_body == nullptr || parent_block == nullptr) {
+      continue;
+    }
+
+    std::map<InvariantFieldAccessKey, InvariantFieldAccessCandidate> candidates;
+    Rose_STL_Container<SgNode *> field_refs =
+        NodeQuery::querySubTree(loop_body, V_SgDotExp);
+    for (Rose_STL_Container<SgNode *>::const_iterator ref_it =
+             field_refs.begin();
+         ref_it != field_refs.end(); ++ref_it) {
+      SgDotExp *dot = isSgDotExp(*ref_it);
+      if (dot == nullptr || !isClosestEnclosingLoop(loop, dot)) {
+        continue;
+      }
+
+      SgVarRefExp *base_ref = nullptr;
+      size_t deref_depth = 0;
+      if (!extractPointerDerefChain(dot->get_lhs_operand(), base_ref,
+                                    deref_depth) ||
+          base_ref == nullptr || deref_depth != 1) {
+        continue;
+      }
+
+      SgSymbol *field_sym = nullptr;
+      if (SgVarRefExp *field_ref =
+              isSgVarRefExp(stripNoopCastsAndParens(dot->get_rhs_operand()))) {
+        field_sym = field_ref->get_symbol();
+      }
+      if (field_sym == nullptr) {
+        continue;
+      }
+
+      SgType *raw_field_type = stripTypeAliases(dot->get_type());
+      if (raw_field_type == nullptr) {
+        continue;
+      }
+
+      SgType *cache_type = nullptr;
+      if (SgArrayType *array_type = isSgArrayType(raw_field_type)) {
+        cache_type =
+            buildPointerType(buildConstType(array_type->findBaseType()));
+      } else {
+        SgType *field_type = stripTypeAliasesAndReferences(raw_field_type);
+        if (field_type == nullptr || isSgClassType(field_type) != nullptr ||
+            isSgTypeVoid(field_type) != nullptr) {
+          continue;
+        }
+        cache_type = buildConstType(field_type);
+      }
+
+      InvariantFieldAccessKey key;
+      key.base_sym = isSgVariableSymbol(base_ref->get_symbol());
+      key.field_sym = field_sym;
+      InvariantFieldAccessCandidate &candidate = candidates[key];
+      candidate.base_sym = key.base_sym;
+      candidate.field_sym = field_sym;
+      if (candidate.cache_type == nullptr) {
+        candidate.cache_type = cache_type;
+      }
+      candidate.refs.push_back(dot);
+      candidate.disallowed = candidate.disallowed ||
+                             isExpressionAddressTaken(dot) ||
+                             isExpressionWrittenThroughChain(dot);
+    }
+
+    for (std::map<InvariantFieldAccessKey,
+                  InvariantFieldAccessCandidate>::iterator cand_it =
+             candidates.begin();
+         cand_it != candidates.end(); ++cand_it) {
+      InvariantFieldAccessCandidate &candidate = cand_it->second;
+      if (candidate.disallowed || candidate.refs.size() < 2 ||
+          candidate.base_sym == nullptr || candidate.cache_type == nullptr ||
+          symbolWrittenInsideScope(loop_body, candidate.base_sym)) {
+        continue;
+      }
+
+      SgVariableSymbol *field_var_sym = isSgVariableSymbol(candidate.field_sym);
+      const std::string field_name = field_var_sym != nullptr
+                                         ? field_var_sym->get_name().getString()
+                                         : std::string("field");
+      std::string cache_name = generateUniqueVariableName(
+          parent_block, "__rex_field_" + field_name + "_");
+      SgVariableDeclaration *cache_decl = buildVariableDeclaration(
+          cache_name, candidate.cache_type,
+          buildAssignInitializer(copyExpression(candidate.refs.front()),
+                                 candidate.cache_type),
+          parent_block);
+      insertStatementBefore(loop, cache_decl);
+      SgVariableSymbol *cache_sym = getFirstVarSym(cache_decl);
+      ROSE_ASSERT(cache_sym != nullptr);
+
+      for (std::vector<SgExpression *>::reverse_iterator ref_it =
+               candidate.refs.rbegin();
+           ref_it != candidate.refs.rend(); ++ref_it) {
+        replaceExpression(*ref_it, buildVarRefExp(cache_sym));
+      }
+    }
+  }
 }
 
 bool is_32_bit_target(const SgNode *context) {
@@ -1079,32 +1948,343 @@ bool hasOpenMPRuntimeConstructs(SgSourceFile *file) {
 }
 } // namespace
 
-// This is a hack to pass the number of CUDA loop iteration count around
-// When translating "omp target" , we need to calculate the number of thread
-// blocks needed. To do that, we need to know how many CUDA threads are needed.
-// We think the number of CUDA threads is the iteration count of the
-// parallelized CUDA loop (peeled off), assuming increment is always 1
-// TODO  Also, the incremental value should be irrevelvant?
-// The loop will be transformed away when we call transOmpTargtLoop since we use
-// bottom-up translation So the loop iteration count needs to be stored globally
-// before transOmpTarget() is called.
-static SgExpression *cuda_loop_iter_count_1 = NULL;
+size_t get_host_pointer_size_bytes(const SgNode *context) {
+  return is_32_bit_target(context) ? 4 : 8;
+}
 
-// this is another hack to pass the reduction variables for accelerator model
-// directives We use bottom-up translation for AST with both omp parallel and
-// omp for. reduction is implemented using a two level reduction method: inner
-// thread block level + beyond block level We save the per-block variable and
-// its reduction type integer into a map when generating inner block level
-// reduction. We use the map to help generate beyond block level reduction
-static std::map<SgVariableSymbol *, int> per_block_reduction_map;
+bool canUseLiteralTargetParam(
+    const SgOmpClauseBodyStatement *target, SgVariableSymbol *var_sym,
+    const std::vector<SgOmpMapClause *> &map_to_clauses,
+    const std::vector<SgOmpMapClause *> &map_from_clauses,
+    const std::vector<SgOmpMapClause *> &map_tofrom_clauses) {
+  if (target == NULL || var_sym == NULL) {
+    return false;
+  }
 
-// we don't know where to insert the declarations when they are generated as
-// part of transOmpTargetLoop we have to save them and insert them later when
-// kernel launch statement is generated as part of transOmpTargetParallel
-static std::vector<SgVariableDeclaration *> per_block_declarations;
+  SgType *type = stripTypeAliasesAndReferences(var_sym->get_type());
+  if (type == NULL || !SageInterface::isScalarType(type) ||
+      isPointerType(type) || isSgTypeLongDouble(type) != NULL) {
+    return false;
+  }
 
-static std::map<string, std::vector<SgExpression *>> offload_array_offset_map;
-static std::map<string, std::vector<SgExpression *>> offload_array_size_map;
+  const bool is_implicit = isImplicitTargetMapVariable(target, var_sym);
+  const bool need_copy_from =
+      isInAnyClauseVariableList(map_from_clauses, var_sym) ||
+      isInAnyClauseVariableList(map_tofrom_clauses, var_sym);
+  if (need_copy_from && !is_implicit) {
+    return false;
+  }
+
+  return get_target_type_size_bytes(type, target) <=
+         get_host_pointer_size_bytes(target);
+}
+
+SgExpression *buildLiteralTargetParamArgExpression(SgVariableSymbol *var_sym,
+                                                   SgScopeStatement *scope) {
+  ROSE_ASSERT(var_sym != NULL);
+  ROSE_ASSERT(scope != NULL);
+
+  SgType *type = stripTypeAliasesAndReferences(var_sym->get_type());
+  ROSE_ASSERT(type != NULL);
+
+  return buildFunctionCallExp(
+      "rex_pack_literal_arg_bytes", buildPointerType(buildVoidType()),
+      buildExprListExp(buildAddressOfOp(buildVarRefExp(var_sym)),
+                       buildSizeOfOp(type)),
+      scope);
+}
+
+static bool isLiteralTargetParamPackCall(const SgExpression *expr) {
+  const SgFunctionCallExp *call = isSgFunctionCallExp(expr);
+  if (call == NULL) {
+    return false;
+  }
+
+  const SgFunctionRefExp *callee = isSgFunctionRefExp(call->get_function());
+  if (callee == NULL || callee->get_symbol() == NULL) {
+    return false;
+  }
+
+  return callee->get_symbol()->get_name().getString() ==
+         "rex_pack_literal_arg_bytes";
+}
+
+static void materializeLiteralTargetArgExpressions(
+    SgExprListExp *map_variable_list, SgExprListExp *map_variable_base_list,
+    SgBasicBlock *outlined_driver_body, SgScopeStatement *scope) {
+  ROSE_ASSERT(map_variable_list != NULL);
+  ROSE_ASSERT(map_variable_base_list != NULL);
+  ROSE_ASSERT(outlined_driver_body != NULL);
+  ROSE_ASSERT(scope != NULL);
+
+  SgExpressionPtrList &arg_exprs = map_variable_list->get_expressions();
+  SgExpressionPtrList &base_exprs = map_variable_base_list->get_expressions();
+  ROSE_ASSERT(arg_exprs.size() == base_exprs.size());
+
+  int literal_arg_counter = 0;
+  for (size_t i = 0; i < arg_exprs.size(); ++i) {
+    SgExpression *packed_expr = nullptr;
+    if (isLiteralTargetParamPackCall(arg_exprs[i])) {
+      packed_expr = arg_exprs[i];
+    } else if (isLiteralTargetParamPackCall(base_exprs[i])) {
+      packed_expr = base_exprs[i];
+    }
+
+    if (packed_expr == nullptr) {
+      continue;
+    }
+
+    const std::string packed_name =
+        "__rex_packed_literal_arg_" + std::to_string(literal_arg_counter++);
+    SgVariableDeclaration *packed_decl = buildVariableDeclaration(
+        packed_name, buildPointerType(buildVoidType()),
+        buildAssignInitializer(copyExpression(packed_expr)), scope);
+    outlined_driver_body->append_statement(packed_decl);
+    SgVariableSymbol *packed_sym = getFirstVarSym(packed_decl);
+    ROSE_ASSERT(packed_sym != NULL);
+
+    arg_exprs[i] = buildVarRefExp(packed_sym);
+    arg_exprs[i]->set_parent(map_variable_list);
+    base_exprs[i] = buildVarRefExp(packed_sym);
+    base_exprs[i]->set_parent(map_variable_base_list);
+  }
+}
+
+static void
+lowerLiteralTargetKernelParameters(SgFunctionDeclaration *outlined_func,
+                                   const ASTtools::VarSymSet_t &literal_syms) {
+  ROSE_ASSERT(outlined_func != NULL);
+
+  SgFunctionDefinition *func_def = outlined_func->get_definition();
+  ROSE_ASSERT(func_def != NULL);
+  SgBasicBlock *body = func_def->get_body();
+  ROSE_ASSERT(body != NULL);
+
+  // LLVM's __tgt_target_kernel ABI prepends a hidden kernel-launch-environment
+  // parameter even for bare kernels. Add it explicitly so REX-generated CUDA
+  // kernels match the runtime's argument layout.
+  SgFunctionParameterList *params = outlined_func->get_parameterList();
+  ROSE_ASSERT(params != NULL);
+  SgFunctionDeclaration *nondef_decl =
+      isSgFunctionDeclaration(outlined_func->get_firstNondefiningDeclaration());
+  if (params->get_args().empty() ||
+      params->get_args().front()->get_name().getString() !=
+          "__rex_kernel_launch_env") {
+    SgInitializedName *kernel_launch_env_param =
+        SageBuilder::buildInitializedName("__rex_kernel_launch_env",
+                                          buildPointerType(buildVoidType()));
+    setOneSourcePositionForTransformation(kernel_launch_env_param);
+    prependArg(params, kernel_launch_env_param);
+
+    outlined_func->set_type(buildFunctionType(
+        outlined_func->get_type()->get_return_type(),
+        buildFunctionParameterTypeList(outlined_func->get_parameterList())));
+
+    if (nondef_decl != NULL) {
+      nondef_decl->set_type(outlined_func->get_type());
+    }
+  }
+
+  if (literal_syms.empty()) {
+    return;
+  }
+
+  std::set<std::string> literal_param_names;
+  for (ASTtools::VarSymSet_t::const_iterator it = literal_syms.begin();
+       it != literal_syms.end(); ++it) {
+    const SgVariableSymbol *var_sym = *it;
+    if (var_sym == NULL) {
+      continue;
+    }
+    literal_param_names.insert(var_sym->get_name().getString());
+  }
+
+  std::vector<SgStatement *> original_body_stmts = body->get_statements();
+  SgInitializedNamePtrList &param_args = params->get_args();
+  for (SgInitializedNamePtrList::iterator it = param_args.begin();
+       it != param_args.end(); ++it) {
+    SgInitializedName *param = *it;
+    if (param == NULL) {
+      continue;
+    }
+
+    if (literal_param_names.find(param->get_name().getString()) ==
+        literal_param_names.end()) {
+      continue;
+    }
+
+    SgType *original_type = stripTypeAliasesAndReferences(param->get_type());
+    ROSE_ASSERT(original_type != NULL);
+
+    SgVariableSymbol *param_sym =
+        isSgVariableSymbol(param->get_symbol_from_symbol_table());
+    ROSE_ASSERT(param_sym != NULL);
+
+    SgType *transport_type =
+        get_host_pointer_size_bytes(body) <= 4
+            ? static_cast<SgType *>(buildUnsignedIntType())
+            : static_cast<SgType *>(buildUnsignedLongLongType());
+    param->set_type(transport_type);
+
+    if (nondef_decl != NULL && nondef_decl != outlined_func) {
+      SgInitializedNamePtrList &nondef_args =
+          nondef_decl->get_parameterList()->get_args();
+      for (SgInitializedNamePtrList::iterator nondef_it = nondef_args.begin();
+           nondef_it != nondef_args.end(); ++nondef_it) {
+        SgInitializedName *nondef_param = *nondef_it;
+        if (nondef_param == NULL) {
+          continue;
+        }
+        if (nondef_param->get_name() == param->get_name()) {
+          nondef_param->set_type(transport_type);
+          break;
+        }
+      }
+    }
+
+    outlined_func->set_type(buildFunctionType(
+        outlined_func->get_type()->get_return_type(),
+        buildFunctionParameterTypeList(outlined_func->get_parameterList())));
+    if (nondef_decl != NULL) {
+      nondef_decl->set_type(outlined_func->get_type());
+    }
+
+    std::string shadow_name = param->get_name().getString() + "__rex_value";
+    SgVariableDeclaration *shadow_decl =
+        buildVariableDeclaration(shadow_name, original_type, NULL, body);
+    prependStatement(shadow_decl, body);
+    SgVariableSymbol *shadow_sym = getFirstVarSym(shadow_decl);
+    ROSE_ASSERT(shadow_sym != NULL);
+
+    SgExprListExp *memcpy_args =
+        buildExprListExp(buildAddressOfOp(buildVarRefExp(shadow_sym)),
+                         buildAddressOfOp(buildVarRefExp(param_sym)),
+                         buildSizeOfOp(original_type));
+    SgExprStatement *memcpy_stmt = buildFunctionCallStmt(
+        "__builtin_memcpy", buildPointerType(buildVoidType()), memcpy_args,
+        body);
+    insertStatementAfter(shadow_decl, memcpy_stmt);
+
+    for (std::vector<SgStatement *>::const_iterator stmt_it =
+             original_body_stmts.begin();
+         stmt_it != original_body_stmts.end(); ++stmt_it) {
+      SgStatement *stmt = *stmt_it;
+      if (stmt == NULL) {
+        continue;
+      }
+      Rose_STL_Container<SgNode *> refs =
+          NodeQuery::querySubTree(stmt, V_SgVarRefExp);
+      for (Rose_STL_Container<SgNode *>::const_iterator ref_it = refs.begin();
+           ref_it != refs.end(); ++ref_it) {
+        SgVarRefExp *ref = isSgVarRefExp(*ref_it);
+        if (ref == NULL || ref->get_symbol() == NULL) {
+          continue;
+        }
+        if (ref->get_symbol()->get_name() == param->get_name()) {
+          ref->set_symbol(shadow_sym);
+        }
+      }
+    }
+  }
+}
+
+static void
+maybeRecordTargetKernelLaunchBounds(SgFunctionDeclaration *outlined_func,
+                                    SgExpression *omp_num_threads) {
+  if (outlined_func == NULL || omp_num_threads == NULL) {
+    return;
+  }
+
+  std::string launch_bounds_expr = trimCopy(omp_num_threads->unparseToString());
+  if (launch_bounds_expr.empty()) {
+    return;
+  }
+
+  const const_int_expr_t const_eval =
+      SageInterface::evaluateConstIntegerExpression(omp_num_threads);
+  if (!const_eval.hasValue_) {
+    class LaunchBoundsExprValidator : public AstSimpleProcessing {
+    public:
+      explicit LaunchBoundsExprValidator(const SgExpression *root_expr)
+          : root_expr_(root_expr), is_valid_(true) {}
+
+      bool isValid() const { return is_valid_; }
+
+      void visit(SgNode *node) override {
+        if (!is_valid_ || node == NULL) {
+          return;
+        }
+
+        if (isSgValueExp(node) != NULL || isSgExprListExp(node) != NULL ||
+            isSgCastExp(node) != NULL || isSgAddOp(node) != NULL ||
+            isSgSubtractOp(node) != NULL || isSgMultiplyOp(node) != NULL ||
+            isSgDivideOp(node) != NULL || isSgModOp(node) != NULL ||
+            isSgBitAndOp(node) != NULL || isSgBitOrOp(node) != NULL ||
+            isSgBitXorOp(node) != NULL || isSgLshiftOp(node) != NULL ||
+            isSgRshiftOp(node) != NULL || isSgUnaryAddOp(node) != NULL ||
+            isSgMinusOp(node) != NULL || isSgBitComplementOp(node) != NULL ||
+            isSgNotOp(node) != NULL || isSgConditionalExp(node) != NULL) {
+          return;
+        }
+
+        if (SgVarRefExp *var_ref = isSgVarRefExp(node)) {
+          SgVariableSymbol *sym = isSgVariableSymbol(var_ref->get_symbol());
+          SgInitializedName *decl = sym != NULL ? sym->get_declaration() : NULL;
+          if (decl == NULL || decl->get_name().is_null()) {
+            is_valid_ = false;
+            return;
+          }
+
+          const bool is_macro_placeholder =
+              decl->get_file_info() != NULL &&
+              decl->get_file_info()->get_filenameString() == "transformation" &&
+              decl->get_initializer() == NULL;
+          if (!is_macro_placeholder) {
+            is_valid_ = false;
+          }
+          return;
+        }
+
+        if (isSgExpression(node) != NULL && node != root_expr_) {
+          is_valid_ = false;
+        }
+      }
+
+    private:
+      const SgExpression *root_expr_;
+      bool is_valid_;
+    };
+
+    LaunchBoundsExprValidator validator(omp_num_threads);
+    validator.traverse(omp_num_threads, preorder);
+    if (!validator.isValid()) {
+      return;
+    }
+  }
+
+  addTextForUnparser(outlined_func,
+                     "__launch_bounds__(" + launch_bounds_expr + ") ",
+                     AstUnparseAttribute::e_before_syntax);
+}
+
+static int computeMaxNestedForDepth(SgNode *node) {
+  if (node == NULL) {
+    return 0;
+  }
+
+  int best_depth = 0;
+  if (SgForStatement *for_stmt = isSgForStatement(node)) {
+    best_depth = 1 + computeMaxNestedForDepth(for_stmt->get_loop_body());
+  }
+
+  SgNodePtrList children = node->get_traversalSuccessorContainer();
+  for (SgNodePtrList::const_iterator child_it = children.begin();
+       child_it != children.end(); ++child_it) {
+    best_depth = std::max(best_depth, computeMaxNestedForDepth(*child_it));
+  }
+
+  return best_depth;
+}
 
 std::map<SgOmpExecStatement *, std::map<SgInitializedName *, SgExpression *> *>
     clause_variable_renaming_record;
@@ -1178,6 +2358,18 @@ bool enable_debugging = false;   /* default is not to debug the process */
 bool useDDE = true;
 
 unsigned int nCounter = 0;
+
+struct GpuOffloadLoweringContext {
+  std::map<SgVariableSymbol *, int> per_block_reduction_map;
+  std::vector<SgVariableDeclaration *> per_block_declarations;
+  ASTtools::VarSymSet_t literal_target_param_syms;
+};
+
+static void
+transOmpVariablesWithContext(SgStatement *ompStmt, SgBasicBlock *bb1,
+                             SgExpression *orig_loop_upper = NULL,
+                             bool isAcceleratorModel = false,
+                             GpuOffloadLoweringContext *offload_ctx = NULL);
 
 void markImplicitTargetMapVariable(SgOmpClauseBodyStatement *target,
                                    SgInitializedName *var) {
@@ -1814,10 +3006,11 @@ void insertAcceleratorInit(SgSourceFile *sgfile) {
   // clock();`.
   prependStatement(expStmt, currentscope);
 
-  SgExprStatement *cleanupStmt = buildFunctionCallStmt(
-      SgName("rex_offload_fini"), buildVoidType(), NULL, currentscope);
-  setSourcePositionForTransformation(cleanupStmt);
-  SageInterface::instrumentEndOfFunction(mainDecl, cleanupStmt);
+  // Do not auto-insert rex_offload_fini() at end of main. For standalone
+  // processes the OS reclaims the registered image and device-side state on
+  // exit, and forcing teardown into user-visible process lifetime adds a
+  // measurable fixed cost to short-running GPU programs. Explicit teardown
+  // remains available through rex_offload_fini() for callers that need it.
 
   return;
 }
@@ -3148,14 +4341,6 @@ void transOmpTargetLoop(SgNode *node) {
                           &orig_stride, NULL, &isIncremental, NULL);
   ROSE_ASSERT(is_canonical == true);
 
-  // loop iteration space: upper - lower + 1
-  // This expression will be later used to help generate
-  // xomp_get_max1DBlock(VEC_LEN), which needs iteration count to calculate max
-  // thread block numbers
-  cuda_loop_iter_count_1 =
-      buildAddOp(buildSubtractOp(deepCopy(orig_upper), deepCopy(orig_lower)),
-                 buildIntVal(1));
-
   // also make sure the loop body is a block
   // TODO: we consider peeling off 1 level loop control only, need to be
   // conditional on what the spec. can provide at pragma level
@@ -3236,10 +4421,8 @@ void transOmpTargetLoop(SgNode *node) {
   // handle private variables at this loop level, mostly loop index variables.
   // TODO: this is not very elegant since the outer most loop's loop variable is
   // still translated.
-  // for reduction
-  per_block_declarations.clear(); // must reset to empty or wrong reference to
-                                  // stale content generated previously
-  transOmpVariables(target, bb1, NULL, true);
+  GpuOffloadLoweringContext offload_ctx;
+  transOmpVariablesWithContext(target, bb1, NULL, true, &offload_ctx);
 }
 
 //! Translate omp for or omp do loops affected by the "omp target" directive,
@@ -3357,14 +4540,6 @@ void transOmpTargetLoop_RoundRobin(SgNode *node) {
                           &orig_stride, NULL, &isIncremental, NULL);
   ROSE_ASSERT(is_canonical == true);
 
-  // loop iteration space: upper - lower + 1, not used within this function, but
-  // a global variable used later. This expression will be later used to help
-  // generate xomp_get_max1DBlock(VEC_LEN), which needs iteration count to
-  // calculate max thread block numbers
-  cuda_loop_iter_count_1 =
-      buildAddOp(buildSubtractOp(deepCopy(orig_upper), deepCopy(orig_lower)),
-                 buildIntVal(1));
-
   // TODO: Fortran support later on
   ROSE_ASSERT(for_loop != NULL);
   // SgBasicBlock* loop_body = ensureBasicBlockAsBodyOfFor (for_loop);
@@ -3475,10 +4650,8 @@ void transOmpTargetLoop_RoundRobin(SgNode *node) {
   // handle private variables at this loop level, mostly loop index variables.
   // TODO: this is not very elegant since the outer most loop's loop variable is
   // still translated.
-  // for reduction
-  per_block_declarations.clear(); // must reset to empty or wrong reference to
-                                  // stale content generated previously
-  transOmpVariables(target, bb1, NULL, true);
+  GpuOffloadLoweringContext offload_ctx;
+  transOmpVariablesWithContext(target, bb1, NULL, true, &offload_ctx);
 }
 
 //! Check if an OpenMP statement has a clause of type vvt
@@ -4646,8 +5819,6 @@ static void generateMappedArrayMemoryHandling(
     };
   };
 
-  offload_array_offset_map[dev_var_name] = v_offset;
-
   // generate Dim array
   string dev_var_Dim_name = "_dev_" + orig_name + "_Dim";
   SgVariableDeclaration *dev_var_Dim_decl = NULL;
@@ -4688,8 +5859,6 @@ static void generateMappedArrayMemoryHandling(
         dev_var_Dim_sym->get_declaration()->get_declaration());
 
   // ROSE_ASSERT (dev_var_Dim_decl != NULL);
-  offload_array_size_map[dev_var_name] = v_dimSize;
-
   // Only if we are in the mode of inserting data handling statements
   if (!need_generate_data_stmt)
     return;
@@ -4897,7 +6066,8 @@ ASTtools::VarSymSet_t
 transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
                      SgExprListExp *map_variable_base_list,
                      SgExprListExp *map_variable_size_list,
-                     SgExprListExp *map_variable_type_list) {
+                     SgExprListExp *map_variable_type_list,
+                     GpuOffloadLoweringContext *offload_ctx = NULL) {
   ASTtools::VarSymSet_t all_syms;
   ROSE_ASSERT(all_syms.size() == 0); // it should be empty
 
@@ -5022,9 +6192,14 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
     string orig_name = (sym->get_name()).getString();
     string dev_var_name = "_dev_" + orig_name;
 
+    const bool use_const_device_pointer = mappedArrayUsesAreReadOnlyInScope(
+        insertion_scope, isSgVariableSymbol(sym));
+    SgType *dev_var_type = buildPointerType(
+        use_const_device_pointer ? buildConstType(element_type) : element_type);
+
     SgVariableDeclaration *dev_var_decl = NULL;
-    dev_var_decl = buildVariableDeclaration(
-        dev_var_name, buildPointerType(element_type), NULL, insertion_scope);
+    dev_var_decl = buildVariableDeclaration(dev_var_name, dev_var_type, NULL,
+                                            insertion_scope);
     insertStatementBefore(insertion_anchor_stmt, dev_var_decl);
     ROSE_ASSERT(dev_var_decl != NULL);
 
@@ -5087,10 +6262,15 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
   for (std::set<SgSymbol *>::iterator iter = atom_syms.begin();
        iter != atom_syms.end(); iter++) {
     SgVariableSymbol *var_sym = isSgVariableSymbol(*iter);
+    const bool use_literal_target_param = canUseLiteralTargetParam(
+        target, var_sym, map_to_clauses, map_from_clauses, map_tofrom_clauses);
     if (variable_map[var_sym] ==
         true) // we should only collect map variables which show up in the
               // current parallel region
       all_syms.insert(var_sym);
+    if (use_literal_target_param && offload_ctx != NULL) {
+      offload_ctx->literal_target_param_syms.insert(var_sym);
+    }
 
     // check the type of current variable symbol and calculate its size
     if (variable_map[var_sym] == true) {
@@ -5101,13 +6281,17 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
           isPointerType(mapping_variable_type) &&
           array_dimensions[var_sym].empty();
       SgExpression *mapping_variable_expression = NULL;
-      if (isPointerType(mapping_variable_type)) {
+      if (use_literal_target_param) {
+        mapping_variable_expression =
+            buildLiteralTargetParamArgExpression(var_sym, target->get_scope());
+      } else if (isPointerType(mapping_variable_type)) {
         mapping_variable_expression = buildVarRefExp(var_sym);
       } else {
         mapping_variable_expression = buildAddressOfOp(buildVarRefExp(var_sym));
       };
       map_variable_list->append_expression(mapping_variable_expression);
-      map_variable_base_list->append_expression(mapping_variable_expression);
+      map_variable_base_list->append_expression(
+          copyExpression(mapping_variable_expression));
       SgExpression *mapping_variable_size = NULL;
       if (is_implicit_pointer_map) {
         mapping_variable_size = buildCastExp(
@@ -5123,6 +6307,13 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
       if (is_implicit_pointer_map) {
         mapping_variable_type_enum =
             OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_IMPLICIT;
+      } else if (use_literal_target_param) {
+        mapping_variable_type_enum =
+            OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_LITERAL;
+        if (isImplicitTargetMapVariable(target, var_sym)) {
+          mapping_variable_type_enum =
+              mapping_variable_type_enum | OMP_TGT_MAPTYPE_IMPLICIT;
+        }
       } else {
         mapping_variable_type_enum = generate_mapping_variable_type(
             var_sym, map_alloc_clauses, map_to_clauses, map_from_clauses,
@@ -5140,76 +6331,6 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
   appendExpressionList(map_variable_size_list, *mapping_array_size_list);
   appendExpressionList(map_variable_type_list, *mapping_array_type_list);
 
-  /*
-  //Pei-Hung: subtract offset from the subscript in the offloaded array
-  reference if(target_parallel_stmt)
-  {
-    // at this point, the body must be a BB now.
-    SgBasicBlock* body_block = isSgBasicBlock(target_parallel_stmt->get_body());
-  // the body of the affected "omp parallel" ROSE_ASSERT (body_block!= NULL);
-    Rose_STL_Container<SgNode*> nodeList = NodeQuery::querySubTree(body_block,
-  V_SgVarRefExp); for (Rose_STL_Container<SgNode *>::iterator i =
-  nodeList.begin(); i != nodeList.end(); i++)
-    {
-      SgVarRefExp *vRef = isSgVarRefExp((*i));
-      SgVariableSymbol* sym = vRef->get_symbol();
-      SgType* type = sym->get_type();
-      if(offload_array_offset_map.find(vRef->get_symbol()->get_name().getString())
-  != offload_array_offset_map.end())
-      {
-        std::vector<SgExpression*> v_offset =
-  offload_array_offset_map.find(vRef->get_symbol()->get_name().getString())->second;
-        std::vector<SgExpression*> v_size =
-  offload_array_size_map.find(vRef->get_symbol()->get_name().getString())->second;
-        if(isSgPntrArrRefExp(vRef->get_parent()) == NULL)
-          continue;
-        //std::cout << "finding susbscript " <<
-  vRef->get_symbol()->get_name().getString() << " in " <<
-  offload_array_offset_map.size() << std::endl; SgPntrArrRefExp* pntrArrRef =
-  isSgPntrArrRefExp(vRef->get_parent()); std::vector<SgExpression*> arrayType
-  =get_C_array_dimensions(type);
-        //std::cout << "vector size = " << v_offset.size() << " array dim= " <<
-  arrayType.size() << std::endl; if(v_offset.size() == arrayType.size())
-        {
-          for(std::vector<SgExpression*>::reverse_iterator ir =
-  v_offset.rbegin(); ir != v_offset.rend(); ir++)
-          {
-            ROSE_ASSERT(pntrArrRef);
-            SgExpression* subscript = pntrArrRef->get_rhs_operand();
-            SgExpression* newsubscript =
-  buildSubtractOp(deepCopy(subscript),deepCopy(*ir));
-            replaceExpression(subscript,newsubscript,true);
-          }
-        }
-        // collapsed case
-        else
-        {
-          ROSE_ASSERT(pntrArrRef);
-          SgExpression* subscript = pntrArrRef->get_rhs_operand();
-          SgExpression* newsubscript = deepCopy(subscript);
-          std::vector<SgExpression*>::reverse_iterator irsize = v_size.rbegin();
-          for(std::vector<SgExpression*>::reverse_iterator ir =
-  v_offset.rbegin(); ir != v_offset.rend(); ir++)
-          {
-            SgIntVal* intVal = isSgIntVal(*ir);
-            if(intVal && intVal->get_value() == 0)
-            {
-              irsize++;
-              continue;
-            }
-            if(ir ==v_offset.rbegin())
-              newsubscript = buildSubtractOp(newsubscript,deepCopy(*ir));
-            else
-              newsubscript =
-  buildSubtractOp(newsubscript,buildMultiplyOp(deepCopy(*ir),deepCopy(*irsize)));
-            irsize++;
-          }
-          replaceExpression(subscript,newsubscript,true);
-        }
-      }
-    }
-  }
-  */
   return all_syms;
 } // end transOmpMapVariables() for omp target data's map clauses for now
 
@@ -5411,6 +6532,13 @@ void collectOmpTargetUpdateInfo(SgStatement *target,
   }
 } // collectOmpTargetUpdateInfo()
 
+static SgVariableDeclaration *buildTargetKernelArgsDeclaration(
+    SgGlobal *global_scope, SgScopeStatement *scope,
+    SgVariableDeclaration *arg_number_decl, SgVariableDeclaration *args_base,
+    SgVariableDeclaration *args, SgVariableDeclaration *arg_sizes,
+    SgVariableDeclaration *arg_types, SgVariableDeclaration *num_blocks_decl,
+    SgVariableDeclaration *threads_per_block_decl, SgExpression *tripcount);
+
 // Translate a parallel region under "omp target"
 /*
 
@@ -5428,6 +6556,7 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
+  GpuOffloadLoweringContext offload_ctx;
 
   // device expression
   SgExpression *device_expression = NULL;
@@ -5463,7 +6592,6 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   SgOmpClauseBodyStatement *target_parallel_stmt =
       isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target_parallel_stmt);
-
   // Prepare the outliner
   Outliner::enable_classic = true;
   //    Outliner::useParameterWrapper = false; //TODO: better handling of the
@@ -5489,7 +6617,7 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
 
   all_syms = transOmpMapVariables(
       target, map_variable_list, map_variable_base_list, map_variable_size_list,
-      map_variable_type_list); //, addressOf_syms);
+      map_variable_type_list, &offload_ctx); //, addressOf_syms);
 
   ASTtools::VarSymSet_t
       per_block_reduction_syms; // translation generated per block reduction
@@ -5534,7 +6662,10 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   for (std::set<const SgVariableSymbol *>::iterator iter = all_syms.begin();
        iter != all_syms.end(); iter++) {
     if (!isPointerType((*iter)->get_type()) &&
-        !isSgArrayType((*iter)->get_type())) {
+        !isSgArrayType((*iter)->get_type()) &&
+        offload_ctx.literal_target_param_syms.find(
+            const_cast<SgVariableSymbol *>(*iter)) ==
+            offload_ctx.literal_target_param_syms.end()) {
       addressOf_syms.insert(*iter);
     };
   };
@@ -5546,6 +6677,9 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   SgFunctionDeclaration *result_decl =
       isSgFunctionDeclaration(result->get_firstNondefiningDeclaration());
   ROSE_ASSERT(result_decl != NULL);
+  lowerLiteralTargetKernelParameters(result,
+                                     offload_ctx.literal_target_param_syms);
+  maybeRecordTargetKernelLaunchBounds(result, omp_num_threads);
   result_decl->get_functionModifier()
       .setCudaKernel(); // add __global__ modifier
 
@@ -5586,10 +6720,6 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   outlined_driver_body->append_statement(threads_per_block_decl);
   attachComment(threads_per_block_decl, string("Launch CUDA kernel ..."));
 
-  // dim3 numBlocks (xomp_get_max1DBlock(VEC_LEN));
-  // TODO: handle 2-D or 3-D using dim type
-  // ROSE_ASSERT (cuda_loop_iter_count_1 != NULL);
-
   SgVariableDeclaration *num_blocks_decl =
       buildVariableDeclaration("_num_blocks_", buildIntType(),
                                buildAssignInitializer(omp_num_teams), p_scope);
@@ -5600,15 +6730,15 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   SgExpression *shared_data = NULL; // shared data size expression for CUDA
                                     // kernel execution configuration
   for (std::vector<SgVariableDeclaration *>::iterator iter =
-           per_block_declarations.begin();
-       iter != per_block_declarations.end(); iter++) {
+           offload_ctx.per_block_declarations.begin();
+       iter != offload_ctx.per_block_declarations.end(); iter++) {
     SgVariableDeclaration *decl = *iter;
     insertStatementAfter(num_blocks_decl, decl);
     SgVariableSymbol *sym = getFirstVarSym(decl);
     SgPointerType *pointer_type = isSgPointerType(sym->get_type());
     ROSE_ASSERT(pointer_type != NULL);
     SgType *base_type = pointer_type->get_base_type();
-    if (per_block_declarations.size() > 1) {
+    if (offload_ctx.per_block_declarations.size() > 1) {
       cerr << "Error. multiple reduction variables are not yet handled."
            << endl;
       ROSE_ABORT();
@@ -5654,10 +6784,10 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
       buildVariableDeclaration(func_name + "id__", buildCharType(),
                                buildAssignInitializer(buildIntVal(0)), g_scope);
 
-  // by default, the device id is set to 0
+  // Use the OpenMP runtime's default device sentinel.
   SgVariableDeclaration *device_id_decl = buildVariableDeclaration(
       "__device_id", buildOpaqueType("int64_t", p_scope),
-      buildAssignInitializer(buildIntVal(0)), p_scope);
+      buildAssignInitializer(buildLongLongIntVal(-1)), p_scope);
   outlined_driver_body->append_statement(device_id_decl);
 
   // define the entry point
@@ -5684,6 +6814,9 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
           buildPointerType(buildVoidType()))),
       p_scope);
   outlined_driver_body->append_statement(host_point_decl);
+
+  materializeLiteralTargetArgExpressions(
+      map_variable_list, map_variable_base_list, outlined_driver_body, p_scope);
 
   SgBracedInitializer *offloading_variables_base =
       buildBracedInitializer(map_variable_base_list);
@@ -5719,15 +6852,20 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
       buildAssignInitializer(buildIntVal(kernel_arg_num)), p_scope);
   outlined_driver_body->append_statement(arg_number_decl);
 
-  // call __tgt_target_teams to execute the CUDA kernel
+  SgVariableDeclaration *kernel_args_decl = buildTargetKernelArgsDeclaration(
+      g_scope, p_scope, arg_number_decl, args_base_decl, args_decl, arg_sizes,
+      arg_types, num_blocks_decl, threads_per_block_decl, NULL);
+  outlined_driver_body->append_statement(kernel_args_decl);
+
+  // call __tgt_target_kernel to execute the CUDA kernel
+  SgVariableSymbol *kernel_args_sym = getFirstVarSym(kernel_args_decl);
+  ROSE_ASSERT(kernel_args_sym != NULL);
   SgExprListExp *parameters = NULL;
   parameters = buildExprListExp(
-      buildVarRefExp(device_id_decl), buildVarRefExp(host_point_decl),
-      buildVarRefExp(arg_number_decl), buildVarRefExp(args_base_decl),
-      buildVarRefExp(args_decl), buildVarRefExp(arg_sizes),
-      buildVarRefExp(arg_types), buildVarRefExp(num_blocks_decl),
-      buildVarRefExp(threads_per_block_decl));
-  string func_offloading_name = "__tgt_target_teams";
+      buildVarRefExp(device_id_decl), buildVarRefExp(num_blocks_decl),
+      buildVarRefExp(threads_per_block_decl), buildVarRefExp(host_point_decl),
+      buildAddressOfOp(buildVarRefExp(kernel_args_sym)));
+  string func_offloading_name = "__tgt_target_kernel";
   SgExprStatement *func_offloading_stmt = buildFunctionCallStmt(
       func_offloading_name, buildIntType(), parameters, p_scope);
   setSourcePositionForTransformation(func_offloading_stmt);
@@ -5741,11 +6879,109 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   target_outlined_function_list->push_back(isSgFunctionDeclaration(result));
 }
 
-// Transform the worksharing loop in a target spmd region
-SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
-  // step 0: Sanity check
-  ROSE_ASSERT(node != NULL);
-  SgForStatement *for_loop = isSgForStatement(node);
+static SgExpression *buildKernelArgNullPtrExpr() {
+  return buildCastExp(buildIntVal(0),
+                      buildPointerType(buildPointerType(buildVoidType())));
+}
+
+static SgExpression *buildKernelLaunchDimInitializer(SgExpression *x_dim_expr) {
+  return buildAggregateInitializer(buildExprListExp(
+      copyExpression(x_dim_expr), buildIntVal(1), buildIntVal(1)));
+}
+
+static SgVariableDeclaration *buildTargetKernelArgsDeclaration(
+    SgGlobal *global_scope, SgScopeStatement *scope,
+    SgVariableDeclaration *arg_number_decl, SgVariableDeclaration *args_base,
+    SgVariableDeclaration *args, SgVariableDeclaration *arg_sizes,
+    SgVariableDeclaration *arg_types, SgVariableDeclaration *num_blocks_decl,
+    SgVariableDeclaration *threads_per_block_decl, SgExpression *tripcount) {
+  ROSE_ASSERT(global_scope != NULL);
+  ROSE_ASSERT(scope != NULL);
+  ROSE_ASSERT(arg_number_decl != NULL);
+  ROSE_ASSERT(args_base != NULL);
+  ROSE_ASSERT(args != NULL);
+  ROSE_ASSERT(arg_sizes != NULL);
+  ROSE_ASSERT(arg_types != NULL);
+  ROSE_ASSERT(num_blocks_decl != NULL);
+  ROSE_ASSERT(threads_per_block_decl != NULL);
+
+  SgClassDeclaration *kernel_args_decl =
+      buildStructDeclaration("__tgt_kernel_arguments", global_scope);
+  ROSE_ASSERT(kernel_args_decl != NULL);
+
+  SgType *int64_type = buildOpaqueType("int64_t", scope);
+  SgExpression *tripcount_expr =
+      tripcount != NULL ? buildCastExp(copyExpression(tripcount), int64_type)
+                        : buildCastExp(buildLongLongIntVal(0), int64_type);
+
+  std::vector<SgExpression *> kernel_args_exprs;
+  kernel_args_exprs.push_back(buildIntVal(3));
+  kernel_args_exprs.push_back(buildVarRefExp(arg_number_decl));
+  kernel_args_exprs.push_back(buildVarRefExp(args_base));
+  kernel_args_exprs.push_back(buildVarRefExp(args));
+  kernel_args_exprs.push_back(buildVarRefExp(arg_sizes));
+  kernel_args_exprs.push_back(buildVarRefExp(arg_types));
+  kernel_args_exprs.push_back(buildKernelArgNullPtrExpr());
+  kernel_args_exprs.push_back(buildKernelArgNullPtrExpr());
+  kernel_args_exprs.push_back(tripcount_expr);
+  kernel_args_exprs.push_back(buildLongLongIntVal(0));
+  kernel_args_exprs.push_back(
+      buildKernelLaunchDimInitializer(buildVarRefExp(num_blocks_decl)));
+  kernel_args_exprs.push_back(
+      buildKernelLaunchDimInitializer(buildVarRefExp(threads_per_block_decl)));
+  kernel_args_exprs.push_back(buildIntVal(0));
+
+  SgBracedInitializer *kernel_args_init =
+      buildBracedInitializer(buildExprListExp(kernel_args_exprs));
+
+  return buildVariableDeclaration("__kernel_args", kernel_args_decl->get_type(),
+                                  buildAssignInitializer(kernel_args_init),
+                                  scope);
+}
+
+struct TargetLoopLoweringInfo {
+  SgInitializedName *orig_index = nullptr;
+  SgExpression *orig_lower = nullptr;
+  SgExpression *orig_upper = nullptr;
+  SgExpression *orig_stride = nullptr;
+  bool is_incremental = true;
+  bool is_inclusive_bound = true;
+};
+
+static SgExpression *
+buildTargetLoopTripCountExpr(const TargetLoopLoweringInfo &info) {
+  SgExpression *distance = nullptr;
+  if (info.is_incremental) {
+    distance =
+        buildSubtractOp(deepCopy(info.orig_upper), deepCopy(info.orig_lower));
+  } else {
+    distance =
+        buildSubtractOp(deepCopy(info.orig_lower), deepCopy(info.orig_upper));
+  }
+  if (info.is_inclusive_bound) {
+    distance = buildAddOp(distance, buildIntVal(1));
+  }
+  return distance;
+}
+
+static SgExpression *buildCudaDimXRef(const std::string &name,
+                                      SgScopeStatement *scope) {
+  return buildOpaqueVarRefExp(name, scope);
+}
+
+static SgExpression *buildCudaGlobalThreadIdXExpr(SgScopeStatement *scope) {
+  return buildAddOp(buildMultiplyOp(buildCudaDimXRef("blockDim.x", scope),
+                                    buildCudaDimXRef("blockIdx.x", scope)),
+                    buildCudaDimXRef("threadIdx.x", scope));
+}
+
+static SgExpression *buildCudaGlobalThreadCountXExpr(SgScopeStatement *scope) {
+  return buildMultiplyOp(buildCudaDimXRef("gridDim.x", scope),
+                         buildCudaDimXRef("blockDim.x", scope));
+}
+
+static TargetLoopLoweringInfo
+analyzeTargetLoopForGpu(SgForStatement *for_loop) {
   ROSE_ASSERT(for_loop != NULL);
 
   // In target-offloading outlined kernels, loop indices can appear as pointer
@@ -5753,50 +6989,149 @@ SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
   // canonical-loop analysis and normalization can proceed.
   rewritePointerBasedForIndices(for_loop);
 
-  // Step 1. Loop normalization
   // For the init statement: for (int i=0;... ) becomes int i; for (i=0;..)
   // For test expression: i<x is normalized to i<= (x-1) and i>x is normalized
-  // to i>= (x+1) For increment expression: i++ is normalized to i+=1 and i-- is
-  // normalized to i+=-1 i-=s is normalized to i+= -s
+  // to i>= (x+1). For increment expression: i++ is normalized to i+=1 and
+  // i-- is normalized to i+=-1.
   SageInterface::forLoopNormalization(for_loop);
 
-  SgInitializedName *orig_index = NULL;
-  SgExpression *orig_lower = NULL;
-  SgExpression *orig_upper = NULL;
-  SgExpression *orig_stride = NULL;
-  bool isIncremental = true; // if the loop iteration space is incremental
-  // grab the original loop 's controlling information
-  bool is_canonical = false;
-
-  is_canonical =
-      isCanonicalForLoop(for_loop, &orig_index, &orig_lower, &orig_upper,
-                         &orig_stride, NULL, &isIncremental);
+  TargetLoopLoweringInfo info;
+  bool is_canonical = isCanonicalForLoop(
+      for_loop, &info.orig_index, &info.orig_lower, &info.orig_upper,
+      &info.orig_stride, NULL, &info.is_incremental);
   ROSE_ASSERT(is_canonical == true);
+  info.is_inclusive_bound = true;
+  return info;
+}
 
-  // loop iteration space: upper - lower + 1, not used within this function, but
-  // a global variable used later. This expression will be later used to help
-  // generate xomp_get_max1DBlock(VEC_LEN), which needs iteration count to
-  // calculate max thread block numbers
-  cuda_loop_iter_count_1 =
-      buildAddOp(buildSubtractOp(deepCopy(orig_upper), deepCopy(orig_lower)),
-                 buildIntVal(1));
+static bool analyzeTargetLoopForGpuReadOnly(SgForStatement *for_loop,
+                                            TargetLoopLoweringInfo *info) {
+  if (for_loop == NULL || info == NULL) {
+    return false;
+  }
 
-  // TODO: Fortran support later on
-  ROSE_ASSERT(for_loop != NULL);
-  // SgBasicBlock* loop_body = ensureBasicBlockAsBodyOfFor (for_loop);
+  bool is_canonical = SageInterface::isCanonicalForLoop(
+      for_loop, &info->orig_index, &info->orig_lower, &info->orig_upper,
+      &info->orig_stride, NULL, &info->is_incremental,
+      &info->is_inclusive_bound);
+  if (is_canonical) {
+    return true;
+  }
 
-  // Step 2. Insert a basic block to replace SgOmpForStatement
-  //  This newly introduced scope is used to hold loop variables ,etc
-  SgBasicBlock *bb1 = SageBuilder::buildBasicBlock();
-  replaceStatement(for_loop, bb1, true);
+  is_canonical = recoverCanonicalForLoopControl(
+      for_loop, &info->orig_index, &info->orig_lower, &info->orig_upper,
+      &info->orig_stride, &info->is_incremental);
+  if (!is_canonical) {
+    return false;
+  }
 
-  // Insert variables used by the two scheduler functions
-  /* int _dev_lower;
-     int _dev_upper;
-     int _dev_loop_chunk_size;
-     int _dev_loop_sched_index;
-     int _dev_loop_stride;
-  */
+  SgBinaryOp *test_expr = isSgBinaryOp(for_loop->get_test_expr());
+  if (test_expr == NULL) {
+    return false;
+  }
+  info->is_inclusive_bound = isSgLessOrEqualOp(test_expr) != NULL ||
+                             isSgGreaterOrEqualOp(test_expr) != NULL;
+  return true;
+}
+
+static bool expressionDependsOnVarsDeclaredInside(SgExpression *expr,
+                                                  SgNode *region_root) {
+  if (expr == NULL || region_root == NULL) {
+    return false;
+  }
+
+  Rose_STL_Container<SgNode *> refs =
+      NodeQuery::querySubTree(expr, V_SgVarRefExp);
+  for (Rose_STL_Container<SgNode *>::const_iterator it = refs.begin();
+       it != refs.end(); ++it) {
+    SgVarRefExp *ref = isSgVarRefExp(*it);
+    if (ref == NULL || ref->get_symbol() == NULL) {
+      continue;
+    }
+    SgInitializedName *decl = ref->get_symbol()->get_declaration();
+    if (decl != NULL && isAncestor(region_root, decl)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool canUseDirectTargetLoopFastPath(const TargetLoopLoweringInfo &info) {
+  return info.orig_index != nullptr && info.orig_lower != nullptr &&
+         info.orig_upper != nullptr && info.orig_stride != nullptr;
+}
+
+static SgVariableDeclaration *
+findHoistedTargetLoopIndexDeclaration(SgForStatement *for_loop,
+                                      const TargetLoopLoweringInfo &info) {
+  if (for_loop == nullptr || info.orig_index == nullptr) {
+    return nullptr;
+  }
+
+  SgVariableDeclaration *index_decl =
+      isSgVariableDeclaration(info.orig_index->get_declaration());
+  if (index_decl == nullptr) {
+    return nullptr;
+  }
+
+  // forLoopNormalization() and rewritePointerBasedForIndices() both hoist
+  // the loop index declaration to the statement immediately preceding the
+  // transformed loop. Only move that tightly-coupled declaration.
+  if (SageInterface::getPreviousStatement(for_loop, false) != index_decl) {
+    return nullptr;
+  }
+
+  const SgInitializedNamePtrList &decl_vars = index_decl->get_variables();
+  if (decl_vars.size() != 1 || decl_vars.front() != info.orig_index) {
+    return nullptr;
+  }
+
+  return index_decl;
+}
+
+static void
+lowerTargetLoopDirectGridStride(SgForStatement *for_loop, SgBasicBlock *bb1,
+                                const TargetLoopLoweringInfo &info) {
+  SgAssignInitializer *init_idx = buildAssignInitializer(
+      buildCudaGlobalThreadCountXExpr(bb1), buildIntType());
+  SgVariableDeclaration *dev_thread_num_decl = buildVariableDeclaration(
+      "_dev_thread_num", buildIntType(), init_idx, bb1);
+  appendStatement(dev_thread_num_decl, bb1);
+  SgVariableSymbol *dev_thread_num_symbol = getFirstVarSym(dev_thread_num_decl);
+  ROSE_ASSERT(dev_thread_num_symbol != NULL);
+
+  init_idx =
+      buildAssignInitializer(buildCudaGlobalThreadIdXExpr(bb1), buildIntType());
+  SgVariableDeclaration *dev_thread_id_decl =
+      buildVariableDeclaration("_dev_thread_id", buildIntType(), init_idx, bb1);
+  appendStatement(dev_thread_id_decl, bb1);
+  SgVariableSymbol *dev_thread_id_symbol = getFirstVarSym(dev_thread_id_decl);
+  ROSE_ASSERT(dev_thread_id_symbol != NULL);
+
+  setLoopLowerBound(
+      for_loop, buildAddOp(deepCopy(info.orig_lower),
+                           buildMultiplyOp(buildVarRefExp(dev_thread_id_symbol),
+                                           deepCopy(info.orig_stride))));
+  setLoopUpperBound(for_loop, deepCopy(info.orig_upper));
+  setLoopStride(for_loop, buildMultiplyOp(buildVarRefExp(dev_thread_num_symbol),
+                                          deepCopy(info.orig_stride)));
+
+  appendStatement(for_loop, bb1);
+
+  SgInitializedName *outer_index = getLoopIndexVariable(for_loop);
+  SgVariableSymbol *outer_index_sym =
+      outer_index != nullptr
+          ? isSgVariableSymbol(outer_index->get_symbol_from_symbol_table())
+          : nullptr;
+  scalarizeDirectGridStrideOuterIndexAccesses(for_loop, outer_index_sym);
+  hoistReadOnlyInvariantAggregateRefsBeforeLoop(for_loop);
+  hoistReadOnlyInvariantFieldAccessesBeforeLoop(for_loop);
+  rewriteReadOnlyDeviceLoadsWithLdg(for_loop);
+}
+
+static void lowerTargetLoopRoundRobin(SgForStatement *for_loop,
+                                      SgBasicBlock *bb1,
+                                      const TargetLoopLoweringInfo &info) {
   SgVariableDeclaration *dev_lower_decl =
       buildVariableDeclaration("_dev_lower", buildIntType(), NULL, bb1);
   appendStatement(dev_lower_decl, bb1);
@@ -5813,8 +7148,6 @@ SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
       buildVariableDeclaration("_dev_loop_stride", buildIntType(), NULL, bb1);
   appendStatement(dev_loop_stride_decl, bb1);
 
-  // Insert CUDA thread id and count declarations
-  // int _dev_thread_num = getCUDABlockThreadCount(1);
   SgAssignInitializer *init_idx = buildAssignInitializer(
       buildFunctionCallExp(SgName("getCUDABlockThreadCount"), buildIntType(),
                            buildExprListExp(buildIntVal(1)), bb1),
@@ -5825,7 +7158,6 @@ SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
   SgVariableSymbol *dev_thread_num_symbol = getFirstVarSym(dev_thread_num_decl);
   ROSE_ASSERT(dev_thread_num_symbol != NULL);
 
-  // int _dev_thread_id = getLoopIndexFromCUDAVariables(1);
   init_idx = buildAssignInitializer(
       buildFunctionCallExp(SgName("getLoopIndexFromCUDAVariables"),
                            buildIntType(), buildExprListExp(buildIntVal(1)),
@@ -5837,16 +7169,11 @@ SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
   SgVariableSymbol *dev_thread_id_symbol = getFirstVarSym(dev_thread_id_decl);
   ROSE_ASSERT(dev_thread_id_symbol != NULL);
 
-  // initialize scheduler
-  // XOMP_static_sched_init (orig_start, orig_end, orig_step, orig_chunk_size,
-  // _dev_thread_num, _dev_thread_id,
-  //                       & _dev_loop_chunk_size , & _dev_loop_sched_index, &
-  //                       _dev_loop_stride);
-  SgExprListExp *parameters =
-      buildExprListExp(copyExpression(orig_lower), copyExpression(orig_upper),
-                       copyExpression(orig_stride), buildIntVal(1),
-                       buildVarRefExp(dev_thread_num_symbol),
-                       buildVarRefExp(dev_thread_id_symbol));
+  SgExprListExp *parameters = buildExprListExp(
+      copyExpression(info.orig_lower), copyExpression(info.orig_upper),
+      copyExpression(info.orig_stride), buildIntVal(1),
+      buildVarRefExp(dev_thread_num_symbol),
+      buildVarRefExp(dev_thread_id_symbol));
   appendExpression(parameters, buildAddressOfOp(buildVarRefExp(
                                    getFirstVarSym(dev_loop_chunk_size_decl))));
   appendExpression(parameters, buildAddressOfOp(buildVarRefExp(
@@ -5857,15 +7184,10 @@ SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
       "XOMP_static_sched_init", buildVoidType(), parameters, bb1);
   appendStatement(call_stmt, bb1);
 
-  // function call exp as while (condition)
-  // XOMP_static_sched_next (&_dev_loop_sched_index, orig_end,
-  // orig_step,_dev_loop_stride, _dev_loop_chunk_size,
-  //                       _dev_thread_num, _dev_thread_id, & _dev_lower , &
-  //                       _dev_upper)
   parameters = buildExprListExp(
       buildAddressOfOp(
           buildVarRefExp(getFirstVarSym(dev_loop_sched_index_decl))),
-      copyExpression(orig_upper), copyExpression(orig_stride),
+      copyExpression(info.orig_upper), copyExpression(info.orig_stride),
       buildVarRefExp(getFirstVarSym(dev_loop_stride_decl)),
       buildVarRefExp(getFirstVarSym(dev_loop_chunk_size_decl)));
   appendExpression(parameters, buildVarRefExp(dev_thread_num_symbol));
@@ -5880,16 +7202,51 @@ SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
   SgWhileStmt *w_stmt = buildWhileStmt(func_call_exp, for_loop);
   appendStatement(w_stmt, bb1);
 
-  // rewrite upper, lower bounds, TODO how about step? normalized to 1 already ?
   setLoopLowerBound(for_loop, buildVarRefExp(getFirstVarSym(dev_lower_decl)));
   setLoopUpperBound(for_loop, buildVarRefExp(getFirstVarSym(dev_upper_decl)));
+}
+
+// Transform the worksharing loop in a target spmd region
+SgBasicBlock *transOmpTargetLoopBlock(SgNode *node,
+                                      bool *used_direct_grid_stride,
+                                      GpuOffloadLoweringContext *offload_ctx) {
+  // step 0: Sanity check
+  ROSE_ASSERT(node != NULL);
+  ROSE_ASSERT(offload_ctx != NULL);
+  (void)offload_ctx;
+  SgForStatement *for_loop = isSgForStatement(node);
+  ROSE_ASSERT(for_loop != NULL);
+
+  TargetLoopLoweringInfo info = analyzeTargetLoopForGpu(for_loop);
+
+  // TODO: Fortran support later on
+  ROSE_ASSERT(for_loop != NULL);
+  // SgBasicBlock* loop_body = ensureBasicBlockAsBodyOfFor (for_loop);
+
+  // Step 2. Insert a basic block to replace SgOmpForStatement
+  //  This newly introduced scope is used to hold loop variables ,etc
+  SgVariableDeclaration *hoisted_index_decl =
+      findHoistedTargetLoopIndexDeclaration(for_loop, info);
+  SgBasicBlock *bb1 = SageBuilder::buildBasicBlock();
+  replaceStatement(for_loop, bb1, true);
+  if (hoisted_index_decl != NULL) {
+    SageInterface::removeStatement(hoisted_index_decl, false);
+    appendStatement(hoisted_index_decl, bb1);
+  }
+
+  bool use_direct_grid_stride = canUseDirectTargetLoopFastPath(info);
+  if (used_direct_grid_stride != NULL) {
+    *used_direct_grid_stride = use_direct_grid_stride;
+  }
+  if (use_direct_grid_stride) {
+    lowerTargetLoopDirectGridStride(for_loop, bb1, info);
+  } else {
+    lowerTargetLoopRoundRobin(for_loop, bb1, info);
+  }
 
   // handle private variables at this loop level, mostly loop index variables.
   // TODO: this is not very elegant since the outer most loop's loop variable is
   // still translated.
-  // for reduction
-  per_block_declarations.clear(); // must reset to empty or wrong reference to
-                                  // stale content generated previously
   return bb1;
 }
 
@@ -5897,11 +7254,14 @@ SgBasicBlock *transOmpTargetLoopBlock(SgNode *node) {
 // omp target parallel for
 // omp target teams distribute parallel for
 void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
-                                   SgExpression *omp_num_threads) {
+                                   SgExpression *omp_num_threads,
+                                   bool has_explicit_num_teams,
+                                   bool has_explicit_num_threads) {
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
+  GpuOffloadLoweringContext offload_ctx;
 
   // device expression
   SgExpression *device_expression = NULL;
@@ -5951,6 +7311,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   SgOmpClauseBodyStatement *target_parallel_stmt =
       isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target_parallel_stmt);
+  (void)has_explicit_num_teams;
 
   // Prepare the outliner
   Outliner::enable_classic = true;
@@ -5960,7 +7321,39 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
 
   // The combined directive only has one code block and should only process omp
   // variables once
-  transOmpVariables(target, body_block, NULL, true);
+  transOmpVariablesWithContext(target, body_block, NULL, true, &offload_ctx);
+
+  SgExpression *host_loop_iter_count_expr = NULL;
+  int direct_launch_thread_cap = 0;
+  {
+    Rose_STL_Container<SgNode *> host_for_loops =
+        NodeQuery::querySubTree(body_block, V_SgForStatement);
+    if (!host_for_loops.empty()) {
+      SgForStatement *host_for_loop = isSgForStatement(host_for_loops[0]);
+      if (host_for_loop != NULL) {
+        TargetLoopLoweringInfo host_loop_info;
+        if (analyzeTargetLoopForGpuReadOnly(host_for_loop, &host_loop_info) &&
+            canUseDirectTargetLoopFastPath(host_loop_info)) {
+          host_loop_iter_count_expr =
+              buildTargetLoopTripCountExpr(host_loop_info);
+          if (expressionDependsOnVarsDeclaredInside(host_loop_iter_count_expr,
+                                                    body_block)) {
+            host_loop_iter_count_expr = NULL;
+          }
+
+          if (!has_explicit_num_threads) {
+            const int nested_loop_depth =
+                computeMaxNestedForDepth(host_for_loop->get_loop_body());
+            if (nested_loop_depth >= 2) {
+              direct_launch_thread_cap = 128;
+            } else if (nested_loop_depth >= 1) {
+              direct_launch_thread_cap = 256;
+            }
+          }
+        }
+      }
+    }
+  }
 
   ASTtools::VarSymSet_t all_syms; // all generated or remaining variables to be
                                   // passed to the outliner
@@ -5979,7 +7372,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
 
   all_syms = transOmpMapVariables(
       target, map_variable_list, map_variable_base_list, map_variable_size_list,
-      map_variable_type_list); //, addressOf_syms);
+      map_variable_type_list, &offload_ctx); //, addressOf_syms);
   /*
   for (std::set<const SgVariableSymbol*>::iterator iter = all_syms.begin(); iter
   != all_syms.end(); iter++) { std::cout << "SPMD worksharing variable: " <<
@@ -6030,7 +7423,10 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   for (std::set<const SgVariableSymbol *>::iterator iter = all_syms.begin();
        iter != all_syms.end(); iter++) {
     if (!isPointerType((*iter)->get_type()) &&
-        !isSgArrayType((*iter)->get_type())) {
+        !isSgArrayType((*iter)->get_type()) &&
+        offload_ctx.literal_target_param_syms.find(
+            const_cast<SgVariableSymbol *>(*iter)) ==
+            offload_ctx.literal_target_param_syms.end()) {
       addressOf_syms.insert(*iter);
     };
   };
@@ -6042,6 +7438,9 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   SgFunctionDeclaration *result_decl =
       isSgFunctionDeclaration(result->get_firstNondefiningDeclaration());
   ROSE_ASSERT(result_decl != NULL);
+  lowerLiteralTargetKernelParameters(result,
+                                     offload_ctx.literal_target_param_syms);
+  maybeRecordTargetKernelLaunchBounds(result, omp_num_threads);
   result_decl->get_functionModifier()
       .setCudaKernel(); // add __global__ modifier
 
@@ -6071,46 +7470,131 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
                                   // target"
   ROSE_ASSERT(p_scope != NULL);
 
+  // At this point, the for loop has been moved to the outlined function.
+  // It's the very first loop statement in that function.
+  Rose_STL_Container<SgNode *> for_loops =
+      NodeQuery::querySubTree(result, V_SgForStatement);
+  transOmpTargetLoopBlock(for_loops[0], NULL, &offload_ctx);
+
   // create the outlined driver for GPU offloading, which is empty at this point
   SgBasicBlock *outlined_driver_body = omp_target_stmt_body_block;
 
-  // by default, the device id is set to 0
+  // Use the OpenMP runtime's default device sentinel.
   SgVariableDeclaration *device_id_decl = buildVariableDeclaration(
       "__device_id", buildOpaqueType("int64_t", p_scope),
-      buildAssignInitializer(buildIntVal(0)), p_scope);
+      buildAssignInitializer(buildLongLongIntVal(-1)), p_scope);
   outlined_driver_body->append_statement(device_id_decl);
   attachComment(device_id_decl, string("Launch CUDA kernel ..."));
 
+  SgVariableDeclaration *threads_per_block_decl = NULL;
+  SgVariableDeclaration *num_blocks_decl = NULL;
+  SgVariableDeclaration *tripcount_decl = NULL;
   // insert dim3 threadsPerBlock(xomp_get_maxThreadsPerBlock());
-  // TODO: for 1-D mapping, int type is enough,  //TODO: a better interface
-  // accepting expression as initializer!!
-  SgVariableDeclaration *threads_per_block_decl = buildVariableDeclaration(
+  // TODO: for 1-D mapping, int type is enough.
+  threads_per_block_decl = buildVariableDeclaration(
       "_threads_per_block_", buildIntType(),
       buildAssignInitializer(omp_num_threads), p_scope);
   outlined_driver_body->append_statement(threads_per_block_decl);
 
   // dim3 numBlocks (xomp_get_max1DBlock(VEC_LEN));
-  // TODO: handle 2-D or 3-D using dim type
-  // ROSE_ASSERT (cuda_loop_iter_count_1 != NULL);
-  SgVariableDeclaration *num_blocks_decl =
+  num_blocks_decl =
       buildVariableDeclaration("_num_blocks_", buildIntType(),
                                buildAssignInitializer(omp_num_teams), p_scope);
   outlined_driver_body->append_statement(num_blocks_decl);
+
+  if (host_loop_iter_count_expr != NULL) {
+    tripcount_decl = buildVariableDeclaration(
+        "__rex_tripcount", buildOpaqueType("int64_t", p_scope),
+        buildAssignInitializer(copyExpression(host_loop_iter_count_expr)),
+        p_scope);
+    outlined_driver_body->append_statement(tripcount_decl);
+
+    if (!has_explicit_num_threads) {
+      SgBasicBlock *cap_launch_body = buildBasicBlock();
+
+      SgBasicBlock *cap_threads_body = buildBasicBlock();
+      SgVariableDeclaration *launch_granularity_decl = buildVariableDeclaration(
+          "__rex_launch_granularity", buildOpaqueType("int64_t", p_scope),
+          buildAssignInitializer(buildLongLongIntVal(32)), cap_threads_body);
+      cap_threads_body->append_statement(launch_granularity_decl);
+
+      SgBasicBlock *use_block_granularity_body = buildBasicBlock();
+      use_block_granularity_body->append_statement(buildAssignStatement(
+          buildVarRefExp(launch_granularity_decl),
+          buildCastExp(buildVarRefExp(threads_per_block_decl),
+                       buildOpaqueType("int64_t", p_scope))));
+      cap_threads_body->append_statement(buildIfStmt(
+          buildLessThanOp(buildCastExp(buildVarRefExp(threads_per_block_decl),
+                                       buildOpaqueType("int64_t", p_scope)),
+                          buildLongLongIntVal(32)),
+          use_block_granularity_body, NULL));
+
+      SgExpression *rounded_threads_expr = buildMultiplyOp(
+          buildDivideOp(buildSubtractOp(
+                            buildAddOp(buildVarRefExp(tripcount_decl),
+                                       buildVarRefExp(launch_granularity_decl)),
+                            buildLongLongIntVal(1)),
+                        buildVarRefExp(launch_granularity_decl)),
+          buildVarRefExp(launch_granularity_decl));
+      SgVariableDeclaration *rounded_threads_decl = buildVariableDeclaration(
+          "__rex_rounded_threads", buildOpaqueType("int64_t", p_scope),
+          buildAssignInitializer(rounded_threads_expr), cap_threads_body);
+      cap_threads_body->append_statement(rounded_threads_decl);
+
+      SgBasicBlock *clamp_threads_body = buildBasicBlock();
+      clamp_threads_body->append_statement(buildAssignStatement(
+          buildVarRefExp(rounded_threads_decl),
+          buildCastExp(buildVarRefExp(threads_per_block_decl),
+                       buildOpaqueType("int64_t", p_scope))));
+      cap_threads_body->append_statement(
+          buildIfStmt(buildGreaterThanOp(
+                          buildVarRefExp(rounded_threads_decl),
+                          buildCastExp(buildVarRefExp(threads_per_block_decl),
+                                       buildOpaqueType("int64_t", p_scope))),
+                      clamp_threads_body, NULL));
+
+      cap_threads_body->append_statement(buildAssignStatement(
+          buildVarRefExp(threads_per_block_decl),
+          buildCastExp(buildVarRefExp(rounded_threads_decl), buildIntType())));
+      cap_launch_body->append_statement(
+          buildIfStmt(buildGreaterThanOp(
+                          buildCastExp(buildVarRefExp(threads_per_block_decl),
+                                       buildOpaqueType("int64_t", p_scope)),
+                          buildVarRefExp(tripcount_decl)),
+                      cap_threads_body, NULL));
+
+      outlined_driver_body->append_statement(
+          buildIfStmt(buildGreaterThanOp(buildVarRefExp(tripcount_decl),
+                                         buildLongLongIntVal(0)),
+                      cap_launch_body, NULL));
+    }
+  }
+
+  if (!has_explicit_num_threads && direct_launch_thread_cap > 0) {
+    SgBasicBlock *cap_direct_threads_body = buildBasicBlock();
+    cap_direct_threads_body->append_statement(
+        buildAssignStatement(buildVarRefExp(threads_per_block_decl),
+                             buildIntVal(direct_launch_thread_cap)));
+    outlined_driver_body->append_statement(
+        buildIfStmt(buildGreaterThanOp(buildVarRefExp(threads_per_block_decl),
+                                       buildIntVal(direct_launch_thread_cap)),
+                    cap_direct_threads_body, NULL));
+  }
 
   // Now we have num_block declaration, we can insert the per block declaration
   // used for reduction variables
   SgExpression *shared_data = NULL; // shared data size expression for CUDA
                                     // kernel execution configuration
   for (std::vector<SgVariableDeclaration *>::iterator iter =
-           per_block_declarations.begin();
-       iter != per_block_declarations.end(); iter++) {
+           offload_ctx.per_block_declarations.begin();
+       iter != offload_ctx.per_block_declarations.end(); iter++) {
     SgVariableDeclaration *decl = *iter;
     insertStatementAfter(num_blocks_decl, decl);
     SgVariableSymbol *sym = getFirstVarSym(decl);
     SgPointerType *pointer_type = isSgPointerType(sym->get_type());
     ROSE_ASSERT(pointer_type != NULL);
     SgType *base_type = pointer_type->get_base_type();
-    if (per_block_declarations.size() > 1) {
+    if (offload_ctx.per_block_declarations.size() > 1) {
       cerr << "Error. multiple reduction variables are not yet handled."
            << endl;
       ROSE_ABORT();
@@ -6200,6 +7684,9 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
       p_scope);
   outlined_driver_body->append_statement(host_point_decl);
 
+  materializeLiteralTargetArgExpressions(
+      map_variable_list, map_variable_base_list, outlined_driver_body, p_scope);
+
   SgBracedInitializer *offloading_variables_base =
       buildBracedInitializer(map_variable_base_list);
   SgVariableDeclaration *args_base_decl = buildVariableDeclaration(
@@ -6234,25 +7721,25 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
       buildAssignInitializer(buildIntVal(kernel_arg_num)), p_scope);
   outlined_driver_body->append_statement(arg_number_decl);
 
-  // call __tgt_target_teams to execute the CUDA kernel
+  SgVariableDeclaration *kernel_args_decl = buildTargetKernelArgsDeclaration(
+      g_scope, p_scope, arg_number_decl, args_base_decl, args_decl, arg_sizes,
+      arg_types, num_blocks_decl, threads_per_block_decl,
+      tripcount_decl != NULL ? buildVarRefExp(tripcount_decl) : NULL);
+  outlined_driver_body->append_statement(kernel_args_decl);
+
+  // call __tgt_target_kernel to execute the CUDA kernel
+  SgVariableSymbol *kernel_args_sym = getFirstVarSym(kernel_args_decl);
+  ROSE_ASSERT(kernel_args_sym != NULL);
   SgExprListExp *parameters = NULL;
   parameters = buildExprListExp(
-      buildVarRefExp(device_id_decl), buildVarRefExp(host_point_decl),
-      buildVarRefExp(arg_number_decl), buildVarRefExp(args_base_decl),
-      buildVarRefExp(args_decl), buildVarRefExp(arg_sizes),
-      buildVarRefExp(arg_types), buildVarRefExp(num_blocks_decl),
-      buildVarRefExp(threads_per_block_decl));
-  string func_offloading_name = "__tgt_target_teams";
+      buildVarRefExp(device_id_decl), buildVarRefExp(num_blocks_decl),
+      buildVarRefExp(threads_per_block_decl), buildVarRefExp(host_point_decl),
+      buildAddressOfOp(buildVarRefExp(kernel_args_sym)));
+  string func_offloading_name = "__tgt_target_kernel";
   SgExprStatement *func_offloading_stmt = buildFunctionCallStmt(
       func_offloading_name, buildIntType(), parameters, p_scope);
   setSourcePositionForTransformation(func_offloading_stmt);
   outlined_driver_body->append_statement(func_offloading_stmt);
-
-  // At this point, the for loop has been moved to the outlined function.
-  // It's the very first loop statement in that function.
-  Rose_STL_Container<SgNode *> for_loops =
-      NodeQuery::querySubTree(result, V_SgForStatement);
-  SgBasicBlock *loop_block = transOmpTargetLoopBlock(for_loops[0]);
 
   for (ASTtools::VarSymSet_t::const_iterator iter =
            per_block_reduction_syms.begin();
@@ -6275,12 +7762,13 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
     SgExprListExp *parameter_list = buildExprListExp(
         buildVarRefExp(const_cast<SgVariableSymbol *>(current_symbol)),
         buildVarRefExp("_num_blocks_", target->get_scope()),
-        buildIntVal(per_block_reduction_map[const_cast<SgVariableSymbol *>(
-            current_symbol)]));
+        buildIntVal(
+            offload_ctx.per_block_reduction_map[const_cast<SgVariableSymbol *>(
+                current_symbol)]));
     SgStatement *reduce_on_cpu_stmt = generateTargetReduceOnCPU(
         orig_var_name, const_cast<SgVariableSymbol *>(current_symbol),
         num_blocks_decl,
-        per_block_reduction_map[const_cast<SgVariableSymbol *>(
+        offload_ctx.per_block_reduction_map[const_cast<SgVariableSymbol *>(
             current_symbol)]);
     outlined_driver_body->append_statement(reduce_on_cpu_stmt);
 
@@ -6310,12 +7798,14 @@ void transOmpLoopInTargetRegion(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
+  GpuOffloadLoweringContext offload_ctx;
 
   // At this point, the for loop has been moved to the outlined function.
   // It's the very first loop statement in that function.
   Rose_STL_Container<SgNode *> for_loops =
       NodeQuery::querySubTree(node, V_SgForStatement);
-  SgBasicBlock *loop_block = transOmpTargetLoopBlock(for_loops[0]);
+  SgBasicBlock *loop_block =
+      transOmpTargetLoopBlock(for_loops[0], NULL, &offload_ctx);
 
   replaceStatement(target, loop_block, true);
 }
@@ -6326,6 +7816,7 @@ void transOmpSpmdInTargetRegion(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
+  GpuOffloadLoweringContext offload_ctx;
 
   // Now we need to ensure that "omp target " has a basic block as its body
   // so we can insert declarations into an inner block, instead of colliding
@@ -6420,7 +7911,10 @@ void transOmpSpmdInTargetRegion(SgNode *node) {
   for (std::set<const SgVariableSymbol *>::iterator iter = all_syms.begin();
        iter != all_syms.end(); iter++) {
     if (!isPointerType((*iter)->get_type()) &&
-        !isSgArrayType((*iter)->get_type())) {
+        !isSgArrayType((*iter)->get_type()) &&
+        offload_ctx.literal_target_param_syms.find(
+            const_cast<SgVariableSymbol *>(*iter)) ==
+            offload_ctx.literal_target_param_syms.end()) {
       addressOf_syms.insert(*iter);
     };
   };
@@ -6432,6 +7926,7 @@ void transOmpSpmdInTargetRegion(SgNode *node) {
   SgFunctionDeclaration *result_decl =
       isSgFunctionDeclaration(result->get_firstNondefiningDeclaration());
   ROSE_ASSERT(result_decl != NULL);
+  maybeRecordTargetKernelLaunchBounds(result, omp_num_threads);
   result_decl->get_functionModifier()
       .setCudaKernel(); // add __global__ modifier
 
@@ -6570,7 +8065,9 @@ void transOmpTargetTeamsDistribute(SgNode *node) {
 
   SgExpression *omp_num_threads = buildIntVal(1);
 
-  transOmpTargetSpmdWorksharing(target, omp_num_teams, omp_num_threads);
+  transOmpTargetSpmdWorksharing(target, omp_num_teams, omp_num_threads,
+                                /*has_explicit_num_teams=*/true,
+                                /*has_explicit_num_threads=*/false);
 }
 
 // transformation for combined directive omp target parallel for
@@ -6593,7 +8090,9 @@ void transOmpTargetParallelFor(SgNode *node) {
   SgExpression *omp_num_threads =
       copyExpression(num_threads_clause->get_expression());
 
-  transOmpTargetSpmdWorksharing(target, omp_num_teams, omp_num_threads);
+  transOmpTargetSpmdWorksharing(target, omp_num_teams, omp_num_threads,
+                                /*has_explicit_num_teams=*/false,
+                                /*has_explicit_num_threads=*/true);
 }
 
 // transformation for combined directive omp target teams distribute parallel
@@ -6625,7 +8124,9 @@ void transOmpTargetTeamsDistributeParallelFor(SgNode *node) {
   SgExpression *omp_num_threads =
       copyExpression(num_threads_clause->get_expression());
 
-  transOmpTargetSpmdWorksharing(target, omp_num_teams, omp_num_threads);
+  transOmpTargetSpmdWorksharing(target, omp_num_teams, omp_num_threads,
+                                /*has_explicit_num_teams=*/true,
+                                /*has_explicit_num_threads=*/true);
 }
 
 /*
@@ -7244,6 +8745,7 @@ void transOmpTargetData(SgNode *node) {
   ROSE_ASSERT(node != NULL);
   SgOmpTargetDataStatement *target = isSgOmpTargetDataStatement(node);
   ROSE_ASSERT(target != NULL);
+  GpuOffloadLoweringContext offload_ctx;
 
   SgScopeStatement *p_scope = target->get_scope();
   ROSE_ASSERT(p_scope != NULL);
@@ -7254,16 +8756,17 @@ void transOmpTargetData(SgNode *node) {
   SgExprListExp *map_variable_type_list = buildExprListExp();
 
   transOmpMapVariables(target, map_variable_list, map_variable_base_list,
-                       map_variable_size_list, map_variable_type_list);
+                       map_variable_size_list, map_variable_type_list,
+                       &offload_ctx);
 
   SgBasicBlock *body = isSgBasicBlock(target->get_body());
   ROSE_ASSERT(body != NULL);
   SgBasicBlock *target_data_begin_block = body;
 
-  // by default, the device id is set to 0
+  // Use the OpenMP runtime's default device sentinel.
   SgVariableDeclaration *device_id_decl = buildVariableDeclaration(
       "__device_id", buildOpaqueType("int64_t", p_scope),
-      buildAssignInitializer(buildIntVal(0)), p_scope);
+      buildAssignInitializer(buildLongLongIntVal(-1)), p_scope);
   target_data_begin_block->prepend_statement(device_id_decl);
 
   SgBracedInitializer *offloading_variables_base =
@@ -7342,10 +8845,10 @@ void transOmpTargetUpdate(SgNode *node) {
                              map_variable_size_list, map_variable_type_list);
 
   SgBasicBlock *target_data_begin_block = buildBasicBlock();
-  // by default, the device id is set to 0
+  // Use the OpenMP runtime's default device sentinel.
   SgVariableDeclaration *device_id_decl = buildVariableDeclaration(
       "__device_id", buildOpaqueType("int64_t", p_scope),
-      buildAssignInitializer(buildIntVal(0)), p_scope);
+      buildAssignInitializer(buildLongLongIntVal(-1)), p_scope);
   target_data_begin_block->prepend_statement(device_id_decl);
 
   SgBracedInitializer *offloading_variables_base =
@@ -8064,8 +9567,10 @@ static void insertInnerThreadBlockReduction(
     SgOmpClause::omp_reduction_identifier_enum r_operator,
     vector<SgStatement *> &end_stmt_list, SgBasicBlock *bb1,
     SgInitializedName *orig_var, SgVariableDeclaration *local_decl,
-    SgVariableDeclaration *per_block_decl) {
+    SgVariableDeclaration *per_block_decl,
+    GpuOffloadLoweringContext *offload_ctx) {
   ROSE_ASSERT(bb1 && orig_var && local_decl && per_block_decl);
+  ROSE_ASSERT(offload_ctx != NULL);
   // the integer value representing different reduction operations, defined
   // within libxomp.h for accelerator model
   // TODO refactor the code to have a function converting operand types to
@@ -8121,7 +9626,7 @@ static void insertInnerThreadBlockReduction(
   // TODO: this could be risky. It is better to have our own conversion function
   // to have full control over it.
   string type_str = var_type->get_base_type()->unparseToString();
-  per_block_reduction_map[var_sym] =
+  offload_ctx->per_block_reduction_map[var_sym] =
       op_value; // save the per block symbol and its corresponding reduction
                 // integer value defined in the libxomp.h
   SgIntVal *reduction_op = buildIntVal(op_value);
@@ -8309,9 +9814,11 @@ buildAndInsertDeclarationForOmp(const std::string &name, SgType *type,
 //  model,
 //     We have no concept of firstprivate or lastprivate
 //     reduction is implemented using a two-level reduction algorithm
-void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
-                       SgExpression *orig_loop_upper /*= NULL*/,
-                       bool isAcceleratorModel /*= false*/) {
+static void transOmpVariablesWithContext(
+    SgStatement *ompStmt, SgBasicBlock *bb1,
+    SgExpression *orig_loop_upper /*= NULL*/,
+    bool isAcceleratorModel /*= false*/,
+    GpuOffloadLoweringContext *offload_ctx /*= NULL*/) {
   ROSE_ASSERT(ompStmt != NULL);
   ROSE_ASSERT(bb1 != NULL);
   SgOmpClauseBodyStatement *clause_stmt = isSgOmpClauseBodyStatement(ompStmt);
@@ -8331,10 +9838,6 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
 
   vector<SgStatement *> front_stmt_list, end_stmt_list, front_init_list;
 
-  // this is call by both transOmpTargetParallel and transOmpTargetLoop, we
-  // should move this to the correct caller place
-  //      per_block_declarations.clear(); // must reset to empty or wrong
-  //      reference to stale content generated previously
   std::map<std::string, SgVariableSymbol *> visible_symbols_by_name;
   if (const SgFunctionDeclaration *enclosing_decl =
           getEnclosingFunctionDeclaration(bb1)) {
@@ -8602,6 +10105,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
     // sizeof(REAL));
     SgVariableDeclaration *per_block_decl = NULL;
     if (isReductionVar && isAcceleratorModel) {
+      ROSE_ASSERT(offload_ctx != NULL);
       // SgOmpParallelStatement* enclosing_omp_parallel =
       // getEnclosingNode<SgOmpParallelStatement> (ompStmt);
       SgOmpClauseBodyStatement *enclosing_omp_parallel =
@@ -8633,7 +10137,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
       // be declared later on when translating "omp parallel" enclosed in "omp
       // target" so we insert it  later when the kernel launch statement is
       // inserted. insertStatementAfter(enclosing_omp_parallel, per_block_decl);
-      per_block_declarations.push_back(per_block_decl);
+      offload_ctx->per_block_declarations.push_back(per_block_decl);
       // store all reduction variables at the loop level, they will be used
       // later when translating the enclosing "omp target" to help decide on the
       // variables being passed
@@ -8648,7 +10152,8 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
       // two-level reduction is used for accelerator model
       if (isAcceleratorModel)
         insertInnerThreadBlockReduction(r_operator, end_stmt_list, bb1,
-                                        orig_var, local_decl, per_block_decl);
+                                        orig_var, local_decl, per_block_decl,
+                                        offload_ctx);
       else
         insertOmpReductionCopyBackStmts(r_operator, end_stmt_list, bb1,
                                         orig_var, local_decl, ompStmt);
@@ -8709,7 +10214,14 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
       }
 
   } // end for
-} // end void transOmpVariables()
+} // end void transOmpVariablesWithContext()
+
+void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
+                       SgExpression *orig_loop_upper /*= NULL*/,
+                       bool isAcceleratorModel /*= false*/) {
+  transOmpVariablesWithContext(ompStmt, bb1, orig_loop_upper,
+                               isAcceleratorModel, NULL);
+}
 
 //  if (omp_get_thread_num () == 0)
 //     { ... }

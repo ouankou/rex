@@ -1,6 +1,12 @@
 #ifndef ROSE_AST_UNPARSE_ATTRIBUTE_HEADER
 #define ROSE_AST_UNPARSE_ATTRIBUTE_HEADER
 
+#include "AstAttributeMechanism.h"
+
+#include <string>
+#include <utility>
+#include <vector>
+
 class AstUnparseAttribute : public AstAttribute {
   // DQ (7/20/2008): Added support for arbitrary text to be unparsed at each
   // SgLocatedNode.
@@ -78,6 +84,12 @@ public:
 
   //! This will output all the strings (mostly for debugging).
   virtual std::string toString() override;
+
+  //! required for ast attribute mechanism
+  virtual AstAttribute *copy() const override;
+
+  //! required for ast attribute mechanism
+  virtual std::string attribute_class_name() const override;
 
   //! This is selective in putting out only the strings that match a specific
   //! location.

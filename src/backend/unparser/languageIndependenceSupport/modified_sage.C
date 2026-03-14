@@ -5,6 +5,7 @@
  */
 
 // tps (01/14/2010) : Switching from rose.h to sage3.
+#include "astUnparseAttribute.h"
 #include "sage3basic.h"
 
 #include "modified_sage.h"
@@ -2360,6 +2361,13 @@ void Unparse_MOD_SAGE::printPrefixAttributes(SgDeclarationStatement *decl_stmt,
   SgFunctionDeclaration *functionDeclaration =
       isSgFunctionDeclaration(decl_stmt);
   if (functionDeclaration != NULL) {
+    AstUnparseAttribute *unparseAttribute = dynamic_cast<AstUnparseAttribute *>(
+        functionDeclaration->getAttribute(AstUnparseAttribute::markerName));
+    if (unparseAttribute != NULL) {
+      curprint(
+          unparseAttribute->toString(AstUnparseAttribute::e_before_syntax));
+    }
+
     // DQ (1/19/2014): Add support for prefix attributes.
     // DQ (1/19/2014): Adding support for gnu attribute regnum to support use in
     // Valgrind application.

@@ -12,6 +12,7 @@
 extern "C" {
 extern struct __tgt_offload_entry __start_omp_offloading_entries;
 extern struct __tgt_offload_entry __stop_omp_offloading_entries;
+void rex_offload_fini(void);
 }
 
 namespace {
@@ -20,6 +21,12 @@ enum RegistrationState {
   kBusy = 1,
   kRegistered = 2,
 };
+
+constexpr int32_t kRexTargetKernelFlags = 2;
+constexpr int32_t kRexTargetKernelReserved = 0;
+constexpr int32_t kRexTargetKernelReserved2 = 0;
+constexpr int32_t kRexTargetKernelReserved3 = 0;
+constexpr char kRexTargetKernelPSource[] = ";unknown;unknown;0;0;;";
 
 struct CubinStorage {
   std::vector<unsigned char> image;
@@ -31,6 +38,7 @@ int registration_state = kUnregistered;
 std::unique_ptr<CubinStorage> cubin_storage;
 
 bool readFile(const char *filename, std::vector<unsigned char> &buffer) {
+
   FILE *file = fopen(filename, "rb");
   if (file == nullptr) {
     return false;
@@ -78,9 +86,8 @@ struct __tgt_bin_desc *register_cubin_internal(const char *filename) {
   storage->bin_desc.HostEntriesEnd = &__stop_omp_offloading_entries;
 
   __rex_real___tgt_register_lib(&storage->bin_desc);
-  struct __tgt_bin_desc *desc = &storage->bin_desc;
   cubin_storage = std::move(storage);
-  return desc;
+  return &cubin_storage->bin_desc;
 }
 
 struct __tgt_bin_desc *ensure_cubin_registered(const char *filename) {
@@ -118,6 +125,10 @@ void unregister_cubin_internal() {
 }
 } // namespace
 
+ident_t rex_target_kernel_ident = {
+    kRexTargetKernelReserved, kRexTargetKernelFlags, kRexTargetKernelReserved2,
+    kRexTargetKernelReserved3, kRexTargetKernelPSource};
+
 // clang++ -g -c register_cubin.cpp -o register_cubin.o
 
 #ifdef __cplusplus
@@ -128,15 +139,19 @@ struct __tgt_bin_desc *__cubin_desc = nullptr;
 
 struct __tgt_bin_desc *register_cubin(const char *filename) {
   const char *cubin_name = filename == nullptr ? REX_CUBIN_NAME : filename;
-  __cubin_desc = ensure_cubin_registered(cubin_name);
-  return __cubin_desc;
+  struct __tgt_bin_desc *desc = ensure_cubin_registered(cubin_name);
+  __atomic_store_n(&__cubin_desc, desc, __ATOMIC_RELEASE);
+  return desc;
 }
 
-void rex_offload_init(void) { __cubin_desc = register_cubin(REX_CUBIN_NAME); }
+void rex_offload_init(void) { (void)register_cubin(REX_CUBIN_NAME); }
 
 void rex_offload_fini(void) {
+  // Standalone generated programs normally rely on process exit for cleanup.
+  // Keep explicit teardown available for callers that truly need it inside a
+  // longer-lived process.
   unregister_cubin_internal();
-  __cubin_desc = nullptr;
+  __atomic_store_n(&__cubin_desc, nullptr, __ATOMIC_RELEASE);
 }
 
 int rex___tgt_target(int64_t device_id, void *host_ptr, int32_t arg_num,
@@ -159,6 +174,17 @@ int rex___tgt_target_teams(int64_t device_id, void *host_ptr, int32_t arg_num,
   return __rex_real___tgt_target_teams(device_id, host_ptr, arg_num, args_base,
                                        args, arg_sizes, arg_types, num_teams,
                                        thread_limit);
+}
+
+int rex___tgt_target_kernel(int64_t device_id, int32_t num_teams,
+                            int32_t thread_limit, void *host_ptr,
+                            struct __tgt_kernel_arguments *kernel_args) {
+  if (register_cubin(REX_CUBIN_NAME) == nullptr) {
+    return -1;
+  }
+  return __rex_real___tgt_target_kernel(&rex_target_kernel_ident, device_id,
+                                        num_teams, thread_limit, host_ptr,
+                                        kernel_args);
 }
 
 void rex___tgt_target_data_begin(int64_t DeviceId, int32_t ArgNum,
