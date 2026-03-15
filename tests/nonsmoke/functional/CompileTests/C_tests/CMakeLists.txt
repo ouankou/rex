@@ -827,8 +827,6 @@ set(TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2020_20.c
   test2020_23.c
   test2020_25.c
-  test2020_26.c
-  test2020_27.c
   test2015_56.c
   test2015_86.c
   test2015_87.c
@@ -980,8 +978,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2020_20.c
   test2020_23.c
   test2020_25.c
-  test2020_26.c
-  test2020_27.c
   constants.c
   test2012_100.c
   test2012_116.c

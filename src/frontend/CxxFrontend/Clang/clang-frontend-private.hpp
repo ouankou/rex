@@ -2081,6 +2081,8 @@ protected:
   std::vector<std::pair<Sg_File_Info *, PreprocessingInfo *>>
       p_preprocessor_record_list;
   bool p_preprocessor_record_list_sorted;
+  std::set<std::string> p_self_referential_macros;
+  bool p_saw_self_referential_macro_expansion;
 
   bool shouldRecordDirective(clang::SourceLocation loc) const;
   std::string getFilenameForLocation(clang::SourceLocation loc) const;
@@ -2151,6 +2153,9 @@ public:
   std::pair<Sg_File_Info *, PreprocessingInfo *> top();
   bool pop();
   size_t size() const { return p_preprocessor_record_list.size(); }
+  bool sawSelfReferentialMacroExpansion() const {
+    return p_saw_self_referential_macro_expansion;
+  }
 };
 
 struct NextPreprocessorToInsert {
