@@ -14295,16 +14295,30 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
     trait_name = "__type_trait";
   }
 
-  SgNodePtrList args;
-  for (unsigned i = 0; i < type_trait->getNumArgs(); ++i) {
-    if (clang::TypeSourceInfo *arg_info = type_trait->getArg(i)) {
-      if (SgType *arg_type = buildTypeFromQualifiedType(arg_info->getType())) {
-        args.push_back(arg_type);
+  if (!type_trait->isValueDependent()) {
+    bool trait_value = false;
+    if (type_trait->isStoredAsBoolean()) {
+      trait_value = type_trait->getBoolValue();
+    } else {
+      const clang::APValue &value = type_trait->getAPValue();
+      ROSE_ASSERT(value.isInt());
+      trait_value = value.getInt().getBoolValue();
+    }
+
+    *node = SageBuilder::buildBoolValExp(trait_value);
+  } else {
+    SgNodePtrList args;
+    for (unsigned i = 0; i < type_trait->getNumArgs(); ++i) {
+      if (clang::TypeSourceInfo *arg_info = type_trait->getArg(i)) {
+        if (SgType *arg_type =
+                buildTypeFromQualifiedType(arg_info->getType())) {
+          args.push_back(arg_type);
+        }
       }
     }
+    ROSE_ASSERT(!args.empty());
+    *node = SageBuilder::buildTypeTraitBuiltinOperator(trait_name, args);
   }
-  ROSE_ASSERT(!args.empty());
-  *node = SageBuilder::buildTypeTraitBuiltinOperator(trait_name, args);
 
   return VisitExpr(type_trait, node) && res;
 }
