@@ -3129,10 +3129,6 @@ list(APPEND REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT
   test2006_131.C
 )
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT})
-# Custom test uses -isystem to force system-header classification.
-list(REMOVE_ITEM CXX_TESTCODES_TO_RUN
-  rex_test2025_issue148_system_header_mutation.cpp
-  )
 set(CXX_TESTCODES_ALWAYS_RUN
   test2013_09.C)
 list(APPEND CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_ALWAYS_RUN})
