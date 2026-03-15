@@ -74,7 +74,6 @@ set(CXX17_TESTCODES
   test2018_12.C
 )
 set(CXX17_DISABLED_TESTCODES
-  test2018_02.C
   test2018_05.C
   test2018_06.C
   test2018_07.C
