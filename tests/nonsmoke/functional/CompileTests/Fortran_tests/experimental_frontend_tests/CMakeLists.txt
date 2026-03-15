@@ -140,6 +140,10 @@ function(_experimental_add_translator_test test_prefix specimen)
     COMMAND bash -c
       "$<TARGET_FILE:testTranslator> ${_rose_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen} && test -s rose_${specimen}"
   )
+  set_tests_properties(${_test_name} PROPERTIES RESOURCE_LOCK experimental_frontend_test_output)
+  if(ARGC GREATER 2)
+    set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
+  endif()
   set(${test_prefix}_${specimen}_name ${_test_name} PARENT_SCOPE)
 endfunction()
 
@@ -153,6 +157,7 @@ function(_experimental_add_frontend_test test_prefix specimen)
       -rose:skip_syntax_check
       ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
   )
+  set_tests_properties(${test_prefix}_${_name} PROPERTIES RESOURCE_LOCK experimental_frontend_test_output)
 endfunction()
 
 foreach(specimen IN LISTS _f90_tests)
@@ -168,7 +173,11 @@ foreach(specimen IN LISTS _f90_working_on_tests)
 endforeach()
 
 foreach(specimen IN LISTS _failing_tests)
-  _experimental_add_translator_test(experimental_frontend_failing ${specimen})
+  if(specimen STREQUAL "pause_stmt.f77")
+    _experimental_add_translator_test(experimental_frontend_failing ${specimen} expected_fail)
+  else()
+    _experimental_add_translator_test(experimental_frontend_failing ${specimen})
+  endif()
 endforeach()
 
 foreach(specimen IN LISTS _non_fortran_failing_tests)

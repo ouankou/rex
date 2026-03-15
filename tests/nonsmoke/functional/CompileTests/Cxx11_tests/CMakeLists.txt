@@ -954,19 +954,25 @@ set(CXX11_DISABLED_TESTCODES
   test2019_301.C
   test2019_306.C
   test2019_311.C
-  test2019_313.C
   test2019_382.C
   test2019_388.C
   test2019_453.C
   test2019_492.C
   test2019_504.C
   test2019_506.C
-  test2020_40.C
   test2020_73.C
   test2020_82.C
   test2020_91.C
   test2020_95.C
   test2018_100.C
+)
+
+set(CXX11_EXPECTED_FAIL_TESTCODES
+  # Pointer-to-member values can only be compared against nullptr or another
+  # pointer-to-member value. These specimens intentionally exercise Clang's
+  # required rejection of invalid integer comparisons.
+  test2019_313.C
+  test2020_40.C
 )
 
 set(CXX11_TESTCODES_CXX03
@@ -1000,6 +1006,7 @@ endfunction()
 assert_cxx11_specimens_exist(CXX11_TESTCODES)
 assert_cxx11_specimens_exist(CXX11_TESTCODES_CXX03)
 assert_cxx11_specimens_exist(CXX11_DISABLED_TESTCODES)
+assert_cxx11_specimens_exist(CXX11_EXPECTED_FAIL_TESTCODES)
 
 set(ROSE_FLAGS_BASE
   -w -rose:verbose 0 -rose:skip_unparse_asm_commands)
@@ -1010,6 +1017,7 @@ set(ROSE_FLAGS_CXX03
 set(ROSE_FLAGS ${ROSE_FLAGS_CXX11})
 
 set(ROSE_DISABLED_TESTCODES ${CXX11_DISABLED_TESTCODES})
+set(ROSE_EXPECTED_FAIL_TESTCODES ${CXX11_EXPECTED_FAIL_TESTCODES})
 set(_cxx11_check_local_tests)
 
 macro(compile_with_flags test_files_var_name flags_var_name)
