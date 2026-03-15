@@ -4,6 +4,53 @@
 #include "markCompilerGenerated.h"
 
 #include "sage3basic.h"
+
+namespace {
+void normalizeNamespaceTemplateDeclarationFlags(
+    SgTemplateClassDeclaration *decl) {
+  auto normalize_one = [](SgTemplateClassDeclaration *candidate) {
+    if (candidate == nullptr) {
+      return;
+    }
+    SgScopeStatement *scope = candidate->get_scope();
+    SgNode *parent = candidate->get_parent();
+    const bool namespace_or_global_scope =
+        isSgGlobal(scope) != nullptr ||
+        isSgNamespaceDefinitionStatement(scope) != nullptr ||
+        isSgGlobal(parent) != nullptr ||
+        isSgNamespaceDefinitionStatement(parent) != nullptr;
+    if (!namespace_or_global_scope) {
+      return;
+    }
+    if (Sg_File_Info *fi = candidate->get_file_info()) {
+      fi->unsetCompilerGenerated();
+      fi->unsetFrontendSpecific();
+      fi->unsetOutputInCodeGeneration();
+    }
+    if (Sg_File_Info *fi = candidate->get_endOfConstruct()) {
+      fi->unsetCompilerGenerated();
+      fi->unsetFrontendSpecific();
+      fi->unsetOutputInCodeGeneration();
+    }
+  };
+
+  normalize_one(decl);
+  if (SgTemplateClassDeclaration *first = isSgTemplateClassDeclaration(
+          decl != nullptr ? decl->get_firstNondefiningDeclaration()
+                          : nullptr)) {
+    if (first != decl) {
+      normalize_one(first);
+    }
+  }
+  if (SgTemplateClassDeclaration *def = isSgTemplateClassDeclaration(
+          decl != nullptr ? decl->get_definingDeclaration() : nullptr)) {
+    if (def != decl) {
+      normalize_one(def);
+    }
+  }
+}
+} // namespace
+
 void fixupTemplateInstantiations(SgNode *node) {
   // DQ (7/7/2005): Introduce tracking of performance of ROSE.
   TimingPerformance timer("Fixup template specializations:");
@@ -59,7 +106,10 @@ void FixupTemplateInstantiations::visit(SgNode *node) {
             stub->setForward();
             stub->set_firstNondefiningDeclaration(stub);
             stub->set_definingDeclaration(nullptr);
-            if (stub->get_file_info() != nullptr) {
+            if (isSgGlobal(lookup_scope) != nullptr ||
+                isSgNamespaceDefinitionStatement(lookup_scope) != nullptr) {
+              normalizeNamespaceTemplateDeclarationFlags(stub);
+            } else if (stub->get_file_info() != nullptr) {
               stub->get_file_info()->setCompilerGenerated();
               stub->get_file_info()->unsetOutputInCodeGeneration();
             }
@@ -67,6 +117,10 @@ void FixupTemplateInstantiations::visit(SgNode *node) {
           }
         }
       }
+    }
+    if (SgTemplateClassDeclaration *template_decl =
+            isSgTemplateClassDeclaration(inst->get_templateDeclaration())) {
+      normalizeNamespaceTemplateDeclarationFlags(template_decl);
     }
   }
 

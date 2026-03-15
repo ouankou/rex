@@ -2,6 +2,29 @@
 
 #include "sage3basic.h"
 
+namespace {
+clang::QualType getInjectedClassNameSpecializationType(
+    const clang::InjectedClassNameType *injected_class_name_type,
+    const clang::ASTContext &ast_context) {
+  if (injected_class_name_type == nullptr) {
+    return {};
+  }
+
+  if (const auto *partial =
+          llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
+              injected_class_name_type->getDecl())) {
+    return partial->getCanonicalInjectedSpecializationType(ast_context);
+  }
+
+  if (const clang::ClassTemplateDecl *class_template =
+          injected_class_name_type->getDecl()->getDescribedClassTemplate()) {
+    return class_template->getCanonicalInjectedSpecializationType(ast_context);
+  }
+
+  return {};
+}
+} // namespace
+
 std::string ClangToDotTranslator::Traverse(const clang::Type *type) {
   if (type == NULL)
     return "";
@@ -168,13 +191,6 @@ std::string ClangToDotTranslator::Traverse(const clang::Type *type) {
   case clang::Type::DependentName:
     ret_status =
         VisitDependentNameType((clang::DependentNameType *)type, node_desc);
-    break;
-  case clang::Type::DependentTemplateSpecialization:
-    ret_status = VisitDependentTemplateSpecializationType(
-        (clang::DependentTemplateSpecializationType *)type, node_desc);
-    break;
-  case clang::Type::Elaborated:
-    ret_status = VisitElaboratedType((clang::ElaboratedType *)type, node_desc);
     break;
   case clang::Type::UnaryTransform:
     ret_status =
@@ -751,16 +767,15 @@ bool ClangToDotTranslator::VisitInjectedClassNameType(
 
   node_desc.kind_hierarchy.push_back("InjectedClassNameType");
 
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
-  node_desc.successors.push_back(std::pair<std::string, std::string>(
-      "injected_specialization_type",
-      Traverse(injected_class_name_type->getInjectedSpecializationType()
-                   .getTypePtr())));
-
-  node_desc.successors.push_back(std::pair<std::string, std::string>(
-      "injected_template_specialization_type",
-      Traverse(injected_class_name_type->getInjectedTST())));
+  if (p_compiler_instance != nullptr) {
+    clang::QualType injected_qt = getInjectedClassNameSpecializationType(
+        injected_class_name_type, p_compiler_instance->getASTContext());
+    if (!injected_qt.isNull() &&
+        injected_qt.getTypePtrOrNull() != injected_class_name_type) {
+      node_desc.successors.push_back(std::pair<std::string, std::string>(
+          "injected_specialization_type", Traverse(injected_qt.getTypePtr())));
+    }
+  }
 
   node_desc.successors.push_back(std::pair<std::string, std::string>(
       "declaration", Traverse(injected_class_name_type->getDecl())));
@@ -1180,39 +1195,6 @@ bool ClangToDotTranslator::VisitDependentNameType(
       "identifier", identifier->getName().data()));
 
   return VisitTypeWithKeyword(dependent_name_type, node_desc) && res;
-}
-
-bool ClangToDotTranslator::VisitDependentTemplateSpecializationType(
-    clang::DependentTemplateSpecializationType
-        *ependent_template_specialization_type,
-    NodeDescriptor &node_desc) {
-#if DEBUG_VISIT_TYPE
-  std::cerr << "ClangToDotTranslator::DependentTemplateSpecializationType"
-            << std::endl;
-#endif
-  bool res = true;
-
-  node_desc.kind_hierarchy.push_back("DependentTemplateSpecializationType");
-
-  ROSE_ASSERT(FAIL_FIXME == 0); // FIXME
-
-  return VisitTypeWithKeyword(ependent_template_specialization_type,
-                              node_desc) &&
-         res;
-}
-
-bool ClangToDotTranslator::VisitElaboratedType(
-    clang::ElaboratedType *elaborated_type, NodeDescriptor &node_desc) {
-#if DEBUG_VISIT_TYPE
-  std::cerr << "ClangToDotTranslator::VisitElaboratedType" << std::endl;
-#endif
-
-  node_desc.kind_hierarchy.push_back("ElaboratedType");
-
-  node_desc.successors.push_back(std::pair<std::string, std::string>(
-      "named_type", Traverse(elaborated_type->getNamedType().getTypePtr())));
-
-  return VisitTypeWithKeyword(elaborated_type, node_desc);
 }
 
 bool ClangToDotTranslator::VisitUnaryTransformType(

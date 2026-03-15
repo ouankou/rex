@@ -5,6 +5,31 @@
 
 #include "rose_config.h"
 
+#include <cstdio>
+
+namespace {
+
+SgDeclarationStatement *templateDeclarationStatement(SgNode *node) {
+  SgDeclarationStatement *declaration = isSgDeclarationStatement(node);
+  if (declaration == NULL) {
+    return NULL;
+  }
+
+  switch (declaration->variantT()) {
+  case V_SgTemplateClassDeclaration:
+  case V_SgTemplateFunctionDeclaration:
+  case V_SgTemplateMemberFunctionDeclaration:
+  case V_SgTemplateTypedefDeclaration:
+  case V_SgTemplateVariableDeclaration:
+  case V_SgTemplateDeclaration:
+    return declaration;
+  default:
+    return NULL;
+  }
+}
+
+} // namespace
+
 void markAsCompilerGenerated(SgNode *node) {
   // This simplifies how the traversal is called!
   MarkAsCompilerGenerated astFixupTraversal;
@@ -83,21 +108,14 @@ void MarkAsCompilerGenerated::visit(SgNode *node) {
     // \n",node->class_name().c_str());
 
     bool couldBeCompilerGenerated = true;
-    SgTemplateDeclaration *templateDeclaration = isSgTemplateDeclaration(node);
+    SgDeclarationStatement *templateDeclaration =
+        templateDeclarationStatement(node);
     if (templateDeclaration != NULL) {
       // DQ (8/12/2005): There are non-trivial cases where a template
       // declaration can be compiler generated (e.g. when it is a nested class)
       couldBeCompilerGenerated = MarkAsCompilerGenerated::
           templateDeclarationCanBeMarkedAsCompilerGenerated(
               templateDeclaration);
-      if (couldBeCompilerGenerated == false) {
-        printf("Warning: detected attempt to mark a template declaration in "
-               "global or namespace scope as compiler generated! (will not be "
-               "marked)\n");
-        templateDeclaration->get_file_info()->display(
-            "template declaration nearly marked as compiler generated "
-            "(prevented)");
-      }
     }
 
     // DQ (8/17/2005): Mark any compiler generated member function

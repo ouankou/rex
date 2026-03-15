@@ -1630,11 +1630,9 @@ void IncludedFilesUnparser::visit(SgNode *node) {
 
         // DQ (10/17/2019): We are getting a few too many files detected as
         // containing transformations, so debugging this.
-        if (normalizedFileName ==
-            "/data1/ROSE_CompileTree/"
-            "git_LINUX-64bit-6.1.0-CLANG20-LIB_1_60-rose_"
-            "development-rc_install/include/clang/g++_HEADERS/"
-            "hdrs5/bits/stl_bvector.h") {
+        if (normalizedFileName.find("/include/clang/g++_HEADERS/"
+                                    "hdrs5/bits/stl_bvector.h") !=
+            std::string::npos) {
           printf("ERROR: node = %s normalizedFileName = %s \n",
                  node->class_name().c_str(), normalizedFileName.c_str());
 

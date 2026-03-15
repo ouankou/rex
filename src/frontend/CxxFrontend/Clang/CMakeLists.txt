@@ -49,7 +49,7 @@ target_include_directories(libroseClangFrontend PRIVATE
 # when multiple LLVM versions are installed.
 # Get LLVM include path from llvm-config if LLVM_INCLUDE_DIRS is not set
 if(NOT LLVM_INCLUDE_DIRS)
-  find_program(CLANG_LLVM_CONFIG NAMES llvm-config-21 llvm-config)
+  find_program(CLANG_LLVM_CONFIG NAMES llvm-config-22 llvm-config)
   if(CLANG_LLVM_CONFIG)
     execute_process(COMMAND ${CLANG_LLVM_CONFIG} --includedir
       OUTPUT_VARIABLE LLVM_INCLUDE_DIRS

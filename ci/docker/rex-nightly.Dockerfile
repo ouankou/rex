@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=ghcr.io/ouankou/rex:base
-ARG LLVM_VERSION=21
+ARG LLVM_VERSION=22
 
 FROM ${BASE_IMAGE} AS rex-base
 

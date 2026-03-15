@@ -71,6 +71,7 @@ set(noinst_programs
   rex_test2026_stl_vector
   rex_test2026_stl_tuple
   rex_test2026_stl_type_traits
+  rex_test2026_type_trait_constant_expr
   rex_test2026_stl_variant
   rex_test2026_stl_regex
 )
@@ -231,6 +232,11 @@ add_test(
 add_test(
   NAME astInterface_rex_test2026_stl_type_traits
   COMMAND rex_test2026_stl_type_traits ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_stl_type_traits.C
+)
+
+add_test(
+  NAME astInterface_rex_test2026_type_trait_constant_expr
+  COMMAND rex_test2026_type_trait_constant_expr ${TEST_CXXFLAGS} -std=c++20 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputrex_test2026_type_trait_constant_expr.C
 )
 
 add_test(

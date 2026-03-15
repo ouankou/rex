@@ -13,6 +13,7 @@
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
 // list of include files.
 #include "rose_config.h"
+
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 

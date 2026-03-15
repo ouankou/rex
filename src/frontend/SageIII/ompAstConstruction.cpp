@@ -6459,16 +6459,19 @@ SgStatement *convertOmpDeclareVariantDirective(
   SgOmpDeclareVariantStatement *result = new SgOmpDeclareVariantStatement();
   result->set_firstNondefiningDeclaration(result);
 
-  if (auto *declare_variant_directive =
-          dynamic_cast<OpenMPDeclareVariantDirective *>(
-              current_OpenMPIR_to_SageIII.second)) {
-    SgExpression *variant_function_ref = parseDeclareVariantExpression(
-        current_OpenMPIR_to_SageIII.first,
-        declare_variant_directive->getVariantFuncID());
-    result->set_variant_function_ref(variant_function_ref);
-    if (variant_function_ref != nullptr) {
-      variant_function_ref->set_parent(result);
-    }
+  ROSE_ASSERT(current_OpenMPIR_to_SageIII.second != nullptr);
+  ROSE_ASSERT(current_OpenMPIR_to_SageIII.second->getKind() ==
+              OMPD_declare_variant);
+
+  auto *declare_variant_directive =
+      static_cast<OpenMPDeclareVariantDirective *>(
+          current_OpenMPIR_to_SageIII.second);
+  SgExpression *variant_function_ref = parseDeclareVariantExpression(
+      current_OpenMPIR_to_SageIII.first,
+      declare_variant_directive->getVariantFuncID());
+  result->set_variant_function_ref(variant_function_ref);
+  if (variant_function_ref != nullptr) {
+    variant_function_ref->set_parent(result);
   }
 
   std::vector<OpenMPClause *> *all_clauses =

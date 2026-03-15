@@ -450,7 +450,7 @@
 }
 
 {
-   rex_upstream_clang21_function_proto_uninit_cond_c1
+   rex_upstream_clang22_function_proto_uninit_cond_c1
    Memcheck:Cond
    fun:_ZN5clang17FunctionProtoTypeC1ENS_8QualTypeEN4llvm8ArrayRefIS1_EES1_RKNS0_12ExtProtoInfoE
    fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
@@ -458,7 +458,7 @@
 }
 
 {
-   rex_upstream_clang21_function_proto_uninit_cond_c2
+   rex_upstream_clang22_function_proto_uninit_cond_c2
    Memcheck:Cond
    fun:_ZN5clang17FunctionProtoTypeC2ENS_8QualTypeEN4llvm8ArrayRefIS1_EES1_RKNS0_12ExtProtoInfoE
    fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
@@ -476,7 +476,7 @@
 }
 
 {
-   rex_upstream_llvm21_timergroup_managed_static_reachable_new
+   rex_upstream_llvm22_timergroup_managed_static_reachable_new
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:_Znwm*
@@ -488,7 +488,7 @@
 }
 
 {
-   rex_upstream_llvm21_timergroup_managed_static_reachable_calloc
+   rex_upstream_llvm22_timergroup_managed_static_reachable_calloc
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:calloc
@@ -502,7 +502,7 @@
 }
 
 {
-   rex_upstream_clang21_make_deduction_failure_info_leak
+   rex_upstream_clang22_make_deduction_failure_info_leak
    Memcheck:Leak
    match-leak-kinds: definite
    fun:malloc

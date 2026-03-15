@@ -184,7 +184,7 @@ public:
   void Build(Fortran::parser::DimensionStmt &);
   void Build(Fortran::parser::NamelistStmt &);
   void Build(Fortran::parser::CompilerDirective &);
-  void Build(Fortran::parser::OmpBeginBlockDirective &);
+  void Build(Fortran::parser::OmpBeginDirective &);
   void Build(Fortran::parser::OmpBeginLoopDirective &);
 
   void Build(Fortran::parser::IntegerTypeSpec &);

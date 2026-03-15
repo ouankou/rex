@@ -205,6 +205,63 @@ templateParametersForSageDeclarationShared(const SgDeclarationStatement *decl) {
   return nullptr;
 }
 
+inline SgDeclarationStatement *
+typedefDeclarationReferenceShared(SgTypedefDeclaration *typedef_decl) {
+  if (typedef_decl == nullptr) {
+    return nullptr;
+  }
+
+  SgType *resolved = typedef_decl->get_base_type();
+  while (resolved != nullptr) {
+    if (SgModifierType *modifier = isSgModifierType(resolved)) {
+      resolved = modifier->get_base_type();
+      continue;
+    }
+    if (SgTypedefType *typedef_type = isSgTypedefType(resolved)) {
+      resolved = typedef_type->get_base_type();
+      continue;
+    }
+    break;
+  }
+
+  if (SgClassType *class_type = isSgClassType(resolved)) {
+    if (SgClassDeclaration *class_decl =
+            isSgClassDeclaration(class_type->get_declaration())) {
+      if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
+              class_decl->get_firstNondefiningDeclaration())) {
+        return first_nondef;
+      }
+      return class_decl;
+    }
+    return nullptr;
+  }
+
+  if (SgEnumType *enum_type = isSgEnumType(resolved)) {
+    if (SgEnumDeclaration *enum_decl =
+            isSgEnumDeclaration(enum_type->get_declaration())) {
+      if (SgEnumDeclaration *first_nondef = isSgEnumDeclaration(
+              enum_decl->get_firstNondefiningDeclaration())) {
+        return first_nondef;
+      }
+      return enum_decl;
+    }
+  }
+
+  return nullptr;
+}
+
+inline void
+repairTypedefDeclarationReferenceShared(SgTypedefDeclaration *typedef_decl) {
+  if (typedef_decl == nullptr || typedef_decl->get_declaration() != nullptr) {
+    return;
+  }
+
+  if (SgDeclarationStatement *decl_ref =
+          typedefDeclarationReferenceShared(typedef_decl)) {
+    typedef_decl->set_declaration(decl_ref);
+  }
+}
+
 template <typename NameNormalizer>
 inline std::string
 templateParameterNameFromSageShared(const SgTemplateParameter *param,
@@ -988,6 +1045,15 @@ protected:
   std::set<clang::FunctionDecl *>
       p_pending_implicit_function_instantiations_set;
 
+  // Deferred translation queue for implicit class template specializations.
+  // Translating these while the primary template is still being constructed
+  // can expose synthetic first-nondefining declarations before the real
+  // defining declaration is available in source order.
+  std::vector<clang::ClassTemplateSpecializationDecl *>
+      p_pending_implicit_class_template_specializations;
+  std::set<clang::ClassTemplateSpecializationDecl *>
+      p_pending_implicit_class_template_specializations_set;
+
   clang::CompilerInstance *p_compiler_instance;
   SagePreprocessorRecord *p_sage_preprocessor_recorder;
   SgSourceFile *p_sage_source_file; // Parent file for connecting global scope
@@ -1023,6 +1089,8 @@ protected:
   void ensureDeclInScopeChildListPreserveScope(
       SgDeclarationStatement *decl, SgScopeStatement *scope,
       const char *context = "ClangToSageTranslator");
+  SgNode *lookupCachedTranslationForTraverse(clang::Decl *decl,
+                                             bool *needs_translation);
   void reconcileOnDemandTranslation(SgNode *node);
   void queueSpecializedTemplateLink(SgDeclarationStatement *decl,
                                     clang::Decl *specialized_decl);
@@ -1036,6 +1104,8 @@ protected:
   // Find a safe insertion scope for opaque types using current scope
   // stack and falling back to global scope.
   SgScopeStatement *getSafeOpaqueTypeInsertionScope() const;
+  bool scopeReachableFromCurrentFile(SgScopeStatement *scope);
+  SgScopeStatement *resolveReachableNamespaceScope(clang::DeclContext *context);
 
   SgType *buildTypeFromQualifiedType(const clang::QualType &qual_type);
   SgType *buildTypeFromTypeLoc(const clang::TypeLoc &type_loc);
@@ -1058,8 +1128,9 @@ protected:
       SgScopeStatement *scope_override = nullptr);
 
   // Helper: Build a nonreal scope chain for a nested name qualifier.
-  SgScopeStatement *buildNonrealScopeFromNestedNameSpecifier(
-      clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope);
+  SgScopeStatement *
+  buildNonrealScopeFromNestedNameSpecifier(clang::NestedNameSpecifier qualifier,
+                                           SgScopeStatement *scope);
 
   // Helper: Get or create template instantiation
   SgTemplateInstantiationDecl *getOrCreateTemplateInstantiation(
@@ -1158,12 +1229,12 @@ protected:
   // Helper: Build a non-real qualified type from a Clang nested-name
   // specifier plus a terminal name (optionally with template arguments).
   SgNonrealType *buildNonrealTypeFromNestedNameSpecifier(
-      clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+      clang::NestedNameSpecifier qualifier, SgScopeStatement *scope,
       const SgName &terminalName,
       const SgTemplateArgumentPtrList *terminalTemplateArgs);
 
   SgNonrealRefExp *buildNonrealRefExpFromNestedNameSpecifier(
-      clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+      clang::NestedNameSpecifier qualifier, SgScopeStatement *scope,
       const SgName &terminalName, bool terminalHasTemplateKeyword,
       const SgTemplateArgumentPtrList *terminalTemplateArgs);
 
@@ -1968,12 +2039,6 @@ public:
   virtual bool
   VisitDependentNameType(clang::DependentNameType *dependent_name_type,
                          SgNode **node);
-  virtual bool VisitDependentTemplateSpecializationType(
-      clang::DependentTemplateSpecializationType
-          *dependent_template_specialization_type,
-      SgNode **node);
-  virtual bool VisitElaboratedType(clang::ElaboratedType *elaborated_type,
-                                   SgNode **node);
   virtual bool
   VisitUnaryTransformType(clang::UnaryTransformType *unary_transform_type,
                           SgNode **node);

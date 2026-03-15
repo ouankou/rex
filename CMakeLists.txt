@@ -56,7 +56,7 @@ endif()
 
 # Helper function to detect and set compiler with preference order:
 # 1. Use environment variable if set
-# 2. Try preferred version (e.g., clang-21)
+# 2. Try preferred version (e.g., clang-22)
 # 3. Try fallback versions (e.g., clang, flang)
 # 4. Let CMake use system default
 function(detect_compiler LANG CMAKE_VAR ENV_VAR LANG_NAME PREFERRED_NAMES FALLBACK_NAMES)
@@ -87,8 +87,8 @@ function(detect_compiler LANG CMAKE_VAR ENV_VAR LANG_NAME PREFERRED_NAMES FALLBA
 endfunction()
 
 # Detect C and C++ compilers
-detect_compiler(C CMAKE_C_COMPILER CC "C" "clang-21" "clang")
-detect_compiler(CXX CMAKE_CXX_COMPILER CXX "C++" "clang++-21" "clang++")
+detect_compiler(C CMAKE_C_COMPILER CC "C" "clang-22" "clang")
+detect_compiler(CXX CMAKE_CXX_COMPILER CXX "C++" "clang++-22" "clang++")
 
 set(_C_COMPILER_DISPLAY "${CMAKE_C_COMPILER}")
 if(NOT _C_COMPILER_DISPLAY)
@@ -399,8 +399,8 @@ endif()
 # Fortran (disabled by default to avoid requiring a Fortran toolchain for basic builds)
 option(ENABLE-FORTRAN "Enable Fortran analysis." OFF)
 
-# Flang frontend (LLVM 21)
-option(ENABLE-FORTRAN-FLANG "Enable Flang frontend support (LLVM 21)." ON)
+# Flang frontend (LLVM 22)
+option(ENABLE-FORTRAN-FLANG "Enable Flang frontend support (LLVM 22)." ON)
 set(FLANG_ROOT "" CACHE PATH "Path to Flang installation (lib/, include/).")
 
 # Legacy tests still reference enable-fortran (lowercase).
@@ -436,7 +436,7 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     list(APPEND FLANG_INCLUDE_DIRS ${LLVM_INCLUDE_DIRS})
   endif()
   if(NOT FLANG_INCLUDE_DIRS)
-    find_program(ROSE_LLVM_CONFIG_EXECUTABLE NAMES llvm-config-21 llvm-config)
+    find_program(ROSE_LLVM_CONFIG_EXECUTABLE NAMES llvm-config-22 llvm-config)
     if(ROSE_LLVM_CONFIG_EXECUTABLE)
       execute_process(
         COMMAND ${ROSE_LLVM_CONFIG_EXECUTABLE} --includedir
@@ -460,8 +460,8 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     endif()
   endif()
 
-  if(DEFINED LLVM_VERSION_MAJOR AND LLVM_VERSION_MAJOR LESS 21)
-    message(FATAL_ERROR "REX requires LLVM 21 or newer. Found LLVM ${LLVM_VERSION_MAJOR}.")
+  if(DEFINED LLVM_VERSION_MAJOR AND LLVM_VERSION_MAJOR LESS 22)
+    message(FATAL_ERROR "REX requires LLVM 22 or newer. Found LLVM ${LLVM_VERSION_MAJOR}.")
   endif()
 
   set(_flang_lib_names FortranParser FortranSemantics
@@ -546,7 +546,7 @@ endif()
 # Fortran
 if(ENABLE-FORTRAN)
   # Detect Fortran compiler using the same helper function
-  detect_compiler(Fortran CMAKE_Fortran_COMPILER FC "Fortran" "flang" "")
+  detect_compiler(Fortran CMAKE_Fortran_COMPILER FC "Fortran" "flang-22" "flang")
   set(ROSE_BUILD_FORTRAN_LANGUAGE_SUPPORT 1)
   enable_language(Fortran)
   set(BACKEND_FORTRAN_COMPILER "${CMAKE_Fortran_COMPILER}")
@@ -601,8 +601,8 @@ if(NOT CLANG_VERSION_MAJOR)
   set(CLANG_VERSION_MAJOR 0)
 endif()
 
-if(CLANG_VERSION_MAJOR LESS 21)
-  message(FATAL_ERROR "REX requires LLVM/Clang 21 or newer. Found Clang ${CLANG_VERSION_MAJOR}.")
+if(CLANG_VERSION_MAJOR LESS 22)
+  message(FATAL_ERROR "REX requires LLVM/Clang 22 or newer. Found Clang ${CLANG_VERSION_MAJOR}.")
 endif()
 
 # LLVM/Clang headers are added to the specific targets that need them.
@@ -1048,7 +1048,7 @@ set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")
 if(_rose_memcheck_valgrind)
   set(ROSE_CTEST_MEMCHECK_COMMAND "${_rose_memcheck_valgrind}")
   set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "${CMAKE_SOURCE_DIR}/scripts/rex-suppressions-for-valgrind")
-  set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=all --error-exitcode=1 --max-stackframe=2047456 --num-callers=32 --trace-children=yes --trace-children-skip=/usr/bin/clang++-21,/usr/bin/clang-21,/usr/lib/llvm-21/bin/clang++-21,/usr/lib/llvm-21/bin/clang-21,/usr/lib/llvm-21/bin/flang,clang++-21,clang-21,flang,clang++,clang,g++,gcc,c++,cc,/usr/bin/grep,/bin/grep,grep,/usr/bin/cmp,/bin/cmp,cmp,/usr/bin/mktemp,/bin/mktemp,mktemp,/usr/bin/dash,/bin/dash,dash,/usr/bin/bash,/bin/bash,bash,egrep,fgrep,diff,sed,awk,tr,cut,sort,uniq,head,tail,cmake,ctest,make,ninja,sh,perl,python,python3,tar,gzip,bzip2,xz,zip,unzip,cp,mv,rm,install --trace-children-skip-by-arg=*gtest_internal_run_death_test*")
+  set(ROSE_CTEST_MEMCHECK_OPTIONS "--leak-check=full --show-leak-kinds=all --error-exitcode=1 --max-stackframe=2047456 --num-callers=32 --trace-children=yes --trace-children-skip=/usr/bin/clang++-22,/usr/bin/clang-22,/usr/bin/flang-22,/usr/lib/llvm-22/bin/clang++-22,/usr/lib/llvm-22/bin/clang-22,/usr/lib/llvm-22/bin/flang-22,/usr/lib/llvm-22/bin/flang,clang++-22,clang-22,flang-22,flang,clang++,clang,g++,gcc,c++,cc,/usr/bin/grep,/bin/grep,grep,/usr/bin/cmp,/bin/cmp,cmp,/usr/bin/mktemp,/bin/mktemp,mktemp,/usr/bin/dash,/bin/dash,dash,/usr/bin/bash,/bin/bash,bash,egrep,fgrep,diff,sed,awk,tr,cut,sort,uniq,head,tail,cmake,ctest,make,ninja,sh,perl,python,python3,tar,gzip,bzip2,xz,zip,unzip,cp,mv,rm,install --trace-children-skip-by-arg=*gtest_internal_run_death_test*")
   if(NOT EXISTS "${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
     message(WARNING "Valgrind suppressions file not found: ${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}")
     set(ROSE_CTEST_MEMCHECK_SUPPRESSIONS "")

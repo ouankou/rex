@@ -31,21 +31,20 @@ std::string buildOverloadedOperatorName(clang::OverloadedOperatorKind op) {
   return result;
 }
 
-bool nestedNameSpecifierHasGlobal(const clang::NestedNameSpecifier *qualifier) {
-  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
-       nns = nns->getPrefix()) {
-    if (nns->getKind() == clang::NestedNameSpecifier::Global) {
+bool nestedNameSpecifierHasGlobal(clang::NestedNameSpecifier qualifier) {
+  for (clang::NestedNameSpecifier nns = qualifier; nns;
+       nns = nestedNameSpecifierPrefix(nns)) {
+    if (nns.getKind() == clang::NestedNameSpecifier::Kind::Global) {
       return true;
     }
   }
   return false;
 }
 
-bool nestedNameSpecifierHasTypeQualifier(
-    const clang::NestedNameSpecifier *qualifier) {
-  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
-       nns = nns->getPrefix()) {
-    if (nns->getKind() == clang::NestedNameSpecifier::TypeSpec) {
+bool nestedNameSpecifierHasTypeQualifier(clang::NestedNameSpecifier qualifier) {
+  for (clang::NestedNameSpecifier nns = qualifier; nns;
+       nns = nestedNameSpecifierPrefix(nns)) {
+    if (nns.getKind() == clang::NestedNameSpecifier::Kind::Type) {
       return true;
     }
   }
@@ -53,13 +52,12 @@ bool nestedNameSpecifierHasTypeQualifier(
 }
 
 bool nestedNameSpecifierHasNamespaceQualifier(
-    const clang::NestedNameSpecifier *qualifier) {
-  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
-       nns = nns->getPrefix()) {
-    switch (nns->getKind()) {
-    case clang::NestedNameSpecifier::Namespace:
-    case clang::NestedNameSpecifier::NamespaceAlias:
-    case clang::NestedNameSpecifier::Global:
+    clang::NestedNameSpecifier qualifier) {
+  for (clang::NestedNameSpecifier nns = qualifier; nns;
+       nns = nestedNameSpecifierPrefix(nns)) {
+    switch (nns.getKind()) {
+    case clang::NestedNameSpecifier::Kind::Namespace:
+    case clang::NestedNameSpecifier::Kind::Global:
       return true;
     default:
       break;
@@ -175,6 +173,38 @@ collectNamespaceContexts(clang::DeclContext *context) {
   }
   std::reverse(namespaces.begin(), namespaces.end());
   return namespaces;
+}
+
+bool declContextCanUseReachableNamespaceScope(clang::DeclContext *context) {
+  for (clang::DeclContext *ctx = context; ctx != nullptr;
+       ctx = ctx->getParent()) {
+    if (ctx->isTranslationUnit() || ctx->isNamespace()) {
+      continue;
+    }
+    if (llvm::isa<clang::LinkageSpecDecl>(ctx)) {
+      continue;
+    }
+    return false;
+  }
+  return context != nullptr;
+}
+
+void suppressFrontendOnlyNode(SgLocatedNode *node) {
+  if (node == nullptr) {
+    return;
+  }
+
+  auto mark = [](Sg_File_Info *fi) {
+    if (fi == nullptr) {
+      return;
+    }
+    fi->setFrontendSpecific();
+    fi->unsetOutputInCodeGeneration();
+  };
+
+  mark(node->get_file_info());
+  mark(node->get_startOfConstruct());
+  mark(node->get_endOfConstruct());
 }
 
 std::vector<std::string>
@@ -398,49 +428,68 @@ bool shouldPreserveDependentDecltypeExpression(
   return param_type->isDependentType();
 }
 
-clang::NestedNameSpecifier *
+clang::NestedNameSpecifier
 buildNamespaceQualifierForDeclContext(clang::DeclContext *context,
                                       clang::ASTContext &ast_context) {
   if (context == nullptr) {
-    return nullptr;
+    return std::nullopt;
   }
   std::vector<const clang::NamespaceDecl *> namespaces =
       collectNamespaceContexts(context);
   if (namespaces.empty()) {
-    return nullptr;
+    return std::nullopt;
   }
 
-  clang::NestedNameSpecifier *qualifier = nullptr;
+  clang::NestedNameSpecifier qualifier = std::nullopt;
   for (const clang::NamespaceDecl *ns : namespaces) {
     if (ns == nullptr || ns->isAnonymousNamespace()) {
       continue;
     }
-    qualifier = clang::NestedNameSpecifier::Create(ast_context, qualifier, ns);
+    qualifier = clang::NestedNameSpecifier(ast_context, ns, qualifier);
   }
   return qualifier;
 }
 
+clang::QualType getInjectedClassNameSpecializationType(
+    const clang::InjectedClassNameType *injected_class_name_type,
+    const clang::ASTContext &ast_context) {
+  if (injected_class_name_type == nullptr) {
+    return {};
+  }
+
+  if (const auto *partial =
+          llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
+              injected_class_name_type->getDecl())) {
+    return partial->getCanonicalInjectedSpecializationType(ast_context);
+  }
+
+  if (const clang::ClassTemplateDecl *class_template =
+          injected_class_name_type->getDecl()->getDescribedClassTemplate()) {
+    return class_template->getCanonicalInjectedSpecializationType(ast_context);
+  }
+
+  return {};
+}
+
 bool collectQualifierNamespaces(
-    const clang::NestedNameSpecifier *qualifier,
+    clang::NestedNameSpecifier qualifier,
     std::vector<const clang::NamespaceDecl *> *namespaces) {
   if (namespaces == nullptr) {
     return false;
   }
   namespaces->clear();
-  for (const clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
-       nns = nns->getPrefix()) {
-    switch (nns->getKind()) {
-    case clang::NestedNameSpecifier::Namespace: {
-      const clang::NamespaceDecl *ns = nns->getAsNamespace();
+  for (clang::NestedNameSpecifier nns = qualifier; nns;
+       nns = nestedNameSpecifierPrefix(nns)) {
+    switch (nns.getKind()) {
+    case clang::NestedNameSpecifier::Kind::Namespace: {
+      const clang::NamespaceDecl *ns = nestedNameSpecifierNamespace(nns);
       if (ns == nullptr || ns->isAnonymousNamespace()) {
         return false;
       }
       namespaces->push_back(ns);
       break;
     }
-    case clang::NestedNameSpecifier::NamespaceAlias:
-      return false;
-    case clang::NestedNameSpecifier::Super:
+    case clang::NestedNameSpecifier::Kind::MicrosoftSuper:
       return false;
     default:
       break;
@@ -465,70 +514,57 @@ bool namespaceChainIsSuffix(
   return true;
 }
 
-clang::NestedNameSpecifier *
-cloneQualifierWithPrefix(clang::NestedNameSpecifier *prefix,
-                         clang::NestedNameSpecifier *suffix,
+clang::NestedNameSpecifier
+cloneQualifierWithPrefix(clang::NestedNameSpecifier prefix,
+                         clang::NestedNameSpecifier suffix,
                          clang::ASTContext &context) {
-  if (suffix == nullptr) {
+  if (!suffix) {
     return prefix;
   }
-  std::vector<const clang::NestedNameSpecifier *> segments;
-  for (const clang::NestedNameSpecifier *nns = suffix; nns != nullptr;
-       nns = nns->getPrefix()) {
+  std::vector<clang::NestedNameSpecifier> segments;
+  for (clang::NestedNameSpecifier nns = suffix; nns;
+       nns = nestedNameSpecifierPrefix(nns)) {
     segments.push_back(nns);
   }
   std::reverse(segments.begin(), segments.end());
 
-  clang::NestedNameSpecifier *result = prefix;
-  for (const clang::NestedNameSpecifier *segment : segments) {
-    switch (segment->getKind()) {
-    case clang::NestedNameSpecifier::Identifier: {
-      const clang::IdentifierInfo *id = segment->getAsIdentifier();
-      if (id == nullptr) {
-        break;
-      }
-      result = clang::NestedNameSpecifier::Create(context, result, id);
-      break;
-    }
-    case clang::NestedNameSpecifier::Namespace: {
-      const clang::NamespaceDecl *ns = segment->getAsNamespace();
+  clang::NestedNameSpecifier result = prefix;
+  for (clang::NestedNameSpecifier segment : segments) {
+    switch (segment.getKind()) {
+    case clang::NestedNameSpecifier::Kind::Namespace: {
+      const clang::NamespaceBaseDecl *ns =
+          nestedNameSpecifierNamespaceBase(segment);
       if (ns == nullptr) {
         break;
       }
-      result = clang::NestedNameSpecifier::Create(context, result, ns);
+      result = clang::NestedNameSpecifier(context, ns, result);
       break;
     }
-    case clang::NestedNameSpecifier::NamespaceAlias: {
-      const clang::NamespaceAliasDecl *ns = segment->getAsNamespaceAlias();
-      if (ns == nullptr) {
-        break;
-      }
-      result = clang::NestedNameSpecifier::Create(context, result, ns);
-      break;
-    }
-    case clang::NestedNameSpecifier::TypeSpec: {
-      const clang::Type *type = segment->getAsType();
+    case clang::NestedNameSpecifier::Kind::Type: {
+      const clang::Type *type = segment.getAsType();
       if (type == nullptr) {
         break;
       }
-      result = clang::NestedNameSpecifier::Create(context, result, type);
+      result = clang::NestedNameSpecifier(type);
       break;
     }
-    case clang::NestedNameSpecifier::Global:
-      result = clang::NestedNameSpecifier::GlobalSpecifier(context);
+    case clang::NestedNameSpecifier::Kind::Global:
+      result = clang::NestedNameSpecifier::getGlobal();
       break;
-    case clang::NestedNameSpecifier::Super:
+    case clang::NestedNameSpecifier::Kind::MicrosoftSuper:
       return suffix;
+    case clang::NestedNameSpecifier::Kind::Null:
+      break;
     }
   }
   return result;
 }
 
-clang::NestedNameSpecifier *
-prependNamespaceQualifiers(clang::NestedNameSpecifier *qualifier,
+clang::NestedNameSpecifier
+prependNamespaceQualifiers(clang::NestedNameSpecifier qualifier,
                            clang::DeclContext *decl_context,
                            clang::ASTContext &context) {
-  if (qualifier == nullptr || decl_context == nullptr) {
+  if (!qualifier || decl_context == nullptr) {
     return qualifier;
   }
   if (nestedNameSpecifierHasGlobal(qualifier)) {
@@ -556,49 +592,54 @@ prependNamespaceQualifiers(clang::NestedNameSpecifier *qualifier,
     return qualifier;
   }
 
-  clang::NestedNameSpecifier *prefix = nullptr;
+  clang::NestedNameSpecifier prefix = std::nullopt;
   for (size_t i = 0; i < missing_count; ++i) {
     const clang::NamespaceDecl *ns = decl_namespaces[i];
     if (ns == nullptr || ns->isAnonymousNamespace()) {
       continue;
     }
-    prefix = clang::NestedNameSpecifier::Create(context, prefix, ns);
+    prefix = clang::NestedNameSpecifier(context, ns, prefix);
   }
-  if (prefix == nullptr) {
+  if (!prefix) {
     return qualifier;
   }
   return cloneQualifierWithPrefix(prefix, qualifier, context);
 }
 
 struct DependentTemplateSpecializationNameInfo {
-  clang::NestedNameSpecifier *qualifier = nullptr;
+  clang::NestedNameSpecifier qualifier = std::nullopt;
   std::string base_name;
-  bool has_template_keyword = true;
+  bool has_template_keyword = false;
 };
 
+// Forward declaration to keep helper ordering simple.
+std::string getTemplateNameBase(const clang::TemplateName &tname);
+
 DependentTemplateSpecializationNameInfo getDependentTemplateSpecializationName(
-    const clang::DependentTemplateSpecializationType *dts) {
+    const clang::TemplateName &template_name) {
   DependentTemplateSpecializationNameInfo info;
-  ROSE_ASSERT(dts != nullptr);
-
-  const clang::DependentTemplateStorage &name = dts->getDependentTemplateName();
-  info.qualifier = name.getQualifier();
-  info.has_template_keyword = name.hasTemplateKeyword();
-
-  clang::IdentifierOrOverloadedOperator base = name.getName();
-  if (const clang::IdentifierInfo *id = base.getIdentifier()) {
-    info.base_name = id->getName().str();
+  if (const clang::QualifiedTemplateName *qualified =
+          template_name.getAsQualifiedTemplateName()) {
+    info.qualifier = qualified->getQualifier();
+    info.base_name = getTemplateNameBase(qualified->getUnderlyingTemplate());
+    info.has_template_keyword = qualified->hasTemplateKeyword();
+  } else if (const clang::DependentTemplateName *dependent =
+                 template_name.getAsDependentTemplateName()) {
+    info.qualifier = dependent->getQualifier();
+    info.has_template_keyword = dependent->hasTemplateKeyword();
+    clang::IdentifierOrOverloadedOperator base = dependent->getName();
+    if (const clang::IdentifierInfo *id = base.getIdentifier()) {
+      info.base_name = id->getName().str();
+    } else {
+      info.base_name = buildOverloadedOperatorName(base.getOperator());
+    }
   } else {
-    info.base_name = buildOverloadedOperatorName(base.getOperator());
+    info.base_name = getTemplateNameBase(template_name);
   }
 
   ROSE_ASSERT(!info.base_name.empty());
   return info;
 }
-
-// Forward declaration to keep helper ordering simple.
-std::string getTemplateNameBase(const clang::TemplateName &tname);
-
 // Generate unique name for template declaration with full namespace
 // qualification
 std::string mangleTemplateName(const clang::TemplateName &tname) {
@@ -610,15 +651,15 @@ std::string mangleTemplateName(const clang::TemplateName &tname) {
   }
 
   auto qualifierToString =
-      [](clang::NestedNameSpecifier *qualifier) -> std::string {
-    if (qualifier == nullptr) {
+      [](clang::NestedNameSpecifier qualifier) -> std::string {
+    if (!qualifier) {
       return "";
     }
     std::string result;
     llvm::raw_string_ostream stream(result);
     clang::LangOptions opts;
     clang::PrintingPolicy policy(opts);
-    qualifier->print(stream, policy);
+    qualifier.print(stream, policy);
     stream.flush();
     return result;
   };
@@ -638,8 +679,8 @@ std::string mangleTemplateName(const clang::TemplateName &tname) {
   if (const clang::QualifiedTemplateName *qtn =
           tname.getAsQualifiedTemplateName()) {
     std::string base = getTemplateNameBase(qtn->getUnderlyingTemplate());
-    clang::NestedNameSpecifier *qualifier = qtn->getQualifier();
-    if (qualifier != nullptr && !base.empty()) {
+    clang::NestedNameSpecifier qualifier = qtn->getQualifier();
+    if (qualifier && !base.empty()) {
       std::string qualifier_str = qualifierToString(qualifier);
       if (!qualifier_str.empty()) {
         return appendQualifier(qualifier_str, base);
@@ -650,8 +691,8 @@ std::string mangleTemplateName(const clang::TemplateName &tname) {
   if (const clang::DependentTemplateName *dtn =
           tname.getAsDependentTemplateName()) {
     std::string base = getTemplateNameBase(tname);
-    clang::NestedNameSpecifier *qualifier = dtn->getQualifier();
-    if (qualifier != nullptr && !base.empty()) {
+    clang::NestedNameSpecifier qualifier = dtn->getQualifier();
+    if (qualifier && !base.empty()) {
       std::string qualifier_str = qualifierToString(qualifier);
       if (!qualifier_str.empty()) {
         return appendQualifier(qualifier_str, base);
@@ -1042,6 +1083,119 @@ ClangToSageTranslator::getSafeOpaqueTypeInsertionScope() const {
   return scope;
 }
 
+bool ClangToSageTranslator::scopeReachableFromCurrentFile(
+    SgScopeStatement *candidate) {
+  if (candidate == nullptr || p_sage_source_file == nullptr) {
+    return false;
+  }
+
+  SgGlobal *file_global = p_sage_source_file->get_globalScope();
+  if (file_global == nullptr) {
+    return false;
+  }
+
+  auto attached_to_parent = [](SgNode *child, SgNode *parent) -> bool {
+    if (child == nullptr || parent == nullptr) {
+      return false;
+    }
+
+    if (SgScopeStatement *parent_scope = isSgScopeStatement(parent)) {
+      if (SgStatement *stmt = isSgStatement(child)) {
+        return parent_scope->statementExistsInScope(stmt);
+      }
+    }
+
+    if (SgNamespaceDeclarationStatement *ns_decl =
+            isSgNamespaceDeclarationStatement(parent)) {
+      return ns_decl->get_definition() == child;
+    }
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(parent)) {
+      return class_decl->get_definition() == child;
+    }
+    if (SgFunctionDeclaration *fn_decl = isSgFunctionDeclaration(parent)) {
+      return fn_decl->get_definition() == child;
+    }
+
+    return true;
+  };
+
+  for (SgNode *cursor = candidate; cursor != nullptr;
+       cursor = cursor->get_parent()) {
+    // A scope is reachable only if its parent chain passes through this
+    // translation unit's actual global scope. Detached sibling globals can
+    // share the same source file parent without belonging to the returned AST.
+    if (cursor == file_global) {
+      return true;
+    }
+
+    SgNode *parent = cursor->get_parent();
+    if (parent == nullptr) {
+      return false;
+    }
+    if (!attached_to_parent(cursor, parent)) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+SgScopeStatement *ClangToSageTranslator::resolveReachableNamespaceScope(
+    clang::DeclContext *decl_context) {
+  if (decl_context == nullptr) {
+    return nullptr;
+  }
+
+  SgScopeStatement *reachable_scope = getGlobalScope();
+  if (reachable_scope == nullptr && p_sage_source_file != nullptr) {
+    reachable_scope = p_sage_source_file->get_globalScope();
+  }
+  if (reachable_scope == nullptr) {
+    return nullptr;
+  }
+
+  std::vector<const clang::NamespaceDecl *> namespaces =
+      collectNamespaceContexts(decl_context);
+  for (const clang::NamespaceDecl *ns_decl : namespaces) {
+    if (ns_decl == nullptr || ns_decl->isAnonymousNamespace()) {
+      continue;
+    }
+
+    SgName ns_name(ns_decl->getNameAsString());
+    SgNamespaceDeclarationStatement *ns_stmt = nullptr;
+    if (SgNamespaceSymbol *ns_symbol =
+            reachable_scope->lookup_namespace_symbol(ns_name)) {
+      ns_stmt = ns_symbol->get_declaration();
+    }
+
+    if (ns_stmt == nullptr || ns_stmt->get_definition() == nullptr ||
+        !scopeReachableFromCurrentFile(ns_stmt->get_definition())) {
+      ns_stmt = SageBuilder::buildNamespaceDeclaration_nfi(ns_name, false,
+                                                           reachable_scope);
+      if (ns_stmt != nullptr) {
+        setCompilerGeneratedFileInfo(ns_stmt);
+        if (SgNamespaceDefinitionStatement *ns_def =
+                ns_stmt->get_definition()) {
+          setCompilerGeneratedFileInfo(ns_def);
+        }
+      }
+    }
+
+    if (ns_stmt == nullptr || ns_stmt->get_definition() == nullptr) {
+      return nullptr;
+    }
+
+    ensureDeclInScopeChildList(ns_stmt, reachable_scope,
+                               "resolveReachableNamespaceScope");
+    suppressFrontendOnlyNode(ns_stmt);
+    suppressFrontendOnlyNode(ns_stmt->get_definition());
+
+    reachable_scope = ns_stmt->get_definition();
+  }
+
+  return reachable_scope;
+}
+
 SgType *ClangToSageTranslator::buildTypeFromQualifiedType(
     const clang::QualType &qual_type) {
   SgNode *tmp_type = Traverse(qual_type.getTypePtr());
@@ -1321,7 +1475,7 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
               auto_loc.getNestedNameSpecifierLoc()) {
         text += getSourceText(nested.getSourceRange());
       }
-      if (clang::ConceptDecl *concept_decl = auto_loc.getNamedConcept()) {
+      if (const clang::NamedDecl *concept_decl = auto_loc.getNamedConcept()) {
         text += concept_decl->getNameAsString();
       }
       if (auto_loc.hasExplicitTemplateArgs() &&
@@ -1401,7 +1555,7 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
   };
 
   auto build_nonreal_template_type =
-      [&](const std::string &base_name, clang::NestedNameSpecifier *qualifier,
+      [&](const std::string &base_name, clang::NestedNameSpecifier qualifier,
           bool has_template_keyword, SgTemplateArgumentPtrList &tpl_args,
           bool preserve_empty_template_argument_list,
           clang::TemplateDecl *template_decl) -> SgType * {
@@ -1417,8 +1571,8 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
     const bool has_template_args =
         preserve_empty_template_argument_list || !tpl_args.empty();
 
-    clang::NestedNameSpecifier *effective_qualifier = qualifier;
-    if (effective_qualifier == nullptr && template_decl != nullptr &&
+    clang::NestedNameSpecifier effective_qualifier = qualifier;
+    if (!effective_qualifier && template_decl != nullptr &&
         p_compiler_instance != nullptr) {
       if (!scopeIsWithinNamespaceChain(scope,
                                        template_decl->getDeclContext())) {
@@ -1429,7 +1583,7 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
     }
 
     SgNonrealType *nrtype = nullptr;
-    if (effective_qualifier != nullptr) {
+    if (effective_qualifier) {
       nrtype = buildNonrealTypeFromNestedNameSpecifier(
           effective_qualifier, scope, SgName(base_name),
           has_template_args ? &tpl_args : nullptr);
@@ -1483,150 +1637,14 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
     return resolved_type;
   };
 
-  if (auto elaborated_loc = type_loc.getAs<clang::ElaboratedTypeLoc>()) {
-    const clang::ElaboratedType *elaborated = elaborated_loc.getTypePtr();
-    clang::NestedNameSpecifier *qualifier =
-        elaborated_loc.getQualifierLoc().getNestedNameSpecifier();
-    if (elaborated != nullptr && qualifier != nullptr &&
-        !elaborated->isDependentType()) {
-      const bool preserve_explicit_scope_qualifier =
-          nestedNameSpecifierHasNamespaceQualifier(qualifier);
-      if (!preserve_explicit_scope_qualifier) {
-        if (SgType *resolved_type =
-                buildTypeFromQualifiedType(elaborated->getNamedType())) {
-          if (isSgTypeUnknown(resolved_type) == nullptr) {
-            return resolved_type;
-          }
-        }
-      }
-
-      std::string terminal_name;
-      SgTemplateArgumentPtrList terminal_args;
-      bool has_terminal_args = false;
-      bool has_explicit_empty_terminal_args = false;
-      clang::DeclContext *terminal_decl_context = nullptr;
-
-      if (auto named_tmpl_loc =
-              elaborated_loc.getNamedTypeLoc()
-                  .getAs<clang::TemplateSpecializationTypeLoc>()) {
-        const clang::TemplateSpecializationType *named_tst =
-            named_tmpl_loc.getTypePtr();
-        if (named_tst != nullptr) {
-          terminal_name = getTemplateNameBase(named_tst->getTemplateName());
-          unsigned arg_count = named_tmpl_loc.getNumArgs();
-          for (unsigned i = 0; i < arg_count; ++i) {
-            appendTemplateArguments(terminal_args, named_tmpl_loc.getArgLoc(i),
-                                    true);
-          }
-          has_terminal_args = !terminal_args.empty();
-          has_explicit_empty_terminal_args =
-              (arg_count == 0 && named_tmpl_loc.getLAngleLoc().isValid());
-        }
-      }
-
-      if (terminal_name.empty()) {
-        if (const clang::TypedefType *td =
-                elaborated->getNamedType()->getAs<clang::TypedefType>()) {
-          terminal_name = td->getDecl()->getNameAsString();
-          terminal_decl_context = td->getDecl()->getDeclContext();
-        } else if (const clang::TagType *tag =
-                       elaborated->getNamedType()->getAs<clang::TagType>()) {
-          terminal_name = tag->getDecl()->getNameAsString();
-          terminal_decl_context = tag->getDecl()->getDeclContext();
-        }
-      }
-
-      if (!terminal_name.empty()) {
-        SgScopeStatement *scope = resolve_scope();
-        clang::NestedNameSpecifier *effective_qualifier = qualifier;
-        if (effective_qualifier != nullptr &&
-            terminal_decl_context != nullptr &&
-            p_compiler_instance != nullptr) {
-          effective_qualifier = prependNamespaceQualifiers(
-              effective_qualifier, terminal_decl_context,
-              p_compiler_instance->getASTContext());
-        }
-        if (SgType *nr = buildNonrealTypeFromNestedNameSpecifier(
-                effective_qualifier, scope, SgName(terminal_name),
-                (has_terminal_args || has_explicit_empty_terminal_args)
-                    ? &terminal_args
-                    : nullptr)) {
-          if (SgNonrealType *nrtype = isSgNonrealType(nr)) {
-            if (SgNonrealDecl *nrdecl =
-                    isSgNonrealDecl(nrtype->get_declaration())) {
-              nrdecl->set_suppress_typename(true);
-            }
-          }
-          return nr;
-        }
-      }
-    }
-
-    if (elaborated != nullptr && elaborated->isDependentType() &&
-        qualifier != nullptr) {
-      clang::TypeLoc named_loc = elaborated_loc.getNamedTypeLoc();
-      if (auto tmpl_loc =
-              named_loc.getAs<clang::TemplateSpecializationTypeLoc>()) {
-        const clang::TemplateSpecializationType *tst = tmpl_loc.getTypePtr();
-        if (tst != nullptr) {
-          clang::TemplateName tname = tst->getTemplateName();
-          std::string base_name = getTemplateNameBase(tname);
-          if (!base_name.empty()) {
-            SgTemplateArgumentPtrList tpl_args;
-            unsigned arg_count = tmpl_loc.getNumArgs();
-            for (unsigned i = 0; i < arg_count; ++i) {
-              appendTemplateArguments(tpl_args, tmpl_loc.getArgLoc(i), true);
-            }
-            if (enable_default_template_args) {
-              append_default_args_from_clang_template_decl(
-                  resolve_template_decl(tname), tpl_args);
-            }
-            bool has_template_keyword = false;
-            if (const clang::QualifiedTemplateName *qtn =
-                    tname.getAsQualifiedTemplateName()) {
-              has_template_keyword = qtn->hasTemplateKeyword();
-            } else if (tname.getAsDependentTemplateName() != nullptr) {
-              has_template_keyword = true;
-            }
-            if (SgType *nr = build_nonreal_template_type(
-                    base_name, qualifier, has_template_keyword, tpl_args,
-                    arg_count == 0 && tmpl_loc.getLAngleLoc().isValid(),
-                    resolve_template_decl(tname))) {
-              return nr;
-            }
-          }
-        }
-      }
-      if (auto dep_loc = named_loc.getAs<clang::DependentNameTypeLoc>()) {
-        const clang::DependentNameType *dnt = dep_loc.getTypePtr();
-        if (dnt != nullptr) {
-          const clang::IdentifierInfo *id = dnt->getIdentifier();
-          if (id != nullptr) {
-            SgScopeStatement *scope = resolve_scope();
-            SgNonrealType *nrtype = buildNonrealTypeFromNestedNameSpecifier(
-                qualifier, scope, SgName(id->getName().str()), nullptr);
-            if (SgNonrealDecl *nrdecl = isSgNonrealDecl(
-                    nrtype ? nrtype->get_declaration() : nullptr)) {
-              nrdecl->set_suppress_typename(false);
-            }
-            if (nrtype != nullptr) {
-              return nrtype;
-            }
-          }
-        }
-      }
-    }
-    return buildTypeFromTypeLoc(elaborated_loc.getNamedTypeLoc());
-  }
-
   if (auto dep_name_loc = type_loc.getAs<clang::DependentNameTypeLoc>()) {
     const clang::DependentNameType *dnt = dep_name_loc.getTypePtr();
     if (dnt != nullptr) {
       const clang::IdentifierInfo *id = dnt->getIdentifier();
       if (id != nullptr) {
         SgScopeStatement *scope = resolve_scope();
-        clang::NestedNameSpecifier *qualifier = dnt->getQualifier();
-        if (qualifier == nullptr) {
+        clang::NestedNameSpecifier qualifier = dnt->getQualifier();
+        if (!qualifier) {
           qualifier = dep_name_loc.getQualifierLoc().getNestedNameSpecifier();
         }
         SgNonrealType *nrtype = buildNonrealTypeFromNestedNameSpecifier(
@@ -1637,28 +1655,6 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
         }
         if (nrtype != nullptr) {
           return nrtype;
-        }
-      }
-    }
-  }
-
-  if (auto dep_spec_loc =
-          type_loc.getAs<clang::DependentTemplateSpecializationTypeLoc>()) {
-    const clang::DependentTemplateSpecializationType *dts =
-        dep_spec_loc.getTypePtr();
-    if (dts != nullptr) {
-      DependentTemplateSpecializationNameInfo name_info =
-          getDependentTemplateSpecializationName(dts);
-      if (!name_info.base_name.empty()) {
-        SgTemplateArgumentPtrList tpl_args;
-        unsigned arg_count = dep_spec_loc.getNumArgs();
-        for (unsigned i = 0; i < arg_count; ++i) {
-          appendTemplateArguments(tpl_args, dep_spec_loc.getArgLoc(i), true);
-        }
-        if (SgType *nr = build_nonreal_template_type(
-                name_info.base_name, name_info.qualifier,
-                name_info.has_template_keyword, tpl_args, false, nullptr)) {
-          return nr;
         }
       }
     }
@@ -1680,7 +1676,7 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
               resolve_template_decl(tname), tpl_args);
         }
 
-        clang::NestedNameSpecifier *qualifier = nullptr;
+        clang::NestedNameSpecifier qualifier = std::nullopt;
         bool has_template_keyword = false;
         if (const clang::QualifiedTemplateName *qtn =
                 tname.getAsQualifiedTemplateName()) {
@@ -1718,7 +1714,7 @@ ClangToSageTranslator::buildTypeFromTypeLoc(const clang::TypeLoc &type_loc) {
     std::string base_name = getTemplateNameBase(tname);
     if (!base_name.empty()) {
       SgTemplateArgumentPtrList tpl_args = buildTemplateArguments(tst);
-      clang::NestedNameSpecifier *qualifier = nullptr;
+      clang::NestedNameSpecifier qualifier = std::nullopt;
       bool has_template_keyword = false;
       if (const clang::QualifiedTemplateName *qtn =
               tname.getAsQualifiedTemplateName()) {
@@ -1902,13 +1898,6 @@ SgNode *ClangToSageTranslator::Traverse(const clang::Type *type) {
     ret_status =
         VisitDependentNameType((clang::DependentNameType *)type, &result);
     break;
-  case clang::Type::DependentTemplateSpecialization:
-    ret_status = VisitDependentTemplateSpecializationType(
-        (clang::DependentTemplateSpecializationType *)type, &result);
-    break;
-  case clang::Type::Elaborated:
-    ret_status = VisitElaboratedType((clang::ElaboratedType *)type, &result);
-    break;
   case clang::Type::UnaryTransform:
     ret_status =
         VisitUnaryTransformType((clang::UnaryTransformType *)type, &result);
@@ -1925,6 +1914,11 @@ SgNode *ClangToSageTranslator::Traverse(const clang::Type *type) {
     break;
   case clang::Type::Using:
     ret_status = VisitUsingType((clang::UsingType *)type, &result);
+    break;
+  case clang::Type::PredefinedSugar:
+    ret_status = true;
+    result = buildTypeFromQualifiedType(
+        ((clang::PredefinedSugarType *)type)->desugar());
     break;
 
   default:
@@ -2162,25 +2156,37 @@ bool ClangToSageTranslator::VisitAttributedType(
   if (type == nullptr) {
     type = SageBuilder::buildUnknownType();
   }
-
-  SgModifierType *modified_type = SageBuilder::buildModifierType(type);
-  SgTypeModifier &sg_modifer = modified_type->get_typeModifier();
+  SgModifierType *modified_type = nullptr;
+  auto ensure_modifier = [&]() -> SgTypeModifier & {
+    if (modified_type == nullptr) {
+      modified_type = SageBuilder::buildModifierType(type);
+    }
+    return modified_type->get_typeModifier();
+  };
 
   switch (attributed_type->getAttrKind()) {
   case clang::attr::NoReturn:
-    sg_modifer.setGnuAttributeNoReturn();
+    ensure_modifier().setGnuAttributeNoReturn();
     break;
   case clang::attr::CDecl:
-    sg_modifer.setGnuAttributeCdecl();
+    ensure_modifier().setGnuAttributeCdecl();
     break;
   case clang::attr::StdCall:
-    sg_modifer.setGnuAttributeStdcall();
+    ensure_modifier().setGnuAttributeStdcall();
     break;
   default:
     break;
   }
 
-  *node = SgModifierType::insertModifierTypeIntoTypeTable(modified_type);
+  if (modified_type != nullptr) {
+    *node = SgModifierType::insertModifierTypeIntoTypeTable(modified_type);
+  } else if (attributed_type->isQualifier()) {
+    *node = type;
+  } else {
+    SgType *equivalent_type =
+        buildTypeFromQualifiedType(attributed_type->getEquivalentType());
+    *node = equivalent_type != nullptr ? equivalent_type : type;
+  }
 
   return VisitType(attributed_type, node);
 }
@@ -2446,9 +2452,9 @@ bool ClangToSageTranslator::VisitAutoType(clang::AutoType *auto_type,
   if (SgAutoType *sg_auto = isSgAutoType(*node)) {
     if (auto_type->isConstrained()) {
       std::string constraint_text;
-      if (clang::ConceptDecl *concept_decl =
+      if (const clang::NamedDecl *constraint_decl =
               auto_type->getTypeConstraintConcept()) {
-        constraint_text = concept_decl->getQualifiedNameAsString();
+        constraint_text = constraint_decl->getQualifiedNameAsString();
         llvm::ArrayRef<clang::TemplateArgument> constraint_args =
             auto_type->getTypeConstraintArguments();
         if (!constraint_args.empty()) {
@@ -2501,7 +2507,7 @@ bool ClangToSageTranslator::VisitDeducedTemplateSpecializationType(
     base_scope = getGlobalScope();
   }
 
-  clang::NestedNameSpecifier *qualifier = nullptr;
+  clang::NestedNameSpecifier qualifier = std::nullopt;
   if (const clang::QualifiedTemplateName *qtn =
           tname.getAsQualifiedTemplateName()) {
     qualifier = qtn->getQualifier();
@@ -2510,7 +2516,7 @@ bool ClangToSageTranslator::VisitDeducedTemplateSpecializationType(
     qualifier = dtn->getQualifier();
   }
 
-  if (qualifier != nullptr) {
+  if (qualifier) {
     *node = buildNonrealTypeFromNestedNameSpecifier(qualifier, base_scope,
                                                     SgName(base_name), nullptr);
   } else {
@@ -2681,8 +2687,35 @@ bool ClangToSageTranslator::VisitInjectedClassNameType(
   // InjectedClassName represents a class referring to itself within its own
   // definition (e.g., in member functions) Desugar to get the actual
   // instantiated type
-  *node = Traverse(
-      injected_class_name_type->getInjectedSpecializationType().getTypePtr());
+  if (p_compiler_instance != nullptr) {
+    clang::QualType injected_qt = getInjectedClassNameSpecializationType(
+        injected_class_name_type, p_compiler_instance->getASTContext());
+    if (!injected_qt.isNull() &&
+        injected_qt.getTypePtrOrNull() != injected_class_name_type) {
+      *node = buildTypeFromQualifiedType(injected_qt);
+    }
+  }
+
+  if (*node == nullptr) {
+    if (SgClassDeclaration *sg_decl = isSgClassDeclaration(
+            lookupSgDeclarationForClangDecl(injected_class_name_type->getDecl(),
+                                            /*allow_on_demand=*/true))) {
+      *node = sg_decl->get_type();
+    }
+  }
+
+  if (*node == nullptr) {
+    std::string name_str =
+        injected_class_name_type->getDecl()->getNameAsString();
+    if (name_str.empty()) {
+      name_str = "__injected_class";
+    }
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    if (scope == nullptr) {
+      scope = getGlobalScope();
+    }
+    *node = SageBuilder::buildNonrealType(SgName(name_str), scope, nullptr);
+  }
 
   return VisitType(injected_class_name_type, node) && res;
 }
@@ -2728,12 +2761,14 @@ bool ClangToSageTranslator::VisitMemberPointerType(
   bool res = true;
 
   clang::QualType classQualType;
-  if (clang::NestedNameSpecifier *qualifier =
+  if (clang::NestedNameSpecifier qualifier =
           member_pointer_type->getQualifier()) {
-    if (const clang::Type *qual_type = qualifier->getAsType()) {
+    if (const clang::Type *qual_type = qualifier.getAsType()) {
       classQualType = clang::QualType(qual_type, 0);
-    } else if (clang::CXXRecordDecl *record = qualifier->getAsRecordDecl()) {
-      classQualType = clang::QualType(record->getTypeForDecl(), 0);
+    } else if (clang::CXXRecordDecl *record =
+                   member_pointer_type->getMostRecentCXXRecordDecl()) {
+      classQualType = record->getASTContext().getTypeDeclType(
+          static_cast<const clang::TypeDecl *>(record));
     }
   }
   SgType *classType = buildTypeFromQualifiedType(classQualType);
@@ -3475,6 +3510,124 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
     SgScopeStatement *scope_override) {
 
   std::string cache_key = normalizeTemplateDeclCacheKey(template_name);
+
+  auto get_template_source_range =
+      [](clang::TemplateDecl *clang_template_decl) -> clang::SourceRange {
+    if (clang_template_decl == nullptr) {
+      return clang::SourceRange();
+    }
+
+    clang::SourceRange range = clang_template_decl->getSourceRange();
+    if (range.isValid()) {
+      return range;
+    }
+
+    if (clang::ClassTemplateDecl *class_template =
+            llvm::dyn_cast<clang::ClassTemplateDecl>(clang_template_decl)) {
+      if (clang::CXXRecordDecl *templated_decl =
+              class_template->getTemplatedDecl()) {
+        range = templated_decl->getSourceRange();
+      }
+    }
+
+    return range;
+  };
+
+  auto normalize_template_decl_source =
+      [&](SgTemplateClassDeclaration *template_decl,
+          clang::TemplateDecl *clang_template_decl) {
+        if (template_decl == nullptr || clang_template_decl == nullptr) {
+          return;
+        }
+
+        clang::SourceRange range =
+            get_template_source_range(clang_template_decl);
+        if (!range.isValid()) {
+          return;
+        }
+
+        auto apply_if_missing = [&](SgTemplateClassDeclaration *candidate) {
+          if (candidate == nullptr) {
+            return;
+          }
+          Sg_File_Info *fi = candidate->get_file_info();
+          if (fi != nullptr && fi->get_line() > 0 &&
+              !fi->isCompilerGenerated()) {
+            return;
+          }
+          applySourceRange(candidate, range);
+        };
+
+        apply_if_missing(template_decl);
+        if (SgTemplateClassDeclaration *first = isSgTemplateClassDeclaration(
+                template_decl->get_firstNondefiningDeclaration())) {
+          if (first != template_decl) {
+            apply_if_missing(first);
+          }
+        }
+        if (SgTemplateClassDeclaration *def = isSgTemplateClassDeclaration(
+                template_decl->get_definingDeclaration())) {
+          if (def != template_decl) {
+            apply_if_missing(def);
+          }
+        }
+      };
+
+  auto lookup_actual_template_decl =
+      [&](clang::TemplateDecl *clang_template_decl)
+      -> SgTemplateClassDeclaration * {
+    if (clang_template_decl == nullptr) {
+      return nullptr;
+    }
+
+    if (SgTemplateClassDeclaration *mapped =
+            isSgTemplateClassDeclaration(lookupSgDeclarationForClangDecl(
+                llvm::cast<clang::Decl>(clang_template_decl),
+                /*allow_on_demand=*/true))) {
+      normalize_template_decl_source(mapped, clang_template_decl);
+      return mapped;
+    }
+
+    if (clang::ClassTemplateDecl *class_template =
+            llvm::dyn_cast<clang::ClassTemplateDecl>(clang_template_decl)) {
+      if (clang::CXXRecordDecl *templated_decl =
+              class_template->getTemplatedDecl()) {
+        if (SgTemplateClassDeclaration *mapped =
+                isSgTemplateClassDeclaration(lookupSgDeclarationForClangDecl(
+                    templated_decl, /*allow_on_demand=*/false))) {
+          normalize_template_decl_source(mapped, clang_template_decl);
+          return mapped;
+        }
+
+        if (clang::CXXRecordDecl *canonical_record =
+                llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
+                    templated_decl->getCanonicalDecl())) {
+          if (SgTemplateClassDeclaration *mapped =
+                  isSgTemplateClassDeclaration(lookupSgDeclarationForClangDecl(
+                      canonical_record, /*allow_on_demand=*/false))) {
+            normalize_template_decl_source(mapped, clang_template_decl);
+            return mapped;
+          }
+        }
+      }
+    }
+
+    return nullptr;
+  };
+
+  clang::TemplateDecl *source_template_decl = nullptr;
+  if (clang_type != nullptr) {
+    if (clang::TemplateDecl *clang_template_decl =
+            clang_type->getTemplateName().getAsTemplateDecl()) {
+      source_template_decl = clang_template_decl;
+      if (SgTemplateClassDeclaration *mapped =
+              lookup_actual_template_decl(clang_template_decl)) {
+        p_template_decl_cache[cache_key] = mapped;
+        return mapped;
+      }
+    }
+  }
+
   auto it = p_template_decl_cache.find(cache_key);
   if (it != p_template_decl_cache.end()) {
     return it->second;
@@ -3542,11 +3695,32 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
   // crash (ua test).
   template_decl->set_firstNondefiningDeclaration(template_decl);
 
-  // Mark as compiler generated and forward declaration
+  // Synthetic namespace/global template declarations participate as the
+  // original template of later instantiations, so they must not remain marked
+  // compiler-generated or AstConsistency will reject them.
   template_decl->setForward();
   template_decl->set_isUnNamed(false);
-  template_decl->get_file_info()->setCompilerGenerated();
-  template_decl->get_file_info()->unsetOutputInCodeGeneration();
+  normalize_template_decl_source(template_decl, source_template_decl);
+  if (isSgGlobal(scope) != nullptr ||
+      isSgNamespaceDefinitionStatement(scope) != nullptr) {
+    template_decl->unsetCompilerGenerated();
+    template_decl->unsetFrontendSpecific();
+    if (Sg_File_Info *fi = template_decl->get_file_info()) {
+      fi->unsetCompilerGenerated();
+      fi->unsetFrontendSpecific();
+      fi->unsetOutputInCodeGeneration();
+    }
+    if (Sg_File_Info *fi = template_decl->get_endOfConstruct()) {
+      fi->unsetCompilerGenerated();
+      fi->unsetFrontendSpecific();
+      fi->unsetOutputInCodeGeneration();
+    }
+  } else if (template_decl->get_file_info() != nullptr) {
+    template_decl->get_file_info()->setCompilerGenerated();
+  }
+  if (template_decl->get_file_info() != nullptr) {
+    template_decl->get_file_info()->unsetOutputInCodeGeneration();
+  }
 
   // Ensure the template declaration scope matches the enclosing scope so
   // symbol insertion does not mismatch the declaration's scope.
@@ -3824,7 +3998,7 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
       }
     }
 
-    clang::NestedNameSpecifier *qualifier = nullptr;
+    clang::NestedNameSpecifier qualifier = std::nullopt;
     std::string name_str;
     bool has_template_keyword = false;
     if (const clang::QualifiedTemplateName *qualified =
@@ -3849,7 +4023,7 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
       name_str = getTemplateNameBase(template_name);
     }
 
-    if (qualifier != nullptr && !name_str.empty()) {
+    if (qualifier && !name_str.empty()) {
       SgScopeStatement *scope = SageBuilder::topScopeStack();
       if (scope == nullptr) {
         scope = getGlobalScope();
@@ -3906,7 +4080,7 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
         }
 
         SgTemplateArgumentPtrList tpl_args = buildTemplateArguments(tst);
-        clang::NestedNameSpecifier *qualifier = nullptr;
+        clang::NestedNameSpecifier qualifier = std::nullopt;
         bool has_template_keyword = false;
         if (const clang::QualifiedTemplateName *qtn =
                 tname.getAsQualifiedTemplateName()) {
@@ -3924,7 +4098,7 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
         }
 
         SgNonrealType *nrtype = nullptr;
-        if (qualifier != nullptr) {
+        if (qualifier) {
           nrtype = buildNonrealTypeFromNestedNameSpecifier(
               qualifier, scope, SgName(base_name),
               tpl_args.empty() ? nullptr : &tpl_args);
@@ -3960,70 +4134,6 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
       if (needs_rebuild) {
         if (SgType *spec_type = build_template_specialization_type(arg_tst)) {
           arg_type = spec_type;
-        }
-      }
-    }
-
-    if (const clang::DependentTemplateSpecializationType *arg_dts =
-            llvm::dyn_cast_or_null<clang::DependentTemplateSpecializationType>(
-                arg.getAsType().getTypePtrOrNull())) {
-      auto build_dependent_template_type =
-          [&](const clang::DependentTemplateSpecializationType *dts)
-          -> SgType * {
-        if (dts == nullptr) {
-          return nullptr;
-        }
-        DependentTemplateSpecializationNameInfo name_info =
-            getDependentTemplateSpecializationName(dts);
-        if (name_info.base_name.empty()) {
-          return nullptr;
-        }
-        SgTemplateArgumentPtrList tpl_args;
-        for (const clang::TemplateArgument &tpl_arg :
-             dts->template_arguments()) {
-          appendTemplateArguments(tpl_args, tpl_arg, true);
-        }
-        if (tpl_args.empty()) {
-          return nullptr;
-        }
-        SgScopeStatement *scope = SageBuilder::topScopeStack();
-        if (scope == nullptr) {
-          scope = getGlobalScope();
-        }
-        SgNonrealType *nrtype = nullptr;
-        if (name_info.qualifier != nullptr) {
-          nrtype = buildNonrealTypeFromNestedNameSpecifier(
-              name_info.qualifier, scope, SgName(name_info.base_name),
-              &tpl_args);
-        } else {
-          nrtype = SageBuilder::buildNonrealType(SgName(name_info.base_name),
-                                                 scope, &tpl_args);
-        }
-        if (SgNonrealDecl *nrdecl =
-                isSgNonrealDecl(nrtype ? nrtype->get_declaration() : nullptr)) {
-          if (name_info.has_template_keyword) {
-            nrdecl->set_has_template_keyword(true);
-          }
-        }
-        return nrtype;
-      };
-
-      bool needs_rebuild = false;
-      if (SgNonrealType *nrtype = isSgNonrealType(arg_type)) {
-        if (SgNonrealDecl *nrdecl =
-                isSgNonrealDecl(nrtype->get_declaration())) {
-          if (nrdecl->get_tpl_args().empty() &&
-              !arg_dts->template_arguments().empty()) {
-            needs_rebuild = true;
-          }
-        }
-      } else if (isSgTypedefType(arg_type) != nullptr) {
-        needs_rebuild = !arg_dts->template_arguments().empty();
-      }
-
-      if (needs_rebuild) {
-        if (SgType *dep_type = build_dependent_template_type(arg_dts)) {
-          arg_type = dep_type;
         }
       }
     }
@@ -4248,10 +4358,6 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
                 bool *has_explicit_empty = nullptr) -> bool {
           clang::TypeLoc type_loc = type_info->getTypeLoc();
           while (!type_loc.isNull()) {
-            if (auto elab_loc = type_loc.getAs<clang::ElaboratedTypeLoc>()) {
-              type_loc = elab_loc.getNamedTypeLoc();
-              continue;
-            }
             if (auto tst_loc =
                     type_loc.getAs<clang::TemplateSpecializationTypeLoc>()) {
               const unsigned arg_count = tst_loc.getNumArgs();
@@ -4261,19 +4367,6 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
               if (has_explicit_empty != nullptr) {
                 *has_explicit_empty =
                     (arg_count == 0 && tst_loc.getLAngleLoc().isValid());
-              }
-              return true;
-            }
-            if (auto dep_tst_loc =
-                    type_loc.getAs<
-                        clang::DependentTemplateSpecializationTypeLoc>()) {
-              const unsigned arg_count = dep_tst_loc.getNumArgs();
-              for (unsigned i = 0; i < arg_count; ++i) {
-                appendTemplateArguments(tpl_args, dep_tst_loc.getArgLoc(i),
-                                        true);
-              }
-              if (has_explicit_empty != nullptr) {
-                *has_explicit_empty = false;
               }
               return true;
             }
@@ -4299,7 +4392,7 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
                   tpl_args, &has_explicit_empty_template_args)) {
             tpl_args = buildTemplateArguments(tst);
           }
-          clang::NestedNameSpecifier *qualifier = nullptr;
+          clang::NestedNameSpecifier qualifier = std::nullopt;
           bool has_template_keyword = false;
           if (const clang::QualifiedTemplateName *qtn =
                   tname.getAsQualifiedTemplateName()) {
@@ -4319,7 +4412,7 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
           const bool has_template_args =
               !tpl_args.empty() || has_explicit_empty_template_args;
           SgNonrealType *nrtype = nullptr;
-          if (qualifier != nullptr) {
+          if (qualifier) {
             nrtype = buildNonrealTypeFromNestedNameSpecifier(
                 qualifier, scope, SgName(base_name),
                 has_template_args ? &tpl_args : nullptr);
@@ -4340,10 +4433,6 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
         auto find_template_specialization_loc = [&](clang::TypeLoc type_loc)
             -> clang::TemplateSpecializationTypeLoc {
           while (!type_loc.isNull()) {
-            if (auto elab_loc = type_loc.getAs<clang::ElaboratedTypeLoc>()) {
-              type_loc = elab_loc.getNamedTypeLoc();
-              continue;
-            }
             if (auto tst_loc =
                     type_loc.getAs<clang::TemplateSpecializationTypeLoc>()) {
               return tst_loc;
@@ -4351,24 +4440,6 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
             type_loc = type_loc.getNextTypeLoc();
           }
           return clang::TemplateSpecializationTypeLoc();
-        };
-
-        auto find_dependent_template_specialization_loc =
-            [&](clang::TypeLoc type_loc)
-            -> clang::DependentTemplateSpecializationTypeLoc {
-          while (!type_loc.isNull()) {
-            if (auto elab_loc = type_loc.getAs<clang::ElaboratedTypeLoc>()) {
-              type_loc = elab_loc.getNamedTypeLoc();
-              continue;
-            }
-            if (auto dep_loc =
-                    type_loc.getAs<
-                        clang::DependentTemplateSpecializationTypeLoc>()) {
-              return dep_loc;
-            }
-            type_loc = type_loc.getNextTypeLoc();
-          }
-          return clang::DependentTemplateSpecializationTypeLoc();
         };
 
         const clang::TemplateSpecializationType *arg_tst = nullptr;
@@ -4496,9 +4567,9 @@ SgTemplateArgument *ClangToSageTranslator::translateTemplateArgument(
           sg_arg->get_templateDeclaration() != nullptr) {
         clang::NestedNameSpecifierLoc qualifier_loc =
             arg_loc.getTemplateQualifierLoc();
-        clang::NestedNameSpecifier *qualifier =
+        clang::NestedNameSpecifier qualifier =
             qualifier_loc.getNestedNameSpecifier();
-        if (qualifier != nullptr) {
+        if (qualifier) {
           std::string name_str;
           if (SgTemplateDeclaration *template_decl =
                   isSgTemplateDeclaration(sg_arg->get_templateDeclaration())) {
@@ -4767,12 +4838,6 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
     return nullptr;
   }
 
-  if (const clang::ElaboratedType *elab =
-          llvm::dyn_cast<clang::ElaboratedType>(clang_type)) {
-    return buildNonrealTypeForNestedNameSpecifierType(
-        elab->getNamedType().getTypePtrOrNull(), scope, prefer_current_scope);
-  }
-
   if (const clang::SubstTemplateTypeParmType *subst =
           llvm::dyn_cast<clang::SubstTemplateTypeParmType>(clang_type)) {
     clang::QualType replacement = subst->getReplacementType();
@@ -4838,14 +4903,14 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
   };
 
   auto build_with_qualifier =
-      [&](clang::NestedNameSpecifier *qualifier, const std::string &name,
+      [&](clang::NestedNameSpecifier qualifier, const std::string &name,
           const SgTemplateArgumentPtrList *tpl_args) -> SgNonrealType * {
     std::string base_name = sanitize_nonreal_name(name);
     ROSE_ASSERT(!base_name.empty());
     if (prefer_current_scope) {
-      qualifier = nullptr;
+      qualifier = std::nullopt;
     }
-    if (qualifier != nullptr) {
+    if (qualifier) {
       return buildNonrealTypeFromNestedNameSpecifier(
           qualifier, scope, SgName(base_name), tpl_args);
     }
@@ -4872,8 +4937,9 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
     const clang::UnresolvedUsingTypenameDecl *decl = uut->getDecl();
     std::string name_str = decl ? decl->getNameAsString() : "";
     ROSE_ASSERT(!name_str.empty());
-    return build_with_qualifier(decl ? decl->getQualifier() : nullptr, name_str,
-                                nullptr);
+    return build_with_qualifier(decl != nullptr ? decl->getQualifier()
+                                                : std::nullopt,
+                                name_str, nullptr);
   }
 
   if (const clang::DependentNameType *dnt =
@@ -4884,31 +4950,6 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
                                 nullptr);
   }
 
-  if (const clang::DependentTemplateSpecializationType *dts =
-          llvm::dyn_cast<clang::DependentTemplateSpecializationType>(
-              clang_type)) {
-    DependentTemplateSpecializationNameInfo name_info =
-        getDependentTemplateSpecializationName(dts);
-
-    SgTemplateArgumentPtrList tpl_args;
-    for (const clang::TemplateArgument &arg : dts->template_arguments()) {
-      appendTemplateArguments(tpl_args, arg, true);
-    }
-    if (!tpl_args.empty()) {
-      ensureTemplateArgumentParents(tpl_args);
-    }
-
-    SgNonrealType *nrtype = build_with_qualifier(
-        name_info.qualifier, name_info.base_name, &tpl_args);
-    if (SgNonrealDecl *nrdecl =
-            isSgNonrealDecl(nrtype ? nrtype->get_declaration() : nullptr)) {
-      if (name_info.has_template_keyword) {
-        nrdecl->set_has_template_keyword(true);
-      }
-    }
-    return nrtype;
-  }
-
   if (const clang::TemplateSpecializationType *tst =
           llvm::dyn_cast<clang::TemplateSpecializationType>(clang_type)) {
     clang::TemplateName tname = tst->getTemplateName();
@@ -4917,7 +4958,7 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
 
     SgTemplateArgumentPtrList tpl_args = buildTemplateArguments(tst);
     applyExplicitTemplateArgumentFlags(tpl_args, tpl_args.size());
-    clang::NestedNameSpecifier *qualifier = nullptr;
+    clang::NestedNameSpecifier qualifier = std::nullopt;
     bool has_template_keyword = false;
     auto resolve_template_decl =
         [&](const clang::TemplateName &name) -> clang::TemplateDecl * {
@@ -4960,21 +5001,21 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
       has_template_keyword = true;
     }
     if (prefer_current_scope) {
-      qualifier = nullptr;
+      qualifier = std::nullopt;
     }
     template_decl = resolve_template_decl(tname);
     SgNonrealType *nrtype = nullptr;
-    if (qualifier != nullptr) {
+    if (qualifier) {
       nrtype = build_with_qualifier(qualifier, base_name, &tpl_args);
     } else {
-      clang::NestedNameSpecifier *ns_qualifier = nullptr;
+      clang::NestedNameSpecifier ns_qualifier = std::nullopt;
       if (!prefer_current_scope && template_decl != nullptr &&
           p_compiler_instance != nullptr) {
         ns_qualifier = buildNamespaceQualifierForDeclContext(
             template_decl->getDeclContext(),
             p_compiler_instance->getASTContext());
       }
-      if (ns_qualifier != nullptr) {
+      if (ns_qualifier) {
         nrtype = build_with_qualifier(ns_qualifier, base_name, &tpl_args);
       } else {
         SgScopeStatement *template_scope = scope;
@@ -5120,7 +5161,7 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
           llvm::dyn_cast<clang::TypedefType>(clang_type)) {
     std::string name_str = tdef->getDecl()->getNameAsString();
     ROSE_ASSERT(!name_str.empty());
-    clang::NestedNameSpecifier *qualifier = nullptr;
+    clang::NestedNameSpecifier qualifier = std::nullopt;
     if (!prefer_current_scope && p_compiler_instance != nullptr) {
       if (!scopeIsWithinNamespaceChain(scope,
                                        tdef->getDecl()->getDeclContext())) {
@@ -5134,13 +5175,13 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
 
   if (const clang::UsingType *using_type =
           llvm::dyn_cast<clang::UsingType>(clang_type)) {
-    clang::UsingShadowDecl *using_decl = using_type->getFoundDecl();
+    clang::UsingShadowDecl *using_decl = using_type->getDecl();
     std::string name_str = using_decl ? using_decl->getNameAsString() : "";
     if (name_str.empty()) {
       name_str = fallback_type_name(clang_type);
     }
     ROSE_ASSERT(!name_str.empty());
-    return build_with_qualifier(nullptr, name_str, nullptr);
+    return build_with_qualifier(std::nullopt, name_str, nullptr);
   }
 
   if (const clang::TagType *tag = llvm::dyn_cast<clang::TagType>(clang_type)) {
@@ -5149,7 +5190,7 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
       name_str = fallback_type_name(clang_type);
     }
     ROSE_ASSERT(!name_str.empty());
-    clang::NestedNameSpecifier *qualifier = nullptr;
+    clang::NestedNameSpecifier qualifier = std::nullopt;
     if (!prefer_current_scope && p_compiler_instance != nullptr) {
       if (!scopeIsWithinNamespaceChain(scope,
                                        tag->getDecl()->getDeclContext())) {
@@ -5177,7 +5218,11 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
     // Preserve injected-template arguments (e.g., Outer<T>) when this type
     // appears in nested-name specifiers. Falling back to the plain record name
     // drops '<T>' and corrupts dependent qualification.
-    clang::QualType injected_qt = inj->getInjectedSpecializationType();
+    clang::QualType injected_qt;
+    if (p_compiler_instance != nullptr) {
+      injected_qt = getInjectedClassNameSpecializationType(
+          inj, p_compiler_instance->getASTContext());
+    }
     const clang::Type *injected_ty = injected_qt.getTypePtrOrNull();
     if (injected_ty != nullptr && injected_ty != clang_type) {
       if (SgNonrealType *nrtype = buildNonrealTypeForNestedNameSpecifierType(
@@ -5191,7 +5236,8 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
       name_str = fallback_type_name(clang_type);
     }
     ROSE_ASSERT(!name_str.empty());
-    SgNonrealType *nrtype = build_with_qualifier(nullptr, name_str, nullptr);
+    SgNonrealType *nrtype =
+        build_with_qualifier(std::nullopt, name_str, nullptr);
     if (SgNonrealDecl *nrdecl =
             isSgNonrealDecl(nrtype ? nrtype->get_declaration() : nullptr)) {
       if (clang::CXXRecordDecl *decl = inj->getDecl()) {
@@ -5213,11 +5259,11 @@ ClangToSageTranslator::buildNonrealTypeForNestedNameSpecifierType(
     name_str = fallback_type_name(clang_type);
   }
   ROSE_ASSERT(!name_str.empty());
-  return build_with_qualifier(nullptr, name_str, nullptr);
+  return build_with_qualifier(std::nullopt, name_str, nullptr);
 }
 
 SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
-    clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope,
+    clang::NestedNameSpecifier qualifier, SgScopeStatement *scope,
     const SgName &terminalName,
     const SgTemplateArgumentPtrList *terminalTemplateArgs) {
   SgScopeStatement *effective_scope = scope;
@@ -5231,30 +5277,22 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
   }
   ROSE_ASSERT(effective_scope != nullptr);
 
-  std::function<SgScopeStatement *(clang::NestedNameSpecifier *,
+  std::function<SgScopeStatement *(clang::NestedNameSpecifier,
                                    SgScopeStatement *)>
       build_chain;
-  build_chain = [&](clang::NestedNameSpecifier *nns,
+  build_chain = [&](clang::NestedNameSpecifier nns,
                     SgScopeStatement *current_scope) -> SgScopeStatement * {
-    if (nns == nullptr) {
+    if (!nns) {
       return current_scope;
     }
 
-    current_scope = build_chain(nns->getPrefix(), current_scope);
+    current_scope = build_chain(nestedNameSpecifierPrefix(nns), current_scope);
 
     SgNonrealType *segment_type = nullptr;
-    switch (nns->getKind()) {
-    case clang::NestedNameSpecifier::Identifier: {
-      const clang::IdentifierInfo *id = nns->getAsIdentifier();
-      std::string name_str = id ? id->getName().str() : "";
-      ROSE_ASSERT(!name_str.empty());
-      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
-                                                   current_scope, nullptr);
-      break;
-    }
-
-    case clang::NestedNameSpecifier::Namespace: {
-      clang::NamespaceDecl *ns = nns->getAsNamespace();
+    switch (nns.getKind()) {
+    case clang::NestedNameSpecifier::Kind::Namespace: {
+      const clang::NamespaceBaseDecl *ns =
+          nestedNameSpecifierNamespaceBase(nns);
       std::string name_str = ns ? ns->getNameAsString() : "";
       ROSE_ASSERT(!name_str.empty());
       segment_type = SageBuilder::buildNonrealType(SgName(name_str),
@@ -5262,27 +5300,18 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
       break;
     }
 
-    case clang::NestedNameSpecifier::NamespaceAlias: {
-      clang::NamespaceAliasDecl *ns = nns->getAsNamespaceAlias();
-      std::string name_str = ns ? ns->getNameAsString() : "";
-      ROSE_ASSERT(!name_str.empty());
-      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
-                                                   current_scope, nullptr);
-      break;
-    }
-
-    case clang::NestedNameSpecifier::TypeSpec: {
-      bool prefer_current = (nns->getPrefix() != nullptr);
+    case clang::NestedNameSpecifier::Kind::Type: {
+      bool prefer_current = static_cast<bool>(nestedNameSpecifierPrefix(nns));
       segment_type = buildNonrealTypeForNestedNameSpecifierType(
-          nns->getAsType(), current_scope, prefer_current);
+          nns.getAsType(), current_scope, prefer_current);
       break;
     }
 
-    case clang::NestedNameSpecifier::Global:
+    case clang::NestedNameSpecifier::Kind::Global:
       break;
 
-    case clang::NestedNameSpecifier::Super: {
-      clang::CXXRecordDecl *record = nns->getAsRecordDecl();
+    case clang::NestedNameSpecifier::Kind::MicrosoftSuper: {
+      clang::CXXRecordDecl *record = nns.getAsRecordDecl();
       std::string name_str = record ? record->getNameAsString() : "";
       if (name_str.empty()) {
         name_str = "__super";
@@ -5291,6 +5320,8 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
                                                    current_scope, nullptr);
       break;
     }
+    case clang::NestedNameSpecifier::Kind::Null:
+      break;
     }
 
     if (segment_type != nullptr) {
@@ -5300,8 +5331,8 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
       if (nestedNameSpecifierHasTemplateKeyword(nns)) {
         segment_decl->set_has_template_keyword(true);
       }
-      if (clang::NestedNameSpecifier *prefix = nns->getPrefix()) {
-        if (prefix->getKind() == clang::NestedNameSpecifier::Global) {
+      if (clang::NestedNameSpecifier prefix = nestedNameSpecifierPrefix(nns)) {
+        if (prefix.getKind() == clang::NestedNameSpecifier::Kind::Global) {
           segment_decl->set_has_global_qualifier(true);
         }
       }
@@ -5314,18 +5345,18 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
   SgScopeStatement *chain_scope = build_chain(qualifier, effective_scope);
   ROSE_ASSERT(chain_scope != nullptr);
 
-  auto qualifier_requires_typename = [](clang::NestedNameSpecifier *nns) {
-    for (clang::NestedNameSpecifier *it = nns; it != nullptr;
-         it = it->getPrefix()) {
-      switch (it->getKind()) {
-      case clang::NestedNameSpecifier::Global:
-      case clang::NestedNameSpecifier::Namespace:
-      case clang::NestedNameSpecifier::NamespaceAlias:
+  auto qualifier_requires_typename = [](clang::NestedNameSpecifier nns) {
+    for (clang::NestedNameSpecifier it = nns; it;
+         it = nestedNameSpecifierPrefix(it)) {
+      switch (it.getKind()) {
+      case clang::NestedNameSpecifier::Kind::Global:
+      case clang::NestedNameSpecifier::Kind::Namespace:
         continue;
-      case clang::NestedNameSpecifier::Identifier:
-      case clang::NestedNameSpecifier::TypeSpec:
-      case clang::NestedNameSpecifier::Super:
+      case clang::NestedNameSpecifier::Kind::Type:
+      case clang::NestedNameSpecifier::Kind::MicrosoftSuper:
         return true;
+      case clang::NestedNameSpecifier::Kind::Null:
+        break;
       }
     }
     return false;
@@ -5337,13 +5368,13 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
 
   SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration());
   ROSE_ASSERT(nrdecl != nullptr);
-  if (qualifier != nullptr && !qualifier_requires_typename(qualifier)) {
+  if (qualifier && !qualifier_requires_typename(qualifier)) {
     nrdecl->set_suppress_typename(true);
   }
 
   // Preserve a leading global qualifier for terminal references so namespace
   // lookup does not accidentally bind to a local shadow.
-  if (qualifier != nullptr && nestedNameSpecifierHasGlobal(qualifier)) {
+  if (qualifier && nestedNameSpecifierHasGlobal(qualifier)) {
     nrdecl->set_has_global_qualifier(true);
   }
 
@@ -5352,14 +5383,14 @@ SgNonrealType *ClangToSageTranslator::buildNonrealTypeFromNestedNameSpecifier(
 
 SgScopeStatement *
 ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
-    clang::NestedNameSpecifier *qualifier, SgScopeStatement *scope) {
-  if (qualifier == nullptr) {
+    clang::NestedNameSpecifier qualifier, SgScopeStatement *scope) {
+  if (!qualifier) {
     return scope;
   }
 
-  std::vector<clang::NestedNameSpecifier *> segments;
-  for (clang::NestedNameSpecifier *nns = qualifier; nns != nullptr;
-       nns = nns->getPrefix()) {
+  std::vector<clang::NestedNameSpecifier> segments;
+  for (clang::NestedNameSpecifier nns = qualifier; nns;
+       nns = nestedNameSpecifierPrefix(nns)) {
     segments.push_back(nns);
   }
 
@@ -5368,46 +5399,31 @@ ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
     current_scope = getGlobalScope();
   }
   for (auto it = segments.rbegin(); it != segments.rend(); ++it) {
-    clang::NestedNameSpecifier *nns = *it;
-    if (nns->getKind() == clang::NestedNameSpecifier::Global) {
+    clang::NestedNameSpecifier nns = *it;
+    if (nns.getKind() == clang::NestedNameSpecifier::Kind::Global) {
       current_scope = getGlobalScope();
       continue;
     }
 
     SgNonrealType *segment_type = nullptr;
-    switch (nns->getKind()) {
-    case clang::NestedNameSpecifier::Identifier: {
-      const clang::IdentifierInfo *id = nns->getAsIdentifier();
-      std::string name_str = id ? id->getName().str() : "";
-      ROSE_ASSERT(!name_str.empty());
-      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
-                                                   current_scope, nullptr);
-      break;
-    }
-    case clang::NestedNameSpecifier::Namespace: {
-      clang::NamespaceDecl *ns = nns->getAsNamespace();
+    switch (nns.getKind()) {
+    case clang::NestedNameSpecifier::Kind::Namespace: {
+      const clang::NamespaceBaseDecl *ns =
+          nestedNameSpecifierNamespaceBase(nns);
       std::string name_str = ns ? ns->getNameAsString() : "";
       ROSE_ASSERT(!name_str.empty());
       segment_type = SageBuilder::buildNonrealType(SgName(name_str),
                                                    current_scope, nullptr);
       break;
     }
-    case clang::NestedNameSpecifier::NamespaceAlias: {
-      clang::NamespaceAliasDecl *ns = nns->getAsNamespaceAlias();
-      std::string name_str = ns ? ns->getNameAsString() : "";
-      ROSE_ASSERT(!name_str.empty());
-      segment_type = SageBuilder::buildNonrealType(SgName(name_str),
-                                                   current_scope, nullptr);
-      break;
-    }
-    case clang::NestedNameSpecifier::TypeSpec: {
-      bool prefer_current = (nns->getPrefix() != nullptr);
+    case clang::NestedNameSpecifier::Kind::Type: {
+      bool prefer_current = static_cast<bool>(nestedNameSpecifierPrefix(nns));
       segment_type = buildNonrealTypeForNestedNameSpecifierType(
-          nns->getAsType(), current_scope, prefer_current);
+          nns.getAsType(), current_scope, prefer_current);
       break;
     }
-    case clang::NestedNameSpecifier::Super: {
-      clang::CXXRecordDecl *record = nns->getAsRecordDecl();
+    case clang::NestedNameSpecifier::Kind::MicrosoftSuper: {
+      clang::CXXRecordDecl *record = nns.getAsRecordDecl();
       std::string name_str = record ? record->getNameAsString() : "";
       if (name_str.empty()) {
         name_str = "__super";
@@ -5416,7 +5432,8 @@ ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
                                                    current_scope, nullptr);
       break;
     }
-    case clang::NestedNameSpecifier::Global:
+    case clang::NestedNameSpecifier::Kind::Global:
+    case clang::NestedNameSpecifier::Kind::Null:
       break;
     }
 
@@ -5427,8 +5444,8 @@ ClangToSageTranslator::buildNonrealScopeFromNestedNameSpecifier(
       if (nestedNameSpecifierHasTemplateKeyword(nns)) {
         segment_decl->set_has_template_keyword(true);
       }
-      if (clang::NestedNameSpecifier *prefix = nns->getPrefix()) {
-        if (prefix->getKind() == clang::NestedNameSpecifier::Global) {
+      if (clang::NestedNameSpecifier prefix = nestedNameSpecifierPrefix(nns)) {
+        if (prefix.getKind() == clang::NestedNameSpecifier::Kind::Global) {
           segment_decl->set_has_global_qualifier(true);
         }
       }
@@ -5443,42 +5460,6 @@ SgTemplateInstantiationDecl *
 ClangToSageTranslator::getOrCreateTemplateInstantiation(
     SgTemplateClassDeclaration *template_decl,
     const clang::TemplateSpecializationType *clang_type) {
-
-  // Extract both base name and qualified name for the template
-  std::string template_base_name = template_decl->get_name().getString();
-
-  // ROOT CAUSE FIX: Check if template declaration has namespace qualification
-  // stored Use qualified name (e.g., "std::array") for instantiation name
-  // instead of just base name
-  std::string template_qualified_name = getTemplateQualifiedName(template_decl);
-
-  // Use qualified name in cache key to avoid namespace collisions
-  // Example: "std::array<int>" and "my_ns::array<int>" must have different
-  // cache keys Otherwise they would both mangle to "array_int" and collide
-  std::string inst_name_full =
-      mangleTemplateInstantiation(template_qualified_name, clang_type);
-  bool has_dependent_args = false;
-  for (const clang::TemplateArgument &arg : clang_type->template_arguments()) {
-    if (arg.isInstantiationDependent() ||
-        arg.containsUnexpandedParameterPack()) {
-      has_dependent_args = true;
-      break;
-    }
-  }
-  std::string inst_display_name;
-  if (has_dependent_args) {
-    SgTemplateArgumentPtrList display_args = buildTemplateArguments(clang_type);
-    if (display_args.empty()) {
-      inst_display_name = template_base_name;
-    } else {
-      inst_display_name = SageBuilder::appendTemplateArgumentsToName(
-                              SgName(template_base_name), display_args)
-                              .getString();
-    }
-  } else {
-    inst_display_name = buildTemplateInstantiationName(
-        template_base_name, clang_type->template_arguments());
-  }
   auto ensure_file_info = [this](SgTemplateInstantiationDecl *decl) {
     if (decl == nullptr) {
       return;
@@ -5518,6 +5499,301 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     }
   };
 
+  clang::TemplateDecl *inst_clang_template_decl = nullptr;
+  clang::DeclContext *inst_decl_context = nullptr;
+  clang::TemplateName clang_tname;
+  if (clang_type != nullptr) {
+    clang_tname = clang_type->getTemplateName();
+    inst_clang_template_decl = clang_tname.getAsTemplateDecl();
+    if (inst_clang_template_decl != nullptr) {
+      inst_decl_context = inst_clang_template_decl->getDeclContext();
+    }
+  }
+
+  auto normalize_decl_scope = [&](SgDeclarationStatement *decl,
+                                  SgScopeStatement *target_scope,
+                                  const char *context) {
+    if (decl == nullptr || target_scope == nullptr) {
+      return;
+    }
+    if (decl->get_scope() != target_scope ||
+        decl->get_parent() != target_scope) {
+      ensureDeclInScopeChildListPreserveScope(decl, target_scope, context);
+      decl->set_scope(target_scope);
+      if (decl->get_parent() != target_scope) {
+        decl->set_parent(target_scope);
+      }
+    }
+    ensureDeclInScopeChildList(decl, target_scope, context);
+  };
+
+  auto suppress_frontend_only_if_synthetic = [](SgLocatedNode *node) {
+    if (node == nullptr) {
+      return;
+    }
+
+    Sg_File_Info *fi = node->get_file_info();
+    const bool has_real_source = fi != nullptr && fi->get_line() > 0 &&
+                                 !fi->isCompilerGenerated() &&
+                                 !fi->isSourcePositionUnavailableInFrontend();
+    if (has_real_source) {
+      return;
+    }
+
+    suppressFrontendOnlyNode(node);
+  };
+
+  auto normalize_template_decl_scope = [&](SgTemplateClassDeclaration *decl,
+                                           SgScopeStatement *target_scope,
+                                           const char *context) {
+    if (decl == nullptr || target_scope == nullptr) {
+      return;
+    }
+    auto normalize_one = [&](SgTemplateClassDeclaration *candidate) {
+      if (candidate == nullptr) {
+        return;
+      }
+      normalize_decl_scope(candidate, target_scope, context);
+      suppress_frontend_only_if_synthetic(candidate);
+      suppress_frontend_only_if_synthetic(candidate->get_definition());
+    };
+
+    normalize_one(decl);
+    if (SgTemplateClassDeclaration *first = isSgTemplateClassDeclaration(
+            decl->get_firstNondefiningDeclaration())) {
+      if (first != decl) {
+        normalize_one(first);
+      }
+    }
+    if (SgTemplateClassDeclaration *def =
+            isSgTemplateClassDeclaration(decl->get_definingDeclaration())) {
+      if (def != decl) {
+        normalize_one(def);
+      }
+    }
+    registerDeclarationSymbol(decl);
+  };
+
+  auto normalize_template_decl_flags = [&](SgTemplateClassDeclaration *decl) {
+    auto normalize_file_info = [](Sg_File_Info *fi) {
+      if (fi == nullptr) {
+        return;
+      }
+      fi->unsetCompilerGenerated();
+      fi->unsetFrontendSpecific();
+      fi->unsetOutputInCodeGeneration();
+    };
+
+    auto normalize_one = [&](SgTemplateClassDeclaration *candidate) {
+      if (candidate == nullptr) {
+        return;
+      }
+      SgScopeStatement *scope = candidate->get_scope();
+      SgNode *parent = candidate->get_parent();
+      const bool namespace_or_global_scope =
+          isSgGlobal(scope) != nullptr ||
+          isSgNamespaceDefinitionStatement(scope) != nullptr ||
+          isSgGlobal(parent) != nullptr ||
+          isSgNamespaceDefinitionStatement(parent) != nullptr;
+      if (!namespace_or_global_scope) {
+        return;
+      }
+      candidate->unsetCompilerGenerated();
+      candidate->unsetFrontendSpecific();
+      normalize_file_info(candidate->get_file_info());
+      normalize_file_info(candidate->get_startOfConstruct());
+      normalize_file_info(candidate->get_endOfConstruct());
+    };
+
+    normalize_one(decl);
+    if (SgTemplateClassDeclaration *first = isSgTemplateClassDeclaration(
+            decl != nullptr ? decl->get_firstNondefiningDeclaration()
+                            : nullptr)) {
+      if (first != decl) {
+        normalize_one(first);
+      }
+    }
+    if (SgTemplateClassDeclaration *def = isSgTemplateClassDeclaration(
+            decl != nullptr ? decl->get_definingDeclaration() : nullptr)) {
+      if (def != decl) {
+        normalize_one(def);
+      }
+    }
+  };
+
+  auto normalize_instantiation_scope = [&](SgTemplateInstantiationDecl *decl,
+                                           SgScopeStatement *target_scope,
+                                           const char *context) {
+    if (decl == nullptr || target_scope == nullptr) {
+      return;
+    }
+    normalize_decl_scope(decl, target_scope, context);
+    if (SgTemplateInstantiationDecl *first = isSgTemplateInstantiationDecl(
+            decl->get_firstNondefiningDeclaration())) {
+      if (first != decl) {
+        normalize_decl_scope(first, target_scope, context);
+      }
+    }
+    if (SgTemplateInstantiationDecl *def =
+            isSgTemplateInstantiationDecl(decl->get_definingDeclaration())) {
+      if (def != decl) {
+        normalize_decl_scope(def, target_scope, context);
+      }
+    }
+    registerDeclarationSymbol(decl);
+  };
+
+  auto namespace_scope_matches_inst_context =
+      [&](SgScopeStatement *scope) -> bool {
+    if (scope == nullptr) {
+      return false;
+    }
+    if (isSgGlobal(scope) == nullptr &&
+        isSgNamespaceDefinitionStatement(scope) == nullptr) {
+      return false;
+    }
+    if (inst_decl_context == nullptr) {
+      return true;
+    }
+
+    clang::DeclContext *context = inst_decl_context;
+    while (context != nullptr && llvm::isa<clang::LinkageSpecDecl>(context)) {
+      context = context->getParent();
+    }
+    if (context == nullptr) {
+      return false;
+    }
+    if (context->isTranslationUnit()) {
+      return isSgGlobal(scope) != nullptr;
+    }
+    return scopeIsWithinNamespaceChain(scope, context);
+  };
+
+  auto pick_reachable_existing_template_scope =
+      [&](SgTemplateClassDeclaration *decl) -> SgScopeStatement * {
+    auto current_namespace_or_global_scope = [&]() -> SgScopeStatement * {
+      for (SgNode *node = SageBuilder::topScopeStack(); node != nullptr;
+           node = node->get_parent()) {
+        if (SgNamespaceDefinitionStatement *ns =
+                isSgNamespaceDefinitionStatement(node)) {
+          return ns;
+        }
+        if (SgGlobal *global = isSgGlobal(node)) {
+          return global;
+        }
+      }
+      return nullptr;
+    };
+
+    auto try_parent_scope =
+        [&](SgScopeStatement *candidate) -> SgScopeStatement * {
+      if (candidate == nullptr ||
+          (isSgGlobal(candidate) == nullptr &&
+           isSgNamespaceDefinitionStatement(candidate) == nullptr) ||
+          !scopeReachableFromCurrentFile(candidate)) {
+        return nullptr;
+      }
+      return candidate;
+    };
+
+    auto try_scope = [&](SgScopeStatement *candidate) -> SgScopeStatement * {
+      if (candidate == nullptr || !scopeReachableFromCurrentFile(candidate) ||
+          !namespace_scope_matches_inst_context(candidate)) {
+        return nullptr;
+      }
+      return candidate;
+    };
+
+    auto try_decl =
+        [&](SgTemplateClassDeclaration *candidate) -> SgScopeStatement * {
+      if (candidate == nullptr) {
+        return nullptr;
+      }
+      if (SgScopeStatement *scope = current_namespace_or_global_scope()) {
+        if (namespace_scope_matches_inst_context(scope)) {
+          return scope;
+        }
+      }
+      if (SgScopeStatement *scope =
+              try_parent_scope(isSgScopeStatement(candidate->get_parent()))) {
+        return scope;
+      }
+      if (SgScopeStatement *scope =
+              try_scope(isSgScopeStatement(candidate->get_parent()))) {
+        return scope;
+      }
+      return try_scope(candidate->get_scope());
+    };
+
+    if (SgScopeStatement *scope = try_decl(decl)) {
+      return scope;
+    }
+    if (SgTemplateClassDeclaration *first = isSgTemplateClassDeclaration(
+            decl != nullptr ? decl->get_firstNondefiningDeclaration()
+                            : nullptr)) {
+      if (first != decl) {
+        if (SgScopeStatement *scope = try_decl(first)) {
+          return scope;
+        }
+      }
+    }
+    if (SgTemplateClassDeclaration *def = isSgTemplateClassDeclaration(
+            decl != nullptr ? decl->get_definingDeclaration() : nullptr)) {
+      if (def != decl) {
+        if (SgScopeStatement *scope = try_decl(def)) {
+          return scope;
+        }
+      }
+    }
+    return nullptr;
+  };
+
+  if (inst_decl_context != nullptr &&
+      declContextCanUseReachableNamespaceScope(inst_decl_context) &&
+      !scopeReachableFromCurrentFile(template_decl->get_scope())) {
+    SgScopeStatement *reachable_scope =
+        pick_reachable_existing_template_scope(template_decl);
+    if (reachable_scope == nullptr) {
+      reachable_scope = resolveReachableNamespaceScope(inst_decl_context);
+    }
+    if (reachable_scope != nullptr) {
+      normalize_template_decl_scope(
+          template_decl, reachable_scope,
+          "getOrCreateTemplateInstantiation:template-decl");
+    }
+  }
+  normalize_template_decl_flags(template_decl);
+
+  // Extract both base name and qualified name for the template.
+  std::string template_base_name = template_decl->get_name().getString();
+  std::string template_qualified_name = getTemplateQualifiedName(template_decl);
+
+  // Use qualified names in the cache key to avoid namespace collisions.
+  std::string inst_name_full =
+      mangleTemplateInstantiation(template_qualified_name, clang_type);
+  bool has_dependent_args = false;
+  for (const clang::TemplateArgument &arg : clang_type->template_arguments()) {
+    if (arg.isInstantiationDependent() ||
+        arg.containsUnexpandedParameterPack()) {
+      has_dependent_args = true;
+      break;
+    }
+  }
+  std::string inst_display_name;
+  if (has_dependent_args) {
+    SgTemplateArgumentPtrList display_args = buildTemplateArguments(clang_type);
+    if (display_args.empty()) {
+      inst_display_name = template_base_name;
+    } else {
+      inst_display_name = SageBuilder::appendTemplateArgumentsToName(
+                              SgName(template_base_name), display_args)
+                              .getString();
+    }
+  } else {
+    inst_display_name = buildTemplateInstantiationName(
+        template_base_name, clang_type->template_arguments());
+  }
+
   // Check cache
   auto it = p_template_inst_cache.find(inst_name_full);
   if (it != p_template_inst_cache.end()) {
@@ -5539,6 +5815,16 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
       SageBuilder::setTemplateArgumentParents(inst_decl);
       if (!inst_decl->get_nameResetFromMangledForm()) {
         inst_decl->set_nameResetFromMangledForm(true);
+      }
+      if (!scopeReachableFromCurrentFile(inst_decl->get_scope()) &&
+          inst_decl_context != nullptr &&
+          declContextCanUseReachableNamespaceScope(inst_decl_context)) {
+        if (SgScopeStatement *reachable_scope =
+                resolveReachableNamespaceScope(inst_decl_context)) {
+          normalize_instantiation_scope(
+              inst_decl, reachable_scope,
+              "getOrCreateTemplateInstantiation:reachable-cache");
+        }
       }
     }
     ensure_file_info(inst_decl);
@@ -5594,15 +5880,13 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
   // stay consistent with later declaration-based instantiation handling.
   SgScopeStatement *inst_scope = template_decl->get_scope();
   if (clang_type != nullptr) {
-    clang::TemplateName clang_tname = clang_type->getTemplateName();
-    if (clang::TemplateDecl *clang_template_decl =
-            clang_tname.getAsTemplateDecl()) {
+    if (inst_clang_template_decl != nullptr) {
       if (SgScopeStatement *context_scope = resolveScopeFromDeclContext(
-              clang_template_decl->getDeclContext(), nullptr)) {
+              inst_clang_template_decl->getDeclContext(), nullptr)) {
         inst_scope = context_scope;
       }
     } else {
-      clang::NestedNameSpecifier *qualifier = nullptr;
+      clang::NestedNameSpecifier qualifier = std::nullopt;
       if (const clang::QualifiedTemplateName *qtn =
               clang_tname.getAsQualifiedTemplateName()) {
         qualifier = qtn->getQualifier();
@@ -5610,7 +5894,7 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
                      clang_tname.getAsDependentTemplateName()) {
         qualifier = dtn->getQualifier();
       }
-      if (qualifier != nullptr) {
+      if (qualifier) {
         SgScopeStatement *base_scope = SageBuilder::topScopeStack();
         if (nestedNameSpecifierHasGlobal(qualifier)) {
           base_scope = getGlobalScope();
@@ -5621,6 +5905,14 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
           inst_scope = context_scope;
         }
       }
+    }
+  }
+  if (!scopeReachableFromCurrentFile(inst_scope) &&
+      inst_decl_context != nullptr &&
+      declContextCanUseReachableNamespaceScope(inst_decl_context)) {
+    if (SgScopeStatement *reachable_scope =
+            resolveReachableNamespaceScope(inst_decl_context)) {
+      inst_scope = reachable_scope;
     }
   }
   if (inst_scope == nullptr) {
@@ -5648,6 +5940,8 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
 
   // Cache it with full name
   p_template_inst_cache[inst_name_full] = inst_decl;
+  normalize_instantiation_scope(inst_decl, inst_scope,
+                                "getOrCreateTemplateInstantiation");
 
   return inst_decl;
 }
@@ -5751,7 +6045,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     if (template_specialization_type->isDependentType()) {
       clang::TemplateName tname =
           template_specialization_type->getTemplateName();
-      clang::NestedNameSpecifier *qualifier = nullptr;
+      clang::NestedNameSpecifier qualifier = std::nullopt;
       if (const clang::QualifiedTemplateName *qtn =
               tname.getAsQualifiedTemplateName()) {
         qualifier = qtn->getQualifier();
@@ -5775,7 +6069,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
       }
 
       SgType *dep_alias_type = nullptr;
-      if (qualifier != nullptr) {
+      if (qualifier) {
         dep_alias_type = buildNonrealTypeFromNestedNameSpecifier(
             qualifier, base_scope, SgName(alias_name),
             template_args.empty() ? nullptr : &template_args);
@@ -5850,6 +6144,24 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
       return VisitType(template_specialization_type, node);
     }
 
+    clang::NestedNameSpecifier alias_qualifier = std::nullopt;
+    if (const clang::QualifiedTemplateName *qtn =
+            tname.getAsQualifiedTemplateName()) {
+      alias_qualifier = qtn->getQualifier();
+    } else if (const clang::DependentTemplateName *dtn =
+                   tname.getAsDependentTemplateName()) {
+      alias_qualifier = dtn->getQualifier();
+    }
+
+    std::string alias_name =
+        alias_decl != nullptr ? alias_decl->getNameAsString() : std::string();
+    if (alias_name.empty()) {
+      alias_name = getTemplateNameBase(tname);
+    }
+    if (alias_name.empty()) {
+      alias_name = "__alias_template";
+    }
+
     bool alias_in_record_context = false;
     if (alias_decl != nullptr) {
       clang::DeclContext *alias_context = alias_decl->getDeclContext();
@@ -5861,27 +6173,9 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
           alias_context != nullptr && alias_context->isRecord();
     }
     if (alias_in_record_context) {
-      // Preserve class-scope alias template spelling (e.g.
-      // `Outer<T>::template Alias<U>`) rather than eagerly materializing the
-      // resolved aliased type, which can lose qualification outside the record
-      // context.
-      clang::NestedNameSpecifier *alias_qualifier = nullptr;
-      if (const clang::QualifiedTemplateName *qtn =
-              tname.getAsQualifiedTemplateName()) {
-        alias_qualifier = qtn->getQualifier();
-      } else if (const clang::DependentTemplateName *dtn =
-                     tname.getAsDependentTemplateName()) {
-        alias_qualifier = dtn->getQualifier();
-      }
-
-      std::string alias_name =
-          alias_decl != nullptr ? alias_decl->getNameAsString() : std::string();
-      if (alias_name.empty()) {
-        alias_name = getTemplateNameBase(tname);
-      }
-      if (alias_name.empty()) {
-        alias_name = "__alias_template";
-      }
+      // Preserve explicitly qualified alias template spelling (e.g.
+      // `Outer<T>::template Alias<U>`) rather than eagerly materializing a
+      // typedef instantiation, which can drop the source qualifier.
 
       SgScopeStatement *base_scope = SageBuilder::topScopeStack();
       if (base_scope == nullptr) {
@@ -5889,7 +6183,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
       }
 
       SgType *record_alias_type = nullptr;
-      if (alias_qualifier != nullptr) {
+      if (alias_qualifier) {
         if (nestedNameSpecifierHasGlobal(alias_qualifier)) {
           base_scope = getGlobalScope();
         }
@@ -5939,118 +6233,55 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
       scope = getGlobalScope();
     }
 
-    auto scope_reachable_from_current_file =
-        [&](SgScopeStatement *candidate) -> bool {
-      if (candidate == nullptr || p_sage_source_file == nullptr) {
-        return false;
+    auto normalize_alias_decl_scope = [&](SgTemplateTypedefDeclaration *decl,
+                                          SgScopeStatement *target_scope,
+                                          const char *context) {
+      if (decl == nullptr || target_scope == nullptr) {
+        return;
       }
-      SgGlobal *file_global = p_sage_source_file->get_globalScope();
-      if (file_global == nullptr) {
-        return false;
-      }
-
-      auto attached_to_parent = [](SgNode *child, SgNode *parent) -> bool {
-        if (child == nullptr || parent == nullptr) {
-          return false;
+      auto normalize_one = [&](SgTemplateTypedefDeclaration *candidate) {
+        if (candidate == nullptr) {
+          return;
         }
-
-        if (SgScopeStatement *parent_scope = isSgScopeStatement(parent)) {
-          if (SgStatement *stmt = isSgStatement(child)) {
-            return parent_scope->statementExistsInScope(stmt);
+        if (candidate->get_scope() != target_scope ||
+            candidate->get_parent() != target_scope) {
+          ensureDeclInScopeChildListPreserveScope(candidate, target_scope,
+                                                  context);
+          candidate->set_scope(target_scope);
+          if (candidate->get_parent() != target_scope) {
+            candidate->set_parent(target_scope);
           }
         }
-
-        if (SgNamespaceDeclarationStatement *ns_decl =
-                isSgNamespaceDeclarationStatement(parent)) {
-          return ns_decl->get_definition() == child;
-        }
-        if (SgClassDeclaration *class_decl = isSgClassDeclaration(parent)) {
-          return class_decl->get_definition() == child;
-        }
-        if (SgFunctionDeclaration *fn_decl = isSgFunctionDeclaration(parent)) {
-          return fn_decl->get_definition() == child;
-        }
-
-        return true;
+        ensureDeclInScopeChildList(candidate, target_scope, context);
+        suppressFrontendOnlyNode(candidate);
+        registerDeclarationSymbol(candidate);
       };
 
-      for (SgNode *cursor = candidate; cursor != nullptr;
-           cursor = cursor->get_parent()) {
-        if (cursor == file_global || cursor == p_sage_source_file) {
-          return true;
-        }
-
-        SgNode *parent = cursor->get_parent();
-        if (parent == nullptr) {
-          return false;
-        }
-        if (!attached_to_parent(cursor, parent)) {
-          return false;
+      normalize_one(decl);
+      if (SgTemplateTypedefDeclaration *first = isSgTemplateTypedefDeclaration(
+              decl->get_firstNondefiningDeclaration())) {
+        if (first != decl) {
+          normalize_one(first);
         }
       }
-      return false;
+      if (SgTemplateTypedefDeclaration *def =
+              isSgTemplateTypedefDeclaration(decl->get_definingDeclaration())) {
+        if (def != decl) {
+          normalize_one(def);
+        }
+      }
     };
 
-    auto resolve_reachable_namespace_scope =
-        [&](clang::DeclContext *decl_context) -> SgScopeStatement * {
-      if (decl_context == nullptr) {
-        return nullptr;
-      }
-      SgScopeStatement *reachable_scope = getGlobalScope();
-      if (reachable_scope == nullptr && p_sage_source_file != nullptr) {
-        reachable_scope = p_sage_source_file->get_globalScope();
-      }
-      if (reachable_scope == nullptr) {
-        return nullptr;
-      }
-
-      std::vector<const clang::NamespaceDecl *> namespaces =
-          collectNamespaceContexts(decl_context);
-      for (const clang::NamespaceDecl *ns_decl : namespaces) {
-        if (ns_decl == nullptr || ns_decl->isAnonymousNamespace()) {
-          continue;
-        }
-
-        SgName ns_name(ns_decl->getNameAsString());
-        SgNamespaceDeclarationStatement *ns_stmt = nullptr;
-        if (SgNamespaceSymbol *ns_symbol =
-                reachable_scope->lookup_namespace_symbol(ns_name)) {
-          ns_stmt = ns_symbol->get_declaration();
-        }
-
-        if (ns_stmt == nullptr || ns_stmt->get_definition() == nullptr ||
-            !scope_reachable_from_current_file(ns_stmt->get_definition())) {
-          // Materialize/reopen a namespace in the reachable scope rather than
-          // reusing detached canonical namespace nodes from system-header
-          // contexts.
-          ns_stmt = SageBuilder::buildNamespaceDeclaration_nfi(ns_name, false,
-                                                               reachable_scope);
-        }
-
-        if (ns_stmt == nullptr || ns_stmt->get_definition() == nullptr) {
-          return nullptr;
-        }
-
-        if (ns_stmt->get_parent() != reachable_scope) {
-          ensureDeclInScopeChildList(
-              ns_stmt, reachable_scope,
-              "VisitTemplateSpecializationType:reachable-namespace");
-        }
-
-        reachable_scope = ns_stmt->get_definition();
-      }
-
-      return reachable_scope;
-    };
-
-    if (!scope_reachable_from_current_file(scope) && alias_decl != nullptr) {
+    if (!scopeReachableFromCurrentFile(scope) && alias_decl != nullptr &&
+        declContextCanUseReachableNamespaceScope(
+            alias_decl->getDeclContext())) {
       if (SgScopeStatement *reachable_scope =
-              resolve_reachable_namespace_scope(alias_decl->getDeclContext())) {
+              resolveReachableNamespaceScope(alias_decl->getDeclContext())) {
         scope = reachable_scope;
       }
     }
 
-    if (!scope_reachable_from_current_file(scope)) {
+    if (!scopeReachableFromCurrentFile(scope)) {
       if (SgScopeStatement *global_scope = getGlobalScope()) {
         scope = global_scope;
       } else if (p_sage_source_file != nullptr &&
@@ -6060,17 +6291,27 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     }
 
     if (alias_sg_decl != nullptr && scope != nullptr &&
-        !scope_reachable_from_current_file(alias_sg_decl->get_scope())) {
+        !scopeReachableFromCurrentFile(alias_sg_decl->get_scope())) {
       SgName reachable_alias_name = alias_sg_decl->get_name();
       if (alias_decl != nullptr) {
         reachable_alias_name = SgName(alias_decl->getNameAsString());
       }
-      if (SgTemplateTypedefSymbol *reachable_alias_sym =
-              scope->lookup_template_typedef_symbol(reachable_alias_name)) {
-        if (SgTemplateTypedefDeclaration *reachable_alias_decl =
-                isSgTemplateTypedefDeclaration(
-                    reachable_alias_sym->get_declaration())) {
-          alias_sg_decl = reachable_alias_decl;
+      bool rebound_to_reachable_symbol = false;
+      if (alias_decl != nullptr && declContextCanUseReachableNamespaceScope(
+                                       alias_decl->getDeclContext())) {
+        if (SgTemplateTypedefSymbol *reachable_alias_sym =
+                scope->lookup_template_typedef_symbol(reachable_alias_name)) {
+          if (SgTemplateTypedefDeclaration *reachable_alias_decl =
+                  isSgTemplateTypedefDeclaration(
+                      reachable_alias_sym->get_declaration())) {
+            alias_sg_decl = reachable_alias_decl;
+            rebound_to_reachable_symbol = true;
+          }
+        }
+        if (!rebound_to_reachable_symbol) {
+          normalize_alias_decl_scope(
+              alias_sg_decl, scope,
+              "VisitTemplateSpecializationType:reachable-alias");
         }
       }
     }
@@ -6105,6 +6346,8 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
               alias_name, aliased_type, scope, /*has_defining_base=*/false,
               alias_sg_decl, template_args);
       if (inst_decl != nullptr) {
+        inst_decl->set_typedef_type(SgTypedefDeclaration::e_using);
+        repairTypedefDeclarationReferenceShared(inst_decl);
         inst_decl->get_templateArguments() = template_args;
         inst_decl->get_deducedTemplateArguments() = deduced_args;
         inst_decl->set_nameResetFromMangledForm(true);
@@ -6134,30 +6377,12 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     }
 
     // Fallback: preserve alias spelling as a nonreal type.
-    std::string alias_name =
-        alias_decl != nullptr ? alias_decl->getNameAsString() : std::string();
-    if (alias_name.empty()) {
-      alias_name = getTemplateNameBase(tname);
-    }
-    if (alias_name.empty()) {
-      alias_name = "__alias_template";
-    }
-
-    clang::NestedNameSpecifier *alias_qualifier = nullptr;
-    if (const clang::QualifiedTemplateName *qtn =
-            tname.getAsQualifiedTemplateName()) {
-      alias_qualifier = qtn->getQualifier();
-    } else if (const clang::DependentTemplateName *dtn =
-                   tname.getAsDependentTemplateName()) {
-      alias_qualifier = dtn->getQualifier();
-    }
-
     SgScopeStatement *base_scope = SageBuilder::topScopeStack();
     if (base_scope == nullptr) {
       base_scope = getGlobalScope();
     }
 
-    if (alias_qualifier != nullptr) {
+    if (alias_qualifier) {
       if (nestedNameSpecifierHasGlobal(alias_qualifier)) {
         base_scope = getGlobalScope();
       }
@@ -6186,7 +6411,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     SgScopeStatement *base_scope = SageBuilder::topScopeStack();
     ROSE_ASSERT(base_scope != nullptr);
 
-    clang::NestedNameSpecifier *qualifier = nullptr;
+    clang::NestedNameSpecifier qualifier = std::nullopt;
     if (const clang::QualifiedTemplateName *qtn =
             tname.getAsQualifiedTemplateName()) {
       qualifier = qtn->getQualifier();
@@ -6195,7 +6420,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
       qualifier = dtn->getQualifier();
     }
 
-    if (qualifier != nullptr) {
+    if (qualifier) {
       *node = buildNonrealTypeFromNestedNameSpecifier(
           qualifier, base_scope, SgName(base_name), &tpl_args);
       return VisitType(template_specialization_type, node);
@@ -6219,8 +6444,10 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
 
   clang::TemplateDecl *clang_template_decl = tname.getAsTemplateDecl();
   if (clang_template_decl) {
-    SgNode *tmp_node = TraverseOnDemand(clang_template_decl);
-    template_decl = isSgTemplateClassDeclaration(tmp_node);
+    template_decl =
+        isSgTemplateClassDeclaration(lookupSgDeclarationForClangDecl(
+            llvm::cast<clang::Decl>(clang_template_decl),
+            /*allow_on_demand=*/true));
   }
 
   if (template_decl == NULL) {
@@ -6232,7 +6459,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
     }
 
     if (template_scope == nullptr) {
-      clang::NestedNameSpecifier *qualifier = nullptr;
+      clang::NestedNameSpecifier qualifier = std::nullopt;
       if (const clang::QualifiedTemplateName *qtn =
               tname.getAsQualifiedTemplateName()) {
         qualifier = qtn->getQualifier();
@@ -6241,7 +6468,7 @@ bool ClangToSageTranslator::VisitTemplateSpecializationType(
         qualifier = dtn->getQualifier();
       }
 
-      if (qualifier != nullptr) {
+      if (qualifier) {
         SgScopeStatement *base_scope = SageBuilder::topScopeStack();
         if (nestedNameSpecifierHasGlobal(qualifier)) {
           base_scope = getGlobalScope();
@@ -6627,6 +6854,7 @@ bool ClangToSageTranslator::VisitTypedefType(clang::TypedefType *typedef_type,
           llvm::isa<clang::TypeAliasDecl>(typedef_decl)
               ? SgTypedefDeclaration::e_using
               : SgTypedefDeclaration::e_typedef);
+      repairTypedefDeclarationReferenceShared(sg_typedef_decl);
       setCompilerGeneratedFileInfo(sg_typedef_decl);
       suppress_unparse_output(sg_typedef_decl);
       p_decl_translation_map.insert(
@@ -6635,6 +6863,7 @@ bool ClangToSageTranslator::VisitTypedefType(clang::TypedefType *typedef_type,
   }
 
   if (sg_typedef_decl != NULL) {
+    repairTypedefDeclarationReferenceShared(sg_typedef_decl);
     *node = sg_typedef_decl->get_type();
   } else {
     SgSymbol *sym = GetSymbolFromSymbolTable(typedef_type->getDecl());
@@ -6711,10 +6940,6 @@ bool ClangToSageTranslator::VisitTypeWithKeyword(
 
   if (*node == nullptr) {
     clang::QualType desugared;
-    if (const clang::ElaboratedType *elaborated =
-            llvm::dyn_cast<clang::ElaboratedType>(type_with_keyword)) {
-      desugared = elaborated->getNamedType();
-    }
     if (desugared.isNull()) {
       clang::QualType qt(type_with_keyword, 0);
       desugared = qt.getCanonicalType();
@@ -6749,310 +6974,6 @@ bool ClangToSageTranslator::VisitDependentNameType(
   }
 
   return VisitTypeWithKeyword(dependent_name_type, node) && res;
-}
-
-bool ClangToSageTranslator::VisitDependentTemplateSpecializationType(
-    clang::DependentTemplateSpecializationType
-        *dependent_template_specialization_type,
-    SgNode **node) {
-#if DEBUG_VISIT_TYPE
-  std::cerr << "ClangToSageTranslator::DependentTemplateSpecializationType"
-            << std::endl;
-#endif
-  bool res = true;
-
-  DependentTemplateSpecializationNameInfo name_info =
-      getDependentTemplateSpecializationName(
-          dependent_template_specialization_type);
-
-  SgTemplateArgumentPtrList tpl_args;
-  for (const clang::TemplateArgument &arg :
-       dependent_template_specialization_type->template_arguments()) {
-    appendTemplateArguments(tpl_args, arg, false);
-  }
-
-  SgScopeStatement *base_scope = SageBuilder::topScopeStack();
-  ROSE_ASSERT(base_scope != nullptr);
-  *node = buildNonrealTypeFromNestedNameSpecifier(
-      name_info.qualifier, base_scope, SgName(name_info.base_name), &tpl_args);
-  if (SgNonrealType *nrtype = isSgNonrealType(*node)) {
-    if (SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration())) {
-      if (name_info.has_template_keyword) {
-        nrdecl->set_has_template_keyword(true);
-      }
-    }
-  }
-
-  return VisitTypeWithKeyword(dependent_template_specialization_type, node) &&
-         res;
-}
-
-bool ClangToSageTranslator::VisitElaboratedType(
-    clang::ElaboratedType *elaborated_type, SgNode **node) {
-#if DEBUG_VISIT_TYPE
-  std::cerr << "ClangToSageTranslator::VisitElaboratedType" << std::endl;
-#endif
-
-  clang::NestedNameSpecifier *qualifier = elaborated_type->getQualifier();
-  if (qualifier != nullptr &&
-      (nestedNameSpecifierHasTypeQualifier(qualifier) ||
-       nestedNameSpecifierHasNamespaceQualifier(qualifier))) {
-    if (!elaborated_type->isDependentType()) {
-      const bool preserve_explicit_scope_qualifier =
-          nestedNameSpecifierHasNamespaceQualifier(qualifier);
-      if (!preserve_explicit_scope_qualifier) {
-        if (SgType *resolved =
-                buildTypeFromQualifiedType(elaborated_type->getNamedType())) {
-          *node = resolved;
-          return VisitTypeWithKeyword(elaborated_type, node);
-        }
-      }
-    }
-
-    if (const clang::TemplateSpecializationType *named_tst =
-            llvm::dyn_cast<clang::TemplateSpecializationType>(
-                elaborated_type->getNamedType().getTypePtrOrNull())) {
-      if (named_tst->isTypeAlias()) {
-        if (SgType *alias_type =
-                buildTypeFromQualifiedType(elaborated_type->getNamedType())) {
-          *node = alias_type;
-          return VisitTypeWithKeyword(elaborated_type, node);
-        }
-      }
-    }
-
-    struct TerminalTypeInfo {
-      SgName name;
-      SgTemplateArgumentPtrList args;
-      bool has_args = false;
-      clang::DeclContext *decl_context = nullptr;
-    };
-
-    auto resolve_template_decl =
-        [&](const clang::TemplateName &name) -> clang::TemplateDecl * {
-      clang::TemplateName current = name;
-      for (;;) {
-        if (clang::TemplateDecl *decl = current.getAsTemplateDecl()) {
-          return decl;
-        }
-        if (const clang::QualifiedTemplateName *qtn =
-                current.getAsQualifiedTemplateName()) {
-          clang::TemplateName underlying = qtn->getUnderlyingTemplate();
-          if (clang::TemplateDecl *decl = underlying.getAsTemplateDecl()) {
-            return decl;
-          }
-          current = underlying;
-          continue;
-        }
-        if (const clang::SubstTemplateTemplateParmStorage *subst =
-                current.getAsSubstTemplateTemplateParm()) {
-          current = subst->getReplacement();
-          continue;
-        }
-        if (clang::UsingShadowDecl *using_shadow =
-                current.getAsUsingShadowDecl()) {
-          return llvm::dyn_cast_or_null<clang::TemplateDecl>(
-              using_shadow->getTargetDecl());
-        }
-        return nullptr;
-      }
-    };
-
-    auto get_terminal_info = [&](clang::QualType named_type,
-                                 TerminalTypeInfo *info) -> bool {
-      if (info == nullptr) {
-        return false;
-      }
-      const clang::Type *named_ptr = named_type.getTypePtrOrNull();
-      if (named_ptr == nullptr) {
-        return false;
-      }
-
-      if (const clang::TemplateSpecializationType *tst =
-              llvm::dyn_cast<clang::TemplateSpecializationType>(named_ptr)) {
-        std::string base_name = getTemplateNameBase(tst->getTemplateName());
-        if (base_name.empty()) {
-          return false;
-        }
-        info->name = SgName(base_name);
-        info->args = buildTemplateArguments(tst);
-        info->has_args = !info->args.empty();
-        if (clang::TemplateDecl *template_decl =
-                resolve_template_decl(tst->getTemplateName())) {
-          info->decl_context = template_decl->getDeclContext();
-        }
-        return true;
-      }
-
-      if (const clang::DependentTemplateSpecializationType *dts =
-              llvm::dyn_cast<clang::DependentTemplateSpecializationType>(
-                  named_ptr)) {
-        DependentTemplateSpecializationNameInfo name_info =
-            getDependentTemplateSpecializationName(dts);
-        if (name_info.base_name.empty()) {
-          return false;
-        }
-        info->name = SgName(name_info.base_name);
-        for (const clang::TemplateArgument &arg : dts->template_arguments()) {
-          appendTemplateArguments(info->args, arg, false);
-        }
-        info->has_args = !info->args.empty();
-        return true;
-      }
-
-      if (const clang::DependentNameType *dnt =
-              llvm::dyn_cast<clang::DependentNameType>(named_ptr)) {
-        const clang::IdentifierInfo *id = dnt->getIdentifier();
-        if (id == nullptr) {
-          return false;
-        }
-        info->name = SgName(id->getName().str());
-        return true;
-      }
-
-      if (const clang::TemplateTypeParmType *ttp =
-              llvm::dyn_cast<clang::TemplateTypeParmType>(named_ptr)) {
-        std::string name_str;
-        if (const clang::TemplateTypeParmDecl *decl = ttp->getDecl()) {
-          name_str = normalizeTemplateTypeParamName(decl->getNameAsString());
-        }
-        if (name_str.empty()) {
-          return false;
-        }
-        info->name = SgName(name_str);
-        return true;
-      }
-
-      if (const clang::TypedefType *tdef =
-              llvm::dyn_cast<clang::TypedefType>(named_ptr)) {
-        std::string name_str = tdef->getDecl()->getNameAsString();
-        if (name_str.empty()) {
-          return false;
-        }
-        info->name = SgName(name_str);
-        info->decl_context = tdef->getDecl()->getDeclContext();
-        return true;
-      }
-
-      if (const clang::TagType *tag =
-              llvm::dyn_cast<clang::TagType>(named_ptr)) {
-        std::string name_str = tag->getDecl()->getNameAsString();
-        if (name_str.empty()) {
-          return false;
-        }
-        info->name = SgName(name_str);
-        info->decl_context = tag->getDecl()->getDeclContext();
-        return true;
-      }
-
-      if (const clang::InjectedClassNameType *inj =
-              llvm::dyn_cast<clang::InjectedClassNameType>(named_ptr)) {
-        std::string name_str = inj->getDecl()->getNameAsString();
-        if (name_str.empty()) {
-          return false;
-        }
-        info->name = SgName(name_str);
-        info->decl_context = inj->getDecl()->getDeclContext();
-        return true;
-      }
-
-      return false;
-    };
-
-    TerminalTypeInfo info;
-    if (get_terminal_info(elaborated_type->getNamedType(), &info)) {
-      clang::NestedNameSpecifier *effective_qualifier = qualifier;
-      if (effective_qualifier != nullptr && info.decl_context != nullptr &&
-          p_compiler_instance != nullptr) {
-        effective_qualifier =
-            prependNamespaceQualifiers(effective_qualifier, info.decl_context,
-                                       p_compiler_instance->getASTContext());
-      }
-
-      auto qualifier_has_namespace =
-          [](clang::NestedNameSpecifier *nns) -> bool {
-        for (clang::NestedNameSpecifier *cur = nns; cur != nullptr;
-             cur = cur->getPrefix()) {
-          switch (cur->getKind()) {
-          case clang::NestedNameSpecifier::Namespace:
-          case clang::NestedNameSpecifier::NamespaceAlias:
-          case clang::NestedNameSpecifier::Global:
-            return true;
-          default:
-            break;
-          }
-        }
-        return false;
-      };
-
-      SgScopeStatement *base_scope = SageBuilder::topScopeStack();
-      if (base_scope == nullptr) {
-        base_scope = getGlobalScope();
-      }
-      if (qualifier_has_namespace(effective_qualifier)) {
-        base_scope = getGlobalScope();
-      } else if (info.decl_context != nullptr) {
-        clang::DeclContext *ctx = info.decl_context;
-        while (ctx != nullptr && !ctx->isNamespace() &&
-               !ctx->isTranslationUnit()) {
-          ctx = ctx->getParent();
-        }
-        if (SgScopeStatement *resolved =
-                resolveScopeFromDeclContext(ctx, nullptr)) {
-          base_scope = resolved;
-        } else if (ctx != nullptr && ctx->isTranslationUnit()) {
-          base_scope = getGlobalScope();
-        }
-      }
-      *node = buildNonrealTypeFromNestedNameSpecifier(
-          effective_qualifier, base_scope, info.name,
-          info.has_args ? &info.args : nullptr);
-      if (!elaborated_type->isDependentType()) {
-        if (SgNonrealType *nrtype = isSgNonrealType(*node)) {
-          if (SgNonrealDecl *nrdecl =
-                  isSgNonrealDecl(nrtype->get_declaration())) {
-            nrdecl->set_suppress_typename(true);
-          }
-        }
-      }
-      return VisitTypeWithKeyword(elaborated_type, node);
-    }
-  }
-
-  SgType *type = buildTypeFromQualifiedType(elaborated_type->getNamedType());
-
-  clang::TagDecl *ownedTagDecl = elaborated_type->getOwnedTagDecl();
-#if DEBUG_VISIT_TYPE
-  if (ownedTagDecl != nullptr) {
-    std::cerr << "ClangToSageTranslator::VisitElaboratedType has ownedTagDecl "
-              << "and isThisDeclarationADefinition = "
-              << ownedTagDecl->isThisDeclarationADefinition() << "\n";
-  }
-#endif
-
-  // CLANG FRONTEND NOTE: ElaboratedType contains namespace qualifiers (e.g.,
-  // "std::" in "std::string") and struct/class/enum keywords that provide
-  // "sugar" for the type reference.
-  //
-  // WARNING: Do NOT mutate the underlying SgTypedefDeclaration or other type
-  // declarations! The same declaration is shared by all uses, so modifying it
-  // causes corruption:
-  //   1st use: "string" → "std::string"
-  //   2nd use: "std::string" → "std::std::string"
-  //   3rd use: "std::std::string" → "std::std::std::string"
-  //
-  // TODO: ROSE needs a proper way to represent elaborated types with
-  // qualifiers. Possible solutions:
-  //   - Create SgQualifiedNameType or similar wrapper
-  //   - Store qualifier info as attributes on the type
-  //   - Handle qualification during unparsing only
-  //
-  // For now, we just desugar to the named type (same as legacy frontend
-  // behavior).
-
-  *node = type;
-
-  return VisitTypeWithKeyword(elaborated_type, node);
 }
 
 bool ClangToSageTranslator::VisitUnaryTransformType(
