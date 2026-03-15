@@ -2,6 +2,7 @@
 #include <algorithm>
 
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
@@ -493,7 +494,7 @@ maybeFixMissingTemplateHeader(clang::SourceManager &source_manager,
                                               buffer_or->getBufferIdentifier());
 }
 
-// Clang 21 rejects `_Alignas/alignas` when it appears after a record
+// Clang rejects `_Alignas/alignas` when it appears after a record
 // definition, e.g. `struct S { ... } _Alignas(16) x;`, even though this form
 // is accepted by GCC and heavily used in legacy ROSE tests. Normalize those
 // declarations by moving the alignment specifier sequence in front of the
@@ -1849,12 +1850,13 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       llvm::vfs::createPhysicalFileSystem();
 
   // TextDiagnosticPrinter keeps a reference to DiagnosticOptions; ensure it
-  // outlives the diagnostics engine for LLVM 21.
+  // outlives the diagnostics engine for LLVM 22.
   clang::TextDiagnosticPrinter *diag_printer =
       new clang::TextDiagnosticPrinter(llvm::errs(), *diag_opts);
 
-  // LLVM API - requires VFS as first parameter
-  compiler_instance->createDiagnostics(*vfs, diag_printer, true);
+  // LLVM 22 returns a DiagnosticsEngine; wire it into the CompilerInstance.
+  compiler_instance->setDiagnostics(clang::CompilerInstance::createDiagnostics(
+      *vfs, *diag_opts, diag_printer, true));
 
   clang::CompilerInvocation &invocation = compiler_instance->getInvocation();
   const std::string default_triple = llvm::sys::getDefaultTargetTriple();
@@ -1950,16 +1952,16 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   driver.setTitle("clang");
   std::string resource_dir_candidate;
   if (!clang_driver_path.empty()) {
-    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
-        clang_driver_path.c_str(), (void *)&clang_main);
+    resource_dir_candidate =
+        clang::GetResourcesPath(clang_driver_path.c_str(), (void *)&clang_main);
   } else if (!llvm_root.empty()) {
     const std::string llvm_fallback =
         llvm_root + "/bin/clang-" + std::to_string(LLVM_VERSION_MAJOR);
-    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
-        llvm_fallback.c_str(), (void *)&clang_main);
+    resource_dir_candidate =
+        clang::GetResourcesPath(llvm_fallback.c_str(), (void *)&clang_main);
   } else if (resolved_clang_driver) {
-    resource_dir_candidate = clang::CompilerInvocation::GetResourcesPath(
-        driver_executable.c_str(), (void *)&clang_main);
+    resource_dir_candidate =
+        clang::GetResourcesPath(driver_executable.c_str(), (void *)&clang_main);
   }
   if (!resource_dir_candidate.empty() &&
       resource_dir_has_header(resource_dir_candidate, "stddef.h")) {
@@ -2262,8 +2264,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   clang::HeaderSearchOptions &headerSearchOpts =
       invocation.getHeaderSearchOpts();
 
-  // Ensure Clang's builtin and system include paths are active for both
-  // LLVM 21 so the resource-dir headers are always available.
+  // Ensure Clang's builtin and system include paths are active for LLVM 22 so
+  // the resource-dir headers are always available.
   headerSearchOpts.UseBuiltinIncludes = true;
   headerSearchOpts.UseStandardSystemIncludes = true;
   headerSearchOpts.UseStandardCXXIncludes = true;
@@ -2272,9 +2274,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     if (!driver.ResourceDir.empty()) {
       headerSearchOpts.ResourceDir = driver.ResourceDir;
     } else {
-      headerSearchOpts.ResourceDir =
-          clang::CompilerInvocation::GetResourcesPath(driver_executable.c_str(),
-                                                      (void *)&clang_main);
+      headerSearchOpts.ResourceDir = clang::GetResourcesPath(
+          driver_executable.c_str(), (void *)&clang_main);
     }
   } else if (!resource_dir_has_header(headerSearchOpts.ResourceDir,
                                       "stddef.h")) {
@@ -2458,7 +2459,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   }
 
   // Now create file manager with FileSystemOptions from the parsed invocation
-  compiler_instance->createFileManager(vfs);
+  compiler_instance->createFileManager();
 
   clang::PreprocessorOptions &pp_opts =
       compiler_instance->getInvocation().getPreprocessorOpts();
@@ -2478,7 +2479,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       compiler_instance->getDiagnostics(), invocation.getTargetOpts());
   compiler_instance->setTarget(target_info);
 
-  compiler_instance->createSourceManager(compiler_instance->getFileManager());
+  compiler_instance->createSourceManager();
 
   // getFileRef returns Expected<FileEntryRef> instead of ErrorOr
   llvm::Expected<clang::FileEntryRef> ret =

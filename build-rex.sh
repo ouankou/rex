@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# REX Build Script with Clang Frontend (LLVM 21)
+# REX Build Script with Clang Frontend (LLVM 22)
 # This script automates the build process for REX compiler
 # with the experimental Clang frontend enabled.
 #
@@ -71,22 +71,22 @@ echo ""
 # Check for LLVM/Clang
 echo -e "${YELLOW}[2/5] Checking for LLVM/Clang installation...${NC}"
 LLVM_CONFIG_CMD=""
-if command -v llvm-config-21 &> /dev/null; then
-    LLVM_CONFIG_CMD="llvm-config-21"
+if command -v llvm-config-22 &> /dev/null; then
+    LLVM_CONFIG_CMD="llvm-config-22"
 elif command -v llvm-config &> /dev/null; then
     LLVM_CONFIG_CMD="llvm-config"
 fi
 
 if [ -z "$LLVM_CONFIG_CMD" ]; then
-    echo -e "${RED}Error: llvm-config not found. Please install LLVM/Clang 21 or later.${NC}"
-    echo "On Ubuntu/Debian: sudo apt-get install llvm-21 clang-21 libclang-21-dev"
+    echo -e "${RED}Error: llvm-config not found. Please install LLVM/Clang 22 or later.${NC}"
+    echo "On Ubuntu/Debian: sudo apt-get install llvm-22 clang-22 libclang-22-dev"
     exit 1
 fi
 
 LLVM_VERSION=$($LLVM_CONFIG_CMD --version)
 LLVM_MAJOR=$(echo "$LLVM_VERSION" | sed -nE 's/^([0-9]+).*/\1/p')
-if [ -z "$LLVM_MAJOR" ] || [ "$LLVM_MAJOR" -lt 21 ]; then
-    echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires LLVM/Clang 21 or later.${NC}"
+if [ -z "$LLVM_MAJOR" ] || [ "$LLVM_MAJOR" -lt 22 ]; then
+    echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires LLVM/Clang 22 or later.${NC}"
     exit 1
 fi
 echo -e "${GREEN}Found LLVM version: $LLVM_VERSION (${LLVM_CONFIG_CMD})${NC}"

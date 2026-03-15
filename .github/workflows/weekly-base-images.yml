@@ -114,12 +114,12 @@ jobs:
           bash -lc '
             set -euo pipefail
             javac -version
-            dpkg-query -W openjdk-25-jdk-headless antlr4 clang-21
+            dpkg-query -W openjdk-25-jdk-headless antlr4 clang-22
           '
         docker run --rm --platform=linux/loong64 \
           "${LOCAL_IMAGE_REPO}:base-loong64-local" \
           bash -lc '
             set -euo pipefail
             javac -version
-            dpkg-query -W openjdk-21-jdk-headless antlr4 clang-21
+            dpkg-query -W openjdk-21-jdk-headless antlr4 clang-22
           '

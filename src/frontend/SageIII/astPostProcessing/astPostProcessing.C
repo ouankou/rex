@@ -779,6 +779,12 @@ void postProcessingSupport(SgNode *node) {
     // line numbers might also be required.
     fixupTemplateInstantiations(node);
 
+    // fixupTemplateInstantiations() can synthesize or relink template
+    // declarations for class instantiations. Re-run the template-declaration
+    // invariant fixup after that pass so those newly linked declarations do
+    // not remain marked compiler-generated.
+    fixupTemplateDeclarations(node);
+
     // DQ (8/19/2005): Mark any template specialization (C++ specializations are
     // template instantiations that are explicit in the source code).  Such
     // template specializations are marked for output only if they are present

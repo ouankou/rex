@@ -221,7 +221,8 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
   // singleton lifetime issues).
   auto diag_printer =
       std::make_unique<clang::TextDiagnosticPrinter>(llvm::errs(), *diag_opts);
-  compiler_instance->createDiagnostics(*vfs, diag_printer.release(), true);
+  compiler_instance->setDiagnostics(clang::CompilerInstance::createDiagnostics(
+      *vfs, *diag_opts, diag_printer.release(), true));
 
   // Parse command-line arguments to populate invocation (including
   // FileSystemOptions like -working-directory, -sysroot)
@@ -234,7 +235,7 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
   ensureX86BaselineTargetFeatures(target_opts);
 
   // Now create file manager with FileSystemOptions from the parsed invocation
-  compiler_instance->createFileManager(vfs);
+  compiler_instance->createFileManager();
 
   clang::LangOptions &lang_opts = compiler_instance->getLangOpts();
   llvm::Triple target_triple(target_opts.Triple);
@@ -310,7 +311,7 @@ int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
       compiler_instance->getInvocation().getTargetOpts());
   compiler_instance->setTarget(target_info);
 
-  compiler_instance->createSourceManager(compiler_instance->getFileManager());
+  compiler_instance->createSourceManager();
 
   // getFileRef returns Expected<FileEntryRef> instead of ErrorOr
   llvm::Expected<clang::FileEntryRef> ret =
@@ -726,46 +727,46 @@ void ClangToDotTranslator::VisitTemplateArgument(
 }
 
 void ClangToDotTranslator::VisitNestedNameSpecifier(
-    clang::NestedNameSpecifier *nested_name_specifier,
+    clang::NestedNameSpecifier nested_name_specifier,
     ClangToDotTranslator::NodeDescriptor &node_desc, std::string prefix) {
-  if (nested_name_specifier == NULL)
+  if (!nested_name_specifier)
     return;
 
   ClangToDotTranslator::VisitNestedNameSpecifier(
-      nested_name_specifier->getPrefix(), node_desc, prefix + " prefix");
+      nestedNameSpecifierPrefix(nested_name_specifier), node_desc,
+      prefix + " prefix");
 
-  switch (nested_name_specifier->getKind()) {
-  case clang::NestedNameSpecifier::Identifier:
-    node_desc.attributes.push_back(std::pair<std::string, std::string>(
-        prefix + " identifier",
-        nested_name_specifier->getAsIdentifier()->getName().data()));
-    break;
-  case clang::NestedNameSpecifier::Namespace:
+  switch (nested_name_specifier.getKind()) {
+  case clang::NestedNameSpecifier::Kind::Namespace: {
+    const clang::NamespaceBaseDecl *ns =
+        nestedNameSpecifierNamespaceBase(nested_name_specifier);
+    const char *label = llvm::isa<clang::NamespaceAliasDecl>(ns)
+                            ? "namespace_alias"
+                            : "namespace";
     node_desc.successors.push_back(std::pair<std::string, std::string>(
-        prefix + " namespace",
-        Traverse(nested_name_specifier->getAsNamespace())));
+        prefix + " " + label,
+        Traverse(const_cast<clang::NamespaceBaseDecl *>(ns))));
     break;
-  case clang::NestedNameSpecifier::NamespaceAlias:
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        prefix + " namespace_alias",
-        Traverse(nested_name_specifier->getAsNamespaceAlias())));
-    break;
-  case clang::NestedNameSpecifier::TypeSpec: {
+  }
+  case clang::NestedNameSpecifier::Kind::Type: {
     const char *label =
         nestedNameSpecifierHasTemplateKeyword(nested_name_specifier)
             ? "type_specifier_with_template"
             : "type_specifier";
     node_desc.successors.push_back(std::pair<std::string, std::string>(
-        prefix + " " + label, Traverse(nested_name_specifier->getAsType())));
+        prefix + " " + label, Traverse(const_cast<clang::Type *>(
+                                  nested_name_specifier.getAsType()))));
     break;
   }
-  case clang::NestedNameSpecifier::Super:
+  case clang::NestedNameSpecifier::Kind::MicrosoftSuper:
     node_desc.attributes.push_back(
         std::pair<std::string, std::string>(prefix, "super"));
     break;
-  case clang::NestedNameSpecifier::Global:
+  case clang::NestedNameSpecifier::Kind::Global:
     node_desc.attributes.push_back(
         std::pair<std::string, std::string>(prefix, "global (::)"));
+    break;
+  case clang::NestedNameSpecifier::Kind::Null:
     break;
   }
 }

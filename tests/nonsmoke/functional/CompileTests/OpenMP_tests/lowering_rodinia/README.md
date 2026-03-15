@@ -5,7 +5,7 @@ inputs and invariant checks.
 
 Design goals:
 - no dependence on legacy output reference files;
-- catch semantic regressions that were observed during REX LLVM-21 migration;
+- catch semantic regressions that were observed during REX LLVM-22 migration;
 - keep checks robust against unstable symbol hash IDs and format churn.
 
 Current cases:

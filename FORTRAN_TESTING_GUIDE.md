@@ -157,7 +157,7 @@ FORTRAN_FLAGS:
 
 ### Issue: CTest Tests Not Registered When Building with Clang
 
-**Problem**: When REX is built with Clang as the C/C++ compiler (required for LLVM 21 compatibility), Fortran tests were not registered with CTest.
+**Problem**: When REX is built with Clang as the C/C++ compiler (required for LLVM 22 compatibility), Fortran tests were not registered with CTest.
 
 **Root Cause**: The `tests/nonsmoke/functional/CompileTests/CMakeLists.txt` had Fortran test registration inside an `else()` block that only executed when CMAKE_CXX_COMPILER_ID was NOT "Clang".
 

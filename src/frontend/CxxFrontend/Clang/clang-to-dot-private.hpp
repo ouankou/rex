@@ -233,7 +233,7 @@ protected:
   void VisitTemplateName(const clang::TemplateName &template_name,
                          NodeDescriptor &node_desc, std::string prefix);
   void
-  VisitNestedNameSpecifier(clang::NestedNameSpecifier *nested_name_specifier,
+  VisitNestedNameSpecifier(clang::NestedNameSpecifier nested_name_specifier,
                            NodeDescriptor &node_desc, std::string prefix);
 
   std::unique_ptr<ClangToDotPreprocessorRecord> p_sage_preprocessor_recorder;
@@ -1065,12 +1065,6 @@ public:
   virtual bool
   VisitDependentNameType(clang::DependentNameType *dependent_name_type,
                          NodeDescriptor &node_desc);
-  virtual bool VisitDependentTemplateSpecializationType(
-      clang::DependentTemplateSpecializationType
-          *dependent_template_specialization_type,
-      NodeDescriptor &node_desc);
-  virtual bool VisitElaboratedType(clang::ElaboratedType *elaborated_type,
-                                   NodeDescriptor &node_desc);
   virtual bool
   VisitUnaryTransformType(clang::UnaryTransformType *unary_transform_type,
                           NodeDescriptor &node_desc);

@@ -1,7 +1,7 @@
 FROM ghcr.io/loong64/debian:sid
 LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
-ARG LLVM_VERSION=21
+ARG LLVM_VERSION=22
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \

@@ -1094,6 +1094,8 @@ list(APPEND _cxx11_check_local_tests Cxx11_tests_c_language_file_as_cxx11)
 
 add_executable(globalVariablesInLambdas globalVariablesInLambdas.C)
 target_link_libraries(globalVariablesInLambdas ROSE_DLL ${link_with_libraries})
+set_target_properties(globalVariablesInLambdas
+  PROPERTIES OUTPUT_NAME "globalVariablesInLambdas_test")
 
 add_test(
   NAME Cxx11_tests_globalVariablesInLambdas

@@ -7612,7 +7612,7 @@ void BuildVisitor::Build(
     }
   }
 
-  for (const auto &name : importStmtNode.names) {
+  for (const auto &name : std::get<std::list<parser::Name>>(importStmtNode.t)) {
     // Import-list names denote host-associated identifiers. Keep them as
     // dedicated placeholder refs instead of binding to mutable in-scope
     // variable symbols, which can be remapped by later OpenMP lowering steps.
@@ -7632,7 +7632,7 @@ void BuildVisitor::Build(parser::CommonStmt &x) {
 
   std::list<SgCommonBlockObject *> commonBlocks;
 
-  for (auto &block : x.blocks) {
+  for (auto &block : x.v) {
     std::string blockName{""};
     SgExprListExp *blockObjects{SageBuilder::buildExprListExp_nfi()};
     ASSERT_not_null(blockObjects);
@@ -8531,7 +8531,7 @@ SgVariableSymbol *findComponentSymbol(SgClassDefinition *def,
 void BuildVisitor::Build(parser::DeclarationTypeSpec::Type &x) {
   // Type DerivedTypeSpec derived;
   //      DerivedTypeSpec std::tuple<Name, std::list<TypeParamSpec>> t;
-  SgType *type = BuildDerivedTypeSpec(x.derived);
+  SgType *type = BuildDerivedTypeSpec(x.v);
   ASSERT_not_null(type);
   this->set(type);
 }
@@ -8574,7 +8574,7 @@ void Build(parser::DeclarationTypeSpec::TypeStar &x, SgType *&type) {
 }
 
 void Build(parser::DeclarationTypeSpec::Class &x, SgType *&type) {
-  type = BuildDerivedTypeSpec(x.derived);
+  type = BuildDerivedTypeSpec(x.v);
 }
 
 void Build(parser::DeclarationTypeSpec::ClassStar &x, SgType *&type) {
@@ -8609,10 +8609,10 @@ void BuildVisitor::Build(parser::IntegerTypeSpec &x) {
 void BuildVisitor::Build(parser::IntrinsicTypeSpec::Real &x) {
   SgType *type{nullptr};
   SgExpression *expr{nullptr};
-  const bool hasKindStar = KindSelectorHasStar(x.kind);
+  const bool hasKindStar = KindSelectorHasStar(x.v);
 
-  if (x.kind) { // std::optional<KindSelector>
-    WalkExpr(x.kind.value(), expr);
+  if (x.v) { // std::optional<KindSelector>
+    WalkExpr(x.v.value(), expr);
   }
   type = SageBuilder::buildFloatType(expr);
   if (type != nullptr) {
@@ -8630,10 +8630,10 @@ void BuildVisitor::Build(parser::IntrinsicTypeSpec::Complex &x) {
   SgType *type{nullptr};
   SgExpression *expr{nullptr};
   SgExpression *kindExpr{nullptr};
-  const bool hasKindStar = KindSelectorHasStar(x.kind);
+  const bool hasKindStar = KindSelectorHasStar(x.v);
 
-  if (x.kind) { // std::optional<KindSelector>
-    WalkExpr(x.kind.value(), expr);
+  if (x.v) { // std::optional<KindSelector>
+    WalkExpr(x.v.value(), expr);
   }
 
   if (expr != nullptr) {
@@ -8671,18 +8671,18 @@ void BuildVisitor::Build(parser::LengthSelector &x) {
 void BuildVisitor::Build(parser::IntrinsicTypeSpec::Character &x) {
   SgType *type{nullptr};
 
-  if (x.selector) { // std::optional<CharSelector>
+  if (x.v) { // std::optional<CharSelector>
     SgExpression *len{nullptr}, *kind{nullptr};
 
     common::visit(
         common::visitors{[&](parser::LengthSelector &y) { WalkExpr(y, len); },
                          [&](parser::CharSelector::LengthAndKind &y) {
-                           if (y.length) {
-                             WalkExpr(y.length, len);
+                           if (std::get<0>(y.t)) {
+                             WalkExpr(*std::get<0>(y.t), len);
                            }
-                           WalkExpr(y.kind, kind);
+                           WalkExpr(std::get<1>(y.t), kind);
                          }},
-        x.selector->u);
+        x.v->u);
 
     if (len == nullptr) {
       // Default character length is 1 when only KIND is specified.
@@ -8704,10 +8704,10 @@ void BuildVisitor::Build(parser::IntrinsicTypeSpec::Character &x) {
 void BuildVisitor::Build(parser::IntrinsicTypeSpec::Logical &x) {
   SgType *type{nullptr};
   SgExpression *expr{nullptr};
-  const bool hasKindStar = KindSelectorHasStar(x.kind);
+  const bool hasKindStar = KindSelectorHasStar(x.v);
 
-  if (x.kind) { // std::optional<KindSelector>
-    WalkExpr(x.kind.value(), expr);
+  if (x.v) { // std::optional<KindSelector>
+    WalkExpr(x.v.value(), expr);
   }
   type = SageBuilder::buildBoolType(expr);
   if (type != nullptr) {
@@ -10081,7 +10081,8 @@ void ApplyIoControlSpec(const parser::IoControlSpec &x,
                         writeStmt->set_size(expr);
                         expr->set_parent(writeStmt);
                       }
-                    }},
+                    },
+                    [&](const parser::ErrorRecovery &) { ABORT_NO_IMPL; }},
                 x.u);
 }
 
@@ -10519,8 +10520,8 @@ SgType *BuildIntrinsicTypeSpec(const parser::IntrinsicTypeSpec &x) {
   if (const auto *realSpec =
           std::get_if<parser::IntrinsicTypeSpec::Real>(&x.u)) {
     SgExpression *expr{nullptr};
-    if (realSpec->kind) {
-      WalkExpr(realSpec->kind.value(), expr);
+    if (realSpec->v) {
+      WalkExpr(realSpec->v.value(), expr);
     }
     return SageBuilder::buildFloatType(expr);
   }
@@ -10530,27 +10531,27 @@ SgType *BuildIntrinsicTypeSpec(const parser::IntrinsicTypeSpec &x) {
   if (const auto *complexSpec =
           std::get_if<parser::IntrinsicTypeSpec::Complex>(&x.u)) {
     SgExpression *expr{nullptr};
-    if (complexSpec->kind) {
-      WalkExpr(complexSpec->kind.value(), expr);
+    if (complexSpec->v) {
+      WalkExpr(complexSpec->v.value(), expr);
     }
     SgType *base = SageBuilder::buildFloatType(expr);
     return SageBuilder::buildComplexType(base);
   }
   if (const auto *charSpec =
           std::get_if<parser::IntrinsicTypeSpec::Character>(&x.u)) {
-    if (charSpec->selector) {
+    if (charSpec->v) {
       SgExpression *len{nullptr};
       SgExpression *kind{nullptr};
       common::visit(
           common::visitors{
               [&](const parser::LengthSelector &z) { WalkExpr(z, len); },
               [&](const parser::CharSelector::LengthAndKind &z) {
-                if (z.length) {
-                  WalkExpr(z.length, len);
+                if (std::get<0>(z.t)) {
+                  WalkExpr(*std::get<0>(z.t), len);
                 }
-                WalkExpr(z.kind, kind);
+                WalkExpr(std::get<1>(z.t), kind);
               }},
-          charSpec->selector->u);
+          charSpec->v->u);
       if (len == nullptr) {
         len = SageBuilder::buildIntVal_nfi(1, "1");
         SageInterface::setSourcePosition(len);
@@ -10566,8 +10567,8 @@ SgType *BuildIntrinsicTypeSpec(const parser::IntrinsicTypeSpec &x) {
   if (auto *logicalSpec =
           std::get_if<parser::IntrinsicTypeSpec::Logical>(&x.u)) {
     SgExpression *expr{nullptr};
-    if (logicalSpec->kind) {
-      WalkExpr(logicalSpec->kind.value(), expr);
+    if (logicalSpec->v) {
+      WalkExpr(logicalSpec->v.value(), expr);
     }
     return SageBuilder::buildBoolType(expr);
   }
@@ -10659,7 +10660,7 @@ void Build(const parser::ArrayConstructor &x, SgExpression *&expr) {
 
 void Build(const parser::AcSpec &x, SgExpression *&expr) {
   std::list<SgExpression *> values;
-  for (const auto &value : x.values) {
+  for (const auto &value : std::get<std::list<parser::AcValue>>(x.t)) {
     SgExpression *valueExpr{nullptr};
     Build(value, valueExpr);
     ASSERT_not_null(valueExpr);
@@ -10673,8 +10674,8 @@ void Build(const parser::AcSpec &x, SgExpression *&expr) {
     }
   }
   SgType *explicitType{nullptr};
-  if (x.type) {
-    explicitType = BuildTypeSpec(x.type.value());
+  if (const auto &type = std::get<std::optional<parser::TypeSpec>>(x.t)) {
+    explicitType = BuildTypeSpec(*type);
   }
   expr = SageBuilder::buildAggregateInitializer_nfi(exprList, explicitType);
 }
@@ -10995,6 +10996,10 @@ void Build(const parser::ImageSelector &x, SgExpression *&expr) {
   for (const auto &spec : std::get<1>(x.t)) {
     common::visit(
         common::visitors{
+            [&](const parser::ImageSelectorSpec::Notify &) {
+              std::cerr << "NOTIFY image selector is not implemented.\n";
+              ROSE_ABORT();
+            },
             [&](const parser::ImageSelectorSpec::Stat &y) {
               if (statExpr != nullptr) {
                 std::cerr << "Duplicate STAT spec in image selector.\n";
@@ -11125,11 +11130,11 @@ void Build(parser::CaseStmt &x, std::list<SgExpression *> &case_list) {
 void Build(parser::CaseValueRange::Range &x, SgExpression *&range) {
   SgExpression *lower{nullptr};
   SgExpression *upper{nullptr};
-  if (x.lower) {
-    WalkExpr(x.lower.value().thing, lower);
+  if (const auto &lowerBound = std::get<0>(x.t)) {
+    WalkExpr(lowerBound->thing, lower);
   }
-  if (x.upper) {
-    WalkExpr(x.upper.value().thing, upper);
+  if (const auto &upperBound = std::get<1>(x.t)) {
+    WalkExpr(upperBound->thing, upper);
   }
 
   if (lower == nullptr && upper == nullptr) {
@@ -11283,7 +11288,7 @@ void BuildVisitor::Build(parser::CompilerDirective &x) {
   AppendPragmasFromCharBlock(x.source);
 }
 
-void BuildVisitor::Build(parser::OmpBeginBlockDirective &x) {
+void BuildVisitor::Build(parser::OmpBeginDirective &x) {
   if (x.source.empty()) {
     return;
   }
