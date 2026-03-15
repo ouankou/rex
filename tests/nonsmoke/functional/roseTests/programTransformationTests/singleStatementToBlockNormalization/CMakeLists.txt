@@ -61,6 +61,24 @@ add_test(
 list(APPEND _single_stmt_test_targets
   normalizationTranslator_test2005_155_explicit_instantiation_output)
 
+set(_single_stmt_issue426_output_dir
+  ${CMAKE_CURRENT_BINARY_DIR}/issue426_array_new_output)
+add_test(
+  NAME normalizationTranslator_test2005_38_array_new_output
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${CMAKE_COMMAND}
+    -DREX_TRANSLATOR=${CMAKE_BINARY_DIR}/bin/normalizationTranslator
+    -DREX_INPUT=${_single_stmt_tests_dir}/test2005_38.C
+    -DREX_INCLUDE_DIR=${_single_stmt_tests_dir}
+    -DREX_WORKDIR=${_single_stmt_issue426_output_dir}
+    "-DREX_EXPECTED_REGEX=new[ ]+double[ ]*\\[[ ]*100[ ]*\\]"
+    -DREX_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    "-DREX_COMPILE_FLAGS=-std=c++17"
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/check_unparsed_contains.cmake
+)
+list(APPEND _single_stmt_test_targets
+  normalizationTranslator_test2005_38_array_new_output)
+
 # Makefile check targets.
 list(JOIN _single_stmt_test_targets "\;" _single_stmt_group_tests)
 add_test(

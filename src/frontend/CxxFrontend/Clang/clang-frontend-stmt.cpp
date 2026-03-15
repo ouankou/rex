@@ -8846,11 +8846,13 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
 #endif
   bool res = true;
   clang::QualType allocatedType = cxx_new_expr->getAllocatedType();
-  SgType *sg_type = buildTypeFromQualifiedType(allocatedType);
+  SgType *allocated_sg_type = buildTypeFromQualifiedType(allocatedType);
+  SgType *new_expr_type = allocated_sg_type;
 
-  auto classTypeUnknown = [sg_type]() {
-    return sg_type == nullptr || (isSgTypedefType(sg_type) == nullptr &&
-                                  isSgClassType(sg_type) == nullptr);
+  auto classTypeUnknown = [allocated_sg_type]() {
+    return allocated_sg_type == nullptr ||
+           (isSgTypedefType(allocated_sg_type) == nullptr &&
+            isSgClassType(allocated_sg_type) == nullptr);
   };
 
   SgExprListExp *placementArgs = nullptr;
@@ -8887,7 +8889,7 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
         }
 
         constructor_args = SageBuilder::buildConstructorInitializer_nfi(
-            nullptr, args, sg_type,
+            nullptr, args, allocated_sg_type,
             false,             // need_name
             false,             // need_qualifier
             false,             // need_parenthesis_after_name
@@ -8907,6 +8909,18 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
     }
   }
 
+  if (cxx_new_expr->isArray()) {
+    SgExpression *array_size = nullptr;
+    if (const std::optional<clang::Expr *> size_expr =
+            cxx_new_expr->getArraySize()) {
+      SgNode *translated_size = Traverse(*size_expr);
+      array_size = isSgExpression(translated_size);
+      ROSE_ASSERT(array_size != nullptr);
+    }
+
+    new_expr_type = SageBuilder::buildArrayType(allocated_sg_type, array_size);
+  }
+
   SgNode *clangFuncDecl = Traverse(cxx_new_expr->getOperatorNew());
   if (constructor_args != nullptr) {
     // (4/28/23 Pei-Hung) The type name is given through sg_type,
@@ -8923,7 +8937,7 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
   short int need_global_specifier = (short int)cxx_new_expr->isGlobalNew();
 
   SgNewExp *newExp =
-      SageBuilder::buildNewExp(sg_type, placementArgs, constructor_args,
+      SageBuilder::buildNewExp(new_expr_type, placementArgs, constructor_args,
                                builtin_args, need_global_specifier, sgFuncDecl);
   *node = newExp;
 
