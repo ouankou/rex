@@ -100,8 +100,12 @@ set(_f90_working_on_tests
   R930.f90
 )
 
-set(_failing_tests
+set(_translator_working_tests
+  ${_f90_working_on_tests}
   pause_stmt.f77
+)
+
+set(_failing_tests
   R432.f90
   R452.f90
   R816.f90
@@ -140,6 +144,7 @@ function(_experimental_add_translator_test test_prefix specimen)
     COMMAND bash -c
       "$<TARGET_FILE:testTranslator> ${_rose_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen} && test -s rose_${specimen}"
   )
+  set_tests_properties(${_test_name} PROPERTIES RESOURCE_LOCK experimental_frontend_test_output)
   set(${test_prefix}_${specimen}_name ${_test_name} PARENT_SCOPE)
 endfunction()
 
@@ -153,6 +158,7 @@ function(_experimental_add_frontend_test test_prefix specimen)
       -rose:skip_syntax_check
       ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
   )
+  set_tests_properties(${test_prefix}_${_name} PROPERTIES RESOURCE_LOCK experimental_frontend_test_output)
 endfunction()
 
 foreach(specimen IN LISTS _f90_tests)
@@ -163,7 +169,7 @@ foreach(specimen IN LISTS _f2018_tests)
   _experimental_add_frontend_test(experimental_frontend_f2018 ${specimen})
 endforeach()
 
-foreach(specimen IN LISTS _f90_working_on_tests)
+foreach(specimen IN LISTS _translator_working_tests)
   _experimental_add_translator_test(experimental_frontend_working ${specimen})
 endforeach()
 
