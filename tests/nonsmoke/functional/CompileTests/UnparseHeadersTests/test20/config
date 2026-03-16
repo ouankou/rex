@@ -1,0 +1,3 @@
+cmd = cd ${TARGET} && ${TEST_UNPARSE_HEADERS} ${ROSE_SWITCHES} ${HDR_ROOT_SWITCHES} ${srcdir}/${TARGET}/Simple20.C
+cmd = test -f ${TARGET}/unparsedHeaders/BlockScopeRename.h
+cmd = grep -F "block_scope_value_rewrite_assignment = 2;" ${TARGET}/unparsedHeaders/BlockScopeRename.h

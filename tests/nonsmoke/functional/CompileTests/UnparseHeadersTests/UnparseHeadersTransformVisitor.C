@@ -6,6 +6,8 @@ const string UnparseHeadersTransformVisitor::matchEnding = "_rename_me";
 const size_t UnparseHeadersTransformVisitor::matchEndingSize =
     matchEnding.size();
 const string UnparseHeadersTransformVisitor::renameEnding = "_renamed";
+const string UnparseHeadersTransformVisitor::rewriteAssignmentMarker =
+    "_rewrite_assignment";
 
 void UnparseHeadersTransformVisitor::visit(SgNode *node) {
   // Use a pointer to a constant SgVariableDeclaration to be able to call the
@@ -38,5 +40,22 @@ void UnparseHeadersTransformVisitor::visit(SgNode *node) {
 
   SgVarRefExp *varRefExp = isSgVarRefExp(node);
   if (varRefExp != NULL) {
+    const string originalName = varRefExp->get_symbol()->get_name().getString();
+    if (originalName.find(rewriteAssignmentMarker) != string::npos) {
+      SgAssignOp *assignOp = isSgAssignOp(varRefExp->get_parent());
+      if (assignOp != NULL && assignOp->get_lhs_operand() == varRefExp) {
+        SgIntVal *intVal = isSgIntVal(assignOp->get_rhs_operand());
+        if (intVal != NULL) {
+          SageInterface::replaceExpression(intVal, SageBuilder::buildIntVal(2),
+                                           false);
+        }
+
+        SgStatement *enclosingStatement =
+            SageInterface::getEnclosingStatement(varRefExp);
+        if (enclosingStatement != NULL) {
+          enclosingStatement->setTransformation();
+        }
+      }
+    }
   }
 }

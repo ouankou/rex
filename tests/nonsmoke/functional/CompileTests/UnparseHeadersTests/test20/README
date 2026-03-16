@@ -1,0 +1,6 @@
+This regression covers a transformed header included inside a function body.
+
+That header is associated with a `SgBasicBlock` unparse scope, so the test
+guards against falling back to copying the original file when the header
+requires AST unparsing. The transformed header must still be emitted with the
+rewritten assignment statement.

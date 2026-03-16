@@ -8,7 +8,8 @@ class UnparseHeadersTransformVisitor : public AstSimpleProcessing
           static const string matchEnding;
           static const size_t matchEndingSize;
           static const string renameEnding;
+          static const string rewriteAssignmentMarker;
 
-     protected:
+        protected:
           void visit(SgNode* astNode);
    };

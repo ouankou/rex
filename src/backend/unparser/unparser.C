@@ -5407,14 +5407,10 @@ void unparseIncludedFiles(SgProject *project,
         // parameter is non-NULL for header file unparsing. This might be a
         // better solution.
         {
-          if (isSgBasicBlock(header_file_associated_scope) != NULL) {
-            std::filesystem::copy_file(
-                std::filesystem::path(originalFileName),
-                std::filesystem::path(
-                    unparsedFile->get_unparse_output_filename()),
-                std::filesystem::copy_options::overwrite_existing);
-            continue;
-          }
+          // Headers included inside function bodies can map to a basic block.
+          // Those scopes still need AST-based unparsing so transformed
+          // statements in the header are emitted instead of silently copying
+          // the original file back out.
 #if DEBUG_UNPARSE_INCLUDE_FILES
           printf("calling unparseFile(): using header_file_associated_scope %p "
                  "= %s : calling unparseFile() \n",
