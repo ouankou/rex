@@ -3510,7 +3510,6 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
     SgScopeStatement *scope_override) {
 
   std::string cache_key = normalizeTemplateDeclCacheKey(template_name);
-
   auto get_template_source_range =
       [](clang::TemplateDecl *clang_template_decl) -> clang::SourceRange {
     if (clang_template_decl == nullptr) {
@@ -5510,6 +5509,111 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     }
   }
 
+  auto same_template_decl_chain = [](SgTemplateClassDeclaration *lhs,
+                                     SgTemplateClassDeclaration *rhs) -> bool {
+    if (lhs == rhs) {
+      return true;
+    }
+    if (lhs == nullptr || rhs == nullptr) {
+      return false;
+    }
+
+    auto first_decl =
+        [](SgTemplateClassDeclaration *decl) -> SgTemplateClassDeclaration * {
+      return isSgTemplateClassDeclaration(
+          decl != nullptr ? decl->get_firstNondefiningDeclaration() : nullptr);
+    };
+    auto defining_decl =
+        [](SgTemplateClassDeclaration *decl) -> SgTemplateClassDeclaration * {
+      return isSgTemplateClassDeclaration(
+          decl != nullptr ? decl->get_definingDeclaration() : nullptr);
+    };
+
+    SgTemplateClassDeclaration *lhs_first = first_decl(lhs);
+    SgTemplateClassDeclaration *rhs_first = first_decl(rhs);
+    if (lhs_first != nullptr && lhs_first == rhs) {
+      return true;
+    }
+    if (rhs_first != nullptr && rhs_first == lhs) {
+      return true;
+    }
+    if (lhs_first != nullptr && lhs_first == rhs_first) {
+      return true;
+    }
+
+    SgTemplateClassDeclaration *lhs_def = defining_decl(lhs);
+    SgTemplateClassDeclaration *rhs_def = defining_decl(rhs);
+    if (lhs_def != nullptr && lhs_def == rhs) {
+      return true;
+    }
+    if (rhs_def != nullptr && rhs_def == lhs) {
+      return true;
+    }
+    if (lhs_def != nullptr && lhs_def == rhs_def) {
+      return true;
+    }
+
+    return false;
+  };
+
+  auto lookup_translated_source_template_decl =
+      [&](clang::TemplateDecl *clang_template_decl)
+      -> SgTemplateClassDeclaration * {
+    auto lookup_decl = [&](clang::Decl *key) -> SgTemplateClassDeclaration * {
+      if (key == nullptr) {
+        return nullptr;
+      }
+      return isSgTemplateClassDeclaration(
+          lookupSgDeclarationForClangDecl(key, /*allow_on_demand=*/false));
+    };
+
+    if (clang_template_decl == nullptr) {
+      return nullptr;
+    }
+
+    if (SgTemplateClassDeclaration *decl =
+            lookup_decl(llvm::cast<clang::Decl>(clang_template_decl))) {
+      return decl;
+    }
+
+    if (clang::ClassTemplateDecl *class_template =
+            llvm::dyn_cast<clang::ClassTemplateDecl>(clang_template_decl)) {
+      if (clang::ClassTemplateDecl *canonical =
+              class_template->getCanonicalDecl()) {
+        if (SgTemplateClassDeclaration *decl = lookup_decl(canonical)) {
+          return decl;
+        }
+      }
+      if (clang::CXXRecordDecl *templated_decl =
+              class_template->getTemplatedDecl()) {
+        if (SgTemplateClassDeclaration *decl = lookup_decl(templated_decl)) {
+          return decl;
+        }
+        if (clang::CXXRecordDecl *canonical_record =
+                llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
+                    templated_decl->getCanonicalDecl())) {
+          if (SgTemplateClassDeclaration *decl =
+                  lookup_decl(canonical_record)) {
+            return decl;
+          }
+        }
+      }
+    }
+
+    return nullptr;
+  };
+
+  SgTemplateClassDeclaration *translated_source_template_decl =
+      lookup_translated_source_template_decl(inst_clang_template_decl);
+  if (translated_source_template_decl != nullptr &&
+      !same_template_decl_chain(template_decl,
+                                translated_source_template_decl)) {
+    template_decl = translated_source_template_decl;
+  }
+  const bool template_decl_is_translated_source_decl =
+      translated_source_template_decl != nullptr &&
+      same_template_decl_chain(template_decl, translated_source_template_decl);
+
   auto normalize_decl_scope = [&](SgDeclarationStatement *decl,
                                   SgScopeStatement *target_scope,
                                   const char *context) {
@@ -5750,7 +5854,8 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
 
   if (inst_decl_context != nullptr &&
       declContextCanUseReachableNamespaceScope(inst_decl_context) &&
-      !scopeReachableFromCurrentFile(template_decl->get_scope())) {
+      !scopeReachableFromCurrentFile(template_decl->get_scope()) &&
+      !template_decl_is_translated_source_decl) {
     SgScopeStatement *reachable_scope =
         pick_reachable_existing_template_scope(template_decl);
     if (reachable_scope == nullptr) {
