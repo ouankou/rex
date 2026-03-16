@@ -8911,11 +8911,13 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
 
   if (cxx_new_expr->isArray()) {
     SgExpression *array_size = nullptr;
-    if (const std::optional<clang::Expr *> size_expr =
+    if (const std::optional<clang::Expr *> size_expr_opt =
             cxx_new_expr->getArraySize()) {
-      SgNode *translated_size = Traverse(*size_expr);
-      array_size = isSgExpression(translated_size);
-      ROSE_ASSERT(array_size != nullptr);
+      if (clang::Expr *size_expr = *size_expr_opt) {
+        SgNode *translated_size = Traverse(size_expr);
+        array_size = isSgExpression(translated_size);
+        ROSE_ASSERT(array_size != nullptr);
+      }
     }
 
     new_expr_type = SageBuilder::buildArrayType(allocated_sg_type, array_size);
