@@ -1,4 +1,5 @@
 #include "test2007_113.h"
+#include "test2007_11x_jsproto_table.h"
 
 #define JS_EXPORT_API(__type) __attribute__((visibility("default"))) __type
 
@@ -55,9 +56,9 @@ typedef enum JSType {
 /* Dense index into cached prototypes and class atoms for standard objects. */
 typedef enum JSProtoKey {
 #define JS_PROTO(name, code, init) JSProto_##name = code,
-#include <jsproto.tbl>
+  TEST2007_11X_FOR_EACH_JS_PROTO(JS_PROTO)
 #undef JS_PROTO
-  JSProto_LIMIT
+      JSProto_LIMIT
 } JSProtoKey;
 
 /* JSObjectOps.checkAccess mode enumeration. */
