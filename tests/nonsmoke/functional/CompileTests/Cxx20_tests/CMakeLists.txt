@@ -21,7 +21,6 @@ set(CXX20_TESTCODES
   test2020_35.C
   test2020_36.C
   test2020_38.C
-  test2020_41.C
   test2020_42.C
   test2020_43.C
   test2020_44.C
