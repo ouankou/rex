@@ -3504,6 +3504,34 @@ ClangToSageTranslator::buildTemplateParameters(
 }
 
 SgTemplateClassDeclaration *
+ClangToSageTranslator::lookupTranslatedTemplateDeclarationForRecord(
+    clang::CXXRecordDecl *record) {
+  for (clang::CXXRecordDecl *candidate :
+       {record, record != nullptr ? record->getCanonicalDecl() : nullptr}) {
+    if (candidate == nullptr) {
+      continue;
+    }
+
+    SgDeclarationStatement *decl =
+        lookupSgDeclarationForClangDecl(candidate, /*allow_on_demand=*/false);
+    if (SgTemplateClassDeclaration *template_decl =
+            isSgTemplateClassDeclaration(decl)) {
+      return template_decl;
+    }
+
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+      if (SgTemplateClassDeclaration *template_decl =
+              isSgTemplateClassDeclaration(
+                  SageInterface::getTemplateDeclaration(class_decl))) {
+        return template_decl;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+SgTemplateClassDeclaration *
 ClangToSageTranslator::getOrCreateTemplateDeclaration(
     const std::string &template_name,
     const clang::TemplateSpecializationType *clang_type,
@@ -3589,37 +3617,9 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
 
     if (clang::ClassTemplateDecl *class_template =
             llvm::dyn_cast<clang::ClassTemplateDecl>(clang_template_decl)) {
-      auto lookup_record_template_decl =
-          [&](clang::CXXRecordDecl *record) -> SgTemplateClassDeclaration * {
-        for (clang::CXXRecordDecl *candidate :
-             {record,
-              record != nullptr ? record->getCanonicalDecl() : nullptr}) {
-          if (candidate == nullptr) {
-            continue;
-          }
-
-          if (SgTemplateClassDeclaration *mapped = isSgTemplateClassDeclaration(
-                  lookupSgDeclarationForClangDecl(candidate,
-                                                  /*allow_on_demand=*/false))) {
-            return mapped;
-          }
-
-          if (SgClassDeclaration *class_decl = isSgClassDeclaration(
-                  lookupSgDeclarationForClangDecl(candidate,
-                                                  /*allow_on_demand=*/false))) {
-            if (SgTemplateClassDeclaration *template_decl =
-                    isSgTemplateClassDeclaration(
-                        SageInterface::getTemplateDeclaration(class_decl))) {
-              return template_decl;
-            }
-          }
-        }
-
-        return nullptr;
-      };
-
       if (SgTemplateClassDeclaration *mapped =
-              lookup_record_template_decl(class_template->getTemplatedDecl())) {
+              lookupTranslatedTemplateDeclarationForRecord(
+                  class_template->getTemplatedDecl())) {
         normalize_template_decl_source(mapped, clang_template_decl);
         return mapped;
       }
@@ -5584,35 +5584,9 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
         return decl;
       }
 
-      auto lookup_record_template_decl =
-          [&](clang::CXXRecordDecl *record) -> SgTemplateClassDeclaration * {
-        for (clang::CXXRecordDecl *candidate :
-             {record,
-              record != nullptr ? record->getCanonicalDecl() : nullptr}) {
-          if (candidate == nullptr) {
-            continue;
-          }
-
-          if (SgTemplateClassDeclaration *decl = lookup_decl(candidate)) {
-            return decl;
-          }
-
-          if (SgClassDeclaration *class_decl = isSgClassDeclaration(
-                  lookupSgDeclarationForClangDecl(candidate,
-                                                  /*allow_on_demand=*/false))) {
-            if (SgTemplateClassDeclaration *template_decl =
-                    isSgTemplateClassDeclaration(
-                        SageInterface::getTemplateDeclaration(class_decl))) {
-              return template_decl;
-            }
-          }
-        }
-
-        return nullptr;
-      };
-
       if (SgTemplateClassDeclaration *decl =
-              lookup_record_template_decl(class_template->getTemplatedDecl())) {
+              lookupTranslatedTemplateDeclarationForRecord(
+                  class_template->getTemplatedDecl())) {
         return decl;
       }
     }

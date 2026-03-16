@@ -1121,6 +1121,9 @@ protected:
       const clang::CXXRecordDecl *record_decl_override = nullptr);
 
   // Template helper methods
+  SgTemplateClassDeclaration *
+  lookupTranslatedTemplateDeclarationForRecord(clang::CXXRecordDecl *record);
+
   // Helper: Get or create template class declaration
   SgTemplateClassDeclaration *getOrCreateTemplateDeclaration(
       const std::string &template_name,
