@@ -1,122 +1,59 @@
 // ROSE-1283
 
-#include <tuple>
+#include <memory>
+#include <type_traits>
+#include <utility>
 
-#include <ext/alloc_traits.h>
+namespace rose_test2020_73 {
 
-namespace std
+  template <typename Value> struct HashNode {
+    using value_type = Value;
+  };
 
-{
+  template <typename NodeAlloc> struct HashtableAlloc {
+    using node_alloc_traits = std::allocator_traits<NodeAlloc>;
+    using value_alloc_type = typename node_alloc_traits::template rebind_alloc<
+        typename NodeAlloc::value_type::value_type>;
+    using value_alloc_traits = std::allocator_traits<value_alloc_type>;
+  };
 
-namespace __detail
+  template <typename Value, typename Alloc> class Hashtable {
+    using node_alloc_type = typename std::allocator_traits<
+        Alloc>::template rebind_alloc<HashNode<Value>>;
 
-{
+  public:
+    using pointer = typename std::allocator_traits<node_alloc_type>::pointer;
+    using const_iterator = pointer;
 
-template <typename _Value>
+    Hashtable &operator=(Hashtable &&) noexcept(
+        std::is_nothrow_move_assignable<node_alloc_type>::value) {
+      return *this;
+    }
+  };
 
-struct _Hash_node
+  template <typename Key> class unordered_map {
+    Hashtable<Key, std::allocator<Key>> impl_;
 
-{
+  public:
+    using const_iterator =
+        typename Hashtable<Key, std::allocator<Key>>::const_iterator;
 
-  typedef _Value value_type;
-};
+    unordered_map &operator=(unordered_map &&) = default;
+  };
 
-template <typename _NodeAlloc>
+  using typedef_1 = unordered_map<int>::const_iterator;
 
-struct _Hashtable_alloc
+  static_assert(std::is_same<std::allocator_traits<std::allocator<int>>::
+                                 rebind_alloc<HashNode<int>>,
+                             std::allocator<HashNode<int>>>::value,
+                "rebind_alloc should preserve the allocator typedef");
 
-{
+  int exercise() {
+    unordered_map<int> lhs;
+    unordered_map<int> rhs;
+    lhs = std::move(rhs);
+    typedef_1 iter = nullptr;
+    return iter == nullptr;
+  }
 
-public:
-  // Use __gnu_cxx for S_nothrow_move et al.
-
-  using __node_alloc_traits = __gnu_cxx::__alloc_traits<_NodeAlloc>;
-
-  using __value_alloc_type =
-
-      typename __alloctr_rebind<
-
-          _NodeAlloc,
-
-          typename _NodeAlloc::value_type::value_type>::__type;
-
-  using __value_alloc_traits = std::allocator_traits<__value_alloc_type>;
-};
-
-} // namespace __detail
-
-template <
-
-    typename _Value,
-
-    typename _Alloc>
-
-class _Hashtable
-
-{
-
-  using __node_alloc_type =
-
-      typename __alloctr_rebind<
-
-          _Alloc,
-
-          __detail::_Hash_node<_Value>>::__type;
-
-public:
-  // NEEDED (with __value_alloc_traits and not __node_alloc_traits):
-
-  typedef typename std::allocator_traits<__node_alloc_type>::pointer pointer;
-
-  //      typedef typename
-  //      __detail::_Hashtable_alloc<__node_alloc_type>::__value_alloc_traits::pointer
-  //      pointer;
-
-public:
-  using const_iterator = int;
-
-  // NEEDED:
-
-  _Hashtable &
-
-  operator=(_Hashtable &&__ht)
-
-      noexcept
-
-      // NEEDED:
-
-      (__detail::_Hashtable_alloc<
-          __node_alloc_type>::__node_alloc_traits::_S_nothrow_move())
-
-  {}
-};
-
-} // namespace std
-
-template <class _Key>
-
-class unordered_map
-
-{
-
-  // NEEDED:
-
-  std::_Hashtable<_Key, std::allocator<_Key>> _M_h;
-
-public:
-  typedef typename std::_Hashtable<_Key, std::allocator<_Key>>::const_iterator
-      const_iterator;
-
-  // NEEDED:
-
-  unordered_map &
-
-  operator=(unordered_map &&) = default;
-};
-
-// NEEDED:
-
-namespace namespace_1 {
-
-typedef unordered_map<int>::const_iterator typedef_1;
-}
+} // namespace rose_test2020_73

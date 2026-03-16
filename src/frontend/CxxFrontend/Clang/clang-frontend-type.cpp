@@ -1742,8 +1742,31 @@ SgNode *ClangToSageTranslator::Traverse(const clang::Type *type) {
   if (type == NULL)
     return NULL;
 
+  auto can_cache_type_translation = [](const clang::Type *candidate) -> bool {
+    if (candidate == nullptr) {
+      return false;
+    }
+
+    switch (candidate->getTypeClass()) {
+    case clang::Type::TemplateTypeParm:
+    case clang::Type::SubstTemplateTypeParm:
+    case clang::Type::SubstTemplateTypeParmPack:
+      // Template-parameter type spelling depends on the current template scope.
+      // Clang canonicalizes these types by depth/index, so caching solely by
+      // raw type pointer leaks names across unrelated templates (e.g. `Key`
+      // becoming `Value` or `_Alloc`).
+      return false;
+    default:
+      return true;
+    }
+  };
+
+  const bool cache_translation = can_cache_type_translation(type);
   std::map<const clang::Type *, SgNode *>::iterator it =
-      p_type_translation_map.find(type);
+      p_type_translation_map.end();
+  if (cache_translation) {
+    it = p_type_translation_map.find(type);
+  }
 #if DEBUG_TRAVERSE_TYPE
   std::cerr << "Traverse Type : " << type << " " << type->getTypeClassName()
             << std::endl;
@@ -1932,8 +1955,10 @@ SgNode *ClangToSageTranslator::Traverse(const clang::Type *type) {
     result = SageBuilder::buildUnknownType();
   }
 
-  p_type_translation_map.insert(
-      std::pair<const clang::Type *, SgNode *>(type, result));
+  if (cache_translation) {
+    p_type_translation_map.insert(
+        std::pair<const clang::Type *, SgNode *>(type, result));
+  }
 
 #if DEBUG_TRAVERSE_TYPE
   std::cerr << "Traverse(clang::Type : " << type << " ";
@@ -3025,9 +3050,6 @@ bool ClangToSageTranslator::VisitSubstTemplateTypeParmType(
   std::cerr << "ClangToSageTranslator::SubstTemplateTypeParmType" << std::endl;
 #endif
 
-  // SubstTemplateTypeParmType represents a type where a template parameter has
-  // been substituted with a concrete type. We simply traverse to the
-  // replacement type.
   clang::QualType replacement_type =
       subst_template_type_parm_type->getReplacementType();
   *node = Traverse(replacement_type.getTypePtr());
