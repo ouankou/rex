@@ -5564,8 +5564,18 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
       if (key == nullptr) {
         return nullptr;
       }
-      return isSgTemplateClassDeclaration(
-          lookupSgDeclarationForClangDecl(key, /*allow_on_demand=*/false));
+
+      SgDeclarationStatement *decl =
+          lookupSgDeclarationForClangDecl(key, /*allow_on_demand=*/false);
+      if (SgTemplateClassDeclaration *template_decl =
+              isSgTemplateClassDeclaration(decl)) {
+        return template_decl;
+      }
+      if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+        return isSgTemplateClassDeclaration(
+            SageInterface::getTemplateDeclaration(class_decl));
+      }
+      return nullptr;
     };
 
     if (clang_template_decl == nullptr) {
