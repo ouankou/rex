@@ -120,8 +120,10 @@ public:
   // DQ (2/22/2021): Make these static so that we can refer to them within tools
   // to support diffs.
   static std::set<std::string> modifiedFiles;
+  static std::set<std::string> filesWithMarkedTransformations;
   static std::set<std::string> allFiles;
   static std::set<std::string> filesToUnparse;
+  static std::set<std::string> filesWithUpdatedIncludePaths;
   static std::list<std::pair<int, std::string>> includeCompilerPaths;
   static std::map<std::string, std::string> unparseMap;
   static std::map<std::string, std::set<std::string>> includingPathsMap;

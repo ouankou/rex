@@ -1,0 +1,8 @@
+This test checks that header unparsing remains stable when the frontend
+normalizes a missing `template<>` header for an out-of-class member
+specialization while the associated header also uses `std::vector<bool>`.
+
+The regression guards two interactions:
+1. `-rose:unparseHeaderFiles` must still emit the application header.
+2. The normalized specialization must round-trip through the backend with
+   the required `template<>` header present in the unparsed source.

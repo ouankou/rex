@@ -72,8 +72,10 @@ std::map<std::string, std::string> IncludedFilesUnparser::unparseMap;
 std::list<std::pair<int, std::string>>
     IncludedFilesUnparser::includeCompilerPaths;
 std::set<std::string> IncludedFilesUnparser::modifiedFiles;
+std::set<std::string> IncludedFilesUnparser::filesWithMarkedTransformations;
 std::set<std::string> IncludedFilesUnparser::allFiles;
 std::set<std::string> IncludedFilesUnparser::filesToUnparse;
+std::set<std::string> IncludedFilesUnparser::filesWithUpdatedIncludePaths;
 std::set<std::string> IncludedFilesUnparser::filesToCopy;
 
 // DQ (2/23/2021): Make these static so that we can refer to them within tools
@@ -172,6 +174,8 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
   // Should be erased completely at every run to avoid name collisions with
   // previous runs.
   FileHelper::eraseFolder(unparseRootPath);
+  filesWithMarkedTransformations.clear();
+  filesWithUpdatedIncludePaths.clear();
 
   // collect immediately affected files as well as all traversed files
 
@@ -407,6 +411,10 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
   // of then can cause them to be unparsed twice (e.g. test9 in
   // UnparseHeader_tests).  Also, modicication of the include directives can
   // trigger unparsing from the AST (which would not otherwise be required).
+  if (projectNode->get_unparse_tokens() == false) {
+    applyFunctionToIncludingPreprocessingInfos(
+        allFiles, &IncludedFilesUnparser::updatePreprocessingInfoPaths);
+  }
 
   for (list<pair<int, string>>::const_iterator it =
            includeCompilerPaths.begin();
@@ -631,35 +639,41 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
     const string &includedFile, PreprocessingInfo *includingPreprocessingInfo) {
   ASSERT_not_null(includingPreprocessingInfo);
 
-  printf("In updatePreprocessingInfoPaths(): includedFile = %s \n",
-         includedFile.c_str());
-  printf(" --- includingPreprocessingInfo->getString() = %s \n",
-         includingPreprocessingInfo->getString().c_str());
+  if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+    printf("In updatePreprocessingInfoPaths(): includedFile = %s \n",
+           includedFile.c_str());
+    printf(" --- includingPreprocessingInfo->getString() = %s \n",
+           includingPreprocessingInfo->getString().c_str());
+  }
 
   string normalizedIncludingFileName =
       FileHelper::getNormalizedContainingFileName(includingPreprocessingInfo);
 
-  printf(
-      "In updatePreprocessingInfoPaths(): normalizedIncludingFileName = %s \n",
-      normalizedIncludingFileName.c_str());
+  if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+    printf("In updatePreprocessingInfoPaths(): normalizedIncludingFileName = "
+           "%s \n",
+           normalizedIncludingFileName.c_str());
 
-  printf("In updatePreprocessingInfoPaths(): filesToUnparse: \n");
-  set<string>::const_iterator fileToUnparsePtr = filesToUnparse.begin();
-  while (fileToUnparsePtr != filesToUnparse.end()) {
-    printf(" --- *fileToUnparsePtr = %s \n", fileToUnparsePtr->c_str());
-    fileToUnparsePtr++;
+    printf("In updatePreprocessingInfoPaths(): filesToUnparse: \n");
+    set<string>::const_iterator fileToUnparsePtr = filesToUnparse.begin();
+    while (fileToUnparsePtr != filesToUnparse.end()) {
+      printf(" --- *fileToUnparsePtr = %s \n", fileToUnparsePtr->c_str());
+      fileToUnparsePtr++;
+    }
   }
 
   if (filesToUnparse.find(normalizedIncludingFileName) !=
       filesToUnparse.end()) {
     // update include paths only in the unparsed files
 
-    printf("In updatePreprocessingInfoPaths(): unparseMap: \n");
-    map<string, string>::const_iterator unparseMapPtr = unparseMap.begin();
-    while (unparseMapPtr != unparseMap.end()) {
-      printf(" --- *unparseMapPtr first = %s second = %s \n",
-             unparseMapPtr->first.c_str(), unparseMapPtr->second.c_str());
-      unparseMapPtr++;
+    if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+      printf("In updatePreprocessingInfoPaths(): unparseMap: \n");
+      map<string, string>::const_iterator unparseMapPtr = unparseMap.begin();
+      while (unparseMapPtr != unparseMap.end()) {
+        printf(" --- *unparseMapPtr first = %s second = %s \n",
+               unparseMapPtr->first.c_str(), unparseMapPtr->second.c_str());
+        unparseMapPtr++;
+      }
     }
     map<string, string>::const_iterator includedFileUnparseMapEntry =
         unparseMap.find(includedFile);
@@ -704,6 +718,7 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
     }
 
     string includeString = includingPreprocessingInfo->getString();
+    const string originalIncludeString = includeString;
     if (SgProject::get_verbose() >= 0) {
       cout << "Original include string:" << includeString << endl;
     }
@@ -715,17 +730,19 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
                           includeDirective.getIncludedPath().size() + 2,
                           replacementIncludeString);
     includingPreprocessingInfo->setString(includeString);
+    if (includeString != originalIncludeString) {
+      filesWithUpdatedIncludePaths.insert(normalizedIncludingFileName);
+    }
     if (SgProject::get_verbose() >= 0) {
       cout << "Updated include string:"
            << includingPreprocessingInfo->getString() << endl;
     }
   }
 
-  printf("Leaving updatePreprocessingInfoPaths(): includedFile = %s \n",
-         includedFile.c_str());
-
-  printf("Exiting as a test! \n");
-  ROSE_ABORT();
+  if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
+    printf("Leaving updatePreprocessingInfoPaths(): includedFile = %s \n",
+           includedFile.c_str());
+  }
 }
 
 void IncludedFilesUnparser::populateUnparseMap() {
@@ -1349,6 +1366,15 @@ void IncludedFilesUnparser::visit(SgNode *node) {
     }
   }
 
+  SgIncludeFile *includeFile = isSgIncludeFile(node);
+  if (includeFile != NULL) {
+    SgSourceFile *headerFile = isSgSourceFile(includeFile->get_source_file());
+    if (headerFile != NULL) {
+      unparseSourceFileMap.insert(
+          pair<string, SgSourceFile *>(headerFile->getFileName(), headerFile));
+    }
+  }
+
   // DQ (9/7/2018): Looking for connections to the SgSourceFile in the
   // SgIncludeDirectiveStatement. We could just build up a map of filenames to
   // SgSourceFile IR nodes and then use it with the modifiedFiles set.
@@ -1617,34 +1643,13 @@ void IncludedFilesUnparser::visit(SgNode *node) {
                normalizedFileName.c_str());
 #endif
         modifiedFiles.insert(normalizedFileName);
+        filesWithMarkedTransformations.insert(normalizedFileName);
 
         // DQ (10/14/2019): Trap cases where the normalizedFileName is not a
         // valid filename.
         if (normalizedFileName == "transformation") {
           printf("ERROR: normalizedFileName = %s \n",
                  normalizedFileName.c_str());
-
-          printf("Exiting as a test! \n");
-          ROSE_ABORT();
-        }
-
-        // DQ (10/17/2019): We are getting a few too many files detected as
-        // containing transformations, so debugging this.
-        if (normalizedFileName.find("/include/clang/g++_HEADERS/"
-                                    "hdrs5/bits/stl_bvector.h") !=
-            std::string::npos) {
-          printf("ERROR: node = %s normalizedFileName = %s \n",
-                 node->class_name().c_str(), normalizedFileName.c_str());
-
-          // DQ (10/17/2019): Debugging code.
-          SgTemplateMemberFunctionDeclaration
-              *templateMemberFunctionDeclaration =
-                  isSgTemplateMemberFunctionDeclaration(node);
-          if (templateMemberFunctionDeclaration != NULL) {
-            printf("In IncludedFilesUnparser::visit(): Found "
-                   "SgTemplateMemberFunctionDeclaration: name = %s \n",
-                   templateMemberFunctionDeclaration->get_name().str());
-          }
 
           printf("Exiting as a test! \n");
           ROSE_ABORT();

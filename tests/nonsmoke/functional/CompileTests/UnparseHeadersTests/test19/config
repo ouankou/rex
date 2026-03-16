@@ -1,0 +1,4 @@
+cmd = cd ${TARGET} && ${TEST_UNPARSE_HEADERS} ${ROSE_SWITCHES} ${HDR_ROOT_SWITCHES} ${srcdir}/${TARGET}/Simple19.C
+cmd = test -f ${TARGET}/unparsedHeaders/VectorBoolTemplate.h
+cmd = grep -F "template<>" ${TARGET}/unparsedHeaders/Simple19.C
+cmd = grep -F "VectorBoolTemplate< int >::touch" ${TARGET}/unparsedHeaders/Simple19.C

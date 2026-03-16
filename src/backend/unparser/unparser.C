@@ -80,6 +80,73 @@ classifyConditionalDirective(const std::string &line) {
   return ConditionalDirectiveRecord::Other;
 }
 
+std::string normalizePathIfPossible(const std::string &path) {
+  if (path.empty()) {
+    return path;
+  }
+  if (!FileHelper::fileExists(path)) {
+    return path;
+  }
+  return FileHelper::normalizePath(path);
+}
+
+void copyLanguageSettings(SgSourceFile *target, const SgSourceFile *reference) {
+  ASSERT_not_null(target);
+  ASSERT_not_null(reference);
+
+  target->set_C_only(reference->get_C_only());
+  if (reference->get_C99_only()) {
+    target->set_C99_only();
+  }
+  if (reference->get_C11_only()) {
+    target->set_C11_only();
+  }
+  target->set_Cxx_only(reference->get_Cxx_only());
+  target->set_Cuda_only(reference->get_Cuda_only());
+  target->set_OpenCL_only(reference->get_OpenCL_only());
+  target->set_Fortran_only(reference->get_Fortran_only());
+}
+
+SgSourceFile *buildDetachedHeaderSourceFile(SgProject *project,
+                                            const std::string &headerPath,
+                                            const SgSourceFile *referenceFile) {
+  ASSERT_not_null(project);
+  ASSERT_not_null(referenceFile);
+
+  std::vector<std::string> argv =
+      project->get_originalCommandLineArgumentList();
+  Rose_STL_Container<std::string> fileList =
+      CommandlineProcessing::generateSourceFilenames(
+          argv, project->get_binary_only());
+  CommandlineProcessing::removeAllFileNamesExcept(argv, fileList, headerPath);
+  if (std::find(argv.begin(), argv.end(), headerPath) == argv.end()) {
+    argv.push_back(headerPath);
+  }
+
+  SgSourceFile *headerFile = new SgSourceFile(argv, project);
+  ASSERT_not_null(headerFile);
+
+  headerFile->set_isHeaderFile(true);
+  headerFile->set_unparseHeaderFiles(referenceFile->get_unparseHeaderFiles());
+  headerFile->set_unparse_tokens(referenceFile->get_unparse_tokens());
+  headerFile->set_use_token_stream_to_improve_source_position_info(
+      referenceFile->get_use_token_stream_to_improve_source_position_info());
+  headerFile->set_unparse_using_leading_and_trailing_token_mappings(
+      referenceFile->get_unparse_using_leading_and_trailing_token_mappings());
+
+  copyLanguageSettings(headerFile, referenceFile);
+
+  headerFile->set_requires_C_preprocessor(false);
+  headerFile->initializeGlobalScope();
+
+  if (headerFile->get_preprocessorDirectivesAndCommentsList() == NULL) {
+    headerFile->set_preprocessorDirectivesAndCommentsList(
+        new ROSEAttributesListContainer());
+  }
+
+  return headerFile;
+}
+
 bool readTextFileLines(const std::string &filename,
                        std::vector<std::string> *lines) {
   ASSERT_not_null(lines);
@@ -331,6 +398,164 @@ bool fileHasRelevantModifications(SgSourceFile *file) {
   }
 
   return false;
+}
+
+std::string getAssociatedFileNameForOutput(SgLocatedNode *node) {
+  if (node == NULL) {
+    return std::string();
+  }
+
+  Sg_File_Info *fileInfo = node->get_file_info();
+  if (fileInfo == NULL) {
+    return std::string();
+  }
+
+  std::string filename;
+  const int physicalFileId = fileInfo->get_physical_file_id();
+  if (physicalFileId >= 0) {
+    filename = fileInfo->getFilenameFromID(physicalFileId);
+  }
+
+  if (filename.empty() || filename == "NULL_FILE") {
+    filename = fileInfo->get_physical_filename();
+  }
+
+  if (filename.empty() || filename == "NULL_FILE") {
+    filename = fileInfo->get_filename();
+  }
+
+  if (filename == "transformation") {
+    if (SgSourceFile *sourceFile =
+            SageInterface::getEnclosingSourceFile(node)) {
+      filename = sourceFile->getFileName();
+    }
+  }
+
+  return normalizePathIfPossible(filename);
+}
+
+std::set<std::string>
+collectFilesWithRelevantModifications(SgProject *project) {
+  std::set<std::string> files;
+  if (project == NULL) {
+    return files;
+  }
+
+  std::set<SgStatement *> transformedStatements =
+      SageInterface::collectTransformedStatements(project);
+  for (SgStatement *statement : transformedStatements) {
+    if (statement == NULL) {
+      continue;
+    }
+
+    Sg_File_Info *fileInfo = statement->get_file_info();
+    if (fileInfo == NULL || fileInfo->isOutputInCodeGeneration() == false) {
+      continue;
+    }
+
+    const std::string filename = getAssociatedFileNameForOutput(statement);
+    if (!filename.empty()) {
+      files.insert(filename);
+    }
+  }
+
+  std::set<SgLocatedNode *> modifiedNodes =
+      SageInterface::collectModifiedLocatedNodes(project);
+  for (SgLocatedNode *node : modifiedNodes) {
+    if (node == NULL) {
+      continue;
+    }
+
+    Sg_File_Info *fileInfo = node->get_file_info();
+    if (fileInfo == NULL || fileInfo->isOutputInCodeGeneration() == false) {
+      continue;
+    }
+
+    const std::string filename = getAssociatedFileNameForOutput(node);
+    if (!filename.empty()) {
+      files.insert(filename);
+    }
+  }
+
+  return files;
+}
+
+bool headerRequiresAstUnparsing(
+    const std::set<std::string> &filesWithRelevantModifications,
+    const std::string &headerFilename) {
+  const std::string normalizedHeaderFilename =
+      normalizePathIfPossible(headerFilename);
+  if (normalizedHeaderFilename.empty()) {
+    return true;
+  }
+
+  if (filesWithRelevantModifications.find(normalizedHeaderFilename) !=
+      filesWithRelevantModifications.end()) {
+    return true;
+  }
+
+  if (IncludedFilesUnparser::filesWithMarkedTransformations.find(
+          normalizedHeaderFilename) !=
+      IncludedFilesUnparser::filesWithMarkedTransformations.end()) {
+    return true;
+  }
+
+  return IncludedFilesUnparser::filesWithUpdatedIncludePaths.find(
+             normalizedHeaderFilename) !=
+         IncludedFilesUnparser::filesWithUpdatedIncludePaths.end();
+}
+
+bool scopeHasRelevantModifications(SgScopeStatement *scope,
+                                   const std::string &headerFilename) {
+  const std::string normalizedHeaderFilename =
+      normalizePathIfPossible(headerFilename);
+  if (scope == NULL || normalizedHeaderFilename.empty()) {
+    return false;
+  }
+
+  class Traversal : public AstSimpleProcessing {
+  public:
+    explicit Traversal(const std::string &normalizedHeaderFilename)
+        : normalizedHeaderFilename(normalizedHeaderFilename), found(false) {}
+
+    void visit(SgNode *node) {
+      if (found == true) {
+        return;
+      }
+
+      SgLocatedNode *locatedNode = isSgLocatedNode(node);
+      if (locatedNode == NULL) {
+        return;
+      }
+
+      Sg_File_Info *fileInfo = locatedNode->get_file_info();
+      if (fileInfo == NULL || fileInfo->isOutputInCodeGeneration() == false) {
+        return;
+      }
+
+      if (getAssociatedFileNameForOutput(locatedNode) !=
+          normalizedHeaderFilename) {
+        return;
+      }
+
+      if (locatedNode->get_isModified() == true) {
+        found = true;
+        return;
+      }
+
+      SgStatement *statement = isSgStatement(node);
+      if (statement != NULL && statement->isTransformation() == true) {
+        found = true;
+      }
+    }
+
+    const std::string normalizedHeaderFilename;
+    bool found;
+  };
+
+  Traversal traversal(normalizedHeaderFilename);
+  traversal.traverse(scope, preorder);
+  return traversal.found;
 }
 
 void insertIncludeFileMapEntry(const std::string &filename,
@@ -2712,10 +2937,19 @@ void unparseFile(SgFile *file, UnparseFormatHelp *unparseHelp,
 
     SgSourceFile *sourceFile = isSgSourceFile(file);
     bool useRawTokenOutput = false;
-    if (sourceFile != NULL && file->get_unparse_tokens() == false &&
+    if (sourceFile != NULL && unparseScope == NULL &&
+        file->get_unparse_tokens() == false &&
         (sourceFile->get_C_only() || sourceFile->get_Cxx_only() ||
          sourceFile->get_Cuda_only() || sourceFile->get_OpenCL_only())) {
-      if (fileHasRelevantModifications(sourceFile) == false) {
+      // Header-file unparsing needs the full AST/preprocessing unparser so it
+      // can reflect renamed declarations, rewritten include paths, and
+      // scope-targeted output. The raw-token fast path bypasses those updates.
+      const bool allowRawTokenOutput =
+          sourceFile->get_isHeaderFile() == false ||
+          sourceFile->get_unparseHeaderFiles() == false;
+
+      if (allowRawTokenOutput == true &&
+          fileHasRelevantModifications(sourceFile) == false) {
         ROSEAttributesListContainerPtr filePreprocInfo =
             sourceFile->get_preprocessorDirectivesAndCommentsList();
         if (filePreprocInfo != NULL &&
@@ -4403,6 +4637,8 @@ void unparseIncludedFiles(SgProject *project,
         includedFilesUnparser.getUnparseMap();
     const map<string, SgScopeStatement *> &unparseScopesMap =
         includedFilesUnparser.getUnparseScopesMap();
+    const std::set<std::string> filesWithRelevantModifications =
+        collectFilesWithRelevantModifications(project);
     prependIncludeOptionsToCommandLine(
         project, includedFilesUnparser.getIncludeCompilerOptions());
 
@@ -4611,6 +4847,8 @@ void unparseIncludedFiles(SgProject *project,
          unparseMapEntry != unparseMap.end(); unparseMapEntry++) {
       // const string & originalFileName = unparseMapEntry -> first;
       string originalFileName = unparseMapEntry->first;
+      bool requiresAstUnparsing = headerRequiresAstUnparsing(
+          filesWithRelevantModifications, originalFileName);
 
       string originalFileNameWithoutPath =
           Rose::utility_stripPathFromFileName(originalFileName);
@@ -4657,6 +4895,13 @@ void unparseIncludedFiles(SgProject *project,
       // unparseSourceFileMap = includedFilesUnparser.getUnparseSourceFileMap();
       map<string, SgSourceFile *> unparseSourceFileMap =
           includedFilesUnparser.getUnparseSourceFileMap();
+      map<string, SgScopeStatement *>::const_iterator unparseScopeIter =
+          unparseScopesMap.find(originalFileName);
+      if (unparseScopeIter != unparseScopesMap.end() &&
+          scopeHasRelevantModifications(unparseScopeIter->second,
+                                        originalFileName) == true) {
+        requiresAstUnparsing = true;
+      }
 
       // If no SgSourceFile was materialized for a header, we can't
       // token-unparse it; fall back to copying the original header
@@ -4664,6 +4909,69 @@ void unparseIncludedFiles(SgProject *project,
       // still succeeds.
       map<string, SgSourceFile *>::const_iterator sourceFileIter =
           unparseSourceFileMap.find(originalFileName);
+      if (sourceFileIter == unparseSourceFileMap.end()) {
+        const SgSourceFile *referenceSourceFile = NULL;
+        const std::string applicationRootDirectory =
+            project->get_applicationRootDirectory();
+        for (SgFile *projectFile : project->get_fileList()) {
+          SgSourceFile *projectSourceFile = isSgSourceFile(projectFile);
+          if (projectSourceFile == NULL) {
+            continue;
+          }
+          if (referenceSourceFile == NULL &&
+              projectSourceFile->get_isHeaderFile() == false) {
+            referenceSourceFile = projectSourceFile;
+          }
+          populateIncludeFileMapForUnparsingFromIncludeTree(
+              projectSourceFile->get_associated_include_file());
+        }
+        if (referenceSourceFile == NULL) {
+          for (SgFile *projectFile : project->get_fileList()) {
+            referenceSourceFile = isSgSourceFile(projectFile);
+            if (referenceSourceFile != NULL) {
+              break;
+            }
+          }
+        }
+
+        SgIncludeFile *includeFile =
+            lookupIncludeFileForUnparsing(originalFileName);
+        if (includeFile != NULL && includeFile->get_source_file() != NULL) {
+          unparseSourceFileMap.insert(
+              std::make_pair(originalFileName, includeFile->get_source_file()));
+          sourceFileIter = unparseSourceFileMap.find(originalFileName);
+        }
+        if (referenceSourceFile != NULL && requiresAstUnparsing == true &&
+            ((includeFile != NULL &&
+              includeFile->get_isApplicationFile() == true) ||
+             (!applicationRootDirectory.empty() &&
+              originalFileName.find(applicationRootDirectory) == 0)) &&
+            sourceFileIter == unparseSourceFileMap.end()) {
+          SgSourceFile *headerSourceFile = buildDetachedHeaderSourceFile(
+              project, originalFileName, referenceSourceFile);
+          ASSERT_not_null(headerSourceFile);
+          if (includeFile != NULL) {
+            headerSourceFile->set_associated_include_file(includeFile);
+            if (includeFile->get_source_file() == NULL) {
+              includeFile->set_source_file(headerSourceFile);
+            }
+          }
+          unparseSourceFileMap.insert(
+              std::make_pair(originalFileName, headerSourceFile));
+          sourceFileIter = unparseSourceFileMap.find(originalFileName);
+        }
+      }
+
+      if (sourceFileIter != unparseSourceFileMap.end()) {
+        SgSourceFile *candidateHeaderFile = sourceFileIter->second;
+        if (candidateHeaderFile != NULL &&
+            normalizePathIfPossible(candidateHeaderFile->getFileName()) ==
+                normalizePathIfPossible(originalFileName) &&
+            fileHasRelevantModifications(candidateHeaderFile) == true) {
+          requiresAstUnparsing = true;
+        }
+      }
+
       if (sourceFileIter == unparseSourceFileMap.end()) {
         const string outputFileName = FileHelper::concatenatePaths(
             unparseRootPath, unparseMapEntry->second);
@@ -4709,8 +5017,15 @@ void unparseIncludedFiles(SgProject *project,
         // DQ (11/15/2018): Mark this as a header file that will be unparsed.
         associated_include_file->set_will_be_unparsed(true);
 
-        if (associated_include_file
-                ->get_can_be_supported_using_token_based_unparsing() == false) {
+        if (requiresAstUnparsing == true &&
+            unparsedFile->get_unparse_tokens() == true &&
+            associated_include_file
+                    ->get_can_be_supported_using_token_based_unparsing() ==
+                false) {
+          // Only token-based header unparsing needs to reject headers that the
+          // include analysis marks as unsafe for token output. The AST-based
+          // header unparser must still emit those headers so declaration
+          // rewrites and include-path updates are preserved.
           // #if DEBUG_UNPARSE_INCLUDE_FILES
           // DQ (4/4/2020): Added header file unparsing feature specific debug
           // level.
@@ -4864,8 +5179,6 @@ void unparseIncludedFiles(SgProject *project,
                 .push_back(include_line);
           }
 
-          printf("Exiting as a test! \n");
-          ROSE_ABORT();
         } else {
           printf(
               "Note: associated_include_file == NULL: "
@@ -4873,8 +5186,6 @@ void unparseIncludedFiles(SgProject *project,
               associated_header_file_body->get_parent(),
               associated_header_file_body->get_parent()->class_name().c_str());
         }
-        printf("Exiting as a test! \n");
-        ROSE_ABORT();
       } else {
         // DQ (11/7/2018): This case is used when the original source file (not
         // a header file) is processed. #if DEBUG_UNPARSE_INCLUDE_FILES DQ
@@ -4966,11 +5277,6 @@ void unparseIncludedFiles(SgProject *project,
           std::filesystem::path adjusted_header_file_directory_path(
               adjusted_header_file_directory);
           create_directories(adjusted_header_file_directory_path);
-          if (added_directory == ".") {
-            printf("Exiting as a test! added_directory = %s \n",
-                   added_directory.c_str());
-            ROSE_ABORT();
-          }
 
           // DQ (11/8/2018): Debugging code to spot the added include path in
           // the command line for the backend compiler. source_file_directory +=
@@ -5051,6 +5357,15 @@ void unparseIncludedFiles(SgProject *project,
       // (9/11/2018): Check that this is a header file (and not the original
       // source file).
       if (unparsedFile->get_isHeaderFile() == true) {
+        if (requiresAstUnparsing == false) {
+          std::filesystem::copy_file(
+              std::filesystem::path(originalFileName),
+              std::filesystem::path(
+                  unparsedFile->get_unparse_output_filename()),
+              std::filesystem::copy_options::overwrite_existing);
+          continue;
+        }
+
         // Unparse only included files (the original source file will be
         // unparsed as usual).
 
@@ -5089,17 +5404,15 @@ void unparseIncludedFiles(SgProject *project,
         // DQ (10/29/2018): Maybe this is the best way to handle this (4th
         // parameter is non-NULL for header file unparsing. This might be a
         // better solution.
-        if (isSgGlobal(header_file_associated_scope) != NULL) {
-#if DEBUG_UNPARSE_INCLUDE_FILES
-          printf("isSgGlobal(header_file_associated_scope) != NULL: calling "
-                 "unparseFile() \n");
-#endif
-          unparseFile(unparsedFile, unparseFormatHelp, unparseDelegate, NULL);
-#if DEBUG_UNPARSE_INCLUDE_FILES
-          printf("DONE: isSgGlobal(header_file_associated_scope) != NULL: "
-                 "calling unparseFile() \n");
-#endif
-        } else {
+        {
+          if (isSgBasicBlock(header_file_associated_scope) != NULL) {
+            std::filesystem::copy_file(
+                std::filesystem::path(originalFileName),
+                std::filesystem::path(
+                    unparsedFile->get_unparse_output_filename()),
+                std::filesystem::copy_options::overwrite_existing);
+            continue;
+          }
 #if DEBUG_UNPARSE_INCLUDE_FILES
           printf("calling unparseFile(): using header_file_associated_scope %p "
                  "= %s : calling unparseFile() \n",

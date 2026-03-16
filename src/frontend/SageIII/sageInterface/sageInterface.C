@@ -1277,8 +1277,6 @@ std::vector<SgNode *> SageInterface::astIntersection(SgNode *original,
   return intersectionSet;
 }
 
-// AJ (10/21/2004): Added support for changing the symbol name associated with
-// an SgInitializedName by updating the symbol table
 int SageInterface::set_name(SgInitializedName *initializedNameNode,
                             SgName new_name) {
   // find the appropriate symbol table, delete the symbol
