@@ -24,7 +24,7 @@ int main() {
                  // okay in C++14
 
   int ar[] = {1, 2, 3}; // ar is int[3]
-  int ab[](1, 2, 3);    // (C++20) ab is int[3]
+  int ab[] = {1, 2, 3}; // another deduced-bound array
   //  char cr[3] = {'a', 'b', 'c', 'd'}; // too many initializer clauses
   char cr[3] = {'a'}; // array initialized as {'a', '\0', '\0'}
 
@@ -38,8 +38,7 @@ int main() {
   std::array<int, 3> std_ar2{{1, 2, 3}};  // std::array is an aggregate
   std::array<int, 3> std_ar1 = {1, 2, 3}; // brace-elision okay
 
-  int ai[] = {1, 2.0}; // narrowing conversion from double to int:
-                       // error in C++11, okay in C++03
+  int ai[] = {1, 2}; // list-initialization without narrowing
 
   std::string ars[] = {std::string("one"), // copy-initialization
                        "two", // conversion, then copy-initialization
