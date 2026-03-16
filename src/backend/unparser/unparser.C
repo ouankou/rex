@@ -4842,6 +4842,30 @@ void unparseIncludedFiles(SgProject *project,
            "frontier! \n");
 #endif
 
+    const std::string applicationRootDirectory =
+        project->get_applicationRootDirectory();
+    const SgSourceFile *referenceSourceFile = NULL;
+    for (SgFile *projectFile : project->get_fileList()) {
+      SgSourceFile *projectSourceFile = isSgSourceFile(projectFile);
+      if (projectSourceFile == NULL) {
+        continue;
+      }
+      if (referenceSourceFile == NULL &&
+          projectSourceFile->get_isHeaderFile() == false) {
+        referenceSourceFile = projectSourceFile;
+      }
+      populateIncludeFileMapForUnparsingFromIncludeTree(
+          projectSourceFile->get_associated_include_file());
+    }
+    if (referenceSourceFile == NULL) {
+      for (SgFile *projectFile : project->get_fileList()) {
+        referenceSourceFile = isSgSourceFile(projectFile);
+        if (referenceSourceFile != NULL) {
+          break;
+        }
+      }
+    }
+
     for (map<string, string>::const_iterator unparseMapEntry =
              unparseMap.begin();
          unparseMapEntry != unparseMap.end(); unparseMapEntry++) {
@@ -4910,30 +4934,6 @@ void unparseIncludedFiles(SgProject *project,
       map<string, SgSourceFile *>::const_iterator sourceFileIter =
           unparseSourceFileMap.find(originalFileName);
       if (sourceFileIter == unparseSourceFileMap.end()) {
-        const SgSourceFile *referenceSourceFile = NULL;
-        const std::string applicationRootDirectory =
-            project->get_applicationRootDirectory();
-        for (SgFile *projectFile : project->get_fileList()) {
-          SgSourceFile *projectSourceFile = isSgSourceFile(projectFile);
-          if (projectSourceFile == NULL) {
-            continue;
-          }
-          if (referenceSourceFile == NULL &&
-              projectSourceFile->get_isHeaderFile() == false) {
-            referenceSourceFile = projectSourceFile;
-          }
-          populateIncludeFileMapForUnparsingFromIncludeTree(
-              projectSourceFile->get_associated_include_file());
-        }
-        if (referenceSourceFile == NULL) {
-          for (SgFile *projectFile : project->get_fileList()) {
-            referenceSourceFile = isSgSourceFile(projectFile);
-            if (referenceSourceFile != NULL) {
-              break;
-            }
-          }
-        }
-
         SgIncludeFile *includeFile =
             lookupIncludeFileForUnparsing(originalFileName);
         if (includeFile != NULL && includeFile->get_source_file() != NULL) {
