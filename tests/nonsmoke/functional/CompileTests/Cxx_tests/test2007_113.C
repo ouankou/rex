@@ -87,9 +87,9 @@ typedef enum JSProtoKey {
   JS_PROTO(UnusedProto28,         28,     js_InitNullClass)
   JS_PROTO(File,                  29,     FILE_INIT)
   JS_PROTO(Block,                 30,     js_InitBlockClass)
-// clang-format on
 #undef JS_PROTO
-                                                                  JSProto_LIMIT
+  JSProto_LIMIT
+  // clang-format on
 } JSProtoKey;
 
 /* JSObjectOps.checkAccess mode enumeration. */
