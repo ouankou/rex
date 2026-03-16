@@ -5511,11 +5511,11 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
 
   auto same_template_decl_chain = [](SgTemplateClassDeclaration *lhs,
                                      SgTemplateClassDeclaration *rhs) -> bool {
-    if (lhs == rhs) {
-      return true;
-    }
     if (lhs == nullptr || rhs == nullptr) {
       return false;
+    }
+    if (lhs == rhs) {
+      return true;
     }
 
     auto first_decl =
