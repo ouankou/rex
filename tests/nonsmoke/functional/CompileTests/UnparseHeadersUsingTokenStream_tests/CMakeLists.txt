@@ -40,6 +40,8 @@ foreach(spec IN LISTS _specimens)
       blddir=${CMAKE_CURRENT_BINARY_DIR}
       "ROSE_SWITCHES=${_rose_switches}"
       "HDR_ROOT_SWITCHES=${_hdr_root_switches}"
+      "TEST_UNPARSE_HEADERS_USING_TOKENS=$<TARGET_FILE:TestUnparseHeadersUsingTokens>"
+      "WHITE_SPACE_TRANSFORMATION=$<TARGET_FILE:whiteSpaceTransformation>"
       ${CMAKE_CURRENT_SOURCE_DIR}/${spec}/config
       ${spec}.passed
   )
@@ -57,6 +59,8 @@ foreach(spec IN LISTS _disabled_specimens)
       blddir=${CMAKE_CURRENT_BINARY_DIR}
       "ROSE_SWITCHES=${_rose_switches}"
       "HDR_ROOT_SWITCHES=${_hdr_root_switches}"
+      "TEST_UNPARSE_HEADERS_USING_TOKENS=$<TARGET_FILE:TestUnparseHeadersUsingTokens>"
+      "WHITE_SPACE_TRANSFORMATION=$<TARGET_FILE:whiteSpaceTransformation>"
       ${CMAKE_CURRENT_SOURCE_DIR}/${spec}/config
       ${spec}.passed
   )
