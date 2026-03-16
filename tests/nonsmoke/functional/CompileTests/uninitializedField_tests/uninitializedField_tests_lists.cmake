@@ -2186,7 +2186,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test2007_120.C
   test2007_121.C
   test2007_122.C
-  test2007_123.C
   test2007_124.C
   test2007_125.C
   test2007_126.C
@@ -2204,7 +2203,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test2007_146.C
   test2007_148.C
   test2007_149.C
-  test2007_153.C
   test2007_156.C
   test2007_168.C
   test2007_174.C
