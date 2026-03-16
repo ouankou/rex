@@ -80,16 +80,6 @@ classifyConditionalDirective(const std::string &line) {
   return ConditionalDirectiveRecord::Other;
 }
 
-std::string normalizePathIfPossible(const std::string &path) {
-  if (path.empty()) {
-    return path;
-  }
-  if (!FileHelper::fileExists(path)) {
-    return path;
-  }
-  return FileHelper::normalizePath(path);
-}
-
 void copyLanguageSettings(SgSourceFile *target, const SgSourceFile *reference) {
   ASSERT_not_null(target);
   ASSERT_not_null(reference);
@@ -433,7 +423,7 @@ std::string getAssociatedFileNameForOutput(SgLocatedNode *node) {
     }
   }
 
-  return normalizePathIfPossible(filename);
+  return FileHelper::normalizePathIfPossible(filename);
 }
 
 std::set<std::string>
@@ -486,7 +476,7 @@ bool headerRequiresAstUnparsing(
     const std::set<std::string> &filesWithRelevantModifications,
     const std::string &headerFilename) {
   const std::string normalizedHeaderFilename =
-      normalizePathIfPossible(headerFilename);
+      FileHelper::normalizePathIfPossible(headerFilename);
   if (normalizedHeaderFilename.empty()) {
     return true;
   }
@@ -510,7 +500,7 @@ bool headerRequiresAstUnparsing(
 bool scopeHasRelevantModifications(SgScopeStatement *scope,
                                    const std::string &headerFilename) {
   const std::string normalizedHeaderFilename =
-      normalizePathIfPossible(headerFilename);
+      FileHelper::normalizePathIfPossible(headerFilename);
   if (scope == NULL || normalizedHeaderFilename.empty()) {
     return false;
   }
@@ -4967,8 +4957,9 @@ void unparseIncludedFiles(SgProject *project,
       if (sourceFileIter != unparseSourceFileMap.end()) {
         SgSourceFile *candidateHeaderFile = sourceFileIter->second;
         if (candidateHeaderFile != NULL &&
-            normalizePathIfPossible(candidateHeaderFile->getFileName()) ==
-                normalizePathIfPossible(originalFileName) &&
+            FileHelper::normalizePathIfPossible(
+                candidateHeaderFile->getFileName()) ==
+                FileHelper::normalizePathIfPossible(originalFileName) &&
             fileHasRelevantModifications(candidateHeaderFile) == true) {
           requiresAstUnparsing = true;
         }

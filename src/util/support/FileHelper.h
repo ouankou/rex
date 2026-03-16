@@ -117,6 +117,16 @@ public:
     return normalizedPath;
   }
 
+  static std::string normalizePathIfPossible(const std::string &path) {
+    if (path.empty()) {
+      return path;
+    }
+    if (!fileExists(path)) {
+      return path;
+    }
+    return normalizePath(path);
+  }
+
   static std::string
   getNormalizedContainingFileName(PreprocessingInfo *preprocessingInfo) {
     return normalizePath(

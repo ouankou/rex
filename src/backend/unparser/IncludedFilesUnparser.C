@@ -4,6 +4,8 @@
 
 #include "CollectionHelper.h"
 
+#include "FileHelper.h"
+
 #include "IncludeDirective.h"
 
 #include "IncludedFilesUnparser.h"
@@ -13,14 +15,6 @@
 using namespace std;
 
 namespace {
-string normalizePathIfPossible(const string &path) {
-  if (path.empty())
-    return path;
-  if (!FileHelper::fileExists(path))
-    return path;
-  return FileHelper::normalizePath(path);
-}
-
 void buildIncludeTreeParentMap(
     SgIncludeFile *includeTreeRoot,
     map<string, set<string>> &includedToIncludingFiles) {
@@ -41,7 +35,7 @@ void buildIncludeTreeParentMap(
       continue;
 
     const string includingFileName =
-        normalizePathIfPossible(includingFile->get_filename());
+        FileHelper::normalizePathIfPossible(includingFile->get_filename());
 
     const SgIncludeFilePtrList &includeFileList =
         includingFile->get_include_file_list();
@@ -53,7 +47,7 @@ void buildIncludeTreeParentMap(
       worklist.push_back(includedFile);
 
       const string includedFileName =
-          normalizePathIfPossible(includedFile->get_filename());
+          FileHelper::normalizePathIfPossible(includedFile->get_filename());
       if (!includedFileName.empty() && !includingFileName.empty())
         includedToIncludingFiles[includedFileName].insert(includingFileName);
     }
@@ -271,7 +265,8 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
         printf("   --- allFiles entry = %s \n", filename.c_str());
       }
 
-      const string normalizedFilename = normalizePathIfPossible(filename);
+      const string normalizedFilename =
+          FileHelper::normalizePathIfPossible(filename);
 
       map<string, set<string>>::const_iterator includeTreeEntry =
           includedToIncludingFiles.find(normalizedFilename);

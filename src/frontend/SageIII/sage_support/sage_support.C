@@ -15,6 +15,8 @@
 
 #include "cmdline.h"
 
+#include "FileHelper.h"
+
 #include "keep_going.h"
 
 #include "processSupport.h"
@@ -118,16 +120,6 @@ static bool hasAttachedPreprocessingInfo(SgNode *root) {
     }
   }
   return false;
-}
-
-static std::string normalizePathIfPossible(const std::string &path) {
-  if (path.empty()) {
-    return path;
-  }
-  if (!FileHelper::fileExists(path)) {
-    return path;
-  }
-  return FileHelper::normalizePath(path);
 }
 
 static std::string toLowerCopy(const std::string &text) {
@@ -269,19 +261,21 @@ static bool hasIncludeDir(const std::vector<std::string> &args,
   if (dir.empty()) {
     return false;
   }
-  const std::string normalized_dir = normalizePathIfPossible(dir);
+  const std::string normalized_dir = FileHelper::normalizePathIfPossible(dir);
   for (size_t i = 0; i < args.size(); ++i) {
     const std::string &arg = args[i];
     if (arg == "-I") {
       if (i + 1 < args.size()) {
-        if (normalizePathIfPossible(args[i + 1]) == normalized_dir) {
+        if (FileHelper::normalizePathIfPossible(args[i + 1]) ==
+            normalized_dir) {
           return true;
         }
       }
       continue;
     }
     if (arg.rfind("-I", 0) == 0 && arg.size() > 2) {
-      if (normalizePathIfPossible(arg.substr(2)) == normalized_dir) {
+      if (FileHelper::normalizePathIfPossible(arg.substr(2)) ==
+          normalized_dir) {
         return true;
       }
     }
@@ -356,6 +350,9 @@ static SgIncludeFile *findIncludeFileByPath(SgIncludeFile *includeRoot,
     return NULL;
   }
 
+  const std::string normalizedHeaderPath =
+      FileHelper::normalizePathIfPossible(headerPath);
+
   std::vector<SgIncludeFile *> worklist;
   std::set<SgIncludeFile *> visited;
   worklist.push_back(includeRoot);
@@ -367,7 +364,8 @@ static SgIncludeFile *findIncludeFileByPath(SgIncludeFile *includeRoot,
       continue;
     }
 
-    if (normalizePathIfPossible(includeFile->get_filename()) == headerPath) {
+    if (FileHelper::normalizePathIfPossible(includeFile->get_filename()) ==
+        normalizedHeaderPath) {
       return includeFile;
     }
 
@@ -1773,7 +1771,7 @@ int SgProject::parse() {
         continue;
       }
       std::string normalizedPath =
-          normalizePathIfPossible(sourceFile->getFileName());
+          FileHelper::normalizePathIfPossible(sourceFile->getFileName());
       if (!normalizedPath.empty()) {
         sourceFilesByPath[normalizedPath] = sourceFile;
       }
@@ -1798,7 +1796,7 @@ int SgProject::parse() {
           continue;
         }
         std::string normalizedPath =
-            normalizePathIfPossible(sourceFile->getFileName());
+            FileHelper::normalizePathIfPossible(sourceFile->getFileName());
         if (!normalizedPath.empty()) {
           tokenMapFilesByPath[normalizedPath] = sourceFile;
         }
@@ -1808,7 +1806,8 @@ int SgProject::parse() {
     std::set<std::string> processedHeaders;
     for (map<string, set<string>>::const_iterator it = includedFilesMap.begin();
          it != includedFilesMap.end(); ++it) {
-      const std::string includingPath = normalizePathIfPossible(it->first);
+      const std::string includingPath =
+          FileHelper::normalizePathIfPossible(it->first);
       std::map<std::string, SgSourceFile *>::const_iterator rootIt =
           includingSourceFiles.find(includingPath);
       if (rootIt == includingSourceFiles.end()) {
@@ -1824,7 +1823,7 @@ int SgProject::parse() {
       const set<string> &includedSet = it->second;
       for (set<string>::const_iterator incIt = includedSet.begin();
            incIt != includedSet.end(); ++incIt) {
-        std::string includedPath = normalizePathIfPossible(*incIt);
+        std::string includedPath = FileHelper::normalizePathIfPossible(*incIt);
         if (!processedHeaders.insert(includedPath).second) {
           continue;
         }
@@ -2736,7 +2735,8 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
     if (source_path.empty()) {
       source_path = getFileName();
     }
-    const std::string normalized_source = normalizePathIfPossible(source_path);
+    const std::string normalized_source =
+        FileHelper::normalizePathIfPossible(source_path);
     std::string source_dir;
     if (!source_path.empty()) {
       source_dir = std::filesystem::path(source_path).parent_path().string();
@@ -2772,7 +2772,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
         return arg;
       }
       if (!normalized_source.empty() &&
-          normalizePathIfPossible(arg) != normalized_source) {
+          FileHelper::normalizePathIfPossible(arg) != normalized_source) {
         return arg;
       }
       if (!needsFlangFortranExtensionFix(arg)) {
@@ -2785,7 +2785,7 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv,
       const std::filesystem::path original_path(arg);
       const std::string stem = original_path.stem().string();
       const size_t hash_value =
-          std::hash<std::string>{}(normalizePathIfPossible(arg));
+          std::hash<std::string>{}(FileHelper::normalizePathIfPossible(arg));
       const std::string temp_name =
           stem + ".rose_flang_" + std::to_string(hash_value) + "." + new_suffix;
       const std::filesystem::path temp_path = out_dir / temp_name;
