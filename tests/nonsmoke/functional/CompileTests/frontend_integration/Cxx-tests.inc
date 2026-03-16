@@ -181,7 +181,7 @@ CXX_TESTS_TO_CHECK =
             .C test2007_108.C test2007_109.C test2007_110.C test2007_111
             .C test2007_112.C test2007_113.C test2007_114.C test2007_115
             .C test2007_116.C test2007_117.C test2007_118.C test2007_119
-            .C test2007_120.C test2007_121.C test2007_122.C
+            .C test2007_120.C test2007_121.C test2007_122
             .C test2007_124.C test2007_125.C test2007_126.C test2007_127
             .C test2007_128.C test2007_129.C test2007_130.C test2007_131
             .C test2007_132.C test2007_133.C test2007_134.C test2007_135
