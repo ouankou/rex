@@ -8,8 +8,6 @@ struct A {
   int m = -1;
 };
 
-// DQ (7/21/2020): This appears to not be supported yet in legacy frontend 6.0
-A{.m=21}  // Initializes str with {}, which calls the default constructor
-          // then initializes n with = 42
-          // then initializes m with = 21
-
+A a{.m = 21}; // Initializes str with {}, which calls the default constructor
+              // then initializes n with = 42
+              // then initializes m with = 21

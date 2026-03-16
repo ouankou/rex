@@ -7,8 +7,6 @@ target_link_libraries(normalizationTranslator
 
 set(TESTCODE_DIR ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 include(${TESTCODE_DIR}/Cxx_transformation_specimens.cmake)
-set(NORMALIZATION_SYSTEM_HEADER_DIR
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like)
 
 set(normalizationTranslator_SWITCHES
   -w -rose:verbose 0 -I${TESTCODE_DIR})
@@ -27,15 +25,10 @@ list(REMOVE_DUPLICATES _normalization_tests)
 
 set(_normalization_test_targets)
 foreach(file_to_test ${_normalization_tests})
-  set(extra_frontend_flags "")
-  if (file_to_test STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
-    list(APPEND extra_frontend_flags -isystem ${NORMALIZATION_SYSTEM_HEADER_DIR})
-  endif()
+  set(extra_frontend_flags)
+  rex_get_cxx_specimen_extra_flags(extra_frontend_flags ${file_to_test})
   if (file_to_test STREQUAL "rex_test2026_concepts.cpp")
     list(APPEND extra_frontend_flags -std=c++20)
-  endif()
-  if (file_to_test IN_LIST REX_FRONTEND_ERROR_TESTS)
-    list(APPEND extra_frontend_flags -rex:clang:continue-on-error)
   endif()
   string(JOIN " " _normalization_switches ${normalizationTranslator_SWITCHES})
   string(JOIN " " _extra_frontend_flags ${extra_frontend_flags})

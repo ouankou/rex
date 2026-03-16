@@ -22,6 +22,20 @@ set(REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT
   rex_test2025_issue99.cpp
 )
 
+set(REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR
+  ${CMAKE_CURRENT_SOURCE_DIR}/input_codes/system_header_like)
+
+function(rex_get_cxx_specimen_extra_flags out_var specimen)
+  set(_flags)
+  if(DEFINED REX_FRONTEND_ERROR_TESTS AND specimen IN_LIST REX_FRONTEND_ERROR_TESTS)
+    list(APPEND _flags -rex:clang:continue-on-error)
+  endif()
+  if(specimen STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
+    list(APPEND _flags -isystem ${REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR})
+  endif()
+  set(${out_var} "${_flags}" PARENT_SCOPE)
+endfunction()
+
 add_executable(testTranslator testTranslator.C)
 add_dependencies(testTranslator roseUtil)
 target_link_libraries(testTranslator ROSE_DLL ${link_with_libraries})

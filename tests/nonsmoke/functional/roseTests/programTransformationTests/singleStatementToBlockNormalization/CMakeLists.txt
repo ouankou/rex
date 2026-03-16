@@ -28,11 +28,19 @@ set(_single_stmt_disabled
 set(_single_stmt_test_targets)
 foreach(specimen IN LISTS REX_CXX_TRANSFORMATION_TEST_SOURCES)
   set(_single_stmt_target singleStatementToBlockNormalization_${specimen}.passed)
+  rex_get_cxx_specimen_extra_flags(_single_stmt_extra_flags ${specimen})
+  string(JOIN " " _single_stmt_extra_flags_str ${_single_stmt_extra_flags})
+  set(_single_stmt_cmd
+    "$<TARGET_FILE:singleStatementToBlockNormalization> ${_single_stmt_switches_str}")
+  if(_single_stmt_extra_flags_str)
+    string(APPEND _single_stmt_cmd " ${_single_stmt_extra_flags_str}")
+  endif()
+  string(APPEND _single_stmt_cmd " -c ${_single_stmt_tests_dir}/${specimen}")
   add_test(
     NAME singleStatementToBlockNormalization_${specimen}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
-      CMD="$<TARGET_FILE:singleStatementToBlockNormalization> ${_single_stmt_switches_str} -c ${_single_stmt_tests_dir}/${specimen}"
+      CMD="${_single_stmt_cmd}"
       ${_exit_status}
       ${_single_stmt_target}
   )
