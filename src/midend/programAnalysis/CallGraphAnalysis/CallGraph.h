@@ -238,11 +238,6 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
       }
 
       SgFunctionDeclaration *pred_decl = canonicalFunctionDeclForCallGraph(f);
-      if (Sg_File_Info *file_info = pred_decl->get_file_info()) {
-        if (file_info->isCompilerGenerated()) {
-          pred_decl = canonicalFunctionDeclForCallGraph(pred_decl);
-        }
-      }
 
       SgFunctionDeclaration *def_decl =
           isSgFunctionDeclaration(pred_decl->get_definingDeclaration());
