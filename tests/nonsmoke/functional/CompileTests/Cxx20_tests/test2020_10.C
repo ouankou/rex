@@ -24,7 +24,7 @@ int main() {
                  // okay in C++14
 
   int ar[] = {1, 2, 3}; // ar is int[3]
-  int ab[] = {1, 2, 3}; // another deduced-bound array
+  int ab[](1, 2, 3);    // (C++20) ab is int[3]
   //  char cr[3] = {'a', 'b', 'c', 'd'}; // too many initializer clauses
   char cr[3] = {'a'}; // array initialized as {'a', '\0', '\0'}
 
