@@ -5521,34 +5521,21 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
     auto first_decl =
         [](SgTemplateClassDeclaration *decl) -> SgTemplateClassDeclaration * {
       return isSgTemplateClassDeclaration(
-          decl != nullptr ? decl->get_firstNondefiningDeclaration() : nullptr);
+          decl->get_firstNondefiningDeclaration());
     };
     auto defining_decl =
         [](SgTemplateClassDeclaration *decl) -> SgTemplateClassDeclaration * {
-      return isSgTemplateClassDeclaration(
-          decl != nullptr ? decl->get_definingDeclaration() : nullptr);
+      return isSgTemplateClassDeclaration(decl->get_definingDeclaration());
     };
 
     SgTemplateClassDeclaration *lhs_first = first_decl(lhs);
     SgTemplateClassDeclaration *rhs_first = first_decl(rhs);
-    if (lhs_first != nullptr && lhs_first == rhs) {
-      return true;
-    }
-    if (rhs_first != nullptr && rhs_first == lhs) {
-      return true;
-    }
     if (lhs_first != nullptr && lhs_first == rhs_first) {
       return true;
     }
 
     SgTemplateClassDeclaration *lhs_def = defining_decl(lhs);
     SgTemplateClassDeclaration *rhs_def = defining_decl(rhs);
-    if (lhs_def != nullptr && lhs_def == rhs) {
-      return true;
-    }
-    if (rhs_def != nullptr && rhs_def == lhs) {
-      return true;
-    }
     if (lhs_def != nullptr && lhs_def == rhs_def) {
       return true;
     }
