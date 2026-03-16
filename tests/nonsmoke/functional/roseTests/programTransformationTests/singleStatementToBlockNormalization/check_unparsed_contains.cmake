@@ -47,3 +47,26 @@ if(_match STREQUAL "")
     "output file: ${_output_file}\n"
     "contents:\n${_output_text}")
 endif()
+
+if(DEFINED REX_CXX_COMPILER AND NOT REX_CXX_COMPILER STREQUAL "")
+  set(_compile_flags)
+  if(DEFINED REX_COMPILE_FLAGS AND NOT REX_COMPILE_FLAGS STREQUAL "")
+    separate_arguments(_compile_flags NATIVE_COMMAND "${REX_COMPILE_FLAGS}")
+  endif()
+
+  execute_process(
+    COMMAND "${REX_CXX_COMPILER}" ${_compile_flags} "-I${REX_INCLUDE_DIR}" -c "${_output_file}" -o "${REX_WORKDIR}/unparsed_output.o"
+    WORKING_DIRECTORY "${REX_WORKDIR}"
+    RESULT_VARIABLE _compile_result
+    OUTPUT_VARIABLE _compile_stdout
+    ERROR_VARIABLE _compile_stderr
+  )
+
+  if(NOT _compile_result EQUAL 0)
+    message(FATAL_ERROR
+      "compiling unparsed output failed with exit code ${_compile_result}\n"
+      "output file: ${_output_file}\n"
+      "stdout:\n${_compile_stdout}\n"
+      "stderr:\n${_compile_stderr}")
+  endif()
+endif()
