@@ -6545,10 +6545,11 @@ void SagePreprocessorRecord::MacroDefined(const clang::Token &MacroNameTok,
     }
   }
   if (text.empty()) {
-    if (macro_name.empty()) {
-      macro_name = "__macro";
+    std::string name_for_text = macro_name;
+    if (name_for_text.empty()) {
+      name_for_text = "__macro";
     }
-    text = "#define " + macro_name;
+    text = "#define " + name_for_text;
   }
 
   if (!macro_name.empty()) {
