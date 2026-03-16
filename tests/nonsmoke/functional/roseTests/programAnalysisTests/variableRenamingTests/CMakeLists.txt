@@ -28,18 +28,10 @@ set(_variable_renaming_flags
   -I${_specimen_dir}
 )
 string(JOIN " " _variable_renaming_flags_str ${_variable_renaming_flags})
-set(_system_header_dir
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like)
 
 foreach(specimen IN LISTS _variable_renaming_specimens)
   string(REPLACE "." "_" _name ${specimen})
-  set(_extra_flags)
-  if (specimen STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
-    list(APPEND _extra_flags -isystem ${_system_header_dir})
-  endif()
-  if (specimen IN_LIST REX_FRONTEND_ERROR_TESTS)
-    list(APPEND _extra_flags -rex:clang:continue-on-error)
-  endif()
+  rex_get_cxx_specimen_extra_flags(_extra_flags ${specimen})
   set(_extra_flags_str "")
   if(_extra_flags)
     string(JOIN " " _extra_flags_str ${_extra_flags})

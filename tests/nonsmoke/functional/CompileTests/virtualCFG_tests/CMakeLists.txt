@@ -7,8 +7,6 @@ target_link_libraries(testVirtualCFG ROSE_DLL ${link_with_libraries})
 
 set(TESTCODE_INCLUDES
   -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
-set(rex_test2025_issue148_system_header_dir
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../input_codes/system_header_like)
 
 set(ROSE_FLAGS
    -w -rose:verbose 0 )
@@ -41,14 +39,7 @@ foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
 endforeach()
 
 foreach(file_to_test ${CXX_TESTCODES_FOR_VIRTUAL_CFG})
-  set(extra_frontend_flags)
-  if (file_to_test IN_LIST REX_FRONTEND_ERROR_TESTS)
-    list(APPEND extra_frontend_flags -rex:clang:continue-on-error)
-  endif()
-  if (file_to_test STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
-    list(APPEND extra_frontend_flags
-      -isystem ${rex_test2025_issue148_system_header_dir})
-  endif()
+  rex_get_cxx_specimen_extra_flags(extra_frontend_flags ${file_to_test})
   add_test(
     NAME testVirtualCFG_CXX_${file_to_test}
     COMMAND testVirtualCFG ${ROSE_FLAGS}

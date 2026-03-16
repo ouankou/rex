@@ -1329,6 +1329,7 @@ set(REX_CXX_TRANSFORMATION_TEST_SOURCES
   test2012_57.C
   test2012_59.C
   test2013_milind_01.C
+  rex_test2025_issue148_system_header_mutation.cpp
   rex_test2026_template_instantiation_basic.cpp
   rex_test2026_template_features.cpp
   rex_test2026_template_decl_wrapper.cpp

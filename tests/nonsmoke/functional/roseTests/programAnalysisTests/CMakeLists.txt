@@ -74,22 +74,18 @@ set(_vfa_specimen_dir
 set(_vfa_switches "-w -rose:verbose 0")
 set(_vfa_includes
   "-I${_vfa_specimen_dir}")
-set(_vfa_system_header_dir
-  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/input_codes/system_header_like)
 
 foreach(specimen IN LISTS EXAMPLE_TESTCODES_REQUIRED_TO_PASS)
   string(REPLACE "." "_" _vfa_name ${specimen})
   set(_vfa_target vfa_${_vfa_name}.passed)
-  set(_vfa_extra_flags "")
-  if (specimen STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
-    set(_vfa_extra_flags "-isystem ${_vfa_system_header_dir}")
-  endif()
-  if (specimen IN_LIST REX_FRONTEND_ERROR_TESTS)
-    set(_vfa_extra_flags "${_vfa_extra_flags} -rex:clang:continue-on-error")
-  endif()
-  string(STRIP "${_vfa_extra_flags}" _vfa_extra_flags)
+  rex_get_cxx_specimen_extra_flags(_vfa_extra_flags ${specimen})
+  string(JOIN " " _vfa_extra_flags_str ${_vfa_extra_flags})
   set(_vfa_cmd
-    "${_vfa_exec} ${_vfa_switches} ${_vfa_includes} ${_vfa_extra_flags} -c ${_vfa_specimen_dir}/${specimen}")
+    "${_vfa_exec} ${_vfa_switches} ${_vfa_includes}")
+  if(_vfa_extra_flags_str)
+    string(APPEND _vfa_cmd " ${_vfa_extra_flags_str}")
+  endif()
+  string(APPEND _vfa_cmd " -c ${_vfa_specimen_dir}/${specimen}")
   add_test(
     NAME program_analysis_vfa_${_vfa_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
