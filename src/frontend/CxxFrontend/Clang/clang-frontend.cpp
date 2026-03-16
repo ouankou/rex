@@ -2493,9 +2493,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(
       input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
 
+  const bool is_c_roundtrip_language = language == ClangToSageTranslator::C;
   const bool is_c_family_roundtrip_language =
-      language == ClangToSageTranslator::C ||
-      language == ClangToSageTranslator::CPLUSPLUS ||
+      is_c_roundtrip_language || language == ClangToSageTranslator::CPLUSPLUS ||
       language == ClangToSageTranslator::CUDA;
   const bool needs_exact_line_splice_roundtrip =
       is_c_family_roundtrip_language &&
@@ -2683,6 +2683,14 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   unsigned numErrors = compiler_instance->getDiagnostics().getNumErrors();
   if (numErrors > 0) {
     printf("Clang found %d diagnostic errors during parsing\n", numErrors);
+  }
+
+  if (is_c_roundtrip_language && preprocessor_recorder != nullptr &&
+      preprocessor_recorder->sawSelfReferentialMacroExpansion() &&
+      !openmp_ast_mode && !sageFile.get_openmp_lowering()) {
+    // Preserve the original tokens for active self-referential macros whose
+    // normalized AST spelling would otherwise be re-expanded on output.
+    sageFile.set_unparse_tokens(true);
   }
 
   SgGlobal *global_scope = translator->getGlobalScope();
@@ -6005,10 +6013,46 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
 
 // class SagePreprocessorRecord
 
+namespace {
+
+bool tokenSpellsIdentifier(const clang::Token &token,
+                           llvm::StringRef identifier) {
+  if (!token.isAnyIdentifier()) {
+    return false;
+  }
+
+  if (token.is(clang::tok::raw_identifier)) {
+    return token.getRawIdentifier() == identifier;
+  }
+
+  const clang::IdentifierInfo *token_identifier = token.getIdentifierInfo();
+  return token_identifier != nullptr &&
+         token_identifier->getName() == identifier;
+}
+
+bool macroDefinitionIsSelfReferential(const clang::MacroInfo *macro_info,
+                                      llvm::StringRef macro_name) {
+  if (macro_info == nullptr || macro_name.empty()) {
+    return false;
+  }
+
+  for (const clang::Token &replacement_token : macro_info->tokens()) {
+    if (tokenSpellsIdentifier(replacement_token, macro_name)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+} // namespace
+
 SagePreprocessorRecord::SagePreprocessorRecord(
     clang::SourceManager *source_manager, clang::Preprocessor *preprocessor)
     : p_source_manager(source_manager), p_preprocessor(preprocessor),
-      p_preprocessor_record_list(), p_preprocessor_record_list_sorted(true) {}
+      p_preprocessor_record_list(), p_preprocessor_record_list_sorted(true),
+      p_self_referential_macros(),
+      p_saw_self_referential_macro_expansion(false) {}
 
 void SagePreprocessorRecord::sortRecordedDirectives() {
   if (p_preprocessor_record_list_sorted || p_preprocessor_record_list.empty()) {
@@ -6413,10 +6457,15 @@ void SagePreprocessorRecord::MacroExpands(const clang::Token &MacroNameTok,
                                           const clang::MacroDefinition &MD,
                                           clang::SourceRange Range,
                                           const clang::MacroArgs *Args) {
-  (void)MacroNameTok;
   (void)MD;
   (void)Range;
   (void)Args;
+  if (const clang::IdentifierInfo *ident = MacroNameTok.getIdentifierInfo()) {
+    if (p_self_referential_macros.find(ident->getName().str()) !=
+        p_self_referential_macros.end()) {
+      p_saw_self_referential_macro_expansion = true;
+    }
+  }
 }
 
 bool SagePreprocessorRecord::HandleComment(clang::Preprocessor &PP,
@@ -6470,10 +6519,16 @@ bool SagePreprocessorRecord::HandleComment(clang::Preprocessor &PP,
 void SagePreprocessorRecord::MacroDefined(const clang::Token &MacroNameTok,
                                           const clang::MacroDirective *MD) {
   clang::SourceLocation loc = MacroNameTok.getLocation();
+  const clang::MacroInfo *macro_info = nullptr;
+  std::string macro_name;
+  if (const clang::IdentifierInfo *ident = MacroNameTok.getIdentifierInfo()) {
+    macro_name = ident->getName().str();
+  }
   if (MD != nullptr) {
-    if (const clang::MacroInfo *info = MD->getMacroInfo()) {
-      if (info->getDefinitionLoc().isValid()) {
-        loc = info->getDefinitionLoc();
+    macro_info = MD->getMacroInfo();
+    if (macro_info != nullptr) {
+      if (macro_info->getDefinitionLoc().isValid()) {
+        loc = macro_info->getDefinitionLoc();
       }
     }
   }
@@ -6490,14 +6545,19 @@ void SagePreprocessorRecord::MacroDefined(const clang::Token &MacroNameTok,
     }
   }
   if (text.empty()) {
-    std::string name;
-    if (const clang::IdentifierInfo *ident = MacroNameTok.getIdentifierInfo()) {
-      name = ident->getName().str();
+    std::string name_for_text = macro_name;
+    if (name_for_text.empty()) {
+      name_for_text = "__macro";
     }
-    if (name.empty()) {
-      name = "__macro";
+    text = "#define " + name_for_text;
+  }
+
+  if (!macro_name.empty()) {
+    if (macroDefinitionIsSelfReferential(macro_info, macro_name)) {
+      p_self_referential_macros.insert(macro_name);
+    } else {
+      p_self_referential_macros.erase(macro_name);
     }
-    text = "#define " + name;
   }
   recordDirective(loc, PreprocessingInfo::CpreprocessorDefineDeclaration, text);
 }
@@ -6506,6 +6566,9 @@ void SagePreprocessorRecord::MacroUndefined(
     const clang::Token &MacroNameTok, const clang::MacroDefinition &MD,
     const clang::MacroDirective *Undef) {
   (void)MD;
+  if (const clang::IdentifierInfo *ident = MacroNameTok.getIdentifierInfo()) {
+    p_self_referential_macros.erase(ident->getName().str());
+  }
   clang::SourceLocation loc = MacroNameTok.getLocation();
   if (Undef != nullptr && Undef->getLocation().isValid()) {
     loc = Undef->getLocation();
