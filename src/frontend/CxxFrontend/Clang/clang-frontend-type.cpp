@@ -5578,24 +5578,19 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
 
     if (clang::ClassTemplateDecl *class_template =
             llvm::dyn_cast<clang::ClassTemplateDecl>(clang_template_decl)) {
-      if (clang::ClassTemplateDecl *canonical =
-              class_template->getCanonicalDecl()) {
-        if (SgTemplateClassDeclaration *decl = lookup_decl(canonical)) {
-          return decl;
-        }
+      if (SgTemplateClassDeclaration *decl =
+              lookup_decl(class_template->getCanonicalDecl())) {
+        return decl;
       }
+
       if (clang::CXXRecordDecl *templated_decl =
               class_template->getTemplatedDecl()) {
         if (SgTemplateClassDeclaration *decl = lookup_decl(templated_decl)) {
           return decl;
         }
-        if (clang::CXXRecordDecl *canonical_record =
-                llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
-                    templated_decl->getCanonicalDecl())) {
-          if (SgTemplateClassDeclaration *decl =
-                  lookup_decl(canonical_record)) {
-            return decl;
-          }
+        if (SgTemplateClassDeclaration *decl =
+                lookup_decl(templated_decl->getCanonicalDecl())) {
+          return decl;
         }
       }
     }
