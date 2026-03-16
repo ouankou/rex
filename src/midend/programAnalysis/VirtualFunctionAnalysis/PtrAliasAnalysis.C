@@ -136,15 +136,13 @@ void PtrAliasAnalysis::getFunctionDeclarations(
   SgFunctionDeclaration *mainDecl = SageInterface::findMain(project);
   ROSE_ASSERT(mainDecl->get_definingDeclaration() == mainDecl);
   // Liao 1/23/2013
-  // Call graph generation will get the first nondefining declaration func
-  // as the function node by default, see CallGraph.h line 198. In ROSE
-  // using legacy frontend 4.4, main() function has a hidden prototype,
-  // which will be stored in call graph. We have to use the prototype or
-  // it complains the defining main() does not exist in the call graph.
-  SgFunctionDeclaration *nondef_main =
-      isSgFunctionDeclaration(mainDecl->get_firstNondefiningDeclaration());
-  ROSE_ASSERT(nondef_main);
-  computeCallGraphNodes(nondef_main, callGraph, processingOrder, order);
+  // Match whatever declaration form the call graph uses for this function.
+  // Most functions have a first non-defining declaration; inline-only methods
+  // and other definition-only cases do not.
+  SgFunctionDeclaration *canonicalMain =
+      canonicalFunctionDeclForCallGraph(mainDecl);
+  ROSE_ASSERT(canonicalMain);
+  computeCallGraphNodes(canonicalMain, callGraph, processingOrder, order);
 
   // Order the graph nodes in alternate fashion
   order = (order == TOPOLOGICAL) ? REVERSE_TOPOLOGICAL : TOPOLOGICAL;

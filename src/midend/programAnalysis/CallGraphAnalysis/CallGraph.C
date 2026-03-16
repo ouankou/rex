@@ -1529,8 +1529,7 @@ void CallGraphBuilder::buildCallGraph() { buildCallGraph(dummyFilter()); }
  **/
 SgGraphNode *
 CallGraphBuilder::hasGraphNodeFor(SgFunctionDeclaration *fdecl) const {
-  SgFunctionDeclaration *unique =
-      isSgFunctionDeclaration(fdecl->get_firstNondefiningDeclaration());
+  SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
   GraphNodes::const_iterator lookedup = graphNodes.find(unique);
   if (lookedup != graphNodes.end()) {
     return lookedup->second;
@@ -1553,8 +1552,7 @@ CallGraphBuilder::hasGraphNodeFor(SgFunctionDeclaration *fdecl) const {
  **/
 SgGraphNode *
 CallGraphBuilder::getGraphNodeFor(SgFunctionDeclaration *fdecl) const {
-  SgFunctionDeclaration *unique =
-      isSgFunctionDeclaration(fdecl->get_firstNondefiningDeclaration());
+  SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
   GraphNodes::const_iterator lookedup = graphNodes.find(unique);
   if (lookedup != graphNodes.end()) {
     return lookedup->second;

@@ -711,20 +711,7 @@ bool IntraProcAliasAnalysis::addVirtualFunction(SgType *type,
 
   // Now add this function to CallGraph
 
-  if (isSgMemberFunctionDeclaration(functionDeclaration)) {
-    // always saving the in-class declaration, so we need to find that one
-    SgDeclarationStatement *nonDefDeclInClass = isSgMemberFunctionDeclaration(
-        functionDeclaration->get_firstNondefiningDeclaration());
-    // functionDeclaration is outside the class (so it must have a definition)
-    if (nonDefDeclInClass)
-      functionDeclaration = isSgMemberFunctionDeclaration(nonDefDeclInClass);
-  } else {
-    // we need to have only one declaration for regular functions as well
-    SgFunctionDeclaration *nonDefDecl = isSgFunctionDeclaration(
-        functionDeclaration->get_firstNondefiningDeclaration());
-    if (nonDefDecl)
-      functionDeclaration = nonDefDecl;
-  }
+  functionDeclaration = canonicalFunctionDeclForCallGraph(functionDeclaration);
 
   SgIncidenceDirectedGraph *callGraph = cgBuilder->getGraph();
 

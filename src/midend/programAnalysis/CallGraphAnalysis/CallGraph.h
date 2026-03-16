@@ -202,6 +202,23 @@ struct GetOneFuncDeclarationPerFunction {
   result_type operator()(SgNode *node);
 };
 
+static inline SgFunctionDeclaration *
+canonicalFunctionDeclForCallGraph(SgFunctionDeclaration *fdecl) {
+  ROSE_ASSERT(fdecl != NULL);
+
+  if (SgFunctionDeclaration *defDecl =
+          isSgFunctionDeclaration(fdecl->get_definingDeclaration())) {
+    return defDecl;
+  }
+
+  if (SgFunctionDeclaration *firstNondef =
+          isSgFunctionDeclaration(fdecl->get_firstNondefiningDeclaration())) {
+    return firstNondef;
+  }
+
+  return fdecl;
+}
+
 template <typename Predicate>
 void CallGraphBuilder::buildCallGraph(Predicate pred) {
   // Adds additional constraints to the predicate. It makes no sense to analyze
@@ -214,25 +231,17 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
       // TV (10/26/2018): FIXME ROSE-1487
       // assert(!f || f==f->get_firstNondefiningDeclaration()); // node
       // uniqueness test
-      if (f == nullptr || f != f->get_firstNondefiningDeclaration() ||
+      if (f == nullptr || f != canonicalFunctionDeclForCallGraph(f) ||
           isSgTemplateMemberFunctionDeclaration(f) ||
           isSgTemplateFunctionDeclaration(f)) {
         return false;
       }
 
-      SgFunctionDeclaration *pred_decl = f;
-      if (Sg_File_Info *file_info = f->get_file_info()) {
-        if (file_info->isCompilerGenerated()) {
-          if (SgFunctionDeclaration *def_decl =
-                  isSgFunctionDeclaration(f->get_definingDeclaration())) {
-            pred_decl = def_decl;
-          }
-        }
-      }
+      SgFunctionDeclaration *pred_decl = canonicalFunctionDeclForCallGraph(f);
 
       SgFunctionDeclaration *def_decl =
-          isSgFunctionDeclaration(f->get_definingDeclaration());
-      bool has_definition = f->get_definition() != NULL;
+          isSgFunctionDeclaration(pred_decl->get_definingDeclaration());
+      bool has_definition = pred_decl->get_definition() != NULL;
       if (!has_definition && def_decl != NULL) {
         has_definition = def_decl->get_definition() != NULL;
       }
@@ -270,8 +279,7 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
   std::vector<SgNode *> fdecl_nodes = NodeQuery::queryMemoryPool(defFunc, &vv);
   for (SgNode *node : fdecl_nodes) {
     SgFunctionDeclaration *fdecl = isSgFunctionDeclaration(node);
-    SgFunctionDeclaration *unique =
-        isSgFunctionDeclaration(fdecl->get_firstNondefiningDeclaration());
+    SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
     if (isSelected(pred)(unique) && hasGraphNodeFor(unique) == NULL) {
       FunctionData fdata(
           unique, project,
@@ -297,7 +305,7 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
         currentFunction.functionList;
     for (SgFunctionDeclaration *callee : callees) {
       SgFunctionDeclaration *callee_unique =
-          isSgFunctionDeclaration(callee->get_firstNondefiningDeclaration());
+          canonicalFunctionDeclForCallGraph(callee);
       if (isSelected(pred)(callee_unique)) {
         SgGraphNode *dstNode = getGraphNodeFor(
             callee_unique); // getGraphNode here, see function comment

@@ -68,6 +68,8 @@ set(CXX_POINTER_ALIAS_SPECIMENS
 
 set(CXX_CONSTPROP_SPECIMENS
   test2001_29.C
+  test2003_01.C
+  test2005_68.C
   test2011_133.C
   rex_test2026_issue213_va_start.cpp
 )
@@ -340,7 +342,6 @@ set(FAILING_CXX_CONSTPROP_SPECIMENS
   test2005_65.C
   test2005_66.C
   test2005_67.C
-  test2005_68.C
   test2005_70.C
   test2005_72.C
   test2005_73.C
@@ -674,7 +675,6 @@ set(CXX_CONSTPROP_SPECIMENS_FAILING
   test2001_04.C
   test2001_14.C
   test2001_28.C
-  test2003_01.C
   test2003_15.C
   test2003_18.C
   test2003_32.C

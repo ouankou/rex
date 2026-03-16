@@ -507,18 +507,26 @@ void ConstantPropagationAnalysisTransfer::visit(SgMinusMinusOp *sgn) {
 
 void ConstantPropagationAnalysisTransfer::visit(SgUnaryAddOp *sgn) {
   ConstantPropagationLattice *resLat = getLattice(sgn);
-  resLat->copy(getLattice(sgn->get_operand()));
+  ConstantPropagationLattice *operandLat = getLattice(sgn->get_operand());
+  if (resLat == NULL || operandLat == NULL)
+    return;
+
+  resLat->copy(operandLat);
 }
 
 void ConstantPropagationAnalysisTransfer::visit(SgMinusOp *sgn) {
   ConstantPropagationLattice *resLat = getLattice(sgn);
+  ConstantPropagationLattice *operandLat = getLattice(sgn->get_operand());
+  if (resLat == NULL || operandLat == NULL)
+    return;
 
   // This sets the level
-  resLat->copy(getLattice(sgn->get_operand()));
+  resLat->copy(operandLat);
 
   // This fixes up the value if it is relevant (where level is neither top not
   // bottom).
-  resLat->setValue(-resLat->getValue());
+  if (resLat->getLevel() == ConstantPropagationLattice::constantValue)
+    resLat->setValue(-resLat->getValue());
 }
 
 bool ConstantPropagationAnalysisTransfer::finish() { return modified; }
