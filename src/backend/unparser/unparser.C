@@ -428,6 +428,8 @@ std::string getAssociatedFileNameForOutput(SgLocatedNode *node) {
     if (SgSourceFile *sourceFile =
             SageInterface::getEnclosingSourceFile(node)) {
       filename = sourceFile->getFileName();
+    } else {
+      filename.clear();
     }
   }
 
