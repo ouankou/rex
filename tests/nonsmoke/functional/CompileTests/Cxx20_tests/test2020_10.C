@@ -38,8 +38,7 @@ int main() {
   std::array<int, 3> std_ar2{{1, 2, 3}};  // std::array is an aggregate
   std::array<int, 3> std_ar1 = {1, 2, 3}; // brace-elision okay
 
-  int ai[] = {1, 2.0}; // narrowing conversion from double to int:
-                       // error in C++11, okay in C++03
+  int ai[] = {1, 2}; // list-initialization without narrowing
 
   std::string ars[] = {std::string("one"), // copy-initialization
                        "two", // conversion, then copy-initialization
