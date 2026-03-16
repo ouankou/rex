@@ -2685,6 +2685,16 @@ int NameQualificationTraversal::nameQualificationDepth(
                   templateInstantiationFunctionName, functionType,
                   currentScope);
 
+          if (isSgFunctionSymbol(symbol) == NULL) {
+            // A non-function symbol in the current scope can hide the
+            // instantiation name. Continue the qualification analysis using
+            // the matching function symbol instead of the hiding declaration.
+            if (symbol != NULL) {
+              forceMoreNameQualification = true;
+            }
+            symbol = symbolHiddingTemplateInstantiationSymbol;
+          }
+
 #if (DEBUG_NAME_QUALIFICATION_LEVEL > 3)
           MLOG_WARN_C(MLOG_UNPARSER,
                       "symbolHiddingTemplateInstantiationSymbol = %p \n",
