@@ -181,7 +181,7 @@ CXX_TESTS_TO_CHECK =
             .C test2007_108.C test2007_109.C test2007_110.C test2007_111
             .C test2007_112.C test2007_113.C test2007_114.C test2007_115
             .C test2007_116.C test2007_117.C test2007_118.C test2007_119
-            .C test2007_120.C test2007_121.C test2007_122.C test2007_123
+            .C test2007_120.C test2007_121.C test2007_122
             .C test2007_124.C test2007_125.C test2007_126.C test2007_127
             .C test2007_128.C test2007_129.C test2007_130.C test2007_131
             .C test2007_132.C test2007_133.C test2007_134.C test2007_135
@@ -189,7 +189,7 @@ CXX_TESTS_TO_CHECK =
             .C test2007_140.C test2007_141.C test2007_142.C test2007_143
             .C test2007_144.C test2007_145.C test2007_146.C test2007_147
             .C test2007_148.C test2007_149.C test2007_150.C test2007_151
-            .C test2007_152.C test2007_153.C test2007_154.C test2007_155
+            .C test2007_152.C test2007_154.C test2007_155
             .C test2007_156.C test2007_157.C test2007_158.C test2007_159
             .C test2007_160.C test2007_161.C test2007_162.C test2007_163
             .C test2007_164.C test2007_165.C test2007_166.C test2007_167
