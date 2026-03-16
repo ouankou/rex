@@ -3589,25 +3589,39 @@ ClangToSageTranslator::getOrCreateTemplateDeclaration(
 
     if (clang::ClassTemplateDecl *class_template =
             llvm::dyn_cast<clang::ClassTemplateDecl>(clang_template_decl)) {
-      if (clang::CXXRecordDecl *templated_decl =
-              class_template->getTemplatedDecl()) {
-        if (SgTemplateClassDeclaration *mapped =
-                isSgTemplateClassDeclaration(lookupSgDeclarationForClangDecl(
-                    templated_decl, /*allow_on_demand=*/false))) {
-          normalize_template_decl_source(mapped, clang_template_decl);
-          return mapped;
-        }
+      auto lookup_record_template_decl =
+          [&](clang::CXXRecordDecl *record) -> SgTemplateClassDeclaration * {
+        for (clang::CXXRecordDecl *candidate :
+             {record,
+              record != nullptr ? record->getCanonicalDecl() : nullptr}) {
+          if (candidate == nullptr) {
+            continue;
+          }
 
-        if (clang::CXXRecordDecl *canonical_record =
-                llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
-                    templated_decl->getCanonicalDecl())) {
-          if (SgTemplateClassDeclaration *mapped =
-                  isSgTemplateClassDeclaration(lookupSgDeclarationForClangDecl(
-                      canonical_record, /*allow_on_demand=*/false))) {
-            normalize_template_decl_source(mapped, clang_template_decl);
+          if (SgTemplateClassDeclaration *mapped = isSgTemplateClassDeclaration(
+                  lookupSgDeclarationForClangDecl(candidate,
+                                                  /*allow_on_demand=*/false))) {
             return mapped;
           }
+
+          if (SgClassDeclaration *class_decl = isSgClassDeclaration(
+                  lookupSgDeclarationForClangDecl(candidate,
+                                                  /*allow_on_demand=*/false))) {
+            if (SgTemplateClassDeclaration *template_decl =
+                    isSgTemplateClassDeclaration(
+                        SageInterface::getTemplateDeclaration(class_decl))) {
+              return template_decl;
+            }
+          }
         }
+
+        return nullptr;
+      };
+
+      if (SgTemplateClassDeclaration *mapped =
+              lookup_record_template_decl(class_template->getTemplatedDecl())) {
+        normalize_template_decl_source(mapped, clang_template_decl);
+        return mapped;
       }
     }
 
@@ -5570,15 +5584,36 @@ ClangToSageTranslator::getOrCreateTemplateInstantiation(
         return decl;
       }
 
-      if (clang::CXXRecordDecl *templated_decl =
-              class_template->getTemplatedDecl()) {
-        if (SgTemplateClassDeclaration *decl = lookup_decl(templated_decl)) {
-          return decl;
+      auto lookup_record_template_decl =
+          [&](clang::CXXRecordDecl *record) -> SgTemplateClassDeclaration * {
+        for (clang::CXXRecordDecl *candidate :
+             {record,
+              record != nullptr ? record->getCanonicalDecl() : nullptr}) {
+          if (candidate == nullptr) {
+            continue;
+          }
+
+          if (SgTemplateClassDeclaration *decl = lookup_decl(candidate)) {
+            return decl;
+          }
+
+          if (SgClassDeclaration *class_decl = isSgClassDeclaration(
+                  lookupSgDeclarationForClangDecl(candidate,
+                                                  /*allow_on_demand=*/false))) {
+            if (SgTemplateClassDeclaration *template_decl =
+                    isSgTemplateClassDeclaration(
+                        SageInterface::getTemplateDeclaration(class_decl))) {
+              return template_decl;
+            }
+          }
         }
-        if (SgTemplateClassDeclaration *decl =
-                lookup_decl(templated_decl->getCanonicalDecl())) {
-          return decl;
-        }
+
+        return nullptr;
+      };
+
+      if (SgTemplateClassDeclaration *decl =
+              lookup_record_template_decl(class_template->getTemplatedDecl())) {
+        return decl;
       }
     }
 
