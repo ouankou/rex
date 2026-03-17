@@ -12,11 +12,9 @@
 
 #include <unistd.h>
 
-// We don't include string.h directly but it
-// is included from the header files above.
-// #include<string.h>
+#include <string.h>
 
-void foo() {
+void foo(void) {
   char *flind;
   strlen(flind);
-};
+}
