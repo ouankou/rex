@@ -9343,6 +9343,44 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
     }
   }
 
+  if (template_decl != nullptr &&
+      class_template_decl->getPreviousDecl() != nullptr) {
+    SgTemplateParameterPtrList copied_params;
+    copied_params.reserve(template_decl->get_templateParameters().size());
+    for (SgTemplateParameter *param : template_decl->get_templateParameters()) {
+      if (param == nullptr) {
+        continue;
+      }
+
+      SgTemplateParameter *param_copy =
+          isSgTemplateParameter(SageInterface::deepCopy(param));
+      if (param_copy == nullptr) {
+        continue;
+      }
+
+      param_copy->set_defaultTypeParameter(nullptr);
+      param_copy->set_defaultExpressionParameter(nullptr);
+      param_copy->set_defaultTemplateDeclarationParameter(nullptr);
+      param_copy->set_parent(template_decl);
+      if (param_copy->get_parameterType() !=
+          SgTemplateParameter::template_parameter) {
+        param_copy->set_templateDeclaration(template_decl);
+      }
+      if (SgInitializedName *init_name = param_copy->get_initializedName()) {
+        init_name->set_parent(param_copy);
+      }
+      if (SgExpression *constraint = param_copy->get_typeConstraint()) {
+        constraint->set_parent(param_copy);
+      }
+
+      copied_params.push_back(param_copy);
+    }
+
+    template_decl->get_templateParameters() = copied_params;
+    attach_nonreal_template_parameters(template_decl,
+                                       template_decl->get_templateParameters());
+  }
+
   if (clang::TemplateParameterList *params = decl_template_params) {
     if (const clang::Expr *requires_expr = params->getRequiresClause()) {
       auto attach_requires = [&](SgTemplateClassDeclaration *decl,

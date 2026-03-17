@@ -2732,7 +2732,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2015_109.C
   test2015_25.C
   test2015_72_icpc.C
-  test2015_82.C
   test2015_83.C
   test2015_84.C
   test2016_52.C
@@ -3065,7 +3064,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_136.C
   test2015_25.C
   test2015_72_icpc.C
-  test2015_82.C
   test2015_83.C
   test2015_84.C
   test2016_20.C
