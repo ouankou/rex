@@ -16,7 +16,7 @@ void foobar() {
       result = z;
       break;
     }
-    case 3:
+    case 3: // fall through
     default: {
       int fallback = i;
       result = fallback;
