@@ -192,7 +192,7 @@ function(rose_force_system_include_dirs target)
   set(_rose_system_include_opts "")
   foreach(_rose_dir IN LISTS _rose_system_include_dirs)
     if(_rose_dir)
-      list(APPEND _rose_system_include_opts "-isystem${_rose_dir}")
+      list(APPEND _rose_system_include_opts "-isystem" "${_rose_dir}")
     endif()
   endforeach()
 
