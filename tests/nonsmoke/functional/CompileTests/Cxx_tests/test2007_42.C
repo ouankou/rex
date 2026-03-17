@@ -1,22 +1,19 @@
-// Note that this test is correct, but since it specifies something that is an non-standard extension 
-// to C (and C++) and one nott supported by the GNU compilers, the generated code fails to compile.
+// Test source positions for standard opaque enum declarations. Use an explicit
+// underlying type so the specimen remains valid in modern C++ modes.
 
-// This test code demonstates the use of forward declarations of enum (non-standard C and C++)
-// it is designed so that an error in how the source position will cause a legitimate error in 
-// the final compilation (of the generated code).
-
-// Test source position of forward declaration of enum (not legal C, 
-// but accepted by many compilers).  We want it to work.
-enum numbers;
+// This test code demonstrates the use of forward enum declarations and is
+// designed so that an error in source position handling will cause a legitimate
+// error in the final compilation of generated code.
+enum numbers : int;
 #include "test2007_42.h"
 
-enum numbers;
+enum numbers : int;
 
 // This is the definition;
-enum numbers {};
+enum numbers : int {};
 
 // It appears that this redundant enum declaration is present in legacy
 // frontend, built as an IR node in the translation from legacy frontend, but
 // not output in the unparsed code in ROSE. This is not a crisis, since it is
 // redundant and meaningless (as best I can tell).
-enum numbers;
+enum numbers : int;
