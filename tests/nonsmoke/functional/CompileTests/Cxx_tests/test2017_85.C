@@ -1,7 +1,8 @@
 // Valid switch/case coverage with an init-statement and declarations scoped
 // inside each case block.
-void foobar() {
+int foobar() {
   int result = 0;
+  int checksum = 0;
 
   for (int k = 1; k <= 4; ++k) {
     switch (int i = k) {
@@ -23,7 +24,11 @@ void foobar() {
       break;
     }
     }
+
+    checksum += result;
   }
 
-  (void)result;
+  return checksum;
 }
+
+int main() { return foobar() == 15 ? 0 : 1; }

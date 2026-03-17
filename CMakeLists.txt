@@ -181,7 +181,9 @@ endif()
 # correct across toolchain packaging differences.
 function(rose_force_system_include_dirs target)
   if(NOT TARGET "${target}")
-    message(FATAL_ERROR "rose_force_system_include_dirs called for unknown target: ${target}")
+    message(FATAL_ERROR
+      "rose_force_system_include_dirs(${target} ...) requires an existing CMake target. "
+      "Call it only after add_library() or add_executable() has created target '${target}'.")
   endif()
 
   set(_rose_system_include_dirs ${ARGN})
