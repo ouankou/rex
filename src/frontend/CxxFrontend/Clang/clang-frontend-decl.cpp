@@ -9451,6 +9451,10 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
                                                     &copied_params);
     attach_nonreal_template_parameters(
         template_decl, *SageBuilder::getTemplateParameterList(template_decl));
+    // Replacing the declaration-owned parameter list detaches the nodes that
+    // were registered earlier, so refresh the decl-to-parameter map before any
+    // later requires-clause or member translation reuses it.
+    register_template_parameter_mappings(decl_template_params, copied_params);
   }
 
   if (clang::TemplateParameterList *params = decl_template_params) {
