@@ -24,11 +24,18 @@ set(REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT
 
 set(REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/input_codes/system_header_like)
+set(REX_TEST2018_34_SUPPORT_DIR
+  ${CMAKE_CURRENT_SOURCE_DIR}/CompileTests/C_tests/test2018_34_support)
 
 function(rex_get_cxx_specimen_extra_flags out_var specimen)
   set(_flags)
+  get_filename_component(_specimen_name "${specimen}" NAME)
   if(DEFINED REX_FRONTEND_ERROR_TESTS AND specimen IN_LIST REX_FRONTEND_ERROR_TESTS)
     list(APPEND _flags -rex:clang:continue-on-error)
+  endif()
+  if(_specimen_name STREQUAL "test2018_34.c")
+    list(APPEND _flags
+      -I${REX_TEST2018_34_SUPPORT_DIR})
   endif()
   if(specimen STREQUAL "rex_test2025_issue148_system_header_mutation.cpp")
     list(APPEND _flags -isystem ${REX_FUNCTIONAL_SYSTEM_HEADER_LIKE_DIR})

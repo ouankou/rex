@@ -4674,30 +4674,42 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
       clang::SourceManager &sm = p_compiler_instance->getSourceManager();
       const clang::LangOptions &lang_opts = p_compiler_instance->getLangOpts();
 
-      bool begin_is_macro = begin.isMacroID();
-      bool end_is_macro = end.isMacroID();
       clang::SourceLocation spelling_begin = sm.getSpellingLoc(begin);
       clang::SourceLocation spelling_end = sm.getSpellingLoc(end);
+      clang::SourceLocation expansion_begin = sm.getExpansionLoc(begin);
+      clang::SourceLocation expansion_end = sm.getExpansionLoc(end);
 
-      if (begin_is_macro) {
+      const bool begin_is_macro = begin.isMacroID();
+      const bool end_is_macro = end.isMacroID();
+      const bool begin_needs_expansion =
+          begin_is_macro ||
+          (expansion_begin.isValid() &&
+           expansion_begin.getRawEncoding() != begin.getRawEncoding());
+      const bool end_needs_expansion =
+          end_is_macro ||
+          (expansion_end.isValid() &&
+           expansion_end.getRawEncoding() != end.getRawEncoding());
+
+      if (begin_needs_expansion && expansion_begin.isValid()) {
 #if DEBUG_SOURCE_LOCATION
         std::cerr << "\tDump SourceLocation begin as it is a MacroID: ";
         begin.dump(sm);
         std::cerr << std::endl;
 #endif
-        begin = sm.getExpansionLoc(begin);
-        ROSE_ASSERT(begin.isValid());
+        begin = expansion_begin;
       }
 
-      if (end_is_macro) {
+      if (end_needs_expansion && expansion_end.isValid()) {
 #if DEBUG_SOURCE_LOCATION
         std::cerr << "\tDump SourceLocation end as it is a MacroID: ";
         end.dump(sm);
         std::cerr << std::endl;
 #endif
-        end = sm.getExpansionLoc(end);
-        ROSE_ASSERT(end.isValid());
+        end = expansion_end;
       }
+
+      ROSE_ASSERT(begin.isValid());
+      ROSE_ASSERT(end.isValid());
 
       clang::FileID file_begin = sm.getFileID(begin);
       clang::FileID file_end = sm.getFileID(end);
@@ -4827,6 +4839,16 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
           }
 
           if (begin_is_macro || end_is_macro) {
+            auto spelling_stays_in_logical_file =
+                [&](const clang::SourceLocation &logical_loc,
+                    const clang::SourceLocation &spelling_loc) -> bool {
+              if (!logical_loc.isValid() || !spelling_loc.isValid()) {
+                return false;
+              }
+              clang::FileID logical_id = sm.getFileID(logical_loc);
+              clang::FileID spelling_id = sm.getFileID(spelling_loc);
+              return !logical_id.isInvalid() && logical_id == spelling_id;
+            };
             auto set_physical_info = [&](Sg_File_Info *fi,
                                          const clang::SourceLocation &loc) {
               if (fi == NULL || !loc.isValid())
@@ -4848,8 +4870,19 @@ void ClangToSageTranslator::applySourceRange(SgNode *node,
                 fi->set_physical_line(spelling_line);
             };
 
-            set_physical_info(start_fi, spelling_begin);
-            set_physical_info(end_fi, spelling_end);
+            // Preserve spelling locations only when the macro spelling remains
+            // in the same physical file as the logical construct. Cross-file
+            // spellings such as C's bool from stdbool.h otherwise cause
+            // token-stream mapping to anchor declarations to the macro
+            // definition instead of the source declaration.
+            if (begin_is_macro &&
+                spelling_stays_in_logical_file(begin, spelling_begin)) {
+              set_physical_info(start_fi, spelling_begin);
+            }
+            if (end_is_macro &&
+                spelling_stays_in_logical_file(end, spelling_end)) {
+              set_physical_info(end_fi, spelling_end);
+            }
           }
 
 #if DEBUG_SOURCE_LOCATION
