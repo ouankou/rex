@@ -13733,9 +13733,10 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
     if (clang::TypeSourceInfo *type_info =
             enum_decl->getIntegerTypeSourceInfo()) {
       enum_field_type = buildTypeFromTypeLoc(type_info->getTypeLoc());
-    }
-    if (enum_field_type == nullptr) {
-      enum_field_type = buildTypeFromQualifiedType(enum_decl->getIntegerType());
+      if (enum_field_type == nullptr) {
+        enum_field_type =
+            buildTypeFromQualifiedType(enum_decl->getIntegerType());
+      }
     }
   }
   auto apply_enum_field_type = [&](SgEnumDeclaration *decl) {
