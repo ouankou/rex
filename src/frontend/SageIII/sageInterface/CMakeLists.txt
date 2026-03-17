@@ -10,9 +10,6 @@ add_library(sageInterface OBJECT
 
 add_dependencies(sageInterface rosetta_generated)
 
-if(LLVM_INCLUDE_DIRS)
-  target_include_directories(sageInterface SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
-endif()
 rose_force_system_include_dirs(sageInterface ${LLVM_INCLUDE_DIRS})
 
 install(
