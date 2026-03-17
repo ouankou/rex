@@ -2741,7 +2741,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2017_33.C
   test2017_34.C
   test2017_67.C
-  test2017_85.C
   test2017_86.C
   test2018_22.C
   test2018_23.C
@@ -3075,7 +3074,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2017_46.C
   test2017_47.C
   test2017_67.C
-  test2017_85.C
   test2017_86.C
   test2018_01.C
   test2018_22.C
