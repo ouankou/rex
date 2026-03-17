@@ -63,6 +63,9 @@ target_include_directories(libroseClangFrontend SYSTEM PRIVATE
   ${LLVM_INCLUDE_DIRS}
   ${CLANG_INCLUDE_DIRS}
 )
+rose_force_system_include_dirs(libroseClangFrontend
+  ${LLVM_INCLUDE_DIRS}
+  ${CLANG_INCLUDE_DIRS})
 
 # Add LLVM definitions
 target_compile_definitions(libroseClangFrontend PRIVATE

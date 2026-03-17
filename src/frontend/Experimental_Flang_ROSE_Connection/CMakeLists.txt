@@ -10,6 +10,9 @@ if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)
     ${CMAKE_SOURCE_DIR}/src/3rdPartyLibraries/flang-parser
     ${CMAKE_SOURCE_DIR}/src/frontend/Experimental_General_Language_Support
     ${FLANG_INCLUDE_DIRS})
+  rose_force_system_include_dirs(flang_frontend
+    ${FLANG_INCLUDE_DIRS}
+    ${LLVM_INCLUDE_DIRS})
 
   if(LLVM_INCLUDE_DIRS)
     target_include_directories(flang_frontend SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
