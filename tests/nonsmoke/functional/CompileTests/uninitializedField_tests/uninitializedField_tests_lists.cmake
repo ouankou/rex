@@ -2442,7 +2442,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test2020_36.C
   test_gnu.C
   test2017_44.C
-  vector_cpp.C
 )
 
 set(UNINIT_C_TEST_SOURCES

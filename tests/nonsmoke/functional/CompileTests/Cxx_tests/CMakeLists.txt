@@ -2466,7 +2466,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2020_36.C
   test_gnu.C
   test2017_44.C
-  vector_cpp.C
 )
 set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   certSignalExample.C
@@ -2756,7 +2755,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2020_36.C
   test_gnu.C
   test2017_44.C
-  vector_cpp.C
 )
 set(TESTCODE_CURRENTLY_FAILING
   c++trick.C
@@ -3095,7 +3093,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2020_35.C
   test2020_36.C
   test_gnu.C
-  vector_cpp.C
   test2004_117.C
   test2007_56.C
   test2013_178.C
