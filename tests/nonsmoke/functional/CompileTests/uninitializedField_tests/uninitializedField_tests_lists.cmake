@@ -2427,7 +2427,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test2017_24.C
   test2017_33.C
   test2017_34.C
-  test2017_67.C
   test2017_85.C
   test2017_86.C
   test2017_99.C
@@ -2593,6 +2592,7 @@ set(UNINIT_C_TEST_SOURCES
   test_int_lexemes.C
   test_int_lexemes_donot_pass.C
   test_simple_int.C
+  test2017_67.c
   test_wchars.C
   X.C
 )

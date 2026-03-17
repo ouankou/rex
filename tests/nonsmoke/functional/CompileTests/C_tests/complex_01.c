@@ -5,7 +5,7 @@
  */
 
 /* Relavant C99 types:
-   "_Bool", "_Complex", "__I__", "__NAN__", "__INFINITY__",
+   "_Bool", "_Complex", "_Complex_I", "NAN", "INFINITY",
 */
 
 #include <complex.h>
@@ -16,27 +16,28 @@ int main(void) {
   __complex__ double y_old_syntax = 2.0;
   __complex__ long double z_old_syntax = 3.0;
 
-  // __complex__ float an_i_old_syntax = __I__;
-  _Complex float an_i_new_syntax = __I__;
+  // __complex__ float an_i_old_syntax = _Complex_I;
+  _Complex float an_i_new_syntax = _Complex_I;
 
-  __I__;
+  _Complex_I;
 
   // ROSE does not yet support the imaginary add operator
   _Complex float a_complex_value = 0.0;
 
   // a_complex_value = 4.0;
 
-  // a_complex_value = 3.0f + (4.0f * __I__);
-  // a_complex_value = 3.0f - 4.0f * __I__;
-  // a_complex_value = 3.0f * (4.0f * __I__);
-  // a_complex_value = 3.0f / (4.0f * __I__);
+  // a_complex_value = 3.0f + (4.0f * _Complex_I);
+  // a_complex_value = 3.0f - 4.0f * _Complex_I;
+  // a_complex_value = 3.0f * (4.0f * _Complex_I);
+  // a_complex_value = 3.0f / (4.0f * _Complex_I);
 
   // Newer syntax for specification of complex types
   _Complex float x = 1.0;
   _Complex double y = 2.0;
   _Complex long double z = 3.0;
 
-  // Specification of complex literals is a bit more complicated
-  // (not clear if this is might just be the use of the commar operator).
-  // note that the parenthesis are required.
-  _Complex float x_with_real_and_imaginary_parts = (1.0, -1.0);
+  // Spell a complex literal using standard complex arithmetic.
+  _Complex float x_with_real_and_imaginary_parts = 1.0f - 1.0f * _Complex_I;
+
+  return 0;
+}

@@ -2437,7 +2437,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_65.C
   test2014_66.C
   test2014_69.C
-  test2015_109.C
   test2015_25.C
   test2015_72_icpc.C
   test2015_82.C
@@ -2452,7 +2451,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2017_24.C
   test2017_33.C
   test2017_34.C
-  test2017_67.C
   test2017_85.C
   test2017_86.C
   test2017_99.C
@@ -2556,7 +2554,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_20.C
   test2007_22.C
   test2007_27.C
-  test2007_30.C
   test2007_31.C
   test2007_32.C
   test2007_33.C
@@ -2564,7 +2561,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_36.C
   test2007_37.C
   test2007_39.C
-  test2007_42.C
   test2007_45.C
   test2007_54.C
   test2007_56.C
@@ -2586,9 +2582,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_88.C
   test2007_89.C
   test2007_91.C
-  test2007_92.C
   test2007_93.C
-  test2007_95.C
   test2007_96.C
   test2007_97.C
   test2007_99.C
@@ -2723,12 +2717,10 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2014_42.C
   test2014_44.C
   test2014_46.C
-  test2014_51.C
   test2014_52.C
   test2014_59.C
   test2014_64.C
   test2014_69.C
-  test2015_109.C
   test2015_25.C
   test2015_72_icpc.C
   test2015_83.C
@@ -2740,7 +2732,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2017_20.C
   test2017_33.C
   test2017_34.C
-  test2017_67.C
+  test2017_85.C
   test2017_86.C
   test2018_22.C
   test2018_23.C
@@ -2848,7 +2840,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_20.C
   test2007_22.C
   test2007_27.C
-  test2007_30.C
   test2007_31.C
   test2007_32.C
   test2007_33.C
@@ -2856,7 +2847,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_36.C
   test2007_37.C
   test2007_39.C
-  test2007_42.C
   test2007_45.C
   test2007_51.C
   test2007_52.C
@@ -2879,9 +2869,7 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_88.C
   test2007_89.C
   test2007_91.C
-  test2007_92.C
   test2007_93.C
-  test2007_95.C
   test2007_96.C
   test2007_97.C
   test2007_99.C
@@ -3045,13 +3033,11 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_42.C
   test2014_44.C
   test2014_46.C
-  test2014_51.C
   test2014_52.C
   test2014_59.C
   test2014_64.C
   test2014_69.C
   test2014_99.C
-  test2015_109.C
   test2015_126.C
   test2015_135.C
   test2015_136.C
@@ -3073,7 +3059,7 @@ set(TESTCODE_CURRENTLY_FAILING
   test2017_44.C
   test2017_46.C
   test2017_47.C
-  test2017_67.C
+  test2017_85.C
   test2017_86.C
   test2018_01.C
   test2018_22.C
@@ -3094,6 +3080,8 @@ set(TESTCODE_CURRENTLY_FAILING
 set(CXX_TESTCODES_EXPECTED_FAIL
   test2014_22.C
   test2014_63.C
+  # Intentionally non-compiling template metaprogramming specimen.
+  test2015_109.C
 )
 
 set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS "${EXAMPLE_TESTCODES_REQUIRED_TO_PASS}" CACHE INTERNAL "" FORCE)

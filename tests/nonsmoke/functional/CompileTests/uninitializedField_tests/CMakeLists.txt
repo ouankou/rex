@@ -70,17 +70,23 @@ endforeach()
 
 foreach(testcode IN LISTS UNINIT_C_TEST_SOURCES)
   string(REPLACE "." "_" _uninit_name ${testcode})
+  if(testcode MATCHES "\\.c$")
+    set(_uninit_source_dir
+        ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/C_tests)
+  else()
+    set(_uninit_source_dir ${_uninit_cxx_dir})
+  endif()
   add_test(
     NAME uninit_fields_c_${_uninit_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${BASH_EXECUTABLE} -c
       "cp \"$1\" \"$2\" && shift 2 && \"$@\""
       dummy
-      ${_uninit_cxx_dir}/${testcode}
+      ${_uninit_source_dir}/${testcode}
       ${testcode}.temp.c
       $<TARGET_FILE:testUninitializedFields>
       ${_uninit_flags}
-      -I${_uninit_cxx_dir}
+      -I${_uninit_source_dir}
       ${_uninit_includes}
       -c
       ${testcode}.temp.c
