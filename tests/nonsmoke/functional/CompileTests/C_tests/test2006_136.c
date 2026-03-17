@@ -1,14 +1,9 @@
-void foo1()
-   {
-     exit(1);
-   }
+#include <stdlib.h>
 
-void foo2()
-   {
-     abort();
-   }
+static void something_arbitrary(void) {}
 
-void foo3()
-   {
-     something_arbitrary();
-   }
+void foo1(void) { exit(1); }
+
+void foo2(void) { abort(); }
+
+void foo3(void) { something_arbitrary(); }

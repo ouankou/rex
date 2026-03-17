@@ -1,5 +1,3 @@
 #include <stdio.h>
-void bar()
-{
-  printf("I am called!\n");
-}
+
+void bar(void) { printf("I am called!\n"); }

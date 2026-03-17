@@ -21,16 +21,18 @@ Compiling the code:
 
 */
 
+// Keep the sla declarations at file scope so the rebuilt output does not
+// re-emit the include inside the generated function body.
+#include "sla.h"
+
+#undef SLA_FCN_PROTO
+#undef SLA_CNV
+
 /*** generates code for sla prototypes ***/
 #define SLA_FCN_PROTO(N, T)                                                    \
   int N(int *argc, char **argv, const char *flind, const char *assop,          \
         const char *pname, T *value, int argd /* no default argument */        \
   )
-
-/*** For allocating and deleting memory ***/
-// #ifndef __cplusplus
-// #include <malloc.h>
-// #endif
 
 /*** Sla for type T (automatically uses function M to modify). ***/
 #define SLA_CNV(C)                                                             \
@@ -51,8 +53,6 @@ Compiling the code:
   }                                                                            \
   free(rr);                                                                    \
   return nvalue;
-
-#include "sla.h"
 
 /*
   Generate additional sla for various primitive types.
