@@ -205,6 +205,10 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
         if (ctor_class) {
           SgType *type_for_ctor_name =
               ctor_type != nullptr ? ctor_type : ctor_class->get_type();
+          // Constructor names are emitted as standalone type names here, so
+          // they must not inherit declarator-level base-type suppression from
+          // the surrounding expression context.
+          info_for_typename.unset_SkipBaseType();
           info_for_typename.set_reference_node_for_qualification(con_init);
           info_for_typename.set_SkipClassSpecifier();
           unp->u_type->unparseType(type_for_ctor_name, info_for_typename);
