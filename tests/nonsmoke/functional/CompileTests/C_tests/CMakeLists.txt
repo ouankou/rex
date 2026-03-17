@@ -621,6 +621,7 @@ set(TESTCODES_REQUIRED_TO_PASS
   test2017_23.c
   test2017_24.c
   test2017_25.c
+  test2017_67.c
   test2018_01.c
   test2018_02.c
   test2018_03.c
@@ -1040,6 +1041,7 @@ set(C_TESTCODES_REQUIRE_GNU89
   test2014_06.c
   test2015_28.c
   test2017_12.c
+  test2017_67.c
   test2018_63.c
 )
 
