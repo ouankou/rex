@@ -87,19 +87,24 @@ set(EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS
   test2006_145.C test2006_146.C test2006_147.C test2006_148.C test2006_149.C
   test2006_150.C test2006_151.C test2006_152.C test2006_153.C test2006_154.C
   test2006_181.C test_int_lexemes.C test_int_lexemes_donot_pass.C
-  test_simple_int.C test_wchars.C X.C)
+  test_simple_int.C test_wchars.C X.C test2017_67.c)
 
 foreach(input_file ${EXAMPLE_C_TESTCODES_VERIFIED_TO_PASS})
   get_filename_component(base_filename "${input_file}" NAME_WE)
   set(file_to_test "${base_filename}.temp.c")
+  if(input_file MATCHES "\\.c$")
+    set(_virtualcfg_c_source_dir ${CMAKE_CURRENT_SOURCE_DIR}/../C_tests)
+  else()
+    set(_virtualcfg_c_source_dir ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests)
+  endif()
   configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${input_file}
+    ${_virtualcfg_c_source_dir}/${input_file}
     ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test}
     COPYONLY)
   add_test(
     NAME testVirtualCFG_C_${file_to_test}
     COMMAND testVirtualCFG ${ROSE_FLAGS}
-      -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
+      -I${_virtualcfg_c_source_dir} ${TESTCODE_INCLUDES}
       -c ${CMAKE_CURRENT_BINARY_DIR}/${file_to_test})
   set_tests_properties(testVirtualCFG_C_${file_to_test} PROPERTIES LABELS VIRTUALCFGTEST)
 endforeach()
@@ -368,6 +373,11 @@ string(REPLACE "testVirtualCFG_CXX_failing_rose-1962.C"
                "testVirtualCFG_CXX_rose-1962.C"
                _virtualcfg_check_java_tests
                "${_virtualcfg_check_java_tests}")
+string(REPLACE ";testVirtualCFG_CXX_failing_test2017_67.C"
+               ""
+               _virtualcfg_check_java_tests
+               "${_virtualcfg_check_java_tests}")
+string(APPEND _virtualcfg_check_java_tests ";testVirtualCFG_C_test2017_67.temp.c")
 string(REPLACE ";" "\\;" _virtualcfg_check_java_group_tests "${_virtualcfg_check_java_tests}")
 
 add_test(
