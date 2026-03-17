@@ -13728,6 +13728,22 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
                     : SageBuilder::buildNondefiningEnumDeclaration_nfi(
                           name, symbol_scope);
   *node = sg_enum_decl;
+  SgType *enum_field_type = nullptr;
+  if (enum_decl->isFixed()) {
+    if (clang::TypeSourceInfo *type_info =
+            enum_decl->getIntegerTypeSourceInfo()) {
+      enum_field_type = buildTypeFromTypeLoc(type_info->getTypeLoc());
+    }
+    if (enum_field_type == nullptr) {
+      enum_field_type = buildTypeFromQualifiedType(enum_decl->getIntegerType());
+    }
+  }
+  auto apply_enum_field_type = [&](SgEnumDeclaration *decl) {
+    if (decl == nullptr || enum_field_type == nullptr) {
+      return;
+    }
+    decl->set_field_type(enum_field_type);
+  };
   auto register_enum_decl = [&](clang::EnumDecl *key) {
     if (key == nullptr) {
       return;
@@ -13916,6 +13932,13 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
       ensure_enum_field_symbol(enumerator, enum_scope, sg_prev_enum_decl);
     }
   }
+
+  apply_enum_field_type(sg_prev_enum_decl);
+  apply_enum_field_type(sg_enum_decl);
+  apply_enum_field_type(
+      isSgEnumDeclaration(sg_enum_decl->get_firstNondefiningDeclaration()));
+  apply_enum_field_type(
+      isSgEnumDeclaration(sg_enum_decl->get_definingDeclaration()));
 
   // REX FIX: Handle AS_none for EnumDecl
   clang::AccessSpecifier access = enum_decl->getAccess();

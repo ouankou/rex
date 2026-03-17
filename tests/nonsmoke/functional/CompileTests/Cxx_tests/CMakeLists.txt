@@ -2564,7 +2564,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_36.C
   test2007_37.C
   test2007_39.C
-  test2007_42.C
   test2007_45.C
   test2007_54.C
   test2007_56.C
@@ -2586,7 +2585,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_88.C
   test2007_89.C
   test2007_91.C
-  test2007_92.C
   test2007_93.C
   test2007_95.C
   test2007_96.C
@@ -2857,7 +2855,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_36.C
   test2007_37.C
   test2007_39.C
-  test2007_42.C
   test2007_45.C
   test2007_51.C
   test2007_52.C
@@ -2880,7 +2877,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_88.C
   test2007_89.C
   test2007_91.C
-  test2007_92.C
   test2007_93.C
   test2007_95.C
   test2007_96.C
