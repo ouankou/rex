@@ -2779,7 +2779,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2005_204.C
   test2005_205.C
   test2005_42.C
-  test2005_50.C
   test2005_85.C
   test2006_08.C
   test2006_09.C

@@ -5141,6 +5141,64 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
     }
     return info->isOutputInCodeGeneration();
   };
+  // Non-statement nodes may appear earlier in traversal order than later
+  // directives/comments. Limit those attachments to the node's own lexical
+  // range so conditionals do not migrate into preceding expressions.
+  auto should_attach_preproc_target =
+      [&](SgLocatedNode *node, Sg_File_Info *directive_info) -> bool {
+    auto same_file = [](Sg_File_Info *lhs, Sg_File_Info *rhs) -> bool {
+      if (lhs == nullptr || rhs == nullptr) {
+        return false;
+      }
+      if (lhs->get_file_id() == rhs->get_file_id()) {
+        return true;
+      }
+      if (!lhs->get_filenameString().empty() &&
+          !rhs->get_filenameString().empty()) {
+        return lhs->get_filenameString() == rhs->get_filenameString();
+      }
+      return false;
+    };
+    auto location_leq_local = [](Sg_File_Info *lhs, Sg_File_Info *rhs) -> bool {
+      if (lhs == nullptr || rhs == nullptr) {
+        return false;
+      }
+      if (lhs->get_line() != rhs->get_line()) {
+        return lhs->get_line() < rhs->get_line();
+      }
+      return lhs->get_col() <= rhs->get_col();
+    };
+
+    if (!should_attach_preproc(node)) {
+      return false;
+    }
+    if (node == nullptr || directive_info == nullptr) {
+      return true;
+    }
+    if (isSgStatement(node) != nullptr) {
+      return true;
+    }
+
+    Sg_File_Info *start = node->get_startOfConstruct();
+    if (start == nullptr || start->get_line() <= 0) {
+      start = get_effective_file_info(node);
+    }
+    Sg_File_Info *end = node->get_endOfConstruct();
+    if (start == nullptr || end == nullptr || start->get_line() <= 0) {
+      return false;
+    }
+    if (!same_file(start, directive_info)) {
+      return false;
+    }
+    if (!same_file(end, directive_info)) {
+      end = start;
+    }
+    if (!location_leq_local(start, end)) {
+      std::swap(start, end);
+    }
+    return location_leq_local(start, directive_info) &&
+           location_leq_local(directive_info, end);
+  };
   auto is_include_directive = [](const PreprocessingInfo *info) -> bool {
     if (info == nullptr) {
       return false;
@@ -5664,7 +5722,8 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
       record_candidate =
           should_attach_include_target(loc_node, inheritedValue->cursor);
     } else {
-      record_candidate = should_attach_preproc(loc_node);
+      record_candidate =
+          should_attach_preproc_target(loc_node, inheritedValue->cursor);
     }
     if (record_candidate) {
       inheritedValue->candidat = loc_node;
@@ -5978,7 +6037,8 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
       }
       bool can_attach = is_include ? should_attach_include_target(
                                          attach_node, inheritedValue->cursor)
-                                   : should_attach_preproc(attach_node);
+                                   : should_attach_preproc_target(
+                                         attach_node, inheritedValue->cursor);
       if (!can_attach) {
         return inheritedValue;
       }
@@ -5998,7 +6058,8 @@ NextPreprocessorToInsert *PreprocessorInserter::evaluateInheritedAttribute(
         record_candidate =
             should_attach_include_target(loc_node, inheritedValue->cursor);
       } else {
-        record_candidate = should_attach_preproc(loc_node);
+        record_candidate =
+            should_attach_preproc_target(loc_node, inheritedValue->cursor);
       }
       if (record_candidate) {
         inheritedValue->candidat = loc_node;
