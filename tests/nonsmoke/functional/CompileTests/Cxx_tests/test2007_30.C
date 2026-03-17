@@ -15,7 +15,9 @@ identityTranslator: ../../../../../ROSE/src/frontend/SageIII/astPostProcessing/r
 Aborted
 */
 
+void f();
+
 struct A {
-  static void m() {f();}
+  static void m() { f(); }
   friend void f();
 };

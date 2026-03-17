@@ -2556,7 +2556,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_20.C
   test2007_22.C
   test2007_27.C
-  test2007_30.C
   test2007_31.C
   test2007_32.C
   test2007_33.C
@@ -2847,7 +2846,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_20.C
   test2007_22.C
   test2007_27.C
-  test2007_30.C
   test2007_31.C
   test2007_32.C
   test2007_33.C
