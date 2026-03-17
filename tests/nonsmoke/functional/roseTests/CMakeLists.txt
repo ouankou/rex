@@ -3,6 +3,7 @@
 
 if(ENABLE-C)
   add_subdirectory (astMergeTests)
+  add_subdirectory (astDiagnostics)
   add_subdirectory (astPerformanceTests)
   add_subdirectory (astProcessingTests)
   add_subdirectory (astQueryTests)
