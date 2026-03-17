@@ -2766,7 +2766,6 @@ set(TESTCODE_CURRENTLY_FAILING
   math.C
   restrict_template_parameter.C
   rose-1701-1.C
-  rose-1962.C
   test2004_25.C
   test2004_35.C
   test2004_85.C
