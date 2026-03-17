@@ -3574,6 +3574,22 @@ add_test(
 )
 set_tests_properties(Cxx_tests_test_multiple_files_4 PROPERTIES LABELS Cxx_tests DISABLED TRUE)
 
+# Issue 476: switch init-statements with case-local declarations must survive
+# compile, link, and execution in the normal Cxx test suite.
+add_test(
+  NAME Cxx_tests_test2017_85_runs
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND sh -c "\"$@\" && ./test2017_85_run"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test2017_85.C
+    -o test2017_85_run
+)
+set_tests_properties(Cxx_tests_test2017_85_runs PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(Cxx_tests_test2017_85_runs test2017_85.C)
+
 add_test(
   NAME Cxx_tests_test_bug_980
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

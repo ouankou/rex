@@ -174,6 +174,33 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   unset(_rose_dir)
 endif()
 
+# Some packaged Clang toolchains report LLVM's installed headers as implicit
+# include directories to CMake even when the C++ frontend does not actually
+# search them. Force such paths through raw -isystem options for the targets
+# that include LLVM/Clang/Flang headers so the generated build rules remain
+# correct across toolchain packaging differences.
+function(rose_force_system_include_dirs target)
+  if(NOT TARGET "${target}")
+    message(FATAL_ERROR
+      "rose_force_system_include_dirs(${target} ...) requires an existing CMake target. "
+      "Call it only after add_library() or add_executable() has created target '${target}'.")
+  endif()
+
+  set(_rose_system_include_dirs ${ARGN})
+  list(REMOVE_DUPLICATES _rose_system_include_dirs)
+
+  set(_rose_system_include_opts "")
+  foreach(_rose_dir IN LISTS _rose_system_include_dirs)
+    if(_rose_dir)
+      list(APPEND _rose_system_include_opts "-isystem" "${_rose_dir}")
+    endif()
+  endforeach()
+
+  if(_rose_system_include_opts)
+    target_compile_options(${target} PRIVATE ${_rose_system_include_opts})
+  endif()
+endfunction()
+
 # In CMake 3.12 and above the find_package(<PackageName>) command now searches prefixes specified by the
 # <PackageName>_ROOT CMake variable and the <PackageName>_ROOT environment variable. Package roots are maintained as a
 # stack so nested calls to all find_* commands inside find modules also search the roots as prefixes. This policy

@@ -1,20 +1,34 @@
-// This is not legal C++ code (fails for GNU (for good reason), but passes for
-// legacy frontend (which is usually more strict).
-void foobar() 
-   {
-     switch (int i = 42)
-        {
-          int x = i;
-          case 1: 
-               x = 2;
-               break;
-          int y = 4;
-          case 2: 
-               x = 2;
-               int z = 5;
-          case 3:
-          default:
-        }
+// Valid switch/case coverage with an init-statement and declarations scoped
+// inside each case block.
+int foobar() {
+  int result = 0;
+  int checksum = 0;
 
-     7;
-   }
+  for (int k = 1; k <= 4; ++k) {
+    switch (int i = k) {
+    case 1: {
+      int x = i;
+      result = x + 1;
+      break;
+    }
+    case 2: {
+      int y = 4;
+      int z = i + y;
+      result = z;
+      break;
+    }
+    case 3: // fall through
+    default: {
+      int fallback = i;
+      result = fallback;
+      break;
+    }
+    }
+
+    checksum += result;
+  }
+
+  return checksum;
+}
+
+int main() { return foobar() == 15 ? 0 : 1; }
