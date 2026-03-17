@@ -248,6 +248,84 @@ stripQualifiedPointerArrayType(clang::QualType qual_type,
   return qual_type;
 }
 
+const clang::DeclContext *
+skipLinkageDeclContexts(const clang::DeclContext *ctx) {
+  while (ctx != nullptr && llvm::isa<clang::LinkageSpecDecl>(ctx)) {
+    ctx = ctx->getParent();
+  }
+  return ctx;
+}
+
+bool declContextsEquivalentIgnoringLinkage(const clang::DeclContext *lhs,
+                                           const clang::DeclContext *rhs) {
+  lhs = skipLinkageDeclContexts(lhs);
+  rhs = skipLinkageDeclContexts(rhs);
+  while (lhs != nullptr && rhs != nullptr) {
+    if (lhs == rhs) {
+      lhs = skipLinkageDeclContexts(lhs->getParent());
+      rhs = skipLinkageDeclContexts(rhs->getParent());
+      continue;
+    }
+
+    if (lhs->isTranslationUnit() || rhs->isTranslationUnit()) {
+      return lhs->isTranslationUnit() && rhs->isTranslationUnit();
+    }
+
+    if (lhs->isNamespace() && rhs->isNamespace()) {
+      const clang::NamespaceDecl *lhs_ns = llvm::dyn_cast<clang::NamespaceDecl>(
+          llvm::dyn_cast<clang::Decl>(lhs));
+      const clang::NamespaceDecl *rhs_ns = llvm::dyn_cast<clang::NamespaceDecl>(
+          llvm::dyn_cast<clang::Decl>(rhs));
+      if (lhs_ns == nullptr || rhs_ns == nullptr) {
+        return false;
+      }
+      if (lhs_ns->isAnonymousNamespace() || rhs_ns->isAnonymousNamespace()) {
+        if (lhs_ns != rhs_ns) {
+          return false;
+        }
+      } else if (lhs_ns->getName() != rhs_ns->getName()) {
+        return false;
+      }
+    } else if (lhs->isRecord() && rhs->isRecord()) {
+      const clang::RecordDecl *lhs_record =
+          llvm::dyn_cast<clang::RecordDecl>(llvm::dyn_cast<clang::Decl>(lhs));
+      const clang::RecordDecl *rhs_record =
+          llvm::dyn_cast<clang::RecordDecl>(llvm::dyn_cast<clang::Decl>(rhs));
+      if (lhs_record == nullptr || rhs_record == nullptr ||
+          lhs_record->getCanonicalDecl() != rhs_record->getCanonicalDecl()) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+
+    lhs = skipLinkageDeclContexts(lhs->getParent());
+    rhs = skipLinkageDeclContexts(rhs->getParent());
+  }
+
+  return lhs == nullptr && rhs == nullptr;
+}
+
+bool isNamedSemanticOuterTagDefinition(const clang::TagDecl *tag_decl) {
+  if (tag_decl == nullptr || !tag_decl->isThisDeclarationADefinition()) {
+    return false;
+  }
+  if (tag_decl->getIdentifier() == nullptr && !tag_decl->hasNameForLinkage()) {
+    return false;
+  }
+
+  const clang::DeclContext *semantic_context =
+      skipLinkageDeclContexts(tag_decl->getDeclContext());
+  const clang::DeclContext *lexical_context =
+      skipLinkageDeclContexts(tag_decl->getLexicalDeclContext());
+  if (semantic_context == nullptr || lexical_context == nullptr) {
+    return false;
+  }
+
+  return !declContextsEquivalentIgnoringLinkage(semantic_context,
+                                                lexical_context);
+}
+
 const clang::TemplateParameterList *
 templateParametersForDeclContext(const clang::DeclContext *context) {
   const clang::Decl *decl = llvm::dyn_cast_or_null<clang::Decl>(context);
@@ -6501,18 +6579,14 @@ bool ClangToSageTranslator::TraverseForDeclContext(
       res = false;
     } else if (child != nullptr) {
       if (clang::TagDecl *tagDecl = llvm::dyn_cast<clang::TagDecl>(decl)) {
-        if (tagDecl->isEmbeddedInDeclarator()) {
-          const clang::DeclContext *semantic_ctx = tagDecl->getDeclContext();
-          const clang::DeclContext *lexical_ctx =
-              tagDecl->getLexicalDeclContext();
-          bool semantic_outer_tag = semantic_ctx == decl_context &&
-                                    lexical_ctx != nullptr &&
-                                    lexical_ctx != decl_context;
-          if (!semantic_outer_tag) {
-            continue;
-          }
+        const bool semantic_outer_named_definition =
+            isNamedSemanticOuterTagDefinition(tagDecl);
+        if (tagDecl->isEmbeddedInDeclarator() &&
+            !semantic_outer_named_definition) {
+          continue;
         }
-        if (tagDecl->getTypedefNameForAnonDecl() != nullptr) {
+        if (tagDecl->getTypedefNameForAnonDecl() != nullptr &&
+            !semantic_outer_named_definition) {
           continue;
         }
       }
@@ -10384,84 +10458,25 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
 
   SgClassDeclaration *sg_class_decl = nullptr;
 
-  auto equivalent_record_decl_contexts =
-      [](const clang::DeclContext *lhs, const clang::DeclContext *rhs) -> bool {
-    auto canonical_context =
-        [](const clang::DeclContext *ctx) -> const clang::DeclContext * {
-      while (ctx != nullptr && llvm::isa<clang::LinkageSpecDecl>(ctx)) {
-        ctx = ctx->getParent();
-      }
-      return ctx;
-    };
-
-    lhs = canonical_context(lhs);
-    rhs = canonical_context(rhs);
-    while (lhs != nullptr && rhs != nullptr) {
-      if (lhs == rhs) {
-        lhs = canonical_context(lhs->getParent());
-        rhs = canonical_context(rhs->getParent());
-        continue;
-      }
-
-      if (lhs->isTranslationUnit() || rhs->isTranslationUnit()) {
-        return lhs->isTranslationUnit() && rhs->isTranslationUnit();
-      }
-
-      if (lhs->isNamespace() && rhs->isNamespace()) {
-        const clang::NamespaceDecl *lhs_ns =
-            llvm::dyn_cast<clang::NamespaceDecl>(
-                llvm::dyn_cast<clang::Decl>(lhs));
-        const clang::NamespaceDecl *rhs_ns =
-            llvm::dyn_cast<clang::NamespaceDecl>(
-                llvm::dyn_cast<clang::Decl>(rhs));
-        if (lhs_ns == nullptr || rhs_ns == nullptr) {
-          return false;
-        }
-        if (lhs_ns->isAnonymousNamespace() || rhs_ns->isAnonymousNamespace()) {
-          if (lhs_ns != rhs_ns) {
-            return false;
-          }
-        } else if (lhs_ns->getName() != rhs_ns->getName()) {
-          return false;
-        }
-      } else if (lhs->isRecord() && rhs->isRecord()) {
-        const clang::RecordDecl *lhs_record =
-            llvm::dyn_cast<clang::RecordDecl>(llvm::dyn_cast<clang::Decl>(lhs));
-        const clang::RecordDecl *rhs_record =
-            llvm::dyn_cast<clang::RecordDecl>(llvm::dyn_cast<clang::Decl>(rhs));
-        if (lhs_record == nullptr || rhs_record == nullptr ||
-            lhs_record->getCanonicalDecl() != rhs_record->getCanonicalDecl()) {
-          return false;
-        }
-      } else {
-        return false;
-      }
-
-      lhs = canonical_context(lhs->getParent());
-      rhs = canonical_context(rhs->getParent());
-    }
-
-    return lhs == nullptr && rhs == nullptr;
-  };
-
   // Find previous declaration
 
   clang::RecordDecl *prev_record_decl = record_decl->getPreviousDecl();
   clang::RecordDecl *record_Definition = record_decl->getDefinition();
   if (prev_record_decl != nullptr &&
-      !equivalent_record_decl_contexts(record_decl->getDeclContext(),
-                                       prev_record_decl->getDeclContext())) {
+      !declContextsEquivalentIgnoringLinkage(
+          record_decl->getDeclContext(), prev_record_decl->getDeclContext())) {
     prev_record_decl = nullptr;
   }
   if (record_Definition != nullptr &&
-      !equivalent_record_decl_contexts(record_decl->getDeclContext(),
-                                       record_Definition->getDeclContext())) {
+      !declContextsEquivalentIgnoringLinkage(
+          record_decl->getDeclContext(), record_Definition->getDeclContext())) {
     record_Definition = nullptr;
   }
   bool isDefined = record_decl->isThisDeclarationADefinition();
   bool isAnonymousStructOrUnion = record_decl->isAnonymousStructOrUnion();
-  bool hasNameForLinkage = record_decl->hasNameForLinkage();
   bool is_lambda_record = false;
+  const bool semantic_outer_named_definition =
+      isNamedSemanticOuterTagDefinition(record_decl);
   if (clang::CXXRecordDecl *cxx_record_decl =
           llvm::dyn_cast<clang::CXXRecordDecl>(record_decl)) {
     is_lambda_record = cxx_record_decl->isLambda();
@@ -10545,9 +10560,9 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
    */
   std::string recordDeclName = record_decl->getNameAsString();
   bool isUnNamed = false;
-  // Pei-Hung (06/30/2023) recordDeclName could be empty if linkaged name being
-  // defined in a typedef of this type.
-  if (isAnonymousStructOrUnion || !hasNameForLinkage || recordDeclName == "") {
+  // Qualified out-of-line/semantic-outer definitions can lack linkage here
+  // even though the tag is semantically named (e.g. `struct N::color`).
+  if (isAnonymousStructOrUnion || recordDeclName == "") {
     recordDeclName = "__anonymous_" + generate_source_position_string(
                                           record_decl->getBeginLoc());
     isUnNamed = true;
@@ -10882,6 +10897,15 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
   if (correct_scope == nullptr) {
     correct_scope = getGlobalScope();
   }
+  SgScopeStatement *structural_decl_scope = correct_scope;
+  if (semantic_outer_named_definition) {
+    if (SgNamespaceDefinitionStatement *semantic_ns =
+            isSgNamespaceDefinitionStatement(semantic_scope)) {
+      if (normalizeNamespaceScope(semantic_ns) == correct_scope) {
+        structural_decl_scope = semantic_ns;
+      }
+    }
+  }
 
   if (!isDefined && prev_record_decl == nullptr &&
       sg_prev_class_decl == nullptr &&
@@ -11089,13 +11113,16 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
        isSgTemplateInstantiationDefn(declaration_parent) != nullptr)) {
     correct_scope = declaration_parent;
   }
+  if (semantic_outer_named_definition && structural_decl_scope != nullptr) {
+    declaration_parent = structural_decl_scope;
+  }
 
   sg_class_decl->set_parent(declaration_parent);
   {
     SgScopeStatement *preferred_scope =
-        preferLexicalNamespaceScope(sg_class_decl, correct_scope);
+        preferLexicalNamespaceScope(sg_class_decl, structural_decl_scope);
     if (preferred_scope == nullptr) {
-      preferred_scope = correct_scope;
+      preferred_scope = structural_decl_scope;
     }
     sg_class_decl->set_scope(preferred_scope);
   }
@@ -11189,10 +11216,10 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
       // ROOT CAUSE FIX: Use correct_scope consistently for defining
       // declaration too
       {
-        SgScopeStatement *preferred_scope =
-            preferLexicalNamespaceScope(sg_def_class_decl, correct_scope);
+        SgScopeStatement *preferred_scope = preferLexicalNamespaceScope(
+            sg_def_class_decl, structural_decl_scope);
         if (preferred_scope == nullptr) {
-          preferred_scope = correct_scope;
+          preferred_scope = structural_decl_scope;
         }
         sg_def_class_decl->set_scope(preferred_scope);
       }
@@ -11299,10 +11326,13 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
                                semantic_ctx != parent_decl &&
                                lexical_ctx == parent_decl;
   }
+  const bool semantic_outer_embedded_tag = semantic_outer_named_definition;
   bool is_embedded_record =
-      embedded_declarator_needs_suppression ||
-      record_decl->getTypedefNameForAnonDecl() != nullptr ||
-      is_inline_tag_decl || (embedded_in_field && !semantic_outer_field_tag);
+      (!semantic_outer_embedded_tag && embedded_declarator_needs_suppression) ||
+      (!semantic_outer_embedded_tag &&
+       record_decl->getTypedefNameForAnonDecl() != nullptr) ||
+      (!semantic_outer_embedded_tag && is_inline_tag_decl) ||
+      (embedded_in_field && !semantic_outer_field_tag);
   if (is_embedded_record) {
     if (sg_class_decl != nullptr) {
       sg_class_decl->set_isAutonomousDeclaration(false);
@@ -14126,12 +14156,15 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
     clang::EnumType *underlyingEnumType = (clang::EnumType *)underlyingType;
     clang::EnumDecl *enumDeclaration = underlyingEnumType->getDecl();
     bool is_definition = enumDeclaration->isThisDeclarationADefinition();
+    bool semantic_outer_tag =
+        isNamedSemanticOuterTagDefinition(enumDeclaration);
     bool embedded_by_location = isEmbeddedInThisTypedef(enumDeclaration);
     bool embedded_by_owned = ownedTagDecl == enumDeclaration;
     bool embedded_by_typedef =
         enumDeclaration->getTypedefNameForAnonDecl() == typedef_decl;
-    isembedded = is_definition && (embedded_by_location || embedded_by_owned ||
-                                   embedded_by_typedef);
+    isembedded =
+        is_definition && !semantic_outer_tag &&
+        (embedded_by_location || embedded_by_owned || embedded_by_typedef);
     iscompleteDefined = is_definition;
     if (isembedded) {
       p_inline_tag_decls.insert(enumDeclaration->getCanonicalDecl());
@@ -14144,12 +14177,15 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
         (clang::RecordType *)underlyingType;
     clang::RecordDecl *recordDeclaration = underlyingRecordType->getDecl();
     bool is_definition = recordDeclaration->isThisDeclarationADefinition();
+    bool semantic_outer_tag =
+        isNamedSemanticOuterTagDefinition(recordDeclaration);
     bool embedded_by_location = isEmbeddedInThisTypedef(recordDeclaration);
     bool embedded_by_owned = ownedTagDecl == recordDeclaration;
     bool embedded_by_typedef =
         recordDeclaration->getTypedefNameForAnonDecl() == typedef_decl;
-    isembedded = is_definition && (embedded_by_location || embedded_by_owned ||
-                                   embedded_by_typedef);
+    isembedded =
+        is_definition && !semantic_outer_tag &&
+        (embedded_by_location || embedded_by_owned || embedded_by_typedef);
     iscompleteDefined = is_definition;
     if (isembedded) {
       p_inline_tag_decls.insert(recordDeclaration->getCanonicalDecl());
@@ -23596,6 +23632,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   bool hasElaboratedType = false;
   bool isOwnedTagDeclADefinition = false;
   bool isDefinitionRequired = false;
+  bool isNamedNonEmbeddedRecord = false;
   // Definitions embedded in a declarator are not autonomous.
   bool isAutonomousDeclaration = true;
 
@@ -23660,13 +23697,20 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
   if (llvm::isa<clang::RecordType>(varType)) {
     clang::RecordType *underlyingRecordType = (clang::RecordType *)varType;
     clang::RecordDecl *recordDeclaration = underlyingRecordType->getDecl();
-    isembedded = recordDeclaration->isEmbeddedInDeclarator();
+    const bool inline_tag_definition =
+        is_inline_tag_definition(recordDeclaration);
+    isembedded =
+        recordDeclaration->isEmbeddedInDeclarator() && inline_tag_definition;
     iscompleteDefined = recordDeclaration->isCompleteDefinition();
     isAutonomousDeclaration = false;
-    if (is_inline_tag_definition(recordDeclaration)) {
+    if (inline_tag_definition) {
       isembedded = true;
       p_inline_tag_decls.insert(recordDeclaration->getCanonicalDecl());
     }
+    isNamedNonEmbeddedRecord = !isembedded &&
+                               !recordDeclaration->isAnonymousStructOrUnion() &&
+                               (recordDeclaration->getIdentifier() != nullptr ||
+                                recordDeclaration->hasNameForLinkage());
   }
 
   if (hasElaboratedType) {
@@ -23953,6 +23997,12 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     std::map<SgClassType *, bool>::iterator bool_it =
         p_class_type_decl_first_see_in_type.find(isSgClassType(type));
     ROSE_ASSERT(bool_it != p_class_type_decl_first_see_in_type.end());
+    if (isNamedNonEmbeddedRecord) {
+      // Named records that were defined through another declarator must keep
+      // their semantic-scope definition instead of being re-embedded on first
+      // variable use.
+      bool_it->second = false;
+    }
     if (bool_it->second) {
       sg_var_decl->set_baseTypeDefiningDeclaration(
           isSgNamedType(type)->get_declaration()->get_definingDeclaration());
