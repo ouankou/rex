@@ -76,6 +76,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue124_system_header_specialization_args.cpp
   rex_test2025_issue125_fixup_child_list_warning.cpp
   rex_test2025_issue126_default_template_args.cpp
+  rex_test2026_redecl_default_template_arg.cpp
   rex_test2025_defaulted_special_members_anon_union.cpp
   rex_test2025_issue59_template_template_arg_global_qual.cpp
   rex_test2025_issue60_friend_function_symbol_scope.cpp
@@ -2731,7 +2732,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2015_109.C
   test2015_25.C
   test2015_72_icpc.C
-  test2015_82.C
   test2015_83.C
   test2015_84.C
   test2016_52.C
@@ -3062,7 +3062,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2015_136.C
   test2015_25.C
   test2015_72_icpc.C
-  test2015_82.C
   test2015_83.C
   test2015_84.C
   test2016_20.C
@@ -4425,6 +4424,49 @@ set_tests_properties(
 rex_lock_test_for_input(
   Cxx_tests_rex_test2025_issue126_default_template_args_unparse
   rex_test2025_issue126_default_template_args.cpp)
+
+# Defaults first introduced on a redeclaration/definition must not be stripped
+# as inherited defaults.
+add_test(
+  NAME Cxx_tests_rex_test2026_redecl_default_template_arg_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -E \"template[[:space:]]*<[[:space:]]*(class|typename)[[:space:]]+T[[:space:]]*=[[:space:]]*int\" rose_rex_test2026_redecl_default_template_arg.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2026_redecl_default_template_arg.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_redecl_default_template_arg.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_redecl_default_template_arg_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_redecl_default_template_arg_unparse
+  rex_test2026_redecl_default_template_arg.cpp)
+
+# Replacing redeclared definition parameters must also refresh template-param
+# lookups before translating requires clauses and dependent members.
+add_test(
+  NAME Cxx_tests_rex_test2026_redecl_default_template_arg_requires_unparse
+  COMMAND
+    sh -c
+    "\"$@\" && grep -E \"template[[:space:]]*<[[:space:]]*(class|typename)[[:space:]]+T[[:space:]]*=[[:space:]]*int\" rose_rex_test2026_redecl_default_template_arg_requires.cpp && grep -E \"requires[[:space:]]*\\(\" rose_rex_test2026_redecl_default_template_arg_requires.cpp && ${CMAKE_CXX_COMPILER} -std=c++20 -c rose_rex_test2026_redecl_default_template_arg_requires.cpp"
+    dummy
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -std=c++20
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2026_redecl_default_template_arg_requires.cpp
+)
+set_tests_properties(
+  Cxx_tests_rex_test2026_redecl_default_template_arg_requires_unparse
+  PROPERTIES LABELS Cxx_tests
+)
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2026_redecl_default_template_arg_requires_unparse
+  rex_test2026_redecl_default_template_arg_requires.cpp)
 
 # Issue 59: Template-template arguments must preserve required global
 # qualification (no string stripping in the unparser).

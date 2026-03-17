@@ -8879,6 +8879,21 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
     }
   }
 
+  const bool is_definition = templated_decl->isThisDeclarationADefinition();
+  SgTemplateParameterPtrList saved_nondefining_decl_params;
+  if (is_definition && existing_nondefining_decl != nullptr &&
+      class_template_decl->getPreviousDecl() != nullptr) {
+    saved_nondefining_decl_params.reserve(
+        existing_nondefining_decl->get_templateParameters().size());
+    for (SgTemplateParameter *param :
+         existing_nondefining_decl->get_templateParameters()) {
+      if (SgTemplateParameter *param_copy =
+              isSgTemplateParameter(SageInterface::deepCopy(param))) {
+        saved_nondefining_decl_params.push_back(param_copy);
+      }
+    }
+  }
+
   // Build template parameters and template declaration.  ROSE's template-class
   // symbol lookup matches template-parameter lists by pointer identity, so for
   // redeclarations we must reuse the existing template-parameter nodes instead
@@ -9270,7 +9285,25 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
 
   apply_missing_default_template_args(*params, decl_template_params);
 
-  const bool is_definition = templated_decl->isThisDeclarationADefinition();
+  auto current_decl_spells_default_template_arg =
+      [](clang::NamedDecl *clang_param) {
+        if (auto *type_param =
+                llvm::dyn_cast<clang::TemplateTypeParmDecl>(clang_param)) {
+          return type_param->hasDefaultArgument() &&
+                 !type_param->defaultArgumentWasInherited();
+        }
+        if (auto *non_type_param =
+                llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(clang_param)) {
+          return non_type_param->hasDefaultArgument() &&
+                 !non_type_param->defaultArgumentWasInherited();
+        }
+        if (auto *template_param =
+                llvm::dyn_cast<clang::TemplateTemplateParmDecl>(clang_param)) {
+          return template_param->hasDefaultArgument() &&
+                 !template_param->defaultArgumentWasInherited();
+        }
+        return false;
+      };
 
   // SageBuilder::buildTemplateClassDeclaration_nfi() always constructs a
   // defining declaration. For forward declarations, build a true non-defining
@@ -9355,6 +9388,44 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
   apply_template_scope(template_decl);
   normalizeNamespaceTemplateDeclarationFlags(result_decl);
 
+  auto reparent_copied_template_parameter =
+      [](SgTemplateParameter *param_copy, SgDeclarationStatement *owner_decl) {
+        if (param_copy == nullptr || owner_decl == nullptr) {
+          return;
+        }
+
+        param_copy->set_parent(owner_decl);
+        if (param_copy->get_parameterType() !=
+            SgTemplateParameter::template_parameter) {
+          param_copy->set_templateDeclaration(owner_decl);
+        }
+        if (SgInitializedName *init_name = param_copy->get_initializedName()) {
+          init_name->set_parent(param_copy);
+        }
+        if (SgExpression *constraint = param_copy->get_typeConstraint()) {
+          constraint->set_parent(param_copy);
+        }
+        if (SgExpression *default_expr =
+                param_copy->get_defaultExpressionParameter()) {
+          default_expr->set_parent(param_copy);
+        }
+        if (SgDeclarationStatement *default_decl =
+                param_copy->get_defaultTemplateDeclarationParameter()) {
+          default_decl->set_parent(param_copy);
+        }
+      };
+
+  if (!saved_nondefining_decl_params.empty() && nondefining_decl != nullptr) {
+    for (SgTemplateParameter *param_copy : saved_nondefining_decl_params) {
+      reparent_copied_template_parameter(param_copy, nondefining_decl);
+    }
+    SageBuilder::setTemplateParametersInDeclaration(
+        nondefining_decl, &saved_nondefining_decl_params);
+    attach_nonreal_template_parameters(
+        nondefining_decl,
+        *SageBuilder::getTemplateParameterList(nondefining_decl));
+  }
+
   if (result_decl != nullptr) {
     attach_nonreal_template_parameters(result_decl,
                                        result_decl->get_templateParameters());
@@ -9415,6 +9486,49 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
         param->set_templateDeclaration(result_decl);
       }
     }
+  }
+
+  if (template_decl != nullptr &&
+      class_template_decl->getPreviousDecl() != nullptr) {
+    SgTemplateParameterPtrList copied_params;
+    copied_params.reserve(template_decl->get_templateParameters().size());
+    for (size_t i = 0; i < template_decl->get_templateParameters().size();
+         ++i) {
+      SgTemplateParameter *param = template_decl->get_templateParameters()[i];
+      if (param == nullptr) {
+        continue;
+      }
+
+      clang::NamedDecl *clang_param =
+          decl_template_params != nullptr &&
+                  i < static_cast<size_t>(decl_template_params->size())
+              ? decl_template_params->getParam(i)
+              : nullptr;
+
+      SgTemplateParameter *param_copy =
+          isSgTemplateParameter(SageInterface::deepCopy(param));
+      if (param_copy == nullptr) {
+        continue;
+      }
+
+      if (!current_decl_spells_default_template_arg(clang_param)) {
+        param_copy->set_defaultTypeParameter(nullptr);
+        param_copy->set_defaultExpressionParameter(nullptr);
+        param_copy->set_defaultTemplateDeclarationParameter(nullptr);
+      }
+      reparent_copied_template_parameter(param_copy, template_decl);
+
+      copied_params.push_back(param_copy);
+    }
+
+    SageBuilder::setTemplateParametersInDeclaration(template_decl,
+                                                    &copied_params);
+    attach_nonreal_template_parameters(
+        template_decl, *SageBuilder::getTemplateParameterList(template_decl));
+    // Replacing the declaration-owned parameter list detaches the nodes that
+    // were registered earlier, so refresh the decl-to-parameter map before any
+    // later requires-clause or member translation reuses it.
+    register_template_parameter_mappings(decl_template_params, copied_params);
   }
 
   if (clang::TemplateParameterList *params = decl_template_params) {
