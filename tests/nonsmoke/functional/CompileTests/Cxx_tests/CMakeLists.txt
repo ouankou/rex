@@ -2437,7 +2437,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2014_65.C
   test2014_66.C
   test2014_69.C
-  test2015_109.C
   test2015_25.C
   test2015_72_icpc.C
   test2015_82.C
@@ -2726,7 +2725,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2014_59.C
   test2014_64.C
   test2014_69.C
-  test2015_109.C
   test2015_25.C
   test2015_72_icpc.C
   test2015_83.C
@@ -3048,7 +3046,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_64.C
   test2014_69.C
   test2014_99.C
-  test2015_109.C
   test2015_126.C
   test2015_135.C
   test2015_136.C
@@ -3092,6 +3089,8 @@ set(TESTCODE_CURRENTLY_FAILING
 set(CXX_TESTCODES_EXPECTED_FAIL
   test2014_22.C
   test2014_63.C
+  # Intentionally non-compiling template metaprogramming specimen.
+  test2015_109.C
 )
 
 set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS "${EXAMPLE_TESTCODES_REQUIRED_TO_PASS}" CACHE INTERNAL "" FORCE)

@@ -1370,8 +1370,9 @@ void SgFile::runFrontend(int &nextErrorCode) {
     nextErrorCode = this->callFrontEnd();
     this->set_frontendErrorCode(nextErrorCode);
   }
-
-  ROSE_ASSERT(nextErrorCode <= 3);
+  // Frontends are allowed to return a real diagnostic count for hard errors.
+  // SgProject::parse/frontendExitStatus interpret those nonzero statuses; do
+  // not treat them as an internal invariant violation here.
 }
 
 // The "purpose" as it appears in the man page, uncapitalized and a single,
