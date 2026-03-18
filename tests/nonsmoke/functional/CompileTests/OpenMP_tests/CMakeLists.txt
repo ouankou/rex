@@ -79,7 +79,7 @@ set(C_TESTCODES
 set(CXX_TESTCODES
 	classMember.cpp hello1.cpp helloNested.cpp memberFunction.cpp
 	memberFunction2.cpp objectPrivate.cpp objectFirstPrivate.cpp
-	objectLastprivate.cpp referenceType.cpp
+	objectLastprivate.cpp referenceType.cpp declare_mapper_type_qualifiers.cpp
 	orphanedAtomic.cpp preprocessingInfo2.cpp task_link.cpp task_link2.cpp
 	task_tree.cpp jacobi-ompacc2.cpp data-member-access.cpp define-directive2.cpp)
 
