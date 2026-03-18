@@ -1,0 +1,5 @@
+#pragma omp declare mapper(base_const : const ::MapperRecord v)
+#pragma omp declare mapper(ptr_to_const : const ::MapperRecord* v)
+#pragma omp declare mapper(const_ptr : ::MapperRecord*const  v)
+#pragma omp declare mapper(ptr_to_const_ptr : ::MapperRecord*const * v)
+#pragma omp declare mapper(template_int : class ::TemplateRecord<123> v)

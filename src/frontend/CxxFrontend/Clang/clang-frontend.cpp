@@ -1848,6 +1848,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // a dangling reference.
   llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs =
       llvm::vfs::createPhysicalFileSystem();
+  compiler_instance->setVirtualFileSystem(vfs);
 
   // TextDiagnosticPrinter keeps a reference to DiagnosticOptions; ensure it
   // outlives the diagnostics engine for LLVM 22.
@@ -2234,10 +2235,9 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
       diags.setDiagnosticGroupWarningAsError("dynamic-exception-spec", false);
     }
   }
-  diags.setSeverity(clang::diag::err_alignment_not_power_of_two,
-                    clang::diag::Severity::Warning, clang::SourceLocation());
-  diags.setSeverity(clang::diag::err_fe_invalid_alignment,
-                    clang::diag::Severity::Warning, clang::SourceLocation());
+  // LLVM 22 rejects remapping these hard alignment errors into warnings.
+  // Preserve the frontend's native severity and record valid alignments from
+  // the translated AST instead of trying to force permissive parsing here.
 
   std::string invocation_triple = target_opts.Triple;
   if (invocation_triple.empty()) {

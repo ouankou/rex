@@ -1,0 +1,2 @@
+#pragma omp target map(to : n) map(tofrom : a[0:32])
+#pragma omp parallel for

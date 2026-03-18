@@ -38,6 +38,124 @@ echo "Build directory: $BUILD_DIR"
 echo "Parallel jobs: $NUM_JOBS"
 echo ""
 
+# Resolve a coherent LLVM toolchain from one prefix.
+find_first_executable() {
+    local search_dir="$1"
+    shift
+    local candidate
+    for candidate in "$@"; do
+        if [ -x "$search_dir/$candidate" ]; then
+            printf '%s\n' "$search_dir/$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+has_flang_libraries() {
+    local flang_root="$1"
+    local libdir
+    local libname
+
+    for libdir in "$flang_root/lib" "$flang_root/lib64"; do
+        [ -d "$libdir" ] || continue
+
+        local missing=0
+        for libname in \
+            FortranParser \
+            FortranSemantics \
+            FortranEvaluate \
+            FortranLower \
+            FortranDecimal \
+            FortranSupport; do
+            if ! compgen -G "$libdir/lib${libname}.*" > /dev/null; then
+                missing=1
+                break
+            fi
+        done
+
+        if [ "$missing" -eq 0 ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+find_llvm_config() {
+    local candidates=()
+    local candidate_roots=()
+    local candidate
+    local version
+    local major
+
+    append_candidate() {
+        local entry="$1"
+        [ -n "$entry" ] || return 0
+        candidates+=("$entry")
+    }
+
+    append_candidate_root() {
+        local root="$1"
+        [ -n "$root" ] || return 0
+        candidate_roots+=("$root")
+    }
+
+    if [ -n "${LLVM_CONFIG:-}" ]; then
+        append_candidate "$LLVM_CONFIG"
+    fi
+    if [ -n "${LLVM_ROOT:-}" ]; then
+        append_candidate_root "$LLVM_ROOT"
+    fi
+    if [ -n "${LLVM_DIR:-}" ]; then
+        append_candidate_root "$LLVM_DIR"
+        candidate="$(cd "$LLVM_DIR/../../.." 2>/dev/null && pwd -P || true)"
+        append_candidate_root "$candidate"
+    fi
+    if [ -n "${CMAKE_PREFIX_PATH:-}" ]; then
+        local raw_prefixes="${CMAKE_PREFIX_PATH//;/:}"
+        local prefix
+        IFS=':' read -r -a _prefix_entries <<< "$raw_prefixes"
+        for prefix in "${_prefix_entries[@]}"; do
+            append_candidate_root "$prefix"
+        done
+    fi
+
+    local root
+    for root in "${candidate_roots[@]}"; do
+        append_candidate "$root/bin/llvm-config"
+        append_candidate "$root/bin/llvm-config-22"
+    done
+    if command -v llvm-config >/dev/null 2>&1; then
+        append_candidate "$(command -v llvm-config)"
+    fi
+    if command -v llvm-config-22 >/dev/null 2>&1; then
+        append_candidate "$(command -v llvm-config-22)"
+    fi
+
+    local seen=""
+    local bindir
+    for candidate in "${candidates[@]}"; do
+        [ -x "$candidate" ] || continue
+        case " $seen " in
+            *" $candidate "*) continue ;;
+        esac
+        seen="$seen $candidate"
+        version=$("$candidate" --version 2>/dev/null || true)
+        major=$(echo "$version" | sed -nE 's/^([0-9]+).*/\1/p')
+        bindir=$("$candidate" --bindir 2>/dev/null || true)
+        if [ -n "$major" ] && [ "$major" -ge 22 ] &&
+           [ -n "$bindir" ] &&
+           [ -x "$bindir/llvm-ar" ] &&
+           [ -x "$(find_first_executable "$bindir" clang-22 clang || true)" ] &&
+           [ -x "$(find_first_executable "$bindir" clang++-22 clang++ || true)" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Prefer the same GCC/stdlib headers/libs as CI (GCC 14) when driving Clang.
 : "${GCC_VERSION:=14}"
 GCC_PREFIX="/usr/lib/gcc/x86_64-linux-gnu/${GCC_VERSION}"
@@ -70,13 +188,7 @@ echo ""
 
 # Check for LLVM/Clang
 echo -e "${YELLOW}[2/5] Checking for LLVM/Clang installation...${NC}"
-LLVM_CONFIG_CMD=""
-if command -v llvm-config-22 &> /dev/null; then
-    LLVM_CONFIG_CMD="llvm-config-22"
-elif command -v llvm-config &> /dev/null; then
-    LLVM_CONFIG_CMD="llvm-config"
-fi
-
+LLVM_CONFIG_CMD="$(find_llvm_config || true)"
 if [ -z "$LLVM_CONFIG_CMD" ]; then
     echo -e "${RED}Error: llvm-config not found. Please install LLVM/Clang 22 or later.${NC}"
     echo "On Ubuntu/Debian: sudo apt-get install llvm-22 clang-22 libclang-22-dev"
@@ -89,7 +201,65 @@ if [ -z "$LLVM_MAJOR" ] || [ "$LLVM_MAJOR" -lt 22 ]; then
     echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires LLVM/Clang 22 or later.${NC}"
     exit 1
 fi
+LLVM_BINDIR=$($LLVM_CONFIG_CMD --bindir)
+LLVM_PREFIX=$($LLVM_CONFIG_CMD --prefix)
+AUTO_C_COMPILER="$(find_first_executable "$LLVM_BINDIR" clang-22 clang || true)"
+AUTO_CXX_COMPILER="$(find_first_executable "$LLVM_BINDIR" clang++-22 clang++ || true)"
+AUTO_LLVM_AR="$(find_first_executable "$LLVM_BINDIR" llvm-ar || true)"
+AUTO_LLVM_RANLIB="$(find_first_executable "$LLVM_BINDIR" llvm-ranlib || true)"
+AUTO_LLVM_NM="$(find_first_executable "$LLVM_BINDIR" llvm-nm || true)"
+AUTO_LLVM_OBJCOPY="$(find_first_executable "$LLVM_BINDIR" llvm-objcopy || true)"
+AUTO_LLVM_OBJDUMP="$(find_first_executable "$LLVM_BINDIR" llvm-objdump || true)"
+AUTO_LLVM_READELF="$(find_first_executable "$LLVM_BINDIR" llvm-readelf || true)"
+AUTO_LLVM_STRIP="$(find_first_executable "$LLVM_BINDIR" llvm-strip || true)"
+AUTO_LINKER="$(find_first_executable "$LLVM_BINDIR" ld.lld lld || true)"
+
+if [ -z "$AUTO_C_COMPILER" ] || [ -z "$AUTO_CXX_COMPILER" ]; then
+    echo -e "${RED}Error: coherent Clang compiler pair not found under $LLVM_BINDIR.${NC}"
+    echo "Expected to find clang/clang++ from the same LLVM installation."
+    exit 1
+fi
+
+if [ -z "$AUTO_LLVM_AR" ] || [ -z "$AUTO_LLVM_RANLIB" ]; then
+    echo -e "${RED}Error: coherent LLVM archiver tools not found under $LLVM_BINDIR.${NC}"
+    echo "Expected to find llvm-ar and llvm-ranlib from the same LLVM installation."
+    exit 1
+fi
+
+export PATH="$LLVM_BINDIR${PATH:+:$PATH}"
+
 echo -e "${GREEN}Found LLVM version: $LLVM_VERSION (${LLVM_CONFIG_CMD})${NC}"
+echo "LLVM prefix:    $LLVM_PREFIX"
+echo "LLVM bindir:    $LLVM_BINDIR"
+echo "C compiler:     ${CC:-$AUTO_C_COMPILER}"
+echo "C++ compiler:   ${CXX:-$AUTO_CXX_COMPILER}"
+echo "Archiver:       $AUTO_LLVM_AR"
+echo "Ranlib:         $AUTO_LLVM_RANLIB"
+
+ENABLE_FORTRAN_CMAKE=ON
+ENABLE_FORTRAN_FLANG_CMAKE=ON
+RESOLVED_FLANG_ROOT="${FLANG_ROOT:-$LLVM_PREFIX}"
+
+if [ -n "${FLANG_ROOT:-}" ]; then
+    if ! has_flang_libraries "$FLANG_ROOT"; then
+        echo -e "${RED}Error: FLANG_ROOT=$FLANG_ROOT does not provide the required libFortran* libraries.${NC}"
+        exit 1
+    fi
+elif has_flang_libraries "$LLVM_PREFIX"; then
+    :
+else
+    ENABLE_FORTRAN_CMAKE=OFF
+    ENABLE_FORTRAN_FLANG_CMAKE=OFF
+    RESOLVED_FLANG_ROOT=""
+    echo -e "${YELLOW}Flang libraries not found under $LLVM_PREFIX.${NC}"
+    echo "Fortran support will be disabled for this build."
+    echo "Set FLANG_ROOT to an LLVM 22 installation with libFortran* libraries to enable Fortran."
+fi
+
+echo "Fortran support: ${ENABLE_FORTRAN_CMAKE}"
+if [ -n "$RESOLVED_FLANG_ROOT" ]; then
+    echo "Flang root:     $RESOLVED_FLANG_ROOT"
+fi
 echo ""
 
 # Create and enter build directory
@@ -102,14 +272,62 @@ mkdir -p "$BUILD_DIR" || { echo -e "${RED}Failed to create build directory${NC}"
 cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 1; }
 
 # Configure with CMake (will auto-detect compilers, preferring clang/flang)
-cmake .. \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-    -DENABLE-C=ON \
-    -DENABLE-FORTRAN=ON \
-    -DENABLE-FORTRAN-FLANG=ON \
-    -DCMAKE_CXX_STANDARD=17 \
+CMAKE_ARGS=(
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+    -DENABLE-C=ON
+    -DENABLE-FORTRAN="$ENABLE_FORTRAN_CMAKE"
+    -DENABLE-FORTRAN-FLANG="$ENABLE_FORTRAN_FLANG_CMAKE"
+    -DCMAKE_CXX_STANDARD=17
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+    -DLLVM_ROOT="$LLVM_PREFIX"
+    -DClang_ROOT="$LLVM_PREFIX"
+    -DCMAKE_AR="$AUTO_LLVM_AR"
+    -DCMAKE_RANLIB="$AUTO_LLVM_RANLIB"
+    -DCMAKE_C_COMPILER_AR="$AUTO_LLVM_AR"
+    -DCMAKE_C_COMPILER_RANLIB="$AUTO_LLVM_RANLIB"
+    -DCMAKE_CXX_COMPILER_AR="$AUTO_LLVM_AR"
+    -DCMAKE_CXX_COMPILER_RANLIB="$AUTO_LLVM_RANLIB"
+)
+
+if [ -n "$AUTO_LLVM_NM" ]; then
+    CMAKE_ARGS+=(-DCMAKE_NM="$AUTO_LLVM_NM")
+fi
+
+if [ -n "$AUTO_LLVM_OBJCOPY" ]; then
+    CMAKE_ARGS+=(-DCMAKE_OBJCOPY="$AUTO_LLVM_OBJCOPY")
+fi
+
+if [ -n "$AUTO_LLVM_OBJDUMP" ]; then
+    CMAKE_ARGS+=(-DCMAKE_OBJDUMP="$AUTO_LLVM_OBJDUMP")
+fi
+
+if [ -n "$AUTO_LLVM_READELF" ]; then
+    CMAKE_ARGS+=(-DCMAKE_READELF="$AUTO_LLVM_READELF")
+fi
+
+if [ -n "$AUTO_LLVM_STRIP" ]; then
+    CMAKE_ARGS+=(-DCMAKE_STRIP="$AUTO_LLVM_STRIP")
+fi
+
+if [ -n "$AUTO_LINKER" ]; then
+    CMAKE_ARGS+=(-DCMAKE_LINKER="$AUTO_LINKER")
+fi
+
+if [ -n "$RESOLVED_FLANG_ROOT" ]; then
+    CMAKE_ARGS+=(-DFLANG_ROOT="$RESOLVED_FLANG_ROOT")
+fi
+
+if [ -z "${CC:-}" ] && [ -z "${CXX:-}" ]; then
+    CMAKE_ARGS+=(
+        -DCMAKE_C_COMPILER="$AUTO_C_COMPILER"
+        -DCMAKE_CXX_COMPILER="$AUTO_CXX_COMPILER"
+    )
+else
+    echo "Respecting explicit compiler environment: CC=${CC:-<unset>} CXX=${CXX:-<unset>}"
+fi
+
+cmake .. "${CMAKE_ARGS[@]}"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}CMake configuration failed!${NC}"

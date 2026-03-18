@@ -4809,7 +4809,25 @@ void FortranCodeGeneration_locatedNode::unparseOmpBeginDirectiveClauses(
       ROSE_ABORT();
     }
     if (mapper_stmt->get_mapper_type() != nullptr) {
-      unparseExpression(mapper_stmt->get_mapper_type(), info);
+      SgType *mapper_type = nullptr;
+      if (SgTypeExpression *type_expr =
+              isSgTypeExpression(mapper_stmt->get_mapper_type())) {
+        mapper_type = type_expr->get_type()->stripType(
+            SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+            SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE);
+      } else {
+        mapper_type = mapper_stmt->get_mapper_type()->get_type()->stripType(
+            SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+            SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_TYPEDEF_TYPE);
+      }
+
+      // OpenMP Fortran declare mapper syntax uses the bare derived-type name
+      // here rather than a full TYPE(...) declaration specifier.
+      if (SgClassType *class_type = isSgClassType(mapper_type)) {
+        curprint(class_type->get_name().getString());
+      } else {
+        unparseExpression(mapper_stmt->get_mapper_type(), info);
+      }
     }
     if (mapper_stmt->get_mapper_variable() != nullptr) {
       if (mapper_stmt->get_mapper_type() != nullptr) {

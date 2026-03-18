@@ -1,3 +1,4 @@
+#include "clang-decl-utils.hpp"
 #include "clang-to-dot-private.hpp"
 
 #include "sage3basic.h"
@@ -1515,8 +1516,10 @@ bool ClangToDotTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
       "original_type",
       Traverse(param_var_decl->getOriginalType().getTypePtr())));
 
+  const clang::Expr *default_arg_expr =
+      getParmVarDeclDefaultArgExpr(param_var_decl);
   node_desc.successors.push_back(std::pair<std::string, std::string>(
-      "default_arg", Traverse(param_var_decl->getDefaultArg())));
+      "default_arg", Traverse(const_cast<clang::Expr *>(default_arg_expr))));
 
   node_desc.kind_hierarchy.push_back("ParmVarDecl");
 

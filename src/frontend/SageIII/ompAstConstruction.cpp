@@ -242,6 +242,372 @@ parseDeclareVariantExpression(SgPragmaDeclaration *directive,
   return expr;
 }
 
+struct DeclareMapperTypeQualifiers {
+  bool is_const = false;
+  bool is_volatile = false;
+  bool is_restrict = false;
+};
+
+enum class DeclareMapperTypeOperatorKind {
+  e_pointer,
+  e_lvalue_reference,
+  e_rvalue_reference
+};
+
+struct DeclareMapperTypeOperator {
+  DeclareMapperTypeOperatorKind kind = DeclareMapperTypeOperatorKind::e_pointer;
+  DeclareMapperTypeQualifiers qualifiers;
+};
+
+static bool isDeclareMapperQualifierToken(const std::string &token) {
+  return token == "const" || token == "volatile" || token == "restrict" ||
+         token == "__restrict" || token == "__restrict__";
+}
+
+static bool isDeclareMapperElaboratedTypeKeyword(const std::string &token) {
+  return token == "struct" || token == "class" || token == "union" ||
+         token == "enum" || token == "typename";
+}
+
+static void setDeclareMapperQualifier(DeclareMapperTypeQualifiers &qualifiers,
+                                      const std::string &token) {
+  if (token == "const") {
+    qualifiers.is_const = true;
+  } else if (token == "volatile") {
+    qualifiers.is_volatile = true;
+  } else if (token == "restrict" || token == "__restrict" ||
+             token == "__restrict__") {
+    qualifiers.is_restrict = true;
+  }
+}
+
+static bool isDeclareMapperWordToken(const std::string &token) {
+  if (token.empty()) {
+    return false;
+  }
+
+  const unsigned char first = static_cast<unsigned char>(token[0]);
+  return std::isalnum(first) || first == '_';
+}
+
+static bool isDeclareMapperNumericLiteralContinuation(unsigned char ch) {
+  return std::isalnum(ch) || ch == '\'' || ch == '.' || ch == '_';
+}
+
+static std::vector<std::string>
+tokenizeDeclareMapperTypeText(const std::string &type_text) {
+  std::vector<std::string> tokens;
+
+  for (std::string::size_type i = 0; i < type_text.size();) {
+    const unsigned char ch = static_cast<unsigned char>(type_text[i]);
+    if (std::isspace(ch)) {
+      ++i;
+      continue;
+    }
+
+    if (std::isalpha(ch) || ch == '_') {
+      const std::string::size_type begin = i++;
+      while (i < type_text.size()) {
+        const unsigned char next = static_cast<unsigned char>(type_text[i]);
+        if (!std::isalnum(next) && next != '_') {
+          break;
+        }
+        ++i;
+      }
+      tokens.push_back(type_text.substr(begin, i - begin));
+      continue;
+    }
+
+    if (std::isdigit(ch)) {
+      const std::string::size_type begin = i++;
+      while (i < type_text.size() &&
+             isDeclareMapperNumericLiteralContinuation(
+                 static_cast<unsigned char>(type_text[i]))) {
+        ++i;
+      }
+      tokens.push_back(type_text.substr(begin, i - begin));
+      continue;
+    }
+
+    if (type_text.compare(i, 2, "::") == 0) {
+      tokens.push_back("::");
+      i += 2;
+      continue;
+    }
+
+    if (type_text.compare(i, 2, "&&") == 0) {
+      tokens.push_back("&&");
+      i += 2;
+      continue;
+    }
+
+    if (type_text.compare(i, 3, "...") == 0) {
+      tokens.push_back("...");
+      i += 3;
+      continue;
+    }
+
+    if (std::strchr("*&,()<>[]", type_text[i]) != nullptr) {
+      tokens.push_back(std::string(1, type_text[i]));
+      ++i;
+      continue;
+    }
+
+    tokens.push_back(std::string(1, type_text[i]));
+    ++i;
+  }
+
+  return tokens;
+}
+
+static void appendDeclareMapperTypeTokenSpacing(std::string &result,
+                                                const std::string &previous,
+                                                const std::string &current) {
+  if (previous.empty() || current.empty()) {
+    return;
+  }
+
+  if (previous == "::" || current == "::") {
+    return;
+  }
+
+  if (previous == "<" || previous == "(" || previous == "[") {
+    return;
+  }
+
+  if (current == ">" || current == "," || current == ")" || current == "]" ||
+      current == "<") {
+    return;
+  }
+
+  if (previous == "," || previous == ">" || previous == ")" ||
+      previous == "]") {
+    result += ' ';
+    return;
+  }
+
+  if (isDeclareMapperWordToken(previous) && isDeclareMapperWordToken(current)) {
+    result += ' ';
+    return;
+  }
+}
+
+static std::string
+joinDeclareMapperTypeTokens(const std::vector<std::string> &tokens) {
+  std::string result;
+  std::string previous;
+  for (const std::string &token : tokens) {
+    appendDeclareMapperTypeTokenSpacing(result, previous, token);
+    result += token;
+    previous = token;
+  }
+  return result;
+}
+
+static bool
+collectDeclareMapperBaseTypeData(const std::vector<std::string> &tokens,
+                                 std::vector<std::string> &base_name,
+                                 DeclareMapperTypeQualifiers &base_qualifiers) {
+  int angle_depth = 0;
+  int paren_depth = 0;
+  int bracket_depth = 0;
+
+  for (const std::string &token : tokens) {
+    const bool top_level =
+        angle_depth == 0 && paren_depth == 0 && bracket_depth == 0;
+
+    if (top_level && base_name.empty() &&
+        isDeclareMapperElaboratedTypeKeyword(token)) {
+      continue;
+    }
+
+    if (top_level && isDeclareMapperQualifierToken(token)) {
+      setDeclareMapperQualifier(base_qualifiers, token);
+    } else {
+      base_name.push_back(token);
+    }
+
+    if (token == "(") {
+      ++paren_depth;
+    } else if (token == ")") {
+      --paren_depth;
+    } else if (token == "[") {
+      ++bracket_depth;
+    } else if (token == "]") {
+      --bracket_depth;
+    } else if (paren_depth == 0 && bracket_depth == 0 && token == "<") {
+      ++angle_depth;
+    } else if (paren_depth == 0 && bracket_depth == 0 && token == ">") {
+      --angle_depth;
+    }
+
+    if (angle_depth < 0 || paren_depth < 0 || bracket_depth < 0) {
+      return false;
+    }
+  }
+
+  return angle_depth == 0 && paren_depth == 0 && bracket_depth == 0;
+}
+
+static bool parseDeclareMapperTypeOperators(
+    const std::vector<std::string> &tokens, size_t start_index,
+    std::vector<DeclareMapperTypeOperator> &operators) {
+  size_t i = start_index;
+  while (i < tokens.size()) {
+    DeclareMapperTypeOperator current_operator;
+    const std::string &token = tokens[i];
+    if (token == "*") {
+      current_operator.kind = DeclareMapperTypeOperatorKind::e_pointer;
+    } else if (token == "&") {
+      current_operator.kind = DeclareMapperTypeOperatorKind::e_lvalue_reference;
+    } else if (token == "&&") {
+      current_operator.kind = DeclareMapperTypeOperatorKind::e_rvalue_reference;
+    } else {
+      return false;
+    }
+    ++i;
+
+    while (i < tokens.size() && isDeclareMapperQualifierToken(tokens[i])) {
+      if (current_operator.kind != DeclareMapperTypeOperatorKind::e_pointer) {
+        return false;
+      }
+      setDeclareMapperQualifier(current_operator.qualifiers, tokens[i]);
+      ++i;
+    }
+
+    operators.push_back(current_operator);
+  }
+
+  return true;
+}
+
+static SgType *
+buildQualifiedDeclareMapperType(SgType *base_type,
+                                const DeclareMapperTypeQualifiers &qualifiers) {
+  if (base_type == nullptr) {
+    return nullptr;
+  }
+
+  if (!qualifiers.is_const && !qualifiers.is_volatile &&
+      !qualifiers.is_restrict) {
+    return base_type;
+  }
+
+  SgModifierType *result = new SgModifierType(base_type);
+  ROSE_ASSERT(result != nullptr);
+
+  SgTypeModifier &type_modifier = result->get_typeModifier();
+  if (qualifiers.is_const) {
+    type_modifier.get_constVolatileModifier().setConst();
+  }
+  if (qualifiers.is_volatile) {
+    type_modifier.get_constVolatileModifier().setVolatile();
+  }
+  if (qualifiers.is_restrict) {
+    type_modifier.setRestrict();
+  }
+
+  SgModifierType *canonical =
+      SgModifierType::insertModifierTypeIntoTypeTable(result);
+  if (canonical != result) {
+    delete result;
+  }
+  return canonical;
+}
+
+SgType *resolveDeclareMapperType(SgPragmaDeclaration *directive,
+                                 const std::string &type_text) {
+  const std::string normalized = trimWhitespaceCopy(type_text);
+  if (normalized.empty()) {
+    return nullptr;
+  }
+
+  const std::vector<std::string> tokens =
+      tokenizeDeclareMapperTypeText(normalized);
+  if (tokens.empty()) {
+    return nullptr;
+  }
+
+  int angle_depth = 0;
+  int paren_depth = 0;
+  int bracket_depth = 0;
+  size_t declarator_start = tokens.size();
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    const std::string &token = tokens[i];
+    if (angle_depth == 0 && paren_depth == 0 && bracket_depth == 0 &&
+        (token == "*" || token == "&" || token == "&&")) {
+      declarator_start = i;
+      break;
+    }
+
+    if (token == "(") {
+      ++paren_depth;
+    } else if (token == ")") {
+      --paren_depth;
+    } else if (token == "[") {
+      ++bracket_depth;
+    } else if (token == "]") {
+      --bracket_depth;
+    } else if (paren_depth == 0 && bracket_depth == 0 && token == "<") {
+      ++angle_depth;
+    } else if (paren_depth == 0 && bracket_depth == 0 && token == ">") {
+      --angle_depth;
+    }
+
+    if (angle_depth < 0 || paren_depth < 0 || bracket_depth < 0) {
+      return nullptr;
+    }
+  }
+
+  if (angle_depth != 0 || paren_depth != 0 || bracket_depth != 0) {
+    return nullptr;
+  }
+
+  std::vector<std::string> base_name_tokens;
+  DeclareMapperTypeQualifiers base_qualifiers;
+  if (!collectDeclareMapperBaseTypeData(
+          std::vector<std::string>(tokens.begin(),
+                                   tokens.begin() + declarator_start),
+          base_name_tokens, base_qualifiers)) {
+    return nullptr;
+  }
+  if (base_name_tokens.empty()) {
+    return nullptr;
+  }
+
+  std::vector<DeclareMapperTypeOperator> operators;
+  if (!parseDeclareMapperTypeOperators(tokens, declarator_start, operators)) {
+    return nullptr;
+  }
+
+  SgScopeStatement *scope =
+      directive != nullptr ? directive->get_scope() : NULL;
+  SgType *resolved_type = SageInterface::lookupNamedTypeInParentScopes(
+      joinDeclareMapperTypeTokens(base_name_tokens), scope);
+  if (resolved_type == nullptr) {
+    return nullptr;
+  }
+
+  resolved_type =
+      buildQualifiedDeclareMapperType(resolved_type, base_qualifiers);
+
+  for (const DeclareMapperTypeOperator &current_operator : operators) {
+    if (current_operator.kind == DeclareMapperTypeOperatorKind::e_pointer) {
+      resolved_type = SageBuilder::buildPointerType(resolved_type);
+      resolved_type = buildQualifiedDeclareMapperType(
+          resolved_type, current_operator.qualifiers);
+    } else if (current_operator.kind ==
+               DeclareMapperTypeOperatorKind::e_lvalue_reference) {
+      resolved_type = SageBuilder::buildReferenceType(resolved_type);
+    } else if (current_operator.kind ==
+               DeclareMapperTypeOperatorKind::e_rvalue_reference) {
+      resolved_type = SageBuilder::buildRvalueReferenceType(resolved_type);
+    }
+  }
+
+  return resolved_type;
+}
+
 void setDirectiveSpellingOverride(SgStatement *statement,
                                   const std::string &spelling) {
   if (statement == nullptr || spelling.empty()) {
@@ -5894,10 +6260,18 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     }
 
     if (!mapper_data.mapper_type.empty()) {
-      SgExpression *mapper_type = parseClauseExpressionWithCache(
-          current_OpenMPIR_to_SageIII.first, OMPC_map, nullptr,
-          mapper_data.mapper_type);
+      SgType *resolved_mapper_type = resolveDeclareMapperType(
+          current_OpenMPIR_to_SageIII.first, mapper_data.mapper_type);
+      if (resolved_mapper_type == nullptr) {
+        MLOG_ERROR_C("ompAstConstruction",
+                     "Failed to resolve declare mapper type '%s'.\n",
+                     mapper_data.mapper_type.c_str());
+        ROSE_ABORT();
+      }
+      SgExpression *mapper_type =
+          SageBuilder::buildTypeExpression(resolved_mapper_type);
       sg_mapper->set_mapper_type(mapper_type);
+      mapper_type->set_parent(sg_mapper);
     }
 
     if (!mapper_data.mapper_variable.empty()) {
@@ -5905,6 +6279,9 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
           current_OpenMPIR_to_SageIII.first, OMPC_map, nullptr,
           mapper_data.mapper_variable);
       sg_mapper->set_mapper_variable(mapper_variable);
+      if (mapper_variable != nullptr) {
+        mapper_variable->set_parent(sg_mapper);
+      }
     }
     break;
   }

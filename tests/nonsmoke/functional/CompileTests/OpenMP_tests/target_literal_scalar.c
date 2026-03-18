@@ -1,0 +1,17 @@
+int main(void) {
+  int i;
+  int n = 32;
+  int a[32];
+
+  for (i = 0; i < n; ++i) {
+    a[i] = i;
+  }
+
+#pragma omp target map(to : n) map(tofrom : a[0 : 32])
+#pragma omp parallel for
+  for (i = 0; i < n; ++i) {
+    a[i] = a[i] + n;
+  }
+
+  return a[0];
+}

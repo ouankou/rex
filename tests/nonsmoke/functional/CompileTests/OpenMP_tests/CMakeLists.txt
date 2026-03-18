@@ -28,6 +28,7 @@ set(C_TESTCODES
 	cancel.c cancellation_point.c collapse.c copyin.c copyprivate2.c copyprivate3.c
 	copyprivate.c critical.c critical1.c critical_dead.c critical_orphaned.c
 	depobj.c task_dep1.c task_dep3.c task_dep_iterator1.c task_dep_iterator2.c
+	declare_mapper_target_update.c
 	declare_simd.c distribute_parallel_for.c distribute_parallel_for_simd.c
 	distribute_simd.c distribute.c distribute2.c dijkstra_open_mp.c dynamicChunk.c
 	empty.c endif.c endif2.c endif3.c nowait.c expressions.c falsesharing.c
@@ -61,6 +62,7 @@ set(C_TESTCODES
 	targetteamsdistribute.c targetteamsdistributesimd.c targetteamsloop.c
 	targetteamsdistributeparallelfor.c targetteamsdistributeparallelforsimd.c
 	targetupdate.c targetupdate_nowait.c targetupdate_device.c target_update_from.c
+	target_literal_scalar.c
 	target_update_to.c taskloop_simd_reduction.1.c task_affinity.c task_affinity1.c
 	task_array.c task_array2.c task_final.c task_largenumber.c task_mergeable.c
 	task_orphaned.c task_outlining.c task_priority.c task_untied.c task_untied2.c
@@ -77,7 +79,7 @@ set(C_TESTCODES
 set(CXX_TESTCODES
 	classMember.cpp hello1.cpp helloNested.cpp memberFunction.cpp
 	memberFunction2.cpp objectPrivate.cpp objectFirstPrivate.cpp
-	objectLastprivate.cpp referenceType.cpp
+	objectLastprivate.cpp referenceType.cpp declare_mapper_type_qualifiers.cpp
 	orphanedAtomic.cpp preprocessingInfo2.cpp task_link.cpp task_link2.cpp
 	task_tree.cpp jacobi-ompacc2.cpp data-member-access.cpp define-directive2.cpp)
 
