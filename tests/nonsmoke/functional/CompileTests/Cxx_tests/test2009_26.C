@@ -1,42 +1,71 @@
+// Syntax-only specimen extracted from ROSE internals. Keep the minimal
+// declarations local so the test remains self-contained in standalone Cxx
+// compile testing.
+#include <map>
+#include <set>
+#include <utility>
+
+class SgNode;
+
+class SgFunctionDeclaration {
+public:
+  void *get_definition();
+};
+
+class InterproceduralInfo;
+
+class DependenceNode {
+public:
+  enum NodeType {
+    Placeholder = 0,
+  };
+};
+
 class DependenceGraph // : public SimpleDirectedGraph
 {
- protected:
+protected:
   bool debugme;
- public:
-  DependenceGraph() {debugme=false;}
-  virtual ~DependenceGraph(){};
+
+public:
+  DependenceGraph() { debugme = false; }
+  virtual ~DependenceGraph() {};
   void debugCoutNodeList() {}
 
   /* ! \brief This enum marks what type of edge connects two DependenceNodes
 
      This enum is used in conjunction with bit vector representations, so
      some of the values are powers of two */
-  enum EdgeType
-  {
+  enum EdgeType {
     // control information
-    CONTROL         = 0x1,          /* !< A control dependence edge */
-    CALL            = 0x4,             /* !< An edge between a call site and a function entry, or from actual-in to formal-in nodes */
-    CALL_RETURN     = 0x5,        /* !return to the call-site */
+    CONTROL = 0x1, /* !< A control dependence edge */
+    CALL = 0x4, /* !< An edge between a call site and a function entry, or from
+                   actual-in to formal-in nodes */
+    CALL_RETURN = 0x5, /* !return to the call-site */
     // data information
-    DATA            = 0x2,             /* !< A data dependence edge */
-    SUMMARY         = 0x3,          /* !< A summary edge between actual-in and actual-out nodes (used for interprocedural */
-    PARAMETER_IN    = 0x7,
-    PARAMETER_OUT   = 0x8,
+    DATA = 0x2,    /* !< A data dependence edge */
+    SUMMARY = 0x3, /* !< A summary edge between actual-in and actual-out nodes
+                      (used for interprocedural */
+    PARAMETER_IN = 0x7,
+    PARAMETER_OUT = 0x8,
     // SYNTACTIC
-    SYNTACTIC       = 0xe,
-        
-    //        RETURN          = 0x6,          /* !< An edge from formal-out nodes to actual-in nodes */
-    DATA_HELPER     = 0x9,
-    CONTROL_HELPER  = 0xa,
-    GLOBALVAR_HELPER= 0xb,
-    COMPLETENESS_HELPER=0xc,
-    // nice, but completely useless
-    BELONGS_TO      = 0xd, /* shows for floating nodes, to which statement/node they belong to*/
-    //      NUM_EDGE_TYPES  = 0x11   /* !< Set to be 1 more than the last entry, to fix size of the name array */
+    SYNTACTIC = 0xe,
 
-    // Jim Leek, 2009/6/3: DO_NOT_FOLLOW is A special type of edge for controlling reachability. It can keep an edge from
-    // being traversed by _getReachable without changing the type of the edge
-    DO_NOT_FOLLOW   = 0x10,
+    //        RETURN          = 0x6,          /* !< An edge from formal-out
+    //        nodes to actual-in nodes */
+    DATA_HELPER = 0x9,
+    CONTROL_HELPER = 0xa,
+    GLOBALVAR_HELPER = 0xb,
+    COMPLETENESS_HELPER = 0xc,
+    // nice, but completely useless
+    BELONGS_TO = 0xd, /* shows for floating nodes, to which statement/node they
+                         belong to*/
+    //      NUM_EDGE_TYPES  = 0x11   /* !< Set to be 1 more than the last entry,
+    //      to fix size of the name array */
+
+    // Jim Leek, 2009/6/3: DO_NOT_FOLLOW is A special type of edge for
+    // controlling reachability. It can keep an edge from being traversed by
+    // _getReachable without changing the type of the edge
+    DO_NOT_FOLLOW = 0x10,
   };
   /* ! \brief an array of C-strings for each EdgeType
      This array is initialized in DependenceGraph.C */
@@ -98,9 +127,10 @@ class DependenceGraph // : public SimpleDirectedGraph
 
      Side effects: If we created a new DependenceNode, we insert a mapping
      from node to the newly created DependenceNode in _sgnode_map. */
-  DependenceNode *createNode(DependenceNode::NodeType type,SgNode * identifyingNode);
-  DependenceNode *createNode(SgNode * node);
-  void deleteNode(DependenceNode * node);
+  DependenceNode *createNode(DependenceNode::NodeType type,
+                             SgNode *identifyingNode);
+  DependenceNode *createNode(SgNode *node);
+  void deleteNode(DependenceNode *node);
 
   /* ! \brief retrieve the DependenceNode that wraps node
 
@@ -109,25 +139,26 @@ class DependenceGraph // : public SimpleDirectedGraph
 
      Return: If there is a wrapper DependenceNode in _sgnode_map, we return
      it. Otherwise, we return NULL. */
-  DependenceNode *getNode(SgNode * node);
+  DependenceNode *getNode(SgNode *node);
   // (NodeType type, SgNode * node = NULL, std::string depName= "")
-  DependenceNode *getNode(DependenceNode::NodeType type,SgNode * identifyingNode);
+  DependenceNode *getNode(DependenceNode::NodeType type,
+                          SgNode *identifyingNode);
 
-  DependenceNode * getExistingNode(SgNode * node);
-  DependenceNode * getExistingNode(DependenceNode::NodeType type,SgNode * identifyingNode);
+  DependenceNode *getExistingNode(SgNode *node);
+  DependenceNode *getExistingNode(DependenceNode::NodeType type,
+                                  SgNode *identifyingNode);
 
   // ! return the InterproceduralInfo object associated with the
   // DependenceGraph
-  InterproceduralInfo *getInterprocedural()
-  {
-    return NULL;
+  InterproceduralInfo *getInterprocedural() {
+    return nullptr;
     //!*!        return _interprocedural;
   }
 
   /* ! \brief create an edge of type e between from and to
 
      Params: - DependenceNode * from: the source of the edge -
-     DependenceNode * to: the sink of the edge - EdgeType e: the type of the 
+     DependenceNode * to: the sink of the edge - EdgeType e: the type of the
      edge
 
      Side effects: Inserts the Edge (from, to) into the set associated with
@@ -135,18 +166,20 @@ class DependenceGraph // : public SimpleDirectedGraph
      to) by _edge_map.
 
   */
-  virtual void establishEdge(DependenceNode * from, DependenceNode * to, EdgeType e=CONTROL);
-  virtual void removeEdge(DependenceNode * from, DependenceNode * to, EdgeType e=CONTROL);
+  virtual void establishEdge(DependenceNode *from, DependenceNode *to,
+                             EdgeType e = CONTROL);
+  virtual void removeEdge(DependenceNode *from, DependenceNode *to,
+                          EdgeType e = CONTROL);
   /* ! \brief determine if there is an edge of type e between from and to
 
      Params: - DependenceNode * from: the source of the edge -
-     DependenceNode * to: the sink of the edge - EdgeType e: the type of the 
+     DependenceNode * to: the sink of the edge - EdgeType e: the type of the
      edge
 
      Return: true if e is in the set associated with Edge(from, to) by
      _edge_map. */
-  bool edgeExists(DependenceNode * from, DependenceNode * to, EdgeType e);
-  bool hasOutgingEdge(DependenceNode * src,EdgeType compare);
+  bool edgeExists(DependenceNode *from, DependenceNode *to, EdgeType e);
+  bool hasOutgingEdge(DependenceNode *src, EdgeType compare);
 
   /* ! \brief returns all edges between from and to
 
@@ -157,44 +190,49 @@ class DependenceGraph // : public SimpleDirectedGraph
      _edge_map.
 
   */
-  std::set < EdgeType > edgeType(DependenceNode * from, DependenceNode * to);
+  std::set<EdgeType> edgeType(DependenceNode *from, DependenceNode *to);
   /*    std::list <DependenceNode*> getParents(DependenceNode * current)
-	{
-	std::list <DependenceNode*> parentList;
-	return parentList;
-	}*/
+        {
+        std::list <DependenceNode*> parentList;
+        return parentList;
+        }*/
   // ! writes a dot file representing this dependence graph to filename
   virtual void writeDot(char *filename);
 
- protected:
+protected:
   // ! Maps a DependenceNode to a copy unique to this DependenceGraph
   //!*!    std::map < DependenceNode *, DependenceNode * >_depnode_map;
   // ! Maps an SgNode to a DependenceNode unique to this DependenceGraph
   //!*!    std::map < SgNode *, DependenceNode * >_sgnode_map;
-  std::map<SgNode*,DependenceNode*> sgNodeToDepNodeMap;
-  std::map<DependenceNode::NodeType,std::map<SgNode*,DependenceNode*> > nodeTypeToDepNodeMapMap;
+  std::map<SgNode *, DependenceNode *> sgNodeToDepNodeMap;
+  std::map<DependenceNode::NodeType, std::map<SgNode *, DependenceNode *>>
+      nodeTypeToDepNodeMapMap;
 
   // ! The InterproceduralInfo associated with this DependenceGraph
   //!*!    InterproceduralInfo *_interprocedural;
 
-  typedef std::pair < DependenceNode *, DependenceNode * >Edge;
+  typedef std::pair<DependenceNode *, DependenceNode *> Edge;
 
   // ! a map from EdgeType to all the edges of that type
-  std::map < EdgeType, std::set < Edge > >edgeTypeMap;
+  std::map<EdgeType, std::set<Edge>> edgeTypeMap;
 
-// DQ (8/30/2009): Debugging ROSE compiling ROSE (this statement does not compile using ROSE). The error is:
-// sage_gen_be.C:5286: SgEnumDeclaration* sage_gen_enum_definition(a_type*, SgDeclarationStatement*&, DataRequiredForComputationOfSourcePostionInformation*): Assertion `forwardDeclaration->get_parent() != __null' failed.
-// #ifndef USE_ROSE
+  // DQ (8/30/2009): Debugging ROSE compiling ROSE (this statement does not
+  // compile using ROSE). The error is: sage_gen_be.C:5286: SgEnumDeclaration*
+  // sage_gen_enum_definition(a_type*, SgDeclarationStatement*&,
+  // DataRequiredForComputationOfSourcePostionInformation*): Assertion
+  // `forwardDeclaration->get_parent() != __null' failed. #ifndef USE_ROSE
 
   // ! a map from an edge to all the variants of that edge in the graph
-  std::map < Edge, std::set < EdgeType > >edgeMap;
+  std::map<Edge, std::set<EdgeType>> edgeMap;
 
-// #endif
+  // #endif
 
-  bool isLibraryFunction(SgFunctionDeclaration * sgFD) const
-  {
-    if (sgFD == NULL) return false;
-    else if (sgFD->get_definition() != NULL) return true;
-    else return false;
+  bool isLibraryFunction(SgFunctionDeclaration *sgFD) const {
+    if (sgFD == nullptr)
+      return false;
+    else if (sgFD->get_definition() != nullptr)
+      return true;
+    else
+      return false;
   };
 };
