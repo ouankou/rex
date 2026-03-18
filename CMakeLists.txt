@@ -54,6 +54,43 @@ endif()
 #-----------------------------------------------------------------------------------------------------------------------
 # Prefer Clang/Clang++ when available, but allow any modern compiler.
 
+# Keep C and C++ compiler discovery within the same toolchain prefix whenever
+# possible so CMake does not mix binaries from different LLVM installs.
+function(find_sibling_compiler OUT_VAR REFERENCE_COMPILER)
+  set(_sibling_compiler "")
+  if(REFERENCE_COMPILER AND EXISTS "${REFERENCE_COMPILER}")
+    get_filename_component(_reference_dir "${REFERENCE_COMPILER}" DIRECTORY)
+    foreach(_candidate_name ${ARGN})
+      if(EXISTS "${_reference_dir}/${_candidate_name}" AND
+         NOT IS_DIRECTORY "${_reference_dir}/${_candidate_name}")
+        set(_sibling_compiler "${_reference_dir}/${_candidate_name}")
+        break()
+      endif()
+    endforeach()
+    unset(_reference_dir)
+  endif()
+  set(${OUT_VAR} "${_sibling_compiler}" PARENT_SCOPE)
+  unset(_sibling_compiler)
+endfunction()
+
+# Infer LLVM/Clang package roots from the selected compiler prefix when the
+# user did not provide explicit package roots.
+function(find_llvm_root_from_compiler OUT_VAR COMPILER)
+  set(_llvm_root "")
+  if(COMPILER AND EXISTS "${COMPILER}")
+    get_filename_component(_compiler_bindir "${COMPILER}" DIRECTORY)
+    get_filename_component(_compiler_prefix "${_compiler_bindir}/.." ABSOLUTE)
+    if(EXISTS "${_compiler_prefix}/lib/cmake/llvm/LLVMConfig.cmake" AND
+       EXISTS "${_compiler_prefix}/lib/cmake/clang/ClangConfig.cmake")
+      set(_llvm_root "${_compiler_prefix}")
+    endif()
+    unset(_compiler_bindir)
+    unset(_compiler_prefix)
+  endif()
+  set(${OUT_VAR} "${_llvm_root}" PARENT_SCOPE)
+  unset(_llvm_root)
+endfunction()
+
 # Helper function to detect and set compiler with preference order:
 # 1. Use environment variable if set
 # 2. Try preferred version (e.g., clang-22)
@@ -87,8 +124,38 @@ function(detect_compiler LANG CMAKE_VAR ENV_VAR LANG_NAME PREFERRED_NAMES FALLBA
 endfunction()
 
 # Detect C and C++ compilers
+if((NOT DEFINED CMAKE_C_COMPILER OR "${CMAKE_C_COMPILER}" STREQUAL "") AND
+   DEFINED CMAKE_CXX_COMPILER AND NOT "${CMAKE_CXX_COMPILER}" STREQUAL "")
+  find_sibling_compiler(_C_COMPILER_FROM_CXX "${CMAKE_CXX_COMPILER}" "clang-22" "clang")
+  if(_C_COMPILER_FROM_CXX)
+    set(CMAKE_C_COMPILER "${_C_COMPILER_FROM_CXX}")
+    message(STATUS "Auto-detected C compiler next to C++ compiler: ${_C_COMPILER_FROM_CXX}")
+  endif()
+  unset(_C_COMPILER_FROM_CXX)
+endif()
 detect_compiler(C CMAKE_C_COMPILER CC "C" "clang-22" "clang")
+
+if((NOT DEFINED CMAKE_CXX_COMPILER OR "${CMAKE_CXX_COMPILER}" STREQUAL "") AND
+   DEFINED CMAKE_C_COMPILER AND NOT "${CMAKE_C_COMPILER}" STREQUAL "")
+  find_sibling_compiler(_CXX_COMPILER_FROM_C "${CMAKE_C_COMPILER}" "clang++-22" "clang++")
+  if(_CXX_COMPILER_FROM_C)
+    set(CMAKE_CXX_COMPILER "${_CXX_COMPILER_FROM_C}")
+    message(STATUS "Auto-detected C++ compiler next to C compiler: ${_CXX_COMPILER_FROM_C}")
+  endif()
+  unset(_CXX_COMPILER_FROM_C)
+endif()
 detect_compiler(CXX CMAKE_CXX_COMPILER CXX "C++" "clang++-22" "clang++")
+
+if((NOT DEFINED LLVM_ROOT OR "${LLVM_ROOT}" STREQUAL "") AND
+   DEFINED CMAKE_C_COMPILER AND NOT "${CMAKE_C_COMPILER}" STREQUAL "")
+  find_llvm_root_from_compiler(_ROSE_DETECTED_LLVM_ROOT "${CMAKE_C_COMPILER}")
+  if(_ROSE_DETECTED_LLVM_ROOT)
+    set(LLVM_ROOT "${_ROSE_DETECTED_LLVM_ROOT}")
+    set(Clang_ROOT "${_ROSE_DETECTED_LLVM_ROOT}")
+    message(STATUS "Auto-detected LLVM root from compiler: ${_ROSE_DETECTED_LLVM_ROOT}")
+  endif()
+  unset(_ROSE_DETECTED_LLVM_ROOT)
+endif()
 
 set(_C_COMPILER_DISPLAY "${CMAKE_C_COMPILER}")
 if(NOT _C_COMPILER_DISPLAY)

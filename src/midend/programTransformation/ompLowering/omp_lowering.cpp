@@ -1189,6 +1189,1146 @@ bool buildExpressionMatchingTypeFromActiveSymbol(
   return false;
 }
 
+struct ResolvedMapperInfo {
+  SgOmpDeclareMapperStatement *declaration = nullptr;
+  std::string identifier_text;
+  std::string formal_name;
+  SgType *formal_type = nullptr;
+};
+
+struct ResolvedMapItem {
+  SgExpression *expression = nullptr;
+  SgOmpClause::omp_map_operator_enum map_operator =
+      SgOmpClause::e_omp_map_unknown;
+  int runtime_flag_bits = 0;
+  bool is_implicit_base_pointer = false;
+};
+
+std::string trimMapperCopy(const std::string &value) {
+  const std::string::size_type begin = value.find_first_not_of(" \t\r\n");
+  if (begin == std::string::npos) {
+    return "";
+  }
+  const std::string::size_type end = value.find_last_not_of(" \t\r\n");
+  return value.substr(begin, end - begin + 1);
+}
+
+std::string getVarRefNameText(const SgVarRefExp *vref) {
+  if (vref == nullptr) {
+    return "";
+  }
+  if (vref->get_symbol() != nullptr) {
+    return vref->get_symbol()->get_name().getString();
+  }
+  return trimMapperCopy(vref->unparseToString());
+}
+
+std::string normalizeMapperIdentifierString(const std::string &value) {
+  std::string trimmed = trimMapperCopy(value);
+  std::transform(
+      trimmed.begin(), trimmed.end(), trimmed.begin(),
+      [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+  return trimmed;
+}
+
+std::string getMapperIdentifierText(const SgExpression *expr) {
+  if (expr == nullptr) {
+    return "";
+  }
+  if (const SgVarRefExp *vref = isSgVarRefExp(expr)) {
+    return normalizeMapperIdentifierString(getVarRefNameText(vref));
+  }
+  return normalizeMapperIdentifierString(expr->unparseToString());
+}
+
+bool isDefaultDeclareMapperIdentifier(
+    SgOmpClause::omp_declare_mapper_identifier_enum identifier) {
+  return identifier == SgOmpClause::e_omp_declare_mapper_identifier_default ||
+         identifier == SgOmpClause::e_omp_declare_mapper_identifier_unspecified;
+}
+
+std::string
+getDeclareMapperFormalName(const SgOmpDeclareMapperStatement *mapper_stmt) {
+  if (mapper_stmt == nullptr || mapper_stmt->get_mapper_variable() == nullptr) {
+    return "";
+  }
+  if (const SgVarRefExp *vref =
+          isSgVarRefExp(mapper_stmt->get_mapper_variable())) {
+    return trimMapperCopy(getVarRefNameText(vref));
+  }
+  return trimMapperCopy(mapper_stmt->get_mapper_variable()->unparseToString());
+}
+
+SgType *
+getDeclareMapperFormalType(const SgOmpDeclareMapperStatement *mapper_stmt) {
+  if (mapper_stmt == nullptr || mapper_stmt->get_mapper_type() == nullptr) {
+    return nullptr;
+  }
+  if (SgTypeExpression *type_expr =
+          isSgTypeExpression(mapper_stmt->get_mapper_type())) {
+    return type_expr->get_type();
+  }
+  return mapper_stmt->get_mapper_type()->get_type();
+}
+
+SgStatement *findDirectChildStatementInScope(SgStatement *anchor,
+                                             SgScopeStatement *scope) {
+  if (anchor == nullptr || scope == nullptr) {
+    return nullptr;
+  }
+
+  SgNode *cursor = anchor;
+  while (cursor != nullptr && cursor->get_parent() != scope) {
+    cursor = cursor->get_parent();
+  }
+  return isSgStatement(cursor);
+}
+
+bool collectEffectiveArraySectionDimensions(
+    SgExpression *expression,
+    std::vector<std::pair<SgExpression *, SgExpression *>> &dimensions) {
+  if (expression == nullptr) {
+    return false;
+  }
+
+  if (SgCastExp *cast_exp = isSgCastExp(expression)) {
+    return collectEffectiveArraySectionDimensions(cast_exp->get_operand(),
+                                                  dimensions);
+  }
+
+  if (SgUnaryOp *unary_op = isSgUnaryOp(expression)) {
+    return collectEffectiveArraySectionDimensions(unary_op->get_operand(),
+                                                  dimensions);
+  }
+
+  if (SgPntrArrRefExp *array_ref = isSgPntrArrRefExp(expression)) {
+    if (!collectEffectiveArraySectionDimensions(array_ref->get_lhs_operand(),
+                                                dimensions)) {
+      return false;
+    }
+
+    if (SgSubscriptExpression *subscript =
+            isSgSubscriptExpression(array_ref->get_rhs_operand())) {
+      SgExpression *lower = subscript->get_lowerBound();
+      SgExpression *length = subscript->get_upperBound();
+      SgExpression *stride = subscript->get_stride();
+      if (stride != nullptr && isSgNullExpression(stride) == nullptr) {
+        const SgIntVal *int_stride = isSgIntVal(stride);
+        if (int_stride == nullptr || int_stride->get_value() != 1) {
+          dimensions.clear();
+          return false;
+        }
+      }
+      if (lower != nullptr && isSgNullExpression(lower) == nullptr &&
+          length != nullptr && isSgNullExpression(length) == nullptr) {
+        dimensions.push_back(std::make_pair(lower, length));
+      }
+    }
+    return true;
+  }
+
+  return true;
+}
+
+bool isArraySectionReference(SgExpression *expr) {
+  std::vector<std::pair<SgExpression *, SgExpression *>> dims;
+  return collectEffectiveArraySectionDimensions(expr, dims) && !dims.empty();
+}
+
+SgExpression *materializeArraySectionExpression(
+    SgExpression *base_expression,
+    const std::vector<std::pair<SgExpression *, SgExpression *>> &dimensions) {
+  if (base_expression == nullptr) {
+    return nullptr;
+  }
+
+  SgExpression *result = copyExpression(base_expression);
+  for (const auto &dimension : dimensions) {
+    SgExpression *lower = dimension.first != nullptr
+                              ? copyExpression(dimension.first)
+                              : buildNullExpression();
+    SgExpression *length = dimension.second != nullptr
+                               ? copyExpression(dimension.second)
+                               : buildNullExpression();
+    SgExpression *stride = buildIntVal(1);
+    result = buildPntrArrRefExp(
+        result, buildSubscriptExpression_nfi(lower, length, stride));
+  }
+  return result;
+}
+
+SgExpression *buildArraySectionBaseExpression(SgExpression *expr) {
+  if (expr == nullptr) {
+    return nullptr;
+  }
+
+  if (SgCastExp *cast_exp = isSgCastExp(expr)) {
+    return buildArraySectionBaseExpression(cast_exp->get_operand());
+  }
+
+  if (SgUnaryOp *unary_op = isSgUnaryOp(expr)) {
+    return buildArraySectionBaseExpression(unary_op->get_operand());
+  }
+
+  if (SgPntrArrRefExp *array_ref = isSgPntrArrRefExp(expr)) {
+    if (isArraySectionReference(array_ref)) {
+      return buildArraySectionBaseExpression(array_ref->get_lhs_operand());
+    }
+  }
+
+  return copyExpression(expr);
+}
+
+void appendArrayDimensionsFromType(
+    SgType *type,
+    std::vector<std::pair<SgExpression *, SgExpression *>> &dimensions) {
+  SgArrayType *array_type = isSgArrayType(stripTypeAliases(type));
+  if (array_type == nullptr) {
+    return;
+  }
+
+  std::vector<SgExpression *> type_dims = get_C_array_dimensions(array_type);
+  for (SgExpression *dim : type_dims) {
+    if (dim == nullptr || isSgNullExpression(dim) != nullptr) {
+      continue;
+    }
+    dimensions.push_back(std::make_pair(buildIntVal(0), copyExpression(dim)));
+  }
+}
+
+bool appendUniqueMapperCandidateType(std::vector<SgType *> &candidate_types,
+                                     SgType *candidate_type) {
+  if (candidate_type == nullptr) {
+    return false;
+  }
+
+  for (SgType *existing : candidate_types) {
+    if (existing == candidate_type ||
+        SageInterface::isEquivalentType(existing, candidate_type)) {
+      return false;
+    }
+  }
+  candidate_types.push_back(candidate_type);
+  return true;
+}
+
+SgExpression *buildEffectiveClauseItemExpression(const SgOmpClause *clause,
+                                                 SgExpression *expr) {
+  ROSE_ASSERT(expr != nullptr);
+  if (isArraySectionReference(expr)) {
+    return copyExpression(expr);
+  }
+
+  std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
+      array_dimensions;
+  if (clause == nullptr) {
+    return copyExpression(expr);
+  }
+  switch (clause->variantT()) {
+  case V_SgOmpMapClause:
+    array_dimensions = isSgOmpMapClause(clause)->get_array_dimensions();
+    break;
+  case V_SgOmpToClause:
+    array_dimensions = isSgOmpToClause(clause)->get_array_dimensions();
+    break;
+  case V_SgOmpFromClause:
+    array_dimensions = isSgOmpFromClause(clause)->get_array_dimensions();
+    break;
+  default:
+    return copyExpression(expr);
+  }
+
+  SgVariableSymbol *base_symbol = extractClauseVariableSymbol(expr);
+  if (base_symbol == nullptr) {
+    return copyExpression(expr);
+  }
+
+  const auto dims_iter = array_dimensions.find(base_symbol);
+  if (dims_iter == array_dimensions.end() || dims_iter->second.empty()) {
+    return copyExpression(expr);
+  }
+
+  return materializeArraySectionExpression(expr, dims_iter->second);
+}
+
+std::vector<SgType *> getMapperCandidateTypes(SgExpression *expr) {
+  std::vector<SgType *> candidate_types;
+  if (expr == nullptr) {
+    return candidate_types;
+  }
+
+  appendUniqueMapperCandidateType(
+      candidate_types, stripTypeAliasesAndReferences(expr->get_type()));
+
+  std::vector<std::pair<SgExpression *, SgExpression *>> dims;
+  if (collectEffectiveArraySectionDimensions(expr, dims) && !dims.empty()) {
+    SgExpression *base_expr = buildArraySectionBaseExpression(expr);
+    if (base_expr != nullptr) {
+      SgType *base_type = stripTypeAliasesAndReferences(base_expr->get_type());
+      if (SgPointerType *ptr_type = isSgPointerType(base_type)) {
+        appendUniqueMapperCandidateType(
+            candidate_types,
+            stripTypeAliasesAndReferences(ptr_type->get_base_type()));
+      } else if (SgArrayType *array_type = isSgArrayType(base_type)) {
+        appendUniqueMapperCandidateType(
+            candidate_types,
+            stripTypeAliasesAndReferences(array_type->findBaseType()));
+      }
+    }
+  }
+
+  return candidate_types;
+}
+
+SgOmpClause::omp_map_operator_enum
+normalizeMapperMapOperator(SgOmpClause::omp_map_operator_enum op) {
+  switch (op) {
+  case SgOmpClause::e_omp_map_present:
+  case SgOmpClause::e_omp_map_self:
+  case SgOmpClause::e_omp_map_unknown:
+    return SgOmpClause::e_omp_map_tofrom;
+  case SgOmpClause::e_omp_map_storage:
+    return SgOmpClause::e_omp_map_alloc;
+  default:
+    return op;
+  }
+}
+
+int runtimeFlagsFromMapClauseModifiers(const SgOmpMapClause *clause) {
+  if (clause == nullptr) {
+    return 0;
+  }
+
+  const SgOmpClause::omp_map_modifier_enum modifiers[] = {
+      clause->get_modifier1(), clause->get_modifier2(),
+      clause->get_modifier3()};
+  int flags = 0;
+  for (SgOmpClause::omp_map_modifier_enum modifier : modifiers) {
+    switch (modifier) {
+    case SgOmpClause::e_omp_map_modifier_always:
+      flags |= OMP_TGT_MAPTYPE_ALWAYS;
+      break;
+    case SgOmpClause::e_omp_map_modifier_close:
+      flags |= OMP_TGT_MAPTYPE_CLOSE;
+      break;
+    case SgOmpClause::e_omp_map_modifier_present:
+      flags |= OMP_TGT_MAPTYPE_PRESENT;
+      break;
+    default:
+      break;
+    }
+  }
+  return flags;
+}
+
+bool mapClauseHasModifier(const SgOmpMapClause *clause,
+                          SgOmpClause::omp_map_modifier_enum modifier) {
+  if (clause == nullptr) {
+    return false;
+  }
+
+  return clause->get_modifier1() == modifier ||
+         clause->get_modifier2() == modifier ||
+         clause->get_modifier3() == modifier;
+}
+
+bool mapClauseUsesExplicitMapper(const SgOmpMapClause *clause) {
+  return mapClauseHasModifier(clause, SgOmpClause::e_omp_map_modifier_mapper);
+}
+
+bool mapClauseUsesIteratorModifier(const SgOmpMapClause *clause) {
+  return clause != nullptr &&
+         (mapClauseHasModifier(clause,
+                               SgOmpClause::e_omp_map_modifier_iterator) ||
+          !clause->get_iterator().empty());
+}
+
+std::string getRequestedMapperIdentifier(const SgOmpMapClause *clause) {
+  if (clause == nullptr) {
+    return "";
+  }
+  return getMapperIdentifierText(clause->get_mapper_identifier());
+}
+
+bool motionClauseUsesExplicitMapper(const SgOmpClause *motion_clause) {
+  if (const SgOmpToClause *to_clause = isSgOmpToClause(motion_clause)) {
+    return to_clause->get_kind() == SgOmpClause::e_omp_to_kind_mapper;
+  }
+  if (const SgOmpFromClause *from_clause = isSgOmpFromClause(motion_clause)) {
+    return from_clause->get_kind() == SgOmpClause::e_omp_from_kind_mapper;
+  }
+  return false;
+}
+
+bool motionClauseUsesIterator(const SgOmpClause *motion_clause) {
+  if (const SgOmpToClause *to_clause = isSgOmpToClause(motion_clause)) {
+    return to_clause->get_kind() == SgOmpClause::e_omp_to_kind_iterator ||
+           !to_clause->get_iterator().empty();
+  }
+  if (const SgOmpFromClause *from_clause = isSgOmpFromClause(motion_clause)) {
+    return from_clause->get_kind() == SgOmpClause::e_omp_from_kind_iterator ||
+           !from_clause->get_iterator().empty();
+  }
+  return false;
+}
+
+std::string getRequestedMapperIdentifier(const SgOmpClause *motion_clause) {
+  if (const SgOmpToClause *to_clause = isSgOmpToClause(motion_clause)) {
+    return getMapperIdentifierText(to_clause->get_mapper_identifier());
+  }
+  if (const SgOmpFromClause *from_clause = isSgOmpFromClause(motion_clause)) {
+    return getMapperIdentifierText(from_clause->get_mapper_identifier());
+  }
+  return "";
+}
+
+SgOmpClause::omp_map_operator_enum
+decayMapperMapOperator(SgOmpClause::omp_map_operator_enum use_op,
+                       SgOmpClause::omp_map_operator_enum mapper_item_op) {
+  const SgOmpClause::omp_map_operator_enum normalized_use =
+      normalizeMapperMapOperator(use_op);
+  const SgOmpClause::omp_map_operator_enum normalized_item =
+      normalizeMapperMapOperator(mapper_item_op);
+
+  switch (normalized_use) {
+  case SgOmpClause::e_omp_map_alloc:
+    return normalized_item;
+  case SgOmpClause::e_omp_map_to:
+    switch (normalized_item) {
+    case SgOmpClause::e_omp_map_alloc:
+      return SgOmpClause::e_omp_map_alloc;
+    case SgOmpClause::e_omp_map_to:
+    case SgOmpClause::e_omp_map_from:
+    case SgOmpClause::e_omp_map_tofrom:
+      return SgOmpClause::e_omp_map_to;
+    case SgOmpClause::e_omp_map_release:
+      return SgOmpClause::e_omp_map_release;
+    case SgOmpClause::e_omp_map_delete:
+      return SgOmpClause::e_omp_map_delete;
+    default:
+      break;
+    }
+    break;
+  case SgOmpClause::e_omp_map_from:
+    switch (normalized_item) {
+    case SgOmpClause::e_omp_map_alloc:
+      return SgOmpClause::e_omp_map_alloc;
+    case SgOmpClause::e_omp_map_to:
+    case SgOmpClause::e_omp_map_from:
+    case SgOmpClause::e_omp_map_tofrom:
+      return SgOmpClause::e_omp_map_from;
+    case SgOmpClause::e_omp_map_release:
+      return SgOmpClause::e_omp_map_release;
+    case SgOmpClause::e_omp_map_delete:
+      return SgOmpClause::e_omp_map_delete;
+    default:
+      break;
+    }
+    break;
+  case SgOmpClause::e_omp_map_tofrom:
+    switch (normalized_item) {
+    case SgOmpClause::e_omp_map_alloc:
+      return SgOmpClause::e_omp_map_alloc;
+    case SgOmpClause::e_omp_map_to:
+    case SgOmpClause::e_omp_map_from:
+    case SgOmpClause::e_omp_map_tofrom:
+      return SgOmpClause::e_omp_map_tofrom;
+    case SgOmpClause::e_omp_map_release:
+      return SgOmpClause::e_omp_map_release;
+    case SgOmpClause::e_omp_map_delete:
+      return SgOmpClause::e_omp_map_delete;
+    default:
+      break;
+    }
+    break;
+  case SgOmpClause::e_omp_map_release:
+    if (normalized_item == SgOmpClause::e_omp_map_delete) {
+      return SgOmpClause::e_omp_map_delete;
+    }
+    return SgOmpClause::e_omp_map_release;
+  case SgOmpClause::e_omp_map_delete:
+    return SgOmpClause::e_omp_map_delete;
+  default:
+    break;
+  }
+
+  MLOG_ERROR_CXX("ompLowering")
+      << "Unsupported mapper map-type decay for use operator "
+      << static_cast<int>(use_op) << " and mapper operator "
+      << static_cast<int>(mapper_item_op);
+  ROSE_ABORT();
+}
+
+int buildRuntimeMapTypeFlags(SgOmpClause::omp_map_operator_enum op,
+                             int runtime_flag_bits) {
+  const SgOmpClause::omp_map_operator_enum normalized_op =
+      normalizeMapperMapOperator(op);
+  int flags = OMP_TGT_MAPTYPE_TARGET_PARAM | runtime_flag_bits;
+
+  switch (normalized_op) {
+  case SgOmpClause::e_omp_map_alloc:
+  case SgOmpClause::e_omp_map_release:
+    return flags;
+  case SgOmpClause::e_omp_map_to:
+    return flags | OMP_TGT_MAPTYPE_TO;
+  case SgOmpClause::e_omp_map_from:
+    return flags | OMP_TGT_MAPTYPE_FROM;
+  case SgOmpClause::e_omp_map_tofrom:
+    return flags | OMP_TGT_MAPTYPE_TO | OMP_TGT_MAPTYPE_FROM;
+  case SgOmpClause::e_omp_map_delete:
+    return flags | OMP_TGT_MAPTYPE_DELETE;
+  default:
+    break;
+  }
+
+  MLOG_ERROR_CXX("ompLowering")
+      << "Unsupported mapper runtime map operator " << static_cast<int>(op);
+  ROSE_ABORT();
+}
+
+bool isImplicitBasePointerMapItem(SgStatement *anchor_stmt,
+                                  SgExpression *expr) {
+  SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(anchor_stmt);
+  if (target == nullptr || expr == nullptr) {
+    return false;
+  }
+
+  if (!isPointerType(expr->get_type()) || isArraySectionReference(expr)) {
+    return false;
+  }
+
+  SgVariableSymbol *base_symbol = extractClauseVariableSymbol(expr);
+  if (base_symbol == nullptr) {
+    return false;
+  }
+
+  return isImplicitTargetMapVariable(target, base_symbol);
+}
+
+SgVariableSymbol *resolveMapperMemberSymbol(SgExpression *lhs_expression,
+                                            const std::string &member_name,
+                                            bool is_arrow) {
+  if (lhs_expression == nullptr || member_name.empty()) {
+    return nullptr;
+  }
+
+  SgType *base_type = stripTypeAliasesAndReferences(lhs_expression->get_type());
+  if (is_arrow) {
+    SgPointerType *pointer_type = isSgPointerType(base_type);
+    if (pointer_type == nullptr) {
+      return nullptr;
+    }
+    base_type = stripTypeAliasesAndReferences(pointer_type->get_base_type());
+  }
+
+  SgClassType *class_type = isSgClassType(base_type);
+  if (class_type == nullptr || class_type->get_declaration() == nullptr) {
+    return nullptr;
+  }
+
+  SgClassDeclaration *class_decl =
+      isSgClassDeclaration(class_type->get_declaration());
+  SgClassDefinition *class_def = class_decl->get_definition();
+  if (class_def == nullptr &&
+      class_decl->get_definingDeclaration() != nullptr) {
+    SgClassDeclaration *defining_decl =
+        isSgClassDeclaration(class_decl->get_definingDeclaration());
+    if (defining_decl != nullptr) {
+      class_def = defining_decl->get_definition();
+    }
+  }
+  if (class_def == nullptr) {
+    return nullptr;
+  }
+
+  return class_def->lookup_variable_symbol(member_name);
+}
+
+void repairMaterializedMapperMemberAccesses(SgExpression *expr) {
+  if (expr == nullptr) {
+    return;
+  }
+
+  std::vector<SgExpression *> accesses;
+  Rose_STL_Container<SgNode *> dots = NodeQuery::querySubTree(expr, V_SgDotExp);
+  for (SgNode *node : dots) {
+    accesses.push_back(isSgExpression(node));
+  }
+  Rose_STL_Container<SgNode *> arrows =
+      NodeQuery::querySubTree(expr, V_SgArrowExp);
+  for (SgNode *node : arrows) {
+    accesses.push_back(isSgExpression(node));
+  }
+
+  std::sort(accesses.begin(), accesses.end(),
+            [](SgExpression *lhs, SgExpression *rhs) {
+              return computeAstDepth(lhs) > computeAstDepth(rhs);
+            });
+
+  for (SgExpression *access_expr : accesses) {
+    if (access_expr == nullptr) {
+      continue;
+    }
+
+    SgBinaryOp *access = isSgBinaryOp(access_expr);
+    ROSE_ASSERT(access != nullptr);
+    SgVarRefExp *rhs_ref =
+        isSgVarRefExp(stripNoopCastsAndParens(access->get_rhs_operand()));
+    if (rhs_ref == nullptr) {
+      continue;
+    }
+
+    const bool is_arrow = isSgArrowExp(access_expr) != nullptr;
+    SgVariableSymbol *member_symbol = resolveMapperMemberSymbol(
+        access->get_lhs_operand(), getVarRefNameText(rhs_ref), is_arrow);
+    if (member_symbol == nullptr) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Failed to resolve mapper member '" << getVarRefNameText(rhs_ref)
+          << "' within expression " << access_expr->unparseToString();
+      ROSE_ABORT();
+    }
+
+    rhs_ref->set_symbol(member_symbol);
+  }
+}
+
+bool isFormalMapperVarRef(SgExpression *expr, const std::string &formal_name) {
+  SgVarRefExp *vref = isSgVarRefExp(stripNoopCastsAndParens(expr));
+  return vref != nullptr && getVarRefNameText(vref) == formal_name;
+}
+
+SgExpression *materializeMapperExpression(SgExpression *template_expr,
+                                          const std::string &formal_name,
+                                          SgExpression *actual_expr) {
+  ROSE_ASSERT(template_expr != nullptr);
+  ROSE_ASSERT(actual_expr != nullptr);
+
+  if (isFormalMapperVarRef(template_expr, formal_name)) {
+    return copyExpression(actual_expr);
+  }
+
+  SgExpression *clone = copyExpression(template_expr);
+  ROSE_ASSERT(clone != nullptr);
+
+  Rose_STL_Container<SgNode *> refs =
+      NodeQuery::querySubTree(clone, V_SgVarRefExp);
+  std::vector<SgVarRefExp *> formal_refs;
+  formal_refs.reserve(refs.size());
+  for (SgNode *node : refs) {
+    SgVarRefExp *vref = isSgVarRefExp(node);
+    if (vref != nullptr && getVarRefNameText(vref) == formal_name) {
+      formal_refs.push_back(vref);
+    }
+  }
+  std::sort(formal_refs.begin(), formal_refs.end(),
+            [](SgVarRefExp *lhs, SgVarRefExp *rhs) {
+              return computeAstDepth(lhs) > computeAstDepth(rhs);
+            });
+
+  for (SgVarRefExp *formal_ref : formal_refs) {
+    if (formal_ref == nullptr || formal_ref->get_parent() == nullptr) {
+      continue;
+    }
+    replaceExpression(formal_ref, copyExpression(actual_expr));
+  }
+
+  repairMaterializedMapperMemberAccesses(clone);
+  return clone;
+}
+
+bool isDirectMapperSelfItem(SgExpression *expr,
+                            const std::string &formal_name) {
+  return isFormalMapperVarRef(expr, formal_name);
+}
+
+ResolvedMapperInfo resolveVisibleMapperForExpression(
+    SgExpression *mapped_expr, const std::string &requested_identifier,
+    bool identifier_was_explicit, SgStatement *anchor_stmt) {
+  ResolvedMapperInfo result;
+  if (mapped_expr == nullptr || anchor_stmt == nullptr) {
+    return result;
+  }
+
+  const std::string normalized_identifier =
+      normalizeMapperIdentifierString(requested_identifier);
+  const bool request_user_mapper = identifier_was_explicit &&
+                                   !normalized_identifier.empty() &&
+                                   normalized_identifier != "default";
+
+  const std::vector<SgType *> candidate_types =
+      getMapperCandidateTypes(mapped_expr);
+  if (candidate_types.empty()) {
+    return result;
+  }
+
+  SgStatement *anchor = anchor_stmt;
+  for (SgScopeStatement *scope = getEnclosingScope(anchor_stmt);
+       scope != NULL;) {
+    SgStatement *anchor_child = findDirectChildStatementInScope(anchor, scope);
+    const SgStatementPtrList statements = scope->generateStatementList();
+    size_t scope_match_count = 0;
+
+    for (SgStatement *stmt : statements) {
+      if (stmt == nullptr) {
+        continue;
+      }
+      if (stmt == anchor_child) {
+        break;
+      }
+
+      SgOmpDeclareMapperStatement *mapper_stmt =
+          isSgOmpDeclareMapperStatement(stmt);
+      if (mapper_stmt == nullptr) {
+        continue;
+      }
+
+      const bool mapper_is_default =
+          isDefaultDeclareMapperIdentifier(mapper_stmt->get_identifier());
+      std::string mapper_identifier_text = "default";
+      if (!mapper_is_default) {
+        mapper_identifier_text =
+            getMapperIdentifierText(mapper_stmt->get_user_defined_identifier());
+      }
+
+      if (request_user_mapper) {
+        if (mapper_is_default ||
+            mapper_identifier_text != normalized_identifier) {
+          continue;
+        }
+      } else if (!mapper_is_default) {
+        continue;
+      }
+
+      SgType *formal_type = stripTypeAliasesAndReferences(
+          getDeclareMapperFormalType(mapper_stmt));
+      if (formal_type == nullptr) {
+        continue;
+      }
+
+      bool type_matches = false;
+      for (SgType *candidate_type : candidate_types) {
+        if (candidate_type != nullptr &&
+            SageInterface::isEquivalentType(formal_type, candidate_type)) {
+          type_matches = true;
+          break;
+        }
+      }
+      if (!type_matches) {
+        continue;
+      }
+
+      ++scope_match_count;
+      if (scope_match_count > 1) {
+        MLOG_ERROR_CXX("ompLowering")
+            << "Ambiguous declare mapper resolution for "
+            << mapped_expr->unparseToString() << " using identifier '"
+            << (normalized_identifier.empty() ? "default"
+                                              : normalized_identifier)
+            << "' in scope " << scope->sage_class_name();
+        ROSE_ABORT();
+      }
+
+      result.declaration = mapper_stmt;
+      result.identifier_text = mapper_identifier_text;
+      result.formal_name = getDeclareMapperFormalName(mapper_stmt);
+      result.formal_type = formal_type;
+    }
+
+    if (scope_match_count > 0) {
+      return result;
+    }
+
+    anchor = isSgStatement(scope);
+    SgScopeStatement *next_scope = scope->get_scope();
+    if (next_scope == scope) {
+      break;
+    }
+    scope = next_scope;
+  }
+
+  return result;
+}
+
+void appendResolvedMapItemArguments(const std::vector<ResolvedMapItem> &items,
+                                    SgExprListExp *map_variable_list,
+                                    SgExprListExp *map_variable_base_list,
+                                    SgExprListExp *map_variable_size_list,
+                                    SgExprListExp *map_variable_type_list,
+                                    SgScopeStatement *scope) {
+  ROSE_ASSERT(map_variable_list != nullptr);
+  ROSE_ASSERT(map_variable_base_list != nullptr);
+  ROSE_ASSERT(map_variable_size_list != nullptr);
+  ROSE_ASSERT(map_variable_type_list != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+
+  std::vector<const ResolvedMapItem *> ordered_items;
+  ordered_items.reserve(items.size());
+  for (const ResolvedMapItem &item : items) {
+    ordered_items.push_back(&item);
+  }
+  std::stable_sort(ordered_items.begin(), ordered_items.end(),
+                   [](const ResolvedMapItem *lhs, const ResolvedMapItem *rhs) {
+                     return lhs->is_implicit_base_pointer &&
+                            !rhs->is_implicit_base_pointer;
+                   });
+
+  for (const ResolvedMapItem *item_ptr : ordered_items) {
+    ROSE_ASSERT(item_ptr != nullptr);
+    const ResolvedMapItem &item = *item_ptr;
+    ROSE_ASSERT(item.expression != nullptr);
+
+    std::vector<std::pair<SgExpression *, SgExpression *>> dimensions;
+    collectEffectiveArraySectionDimensions(item.expression, dimensions);
+
+    SgExpression *base_expression = nullptr;
+    if (!dimensions.empty()) {
+      base_expression = buildArraySectionBaseExpression(item.expression);
+    } else if (isSgArrayType(stripTypeAliases(item.expression->get_type())) !=
+               nullptr) {
+      base_expression = copyExpression(item.expression);
+      appendArrayDimensionsFromType(item.expression->get_type(), dimensions);
+    } else {
+      base_expression = copyExpression(item.expression);
+    }
+    ROSE_ASSERT(base_expression != nullptr);
+
+    SgExpression *mapping_expression = nullptr;
+    SgExpression *mapping_base_expression = copyExpression(base_expression);
+    SgExpression *mapping_size_expression = nullptr;
+    int runtime_flag_bits = item.runtime_flag_bits;
+    if (item.is_implicit_base_pointer) {
+      runtime_flag_bits |= OMP_TGT_MAPTYPE_IMPLICIT;
+    }
+
+    const bool treat_as_array =
+        !dimensions.empty() ||
+        isSgArrayType(stripTypeAliases(base_expression->get_type())) != nullptr;
+    const bool is_implicit_pointer_map =
+        item.is_implicit_base_pointer && !treat_as_array &&
+        isPointerType(item.expression->get_type());
+    if (treat_as_array) {
+      SgType *base_type = stripTypeAliases(base_expression->get_type());
+      SgType *element_type = nullptr;
+      if (SgPointerType *pointer_type = isSgPointerType(base_type)) {
+        element_type =
+            stripTypeAliasesAndReferences(pointer_type->get_base_type());
+      } else if (SgArrayType *array_type = isSgArrayType(base_type)) {
+        element_type =
+            stripTypeAliasesAndReferences(array_type->findBaseType());
+      }
+      if (element_type == nullptr) {
+        MLOG_ERROR_CXX("ompLowering")
+            << "Unsupported mapped array base type for expression "
+            << item.expression->unparseToString();
+        ROSE_ABORT();
+      }
+
+      SgExpression *offset_expression = nullptr;
+      SgExpression *extent_expression = nullptr;
+      for (const auto &dimension : dimensions) {
+        SgExpression *length = dimension.second;
+        if (length == nullptr || isSgNullExpression(length) != nullptr) {
+          MLOG_ERROR_CXX("ompLowering") << "Missing array-section length for "
+                                        << item.expression->unparseToString();
+          ROSE_ABORT();
+        }
+
+        if (offset_expression == nullptr) {
+          if (dimension.first != nullptr &&
+              isSgNullExpression(dimension.first) == nullptr) {
+            offset_expression = copyExpression(dimension.first);
+          } else {
+            offset_expression = buildIntVal(0);
+          }
+        }
+
+        if (extent_expression == nullptr) {
+          extent_expression = copyExpression(length);
+        } else {
+          extent_expression =
+              buildMultiplyOp(extent_expression, copyExpression(length));
+        }
+      }
+      if (offset_expression == nullptr) {
+        offset_expression = buildIntVal(0);
+      }
+      if (extent_expression == nullptr) {
+        extent_expression = buildIntVal(1);
+      }
+
+      if (isSgIntVal(offset_expression) != nullptr &&
+          isSgIntVal(offset_expression)->get_value() == 0) {
+        mapping_expression = copyExpression(base_expression);
+      } else {
+        mapping_expression =
+            buildAddOp(copyExpression(base_expression), offset_expression);
+      }
+      mapping_size_expression = buildCastExp(
+          buildMultiplyOp(buildSizeOfOp(element_type), extent_expression),
+          buildOpaqueType("int64_t", scope));
+    } else if (is_implicit_pointer_map) {
+      mapping_expression = copyExpression(item.expression);
+      mapping_size_expression =
+          buildCastExp(buildIntVal(0), buildOpaqueType("int64_t", scope));
+    } else if (isPointerType(item.expression->get_type())) {
+      mapping_expression = copyExpression(item.expression);
+      mapping_size_expression =
+          buildCastExp(buildSizeOfOp(item.expression->get_type()),
+                       buildOpaqueType("int64_t", scope));
+    } else {
+      mapping_expression = buildAddressOfOp(copyExpression(item.expression));
+      mapping_base_expression = copyExpression(mapping_expression);
+      mapping_size_expression =
+          buildCastExp(buildSizeOfOp(item.expression->get_type()),
+                       buildOpaqueType("int64_t", scope));
+    }
+
+    map_variable_list->append_expression(mapping_expression);
+    map_variable_base_list->append_expression(mapping_base_expression);
+    map_variable_size_list->append_expression(mapping_size_expression);
+    if (is_implicit_pointer_map) {
+      map_variable_type_list->append_expression(
+          buildIntVal(OMP_TGT_MAPTYPE_TARGET_PARAM | runtime_flag_bits));
+    } else {
+      map_variable_type_list->append_expression(buildIntVal(
+          buildRuntimeMapTypeFlags(item.map_operator, runtime_flag_bits)));
+    }
+  }
+}
+
+enum class MapperUseKind { map_clause, to_clause, from_clause };
+
+void collectExpandedMapItemsForExpression(
+    SgExpression *mapped_expr, const std::string &requested_identifier,
+    bool identifier_was_explicit, MapperUseKind use_kind,
+    SgOmpClause::omp_map_operator_enum use_map_op, int runtime_flag_bits,
+    SgStatement *anchor_stmt, std::vector<ResolvedMapItem> &items,
+    std::vector<const SgOmpDeclareMapperStatement *> &active_mappers) {
+  ROSE_ASSERT(mapped_expr != nullptr);
+  ROSE_ASSERT(anchor_stmt != nullptr);
+
+  ResolvedMapperInfo resolved_mapper = resolveVisibleMapperForExpression(
+      mapped_expr, requested_identifier, identifier_was_explicit, anchor_stmt);
+  if (resolved_mapper.declaration == nullptr) {
+    const std::string normalized_identifier =
+        normalizeMapperIdentifierString(requested_identifier);
+    const bool requires_user_mapper = identifier_was_explicit &&
+                                      !normalized_identifier.empty() &&
+                                      normalized_identifier != "default";
+    if (requires_user_mapper) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Failed to resolve mapper '" << requested_identifier
+          << "' for expression " << mapped_expr->unparseToString();
+      ROSE_ABORT();
+    }
+
+    ResolvedMapItem direct_item;
+    direct_item.expression = mapped_expr;
+    direct_item.map_operator = use_map_op;
+    direct_item.runtime_flag_bits = runtime_flag_bits;
+    direct_item.is_implicit_base_pointer =
+        isImplicitBasePointerMapItem(anchor_stmt, mapped_expr);
+    items.push_back(direct_item);
+    return;
+  }
+
+  if (resolved_mapper.formal_name.empty()) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "Declare mapper is missing a formal variable for "
+        << mapped_expr->unparseToString();
+    ROSE_ABORT();
+  }
+
+  if (std::find(active_mappers.begin(), active_mappers.end(),
+                resolved_mapper.declaration) != active_mappers.end()) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "Recursive declare mapper expansion detected for "
+        << mapped_expr->unparseToString();
+    ROSE_ABORT();
+  }
+
+  active_mappers.push_back(resolved_mapper.declaration);
+  const SgOmpClausePtrList &mapper_clauses =
+      resolved_mapper.declaration->get_clauses();
+  for (SgOmpClause *clause : mapper_clauses) {
+    SgOmpMapClause *mapper_clause = isSgOmpMapClause(clause);
+    if (mapper_clause == nullptr) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Unsupported non-map clause within declare mapper: "
+          << clause->class_name();
+      ROSE_ABORT();
+    }
+
+    const SgOmpClause::omp_map_operator_enum mapper_item_op =
+        normalizeMapperMapOperator(mapper_clause->get_operation());
+    const int combined_flag_bits =
+        runtime_flag_bits | runtimeFlagsFromMapClauseModifiers(mapper_clause);
+    const std::string nested_requested_identifier =
+        getRequestedMapperIdentifier(mapper_clause);
+    const bool nested_identifier_was_explicit =
+        mapClauseUsesExplicitMapper(mapper_clause);
+    if (mapClauseUsesIteratorModifier(mapper_clause)) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Iterator-based mapper expansion is not implemented for "
+          << mapper_clause->unparseToString();
+      ROSE_ABORT();
+    }
+    const SgExpressionPtrList &mapper_items =
+        mapper_clause->get_variables()->get_expressions();
+    for (SgExpression *mapper_item : mapper_items) {
+      ROSE_ASSERT(mapper_item != nullptr);
+
+      SgExpression *materialized_item = materializeMapperExpression(
+          mapper_item, resolved_mapper.formal_name, mapped_expr);
+      const bool is_direct_self_item =
+          isDirectMapperSelfItem(mapper_item, resolved_mapper.formal_name);
+
+      if (use_kind == MapperUseKind::map_clause) {
+        const SgOmpClause::omp_map_operator_enum derived_op =
+            decayMapperMapOperator(use_map_op, mapper_item_op);
+        if (is_direct_self_item && !nested_identifier_was_explicit) {
+          ResolvedMapItem direct_item;
+          direct_item.expression = materialized_item;
+          direct_item.map_operator = derived_op;
+          direct_item.runtime_flag_bits = combined_flag_bits;
+          direct_item.is_implicit_base_pointer =
+              isImplicitBasePointerMapItem(anchor_stmt, materialized_item);
+          items.push_back(direct_item);
+        } else {
+          collectExpandedMapItemsForExpression(
+              materialized_item, nested_requested_identifier,
+              nested_identifier_was_explicit, MapperUseKind::map_clause,
+              derived_op, combined_flag_bits, anchor_stmt, items,
+              active_mappers);
+        }
+        continue;
+      }
+
+      const bool keep_for_to = mapper_item_op == SgOmpClause::e_omp_map_to ||
+                               mapper_item_op == SgOmpClause::e_omp_map_tofrom;
+      const bool keep_for_from =
+          mapper_item_op == SgOmpClause::e_omp_map_from ||
+          mapper_item_op == SgOmpClause::e_omp_map_tofrom;
+      if ((use_kind == MapperUseKind::to_clause && !keep_for_to) ||
+          (use_kind == MapperUseKind::from_clause && !keep_for_from)) {
+        continue;
+      }
+
+      const SgOmpClause::omp_map_operator_enum update_op =
+          use_kind == MapperUseKind::to_clause ? SgOmpClause::e_omp_map_to
+                                               : SgOmpClause::e_omp_map_from;
+      if (is_direct_self_item && !nested_identifier_was_explicit) {
+        ResolvedMapItem direct_item;
+        direct_item.expression = materialized_item;
+        direct_item.map_operator = update_op;
+        direct_item.runtime_flag_bits = combined_flag_bits;
+        direct_item.is_implicit_base_pointer =
+            isImplicitBasePointerMapItem(anchor_stmt, materialized_item);
+        items.push_back(direct_item);
+      } else {
+        collectExpandedMapItemsForExpression(
+            materialized_item, nested_requested_identifier,
+            nested_identifier_was_explicit, use_kind, update_op,
+            combined_flag_bits, anchor_stmt, items, active_mappers);
+      }
+    }
+  }
+  active_mappers.pop_back();
+}
+
+std::vector<ResolvedMapItem>
+collectExpandedMapItemsForClause(SgStatement *anchor_stmt,
+                                 const SgOmpMapClause *map_clause) {
+  std::vector<ResolvedMapItem> items;
+  if (anchor_stmt == nullptr || map_clause == nullptr ||
+      map_clause->get_variables() == nullptr) {
+    return items;
+  }
+
+  if (mapClauseUsesIteratorModifier(map_clause)) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "Iterator-based map clause lowering is not implemented for "
+        << map_clause->unparseToString();
+    ROSE_ABORT();
+  }
+
+  const std::string requested_identifier =
+      getRequestedMapperIdentifier(map_clause);
+  const bool identifier_was_explicit = mapClauseUsesExplicitMapper(map_clause);
+  const int runtime_flag_bits = runtimeFlagsFromMapClauseModifiers(map_clause);
+  std::vector<const SgOmpDeclareMapperStatement *> active_mappers;
+  const SgExpressionPtrList &variables =
+      map_clause->get_variables()->get_expressions();
+  for (SgExpression *expr : variables) {
+    if (expr == nullptr) {
+      continue;
+    }
+    SgExpression *effective_expr =
+        buildEffectiveClauseItemExpression(map_clause, expr);
+    collectExpandedMapItemsForExpression(
+        effective_expr, requested_identifier, identifier_was_explicit,
+        MapperUseKind::map_clause, map_clause->get_operation(),
+        runtime_flag_bits, anchor_stmt, items, active_mappers);
+  }
+  return items;
+}
+
+std::vector<ResolvedMapItem>
+collectExpandedMotionItemsForClause(SgStatement *anchor_stmt,
+                                    const SgOmpClause *motion_clause) {
+  std::vector<ResolvedMapItem> items;
+  if (anchor_stmt == nullptr || motion_clause == nullptr) {
+    return items;
+  }
+
+  if (motion_clause->variantT() != V_SgOmpToClause &&
+      motion_clause->variantT() != V_SgOmpFromClause) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "Unexpected motion clause in mapper expansion: "
+        << motion_clause->sage_class_name();
+    ROSE_ABORT();
+  }
+
+  const SgOmpVariablesClause *vars_clause =
+      isSgOmpVariablesClause(motion_clause);
+  if (vars_clause == nullptr || vars_clause->get_variables() == nullptr) {
+    return items;
+  }
+
+  if (motionClauseUsesIterator(motion_clause)) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "Iterator-based target update lowering is not implemented for "
+        << motion_clause->unparseToString();
+    ROSE_ABORT();
+  }
+
+  const std::string requested_identifier =
+      getRequestedMapperIdentifier(motion_clause);
+  const bool identifier_was_explicit =
+      motionClauseUsesExplicitMapper(motion_clause);
+  const MapperUseKind use_kind = motion_clause->variantT() == V_SgOmpToClause
+                                     ? MapperUseKind::to_clause
+                                     : MapperUseKind::from_clause;
+  const SgOmpClause::omp_map_operator_enum use_map_op =
+      use_kind == MapperUseKind::to_clause ? SgOmpClause::e_omp_map_to
+                                           : SgOmpClause::e_omp_map_from;
+
+  std::vector<const SgOmpDeclareMapperStatement *> active_mappers;
+  const SgExpressionPtrList &variables =
+      vars_clause->get_variables()->get_expressions();
+  for (SgExpression *expr : variables) {
+    if (expr == nullptr) {
+      continue;
+    }
+    SgExpression *effective_expr =
+        buildEffectiveClauseItemExpression(motion_clause, expr);
+    collectExpandedMapItemsForExpression(
+        effective_expr, requested_identifier, identifier_was_explicit, use_kind,
+        use_map_op, 0, anchor_stmt, items, active_mappers);
+  }
+  return items;
+}
+
 static void normalize_fortran_parallel_outlined_pointer_formals(
     SgFunctionDeclaration *outlined_func,
     const ASTtools::VarSymSet_t &captured_symbols) {
@@ -6163,14 +7303,10 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
     device_expression = buildIntVal(0);
   };
 
-  std::vector<SgExpression *> *mapping_array_list =
-      new std::vector<SgExpression *>();
-  std::vector<SgExpression *> *mapping_array_base_list =
-      new std::vector<SgExpression *>();
-  std::vector<SgExpression *> *mapping_array_size_list =
-      new std::vector<SgExpression *>();
-  std::vector<SgExpression *> *mapping_array_type_list =
-      new std::vector<SgExpression *>();
+  std::vector<SgExpression *> side_effect_map_variable_list;
+  std::vector<SgExpression *> side_effect_map_variable_base_list;
+  std::vector<SgExpression *> side_effect_map_variable_size_list;
+  std::vector<SgExpression *> side_effect_map_variable_type_list;
   // handle array variables showing up in the map clauses:
   for (std::set<SgSymbol *>::const_iterator iter = array_syms.begin();
        iter != array_syms.end(); iter++) {
@@ -6222,9 +7358,10 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
     generateMappedArrayMemoryHandling(
         sym, map_alloc_clauses, map_to_clauses, map_from_clauses,
         map_tofrom_clauses, array_dimensions, device_expression,
-        insertion_scope, insertion_anchor_stmt, true, mapping_array_list,
-        mapping_array_base_list, mapping_array_size_list,
-        mapping_array_type_list);
+        insertion_scope, insertion_anchor_stmt, true,
+        &side_effect_map_variable_list, &side_effect_map_variable_base_list,
+        &side_effect_map_variable_size_list,
+        &side_effect_map_variable_type_list);
 
     // map variables will be passed as kernel arguments later.
     // they are only temporarily used and should be removed to prevent
@@ -6262,74 +7399,25 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
   for (std::set<SgSymbol *>::iterator iter = atom_syms.begin();
        iter != atom_syms.end(); iter++) {
     SgVariableSymbol *var_sym = isSgVariableSymbol(*iter);
-    const bool use_literal_target_param = canUseLiteralTargetParam(
-        target, var_sym, map_to_clauses, map_from_clauses, map_tofrom_clauses);
     if (variable_map[var_sym] ==
         true) // we should only collect map variables which show up in the
               // current parallel region
       all_syms.insert(var_sym);
-    if (use_literal_target_param && offload_ctx != NULL) {
-      offload_ctx->literal_target_param_syms.insert(var_sym);
-    }
-
-    // check the type of current variable symbol and calculate its size
-    if (variable_map[var_sym] == true) {
-      SgInitializedName *mapping_variable = var_sym->get_declaration();
-      SgType *mapping_variable_type = mapping_variable->get_type();
-      const bool is_implicit_pointer_map =
-          isImplicitTargetMapVariable(target, var_sym) &&
-          isPointerType(mapping_variable_type) &&
-          array_dimensions[var_sym].empty();
-      SgExpression *mapping_variable_expression = NULL;
-      if (use_literal_target_param) {
-        mapping_variable_expression =
-            buildLiteralTargetParamArgExpression(var_sym, target->get_scope());
-      } else if (isPointerType(mapping_variable_type)) {
-        mapping_variable_expression = buildVarRefExp(var_sym);
-      } else {
-        mapping_variable_expression = buildAddressOfOp(buildVarRefExp(var_sym));
-      };
-      map_variable_list->append_expression(mapping_variable_expression);
-      map_variable_base_list->append_expression(
-          copyExpression(mapping_variable_expression));
-      SgExpression *mapping_variable_size = NULL;
-      if (is_implicit_pointer_map) {
-        mapping_variable_size = buildCastExp(
-            buildIntVal(0), buildOpaqueType("int64_t", target->get_scope()));
-      } else {
-        mapping_variable_size =
-            buildCastExp(buildSizeOfOp(mapping_variable_type),
-                         buildOpaqueType("int64_t", target->get_scope()));
-      }
-      map_variable_size_list->append_expression(mapping_variable_size);
-
-      int mapping_variable_type_enum = 0;
-      if (is_implicit_pointer_map) {
-        mapping_variable_type_enum =
-            OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_IMPLICIT;
-      } else if (use_literal_target_param) {
-        mapping_variable_type_enum =
-            OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_LITERAL;
-        if (isImplicitTargetMapVariable(target, var_sym)) {
-          mapping_variable_type_enum =
-              mapping_variable_type_enum | OMP_TGT_MAPTYPE_IMPLICIT;
-        }
-      } else {
-        mapping_variable_type_enum = generate_mapping_variable_type(
-            var_sym, map_alloc_clauses, map_to_clauses, map_from_clauses,
-            map_tofrom_clauses, array_dimensions, device_expression,
-            insertion_scope, insertion_anchor_stmt);
-      }
-      SgExpression *mapping_variable_value =
-          buildIntVal(mapping_variable_type_enum);
-      map_variable_type_list->append_expression(mapping_variable_value);
-    };
   }
 
-  appendExpressionList(map_variable_list, *mapping_array_list);
-  appendExpressionList(map_variable_base_list, *mapping_array_base_list);
-  appendExpressionList(map_variable_size_list, *mapping_array_size_list);
-  appendExpressionList(map_variable_type_list, *mapping_array_type_list);
+  std::vector<ResolvedMapItem> resolved_items;
+  for (SgOmpClause *clause : map_clauses) {
+    SgOmpMapClause *map_clause = isSgOmpMapClause(clause);
+    if (map_clause == NULL)
+      continue;
+    std::vector<ResolvedMapItem> clause_items =
+        collectExpandedMapItemsForClause(target, map_clause);
+    resolved_items.insert(resolved_items.end(), clause_items.begin(),
+                          clause_items.end());
+  }
+  appendResolvedMapItemArguments(resolved_items, map_variable_list,
+                                 map_variable_base_list, map_variable_size_list,
+                                 map_variable_type_list, target->get_scope());
 
   return all_syms;
 } // end transOmpMapVariables() for omp target data's map clauses for now
@@ -6482,54 +7570,28 @@ void collectOmpTargetUpdateInfo(SgStatement *target,
                                 SgExprListExp *map_variable_size_list,
                                 SgExprListExp *map_variable_type_list) {
   ROSE_ASSERT(target != NULL);
-
-  SgOmpFromClause *from_clause = NULL;
   Rose_STL_Container<SgOmpClause *> from_clauses =
       getClause(target, V_SgOmpFromClause);
-  if (from_clauses.size() != 0)
-    from_clause = isSgOmpFromClause(from_clauses[0]);
-
-  SgOmpToClause *to_clause = NULL;
   Rose_STL_Container<SgOmpClause *> to_clauses =
       getClause(target, V_SgOmpToClause);
-  if (to_clauses.size() != 0)
-    to_clause = isSgOmpToClause(to_clauses[0]);
 
-  // store all variables showing up in any of the device clauses
-  SgInitializedNamePtrList all_mapped_vars;
-  std::map<SgSymbol *, std::vector<std::pair<SgExpression *, SgExpression *>>>
-      array_dimensions;
-
-  SgBasicBlock *body_block = SageBuilder::buildBasicBlock();
-  ROSE_ASSERT(body_block != NULL);
-
-  if (from_clause != NULL) {
-    all_mapped_vars = collectClauseVariables(target, V_SgOmpFromClause);
-    array_dimensions = from_clause->get_array_dimensions();
-    collectOmpFromToVariablesInfo(all_mapped_vars, array_dimensions,
-                                  map_variable_list, map_variable_base_list,
-                                  map_variable_size_list, body_block);
-    int mapping_variable_type_enum =
-        OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_FROM;
-    SgExpression *mapping_variable_value =
-        buildIntVal(mapping_variable_type_enum);
-    for (int i = 0; i < all_mapped_vars.size(); i++)
-      map_variable_type_list->append_expression(mapping_variable_value);
+  std::vector<ResolvedMapItem> resolved_items;
+  for (SgOmpClause *clause : from_clauses) {
+    std::vector<ResolvedMapItem> clause_items =
+        collectExpandedMotionItemsForClause(target, clause);
+    resolved_items.insert(resolved_items.end(), clause_items.begin(),
+                          clause_items.end());
+  }
+  for (SgOmpClause *clause : to_clauses) {
+    std::vector<ResolvedMapItem> clause_items =
+        collectExpandedMotionItemsForClause(target, clause);
+    resolved_items.insert(resolved_items.end(), clause_items.begin(),
+                          clause_items.end());
   }
 
-  if (to_clause != NULL) {
-    all_mapped_vars = collectClauseVariables(target, V_SgOmpToClause);
-    array_dimensions = to_clause->get_array_dimensions();
-    collectOmpFromToVariablesInfo(all_mapped_vars, array_dimensions,
-                                  map_variable_list, map_variable_base_list,
-                                  map_variable_size_list, body_block);
-    int mapping_variable_type_enum =
-        OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_TO;
-    SgExpression *mapping_variable_value =
-        buildIntVal(mapping_variable_type_enum);
-    for (int i = 0; i < all_mapped_vars.size(); i++)
-      map_variable_type_list->append_expression(mapping_variable_value);
-  }
+  appendResolvedMapItemArguments(resolved_items, map_variable_list,
+                                 map_variable_base_list, map_variable_size_list,
+                                 map_variable_type_list, target->get_scope());
 } // collectOmpTargetUpdateInfo()
 
 static SgVariableDeclaration *buildTargetKernelArgsDeclaration(

@@ -2,6 +2,24 @@
 
 #include "sage3basic.h"
 
+namespace {
+
+const clang::Expr *
+getParmVarDeclDefaultArgExpr(const clang::ParmVarDecl *param_var_decl) {
+  if (param_var_decl == nullptr || !param_var_decl->hasDefaultArg() ||
+      param_var_decl->hasUnparsedDefaultArg()) {
+    return nullptr;
+  }
+
+  if (param_var_decl->hasUninstantiatedDefaultArg()) {
+    return param_var_decl->getUninstantiatedDefaultArg();
+  }
+
+  return param_var_decl->getDefaultArg();
+}
+
+} // namespace
+
 std::string ClangToDotTranslator::Traverse(clang::Decl *decl) {
   if (decl == NULL) {
     return "";
@@ -1515,8 +1533,10 @@ bool ClangToDotTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
       "original_type",
       Traverse(param_var_decl->getOriginalType().getTypePtr())));
 
+  const clang::Expr *default_arg_expr =
+      getParmVarDeclDefaultArgExpr(param_var_decl);
   node_desc.successors.push_back(std::pair<std::string, std::string>(
-      "default_arg", Traverse(param_var_decl->getDefaultArg())));
+      "default_arg", Traverse(const_cast<clang::Expr *>(default_arg_expr))));
 
   node_desc.kind_hierarchy.push_back("ParmVarDecl");
 

@@ -116,6 +116,20 @@ bool typeLocContainsAutoType(clang::TypeLoc type_loc) {
   return false;
 }
 
+const clang::Expr *
+getParmVarDeclDefaultArgExpr(const clang::ParmVarDecl *param_var_decl) {
+  if (param_var_decl == nullptr || !param_var_decl->hasDefaultArg() ||
+      param_var_decl->hasUnparsedDefaultArg()) {
+    return nullptr;
+  }
+
+  if (param_var_decl->hasUninstantiatedDefaultArg()) {
+    return param_var_decl->getUninstantiatedDefaultArg();
+  }
+
+  return param_var_decl->getDefaultArg();
+}
+
 void normalizeNamespaceTemplateDeclarationFlags(
     SgTemplateClassDeclaration *decl) {
   auto normalize_file_info = [](Sg_File_Info *fi) {
@@ -1107,7 +1121,10 @@ static bool getExplicitInstantiationClassKind(
           clang::CharSourceRange::getTokenRange(begin, end);
       llvm::StringRef text = clang::Lexer::getSourceText(char_range, sm, lang);
       if (!text.empty()) {
-        clang::Lexer lexer(begin, lang, text.begin(), text.begin(), text.end());
+        std::string owned_text = text.str();
+        const char *buffer_begin = owned_text.c_str();
+        const char *buffer_end = buffer_begin + owned_text.size();
+        clang::Lexer lexer(begin, lang, buffer_begin, buffer_begin, buffer_end);
         lexer.SetCommentRetentionState(false);
 
         bool saw_template = false;
@@ -17515,6 +17532,27 @@ SFINAEFailureResult ClangToSageTranslator::evaluateSFINAEFailure(
     return result;
   }
 
+  clang::SourceLocation point_of_instantiation =
+      function_decl->getPointOfInstantiation();
+  if (const clang::MemberSpecializationInfo *member_info =
+          function_decl->getMemberSpecializationInfo()) {
+    clang::SourceLocation member_poi = member_info->getPointOfInstantiation();
+    if (member_poi.isValid()) {
+      point_of_instantiation = member_poi;
+    }
+  }
+  if (!point_of_instantiation.isValid()) {
+    point_of_instantiation = function_decl->getLocation();
+  }
+
+  clang::Sema::InstantiatingTemplate instantiation(
+      sema, point_of_instantiation,
+      const_cast<clang::FunctionDecl *>(function_decl),
+      function_decl->getSourceRange());
+  if (instantiation.isInvalid()) {
+    return result;
+  }
+
   clang::Sema::ContextRAII context(
       sema, const_cast<clang::DeclContext *>(function_decl->getDeclContext()));
   clang::Sema::SFINAETrap trap(sema);
@@ -24683,14 +24721,15 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
 
   SgInitializer *init = nullptr;
 
-  if (param_var_decl->hasDefaultArg()) {
-    SgNode *tmp_expr = Traverse(param_var_decl->getDefaultArg());
+  if (const clang::Expr *default_arg_expr =
+          getParmVarDeclDefaultArgExpr(param_var_decl)) {
+    SgNode *tmp_expr = Traverse(const_cast<clang::Expr *>(default_arg_expr));
     SgExpression *expr = isSgExpression(tmp_expr);
-    // ROOT CAUSE FIX: Check that expr is not nullptr before using it
-    // The conversion from tmp_expr to expr can fail, leaving expr == nullptr
     if (tmp_expr != nullptr && expr == nullptr) {
-      std::cerr << "Runtime error: tmp_expr != nullptr && expr == nullptr"
-                << std::endl;
+      MLOG_ERROR_CXX(MLOG_FRONTEND)
+          << "Runtime error: ParmVarDecl default argument did not translate "
+             "to SgExpression ("
+          << tmp_expr->class_name() << ")." << std::endl;
       res = false;
     } else if (expr != nullptr) {
       // The same Clang default-argument subtree can be referenced by multiple

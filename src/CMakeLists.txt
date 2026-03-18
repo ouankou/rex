@@ -162,13 +162,15 @@ target_include_directories(ROSE_DLL PUBLIC
 # ROSE requires C++14 for public headers.
 target_compile_features(ROSE_DLL PUBLIC cxx_std_14)
 
-# Link Clang/LLVM libraries (required for REX)
+# Link Clang/LLVM libraries (required for REX).
+# Keep these in the public link interface because GNU ld does not resolve
+# undefined symbols from ROSE_DLL through its DT_NEEDED entries alone when
+# downstream executables link against librose.
 if(ENABLE-C)
   target_link_libraries(ROSE_DLL
-    PUBLIC ${link_with_libraries}
-    PRIVATE ${CLANG_LIBS} ${LLVM_LIBS})
+    PUBLIC ${link_with_libraries} ${CLANG_LIBS} ${LLVM_LIBS})
 else()
-  target_link_libraries(ROSE_DLL PUBLIC ${link_with_libraries} PRIVATE ${LLVM_LIBS})
+  target_link_libraries(ROSE_DLL PUBLIC ${link_with_libraries} ${LLVM_LIBS})
 endif()
 
 if(ENABLE-FORTRAN AND ENABLE-FORTRAN-FLANG)

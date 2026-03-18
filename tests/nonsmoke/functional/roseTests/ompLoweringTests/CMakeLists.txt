@@ -446,6 +446,20 @@ if(ENABLE-C)
       ${testcode}
       legacy_compile_only/acc_cxx/${_omp_name})
   endforeach()
+
+  add_test(
+    NAME omp_lowering_mapper_semantic_declare_mapper_target_update
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_mapper_lowering_check.sh
+            $<TARGET_FILE:roseomp>
+            ${_omp_test_dir}/declare_mapper_target_update.c
+            ${_omp_lowering_test_output_dir}/mapper_semantic/declare_mapper_target_update
+            declare_mapper_target_update.c)
+  set_tests_properties(
+    omp_lowering_mapper_semantic_declare_mapper_target_update
+    PROPERTIES TIMEOUT 540)
+  _label_omp_semantic(omp_lowering_mapper_semantic_declare_mapper_target_update)
 endif()
 
 set(OMP_LOWERING_FORTRAN_LABELS ${_omp_legacy_labels})

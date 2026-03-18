@@ -242,6 +242,79 @@ parseDeclareVariantExpression(SgPragmaDeclaration *directive,
   return expr;
 }
 
+SgType *resolveDeclareMapperType(SgPragmaDeclaration *directive,
+                                 const std::string &type_text) {
+  std::string normalized = trimWhitespaceCopy(type_text);
+  if (normalized.empty()) {
+    return nullptr;
+  }
+
+  auto strip_leading_keyword = [&](const char *keyword) {
+    const std::string prefix = std::string(keyword) + " ";
+    if (normalized.rfind(prefix, 0) == 0) {
+      normalized = trimWhitespaceCopy(normalized.substr(prefix.size()));
+    }
+  };
+
+  strip_leading_keyword("struct");
+  strip_leading_keyword("class");
+  strip_leading_keyword("union");
+
+  bool is_const = false;
+  bool is_volatile = false;
+  bool stripped_qualifier = true;
+  while (stripped_qualifier) {
+    stripped_qualifier = false;
+    if (normalized.rfind("const ", 0) == 0) {
+      is_const = true;
+      normalized = trimWhitespaceCopy(normalized.substr(strlen("const ")));
+      stripped_qualifier = true;
+    } else if (normalized.rfind("volatile ", 0) == 0) {
+      is_volatile = true;
+      normalized = trimWhitespaceCopy(normalized.substr(strlen("volatile ")));
+      stripped_qualifier = true;
+    }
+  }
+
+  std::vector<char> suffix_qualifiers;
+  while (!normalized.empty()) {
+    const char tail = normalized.back();
+    if (tail == '*' || tail == '&') {
+      suffix_qualifiers.push_back(tail);
+      normalized.pop_back();
+      normalized = trimWhitespaceCopy(normalized);
+      continue;
+    }
+    break;
+  }
+
+  SgScopeStatement *scope =
+      directive != nullptr ? directive->get_scope() : NULL;
+  SgType *resolved_type =
+      SageInterface::lookupNamedTypeInParentScopes(normalized, scope);
+  if (resolved_type == nullptr) {
+    return nullptr;
+  }
+
+  if (is_const) {
+    resolved_type = SageBuilder::buildConstType(resolved_type);
+  }
+  if (is_volatile) {
+    resolved_type = SageBuilder::buildVolatileType(resolved_type);
+  }
+
+  for (std::vector<char>::reverse_iterator it = suffix_qualifiers.rbegin();
+       it != suffix_qualifiers.rend(); ++it) {
+    if (*it == '*') {
+      resolved_type = SageBuilder::buildPointerType(resolved_type);
+    } else if (*it == '&') {
+      resolved_type = SageBuilder::buildReferenceType(resolved_type);
+    }
+  }
+
+  return resolved_type;
+}
+
 void setDirectiveSpellingOverride(SgStatement *statement,
                                   const std::string &spelling) {
   if (statement == nullptr || spelling.empty()) {
@@ -5894,10 +5967,18 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
     }
 
     if (!mapper_data.mapper_type.empty()) {
-      SgExpression *mapper_type = parseClauseExpressionWithCache(
-          current_OpenMPIR_to_SageIII.first, OMPC_map, nullptr,
-          mapper_data.mapper_type);
+      SgType *resolved_mapper_type = resolveDeclareMapperType(
+          current_OpenMPIR_to_SageIII.first, mapper_data.mapper_type);
+      if (resolved_mapper_type == nullptr) {
+        MLOG_ERROR_C("ompAstConstruction",
+                     "Failed to resolve declare mapper type '%s'.\n",
+                     mapper_data.mapper_type.c_str());
+        ROSE_ABORT();
+      }
+      SgExpression *mapper_type =
+          SageBuilder::buildTypeExpression(resolved_mapper_type);
       sg_mapper->set_mapper_type(mapper_type);
+      mapper_type->set_parent(sg_mapper);
     }
 
     if (!mapper_data.mapper_variable.empty()) {
@@ -5905,6 +5986,9 @@ convertNonBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
           current_OpenMPIR_to_SageIII.first, OMPC_map, nullptr,
           mapper_data.mapper_variable);
       sg_mapper->set_mapper_variable(mapper_variable);
+      if (mapper_variable != nullptr) {
+        mapper_variable->set_parent(sg_mapper);
+      }
     }
     break;
   }

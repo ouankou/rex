@@ -28,6 +28,7 @@ set(C_TESTCODES
 	cancel.c cancellation_point.c collapse.c copyin.c copyprivate2.c copyprivate3.c
 	copyprivate.c critical.c critical1.c critical_dead.c critical_orphaned.c
 	depobj.c task_dep1.c task_dep3.c task_dep_iterator1.c task_dep_iterator2.c
+	declare_mapper_target_update.c
 	declare_simd.c distribute_parallel_for.c distribute_parallel_for_simd.c
 	distribute_simd.c distribute.c distribute2.c dijkstra_open_mp.c dynamicChunk.c
 	empty.c endif.c endif2.c endif3.c nowait.c expressions.c falsesharing.c
