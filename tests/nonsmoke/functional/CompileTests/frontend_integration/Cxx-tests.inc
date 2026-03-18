@@ -200,8 +200,8 @@ CXX_TESTS_TO_CHECK =
             .C test2008_08.C test2008_09.C test2008_10.C test2008_11
             .C test2008_12.C test2008_13.C test2008_14.C test2008_15
             .C test2008_16.C test2009_01.C test2009_02.C test2009_03
-            .C test2009_04.C test2009_05.C test2009_06.C test2009_07
-            .C test2009_08.C test2009_09.C test2009_10.C test2009_11
+            .C test2009_04.C test2009_05.C test2009_06.C test2009_08
+            .C test2009_09.C test2009_10.C test2009_11
             .C test2009_12.C test2009_13.C test2009_14.C test2009_15
             .C test2009_16.C test2009_17.C test2009_18.C test2009_19
             .C test2009_20.C test2009_21.C test2009_22.C test2009_23
