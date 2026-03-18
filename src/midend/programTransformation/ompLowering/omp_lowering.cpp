@@ -7411,6 +7411,24 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
     removeStatement(dev_var_decl);
   } // end for
 
+  // C/C++ mapping arguments are produced by the resolved-item path below.
+  // Fortran lowering still needs the legacy array side effects emitted while
+  // materializing mapped array handling above.
+  if (SageInterface::is_Fortran_language()) {
+    for (SgExpression *expr : side_effect_map_variable_list) {
+      map_variable_list->append_expression(expr);
+    }
+    for (SgExpression *expr : side_effect_map_variable_base_list) {
+      map_variable_base_list->append_expression(expr);
+    }
+    for (SgExpression *expr : side_effect_map_variable_size_list) {
+      map_variable_size_list->append_expression(expr);
+    }
+    for (SgExpression *expr : side_effect_map_variable_type_list) {
+      map_variable_type_list->append_expression(expr);
+    }
+  }
+
   // Step 5. TODO  replace indexing element access with address calculation
   // (only needed for 2/3 -D) We switch the order of 4 and 5 since we want to
   // rewrite the subscripts before the arrays are replaced
