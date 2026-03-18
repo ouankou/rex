@@ -290,6 +290,10 @@ static bool isDeclareMapperWordToken(const std::string &token) {
   return std::isalnum(first) || first == '_';
 }
 
+static bool isDeclareMapperNumericLiteralContinuation(unsigned char ch) {
+  return std::isalnum(ch) || ch == '\'' || ch == '.' || ch == '_';
+}
+
 static std::vector<std::string>
 tokenizeDeclareMapperTypeText(const std::string &type_text) {
   std::vector<std::string> tokens;
@@ -308,6 +312,17 @@ tokenizeDeclareMapperTypeText(const std::string &type_text) {
         if (!std::isalnum(next) && next != '_') {
           break;
         }
+        ++i;
+      }
+      tokens.push_back(type_text.substr(begin, i - begin));
+      continue;
+    }
+
+    if (std::isdigit(ch)) {
+      const std::string::size_type begin = i++;
+      while (i < type_text.size() &&
+             isDeclareMapperNumericLiteralContinuation(
+                 static_cast<unsigned char>(type_text[i]))) {
         ++i;
       }
       tokens.push_back(type_text.substr(begin, i - begin));
