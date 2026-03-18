@@ -1196,6 +1196,8 @@ struct ResolvedMapperInfo {
   SgType *formal_type = nullptr;
 };
 
+enum class MapperUseKind { map_clause, to_clause, from_clause };
+
 struct ResolvedMapItem {
   SgExpression *expression = nullptr;
   SgOmpClause::omp_map_operator_enum map_operator =
@@ -1205,6 +1207,21 @@ struct ResolvedMapItem {
   bool is_implicit_target_variable = false;
   bool use_literal_target_param = false;
   SgVariableSymbol *direct_variable_symbol = nullptr;
+};
+
+enum class ExpandedMapEntryKind { direct_item, dynamic_mapper_section };
+
+struct ExpandedMapEntry {
+  ExpandedMapEntryKind kind = ExpandedMapEntryKind::direct_item;
+  ResolvedMapItem direct_item;
+  ResolvedMapperInfo resolved_mapper;
+  SgExpression *section_base_expression = nullptr;
+  std::vector<std::pair<SgExpression *, SgExpression *>> section_dimensions;
+  MapperUseKind use_kind = MapperUseKind::map_clause;
+  SgOmpClause::omp_map_operator_enum use_map_op =
+      SgOmpClause::e_omp_map_unknown;
+  int runtime_flag_bits = 0;
+  SgStatement *anchor_stmt = nullptr;
 };
 
 SgVariableSymbol *getDirectResolvedMapItemVariableSymbol(SgExpression *expr) {
@@ -1980,6 +1997,170 @@ ResolvedMapperInfo resolveVisibleMapperForExpression(
   return result;
 }
 
+std::vector<const ResolvedMapItem *>
+getOrderedResolvedMapItems(const std::vector<ResolvedMapItem> &items) {
+  std::vector<const ResolvedMapItem *> ordered_items;
+  ordered_items.reserve(items.size());
+  for (const ResolvedMapItem &item : items) {
+    ordered_items.push_back(&item);
+  }
+  std::stable_sort(ordered_items.begin(), ordered_items.end(),
+                   [](const ResolvedMapItem *lhs, const ResolvedMapItem *rhs) {
+                     return lhs->is_implicit_base_pointer &&
+                            !rhs->is_implicit_base_pointer;
+                   });
+  return ordered_items;
+}
+
+struct MapArgumentExpressions {
+  SgExpression *mapping_expression = nullptr;
+  SgExpression *mapping_base_expression = nullptr;
+  SgExpression *mapping_size_expression = nullptr;
+  SgExpression *mapping_type_expression = nullptr;
+};
+
+MapArgumentExpressions
+buildResolvedMapItemArgumentExpressions(const ResolvedMapItem &item,
+                                        SgScopeStatement *scope) {
+  ROSE_ASSERT(item.expression != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+
+  std::vector<std::pair<SgExpression *, SgExpression *>> dimensions;
+  collectEffectiveArraySectionDimensions(item.expression, dimensions);
+
+  SgExpression *base_expression = nullptr;
+  if (!dimensions.empty()) {
+    base_expression = buildArraySectionBaseExpression(item.expression);
+  } else if (isSgArrayType(stripTypeAliases(item.expression->get_type())) !=
+             nullptr) {
+    base_expression = copyExpression(item.expression);
+    appendArrayDimensionsFromType(item.expression->get_type(), dimensions);
+  } else {
+    base_expression = copyExpression(item.expression);
+  }
+  ROSE_ASSERT(base_expression != nullptr);
+
+  MapArgumentExpressions result;
+  result.mapping_base_expression = copyExpression(base_expression);
+  int runtime_flag_bits = item.runtime_flag_bits;
+  if (item.is_implicit_base_pointer) {
+    runtime_flag_bits |= OMP_TGT_MAPTYPE_IMPLICIT;
+  }
+
+  const bool treat_as_array =
+      !dimensions.empty() ||
+      isSgArrayType(stripTypeAliases(base_expression->get_type())) != nullptr;
+  const bool is_implicit_pointer_map =
+      item.is_implicit_base_pointer && !treat_as_array &&
+      isPointerType(item.expression->get_type());
+  if (item.use_literal_target_param) {
+    ROSE_ASSERT(item.direct_variable_symbol != nullptr);
+    SgInitializedName *mapping_variable =
+        item.direct_variable_symbol->get_declaration();
+    ROSE_ASSERT(mapping_variable != nullptr);
+    SgType *mapping_variable_type = mapping_variable->get_type();
+    ROSE_ASSERT(mapping_variable_type != nullptr);
+
+    result.mapping_expression = buildLiteralTargetParamArgExpression(
+        item.direct_variable_symbol, scope);
+    result.mapping_base_expression = copyExpression(result.mapping_expression);
+    result.mapping_size_expression =
+        buildCastExp(buildSizeOfOp(mapping_variable_type),
+                     buildOpaqueType("int64_t", scope));
+  } else if (treat_as_array) {
+    SgType *base_type = stripTypeAliases(base_expression->get_type());
+    SgType *element_type = nullptr;
+    if (SgPointerType *pointer_type = isSgPointerType(base_type)) {
+      element_type =
+          stripTypeAliasesAndReferences(pointer_type->get_base_type());
+    } else if (SgArrayType *array_type = isSgArrayType(base_type)) {
+      element_type = stripTypeAliasesAndReferences(array_type->findBaseType());
+    }
+    if (element_type == nullptr) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Unsupported mapped array base type for expression "
+          << item.expression->unparseToString();
+      ROSE_ABORT();
+    }
+
+    SgExpression *offset_expression = nullptr;
+    SgExpression *extent_expression = nullptr;
+    for (const auto &dimension : dimensions) {
+      SgExpression *length = dimension.second;
+      if (length == nullptr || isSgNullExpression(length) != nullptr) {
+        MLOG_ERROR_CXX("ompLowering") << "Missing array-section length for "
+                                      << item.expression->unparseToString();
+        ROSE_ABORT();
+      }
+
+      if (offset_expression == nullptr) {
+        if (dimension.first != nullptr &&
+            isSgNullExpression(dimension.first) == nullptr) {
+          offset_expression = copyExpression(dimension.first);
+        } else {
+          offset_expression = buildIntVal(0);
+        }
+      }
+
+      if (extent_expression == nullptr) {
+        extent_expression = copyExpression(length);
+      } else {
+        extent_expression =
+            buildMultiplyOp(extent_expression, copyExpression(length));
+      }
+    }
+    if (offset_expression == nullptr) {
+      offset_expression = buildIntVal(0);
+    }
+    if (extent_expression == nullptr) {
+      extent_expression = buildIntVal(1);
+    }
+
+    if (isSgIntVal(offset_expression) != nullptr &&
+        isSgIntVal(offset_expression)->get_value() == 0) {
+      result.mapping_expression = copyExpression(base_expression);
+    } else {
+      result.mapping_expression =
+          buildAddOp(copyExpression(base_expression), offset_expression);
+    }
+    result.mapping_size_expression = buildCastExp(
+        buildMultiplyOp(buildSizeOfOp(element_type), extent_expression),
+        buildOpaqueType("int64_t", scope));
+  } else if (is_implicit_pointer_map) {
+    result.mapping_expression = copyExpression(item.expression);
+    result.mapping_size_expression =
+        buildCastExp(buildIntVal(0), buildOpaqueType("int64_t", scope));
+  } else if (isPointerType(item.expression->get_type())) {
+    result.mapping_expression = copyExpression(item.expression);
+    result.mapping_size_expression =
+        buildCastExp(buildSizeOfOp(item.expression->get_type()),
+                     buildOpaqueType("int64_t", scope));
+  } else {
+    result.mapping_expression =
+        buildAddressOfOp(copyExpression(item.expression));
+    result.mapping_base_expression = copyExpression(result.mapping_expression);
+    result.mapping_size_expression =
+        buildCastExp(buildSizeOfOp(item.expression->get_type()),
+                     buildOpaqueType("int64_t", scope));
+  }
+
+  if (item.use_literal_target_param) {
+    int literal_flags = OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_LITERAL;
+    if (item.is_implicit_target_variable) {
+      literal_flags |= OMP_TGT_MAPTYPE_IMPLICIT;
+    }
+    result.mapping_type_expression = buildIntVal(literal_flags);
+  } else if (is_implicit_pointer_map) {
+    result.mapping_type_expression =
+        buildIntVal(OMP_TGT_MAPTYPE_TARGET_PARAM | runtime_flag_bits);
+  } else {
+    result.mapping_type_expression = buildIntVal(
+        buildRuntimeMapTypeFlags(item.map_operator, runtime_flag_bits));
+  }
+
+  return result;
+}
+
 void appendResolvedMapItemArguments(const std::vector<ResolvedMapItem> &items,
                                     SgExprListExp *map_variable_list,
                                     SgExprListExp *map_variable_base_list,
@@ -1992,199 +2173,38 @@ void appendResolvedMapItemArguments(const std::vector<ResolvedMapItem> &items,
   ROSE_ASSERT(map_variable_type_list != nullptr);
   ROSE_ASSERT(scope != nullptr);
 
-  std::vector<const ResolvedMapItem *> ordered_items;
-  ordered_items.reserve(items.size());
-  for (const ResolvedMapItem &item : items) {
-    ordered_items.push_back(&item);
-  }
-  std::stable_sort(ordered_items.begin(), ordered_items.end(),
-                   [](const ResolvedMapItem *lhs, const ResolvedMapItem *rhs) {
-                     return lhs->is_implicit_base_pointer &&
-                            !rhs->is_implicit_base_pointer;
-                   });
-
+  const std::vector<const ResolvedMapItem *> ordered_items =
+      getOrderedResolvedMapItems(items);
   for (const ResolvedMapItem *item_ptr : ordered_items) {
     ROSE_ASSERT(item_ptr != nullptr);
-    const ResolvedMapItem &item = *item_ptr;
-    ROSE_ASSERT(item.expression != nullptr);
-
-    std::vector<std::pair<SgExpression *, SgExpression *>> dimensions;
-    collectEffectiveArraySectionDimensions(item.expression, dimensions);
-
-    SgExpression *base_expression = nullptr;
-    if (!dimensions.empty()) {
-      base_expression = buildArraySectionBaseExpression(item.expression);
-    } else if (isSgArrayType(stripTypeAliases(item.expression->get_type())) !=
-               nullptr) {
-      base_expression = copyExpression(item.expression);
-      appendArrayDimensionsFromType(item.expression->get_type(), dimensions);
-    } else {
-      base_expression = copyExpression(item.expression);
-    }
-    ROSE_ASSERT(base_expression != nullptr);
-
-    SgExpression *mapping_expression = nullptr;
-    SgExpression *mapping_base_expression = copyExpression(base_expression);
-    SgExpression *mapping_size_expression = nullptr;
-    int runtime_flag_bits = item.runtime_flag_bits;
-    if (item.is_implicit_base_pointer) {
-      runtime_flag_bits |= OMP_TGT_MAPTYPE_IMPLICIT;
-    }
-
-    const bool treat_as_array =
-        !dimensions.empty() ||
-        isSgArrayType(stripTypeAliases(base_expression->get_type())) != nullptr;
-    const bool is_implicit_pointer_map =
-        item.is_implicit_base_pointer && !treat_as_array &&
-        isPointerType(item.expression->get_type());
-    if (item.use_literal_target_param) {
-      ROSE_ASSERT(item.direct_variable_symbol != nullptr);
-      SgInitializedName *mapping_variable =
-          item.direct_variable_symbol->get_declaration();
-      ROSE_ASSERT(mapping_variable != nullptr);
-      SgType *mapping_variable_type = mapping_variable->get_type();
-      ROSE_ASSERT(mapping_variable_type != nullptr);
-
-      mapping_expression = buildLiteralTargetParamArgExpression(
-          item.direct_variable_symbol, scope);
-      mapping_base_expression = copyExpression(mapping_expression);
-      mapping_size_expression =
-          buildCastExp(buildSizeOfOp(mapping_variable_type),
-                       buildOpaqueType("int64_t", scope));
-    } else if (treat_as_array) {
-      SgType *base_type = stripTypeAliases(base_expression->get_type());
-      SgType *element_type = nullptr;
-      if (SgPointerType *pointer_type = isSgPointerType(base_type)) {
-        element_type =
-            stripTypeAliasesAndReferences(pointer_type->get_base_type());
-      } else if (SgArrayType *array_type = isSgArrayType(base_type)) {
-        element_type =
-            stripTypeAliasesAndReferences(array_type->findBaseType());
-      }
-      if (element_type == nullptr) {
-        MLOG_ERROR_CXX("ompLowering")
-            << "Unsupported mapped array base type for expression "
-            << item.expression->unparseToString();
-        ROSE_ABORT();
-      }
-
-      SgExpression *offset_expression = nullptr;
-      SgExpression *extent_expression = nullptr;
-      for (const auto &dimension : dimensions) {
-        SgExpression *length = dimension.second;
-        if (length == nullptr || isSgNullExpression(length) != nullptr) {
-          MLOG_ERROR_CXX("ompLowering") << "Missing array-section length for "
-                                        << item.expression->unparseToString();
-          ROSE_ABORT();
-        }
-
-        if (offset_expression == nullptr) {
-          if (dimension.first != nullptr &&
-              isSgNullExpression(dimension.first) == nullptr) {
-            offset_expression = copyExpression(dimension.first);
-          } else {
-            offset_expression = buildIntVal(0);
-          }
-        }
-
-        if (extent_expression == nullptr) {
-          extent_expression = copyExpression(length);
-        } else {
-          extent_expression =
-              buildMultiplyOp(extent_expression, copyExpression(length));
-        }
-      }
-      if (offset_expression == nullptr) {
-        offset_expression = buildIntVal(0);
-      }
-      if (extent_expression == nullptr) {
-        extent_expression = buildIntVal(1);
-      }
-
-      if (isSgIntVal(offset_expression) != nullptr &&
-          isSgIntVal(offset_expression)->get_value() == 0) {
-        mapping_expression = copyExpression(base_expression);
-      } else {
-        mapping_expression =
-            buildAddOp(copyExpression(base_expression), offset_expression);
-      }
-      mapping_size_expression = buildCastExp(
-          buildMultiplyOp(buildSizeOfOp(element_type), extent_expression),
-          buildOpaqueType("int64_t", scope));
-    } else if (is_implicit_pointer_map) {
-      mapping_expression = copyExpression(item.expression);
-      mapping_size_expression =
-          buildCastExp(buildIntVal(0), buildOpaqueType("int64_t", scope));
-    } else if (isPointerType(item.expression->get_type())) {
-      mapping_expression = copyExpression(item.expression);
-      mapping_size_expression =
-          buildCastExp(buildSizeOfOp(item.expression->get_type()),
-                       buildOpaqueType("int64_t", scope));
-    } else {
-      mapping_expression = buildAddressOfOp(copyExpression(item.expression));
-      mapping_base_expression = copyExpression(mapping_expression);
-      mapping_size_expression =
-          buildCastExp(buildSizeOfOp(item.expression->get_type()),
-                       buildOpaqueType("int64_t", scope));
-    }
-
-    map_variable_list->append_expression(mapping_expression);
-    map_variable_base_list->append_expression(mapping_base_expression);
-    map_variable_size_list->append_expression(mapping_size_expression);
-    if (item.use_literal_target_param) {
-      int literal_flags =
-          OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_LITERAL;
-      if (item.is_implicit_target_variable) {
-        literal_flags |= OMP_TGT_MAPTYPE_IMPLICIT;
-      }
-      map_variable_type_list->append_expression(buildIntVal(literal_flags));
-    } else if (is_implicit_pointer_map) {
-      map_variable_type_list->append_expression(
-          buildIntVal(OMP_TGT_MAPTYPE_TARGET_PARAM | runtime_flag_bits));
-    } else {
-      map_variable_type_list->append_expression(buildIntVal(
-          buildRuntimeMapTypeFlags(item.map_operator, runtime_flag_bits)));
-    }
+    MapArgumentExpressions expressions =
+        buildResolvedMapItemArgumentExpressions(*item_ptr, scope);
+    map_variable_list->append_expression(expressions.mapping_expression);
+    map_variable_base_list->append_expression(
+        expressions.mapping_base_expression);
+    map_variable_size_list->append_expression(
+        expressions.mapping_size_expression);
+    map_variable_type_list->append_expression(
+        expressions.mapping_type_expression);
   }
 }
 
-enum class MapperUseKind { map_clause, to_clause, from_clause };
-
-void collectExpandedMapItemsForExpression(
+void collectExpandedMapEntriesForExpression(
     SgExpression *mapped_expr, const std::string &requested_identifier,
     bool identifier_was_explicit, MapperUseKind use_kind,
     SgOmpClause::omp_map_operator_enum use_map_op, int runtime_flag_bits,
-    SgStatement *anchor_stmt, std::vector<ResolvedMapItem> &items,
+    SgStatement *anchor_stmt, std::vector<ExpandedMapEntry> &items,
+    std::vector<const SgOmpDeclareMapperStatement *> &active_mappers);
+
+void collectExpandedMapEntriesUsingResolvedMapper(
+    SgExpression *mapped_expr, const ResolvedMapperInfo &resolved_mapper,
+    MapperUseKind use_kind, SgOmpClause::omp_map_operator_enum use_map_op,
+    int runtime_flag_bits, SgStatement *anchor_stmt,
+    std::vector<ExpandedMapEntry> &items,
     std::vector<const SgOmpDeclareMapperStatement *> &active_mappers) {
   ROSE_ASSERT(mapped_expr != nullptr);
   ROSE_ASSERT(anchor_stmt != nullptr);
-
-  ResolvedMapperInfo resolved_mapper = resolveVisibleMapperForExpression(
-      mapped_expr, requested_identifier, identifier_was_explicit, anchor_stmt);
-  if (resolved_mapper.declaration == nullptr) {
-    const std::string normalized_identifier =
-        normalizeMapperIdentifierString(requested_identifier);
-    const bool requires_user_mapper = identifier_was_explicit &&
-                                      !normalized_identifier.empty() &&
-                                      normalized_identifier != "default";
-    if (requires_user_mapper) {
-      MLOG_ERROR_CXX("ompLowering")
-          << "Failed to resolve mapper '" << requested_identifier
-          << "' for expression " << mapped_expr->unparseToString();
-      ROSE_ABORT();
-    }
-
-    ResolvedMapItem direct_item;
-    direct_item.expression = mapped_expr;
-    direct_item.map_operator = use_map_op;
-    direct_item.runtime_flag_bits = runtime_flag_bits;
-    direct_item.is_implicit_base_pointer =
-        isImplicitBasePointerMapItem(anchor_stmt, mapped_expr);
-    direct_item.direct_variable_symbol =
-        getDirectResolvedMapItemVariableSymbol(mapped_expr);
-    items.push_back(direct_item);
-    return;
-  }
+  ROSE_ASSERT(resolved_mapper.declaration != nullptr);
 
   if (resolved_mapper.formal_name.empty()) {
     MLOG_ERROR_CXX("ompLowering")
@@ -2249,9 +2269,11 @@ void collectExpandedMapItemsForExpression(
               isImplicitBasePointerMapItem(anchor_stmt, materialized_item);
           direct_item.direct_variable_symbol =
               getDirectResolvedMapItemVariableSymbol(materialized_item);
-          items.push_back(direct_item);
+          ExpandedMapEntry direct_entry;
+          direct_entry.direct_item = direct_item;
+          items.push_back(direct_entry);
         } else {
-          collectExpandedMapItemsForExpression(
+          collectExpandedMapEntriesForExpression(
               materialized_item, nested_requested_identifier,
               nested_identifier_was_explicit, MapperUseKind::map_clause,
               derived_op, combined_flag_bits, anchor_stmt, items,
@@ -2282,9 +2304,11 @@ void collectExpandedMapItemsForExpression(
             isImplicitBasePointerMapItem(anchor_stmt, materialized_item);
         direct_item.direct_variable_symbol =
             getDirectResolvedMapItemVariableSymbol(materialized_item);
-        items.push_back(direct_item);
+        ExpandedMapEntry direct_entry;
+        direct_entry.direct_item = direct_item;
+        items.push_back(direct_entry);
       } else {
-        collectExpandedMapItemsForExpression(
+        collectExpandedMapEntriesForExpression(
             materialized_item, nested_requested_identifier,
             nested_identifier_was_explicit, use_kind, update_op,
             combined_flag_bits, anchor_stmt, items, active_mappers);
@@ -2294,10 +2318,94 @@ void collectExpandedMapItemsForExpression(
   active_mappers.pop_back();
 }
 
-std::vector<ResolvedMapItem>
+void collectExpandedMapEntriesForExpression(
+    SgExpression *mapped_expr, const std::string &requested_identifier,
+    bool identifier_was_explicit, MapperUseKind use_kind,
+    SgOmpClause::omp_map_operator_enum use_map_op, int runtime_flag_bits,
+    SgStatement *anchor_stmt, std::vector<ExpandedMapEntry> &items,
+    std::vector<const SgOmpDeclareMapperStatement *> &active_mappers) {
+  ROSE_ASSERT(mapped_expr != nullptr);
+  ROSE_ASSERT(anchor_stmt != nullptr);
+
+  ResolvedMapperInfo resolved_mapper = resolveVisibleMapperForExpression(
+      mapped_expr, requested_identifier, identifier_was_explicit, anchor_stmt);
+  if (resolved_mapper.declaration == nullptr) {
+    const std::string normalized_identifier =
+        normalizeMapperIdentifierString(requested_identifier);
+    const bool requires_user_mapper = identifier_was_explicit &&
+                                      !normalized_identifier.empty() &&
+                                      normalized_identifier != "default";
+    if (requires_user_mapper) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Failed to resolve mapper '" << requested_identifier
+          << "' for expression " << mapped_expr->unparseToString();
+      ROSE_ABORT();
+    }
+
+    ResolvedMapItem direct_item;
+    direct_item.expression = mapped_expr;
+    direct_item.map_operator = use_map_op;
+    direct_item.runtime_flag_bits = runtime_flag_bits;
+    direct_item.is_implicit_base_pointer =
+        isImplicitBasePointerMapItem(anchor_stmt, mapped_expr);
+    direct_item.direct_variable_symbol =
+        getDirectResolvedMapItemVariableSymbol(mapped_expr);
+    ExpandedMapEntry direct_entry;
+    direct_entry.direct_item = direct_item;
+    items.push_back(direct_entry);
+    return;
+  }
+
+  if (isArraySectionReference(mapped_expr)) {
+    ExpandedMapEntry dynamic_entry;
+    dynamic_entry.kind = ExpandedMapEntryKind::dynamic_mapper_section;
+    dynamic_entry.resolved_mapper = resolved_mapper;
+    dynamic_entry.section_base_expression =
+        buildArraySectionBaseExpression(mapped_expr);
+    dynamic_entry.use_kind = use_kind;
+    dynamic_entry.use_map_op = use_map_op;
+    dynamic_entry.runtime_flag_bits = runtime_flag_bits;
+    dynamic_entry.anchor_stmt = anchor_stmt;
+    collectEffectiveArraySectionDimensions(mapped_expr,
+                                           dynamic_entry.section_dimensions);
+    if (dynamic_entry.section_base_expression == nullptr ||
+        dynamic_entry.section_dimensions.empty()) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Failed to materialize mapper array-section expansion for "
+          << mapped_expr->unparseToString();
+      ROSE_ABORT();
+    }
+    items.push_back(dynamic_entry);
+    return;
+  }
+
+  collectExpandedMapEntriesUsingResolvedMapper(
+      mapped_expr, resolved_mapper, use_kind, use_map_op, runtime_flag_bits,
+      anchor_stmt, items, active_mappers);
+}
+
+bool hasDynamicExpandedMapEntries(const std::vector<ExpandedMapEntry> &items) {
+  for (const ExpandedMapEntry &item : items) {
+    if (item.kind == ExpandedMapEntryKind::dynamic_mapper_section) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void collectDirectResolvedMapItems(const std::vector<ExpandedMapEntry> &items,
+                                   std::vector<ResolvedMapItem> &direct_items) {
+  for (const ExpandedMapEntry &item : items) {
+    if (item.kind == ExpandedMapEntryKind::direct_item) {
+      direct_items.push_back(item.direct_item);
+    }
+  }
+}
+
+std::vector<ExpandedMapEntry>
 collectExpandedMapItemsForClause(SgStatement *anchor_stmt,
                                  const SgOmpMapClause *map_clause) {
-  std::vector<ResolvedMapItem> items;
+  std::vector<ExpandedMapEntry> items;
   if (anchor_stmt == nullptr || map_clause == nullptr ||
       map_clause->get_variables() == nullptr) {
     return items;
@@ -2323,7 +2431,7 @@ collectExpandedMapItemsForClause(SgStatement *anchor_stmt,
     }
     SgExpression *effective_expr =
         buildEffectiveClauseItemExpression(map_clause, expr);
-    collectExpandedMapItemsForExpression(
+    collectExpandedMapEntriesForExpression(
         effective_expr, requested_identifier, identifier_was_explicit,
         MapperUseKind::map_clause, map_clause->get_operation(),
         runtime_flag_bits, anchor_stmt, items, active_mappers);
@@ -2331,10 +2439,10 @@ collectExpandedMapItemsForClause(SgStatement *anchor_stmt,
   return items;
 }
 
-std::vector<ResolvedMapItem>
+std::vector<ExpandedMapEntry>
 collectExpandedMotionItemsForClause(SgStatement *anchor_stmt,
                                     const SgOmpClause *motion_clause) {
-  std::vector<ResolvedMapItem> items;
+  std::vector<ExpandedMapEntry> items;
   if (anchor_stmt == nullptr || motion_clause == nullptr) {
     return items;
   }
@@ -2380,7 +2488,7 @@ collectExpandedMotionItemsForClause(SgStatement *anchor_stmt,
     }
     SgExpression *effective_expr =
         buildEffectiveClauseItemExpression(motion_clause, expr);
-    collectExpandedMapItemsForExpression(
+    collectExpandedMapEntriesForExpression(
         effective_expr, requested_identifier, identifier_was_explicit, use_kind,
         use_map_op, 0, anchor_stmt, items, active_mappers);
   }
@@ -7244,12 +7352,13 @@ static void generateMappedArrayMemoryHandling(
 //         clauses
 //         2. Using DDE, the translation is simplified as is identical for both
 //         directive
-ASTtools::VarSymSet_t
-transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
-                     SgExprListExp *map_variable_base_list,
-                     SgExprListExp *map_variable_size_list,
-                     SgExprListExp *map_variable_type_list,
-                     GpuOffloadLoweringContext *offload_ctx = NULL) {
+ASTtools::VarSymSet_t transOmpMapVariables(
+    SgStatement *node, SgExprListExp *map_variable_list,
+    SgExprListExp *map_variable_base_list,
+    SgExprListExp *map_variable_size_list,
+    SgExprListExp *map_variable_type_list,
+    GpuOffloadLoweringContext *offload_ctx = NULL,
+    std::vector<ExpandedMapEntry> *dynamic_entries_out = NULL) {
   ASTtools::VarSymSet_t all_syms;
   ROSE_ASSERT(all_syms.size() == 0); // it should be empty
 
@@ -7465,18 +7574,22 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
       all_syms.insert(var_sym);
   }
 
-  std::vector<ResolvedMapItem> resolved_items;
+  std::vector<ExpandedMapEntry> expanded_entries;
   for (SgOmpClause *clause : map_clauses) {
     SgOmpMapClause *map_clause = isSgOmpMapClause(clause);
     if (map_clause == NULL)
       continue;
-    std::vector<ResolvedMapItem> clause_items =
+    std::vector<ExpandedMapEntry> clause_items =
         collectExpandedMapItemsForClause(target, map_clause);
-    resolved_items.insert(resolved_items.end(), clause_items.begin(),
-                          clause_items.end());
+    expanded_entries.insert(expanded_entries.end(), clause_items.begin(),
+                            clause_items.end());
   }
   if (!isSgOmpTargetDataStatement(node) && offload_ctx != NULL) {
-    for (ResolvedMapItem &item : resolved_items) {
+    for (ExpandedMapEntry &entry : expanded_entries) {
+      if (entry.kind != ExpandedMapEntryKind::direct_item) {
+        continue;
+      }
+      ResolvedMapItem &item = entry.direct_item;
       if (item.direct_variable_symbol == NULL ||
           variable_map[item.direct_variable_symbol] != true) {
         continue;
@@ -7494,9 +7607,21 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
           item.direct_variable_symbol);
     }
   }
-  appendResolvedMapItemArguments(resolved_items, map_variable_list,
-                                 map_variable_base_list, map_variable_size_list,
-                                 map_variable_type_list, target->get_scope());
+  const bool has_dynamic_entries =
+      hasDynamicExpandedMapEntries(expanded_entries);
+  if (dynamic_entries_out != NULL) {
+    dynamic_entries_out->clear();
+    if (has_dynamic_entries) {
+      *dynamic_entries_out = expanded_entries;
+    }
+  }
+  if (!has_dynamic_entries) {
+    std::vector<ResolvedMapItem> resolved_items;
+    collectDirectResolvedMapItems(expanded_entries, resolved_items);
+    appendResolvedMapItemArguments(
+        resolved_items, map_variable_list, map_variable_base_list,
+        map_variable_size_list, map_variable_type_list, target->get_scope());
+  }
 
   return all_syms;
 } // end transOmpMapVariables() for omp target data's map clauses for now
@@ -7643,35 +7768,454 @@ void collectOmpFromToVariablesInfo(
 }
 
 // Collect mapping variables information in from/to clauses.
-void collectOmpTargetUpdateInfo(SgStatement *target,
-                                SgExprListExp *map_variable_list,
-                                SgExprListExp *map_variable_base_list,
-                                SgExprListExp *map_variable_size_list,
-                                SgExprListExp *map_variable_type_list) {
+void collectOmpTargetUpdateInfo(
+    SgStatement *target, SgExprListExp *map_variable_list,
+    SgExprListExp *map_variable_base_list,
+    SgExprListExp *map_variable_size_list,
+    SgExprListExp *map_variable_type_list,
+    std::vector<ExpandedMapEntry> *dynamic_entries_out = NULL) {
   ROSE_ASSERT(target != NULL);
   Rose_STL_Container<SgOmpClause *> from_clauses =
       getClause(target, V_SgOmpFromClause);
   Rose_STL_Container<SgOmpClause *> to_clauses =
       getClause(target, V_SgOmpToClause);
 
-  std::vector<ResolvedMapItem> resolved_items;
+  std::vector<ExpandedMapEntry> expanded_entries;
   for (SgOmpClause *clause : from_clauses) {
-    std::vector<ResolvedMapItem> clause_items =
+    std::vector<ExpandedMapEntry> clause_items =
         collectExpandedMotionItemsForClause(target, clause);
-    resolved_items.insert(resolved_items.end(), clause_items.begin(),
-                          clause_items.end());
+    expanded_entries.insert(expanded_entries.end(), clause_items.begin(),
+                            clause_items.end());
   }
   for (SgOmpClause *clause : to_clauses) {
-    std::vector<ResolvedMapItem> clause_items =
+    std::vector<ExpandedMapEntry> clause_items =
         collectExpandedMotionItemsForClause(target, clause);
-    resolved_items.insert(resolved_items.end(), clause_items.begin(),
-                          clause_items.end());
+    expanded_entries.insert(expanded_entries.end(), clause_items.begin(),
+                            clause_items.end());
   }
 
-  appendResolvedMapItemArguments(resolved_items, map_variable_list,
-                                 map_variable_base_list, map_variable_size_list,
-                                 map_variable_type_list, target->get_scope());
+  const bool has_dynamic_entries =
+      hasDynamicExpandedMapEntries(expanded_entries);
+  if (dynamic_entries_out != NULL) {
+    dynamic_entries_out->clear();
+    if (has_dynamic_entries) {
+      *dynamic_entries_out = expanded_entries;
+    }
+  }
+  if (!has_dynamic_entries) {
+    std::vector<ResolvedMapItem> resolved_items;
+    collectDirectResolvedMapItems(expanded_entries, resolved_items);
+    appendResolvedMapItemArguments(
+        resolved_items, map_variable_list, map_variable_base_list,
+        map_variable_size_list, map_variable_type_list, target->get_scope());
+  }
 } // collectOmpTargetUpdateInfo()
+
+struct RuntimeMapArgumentArrayDeclarations {
+  SgVariableDeclaration *args_base_decl = nullptr;
+  SgVariableDeclaration *args_decl = nullptr;
+  SgVariableDeclaration *arg_sizes_decl = nullptr;
+  SgVariableDeclaration *arg_types_decl = nullptr;
+  SgVariableDeclaration *arg_number_decl = nullptr;
+  bool uses_heap_storage = false;
+};
+
+size_t getMapArgumentListCount(SgExprListExp *map_variable_list,
+                               SgExprListExp *map_variable_base_list,
+                               SgExprListExp *map_variable_size_list,
+                               SgExprListExp *map_variable_type_list) {
+  if (map_variable_list == nullptr || map_variable_base_list == nullptr ||
+      map_variable_size_list == nullptr || map_variable_type_list == nullptr) {
+    return 0;
+  }
+
+  const size_t arg_count = map_variable_list->get_expressions().size();
+  ROSE_ASSERT(map_variable_base_list->get_expressions().size() == arg_count);
+  ROSE_ASSERT(map_variable_size_list->get_expressions().size() == arg_count);
+  ROSE_ASSERT(map_variable_type_list->get_expressions().size() == arg_count);
+  return arg_count;
+}
+
+SgExpression *
+buildArraySectionElementIndexExpression(SgExpression *lower_bound,
+                                        SgVariableSymbol *index_symbol) {
+  ROSE_ASSERT(index_symbol != nullptr);
+
+  SgExpression *index_expr = buildVarRefExp(index_symbol);
+  if (lower_bound == nullptr || isSgNullExpression(lower_bound) != nullptr) {
+    return index_expr;
+  }
+
+  SgType *lower_type = stripTypeAliasesAndReferences(lower_bound->get_type());
+  if (lower_type != nullptr) {
+    index_expr = buildCastExp(index_expr, lower_type);
+  }
+  return buildAddOp(copyExpression(lower_bound), index_expr);
+}
+
+SgExpression *buildArraySectionElementExpression(
+    SgExpression *base_expression,
+    const std::vector<std::pair<SgExpression *, SgExpression *>> &dimensions,
+    const std::vector<SgVariableSymbol *> &index_symbols) {
+  ROSE_ASSERT(base_expression != nullptr);
+  ROSE_ASSERT(dimensions.size() == index_symbols.size());
+
+  SgExpression *result = copyExpression(base_expression);
+  for (size_t i = 0; i < dimensions.size(); ++i) {
+    result =
+        buildPntrArrRefExp(result, buildArraySectionElementIndexExpression(
+                                       dimensions[i].first, index_symbols[i]));
+  }
+  return result;
+}
+
+SgExpression *buildMallocArrayInitializer(SgType *element_type,
+                                          SgExpression *element_count,
+                                          SgScopeStatement *scope) {
+  ROSE_ASSERT(element_type != nullptr);
+  ROSE_ASSERT(element_count != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+
+  SgExpression *allocation_size = buildMultiplyOp(
+      buildSizeOfOp(element_type), copyExpression(element_count));
+  return buildCastExp(
+      buildFunctionCallExp(SgName("malloc"), buildPointerType(buildVoidType()),
+                           buildExprListExp(allocation_size), scope),
+      buildPointerType(element_type));
+}
+
+void appendMapArgumentArrayAssignment(SgBasicBlock *block,
+                                      SgScopeStatement *scope,
+                                      SgVariableDeclaration *target_decl,
+                                      SgVariableDeclaration *index_decl,
+                                      SgExpression *value_expr,
+                                      SgType *element_type) {
+  ROSE_ASSERT(block != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+  ROSE_ASSERT(target_decl != nullptr);
+  ROSE_ASSERT(index_decl != nullptr);
+  ROSE_ASSERT(value_expr != nullptr);
+  ROSE_ASSERT(element_type != nullptr);
+
+  block->append_statement(buildAssignStatement(
+      buildPntrArrRefExp(buildVarRefExp(target_decl),
+                         buildVarRefExp(index_decl)),
+      buildCastExp(copyExpression(value_expr), element_type)));
+}
+
+void appendRawMapArgumentListsToDynamicArrays(
+    SgExprListExp *map_variable_list, SgExprListExp *map_variable_base_list,
+    SgExprListExp *map_variable_size_list,
+    SgExprListExp *map_variable_type_list, SgBasicBlock *block,
+    SgScopeStatement *scope, SgVariableDeclaration *args_base_decl,
+    SgVariableDeclaration *args_decl, SgVariableDeclaration *arg_sizes_decl,
+    SgVariableDeclaration *arg_types_decl,
+    SgVariableDeclaration *arg_index_decl) {
+  if (map_variable_list == nullptr || map_variable_base_list == nullptr ||
+      map_variable_size_list == nullptr || map_variable_type_list == nullptr) {
+    return;
+  }
+
+  const SgExpressionPtrList &args = map_variable_list->get_expressions();
+  const SgExpressionPtrList &bases = map_variable_base_list->get_expressions();
+  const SgExpressionPtrList &sizes = map_variable_size_list->get_expressions();
+  const SgExpressionPtrList &types = map_variable_type_list->get_expressions();
+  ROSE_ASSERT(args.size() == bases.size());
+  ROSE_ASSERT(args.size() == sizes.size());
+  ROSE_ASSERT(args.size() == types.size());
+
+  SgType *void_ptr_type = buildPointerType(buildVoidType());
+  SgType *int64_type = buildOpaqueType("int64_t", scope);
+  for (size_t i = 0; i < args.size(); ++i) {
+    appendMapArgumentArrayAssignment(block, scope, args_base_decl,
+                                     arg_index_decl, bases[i], void_ptr_type);
+    appendMapArgumentArrayAssignment(block, scope, args_decl, arg_index_decl,
+                                     args[i], void_ptr_type);
+    appendMapArgumentArrayAssignment(block, scope, arg_sizes_decl,
+                                     arg_index_decl, sizes[i], int64_type);
+    appendMapArgumentArrayAssignment(block, scope, arg_types_decl,
+                                     arg_index_decl, types[i], int64_type);
+    block->append_statement(buildExprStatement(
+        buildPlusPlusOp(buildVarRefExp(arg_index_decl), SgUnaryOp::postfix)));
+  }
+}
+
+enum class DynamicMapExpansionPass { count_only, populate };
+
+void appendExpandedMapEntriesDynamicPass(
+    const std::vector<ExpandedMapEntry> &entries, DynamicMapExpansionPass pass,
+    SgBasicBlock *block, SgScopeStatement *scope,
+    SgVariableDeclaration *arg_number_decl,
+    SgVariableDeclaration *args_base_decl, SgVariableDeclaration *args_decl,
+    SgVariableDeclaration *arg_sizes_decl,
+    SgVariableDeclaration *arg_types_decl,
+    SgVariableDeclaration *arg_index_decl, size_t &loop_counter,
+    size_t &literal_counter);
+
+void appendExpandedMapEntryDynamicPass(
+    const ExpandedMapEntry &entry, DynamicMapExpansionPass pass,
+    SgBasicBlock *block, SgScopeStatement *scope,
+    SgVariableDeclaration *arg_number_decl,
+    SgVariableDeclaration *args_base_decl, SgVariableDeclaration *args_decl,
+    SgVariableDeclaration *arg_sizes_decl,
+    SgVariableDeclaration *arg_types_decl,
+    SgVariableDeclaration *arg_index_decl, size_t &loop_counter,
+    size_t &literal_counter) {
+  ROSE_ASSERT(block != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+  ROSE_ASSERT(arg_number_decl != nullptr);
+
+  if (entry.kind == ExpandedMapEntryKind::direct_item) {
+    if (pass == DynamicMapExpansionPass::count_only) {
+      block->append_statement(buildExprStatement(
+          buildPlusAssignOp(buildVarRefExp(arg_number_decl), buildIntVal(1))));
+      return;
+    }
+
+    ROSE_ASSERT(args_base_decl != nullptr);
+    ROSE_ASSERT(args_decl != nullptr);
+    ROSE_ASSERT(arg_sizes_decl != nullptr);
+    ROSE_ASSERT(arg_types_decl != nullptr);
+    ROSE_ASSERT(arg_index_decl != nullptr);
+
+    MapArgumentExpressions expressions =
+        buildResolvedMapItemArgumentExpressions(entry.direct_item, scope);
+    if (isLiteralTargetParamPackCall(expressions.mapping_expression) ||
+        isLiteralTargetParamPackCall(expressions.mapping_base_expression)) {
+      const std::string packed_name =
+          "__rex_packed_literal_arg_dyn_" + std::to_string(literal_counter++);
+      SgVariableDeclaration *packed_decl = buildVariableDeclaration(
+          packed_name, buildPointerType(buildVoidType()),
+          buildAssignInitializer(
+              copyExpression(expressions.mapping_expression)),
+          block);
+      block->append_statement(packed_decl);
+      SgVariableSymbol *packed_symbol = getFirstVarSym(packed_decl);
+      ROSE_ASSERT(packed_symbol != nullptr);
+      expressions.mapping_expression = buildVarRefExp(packed_symbol);
+      expressions.mapping_base_expression = buildVarRefExp(packed_symbol);
+    }
+
+    SgType *void_ptr_type = buildPointerType(buildVoidType());
+    SgType *int64_type = buildOpaqueType("int64_t", scope);
+    appendMapArgumentArrayAssignment(
+        block, scope, args_base_decl, arg_index_decl,
+        expressions.mapping_base_expression, void_ptr_type);
+    appendMapArgumentArrayAssignment(block, scope, args_decl, arg_index_decl,
+                                     expressions.mapping_expression,
+                                     void_ptr_type);
+    appendMapArgumentArrayAssignment(
+        block, scope, arg_sizes_decl, arg_index_decl,
+        expressions.mapping_size_expression, int64_type);
+    appendMapArgumentArrayAssignment(
+        block, scope, arg_types_decl, arg_index_decl,
+        expressions.mapping_type_expression, int64_type);
+    block->append_statement(buildExprStatement(
+        buildPlusPlusOp(buildVarRefExp(arg_index_decl), SgUnaryOp::postfix)));
+    return;
+  }
+
+  ROSE_ASSERT(entry.kind == ExpandedMapEntryKind::dynamic_mapper_section);
+  ROSE_ASSERT(entry.section_base_expression != nullptr);
+  ROSE_ASSERT(!entry.section_dimensions.empty());
+  ROSE_ASSERT(entry.resolved_mapper.declaration != nullptr);
+
+  std::function<void(size_t, SgBasicBlock *, std::vector<SgVariableSymbol *> &)>
+      build_loop_nest;
+  build_loop_nest = [&](size_t dim_index, SgBasicBlock *current_block,
+                        std::vector<SgVariableSymbol *> &index_symbols) {
+    if (dim_index == entry.section_dimensions.size()) {
+      SgExpression *element_expr = buildArraySectionElementExpression(
+          entry.section_base_expression, entry.section_dimensions,
+          index_symbols);
+      std::vector<ExpandedMapEntry> nested_entries;
+      std::vector<const SgOmpDeclareMapperStatement *> active_mappers;
+      collectExpandedMapEntriesUsingResolvedMapper(
+          element_expr, entry.resolved_mapper, entry.use_kind, entry.use_map_op,
+          entry.runtime_flag_bits, entry.anchor_stmt, nested_entries,
+          active_mappers);
+      appendExpandedMapEntriesDynamicPass(
+          nested_entries, pass, current_block, scope, arg_number_decl,
+          args_base_decl, args_decl, arg_sizes_decl, arg_types_decl,
+          arg_index_decl, loop_counter, literal_counter);
+      return;
+    }
+
+    const std::pair<SgExpression *, SgExpression *> &dimension =
+        entry.section_dimensions[dim_index];
+    SgExpression *length_expr = dimension.second;
+    if (length_expr == nullptr || isSgNullExpression(length_expr) != nullptr) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Missing mapper section length while expanding "
+          << entry.section_base_expression->unparseToString();
+      ROSE_ABORT();
+    }
+
+    const std::string index_name =
+        "__rex_mapper_section_index_" + std::to_string(loop_counter++);
+    SgType *index_type = buildOpaqueType("int64_t", scope);
+    SgVariableDeclaration *index_decl = buildVariableDeclaration(
+        index_name, index_type, buildAssignInitializer(buildLongLongIntVal(0)),
+        current_block);
+    SgVariableSymbol *index_symbol = getFirstVarSym(index_decl);
+    ROSE_ASSERT(index_symbol != nullptr);
+    index_symbols.push_back(index_symbol);
+
+    SgBasicBlock *loop_body = buildBasicBlock();
+    build_loop_nest(dim_index + 1, loop_body, index_symbols);
+    current_block->append_statement(buildForStatement_nfi(
+        index_decl,
+        buildExprStatement(buildLessThanOp(
+            buildVarRefExp(index_symbol),
+            buildCastExp(copyExpression(length_expr), index_type))),
+        buildPlusPlusOp(buildVarRefExp(index_symbol), SgUnaryOp::postfix),
+        loop_body));
+    index_symbols.pop_back();
+  };
+
+  std::vector<SgVariableSymbol *> index_symbols;
+  build_loop_nest(0, block, index_symbols);
+}
+
+void appendExpandedMapEntriesDynamicPass(
+    const std::vector<ExpandedMapEntry> &entries, DynamicMapExpansionPass pass,
+    SgBasicBlock *block, SgScopeStatement *scope,
+    SgVariableDeclaration *arg_number_decl,
+    SgVariableDeclaration *args_base_decl, SgVariableDeclaration *args_decl,
+    SgVariableDeclaration *arg_sizes_decl,
+    SgVariableDeclaration *arg_types_decl,
+    SgVariableDeclaration *arg_index_decl, size_t &loop_counter,
+    size_t &literal_counter) {
+  for (const ExpandedMapEntry &entry : entries) {
+    appendExpandedMapEntryDynamicPass(
+        entry, pass, block, scope, arg_number_decl, args_base_decl, args_decl,
+        arg_sizes_decl, arg_types_decl, arg_index_decl, loop_counter,
+        literal_counter);
+  }
+}
+
+RuntimeMapArgumentArrayDeclarations buildDynamicRuntimeMapArgumentArrays(
+    SgBasicBlock *block, SgScopeStatement *scope,
+    SgExprListExp *prefix_map_variable_list,
+    SgExprListExp *prefix_map_variable_base_list,
+    SgExprListExp *prefix_map_variable_size_list,
+    SgExprListExp *prefix_map_variable_type_list,
+    const std::vector<ExpandedMapEntry> &dynamic_entries,
+    SgExprListExp *suffix_map_variable_list = NULL,
+    SgExprListExp *suffix_map_variable_base_list = NULL,
+    SgExprListExp *suffix_map_variable_size_list = NULL,
+    SgExprListExp *suffix_map_variable_type_list = NULL) {
+  ROSE_ASSERT(block != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+
+  const size_t prefix_count = getMapArgumentListCount(
+      prefix_map_variable_list, prefix_map_variable_base_list,
+      prefix_map_variable_size_list, prefix_map_variable_type_list);
+  const size_t suffix_count = getMapArgumentListCount(
+      suffix_map_variable_list, suffix_map_variable_base_list,
+      suffix_map_variable_size_list, suffix_map_variable_type_list);
+
+  RuntimeMapArgumentArrayDeclarations result;
+  result.uses_heap_storage = true;
+  result.arg_number_decl = buildVariableDeclaration(
+      "__arg_num", buildOpaqueType("int32_t", scope),
+      buildAssignInitializer(
+          buildIntVal(static_cast<int>(prefix_count + suffix_count))),
+      block);
+  block->append_statement(result.arg_number_decl);
+
+  size_t loop_counter = 0;
+  size_t literal_counter = 0;
+  appendExpandedMapEntriesDynamicPass(
+      dynamic_entries, DynamicMapExpansionPass::count_only, block, scope,
+      result.arg_number_decl, NULL, NULL, NULL, NULL, NULL, loop_counter,
+      literal_counter);
+
+  SgExpression *arg_count_expr = buildVarRefExp(result.arg_number_decl);
+  SgType *void_ptr_type = buildPointerType(buildVoidType());
+  SgType *void_ptr_ptr_type = buildPointerType(void_ptr_type);
+  SgType *int64_type = buildOpaqueType("int64_t", scope);
+  SgType *int64_ptr_type = buildPointerType(int64_type);
+
+  result.args_base_decl = buildVariableDeclaration(
+      "__args_base", void_ptr_ptr_type,
+      buildAssignInitializer(
+          buildMallocArrayInitializer(void_ptr_type, arg_count_expr, scope)),
+      block);
+  block->append_statement(result.args_base_decl);
+
+  result.args_decl = buildVariableDeclaration(
+      "__args", void_ptr_ptr_type,
+      buildAssignInitializer(
+          buildMallocArrayInitializer(void_ptr_type, arg_count_expr, scope)),
+      block);
+  block->append_statement(result.args_decl);
+
+  result.arg_sizes_decl = buildVariableDeclaration(
+      "__arg_sizes", int64_ptr_type,
+      buildAssignInitializer(
+          buildMallocArrayInitializer(int64_type, arg_count_expr, scope)),
+      block);
+  block->append_statement(result.arg_sizes_decl);
+
+  result.arg_types_decl = buildVariableDeclaration(
+      "__arg_types", int64_ptr_type,
+      buildAssignInitializer(
+          buildMallocArrayInitializer(int64_type, arg_count_expr, scope)),
+      block);
+  block->append_statement(result.arg_types_decl);
+
+  SgVariableDeclaration *arg_index_decl =
+      buildVariableDeclaration("__arg_index", buildOpaqueType("int32_t", scope),
+                               buildAssignInitializer(buildIntVal(0)), block);
+  block->append_statement(arg_index_decl);
+
+  appendRawMapArgumentListsToDynamicArrays(
+      prefix_map_variable_list, prefix_map_variable_base_list,
+      prefix_map_variable_size_list, prefix_map_variable_type_list, block,
+      scope, result.args_base_decl, result.args_decl, result.arg_sizes_decl,
+      result.arg_types_decl, arg_index_decl);
+
+  loop_counter = 0;
+  literal_counter = 0;
+  appendExpandedMapEntriesDynamicPass(
+      dynamic_entries, DynamicMapExpansionPass::populate, block, scope,
+      result.arg_number_decl, result.args_base_decl, result.args_decl,
+      result.arg_sizes_decl, result.arg_types_decl, arg_index_decl,
+      loop_counter, literal_counter);
+
+  appendRawMapArgumentListsToDynamicArrays(
+      suffix_map_variable_list, suffix_map_variable_base_list,
+      suffix_map_variable_size_list, suffix_map_variable_type_list, block,
+      scope, result.args_base_decl, result.args_decl, result.arg_sizes_decl,
+      result.arg_types_decl, arg_index_decl);
+
+  return result;
+}
+
+void appendDynamicRuntimeMapArgumentArrayCleanup(
+    const RuntimeMapArgumentArrayDeclarations &arrays, SgBasicBlock *block,
+    SgScopeStatement *scope) {
+  if (!arrays.uses_heap_storage) {
+    return;
+  }
+
+  ROSE_ASSERT(block != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+
+  const SgVariableDeclaration *declarations[] = {
+      arrays.arg_types_decl, arrays.arg_sizes_decl, arrays.args_decl,
+      arrays.args_base_decl};
+  for (const SgVariableDeclaration *decl : declarations) {
+    ROSE_ASSERT(decl != nullptr);
+    block->append_statement(buildFunctionCallStmt(
+        "free", buildVoidType(),
+        buildExprListExp(buildCastExp(
+            buildVarRefExp(const_cast<SgVariableDeclaration *>(decl)),
+            buildPointerType(buildVoidType()))),
+        scope));
+  }
+}
 
 static SgVariableDeclaration *buildTargetKernelArgsDeclaration(
     SgGlobal *global_scope, SgScopeStatement *scope,
@@ -7755,10 +8299,12 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
   SgExprListExp *map_variable_base_list = buildExprListExp();
   SgExprListExp *map_variable_size_list = buildExprListExp();
   SgExprListExp *map_variable_type_list = buildExprListExp();
+  std::vector<ExpandedMapEntry> dynamic_map_entries;
 
   all_syms = transOmpMapVariables(
       target, map_variable_list, map_variable_base_list, map_variable_size_list,
-      map_variable_type_list, &offload_ctx); //, addressOf_syms);
+      map_variable_type_list, &offload_ctx,
+      &dynamic_map_entries); //, addressOf_syms);
 
   ASTtools::VarSymSet_t
       per_block_reduction_syms; // translation generated per block reduction
@@ -7956,42 +8502,61 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
       p_scope);
   outlined_driver_body->append_statement(host_point_decl);
 
-  materializeLiteralTargetArgExpressions(
-      map_variable_list, map_variable_base_list, outlined_driver_body, p_scope);
+  SgVariableDeclaration *args_base_decl = nullptr;
+  SgVariableDeclaration *args_decl = nullptr;
+  SgVariableDeclaration *arg_sizes = nullptr;
+  SgVariableDeclaration *arg_types = nullptr;
+  SgVariableDeclaration *arg_number_decl = nullptr;
+  RuntimeMapArgumentArrayDeclarations dynamic_arrays;
+  if (!dynamic_map_entries.empty()) {
+    dynamic_arrays = buildDynamicRuntimeMapArgumentArrays(
+        outlined_driver_body, p_scope, map_variable_list,
+        map_variable_base_list, map_variable_size_list, map_variable_type_list,
+        dynamic_map_entries);
+    args_base_decl = dynamic_arrays.args_base_decl;
+    args_decl = dynamic_arrays.args_decl;
+    arg_sizes = dynamic_arrays.arg_sizes_decl;
+    arg_types = dynamic_arrays.arg_types_decl;
+    arg_number_decl = dynamic_arrays.arg_number_decl;
+  } else {
+    materializeLiteralTargetArgExpressions(map_variable_list,
+                                           map_variable_base_list,
+                                           outlined_driver_body, p_scope);
 
-  SgBracedInitializer *offloading_variables_base =
-      buildBracedInitializer(map_variable_base_list);
-  SgVariableDeclaration *args_base_decl = buildVariableDeclaration(
-      "__args_base", buildArrayType(buildPointerType(buildVoidType())),
-      buildAssignInitializer(offloading_variables_base), p_scope);
-  outlined_driver_body->append_statement(args_base_decl);
+    SgBracedInitializer *offloading_variables_base =
+        buildBracedInitializer(map_variable_base_list);
+    args_base_decl = buildVariableDeclaration(
+        "__args_base", buildArrayType(buildPointerType(buildVoidType())),
+        buildAssignInitializer(offloading_variables_base), p_scope);
+    outlined_driver_body->append_statement(args_base_decl);
 
-  SgBracedInitializer *offloading_variables =
-      buildBracedInitializer(map_variable_list);
-  SgVariableDeclaration *args_decl = buildVariableDeclaration(
-      "__args", buildArrayType(buildPointerType(buildVoidType())),
-      buildAssignInitializer(offloading_variables), p_scope);
-  outlined_driver_body->append_statement(args_decl);
+    SgBracedInitializer *offloading_variables =
+        buildBracedInitializer(map_variable_list);
+    args_decl = buildVariableDeclaration(
+        "__args", buildArrayType(buildPointerType(buildVoidType())),
+        buildAssignInitializer(offloading_variables), p_scope);
+    outlined_driver_body->append_statement(args_decl);
 
-  SgBracedInitializer *map_variable_sizes =
-      buildBracedInitializer(map_variable_size_list);
-  SgVariableDeclaration *arg_sizes = buildVariableDeclaration(
-      "__arg_sizes", buildArrayType(buildOpaqueType("int64_t", p_scope)),
-      buildAssignInitializer(map_variable_sizes), p_scope);
-  outlined_driver_body->append_statement(arg_sizes);
+    SgBracedInitializer *map_variable_sizes =
+        buildBracedInitializer(map_variable_size_list);
+    arg_sizes = buildVariableDeclaration(
+        "__arg_sizes", buildArrayType(buildOpaqueType("int64_t", p_scope)),
+        buildAssignInitializer(map_variable_sizes), p_scope);
+    outlined_driver_body->append_statement(arg_sizes);
 
-  SgBracedInitializer *map_variable_types =
-      buildBracedInitializer(map_variable_type_list);
-  SgVariableDeclaration *arg_types = buildVariableDeclaration(
-      "__arg_types", buildArrayType(buildOpaqueType("int64_t", p_scope)),
-      buildAssignInitializer(map_variable_types), p_scope);
-  outlined_driver_body->append_statement(arg_types);
+    SgBracedInitializer *map_variable_types =
+        buildBracedInitializer(map_variable_type_list);
+    arg_types = buildVariableDeclaration(
+        "__arg_types", buildArrayType(buildOpaqueType("int64_t", p_scope)),
+        buildAssignInitializer(map_variable_types), p_scope);
+    outlined_driver_body->append_statement(arg_types);
 
-  int kernel_arg_num = map_variable_base_list->get_expressions().size();
-  SgVariableDeclaration *arg_number_decl = buildVariableDeclaration(
-      "__arg_num", buildOpaqueType("int32_t", p_scope),
-      buildAssignInitializer(buildIntVal(kernel_arg_num)), p_scope);
-  outlined_driver_body->append_statement(arg_number_decl);
+    int kernel_arg_num = map_variable_base_list->get_expressions().size();
+    arg_number_decl = buildVariableDeclaration(
+        "__arg_num", buildOpaqueType("int32_t", p_scope),
+        buildAssignInitializer(buildIntVal(kernel_arg_num)), p_scope);
+    outlined_driver_body->append_statement(arg_number_decl);
+  }
 
   SgVariableDeclaration *kernel_args_decl = buildTargetKernelArgsDeclaration(
       g_scope, p_scope, arg_number_decl, args_base_decl, args_decl, arg_sizes,
@@ -8011,6 +8576,9 @@ void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
       func_offloading_name, buildIntType(), parameters, p_scope);
   setSourcePositionForTransformation(func_offloading_stmt);
   outlined_driver_body->append_statement(func_offloading_stmt);
+
+  appendDynamicRuntimeMapArgumentArrayCleanup(dynamic_arrays,
+                                              outlined_driver_body, p_scope);
 
   SageInterface::fixStatement(outlined_driver_body, p_scope);
   //------------now remove omp parallel since everything within it has been
@@ -8510,10 +9078,12 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   SgExprListExp *map_variable_base_list = buildExprListExp();
   SgExprListExp *map_variable_size_list = buildExprListExp();
   SgExprListExp *map_variable_type_list = buildExprListExp();
+  std::vector<ExpandedMapEntry> dynamic_map_entries;
 
   all_syms = transOmpMapVariables(
       target, map_variable_list, map_variable_base_list, map_variable_size_list,
-      map_variable_type_list, &offload_ctx); //, addressOf_syms);
+      map_variable_type_list, &offload_ctx,
+      &dynamic_map_entries); //, addressOf_syms);
   /*
   for (std::set<const SgVariableSymbol*>::iterator iter = all_syms.begin(); iter
   != all_syms.end(); iter++) { std::cout << "SPMD worksharing variable: " <<
@@ -8726,6 +9296,10 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
   // used for reduction variables
   SgExpression *shared_data = NULL; // shared data size expression for CUDA
                                     // kernel execution configuration
+  SgExprListExp *map_variable_list_suffix = buildExprListExp();
+  SgExprListExp *map_variable_base_list_suffix = buildExprListExp();
+  SgExprListExp *map_variable_size_list_suffix = buildExprListExp();
+  SgExprListExp *map_variable_type_list_suffix = buildExprListExp();
   for (std::vector<SgVariableDeclaration *>::iterator iter =
            offload_ctx.per_block_declarations.begin();
        iter != offload_ctx.per_block_declarations.end(); iter++) {
@@ -8747,18 +9321,32 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
 
     // insert reduction buffer array to variable mapping list
     string reduction_buffer_name = (sym->get_name()).getString();
-    map_variable_list->append_expression(
+    SgExprListExp *reduction_map_variable_list = dynamic_map_entries.empty()
+                                                     ? map_variable_list
+                                                     : map_variable_list_suffix;
+    SgExprListExp *reduction_map_variable_base_list =
+        dynamic_map_entries.empty() ? map_variable_base_list
+                                    : map_variable_base_list_suffix;
+    SgExprListExp *reduction_map_variable_size_list =
+        dynamic_map_entries.empty() ? map_variable_size_list
+                                    : map_variable_size_list_suffix;
+    SgExprListExp *reduction_map_variable_type_list =
+        dynamic_map_entries.empty() ? map_variable_type_list
+                                    : map_variable_type_list_suffix;
+    reduction_map_variable_list->append_expression(
         buildVarRefExp(reduction_buffer_name, p_scope));
-    map_variable_base_list->append_expression(
+    reduction_map_variable_base_list->append_expression(
         buildVarRefExp(reduction_buffer_name, p_scope));
     SgExpression *reduction_variable_size =
         buildCastExp(buildMultiplyOp(buildVarRefExp(num_blocks_decl),
                                      buildSizeOfOp(base_type)),
                      buildOpaqueType("int64_t", p_scope));
-    map_variable_size_list->append_expression(reduction_variable_size);
+    reduction_map_variable_size_list->append_expression(
+        reduction_variable_size);
     SgExpression *reduction_variable_value =
         buildIntVal(OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_FROM);
-    map_variable_type_list->append_expression(reduction_variable_value);
+    reduction_map_variable_type_list->append_expression(
+        reduction_variable_value);
   }
 
   // generate the cuda kernel launch statement
@@ -8825,42 +9413,63 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
       p_scope);
   outlined_driver_body->append_statement(host_point_decl);
 
-  materializeLiteralTargetArgExpressions(
-      map_variable_list, map_variable_base_list, outlined_driver_body, p_scope);
+  SgVariableDeclaration *args_base_decl = nullptr;
+  SgVariableDeclaration *args_decl = nullptr;
+  SgVariableDeclaration *arg_sizes = nullptr;
+  SgVariableDeclaration *arg_types = nullptr;
+  SgVariableDeclaration *arg_number_decl = nullptr;
+  RuntimeMapArgumentArrayDeclarations dynamic_arrays;
+  if (!dynamic_map_entries.empty()) {
+    dynamic_arrays = buildDynamicRuntimeMapArgumentArrays(
+        outlined_driver_body, p_scope, map_variable_list,
+        map_variable_base_list, map_variable_size_list, map_variable_type_list,
+        dynamic_map_entries, map_variable_list_suffix,
+        map_variable_base_list_suffix, map_variable_size_list_suffix,
+        map_variable_type_list_suffix);
+    args_base_decl = dynamic_arrays.args_base_decl;
+    args_decl = dynamic_arrays.args_decl;
+    arg_sizes = dynamic_arrays.arg_sizes_decl;
+    arg_types = dynamic_arrays.arg_types_decl;
+    arg_number_decl = dynamic_arrays.arg_number_decl;
+  } else {
+    materializeLiteralTargetArgExpressions(map_variable_list,
+                                           map_variable_base_list,
+                                           outlined_driver_body, p_scope);
 
-  SgBracedInitializer *offloading_variables_base =
-      buildBracedInitializer(map_variable_base_list);
-  SgVariableDeclaration *args_base_decl = buildVariableDeclaration(
-      "__args_base", buildArrayType(buildPointerType(buildVoidType())),
-      buildAssignInitializer(offloading_variables_base), p_scope);
-  outlined_driver_body->append_statement(args_base_decl);
+    SgBracedInitializer *offloading_variables_base =
+        buildBracedInitializer(map_variable_base_list);
+    args_base_decl = buildVariableDeclaration(
+        "__args_base", buildArrayType(buildPointerType(buildVoidType())),
+        buildAssignInitializer(offloading_variables_base), p_scope);
+    outlined_driver_body->append_statement(args_base_decl);
 
-  SgBracedInitializer *offloading_variables =
-      buildBracedInitializer(map_variable_list);
-  SgVariableDeclaration *args_decl = buildVariableDeclaration(
-      "__args", buildArrayType(buildPointerType(buildVoidType())),
-      buildAssignInitializer(offloading_variables), p_scope);
-  outlined_driver_body->append_statement(args_decl);
+    SgBracedInitializer *offloading_variables =
+        buildBracedInitializer(map_variable_list);
+    args_decl = buildVariableDeclaration(
+        "__args", buildArrayType(buildPointerType(buildVoidType())),
+        buildAssignInitializer(offloading_variables), p_scope);
+    outlined_driver_body->append_statement(args_decl);
 
-  SgBracedInitializer *map_variable_sizes =
-      buildBracedInitializer(map_variable_size_list);
-  SgVariableDeclaration *arg_sizes = buildVariableDeclaration(
-      "__arg_sizes", buildArrayType(buildOpaqueType("int64_t", p_scope)),
-      buildAssignInitializer(map_variable_sizes), p_scope);
-  outlined_driver_body->append_statement(arg_sizes);
+    SgBracedInitializer *map_variable_sizes =
+        buildBracedInitializer(map_variable_size_list);
+    arg_sizes = buildVariableDeclaration(
+        "__arg_sizes", buildArrayType(buildOpaqueType("int64_t", p_scope)),
+        buildAssignInitializer(map_variable_sizes), p_scope);
+    outlined_driver_body->append_statement(arg_sizes);
 
-  SgBracedInitializer *map_variable_types =
-      buildBracedInitializer(map_variable_type_list);
-  SgVariableDeclaration *arg_types = buildVariableDeclaration(
-      "__arg_types", buildArrayType(buildOpaqueType("int64_t", p_scope)),
-      buildAssignInitializer(map_variable_types), p_scope);
-  outlined_driver_body->append_statement(arg_types);
+    SgBracedInitializer *map_variable_types =
+        buildBracedInitializer(map_variable_type_list);
+    arg_types = buildVariableDeclaration(
+        "__arg_types", buildArrayType(buildOpaqueType("int64_t", p_scope)),
+        buildAssignInitializer(map_variable_types), p_scope);
+    outlined_driver_body->append_statement(arg_types);
 
-  int kernel_arg_num = map_variable_base_list->get_expressions().size();
-  SgVariableDeclaration *arg_number_decl = buildVariableDeclaration(
-      "__arg_num", buildOpaqueType("int32_t", p_scope),
-      buildAssignInitializer(buildIntVal(kernel_arg_num)), p_scope);
-  outlined_driver_body->append_statement(arg_number_decl);
+    int kernel_arg_num = map_variable_base_list->get_expressions().size();
+    arg_number_decl = buildVariableDeclaration(
+        "__arg_num", buildOpaqueType("int32_t", p_scope),
+        buildAssignInitializer(buildIntVal(kernel_arg_num)), p_scope);
+    outlined_driver_body->append_statement(arg_number_decl);
+  }
 
   SgVariableDeclaration *kernel_args_decl = buildTargetKernelArgsDeclaration(
       g_scope, p_scope, arg_number_decl, args_base_decl, args_decl, arg_sizes,
@@ -8881,6 +9490,9 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
       func_offloading_name, buildIntType(), parameters, p_scope);
   setSourcePositionForTransformation(func_offloading_stmt);
   outlined_driver_body->append_statement(func_offloading_stmt);
+
+  appendDynamicRuntimeMapArgumentArrayCleanup(dynamic_arrays,
+                                              outlined_driver_body, p_scope);
 
   for (ASTtools::VarSymSet_t::const_iterator iter =
            per_block_reduction_syms.begin();
@@ -9895,13 +10507,66 @@ void transOmpTargetData(SgNode *node) {
   SgExprListExp *map_variable_base_list = buildExprListExp();
   SgExprListExp *map_variable_size_list = buildExprListExp();
   SgExprListExp *map_variable_type_list = buildExprListExp();
+  std::vector<ExpandedMapEntry> dynamic_map_entries;
 
   transOmpMapVariables(target, map_variable_list, map_variable_base_list,
                        map_variable_size_list, map_variable_type_list,
-                       &offload_ctx);
+                       &offload_ctx, &dynamic_map_entries);
 
   SgBasicBlock *body = isSgBasicBlock(target->get_body());
   ROSE_ASSERT(body != NULL);
+
+  if (!dynamic_map_entries.empty()) {
+    SgBasicBlock *translated_body = buildBasicBlock();
+
+    SgVariableDeclaration *device_id_decl = buildVariableDeclaration(
+        "__device_id", buildOpaqueType("int64_t", p_scope),
+        buildAssignInitializer(buildLongLongIntVal(-1)), p_scope);
+    translated_body->append_statement(device_id_decl);
+
+    RuntimeMapArgumentArrayDeclarations dynamic_arrays =
+        buildDynamicRuntimeMapArgumentArrays(
+            translated_body, p_scope, map_variable_list, map_variable_base_list,
+            map_variable_size_list, map_variable_type_list,
+            dynamic_map_entries);
+
+    SgExprListExp *parameters =
+        buildExprListExp(buildVarRefExp(device_id_decl),
+                         buildVarRefExp(dynamic_arrays.arg_number_decl),
+                         buildVarRefExp(dynamic_arrays.args_base_decl),
+                         buildVarRefExp(dynamic_arrays.args_decl),
+                         buildVarRefExp(dynamic_arrays.arg_sizes_decl),
+                         buildVarRefExp(dynamic_arrays.arg_types_decl));
+    SgExprStatement *begin_stmt = buildFunctionCallStmt(
+        "__tgt_target_data_begin", buildVoidType(), parameters, p_scope);
+    setSourcePositionForTransformation(begin_stmt);
+    translated_body->append_statement(begin_stmt);
+
+    body->set_parent(NULL);
+    target->set_body(NULL);
+    translated_body->append_statement(body);
+
+    SgExprStatement *end_stmt = buildFunctionCallStmt(
+        "__tgt_target_data_end", buildVoidType(),
+        buildExprListExp(buildVarRefExp(device_id_decl),
+                         buildVarRefExp(dynamic_arrays.arg_number_decl),
+                         buildVarRefExp(dynamic_arrays.args_base_decl),
+                         buildVarRefExp(dynamic_arrays.args_decl),
+                         buildVarRefExp(dynamic_arrays.arg_sizes_decl),
+                         buildVarRefExp(dynamic_arrays.arg_types_decl)),
+        p_scope);
+    setSourcePositionForTransformation(end_stmt);
+    translated_body->append_statement(end_stmt);
+
+    appendDynamicRuntimeMapArgumentArrayCleanup(dynamic_arrays, translated_body,
+                                                p_scope);
+
+    replaceStatement(target, translated_body, true);
+    attachComment(translated_body,
+                  "Translated from #pragma omp target data ...");
+    return;
+  }
+
   SgBasicBlock *target_data_begin_block = body;
 
   // Use the OpenMP runtime's default device sentinel.
@@ -9981,9 +10646,46 @@ void transOmpTargetUpdate(SgNode *node) {
   SgExprListExp *map_variable_base_list = buildExprListExp();
   SgExprListExp *map_variable_size_list = buildExprListExp();
   SgExprListExp *map_variable_type_list = buildExprListExp();
+  std::vector<ExpandedMapEntry> dynamic_map_entries;
 
   collectOmpTargetUpdateInfo(target, map_variable_list, map_variable_base_list,
-                             map_variable_size_list, map_variable_type_list);
+                             map_variable_size_list, map_variable_type_list,
+                             &dynamic_map_entries);
+
+  if (!dynamic_map_entries.empty()) {
+    SgBasicBlock *translated_block = buildBasicBlock();
+    SgVariableDeclaration *device_id_decl = buildVariableDeclaration(
+        "__device_id", buildOpaqueType("int64_t", p_scope),
+        buildAssignInitializer(buildLongLongIntVal(-1)), p_scope);
+    translated_block->append_statement(device_id_decl);
+
+    RuntimeMapArgumentArrayDeclarations dynamic_arrays =
+        buildDynamicRuntimeMapArgumentArrays(
+            translated_block, p_scope, map_variable_list,
+            map_variable_base_list, map_variable_size_list,
+            map_variable_type_list, dynamic_map_entries);
+
+    SgExprStatement *func_offloading_stmt = buildFunctionCallStmt(
+        "__tgt_target_data_update", buildVoidType(),
+        buildExprListExp(buildVarRefExp(device_id_decl),
+                         buildVarRefExp(dynamic_arrays.arg_number_decl),
+                         buildVarRefExp(dynamic_arrays.args_base_decl),
+                         buildVarRefExp(dynamic_arrays.args_decl),
+                         buildVarRefExp(dynamic_arrays.arg_sizes_decl),
+                         buildVarRefExp(dynamic_arrays.arg_types_decl)),
+        p_scope);
+    setSourcePositionForTransformation(func_offloading_stmt);
+    translated_block->append_statement(func_offloading_stmt);
+
+    appendDynamicRuntimeMapArgumentArrayCleanup(dynamic_arrays,
+                                                translated_block, p_scope);
+
+    translated_block->set_parent(target->get_parent());
+    replaceStatement(target, translated_block, true);
+    attachComment(func_offloading_stmt,
+                  "Translated from #pragma omp target update ...");
+    return;
+  }
 
   SgBasicBlock *target_data_begin_block = buildBasicBlock();
   // Use the OpenMP runtime's default device sentinel.

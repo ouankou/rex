@@ -24,20 +24,27 @@ bash "${script_dir}/run_translate_only.sh" "${translator}" "${input_file}" \
 
 [[ -f "${rose_file}" ]] || fail "missing lowered host file '${rose_file}'"
 
-grep -Fq '&v[0:1].len' "${rose_file}" || \
-  fail "missing lowered mapper member address for v[0:1].len"
-grep -Fq 'v[0:1].data + 0' "${rose_file}" || \
-  fail "missing lowered mapper array section for v[0:1].data"
-grep -Fq 'sizeof(float ) * v[0:1].len' "${rose_file}" || \
-  fail "missing lowered mapper-derived array size expression"
-grep -Fq 'void *__args_base[] = {&v[0:1].len, v[0:1].data};' "${rose_file}" || \
-  fail "missing lowered mapper base-argument expansion"
+grep -Fq '__arg_num = 0;' "${rose_file}" || \
+  fail "missing dynamic mapper argument counting"
+grep -Fq '__rex_mapper_section_index_0 < (int64_t )n' "${rose_file}" || \
+  fail "missing mapper element-expansion loop over runtime section length"
+grep -Fq '&v[0 + (long long )__rex_mapper_section_index_0].len' "${rose_file}" || \
+  fail "missing lowered mapper member address for per-element expansion"
+grep -Fq 'v[0 + (long long )__rex_mapper_section_index_0].data + 0' "${rose_file}" || \
+  fail "missing lowered mapper data expansion for per-element section mapping"
+grep -Fq 'sizeof(float ) * v[0 + (long long )__rex_mapper_section_index_0].len' "${rose_file}" || \
+  fail "missing lowered mapper-derived per-element array size expression"
+grep -Fq 'malloc(sizeof(void *) * __arg_num)' "${rose_file}" || \
+  fail "missing dynamic mapper runtime argument allocation"
 
 if grep -Fq 'void *__args[] = {v};' "${rose_file}"; then
   fail "raw pointer fallback remained in lowered output"
 fi
 if grep -Fq 'void *__args_base[] = {v};' "${rose_file}"; then
   fail "raw pointer base fallback remained in lowered output"
+fi
+if grep -Fq 'v[0:n].len' "${rose_file}"; then
+  fail "mapper expansion still uses the whole array section instead of elements"
 fi
 
 exit 0
