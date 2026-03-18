@@ -1,3 +1,4 @@
+#include "clang-decl-utils.hpp"
 #include "clang-frontend-private.hpp"
 #include "clang-nns-utils.hpp"
 
@@ -114,20 +115,6 @@ bool typeLocContainsAutoType(clang::TypeLoc type_loc) {
     }
   }
   return false;
-}
-
-const clang::Expr *
-getParmVarDeclDefaultArgExpr(const clang::ParmVarDecl *param_var_decl) {
-  if (param_var_decl == nullptr || !param_var_decl->hasDefaultArg() ||
-      param_var_decl->hasUnparsedDefaultArg()) {
-    return nullptr;
-  }
-
-  if (param_var_decl->hasUninstantiatedDefaultArg()) {
-    return param_var_decl->getUninstantiatedDefaultArg();
-  }
-
-  return param_var_decl->getDefaultArg();
 }
 
 void normalizeNamespaceTemplateDeclarationFlags(

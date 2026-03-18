@@ -1,24 +1,7 @@
+#include "clang-decl-utils.hpp"
 #include "clang-to-dot-private.hpp"
 
 #include "sage3basic.h"
-
-namespace {
-
-const clang::Expr *
-getParmVarDeclDefaultArgExpr(const clang::ParmVarDecl *param_var_decl) {
-  if (param_var_decl == nullptr || !param_var_decl->hasDefaultArg() ||
-      param_var_decl->hasUnparsedDefaultArg()) {
-    return nullptr;
-  }
-
-  if (param_var_decl->hasUninstantiatedDefaultArg()) {
-    return param_var_decl->getUninstantiatedDefaultArg();
-  }
-
-  return param_var_decl->getDefaultArg();
-}
-
-} // namespace
 
 std::string ClangToDotTranslator::Traverse(clang::Decl *decl) {
   if (decl == NULL) {
