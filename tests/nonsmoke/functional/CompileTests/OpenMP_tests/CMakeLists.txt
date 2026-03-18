@@ -62,6 +62,7 @@ set(C_TESTCODES
 	targetteamsdistribute.c targetteamsdistributesimd.c targetteamsloop.c
 	targetteamsdistributeparallelfor.c targetteamsdistributeparallelforsimd.c
 	targetupdate.c targetupdate_nowait.c targetupdate_device.c target_update_from.c
+	target_literal_scalar.c
 	target_update_to.c taskloop_simd_reduction.1.c task_affinity.c task_affinity1.c
 	task_array.c task_array2.c task_final.c task_largenumber.c task_mergeable.c
 	task_orphaned.c task_outlining.c task_priority.c task_untied.c task_untied2.c

@@ -460,6 +460,20 @@ if(ENABLE-C)
     omp_lowering_mapper_semantic_declare_mapper_target_update
     PROPERTIES TIMEOUT 540)
   _label_omp_semantic(omp_lowering_mapper_semantic_declare_mapper_target_update)
+
+  add_test(
+    NAME omp_acc_lowering_c_compile_only_target_literal_scalar
+    WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
+    COMMAND ${BASH_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_literal_target_param_check.sh
+            $<TARGET_FILE:roseompacc>
+            ${_omp_test_dir}/target_literal_scalar.c
+            ${_omp_lowering_test_output_dir}/acc_c/target_literal_scalar
+            target_literal_scalar.c)
+  set_tests_properties(
+    omp_acc_lowering_c_compile_only_target_literal_scalar
+    PROPERTIES TIMEOUT 540)
+  _label_omp_compile_only(omp_acc_lowering_c_compile_only_target_literal_scalar)
 endif()
 
 set(OMP_LOWERING_FORTRAN_LABELS ${_omp_legacy_labels})

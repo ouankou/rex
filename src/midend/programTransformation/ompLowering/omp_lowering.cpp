@@ -1202,7 +1202,38 @@ struct ResolvedMapItem {
       SgOmpClause::e_omp_map_unknown;
   int runtime_flag_bits = 0;
   bool is_implicit_base_pointer = false;
+  bool is_implicit_target_variable = false;
+  bool use_literal_target_param = false;
+  SgVariableSymbol *direct_variable_symbol = nullptr;
 };
+
+SgVariableSymbol *getDirectResolvedMapItemVariableSymbol(SgExpression *expr) {
+  if (expr == nullptr) {
+    return nullptr;
+  }
+
+  SgVarRefExp *var_ref = isSgVarRefExp(stripNoopCastsAndParens(expr));
+  if (var_ref == nullptr) {
+    return nullptr;
+  }
+
+  return isSgVariableSymbol(var_ref->get_symbol());
+}
+
+SgExpression *buildLiteralTargetParamArgExpression(SgVariableSymbol *var_sym,
+                                                   SgScopeStatement *scope) {
+  ROSE_ASSERT(var_sym != NULL);
+  ROSE_ASSERT(scope != NULL);
+
+  SgType *type = stripTypeAliasesAndReferences(var_sym->get_type());
+  ROSE_ASSERT(type != NULL);
+
+  return buildFunctionCallExp(
+      "rex_pack_literal_arg_bytes", buildPointerType(buildVoidType()),
+      buildExprListExp(buildAddressOfOp(buildVarRefExp(var_sym)),
+                       buildSizeOfOp(type)),
+      scope);
+}
 
 std::string trimMapperCopy(const std::string &value) {
   const std::string::size_type begin = value.find_first_not_of(" \t\r\n");
@@ -2006,7 +2037,21 @@ void appendResolvedMapItemArguments(const std::vector<ResolvedMapItem> &items,
     const bool is_implicit_pointer_map =
         item.is_implicit_base_pointer && !treat_as_array &&
         isPointerType(item.expression->get_type());
-    if (treat_as_array) {
+    if (item.use_literal_target_param) {
+      ROSE_ASSERT(item.direct_variable_symbol != nullptr);
+      SgInitializedName *mapping_variable =
+          item.direct_variable_symbol->get_declaration();
+      ROSE_ASSERT(mapping_variable != nullptr);
+      SgType *mapping_variable_type = mapping_variable->get_type();
+      ROSE_ASSERT(mapping_variable_type != nullptr);
+
+      mapping_expression = buildLiteralTargetParamArgExpression(
+          item.direct_variable_symbol, scope);
+      mapping_base_expression = copyExpression(mapping_expression);
+      mapping_size_expression =
+          buildCastExp(buildSizeOfOp(mapping_variable_type),
+                       buildOpaqueType("int64_t", scope));
+    } else if (treat_as_array) {
       SgType *base_type = stripTypeAliases(base_expression->get_type());
       SgType *element_type = nullptr;
       if (SgPointerType *pointer_type = isSgPointerType(base_type)) {
@@ -2086,7 +2131,14 @@ void appendResolvedMapItemArguments(const std::vector<ResolvedMapItem> &items,
     map_variable_list->append_expression(mapping_expression);
     map_variable_base_list->append_expression(mapping_base_expression);
     map_variable_size_list->append_expression(mapping_size_expression);
-    if (is_implicit_pointer_map) {
+    if (item.use_literal_target_param) {
+      int literal_flags =
+          OMP_TGT_MAPTYPE_TARGET_PARAM | OMP_TGT_MAPTYPE_LITERAL;
+      if (item.is_implicit_target_variable) {
+        literal_flags |= OMP_TGT_MAPTYPE_IMPLICIT;
+      }
+      map_variable_type_list->append_expression(buildIntVal(literal_flags));
+    } else if (is_implicit_pointer_map) {
       map_variable_type_list->append_expression(
           buildIntVal(OMP_TGT_MAPTYPE_TARGET_PARAM | runtime_flag_bits));
     } else {
@@ -2128,6 +2180,8 @@ void collectExpandedMapItemsForExpression(
     direct_item.runtime_flag_bits = runtime_flag_bits;
     direct_item.is_implicit_base_pointer =
         isImplicitBasePointerMapItem(anchor_stmt, mapped_expr);
+    direct_item.direct_variable_symbol =
+        getDirectResolvedMapItemVariableSymbol(mapped_expr);
     items.push_back(direct_item);
     return;
   }
@@ -2193,6 +2247,8 @@ void collectExpandedMapItemsForExpression(
           direct_item.runtime_flag_bits = combined_flag_bits;
           direct_item.is_implicit_base_pointer =
               isImplicitBasePointerMapItem(anchor_stmt, materialized_item);
+          direct_item.direct_variable_symbol =
+              getDirectResolvedMapItemVariableSymbol(materialized_item);
           items.push_back(direct_item);
         } else {
           collectExpandedMapItemsForExpression(
@@ -2224,6 +2280,8 @@ void collectExpandedMapItemsForExpression(
         direct_item.runtime_flag_bits = combined_flag_bits;
         direct_item.is_implicit_base_pointer =
             isImplicitBasePointerMapItem(anchor_stmt, materialized_item);
+        direct_item.direct_variable_symbol =
+            getDirectResolvedMapItemVariableSymbol(materialized_item);
         items.push_back(direct_item);
       } else {
         collectExpandedMapItemsForExpression(
@@ -3092,11 +3150,9 @@ size_t get_host_pointer_size_bytes(const SgNode *context) {
   return is_32_bit_target(context) ? 4 : 8;
 }
 
-bool canUseLiteralTargetParam(
-    const SgOmpClauseBodyStatement *target, SgVariableSymbol *var_sym,
-    const std::vector<SgOmpMapClause *> &map_to_clauses,
-    const std::vector<SgOmpMapClause *> &map_from_clauses,
-    const std::vector<SgOmpMapClause *> &map_tofrom_clauses) {
+bool canUseLiteralTargetParam(const SgOmpClauseBodyStatement *target,
+                              SgVariableSymbol *var_sym,
+                              SgOmpClause::omp_map_operator_enum map_operator) {
   if (target == NULL || var_sym == NULL) {
     return false;
   }
@@ -3108,30 +3164,16 @@ bool canUseLiteralTargetParam(
   }
 
   const bool is_implicit = isImplicitTargetMapVariable(target, var_sym);
-  const bool need_copy_from =
-      isInAnyClauseVariableList(map_from_clauses, var_sym) ||
-      isInAnyClauseVariableList(map_tofrom_clauses, var_sym);
+  const SgOmpClause::omp_map_operator_enum normalized_op =
+      normalizeMapperMapOperator(map_operator);
+  const bool need_copy_from = normalized_op == SgOmpClause::e_omp_map_from ||
+                              normalized_op == SgOmpClause::e_omp_map_tofrom;
   if (need_copy_from && !is_implicit) {
     return false;
   }
 
   return get_target_type_size_bytes(type, target) <=
          get_host_pointer_size_bytes(target);
-}
-
-SgExpression *buildLiteralTargetParamArgExpression(SgVariableSymbol *var_sym,
-                                                   SgScopeStatement *scope) {
-  ROSE_ASSERT(var_sym != NULL);
-  ROSE_ASSERT(scope != NULL);
-
-  SgType *type = stripTypeAliasesAndReferences(var_sym->get_type());
-  ROSE_ASSERT(type != NULL);
-
-  return buildFunctionCallExp(
-      "rex_pack_literal_arg_bytes", buildPointerType(buildVoidType()),
-      buildExprListExp(buildAddressOfOp(buildVarRefExp(var_sym)),
-                       buildSizeOfOp(type)),
-      scope);
 }
 
 static bool isLiteralTargetParamPackCall(const SgExpression *expr) {
@@ -7414,6 +7456,25 @@ transOmpMapVariables(SgStatement *node, SgExprListExp *map_variable_list,
         collectExpandedMapItemsForClause(target, map_clause);
     resolved_items.insert(resolved_items.end(), clause_items.begin(),
                           clause_items.end());
+  }
+  if (!isSgOmpTargetDataStatement(node) && offload_ctx != NULL) {
+    for (ResolvedMapItem &item : resolved_items) {
+      if (item.direct_variable_symbol == NULL ||
+          variable_map[item.direct_variable_symbol] != true) {
+        continue;
+      }
+
+      item.is_implicit_target_variable =
+          isImplicitTargetMapVariable(target, item.direct_variable_symbol);
+      if (!canUseLiteralTargetParam(target, item.direct_variable_symbol,
+                                    item.map_operator)) {
+        continue;
+      }
+
+      item.use_literal_target_param = true;
+      offload_ctx->literal_target_param_syms.insert(
+          item.direct_variable_symbol);
+    }
   }
   appendResolvedMapItemArguments(resolved_items, map_variable_list,
                                  map_variable_base_list, map_variable_size_list,
