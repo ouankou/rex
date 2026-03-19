@@ -373,6 +373,10 @@ string(REPLACE "testVirtualCFG_CXX_failing_rose-1962.C"
                "testVirtualCFG_CXX_rose-1962.C"
                _virtualcfg_check_java_tests
                "${_virtualcfg_check_java_tests}")
+string(REPLACE "testVirtualCFG_CXX_failing_test2010_12.C"
+               "testVirtualCFG_CXX_test2010_12.C"
+               _virtualcfg_check_java_tests
+               "${_virtualcfg_check_java_tests}")
 string(REPLACE "testVirtualCFG_CXX_failing_test2009_17.C"
                "testVirtualCFG_CXX_test2009_17.C"
                _virtualcfg_check_java_tests

@@ -33,7 +33,8 @@ void Y::foo()
   // This works and is an intermediate step in fixing this bug.
      functionHandlers[0] = (X::MemberFunctionPointerType) 0L;
 
-  // These work but they are not a part of the cast (so this is a simpler case: function pointer expressions).
+     // These work but they are not a part of the cast (so this is a simpler
+     // case: function pointer expressions).
      &Y::MemberFunctionPointer_A;
 
      // Simple cast expression
