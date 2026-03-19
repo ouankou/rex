@@ -6,6 +6,7 @@
 #include "CallGraph.h"
 #endif
 
+#include <algorithm>
 #include <vector>
 using namespace std;
 
@@ -19,37 +20,54 @@ bool virtualInterproceduralControlFlowGraphs = false;
 
 #ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 
+namespace {
+
+SgExpression *getLambdaCaptureExpression(const SgLambdaCapture *capture);
+std::vector<SgLambdaCapture *>
+getExecutableLambdaCaptures(const SgLambdaCaptureList *capture_list);
+SgLambdaExp *getLambdaForCapture(const SgLambdaCapture *capture);
+SgExpression *
+getFirstExecutableLambdaCaptureExpression(const SgLambdaExp *lambda);
+SgExpression *
+getLastExecutableLambdaCaptureExpression(const SgLambdaExp *lambda);
+SgExpression *
+getPreviousExecutableLambdaCaptureExpression(const SgLambdaCapture *capture);
+SgExpression *
+getNextExecutableLambdaCaptureExpression(const SgLambdaCapture *capture);
+
+} // namespace
+
 unsigned int SgNode::cfgIndexForEnd() const {
   ROSE_ASSERT(!"CFG functions only work on SgExpression, SgStatement, and "
                "SgInitializedName");
   return 0;
 }
 
-bool SgNode::cfgIsIndexInteresting(unsigned int) const {
+bool SgNode::cfgIsIndexInteresting(unsigned int idx) const {
   ROSE_ASSERT(!"CFG functions only work on SgExpression, SgStatement, and "
                "SgInitializedName");
   return false;
 }
 
-unsigned int SgNode::cfgFindChildIndex(SgNode *) {
+unsigned int SgNode::cfgFindChildIndex(SgNode *n) {
   ROSE_ASSERT(!"CFG functions only work on SgExpression, SgStatement, and "
                "SgInitializedName");
   return 0;
 }
 
-unsigned int SgNode::cfgFindNextChildIndex(SgNode *) {
+unsigned int SgNode::cfgFindNextChildIndex(SgNode *n) {
   ROSE_ASSERT(!"CFG functions only work on SgExpression, SgStatement, and "
                "SgInitializedName");
   return 0;
 }
 
-std::vector<CFGEdge> SgNode::cfgOutEdges(unsigned int /*idx*/) {
+std::vector<CFGEdge> SgNode::cfgOutEdges(unsigned int idx) {
   ROSE_ASSERT(!"CFG functions only work on SgExpression, SgStatement, and "
                "SgInitializedName");
   return std::vector<CFGEdge>();
 }
 
-std::vector<CFGEdge> SgNode::cfgInEdges(unsigned int /*idx*/) {
+std::vector<CFGEdge> SgNode::cfgInEdges(unsigned int idx) {
   ROSE_ASSERT(!"CFG functions only work on SgExpression, SgStatement, and "
                "SgInitializedName");
   return std::vector<CFGEdge>();
@@ -224,6 +242,19 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
     }
   }
 
+  if (SgLambdaCapture *capture = isSgLambdaCapture(parent)) {
+    ROSE_ASSERT(getLambdaCaptureExpression(capture) == n);
+
+    if (SgExpression *next_capture =
+            getNextExecutableLambdaCaptureExpression(capture)) {
+      return next_capture->cfgForBeginning();
+    }
+
+    SgLambdaExp *lambda = getLambdaForCapture(capture);
+    ASSERT_not_null(lambda);
+    return CFGNode(lambda, lambda->cfgIndexForEnd());
+  }
+
   if (isSgCaseOptionStmt(n) && isSgLabelStatement(parent) == nullptr) {
     unsigned int idx = parent->cfgFindNextChildIndex(n);
 #if DEBUG_CALLGRAPH
@@ -342,6 +373,19 @@ static CFGNode getNodeJustBeforeInContainer(SgNode *n) {
         return CFGNode(proc->get_definition(), 0);
       }
     }
+  }
+
+  if (SgLambdaCapture *capture = isSgLambdaCapture(parent)) {
+    ROSE_ASSERT(getLambdaCaptureExpression(capture) == n);
+
+    if (SgExpression *previous_capture =
+            getPreviousExecutableLambdaCaptureExpression(capture)) {
+      return previous_capture->cfgForEnd();
+    }
+
+    SgLambdaExp *lambda = getLambdaForCapture(capture);
+    ASSERT_not_null(lambda);
+    return CFGNode(lambda, 0);
   }
 
   SgLabelStatement *parentLabelStatement = isSgLabelStatement(parent);
@@ -3743,7 +3787,145 @@ std::vector<CFGEdge> SgFormatStatement::cfgInEdges(unsigned int idx) {
   return result;
 }
 
+namespace {
+
+SgExpression *getLambdaCaptureExpression(const SgLambdaCapture *capture) {
+  if (capture == nullptr) {
+    return nullptr;
+  }
+
+  if (SgExpression *source = capture->get_source_closure_variable()) {
+    return source;
+  }
+
+  return capture->get_capture_variable();
+}
+
+std::vector<SgLambdaCapture *>
+getExecutableLambdaCaptures(const SgLambdaCaptureList *capture_list) {
+  std::vector<SgLambdaCapture *> result;
+  if (capture_list == nullptr) {
+    return result;
+  }
+
+  for (SgLambdaCapture *capture : capture_list->get_capture_list()) {
+    if (getLambdaCaptureExpression(capture) != nullptr) {
+      result.push_back(capture);
+    }
+  }
+
+  return result;
+}
+
+SgLambdaCaptureList *getExecutableLambdaCaptureList(const SgLambdaExp *lambda) {
+  if (lambda == nullptr) {
+    return nullptr;
+  }
+
+  SgLambdaCaptureList *capture_list = lambda->get_lambda_capture_list();
+  if (getExecutableLambdaCaptures(capture_list).empty()) {
+    return nullptr;
+  }
+
+  return capture_list;
+}
+
+SgLambdaExp *getLambdaForCapture(const SgLambdaCapture *capture) {
+  if (capture == nullptr) {
+    return nullptr;
+  }
+
+  return isSgLambdaExp(capture->get_parent() != nullptr
+                           ? capture->get_parent()->get_parent()
+                           : nullptr);
+}
+
+SgExpression *
+getFirstExecutableLambdaCaptureExpression(const SgLambdaExp *lambda) {
+  SgLambdaCaptureList *capture_list = getExecutableLambdaCaptureList(lambda);
+  if (capture_list == nullptr) {
+    return nullptr;
+  }
+
+  std::vector<SgLambdaCapture *> captures =
+      getExecutableLambdaCaptures(capture_list);
+  ROSE_ASSERT(!captures.empty());
+  return getLambdaCaptureExpression(captures.front());
+}
+
+SgExpression *
+getLastExecutableLambdaCaptureExpression(const SgLambdaExp *lambda) {
+  SgLambdaCaptureList *capture_list = getExecutableLambdaCaptureList(lambda);
+  if (capture_list == nullptr) {
+    return nullptr;
+  }
+
+  std::vector<SgLambdaCapture *> captures =
+      getExecutableLambdaCaptures(capture_list);
+  ROSE_ASSERT(!captures.empty());
+  return getLambdaCaptureExpression(captures.back());
+}
+
+SgExpression *
+getPreviousExecutableLambdaCaptureExpression(const SgLambdaCapture *capture) {
+  SgLambdaCaptureList *capture_list = isSgLambdaCaptureList(
+      capture != nullptr ? capture->get_parent() : nullptr);
+  if (capture_list == nullptr) {
+    return nullptr;
+  }
+
+  const SgLambdaCapturePtrList &captures = capture_list->get_capture_list();
+  SgLambdaCapturePtrList::const_iterator current =
+      std::find(captures.begin(), captures.end(), capture);
+  if (current == captures.end()) {
+    ROSE_ASSERT(
+        !"Bad capture in getPreviousExecutableLambdaCaptureExpression()");
+    return nullptr;
+  }
+
+  while (current != captures.begin()) {
+    --current;
+    if (SgExpression *capture_expression =
+            getLambdaCaptureExpression(*current)) {
+      return capture_expression;
+    }
+  }
+
+  return nullptr;
+}
+
+SgExpression *
+getNextExecutableLambdaCaptureExpression(const SgLambdaCapture *capture) {
+  SgLambdaCaptureList *capture_list = isSgLambdaCaptureList(
+      capture != nullptr ? capture->get_parent() : nullptr);
+  if (capture_list == nullptr) {
+    return nullptr;
+  }
+
+  const SgLambdaCapturePtrList &captures = capture_list->get_capture_list();
+  SgLambdaCapturePtrList::const_iterator current =
+      std::find(captures.begin(), captures.end(), capture);
+  if (current == captures.end()) {
+    ROSE_ASSERT(!"Bad capture in getNextExecutableLambdaCaptureExpression()");
+    return nullptr;
+  }
+
+  for (++current; current != captures.end(); ++current) {
+    if (SgExpression *capture_expression =
+            getLambdaCaptureExpression(*current)) {
+      return capture_expression;
+    }
+  }
+
+  return nullptr;
+}
+
+} // namespace
+
 unsigned int SgExpression::cfgIndexForEnd() const {
+  if (const SgLambdaExp *lambda = isSgLambdaExp(this)) {
+    return getFirstExecutableLambdaCaptureExpression(lambda) != nullptr ? 1 : 0;
+  }
   if (isSgFoldExpression(this) != nullptr) {
     return 1;
   }
@@ -3791,6 +3973,23 @@ unsigned int SgExpression::cfgFindNextChildIndex(SgNode *n) {
 }
 
 std::vector<CFGEdge> SgExpression::cfgOutEdges(unsigned int idx) {
+  if (const SgLambdaExp *lambda = isSgLambdaExp(this)) {
+    std::vector<CFGEdge> result;
+    SgExpression *first_capture =
+        getFirstExecutableLambdaCaptureExpression(lambda);
+    if (first_capture == nullptr) {
+      ROSE_ASSERT(idx == 0);
+      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+    } else if (idx == 0) {
+      makeEdge(CFGNode(this, idx), first_capture->cfgForBeginning(), result);
+    } else if (idx == 1) {
+      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+    } else {
+      ROSE_ASSERT(!"Bad index for SgLambdaExp");
+    }
+    return result;
+  }
+
   if (SgFoldExpression *fold = isSgFoldExpression(this)) {
     std::vector<CFGEdge> result;
     switch (idx) {
@@ -3815,6 +4014,20 @@ std::vector<CFGEdge> SgExpression::cfgOutEdges(unsigned int idx) {
 }
 
 std::vector<CFGEdge> SgExpression::cfgInEdges(unsigned int idx) {
+  if (const SgLambdaExp *lambda = isSgLambdaExp(this)) {
+    std::vector<CFGEdge> result;
+    SgExpression *last_capture =
+        getLastExecutableLambdaCaptureExpression(lambda);
+    if (idx == 0) {
+      makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+    } else if (idx == 1 && last_capture != nullptr) {
+      makeEdge(last_capture->cfgForEnd(), CFGNode(this, idx), result);
+    } else {
+      ROSE_ASSERT(!"Bad index for SgLambdaExp");
+    }
+    return result;
+  }
+
   if (SgFoldExpression *fold = isSgFoldExpression(this)) {
     std::vector<CFGEdge> result;
     switch (idx) {

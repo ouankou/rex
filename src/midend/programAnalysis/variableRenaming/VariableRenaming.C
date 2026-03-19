@@ -29,6 +29,45 @@
 using namespace std;
 using namespace Rose;
 
+namespace {
+
+// Keep this executable-capture selection rule in sync with
+// virtualCFG/memberFunctions.C:getLambdaCaptureExpression().
+// The subsystems are intentionally decoupled, so we duplicate the minimal
+// lambda-capture mapping here instead of introducing a new shared dependency.
+SgExpression *
+getVariableRenamingLambdaCaptureExpression(const SgLambdaCapture *capture) {
+  if (capture == NULL) {
+    return NULL;
+  }
+
+  if (SgExpression *source = capture->get_source_closure_variable()) {
+    return source;
+  }
+
+  return capture->get_capture_variable();
+}
+
+template <class SuccessorsContainer>
+void collectVariableRenamingSuccessors(SgNode *node,
+                                       SuccessorsContainer &succContainer) {
+  if (SgLambdaExp *lambda = isSgLambdaExp(node)) {
+    if (SgLambdaCaptureList *capture_list = lambda->get_lambda_capture_list()) {
+      for (SgLambdaCapture *capture : capture_list->get_capture_list()) {
+        if (SgExpression *capture_expression =
+                getVariableRenamingLambdaCaptureExpression(capture)) {
+          succContainer.push_back(capture_expression);
+        }
+      }
+    }
+    return;
+  }
+
+  succContainer = node->get_traversalSuccessorContainer();
+}
+
+} // namespace
+
 // Initializations of the static attribute tags
 std::string VariableRenaming::varKeyTag = "rename_KeyTag";
 SgInitializedName *VariableRenaming::thisDecl = NULL;
@@ -1093,6 +1132,11 @@ VariableRenaming::UniqueNameTraversal::evaluateSynthesizedAttribute(
 
     return VariableRenaming::VarRefSynthAttr(names);
   }
+}
+
+void VariableRenaming::UniqueNameTraversal::setNodeSuccessors(
+    SgNode *node, SuccessorsContainer &succContainer) {
+  collectVariableRenamingSuccessors(node, succContainer);
 }
 
 void VariableRenaming::runDefUse(SgFunctionDefinition *func) {
@@ -2979,6 +3023,11 @@ VariableRenaming::DefsAndUsesTraversal::evaluateSynthesizedAttribute(
     // We don't propagate the variables here up the tree.
     return ChildUses(uses, NULL);
   }
+}
+
+void VariableRenaming::DefsAndUsesTraversal::setNodeSuccessors(
+    SgNode *node, SuccessorsContainer &succContainer) {
+  collectVariableRenamingSuccessors(node, succContainer);
 }
 
 /** Mark all the uses as occurring at the specified node. */
