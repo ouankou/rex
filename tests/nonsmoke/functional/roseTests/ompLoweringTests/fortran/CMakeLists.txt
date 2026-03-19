@@ -6,8 +6,7 @@ set(_omp_fortran_lowering_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_fortran_lowering_output_dir})
 
-set(OMP_FORTRAN_LOWERING_EXCLUDED_CASES
-  requires_dynamic_allocators_type.f90)
+set(OMP_FORTRAN_LOWERING_EXCLUDED_CASES)
 
 set(OMP_FORTRAN_ALL_CASES ${OPENMP_FORTRAN_TESTCODES})
 list(REMOVE_ITEM OMP_FORTRAN_ALL_CASES
@@ -19,6 +18,9 @@ set(OMP_FORTRAN_SEMANTIC_EXCLUDED_CASES
   allocate_predefined_modifiers.f90
   allocate_user_defined_modifiers.f90
   exampleA134f.f90
+  # LLVM Flang 22 still aborts on the original !$omp allocate directive,
+  # so semantic compare is not yet a valid gate for this specimen.
+  requires_dynamic_allocators_type.f90
   single-copyprivate.f90)
 
 set(OMP_FORTRAN_SEMANTIC_CASES ${OMP_FORTRAN_ALL_CASES})
