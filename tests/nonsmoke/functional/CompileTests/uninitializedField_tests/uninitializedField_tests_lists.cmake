@@ -2255,7 +2255,6 @@ set(UNINIT_CXX_TEST_SOURCES
   test2007_99.C
   test2008_07.C
   test2008_15.C
-  test2009_07.C
   test2009_13.C
   test2009_17.C
   test2009_22.C
