@@ -1,29 +1,30 @@
 #pragma once
 
+// Reduced support scaffold so these compile tests remain standalone.
 class Box {
 public:
-  int numPts() const;
+  int numPts() const { return 0; }
 };
 
 class DenseIntVectSet {
 public:
-  Box box() const;
-  DenseIntVectSet &operator|=(const DenseIntVectSet &);
+  Box box() const { return Box(); }
+  DenseIntVectSet &operator|=(const DenseIntVectSet &) { return *this; }
 };
 
 class SparseIntVectSet {
 public:
-  SparseIntVectSet &operator|=(const SparseIntVectSet &);
+  SparseIntVectSet &operator|=(const SparseIntVectSet &) { return *this; }
 };
 
 class TreeNodePool {
 public:
-  void clear();
+  void clear() {}
 };
 
 class StaticVector {
 public:
-  void clear();
+  void clear() {}
 };
 
 class TreeIntVectSet {
@@ -38,20 +39,31 @@ public:
 namespace CH_XD {
 class MinBoxResult {
 public:
-  int numPts() const;
+  int numPts() const { return 0; }
 };
 
-MinBoxResult minBox(const Box &, const Box &);
+inline MinBoxResult minBox(const Box &, const Box &) { return MinBoxResult(); }
 } // namespace CH_XD
 
 class IntVectSet {
 public:
   IntVectSet &operator|=(const IntVectSet &ivs);
   static void clearStaticMemory();
-  void convert() const;
+  void convert() const {}
 
 private:
-  bool m_isdense;
+  bool m_isdense = false;
   DenseIntVectSet m_dense;
   SparseIntVectSet m_ivs;
 };
+
+namespace test2014_intvectset_support {
+static TreeNodePool treeNodePoolInstance;
+}
+
+TreeNodePool *TreeIntVectSet::treeNodePool =
+    &test2014_intvectset_support::treeNodePoolInstance;
+StaticVector TreeIntVectSet::index;
+StaticVector TreeIntVectSet::parents;
+StaticVector TreeIntVectSet::boxes;
+StaticVector TreeIntVectSet::bufferOffset;
