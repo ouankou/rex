@@ -29,6 +29,37 @@
 using namespace std;
 using namespace Rose;
 
+namespace {
+
+template <class SuccessorsContainer>
+void collectVariableRenamingSuccessors(SgNode *node,
+                                       SuccessorsContainer &succContainer) {
+  if (SgLambdaExp *lambda = isSgLambdaExp(node)) {
+    if (SgLambdaCaptureList *capture_list = lambda->get_lambda_capture_list()) {
+      for (SgLambdaCapture *capture : capture_list->get_capture_list()) {
+        if (capture == NULL) {
+          continue;
+        }
+
+        SgExpression *capture_expression =
+            capture->get_source_closure_variable();
+        if (capture_expression == NULL) {
+          capture_expression = capture->get_capture_variable();
+        }
+
+        if (capture_expression != NULL) {
+          succContainer.push_back(capture_expression);
+        }
+      }
+    }
+    return;
+  }
+
+  succContainer = node->get_traversalSuccessorContainer();
+}
+
+} // namespace
+
 // Initializations of the static attribute tags
 std::string VariableRenaming::varKeyTag = "rename_KeyTag";
 SgInitializedName *VariableRenaming::thisDecl = NULL;
@@ -1093,6 +1124,11 @@ VariableRenaming::UniqueNameTraversal::evaluateSynthesizedAttribute(
 
     return VariableRenaming::VarRefSynthAttr(names);
   }
+}
+
+void VariableRenaming::UniqueNameTraversal::setNodeSuccessors(
+    SgNode *node, SuccessorsContainer &succContainer) {
+  collectVariableRenamingSuccessors(node, succContainer);
 }
 
 void VariableRenaming::runDefUse(SgFunctionDefinition *func) {
@@ -2979,6 +3015,11 @@ VariableRenaming::DefsAndUsesTraversal::evaluateSynthesizedAttribute(
     // We don't propagate the variables here up the tree.
     return ChildUses(uses, NULL);
   }
+}
+
+void VariableRenaming::DefsAndUsesTraversal::setNodeSuccessors(
+    SgNode *node, SuccessorsContainer &succContainer) {
+  collectVariableRenamingSuccessors(node, succContainer);
 }
 
 /** Mark all the uses as occurring at the specified node. */

@@ -968,6 +968,8 @@ private:
   class UniqueNameTraversal
       : public AstBottomUpProcessing<VariableRenaming::VarRefSynthAttr> {
     VariableRenaming *varRename;
+    using SuccessorsContainer = typename AstBottomUpProcessing<
+        VariableRenaming::VarRefSynthAttr>::SuccessorsContainer;
 
     /** All the initialized names in the project. */
     std::vector<SgInitializedName *> allInitNames;
@@ -980,7 +982,12 @@ private:
   public:
     UniqueNameTraversal(VariableRenaming *varRenaming,
                         const std::vector<SgInitializedName *> &allNames)
-        : varRename(varRenaming), allInitNames(allNames) {}
+        : varRename(varRenaming), allInitNames(allNames) {
+      this->set_useDefaultIndexBasedTraversal(false);
+    }
+
+    void setNodeSuccessors(SgNode *node,
+                           SuccessorsContainer &succContainer) override;
 
     /** Called to evaluate the synthesized attribute on every node.
      *
@@ -992,7 +999,8 @@ private:
      * @return The attribute at this node.
      */
     virtual VariableRenaming::VarRefSynthAttr
-    evaluateSynthesizedAttribute(SgNode *node, SynthesizedAttributesList attrs);
+    evaluateSynthesizedAttribute(SgNode *node,
+                                 SynthesizedAttributesList attrs) override;
   };
 
   /** Attribute that describes the variables used by a given expression. */
@@ -1046,9 +1054,16 @@ private:
    * just records each instance of a variable used or defined. */
   class DefsAndUsesTraversal : public AstBottomUpProcessing<ChildUses> {
     VariableRenaming *ssa;
+    using SuccessorsContainer =
+        typename AstBottomUpProcessing<ChildUses>::SuccessorsContainer;
 
   public:
-    DefsAndUsesTraversal(VariableRenaming *ssa) : ssa(ssa) {}
+    DefsAndUsesTraversal(VariableRenaming *ssa) : ssa(ssa) {
+      this->set_useDefaultIndexBasedTraversal(false);
+    }
+
+    void setNodeSuccessors(SgNode *node,
+                           SuccessorsContainer &succContainer) override;
 
     /** Called to evaluate the synthesized attribute on every node.
      *
@@ -1060,7 +1075,8 @@ private:
      * @return The attribute at this node.
      */
     virtual ChildUses
-    evaluateSynthesizedAttribute(SgNode *node, SynthesizedAttributesList attrs);
+    evaluateSynthesizedAttribute(SgNode *node,
+                                 SynthesizedAttributesList attrs) override;
 
   private:
     /** Mark all the uses as occurring at the specified node. */

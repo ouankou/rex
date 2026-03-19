@@ -8,8 +8,20 @@
 
 #include <iostream>
 
-#define USE_ICC
-// #define USE_XLC
+template <typename T> T *assume_aligned_32(T *ptr) {
+#if defined(__INTEL_COMPILER)
+  __assume_aligned(ptr, 32);
+  return ptr;
+#elif defined(__clang__) || defined(__GNUC__)
+  return static_cast<T *>(__builtin_assume_aligned(ptr, 32));
+#elif defined(__IBMCPP__) || defined(__ibmxl__)
+  __alignx(32, ptr);
+  return ptr;
+#else
+#error                                                                         \
+    "test2012_139.C requires compiler support for an alignment-assumption builtin"
+#endif
+}
 
 /*!
  ******************************************************************************
@@ -57,15 +69,9 @@ public:
   }
 
   void operator()(unsigned idx) {
-#if defined(USE_ICC) // if using Intel compiler (icc)
-    __assume_aligned(m_parent, 32);
-    __assume_aligned(m_child, 32);
-#endif
-#if defined(USE_XLC) // if using IBM compiler (xlcxx)
-    __alignx(32, m_parent);
-    __alignx(32, m_child);
-#endif
-    m_child[idx] = m_parent[idx] * m_parent[idx];
+    double *__restrict__ parent = assume_aligned_32(m_parent);
+    double *__restrict__ child = assume_aligned_32(m_child);
+    child[idx] = parent[idx] * parent[idx];
   }
 
   double *__restrict__ m_parent;
@@ -95,28 +101,16 @@ int main(int argc, char *argv[]) {
   // Generate reference result to check correctness
   //
 
-#if defined(USE_ICC) // if using Intel compiler (icc)
   auto ref_op = [&](int idx) {
-    __assume_aligned(parent, 32);
-    __assume_aligned(child_ref, 32);
-    child_ref[idx] = parent[idx] * parent[idx];
+    double *aligned_parent = assume_aligned_32(parent);
+    double *aligned_child_ref = assume_aligned_32(child_ref);
+    aligned_child_ref[idx] = aligned_parent[idx] * aligned_parent[idx];
   };
-#endif
-
-#if defined(USE_XLC) // if using IBM compiler (xlcxx)
-  TestOp ref_op(parent, child_ref);
-#endif
 
   // Execute full array traversal as correct result...
   IndexSet_forall(0, array_length, ref_op);
 
-#if defined(USE_ICC)
   TestOp test_op(parent, child);
-#endif
-
-#if defined(USE_XLC) // if using IBM compiler (xlcxx)
-  TestOp test_op(parent, child);
-#endif
 
   // Execute half array traversal and check result...
   IndexSet_forall(0, array_length / 2, test_op);
