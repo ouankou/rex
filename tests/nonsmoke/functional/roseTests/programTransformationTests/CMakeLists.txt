@@ -1,6 +1,12 @@
 add_subdirectory(extractFunctionArgumentsTest)
 add_subdirectory(singleStatementToBlockNormalization)
 
+function(rex_configure_generated_output_verify_test setup_test verify_test)
+  string(MAKE_C_IDENTIFIER "${setup_test}_fixture" _fixture)
+  set_tests_properties(${setup_test} PROPERTIES FIXTURES_SETUP "${_fixture}")
+  set_tests_properties(${verify_test} PROPERTIES FIXTURES_REQUIRED "${_fixture}")
+endfunction()
+
 #-------------------------------------------------------------------------------
 # preTest
 
@@ -8,6 +14,7 @@ add_executable(preTest preTest.C)
 target_link_libraries(preTest ROSE_DLL ${link_with_libraries})
 
 set(files_to_test pass1.C pass2.C pass3.C)
+set(pre_verify_tests)
 foreach(file_to_test ${files_to_test})
   add_test(
     NAME pre_${file_to_test}
@@ -19,8 +26,10 @@ foreach(file_to_test ${files_to_test})
       ${CMAKE_CURRENT_SOURCE_DIR}/rose_${file_to_test}.save
       ${CMAKE_CURRENT_BINARY_DIR}/rose_${file_to_test}
   )
-  set_tests_properties(pre_${file_to_test}_verify PROPERTIES DEPENDS pre_${file_to_test})
+  rex_configure_generated_output_verify_test(pre_${file_to_test} pre_${file_to_test}_verify)
+  list(APPEND pre_verify_tests pre_${file_to_test}_verify)
 endforeach()
+string(JOIN "\\;" pre_verify_tests_arg ${pre_verify_tests})
 
 #-------------------------------------------------------------------------------
 # patternRewriteTest
@@ -38,7 +47,9 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/rose_rewrite_test1.C.save
     ${CMAKE_CURRENT_BINARY_DIR}/rose_rewrite_test1.C
 )
-set_tests_properties(pr_rewrite_test1.C_verify PROPERTIES DEPENDS pr_rewrite_test1.C)
+rex_configure_generated_output_verify_test(pr_rewrite_test1.C pr_rewrite_test1.C_verify)
+set(pattern_rewrite_verify_tests pr_rewrite_test1.C_verify)
+string(JOIN "\\;" pattern_rewrite_verify_tests_arg ${pattern_rewrite_verify_tests})
 
 #-------------------------------------------------------------------------------
 # finiteDifferencingTest
@@ -49,6 +60,7 @@ target_link_libraries(finiteDifferencingTest
 
 set(files_to_test
   finitediff_test1.C finitediff_test2.C finitediff_test3.C)
+set(fd_verify_tests)
 foreach(file_to_test ${files_to_test})
   add_test(
     NAME fd_${file_to_test}
@@ -60,8 +72,10 @@ foreach(file_to_test ${files_to_test})
       ${CMAKE_CURRENT_SOURCE_DIR}/rose_${file_to_test}.save
       ${CMAKE_CURRENT_BINARY_DIR}/rose_${file_to_test}
   )
-  set_tests_properties(fd_${file_to_test}_verify PROPERTIES DEPENDS fd_${file_to_test})
+  rex_configure_generated_output_verify_test(fd_${file_to_test} fd_${file_to_test}_verify)
+  list(APPEND fd_verify_tests fd_${file_to_test}_verify)
 endforeach()
+string(JOIN "\\;" fd_verify_tests_arg ${fd_verify_tests})
 
 #-------------------------------------------------------------------------------
 # finiteDifferencingDemo
@@ -166,10 +180,10 @@ add_test(
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=fd_finitediff_test1.C\;fd_finitediff_test2.C\;fd_finitediff_test3.C
+    -DREX_CTEST_GROUP_TESTS=${fd_verify_tests_arg}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest PROPERTIES LABELS disabled DEPENDS "fd_finitediff_test1.C;fd_finitediff_test2.C;fd_finitediff_test3.C" )
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest PROPERTIES LABELS disabled DEPENDS "${fd_verify_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest PROPERTIES DISABLED TRUE)
 endif()
@@ -179,10 +193,10 @@ add_test(
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=pr_rewrite_test1.C
+    -DREX_CTEST_GROUP_TESTS=${pattern_rewrite_verify_tests_arg}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest PROPERTIES LABELS disabled DEPENDS pr_rewrite_test1.C )
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest PROPERTIES LABELS disabled DEPENDS "${pattern_rewrite_verify_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest PROPERTIES DISABLED TRUE)
 endif()
@@ -192,10 +206,10 @@ add_test(
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=pre_pass1.C\;pre_pass2.C\;pre_pass3.C
+    -DREX_CTEST_GROUP_TESTS=${pre_verify_tests_arg}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-preTest PROPERTIES LABELS disabled DEPENDS "pre_pass1.C;pre_pass2.C;pre_pass3.C" )
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-preTest PROPERTIES LABELS disabled DEPENDS "${pre_verify_tests}" )
 if(NOT REX_ENABLE_DISABLED_TESTS)
   set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-preTest PROPERTIES DISABLED TRUE)
 endif()
@@ -218,7 +232,7 @@ add_test(
   COMMAND ${CMAKE_COMMAND}
     -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
     -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=constantFoldingTest_1\;constantFoldingTest_2\;constantFoldingTest_3\;fd_finitediff_test1.C\;fd_finitediff_test2.C\;fd_finitediff_test3.C\;finiteDifferencingDemo_finitediff_test1.C\;functionNormalization_functionNormalizationTest1.C\;icg_1\;icg_2\;pr_rewrite_test1.C\;pre_pass1.C\;pre_pass2.C\;pre_pass3.C
+    -DREX_CTEST_GROUP_TESTS=constantFoldingTest_1\;constantFoldingTest_2\;constantFoldingTest_3\;${fd_verify_tests_arg}\;finiteDifferencingDemo_finitediff_test1.C\;functionNormalization_functionNormalizationTest1.C\;icg_1\;icg_2\;${pattern_rewrite_verify_tests_arg}\;${pre_verify_tests_arg}
     -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
 )
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditional-check-local PROPERTIES DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3;fd_finitediff_test1.C;fd_finitediff_test2.C;fd_finitediff_test3.C;finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C;icg_1;icg_2;pr_rewrite_test1.C;pre_pass1.C;pre_pass2.C;pre_pass3.C" )
+set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditional-check-local PROPERTIES DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3;${fd_verify_tests};finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C;icg_1;icg_2;${pattern_rewrite_verify_tests};${pre_verify_tests}" )
