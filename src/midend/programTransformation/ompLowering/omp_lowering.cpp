@@ -10989,12 +10989,11 @@ void transOmpAllocate(SgNode *node) {
     allocator_type = buildIntType();
   }
 
-  static size_t saved_allocator_counter = 0;
-  std::ostringstream saved_name;
-  saved_name << "__rex_saved_allocator_" << saved_allocator_counter++;
   SgBasicBlock *procedure_body = getEnclosingFortranProcedureBody(scope);
+  const std::string saved_name =
+      generateUniqueVariableName(procedure_body, "__rex_saved_allocator_");
   SgVariableDeclaration *saved_decl = buildVariableDeclaration(
-      saved_name.str(), allocator_type, NULL, procedure_body);
+      saved_name, allocator_type, NULL, procedure_body);
   insert_fortran_declaration_into_procedure(saved_decl, scope);
 
   SgInitializedName &saved_var = getFirstVariable(*saved_decl);
