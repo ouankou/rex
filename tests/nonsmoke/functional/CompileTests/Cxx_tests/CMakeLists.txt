@@ -2587,7 +2587,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_99.C
   test2008_07.C
   test2009_13.C
-  test2009_17.C
   test2009_22.C
   test2009_29.C
   test2009_32.C
@@ -2871,7 +2870,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_99.C
   test2008_07.C
   test2009_13.C
-  test2009_17.C
   test2009_21.C
   test2009_22.C
   test2009_29.C
