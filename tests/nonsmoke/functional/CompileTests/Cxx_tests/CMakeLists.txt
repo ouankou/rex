@@ -2703,8 +2703,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2014_227.C
   test2014_228.C
   test2014_229.C
-  test2014_23.C
-  test2014_25.C
   test2014_42.C
   test2014_44.C
   test2014_46.C
@@ -3010,8 +3008,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2014_227.C
   test2014_228.C
   test2014_229.C
-  test2014_23.C
-  test2014_25.C
   test2014_42.C
   test2014_44.C
   test2014_46.C
