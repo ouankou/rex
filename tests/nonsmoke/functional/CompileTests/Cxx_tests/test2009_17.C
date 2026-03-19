@@ -45,7 +45,7 @@ void Y::foo()
      // maybe still do better...
      functionHandlers[0] = (X::MemberFunctionPointerType) &Y::MemberFunctionPointer_A;
 
-  // This is a semantically equivalent example to the case above.
+     // This is a semantically equivalent example to the case above.
      functionHandlers[0] =
          (X::MemberFunctionPointerType)&Y::MemberFunctionPointer_A;
 }
