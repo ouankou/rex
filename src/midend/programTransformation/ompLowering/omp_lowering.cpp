@@ -27,6 +27,12 @@ using namespace SageInterface;
 using namespace SageBuilder;
 using namespace OmpSupport;
 
+static void insert_fortran_statement_in_specification_part(SgStatement *stmt,
+                                                           SgBasicBlock *body);
+static void
+insert_fortran_declaration_into_procedure(SgVariableDeclaration *decl,
+                                          SgScopeStatement *scope);
+
 namespace {
 std::map<const SgOmpClauseBodyStatement *, std::set<const SgInitializedName *>>
     implicit_target_map_variables;
@@ -147,6 +153,199 @@ bool isInAnyClauseVariableList(const std::vector<SgOmpMapClause *> &clauses,
     }
   }
   return false;
+}
+
+bool isOmpLibUseStatement(const SgStatement *stmt) {
+  const SgUseStatement *use_stmt = isSgUseStatement(stmt);
+  if (use_stmt == nullptr) {
+    return false;
+  }
+
+  std::string module_name = use_stmt->get_name().getString();
+  std::transform(module_name.begin(), module_name.end(), module_name.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return module_name == "omp_lib";
+}
+
+bool isOmpLibIncludeStatement(const SgStatement *stmt) {
+  const SgFortranIncludeLine *include_stmt = isSgFortranIncludeLine(stmt);
+  if (include_stmt == nullptr) {
+    return false;
+  }
+
+  const std::filesystem::path include_path(include_stmt->get_filename());
+  return include_path.filename() == "omp_lib.h";
+}
+
+SgBasicBlock *getEnclosingFortranProcedureBody(SgScopeStatement *scope) {
+  ROSE_ASSERT(scope != nullptr);
+  SgFunctionDefinition *func_def = getEnclosingFunctionDefinition(scope);
+  ROSE_ASSERT(func_def != nullptr);
+  SgBasicBlock *body = func_def->get_body();
+  ROSE_ASSERT(body != nullptr);
+  return body;
+}
+
+void ensureFortranOmpAllocatorInterfaces(SgScopeStatement *scope) {
+  SgBasicBlock *body = getEnclosingFortranProcedureBody(scope);
+  const SgStatementPtrList &stmts = body->get_statements();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgStatement *stmt = *it;
+    if (stmt == nullptr) {
+      continue;
+    }
+    if (isOmpLibUseStatement(stmt) || isOmpLibIncludeStatement(stmt)) {
+      return;
+    }
+  }
+
+  SgFortranIncludeLine *include_stmt = buildFortranIncludeLine("omp_lib.h");
+  insert_fortran_statement_in_specification_part(include_stmt, body);
+}
+
+std::string
+ompAllocatorModifierName(SgOmpClause::omp_allocator_modifier_enum modifier) {
+  switch (modifier) {
+  case SgOmpClause::e_omp_allocator_default_mem_alloc:
+    return "omp_default_mem_alloc";
+  case SgOmpClause::e_omp_allocator_large_cap_mem_alloc:
+    return "omp_large_cap_mem_alloc";
+  case SgOmpClause::e_omp_allocator_const_mem_alloc:
+    return "omp_const_mem_alloc";
+  case SgOmpClause::e_omp_allocator_high_bw_mem_alloc:
+    return "omp_high_bw_mem_alloc";
+  case SgOmpClause::e_omp_allocator_low_lat_mem_alloc:
+    return "omp_low_lat_mem_alloc";
+  case SgOmpClause::e_omp_allocator_cgroup_mem_alloc:
+    return "omp_cgroup_mem_alloc";
+  case SgOmpClause::e_omp_allocator_pteam_mem_alloc:
+    return "omp_pteam_mem_alloc";
+  case SgOmpClause::e_omp_allocator_thread_mem_alloc:
+    return "omp_thread_mem_alloc";
+  default:
+    return "";
+  }
+}
+
+SgExpression *
+buildAllocatorArgumentExpression(const SgOmpAllocatorClause *clause,
+                                 SgScopeStatement *scope) {
+  ROSE_ASSERT(clause != nullptr);
+  ROSE_ASSERT(scope != nullptr);
+
+  const SgOmpClause::omp_allocator_modifier_enum modifier =
+      clause->get_modifier();
+  if (modifier == SgOmpClause::e_omp_allocator_user_defined_modifier) {
+    SgExpression *user_defined = clause->get_user_defined_modifier();
+    ROSE_ASSERT(user_defined != nullptr);
+    return copyExpression(user_defined);
+  }
+
+  const std::string allocator_name = ompAllocatorModifierName(modifier);
+  if (!allocator_name.empty()) {
+    return buildOpaqueVarRefExp(allocator_name, scope);
+  }
+
+  MLOG_ERROR_CXX("ompLowering")
+      << "Unsupported allocator modifier in OpenMP allocate lowering: "
+      << static_cast<int>(modifier);
+  ROSE_ABORT();
+}
+
+SgOmpAllocatorClause *
+getAllocatorClauseOrAbort(SgOmpAllocateStatement *target) {
+  ROSE_ASSERT(target != nullptr);
+
+  SgOmpAllocatorClause *allocator_clause = nullptr;
+  const SgOmpClausePtrList &clauses = target->get_clauses();
+  for (SgOmpClausePtrList::const_iterator it = clauses.begin();
+       it != clauses.end(); ++it) {
+    SgOmpClause *clause = *it;
+    if (clause == nullptr) {
+      continue;
+    }
+    if (SgOmpAllocatorClause *current = isSgOmpAllocatorClause(clause)) {
+      if (allocator_clause != nullptr) {
+        MLOG_ERROR_CXX("ompLowering")
+            << "OpenMP allocate lowering expects at most one allocator clause";
+        ROSE_ABORT();
+      }
+      allocator_clause = current;
+      continue;
+    }
+
+    MLOG_ERROR_CXX("ompLowering")
+        << "Unsupported clause on OpenMP allocate statement in lowering: "
+        << clause->sage_class_name();
+    ROSE_ABORT();
+  }
+
+  if (allocator_clause == nullptr) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "OpenMP allocate lowering requires an explicit allocator clause";
+    ROSE_ABORT();
+  }
+
+  return allocator_clause;
+}
+
+std::set<SgInitializedName *>
+collectReferencedBaseObjects(const SgExpressionPtrList &expressions) {
+  std::set<SgInitializedName *> result;
+  for (SgExpressionPtrList::const_iterator it = expressions.begin();
+       it != expressions.end(); ++it) {
+    SgExpression *expr = *it;
+    if (expr == nullptr) {
+      continue;
+    }
+    SgInitializedName *name = SageInterface::convertRefToInitializedName(expr);
+    if (name == nullptr) {
+      MLOG_ERROR_CXX("ompLowering")
+          << "Unable to resolve allocate object from expression '"
+          << expr->unparseToString() << "'";
+      ROSE_ABORT();
+    }
+    result.insert(name);
+  }
+  return result;
+}
+
+std::set<SgInitializedName *>
+collectAllocateStatementBaseObjects(const SgAllocateStatement *stmt) {
+  ROSE_ASSERT(stmt != nullptr);
+  SgExprListExp *expr_list = stmt->get_expr_list();
+  ROSE_ASSERT(expr_list != nullptr);
+
+  SgExpressionPtrList allocate_objects;
+  const SgExpressionPtrList &exprs = expr_list->get_expressions();
+  for (SgExpressionPtrList::const_iterator it = exprs.begin();
+       it != exprs.end(); ++it) {
+    SgExpression *expr = *it;
+    if (expr == nullptr || isSgTypeExpression(expr) != nullptr) {
+      continue;
+    }
+    allocate_objects.push_back(expr);
+  }
+
+  return collectReferencedBaseObjects(allocate_objects);
+}
+
+bool requiresOnlyDynamicAllocators(const SgOmpRequiresStatement *stmt) {
+  ROSE_ASSERT(stmt != nullptr);
+  const SgOmpClausePtrList &clauses = stmt->get_clauses();
+  if (clauses.empty()) {
+    return false;
+  }
+
+  for (SgOmpClausePtrList::const_iterator it = clauses.begin();
+       it != clauses.end(); ++it) {
+    if (isSgOmpDynamicAllocatorsClause(*it) == nullptr) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 SgExpression *stripNoopCastsAndParens(SgExpression *expr) {
@@ -10746,6 +10945,101 @@ void transOmpTargetUpdate(SgNode *node) {
                 "Translated from #pragma omp target update ...");
 }
 
+void transOmpAllocate(SgNode *node) {
+  ROSE_ASSERT(node != NULL);
+  SgOmpAllocateStatement *target = isSgOmpAllocateStatement(node);
+  ROSE_ASSERT(target != NULL);
+
+  if (!SageInterface::is_Fortran_language()) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "OpenMP allocate statement lowering is currently implemented only "
+           "for Fortran allocate statements";
+    ROSE_ABORT();
+  }
+
+  SgScopeStatement *scope = target->get_scope();
+  ROSE_ASSERT(scope != NULL);
+  ensureFortranOmpAllocatorInterfaces(scope);
+
+  SgStatement *next_stmt = SageInterface::getNextStatement(target);
+  SgAllocateStatement *allocate_stmt = isSgAllocateStatement(next_stmt);
+  if (allocate_stmt == NULL) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "OpenMP allocate statement lowering expects the next statement to "
+           "be a Fortran allocate statement";
+    ROSE_ABORT();
+  }
+
+  const std::set<SgInitializedName *> target_objects =
+      collectReferencedBaseObjects(target->get_variables());
+  const std::set<SgInitializedName *> allocate_objects =
+      collectAllocateStatementBaseObjects(allocate_stmt);
+  if (target_objects.empty() || target_objects != allocate_objects) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "OpenMP allocate lowering currently requires the directive variable "
+           "list to match the following allocate statement exactly";
+    ROSE_ABORT();
+  }
+
+  SgOmpAllocatorClause *allocator_clause = getAllocatorClauseOrAbort(target);
+  SgExpression *allocator_expr =
+      buildAllocatorArgumentExpression(allocator_clause, scope);
+  SgType *allocator_type = allocator_expr->get_type();
+  if (allocator_type == NULL) {
+    allocator_type = buildIntType();
+  }
+
+  static size_t saved_allocator_counter = 0;
+  std::ostringstream saved_name;
+  saved_name << "__rex_saved_allocator_" << saved_allocator_counter++;
+  SgBasicBlock *procedure_body = getEnclosingFortranProcedureBody(scope);
+  SgVariableDeclaration *saved_decl = buildVariableDeclaration(
+      saved_name.str(), allocator_type, NULL, procedure_body);
+  insert_fortran_declaration_into_procedure(saved_decl, scope);
+
+  SgInitializedName &saved_var = getFirstVariable(*saved_decl);
+  SgExprStatement *save_stmt = buildAssignStatement(
+      buildVarRefExp(saved_var.get_name(), scope),
+      buildFunctionCallExp("omp_get_default_allocator", allocator_type,
+                           buildExprListExp(), scope));
+  SgExprStatement *set_stmt =
+      buildFunctionCallStmt("omp_set_default_allocator", buildVoidType(),
+                            buildExprListExp(allocator_expr), scope);
+  SgExprStatement *restore_stmt = buildFunctionCallStmt(
+      "omp_set_default_allocator", buildVoidType(),
+      buildExprListExp(buildVarRefExp(saved_var.get_name(), scope)), scope);
+
+  attachComment(save_stmt,
+                "Translated from OpenMP allocate using explicit allocator "
+                "runtime calls.");
+  insertStatementBefore(allocate_stmt, save_stmt);
+  insertStatementAfter(save_stmt, set_stmt);
+  insertStatementAfter(allocate_stmt, restore_stmt);
+  removeStatement(target);
+}
+
+void transOmpRequires(SgNode *node) {
+  ROSE_ASSERT(node != NULL);
+  SgOmpRequiresStatement *target = isSgOmpRequiresStatement(node);
+  ROSE_ASSERT(target != NULL);
+
+  if (!requiresOnlyDynamicAllocators(target)) {
+    MLOG_ERROR_CXX("ompLowering")
+        << "OpenMP requires lowering currently supports only "
+           "requires(dynamic_allocators)";
+    ROSE_ABORT();
+  }
+
+  if (SgStatement *next_stmt = SageInterface::getNextStatement(target)) {
+    attachComment(
+        next_stmt,
+        "Translated from OpenMP requires(dynamic_allocators); allocator "
+        "semantics are lowered to explicit runtime calls.");
+  }
+
+  removeStatement(target);
+}
+
 //! Add __thread for each threadprivate variable's declaration statement and
 //! remove the #pragma omp threadprivate(...)
 void transOmpThreadprivate(SgNode *node) {
@@ -12614,6 +12908,8 @@ void lower_omp(SgSourceFile *file) {
         NodeQuery::querySubTree(file, V_SgOmpExecStatement);
     nodeList = mergeSgNodeList(
         nodeList, NodeQuery::querySubTree(file, V_SgOmpThreadprivateStatement));
+    nodeList = mergeSgNodeList(
+        nodeList, NodeQuery::querySubTree(file, V_SgOmpRequiresStatement));
     if (cpu_outlined_file != NULL) {
       nodeList = mergeSgNodeList(
           nodeList,
@@ -12621,6 +12917,9 @@ void lower_omp(SgSourceFile *file) {
       nodeList = mergeSgNodeList(
           nodeList, NodeQuery::querySubTree(cpu_outlined_file,
                                             V_SgOmpThreadprivateStatement));
+      nodeList = mergeSgNodeList(
+          nodeList,
+          NodeQuery::querySubTree(cpu_outlined_file, V_SgOmpRequiresStatement));
     }
     // Collect all the OpenMP nodes without OpenMP parent
     for (iter = nodeList.begin(); iter != nodeList.end(); iter++) {
@@ -12631,6 +12930,8 @@ void lower_omp(SgSourceFile *file) {
         if (omp_parent == NULL) {
           omp_nodes.push_back(omp_node);
         }
+      } else if (isSgOmpRequiresStatement(*iter) != NULL) {
+        omp_nodes.push_back(*iter);
       } else if (isSgOmpThreadprivateStatement(*iter) != NULL) {
         omp_nodes.push_back(*iter);
       }
@@ -12709,6 +13010,14 @@ void lower_omp(SgSourceFile *file) {
         }
         case V_SgOmpFlushStatement: {
           transOmpFlush(node);
+          break;
+        }
+        case V_SgOmpAllocateStatement: {
+          transOmpAllocate(node);
+          break;
+        }
+        case V_SgOmpRequiresStatement: {
+          transOmpRequires(node);
           break;
         }
 
