@@ -35,17 +35,13 @@ void Y::foo()
 
   // These work but they are not a part of the cast (so this is a simpler case: function pointer expressions).
      &Y::MemberFunctionPointer_A;
-     &Y::MemberFunctionPointer_A;
 
-  // Simple cast expression
+     // Simple cast expression
      (X::MemberFunctionPointerType) & Y::MemberFunctionPointer_A;
 
      // This is the harder cases that originally failed
      // Note: the cast type will be the base type of the typedef, so we could
      // maybe still do better...
-     functionHandlers[0] = (X::MemberFunctionPointerType) &Y::MemberFunctionPointer_A;
-
-     // This is a semantically equivalent example to the case above.
      functionHandlers[0] =
          (X::MemberFunctionPointerType)&Y::MemberFunctionPointer_A;
 }
