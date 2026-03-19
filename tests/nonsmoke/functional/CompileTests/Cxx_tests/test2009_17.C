@@ -37,11 +37,11 @@ void Y::foo()
      &Y::MemberFunctionPointer_A;
 
      // Simple cast expression
-     (X::MemberFunctionPointerType) & Y::MemberFunctionPointer_A;
+     static_cast<X::MemberFunctionPointerType>(&Y::MemberFunctionPointer_A);
 
      // This is the harder cases that originally failed
      // Note: the cast type will be the base type of the typedef, so we could
      // maybe still do better...
      functionHandlers[0] =
-         (X::MemberFunctionPointerType)&Y::MemberFunctionPointer_A;
+         static_cast<X::MemberFunctionPointerType>(&Y::MemberFunctionPointer_A);
 }
