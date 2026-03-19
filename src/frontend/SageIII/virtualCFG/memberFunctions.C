@@ -6,6 +6,7 @@
 #include "CallGraph.h"
 #endif
 
+#include <algorithm>
 #include <vector>
 using namespace std;
 
@@ -3873,15 +3874,23 @@ getPreviousExecutableLambdaCaptureExpression(const SgLambdaCapture *capture) {
     return nullptr;
   }
 
-  std::vector<SgLambdaCapture *> captures =
-      getExecutableLambdaCaptures(capture_list);
-  for (size_t i = 0; i < captures.size(); ++i) {
-    if (captures[i] == capture) {
-      return i == 0 ? nullptr : getLambdaCaptureExpression(captures[i - 1]);
+  const SgLambdaCapturePtrList &captures = capture_list->get_capture_list();
+  SgLambdaCapturePtrList::const_iterator current =
+      std::find(captures.begin(), captures.end(), capture);
+  if (current == captures.end()) {
+    ROSE_ASSERT(
+        !"Bad capture in getPreviousExecutableLambdaCaptureExpression()");
+    return nullptr;
+  }
+
+  while (current != captures.begin()) {
+    --current;
+    if (SgExpression *capture_expression =
+            getLambdaCaptureExpression(*current)) {
+      return capture_expression;
     }
   }
 
-  ROSE_ASSERT(!"Bad capture in getPreviousExecutableLambdaCaptureExpression()");
   return nullptr;
 }
 
@@ -3893,17 +3902,21 @@ getNextExecutableLambdaCaptureExpression(const SgLambdaCapture *capture) {
     return nullptr;
   }
 
-  std::vector<SgLambdaCapture *> captures =
-      getExecutableLambdaCaptures(capture_list);
-  for (size_t i = 0; i < captures.size(); ++i) {
-    if (captures[i] == capture) {
-      return i + 1 < captures.size()
-                 ? getLambdaCaptureExpression(captures[i + 1])
-                 : nullptr;
+  const SgLambdaCapturePtrList &captures = capture_list->get_capture_list();
+  SgLambdaCapturePtrList::const_iterator current =
+      std::find(captures.begin(), captures.end(), capture);
+  if (current == captures.end()) {
+    ROSE_ASSERT(!"Bad capture in getNextExecutableLambdaCaptureExpression()");
+    return nullptr;
+  }
+
+  for (++current; current != captures.end(); ++current) {
+    if (SgExpression *capture_expression =
+            getLambdaCaptureExpression(*current)) {
+      return capture_expression;
     }
   }
 
-  ROSE_ASSERT(!"Bad capture in getNextExecutableLambdaCaptureExpression()");
   return nullptr;
 }
 
