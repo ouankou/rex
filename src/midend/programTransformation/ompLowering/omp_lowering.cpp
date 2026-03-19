@@ -186,6 +186,82 @@ SgBasicBlock *getEnclosingFortranProcedureBody(SgScopeStatement *scope) {
   return body;
 }
 
+const Sg_File_Info *getStatementStartInfo(const SgStatement *stmt) {
+  ROSE_ASSERT(stmt != nullptr);
+  if (const SgLocatedNode *located = isSgLocatedNode(stmt)) {
+    if (const Sg_File_Info *info = located->get_startOfConstruct()) {
+      return info;
+    }
+  }
+  return stmt->get_file_info();
+}
+
+const Sg_File_Info *getStatementEndInfo(const SgStatement *stmt) {
+  ROSE_ASSERT(stmt != nullptr);
+  if (const SgLocatedNode *located = isSgLocatedNode(stmt)) {
+    if (const Sg_File_Info *info = located->get_endOfConstruct()) {
+      return info;
+    }
+  }
+  return stmt->get_file_info();
+}
+
+bool sourcePositionLess(const Sg_File_Info *lhs, const Sg_File_Info *rhs) {
+  ROSE_ASSERT(lhs != nullptr);
+  ROSE_ASSERT(rhs != nullptr);
+  if (lhs->get_line() != rhs->get_line()) {
+    return lhs->get_line() < rhs->get_line();
+  }
+  return lhs->get_col() < rhs->get_col();
+}
+
+bool sourcePositionAfter(const Sg_File_Info *lhs, const Sg_File_Info *rhs) {
+  ROSE_ASSERT(lhs != nullptr);
+  ROSE_ASSERT(rhs != nullptr);
+  if (lhs->get_line() != rhs->get_line()) {
+    return lhs->get_line() > rhs->get_line();
+  }
+  return lhs->get_col() > rhs->get_col();
+}
+
+SgStatement *findNextOriginalStatementInScope(SgStatement *target) {
+  ROSE_ASSERT(target != nullptr);
+  SgScopeStatement *scope = target->get_scope();
+  ROSE_ASSERT(scope != nullptr);
+
+  const Sg_File_Info *target_end = getStatementEndInfo(target);
+  ROSE_ASSERT(target_end != nullptr);
+
+  SgStatement *next_stmt = nullptr;
+  const Sg_File_Info *next_info = nullptr;
+  const SgStatementPtrList &stmts = scope->getStatementList();
+  for (SgStatementPtrList::const_iterator it = stmts.begin(); it != stmts.end();
+       ++it) {
+    SgStatement *stmt = *it;
+    if (stmt == nullptr || stmt == target) {
+      continue;
+    }
+
+    const Sg_File_Info *stmt_start = getStatementStartInfo(stmt);
+    if (stmt_start == nullptr || stmt_start->isTransformation()) {
+      continue;
+    }
+    if (stmt_start->get_filenameString() != target_end->get_filenameString()) {
+      continue;
+    }
+    if (!sourcePositionAfter(stmt_start, target_end)) {
+      continue;
+    }
+
+    if (next_info == nullptr || sourcePositionLess(stmt_start, next_info)) {
+      next_stmt = stmt;
+      next_info = stmt_start;
+    }
+  }
+
+  return next_stmt;
+}
+
 void ensureFortranOmpAllocatorInterfaces(SgScopeStatement *scope) {
   SgBasicBlock *body = getEnclosingFortranProcedureBody(scope);
   const SgStatementPtrList &stmts = body->get_statements();
@@ -10961,7 +11037,7 @@ void transOmpAllocate(SgNode *node) {
   ROSE_ASSERT(scope != NULL);
   ensureFortranOmpAllocatorInterfaces(scope);
 
-  SgStatement *next_stmt = SageInterface::getNextStatement(target);
+  SgStatement *next_stmt = findNextOriginalStatementInScope(target);
   SgAllocateStatement *allocate_stmt = isSgAllocateStatement(next_stmt);
   if (allocate_stmt == NULL) {
     MLOG_ERROR_CXX("ompLowering")
@@ -11011,10 +11087,10 @@ void transOmpAllocate(SgNode *node) {
   attachComment(save_stmt,
                 "Translated from OpenMP allocate using explicit allocator "
                 "runtime calls.");
+  removeStatement(target);
   insertStatementBefore(allocate_stmt, save_stmt);
   insertStatementAfter(save_stmt, set_stmt);
   insertStatementAfter(allocate_stmt, restore_stmt);
-  removeStatement(target);
 }
 
 void transOmpRequires(SgNode *node) {
@@ -12908,6 +12984,8 @@ void lower_omp(SgSourceFile *file) {
     nodeList = mergeSgNodeList(
         nodeList, NodeQuery::querySubTree(file, V_SgOmpThreadprivateStatement));
     nodeList = mergeSgNodeList(
+        nodeList, NodeQuery::querySubTree(file, V_SgOmpAllocateStatement));
+    nodeList = mergeSgNodeList(
         nodeList, NodeQuery::querySubTree(file, V_SgOmpRequiresStatement));
     if (cpu_outlined_file != NULL) {
       nodeList = mergeSgNodeList(
@@ -12918,10 +12996,27 @@ void lower_omp(SgSourceFile *file) {
                                             V_SgOmpThreadprivateStatement));
       nodeList = mergeSgNodeList(
           nodeList,
+          NodeQuery::querySubTree(cpu_outlined_file, V_SgOmpAllocateStatement));
+      nodeList = mergeSgNodeList(
+          nodeList,
           NodeQuery::querySubTree(cpu_outlined_file, V_SgOmpRequiresStatement));
     }
-    // Collect all the OpenMP nodes without OpenMP parent
+    Rose_STL_Container<SgNode *> visibleNodeList;
+    std::unordered_set<SgNode *> seenVisibleNodes;
     for (iter = nodeList.begin(); iter != nodeList.end(); iter++) {
+      SgLocatedNode *located = isSgLocatedNode(*iter);
+      if (located != NULL && !located->isOutputInCodeGeneration()) {
+        continue;
+      }
+      if (!seenVisibleNodes.insert(*iter).second) {
+        continue;
+      }
+      visibleNodeList.push_back(*iter);
+    }
+
+    // Collect all the OpenMP nodes without OpenMP parent
+    for (iter = visibleNodeList.begin(); iter != visibleNodeList.end();
+         iter++) {
       SgOmpExecStatement *omp_node = isSgOmpExecStatement(*iter);
       if (omp_node != NULL) {
         SgOmpExecStatement *omp_parent =
@@ -12930,6 +13025,8 @@ void lower_omp(SgSourceFile *file) {
           omp_nodes.push_back(omp_node);
         }
       } else if (isSgOmpRequiresStatement(*iter) != NULL) {
+        omp_nodes.push_back(*iter);
+      } else if (isSgOmpAllocateStatement(*iter) != NULL) {
         omp_nodes.push_back(*iter);
       } else if (isSgOmpThreadprivateStatement(*iter) != NULL) {
         omp_nodes.push_back(*iter);
@@ -12940,8 +13037,8 @@ void lower_omp(SgSourceFile *file) {
     // nodes. If no roots are detected but OpenMP nodes still exist, force
     // progress by processing one node and rebuilding the OpenMP tree in the
     // next iteration.
-    if (omp_nodes.empty() && !nodeList.empty()) {
-      SgStatement *fallback = isSgStatement(nodeList.front());
+    if (omp_nodes.empty() && !visibleNodeList.empty()) {
+      SgStatement *fallback = isSgStatement(visibleNodeList.front());
       ROSE_ASSERT(fallback != NULL);
       MLOG_WARN_CXX("ompLowering")
           << "Recovering from stale OpenMP parent links while lowering "
