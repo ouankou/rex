@@ -1,0 +1,18 @@
+#ifndef TESTS_NONSMOKE_FUNCTIONAL_COMPILETESTS_CXX_TESTS_TEST2013_245HEADER
+#define TESTS_NONSMOKE_FUNCTIONAL_COMPILETESTS_CXX_TESTS_TEST2013_245HEADER
+
+namespace test2013_245 {
+
+template <typename T> struct Wrapper {
+  using value_type = T;
+
+  explicit Wrapper(T initial_value) : value(initial_value) {}
+
+  T value;
+};
+
+inline int compute(int base_value) { return base_value + 1; }
+
+} // namespace test2013_245
+
+#endif
