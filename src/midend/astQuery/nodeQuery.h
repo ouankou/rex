@@ -222,8 +222,9 @@ template <typename NodeFunctional>
 auto querySubTree(
     SgNode *subTree, NodeFunctional pred,
     AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes)
-    -> std::invoke_result_t<NodeFunctional &, SgNode *> {
-  static_assert(std::is_invocable_v<NodeFunctional &, SgNode *>,
+    -> AstQueryNamespace::detail::invoke_result_t<NodeFunctional &, SgNode *> {
+  static_assert(AstQueryNamespace::detail::is_invocable<NodeFunctional &,
+                                                        SgNode *>::value,
                 "NodeQuery::querySubTree expects a callable taking SgNode*");
   return AstQueryNamespace::querySubTree(subTree, pred, defineQueryType);
 };
@@ -391,8 +392,9 @@ void mergeList(Rose_STL_Container<SgNode *> &nodeList,
 template <typename NodeFunctional>
 auto queryMemoryPool(NodeFunctional nodeFunc,
                      VariantVector *targetVariantVector = NULL)
-    -> std::invoke_result_t<NodeFunctional &, SgNode *> {
-  static_assert(std::is_invocable_v<NodeFunctional &, SgNode *>,
+    -> AstQueryNamespace::detail::invoke_result_t<NodeFunctional &, SgNode *> {
+  static_assert(AstQueryNamespace::detail::is_invocable<NodeFunctional &,
+                                                        SgNode *>::value,
                 "NodeQuery::queryMemoryPool expects a callable taking SgNode*");
   return AstQueryNamespace::queryMemoryPool(nodeFunc, targetVariantVector);
 }
