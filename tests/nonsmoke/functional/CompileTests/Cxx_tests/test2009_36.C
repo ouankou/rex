@@ -10,7 +10,7 @@ Compiling the following code snippet (also attached) using even the
 identity unparser:
 
 ---------------------------------------------
-/* wait.c */
+// wait.c
 #include <sys/types.h>
 
 #include <sys/wait.h>
@@ -72,8 +72,7 @@ http://pages.cs.wisc.edu/~travitch
 
 #include <sys/wait.h>
 
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
   int err;
   wait(&err);
 

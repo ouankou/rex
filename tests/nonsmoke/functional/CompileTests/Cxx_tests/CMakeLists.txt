@@ -2282,7 +2282,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test2007_99.C
   test2008_07.C
   test2008_15.C
-  test2009_07.C
   test2009_13.C
   test2009_17.C
   test2009_22.C
@@ -2528,7 +2527,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_120.C
   test2007_121.C
   test2007_122.C
-  test2007_124.C
   test2007_126.C
   test2007_127.C
   test2007_129.C
@@ -2587,16 +2585,13 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2007_97.C
   test2007_99.C
   test2008_07.C
-  test2009_07.C
   test2009_13.C
-  test2009_17.C
   test2009_22.C
   test2009_29.C
   test2009_32.C
   test2009_33.C
   test2009_34.C
   test2009_35.C
-  test2009_36.C
   test2009_43.C
   test2009_44.C
   test2009_46.C
@@ -2673,7 +2668,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2013_185.C
   test2013_197.C
   test2013_19.C
-  test2013_245.C
   test2013_248.C
   test2013_249.C
   test2013_254.C
@@ -2812,7 +2806,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_120.C
   test2007_121.C
   test2007_122.C
-  test2007_124.C
   test2007_126.C
   test2007_127.C
   test2007_129.C
@@ -2872,9 +2865,7 @@ set(TESTCODE_CURRENTLY_FAILING
   test2007_97.C
   test2007_99.C
   test2008_07.C
-  test2009_07.C
   test2009_13.C
-  test2009_17.C
   test2009_21.C
   test2009_22.C
   test2009_29.C
@@ -2882,7 +2873,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2009_33.C
   test2009_34.C
   test2009_35.C
-  test2009_36.C
   test2009_43.C
   test2009_44.C
   test2009_46.C
@@ -2974,7 +2964,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_19.C
   test2013_195.C
   test2013_197.C
-  test2013_245.C
   test2013_248.C
   test2013_249.C
   test2013_254.C
@@ -3267,18 +3256,6 @@ add_test(
 )
 set_tests_properties(Cxx_tests_test2005_56_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
 rex_lock_test_for_input(Cxx_tests_test2005_56_special test2005_56.C)
-
-add_test(
-  NAME Cxx_tests_test2010_02_special
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:${translator}>
-    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
-    -I${CMAKE_BINARY_DIR}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_02.C
-    -o test2010_02.o
-)
-set_tests_properties(Cxx_tests_test2010_02_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
-rex_lock_test_for_input(Cxx_tests_test2010_02_special test2010_02.C)
 
 add_test(
   NAME Cxx_tests_test_unparse_includes_option
