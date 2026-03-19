@@ -2604,7 +2604,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2010_09.C
   test2010_10.C
   test2010_11.C
-  test2010_12.C
   test2010_15.C
   test2010_16.C
   test2010_17.C
@@ -2891,7 +2890,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2010_09.C
   test2010_10.C
   test2010_11.C
-  test2010_12.C
   test2010_15.C
   test2010_16.C
   test2010_17.C
