@@ -3262,18 +3262,6 @@ set_tests_properties(Cxx_tests_test2005_56_special PROPERTIES LABELS Cxx_tests D
 rex_lock_test_for_input(Cxx_tests_test2005_56_special test2005_56.C)
 
 add_test(
-  NAME Cxx_tests_test2010_02_special
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND $<TARGET_FILE:${translator}>
-    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
-    -I${CMAKE_BINARY_DIR}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2010_02.C
-    -o test2010_02.o
-)
-set_tests_properties(Cxx_tests_test2010_02_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
-rex_lock_test_for_input(Cxx_tests_test2010_02_special test2010_02.C)
-
-add_test(
   NAME Cxx_tests_test_unparse_includes_option
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:${translator}>

@@ -14,6 +14,7 @@
 #include <functional>
 
 #include <type_traits>
+#include <utility>
 // Support for operations like (SgTypeInt | SgTypeFloat)
 // note that non-terminals would be expanded into the associated terminals!
 // So SgType would generate (SgTypeInt | SgTypeFloat | SgTypeDouble | ... |
@@ -49,6 +50,48 @@ ROSE_DLL_API VariantVector operator+(const VariantVector &lhs,
                                      const VariantVector &rhs);
 
 namespace AstQueryNamespace {
+namespace detail {
+// Keep AST query helpers usable in C++14 compile tests even though REX itself
+// is built as C++17.
+template <typename...> struct make_void {
+  using type = void;
+};
+
+template <typename... Ts> using void_t = typename make_void<Ts...>::type;
+
+#if __cplusplus >= 201703L
+template <typename F, typename... Args>
+using invoke_result_t = typename std::invoke_result<F, Args...>::type;
+#else
+template <typename F, typename... Args>
+using invoke_result_t = typename std::result_of<F(Args...)>::type;
+#endif
+
+template <typename, typename F, typename... Args>
+struct is_invocable_impl : std::false_type {};
+
+template <typename F, typename... Args>
+struct is_invocable_impl<void_t<invoke_result_t<F, Args...>>, F, Args...>
+    : std::true_type {};
+
+template <typename F, typename... Args>
+struct is_invocable : is_invocable_impl<void, F, Args...> {};
+
+template <typename F, typename... Args>
+auto invoke(F &&f, Args &&...args) -> typename std::enable_if<
+    std::is_member_pointer<typename std::decay<F>::type>::value,
+    invoke_result_t<F &&, Args &&...>>::type {
+  return std::mem_fn(f)(std::forward<Args>(args)...);
+}
+
+template <typename F, typename... Args>
+auto invoke(F &&f, Args &&...args) -> typename std::enable_if<
+    !std::is_member_pointer<typename std::decay<F>::type>::value,
+    invoke_result_t<F &&, Args &&...>>::type {
+  return std::forward<F>(f)(std::forward<Args>(args)...);
+}
+} // namespace detail
+
 template <typename AstQuerySynthesizedAttributeType>
 struct helpFunctionalOneParamater {
   using FunctorType =
@@ -159,12 +202,13 @@ class AstQuery : public AST_Query_Base
   // Instantiate the functional which returns the list of nodes to be processed
   NodeFunctional *nodeFunc;
 
-  static_assert(std::is_invocable_v<NodeFunctional &, SgNode *>,
+  static_assert(detail::is_invocable<NodeFunctional &, SgNode *>::value,
                 "AstQuery requires a callable that accepts SgNode*");
 
   // When a node satisfies a functional it is added to
   // this list.
-  typedef std::invoke_result_t<NodeFunctional &, SgNode *> AstQueryReturnType;
+  typedef detail::invoke_result_t<NodeFunctional &, SgNode *>
+      AstQueryReturnType;
   AstQueryReturnType listOfNodes;
 
 public:
@@ -206,7 +250,7 @@ void AstQuery<AST_Query_Base, NodeFunctional>::setPredicate(
 }
 
 template <typename AST_Query_Base, typename NodeFunctional>
-AstQuery<AST_Query_Base, NodeFunctional>::~AstQuery(){};
+AstQuery<AST_Query_Base, NodeFunctional>::~AstQuery() {};
 
 template <typename AST_Query_Base, typename NodeFunctional>
 typename AstQuery<AST_Query_Base, NodeFunctional>::AstQueryReturnType
@@ -233,7 +277,7 @@ void AstQuery<AST_Query_Base, NodeFunctional>::visit(SgNode *node) {
 
   // This function assemble the elements of the input list (a list of lists) to
   // form the output (a single list)
-  AstQueryNamespace::Merge(listOfNodes, std::invoke(*nodeFunc, node));
+  AstQueryNamespace::Merge(listOfNodes, detail::invoke(*nodeFunc, node));
 }
 
 /********************************************************************************
@@ -244,11 +288,11 @@ void AstQuery<AST_Query_Base, NodeFunctional>::visit(SgNode *node) {
  *in the second argument.
  ********************************************************************************/
 template <typename NodeFunctional>
-std::invoke_result_t<NodeFunctional &, SgNode *> querySubTree(
+detail::invoke_result_t<NodeFunctional &, SgNode *> querySubTree(
     SgNode *node, NodeFunctional nodeFunc,
     AstQueryNamespace::QueryDepth defineQueryType = AstQueryNamespace::AllNodes,
     t_traverseOrder treeTraversalOrder = preorder) {
-  static_assert(std::is_invocable_v<NodeFunctional &, SgNode *>,
+  static_assert(detail::is_invocable<NodeFunctional &, SgNode *>::value,
                 "nodeFunc must be callable with SgNode*");
   ROSE_ASSERT(node != NULL);
 
@@ -334,9 +378,9 @@ _Result querySubTree(SgNode *subTree, _Result (*__x)(SgNode *),
  *criteria specified in and returned by the predicate in the third argument.
  ********************************************************************************/
 template <class Iterator, class NodeFunctional>
-std::invoke_result_t<NodeFunctional &, SgNode *>
+detail::invoke_result_t<NodeFunctional &, SgNode *>
 queryRange(Iterator begin, Iterator end, NodeFunctional nodeFunc) {
-  static_assert(std::is_invocable_v<NodeFunctional &, SgNode *>,
+  static_assert(detail::is_invocable<NodeFunctional &, SgNode *>::value,
                 "nodeFunc must be callable with SgNode*");
 
   AstQuery<AstQuery_DUMMY, NodeFunctional> astQuery(&nodeFunc);
@@ -399,10 +443,10 @@ void queryMemoryPool(AstQuery<ROSE_VisitTraversal, FunctionalType> &astQuery,
  *in the second argument.
  ********************************************************************************/
 template <typename NodeFunctional>
-std::invoke_result_t<NodeFunctional &, SgNode *>
+detail::invoke_result_t<NodeFunctional &, SgNode *>
 queryMemoryPool(NodeFunctional nodeFunc,
                 VariantVector *targetVariantVector = NULL) {
-  static_assert(std::is_invocable_v<NodeFunctional &, SgNode *>,
+  static_assert(detail::is_invocable<NodeFunctional &, SgNode *>::value,
                 "nodeFunc must be callable with SgNode*");
 
   AstQuery<ROSE_VisitTraversal, NodeFunctional> astQuery(&nodeFunc);
