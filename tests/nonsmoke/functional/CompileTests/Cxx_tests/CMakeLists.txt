@@ -2599,7 +2599,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2010_09.C
   test2010_10.C
   test2010_11.C
-  test2010_12.C
   test2010_15.C
   test2010_16.C
   test2010_17.C
@@ -2662,7 +2661,6 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2012_277.C
   test2012_278.C
   test2012_35.C
-  test2012_68.C
   test2012_79.C
   test2012_86.C
   test2013_14.C
@@ -2879,7 +2877,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2010_09.C
   test2010_10.C
   test2010_11.C
-  test2010_12.C
   test2010_15.C
   test2010_16.C
   test2010_17.C
@@ -2951,7 +2948,6 @@ set(TESTCODE_CURRENTLY_FAILING
   test2012_35.C
   test2012_57.C
   test2012_59.C
-  test2012_68.C
   test2012_79.C
   test2012_81.C
   test2012_86.C
