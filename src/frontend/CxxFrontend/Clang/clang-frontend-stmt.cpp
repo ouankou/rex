@@ -64,6 +64,105 @@ static void suppress_unparse_output(SgLocatedNode *n) {
 using llvm::isa; // For LLVM type checking (isa<Type>)
 
 namespace {
+static bool
+scope_supports_statement_list_for_instantiation_ref(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return false;
+  }
+  switch (scope->variantT()) {
+  case V_SgBasicBlock:
+  case V_SgCatchOptionStmt:
+  case V_SgDoWhileStmt:
+  case V_SgForStatement:
+  case V_SgRangeBasedForStatement:
+  case V_SgTemplateFunctionDefinition:
+  case V_SgFunctionDefinition:
+  case V_SgSwitchStatement:
+  case V_SgWhileStmt:
+  case V_SgFortranDo:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static SgDeclarationStatementPtrList *
+get_scope_declaration_list_for_instantiation_ref(SgScopeStatement *scope) {
+  if (scope == nullptr) {
+    return nullptr;
+  }
+  if (SgGlobal *global = isSgGlobal(scope)) {
+    return &global->get_declarations();
+  }
+  if (SgNamespaceDefinitionStatement *ns_def =
+          isSgNamespaceDefinitionStatement(scope)) {
+    return &ns_def->get_declarations();
+  }
+  if (SgDeclarationScope *decl_scope = isSgDeclarationScope(scope)) {
+    return &decl_scope->get_declarations();
+  }
+  if (SgClassDefinition *class_def = isSgClassDefinition(scope)) {
+    return &class_def->get_members();
+  }
+  if (SgTemplateClassDefinition *template_def =
+          isSgTemplateClassDefinition(scope)) {
+    return &template_def->get_members();
+  }
+  if (SgTemplateInstantiationDefn *inst_def =
+          isSgTemplateInstantiationDefn(scope)) {
+    return &inst_def->get_members();
+  }
+  if (scope->containsOnlyDeclarations()) {
+    return &scope->getDeclarationList();
+  }
+  return nullptr;
+}
+
+static bool is_decl_attached_to_scope_child_list_for_instantiation_ref(
+    SgScopeStatement *scope, SgDeclarationStatement *decl) {
+  if (scope == nullptr || decl == nullptr) {
+    return false;
+  }
+  if (SgDeclarationStatementPtrList *decls =
+          get_scope_declaration_list_for_instantiation_ref(scope)) {
+    return std::find(decls->begin(), decls->end(), decl) != decls->end();
+  }
+  if (!scope_supports_statement_list_for_instantiation_ref(scope)) {
+    return false;
+  }
+  const SgStatementPtrList &stmts = scope->getStatementList();
+  return std::find(stmts.begin(), stmts.end(), decl) != stmts.end();
+}
+
+static bool detach_decl_from_scope_child_list_for_instantiation_ref(
+    SgDeclarationStatement *decl, SgScopeStatement *scope) {
+  if (scope == nullptr || decl == nullptr) {
+    return false;
+  }
+
+  auto erase_all = [&](auto &list) -> bool {
+    bool removed = false;
+    for (auto it = list.begin(); it != list.end();) {
+      if (*it == decl) {
+        it = list.erase(it);
+        removed = true;
+      } else {
+        ++it;
+      }
+    }
+    return removed;
+  };
+
+  if (SgDeclarationStatementPtrList *decls =
+          get_scope_declaration_list_for_instantiation_ref(scope)) {
+    return erase_all(*decls);
+  }
+  if (!scope_supports_statement_list_for_instantiation_ref(scope)) {
+    return false;
+  }
+  return erase_all(scope->getStatementList());
+}
+
 static void setCoroutineKeywordAttribute(SgNode *node,
                                          const char *keyword_spelling) {
   if (node == nullptr || keyword_spelling == nullptr) {
@@ -1318,6 +1417,147 @@ SgScopeStatement *normalizeNamespaceScope(SgScopeStatement *scope) {
   return first_def != nullptr ? first_def : scope;
 }
 
+template <typename Fn>
+static void for_each_unique_function_decl_in_chain(SgFunctionDeclaration *decl,
+                                                   Fn &&fn) {
+  if (decl == nullptr) {
+    return;
+  }
+
+  std::array<SgFunctionDeclaration *, 3> candidates = {
+      decl, isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration()),
+      isSgFunctionDeclaration(decl->get_definingDeclaration())};
+  std::array<SgFunctionDeclaration *, 3> visited = {nullptr, nullptr, nullptr};
+  size_t visited_count = 0;
+
+  for (SgFunctionDeclaration *candidate : candidates) {
+    if (candidate == nullptr) {
+      continue;
+    }
+
+    bool seen = false;
+    for (size_t i = 0; i < visited_count; ++i) {
+      if (visited[i] == candidate) {
+        seen = true;
+        break;
+      }
+    }
+    if (seen) {
+      continue;
+    }
+
+    visited[visited_count++] = candidate;
+    fn(candidate);
+  }
+}
+
+template <typename TemplateDeclT, typename InstantiationDeclT>
+static TemplateDeclT *
+recover_instantiation_template_declaration(SgFunctionDeclaration *decl) {
+  TemplateDeclT *result = nullptr;
+
+  for_each_unique_function_decl_in_chain(
+      decl, [&](SgFunctionDeclaration *candidate_decl) {
+        if (result != nullptr) {
+          return;
+        }
+
+        if (TemplateDeclT *template_decl =
+                dynamic_cast<TemplateDeclT *>(candidate_decl)) {
+          result = template_decl;
+          return;
+        }
+
+        if (InstantiationDeclT *inst_decl =
+                dynamic_cast<InstantiationDeclT *>(candidate_decl)) {
+          if (TemplateDeclT *template_decl = dynamic_cast<TemplateDeclT *>(
+                  inst_decl->get_templateDeclaration())) {
+            result = template_decl;
+            return;
+          }
+          if (TemplateDeclT *template_decl = dynamic_cast<TemplateDeclT *>(
+                  inst_decl->get_specializedTemplateDeclaration())) {
+            result = template_decl;
+          }
+        }
+      });
+
+  return result;
+}
+
+template <typename InstantiationDeclT, typename TemplateDeclT>
+static void apply_template_instantiation_template_links(
+    InstantiationDeclT *decl, TemplateDeclT *template_decl,
+    const SgName &template_name = SgName()) {
+  if (decl == nullptr || template_decl == nullptr) {
+    return;
+  }
+
+  const SgName resolved_template_name =
+      template_name.is_null() ? template_decl->get_name() : template_name;
+
+  for_each_unique_function_decl_in_chain(
+      decl, [&](SgFunctionDeclaration *candidate_decl) {
+        if (InstantiationDeclT *inst_decl =
+                dynamic_cast<InstantiationDeclT *>(candidate_decl)) {
+          inst_decl->set_templateDeclaration(template_decl);
+          inst_decl->set_specializedTemplateDeclaration(template_decl);
+          if (resolved_template_name.is_null() == false) {
+            inst_decl->set_templateName(resolved_template_name);
+          }
+        }
+      });
+}
+
+static void
+mark_synthesized_instantiation_decl_chain_for_ref(SgFunctionDeclaration *decl,
+                                                  SgScopeStatement *scope) {
+  if (decl == nullptr) {
+    return;
+  }
+
+  SgScopeStatement *target_scope = normalizeNamespaceScope(scope);
+  if (target_scope == nullptr) {
+    target_scope = normalizeNamespaceScope(decl->get_scope());
+  }
+
+  for_each_unique_function_decl_in_chain(
+      decl, [&](SgFunctionDeclaration *candidate_decl) {
+        Sg_File_Info *file_info = candidate_decl->get_file_info();
+        const bool touches_synthetic_candidate =
+            candidate_decl == decl || file_info == nullptr ||
+            file_info->isCompilerGenerated();
+        if (!touches_synthetic_candidate) {
+          return;
+        }
+
+        if (target_scope != nullptr &&
+            candidate_decl->get_scope() != target_scope) {
+          candidate_decl->set_scope(target_scope);
+        }
+
+        if (SgScopeStatement *decl_scope = candidate_decl->get_scope()) {
+          if (is_decl_attached_to_scope_child_list_for_instantiation_ref(
+                  decl_scope, candidate_decl)) {
+            detach_decl_from_scope_child_list_for_instantiation_ref(
+                candidate_decl, decl_scope);
+          }
+          candidate_decl->set_parent(decl_scope);
+        }
+
+        suppress_unparse_output(candidate_decl);
+        if (SgFunctionParameterList *params =
+                candidate_decl->get_parameterList()) {
+          suppress_unparse_output(params);
+          for (SgInitializedName *param : params->get_args()) {
+            if (param != nullptr) {
+              suppress_unparse_output(param);
+            }
+          }
+        }
+      });
+}
+
 bool isSkippableLineBetweenPragmaAndStatement(const std::string &trimmed_line) {
   if (trimmed_line.empty()) {
     return true;
@@ -1527,10 +1767,31 @@ SgNode *ClangToSageTranslator::Traverse(clang::Stmt *stmt) {
   std::map<clang::Stmt *, SgNode *>::iterator it =
       p_stmt_translation_map.find(stmt);
   if (it != p_stmt_translation_map.end()) {
-    if (stmt->getStmtClass() == clang::Stmt::OpaqueValueExprClass) {
-      SgExpression *expr = isSgExpression(it->second);
-      ROSE_ASSERT(expr != nullptr);
+    if (SgExpression *expr = isSgExpression(it->second)) {
+      // Clang can reuse expression subtrees across template patterns,
+      // instantiations, and other lowered wrapper nodes. ROSE expressions
+      // must remain a tree with a single owning parent, so cached expressions
+      // need copy-on-reuse rather than pointer reuse.
       return SageInterface::copyExpression(expr);
+    }
+    if (SgStatement *sg_stmt = isSgStatement(it->second)) {
+      switch (stmt->getStmtClass()) {
+      case clang::Stmt::LabelStmtClass:
+      case clang::Stmt::CaseStmtClass:
+      case clang::Stmt::DefaultStmtClass:
+        // These statements are referenced from elsewhere in the AST (e.g.,
+        // goto/switch targets), so lookups must continue to resolve to the
+        // original node identity.
+        return sg_stmt;
+      default:
+        break;
+      }
+
+      if (sg_stmt->get_parent() != nullptr) {
+        // Non-target statements must not be shared across distinct owning
+        // contexts such as template instantiations or OpenMP wrapper nodes.
+        return SageInterface::copyStatement(sg_stmt);
+      }
     }
     return it->second;
   }
@@ -5940,6 +6201,256 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     }
   }
 
+  auto maybe_resolve_unresolved_overload_callee = [&]() {
+    clang::UnresolvedLookupExpr *unresolved_lookup =
+        llvm::dyn_cast_or_null<clang::UnresolvedLookupExpr>(callee_base);
+    if (unresolved_lookup == nullptr) {
+      return;
+    }
+    if (expr != nullptr && isSgNonrealRefExp(expr) == nullptr) {
+      return;
+    }
+
+    clang::NamedDecl *selected_named_decl = nullptr;
+    clang::FunctionDecl *selected_function_decl = nullptr;
+    clang::Decl *selected_canonical_decl = nullptr;
+    const unsigned call_arg_count = call_expr->getNumArgs();
+
+    for (auto it = unresolved_lookup->decls_begin();
+         it != unresolved_lookup->decls_end(); ++it) {
+      clang::NamedDecl *named_decl = it.getDecl();
+      if (named_decl == nullptr) {
+        continue;
+      }
+      if (clang::UsingShadowDecl *shadow =
+              llvm::dyn_cast<clang::UsingShadowDecl>(named_decl)) {
+        named_decl = shadow->getTargetDecl();
+      }
+      if (named_decl == nullptr) {
+        continue;
+      }
+
+      clang::FunctionDecl *function_decl = nullptr;
+      if (clang::FunctionTemplateDecl *template_decl =
+              llvm::dyn_cast<clang::FunctionTemplateDecl>(named_decl)) {
+        function_decl = template_decl->getTemplatedDecl();
+      } else {
+        function_decl = llvm::dyn_cast<clang::FunctionDecl>(named_decl);
+      }
+      if (function_decl == nullptr) {
+        return;
+      }
+
+      const unsigned min_args = function_decl->getMinRequiredArguments();
+      const unsigned max_args = function_decl->getNumParams();
+      const bool viable_by_arity =
+          call_arg_count >= min_args &&
+          (function_decl->isVariadic() || call_arg_count <= max_args);
+      if (!viable_by_arity) {
+        continue;
+      }
+
+      clang::Decl *canonical_decl = function_decl->getCanonicalDecl();
+      if (selected_canonical_decl != nullptr &&
+          selected_canonical_decl != canonical_decl) {
+        selected_named_decl = nullptr;
+        selected_function_decl = nullptr;
+        selected_canonical_decl = nullptr;
+        return;
+      }
+
+      selected_named_decl = named_decl;
+      selected_function_decl = function_decl;
+      selected_canonical_decl = canonical_decl;
+    }
+
+    if (selected_named_decl == nullptr) {
+      return;
+    }
+
+    auto unwrap_directive_decl =
+        [](SgDeclarationStatement *decl) -> SgDeclarationStatement * {
+      if (SgTemplateInstantiationDirectiveStatement *inst_directive =
+              isSgTemplateInstantiationDirectiveStatement(decl)) {
+        return inst_directive->get_declaration();
+      }
+      return decl;
+    };
+
+    auto ensure_template_member_symbol =
+        [&](SgTemplateMemberFunctionDeclaration *decl)
+        -> SgTemplateMemberFunctionSymbol * {
+      if (decl == nullptr) {
+        return nullptr;
+      }
+      registerDeclarationSymbol(decl);
+      SgTemplateMemberFunctionSymbol *sym = isSgTemplateMemberFunctionSymbol(
+          decl->get_symbol_from_symbol_table());
+      if (sym != nullptr) {
+        return sym;
+      }
+
+      SgScopeStatement *decl_scope = decl->get_scope();
+      if (decl_scope == nullptr) {
+        decl_scope = SageBuilder::topScopeStack();
+      }
+      if (decl_scope != nullptr) {
+        SgTemplateParameterPtrList *params = &decl->get_templateParameters();
+        sym = decl_scope->lookup_template_member_function_symbol(
+            decl->get_name(), decl->get_type(), params);
+      }
+      if (sym == nullptr) {
+        sym = new SgTemplateMemberFunctionSymbol(decl);
+        attachSymbolToScopeOrOrphan(sym, decl_scope);
+      }
+      return sym;
+    };
+
+    auto ensure_template_function_symbol =
+        [&](SgTemplateFunctionDeclaration *decl) -> SgTemplateFunctionSymbol * {
+      if (decl == nullptr) {
+        return nullptr;
+      }
+      registerDeclarationSymbol(decl);
+      SgTemplateFunctionSymbol *sym =
+          isSgTemplateFunctionSymbol(decl->get_symbol_from_symbol_table());
+      if (sym != nullptr) {
+        return sym;
+      }
+
+      SgScopeStatement *decl_scope = normalizeNamespaceScope(decl->get_scope());
+      if (decl_scope == nullptr) {
+        decl_scope = SageBuilder::topScopeStack();
+      }
+      if (decl_scope != nullptr) {
+        SgTemplateParameterPtrList *params = &decl->get_templateParameters();
+        sym = decl_scope->lookup_template_function_symbol(
+            decl->get_name(), decl->get_type(), params);
+      }
+      if (sym == nullptr) {
+        sym = new SgTemplateFunctionSymbol(decl);
+        attachSymbolToScopeOrOrphan(sym, decl_scope);
+      }
+      return sym;
+    };
+
+    auto ensure_member_symbol =
+        [&](SgMemberFunctionDeclaration *decl) -> SgMemberFunctionSymbol * {
+      if (decl == nullptr) {
+        return nullptr;
+      }
+      registerDeclarationSymbol(decl);
+      SgMemberFunctionSymbol *sym =
+          isSgMemberFunctionSymbol(decl->get_symbol_from_symbol_table());
+      if (sym != nullptr) {
+        return sym;
+      }
+
+      SgScopeStatement *decl_scope = decl->get_scope();
+      if (decl_scope == nullptr) {
+        decl_scope = SageBuilder::topScopeStack();
+      }
+      if (decl_scope != nullptr) {
+        sym = decl_scope->lookup_nontemplate_member_function_symbol(
+            decl->get_name(), decl->get_type(), nullptr);
+      }
+      if (sym == nullptr) {
+        sym = new SgMemberFunctionSymbol(decl);
+        attachSymbolToScopeOrOrphan(sym, decl_scope);
+      }
+      return sym;
+    };
+
+    auto ensure_function_symbol =
+        [&](SgFunctionDeclaration *decl) -> SgFunctionSymbol * {
+      if (decl == nullptr) {
+        return nullptr;
+      }
+      registerDeclarationSymbol(decl);
+      SgFunctionSymbol *sym =
+          isSgFunctionSymbol(decl->get_symbol_from_symbol_table());
+      if (sym != nullptr) {
+        return sym;
+      }
+
+      SgScopeStatement *decl_scope = normalizeNamespaceScope(decl->get_scope());
+      if (decl_scope == nullptr) {
+        decl_scope = SageBuilder::topScopeStack();
+      }
+      if (decl_scope != nullptr) {
+        sym = decl_scope->lookup_nontemplate_function_symbol(
+            decl->get_name(), decl->get_type(), nullptr);
+        if (sym == nullptr) {
+          sym = decl_scope->lookup_function_symbol(decl->get_name(),
+                                                   decl->get_type());
+        }
+      }
+      if (sym == nullptr) {
+        sym = new SgFunctionSymbol(decl);
+        attachSymbolToScopeOrOrphan(sym, decl_scope);
+      }
+      return sym;
+    };
+
+    SgDeclarationStatement *decl_stmt =
+        unwrap_directive_decl(lookupSgDeclarationForClangDecl(
+            llvm::cast<clang::Decl>(selected_named_decl),
+            /*allow_on_demand=*/true));
+    if (decl_stmt == nullptr && selected_function_decl != nullptr) {
+      decl_stmt = unwrap_directive_decl(lookupSgDeclarationForClangDecl(
+          selected_function_decl, /*allow_on_demand=*/true));
+    }
+    if (decl_stmt == nullptr) {
+      return;
+    }
+
+    SgExpression *resolved_ref = nullptr;
+    if (SgTemplateMemberFunctionDeclaration *tmpl_member_decl =
+            isSgTemplateMemberFunctionDeclaration(decl_stmt)) {
+      if (SgTemplateMemberFunctionSymbol *sym =
+              ensure_template_member_symbol(tmpl_member_decl)) {
+        resolved_ref = SageBuilder::buildTemplateMemberFunctionRefExp_nfi(
+            sym, false, false);
+      }
+    } else if (SgTemplateFunctionDeclaration *tmpl_func_decl =
+                   isSgTemplateFunctionDeclaration(decl_stmt)) {
+      if (SgTemplateFunctionSymbol *sym =
+              ensure_template_function_symbol(tmpl_func_decl)) {
+        resolved_ref = SageBuilder::buildTemplateFunctionRefExp_nfi(sym);
+      }
+    } else if (SgMemberFunctionDeclaration *member_decl =
+                   isSgMemberFunctionDeclaration(decl_stmt)) {
+      if (SgMemberFunctionSymbol *sym = ensure_member_symbol(member_decl)) {
+        resolved_ref =
+            SageBuilder::buildMemberFunctionRefExp_nfi(sym, false, false);
+      }
+    } else if (SgFunctionDeclaration *function_decl =
+                   isSgFunctionDeclaration(decl_stmt)) {
+      if (SgFunctionSymbol *sym = ensure_function_symbol(function_decl)) {
+        resolved_ref = SageBuilder::buildFunctionRefExp(sym);
+      }
+    }
+
+    if (resolved_ref == nullptr) {
+      return;
+    }
+
+    clang::NestedNameSpecifierLoc qualifier_loc =
+        unresolved_lookup->getQualifierLoc();
+    const clang::NestedNameSpecifierLoc *qualifier_loc_ptr =
+        qualifier_loc.getNestedNameSpecifier() ? &qualifier_loc : nullptr;
+    clang::NestedNameSpecifier qualifier = unresolved_lookup->getQualifier();
+    if (!qualifier && qualifier_loc_ptr != nullptr) {
+      qualifier = qualifier_loc_ptr->getNestedNameSpecifier();
+    }
+    attachExplicitQualifierFromNestedName(
+        resolved_ref, qualifier, qualifier_loc_ptr, p_compiler_instance);
+    applySourceRange(resolved_ref, unresolved_lookup->getSourceRange());
+    expr = resolved_ref;
+  };
+
+  maybe_resolve_unresolved_overload_callee();
+
   auto maybe_upgrade_template_callee = [&]() {
     if (expr == nullptr) {
       return;
@@ -6190,36 +6701,48 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
           }
         };
 
+    auto set_compiler_generated_on_instantiation_chain =
+        [&](SgFunctionDeclaration *decl) {
+          if (decl == nullptr) {
+            return;
+          }
+          for_each_unique_function_decl_in_chain(
+              decl, [&](SgFunctionDeclaration *candidate_decl) {
+                Sg_File_Info *file_info = candidate_decl->get_file_info();
+                const bool touches_synthetic_candidate =
+                    candidate_decl == decl || file_info == nullptr ||
+                    file_info->isCompilerGenerated();
+                if (!touches_synthetic_candidate) {
+                  return;
+                }
+
+                setCompilerGeneratedFileInfo(candidate_decl);
+                if (SgFunctionParameterList *params =
+                        candidate_decl->get_parameterList()) {
+                  setCompilerGeneratedFileInfo(params);
+                  for (SgInitializedName *param : params->get_args()) {
+                    if (param != nullptr) {
+                      setCompilerGeneratedFileInfo(param);
+                    }
+                  }
+                }
+              });
+        };
+
     auto finalize_synthesized_instantiation_decl =
         [&](SgFunctionDeclaration *decl, SgScopeStatement *scope,
             const char *context) {
           if (decl == nullptr) {
             return;
           }
+          (void)context;
 
           SgScopeStatement *target_scope = scope;
           if (target_scope != nullptr) {
             target_scope = normalizeNamespaceScope(target_scope);
           }
-          if (target_scope != nullptr && decl->get_scope() != target_scope) {
-            decl->set_scope(target_scope);
-          }
-          if (decl->get_parent() == nullptr && decl->get_scope() != nullptr) {
-            decl->set_parent(decl->get_scope());
-          }
-          if (SgScopeStatement *decl_scope = decl->get_scope()) {
-            ensureDeclInScopeChildList(decl, decl_scope, context);
-          }
-
-          setCompilerGeneratedFileInfo(decl);
-          if (SgFunctionParameterList *params = decl->get_parameterList()) {
-            setCompilerGeneratedFileInfo(params);
-            for (SgInitializedName *param : params->get_args()) {
-              if (param != nullptr) {
-                setCompilerGeneratedFileInfo(param);
-              }
-            }
-          }
+          mark_synthesized_instantiation_decl_chain_for_ref(decl, target_scope);
+          set_compiler_generated_on_instantiation_chain(decl);
 
           registerDeclarationSymbol(decl);
           if (decl->get_symbol_from_symbol_table() == nullptr &&
@@ -6511,14 +7034,11 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
           sync_member_instantiation_args(inst_decl);
           propagateSpecialFunctionModifiers(base_decl, inst_decl);
           if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                  isSgTemplateMemberFunctionDeclaration(base_decl)) {
-            inst_decl->set_templateDeclaration(tmpl_decl);
-            inst_decl->set_templateName(tmpl_decl->get_name());
-          } else if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                         isSgTemplateMemberFunctionDeclaration(
-                             base_decl->get_firstNondefiningDeclaration())) {
-            inst_decl->set_templateDeclaration(tmpl_decl);
-            inst_decl->set_templateName(tmpl_decl->get_name());
+                  recover_instantiation_template_declaration<
+                      SgTemplateMemberFunctionDeclaration,
+                      SgTemplateInstantiationMemberFunctionDecl>(base_decl)) {
+            apply_template_instantiation_template_links(inst_decl, tmpl_decl,
+                                                        tmpl_decl->get_name());
           }
 
           finalize_synthesized_instantiation_decl(
@@ -6537,6 +7057,16 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         if (SgMemberFunctionDeclaration *inst_decl =
                 isSgMemberFunctionDeclaration(inst_sym->get_declaration())) {
           propagateSpecialFunctionModifiers(base_decl, inst_decl);
+          if (SgTemplateInstantiationMemberFunctionDecl *inst_tmpl_decl =
+                  isSgTemplateInstantiationMemberFunctionDecl(inst_decl)) {
+            if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                    recover_instantiation_template_declaration<
+                        SgTemplateMemberFunctionDeclaration,
+                        SgTemplateInstantiationMemberFunctionDecl>(base_decl)) {
+              apply_template_instantiation_template_links(
+                  inst_tmpl_decl, tmpl_decl, tmpl_decl->get_name());
+            }
+          }
         }
       }
 
@@ -6593,14 +7123,11 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
           sync_function_instantiation_args(inst_decl);
           propagateSpecialFunctionModifiers(base_decl, inst_decl);
           if (SgTemplateFunctionDeclaration *tmpl_decl =
-                  isSgTemplateFunctionDeclaration(base_decl)) {
-            inst_decl->set_templateDeclaration(tmpl_decl);
-            inst_decl->set_templateName(tmpl_decl->get_name());
-          } else if (SgTemplateFunctionDeclaration *tmpl_decl =
-                         isSgTemplateFunctionDeclaration(
-                             base_decl->get_firstNondefiningDeclaration())) {
-            inst_decl->set_templateDeclaration(tmpl_decl);
-            inst_decl->set_templateName(tmpl_decl->get_name());
+                  recover_instantiation_template_declaration<
+                      SgTemplateFunctionDeclaration,
+                      SgTemplateInstantiationFunctionDecl>(base_decl)) {
+            apply_template_instantiation_template_links(inst_decl, tmpl_decl,
+                                                        tmpl_decl->get_name());
           }
 
           finalize_synthesized_instantiation_decl(
@@ -6619,6 +7146,16 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
         if (SgFunctionDeclaration *inst_decl =
                 isSgFunctionDeclaration(inst_sym->get_declaration())) {
           propagateSpecialFunctionModifiers(base_decl, inst_decl);
+          if (SgTemplateInstantiationFunctionDecl *inst_tmpl_decl =
+                  isSgTemplateInstantiationFunctionDecl(inst_decl)) {
+            if (SgTemplateFunctionDeclaration *tmpl_decl =
+                    recover_instantiation_template_declaration<
+                        SgTemplateFunctionDeclaration,
+                        SgTemplateInstantiationFunctionDecl>(base_decl)) {
+              apply_template_instantiation_template_links(
+                  inst_tmpl_decl, tmpl_decl, tmpl_decl->get_name());
+            }
+          }
         }
       }
 
@@ -6656,20 +7193,38 @@ bool ClangToSageTranslator::VisitCallExpr(clang::CallExpr *call_expr,
     clang::CXXMethodDecl *method_decl = member_call->getMethodDecl();
     if (method_decl != nullptr) {
       const clang::CXXRecordDecl *record_decl = method_decl->getParent();
-      const clang::ClassTemplateSpecializationDecl *spec_decl =
-          llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(
-              record_decl);
-      if (spec_decl == nullptr) {
-        clang::QualType object_type = member_call->getObjectType();
-        if (!object_type.isNull()) {
-          object_type = object_type.getNonReferenceType();
-          if (const clang::CXXRecordDecl *object_decl =
-                  object_type->getAsCXXRecordDecl()) {
-            record_decl = object_decl;
-            spec_decl = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(
-                object_decl);
+      const clang::ClassTemplateSpecializationDecl *spec_decl = nullptr;
+      clang::QualType object_type = member_call->getObjectType();
+      if (!object_type.isNull()) {
+        object_type = object_type.getNonReferenceType();
+        clang::QualType canonical_object_type = object_type.getCanonicalType();
+        if (!canonical_object_type.isNull()) {
+          if (const clang::RecordType *record_type =
+                  canonical_object_type->getAs<clang::RecordType>()) {
+            if (const auto *object_spec =
+                    llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(
+                        record_type->getDecl())) {
+              record_decl = object_spec;
+              spec_decl = object_spec;
+            }
           }
         }
+        if (spec_decl == nullptr) {
+          if (const clang::CXXRecordDecl *object_decl =
+                  object_type->getAsCXXRecordDecl()) {
+            if (const auto *object_spec =
+                    llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(
+                        object_decl)) {
+              record_decl = object_decl;
+              spec_decl = object_spec;
+            }
+          }
+        }
+      }
+      if (spec_decl == nullptr) {
+        spec_decl =
+            llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(
+                record_decl);
       }
       if (spec_decl != nullptr && record_decl != nullptr) {
         if (SgType *member_type = buildSpecializedMemberTypedefReturnType(
@@ -6724,7 +7279,77 @@ bool ClangToSageTranslator::VisitCUDAKernelCallExpr(
 #endif
   bool res = true;
 
-  // TODO
+  auto translate_expr = [&](clang::Expr *expr,
+                            const char *label) -> SgExpression * {
+    if (expr == nullptr) {
+      return nullptr;
+    }
+
+    SgNode *tmp_expr = Traverse(expr);
+    SgExpression *sg_expr = isSgExpression(tmp_expr);
+    if (tmp_expr != nullptr && sg_expr == nullptr) {
+      std::cerr << "Runtime error: " << label
+                << " translated to a non-expression Sage node" << std::endl;
+      res = false;
+    }
+    return sg_expr;
+  };
+
+  SgExpression *kernel =
+      translate_expr(cuda_kernel_call_expr->getCallee(), "CUDA kernel callee");
+
+  clang::CallExpr *config_call = cuda_kernel_call_expr->getConfig();
+  if (config_call == nullptr) {
+    std::cerr << "Runtime error: CUDAKernelCallExpr missing launch "
+                 "configuration"
+              << std::endl;
+    return false;
+  }
+
+  auto translate_config_arg = [&](unsigned index,
+                                  const char *label) -> SgExpression * {
+    if (index >= config_call->getNumArgs()) {
+      return nullptr;
+    }
+    return translate_expr(config_call->getArg(index), label);
+  };
+
+  SgExpression *grid =
+      translate_config_arg(0, "CUDA launch configuration grid");
+  SgExpression *blocks =
+      translate_config_arg(1, "CUDA launch configuration blocks");
+  SgExpression *shared =
+      translate_config_arg(2, "CUDA launch configuration shared memory");
+  SgExpression *stream =
+      translate_config_arg(3, "CUDA launch configuration stream");
+
+  if (kernel == nullptr || grid == nullptr || blocks == nullptr) {
+    return false;
+  }
+
+  SgExprListExp *param_list = SageBuilder::buildExprListExp_nfi();
+  applySourceRange(param_list, cuda_kernel_call_expr->getSourceRange());
+
+  for (clang::CallExpr::arg_iterator it = cuda_kernel_call_expr->arg_begin();
+       it != cuda_kernel_call_expr->arg_end(); ++it) {
+    if (clang::isa<clang::CXXDefaultArgExpr>(*it)) {
+      continue;
+    }
+
+    SgExpression *arg = translate_expr(*it, "CUDA kernel argument");
+    if (arg != nullptr) {
+      param_list->append_expression(arg);
+    }
+  }
+
+  SgCudaKernelExecConfig *exec_config =
+      SageBuilder::buildCudaKernelExecConfig_nfi(grid, blocks, shared, stream);
+  applySourceRange(exec_config, config_call->getSourceRange());
+
+  SgCudaKernelCallExp *kernel_call =
+      SageBuilder::buildCudaKernelCallExp_nfi(kernel, param_list, exec_config);
+  applySourceRange(kernel_call, cuda_kernel_call_expr->getSourceRange());
+  *node = kernel_call;
 
   return VisitExpr(cuda_kernel_call_expr, node) && res;
 }
@@ -6797,6 +7422,279 @@ bool ClangToSageTranslator::VisitCXXOperatorCallExpr(
           buildTypeFromQualifiedType(cxx_operator_call_expr->getType());
       if (lhs_type != nullptr && op_type != nullptr && lhs_type == op_type) {
         *node = SageBuilder::buildAssignOp(lhs, rhs);
+        return VisitExpr(cxx_operator_call_expr, node) && res;
+      }
+    }
+  }
+
+  auto traverse_operator_arg = [&](unsigned index) -> SgExpression * {
+    if (index >= cxx_operator_call_expr->getNumArgs()) {
+      return nullptr;
+    }
+
+    SgNode *tmp_arg = Traverse(cxx_operator_call_expr->getArg(index));
+    SgExpression *arg = isSgExpression(tmp_arg);
+    if (tmp_arg != nullptr && arg == nullptr) {
+      std::cerr << "Runtime error: tmp_arg != nullptr && arg == nullptr"
+                << std::endl;
+      res = false;
+    }
+    return arg;
+  };
+
+  auto build_syntax_operator_expr = [&]() -> SgExpression * {
+    const unsigned num_args = cxx_operator_call_expr->getNumArgs();
+    const clang::OverloadedOperatorKind op =
+        cxx_operator_call_expr->getOperator();
+
+    auto unary_arg = [&]() -> SgExpression * {
+      return traverse_operator_arg(0);
+    };
+    auto binary_lhs = [&]() -> SgExpression * {
+      return traverse_operator_arg(0);
+    };
+    auto binary_rhs = [&]() -> SgExpression * {
+      return traverse_operator_arg(1);
+    };
+
+    switch (op) {
+    case clang::OO_Plus:
+      if (num_args == 1) {
+        return SageBuilder::buildUnaryAddOp(unary_arg());
+      }
+      if (num_args == 2) {
+        return SageBuilder::buildAddOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Minus:
+      if (num_args == 1) {
+        return SageBuilder::buildMinusOp(unary_arg());
+      }
+      if (num_args == 2) {
+        return SageBuilder::buildSubtractOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Star:
+      if (num_args == 1) {
+        return SageBuilder::buildPointerDerefExp(unary_arg());
+      }
+      if (num_args == 2) {
+        return SageBuilder::buildMultiplyOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Amp:
+      if (num_args == 1) {
+        return SageBuilder::buildAddressOfOp(unary_arg());
+      }
+      if (num_args == 2) {
+        return SageBuilder::buildBitAndOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Tilde:
+      if (num_args == 1) {
+        return SageBuilder::buildBitComplementOp(unary_arg());
+      }
+      break;
+
+    case clang::OO_Exclaim:
+      if (num_args == 1) {
+        return SageBuilder::buildNotOp(unary_arg());
+      }
+      break;
+
+    case clang::OO_Slash:
+      if (num_args == 2) {
+        return SageBuilder::buildDivideOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Percent:
+      if (num_args == 2) {
+        return SageBuilder::buildModOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Caret:
+      if (num_args == 2) {
+        return SageBuilder::buildBitXorOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Pipe:
+      if (num_args == 2) {
+        return SageBuilder::buildBitOrOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_LessLess:
+      if (num_args == 2) {
+        return SageBuilder::buildLshiftOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_GreaterGreater:
+      if (num_args == 2) {
+        return SageBuilder::buildRshiftOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Less:
+      if (num_args == 2) {
+        return SageBuilder::buildLessThanOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Greater:
+      if (num_args == 2) {
+        return SageBuilder::buildGreaterThanOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_LessEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildLessOrEqualOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_GreaterEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildGreaterOrEqualOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_EqualEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildEqualityOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_ExclaimEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildNotEqualOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_AmpAmp:
+      if (num_args == 2) {
+        return SageBuilder::buildAndOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_PipePipe:
+      if (num_args == 2) {
+        return SageBuilder::buildOrOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Comma:
+      if (num_args == 2) {
+        return SageBuilder::buildCommaOpExp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_Equal:
+      if (num_args == 2) {
+        return SageBuilder::buildAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_PlusEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildPlusAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_MinusEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildMinusAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_StarEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildMultAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_SlashEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildDivAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_PercentEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildModAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_AmpEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildAndAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_PipeEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildIorAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_CaretEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildXorAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_LessLessEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildLshiftAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_GreaterGreaterEqual:
+      if (num_args == 2) {
+        return SageBuilder::buildRshiftAssignOp(binary_lhs(), binary_rhs());
+      }
+      break;
+
+    case clang::OO_PlusPlus:
+      if (num_args == 1) {
+        return SageBuilder::buildPlusPlusOp(unary_arg(), SgUnaryOp::prefix);
+      }
+      if (num_args == 2) {
+        return SageBuilder::buildPlusPlusOp(binary_lhs(), SgUnaryOp::postfix);
+      }
+      break;
+
+    case clang::OO_MinusMinus:
+      if (num_args == 1) {
+        return SageBuilder::buildMinusMinusOp(unary_arg(), SgUnaryOp::prefix);
+      }
+      if (num_args == 2) {
+        return SageBuilder::buildMinusMinusOp(binary_lhs(), SgUnaryOp::postfix);
+      }
+      break;
+
+    default:
+      break;
+    }
+
+    return nullptr;
+  };
+
+  if (!has_explicit_template_args &&
+      cxx_operator_call_expr->getDirectCallee() == nullptr) {
+    clang::Expr *callee = cxx_operator_call_expr->getCallee();
+    clang::Expr *base_callee =
+        callee != nullptr ? callee->IgnoreParenImpCasts() : nullptr;
+    if (llvm::isa<clang::OverloadExpr>(base_callee)) {
+      if (SgExpression *syntax_expr = build_syntax_operator_expr()) {
+        *node = syntax_expr;
         return VisitExpr(cxx_operator_call_expr, node) && res;
       }
     }
@@ -7384,8 +8282,15 @@ bool ClangToSageTranslator::VisitExplicitCastExpr(
   SgExpression *sg_expr = isSgExpression(tmp_expr);
   ROSE_ASSERT(sg_expr != nullptr);
 
-  SgType *sg_type =
-      buildTypeFromQualifiedType(explicit_cast_expr->getTypeAsWritten());
+  SgType *sg_type = nullptr;
+  if (clang::TypeSourceInfo *type_info =
+          explicit_cast_expr->getTypeInfoAsWritten()) {
+    sg_type = buildTypeFromTypeLoc(type_info->getTypeLoc());
+  }
+  if (sg_type == nullptr) {
+    sg_type =
+        buildTypeFromQualifiedType(explicit_cast_expr->getTypeAsWritten());
+  }
 
   SgCastExp::cast_type_enum cast_kind = SgCastExp::e_C_style_cast;
   if (llvm::isa<clang::CXXStaticCastExpr>(explicit_cast_expr)) {
@@ -7421,18 +8326,7 @@ bool ClangToSageTranslator::VisitCStyleCastExpr(
   std::cerr << "ClangToSageTranslator::VisitCStyleCastExpr" << std::endl;
 #endif
 
-  bool res = true;
-
-  SgNode *tmp_expr = Traverse(c_style_cast->getSubExpr());
-  SgExpression *expr = isSgExpression(tmp_expr);
-
-  ROSE_ASSERT(expr);
-
-  SgType *type = buildTypeFromQualifiedType(c_style_cast->getTypeAsWritten());
-
-  *node = SageBuilder::buildCastExp(expr, type, SgCastExp::e_C_style_cast);
-
-  return VisitExplicitCastExpr(c_style_cast, node) && res;
+  return VisitExplicitCastExpr(c_style_cast, node);
 }
 
 bool ClangToSageTranslator::VisitCXXFunctionalCastExpr(
@@ -8402,6 +9296,10 @@ bool ClangToSageTranslator::VisitCXXConstructExpr(
             false,        // need_parenthesis_after_name
             class_unknown // associated_class_unknown
         );
+    if (SgMemberFunctionDeclaration *sg_ctor_decl =
+            isSgMemberFunctionDeclaration(Traverse(ctor_decl))) {
+      ctor_init->set_declaration(sg_ctor_decl);
+    }
     bool isCompilerGenerated = false;
     SgClassDeclaration *enclosingClassDecl = nullptr;
     if (ctor_decl != nullptr) {
@@ -9788,22 +10686,39 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
         isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration()));
     ensure_decl(isSgFunctionDeclaration(decl->get_definingDeclaration()));
   };
+  auto set_compiler_generated_on_instantiation_chain =
+      [&](SgFunctionDeclaration *decl) {
+        if (decl == nullptr) {
+          return;
+        }
+        for_each_unique_function_decl_in_chain(
+            decl, [&](SgFunctionDeclaration *candidate_decl) {
+              Sg_File_Info *file_info = candidate_decl->get_file_info();
+              const bool touches_synthetic_candidate =
+                  candidate_decl == decl || file_info == nullptr ||
+                  file_info->isCompilerGenerated();
+              if (!touches_synthetic_candidate) {
+                return;
+              }
+
+              setCompilerGeneratedFileInfo(candidate_decl);
+              if (SgFunctionParameterList *params =
+                      candidate_decl->get_parameterList()) {
+                setCompilerGeneratedFileInfo(params);
+                for (SgInitializedName *param : params->get_args()) {
+                  if (param != nullptr) {
+                    setCompilerGeneratedFileInfo(param);
+                  }
+                }
+              }
+            });
+      };
   auto finalize_instantiation_decl = [&](SgFunctionDeclaration *decl) {
     if (decl == nullptr) {
       return;
     }
-    if (SgScopeStatement *scope = decl->get_scope()) {
-      ensureDeclInScopeChildList(decl, scope, "VisitDeclRefExpr:instantiation");
-    }
-    setCompilerGeneratedFileInfo(decl);
-    if (SgFunctionParameterList *params = decl->get_parameterList()) {
-      setCompilerGeneratedFileInfo(params);
-      for (SgInitializedName *param : params->get_args()) {
-        if (param != nullptr) {
-          setCompilerGeneratedFileInfo(param);
-        }
-      }
-    }
+    mark_synthesized_instantiation_decl_chain_for_ref(decl, decl->get_scope());
+    set_compiler_generated_on_instantiation_chain(decl);
   };
   auto attach_explicit_qualifier = [&](SgExpression *expr) {
     if (expr == nullptr || decl_ref_expr == nullptr ||
@@ -10083,41 +10998,200 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     sym = GetSymbolFromSymbolTable(decl_ref_expr->getDecl());
   }
 
-  if (clang::CXXMethodDecl *clang_method =
-          llvm::dyn_cast<clang::CXXMethodDecl>(decl_ref_expr->getDecl())) {
-    auto resolve_member_symbol = [&](SgMemberFunctionDeclaration *member_decl)
-        -> SgMemberFunctionSymbol * {
-      if (member_decl == nullptr) {
-        return nullptr;
-      }
-      SgScopeStatement *decl_scope =
-          normalizeNamespaceScope(member_decl->get_scope());
-      if (decl_scope == nullptr) {
-        decl_scope = SageBuilder::topScopeStack();
-      }
-      SgMemberFunctionSymbol *member_sym = nullptr;
-      if (decl_scope != nullptr) {
-        member_sym = decl_scope->lookup_nontemplate_member_function_symbol(
-            member_decl->get_name(), member_decl->get_type(), nullptr);
-      }
+  auto resolve_member_symbol = [&](SgMemberFunctionDeclaration *member_decl)
+      -> SgMemberFunctionSymbol * {
+    if (member_decl == nullptr) {
+      return nullptr;
+    }
+    SgScopeStatement *decl_scope =
+        normalizeNamespaceScope(member_decl->get_scope());
+    if (decl_scope == nullptr) {
+      decl_scope = SageBuilder::topScopeStack();
+    }
+    SgMemberFunctionSymbol *member_sym = nullptr;
+    if (decl_scope != nullptr) {
+      member_sym = decl_scope->lookup_nontemplate_member_function_symbol(
+          member_decl->get_name(), member_decl->get_type(), nullptr);
       if (member_sym == nullptr) {
-        member_sym = new SgMemberFunctionSymbol(member_decl);
-        if (decl_scope != nullptr) {
-          attachSymbolToScopeOrOrphan(member_sym, decl_scope);
-        } else {
-          attachSymbolToScopeOrOrphan(member_sym, nullptr);
+        if (SgFunctionSymbol *wrong_sym = decl_scope->lookup_function_symbol(
+                member_decl->get_name(), member_decl->get_type())) {
+          decl_scope->remove_symbol(wrong_sym);
+          move_symbol_to_orphan_table(wrong_sym);
         }
       }
-      return member_sym;
-    };
+    }
+    if (member_sym == nullptr) {
+      member_sym = new SgMemberFunctionSymbol(member_decl);
+      if (decl_scope != nullptr) {
+        attachSymbolToScopeOrOrphan(member_sym, decl_scope);
+      } else {
+        attachSymbolToScopeOrOrphan(member_sym, nullptr);
+      }
+    }
+    return member_sym;
+  };
 
+  auto resolve_member_declaration_from_symbol =
+      [&](SgSymbol *symbol) -> SgMemberFunctionDeclaration * {
+    if (symbol == nullptr) {
+      return nullptr;
+    }
+    if (SgMemberFunctionSymbol *member_symbol =
+            isSgMemberFunctionSymbol(symbol)) {
+      return isSgMemberFunctionDeclaration(member_symbol->get_declaration());
+    }
+    if (SgTemplateMemberFunctionSymbol *tmpl_member_symbol =
+            isSgTemplateMemberFunctionSymbol(symbol)) {
+      return isSgMemberFunctionDeclaration(
+          tmpl_member_symbol->get_declaration());
+    }
+    if (SgTemplateFunctionSymbol *tmpl_function_symbol =
+            isSgTemplateFunctionSymbol(symbol)) {
+      return isSgMemberFunctionDeclaration(
+          tmpl_function_symbol->get_declaration());
+    }
+    if (SgFunctionSymbol *function_symbol = isSgFunctionSymbol(symbol)) {
+      return isSgMemberFunctionDeclaration(function_symbol->get_declaration());
+    }
+    return nullptr;
+  };
+
+  auto lookup_translated_member_declaration =
+      [&](clang::Decl *lookup_decl) -> SgMemberFunctionDeclaration * {
+    if (lookup_decl == nullptr) {
+      return nullptr;
+    }
+
+    SgDeclarationStatement *decl_stmt =
+        lookupSgDeclarationForClangDecl(lookup_decl, /*allow_on_demand=*/true);
+    if (decl_stmt == nullptr &&
+        p_decl_translation_in_progress.find(lookup_decl) ==
+            p_decl_translation_in_progress.end() &&
+        p_decl_translation_on_demand.find(lookup_decl) ==
+            p_decl_translation_on_demand.end()) {
+      decl_stmt = isSgDeclarationStatement(TraverseOnDemand(lookup_decl));
+    }
+    if (SgTemplateInstantiationDirectiveStatement *inst_directive =
+            isSgTemplateInstantiationDirectiveStatement(decl_stmt)) {
+      decl_stmt = inst_directive->get_declaration();
+    }
+
+    return isSgMemberFunctionDeclaration(decl_stmt);
+  };
+
+  auto lookup_template_member_decl =
+      [&](clang::Decl *lookup_decl) -> SgTemplateMemberFunctionDeclaration * {
+    if (lookup_decl == nullptr) {
+      return nullptr;
+    }
+
+    SgDeclarationStatement *decl_stmt =
+        lookupSgDeclarationForClangDecl(lookup_decl, /*allow_on_demand=*/true);
+    if (SgTemplateInstantiationDirectiveStatement *inst_directive =
+            isSgTemplateInstantiationDirectiveStatement(decl_stmt)) {
+      decl_stmt = inst_directive->get_declaration();
+    }
+
+    if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+            isSgTemplateMemberFunctionDeclaration(decl_stmt)) {
+      return tmpl_decl;
+    }
+
+    return recover_instantiation_template_declaration<
+        SgTemplateMemberFunctionDeclaration,
+        SgTemplateInstantiationMemberFunctionDecl>(
+        isSgFunctionDeclaration(decl_stmt));
+  };
+
+  auto lookup_template_function_decl =
+      [&](clang::Decl *lookup_decl) -> SgTemplateFunctionDeclaration * {
+    if (lookup_decl == nullptr) {
+      return nullptr;
+    }
+
+    SgDeclarationStatement *decl_stmt =
+        lookupSgDeclarationForClangDecl(lookup_decl, /*allow_on_demand=*/true);
+    if (SgTemplateInstantiationDirectiveStatement *inst_directive =
+            isSgTemplateInstantiationDirectiveStatement(decl_stmt)) {
+      decl_stmt = inst_directive->get_declaration();
+    }
+
+    if (SgTemplateFunctionDeclaration *tmpl_decl =
+            isSgTemplateFunctionDeclaration(decl_stmt)) {
+      return tmpl_decl;
+    }
+
+    return recover_instantiation_template_declaration<
+        SgTemplateFunctionDeclaration, SgTemplateInstantiationFunctionDecl>(
+        isSgFunctionDeclaration(decl_stmt));
+  };
+
+  auto resolve_member_template_decl =
+      [&](SgMemberFunctionDeclaration *member_decl,
+          clang::FunctionDecl *clang_func)
+      -> SgTemplateMemberFunctionDeclaration * {
+    if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+            recover_instantiation_template_declaration<
+                SgTemplateMemberFunctionDeclaration,
+                SgTemplateInstantiationMemberFunctionDecl>(member_decl)) {
+      return tmpl_decl;
+    }
+
+    if (clang_func == nullptr) {
+      return nullptr;
+    }
+
+    if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+            lookup_template_member_decl(clang_func->getPrimaryTemplate())) {
+      return tmpl_decl;
+    }
+    if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+            lookup_template_member_decl(
+                clang_func->getDescribedFunctionTemplate())) {
+      return tmpl_decl;
+    }
+    if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+            lookup_template_member_decl(
+                clang_func->getInstantiatedFromMemberFunction())) {
+      return tmpl_decl;
+    }
+    return lookup_template_member_decl(
+        clang_func->getTemplateInstantiationPattern());
+  };
+
+  auto resolve_function_template_decl =
+      [&](SgFunctionDeclaration *func_decl,
+          clang::FunctionDecl *clang_func) -> SgTemplateFunctionDeclaration * {
+    if (SgTemplateFunctionDeclaration *tmpl_decl =
+            recover_instantiation_template_declaration<
+                SgTemplateFunctionDeclaration,
+                SgTemplateInstantiationFunctionDecl>(func_decl)) {
+      return tmpl_decl;
+    }
+
+    if (clang_func == nullptr) {
+      return nullptr;
+    }
+
+    if (SgTemplateFunctionDeclaration *tmpl_decl =
+            lookup_template_function_decl(clang_func->getPrimaryTemplate())) {
+      return tmpl_decl;
+    }
+    if (SgTemplateFunctionDeclaration *tmpl_decl =
+            lookup_template_function_decl(
+                clang_func->getDescribedFunctionTemplate())) {
+      return tmpl_decl;
+    }
+    return lookup_template_function_decl(
+        clang_func->getTemplateInstantiationPattern());
+  };
+
+  if (clang::CXXMethodDecl *clang_method =
+          llvm::dyn_cast<clang::CXXMethodDecl>(decl_ref_expr->getDecl())) {
     SgMemberFunctionSymbol *method_sym = isSgMemberFunctionSymbol(sym);
     if (method_sym == nullptr) {
-      SgMemberFunctionDeclaration *member_decl = nullptr;
-      if (SgFunctionSymbol *function_sym = isSgFunctionSymbol(sym)) {
-        member_decl =
-            isSgMemberFunctionDeclaration(function_sym->get_declaration());
-      }
+      SgMemberFunctionDeclaration *member_decl =
+          resolve_member_declaration_from_symbol(sym);
       if (member_decl == nullptr) {
         SgDeclarationStatement *decl_stmt = lookupSgDeclarationForClangDecl(
             clang_method, /*allow_on_demand=*/true);
@@ -10126,6 +11200,41 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
           decl_stmt = inst_directive->get_declaration();
         }
         member_decl = isSgMemberFunctionDeclaration(decl_stmt);
+      }
+      if (member_decl == nullptr) {
+        if (clang::FunctionDecl *pattern =
+                clang_method->getInstantiatedFromMemberFunction()) {
+          member_decl = lookup_translated_member_declaration(pattern);
+        }
+      }
+      if (member_decl == nullptr) {
+        if (clang::FunctionDecl *pattern =
+                clang_method->getTemplateInstantiationPattern()) {
+          member_decl = lookup_translated_member_declaration(pattern);
+        }
+      }
+      if (member_decl == nullptr) {
+        if (clang::FunctionTemplateDecl *primary =
+                clang_method->getPrimaryTemplate()) {
+          member_decl = lookup_translated_member_declaration(primary);
+          if (member_decl == nullptr) {
+            member_decl = lookup_translated_member_declaration(
+                primary->getTemplatedDecl());
+          }
+        }
+      }
+      if (member_decl == nullptr) {
+        if (const clang::FunctionTemplateSpecializationInfo *spec_info =
+                clang_method->getTemplateSpecializationInfo()) {
+          if (clang::FunctionTemplateDecl *template_decl =
+                  spec_info->getTemplate()) {
+            member_decl = lookup_translated_member_declaration(template_decl);
+            if (member_decl == nullptr) {
+              member_decl = lookup_translated_member_declaration(
+                  template_decl->getTemplatedDecl());
+            }
+          }
+        }
       }
       method_sym = resolve_member_symbol(member_decl);
     }
@@ -10139,6 +11248,7 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
     if (clang::FunctionDecl *clang_func =
             llvm::dyn_cast<clang::FunctionDecl>(decl_ref_expr->getDecl())) {
       if (isSgTemplateFunctionSymbol(sym) != nullptr &&
+          !llvm::isa<clang::CXXMethodDecl>(clang_func) &&
           clang_func->getDescribedFunctionTemplate() == nullptr &&
           clang_func->getPrimaryTemplate() == nullptr) {
         SgNode *tmp_decl = nullptr;
@@ -10305,20 +11415,10 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               SageBuilder::setTemplateArgumentsInDeclaration(inst_decl,
                                                              &template_args);
 
-              if (inst_decl->get_templateDeclaration() == nullptr) {
-                clang::FunctionTemplateDecl *primary_template =
-                    clang_func->getPrimaryTemplate();
-                if (primary_template == nullptr) {
-                  primary_template = clang_func->getDescribedFunctionTemplate();
-                }
-                if (primary_template != nullptr) {
-                  SgNode *tmpl_node = Traverse(primary_template);
-                  if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                          isSgTemplateMemberFunctionDeclaration(tmpl_node)) {
-                    inst_decl->set_templateDeclaration(tmpl_decl);
-                    inst_decl->set_templateName(tmpl_decl->get_name());
-                  }
-                }
+              if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                      resolve_member_template_decl(nullptr, clang_func)) {
+                apply_template_instantiation_template_links(
+                    inst_decl, tmpl_decl, tmpl_decl->get_name());
               }
 
               finalize_instantiation_decl(inst_decl);
@@ -10653,54 +11753,18 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
       *node = ref_exp;
     } else {
       SgMemberFunctionSymbol *member_sym = member_func_sym;
-      if (member_sym == nullptr && tmpl_member_sym != nullptr) {
-        if (SgMemberFunctionDeclaration *member_decl =
-                isSgMemberFunctionDeclaration(
-                    tmpl_member_sym->get_declaration())) {
-          SgScopeStatement *decl_scope = member_decl->get_scope();
-          decl_scope = normalizeNamespaceScope(decl_scope);
-          if (decl_scope != nullptr) {
-            member_sym = decl_scope->lookup_nontemplate_member_function_symbol(
-                member_decl->get_name(), member_decl->get_type(), nullptr);
-          }
-          if (member_sym == nullptr) {
-            member_sym = new SgMemberFunctionSymbol(member_decl);
-            if (decl_scope != nullptr) {
-              attachSymbolToScopeOrOrphan(member_sym, decl_scope);
-            } else {
-              attachSymbolToScopeOrOrphan(member_sym, nullptr);
-            }
-          }
-        }
+      if (member_sym == nullptr) {
+        member_sym = resolve_member_symbol(
+            resolve_member_declaration_from_symbol(tmpl_member_sym));
       }
-      if (member_sym == nullptr && func_sym != nullptr) {
-        if (SgMemberFunctionDeclaration *member_decl =
-                isSgMemberFunctionDeclaration(func_sym->get_declaration())) {
-          SgScopeStatement *decl_scope = member_decl->get_scope();
-          decl_scope = normalizeNamespaceScope(decl_scope);
-          if (decl_scope != nullptr) {
-            member_sym = decl_scope->lookup_nontemplate_member_function_symbol(
-                member_decl->get_name(), member_decl->get_type(), nullptr);
-          }
-
-          if (member_sym == nullptr) {
-            SgFunctionSymbol *wrong_sym = nullptr;
-            if (decl_scope != nullptr) {
-              wrong_sym = decl_scope->lookup_function_symbol(
-                  member_decl->get_name(), member_decl->get_type());
-            }
-            if (wrong_sym != nullptr && decl_scope != nullptr) {
-              decl_scope->remove_symbol(wrong_sym);
-              move_symbol_to_orphan_table(wrong_sym);
-            }
-            member_sym = new SgMemberFunctionSymbol(member_decl);
-            if (decl_scope != nullptr) {
-              attachSymbolToScopeOrOrphan(member_sym, decl_scope);
-            } else {
-              attachSymbolToScopeOrOrphan(member_sym, nullptr);
-            }
-          }
-        }
+      if (member_sym == nullptr) {
+        member_sym = resolve_member_symbol(
+            resolve_member_declaration_from_symbol(tmpl_func_sym));
+      }
+      if (member_sym == nullptr) {
+        member_sym =
+            resolve_member_symbol(resolve_member_declaration_from_symbol(
+                static_cast<SgSymbol *>(func_sym)));
       }
 
       clang::FunctionDecl *clang_func =
@@ -10959,6 +12023,11 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                   template_base_name.is_null() == false) {
                 inst_decl->set_templateName(template_base_name);
               }
+              if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                      resolve_member_template_decl(member_decl, clang_func)) {
+                apply_template_instantiation_template_links(
+                    inst_decl, tmpl_decl, tmpl_decl->get_name());
+              }
             } else {
               SgType *ret_type =
                   func_type != nullptr ? func_type->get_return_type() : nullptr;
@@ -10996,41 +12065,10 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 SageBuilder::setTemplateArgumentsInDeclaration(
                     inst_decl, ensure_template_args());
 
-                if (member_decl != nullptr) {
-                  if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                          isSgTemplateMemberFunctionDeclaration(member_decl)) {
-                    inst_decl->set_templateDeclaration(tmpl_decl);
-                    inst_decl->set_templateName(tmpl_decl->get_name());
-                  } else if (SgTemplateMemberFunctionDeclaration *first_nondef =
-                                 isSgTemplateMemberFunctionDeclaration(
-                                     member_decl
-                                         ->get_firstNondefiningDeclaration())) {
-                    inst_decl->set_templateDeclaration(first_nondef);
-                    inst_decl->set_templateName(first_nondef->get_name());
-                  }
-                }
-
-                if (inst_decl->get_templateDeclaration() == nullptr) {
-                  if (clang::FunctionDecl *clang_func =
-                          llvm::dyn_cast<clang::FunctionDecl>(
-                              decl_ref_expr->getDecl())) {
-                    clang::FunctionTemplateDecl *primary_template =
-                        clang_func->getPrimaryTemplate();
-                    if (primary_template == nullptr) {
-                      primary_template =
-                          clang_func->getDescribedFunctionTemplate();
-                    }
-
-                    if (primary_template != nullptr) {
-                      SgNode *tmpl_node = Traverse(primary_template);
-                      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                              isSgTemplateMemberFunctionDeclaration(
-                                  tmpl_node)) {
-                        inst_decl->set_templateDeclaration(tmpl_decl);
-                        inst_decl->set_templateName(tmpl_decl->get_name());
-                      }
-                    }
-                  }
+                if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                        resolve_member_template_decl(member_decl, clang_func)) {
+                  apply_template_instantiation_template_links(
+                      inst_decl, tmpl_decl, tmpl_decl->get_name());
                 }
 
                 finalize_instantiation_decl(inst_decl);
@@ -11168,6 +12206,11 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 template_base_name.is_null() == false) {
               inst_decl->set_templateName(template_base_name);
             }
+            if (SgTemplateFunctionDeclaration *tmpl_decl =
+                    resolve_function_template_decl(decl, clang_func)) {
+              apply_template_instantiation_template_links(
+                  inst_decl, tmpl_decl, tmpl_decl->get_name());
+            }
             reused_instantiation = true;
           } else if (decl != nullptr) {
             if (SgTemplateInstantiationFunctionDecl *inst_decl =
@@ -11180,6 +12223,11 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
               if (inst_decl->get_templateName().is_null() &&
                   template_base_name.is_null() == false) {
                 inst_decl->set_templateName(template_base_name);
+              }
+              if (SgTemplateFunctionDeclaration *tmpl_decl =
+                      resolve_function_template_decl(decl, clang_func)) {
+                apply_template_instantiation_template_links(
+                    inst_decl, tmpl_decl, tmpl_decl->get_name());
               }
               reused_instantiation = true;
             }
@@ -11251,6 +12299,13 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                   template_base_name.is_null() == false) {
                 inst_decl->set_templateName(template_base_name);
               }
+              if (SgTemplateFunctionDeclaration *tmpl_decl =
+                      resolve_function_template_decl(
+                          isSgFunctionDeclaration(func_sym->get_declaration()),
+                          clang_func)) {
+                apply_template_instantiation_template_links(
+                    inst_decl, tmpl_decl, tmpl_decl->get_name());
+              }
             } else {
               SgType *ret_type =
                   func_type != nullptr ? func_type->get_return_type() : nullptr;
@@ -11283,42 +12338,13 @@ bool ClangToSageTranslator::VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                 SageBuilder::setTemplateArgumentsInDeclaration(
                     inst_decl, ensure_template_args());
 
-                SgFunctionDeclaration *base_decl =
-                    isSgFunctionDeclaration(func_sym->get_declaration());
-                if (base_decl != nullptr) {
-                  if (SgTemplateFunctionDeclaration *tmpl_decl =
-                          isSgTemplateFunctionDeclaration(base_decl)) {
-                    inst_decl->set_templateDeclaration(tmpl_decl);
-                    inst_decl->set_templateName(tmpl_decl->get_name());
-                  } else if (SgTemplateFunctionDeclaration *first_nondef =
-                                 isSgTemplateFunctionDeclaration(
-                                     base_decl
-                                         ->get_firstNondefiningDeclaration())) {
-                    inst_decl->set_templateDeclaration(first_nondef);
-                    inst_decl->set_templateName(first_nondef->get_name());
-                  }
-                }
-
-                if (inst_decl->get_templateDeclaration() == nullptr) {
-                  if (clang::FunctionDecl *clang_func =
-                          llvm::dyn_cast<clang::FunctionDecl>(
-                              decl_ref_expr->getDecl())) {
-                    clang::FunctionTemplateDecl *primary_template =
-                        clang_func->getPrimaryTemplate();
-                    if (primary_template == nullptr) {
-                      primary_template =
-                          clang_func->getDescribedFunctionTemplate();
-                    }
-
-                    if (primary_template != nullptr) {
-                      SgNode *tmpl_node = Traverse(primary_template);
-                      if (SgTemplateFunctionDeclaration *tmpl_decl =
-                              isSgTemplateFunctionDeclaration(tmpl_node)) {
-                        inst_decl->set_templateDeclaration(tmpl_decl);
-                        inst_decl->set_templateName(tmpl_decl->get_name());
-                      }
-                    }
-                  }
+                if (SgTemplateFunctionDeclaration *tmpl_decl =
+                        resolve_function_template_decl(
+                            isSgFunctionDeclaration(
+                                func_sym->get_declaration()),
+                            clang_func)) {
+                  apply_template_instantiation_template_links(
+                      inst_decl, tmpl_decl, tmpl_decl->get_name());
                 }
 
                 finalize_instantiation_decl(inst_decl);
@@ -12260,16 +13286,12 @@ bool ClangToSageTranslator::VisitLambdaExpr(clang::LambdaExpr *lambda_expr,
           current->set_isAutonomousDeclaration(false);
           setCompilerGeneratedFileInfo(current, false);
           suppress_unparse_output(current);
-          if (Sg_File_Info *decl_fi = current->get_file_info()) {
-            decl_fi->setFrontendSpecific();
-          }
+          current->setFrontendSpecific();
 
           if (SgClassDefinition *class_def = current->get_definition()) {
             setCompilerGeneratedFileInfo(class_def, false);
             suppress_unparse_output(class_def);
-            if (Sg_File_Info *def_fi = class_def->get_file_info()) {
-              def_fi->setFrontendSpecific();
-            }
+            class_def->setFrontendSpecific();
           }
 
           if (SgClassDeclaration *first_nondef = isSgClassDeclaration(
@@ -12466,8 +13488,26 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
   bool res = true;
 
   bool implicit_access = member_expr->isImplicitAccess();
+  auto is_instance_member_access = [&](clang::ValueDecl *decl) {
+    if (decl == nullptr) {
+      return false;
+    }
+    if (llvm::isa<clang::FieldDecl>(decl)) {
+      return true;
+    }
+    if (clang::CXXMethodDecl *method_decl =
+            llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
+      return !method_decl->isStatic();
+    }
+    return false;
+  };
+
+  bool materialize_implicit_base =
+      implicit_access && member_expr->hasQualifier() &&
+      is_instance_member_access(member_expr->getMemberDecl());
+
   SgExpression *base = nullptr;
-  if (!implicit_access) {
+  if (!implicit_access || materialize_implicit_base) {
     SgNode *tmp_base = Traverse(member_expr->getBase());
     base = isSgExpression(tmp_base);
     if (base == nullptr) {
@@ -13049,37 +14089,99 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
           }
         };
 
+    auto lookup_template_member_decl =
+        [&](clang::Decl *lookup_decl) -> SgTemplateMemberFunctionDeclaration * {
+      if (lookup_decl == nullptr) {
+        return nullptr;
+      }
+
+      SgDeclarationStatement *decl_stmt =
+          lookupSgDeclarationForClangDecl(lookup_decl,
+                                          /*allow_on_demand=*/true);
+      if (SgTemplateInstantiationDirectiveStatement *inst_directive =
+              isSgTemplateInstantiationDirectiveStatement(decl_stmt)) {
+        decl_stmt = inst_directive->get_declaration();
+      }
+
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              isSgTemplateMemberFunctionDeclaration(decl_stmt)) {
+        return tmpl_decl;
+      }
+
+      return recover_instantiation_template_declaration<
+          SgTemplateMemberFunctionDeclaration,
+          SgTemplateInstantiationMemberFunctionDecl>(
+          isSgFunctionDeclaration(decl_stmt));
+    };
+
+    auto resolve_member_template_decl =
+        [&](SgMemberFunctionDeclaration *member_decl)
+        -> SgTemplateMemberFunctionDeclaration * {
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              recover_instantiation_template_declaration<
+                  SgTemplateMemberFunctionDeclaration,
+                  SgTemplateInstantiationMemberFunctionDecl>(member_decl)) {
+        return tmpl_decl;
+      }
+
+      if (clang_func == nullptr) {
+        return nullptr;
+      }
+
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              lookup_template_member_decl(clang_func->getPrimaryTemplate())) {
+        return tmpl_decl;
+      }
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              lookup_template_member_decl(
+                  clang_func->getDescribedFunctionTemplate())) {
+        return tmpl_decl;
+      }
+      if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+              lookup_template_member_decl(
+                  clang_func->getInstantiatedFromMemberFunction())) {
+        return tmpl_decl;
+      }
+      return lookup_template_member_decl(
+          clang_func->getTemplateInstantiationPattern());
+    };
+
+    auto set_compiler_generated_on_instantiation_chain =
+        [&](SgFunctionDeclaration *decl) {
+          if (decl == nullptr) {
+            return;
+          }
+          for_each_unique_function_decl_in_chain(
+              decl, [&](SgFunctionDeclaration *candidate_decl) {
+                Sg_File_Info *file_info = candidate_decl->get_file_info();
+                const bool touches_synthetic_candidate =
+                    candidate_decl == decl || file_info == nullptr ||
+                    file_info->isCompilerGenerated();
+                if (!touches_synthetic_candidate) {
+                  return;
+                }
+
+                setCompilerGeneratedFileInfo(candidate_decl);
+                if (SgFunctionParameterList *params =
+                        candidate_decl->get_parameterList()) {
+                  setCompilerGeneratedFileInfo(params);
+                  for (SgInitializedName *param : params->get_args()) {
+                    if (param != nullptr) {
+                      setCompilerGeneratedFileInfo(param);
+                    }
+                  }
+                }
+              });
+        };
+
     auto finalize_member_instantiation_decl =
         [&](SgTemplateInstantiationMemberFunctionDecl *decl,
             SgScopeStatement *scope) {
           if (decl == nullptr) {
             return;
           }
-
-          SgScopeStatement *target_scope = scope;
-          if (target_scope != nullptr) {
-            target_scope = normalizeNamespaceScope(target_scope);
-          }
-          if (target_scope != nullptr && decl->get_scope() != target_scope) {
-            decl->set_scope(target_scope);
-          }
-          if (decl->get_parent() == nullptr && decl->get_scope() != nullptr) {
-            decl->set_parent(decl->get_scope());
-          }
-          if (SgScopeStatement *decl_scope = decl->get_scope()) {
-            ensureDeclInScopeChildList(
-                decl, decl_scope, "VisitMemberExpr:template-instantiation");
-          }
-
-          setCompilerGeneratedFileInfo(decl);
-          if (SgFunctionParameterList *params = decl->get_parameterList()) {
-            setCompilerGeneratedFileInfo(params);
-            for (SgInitializedName *param : params->get_args()) {
-              if (param != nullptr) {
-                setCompilerGeneratedFileInfo(param);
-              }
-            }
-          }
+          mark_synthesized_instantiation_decl_chain_for_ref(decl, scope);
+          set_compiler_generated_on_instantiation_chain(decl);
 
           registerDeclarationSymbol(decl);
           if (decl->get_symbol_from_symbol_table() == nullptr &&
@@ -13129,6 +14231,11 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       if (inst_decl != nullptr) {
         ensure_function_param_list(inst_decl, nullptr);
         update_inst_decl(inst_decl, template_base_name);
+        if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
+                resolve_member_template_decl(member_decl)) {
+          apply_template_instantiation_template_links(inst_decl, tmpl_decl,
+                                                      tmpl_decl->get_name());
+        }
         return member_symbol;
       }
 
@@ -13175,30 +14282,10 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
       }
 
       update_inst_decl(new_inst_decl, template_base_name);
-
       if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-              isSgTemplateMemberFunctionDeclaration(member_decl)) {
-        new_inst_decl->set_templateDeclaration(tmpl_decl);
-        new_inst_decl->set_templateName(tmpl_decl->get_name());
-      } else if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                     isSgTemplateMemberFunctionDeclaration(
-                         member_decl->get_firstNondefiningDeclaration())) {
-        new_inst_decl->set_templateDeclaration(tmpl_decl);
-        new_inst_decl->set_templateName(tmpl_decl->get_name());
-      } else if (clang_func != nullptr) {
-        clang::FunctionTemplateDecl *primary_template =
-            clang_func->getPrimaryTemplate();
-        if (primary_template == nullptr) {
-          primary_template = clang_func->getDescribedFunctionTemplate();
-        }
-        if (primary_template != nullptr) {
-          if (SgTemplateMemberFunctionDeclaration *tmpl_decl =
-                  isSgTemplateMemberFunctionDeclaration(
-                      Traverse(primary_template))) {
-            new_inst_decl->set_templateDeclaration(tmpl_decl);
-            new_inst_decl->set_templateName(tmpl_decl->get_name());
-          }
-        }
+              resolve_member_template_decl(member_decl)) {
+        apply_template_instantiation_template_links(new_inst_decl, tmpl_decl,
+                                                    tmpl_decl->get_name());
       }
 
       finalize_member_instantiation_decl(new_inst_decl, func_scope);
@@ -13306,7 +14393,9 @@ bool ClangToSageTranslator::VisitMemberExpr(clang::MemberExpr *member_expr,
     base = strip_anonymous_member_base(base);
   }
 
-  if (implicit_access || base == nullptr) {
+  if (implicit_access && !materialize_implicit_base) {
+    *node = sg_member_expr;
+  } else if (base == nullptr) {
     *node = sg_member_expr;
   } else if (member_expr->isArrow() || base_requires_arrow(base)) {
     *node = SageBuilder::buildArrowExp(base, sg_member_expr);
@@ -13324,7 +14413,79 @@ bool ClangToSageTranslator::VisitMSPropertyRefExpr(
 #endif
   bool res = true;
 
-  // TODO
+  SgNode *tmp_base = Traverse(ms_property_expr->getBaseExpr());
+  SgExpression *base = isSgExpression(tmp_base);
+  if (tmp_base != nullptr && base == nullptr) {
+    std::cerr << "Runtime error: MS property base translated to a non-"
+                 "expression Sage node"
+              << std::endl;
+    return false;
+  }
+
+  clang::MSPropertyDecl *property_decl = ms_property_expr->getPropertyDecl();
+  const std::string property_name =
+      property_decl != nullptr ? property_decl->getNameAsString() : "";
+  if (property_name.empty()) {
+    std::cerr << "Runtime error: MS property reference missing property name"
+              << std::endl;
+    return false;
+  }
+
+  SgExpression *sg_member_expr = nullptr;
+  auto it_decl = property_decl != nullptr
+                     ? p_decl_translation_map.find(property_decl)
+                     : p_decl_translation_map.end();
+  if (it_decl != p_decl_translation_map.end()) {
+    if (SgVariableDeclaration *var_decl =
+            isSgVariableDeclaration(it_decl->second)) {
+      if (SgInitializedName *init_name =
+              SageInterface::getFirstInitializedName(var_decl)) {
+        SgVariableSymbol *sym = isSgVariableSymbol(
+            init_name->search_for_symbol_from_symbol_table());
+        if (sym == nullptr) {
+          SgScopeStatement *scope = init_name->get_scope();
+          if (scope == nullptr) {
+            scope = SageBuilder::topScopeStack();
+          }
+          sym = new SgVariableSymbol(init_name);
+          attachSymbolToScopeOrOrphan(sym, scope);
+        }
+        if (sym != nullptr) {
+          sg_member_expr = SageBuilder::buildVarRefExp(sym);
+        }
+      }
+    } else if (SgInitializedName *init_name =
+                   isSgInitializedName(it_decl->second)) {
+      SgVariableSymbol *sym =
+          isSgVariableSymbol(init_name->search_for_symbol_from_symbol_table());
+      if (sym == nullptr) {
+        SgScopeStatement *scope = init_name->get_scope();
+        if (scope == nullptr) {
+          scope = SageBuilder::topScopeStack();
+        }
+        sym = new SgVariableSymbol(init_name);
+        attachSymbolToScopeOrOrphan(sym, scope);
+      }
+      if (sym != nullptr) {
+        sg_member_expr = SageBuilder::buildVarRefExp(sym);
+      }
+    }
+  }
+
+  if (sg_member_expr == nullptr) {
+    sg_member_expr = SageBuilder::buildDanglingVarRefExp(
+        SgName(property_name), SageBuilder::topScopeStack());
+  }
+
+  if (ms_property_expr->isImplicitAccess() || base == nullptr) {
+    *node = sg_member_expr;
+  } else if (ms_property_expr->isArrow()) {
+    *node = SageBuilder::buildArrowExp(base, sg_member_expr);
+  } else {
+    *node = SageBuilder::buildDotExp(base, sg_member_expr);
+  }
+
+  applySourceRange(*node, ms_property_expr->getSourceRange());
 
   return VisitExpr(ms_property_expr, node) && res;
 }
@@ -13337,7 +14498,26 @@ bool ClangToSageTranslator::VisitMSPropertySubscriptExpr(
 #endif
   bool res = true;
 
-  // TODO
+  SgNode *tmp_base = Traverse(ms_property_subscript_expr->getBase());
+  SgExpression *base = isSgExpression(tmp_base);
+  if (tmp_base != nullptr && base == nullptr) {
+    std::cerr << "Runtime error: MS property subscript base translated to a "
+                 "non-expression Sage node"
+              << std::endl;
+    return false;
+  }
+
+  SgNode *tmp_idx = Traverse(ms_property_subscript_expr->getIdx());
+  SgExpression *idx = isSgExpression(tmp_idx);
+  if (tmp_idx != nullptr && idx == nullptr) {
+    std::cerr << "Runtime error: MS property subscript index translated to a "
+                 "non-expression Sage node"
+              << std::endl;
+    return false;
+  }
+
+  *node = SageBuilder::buildPntrArrRefExp(base, idx);
+  applySourceRange(*node, ms_property_subscript_expr->getSourceRange());
 
   return VisitExpr(ms_property_subscript_expr, node) && res;
 }
@@ -13709,6 +14889,85 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
     return nullptr;
   };
 
+  auto normalize_class_like_scope =
+      [](SgScopeStatement *scope) -> SgScopeStatement * {
+    if (scope == nullptr) {
+      return nullptr;
+    }
+    if (SgClassDeclaration *class_decl = isSgClassDeclaration(scope)) {
+      if (SgClassDefinition *class_def = class_decl->get_definition()) {
+        return class_def;
+      }
+    }
+    if (SgTemplateClassDeclaration *tmpl_decl =
+            isSgTemplateClassDeclaration(scope)) {
+      if (SgClassDefinition *tmpl_def = tmpl_decl->get_definition()) {
+        return tmpl_def;
+      }
+    }
+    if (SgTemplateInstantiationDecl *inst_decl =
+            isSgTemplateInstantiationDecl(scope)) {
+      if (SgClassDefinition *inst_def = inst_decl->get_definition()) {
+        return inst_def;
+      }
+    }
+    return scope;
+  };
+
+  auto resolve_member_lookup_scope = [&]() -> SgScopeStatement * {
+    const clang::CXXRecordDecl *member_record = nullptr;
+
+    for (auto it = unresolved_lookup_expr->decls_begin();
+         it != unresolved_lookup_expr->decls_end(); ++it) {
+      clang::NamedDecl *named_decl = it.getDecl();
+      if (named_decl == nullptr) {
+        continue;
+      }
+      if (clang::UsingShadowDecl *shadow =
+              llvm::dyn_cast<clang::UsingShadowDecl>(named_decl)) {
+        named_decl = shadow->getTargetDecl();
+      }
+      if (named_decl == nullptr) {
+        continue;
+      }
+
+      const clang::CXXMethodDecl *method_decl = nullptr;
+      if (const clang::FunctionTemplateDecl *tmpl_decl =
+              llvm::dyn_cast<clang::FunctionTemplateDecl>(named_decl)) {
+        method_decl =
+            llvm::dyn_cast<clang::CXXMethodDecl>(tmpl_decl->getTemplatedDecl());
+      } else {
+        method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(named_decl);
+      }
+      if (method_decl == nullptr || method_decl->getParent() == nullptr) {
+        return nullptr;
+      }
+
+      const clang::CXXRecordDecl *candidate_record = method_decl->getParent();
+      if (candidate_record->getDefinition() != nullptr) {
+        candidate_record = candidate_record->getDefinition();
+      }
+      candidate_record = llvm::dyn_cast_or_null<clang::CXXRecordDecl>(
+          candidate_record->getCanonicalDecl());
+      if (candidate_record == nullptr) {
+        return nullptr;
+      }
+
+      if (member_record == nullptr) {
+        member_record = candidate_record;
+      } else if (member_record != candidate_record) {
+        return nullptr;
+      }
+    }
+
+    if (member_record == nullptr) {
+      return nullptr;
+    }
+
+    return normalize_class_like_scope(resolveScopeFromDeclContext(
+        const_cast<clang::CXXRecordDecl *>(member_record), current_scope));
+  };
+
   if (*node == nullptr) {
     if (SgExpression *func_ref = build_single_overload_function_ref()) {
       attachExplicitQualifierFromNestedName(
@@ -13731,9 +14990,16 @@ bool ClangToSageTranslator::VisitUnresolvedLookupExpr(
     template_args_ptr = &template_args;
   }
 
+  SgScopeStatement *lookup_scope = current_scope;
+  if (!lookup_qualifier) {
+    if (SgScopeStatement *member_scope = resolve_member_lookup_scope()) {
+      lookup_scope = member_scope;
+    }
+  }
+
   *node = buildNonrealRefExpFromNestedNameSpecifier(
       structuralQualifierForExplicitlyQualifiedNonrealRef(lookup_qualifier),
-      current_scope, SgName(function_name),
+      lookup_scope, SgName(function_name),
       unresolved_lookup_expr->hasTemplateKeyword(), template_args_ptr);
 
   // Set source position
@@ -14051,7 +15317,39 @@ bool ClangToSageTranslator::VisitPseudoObjectExpr(
 #endif
   bool res = true;
 
-  // TODO
+  // Prefer the syntactic form so source-level pseudo-object spellings such as
+  // CUDA builtins (`blockDim.x`) remain representable in the ROSE AST instead
+  // of collapsing into Clang's internal getter calls.
+  clang::Expr *preferred_expr = pseudo_object_expr->getSyntacticForm();
+  if (preferred_expr == nullptr) {
+    preferred_expr = pseudo_object_expr->getResultExpr();
+  }
+  if (preferred_expr == nullptr &&
+      pseudo_object_expr->getNumSemanticExprs() != 0) {
+    preferred_expr = pseudo_object_expr->getSemanticExpr(
+        pseudo_object_expr->getResultExprIndex() !=
+                clang::PseudoObjectExpr::NoResult
+            ? pseudo_object_expr->getResultExprIndex()
+            : 0);
+  }
+
+  if (preferred_expr == nullptr) {
+    std::cerr << "Runtime error: PseudoObjectExpr has no translatable form"
+              << std::endl;
+    return false;
+  }
+
+  SgNode *tmp_expr = Traverse(preferred_expr);
+  SgExpression *expr = isSgExpression(tmp_expr);
+  if (tmp_expr != nullptr && expr == nullptr) {
+    std::cerr << "Runtime error: PseudoObjectExpr translated to a non-"
+                 "expression Sage node"
+              << std::endl;
+    return false;
+  }
+
+  *node = expr;
+  applySourceRange(*node, pseudo_object_expr->getSourceRange());
 
   return VisitExpr(pseudo_object_expr, node) && res;
 }
@@ -14306,7 +15604,7 @@ bool ClangToSageTranslator::VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
 #endif
   bool res = true;
 
-  const char *trait_name = clang::getTraitName(type_trait->getTrait());
+  const char *trait_name = clang::getTraitSpelling(type_trait->getTrait());
   if (trait_name == nullptr) {
     trait_name = "__type_trait";
   }

@@ -14,6 +14,7 @@
 
 #include <sstream>
 
+#include <cstdlib>
 #include <string>
 using namespace std;
 #include "AstTraversal.h"
@@ -46,6 +47,14 @@ static void erase_all(std::string &value, const std::string &needle) {
   while ((pos = value.find(needle, pos)) != std::string::npos) {
     value.erase(pos, needle.size());
   }
+}
+
+static std::string get_debug_output_dir() {
+  const char *env = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (env != nullptr && env[0] != '\0') {
+    return std::string(env);
+  }
+  return ".";
 }
 
 /*
@@ -165,7 +174,8 @@ int main(int argc, char *argv[]) {
 
   // Initialize the project
   initAnalysis(project);
-  Dbg::init("Pointer Alias analysis Test", ".", "index.html");
+  Dbg::init("Pointer Alias analysis Test", get_debug_output_dir(),
+            "index.html");
 
   liveDeadAnalysisDebugLevel = 0;
   analysisDebugLevel = 1;

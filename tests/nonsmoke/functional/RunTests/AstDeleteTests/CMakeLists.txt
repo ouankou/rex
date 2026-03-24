@@ -1,7 +1,6 @@
 
 include_directories(${ROSE_INCLUDES})
 
-
 ########### next target ###############
 
 add_executable(memoryTranslator test.C)
@@ -22,17 +21,5 @@ add_test(
 )
 set_tests_properties(nonsmoke_functional_RunTests_AstDeleteTests_test1.C PROPERTIES DEPENDS ast_delete_memory_translator)
 
-
 ########### install files ###############
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_RunTests_AstDeleteTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=ast_delete_memory_translator
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_RunTests_AstDeleteTests_check-local PROPERTIES DEPENDS ast_delete_memory_translator )

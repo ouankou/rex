@@ -9,8 +9,6 @@ add_executable(copyFunctionDefinitions copyFunctionDefinitions.C)
 target_link_libraries(copyFunctionDefinitions ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
 install(TARGETS copyExample copyLoops copyBlocks copyFunctionDefinitions DESTINATION bin)
 
-if(with-ROSE_LONG_MAKE_CHECK_RULE)
-
   set(TESTCODES_REQUIRED_TO_PASS
     copytest2007_01.C copytest2007_02.C copytest2007_03.C copytest2007_04.C
     copytest2007_05.C copytest2007_06.C copytest2007_07.C copytest2007_08.C
@@ -149,7 +147,7 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     lexPhase2003_01.C math.C inputForLoopLocator.C X.C
     )
 
-  set(_copyast_disabled_extra_tests
+  set(_copyast_additional_cxx_tests
     # DQ (4/20/2016): This test fails after adding Clang support; investigate.
     test2007_141.C
     # DQ (1/13/2013): These demonstrate failures that still need fixes.
@@ -168,26 +166,17 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     test2006_141.C
   )
 
-set(GNU_6_1_PROBLEM_FILE
-   test2004_149.C   test2005_28.C   test2005_45.C   test2005_93.C
-   test2005_98.C   test2005_181.C   test2006_20.C   test2006_79.C    test2006_92.C
+list(APPEND EXTRA_TESTCODES_REQUIRED_TO_PASS
+  test2004_149.C
+  test2005_28.C
+  test2005_45.C
+  test2005_93.C
+  test2005_98.C
+  test2005_181.C
+  test2006_20.C
+  test2006_79.C
+  test2006_92.C
 )
-
-if(NOT ROSE_USING_GCC_VERSION_LATER_6_1 EQUAL 1)
-
-set(EXTRA_TESTCODES_REQUIRED_TO_PASS ${EXTRA_TESTCODES_REQUIRED_TO_PASS} ${GNU_6_1_PROBLEM_FILE})
-
-endif()
-
-else()
-  # The shorter set of tests
-  set(TESTCODES_REQUIRED_TO_PASS
-   copytest2007_01.C copytest2007_02.C copytest2007_03.C copyExampleInput.C)
-
-  set(EXTRA_TESTCODES_REQUIRED_TO_PASS
-    test_CplusplusMacro_Cpp.C test2001_01.C test2001_02.C test2001_03.C)
-  set(_copyast_disabled_extra_tests)
-endif()
 
 set(ROSE_FLAGS  -rose:verbose 0 )
 
@@ -242,7 +231,7 @@ foreach(testcode ${EXTRA_TESTCODES_REQUIRED_TO_PASS})
   set_tests_properties(copyAST_${basename} PROPERTIES LABELS COPYASTTEST)
 endforeach()
 
-foreach(testcode ${_copyast_disabled_extra_tests})
+foreach(testcode ${_copyast_additional_cxx_tests})
   get_filename_component(basename ${testcode} NAME_WE)
   add_test(
     NAME copyAST_${basename}
@@ -250,10 +239,10 @@ foreach(testcode ${_copyast_disabled_extra_tests})
             -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_${basename}.C
             -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${testcode})
-  set_tests_properties(copyAST_${basename} PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
+  set_tests_properties(copyAST_${basename} PROPERTIES  LABELS COPYASTTEST)
 endforeach()
 
-set(_copyast_disabled_tests
+set(_copyast_additional_local_tests
   copytest2007_28.C
   copytest2007_33.C
   copytest2007_34.C
@@ -280,24 +269,13 @@ set(_copyast_disabled_tests
   copytest2007_68.C
 )
 
-foreach(testcode ${_copyast_disabled_tests})
+foreach(testcode ${_copyast_additional_local_tests})
   get_filename_component(basename ${testcode} NAME_WE)
   add_test(
     NAME copyAST_${basename}
     COMMAND copyExample ${ROSE_FLAGS}
             -rose:output ${ROSE_TEST_OUTPUT_DIR}/rose_${basename}.C
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${testcode})
-  set_tests_properties(copyAST_${basename} PROPERTIES DISABLED TRUE LABELS COPYASTTEST)
+  set_tests_properties(copyAST_${basename} PROPERTIES  LABELS COPYASTTEST)
 endforeach()
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_CompileTests_copyAST_tests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=copyAST_copyExampleInput\;copyAST_copytest2007_01\;copyAST_copytest2007_02\;copyAST_copytest2007_03\;singleStatementToBlockNormalization_test2001_01.C\;singleStatementToBlockNormalization_test2001_02.C\;singleStatementToBlockNormalization_test2001_03.C\;singleStatementToBlockNormalization_test_CplusplusMacro_Cpp.C
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_copyAST_tests_check-local PROPERTIES DEPENDS "copyAST_copyExampleInput;copyAST_copytest2007_01;copyAST_copytest2007_02;copyAST_copytest2007_03;singleStatementToBlockNormalization_test2001_01.C;singleStatementToBlockNormalization_test2001_02.C;singleStatementToBlockNormalization_test2001_03.C;singleStatementToBlockNormalization_test_CplusplusMacro_Cpp.C" )

@@ -252,6 +252,9 @@ public:
         operator()(*p);
       }
     }
+    if (!ref.is_unknown() && !fa.IsMemoryAccess(ref)) {
+      return true;
+    }
     DebugLocalInfoCollect([&ref, this]() {
       return "appending reading " + AstInterface::AstToString(ref) + " : " +
              AstInterface::AstToString(stmt);

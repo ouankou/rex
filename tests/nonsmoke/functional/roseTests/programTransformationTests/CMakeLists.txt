@@ -89,7 +89,6 @@ add_test(
   COMMAND finiteDifferencingDemo
     -c ${CMAKE_CURRENT_SOURCE_DIR}/finitediff_test1.C
 )
-set_tests_properties(finiteDifferencingDemo_finitediff_test1.C PROPERTIES DISABLED TRUE)
 
 #-------------------------------------------------------------------------------
 # testFunctionNormalization
@@ -160,79 +159,3 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/inputCode_implicitCodeGenerationTest.C
 )
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_check-constantFoldingTests
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=constantFoldingTest_1\;constantFoldingTest_2\;constantFoldingTest_3
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-constantFoldingTests PROPERTIES LABELS disabled DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-constantFoldingTests PROPERTIES DISABLED TRUE)
-endif()
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${fd_verify_tests_arg}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest PROPERTIES LABELS disabled DEPENDS "${fd_verify_tests}" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-finiteDifferencingTest PROPERTIES DISABLED TRUE)
-endif()
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${pattern_rewrite_verify_tests_arg}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest PROPERTIES LABELS disabled DEPENDS "${pattern_rewrite_verify_tests}" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-patternRewriteTest PROPERTIES DISABLED TRUE)
-endif()
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_check-preTest
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${pre_verify_tests_arg}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-preTest PROPERTIES LABELS disabled DEPENDS "${pre_verify_tests}" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_check-preTest PROPERTIES DISABLED TRUE)
-endif()
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_conditinal-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=finiteDifferencingDemo_finitediff_test1.C\;functionNormalization_functionNormalizationTest1.C
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditinal-check-local PROPERTIES LABELS disabled DEPENDS "finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditinal-check-local PROPERTIES DISABLED TRUE)
-endif()
-add_test(
-  NAME nonsmoke_functional_roseTests_programTransformationTests_conditional-check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=constantFoldingTest_1\;constantFoldingTest_2\;constantFoldingTest_3\;${fd_verify_tests_arg}\;finiteDifferencingDemo_finitediff_test1.C\;functionNormalization_functionNormalizationTest1.C\;icg_1\;icg_2\;${pattern_rewrite_verify_tests_arg}\;${pre_verify_tests_arg}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programTransformationTests_conditional-check-local PROPERTIES DEPENDS "constantFoldingTest_1;constantFoldingTest_2;constantFoldingTest_3;${fd_verify_tests};finiteDifferencingDemo_finitediff_test1.C;functionNormalization_functionNormalizationTest1.C;icg_1;icg_2;${pattern_rewrite_verify_tests};${pre_verify_tests}" )

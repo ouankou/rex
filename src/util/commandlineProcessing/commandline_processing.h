@@ -244,6 +244,7 @@ ROSE_DLL_API bool isExecutableFilename(std::string name);
 ROSE_DLL_API bool isValidFileWithExecutableFileSuffix(std::string name);
 
 ROSE_UTIL_API bool isCFileNameSuffix(const std::string &suffix);
+ROSE_UTIL_API bool isAssemblerFileNameSuffix(const std::string &suffix);
 
 ROSE_UTIL_API bool isCppFileNameSuffix(const std::string &suffix);
 

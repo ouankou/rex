@@ -7,6 +7,7 @@
 #include "rose.h"
 
 #include "sageGeneric.h"
+#include "test_output_path.h"
 
 static size_t count = 0;
 
@@ -45,7 +46,7 @@ int main(int argc, char *argv[]) {
   std::string filename =
       Rose::StringUtility::stripPathFromFileName(firstfile->getFileName());
   std::string ofilename = filename + ".genericCoverage.output";
-  std::ofstream ofile(ofilename.c_str());
+  std::ofstream ofile(resolveTestOutputPath(ofilename).c_str());
 
   ofile << "ok." << std::endl;
   return 0;

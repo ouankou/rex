@@ -25,27 +25,3 @@ foreach(alg a b c d)
 endforeach()
 list(JOIN _smoke_run_algorithm_tests "$<SEMICOLON>" _smoke_run_algorithm_tests_joined)
 
-# Makefile check targets.
-add_test(
-  NAME smoke_ExamplesForTestWriters_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_smoke_run_algorithm_tests_joined}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(smoke_ExamplesForTestWriters_check-local PROPERTIES DEPENDS "${_smoke_run_algorithm_tests}" )
-add_test(
-  NAME smoke_ExamplesForTestWriters_check-runAlgorithm
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_smoke_run_algorithm_tests_joined}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(smoke_ExamplesForTestWriters_check-runAlgorithm PROPERTIES LABELS disabled DEPENDS "${_smoke_run_algorithm_tests}" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(smoke_ExamplesForTestWriters_check-runAlgorithm PROPERTIES DISABLED TRUE)
-endif()

@@ -5,6 +5,8 @@
 
 #include "OperatorDescriptors.h"
 
+#include "sage3basic.h"
+
 #include <cctype>
 
 #include <cstring>
@@ -14,6 +16,16 @@
 using namespace std;
 
 DebugLog DebugOperatorDescriptor("-debugannot");
+
+namespace {
+std::string StripLeadingGlobalQualifier(std::string name) {
+  if (name.rfind("::", 0) == 0) {
+    name.erase(0, 2);
+  }
+  return name;
+}
+} // namespace
+
 ReplaceParams::ReplaceParams(
     const ParameterDeclaration &decl, const AstInterface::AstNodeList &args,
     Map2Object<AstInterface *, AstNodePtr, AstNodePtr> *codegen) {
@@ -68,6 +80,8 @@ void ReplaceParams::VisitVar(const SymbolicVar &var) {
   SymbolicAstWrap ast = find(varname);
   if (ast.get_ast() != AST_NULL)
     cur = ast;
+  else
+    cur = var;
 }
 
 void ReplaceParams::operator()(SymbolicValDescriptor &v) {
@@ -94,10 +108,28 @@ OperatorDeclaration::operator_signature(AstInterface &fa, const AstNodePtr &exp,
     if (argp != 0 && paramp->size() == 1) {
       argp->push_back(exp.get_ptr());
     }
-  } else if ((fa.IsFunctionCall(exp, &f, argp, 0, paramp) &&
-              AstInterface::IsVarRef(f, 0, &fname, 0, 0,
-                                     /*use_globl_name=*/true)) ||
-             AstInterface::IsFunctionDefinition(exp, &fname, argp, 0, 0, paramp,
+  } else if (fa.IsFunctionCall(exp, &f, argp, 0, paramp)) {
+    if (AstInterface::IsVarRef(f, 0, &fname, 0, 0,
+                               /*use_globl_name=*/true)) {
+    } else if (SgConstructorInitializer *ctor_init =
+                   isSgConstructorInitializer(f.get_ptr())) {
+      SgFunctionDeclaration *decl = ctor_init->get_declaration();
+      if (decl == nullptr) {
+        DebugOperatorDescriptor([&]() {
+          return "Unexpected constructor initializer without declaration: " +
+                 AstInterface::AstToString(exp) + ". Return empty name.";
+        });
+        return "";
+      }
+      fname = StripLeadingGlobalQualifier(decl->get_qualified_name().str());
+    } else {
+      DebugOperatorDescriptor([&]() {
+        return "Unexpected operator callee: " + AstInterface::AstToString(f) +
+               ". Return empty name.";
+      });
+      return "";
+    }
+  } else if (AstInterface::IsFunctionDefinition(exp, &fname, argp, 0, 0, paramp,
                                                 0,
                                                 /*use_globl_name=*/true)) {
   } else {
@@ -143,6 +175,9 @@ OperatorDeclaration::OperatorDeclaration(AstInterface &fa, AstNodePtr op_ast,
                    AstInterface::GetVariableSignature(*p1));
     ++p1;
     ++p2;
+  }
+  for (unsigned i = 0; i < pars.num_of_params(); ++i) {
+    TypeDescriptor::get_name() += "_" + pars.get_param_type(i);
   }
   assert(params.size() == pars.num_of_params());
   if (params.size() != argp->size()) {

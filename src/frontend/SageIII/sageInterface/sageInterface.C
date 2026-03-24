@@ -4559,6 +4559,7 @@ void SageInterface::rebuildSymbolTable(SgScopeStatement *scope) {
       }
 
         // DQ (2/18/2017): Added support for C++11 SgTemplateTypedefDeclaration.
+      case V_SgTemplateInstantiationTypedefDeclaration:
       case V_SgTemplateTypedefDeclaration:
 
       case V_SgTypedefDeclaration: {
@@ -13540,38 +13541,70 @@ void SageInterface::collectVarRefs(SgLocatedNode *root,
   }
 }
 
+namespace {
+int collectVariableReferencesFromArrayType(
+    SgType *type, Rose_STL_Container<SgNode *> &currentVarRefList,
+    std::set<SgVarRefExp *> &seenVarRefs) {
+  if (type == NULL)
+    return 0;
+
+  if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
+    return collectVariableReferencesFromArrayType(
+        typedef_type->get_base_type(), currentVarRefList, seenVarRefs);
+  }
+
+  if (SgModifierType *modifier_type = isSgModifierType(type)) {
+    return collectVariableReferencesFromArrayType(
+        modifier_type->get_base_type(), currentVarRefList, seenVarRefs);
+  }
+
+  SgArrayType *array_type = isSgArrayType(type);
+  if (array_type == NULL)
+    return 0;
+
+  int rt = 0;
+  if (SgExpression *index_expr = array_type->get_index()) {
+    Rose_STL_Container<SgNode *> varList =
+        NodeQuery::querySubTree(index_expr, V_SgVarRefExp);
+    for (size_t j = 0; j < varList.size(); j++) {
+      SgVarRefExp *var_exp = isSgVarRefExp(varList[j]);
+      ROSE_ASSERT(var_exp != NULL);
+      if (seenVarRefs.insert(var_exp).second) {
+        currentVarRefList.push_back(var_exp);
+        rt++;
+      }
+    }
+  }
+
+  return rt + collectVariableReferencesFromArrayType(
+                  array_type->get_base_type(), currentVarRefList, seenVarRefs);
+}
+} // namespace
+
 int SageInterface::collectVariableReferencesInArrayTypes(
     SgLocatedNode *root, Rose_STL_Container<SgNode *> &currentVarRefList) {
   int rt = 0;
   ROSE_ASSERT(root != NULL);
+  std::set<SgVarRefExp *> seenVarRefs;
+
   Rose_STL_Container<SgNode *> constructorList =
       NodeQuery::querySubTree(root, V_SgConstructorInitializer);
   for (size_t i = 0; i < constructorList.size(); i++) {
     SgConstructorInitializer *c_init =
         isSgConstructorInitializer(constructorList[i]);
-    if (SgArrayType *a_type = isSgArrayType(c_init->get_expression_type())) {
-      // CLANG FRONTEND FIX: get_index() can return NULL for some array types
-      // Check before passing to querySubTree to avoid assertion failure
-      SgExpression *index_expr = a_type->get_index();
-      if (index_expr != NULL) {
-        Rose_STL_Container<SgNode *> varList =
-            NodeQuery::querySubTree(index_expr, V_SgVarRefExp);
-        for (size_t j = 0; j < varList.size(); j++) {
-          SgVarRefExp *var_exp = isSgVarRefExp(varList[j]);
-          //        if (debug)
-          //        {
-          //          cout<<"Found a var ref in array
-          //          type:"<<var_exp->get_symbol()->get_name()<<endl;
-          //        }
-          currentVarRefList.push_back(var_exp);
-          // TODO: these variable references do have special scopes, how to
-          // communicate to users?
-          //         specialVarRefScopeExp[var_exp] = c_init ;
-          rt++;
-        }
-      }
-    }
+    rt += collectVariableReferencesFromArrayType(
+        c_init->get_expression_type(), currentVarRefList, seenVarRefs);
   }
+
+  Rose_STL_Container<SgNode *> newExpList =
+      NodeQuery::querySubTree(root, V_SgNewExp);
+  for (size_t i = 0; i < newExpList.size(); i++) {
+    SgNewExp *new_exp = isSgNewExp(newExpList[i]);
+    ROSE_ASSERT(new_exp != NULL);
+    rt += collectVariableReferencesFromArrayType(
+        new_exp->get_specified_type(), currentVarRefList, seenVarRefs);
+  }
+
   return rt;
 }
 
@@ -13677,6 +13710,17 @@ SgAssignInitializer *SageInterface::splitExpression(SgExpression *from,
   }
 
   SgType *vartype = from->get_type();
+  bool materializeReferenceAsPointer = SageInterface::isReferenceType(vartype);
+  if (materializeReferenceAsPointer) {
+    // Reference-valued expressions cannot be lowered into an uninitialized
+    // reference followed by assignment. Use a pointer temp and dereference it
+    // at the original expression site instead so later statement rewriting can
+    // assign the alias target explicitly.
+    SgType *pointee_type = vartype->stripType(
+        SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_REFERENCE_TYPE |
+        SgType::STRIP_RVALUE_REFERENCE_TYPE);
+    vartype = SageBuilder::buildPointerType(pointee_type);
+  }
   SgNode *fromparent = from->get_parent();
   vector<SgExpression *> ancestors;
   for (SgExpression *expr = from, *anc = isSgExpression(fromparent); anc != 0;
@@ -13719,12 +13763,23 @@ SgAssignInitializer *SageInterface::splitExpression(SgExpression *from,
   ROSE_ASSERT(sym);
   SgInitializedName *initname = sym->get_declaration();
   ROSE_ASSERT(initname);
-  SgVarRefExp *varref = SageBuilder::buildVarRefExp(sym);
-  replaceExpressionWithExpression(from, varref);
+  SgVarRefExp *temp_varref = SageBuilder::buildVarRefExp(sym);
+  SgExpression *replacement = temp_varref;
+  if (materializeReferenceAsPointer) {
+    SgPointerDerefExp *deref = SageBuilder::buildPointerDerefExp(temp_varref);
+    deref->set_lvalue(from->get_lvalue());
+    replacement = deref;
+  }
+  replaceExpressionWithExpression(from, replacement);
   // std::cout << "Unparsed 3: " << fromparent->sage_class_name() << " --- " <<
   // fromparent->unparseToString() << endl; cout << "From is a " <<
   // from->sage_class_name() << endl;
-  SgAssignInitializer *ai = SageBuilder::buildAssignInitializer(from);
+  SgExpression *initializer_operand = from;
+  if (materializeReferenceAsPointer) {
+    initializer_operand = SageBuilder::buildAddressOfOp(from);
+  }
+  SgAssignInitializer *ai =
+      SageBuilder::buildAssignInitializer(initializer_operand);
   initname->set_initializer(ai);
   ai->set_parent(initname);
   myStatementInsert(stmt, vardecl, true);
@@ -16750,6 +16805,9 @@ void SageInterface::movePreprocessingInfo(
          PreprocessingInfo::CpreprocessorErrorDeclaration) ||
         (info->getTypeOfDirective() ==
          PreprocessingInfo::CpreprocessorWarningDeclaration) ||
+        // Inactive/preprocessed regions that still need to survive statement
+        // motion/removal for token-based unparsing (e.g. `#if/#else` blocks).
+        (info->getTypeOfDirective() == PreprocessingInfo::CSkippedToken) ||
         // DQ (12/28/2020): Added support for C linkage specifications.
         (info->getTypeOfDirective() ==
          PreprocessingInfo::ClinkageSpecificationStart) ||
@@ -17916,26 +17974,10 @@ unsigned long long SageInterface::getIntegerConstantValue(SgValueExp *expr) {
 
 class CollectDependentDeclarationsCopyType : public SgCopyHelp {
 public:
-  // This is the simpliest possible version of a deep copy SgCopyHelp::copyAst()
-  // member function. Note that the root of the does not have its file info set
-  // like its children.
-  virtual SgNode *copyAst(const SgNode *n) {
-    // DQ (2/26/2009): This defines a simple concept of "deep" copy. It forms a
-    // more testable building block, I hope.
-    SgNode *copy = n->copy(*this);
-
-    // Also mark this as a transformation and to be output in unparsing (so it
-    // will be output by the code generator).
-    Sg_File_Info *fileInfo = copy->get_file_info();
-    if (fileInfo != NULL) {
-      // Must make this for output (checked in unparser), marking as a
-      // transformation is not checked
-      fileInfo->setOutputInCodeGeneration();
-      fileInfo->setTransformation();
-    }
-
-    return copy;
-  }
+  // Dependent declaration copying only needs the copied declaration root to be
+  // marked for output. Marking every copied node forces synthetic/internal
+  // declarations in the subtree to unparse as if they were source-written.
+  virtual SgNode *copyAst(const SgNode *n) { return n->copy(*this); }
 } collectDependentDeclarationsCopyType;
 
 class CollectCppDirectivesTraversal : public SgSimpleProcessing {
@@ -18076,8 +18118,10 @@ SgDeclarationStatement *getAssociatedDeclaration(SgScopeStatement *scope) {
 
 class CollectDependentDeclarationsTraversal : public SgSimpleProcessing {
 public:
-  explicit CollectDependentDeclarationsTraversal(int target_physical_file_id)
-      : target_physical_file_id_(target_physical_file_id) {}
+  CollectDependentDeclarationsTraversal(int target_physical_file_id,
+                                        bool include_header_decls)
+      : target_physical_file_id_(target_physical_file_id),
+        include_header_decls_(include_header_decls) {}
   // Accumulate a list of copies of associated declarations referenced in the
   // AST subtree (usually of the outlined functions) to insert in the separate
   // file to support outlining.
@@ -18097,6 +18141,7 @@ public:
 private:
   void addDeclaration(SgDeclarationStatement *decl);
   int target_physical_file_id_;
+  bool include_header_decls_;
 };
 
 SgDeclarationStatement *
@@ -18172,7 +18217,20 @@ void CollectDependentDeclarationsTraversal::addDeclaration(
       if (info != NULL && info->isCompilerGenerated() == false &&
           info->get_physical_file_id() >= 0 &&
           info->get_physical_file_id() != target_physical_file_id_) {
-        return;
+        // When the outlined file intentionally excludes header includes, it
+        // must carry dependent declarations from non-system headers so the
+        // generated file remains self-contained and compilable.
+        if (include_header_decls_) {
+          // We intentionally avoid copying declarations from system headers
+          // (e.g., std), but we must allow non-system cross-file declarations
+          // (typically from project headers) when header includes are excluded.
+          SgLocatedNode *loc = isSgLocatedNode(dependentDeclaration);
+          if (loc == NULL || SageInterface::insideSystemHeader(loc)) {
+            return;
+          }
+        } else {
+          return;
+        }
       }
     }
 
@@ -18408,10 +18466,9 @@ static std::map<const SgStatement *, bool>
 // Used to separate a function to a new source file and add necessary type
 // declarations into the new file. NOTICE: each call to this function has to
 // have call visitedDeclMap.clear() first!!
-static void
-getDependentDeclarations(SgStatement *stmt,
-                         vector<SgDeclarationStatement *> &declarationList,
-                         vector<SgSymbol *> &symbolList) {
+static void getDependentDeclarations(
+    SgStatement *stmt, vector<SgDeclarationStatement *> &declarationList,
+    vector<SgSymbol *> &symbolList, bool includeHeaderDecls) {
   // This function returns a list of the dependent declaration for any input
   // statement. Dependent declaration are functions called, types referenced in
   // variable declarations, etc.
@@ -18420,7 +18477,8 @@ getDependentDeclarations(SgStatement *stmt,
   if (stmt != NULL && stmt->get_file_info() != NULL) {
     target_physical_file_id = stmt->get_file_info()->get_physical_file_id();
   }
-  CollectDependentDeclarationsTraversal t(target_physical_file_id);
+  CollectDependentDeclarationsTraversal t(target_physical_file_id,
+                                          includeHeaderDecls);
   t.traverse(stmt, preorder);
   // Merge to the parent level list
   copy(t.declarationList.begin(), t.declarationList.end(),
@@ -18476,7 +18534,8 @@ getDependentDeclarations(SgStatement *stmt,
     // recursively collect dependent declarations for the body stmt
     if ((body_stmt != NULL) &&
         (!visitedDeclMap[body_stmt])) { // avoid infinite recursion
-      getDependentDeclarations(body_stmt, declarationList, symbolList);
+      getDependentDeclarations(body_stmt, declarationList, symbolList,
+                               includeHeaderDecls);
     }
   }
 } // end void getDependentDeclarations()
@@ -18576,6 +18635,14 @@ SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(
     }
   }
   return sortedNode;
+}
+
+static void
+getDependentDeclarations(SgStatement *stmt,
+                         vector<SgDeclarationStatement *> &declarationList,
+                         vector<SgSymbol *> &symbolList) {
+  getDependentDeclarations(stmt, declarationList, symbolList,
+                           /*includeHeaderDecls=*/false);
 }
 
 //! Please call this instead of calling getDependentDeclarations ( SgStatement*
@@ -18943,13 +19010,9 @@ void SageInterface::markSubtreeToBeUnparsed(SgNode *root,
 
 void SageInterface::markSubtreeToBeUnparsedTreeTraversal(SgNode *root,
                                                          int physical_file_id) {
-  // DQ (7/13/2021): This function marks nodes in a subtree to be a
-  // transformation, but avoids marking subtrees of the SgCastExp. This is
-  // important because currently the marking of an implicit cast will cause it
-  // to be unparsed, even though it is marked as implicit.  This detail of
-  // precedence of implicit flags over transformation flags needs to be fixed
-  // seperated. This function has been implemented as part of debugging this
-  // issue.
+  // Mark nodes in a subtree to be unparsed, but avoid marking subtrees of
+  // SgCastExp. Marking an implicit cast as a transformation can cause it to be
+  // unparsed even though it is implicit.
 
   class InheritedAttribute {
   public:
@@ -18962,11 +19025,6 @@ void SageInterface::markSubtreeToBeUnparsedTreeTraversal(SgNode *root,
       physical_file_id = X.physical_file_id;
     }
   };
-
-// DQ (7/21/21): This code construction does not work with the GNU 4.9.x
-// compilers. #if !( ( (__GNUC__ == 4) && (__GNUC_MINOR__ <= 9) ) || (__GNUC__ <
-// 4))
-#if (__GNUC__ > 4)
 
   class SubtreeTraversal : public SgTopDownProcessing<InheritedAttribute> {
   public:
@@ -18999,10 +19057,6 @@ void SageInterface::markSubtreeToBeUnparsedTreeTraversal(SgNode *root,
   SubtreeTraversal traversal;
 
   traversal.traverse(root, inheritedAttribute);
-#else
-  printf("This function does not compile with GNU 4.9 or older compilers (part "
-         "of ROSE used only with more modern compilers) \n");
-#endif
 }
 
 //! Generate copies for a list of declarations and insert them into a different
@@ -19033,6 +19087,39 @@ vector<SgDeclarationStatement *> generateCopiesOfDependentDeclarations(
   // DQ (2/25/2009): Initially this is always global scope so test this for now,
   // at least.
   ROSE_ASSERT(isSgGlobal(targetScope) != NULL);
+
+  auto resolveFunctionSymbolInScope =
+      [](SgScopeStatement *scope,
+         SgFunctionDeclaration *functionDeclaration) -> SgFunctionSymbol * {
+    if (scope == NULL || functionDeclaration == NULL) {
+      return NULL;
+    }
+
+    SgFunctionDeclaration *firstNondefiningDeclaration =
+        isSgFunctionDeclaration(
+            functionDeclaration->get_firstNondefiningDeclaration());
+    if (firstNondefiningDeclaration == NULL) {
+      firstNondefiningDeclaration = functionDeclaration;
+    }
+
+    SgFunctionSymbol *functionSymbol =
+        scope->lookup_function_symbol(firstNondefiningDeclaration->get_name(),
+                                      firstNondefiningDeclaration->get_type());
+    if (functionSymbol == NULL) {
+      functionSymbol = scope->lookup_function_symbol(
+          firstNondefiningDeclaration->get_name());
+    }
+    if (functionSymbol == NULL) {
+      functionSymbol = isSgFunctionSymbol(
+          scope->find_symbol_from_declaration(firstNondefiningDeclaration));
+    }
+    if (functionSymbol == NULL) {
+      functionSymbol = isSgFunctionSymbol(
+          firstNondefiningDeclaration->get_symbol_from_symbol_table());
+    }
+
+    return functionSymbol;
+  };
 
   for (vector<SgDeclarationStatement *>::const_iterator i =
            dependentDeclarations.begin();
@@ -19092,14 +19179,23 @@ vector<SgDeclarationStatement *> generateCopiesOfDependentDeclarations(
 
       assert(copy_functionDeclaration->get_scope() != NULL);
       assert(copy_functionDeclaration->get_scope() == targetScope);
-      assert(copy_functionDeclaration->get_scope()->lookup_function_symbol(
-                 copy_functionDeclaration->get_name(),
-                 copy_functionDeclaration->get_type()) != NULL);
-      assert(copy_functionDeclaration->get_scope()
-                 ->lookup_function_symbol(copy_functionDeclaration->get_name(),
-                                          copy_functionDeclaration->get_type())
-                 ->get_symbol_basis() ==
-             copy_functionDeclaration->get_firstNondefiningDeclaration());
+      SgFunctionDeclaration *copyFirstNondefiningDeclaration =
+          isSgFunctionDeclaration(
+              copy_functionDeclaration->get_firstNondefiningDeclaration());
+      assert(copyFirstNondefiningDeclaration != NULL);
+
+      SgFunctionSymbol *copyFunctionSymbol =
+          resolveFunctionSymbolInScope(copy_functionDeclaration->get_scope(),
+                                       copyFirstNondefiningDeclaration);
+      if (copyFunctionSymbol == NULL) {
+        copyFunctionSymbol =
+            new SgFunctionSymbol(copyFirstNondefiningDeclaration);
+        copy_functionDeclaration->get_scope()->insert_symbol(
+            copyFirstNondefiningDeclaration->get_name(), copyFunctionSymbol);
+      }
+      assert(copyFunctionSymbol != NULL);
+      assert(copyFunctionSymbol->get_symbol_basis() ==
+             copyFirstNondefiningDeclaration);
 
       copy_node = copy_functionDeclaration;
     } else {
@@ -19363,8 +19459,319 @@ void SageInterface::appendStatementWithDependentDeclaration(
   // will be mapped to newer symbols generated in the copied AST. Collect the
   // declaration that the input declaration depends upon.
   vector<SgDeclarationStatement *> dependentDeclarationList_inOriginalFile;
+  {
+    // When excluding header includes, the outlined file must carry dependent
+    // declarations from non-system headers to remain self-contained.
+    visitedDeclMap.clear();
+    vector<SgSymbol *> unusedSymbols;
+    getDependentDeclarations(decl, dependentDeclarationList_inOriginalFile,
+                             unusedSymbols,
+                             /*includeHeaderDecls=*/excludeHeaderFiles);
+    dependentDeclarationList_inOriginalFile =
+        sortSgNodeListBasedOnAppearanceOrderInSource(
+            dependentDeclarationList_inOriginalFile);
+  }
 
-  dependentDeclarationList_inOriginalFile = getDependentDeclarations(decl);
+  {
+    std::set<SgDeclarationStatement *> dependentDeclarationSet(
+        dependentDeclarationList_inOriginalFile.begin(),
+        dependentDeclarationList_inOriginalFile.end());
+    std::vector<SgDeclarationStatement *> filteredDependentDeclarations;
+    filteredDependentDeclarations.reserve(
+        dependentDeclarationList_inOriginalFile.size());
+
+    for (SgDeclarationStatement *dependentDecl :
+         dependentDeclarationList_inOriginalFile) {
+      bool coveredByEnclosingDeclaration = false;
+      for (SgScopeStatement *scopeCursor = dependentDecl->get_scope();
+           scopeCursor != NULL && isSgGlobal(scopeCursor) == NULL;
+           scopeCursor = scopeCursor->get_scope()) {
+        SgDeclarationStatement *enclosingDecl = NULL;
+        if (SgNamespaceDefinitionStatement *namespaceScope =
+                isSgNamespaceDefinitionStatement(scopeCursor)) {
+          enclosingDecl = namespaceScope->get_namespaceDeclaration();
+        } else if (SgClassDefinition *classScope =
+                       isSgClassDefinition(scopeCursor)) {
+          enclosingDecl = classScope->get_declaration();
+        }
+
+        if (enclosingDecl != NULL && enclosingDecl != dependentDecl &&
+            dependentDeclarationSet.count(enclosingDecl) != 0) {
+          coveredByEnclosingDeclaration = true;
+          break;
+        }
+      }
+
+      if (!coveredByEnclosingDeclaration) {
+        filteredDependentDeclarations.push_back(dependentDecl);
+      }
+    }
+
+    dependentDeclarationList_inOriginalFile.swap(filteredDependentDeclarations);
+  }
+
+  SgSourceFile *outlinedFile = SageInterface::getEnclosingSourceFile(scope);
+  ROSE_ASSERT(outlinedFile != NULL);
+  const std::string outlined_output_filename =
+      outlinedFile->get_unparse_output_filename();
+  ROSE_ASSERT(!outlined_output_filename.empty());
+  const int outlined_physical_file_id =
+      Sg_File_Info::getIDFromFilename(outlined_output_filename);
+
+  auto findEquivalentDeclarationInScope =
+      [](SgScopeStatement *targetDeclScope,
+         SgDeclarationStatement *originalDecl) -> SgDeclarationStatement * {
+    if (targetDeclScope == NULL || originalDecl == NULL) {
+      return NULL;
+    }
+
+    const SgDeclarationStatementPtrList &declarationList =
+        targetDeclScope->getDeclarationList();
+    for (SgDeclarationStatement *candidateDecl : declarationList) {
+      if (candidateDecl == NULL) {
+        continue;
+      }
+
+      switch (originalDecl->variantT()) {
+      case V_SgClassDeclaration: {
+        SgClassDeclaration *originalClassDecl =
+            isSgClassDeclaration(originalDecl);
+        SgClassDeclaration *candidateClassDecl =
+            isSgClassDeclaration(candidateDecl);
+        if (originalClassDecl != NULL && candidateClassDecl != NULL &&
+            candidateClassDecl->get_name() == originalClassDecl->get_name()) {
+          return candidateClassDecl;
+        }
+        break;
+      }
+
+      case V_SgNamespaceDeclarationStatement: {
+        SgNamespaceDeclarationStatement *originalNamespaceDecl =
+            isSgNamespaceDeclarationStatement(originalDecl);
+        SgNamespaceDeclarationStatement *candidateNamespaceDecl =
+            isSgNamespaceDeclarationStatement(candidateDecl);
+        if (originalNamespaceDecl != NULL && candidateNamespaceDecl != NULL &&
+            candidateNamespaceDecl->get_name() ==
+                originalNamespaceDecl->get_name()) {
+          return candidateNamespaceDecl;
+        }
+        break;
+      }
+
+      case V_SgTypedefDeclaration: {
+        SgTypedefDeclaration *originalTypedefDecl =
+            isSgTypedefDeclaration(originalDecl);
+        SgTypedefDeclaration *candidateTypedefDecl =
+            isSgTypedefDeclaration(candidateDecl);
+        if (originalTypedefDecl != NULL && candidateTypedefDecl != NULL &&
+            candidateTypedefDecl->get_name() ==
+                originalTypedefDecl->get_name()) {
+          return candidateTypedefDecl;
+        }
+        break;
+      }
+
+      case V_SgEnumDeclaration: {
+        SgEnumDeclaration *originalEnumDecl = isSgEnumDeclaration(originalDecl);
+        SgEnumDeclaration *candidateEnumDecl =
+            isSgEnumDeclaration(candidateDecl);
+        if (originalEnumDecl != NULL && candidateEnumDecl != NULL &&
+            candidateEnumDecl->get_name() == originalEnumDecl->get_name()) {
+          return candidateEnumDecl;
+        }
+        break;
+      }
+
+      case V_SgFunctionDeclaration:
+      case V_SgMemberFunctionDeclaration:
+      case V_SgTemplateFunctionDeclaration:
+      case V_SgTemplateMemberFunctionDeclaration:
+      case V_SgTemplateInstantiationFunctionDecl:
+      case V_SgTemplateInstantiationMemberFunctionDecl: {
+        SgFunctionDeclaration *originalFunctionDecl =
+            isSgFunctionDeclaration(originalDecl);
+        SgFunctionDeclaration *candidateFunctionDecl =
+            isSgFunctionDeclaration(candidateDecl);
+        if (originalFunctionDecl == NULL || candidateFunctionDecl == NULL ||
+            candidateFunctionDecl->get_name() !=
+                originalFunctionDecl->get_name()) {
+          break;
+        }
+
+        SgFunctionDeclaration *originalFirstNondefiningDecl =
+            isSgFunctionDeclaration(
+                originalFunctionDecl->get_firstNondefiningDeclaration());
+        if (originalFirstNondefiningDecl == NULL) {
+          originalFirstNondefiningDecl = originalFunctionDecl;
+        }
+
+        SgFunctionDeclaration *candidateFirstNondefiningDecl =
+            isSgFunctionDeclaration(
+                candidateFunctionDecl->get_firstNondefiningDeclaration());
+        if (candidateFirstNondefiningDecl == NULL) {
+          candidateFirstNondefiningDecl = candidateFunctionDecl;
+        }
+
+        SgFunctionType *originalFunctionType =
+            isSgFunctionType(originalFirstNondefiningDecl->get_type());
+        SgFunctionType *candidateFunctionType =
+            isSgFunctionType(candidateFirstNondefiningDecl->get_type());
+        if (originalFunctionType != NULL && candidateFunctionType != NULL &&
+            SageInterface::isEquivalentFunctionType(originalFunctionType,
+                                                    candidateFunctionType)) {
+          return candidateFunctionDecl;
+        }
+        break;
+      }
+
+      default:
+        break;
+      }
+    }
+
+    return NULL;
+  };
+
+  auto resolveTargetScopeForDeclaration =
+      [scope, &findEquivalentDeclarationInScope](
+          SgDeclarationStatement *originalDecl) -> SgScopeStatement * {
+    if (originalDecl == NULL) {
+      return NULL;
+    }
+
+    std::vector<SgScopeStatement *> scopeChain;
+    for (SgScopeStatement *originalScope = originalDecl->get_scope();
+         originalScope != NULL && isSgGlobal(originalScope) == NULL;
+         originalScope = originalScope->get_scope()) {
+      if (isSgNamespaceDefinitionStatement(originalScope) != NULL ||
+          isSgClassDefinition(originalScope) != NULL) {
+        scopeChain.push_back(originalScope);
+        continue;
+      }
+
+      return NULL;
+    }
+
+    SgScopeStatement *targetScope = scope;
+    for (std::vector<SgScopeStatement *>::reverse_iterator it =
+             scopeChain.rbegin();
+         it != scopeChain.rend(); ++it) {
+      if (SgNamespaceDefinitionStatement *namespaceScope =
+              isSgNamespaceDefinitionStatement(*it)) {
+        SgNamespaceDeclarationStatement *targetNamespaceDecl =
+            isSgNamespaceDeclarationStatement(findEquivalentDeclarationInScope(
+                targetScope, namespaceScope->get_namespaceDeclaration()));
+        if (targetNamespaceDecl == NULL ||
+            targetNamespaceDecl->get_definition() == NULL) {
+          return NULL;
+        }
+
+        targetScope = targetNamespaceDecl->get_definition();
+        continue;
+      }
+
+      if (SgClassDefinition *classScope = isSgClassDefinition(*it)) {
+        SgClassDeclaration *targetClassDecl =
+            isSgClassDeclaration(findEquivalentDeclarationInScope(
+                targetScope, classScope->get_declaration()));
+        if (targetClassDecl == NULL ||
+            targetClassDecl->get_definition() == NULL) {
+          return NULL;
+        }
+
+        targetScope = targetClassDecl->get_definition();
+        continue;
+      }
+    }
+
+    return targetScope;
+  };
+
+  auto resolveFunctionSymbolInScope =
+      [](SgScopeStatement *scope,
+         SgFunctionDeclaration *functionDeclaration) -> SgFunctionSymbol * {
+    if (scope == NULL || functionDeclaration == NULL) {
+      return NULL;
+    }
+
+    SgFunctionDeclaration *firstNondefiningDeclaration =
+        isSgFunctionDeclaration(
+            functionDeclaration->get_firstNondefiningDeclaration());
+    if (firstNondefiningDeclaration == NULL) {
+      firstNondefiningDeclaration = functionDeclaration;
+    }
+
+    SgFunctionSymbol *functionSymbol =
+        scope->lookup_function_symbol(firstNondefiningDeclaration->get_name(),
+                                      firstNondefiningDeclaration->get_type());
+    if (functionSymbol == NULL) {
+      functionSymbol = scope->lookup_function_symbol(
+          firstNondefiningDeclaration->get_name());
+    }
+    if (functionSymbol == NULL) {
+      functionSymbol = isSgFunctionSymbol(
+          scope->find_symbol_from_declaration(firstNondefiningDeclaration));
+    }
+    if (functionSymbol == NULL) {
+      functionSymbol = isSgFunctionSymbol(
+          firstNondefiningDeclaration->get_symbol_from_symbol_table());
+    }
+
+    return functionSymbol;
+  };
+
+  auto lookupExistingDeclarationInTargetFile =
+      [&](SgDeclarationStatement *originalDecl) -> SgDeclarationStatement * {
+    SgScopeStatement *targetDeclScope =
+        resolveTargetScopeForDeclaration(originalDecl);
+    if (targetDeclScope == NULL) {
+      return NULL;
+    }
+
+    return findEquivalentDeclarationInScope(targetDeclScope, originalDecl);
+  };
+
+  SgSourceFile *originalStatementFile =
+      SageInterface::getEnclosingSourceFile(original_statement);
+  const std::string outlinedDeclarationFilename =
+      original_statement != NULL && original_statement->get_file_info() != NULL
+          ? original_statement->get_file_info()->get_filenameString()
+          : std::string();
+  std::string originalStatementOwningFilename;
+  if (originalStatementFile != NULL) {
+    originalStatementOwningFilename =
+        originalStatementFile->get_sourceFileNameWithPath();
+    if (originalStatementOwningFilename.empty()) {
+      originalStatementOwningFilename = originalStatementFile->getFileName();
+    }
+  }
+  const bool outlinedDeclarationInsideHeader =
+      !outlinedDeclarationFilename.empty() &&
+      !originalStatementOwningFilename.empty() &&
+      outlinedDeclarationFilename != originalStatementOwningFilename;
+
+  {
+    std::vector<SgDeclarationStatement *> filteredDependentDeclarations;
+    filteredDependentDeclarations.reserve(
+        dependentDeclarationList_inOriginalFile.size());
+    for (SgDeclarationStatement *dependentDecl :
+         dependentDeclarationList_inOriginalFile) {
+      if (excludeHeaderFiles == true &&
+          outlinedDeclarationInsideHeader == true &&
+          dependentDecl->get_file_info() != NULL &&
+          dependentDecl->get_file_info()->get_filenameString() ==
+              outlinedDeclarationFilename) {
+        filteredDependentDeclarations.push_back(dependentDecl);
+        continue;
+      }
+
+      if (lookupExistingDeclarationInTargetFile(dependentDecl) != NULL) {
+        continue;
+      }
+      filteredDependentDeclarations.push_back(dependentDecl);
+    }
+    dependentDeclarationList_inOriginalFile.swap(filteredDependentDeclarations);
+  }
 
   // Generate the copies of all the dependent statements
   //     printf ("Fixme: this currently causes the
@@ -19425,6 +19832,11 @@ void SageInterface::appendStatementWithDependentDeclaration(
   SgFunctionDeclaration *outlinedFunctionDeclaration =
       isSgFunctionDeclaration(decl);
   ROSE_ASSERT(outlinedFunctionDeclaration != NULL);
+  SgFunctionDeclaration *outlinedFunctionFirstNondefiningDeclaration =
+      isSgFunctionDeclaration(
+          outlinedFunctionDeclaration->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(outlinedFunctionFirstNondefiningDeclaration != NULL);
+
   SgGlobal *originalFileGlobalScope = getGlobalScope(original_statement);
   ROSE_ASSERT(originalFileGlobalScope != NULL);
   if (SgProject::get_verbose() >= 1)
@@ -19438,22 +19850,12 @@ void SageInterface::appendStatementWithDependentDeclaration(
   // outlinedFunctionSymbolFromOriginalFile =
   // isSgFunctionSymbol(originalFileGlobalScope->lookup_symbol(outlinedFunctionDeclaration->get_name()));
   SgFunctionSymbol *outlinedFunctionSymbolFromOriginalFile =
-      isSgFunctionSymbol(originalFileGlobalScope->lookup_symbol(
-          outlinedFunctionDeclaration->get_name(), NULL, NULL));
-
-  // SgSymbol* outlinedFunctionSymbolFromOutlinedFile =
-  // scope->lookup_symbol(outlinedFunctionDeclaration->get_name());
-  ROSE_ASSERT(decl->get_firstNondefiningDeclaration() != NULL);
-  SgFunctionSymbol *outlinedFunctionSymbolFromOutlinedFile = isSgFunctionSymbol(
-      decl->get_firstNondefiningDeclaration()->get_symbol_from_symbol_table());
-
-  ROSE_ASSERT(outlinedFunctionSymbolFromOriginalFile != NULL);
+      resolveFunctionSymbolInScope(originalFileGlobalScope,
+                                   outlinedFunctionFirstNondefiningDeclaration);
+  SgFunctionSymbol *outlinedFunctionSymbolFromOutlinedFile =
+      resolveFunctionSymbolInScope(scope,
+                                   outlinedFunctionFirstNondefiningDeclaration);
   ROSE_ASSERT(outlinedFunctionSymbolFromOutlinedFile != NULL);
-
-  // TV (07/24/2013): Symbol are unified across files through the project wide
-  // global scope
-  ROSE_ASSERT(outlinedFunctionSymbolFromOriginalFile ==
-              outlinedFunctionSymbolFromOutlinedFile);
 
   // Add the SgGlobal referenece to the replacementMap
   replacementMap.insert(
@@ -19463,16 +19865,21 @@ void SageInterface::appendStatementWithDependentDeclaration(
   // replacementMap
   SgFunctionDeclaration
       *outlinedNondefiningFunctionDeclarationFromOriginalFile =
-          isSgFunctionDeclaration(
-              outlinedFunctionSymbolFromOriginalFile->get_declaration());
+          outlinedFunctionSymbolFromOriginalFile != NULL
+              ? isSgFunctionDeclaration(
+                    outlinedFunctionSymbolFromOriginalFile->get_declaration())
+              : NULL;
   SgFunctionDeclaration
       *outlinedNondefiningFunctionDeclarationFromOutlinedFile =
           isSgFunctionDeclaration(decl->get_firstNondefiningDeclaration());
-  ROSE_ASSERT(outlinedNondefiningFunctionDeclarationFromOriginalFile != NULL);
   ROSE_ASSERT(outlinedNondefiningFunctionDeclarationFromOutlinedFile != NULL);
-  replacementMap.insert(pair<SgNode *, SgNode *>(
-      outlinedNondefiningFunctionDeclarationFromOriginalFile,
-      outlinedNondefiningFunctionDeclarationFromOutlinedFile));
+  if (outlinedNondefiningFunctionDeclarationFromOriginalFile != NULL &&
+      outlinedNondefiningFunctionDeclarationFromOriginalFile !=
+          outlinedNondefiningFunctionDeclarationFromOutlinedFile) {
+    replacementMap.insert(pair<SgNode *, SgNode *>(
+        outlinedNondefiningFunctionDeclarationFromOriginalFile,
+        outlinedNondefiningFunctionDeclarationFromOutlinedFile));
+  }
 
   // list<SgDeclarationStatement>::iterator i = declarationList.begin();
   // while (i != declarationList.end())
@@ -19482,6 +19889,55 @@ void SageInterface::appendStatementWithDependentDeclaration(
   //      cout<<"\n*******************************************\n"<<endl;
   //      cout<<"Inserting dependent decls:
   //      count="<<dependentDeclarationList.size()<<endl;
+  auto retargetPhysicalFileId = [outlined_physical_file_id](SgNode *root) {
+    if (root == NULL) {
+      return;
+    }
+
+    RoseAst ast(root);
+    for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
+      SgLocatedNode *locatedNode = isSgLocatedNode(*node);
+      if (locatedNode == NULL) {
+        continue;
+      }
+
+      Sg_File_Info *fileInfo = locatedNode->get_file_info();
+      if (fileInfo != NULL) {
+        fileInfo->set_physical_file_id(outlined_physical_file_id);
+      }
+    }
+  };
+  auto cloneAttachedPreprocessingInfo = [](SgNode *root) {
+    if (root == NULL) {
+      return;
+    }
+
+    RoseAst ast(root);
+    for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
+      SgLocatedNode *locatedNode = isSgLocatedNode(*node);
+      if (locatedNode == NULL) {
+        continue;
+      }
+
+      AttachedPreprocessingInfoType *infos =
+          locatedNode->getAttachedPreprocessingInfo();
+      if (infos == NULL || infos->empty()) {
+        continue;
+      }
+
+      AttachedPreprocessingInfoType *clonedInfos =
+          new AttachedPreprocessingInfoType;
+      for (AttachedPreprocessingInfoType::const_iterator info = infos->begin();
+           info != infos->end(); ++info) {
+        if (*info != NULL) {
+          clonedInfos->push_back(new PreprocessingInfo(**info));
+        }
+      }
+
+      locatedNode->set_attachedPreprocessingInfoPtr(clonedInfos);
+    }
+  };
+
   for (size_t i = 0; i < dependentDeclarationList.size(); i++) {
     SgDeclarationStatement *d =
         dependentDeclarationList[i]; // copies of dependent declarations
@@ -19497,6 +19953,7 @@ void SageInterface::appendStatementWithDependentDeclaration(
                      decl) != scope->getDeclarationList().end());
     scope->insert_statement(decl, d, /* bool inFront= */ true);
     d->set_parent(scope);
+    retargetPhysicalFileId(d);
 
     // For whatever type of declaration we add to the global scope in the new
     // separate file we have to add the required symbol information to the
@@ -19566,9 +20023,12 @@ void SageInterface::appendStatementWithDependentDeclaration(
 
       j++;
     }
+
+    cloneAttachedPreprocessingInfo(d);
   }
 
   // Add a message to the top of the outlined function that has been added
+  retargetPhysicalFileId(decl);
   addMessageStatement(decl, "/* OUTLINED FUNCTION */");
 
   // Insert the dependent declarations ahead of the input "decl".
@@ -19615,9 +20075,6 @@ void SageInterface::appendStatementWithDependentDeclaration(
   // to reset the pointers in the AST. As the replacement is computed the
   // pointer values that are marked in the replacement list for update are added
   // to the intermediateDeleteSet.
-
-  SgSourceFile *outlinedFile = SageInterface::getEnclosingSourceFile(scope);
-  ROSE_ASSERT(outlinedFile != NULL);
 
   // This replacement will be done over the entire file (parts of it are
   // redundant with what has already been done by the AST copy (so this step
@@ -21156,6 +21613,12 @@ public:
   }
 };
 
+bool hasLiveAstNodes() {
+  LiveNodeCollector collector;
+  traverseMemoryPoolVisitorPattern(collector);
+  return !collector.nodes.empty();
+}
+
 template <typename MapT> void clearAndShrink(MapT &map);
 
 void clearTokenStreamGlobalMaps() {
@@ -21198,15 +21661,24 @@ void clearTokenStreamGlobalMaps() {
   }
   Rose::representativeWhitespaceStatementMapOfMaps.clear();
 
+  std::unordered_set<MacroExpansion *> macro_expansions_to_delete;
   for (auto &entry : Rose::macroExpansionMapOfMaps) {
     std::map<SgStatement *, MacroExpansion *> *macroMap = entry.second;
     if (macroMap == nullptr) {
       continue;
     }
+    // A single macro expansion is intentionally indexed by every statement it
+    // covers. Collect unique expansion objects first so shared expansions are
+    // only destroyed once during teardown.
     for (auto &macroEntry : *macroMap) {
-      delete macroEntry.second;
+      if (macroEntry.second != nullptr) {
+        macro_expansions_to_delete.insert(macroEntry.second);
+      }
     }
     delete macroMap;
+  }
+  for (MacroExpansion *macroExpansion : macro_expansions_to_delete) {
+    delete macroExpansion;
   }
   Rose::macroExpansionMapOfMaps.clear();
 
@@ -21253,8 +21725,16 @@ void tearDownAstAtExit() {
     return;
   }
   SgProject *project = g_astTeardownProject;
+  if (project != nullptr && !SgNode::isLiveNode(project)) {
+    project = nullptr;
+  }
   if (project == nullptr) {
     project = findAnyLiveProject();
+  }
+  if (project == nullptr && !hasLiveAstNodes()) {
+    g_astTeardownComplete = true;
+    g_astTeardownProject = nullptr;
+    return;
   }
   SageInterface::tearDownAst(project);
 }
@@ -21975,7 +22455,7 @@ SageInterface::convertRefToInitializedName(SgNode *current,
   // object, rhs is its member function)
   else if (SgFunctionCallExp *func_call = isSgFunctionCallExp(current)) {
     return convertRefToInitializedName(func_call->get_function(), coarseGrain);
-  } else if (isSgIntVal(current)) {
+  } else if (isSgValueExp(current)) {
     // It is very rare, but sometimes a constant is treated as a
     // variable.  In which case we don't need an SgInitializdName
     return NULL;

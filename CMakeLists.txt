@@ -28,7 +28,6 @@
 #    on its own, so some of the logic is still necessarily in the level above.  There are exceptions to this rule,
 #    and they're pretty obvious when they occur--as when a single if() protects a whole bunch of add_subdirectory.
 
-
 ########################################################################################################################
 # Platform-independent settings
 ########################################################################################################################
@@ -338,7 +337,6 @@ set(ROSE_OPENMP_VERSION 202411 CACHE INTERNAL
   "OpenMP version used by ROSE-generated OpenMP interfaces")
 message(STATUS "ROSE OpenMP version: ${ROSE_OPENMP_VERSION}")
 
-
 ########################################################################################################################
 # ROSE version information
 ########################################################################################################################
@@ -423,7 +421,6 @@ install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/cmake/RoseConfigVersion.cmake
   DESTINATION ${LIB_INSTALL_DIR}/cmake/Rose
 )
-
 
 ########################################################################################################################
 # ROSETTA
@@ -798,7 +795,6 @@ list(APPEND CLANG_LIBS
   clangAPINotes
   clangTooling)
 
-
 set(_rose_clang_cpp_candidates
   clang-cpp
   clang-cpp${CLANG_VERSION_MAJOR}
@@ -913,7 +909,6 @@ if(ENABLE-TESTS-DIRECTORY)
       -DREX_BUILD_DIR=${CMAKE_BINARY_DIR}
       -P ${CMAKE_SOURCE_DIR}/cmake/check_no_autotools.cmake)
 endif()
-option(REX_ENABLE_DISABLED_TESTS "Enable tests marked disabled in CTest" OFF)
 option(ENABLE-TUTORIAL-DIRECTORY "Enable compilation and testing of the ROSE/tutorial directory" OFF)
 
 option(ENABLE-ADVANCED-WARNINGS "Support for an advanced uniform warning level for ROSE development" OFF)
@@ -1098,9 +1093,27 @@ if(ROSE_VALGRIND_REQUESTED)
     message(STATUS "Valgrind version: ${_rose_valgrind_version}")
   endif()
   set(ROSE_USE_VALGRIND 1)
+else()
+  unset(VALGRIND_BINARY)
+  find_program(VALGRIND_BINARY valgrind
+    PATHS ENV PATH /usr/bin /usr/local/bin
+    NO_CMAKE_FIND_ROOT_PATH)
+  if(VALGRIND_BINARY AND NOT VALGRIND_INCLUDE_PATH)
+    unset(VALGRIND_INCLUDE_PATH)
+    find_path(VALGRIND_INCLUDE_PATH valgrind/valgrind.h
+      PATHS /usr/include /usr/local/include
+      NO_DEFAULT_PATH)
+  endif()
+  if(VALGRIND_BINARY AND VALGRIND_INCLUDE_PATH)
+    set(ROSE_USE_VALGRIND 1)
+    message(STATUS "Auto-enabled Valgrind support: ${VALGRIND_BINARY}")
+  endif()
 endif()
 if(ROSE_USE_VALGRIND AND NOT VALGRIND_INCLUDE_PATH)
-  find_path(VALGRIND_INCLUDE_PATH valgrind/valgrind.h)
+  unset(VALGRIND_INCLUDE_PATH)
+  find_path(VALGRIND_INCLUDE_PATH valgrind/valgrind.h
+    PATHS /usr/include /usr/local/include
+    NO_DEFAULT_PATH)
 endif()
 if(ROSE_USE_VALGRIND AND NOT VALGRIND_INCLUDE_PATH)
   message(FATAL_ERROR "Valgrind headers not found. Set WITH-VALGRIND or WITH-VALGRIND-INCLUDE.")
@@ -1110,7 +1123,7 @@ if(VALGRIND_INCLUDE_PATH AND NOT EXISTS "${VALGRIND_INCLUDE_PATH}/valgrind/valgr
 endif()
 
 set(_rose_memcheck_valgrind "")
-if(ROSE_VALGRIND_REQUESTED)
+if(VALGRIND_BINARY)
   set(_rose_memcheck_valgrind "${VALGRIND_BINARY}")
 endif()
 if(NOT _rose_memcheck_valgrind)
@@ -1775,7 +1788,6 @@ if(VERBOSE)
   message(STATUS "CMAKE_RANLIB:                       ${CMAKE_RANLIB}")
 endif()
 
-
 ########################################################################################################################
 # ROSE headers are scattered throughout the source tree.
 ########################################################################################################################
@@ -1950,7 +1962,6 @@ if(NOT DEFINED CMAKE_INSTALL_RPATH_USE_LINK_PATH)
   set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
 endif()
 
-
 ########################################################################################################################
 # Recursion
 ########################################################################################################################
@@ -2070,7 +2081,6 @@ else()
   set(CXX_INCLUDE_STRING {\"none\"})
 endif()
 
-
 ########################################################################################################################
 # Private and public build-time configuration files
 ########################################################################################################################
@@ -2088,7 +2098,6 @@ configure_file(${ROSE_TOP_SRC_DIR}/rose_config.h.in.cmake ${ROSE_TOP_BINARY_DIR}
 # The rosePublicConfig.h header is generated from rose_config.h by copying certain CPP macros from rose_config.h to
 # rosePublicConfig.h and changing their names so as not to pollute the global name space.  See
 # scripts/publicConfiguration.pl for details.
-
 
 ########################################################################################################################
 # Ancillary ROSE components. These are things that are not part of the ROSE library.

@@ -1193,6 +1193,8 @@ SgFile *determineFileType(vector<string> argv, int &nextErrorCode,
         } else {
           if (CommandlineProcessing::isCFileNameSuffix(filenameExtension) ==
                   true ||
+              CommandlineProcessing::isAssemblerFileNameSuffix(
+                  filenameExtension) == true ||
               project->get_C_only() == true) {
             // file = new SgSourceFile ( argv,  project );
             SgSourceFile *sourceFile = new SgSourceFile(argv, project);
@@ -1648,11 +1650,11 @@ int SgProject::parse() {
   // never called by SgFile::callFrontEnd either.)
   // if ( !get_fileList().empty() && !get_useBackendOnly() )
 
-  // Now that file-id validation is hardened and AstPostProcessing filters
-  // out irrelevant system-header debris, we can run the pass for all
-  // frontends (Clang and legacy frontend). Keep the original guards that
-  // skip purely backend-only runs.
-  if ((get_fileList().empty() == false) && (get_useBackendOnly() == false)) {
+  // AstPostProcessing expects a coherent AST. If any frontend failed, the
+  // project may contain partial declarations that should be reported back to
+  // the caller as a frontend failure rather than pushed through global fixup.
+  if ((get_fileList().empty() == false) && (get_useBackendOnly() == false) &&
+      errorCode == 0) {
     AstPostProcessing(this);
   }
 
@@ -3142,6 +3144,18 @@ int SgSourceFile::build_C_and_Cxx_AST(vector<string> argv,
   // SG (7/9/2015) In case of a mixed language project, force case
   // sensitivity here.
   SageBuilder::symbol_table_case_insensitive_semantics = false;
+
+  const std::string filenameExtension =
+      StringUtility::fileNameSuffix(get_sourceFileNameWithPath());
+  if (CommandlineProcessing::isAssemblerFileNameSuffix(filenameExtension)) {
+    // Standalone assembler sources are backend passthrough inputs: ROSE does
+    // not build a C/C++ AST for them, but the driver must still accept the
+    // suffix and compile the original file in normal compile-only flows.
+    set_skip_unparse(true);
+    set_skip_commentsAndDirectives(true);
+    set_unparse_output_filename(get_sourceFileNameWithPath());
+    return 0;
+  }
 
   std::string frontEndCommandLineString;
   frontEndCommandLineString = std::string(argv[0]) + std::string(" ") +

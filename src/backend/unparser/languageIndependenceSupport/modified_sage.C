@@ -59,6 +59,11 @@ bool is_decl_attached_to_parent_scope(SgDeclarationStatement *decl) {
                    static_cast<SgStatement *>(decl)) != stmts.end();
 }
 
+std::vector<std::string> &active_extern_linkage_brace_stack() {
+  static std::vector<std::string> stack;
+  return stack;
+}
+
 } // namespace
 
 bool getOperatorFunctionName(SgExpression *expr, string &func_name) {
@@ -96,6 +101,27 @@ bool Unparse_MOD_SAGE::experimentalMode = false;
 int Unparse_MOD_SAGE::experimentalModeVerbose = 0;
 
 Unparse_MOD_SAGE::Unparse_MOD_SAGE(Unparser *unp) : unp(unp) {}
+
+void Unparse_MOD_SAGE::resetActiveExternLinkageBraceStack() {
+  active_extern_linkage_brace_stack().clear();
+}
+
+void Unparse_MOD_SAGE::pushActiveExternLinkageBraceLanguage(
+    const std::string &language) {
+  ROSE_ASSERT(!language.empty());
+  active_extern_linkage_brace_stack().push_back(language);
+}
+
+void Unparse_MOD_SAGE::popActiveExternLinkageBraceLanguage() {
+  std::vector<std::string> &stack = active_extern_linkage_brace_stack();
+  ROSE_ASSERT(!stack.empty());
+  stack.pop_back();
+}
+
+std::string Unparse_MOD_SAGE::getActiveExternLinkageBraceLanguage() {
+  const std::vector<std::string> &stack = active_extern_linkage_brace_stack();
+  return stack.empty() ? std::string() : stack.back();
+}
 
 //-----------------------------------------------------------------------------------
 //  void Unparse_MOD_SAGE::isOperator
@@ -1269,16 +1295,21 @@ void Unparse_MOD_SAGE::outputExternLinkageSpecifier(
   // && decl_stmt->get_linkage())
   if (decl_stmt->get_declarationModifier().get_storageModifier().isExtern() &&
       decl_stmt->get_linkage().empty() == false) {
+    const std::string active_linkage =
+        Unparse_MOD_SAGE::getActiveExternLinkageBraceLanguage();
+    const bool inside_matching_linkage_braces =
+        !active_linkage.empty() && active_linkage == decl_stmt->get_linkage();
+
 #if DEBUG_EXTERN
     printf("/* output extern keyword */ \n");
 #endif
-    if (info.get_extern_C_with_braces() == false) {
+    if (inside_matching_linkage_braces == false) {
       // curprint( "extern \"" + decl_stmt->get_linkage() + "\" ");
       if (decl_stmt->isExternBrace() == true) {
 #if DEBUG_EXTERN
         printf("/* output extern brace */ \n");
 #endif
-        ROSE_ASSERT(info.get_extern_C_with_braces() == false);
+        ROSE_ASSERT(inside_matching_linkage_braces == false);
 
         // DQ (11/15/2020): This fixes Cxx_tests/test2020_73.C.
         if (decl_stmt->get_declarationModifier().isFriend() == true) {
@@ -1313,8 +1344,8 @@ void Unparse_MOD_SAGE::outputExternLinkageSpecifier(
       }
     } else {
 #if DEBUG_EXTERN
-      printf("/* info.get_extern_C_with_braces() == true: check friend status "
-             "to output extern keyword only */ \n");
+      printf("/* active extern linkage matches declaration linkage: output "
+             "extern keyword only */ \n");
 #endif
       // DQ (8/17/2020): This is required for test2020_37.C but not for
       // test2020_28.C. curprint( "extern \"" + decl_stmt->get_linkage() + "\"
@@ -1620,6 +1651,17 @@ void Unparse_MOD_SAGE::outputTemplateSpecializationSpecifier(
           }
         }
       }
+    }
+
+    // Preprocessor directives can legally appear between the `template<>`
+    // specialization specifier and the declaration keyword (e.g., a conditional
+    // `#if ... template<> #endif class X<int>;`). Such directives are attached
+    // to the declaration as `inside` preprocessing info, but the generic
+    // statement driver only emits `before`/`after` lists. Emit the `inside`
+    // directives here so conditionals remain balanced and round-trip correctly.
+    if (unp != nullptr && unp->u_exprStmt != nullptr) {
+      unp->u_exprStmt->unparseAttachedPreprocessingInfo(
+          decl_stmt, info, PreprocessingInfo::inside);
     }
   }
 

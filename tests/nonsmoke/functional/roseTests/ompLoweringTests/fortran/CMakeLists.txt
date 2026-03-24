@@ -6,94 +6,19 @@ set(_omp_fortran_lowering_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_fortran_lowering_output_dir})
 
-set(OMP_FORTRAN_LOWERING_EXCLUDED_CASES)
-
 set(OMP_FORTRAN_ALL_CASES ${OPENMP_FORTRAN_TESTCODES})
-list(REMOVE_ITEM OMP_FORTRAN_ALL_CASES
-     ${OMP_FORTRAN_LOWERING_EXCLUDED_CASES})
-
-# These specimens are syntax/AST-oriented and are not valid, deterministic
-# runtime semantic checks under the LLVM Flang/OpenMP runtime toolchain.
-set(OMP_FORTRAN_SEMANTIC_EXCLUDED_CASES
-  allocate_predefined_modifiers.f90
-  allocate_user_defined_modifiers.f90
-  exampleA134f.f90
-  # LLVM Flang 22 still aborts on the original !$omp allocate directive,
-  # so semantic compare is not yet a valid gate for this specimen.
-  requires_dynamic_allocators_type.f90
-  single-copyprivate.f90)
-
-set(OMP_FORTRAN_SEMANTIC_CASES ${OMP_FORTRAN_ALL_CASES})
-list(REMOVE_ITEM OMP_FORTRAN_SEMANTIC_CASES
-     ${OMP_FORTRAN_SEMANTIC_EXCLUDED_CASES})
-
-set(OMP_FORTRAN_INVARIANT_EXCLUDED_CASES)
-
-set(OMP_FORTRAN_INVARIANT_CASES ${OMP_FORTRAN_SEMANTIC_CASES})
-list(REMOVE_ITEM OMP_FORTRAN_INVARIANT_CASES
-     ${OMP_FORTRAN_INVARIANT_EXCLUDED_CASES})
-
-# Translate-only specimens that intentionally do not enforce invariants.
-set(OMP_FORTRAN_TRANSLATE_INVARIANT_EXCLUDED_CASES
-  exampleA134f.f90)
+list(REMOVE_DUPLICATES OMP_FORTRAN_ALL_CASES)
 
 # Semantic runs execute lowered and original binaries multiple times and can
 # legitimately run longer when the full OMP lowering suite is parallelized.
+# The semantic harness itself downgrades to successful translation coverage
+# when the original source is not semantically executable under the current
+# Flang/OpenMP toolchain, so every specimen can be registered uniformly.
 set(OMP_FORTRAN_SEMANTIC_RUN_TIMEOUT_SECONDS 180)
 # run_fortran_semantic_compare.sh executes:
 # 2 binaries (orig/lowered) * 2 thread counts * 3 repeats = 12 total runs.
 set(OMP_FORTRAN_SEMANTIC_TOTAL_RUNS 12)
 set(OMP_FORTRAN_SEMANTIC_COMPILE_OVERHEAD_SECONDS 360)
-
-list(REMOVE_DUPLICATES OMP_FORTRAN_ALL_CASES)
-list(REMOVE_DUPLICATES OMP_FORTRAN_LOWERING_EXCLUDED_CASES)
-list(REMOVE_DUPLICATES OMP_FORTRAN_SEMANTIC_CASES)
-list(REMOVE_DUPLICATES OMP_FORTRAN_SEMANTIC_EXCLUDED_CASES)
-list(REMOVE_DUPLICATES OMP_FORTRAN_INVARIANT_CASES)
-list(REMOVE_DUPLICATES OMP_FORTRAN_INVARIANT_EXCLUDED_CASES)
-list(REMOVE_DUPLICATES OMP_FORTRAN_TRANSLATE_INVARIANT_EXCLUDED_CASES)
-
-foreach(specimen IN LISTS OMP_FORTRAN_LOWERING_EXCLUDED_CASES)
-  if(NOT specimen IN_LIST OPENMP_FORTRAN_TESTCODES)
-    message(FATAL_ERROR
-      "Fortran lowering exclusion '${specimen}' is not in OPENMP_FORTRAN_TESTCODES")
-  endif()
-endforeach()
-
-foreach(specimen IN LISTS OMP_FORTRAN_SEMANTIC_CASES)
-  if(NOT specimen IN_LIST OMP_FORTRAN_ALL_CASES)
-    message(FATAL_ERROR
-      "Fortran semantic case '${specimen}' is not in OMP_FORTRAN_ALL_CASES")
-  endif()
-endforeach()
-
-foreach(specimen IN LISTS OMP_FORTRAN_SEMANTIC_EXCLUDED_CASES)
-  if(NOT specimen IN_LIST OMP_FORTRAN_ALL_CASES)
-    message(FATAL_ERROR
-      "Fortran semantic exclusion '${specimen}' is not in OMP_FORTRAN_ALL_CASES")
-  endif()
-endforeach()
-
-foreach(specimen IN LISTS OMP_FORTRAN_INVARIANT_CASES)
-  if(NOT specimen IN_LIST OMP_FORTRAN_SEMANTIC_CASES)
-    message(FATAL_ERROR
-      "Fortran invariant case '${specimen}' is not in OMP_FORTRAN_SEMANTIC_CASES")
-  endif()
-endforeach()
-
-foreach(specimen IN LISTS OMP_FORTRAN_INVARIANT_EXCLUDED_CASES)
-  if(NOT specimen IN_LIST OMP_FORTRAN_SEMANTIC_CASES)
-    message(FATAL_ERROR
-      "Fortran invariant exclusion '${specimen}' is not in OMP_FORTRAN_SEMANTIC_CASES")
-  endif()
-endforeach()
-
-foreach(specimen IN LISTS OMP_FORTRAN_TRANSLATE_INVARIANT_EXCLUDED_CASES)
-  if(NOT specimen IN_LIST OMP_FORTRAN_SEMANTIC_EXCLUDED_CASES)
-    message(FATAL_ERROR
-      "Fortran translate-invariant exclusion '${specimen}' is not in OMP_FORTRAN_SEMANTIC_EXCLUDED_CASES")
-  endif()
-endforeach()
 
 set(_omp_fortran_compiler "")
 set(_omp_fortran_omp_include "")
@@ -149,28 +74,6 @@ if(enable-fortran)
   endif()
 endif()
 
-function(add_omp_fortran_translate_test specimen)
-  _omp_sanitize_name(_omp_name ${specimen})
-  set(_test_name omp_lowering_fortran_translate_${_omp_name})
-  set(_workdir ${_omp_fortran_lowering_output_dir}/translate/${_omp_name})
-  set(_translator_flags)
-  if(_omp_fortran_omp_include)
-    list(APPEND _translator_flags -I${_omp_fortran_omp_include})
-  endif()
-  add_test(
-    NAME ${_test_name}
-    WORKING_DIRECTORY ${_omp_fortran_lowering_output_dir}
-    COMMAND ${BASH_EXECUTABLE} ${OMP_LOWERING_TRANSLATE_SCRIPT}
-            $<TARGET_FILE:roseomp>
-            ${_omp_fortran_dir}/${specimen}
-            ${_workdir}
-            ${specimen}
-            ${_translator_flags})
-  set_tests_properties(${_test_name} PROPERTIES TIMEOUT 540)
-  set_property(TEST ${_test_name} APPEND PROPERTY LABELS
-               "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_TRANSLATE;OMPLOWERING_FORTRAN")
-endfunction()
-
 function(add_omp_fortran_semantic_test specimen)
   _omp_sanitize_name(_omp_name ${specimen})
   set(_test_name omp_lowering_fortran_semantic_${_omp_name})
@@ -217,22 +120,10 @@ endfunction()
 if(enable-fortran)
   foreach(specimen IN LISTS OMP_FORTRAN_ALL_CASES)
     _omp_sanitize_name(_omp_name ${specimen})
-    if(specimen IN_LIST OMP_FORTRAN_SEMANTIC_CASES)
-      add_omp_fortran_semantic_test(${specimen})
-      if(specimen IN_LIST OMP_FORTRAN_INVARIANT_CASES)
-        add_omp_fortran_invariant_test(
-          ${specimen}
-          omp_lowering_fortran_semantic_${_omp_name}
-          ${_omp_fortran_lowering_output_dir}/semantic/${_omp_name})
-      endif()
-    else()
-      add_omp_fortran_translate_test(${specimen})
-      if(NOT specimen IN_LIST OMP_FORTRAN_TRANSLATE_INVARIANT_EXCLUDED_CASES)
-        add_omp_fortran_invariant_test(
-          ${specimen}
-          omp_lowering_fortran_translate_${_omp_name}
-          ${_omp_fortran_lowering_output_dir}/translate/${_omp_name})
-      endif()
-    endif()
+    add_omp_fortran_semantic_test(${specimen})
+    add_omp_fortran_invariant_test(
+      ${specimen}
+      omp_lowering_fortran_semantic_${_omp_name}
+      ${_omp_fortran_lowering_output_dir}/semantic/${_omp_name})
   endforeach()
 endif()

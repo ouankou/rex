@@ -16,6 +16,42 @@ use strict;
 my $warning;
 my $nfail=0;
 
+sub report_conflicts {
+  my($index) = @_;
+  for my $dir (sort keys %$index) {
+    my @failures = map {[sort keys %$_]}
+                   grep {scalar(keys %$_) > 1}
+                   values %{$index->{$dir}};
+    if (@failures) {
+      print $desc unless $nfail++;
+      print "  $dir ($warning", join(" ", @$_), ")\n" for @failures;
+    }
+  }
+}
+
+sub check_git_tree {
+  open my $git, "-|", "git", "ls-tree", "-r", "--name-only", "--full-tree", "HEAD"
+      or return 0;
+
+  my %index;
+  while (my $path = <$git>) {
+    chomp $path;
+    next if $path eq "";
+
+    my @entries = split /\//, $path;
+    my $dir = ".";
+    for my $entry (@entries) {
+      my $bucket = ($index{$dir}{lc $entry} ||= {});
+      $bucket->{$entry} = 1;
+      $dir = $dir eq "." ? "./$entry" : "$dir/$entry";
+    }
+  }
+  close $git;
+
+  report_conflicts(\%index);
+  return 1;
+}
+
 sub checkdir {
   my($dir) = @_;
   opendir DIR, $dir or return;
@@ -43,6 +79,5 @@ sub checkdir {
   }
 }
 
-checkdir ".";
+check_git_tree() or checkdir(".");
 exit($nfail>0 ? ($warning?128:1) : 0);
-

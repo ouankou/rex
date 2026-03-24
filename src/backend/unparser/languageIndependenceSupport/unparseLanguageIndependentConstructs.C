@@ -51,6 +51,173 @@ SgVariableSymbol *unparse_omp_var_ref(UnparseLanguageIndependentConstructs &unp,
   }
   return sym;
 }
+
+bool starts_with_case_insensitive_keyword(const std::string &text, size_t pos,
+                                          const char *keyword) {
+  const size_t keyword_len = std::strlen(keyword);
+  if (pos + keyword_len > text.size()) {
+    return false;
+  }
+
+  for (size_t i = 0; i < keyword_len; ++i) {
+    const unsigned char lhs = static_cast<unsigned char>(text[pos + i]);
+    const unsigned char rhs = static_cast<unsigned char>(keyword[i]);
+    if (std::tolower(lhs) != std::tolower(rhs)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool is_directive_kind_token(const std::string &text, size_t pos,
+                             const char *keyword) {
+  const size_t keyword_len = std::strlen(keyword);
+  if (!starts_with_case_insensitive_keyword(text, pos, keyword)) {
+    return false;
+  }
+
+  const size_t end = pos + keyword_len;
+  return end == text.size() ||
+         std::isspace(static_cast<unsigned char>(text[end]));
+}
+
+bool ends_with_cpp_line_continuation(const std::string &line) {
+  const size_t end = line.find_last_not_of(" \t\r");
+  return end != std::string::npos && line[end] == '\\';
+}
+
+bool is_standalone_hash_line(const std::string &line) {
+  const size_t begin = line.find_first_not_of(" \t\r");
+  if (begin == std::string::npos || line[begin] != '#') {
+    return false;
+  }
+
+  return line.find_first_not_of(" \t\r", begin + 1) == std::string::npos;
+}
+
+bool is_openmp_or_openacc_pragma_line(const std::string &line) {
+  size_t pos = line.find_first_not_of(" \t");
+  if (pos == std::string::npos || line[pos] != '#') {
+    return false;
+  }
+
+  ++pos;
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos ||
+      !starts_with_case_insensitive_keyword(line, pos, "pragma")) {
+    return false;
+  }
+
+  pos += 6;
+  if (pos < line.size() &&
+      !std::isspace(static_cast<unsigned char>(line[pos]))) {
+    return false;
+  }
+
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos) {
+    return false;
+  }
+
+  return is_directive_kind_token(line, pos, "omp") ||
+         is_directive_kind_token(line, pos, "acc");
+}
+
+std::string
+sanitize_openmp_openacc_skipped_token_text(const std::string &text) {
+  std::string sanitized;
+  size_t line_start = 0;
+  bool skip_pragma_continuation = false;
+
+  while (line_start < text.size()) {
+    const size_t line_end = text.find('\n', line_start);
+    const size_t past_line_end =
+        line_end == std::string::npos ? text.size() : line_end + 1;
+    const std::string line =
+        text.substr(line_start, past_line_end - line_start);
+
+    std::string logical_line = line;
+    if (!logical_line.empty() && logical_line.back() == '\n') {
+      logical_line.pop_back();
+    }
+    if (!logical_line.empty() && logical_line.back() == '\r') {
+      logical_line.pop_back();
+    }
+
+    const bool has_cpp_continuation =
+        ends_with_cpp_line_continuation(logical_line);
+    bool skip_line = skip_pragma_continuation;
+    if (!skip_line) {
+      skip_line = is_standalone_hash_line(logical_line) ||
+                  is_openmp_or_openacc_pragma_line(logical_line);
+    }
+
+    if (!skip_line) {
+      sanitized += line;
+    }
+
+    skip_pragma_continuation =
+        skip_line && (skip_pragma_continuation || has_cpp_continuation);
+    if (skip_pragma_continuation && !has_cpp_continuation) {
+      skip_pragma_continuation = false;
+    }
+
+    line_start = past_line_end;
+  }
+
+  return sanitized;
+}
+
+class LinewrapGuard {
+public:
+  explicit LinewrapGuard(Unparser *unp)
+      : unp_(unp),
+        saved_linewrap_(unp != nullptr ? unp->cur.get_linewrap() : 0) {
+    if (unp_ != nullptr) {
+      unp_->cur.set_linewrap(-1);
+    }
+  }
+
+  ~LinewrapGuard() {
+    if (unp_ != nullptr) {
+      unp_->cur.set_linewrap(saved_linewrap_);
+    }
+  }
+
+private:
+  Unparser *unp_ = nullptr;
+  int saved_linewrap_ = 0;
+};
+
+void collect_omp_clause_items(SgExpression *expr,
+                              std::vector<SgExpression *> &items) {
+  if (expr == nullptr) {
+    return;
+  }
+
+  if (SgCommaOpExp *comma = isSgCommaOpExp(expr)) {
+    collect_omp_clause_items(comma->get_lhs_operand(), items);
+    collect_omp_clause_items(comma->get_rhs_operand(), items);
+    return;
+  }
+
+  items.push_back(expr);
+}
+
+std::vector<SgExpression *>
+flatten_omp_clause_items(SgExprListExp *expressions) {
+  std::vector<SgExpression *> items;
+  if (expressions == nullptr) {
+    return items;
+  }
+
+  for (SgExpression *expr : expressions->get_expressions()) {
+    collect_omp_clause_items(expr, items);
+  }
+
+  return items;
+}
 } // namespace
 
 #define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
@@ -969,12 +1136,16 @@ bool UnparseLanguageIndependentConstructs::canBeUnparsedFromTokenStream(
     return false;
   }
 
+  if (sourceFile->get_openmp() || sourceFile->get_openacc()) {
+    // OpenMP/OpenACC tests expect directive spelling to come from the AST, not
+    // from preserved token text. Token-stream unparsing can retain inactive
+    // branches, original spacing, and indentation from commented directives,
+    // which makes the output unstable across translation paths.
+    return false;
+  }
+
   if (sourceFile->get_Fortran_only() || sourceFile->get_F90_only() ||
       sourceFile->get_CoArrayFortran_only()) {
-    if (sourceFile->get_openmp() || sourceFile->get_openacc()) {
-      // Avoid token-stream unparsing when directive comments are present.
-      return false;
-    }
     bool isOpenMP = (isSgOmpExecStatement(stmt) != NULL) ||
                     SageInterface::isOmpStatement(stmt);
     if (!isOpenMP) {
@@ -2830,10 +3001,13 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
                unparseViaTokenStream ? "true" : "false");
 #endif
 
-        // DQ (5/15/2021): I would like to simplify the token based unparsing by
-        // removing the secondary mechanism to overrule the
-        // associatedFrontierNode.
-        ROSE_ASSERT(frontier_nodes.size() > 0);
+        // Detached unparseToString() calls can reach declarations in files that
+        // have token-stream unparsing enabled but no computed frontier map.
+        // In that case we must fall back to AST unparsing instead of asserting.
+        if (unparseViaTokenStream == true) {
+          ROSE_ASSERT(frontier_nodes.size() > 0);
+          ROSE_ASSERT(associatedFrontierNode != NULL);
+        }
 
 #if DEBUG_UNPARSE_STATEMENT
         printf("In UnparseLanguageIndependentConstructs::unparseStatement(): "
@@ -4642,20 +4816,29 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     SgClinkageStartStatement *clinkage_start = isSgClinkageStartStatement(stmt);
     SgClinkageEndStatement *clinkage_end = isSgClinkageEndStatement(stmt);
     bool track_extern_marker = false;
+    std::string linkage_language;
     if (clinkage_start != NULL || clinkage_end != NULL) {
       track_extern_marker = statementFromFile(stmt, getFileName(), info);
+      if (track_extern_marker) {
+        linkage_language = clinkage_start != NULL
+                               ? clinkage_start->get_languageSpecifier()
+                               : clinkage_end->get_languageSpecifier();
+      }
     }
 
     unparseStatement(stmt, info);
 
     if (track_extern_marker) {
-      const bool start_is_c = clinkage_start != NULL &&
-                              clinkage_start->get_languageSpecifier() == "C";
-      const bool end_is_c =
-          clinkage_end != NULL && clinkage_end->get_languageSpecifier() == "C";
-      if (start_is_c) {
+      if (clinkage_start != NULL) {
+        Unparse_MOD_SAGE::pushActiveExternLinkageBraceLanguage(
+            linkage_language);
+      } else {
+        Unparse_MOD_SAGE::popActiveExternLinkageBraceLanguage();
+      }
+
+      if (linkage_language == "C" && clinkage_start != NULL) {
         ++extern_brace_depth;
-      } else if (end_is_c) {
+      } else if (linkage_language == "C" && clinkage_end != NULL) {
         if (extern_brace_depth > 0) {
           --extern_brace_depth;
         }
@@ -4669,6 +4852,8 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       SgStatement * stmt, SgUnparse_Info & info) {
     SgGlobal *globalScope = isSgGlobal(stmt);
     ASSERT_not_null(globalScope);
+
+    Unparse_MOD_SAGE::resetActiveExternLinkageBraceStack();
 
 #if OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES || 0
     printf("global scope file = %s \n",
@@ -4782,7 +4967,9 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           // whitespace of the first statement to be unparsed.
           // unparseStatementFromTokenStream(globalScope, first_statement,
           // e_token_subsequence_start, e_leading_whitespace_start, info);
-          if (first_statement == firstDeclarationOfGlobalScope) {
+          if (first_statement == firstDeclarationOfGlobalScope &&
+              unparseAttachedPreprocessingInfoUsingTokenStream(
+                  first_statement, info, PreprocessingInfo::before)) {
 #if DEBUG_USING_CURPRINT
             curprint("\n/* In unparseGlobalStmt(): Calling "
                      "unparseStatementFromTokenStream(globalScope,first_"
@@ -5032,6 +5219,18 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       return;
     }
 
+    // When token-stream unparsing is active, file-level directives/comments
+    // attached to SgGlobal are already emitted from token ranges. Re-emitting
+    // non-transformation entries from the AST causes duplication at EOF.
+    bool suppressNonTransformedGlobalPreproc = false;
+    if (isSgGlobal(stmt) != NULL) {
+      SgSourceFile *currentSourceFile = info.get_current_source_file();
+      if (currentSourceFile != NULL &&
+          currentSourceFile->get_unparse_tokens() == true) {
+        suppressNonTransformedGlobalPreproc = true;
+      }
+    }
+
     const bool is_fixed_form_fortran =
         (unp->currentFile != nullptr && unp->currentFile->get_Fortran_only() &&
          unp->currentFile->get_outputFormat() ==
@@ -5047,7 +5246,36 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         if (marker == 'C' || marker == 'c' || marker == '*') {
           text[pos] = '!';
         }
+        if (marker == '!' || marker == 'C' || marker == 'c' || marker == '*') {
+          // Fixed-form full-line comments must begin in column 1. Leaving
+          // leading whitespace here makes the line wrapper treat the comment as
+          // continued code and inject a bogus continuation marker.
+          text.erase(0, pos);
+        }
       }
+      return text;
+    };
+    auto normalize_preprocessing_comment = [&](const std::string &comment) {
+      std::string text = normalize_fortran_comment(comment);
+      size_t pos = text.find_first_not_of(" \t");
+      if (pos == std::string::npos) {
+        return text;
+      }
+
+      const std::string trimmed = text.substr(pos);
+      std::string lowered = trimmed;
+      for (char &ch : lowered) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+      }
+
+      const bool is_commented_pragma =
+          ((trimmed.rfind("//", 0) == 0) || (trimmed.rfind("/*", 0) == 0)) &&
+          (lowered.find("#pragma omp") != std::string::npos ||
+           lowered.find("#pragma acc") != std::string::npos);
+      if (is_commented_pragma) {
+        return trimmed;
+      }
+
       return text;
     };
     auto marker_output_eligible = [&](SgStatement *marker) -> bool {
@@ -5131,6 +5359,14 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       ROSE_ASSERT((*i)->getRelativePosition() == PreprocessingInfo::before ||
                   (*i)->getRelativePosition() == PreprocessingInfo::after ||
                   (*i)->getRelativePosition() == PreprocessingInfo::inside);
+
+      if (suppressNonTransformedGlobalPreproc == true) {
+        Sg_File_Info *preprocFileInfo = (*i)->get_file_info();
+        if (preprocFileInfo == NULL ||
+            preprocFileInfo->isTransformation() == false) {
+          continue;
+        }
+      }
 
       // Check and see if the info object would indicate that the statement
       // would be printed, if not then don't print the comments associated with
@@ -5234,7 +5470,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           case PreprocessingInfo::C_StyleComment:
           case PreprocessingInfo::CplusplusStyleComment:
             if (!info.SkipComments()) {
-              curprint(normalize_fortran_comment((*i)->getString()));
+              curprint(normalize_preprocessing_comment((*i)->getString()));
             }
             break;
 
@@ -5258,7 +5494,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           PreprocessingInfo::DirectiveType dtype = (*i)->getTypeOfDirective();
           if (dtype == PreprocessingInfo::CplusplusStyleComment) {
             if (!info.SkipComments()) {
-              curprint(normalize_fortran_comment((*i)->getString()));
+              curprint(normalize_preprocessing_comment((*i)->getString()));
             }
             continue;
           }
@@ -5283,7 +5519,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           case PreprocessingInfo::F90StyleComment:
           case PreprocessingInfo::C_StyleComment:
             if (!info.SkipComments()) {
-              curprint(normalize_fortran_comment((*i)->getString()));
+              curprint(normalize_preprocessing_comment((*i)->getString()));
             }
             break;
 
@@ -5335,18 +5571,36 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           case PreprocessingInfo::CpreprocessorLineDeclaration:
             // AS(120506) Added support for skipped tokens in the
             // token stream.
-          case PreprocessingInfo::CSkippedToken:
+          case PreprocessingInfo::CSkippedToken: {
+            std::string directive_text = (*i)->getString();
+            if (dtype == PreprocessingInfo::CSkippedToken) {
+              SgSourceFile *currentSourceFile = info.get_current_source_file();
+              if (currentSourceFile != NULL &&
+                  (currentSourceFile->get_openmp() ||
+                   currentSourceFile->get_openacc())) {
+                if (!(*i)->isTransformation()) {
+                  break;
+                }
+
+                directive_text =
+                    sanitize_openmp_openacc_skipped_token_text(directive_text);
+                if (directive_text.empty()) {
+                  break;
+                }
+              }
+            }
             if (!info.SkipComments()) {
               if (unp->opt.get_unparse_includes_opt() == true) {
                 curprint(string("// (previously processed: ignored) ") +
-                         (*i)->getString());
+                         directive_text);
               } else {
-                curprint((*i)->getString());
+                curprint(directive_text);
               }
             } else {
-              curprint((*i)->getString());
+              curprint(directive_text);
             }
             break;
+          }
 
             // Comment out these declarations where they occur because we don't
             // need them (they have already been evaluated by the front-end and
@@ -9875,17 +10129,20 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       dims = m_clause->get_array_dimensions();
     }
 
-    // unparse variable list then
-    SgExpressionPtrList::iterator p =
-        c->get_variables()->get_expressions().begin();
-
-    while (p != c->get_variables()->get_expressions().end()) {
+    // Unparse clause items in AST order. OpenMP frontends can legally store
+    // top-level list items as comma expressions; flatten them here so clause
+    // punctuation is emitted consistently by the OpenMP unparser.
+    std::vector<SgExpression *> clause_items =
+        flatten_omp_clause_items(c->get_variables());
+    for (size_t item_index = 0; item_index < clause_items.size();
+         ++item_index) {
+      SgExpression *item = clause_items[item_index];
       // We now try to put array reference expression into variable list.
-      if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(*p)) {
+      if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(item)) {
         // curprint (aref->unparseToString()); // This does not work!
         SgUnparse_Info ninfo(info);
         unparseExpression(aref, ninfo);
-      } else if (SgVarRefExp *vref = isSgVarRefExp(*p)) {
+      } else if (SgVarRefExp *vref = isSgVarRefExp(item)) {
         SgVariableSymbol *sym = unparse_omp_var_ref(*this, vref, info);
         if (sym != NULL && is_map) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
@@ -10028,15 +10285,10 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
         // OpenMP 5.x list items can be general lvalue expressions
         // (e.g., function calls returning references, dereference expressions).
         SgUnparse_Info ninfo(info);
-        unparseExpression(*p, ninfo);
+        unparseExpression(item, ninfo);
       }
 
-      // output the optional dimension info for map() variable
-      // Move to the next argument
-      p++;
-
-      // Check if this is the last argument (output a "," separator if not)
-      if (p != c->get_variables()->get_expressions().end()) {
+      if (item_index + 1 < clause_items.size()) {
         curprint(",");
       }
     }
@@ -10136,16 +10388,17 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
       dims = m_clause->get_array_dimensions();
     }
 
-    // unparse variable list then
-    SgExpressionPtrList::iterator p =
-        c->get_variables()->get_expressions().begin();
-    while (p != c->get_variables()->get_expressions().end()) {
+    std::vector<SgExpression *> clause_items =
+        flatten_omp_clause_items(c->get_variables());
+    for (size_t item_index = 0; item_index < clause_items.size();
+         ++item_index) {
+      SgExpression *item = clause_items[item_index];
       // We now try to put array reference expression into variable list.
-      if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(*p)) {
+      if (SgPntrArrRefExp *aref = isSgPntrArrRefExp(item)) {
         // curprint (aref->unparseToString()); // This does not work!
         SgUnparse_Info ninfo(info);
         unparseExpression(aref, ninfo);
-      } else if (SgVarRefExp *vref = isSgVarRefExp(*p)) {
+      } else if (SgVarRefExp *vref = isSgVarRefExp(item)) {
         SgVariableSymbol *sym = unparse_omp_var_ref(*this, vref, info);
         if (sym != NULL && is_map) {
           std::vector<std::pair<SgExpression *, SgExpression *>> bounds =
@@ -10202,17 +10455,11 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
           } // end if has bounds
         }
       } else {
-        cerr << "Unhandled type of variable in a varlist:" << (*p)->class_name()
-             << endl;
-        ROSE_ABORT();
+        SgUnparse_Info ninfo(info);
+        unparseExpression(item, ninfo);
       }
 
-      // output the optional dimension info for map() variable
-      // Move to the next argument
-      p++;
-
-      // Check if this is the last argument (output a "," separator if not)
-      if (p != c->get_variables()->get_expressions().end()) {
+      if (item_index + 1 < clause_items.size()) {
         curprint(",");
       }
     }
@@ -11278,6 +11525,7 @@ int UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
   void UnparseLanguageIndependentConstructs::unparseOmpGenericStatement(
       SgStatement * stmt, SgUnparse_Info & info) {
     ASSERT_not_null(stmt);
+    LinewrapGuard disable_linewrap(unp);
 
     static const char *const kOmpCombinedParallelNestedVariantAttrName =
         "omp_combined_parallel_nested_variant";

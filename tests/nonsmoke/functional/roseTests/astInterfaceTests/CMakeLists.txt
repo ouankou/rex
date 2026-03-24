@@ -110,6 +110,12 @@ install(TARGETS ${bin_programs} DESTINATION bin)
 
 # Common test flags
 set(TEST_CXXFLAGS -rose:verbose 0 -g3)
+set(_ast_interface_fortran_output_dir
+  ${CMAKE_CURRENT_BINARY_DIR}/test-output/fortran)
+file(MAKE_DIRECTORY ${_ast_interface_fortran_output_dir})
+set(_ast_interface_fortran_flags
+  -I${_ast_interface_fortran_output_dir}
+  -outputdir ${_ast_interface_fortran_output_dir})
 
 # Test definitions
 # Group 1: Tests that follow the pattern: executable inputfile.C -> rose_inputfile.C
@@ -171,7 +177,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
   set(_disable_interface_coverage TRUE)
 endif()
 if(_disable_interface_coverage)
-  set_tests_properties(astInterface_interfaceFunctionCoverage PROPERTIES DISABLED TRUE)
 endif()
 
 # buildFunctionDeclaration test (uses inputBlank1.C)
@@ -281,7 +286,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
   set(_disable_deep_delete TRUE)
 endif()
 if(_disable_deep_delete)
-  set_tests_properties(astInterface_deepDelete PROPERTIES DISABLED TRUE)
 endif()
 
 # loopUnrolling tests (multiple tests with different parameters)
@@ -377,7 +381,9 @@ if(ENABLE-FORTRAN)
   foreach(test ${fortran_programs})
     add_test(
       NAME astInterface_${test}
-      COMMAND ${test} ${TEST_CXXFLAGS} -c ${CMAKE_CURRENT_SOURCE_DIR}/input${test}.f
+      WORKING_DIRECTORY ${_ast_interface_fortran_output_dir}
+      COMMAND ${test} ${TEST_CXXFLAGS} ${_ast_interface_fortran_flags}
+              -c ${CMAKE_CURRENT_SOURCE_DIR}/input${test}.f
     )
   endforeach()
 endif()
@@ -391,14 +397,3 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unitTests/CMakeLists.txt)
   add_subdirectory(unitTests)
 endif()
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_astInterfaceTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=astInterface_abiStuffTest\;astInterface_deepDelete\;astInterface_movePreprocessingInfo
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_astInterfaceTests_check-local PROPERTIES DEPENDS "astInterface_abiStuffTest;astInterface_deepDelete;astInterface_movePreprocessingInfo" )

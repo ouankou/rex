@@ -97,14 +97,3 @@ foreach(specimen IN LISTS _slice_specimens)
   list(APPEND _slice_chain_tests ${_chain_test})
 endforeach()
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_staticInterproceduralSlicingTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_slice_chain_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_staticInterproceduralSlicingTests_check-local PROPERTIES DEPENDS "${_slice_chain_tests}" )

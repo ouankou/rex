@@ -26,6 +26,11 @@ set(OUTLINE_C_TESTS
   zeroParameter.c
 )
 
+# Legacy C specimens that rely on GNU89 semantics.
+set(OUTLINE_GNU89_C_TESTS
+  jacobi_rose_outline.c
+)
+
 set(OUTLINE_CXX_TESTS
   array2.cpp
   moreTest2.cpp
@@ -673,13 +678,17 @@ string(JOIN " " _outline_noswitch_str ${_outline_noswitch_args})
 foreach(specimen IN LISTS OUTLINE_C_TESTS)
   string(REPLACE "." "_" _name ${specimen})
   set(_target classic_${specimen}.passed)
+  set(_specimen_lang_flags "")
+  if(specimen IN_LIST OUTLINE_GNU89_C_TESTS)
+    set(_specimen_lang_flags "-std=gnu89")
+  endif()
   add_test(
     NAME outline_classic_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="outline classic ${specimen} [${_target}]"
       USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} -rose:outline:enable_classic -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_specimen_lang_flags} -rose:outline:enable_classic -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       ${_target}
   )
@@ -705,13 +714,17 @@ endforeach()
 foreach(specimen IN LISTS OUTLINE_C_TESTS)
   string(REPLACE "." "_" _name ${specimen})
   set(_target inplace_${specimen}.passed)
+  set(_specimen_lang_flags "")
+  if(specimen IN_LIST OUTLINE_GNU89_C_TESTS)
+    set(_specimen_lang_flags "-std=gnu89")
+  endif()
   add_test(
     NAME outline_inplace_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="outline in-place ${specimen} [${_target}]"
       USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} -rose:outline:temp_variable -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_specimen_lang_flags} -rose:outline:temp_variable -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       ${_target}
   )
@@ -722,13 +735,17 @@ set(_outline_c_and_cxx_tests ${OUTLINE_C_TESTS} ${OUTLINE_CXX_TESTS})
 foreach(specimen IN LISTS _outline_c_and_cxx_tests)
   string(REPLACE "." "_" _name ${specimen})
   set(_target tofile_${specimen}.passed)
+  set(_specimen_lang_flags "")
+  if(specimen IN_LIST OUTLINE_GNU89_C_TESTS)
+    set(_specimen_lang_flags "-std=gnu89")
+  endif()
   add_test(
     NAME outline_tofile_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="outline new-file ${specimen} [${_target}]"
       USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} -rose:outline:new_file -rose:outline:temp_variable -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_specimen_lang_flags} -rose:outline:new_file -rose:outline:temp_variable -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       ${_target}
   )
@@ -738,13 +755,17 @@ endforeach()
 foreach(specimen IN LISTS _outline_c_and_cxx_tests)
   string(REPLACE "." "_" _name ${specimen})
   set(_target default_${specimen}.passed)
+  set(_specimen_lang_flags "")
+  if(specimen IN_LIST OUTLINE_GNU89_C_TESTS)
+    set(_specimen_lang_flags "-std=gnu89")
+  endif()
   add_test(
     NAME outline_default_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="outline default ${specimen} [${_target}]"
       USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_outline_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_specimen_lang_flags} ${_outline_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       ${_target}
   )
@@ -839,13 +860,17 @@ string(JOIN " " _dlopen_flags_str ${_dlopen_flags})
 foreach(specimen IN LISTS _outline_c_and_cxx_tests)
   string(REPLACE "." "_" _name ${specimen})
   set(_target dlopen_${specimen}.passed)
+  set(_specimen_lang_flags "")
+  if(specimen IN_LIST OUTLINE_GNU89_C_TESTS)
+    set(_specimen_lang_flags "-std=gnu89")
+  endif()
   add_test(
     NAME outline_dlopen_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="outline dlopen ${specimen} [${_target}]"
       USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_dlopen_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_specimen_lang_flags} ${_dlopen_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       ${_target}
   )
@@ -860,13 +885,17 @@ string(JOIN " " _dlopen2_flags_str ${_dlopen2_flags})
 foreach(specimen IN LISTS _outline_c_and_cxx_tests)
   string(REPLACE "." "_" _name ${specimen})
   set(_target dlopen2_${specimen}.passed)
+  set(_specimen_lang_flags "")
+  if(specimen IN_LIST OUTLINE_GNU89_C_TESTS)
+    set(_specimen_lang_flags "-std=gnu89")
+  endif()
   add_test(
     NAME outline_dlopen2_${_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${_rth}
       TITLE="outline dlopen2 ${specimen} [${_target}]"
       USE_SUBDIR=yes
-      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_dlopen2_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
+      CMD="$<TARGET_FILE:outline> ${_outline_includes_str} ${_specimen_lang_flags} ${_dlopen2_flags_str} -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}"
       ${_exit_status}
       ${_target}
   )
@@ -990,26 +1019,4 @@ add_test(
   COMMAND bash -c
     "${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_class_ODR_violation_main.C && ${CMAKE_CXX_COMPILER} -c ${CMAKE_CURRENT_SOURCE_DIR}/test_class_ODR_violation_outlined.C && ${CMAKE_CXX_COMPILER} test_class_ODR_violation_main.o test_class_ODR_violation_outlined.o -o test_class_ODR_violation"
 )
-set_tests_properties(outline_test_class_ODR_violation PROPERTIES DISABLED TRUE)
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_astOutliningTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=injectOutlinePragmas\;outlineRandom\;outline_classic_array1_c\;outline_classic_arrayParameter_c\;outline_classic_arrayRef_c\;outline_classic_jacobi_rose_outline_c\;outline_classic_moreTest0_c\;outline_classic_moreTest1_c\;outline_classic_moreTest8_c\;outline_classic_openmp_jacobi_c\;outline_classic_print_c\;outline_classic_variableCloning_c\;outline_classic_zeroParameter_c\;outline_complexStruct\;outline_default_array1_c\;outline_default_array2_cpp\;outline_default_arrayParameter_c\;outline_default_arrayRef_c\;outline_default_charStar_cpp\;outline_default_const-global_cpp\;outline_default_jacobi_rose_outline_c\;outline_default_moreTest0_c\;outline_default_moreTest1_c\;outline_default_moreTest6_cpp\;outline_default_moreTest7_cpp\;outline_default_moreTest8_c\;outline_default_print_c\;outline_default_reference_cpp\;outline_default_variableCloning_c\;outline_default_zeroParameter_c\;outline_dlopen2_array1_c\;outline_dlopen2_array2_cpp\;outline_dlopen2_arrayParameter_c\;outline_dlopen2_arrayRef_c\;outline_dlopen2_charStar_cpp\;outline_dlopen2_const-global_cpp\;outline_dlopen2_jacobi_rose_outline_c\;outline_dlopen2_moreTest0_c\;outline_dlopen2_moreTest1_c\;outline_dlopen2_moreTest6_cpp\;outline_dlopen2_moreTest7_cpp\;outline_dlopen2_moreTest8_c\;outline_dlopen2_print_c\;outline_dlopen2_reference_cpp\;outline_dlopen2_variableCloning_c\;outline_dlopen2_zeroParameter_c\;outline_dlopen3_charStar_cpp\;outline_dlopen3_ft_cfftz_cpp\;outline_dlopen3_print_cpp\;outline_dlopen3_test_119_2021_cpp\;outline_dlopen3_test_120_2020_cpp\;outline_dlopen3_test_121_2020_cpp\;outline_dlopen3_test_20_2019_cpp\;outline_dlopen3_test_26_v1_2020_cpp\;outline_dlopen3_test_37_2020_cpp\;outline_dlopen3_test_42_2020_cpp\;outline_dlopen3_test_52_cpp\;outline_dlopen3_test_61_2020_cpp\;outline_dlopen4_ft_cfftz_omp_cpp\;outline_dlopen5_ft_cfftz_omp2_cpp\;outline_dlopen_array1_c\;outline_dlopen_array2_cpp\;outline_dlopen_arrayParameter_c\;outline_dlopen_arrayRef_c\;outline_dlopen_charStar_cpp\;outline_dlopen_const-global_cpp\;outline_dlopen_jacobi_rose_outline_c\;outline_dlopen_moreTest0_c\;outline_dlopen_moreTest1_c\;outline_dlopen_moreTest6_cpp\;outline_dlopen_moreTest7_cpp\;outline_dlopen_moreTest8_c\;outline_dlopen_print_c\;outline_dlopen_reference_cpp\;outline_dlopen_variableCloning_c\;outline_dlopen_zeroParameter_c\;outline_dlopensimple_charStar_cpp\;outline_dlopensimple_ft_cfftz_cpp\;outline_dlopensimple_print_cpp\;outline_dlopensimple_test_119_2021_cpp\;outline_dlopensimple_test_120_2020_cpp\;outline_dlopensimple_test_121_2020_cpp\;outline_dlopensimple_test_20_2019_cpp\;outline_dlopensimple_test_26_v1_2020_cpp\;outline_dlopensimple_test_37_2020_cpp\;outline_dlopensimple_test_42_2020_cpp\;outline_dlopensimple_test_52_cpp\;outline_dlopensimple_test_61_2020_cpp\;outline_inplace_array1_c\;outline_inplace_arrayParameter_c\;outline_inplace_arrayRef_c\;outline_inplace_jacobi_rose_outline_c\;outline_inplace_moreTest0_c\;outline_inplace_moreTest1_c\;outline_inplace_moreTest8_c\;outline_inplace_print_c\;outline_inplace_variableCloning_c\;outline_inplace_zeroParameter_c\;outline_noswitch_array-variable_f\;outline_noswitch_array_f\;outline_noswitch_assignment_f\;outline_noswitch_assignmentmain2_f\;outline_noswitch_assignmentmain_f\;outline_noswitch_blockdo_f90\;outline_noswitch_contains_f90\;outline_noswitch_dimension_f\;outline_noswitch_doloop3_f90\;outline_noswitch_doloop4_f90\;outline_noswitch_doloop_f\;outline_noswitch_doloop_nested_f90\;outline_noswitch_format_f\;outline_noswitch_function2_f\;outline_noswitch_function_f\;outline_noswitch_hello_f\;outline_noswitch_integer_f\;outline_noswitch_intent_f90\;outline_noswitch_lengthlimit_f\;outline_noswitch_loan_f\;outline_noswitch_moduleParameter_f90\;outline_noswitch_parameter2_f\;outline_noswitch_parameter_f\;outline_noswitch_stop1_f90\;outline_noswitch_stop_f90\;outline_noswitch_subroutine_f90\;outline_noswitch_ugoto_f\;outline_noswitch_write_f\;outline_seq7a_test2001_02_C\;outline_seq7a_test2001_03_C\;outline_seq7a_test2004_116_C\;outline_seq7b_array-variable_f\;outline_seq7b_array_f\;outline_seq7b_assignment_f\;outline_seq7b_assignmentmain2_f\;outline_seq7b_assignmentmain_f\;outline_seq7b_blockdo_f90\;outline_seq7b_contains_f90\;outline_seq7b_dimension_f\;outline_seq7b_doloop3_f90\;outline_seq7b_doloop4_f90\;outline_seq7b_doloop_f\;outline_seq7b_doloop_nested_f90\;outline_seq7b_format_f\;outline_seq7b_function2_f\;outline_seq7b_function_f\;outline_seq7b_hello_f\;outline_seq7b_integer_f\;outline_seq7b_intent_f90\;outline_seq7b_lengthlimit_f\;outline_seq7b_loan_f\;outline_seq7b_moduleParameter_f90\;outline_seq7b_parameter2_f\;outline_seq7b_parameter_f\;outline_seq7b_stop1_f90\;outline_seq7b_stop_f90\;outline_seq7b_subroutine_f90\;outline_seq7b_ugoto_f\;outline_seq7b_write_f\;outline_test_inline_2022_6\;outline_tofile_array1_c\;outline_tofile_array2_cpp\;outline_tofile_arrayParameter_c\;outline_tofile_arrayRef_c\;outline_tofile_charStar_cpp\;outline_tofile_const-global_cpp\;outline_tofile_jacobi_rose_outline_c\;outline_tofile_moreTest0_c\;outline_tofile_moreTest1_c\;outline_tofile_moreTest6_cpp\;outline_tofile_moreTest7_cpp\;outline_tofile_moreTest8_c\;outline_tofile_print_c\;outline_tofile_reference_cpp\;outline_tofile_variableCloning_c\;outline_tofile_zeroParameter_c
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_astOutliningTests_check-local PROPERTIES DEPENDS "injectOutlinePragmas;outlineRandom;outline_classic_array1_c;outline_classic_arrayParameter_c;outline_classic_arrayRef_c;outline_classic_jacobi_rose_outline_c;outline_classic_moreTest0_c;outline_classic_moreTest1_c;outline_classic_moreTest8_c;outline_classic_openmp_jacobi_c;outline_classic_print_c;outline_classic_variableCloning_c;outline_classic_zeroParameter_c;outline_complexStruct;outline_default_array1_c;outline_default_array2_cpp;outline_default_arrayParameter_c;outline_default_arrayRef_c;outline_default_charStar_cpp;outline_default_const-global_cpp;outline_default_jacobi_rose_outline_c;outline_default_moreTest0_c;outline_default_moreTest1_c;outline_default_moreTest6_cpp;outline_default_moreTest7_cpp;outline_default_moreTest8_c;outline_default_print_c;outline_default_reference_cpp;outline_default_variableCloning_c;outline_default_zeroParameter_c;outline_dlopen2_array1_c;outline_dlopen2_array2_cpp;outline_dlopen2_arrayParameter_c;outline_dlopen2_arrayRef_c;outline_dlopen2_charStar_cpp;outline_dlopen2_const-global_cpp;outline_dlopen2_jacobi_rose_outline_c;outline_dlopen2_moreTest0_c;outline_dlopen2_moreTest1_c;outline_dlopen2_moreTest6_cpp;outline_dlopen2_moreTest7_cpp;outline_dlopen2_moreTest8_c;outline_dlopen2_print_c;outline_dlopen2_reference_cpp;outline_dlopen2_variableCloning_c;outline_dlopen2_zeroParameter_c;outline_dlopen3_charStar_cpp;outline_dlopen3_ft_cfftz_cpp;outline_dlopen3_print_cpp;outline_dlopen3_test_119_2021_cpp;outline_dlopen3_test_120_2020_cpp;outline_dlopen3_test_121_2020_cpp;outline_dlopen3_test_20_2019_cpp;outline_dlopen3_test_26_v1_2020_cpp;outline_dlopen3_test_37_2020_cpp;outline_dlopen3_test_42_2020_cpp;outline_dlopen3_test_52_cpp;outline_dlopen3_test_61_2020_cpp;outline_dlopen4_ft_cfftz_omp_cpp;outline_dlopen5_ft_cfftz_omp2_cpp;outline_dlopen_array1_c;outline_dlopen_array2_cpp;outline_dlopen_arrayParameter_c;outline_dlopen_arrayRef_c;outline_dlopen_charStar_cpp;outline_dlopen_const-global_cpp;outline_dlopen_jacobi_rose_outline_c;outline_dlopen_moreTest0_c;outline_dlopen_moreTest1_c;outline_dlopen_moreTest6_cpp;outline_dlopen_moreTest7_cpp;outline_dlopen_moreTest8_c;outline_dlopen_print_c;outline_dlopen_reference_cpp;outline_dlopen_variableCloning_c;outline_dlopen_zeroParameter_c;outline_dlopensimple_charStar_cpp;outline_dlopensimple_ft_cfftz_cpp;outline_dlopensimple_print_cpp;outline_dlopensimple_test_119_2021_cpp;outline_dlopensimple_test_120_2020_cpp;outline_dlopensimple_test_121_2020_cpp;outline_dlopensimple_test_20_2019_cpp;outline_dlopensimple_test_26_v1_2020_cpp;outline_dlopensimple_test_37_2020_cpp;outline_dlopensimple_test_42_2020_cpp;outline_dlopensimple_test_52_cpp;outline_dlopensimple_test_61_2020_cpp;outline_inplace_array1_c;outline_inplace_arrayParameter_c;outline_inplace_arrayRef_c;outline_inplace_jacobi_rose_outline_c;outline_inplace_moreTest0_c;outline_inplace_moreTest1_c;outline_inplace_moreTest8_c;outline_inplace_print_c;outline_inplace_variableCloning_c;outline_inplace_zeroParameter_c;outline_noswitch_array-variable_f;outline_noswitch_array_f;outline_noswitch_assignment_f;outline_noswitch_assignmentmain2_f;outline_noswitch_assignmentmain_f;outline_noswitch_blockdo_f90;outline_noswitch_contains_f90;outline_noswitch_dimension_f;outline_noswitch_doloop3_f90;outline_noswitch_doloop4_f90;outline_noswitch_doloop_f;outline_noswitch_doloop_nested_f90;outline_noswitch_format_f;outline_noswitch_function2_f;outline_noswitch_function_f;outline_noswitch_hello_f;outline_noswitch_integer_f;outline_noswitch_intent_f90;outline_noswitch_lengthlimit_f;outline_noswitch_loan_f;outline_noswitch_moduleParameter_f90;outline_noswitch_parameter2_f;outline_noswitch_parameter_f;outline_noswitch_stop1_f90;outline_noswitch_stop_f90;outline_noswitch_subroutine_f90;outline_noswitch_ugoto_f;outline_noswitch_write_f;outline_seq7a_test2001_02_C;outline_seq7a_test2001_03_C;outline_seq7a_test2004_116_C;outline_seq7b_array-variable_f;outline_seq7b_array_f;outline_seq7b_assignment_f;outline_seq7b_assignmentmain2_f;outline_seq7b_assignmentmain_f;outline_seq7b_blockdo_f90;outline_seq7b_contains_f90;outline_seq7b_dimension_f;outline_seq7b_doloop3_f90;outline_seq7b_doloop4_f90;outline_seq7b_doloop_f;outline_seq7b_doloop_nested_f90;outline_seq7b_format_f;outline_seq7b_function2_f;outline_seq7b_function_f;outline_seq7b_hello_f;outline_seq7b_integer_f;outline_seq7b_intent_f90;outline_seq7b_lengthlimit_f;outline_seq7b_loan_f;outline_seq7b_moduleParameter_f90;outline_seq7b_parameter2_f;outline_seq7b_parameter_f;outline_seq7b_stop1_f90;outline_seq7b_stop_f90;outline_seq7b_subroutine_f90;outline_seq7b_ugoto_f;outline_seq7b_write_f;outline_test_inline_2022_6;outline_tofile_array1_c;outline_tofile_array2_cpp;outline_tofile_arrayParameter_c;outline_tofile_arrayRef_c;outline_tofile_charStar_cpp;outline_tofile_const-global_cpp;outline_tofile_jacobi_rose_outline_c;outline_tofile_moreTest0_c;outline_tofile_moreTest1_c;outline_tofile_moreTest6_cpp;outline_tofile_moreTest7_cpp;outline_tofile_moreTest8_c;outline_tofile_print_c;outline_tofile_reference_cpp;outline_tofile_variableCloning_c;outline_tofile_zeroParameter_c" )
-add_test(
-  NAME nonsmoke_functional_roseTests_astOutliningTests_check_classic
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=outline_classic_array1_c\;outline_classic_arrayParameter_c\;outline_classic_arrayRef_c\;outline_classic_jacobi_rose_outline_c\;outline_classic_moreTest0_c\;outline_classic_moreTest1_c\;outline_classic_moreTest8_c\;outline_classic_print_c\;outline_classic_variableCloning_c\;outline_classic_zeroParameter_c
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_astOutliningTests_check_classic PROPERTIES DEPENDS "outline_classic_array1_c;outline_classic_arrayParameter_c;outline_classic_arrayRef_c;outline_classic_jacobi_rose_outline_c;outline_classic_moreTest0_c;outline_classic_moreTest1_c;outline_classic_moreTest8_c;outline_classic_print_c;outline_classic_variableCloning_c;outline_classic_zeroParameter_c" )

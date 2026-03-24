@@ -56,8 +56,15 @@ function(fortran_frontend_negative_test input_file)
 endfunction()
 
 set(FORTRAN_FLAGS -rose:fortran_std=f77)
+set(_fortran_f77_frontend_negative_tests
+  test2007_146.f
+)
 foreach(F77_test ${F77_TESTCODES})
-  fortran_test(${F77_test})
+  if(F77_test IN_LIST _fortran_f77_frontend_negative_tests)
+    fortran_frontend_negative_test(${F77_test})
+  else()
+    fortran_test(${F77_test})
+  endif()
 endforeach()
 
 set(FORTRAN_FLAGS -rose:fortran_std=f90)
@@ -118,7 +125,7 @@ foreach(F03_test ${F03_TESTCODES})
   endif()
 endforeach()
 
-# Extra tests from Automake conditional-check-local and supporting rules.
+# Extra tests carried over from the old Automake-only rules.
 add_test(
   NAME fortran_enforce_module_name_policy
   COMMAND ${CMAKE_SOURCE_DIR}/scripts/policies/UniqueFortranModules.pl

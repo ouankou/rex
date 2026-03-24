@@ -113,6 +113,7 @@
 
 #include <map>   // used to store special var reference's scope
 #include <queue> // used for a worklist of declarations to be moved
+#include <set>
 #include <stack> // used for a worklist of declarations to be moved , first found, last processing
 
 // another level of control over transformation tracking code
@@ -169,6 +170,22 @@ bool merge_decl_assign = false;
 
 // a global variable storing inserted declaration per input file processed
 static std::vector<SgVariableDeclaration *> inserted_decls;
+
+static SgVariableSymbol *
+getDeclaredVariableSymbolIfAny(SgVariableDeclaration *decl) {
+  if (decl == NULL)
+    return NULL;
+
+  SgInitializedName *init_name = SageInterface::getFirstInitializedName(decl);
+  if (init_name == NULL)
+    return NULL;
+
+  if (init_name->get_name().getString().empty())
+    return NULL;
+
+  return SageInterface::getFirstVarSym(decl);
+}
+
 //! Move a declaration to a scope which is the closest to the declaration's use
 //! places. It may generate new declarations to be considered later on so
 //! worklist is used.
@@ -389,6 +406,12 @@ protected:
         // skip compiler generated (frontend) declarations
         if (decl->get_file_info()->isCompilerGenerated())
           continue;
+        if (getDeclaredVariableSymbolIfAny(decl) == NULL) {
+          if (debug)
+            cout << "Skipping a declaration without a named variable symbol .."
+                 << endl;
+          continue;
+        }
         worklist.push(decl);
       }
 
@@ -758,29 +781,75 @@ void Scope_Node::traverse_write(Scope_Node *n, std::ofstream &dotfile) {
 // The default NodeQuery::querySubTree() will miss variables referenced in array
 // type's index list. e.g. double *buffer = new double[numItems] ;
 // TODO: fix the root cause of NodeQuery::querySubTree()
-static int collectUpArrayTypeIndexVariables(
-    SgScopeStatement *scope, Rose_STL_Container<SgNode *> &currentVarRefList) {
+static int collectUpArrayTypeIndexVariablesFromType(
+    SgType *type, SgExpression *scope_owner,
+    Rose_STL_Container<SgNode *> &currentVarRefList,
+    std::set<SgVarRefExp *> &seenVarRefs) {
+  if (type == NULL)
+    return 0;
+
+  if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
+    return collectUpArrayTypeIndexVariablesFromType(
+        typedef_type->get_base_type(), scope_owner, currentVarRefList,
+        seenVarRefs);
+  }
+
+  if (SgModifierType *modifier_type = isSgModifierType(type)) {
+    return collectUpArrayTypeIndexVariablesFromType(
+        modifier_type->get_base_type(), scope_owner, currentVarRefList,
+        seenVarRefs);
+  }
+
+  SgArrayType *array_type = isSgArrayType(type);
+  if (array_type == NULL)
+    return 0;
+
   int rt = 0;
-  ROSE_ASSERT(scope != NULL);
-  Rose_STL_Container<SgNode *> constructorList =
-      NodeQuery::querySubTree(scope, V_SgConstructorInitializer);
-  for (size_t i = 0; i < constructorList.size(); i++) {
-    SgConstructorInitializer *c_init =
-        isSgConstructorInitializer(constructorList[i]);
-    if (SgArrayType *a_type = isSgArrayType(c_init->get_expression_type())) {
-      Rose_STL_Container<SgNode *> varList =
-          NodeQuery::querySubTree(a_type->get_index(), V_SgVarRefExp);
-      for (size_t j = 0; j < varList.size(); j++) {
-        SgVarRefExp *var_exp = isSgVarRefExp(varList[j]);
+  if (SgExpression *index_expr = array_type->get_index()) {
+    Rose_STL_Container<SgNode *> varList =
+        NodeQuery::querySubTree(index_expr, V_SgVarRefExp);
+    for (size_t j = 0; j < varList.size(); j++) {
+      SgVarRefExp *var_exp = isSgVarRefExp(varList[j]);
+      ROSE_ASSERT(var_exp != NULL);
+      if (seenVarRefs.insert(var_exp).second) {
         if (debug) {
           cout << "Found a var ref in array type:"
                << var_exp->get_symbol()->get_name() << endl;
         }
         currentVarRefList.push_back(var_exp);
-        specialVarRefScopeExp[var_exp] = c_init;
+        specialVarRefScopeExp[var_exp] = scope_owner;
         rt++;
       }
     }
+  }
+
+  return rt + collectUpArrayTypeIndexVariablesFromType(
+                  array_type->get_base_type(), scope_owner, currentVarRefList,
+                  seenVarRefs);
+}
+
+static int collectUpArrayTypeIndexVariables(
+    SgScopeStatement *scope, Rose_STL_Container<SgNode *> &currentVarRefList) {
+  int rt = 0;
+  ROSE_ASSERT(scope != NULL);
+  std::set<SgVarRefExp *> seenVarRefs;
+
+  Rose_STL_Container<SgNode *> constructorList =
+      NodeQuery::querySubTree(scope, V_SgConstructorInitializer);
+  for (size_t i = 0; i < constructorList.size(); i++) {
+    SgConstructorInitializer *c_init =
+        isSgConstructorInitializer(constructorList[i]);
+    rt += collectUpArrayTypeIndexVariablesFromType(
+        c_init->get_expression_type(), c_init, currentVarRefList, seenVarRefs);
+  }
+
+  Rose_STL_Container<SgNode *> newExpList =
+      NodeQuery::querySubTree(scope, V_SgNewExp);
+  for (size_t i = 0; i < newExpList.size(); i++) {
+    SgNewExp *new_exp = isSgNewExp(newExpList[i]);
+    ROSE_ASSERT(new_exp != NULL);
+    rt += collectUpArrayTypeIndexVariablesFromType(
+        new_exp->get_specified_type(), new_exp, currentVarRefList, seenVarRefs);
   }
   return rt;
 }
@@ -849,15 +918,20 @@ Scope_Node *generateScopeTree(
   SgScopeStatement *decl_scope = decl->get_scope();
   ROSE_ASSERT(decl_scope != NULL);
 
-  SgVariableSymbol *var_sym =
-      isSgVariableSymbol(SageInterface::getFirstVarSym(var_decl));
-  ROSE_ASSERT(var_sym != NULL);
-
   // the root of the scope tree
   Scope_Node *scope_tree = new Scope_Node(decl_scope, s_decl);
   scope_tree->depth = 0;
   scope_tree->parent = NULL;
   ScopeTreeMap[decl_scope] = scope_tree;
+
+  SgVariableSymbol *var_sym = getDeclaredVariableSymbolIfAny(var_decl);
+  if (var_sym == NULL) {
+    if (debug)
+      cout << "Skipping scope-tree generation for a declaration without a "
+              "named variable symbol."
+           << endl;
+    return scope_tree;
+  }
 
   // Step 1. Find all variable references to the declared variable.
   // Note: querySubTree uses pre-order traversal.

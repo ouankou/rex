@@ -1,4 +1,4 @@
-# Generated from legacy test lists test lists.
+# Generated from legacy test lists.
 set(COLLECT_COMMENTS_TEST_SOURCES
   test_CplusplusMacro_Cpp.C
   test2001_01.C
@@ -629,4 +629,4 @@ set(COLLECT_COMMENTS_TEST_SOURCES
   test2006_44.C
 )
 
-set(COLLECT_COMMENTS_DISABLED_TEST_SOURCES)
+set(COLLECT_COMMENTS_ADDITIONAL_TEST_SOURCES)

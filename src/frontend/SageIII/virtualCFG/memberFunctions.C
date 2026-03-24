@@ -199,18 +199,6 @@ static void addIncomingFortranGotos(SgStatement *stmt, unsigned int index,
   }
 }
 
-static SgStatement *unwrapLeadingLabelStatement(SgStatement *statement) {
-  ASSERT_not_null(statement);
-  while (SgLabelStatement *labelStatement = isSgLabelStatement(statement)) {
-    SgStatement *next = labelStatement->get_statement();
-    if (next == nullptr) {
-      break;
-    }
-    statement = next;
-  }
-  return statement;
-}
-
 static CFGNode getNodeJustAfterInContainer(SgNode *n) {
   // Only handles next-statement control flow
   SgNode *parent = n->get_parent();
@@ -267,16 +255,6 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
   }
 
   SgLabelStatement *labelStatement = isSgLabelStatement(n);
-  if (labelStatement != nullptr && labelStatement->get_statement() != nullptr) {
-    unsigned int idx = 0;
-#if DEBUG_CALLGRAPH
-    printf(
-        "In getNodeJustAfterInContainer(): found SgLabelStatement: idx = %u \n",
-        idx);
-#endif
-    ASSERT_not_null(labelStatement->get_statement());
-    return CFGNode(labelStatement->get_statement(), idx);
-  }
 
   // DQ (1/16/2018): Handle the case of where the parent is a SgLabelStatement.
   SgLabelStatement *parentLabelStatement = isSgLabelStatement(parent);
@@ -286,32 +264,26 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
            "SgLabelStatement: parentLabelStatement = %p = %s \n",
            parentLabelStatement, parentLabelStatement->class_name().c_str());
 #endif
-    parent = parentLabelStatement->get_parent();
-    ASSERT_not_null(parent);
-    unsigned int idx;
-
-    // MS (12/9/2019 ) - handling sequences of labels
-    while (isSgLabelStatement(parent)) {
-      parentLabelStatement = isSgLabelStatement(parent);
-      parent = parent->get_parent();
-    }
-    ASSERT_not_null(parent);
-    idx = parent->cfgFindNextChildIndex(parentLabelStatement);
-
-#if DEBUG_CALLGRAPH
-    printf("In getNodeJustAfterInContainer(): found parent as "
-           "SgLabelStatement: idx = %u \n",
-           idx);
-#endif
-    return CFGNode(parent, idx);
+    return CFGNode(parentLabelStatement,
+                   parentLabelStatement->cfgIndexForEnd());
   } else {
     if (labelStatement != nullptr) {
 #if DEBUG_CALLGRAPH
       unsigned int idx = parent->cfgFindNextChildIndex(n);
       printf("In getNodeJustAfterInContainer(): FORTRAN case: "
-             "labelStatement->get_statement() == NULL: idx = %u \n",
+             "labelStatement successor index: idx = %u \n",
              idx);
 #endif
+    }
+  }
+
+  if (SgOmpClauseBodyStatement *omp_clause_body =
+          isSgOmpClauseBodyStatement(parent)) {
+    if (omp_clause_body->get_body() == n) {
+      // OpenMP clause-body statements reserve index 1 for clauses, but the
+      // CFG does not currently model a separate executable clause-list step.
+      // Route body completion directly to the statement end node.
+      return CFGNode(parent, parent->cfgIndexForEnd());
     }
   }
 
@@ -556,8 +528,7 @@ std::vector<CFGEdge> SgBasicBlock::cfgInEdges(unsigned int idx) {
 #endif
 
     if (idx <= this->get_statements().size()) {
-      SgStatement *statement =
-          unwrapLeadingLabelStatement(this->get_statements()[idx - 1]);
+      SgStatement *statement = this->get_statements()[idx - 1];
 #if DEBUG_CALLGRAPH
       printf("In SgBasicBlock::cfgInEdges(): idx = %u Compute the starting "
              "node: statement = %p = %s \n",
@@ -807,17 +778,10 @@ static void addInEdgeOrBypassForExpressionChild(SgNode *me, unsigned int idx,
   }
 }
 
-unsigned int SgRangeBasedForStatement::cfgIndexForEnd() const {
-  // DQ (3/25/2018): The range based for statement has one less children than
-  // the more common for statement. return 4;
-  return 3;
-}
+unsigned int SgRangeBasedForStatement::cfgIndexForEnd() const { return 4; }
 
 bool SgRangeBasedForStatement::cfgIsIndexInteresting(unsigned int idx) const {
-  // DQ (3/25/2018): The range based for statement has one less children than
-  // the more common for statement. Not clear if this is the correct value. I
-  // think it should be 1 instead of 2, but not clear. return idx == 2;
-  return idx == 1;
+  return idx == 2;
 }
 
 unsigned int SgRangeBasedForStatement::cfgFindChildIndex(SgNode *n) {
@@ -889,10 +853,9 @@ std::vector<CFGEdge> SgRangeBasedForStatement::cfgOutEdges(unsigned int idx) {
              result);
     makeEdge(CFGNode(this, idx), CFGNode(this, 4), result);
     break;
-    // case 3: makeEdge(CFGNode(this, idx),
-    // this->get_increment_expr_root()->cfgForBeginning(), result); break; case
-    // 3: makeEdge(CFGNode(this, idx), this->get_increment()->cfgForBeginning(),
-    // result); break;
+  case 3:
+    makeEdge(CFGNode(this, idx), CFGNode(this, 2), result);
+    break;
   case 4:
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
     break;
@@ -912,11 +875,12 @@ std::vector<CFGEdge> SgRangeBasedForStatement::cfgInEdges(unsigned int idx) {
   case 1:
     makeEdge(this->get_iterator_declaration()->cfgForEnd(), CFGNode(this, idx),
              result);
+    break;
+  case 2:
     makeEdge(this->get_range_declaration()->cfgForEnd(), CFGNode(this, idx),
              result);
+    makeEdge(CFGNode(this, 3), CFGNode(this, idx), result);
     break;
-    // case 2: makeEdge(this->get_test()->cfgForEnd(), CFGNode(this, idx),
-    // result); break;
   case 3: {
     makeEdge(this->get_loop_body()->cfgForEnd(), CFGNode(this, idx), result);
     vector<SgContinueStmt *> continueStmts =
@@ -1339,7 +1303,9 @@ std::vector<CFGEdge> SgExprStatement::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgLabelStatement::cfgIndexForEnd() const { return 0; }
+unsigned int SgLabelStatement::cfgIndexForEnd() const {
+  return this->get_statement() ? 1 : 0;
+}
 
 // DQ (1/7/2018): Fix this to reflect design change in AST required to represent
 // labels as compound statements.
@@ -1357,6 +1323,14 @@ std::vector<CFGEdge> SgLabelStatement::cfgOutEdges(unsigned int idx) {
 
   switch (idx) {
   case 0:
+    if (this->get_statement()) {
+      makeEdge(CFGNode(this, idx), this->get_statement()->cfgForBeginning(),
+               result);
+    } else {
+      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+    }
+    break;
+  case 1:
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
     break;
   default:
@@ -1388,6 +1362,10 @@ std::vector<CFGEdge> SgLabelStatement::cfgInEdges(unsigned int idx) {
     }
     break;
   }
+  case 1:
+    ASSERT_not_null(this->get_statement());
+    makeEdge(this->get_statement()->cfgForEnd(), CFGNode(this, idx), result);
+    break;
 
   default:
     ROSE_ASSERT(!"Bad index for SgLabelStatement");
@@ -1644,8 +1622,7 @@ std::vector<CFGEdge> SgCaseOptionStmt::cfgInEdges(unsigned int idx) {
     break;
   }
   case 1:
-    makeEdge(unwrapLeadingLabelStatement(this->get_body())->cfgForEnd(),
-             CFGNode(this, idx), result);
+    makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
     break;
   default:
     ROSE_ASSERT(!"Bad index for SgCaseOptionStmt");
@@ -1810,8 +1787,7 @@ std::vector<CFGEdge> SgDefaultOptionStmt::cfgInEdges(unsigned int idx) {
     break;
   }
   case 1:
-    makeEdge(unwrapLeadingLabelStatement(this->get_body())->cfgForEnd(),
-             CFGNode(this, idx), result);
+    makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
     break;
   default:
     ROSE_ASSERT(!"Bad index for SgDefaultOptionStmt");
@@ -5683,6 +5659,36 @@ std::vector<CFGEdge> SgOmpBodyStatement::cfgInEdges(unsigned int idx) {
     ROSE_ASSERT(!"Bad index for SgOmpBodyStatement");
   }
   return result;
+}
+
+unsigned int SgOmpClauseBodyStatement::cfgFindChildIndex(SgNode *n) {
+  if (n == this->get_body()) {
+    return 0;
+  }
+
+  const SgOmpClausePtrList &clauses = this->get_clauses();
+  if (std::find(clauses.begin(), clauses.end(), n) != clauses.end()) {
+    // Clauses are modeled as a single reserved CFG slot even though the CFG
+    // does not currently emit executable clause-list edges.
+    return 1;
+  }
+
+  ROSE_ASSERT(!"Bad child in SgOmpClauseBodyStatement");
+  return 0;
+}
+
+unsigned int SgOmpClauseBodyStatement::cfgFindNextChildIndex(SgNode *n) {
+  if (n == this->get_body()) {
+    return 2;
+  }
+
+  const SgOmpClausePtrList &clauses = this->get_clauses();
+  if (std::find(clauses.begin(), clauses.end(), n) != clauses.end()) {
+    return 2;
+  }
+
+  ROSE_ASSERT(!"Bad child in SgOmpClauseBodyStatement");
+  return 0;
 }
 
 unsigned int SgOmpClauseBodyStatement::cfgIndexForEnd() const { return 2; }

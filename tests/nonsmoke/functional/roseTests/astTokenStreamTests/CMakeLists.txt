@@ -311,7 +311,7 @@ set(TOKEN_C_TESTCODES_REQUIRED
   constants.c
 )
 
-set(TOKEN_C_FAILING_TESTCODES
+set(TOKEN_C_ADDITIONAL_TESTCODES
   test2012_17.c
   test2012_163.c
 )
@@ -1088,7 +1088,7 @@ set(TOKEN_CXX_TESTCODES_REQUIRED
   test2021_01.C
 )
 
-set(TOKEN_CXX_FAILING_TESTCODES
+set(TOKEN_CXX_ADDITIONAL_TESTCODES
   test2004_67.C
   test2004_140.C
   test2005_128.C
@@ -1106,7 +1106,7 @@ set(TOKEN_CXX_FAILING_TESTCODES
   test2011_142.C
 )
 
-set(TOKEN_CXX_FAILING_GNU48_TESTCODES
+set(TOKEN_CXX_GNU48_ADDITIONAL_TESTCODES
   test2005_73.C
   test2005_193.C
 )
@@ -1181,7 +1181,11 @@ endforeach()
 
 #-------------------------------------------------------------------------------
 # Token representation tests (C)
-foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
+set(_token_c_all_testcodes
+  ${TOKEN_C_TESTCODES_REQUIRED}
+  ${TOKEN_C_ADDITIONAL_TESTCODES}
+)
+foreach(file_to_test IN LISTS _token_c_all_testcodes)
   string(REPLACE "." "_" _name ${file_to_test})
   set(_target ${file_to_test}.passed)
   add_test(
@@ -1192,25 +1196,16 @@ foreach(file_to_test IN LISTS TOKEN_C_TESTCODES_REQUIRED)
       ${_exit_status}
       ${_target}
   )
-endforeach()
-
-foreach(file_to_test IN LISTS TOKEN_C_FAILING_TESTCODES)
-  string(REPLACE "." "_" _name ${file_to_test})
-  set(_target ${file_to_test}.passed)
-  add_test(
-    NAME tokenStream_C_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      CMD="$<TARGET_FILE:${translator}> ${_rose_flags_str} -c ${_c_test_dir}/${file_to_test} && diff -u ${_c_test_dir}/${file_to_test} rose_${file_to_test}"
-      ${_exit_status}
-      ${_target}
-  )
-  set_tests_properties(tokenStream_C_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
 # Token representation tests (C++)
-foreach(file_to_test IN LISTS TOKEN_CXX_TESTCODES_REQUIRED)
+set(_token_cxx_all_testcodes
+  ${TOKEN_CXX_TESTCODES_REQUIRED}
+  ${TOKEN_CXX_ADDITIONAL_TESTCODES}
+  ${TOKEN_CXX_GNU48_ADDITIONAL_TESTCODES}
+)
+foreach(file_to_test IN LISTS _token_cxx_all_testcodes)
   string(REPLACE "." "_" _name ${file_to_test})
   set(_target ${file_to_test}.passed)
   add_test(
@@ -1221,20 +1216,6 @@ foreach(file_to_test IN LISTS TOKEN_CXX_TESTCODES_REQUIRED)
       ${_exit_status}
       ${_target}
   )
-endforeach()
-
-foreach(file_to_test IN LISTS TOKEN_CXX_FAILING_TESTCODES TOKEN_CXX_FAILING_GNU48_TESTCODES)
-  string(REPLACE "." "_" _name ${file_to_test})
-  set(_target ${file_to_test}.passed)
-  add_test(
-    NAME tokenStream_CXX_${_name}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${_rth}
-      CMD="$<TARGET_FILE:${translator}> -rose:unparse_tokens -I${_cxx_test_dir} -c ${_cxx_test_dir}/${file_to_test} && diff -u ${_cxx_test_dir}/${file_to_test} rose_${file_to_test}"
-      ${_exit_status}
-      ${_target}
-  )
-  set_tests_properties(tokenStream_CXX_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
@@ -1277,7 +1258,6 @@ add_test(
     -rose:verbose 0
     -c ${CMAKE_CURRENT_SOURCE_DIR}/input_testUnparsingUsingTokenStream_test2021_02.C
 )
-set_tests_properties(test_unparsingUsingTokens_test2021_02 PROPERTIES DISABLED TRUE)
 
 add_test(
   NAME test_typeTransformation_UsingTokens
@@ -1285,7 +1265,6 @@ add_test(
     -rose:verbose 0
     -c ${CMAKE_CURRENT_SOURCE_DIR}/input_test_type_transformations.c
 )
-set_tests_properties(test_typeTransformation_UsingTokens PROPERTIES DISABLED TRUE)
 
 #-------------------------------------------------------------------------------
 # Token unparser transformation tests
@@ -1304,11 +1283,10 @@ foreach(file_to_test IN LISTS TOKEN_CXX_TOKEN_UNPARSER_TESTCODES)
       ${_exit_status}
       ${_target}
   )
-  set_tests_properties(tokenUnparserTransformations_${_name} PROPERTIES DISABLED TRUE)
 endforeach()
 
 #-------------------------------------------------------------------------------
-# Additional disabled tests from Automake
+# Additional token-stream tests promoted from the legacy Automake lists.
 set(_token_stream_mapping_test2003_12_cmd
   "\"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c")
 add_test(
@@ -1317,7 +1295,6 @@ add_test(
   COMMAND bash -c
     "${_rth} CMD=\"'${_token_stream_mapping_test2003_12_cmd}'\" ${_exit_status} test2003_12.c.mapping.passed && \"$<TARGET_FILE:tokenStreamMapping>\" -rose:C89 -rose:unparse_tokens -c ${_c_test_dir}/test2003_12.c"
 )
-set_tests_properties(testTokenMapping PROPERTIES DISABLED TRUE)
 
 add_test(
   NAME test_binary_after_token_unparsing
@@ -1325,7 +1302,6 @@ add_test(
   COMMAND bash -c
     "gcc ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c -o gcc_test2003_12.o && \"$<TARGET_FILE:tokenStreamMapping>\" ${_rose_flags_str} -c ${_c_test_dir}/test2003_12.c && gcc -c GlobalScopeDeclarationTokenStream.c -o rose_test2003_12.o && diff ${_c_test_dir}/test2003_12.c GlobalScopeDeclarationTokenStream.c && diff gcc_test2003_12.o rose_test2003_12.o"
 )
-set_tests_properties(test_binary_after_token_unparsing PROPERTIES DISABLED TRUE)
 
 install(
   TARGETS
@@ -1336,17 +1312,3 @@ install(
     testTokenUnparserTransformations
   DESTINATION bin)
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_astTokenStreamTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=tokenLinearization_testLin1_c\;tokenLinearization_testLin2_c
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES LABELS disabled DEPENDS "tokenLinearization_testLin1_c;tokenLinearization_testLin2_c" )
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_roseTests_astTokenStreamTests_check-local PROPERTIES DISABLED TRUE)
-endif()

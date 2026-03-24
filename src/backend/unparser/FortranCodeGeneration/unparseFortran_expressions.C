@@ -1406,6 +1406,44 @@ bool FortranCodeGeneration_locatedNode::isSubroutineCall(
     if (exprStmt->get_expression() != fcall) {
       return false;
     }
+    SgExpression *expr = exprStmt->get_expression();
+    SgNode *exprContext = exprStmt->get_parent();
+    if (SgIfStmt *ifStmt = isSgIfStmt(exprContext)) {
+      if (ifStmt->get_conditional() == exprStmt) {
+        return false;
+      }
+    }
+    if (SgWhileStmt *whileStmt = isSgWhileStmt(exprContext)) {
+      if (whileStmt->get_condition() == exprStmt) {
+        return false;
+      }
+    }
+    if (SgDoWhileStmt *doWhileStmt = isSgDoWhileStmt(exprContext)) {
+      if (doWhileStmt->get_condition() == exprStmt) {
+        return false;
+      }
+    }
+    if (SgForStatement *forStmt = isSgForStatement(exprContext)) {
+      if (forStmt->get_test() == exprStmt || forStmt->get_increment() == expr) {
+        return false;
+      }
+    }
+    if (SgFortranDo *fortranDo = isSgFortranDo(exprContext)) {
+      if (fortranDo->get_bound() == expr) {
+        return false;
+      }
+    }
+    if (SgWhereStatement *whereStmt = isSgWhereStatement(exprContext)) {
+      if (whereStmt->get_condition() == expr) {
+        return false;
+      }
+    }
+    if (SgElseWhereStatement *elseWhereStmt =
+            isSgElseWhereStatement(exprContext)) {
+      if (elseWhereStmt->get_condition() == expr) {
+        return false;
+      }
+    }
   } else {
     return false;
   }

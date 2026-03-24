@@ -215,6 +215,43 @@ static void normalizeGlobalClassAccess(SgProject *project) {
   }
 }
 
+static void normalizeDeclarationNameQualification(SgProject *project) {
+  if (project == NULL)
+    return;
+
+  RoseAst ast(project);
+  for (RoseAst::iterator it = ast.begin(); it != ast.end(); ++it) {
+    if (SgClassDeclaration *decl = isSgClassDeclaration(*it)) {
+      SgScopeStatement *scope = decl->get_scope();
+      if (scope != NULL && (isSgGlobal(scope) != NULL ||
+                            isSgNamespaceDefinitionStatement(scope) != NULL ||
+                            isSgClassDefinition(scope) != NULL)) {
+        decl->set_name_qualification_length(0);
+        decl->set_global_qualification_required(false);
+      }
+      continue;
+    }
+
+    SgFunctionDeclaration *func = isSgFunctionDeclaration(*it);
+    if (func == NULL) {
+      continue;
+    }
+
+    SgScopeStatement *scope = func->get_scope();
+    if (scope == NULL || func->get_parent() != scope) {
+      continue;
+    }
+
+    if (isSgClassDefinition(scope) == NULL &&
+        isSgTemplateClassDefinition(scope) == NULL) {
+      continue;
+    }
+
+    func->set_name_qualification_length(0);
+    func->set_global_qualification_required(false);
+  }
+}
+
 static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
   if (glob_scope == NULL)
     return;
@@ -889,9 +926,12 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
 
   ROSE_ASSERT(s != NULL);
   ROSE_ASSERT(s->get_statements().empty() == true);
-  // if we generate a new file, and we don't copy entire original input file to
-  // the new file
-  if (useNewFile == true && copy_origFile == false) {
+  // If we generate a new file and it does not carry full header context (either
+  // because we did not copy the original file, or because we explicitly
+  // excluded header includes), then we must reconstruct dependent declarations
+  // so the outlined file is self-contained and compilable.
+  if (useNewFile == true &&
+      (copy_origFile == false || exclude_headers == true)) {
     // DQ (2/6/2009): I need to write this function to support the
     // insertion of the function into the specified scope.  If the
     // file associated with the scope is marked as compiler generated
@@ -938,6 +978,7 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
     AstPostProcessing(project);
     fixFriendClassDeclarations(project);
     normalizeGlobalClassAccess(project);
+    normalizeDeclarationNameQualification(project);
   } else {
     SgSourceFile *originalSourceFile =
         SageInterface::getEnclosingSourceFile(src_scope);
@@ -945,6 +986,7 @@ Outliner::Result Outliner::outlineBlock(SgBasicBlock *s,
       AstPostProcessing(originalSourceFile);
       fixFriendClassDeclarations(SageInterface::getProject());
       normalizeGlobalClassAccess(SageInterface::getProject());
+      normalizeDeclarationNameQualification(SageInterface::getProject());
     }
   }
 

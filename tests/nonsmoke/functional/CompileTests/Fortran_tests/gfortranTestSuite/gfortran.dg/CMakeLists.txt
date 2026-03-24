@@ -1,5 +1,3 @@
-if(with-ROSE_LONG_MAKE_CHECK_RULE)
-
   # This is the long test of ROSE (takes a while!)
   set(F90_TESTCODES_REQUIRED_TO_PASS
     access_spec_1.f90 access_spec_3.f90 achar_1.f90 achar_2.f90 achar_4.f90
@@ -351,19 +349,6 @@ if(with-ROSE_LONG_MAKE_CHECK_RULE)
     string_null_compare_1.f substr_2.f substr_3.f t_editing.f write_back.f
     write_rewind_1.f write_rewind_2.f wtruncate_f77.f x_slash_1.f x_slash_2.f)
 
-else()
-# Shorten the list of code to compile to simplify checks using "make distcheck"
-  set(F90_TESTCODES_REQUIRED_TO_PASS
-    PR19754_2.f90 PR40660.f90 Wall.f90 Wno-all.f90 achar_1.f90
-    actual_pointer_function_1.f90 actual_procedure_1.f90 advance_1.f90
-    advance_2.f90 advance_4.f90 advance_5.f90)
-
-# Shorten the list of code to compile to simplify checks using "make distcheck"
-set(F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS
-   PR19872.f allocate_zerosize_3.f array_constructor_type_9.f backslash_3.f
-   bounds_check_13.f bounds_check_2.f)
-endif()
-
 set(F03_TESTCODES_REQUIRED_TO_PASS
   abstract_type_7.f03 array_constructor_25.f03 array_constructor_29.f03
   array_constructor_type_1.f03 array_constructor_type_12.f03
@@ -400,7 +385,7 @@ foreach(file_to_test ${F77_FIXED_FORMAT_TESTCODES_REQUIRED_TO_PASS})
     WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
-set(_gfortran_f90_disabled_tests
+set(_gfortran_f90_additional_tests
   enum_1.f90
   implicit_2.f90
   implicit_derived_type_1.f90
@@ -410,7 +395,7 @@ set(_gfortran_f90_disabled_tests
   transfer_array_intrinsic_2.f90
 )
 
-foreach(file_to_test ${_gfortran_f90_disabled_tests})
+foreach(file_to_test ${_gfortran_f90_additional_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f90 -c
@@ -419,13 +404,13 @@ foreach(file_to_test ${_gfortran_f90_disabled_tests})
     WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
-set(_gfortran_f77_disabled_tests
+set(_gfortran_f77_additional_tests
   literal_character_constant_1_x.F
   literal_character_constant_1_y.F
   literal_character_constant_1_z.F
 )
 
-foreach(file_to_test ${_gfortran_f77_disabled_tests})
+foreach(file_to_test ${_gfortran_f77_additional_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:fortran_std=f77 -c
@@ -434,7 +419,7 @@ foreach(file_to_test ${_gfortran_f77_disabled_tests})
     WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
-set(_gfortran_untested_tests
+set(_gfortran_additional_c_tests
   bind_c_coms_driver.c
   bind_c_dts_2_driver.c
   bind_c_dts_driver.c
@@ -482,7 +467,7 @@ set(_gfortran_untested_tests
   value_4.c
 )
 
-foreach(file_to_test ${_gfortran_untested_tests})
+foreach(file_to_test ${_gfortran_additional_c_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -c
@@ -506,14 +491,14 @@ foreach(file_to_test ${F03_TESTCODES_REQUIRED_TO_PASS})
     WORKING_DIRECTORY ${_gfortran_output_dir})
 endforeach()
 
-set(_gfortran_f03_disabled_tests
+set(_gfortran_f03_additional_tests
   array_constructor_type_7.f03
   array_constructor_type_10.f03
   array_constructor_type_19.f03
   array_constructor_type_21.f03
 )
 
-foreach(file_to_test ${_gfortran_f03_disabled_tests})
+foreach(file_to_test ${_gfortran_f03_additional_tests})
   add_test(
     NAME GFORTRANSUITE_${file_to_test}
     COMMAND testTranslator ${ROSE_FLAGS} -rose:skip_syntax_check

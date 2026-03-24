@@ -7,7 +7,21 @@ endforeach()
 set(ROSE_FLAGS -w -rose:verbose 0)
 set(translator testTranslator)
 
-option(REX_ENABLE_FAILING_TESTS "Enable tests known to fail" OFF)
+# Legacy specimens that are invalid under modern Clang/libstdc++ should still
+# run under plain `ctest`, but as ordinary negative tests rather than through
+# ad hoc flag-gated lists.
+set(ROSE_ALWAYS_ENABLED_NEGATIVE_TESTCODES
+  test2005_57.C
+  test2005_135.C
+  test2005_136.C
+  test2005_138.C
+  test2005_139.C
+  test2005_144.C
+  test2005_149.C
+  test2005_156.C
+  test2005_171.C
+  test2005_173.C
+)
 
 # define compile_test CMake function
 function(compile_test input_file label)
@@ -28,10 +42,6 @@ function(compile_test input_file label)
   endif()
   rex_get_cxx_specimen_extra_flags(_extra_rose_flags ${input_file})
   list(APPEND _rose_flags ${_extra_rose_flags})
-  if(DEFINED ROSE_SKIP_FINAL_COMPILE_TESTCODES AND
-     input_file IN_LIST ROSE_SKIP_FINAL_COMPILE_TESTCODES)
-    list(APPEND _rose_flags "-rose:skipfinalCompileStep")
-  endif()
   if(DEFINED ROSE_OUTPUT_TO_BUILD_TESTCODES AND
      input_file IN_LIST ROSE_OUTPUT_TO_BUILD_TESTCODES)
     set(_output_base "${input_file}")
@@ -57,37 +67,18 @@ function(compile_test input_file label)
         ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
     )
   endif()
-  set(_labels ${label})
-  set(_disable_test FALSE)
-  set(_expected_fail FALSE)
-  if(DEFINED ROSE_DISABLED_TESTCODES AND input_file IN_LIST ROSE_DISABLED_TESTCODES)
-    list(APPEND _labels disabled)
-    if(NOT REX_ENABLE_DISABLED_TESTS)
-      set(_disable_test TRUE)
-    endif()
-  endif()
-  if(DEFINED ROSE_FAILING_TESTCODES AND input_file IN_LIST ROSE_FAILING_TESTCODES)
-    list(APPEND _labels known_fail)
-    if(NOT REX_ENABLE_FAILING_TESTS)
-      list(APPEND _labels disabled)
-      set(_disable_test TRUE)
-    endif()
-  endif()
-  if(DEFINED ROSE_EXPECTED_FAIL_TESTCODES AND input_file IN_LIST ROSE_EXPECTED_FAIL_TESTCODES)
-    list(APPEND _labels expected_fail)
-    set(_expected_fail TRUE)
-  endif()
-  list(REMOVE_DUPLICATES _labels)
-  set_tests_properties(${test_id} PROPERTIES LABELS "${_labels}")
-  set_property(TEST ${test_id} APPEND PROPERTY ENVIRONMENT
-               "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
-
-  if(_expected_fail)
+  set_tests_properties(${test_id} PROPERTIES LABELS "${label}")
+  if(input_file IN_LIST ROSE_ALWAYS_ENABLED_NEGATIVE_TESTCODES)
     set_tests_properties(${test_id} PROPERTIES WILL_FAIL TRUE)
   endif()
-  if(_disable_test)
-    set_tests_properties(${test_id} PROPERTIES DISABLED TRUE)
-  endif()
+  set_property(TEST ${test_id} APPEND PROPERTY ENVIRONMENT
+               "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
+endfunction()
+
+function(compile_negative_test input_file label)
+  compile_test(${input_file} ${label} ${ARGN})
+  rex_compile_test_name(_test_name ${label} ${input_file})
+  set_tests_properties(${_test_name} PROPERTIES WILL_FAIL TRUE)
 endfunction()
 
 # Prevent race conditions when multiple tests process the same input file.
@@ -159,14 +150,12 @@ if(ENABLE-C)
   add_subdirectory(UnparseHeadersUsingTokenStream_tests)
   add_subdirectory(frontend_integration)
 
-  if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Xtensa")
-    add_subdirectory(mergeAST_tests)
-    add_subdirectory(ElsaTestCases)
-    add_subdirectory(virtualCFG_tests)
-    add_subdirectory(mixLanguage_tests)
-    add_subdirectory(systemc_tests)
-    add_subdirectory(staticCFG_tests)
-  endif()
+  add_subdirectory(mergeAST_tests)
+  add_subdirectory(ElsaTestCases)
+  add_subdirectory(virtualCFG_tests)
+  add_subdirectory(mixLanguage_tests)
+  add_subdirectory(systemc_tests)
+  add_subdirectory(staticCFG_tests)
 endif()
 
 if(ENABLE-C OR ENABLE-FORTRAN)

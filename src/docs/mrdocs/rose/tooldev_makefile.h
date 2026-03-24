@@ -60,10 +60,10 @@
  * all: demo
  *
  * demo.o: demo.C
- * 	$(ROSE_CXX) $(ROSE_CPPFLAGS) $(ROSE_CXXFLAGS) -o $@ -c $^
+ *     $(ROSE_CXX) $(ROSE_CPPFLAGS) $(ROSE_CXXFLAGS) -o $@ -c $^
  *
  * demo: demo.o
- * 	$(ROSE_CXX) $(ROSE_CXXFLAGS) -o $@ $^ $(ROSE_LDFLAGS)
+ *     $(ROSE_CXX) $(ROSE_CXXFLAGS) -o $@ $^ $(ROSE_LDFLAGS)
  * $(ROSE_LINK_RPATHS) -Wl,-rpath=$(ROSE_PREFIX)/lib
  *
  * MOSTLYCLEANFILES += demo demo.o
@@ -73,7 +73,7 @@
  *
  * .PHONY: clean
  * clean:
- * 	rm -f $(MOSTLYCLEANFILES)
+ *     rm -f $(MOSTLYCLEANFILES)
  * ```
  *
  * See @ref tooldev.

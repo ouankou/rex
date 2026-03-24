@@ -10,6 +10,27 @@
 // DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
+namespace {
+bool is_frontend_suppressed_template_instantiation(
+    SgDeclarationStatement *decl) {
+  if (decl == NULL || decl->get_file_info() == NULL) {
+    return false;
+  }
+
+  const bool is_template_instantiation =
+      isSgTemplateInstantiationDecl(decl) != NULL ||
+      isSgTemplateInstantiationFunctionDecl(decl) != NULL ||
+      isSgTemplateInstantiationMemberFunctionDecl(decl) != NULL;
+  if (!is_template_instantiation) {
+    return false;
+  }
+
+  Sg_File_Info *file_info = decl->get_file_info();
+  return file_info->isCompilerGenerated() == true &&
+         file_info->isOutputInCodeGeneration() == false;
+}
+} // namespace
+
 set<SgDeclarationStatement *>
 MarkTemplateInstantiationsForOutput::BuildSetOfRequiredTemplateDeclarations(
     SgNode *node, SgSourceFile *file) {
@@ -880,6 +901,13 @@ void MarkTemplateInstantiationsForOutputSupport::saveDeclaration(
               definingDeclaration != NULL);
 
   if (firstNondefiningDeclaration != NULL) {
+    if (is_frontend_suppressed_template_instantiation(
+            firstNondefiningDeclaration)) {
+      firstNondefiningDeclaration = NULL;
+    }
+  }
+
+  if (firstNondefiningDeclaration != NULL) {
     // DQ (3/31/2013): Only add each declaration once!
     // listOfTemplateDeclarationsToOutput.push_back(firstNondefiningDeclaration);
     if (find(listOfTemplateDeclarationsToOutput.begin(),
@@ -896,6 +924,12 @@ void MarkTemplateInstantiationsForOutputSupport::saveDeclaration(
 
   // The defining declaration does not always exist! (e.g. "extern struct
   // _IO_FILE_plus _IO_2_1_stdin_;")
+  if (definingDeclaration != NULL) {
+    if (is_frontend_suppressed_template_instantiation(definingDeclaration)) {
+      definingDeclaration = NULL;
+    }
+  }
+
   if (definingDeclaration != NULL) {
     // DQ (3/31/2013): Only add each declaration once!
     // listOfTemplateDeclarationsToOutput.push_back(definingDeclaration);

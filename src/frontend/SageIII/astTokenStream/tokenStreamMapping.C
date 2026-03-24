@@ -2847,6 +2847,24 @@ SynthesizedAttribute TokenMappingTraversal::evaluateSynthesizedAttribute(
               tmp_locatedNode != NULL &&
               (*(tmp_locatedNode->get_startOfConstruct()) ==
                *(tmp_locatedNode->get_endOfConstruct()));
+
+          // A single-token statement can be a real standalone token (e.g. an
+          // empty statement ";") and not a macro expansion that needs its token
+          // range repaired. Treating those as macros can cause us to compute an
+          // invalid (end < start) range when the following statement has a
+          // token mapping that starts earlier (which can happen with macro
+          // interactions).
+          if (processAsMacroExpansion == true) {
+            if (SgStatement *stmt = isSgStatement(tmp_locatedNode)) {
+              if (isSgNullStatement(stmt) != NULL) {
+                processAsMacroExpansion = false;
+              } else if (SgExprStatement *exprStmt = isSgExprStatement(stmt)) {
+                if (isSgNullExpression(exprStmt->get_expression()) != NULL) {
+                  processAsMacroExpansion = false;
+                }
+              }
+            }
+          }
 #if DEBUG_MACRO_HANDLING
           printf("   --- processAsMacroExpansion = %s \n",
                  processAsMacroExpansion ? "true" : "false");
@@ -7889,10 +7907,35 @@ void buildTokenStreamMappingForRoot(SgSourceFile *sourceFile,
     printf("In buildTokenStreamMapping(): No tokens found in file \n");
 
     // DQ (1/30/2021): If there are no tokens or AST nodes, then at least build
-    // the empty list to avoid errors later. This is the trival case of an empty
-    // file).
+    // the empty map to avoid errors later. This is the trivial case of an empty
+    // file.
+    SgGlobal *globalScope = sourceFile->get_globalScope();
+    ROSE_ASSERT(globalScope != NULL);
+
+    TokenStreamSequenceToNodeMapping *sourceFileMapping =
+        new TokenStreamSequenceToNodeMapping(sourceFile, -1, -1, -1, -1, -1, -1,
+                                             -1, -1);
+    TokenStreamSequenceToNodeMapping *globalScopeMapping =
+        new TokenStreamSequenceToNodeMapping(globalScope, -1, -1, -1, -1, -1,
+                                             -1, -1, -1);
+    (*tokenStreamSequenceMapPointer)[sourceFile] = sourceFileMapping;
+    (*tokenStreamSequenceMapPointer)[globalScope] = globalScopeMapping;
+
     ROSE_ASSERT(tokenStreamSequenceMapPointer != NULL);
     sourceFile->set_tokenSubsequenceMap(tokenStreamSequenceMapPointer);
+
+    if (sourceFile->get_unparse_using_leading_and_trailing_token_mappings() ==
+        true) {
+      bool preferTrailingWhitespaceInOutput = true;
+      outputSourceCodeFromTokenStream_globalScope(
+          sourceFile, tokenVector, *tokenStreamSequenceMapPointer,
+          preferTrailingWhitespaceInOutput);
+
+      preferTrailingWhitespaceInOutput = false;
+      outputSourceCodeFromTokenStream_globalScope(
+          sourceFile, tokenVector, *tokenStreamSequenceMapPointer,
+          preferTrailingWhitespaceInOutput);
+    }
 
     return;
   }

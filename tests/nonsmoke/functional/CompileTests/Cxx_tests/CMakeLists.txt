@@ -2114,35 +2114,8 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   rex_test2025_issue99.cpp
   rex_test2025_issue99_recursive.cpp
   rex_test2025_issue99_uaf.cpp
-  test2025_issue84_friend_template_in_class.cpp
   test2009_24.C
-  test2014_108.C
-  test2014_205.C
-  test2014_239.C
   test2015_99.C
-  test2016_34.C
-  test2016_48.C
-  test2016_54.C
-  test2016_55.C
-  test2016_56.C
-  test2017_26.C
-  test2017_51.C
-  test2016_96.C
-  test2014_111.C
-  test2014_187.C
-  test2014_187_work_around.C
-  test2014_188.C
-  test2014_236.C
-  test2014_238.C
-  test2015_115.C
-  test2015_116.C
-  test2015_148.C
-  test2016_15.C
-  test2016_16.C
-  test2016_17.C
-  test2016_18.C
-  test2016_89.C
-  test2017_50.C
   test2004_83.C
   certSignalExample.C
   c++trick.C
@@ -2465,7 +2438,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS
   test_gnu.C
   test2017_44.C
 )
-set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
+set(CXX_TESTCODES_LEGACY_DEFAULT
   certSignalExample.C
   c++trick.C
   lexPhase2003_02.C
@@ -2733,7 +2706,7 @@ set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED
   test2020_36.C
   test2017_44.C
 )
-set(TESTCODE_CURRENTLY_FAILING
+set(CXX_TESTCODES_ADDITIONAL_TO_RUN
   c++trick.C
   certSignalExample.C
   lexPhase2003_02.C
@@ -3053,7 +3026,8 @@ set(TESTCODE_CURRENTLY_FAILING
   test2013_182.C
 )
 
-set(CXX_TESTCODES_EXPECTED_FAIL
+set(CXX_TESTCODES_EXTRA_DEFAULT
+  test2006_131.C
   test2014_22.C
   test2014_63.C
   # Intentionally non-compiling template metaprogramming specimen.
@@ -3061,17 +3035,19 @@ set(CXX_TESTCODES_EXPECTED_FAIL
 )
 
 set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS "${EXAMPLE_TESTCODES_REQUIRED_TO_PASS}" CACHE INTERNAL "" FORCE)
-set(EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED "${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED}" CACHE INTERNAL "" FORCE)
-set(TESTCODE_CURRENTLY_FAILING "${TESTCODE_CURRENTLY_FAILING}" CACHE INTERNAL "" FORCE)
-set(CXX_TESTCODES_TO_RUN ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS})
-list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${TESTCODE_CURRENTLY_FAILING})
-list(APPEND REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT
-  test2006_131.C
+set(CXX_TESTCODES_STANDARD_TO_RUN
+  ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS}
+  ${CXX_TESTCODES_LEGACY_DEFAULT}
+  ${CXX_TESTCODES_ADDITIONAL_TO_RUN}
+  ${CXX_TESTCODES_EXTRA_DEFAULT}
 )
-list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${REX_FRONTEND_ERROR_TESTS_SKIP_DEFAULT})
 set(CXX_TESTCODES_ALWAYS_RUN
   test2013_09.C)
-list(APPEND CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_ALWAYS_RUN})
+list(APPEND CXX_TESTCODES_STANDARD_TO_RUN ${CXX_TESTCODES_ALWAYS_RUN})
+list(REMOVE_DUPLICATES CXX_TESTCODES_STANDARD_TO_RUN)
+set(CXX_TESTCODES_STANDARD_TO_RUN "${CXX_TESTCODES_STANDARD_TO_RUN}" CACHE INTERNAL "" FORCE)
+
+set(CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_STANDARD_TO_RUN})
 list(REMOVE_DUPLICATES CXX_TESTCODES_TO_RUN)
 
 set(CXX_TESTCODES_GNUXX03
@@ -3098,10 +3074,19 @@ set(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING
 )
 list(REMOVE_ITEM CXX_TESTCODES_TO_RUN ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
 
+function(assert_cxx_specimens_exist list_name)
+  foreach(specimen IN LISTS ${list_name})
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${specimen}")
+      message(FATAL_ERROR
+        "Cxx_tests specimen '${specimen}' listed in ${list_name} does not exist")
+    endif()
+  endforeach()
+endfunction()
 
-set(ROSE_DISABLED_TESTCODES ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS_DISABLED})
-set(ROSE_FAILING_TESTCODES ${TESTCODE_CURRENTLY_FAILING})
-set(ROSE_EXPECTED_FAIL_TESTCODES ${CXX_TESTCODES_EXPECTED_FAIL})
+assert_cxx_specimens_exist(CXX_TESTCODES_GNUXX03)
+assert_cxx_specimens_exist(CXX_TESTCODES_GNUXX17)
+assert_cxx_specimens_exist(CXX_TESTCODES_DELAYED_TEMPLATE_PARSING)
+assert_cxx_specimens_exist(CXX_TESTCODES_TO_RUN)
 
 set(ROSE_FLAGS
   -w -rose:verbose 0
@@ -3119,23 +3104,6 @@ set(ROSE_OUTPUT_TO_BUILD_TESTCODES
   test2007_109.C
   test2007_125.C
 )
-
-foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
-  compile_test(${file_to_test} "Cxx_tests_failing")
-  rex_compile_test_name(_test_name "Cxx_tests_failing" ${file_to_test})
-  rex_lock_test_for_input(${_test_name} ${file_to_test})
-  set_tests_properties(${_test_name} PROPERTIES
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-endforeach()
-
-foreach(file_to_test ${CXX_TESTCODES_EXPECTED_FAIL})
-  compile_test(${file_to_test} "Cxx_tests")
-  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
-  rex_lock_test_for_input(${_test_name} ${file_to_test})
-  set_tests_properties(${_test_name} PROPERTIES
-    WILL_FAIL 1
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-endforeach()
 
 set(ROSE_FLAGS ${_rose_flags_base} -std=gnu++03)
 foreach(file_to_test ${CXX_TESTCODES_GNUXX03})
@@ -3167,7 +3135,6 @@ foreach(file_to_test ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING})
 endforeach()
 set(ROSE_FLAGS ${_rose_flags_default})
 
-
 foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
   compile_test(${file_to_test} "Cxx_tests")
   rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
@@ -3176,11 +3143,8 @@ foreach(file_to_test ${CXX_TESTCODES_TO_RUN})
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endforeach()
 
-# Automake TEST_Objects_UnfoldedConstants targets (non-default "make check").
-set(_unfolded_constants_inputs
-  ${EXAMPLE_TESTCODES_REQUIRED_TO_PASS}
-  ${TESTCODE_CURRENTLY_FAILING})
-set(_unfolded_constants_tests ${_unfolded_constants_inputs})
+# Additional unfolded-constants coverage for the default CTest run.
+set(_unfolded_constants_tests ${CXX_TESTCODES_STANDARD_TO_RUN})
 list(FILTER _unfolded_constants_tests INCLUDE REGEX "\\.C$")
 list(REMOVE_DUPLICATES _unfolded_constants_tests)
 
@@ -3208,7 +3172,7 @@ foreach(file_to_test ${_unfolded_constants_tests})
   rex_lock_test_for_input(${_unfolded_target} ${file_to_test})
 endforeach()
 
-# Automake special-rule tests (non-list targets and custom command lines).
+# Additional custom command-line coverage.
 add_test(
   NAME Cxx_tests_method_defn_in_tpldecl_0_passed
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -3246,7 +3210,7 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2005_56.C
     -o test2005_56.o
 )
-set_tests_properties(Cxx_tests_test2005_56_special PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_test2005_56_special PROPERTIES LABELS Cxx_tests )
 rex_lock_test_for_input(Cxx_tests_test2005_56_special test2005_56.C)
 
 add_test(
@@ -3341,7 +3305,7 @@ add_test(
     conftest_3.C
     -o conftest_configure_test_part_3
 )
-set_tests_properties(Cxx_tests_common_configure_test_with_link_part_3 PROPERTIES LABELS Cxx_tests RESOURCE_LOCK rose_output_conftest DISABLED TRUE)
+set_tests_properties(Cxx_tests_common_configure_test_with_link_part_3 PROPERTIES LABELS Cxx_tests RESOURCE_LOCK rose_output_conftest )
 
 add_test(
   NAME Cxx_tests_suppress_variable_declaration_normalization
@@ -3351,7 +3315,7 @@ add_test(
     ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test_multible_variables_in_variable_declaration.C
 )
-set_tests_properties(Cxx_tests_suppress_variable_declaration_normalization PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_suppress_variable_declaration_normalization PROPERTIES LABELS Cxx_tests )
 rex_lock_test_for_input(
   Cxx_tests_suppress_variable_declaration_normalization
   test_multible_variables_in_variable_declaration.C)
@@ -3363,7 +3327,7 @@ add_test(
     -rose:verbose 0 -nostdinc
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2015_08.C
 )
-set_tests_properties(Cxx_tests_testOption PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_testOption PROPERTIES LABELS Cxx_tests )
 rex_lock_test_for_input(Cxx_tests_testOption test2015_08.C)
 
 add_test(
@@ -3421,7 +3385,7 @@ add_test(
     -DthisIsOK -D thisIsAnError -rose:verbose 0
     roseTestProgram.C
 )
-set_tests_properties(Cxx_tests_testUsingBadCommandline PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_testUsingBadCommandline PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_testBuildUsingNoPath
@@ -3433,7 +3397,7 @@ add_test(
     -rose:verbose 0
     roseTestProgram.C
 )
-set_tests_properties(Cxx_tests_testBuildUsingNoPath PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_testBuildUsingNoPath PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_testBuildUsingRelativePath
@@ -3445,7 +3409,7 @@ add_test(
     -rose:verbose 0
     ../Cxx_tests/roseTestProgram.C
 )
-set_tests_properties(Cxx_tests_testBuildUsingRelativePath PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_testBuildUsingRelativePath PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_testBuildUsingAbsolutePath
@@ -3456,7 +3420,7 @@ add_test(
     $<TARGET_FILE:${translator}>
     -rose:verbose 0
 )
-set_tests_properties(Cxx_tests_testBuildUsingAbsolutePath PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_testBuildUsingAbsolutePath PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_test_ansi_and_nonansi_modes
@@ -3466,7 +3430,7 @@ add_test(
     dummy
     $<TARGET_FILE:${translator}>
 )
-set_tests_properties(Cxx_tests_test_ansi_and_nonansi_modes PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_test_ansi_and_nonansi_modes PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_multipleDeclarationsBug
@@ -3476,7 +3440,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/markus_1a.C
     ${CMAKE_CURRENT_SOURCE_DIR}/markus_1b.C
 )
-set_tests_properties(Cxx_tests_multipleDeclarationsBug PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_multipleDeclarationsBug PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_test_MPI_LAM
@@ -3486,7 +3450,7 @@ add_test(
     -I/home/dquinlan/ROSE/ROSE_TESTS/MPI_header_tests/MPI_header_tests_64bit/LAM_MPI/include
     -c /home/dquinlan/ROSE/ROSE_TESTS/MPI_header_tests/MPI_header_tests_64bit/tests/input.C
 )
-set_tests_properties(Cxx_tests_test_MPI_LAM PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_test_MPI_LAM PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_test_multiple_files
@@ -3496,7 +3460,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2012_246a.C
     ${CMAKE_CURRENT_SOURCE_DIR}/test2012_246b.C
 )
-set_tests_properties(Cxx_tests_test_multiple_files PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_test_multiple_files PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME CXXTEST_test2012_246a
@@ -3516,7 +3480,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2018_01.C
     ${CMAKE_CURRENT_SOURCE_DIR}/test2018_02.C
 )
-set_tests_properties(Cxx_tests_test_multiple_files_2 PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_test_multiple_files_2 PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_test_multiple_files_3
@@ -3526,7 +3490,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2019_30a.C
     ${CMAKE_CURRENT_SOURCE_DIR}/test2019_30b.C
 )
-set_tests_properties(Cxx_tests_test_multiple_files_3 PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_test_multiple_files_3 PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_test_multiple_files_4
@@ -3536,7 +3500,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2019_42a.C
     ${CMAKE_CURRENT_SOURCE_DIR}/test2019_42b.C
 )
-set_tests_properties(Cxx_tests_test_multiple_files_4 PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_test_multiple_files_4 PROPERTIES LABELS Cxx_tests )
 
 # Issue 476: switch init-statements with case-local declarations must survive
 # compile, link, and execution in the normal Cxx test suite.
@@ -3561,7 +3525,7 @@ add_test(
     -rose:verbose 0 -c
     ${CMAKE_CURRENT_SOURCE_DIR}/cpp_vector.C
 )
-set_tests_properties(Cxx_tests_test_bug_980 PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_test_bug_980 PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_testParser
@@ -3571,7 +3535,7 @@ add_test(
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2001_01.C
 )
-set_tests_properties(Cxx_tests_testParser PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_testParser PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_performance_timing
@@ -3582,7 +3546,7 @@ add_test(
     -rose:skip_unparse -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/testPerformance.C
 )
-set_tests_properties(Cxx_tests_performance_timing PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_performance_timing PROPERTIES LABELS Cxx_tests )
 
 add_test(
   NAME Cxx_tests_test_pdf_generation
@@ -3604,19 +3568,21 @@ add_test(
     -rose:skip_unparse -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/testPerformance.C
 )
-set_tests_properties(Cxx_tests_hpctoolkit PROPERTIES LABELS Cxx_tests DISABLED TRUE)
+set_tests_properties(Cxx_tests_hpctoolkit PROPERTIES LABELS Cxx_tests )
 
-# Issue 99: Friend function template lookup requires error-tolerant mode.
+# Extra Issue 99 coverage beyond the default compile test.
 add_test(
-  NAME Cxx_tests_rex_test2025_issue99
+  NAME Cxx_tests_rex_test2025_issue99_continue_on_error
   COMMAND
     $<TARGET_FILE:${translator}>
     ${ROSE_FLAGS} -rex:clang:continue-on-error ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_issue99.cpp
 )
-set_tests_properties(Cxx_tests_rex_test2025_issue99 PROPERTIES LABELS Cxx_tests )
-rex_lock_test_for_input(Cxx_tests_rex_test2025_issue99 rex_test2025_issue99.cpp)
+set_tests_properties(Cxx_tests_rex_test2025_issue99_continue_on_error PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(
+  Cxx_tests_rex_test2025_issue99_continue_on_error
+  rex_test2025_issue99.cpp)
 
 # Issue 482: if-body blocks must remain linked through the SgIfStmt child list.
 add_executable(
@@ -3630,7 +3596,8 @@ target_link_libraries(
 )
 
 add_test(
-  NAME Cxx_tests_test2006_131_C
+  NAME Cxx_tests_test2006_131_issue482_if_body_parenting
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND
     $<TARGET_FILE:rex_test2026_issue482_if_body_parenting_translator>
     ${ROSE_FLAGS} -rex:clang:continue-on-error -rose:skipfinalCompileStep
@@ -3638,8 +3605,29 @@ add_test(
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2006_131.C
 )
-set_tests_properties(Cxx_tests_test2006_131_C PROPERTIES LABELS Cxx_tests )
-rex_lock_test_for_input(Cxx_tests_test2006_131_C test2006_131.C)
+set_tests_properties(
+  Cxx_tests_test2006_131_issue482_if_body_parenting
+  PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_test2006_131_issue482_if_body_parenting
+  test2006_131.C)
+
+add_test(
+  NAME Cxx_tests_test2014_22_continue_on_error
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND
+    $<TARGET_FILE:${translator}>
+    ${ROSE_FLAGS} -rex:clang:continue-on-error -rose:skipfinalCompileStep
+    ${ROSE_INCLUDE_FLAGS}
+    -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/test2014_22.C
+)
+set_tests_properties(
+  Cxx_tests_test2014_22_continue_on_error
+  PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(
+  Cxx_tests_test2014_22_continue_on_error
+  test2014_22.C)
 
 # Issue 91: Declaration chains must not emit "firstNondefiningDeclaration == NULL"
 rex_compile_test_name(_issue91_test "Cxx_tests" rex_test2025_issue91_decl_chain.cpp)
@@ -3660,6 +3648,9 @@ set_tests_properties(${_issue145_test} PROPERTIES FAIL_REGULAR_EXPRESSION "Canno
 # Issue 150: Name-qualification map should not emit overwrite or default-scope warnings.
 rex_compile_test_name(_issue150_test "Cxx_tests" rex_test2025_issue150_name_qualification_map.cpp)
 set_tests_properties(${_issue150_test} PROPERTIES FAIL_REGULAR_EXPRESSION "In addToNameMap\(\): Allow this for replacement now!;Default reached in SgScopeStatement::isNamedScope" )
+
+set(_cxx_unparse_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_unparse_output)
+file(MAKE_DIRECTORY ${_cxx_unparse_output_dir})
 
 # Issue 160: Preserve file-scope static and implicit member access in unparse output.
 string(CONCAT rex_test2025_issue160_axpy_roundtrip_unparse_command
@@ -3859,7 +3850,10 @@ function(rex_add_cxx_unparse_check_test base_name shell_check_command)
       -I${CMAKE_CURRENT_SOURCE_DIR}
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${base_name}.cpp
   )
-  set_tests_properties(Cxx_tests_${base_name}_unparse PROPERTIES LABELS Cxx_tests)
+  set_tests_properties(Cxx_tests_${base_name}_unparse PROPERTIES
+    LABELS Cxx_tests
+    WORKING_DIRECTORY ${_cxx_unparse_output_dir}
+  )
   rex_lock_test_for_input(Cxx_tests_${base_name}_unparse ${base_name}.cpp)
 endfunction()
 
@@ -4236,21 +4230,25 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2025_issue149_param_list_unique_name_interface_function_coverage
   rex_test2025_issue149_param_list_unique_name.cpp)
 
-# Issue 144: Clang diagnostic errors must be fatal by default.
+# Extra Issue 144 diagnostic coverage beyond the default compile test.
 add_test(
-  NAME Cxx_tests_rex_test2025_cfe_error_exit_code
+  NAME Cxx_tests_rex_test2025_cfe_error_exit_code_diagnostics
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND
+    ${BASH_EXECUTABLE} -c
+    "\"$@\" > ${CMAKE_CURRENT_BINARY_DIR}/rex_test2025_cfe_error_exit_code.log 2>&1; status=$?; test $status -ne 0 && grep -F \"non-void function 'main' should return a value\" ${CMAKE_CURRENT_BINARY_DIR}/rex_test2025_cfe_error_exit_code.log && grep -F \"Error: Clang reported 1 diagnostic error(s); refusing to run backend\" ${CMAKE_CURRENT_BINARY_DIR}/rex_test2025_cfe_error_exit_code.log"
+    dummy
     $<TARGET_FILE:${translator}>
     ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_cfe_error_exit_code.cpp
 )
 set_tests_properties(
-  Cxx_tests_rex_test2025_cfe_error_exit_code
-  PROPERTIES LABELS Cxx_tests WILL_FAIL TRUE
+  Cxx_tests_rex_test2025_cfe_error_exit_code_diagnostics
+  PROPERTIES LABELS Cxx_tests
 )
 rex_lock_test_for_input(
-  Cxx_tests_rex_test2025_cfe_error_exit_code
+  Cxx_tests_rex_test2025_cfe_error_exit_code_diagnostics
   rex_test2025_cfe_error_exit_code.cpp)
 
 # Issue 144: Allow backend when explicitly opted in.
@@ -4726,73 +4724,46 @@ rex_lock_test_for_input(
   Cxx_tests_rex_test2026_dependent_qualification_unparse
   rex_test2026_dependent_qualification.cpp)
 
-# Makefile check targets.
-set(_cxx_compile_tests)
-foreach(file_to_test ${CXX_TESTCODES_EXPECTED_FAIL})
-  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
-  list(APPEND _cxx_compile_tests ${_test_name})
-endforeach()
-foreach(file_to_test ${TESTCODE_CURRENTLY_FAILING})
-  rex_compile_test_name(_test_name "Cxx_tests_failing" ${file_to_test})
-  list(APPEND _cxx_compile_tests ${_test_name})
-endforeach()
-foreach(
-  file_to_test
-  ${CXX_TESTCODES_GNUXX03}
-  ${CXX_TESTCODES_GNUXX17}
-  ${CXX_TESTCODES_DELAYED_TEMPLATE_PARSING}
-  ${CXX_TESTCODES_TO_RUN})
-  rex_compile_test_name(_test_name "Cxx_tests" ${file_to_test})
-  list(APPEND _cxx_compile_tests ${_test_name})
-endforeach()
-list(REMOVE_DUPLICATES _cxx_compile_tests)
-
-set(_cxx_check_local_tests ${_cxx_compile_tests})
-list(APPEND _cxx_check_local_tests
-  Cxx_tests_test2006_131_C
-  Cxx_tests_test_pdf_generation
-  Cxx_tests_test_unparse_includes_option
-  Cxx_tests_test_unparse_includes_option_with_link
-  Cxx_tests_common_configure_test_with_link_part_1
-  Cxx_tests_common_configure_test_with_link_part_2
-  Cxx_tests_testTemplateExample_1
-  Cxx_tests_testTemplateExample_2
-  Cxx_tests_testTemplateExample_3
-  Cxx_tests_testTemplateExample_4
-  Cxx_tests_testTemplateExample_5
+set_tests_properties(
+  Cxx_tests_rex_test2025_issue160_axpy_roundtrip_unparse
+  Cxx_tests_rex_test2025_issue163_axpy_roundtrip_unparse
+  Cxx_tests_rex_test2025_issue164_constexpr_const_unparse
+  Cxx_tests_rex_test2025_issue160_axpy_system_headers_unparse
+  Cxx_tests_rex_test2025_issue160_explicit_struct_instantiation_unparse
+  Cxx_tests_rex_test2025_issue160_explicit_class_instantiation_unparse
+  Cxx_tests_rex_test2025_issue160_extern_class_instantiation_unparse
+  Cxx_tests_${_issue160_system_header_class_instantiation_base}_unparse
+  Cxx_tests_rex_test2025_issue113_instantiation_spelling_unparse
+  Cxx_tests_rex_test2026_token_unparse_contract_rejects_incomplete_map
+  Cxx_tests_rex_test2025_extern_c_roundtrip_unparse
+  Cxx_tests_rex_test2025_extern_c_brace_roundtrip_unparse
+  Cxx_tests_rex_test2025_issue123_std_double_colon_unparse
+  Cxx_tests_rex_test2025_issue146_std_iota_quad_colon_unparse
+  Cxx_tests_rex_test2025_issue146_shadowed_function_template_unparse
+  Cxx_tests_rex_test2025_cfe_error_exit_code_continue_on_error_unparse
+  Cxx_tests_rex_test2026_issue264_rtti_backend_only
+  Cxx_tests_rex_test2026_issue264_rtti_respect_frontend_flags
+  Cxx_tests_rex_test2026_issue317_rtti_exceptions_backend_only
+  Cxx_tests_rex_test2025_issue124_system_header_specialization_args_unparse
+  Cxx_tests_rex_test2025_issue126_default_template_args_unparse
+  Cxx_tests_rex_test2026_redecl_default_template_arg_unparse
+  Cxx_tests_rex_test2026_redecl_default_template_arg_requires_unparse
+  Cxx_tests_rex_test2025_issue59_template_template_arg_global_qual_unparse
+  Cxx_tests_rex_test2025_issue60_friend_function_symbol_scope_unparse
+  Cxx_tests_rex_test2025_issue64_shadow_template_global_qual_unparse
+  Cxx_tests_rex_test2025_namespace_reopenings_preserve_blocks_unparse
+  Cxx_tests_rex_test2025_issue93_static_assert_order_unparse
+  Cxx_tests_rex_test2025_issue94_template_arg_spacing_unparse
+  Cxx_tests_rex_test2025_defaulted_special_members_anon_union_unparse
+  Cxx_tests_rex_test2025_template_call_explicit_args
+  Cxx_tests_rex_test2025_member_template_call_explicit_args
+  Cxx_tests_rex_test2025_variadic_template_params_unparse
+  Cxx_tests_rex_test2025_template_argument_pack_unparse
+  Cxx_tests_rex_test2025_issue99_failure_propagation
+  Cxx_tests_rex_test2025_issue87_namespace
+  Cxx_tests_rex_test2025_issue89_type_alias_template_args
+  Cxx_tests_rex_test2025_issue90_array_dim_template_param
+  Cxx_tests_rex_test2026_concepts_unparse
+  Cxx_tests_rex_test2026_dependent_qualification_unparse
+  PROPERTIES WORKING_DIRECTORY ${_cxx_unparse_output_dir}
 )
-list(REMOVE_DUPLICATES _cxx_check_local_tests)
-
-set(_cxx_perf_tests ${_cxx_compile_tests})
-list(APPEND _cxx_perf_tests Cxx_tests_test2006_131_C)
-list(REMOVE_DUPLICATES _cxx_perf_tests)
-
-add_test(
-  NAME nonsmoke_functional_CompileTests_Cxx_tests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_cxx_check_local_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_Cxx_tests_check-local PROPERTIES
-  DEPENDS "${_cxx_check_local_tests}"
-)
-
-add_test(
-  NAME nonsmoke_functional_CompileTests_Cxx_tests_check-performance-timing-with-threshold
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_cxx_perf_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_CompileTests_Cxx_tests_check-performance-timing-with-threshold PROPERTIES
-  LABELS disabled
-  DEPENDS "${_cxx_perf_tests}"
-)
-if(NOT REX_ENABLE_DISABLED_TESTS)
-  set_tests_properties(nonsmoke_functional_CompileTests_Cxx_tests_check-performance-timing-with-threshold PROPERTIES DISABLED TRUE)
-endif()

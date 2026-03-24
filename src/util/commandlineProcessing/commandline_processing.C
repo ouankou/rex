@@ -436,6 +436,13 @@ bool CommandlineProcessing::isCFileNameSuffix(const std::string &suffix) {
   return returnValue;
 }
 
+bool CommandlineProcessing::isAssemblerFileNameSuffix(
+    const std::string &suffix) {
+  // GCC/Clang conventionally use ".s" for raw assembler and ".S" for
+  // assembler that still needs preprocessing.
+  return suffix == "s" || suffix == "S";
+}
+
 bool CommandlineProcessing::isCppFileNameSuffix(const std::string &suffix) {
   // Returns true only if this is a valid C++ source file name extension
   // (suffix)

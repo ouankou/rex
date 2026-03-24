@@ -1,5 +1,5 @@
-#ifndef ROSE_INTEGEROPS_H
-#define ROSE_INTEGEROPS_H
+#ifndef ROSE_StringUtility_IntegerOps_H
+#define ROSE_StringUtility_IntegerOps_H
 
 #include <cassert>
 

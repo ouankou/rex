@@ -113,8 +113,24 @@ public:
 
   static std::string normalizePath(const std::string &aPath) {
     std::filesystem::path fsPath(aPath);
-    std::string normalizedPath = std::filesystem::canonical(fsPath).string();
-    return normalizedPath;
+
+    // Some callers normalize paths that may not exist yet (e.g., generated
+    // output files). canonical() throws in that case; weakly_canonical()
+    // preserves normalization without requiring the full path to exist.
+    std::error_code ec;
+    std::filesystem::path normalizedPath =
+        std::filesystem::weakly_canonical(fsPath, ec);
+    if (!ec) {
+      return normalizedPath.string();
+    }
+
+    ec.clear();
+    normalizedPath = std::filesystem::absolute(fsPath, ec);
+    if (!ec) {
+      return normalizedPath.lexically_normal().string();
+    }
+
+    return fsPath.lexically_normal().string();
   }
 
   static std::string normalizePathIfPossible(const std::string &path) {

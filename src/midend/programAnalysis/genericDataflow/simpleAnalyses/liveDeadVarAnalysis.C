@@ -428,22 +428,44 @@ void LiveDeadVarsTransfer::visit(SgCaseOptionStmt *sgn) {
     used(sgn->get_key_range_end());
 }
 void LiveDeadVarsTransfer::visit(SgIfStmt *sgn) {
-  // Dbg::dbg << "SgIfStmt"<<endl;
-  ROSE_ASSERT(isSgExprStatement(sgn->get_conditional()));
-  // Dbg::dbg << "    conditional
-  // stmt="<<Dbg::escape(isSgExprStatement(sgn->get_conditional())->unparseToString())
-  // << " | " << isSgExprStatement(sgn->get_conditional())->class_name()<<endl;
-  // Dbg::dbg << "    conditional
-  // expr="<<Dbg::escape(isSgExprStatement(sgn->get_conditional())->get_expression()->unparseToString())
-  // << " | " <<
-  // isSgExprStatement(sgn->get_conditional())->get_expression()->class_name()<<endl;
-  // Dbg::dbg << "    conditional
-  // var="<<SgExpr2Var(isSgExprStatement(sgn->get_conditional())->get_expression())<<endl;
-  used(isSgExprStatement(sgn->get_conditional())->get_expression());
+  if (SgExprStatement *cond_expr = isSgExprStatement(sgn->get_conditional())) {
+    used(cond_expr->get_expression());
+  } else if (SgVariableDeclaration *cond_decl =
+                 isSgVariableDeclaration(sgn->get_conditional())) {
+    for (SgInitializedName *name : cond_decl->get_variables()) {
+      if (name == nullptr) {
+        continue;
+      }
+      assignedVars.insert(varID(name));
+      if (name->get_initializer() != nullptr) {
+        used(name->get_initializer());
+      }
+    }
+  } else if (isSgNullStatement(sgn->get_conditional())) {
+    // no condition expression
+  } else {
+    std::cerr
+        << "LiveDeadVarsTransfer::visit() \"if\" condition statement type "
+           "is not handled yet: "
+        << sgn->get_conditional()->class_name() << "\n";
+    ROSE_ASSERT(!"statement type not handled");
+  }
 }
 void LiveDeadVarsTransfer::visit(SgForStatement *sgn) {
   if (isSgExprStatement(sgn->get_test())) {
     used(isSgExprStatement(sgn->get_test())->get_expression());
+    used(sgn->get_increment());
+  } else if (SgVariableDeclaration *test_decl =
+                 isSgVariableDeclaration(sgn->get_test())) {
+    for (SgInitializedName *name : test_decl->get_variables()) {
+      if (name == nullptr) {
+        continue;
+      }
+      assignedVars.insert(varID(name));
+      if (name->get_initializer() != nullptr) {
+        used(name->get_initializer());
+      }
+    }
     used(sgn->get_increment());
   } else if (isSgNullStatement(sgn->get_test())) {
     // void: no def or use
@@ -469,18 +491,50 @@ void LiveDeadVarsTransfer::visit(SgFortranDo *sgn) {
     used(sgn->get_increment());
 }
 void LiveDeadVarsTransfer::visit(SgWhileStmt *sgn) {
-  ROSE_ASSERT(isSgExprStatement(sgn->get_condition()));
-  // Dbg::dbg <<
-  // "condition="<<Dbg::escape(sgn->get_condition()->unparseToString()) << " | "
-  // << sgn->get_condition()->class_name()<<endl;
-  used(isSgExprStatement(sgn->get_condition())->get_expression());
+  if (SgExprStatement *cond_expr = isSgExprStatement(sgn->get_condition())) {
+    used(cond_expr->get_expression());
+  } else if (SgVariableDeclaration *cond_decl =
+                 isSgVariableDeclaration(sgn->get_condition())) {
+    for (SgInitializedName *name : cond_decl->get_variables()) {
+      if (name == nullptr) {
+        continue;
+      }
+      assignedVars.insert(varID(name));
+      if (name->get_initializer() != nullptr) {
+        used(name->get_initializer());
+      }
+    }
+  } else if (isSgNullStatement(sgn->get_condition())) {
+    // no condition expression
+  } else {
+    std::cerr << "LiveDeadVarsTransfer::visit() \"while\" condition statement "
+                 "type is not handled yet: "
+              << sgn->get_condition()->class_name() << "\n";
+    ROSE_ASSERT(!"statement type not handled");
+  }
 }
 void LiveDeadVarsTransfer::visit(SgDoWhileStmt *sgn) {
-  ROSE_ASSERT(isSgExprStatement(sgn->get_condition()));
-  // Dbg::dbg <<
-  // "condition="<<Dbg::escape(sgn->get_condition()->unparseToString()) << " | "
-  // << sgn->get_condition()->class_name()<<endl;
-  used(isSgExprStatement(sgn->get_condition())->get_expression());
+  if (SgExprStatement *cond_expr = isSgExprStatement(sgn->get_condition())) {
+    used(cond_expr->get_expression());
+  } else if (SgVariableDeclaration *cond_decl =
+                 isSgVariableDeclaration(sgn->get_condition())) {
+    for (SgInitializedName *name : cond_decl->get_variables()) {
+      if (name == nullptr) {
+        continue;
+      }
+      assignedVars.insert(varID(name));
+      if (name->get_initializer() != nullptr) {
+        used(name->get_initializer());
+      }
+    }
+  } else if (isSgNullStatement(sgn->get_condition())) {
+    // no condition expression
+  } else {
+    std::cerr << "LiveDeadVarsTransfer::visit() \"do-while\" condition "
+                 "statement type is not handled yet: "
+              << sgn->get_condition()->class_name() << "\n";
+    ROSE_ASSERT(!"statement type not handled");
+  }
 }
 
 bool LiveDeadVarsTransfer::finish() {

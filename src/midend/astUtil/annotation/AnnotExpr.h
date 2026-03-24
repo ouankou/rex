@@ -38,6 +38,9 @@ public:
     write(out);
     return out.str();
   }
+  bool operator<(const SymbolicValDescriptor &that) const {
+    return toString() < that.toString();
+  }
 
   bool is_top() const;
   bool is_bottom() const;

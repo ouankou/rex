@@ -1,5 +1,5 @@
-#ifndef ROSE_FileUtility_H
-#define ROSE_FileUtility_H
+#ifndef ROSE_StringUtility_FileUtility_H
+#define ROSE_StringUtility_FileUtility_H
 
 #include "rosedll.h"
 

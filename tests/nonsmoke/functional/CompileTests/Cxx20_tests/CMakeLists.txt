@@ -127,46 +127,30 @@ set(CXX20_TESTCODES
   test2020_121.C
   rex_test2026_concepts_requires.cpp
 )
-set(CXX20_DISABLED_TESTCODES
-  test2020_12.C
-  test2020_21.C
-  test2020_22.C
-  test2020_82.C
-  test2020_99.C
-  test2020_113.C
-  test2020_117.C
-  test2020_123.C
-)
-set(CXX20_EXPECTED_FAIL_TESTCODES
-  test2020_47.C
-)
 
-list(APPEND REX_FRONTEND_ERROR_TESTS
+set(CXX20_NEGATIVE_TESTCODES
   test2020_46.C
   test2020_49.C
   test2020_56.C
   test2020_59.C
   test2020_66.C
 )
-
-set(ROSE_SKIP_FINAL_COMPILE_TESTCODES
-  test2020_46.C
-  test2020_49.C
-  test2020_56.C
-  test2020_59.C
-  test2020_66.C
-)
+set(CXX20_POSITIVE_TESTCODES ${CXX20_TESTCODES})
+list(REMOVE_ITEM CXX20_POSITIVE_TESTCODES ${CXX20_NEGATIVE_TESTCODES})
 
 set(ROSE_FLAGS -w -rose:verbose 0 -std=c++20)
 
-set(ROSE_DISABLED_TESTCODES ${CXX20_DISABLED_TESTCODES})
-set(ROSE_EXPECTED_FAIL_TESTCODES ${CXX20_EXPECTED_FAIL_TESTCODES})
-
-foreach(file_to_test ${CXX20_TESTCODES})
+foreach(file_to_test ${CXX20_POSITIVE_TESTCODES})
   if(file_to_test STREQUAL "test2020_45.C")
     continue()
   endif()
   compile_test(${file_to_test} "Cxx20_tests")
+  rex_compile_test_name(_test_name "Cxx20_tests" ${file_to_test})
+  rex_lock_test_for_input(${_test_name} ${file_to_test})
+endforeach()
+
+foreach(file_to_test ${CXX20_NEGATIVE_TESTCODES})
+  compile_negative_test(${file_to_test} "Cxx20_tests")
   rex_compile_test_name(_test_name "Cxx20_tests" ${file_to_test})
   rex_lock_test_for_input(${_test_name} ${file_to_test})
 endforeach()

@@ -245,34 +245,3 @@ add_test(
     vf_05.passed
 )
 
-# Makefile check targets.
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_check-extra
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=program_analysis_cfg_01\;program_analysis_cfg_02\;program_analysis_cfg_03\;program_analysis_df_01\;program_analysis_df_02\;program_analysis_df_03\;program_analysis_df_04\;program_analysis_ptr_01\;program_analysis_sr_01\;program_analysis_sr_02\;program_analysis_sr_03\;program_analysis_vf_01\;program_analysis_vf_02\;program_analysis_vf_03\;program_analysis_vf_04\;program_analysis_vf_05
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_check-extra PROPERTIES DEPENDS "program_analysis_cfg_01;program_analysis_cfg_02;program_analysis_cfg_03;program_analysis_df_01;program_analysis_df_02;program_analysis_df_03;program_analysis_df_04;program_analysis_ptr_01;program_analysis_sr_01;program_analysis_sr_02;program_analysis_sr_03;program_analysis_vf_01;program_analysis_vf_02;program_analysis_vf_03;program_analysis_vf_04;program_analysis_vf_05" )
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=program_analysis_cfg_01\;program_analysis_cfg_02\;program_analysis_cfg_03\;program_analysis_df_01\;program_analysis_df_02\;program_analysis_df_03\;program_analysis_df_04\;program_analysis_ptr_01\;program_analysis_sr_01\;program_analysis_sr_02\;program_analysis_sr_03\;program_analysis_vf_01\;program_analysis_vf_02\;program_analysis_vf_03\;program_analysis_vf_04\;program_analysis_vf_05\;program_analysis_vfa_test2001_02_C\;program_analysis_vfa_test2001_03_C\;program_analysis_vfa_test2004_116_C
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_check-local PROPERTIES DEPENDS "program_analysis_cfg_01;program_analysis_cfg_02;program_analysis_cfg_03;program_analysis_df_01;program_analysis_df_02;program_analysis_df_03;program_analysis_df_04;program_analysis_ptr_01;program_analysis_sr_01;program_analysis_sr_02;program_analysis_sr_03;program_analysis_vf_01;program_analysis_vf_02;program_analysis_vf_03;program_analysis_vf_04;program_analysis_vf_05;program_analysis_vfa_test2001_02_C;program_analysis_vfa_test2001_03_C;program_analysis_vfa_test2004_116_C" )
-add_test(
-  NAME nonsmoke_functional_roseTests_programAnalysisTests_check-vfa
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=program_analysis_vfa_test2001_02_C\;program_analysis_vfa_test2001_03_C\;program_analysis_vfa_test2004_116_C
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(nonsmoke_functional_roseTests_programAnalysisTests_check-vfa PROPERTIES DEPENDS "program_analysis_vfa_test2001_02_C;program_analysis_vfa_test2001_03_C;program_analysis_vfa_test2004_116_C" )

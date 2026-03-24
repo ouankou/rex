@@ -3240,36 +3240,55 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
     AstTypeList PTlist;
     if (paramtypes == 0)
       paramtypes = &PTlist;
-    AstNodeType _ftype;
-    if (!IsVarRef(AstNodePtrImpl(f),
-                  &_ftype)) { // IsVarRef can also be used to get the (return?)
-                              // type of a function
-      MLOG_ERROR_C("astInterface",
-                   "Could not get function information from %s, Expression is "
-                   "%s at %s:%d\n",
-                   f->class_name().c_str(), f->unparseToString().c_str(),
-                   f->get_file_info()->get_filenameString().c_str(),
-                   f->get_file_info()->get_line());
-      ROSE_ABORT();
-    }
-    SgType *t = AstNodeTypeImpl(_ftype).get_ptr();
-    ROSE_ASSERT(t != NULL);
-    if (t->variantT() == V_SgPointerType)
-      t = static_cast<SgPointerType *>(t)->get_base_type();
-    SgFunctionType *ftype = isSgFunctionType(t);
-    if (ftype != 0) {
-      SgTypePtrList atypes = ftype->get_arguments();
-      for (SgTypePtrList::const_iterator p = atypes.begin(); p != atypes.end();
-           ++p) {
-        paramtypes->push_back(AstNodeTypeImpl(*p));
+    if (SgConstructorInitializer *ctor_init = isSgConstructorInitializer(f)) {
+      SgFunctionDeclaration *decl = ctor_init->get_declaration();
+      if (decl == nullptr) {
+        MLOG_ERROR_C("astInterface",
+                     "Could not get constructor declaration from %s, "
+                     "Expression is %s at %s:%d\n",
+                     f->class_name().c_str(), f->unparseToString().c_str(),
+                     f->get_file_info()->get_filenameString().c_str(),
+                     f->get_file_info()->get_line());
+        ROSE_ABORT();
       }
-      if (returntype != 0)
-        *returntype = AstNodeTypeImpl(ftype->get_return_type());
-    } else { // not a function type
-      DebugVariable([&s]() {
-        return "Non-function type called: " + AstInterface::AstToString(s);
-      });
-      return false;
+      for (SgInitializedName *param : decl->get_args()) {
+        paramtypes->push_back(AstNodeTypeImpl(param->get_type()));
+      }
+      if (returntype != 0) {
+        *returntype = AstNodeTypeImpl(ctor_init->get_expression_type());
+      }
+    } else {
+      AstNodeType _ftype;
+      if (!IsVarRef(AstNodePtrImpl(f),
+                    &_ftype)) { // IsVarRef can also be used to get the
+                                // (return?) type of a function
+        MLOG_ERROR_C("astInterface",
+                     "Could not get function information from %s, Expression "
+                     "is %s at %s:%d\n",
+                     f->class_name().c_str(), f->unparseToString().c_str(),
+                     f->get_file_info()->get_filenameString().c_str(),
+                     f->get_file_info()->get_line());
+        ROSE_ABORT();
+      }
+      SgType *t = AstNodeTypeImpl(_ftype).get_ptr();
+      ROSE_ASSERT(t != NULL);
+      if (t->variantT() == V_SgPointerType)
+        t = static_cast<SgPointerType *>(t)->get_base_type();
+      SgFunctionType *ftype = isSgFunctionType(t);
+      if (ftype != 0) {
+        SgTypePtrList atypes = ftype->get_arguments();
+        for (SgTypePtrList::const_iterator p = atypes.begin();
+             p != atypes.end(); ++p) {
+          paramtypes->push_back(AstNodeTypeImpl(*p));
+        }
+        if (returntype != 0)
+          *returntype = AstNodeTypeImpl(ftype->get_return_type());
+      } else { // not a function type
+        DebugVariable([&s]() {
+          return "Non-function type called: " + AstInterface::AstToString(s);
+        });
+        return false;
+      }
     }
     // Store arguments of reference types into outargs
     if (outargs != 0) {

@@ -2,10 +2,6 @@ add_executable(statements statements.C )
 target_link_libraries(statements ROSE_DLL ${link_with_libraries} )
 install(TARGETS statements DESTINATION bin)
 
-if(NOT with-ROSE_LONG_MAKE_CHECK_RULE)
-  return()
-endif()
-
 set(TESTCODES
   test_CplusplusMacro_Cpp.C test2001_01.C test2001_02.C test2001_03.C
   test2001_04.C test2001_05.C test2001_06.C test2001_07.C test2001_08.C
@@ -122,7 +118,7 @@ set(TESTCODES
 
 set(TESTCODE_INCLUDES "")
 
-set(_source_position_disabled_tests
+set(_additional_source_position_tests
   lexPhase2003_02.C
   test2004_25.C
   test2005_04.C
@@ -164,10 +160,6 @@ set(_source_position_disabled_tests
   test2006_177.C
 )
 
-# Ensure disabled tests are not included in the enabled test set by removing
-# them from the TESTCODES list.
-list(REMOVE_ITEM TESTCODES ${_source_position_disabled_tests})
-
 function(add_source_position_test test_file)
   configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/${test_file}
@@ -187,28 +179,6 @@ foreach(file_to_test ${TESTCODES})
   add_source_position_test(${file_to_test})
 endforeach()
 
-foreach(file_to_test ${_source_position_disabled_tests})
-  add_source_position_test(${file_to_test} DISABLED TRUE)
+foreach(file_to_test ${_additional_source_position_tests})
+  add_source_position_test(${file_to_test})
 endforeach()
-
-# Makefile check targets.
-set(_source_position_check_tests)
-foreach(file_to_test ${TESTCODES} ${_source_position_disabled_tests})
-  list(APPEND _source_position_check_tests "SOURCEPOSITIONTEST_${file_to_test}")
-endforeach()
-list(REMOVE_DUPLICATES _source_position_check_tests)
-list(JOIN _source_position_check_tests "\;" _source_position_group_tests)
-
-add_test(
-  NAME nonsmoke_functional_CompileTests_sourcePosition_tests_check-local
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND}
-    -DREX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
-    -DREX_CTEST_BUILD_DIR=${CMAKE_BINARY_DIR}
-    -DREX_CTEST_GROUP_TESTS=${_source_position_group_tests}
-    -P ${CMAKE_SOURCE_DIR}/scripts/run_ctest_group.cmake
-)
-set_tests_properties(
-  nonsmoke_functional_CompileTests_sourcePosition_tests_check-local
-  PROPERTIES DEPENDS "${_source_position_check_tests}"
-)

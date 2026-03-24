@@ -19,6 +19,8 @@
 
 #include "unparser.h"
 
+#include <functional>
+
 // DQ (8/31/2013):  This should only be included by source files that require
 // it. This fixed a reported bug which caused conflicts with configure-time
 // macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
@@ -1787,9 +1789,10 @@ void Unparse_ExprStmt::unparseNamespaceDeclarationStatement(
 
     curprint("namespace ");
 
-    // This can be an empty string (in the case of an unnamed namespace)
-    SgName name = namespaceDeclaration->get_name();
-    curprint(name.str());
+    if (!namespaceDeclaration->get_isUnnamedNamespace()) {
+      SgName name = namespaceDeclaration->get_name();
+      curprint(name.str());
+    }
   } else {
     SgNamespaceDefinitionStatement *namespaceDefinition =
         namespaceDeclaration->get_definition();
@@ -1999,10 +2002,16 @@ void Unparse_ExprStmt::unparseUsingDirectiveStatement(SgStatement *stmt,
                                                       SgUnparse_Info &info) {
   SgUsingDirectiveStatement *usingDirective = isSgUsingDirectiveStatement(stmt);
   ASSERT_not_null(usingDirective);
+  ASSERT_not_null(usingDirective->get_namespaceDeclaration());
+
+  // Anonymous namespaces are emitted as `namespace { ... }` and do not need
+  // a synthetic `using namespace __anonymous_namespace_...;` in generated code.
+  if (usingDirective->get_namespaceDeclaration()->get_isUnnamedNamespace()) {
+    return;
+  }
 
   // DQ (8/26/2004): This should be "using namespace" instead of just "using"
   curprint(string("\nusing namespace "));
-  ASSERT_not_null(usingDirective->get_namespaceDeclaration());
 
   // DQ (5/12/2011): Support for new name qualification.
   SgUnparse_Info tmp_info(info);
@@ -2232,24 +2241,26 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
       // DQ (12/29/2011): Added more template support for declarations.
       // I don't know if these case have to be separated out from case
       // V_SgFunctionDeclaration
-    case V_SgTemplateFunctionDeclaration:
-    case V_SgTemplateMemberFunctionDeclaration: {
+    case V_SgTemplateFunctionDeclaration: {
       SgTemplateFunctionDeclaration *templateDeclaration =
           isSgTemplateFunctionDeclaration(declarationStatement);
-
-      // DQ (1/19/2017): Modify this to be a warning instead of an assertion for
-      // the GNU 6.1 compiler. This is a problem for test2011_121.C and several
-      // other test codes in the unparseToString_tests directory.
-      // ASSERT_not_null(templateDeclaration);
       if (templateDeclaration != NULL) {
         SgName templateName = templateDeclaration->get_name();
         std::string using_name =
             inheriting_ctor_terminal_name(templateName.str());
         curprint(using_name);
-      } else {
-        // printf ("NOTE: In unparseUsingDeclarationStatement():
-        // declarationStatement = %s templateDeclaration == NULL
-        // \n",declarationStatement->sage_class_name());
+      }
+      break;
+    }
+
+    case V_SgTemplateMemberFunctionDeclaration: {
+      SgTemplateMemberFunctionDeclaration *templateDeclaration =
+          isSgTemplateMemberFunctionDeclaration(declarationStatement);
+      if (templateDeclaration != NULL) {
+        SgName templateName = templateDeclaration->get_name();
+        std::string using_name =
+            inheriting_ctor_terminal_name(templateName.str());
+        curprint(using_name);
       }
       break;
     }
@@ -4926,6 +4937,20 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       return;
     }
 
+    if (SgTemplateInstantiationDecl *assoc_inst =
+            isSgTemplateInstantiationDecl(assoc_class)) {
+      if (assoc_inst->isSpecialization()) {
+        size_t enclosing_template_ids =
+            count_enclosing_template_instantiation_levels_for_class_specialization(
+                assoc_inst);
+        for (size_t i = 0; i < enclosing_template_ids; ++i) {
+          curprint("template<>");
+          curprint("\n");
+        }
+        return;
+      }
+    }
+
     std::vector<SgTemplateClassDeclaration *> template_chain;
     auto add_template = [&](SgTemplateClassDeclaration *tmpl) {
       if (tmpl == NULL) {
@@ -4986,7 +5011,11 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
   if (!mfuncdecl_stmt->isForward() && mfuncdefn &&
       !ninfo.SkipFunctionDefinition() &&
       isDefaultedOrDeletedMemberFunction == false) {
-    unparseStatement(mfuncdecl_stmt->get_definition(), info);
+    // Class-member access control applies to the declaration itself, not to
+    // local declarations nested inside the function body.
+    SgUnparse_Info body_info(info);
+    body_info.unset_CheckAccess();
+    unparseStatement(mfuncdecl_stmt->get_definition(), body_info);
   } else {
     ASSERT_not_null(mfuncdecl_stmt->get_parent());
     // Access-specifier emission must be recomputed for each declaration.
@@ -5747,6 +5776,52 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
   if (p != classdefn_stmt->get_inheritances().end()) {
     curprint(string(": "));
 
+    std::function<void(SgNonrealDecl *, const SgName &, SgUnparse_Info &)>
+        unparse_nonreal_base_decl = [&](SgNonrealDecl *nr_decl,
+                                        const SgName &base_name_qualifier,
+                                        SgUnparse_Info &base_info) {
+          ASSERT_not_null(nr_decl);
+
+          bool has_nonreal_parent = false;
+          if (SgDeclarationScope *parent_scope =
+                  isSgDeclarationScope(nr_decl->get_parent())) {
+            if (SgNonrealDecl *parent_decl =
+                    isSgNonrealDecl(parent_scope->get_parent())) {
+              has_nonreal_parent = true;
+              unparse_nonreal_base_decl(parent_decl, SgName(), base_info);
+              curprint("::");
+            }
+          }
+
+          if (!has_nonreal_parent) {
+            if (nr_decl->get_has_global_qualifier()) {
+              curprint("::");
+            }
+            if (!base_name_qualifier.is_null()) {
+              curprint(base_name_qualifier.str());
+            }
+          } else if (nr_decl->get_has_template_keyword()) {
+            curprint("template ");
+          }
+
+          curprint(nr_decl->get_name().str());
+
+          SgTemplateArgumentPtrList &tpl_args = nr_decl->get_tpl_args();
+          if (tpl_args.size() > 0 || nr_decl->get_is_nonreal_template()) {
+            if (tpl_args.empty()) {
+              curprint("<>");
+            } else {
+              SgTemplateArgumentPtrList explicit_args = tpl_args;
+              SgUnparse_Info ninfo(base_info);
+              ninfo.set_SkipClassDefinition();
+              ninfo.set_SkipEnumDefinition();
+              ninfo.set_SkipClassSpecifier();
+              unp->u_exprStmt->unparseTemplateArgumentList(explicit_args,
+                                                           ninfo);
+            }
+          }
+        };
+
     // DQ (5/9/2011): This loop structure should be rewritten...
     while (true) {
       SgBaseClass *bcls = *p;
@@ -5782,29 +5857,7 @@ void Unparse_ExprStmt::unparseClassInheritanceList(
       if (nr_bcls != NULL) {
         SgNonrealDecl *nr_decl = nr_bcls->get_base_class_nonreal();
         ASSERT_not_null(nr_decl);
-
-        curprint(nameQualifier.str());
-        curprint(nr_decl->get_name().str());
-        if (!nr_decl->get_tpl_args().empty()) {
-          curprint("<");
-          bool need_separator = false;
-          for (SgTemplateArgument *argument : nr_decl->get_tpl_args()) {
-            if (argument == NULL ||
-                argument->get_argumentType() ==
-                    SgTemplateArgument::start_of_pack_expansion_argument) {
-              continue;
-            }
-            if (need_separator) {
-              curprint(",");
-            }
-            unparseTemplateArgument(argument, tmp_ninfo);
-            if (argument->get_is_pack_element()) {
-              curprint("...");
-            }
-            need_separator = true;
-          }
-          curprint(">");
-        }
+        unparse_nonreal_base_decl(nr_decl, nameQualifier, tmp_ninfo);
       } else {
         SgClassDeclaration *tmp_decl = bcls->get_base_class();
         ASSERT_not_null(tmp_decl);
@@ -8397,38 +8450,199 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       ((templateMemberFunctionDeclaration != NULL) &&
        (templateMemberFunctionDeclaration->get_unparse_template_ast() == true));
 
+  auto unparse_member_function_ctor_initializers =
+      [&](SgMemberFunctionDeclaration *member_function,
+          SgUnparse_Info &decl_info) {
+        if (member_function == NULL) {
+          return;
+        }
+
+        auto const &ctor_inits = member_function->get_ctors();
+        if (ctor_inits.empty()) {
+          return;
+        }
+
+        SgUnparse_Info init_info(decl_info);
+        init_info.set_SkipClassDefinition();
+        init_info.set_SkipEnumDefinition();
+        init_info.set_inArgList();
+        init_info.set_declstatement_ptr(NULL);
+        init_info.set_declstatement_ptr(member_function);
+
+        auto it_ctor_init = ctor_inits.begin();
+        auto const first = it_ctor_init;
+
+        curprint(" : ");
+        while (it_ctor_init != ctor_inits.end()) {
+          SgInitializedName *ctor_init = *it_ctor_init;
+          ASSERT_not_null(ctor_init);
+          if (it_ctor_init != first) {
+            curprint(", ");
+          }
+          ++it_ctor_init;
+
+          unparseAttachedPreprocessingInfo(ctor_init, decl_info,
+                                           PreprocessingInfo::before);
+
+          SgName nameQualifier = ctor_init->get_qualified_name_prefix();
+          if (!nameQualifier.is_null()) {
+            curprint(nameQualifier.str());
+          }
+          curprint(ctor_init->get_name().str());
+
+          SgExpression *initializer = ctor_init->get_initializer();
+          if (initializer == NULL) {
+            continue;
+          }
+
+          SgConstructorInitializer *ctor_initializer =
+              isSgConstructorInitializer(initializer);
+          bool output_parenthesis = ctor_initializer == nullptr;
+          if (output_parenthesis) {
+            curprint(string("("));
+          }
+
+          decl_info.set_reference_node_for_qualification(initializer);
+          unparseExpression(initializer, init_info);
+          decl_info.set_reference_node_for_qualification(NULL);
+
+          if (output_parenthesis) {
+            curprint(string(")"));
+          }
+        }
+      };
+
+  auto collect_template_class_chain =
+      [](SgDeclarationStatement *associated_decl,
+         SgScopeStatement *fallback_scope) {
+        std::vector<SgTemplateClassDeclaration *> chain;
+
+        auto append_template_decl = [&](SgDeclarationStatement *decl) {
+          SgTemplateClassDeclaration *template_decl =
+              isSgTemplateClassDeclaration(decl);
+          if (template_decl == nullptr) {
+            return;
+          }
+          if (std::find(chain.begin(), chain.end(), template_decl) ==
+              chain.end()) {
+            chain.push_back(template_decl);
+          }
+        };
+
+        append_template_decl(associated_decl);
+
+        SgNode *cursor = associated_decl != nullptr
+                             ? associated_decl->get_scope()
+                             : static_cast<SgNode *>(fallback_scope);
+        while (cursor != nullptr) {
+          if (SgClassDefinition *class_def = isSgClassDefinition(cursor)) {
+            append_template_decl(class_def->get_declaration());
+          } else if (SgTemplateClassDefinition *tpl_class_def =
+                         isSgTemplateClassDefinition(cursor)) {
+            append_template_decl(tpl_class_def->get_declaration());
+          } else if (SgTemplateInstantiationDefn *inst_def =
+                         isSgTemplateInstantiationDefn(cursor)) {
+            append_template_decl(inst_def->get_declaration());
+          }
+          cursor = cursor->get_parent();
+        }
+        return chain;
+      };
+  auto template_parameter_lists_match =
+      [](const SgTemplateParameterPtrList &lhs,
+         const SgTemplateParameterPtrList &rhs) -> bool {
+    if (lhs.size() != rhs.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < lhs.size(); ++i) {
+      SgTemplateParameter *lhs_param = lhs[i];
+      SgTemplateParameter *rhs_param = rhs[i];
+      if (lhs_param == nullptr || rhs_param == nullptr) {
+        if (lhs_param != rhs_param) {
+          return false;
+        }
+        continue;
+      }
+      if (lhs_param->get_parameterType() != rhs_param->get_parameterType()) {
+        return false;
+      }
+      if (lhs_param->get_is_parameter_pack() !=
+          rhs_param->get_is_parameter_pack()) {
+        return false;
+      }
+
+      auto parameter_name = [](SgTemplateParameter *param) -> std::string {
+        if (param == nullptr) {
+          return std::string();
+        }
+        if (SgTemplateType *template_type =
+                isSgTemplateType(param->get_type())) {
+          std::string name = template_type->get_name().getString();
+          if (!name.empty()) {
+            return name;
+          }
+        }
+        if (SgInitializedName *init_name = param->get_initializedName()) {
+          std::string name = init_name->get_name().getString();
+          if (!name.empty()) {
+            return name;
+          }
+        }
+        return std::string();
+      };
+
+      if (parameter_name(lhs_param) != parameter_name(rhs_param)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   if (unparse_template_from_ast) {
     SgTemplateClassDeclaration *assoc_tpl_class_decl = nullptr;
+    SgDeclarationStatement *associated_decl = nullptr;
     if (templateMemberFunctionDeclaration) {
-      assoc_tpl_class_decl = isSgTemplateClassDeclaration(
-          templateMemberFunctionDeclaration->get_associatedClassDeclaration());
+      associated_decl =
+          templateMemberFunctionDeclaration->get_associatedClassDeclaration();
+      assoc_tpl_class_decl = isSgTemplateClassDeclaration(associated_decl);
     } else if (templateVariableDeclaration) {
       ROSE_ASSERT(templateVariableDeclaration->get_variables().size() == 1);
       auto *iname = templateVariableDeclaration->get_variables()[0];
-      assoc_tpl_class_decl =
+      associated_decl =
           iname->get_scope()
-              ? isSgTemplateClassDeclaration(iname->get_scope()->get_parent())
+              ? isSgDeclarationStatement(iname->get_scope()->get_parent())
               : nullptr;
+      assoc_tpl_class_decl = isSgTemplateClassDeclaration(associated_decl);
     } else if (templateClassDeclaration || templateTypedefDeclaration) {
-      assoc_tpl_class_decl = template_stmt->get_scope()
-                                 ? isSgTemplateClassDeclaration(
-                                       template_stmt->get_scope()->get_parent())
-                                 : nullptr;
+      associated_decl = template_stmt->get_scope()
+                            ? isSgDeclarationStatement(
+                                  template_stmt->get_scope()->get_parent())
+                            : nullptr;
+      assoc_tpl_class_decl = isSgTemplateClassDeclaration(associated_decl);
     }
     //     std::cout << "assoc_tpl_class_decl = " << std::hex <<
     //     assoc_tpl_class_decl << " : " << (assoc_tpl_class_decl ?
     //     assoc_tpl_class_decl->class_name() : "") << std::endl;
 
     SgNode *parent = stmt->get_parent();
-    if (!isSgTemplateClassDefinition(parent)) {
-      // FIXME unparse nested headers in the wrong order
-      while (assoc_tpl_class_decl != nullptr) {
-        unparseTemplateHeader(assoc_tpl_class_decl, info);
-        assoc_tpl_class_decl =
-            assoc_tpl_class_decl->get_scope()
-                ? isSgTemplateClassDeclaration(
-                      assoc_tpl_class_decl->get_scope()->get_parent())
-                : nullptr;
+    const bool parent_is_class_like_definition =
+        isSgClassDefinition(parent) != nullptr ||
+        isSgTemplateClassDefinition(parent) != nullptr ||
+        isSgTemplateInstantiationDefn(parent) != nullptr;
+    if (!parent_is_class_like_definition) {
+      std::vector<SgTemplateClassDeclaration *> assoc_tpl_chain =
+          collect_template_class_chain(associated_decl,
+                                       template_stmt->get_scope());
+      if (templateMemberFunctionDeclaration != nullptr &&
+          !assoc_tpl_chain.empty() &&
+          template_parameter_lists_match(
+              assoc_tpl_chain.front()->get_templateParameters(),
+              templateMemberFunctionDeclaration->get_templateParameters())) {
+        assoc_tpl_chain.erase(assoc_tpl_chain.begin());
+      }
+      for (auto it = assoc_tpl_chain.rbegin(); it != assoc_tpl_chain.rend();
+           ++it) {
+        unparseTemplateHeader(*it, info);
       }
     }
 
@@ -8521,6 +8735,8 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       if (templateMemberFunctionDeclaration != NULL) {
         unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,
                                          ninfo);
+        unparse_member_function_ctor_initializers(
+            templateMemberFunctionDeclaration, ninfo);
       } else {
         unparseTrailingRequiresClauseIfPresent(this, functionDeclaration,
                                                ninfo);
@@ -8530,7 +8746,9 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
           functionDeclaration->get_definition();
       if (functionDefn != NULL) {
         SgBasicBlock *body = functionDefn->get_body();
-        unparseStatement(body, info);
+        SgUnparse_Info body_info(info);
+        body_info.unset_CheckAccess();
+        unparseStatement(body, body_info);
       }
 
       if (functionDefn == NULL && !info.SkipSemiColon())
@@ -8607,11 +8825,25 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
           isSgTemplateClassDeclaration(assoc_decl);
 
       SgNode *parent = templateMemberFunctionDeclaration->get_parent();
-      SgTemplateClassDefinition *parent_is_tpl_class_defn =
-          isSgTemplateClassDefinition(parent);
+      const bool parent_is_class_like_definition =
+          isSgClassDefinition(parent) != nullptr ||
+          isSgTemplateClassDefinition(parent) != nullptr ||
+          isSgTemplateInstantiationDefn(parent) != nullptr;
 
-      if (assoc_tpl_class_decl != NULL && parent_is_tpl_class_defn == NULL) {
-        unparseTemplateHeader(assoc_tpl_class_decl, info);
+      if (assoc_tpl_class_decl != NULL && !parent_is_class_like_definition) {
+        std::vector<SgTemplateClassDeclaration *> assoc_tpl_chain =
+            collect_template_class_chain(
+                assoc_decl, templateMemberFunctionDeclaration->get_scope());
+        if (!assoc_tpl_chain.empty() &&
+            template_parameter_lists_match(
+                assoc_tpl_chain.front()->get_templateParameters(),
+                templateMemberFunctionDeclaration->get_templateParameters())) {
+          assoc_tpl_chain.erase(assoc_tpl_chain.begin());
+        }
+        for (auto it = assoc_tpl_chain.rbegin(); it != assoc_tpl_chain.rend();
+             ++it) {
+          unparseTemplateHeader(*it, info);
+        }
       }
 
       unparseTemplateHeader(templateMemberFunctionDeclaration, info);
@@ -8648,6 +8880,8 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
 
       unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,
                                        ninfo);
+      unparse_member_function_ctor_initializers(
+          templateMemberFunctionDeclaration, ninfo);
 
       curprint(string("\n") + templateString + string("\n"));
     } else {
@@ -8679,6 +8913,8 @@ void Unparse_ExprStmt::unparseOmpForStatement(SgStatement *stmt,
   ASSERT_not_null(stmt);
   SgOmpForStatement *f_stmt = isSgOmpForStatement(stmt);
   ASSERT_not_null(f_stmt);
+  const int saved_linewrap = unp->cur.get_linewrap();
+  unp->cur.set_linewrap(-1);
 
   unparseOmpDirectivePrefixAndName(stmt, info);
 
@@ -8694,6 +8930,8 @@ void Unparse_ExprStmt::unparseOmpForStatement(SgStatement *stmt,
          << endl;
     ROSE_ABORT();
   }
+
+  unp->cur.set_linewrap(saved_linewrap);
 }
 
 void Unparse_ExprStmt::unparseOmpForSimdStatement(SgStatement *stmt,
@@ -8701,6 +8939,8 @@ void Unparse_ExprStmt::unparseOmpForSimdStatement(SgStatement *stmt,
   ASSERT_not_null(stmt);
   SgOmpForSimdStatement *f_stmt = isSgOmpForSimdStatement(stmt);
   ASSERT_not_null(f_stmt);
+  const int saved_linewrap = unp->cur.get_linewrap();
+  unp->cur.set_linewrap(-1);
 
   unparseOmpDirectivePrefixAndName(stmt, info);
 
@@ -8716,6 +8956,8 @@ void Unparse_ExprStmt::unparseOmpForSimdStatement(SgStatement *stmt,
          << endl;
     ROSE_ABORT();
   }
+
+  unp->cur.set_linewrap(saved_linewrap);
 }
 
 void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,

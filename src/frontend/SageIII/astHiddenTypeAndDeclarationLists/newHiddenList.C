@@ -4,6 +4,35 @@
 
 using namespace std;
 
+namespace {
+SgDeclarationStatement *preferAssociatedDefinitionForTemplateInstantiation(
+    SgDeclarationStatement *declaration) {
+  auto *inst = isSgTemplateInstantiationDecl(declaration);
+  if (inst == NULL) {
+    return declaration;
+  }
+
+  auto *def_inst =
+      isSgTemplateInstantiationDecl(inst->get_definingDeclaration());
+  if (def_inst == NULL || def_inst == inst ||
+      def_inst->get_definition() == NULL) {
+    return declaration;
+  }
+
+  const bool is_explicit_specialization =
+      inst->get_specialization() == SgDeclarationStatement::e_specialization ||
+      def_inst->get_specialization() ==
+          SgDeclarationStatement::e_specialization;
+  const bool defining_decl_will_unparse =
+      def_inst->get_file_info() != NULL &&
+      def_inst->get_file_info()->isOutputInCodeGeneration();
+
+  return (is_explicit_specialization || defining_decl_will_unparse)
+             ? static_cast<SgDeclarationStatement *>(def_inst)
+             : declaration;
+}
+} // namespace
+
 // *******************************************************
 // Main calling function to support hidden list evaluation
 // *******************************************************
@@ -241,7 +270,8 @@ HiddenListTraversal::associatedDeclaration(SgType *type) {
         isSgClassDeclaration(classType->get_declaration());
     ROSE_ASSERT(declaration != NULL);
 
-    return_declaration = declaration;
+    return_declaration =
+        preferAssociatedDefinitionForTemplateInstantiation(declaration);
     break;
   }
 
@@ -1426,7 +1456,7 @@ HiddenListTraversal::getDeclarationAssociatedWithType(SgType *type) {
   // printf ("In getDeclarationAssociatedWithType(): type = %s
   // \n",type->class_name().c_str());
 
-  SgDeclarationStatement *declaration = type->getAssociatedDeclaration();
+  SgDeclarationStatement *declaration = associatedDeclaration(type);
 
   // Primative types will not have an asociated declaration...
   // ROSE_ASSERT(declaration != NULL);
@@ -1444,7 +1474,8 @@ HiddenListTraversal::getDeclarationAssociatedWithType(SgType *type) {
            "declaration->get_definingDeclaration()         = %p \n",
            declaration->get_definingDeclaration());
 
-    ROSE_ASSERT(declaration == declaration->get_firstNondefiningDeclaration());
+    ROSE_ASSERT(declaration == declaration->get_firstNondefiningDeclaration() ||
+                declaration == declaration->get_definingDeclaration());
   }
 
   return declaration;

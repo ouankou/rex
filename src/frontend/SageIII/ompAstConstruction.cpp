@@ -1009,6 +1009,186 @@ std::string getRawOpenMPCppDirectiveText(
   return "";
 }
 
+static void setLocatedNodeLineAndColumn(SgLocatedNode *node, int line,
+                                        int col) {
+  if (node == nullptr) {
+    return;
+  }
+
+  if (Sg_File_Info *info = node->get_file_info()) {
+    info->set_line(line);
+    info->set_col(col);
+  }
+  if (Sg_File_Info *start = node->get_startOfConstruct()) {
+    start->set_line(line);
+    start->set_col(col);
+  }
+  if (Sg_File_Info *end = node->get_endOfConstruct()) {
+    end->set_line(line);
+    end->set_col(col);
+  }
+}
+
+static bool isConditionalBeginDirective(const PreprocessingInfo *info) {
+  if (info == nullptr) {
+    return false;
+  }
+
+  switch (info->getTypeOfDirective()) {
+  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
+  case PreprocessingInfo::CpreprocessorIfDeclaration:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool isConditionalEndDirective(const PreprocessingInfo *info) {
+  return info != nullptr &&
+         info->getTypeOfDirective() ==
+             PreprocessingInfo::CpreprocessorEndifDeclaration;
+}
+
+static bool isStandaloneConditionalBoundaryToken(const std::string &text) {
+  const size_t begin = text.find_first_not_of(" \t\r\n");
+  if (begin == std::string::npos || text[begin] != '#') {
+    return false;
+  }
+  return text.find_first_not_of(" \t\r\n", begin + 1) == std::string::npos;
+}
+
+static bool isDirectiveKindToken(const std::string &text, size_t pos,
+                                 const char *keyword) {
+  const size_t keyword_len = std::strlen(keyword);
+  if (!startsWithCaseInsensitiveKeyword(text, pos, keyword)) {
+    return false;
+  }
+
+  const size_t end = pos + keyword_len;
+  return end == text.size() ||
+         std::isspace(static_cast<unsigned char>(text[end]));
+}
+
+static bool isOpenMPOrOpenACCCppPragmaLine(const std::string &line) {
+  size_t pos = line.find_first_not_of(" \t");
+  if (pos == std::string::npos || line[pos] != '#') {
+    return false;
+  }
+
+  ++pos;
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos ||
+      !startsWithCaseInsensitiveKeyword(line, pos, "pragma")) {
+    return false;
+  }
+
+  pos += 6;
+  if (pos < line.size() &&
+      !std::isspace(static_cast<unsigned char>(line[pos]))) {
+    return false;
+  }
+
+  pos = line.find_first_not_of(" \t", pos);
+  if (pos == std::string::npos) {
+    return false;
+  }
+
+  return isDirectiveKindToken(line, pos, "omp") ||
+         isDirectiveKindToken(line, pos, "acc");
+}
+
+static std::string
+sanitizeMovedConditionalSkippedTokenText(const std::string &text) {
+  std::string sanitized;
+  size_t line_start = 0;
+  bool skip_pragma_continuation = false;
+
+  while (line_start < text.size()) {
+    const size_t line_end = text.find('\n', line_start);
+    const size_t past_line_end =
+        line_end == std::string::npos ? text.size() : line_end + 1;
+    const std::string line =
+        text.substr(line_start, past_line_end - line_start);
+
+    std::string logical_line = line;
+    if (!logical_line.empty() && logical_line.back() == '\n') {
+      logical_line.pop_back();
+    }
+    if (!logical_line.empty() && logical_line.back() == '\r') {
+      logical_line.pop_back();
+    }
+
+    const bool has_cpp_continuation = endsWithCppLineContinuation(logical_line);
+    bool skip_line = skip_pragma_continuation;
+    if (!skip_line) {
+      skip_line = isStandaloneConditionalBoundaryToken(logical_line) ||
+                  isOpenMPOrOpenACCCppPragmaLine(logical_line);
+    }
+
+    if (!skip_line) {
+      sanitized += line;
+    }
+
+    skip_pragma_continuation =
+        skip_line && (skip_pragma_continuation || has_cpp_continuation);
+    if (skip_pragma_continuation && !has_cpp_continuation) {
+      skip_pragma_continuation = false;
+    }
+
+    line_start = past_line_end;
+  }
+
+  return sanitized;
+}
+
+static void trimTrailingConditionalBoundaryToken(std::string &text) {
+  if (text.size() >= 3 && text.compare(text.size() - 3, 3, "#\r\n") == 0) {
+    text.erase(text.size() - 3);
+    return;
+  }
+  if (text.size() >= 2 && text.compare(text.size() - 2, 2, "#\n") == 0) {
+    text.erase(text.size() - 2);
+  }
+}
+
+static void normalizeMovedConditionalSkippedTokens(SgStatement *statement) {
+  if (statement == nullptr) {
+    return;
+  }
+
+  AttachedPreprocessingInfoType *infos =
+      statement->getAttachedPreprocessingInfo();
+  if (infos == nullptr) {
+    return;
+  }
+
+  for (AttachedPreprocessingInfoType::iterator it = infos->begin();
+       it != infos->end();) {
+    PreprocessingInfo *info = *it;
+    if (info == nullptr ||
+        info->getTypeOfDirective() != PreprocessingInfo::CSkippedToken) {
+      ++it;
+      continue;
+    }
+
+    AttachedPreprocessingInfoType::iterator next = it;
+    ++next;
+    std::string text =
+        sanitizeMovedConditionalSkippedTokenText(info->getString());
+    if (next != infos->end() && isConditionalEndDirective(*next)) {
+      trimTrailingConditionalBoundaryToken(text);
+    }
+    if (text.empty()) {
+      it = infos->erase(it);
+      continue;
+    }
+    info->setString(text);
+
+    ++it;
+  }
+}
+
 void initializeGeneratedOpenMPStatement(SgStatement *statement) {
   if (statement == nullptr) {
     return;
@@ -5150,6 +5330,8 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
 
     PreprocessingInfo *info = std::get<1>(*iter);
     ROSE_ASSERT(info != NULL);
+    setLocatedNodeLineAndColumn(p_decl, info->getLineNumber(),
+                                info->getColumnNumber());
     // We still keep the peprocessingInfo. its line number will be used later to
     // set file info object
     AttachedPreprocessingInfoType *comments =
@@ -5227,13 +5409,10 @@ void convert_Fortran_OMP_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
         last_before = stmt_last_before_pragma_dict[stmt];
       }
       // Don't automatically move comments here!
-      if (isSgBasicBlock(stmt) &&
-          isSgFortranDo(
-              stmt->get_parent())) { // special handling for the body of
-                                     // SgFortranDo.  The comments will be
-                                     // attached before the body But we cannot
-                                     // insert the pragma before the body. So we
-                                     // prepend it into the body instead
+      if (isSgBasicBlock(stmt)) {
+        // Fortran directive comments are often anchored on a branch or loop
+        // body block itself. Inserting before the block moves the directive
+        // outside the structured region, so keep it inside the block instead.
         if (last_before) {
           insertStatementAfter(last_before, p_decl, false);
         } else {
@@ -5441,10 +5620,8 @@ void convert_Fortran_ACC_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
 
     SgPragmaDeclaration *p_decl = buildPragmaDeclaration(pragma_text, scope);
     copyStartFileInfo(locNode, p_decl);
-    if (Sg_File_Info *info = p_decl->get_file_info()) {
-      info->set_line(pinfo->getLineNumber());
-      info->set_col(pinfo->getColumnNumber());
-    }
+    setLocatedNodeLineAndColumn(p_decl, pinfo->getLineNumber(),
+                                pinfo->getColumnNumber());
 
     std::string parse_text = std::string("!$") + pragma_text;
     accparser_OpenACCIR = parseOpenACC(parse_text);
@@ -5479,7 +5656,7 @@ void convert_Fortran_ACC_Comments_to_Pragmas(SgSourceFile *sageFilePtr) {
       if (stmt_last_before_pragma_dict.count(stmt)) {
         last_before = stmt_last_before_pragma_dict[stmt];
       }
-      if (isSgBasicBlock(stmt) && isSgFortranDo(stmt->get_parent())) {
+      if (isSgBasicBlock(stmt)) {
         if (last_before) {
           insertStatementAfter(last_before, p_decl, false);
         } else {
@@ -5719,8 +5896,8 @@ void processOpenMP(SgSourceFile *sageFilePtr) {
   // We can turn this off to debug the convert_Fortran_OMP_Comments_to_Pragmas()
   OpenMPIRToSageAST(sageFilePtr);
   if (isFortran) {
+    removeFortranDirectiveComments(sageFilePtr, "omp");
     if (hasFortranOpenMPArtifactsForSourceFile(sageFilePtr)) {
-      removeFortranDirectiveComments(sageFilePtr, "omp");
       removeFortranOpenMPPragmas(sageFilePtr);
     }
   }
@@ -5942,7 +6119,18 @@ convertDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   setOneSourcePositionForTransformation(result);
   copyStartFileInfo(pdecl, result);
-  copyEndFileInfo(pdecl, result);
+  // Structured OpenMP directives should end with their body, not with the
+  // leading pragma line. Replacing the end location with the pragma extent can
+  // also break directives whose end bookkeeping is derived from nested bodies
+  // (for example, target constructs wrapping a nested parallel region).
+  if (SgOmpBodyStatement *body_stmt = isSgOmpBodyStatement(result)) {
+    if (body_stmt->get_body() == NULL) {
+      copyEndFileInfo(pdecl, result);
+    }
+  } else {
+    copyEndFileInfo(pdecl, result);
+  }
+  initializeGeneratedOpenMPStatement(result);
   if (SgLocatedNode *located_result = isSgLocatedNode(result)) {
     located_result->setOutputInCodeGeneration();
   }
@@ -6384,9 +6572,11 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   // like target enter/exit data are standalone and must not steal the next
   // statement as a synthetic body.
   SgStatement *body = NULL;
+  SgStatement *next_stmt_after_body = NULL;
   if (directive_requires_structured_block(directive_kind)) {
     body = getOpenMPBlockBody(current_OpenMPIR_to_SageIII);
     if (body != NULL) {
+      next_stmt_after_body = getNextStatement(body);
       removeStatement(body, false);
     } else {
       return NULL;
@@ -6646,6 +6836,27 @@ convertBodyDirective(std::pair<SgPragmaDeclaration *, OpenMPDirective *>
   }
   if (body != NULL) {
     body->set_parent(result);
+  }
+  if (body != NULL) {
+    bool is_fortran_file = false;
+    if (SgSourceFile *source_file =
+            getEnclosingSourceFile(current_OpenMPIR_to_SageIII.first)) {
+      is_fortran_file =
+          source_file->get_Fortran_only() || source_file->get_F77_only() ||
+          source_file->get_F90_only() || source_file->get_F95_only() ||
+          source_file->get_F2003_only();
+    }
+    if (!is_fortran_file) {
+      moveUpInnerDanglingIfEndifDirective(body);
+      if (next_stmt_after_body != NULL) {
+        movePreprocessingInfo(next_stmt_after_body, result,
+                              PreprocessingInfo::before,
+                              PreprocessingInfo::after);
+      }
+      movePreprocessingInfo(body, result, PreprocessingInfo::after,
+                            PreprocessingInfo::after);
+      normalizeMovedConditionalSkippedTokens(result);
+    }
   }
   // extract all the clauses based on the vector of clauses in the original
   // order

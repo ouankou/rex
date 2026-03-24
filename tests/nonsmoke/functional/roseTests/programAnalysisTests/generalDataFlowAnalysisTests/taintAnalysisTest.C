@@ -8,7 +8,17 @@
 
 #include "sage3basic.h"
 
+#include <cstdlib>
+
 #include "taintAnalysis.h"
+
+static std::string get_debug_output_dir() {
+  const char *env = std::getenv("ROSE_TEST_OUTPUT_DIR");
+  if (env != nullptr && env[0] != '\0') {
+    return std::string(env);
+  }
+  return ".";
+}
 
 static void usage(const char *arg0, int exit_status) {
   const char *slash = strrchr(arg0, '/');
@@ -104,7 +114,7 @@ int main(int argc, char *argv[]) {
 
   SgProject *project = frontend(argc, argv);
   initAnalysis(project);
-  Dbg::init("Taint analysis", ".", "index.html");
+  Dbg::init("Taint analysis", get_debug_output_dir(), "index.html");
 
   // Generate the call graph
   CallGraphBuilder cg_analyzer(project);

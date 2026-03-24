@@ -18,7 +18,7 @@ make[2]: Entering directory `/home/too1/projects/rose/UNIT-86-unit-tests/compila
   CXX      ExpressionBuilderUnitTests.o
   CXXLD    ExpressionBuilderUnitTests
 make[2]: Leaving directory `/home/too1/projects/rose/UNIT-86-unit-tests/compilation/tests/nonsmoke/functional/UnitTests/Rose/SageBuilder'
-make  check-local
+ctest --test-dir build --output-on-failure -R SageBuilder
 make[2]: Entering directory `/home/too1/projects/rose/UNIT-86-unit-tests/compilation/tests/nonsmoke/functional/UnitTests/Rose/SageBuilder'
   TEST   SgTypeBuildersUnitTests
   TEST   ExpressionBuilderUnitTests

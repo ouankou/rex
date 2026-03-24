@@ -673,6 +673,16 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
   std::vector<stream_element *> tokenVector = getTokenStream(sourceFile);
   const size_t tokenCount = tokenVector.size();
 
+  if (tokenCount == 0) {
+    std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator globalIt =
+        tokenMap.find(globalScope);
+    if (globalIt != tokenMap.end() && globalIt->second != NULL) {
+      assertTokenSubsequenceWithinBounds(sourceFile, globalScope,
+                                         globalIt->second, tokenCount);
+    }
+    return;
+  }
+
   std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator globalIt =
       tokenMap.find(globalScope);
   if (globalIt == tokenMap.end() || globalIt->second == NULL) {
@@ -710,10 +720,27 @@ void enforceTokenUnparseContractForFile(SgSourceFile *sourceFile) {
     std::map<SgNode *, TokenStreamSequenceToNodeMapping *>::iterator declIt =
         tokenMap.find(decl);
     if (declIt == tokenMap.end() || declIt->second == NULL) {
+      std::ostringstream detail;
+      detail << " parent="
+             << (decl->get_parent() != NULL ? decl->get_parent()->class_name()
+                                            : std::string("<null>"));
+      if (SgScopeStatement *scope = decl->get_scope()) {
+        detail << " scope=" << scope->class_name();
+      } else {
+        detail << " scope=<null>";
+      }
+      if (Sg_File_Info *fi = decl->get_file_info()) {
+        detail << " file=" << fi->get_filenameString() << ":" << fi->get_line()
+               << ":" << fi->get_col();
+      }
+      if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
+        detail << " name=" << class_decl->get_name().getString();
+      }
       MLOG_ERROR_CXX("sageSupport")
           << "token-unparse contract violation: token-map missing top-level "
           << "declaration entry " << decl << " (" << decl->class_name()
-          << ") in file " << sourceFile->getFileName() << std::endl;
+          << ") in file " << sourceFile->getFileName() << detail.str()
+          << std::endl;
       ROSE_ASSERT(false);
     }
 
@@ -1434,6 +1461,48 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
   SgStatement *nextStatement = NULL;
   SgScopeStatement *scope = currentStatement->get_scope();
   ROSE_ASSERT(scope != NULL);
+
+  // If this statement is nested under a label, it is not directly present in
+  // the enclosing scope's statement list. Advance from the label statement
+  // itself (which *is* in that list) to preserve linear statement iteration.
+  if (SgLabelStatement *label_parent =
+          isSgLabelStatement(currentStatement->get_parent())) {
+    SgScopeStatement *label_scope = label_parent->get_scope();
+    ROSE_ASSERT(label_scope != NULL);
+
+    // Labels are statements, so they should only occur in statement lists.
+    if (!isSgDeclarationScope(label_scope) &&
+        label_scope->containsOnlyDeclarations() == false) {
+      SgStatementPtrList &statementList = label_scope->getStatementList();
+      Rose_STL_Container<SgStatement *>::iterator i;
+      for (i = statementList.begin();
+           i != statementList.end() && (*i) != label_parent; ++i) {
+      }
+
+      if (i == statementList.end()) {
+        MLOG_FATAL_CXX("sageSupport")
+            << "fatal error: ROSE::getNextStatement(): label statement is not "
+               "found within its scope's statement list"
+            << endl;
+        MLOG_FATAL_CXX("sageSupport") << "current statement is "
+                                      << currentStatement->class_name() << endl;
+        MLOG_FATAL_CXX("sageSupport")
+            << currentStatement->get_file_info()->displayString() << endl;
+        MLOG_FATAL_CXX("sageSupport")
+            << "label statement is " << label_parent->class_name() << endl;
+        MLOG_FATAL_CXX("sageSupport")
+            << label_parent->get_file_info()->displayString() << endl;
+        MLOG_FATAL_CXX("sageSupport")
+            << "Its scope is " << label_scope->class_name() << endl;
+        MLOG_FATAL_CXX("sageSupport")
+            << label_scope->get_file_info()->displayString() << endl;
+        ROSE_ASSERT("!ROSE::getNextStatement label not found");
+      }
+
+      ++i;
+      return (i == statementList.end()) ? nullptr : *i;
+    }
+  }
 
   // DQ (9/18/2010): If we try to get the next statement from SgGlobal, then
   // return NULL.

@@ -110,6 +110,14 @@ generatePrototype(const SgFunctionDeclaration *full_decl,
   if (full_decl->get_functionModifier().isInline())
     proto->get_functionModifier().setInline();
 
+  // Keep language linkage consistent with the defining declaration (e.g.,
+  // outlined functions may be forced to `extern "C"`).
+  proto->set_linkage(full_decl->get_linkage());
+  if (full_decl->get_declarationModifier().get_storageModifier().isExtern() ==
+      true) {
+    proto->get_declarationModifier().get_storageModifier().setExtern();
+  }
+
   // This should be the defining declaration (check it).
   ROSE_ASSERT(full_decl->get_definition() != NULL);
 
@@ -1362,8 +1370,31 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
     sourceFileFunctionPrototype = insertGlobalPrototype(
         func, friendFunctionPrototypeList, src_global, target_func);
 
+    SgFunctionDeclaration *source_first_nondef =
+        sourceFileFunctionPrototype != NULL
+            ? isSgFunctionDeclaration(sourceFileFunctionPrototype
+                                          ->get_firstNondefiningDeclaration())
+            : NULL;
+
     SgFunctionSymbol *sourceFileFunctionPrototypeSymbol =
         isSgFunctionSymbol(src_global->lookup_symbol(func->get_name()));
+    if (sourceFileFunctionPrototypeSymbol == NULL &&
+        source_first_nondef != NULL) {
+      sourceFileFunctionPrototypeSymbol = isSgFunctionSymbol(
+          src_global->find_symbol_from_declaration(source_first_nondef));
+    }
+    if (sourceFileFunctionPrototypeSymbol == NULL &&
+        source_first_nondef != NULL) {
+      sourceFileFunctionPrototypeSymbol = isSgFunctionSymbol(
+          source_first_nondef->get_symbol_from_symbol_table());
+    }
+    if (sourceFileFunctionPrototypeSymbol == NULL &&
+        source_first_nondef != NULL) {
+      sourceFileFunctionPrototypeSymbol =
+          new SgFunctionSymbol(source_first_nondef);
+      src_global->insert_symbol(func->get_name(),
+                                sourceFileFunctionPrototypeSymbol);
+    }
     ROSE_ASSERT(sourceFileFunctionPrototypeSymbol != NULL);
     // Liao 12/6/2012. The assumption now is changed. A hidden nondefining
     // declaration is always created when a defining declaration is created. So
@@ -1396,8 +1427,11 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
 
     // Build a function prototype and insert it first (will be at the top of the
     // generated file).
-    outlinedFileFunctionPrototype =
-        SageBuilder::buildNondefiningFunctionDeclaration(func, scope);
+    // For template outlined functions we must build a matching template
+    // prototype, otherwise wiring defining/nondefining will assert due to a
+    // cross-variant definingDeclaration edge.
+    outlinedFileFunctionPrototype = generatePrototype(func, scope, false);
+    ROSE_ASSERT(outlinedFileFunctionPrototype != NULL);
 
     // Inherit defining function's inline property: avoid linking error when
     // linking multiple .lib files with the outlined functions
@@ -1462,8 +1496,16 @@ Outliner::insert(SgFunctionDeclaration *func, SgScopeStatement *scope,
     // ROSE_ASSERT(outlinedFileFunctionPrototypeSymbol->get_declaration() ==
     // outlinedFileFunctionPrototype);
 
-    ROSE_ASSERT(outlinedFileFunctionPrototype->get_definingDeclaration() ==
-                func);
+    // The prototype must be connected to the defining declaration for the
+    // outlined function. Some builder paths don't automatically wire this up,
+    // especially for friend-related outlining.
+    if (outlinedFileFunctionPrototype->get_definingDeclaration() == NULL) {
+      outlinedFileFunctionPrototype->set_definingDeclaration(func);
+    } else {
+      // If a defining decl is already attached, it must match.
+      ROSE_ASSERT(outlinedFileFunctionPrototype->get_definingDeclaration() ==
+                  func);
+    }
 
     // DQ (2/20/2009): ASK LIAO: If func is a defining declaration then
     // shouldn't the SageBuilder::buildNondefiningFunctionDeclaration() set the

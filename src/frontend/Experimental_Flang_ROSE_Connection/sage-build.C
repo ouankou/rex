@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <limits>
 
 #include <optional>
@@ -2308,7 +2309,7 @@ CollectFortranCommentTokens(const SgSourceFile *source) {
     if (comment_start == std::string::npos) {
       continue;
     }
-    if (IsOpenAccOrCufDirectiveLine(line)) {
+    if (source->get_openacc() && IsOpenAccOrCufDirectiveLine(line)) {
       continue;
     }
 
@@ -2905,10 +2906,15 @@ void Build(parser::Program &x, parser::AllCookedSources &cooked) {
   // Start by building ProgramUnit(s)
   Walk(x.v, visitor);
 
-  // Flang does not always surface OpenMP/OpenACC directives as parser
-  // constructs. Recover them from source text so OpenMP AST conversion can
-  // consume consistent pragma declarations.
-  InjectFortranDirectivePragmasFromSource(builder.getSourceFile());
+  SgSourceFile *source_file = builder.getSourceFile();
+  if (source_file != nullptr &&
+      (source_file->get_openmp() || source_file->get_openacc())) {
+    // Flang does not always surface OpenMP/OpenACC directives as parser
+    // constructs. Recover them from source text only when the directive
+    // pipeline is enabled; otherwise the original source comments are the
+    // single canonical representation for plain parse/unparse.
+    InjectFortranDirectivePragmasFromSource(source_file);
+  }
 
   // Root of tree, finished
   visitor.Done();
@@ -4197,6 +4203,17 @@ void PopulateBlock(Rose::builder::BuildVisitor &visitor,
   SageBuilder::popScopeStack();
 }
 
+void SetBlockSourceRange(SgBasicBlock *body, const SourcePosition &begin,
+                         const SourcePosition &end) {
+  if (body == nullptr) {
+    return;
+  }
+  if (begin.line <= 0 || end.line <= 0) {
+    return;
+  }
+  builder.setSourcePosition(body, begin, end);
+}
+
 SgExpression *BuildScalarExpr(parser::ScalarExpr &expr) {
   SgExpression *result{nullptr};
   WalkExpr(expr.thing.value(), result);
@@ -4398,6 +4415,9 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
   using namespace Fortran::parser;
 
   auto &ifStmt = std::get<Statement<IfThenStmt>>(x.t);
+  auto &elseIfBlocks = std::get<std::list<IfConstruct::ElseIfBlock>>(x.t);
+  auto &optElse = std::get<std::optional<IfConstruct::ElseBlock>>(x.t);
+  auto &endIfStmt = std::get<Statement<EndIfStmt>>(x.t);
   SgExpression *condition =
       BuildScalarLogicalExpr(std::get<ScalarLogicalExpr>(ifStmt.statement.t));
   ASSERT_not_null(condition);
@@ -4414,16 +4434,27 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
                 /*is_ifthen*/ true, /*has_end_stmt*/ true,
                 /*is_else_if*/ false);
   SourcePosition srcBegin{BuildSourcePosition(ifStmt, Order::begin)};
-  SourcePosition srcEnd{
-      BuildSourcePosition(std::get<Statement<EndIfStmt>>(x.t), Order::end)};
+  SourcePosition srcEnd{BuildSourcePosition(endIfStmt, Order::end)};
   builder.setSourcePosition(ifNode, srcBegin, srcEnd);
   builder.Leave(ifNode);
   trueBody->set_scope(SageBuilder::topScopeStack());
 
   PopulateBlock(*this, std::get<Block>(x.t), trueBody);
+  SourcePosition trueBodyEnd =
+      !elseIfBlocks.empty()
+          ? BuildSourcePosition(
+                std::get<Statement<ElseIfStmt>>(elseIfBlocks.front().t),
+                Order::begin)
+          : (optElse
+                 ? BuildSourcePosition(
+                       std::get<Statement<ElseStmt>>(optElse->t), Order::begin)
+                 : BuildSourcePosition(endIfStmt, Order::begin));
+  SetBlockSourceRange(trueBody, srcBegin, trueBodyEnd);
 
   SgIfStmt *currentIf = ifNode;
-  for (auto &elseIfBlock : std::get<std::list<IfConstruct::ElseIfBlock>>(x.t)) {
+  for (auto elseIfIter = elseIfBlocks.begin(); elseIfIter != elseIfBlocks.end();
+       ++elseIfIter) {
+    auto &elseIfBlock = *elseIfIter;
     auto &elseIfStmt = std::get<Statement<ElseIfStmt>>(elseIfBlock.t);
     SgExpression *elseIfCond = BuildScalarLogicalExpr(
         std::get<ScalarLogicalExpr>(elseIfStmt.statement.t));
@@ -4447,10 +4478,20 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
     currentIf->set_false_body(elseIfNode);
     elseIfNode->set_parent(currentIf);
     PopulateBlock(*this, std::get<Block>(elseIfBlock.t), elseIfBody);
+    SourcePosition elseIfBodyEnd =
+        std::next(elseIfIter) != elseIfBlocks.end()
+            ? BuildSourcePosition(
+                  std::get<Statement<ElseIfStmt>>(std::next(elseIfIter)->t),
+                  Order::begin)
+            : (optElse ? BuildSourcePosition(
+                             std::get<Statement<ElseStmt>>(optElse->t),
+                             Order::begin)
+                       : BuildSourcePosition(endIfStmt, Order::begin));
+    SetBlockSourceRange(elseIfBody, elseIfBegin, elseIfBodyEnd);
     currentIf = elseIfNode;
   }
 
-  if (auto &optElse = std::get<std::optional<IfConstruct::ElseBlock>>(x.t)) {
+  if (optElse) {
     SgBasicBlock *elseBody = SageBuilder::buildBasicBlock_nfi();
     ASSERT_not_null(elseBody);
     if (SageBuilder::topScopeStack()->isCaseInsensitive()) {
@@ -4459,7 +4500,10 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
     currentIf->set_false_body(elseBody);
     elseBody->set_parent(currentIf);
     elseBody->set_scope(SageBuilder::topScopeStack());
+    SourcePosition elseBegin{BuildSourcePosition(
+        std::get<Statement<ElseStmt>>(optElse->t), Order::begin)};
     PopulateBlock(*this, std::get<Block>(optElse->t), elseBody);
+    SetBlockSourceRange(elseBody, elseBegin, srcEnd);
   }
 }
 

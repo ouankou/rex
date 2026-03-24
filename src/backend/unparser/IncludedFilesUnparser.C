@@ -6,6 +6,8 @@
 
 #include "FileHelper.h"
 
+#include "IncludingPreprocessingInfosCollector.h"
+
 #include "IncludeDirective.h"
 
 #include "IncludedFilesUnparser.h"
@@ -126,6 +128,17 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
 
   // DQ (4/6/2020): Added assertion.
   ROSE_ASSERT(projectNode != NULL);
+
+  // The project's including-preprocessing-info map is derived data that can
+  // become stale after transformations (e.g. include directive deletion during
+  // outlining). Rebuild it from the current AST to avoid dangling
+  // PreprocessingInfo* pointers.
+  {
+    map<string, set<string>> emptyIncludedFilesMap;
+    IncludingPreprocessingInfosCollector collector(projectNode,
+                                                   emptyIncludedFilesMap);
+    projectNode->set_includingPreprocessingInfosMap(collector.collect());
+  }
 
 #define DEBUG_FIGURE_OUT 0
 

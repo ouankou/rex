@@ -1,5 +1,41 @@
 #include "sage3basic.h"
 
+namespace {
+SgType *resolveStoredCallType(SgType *type) {
+  if (type == NULL) {
+    return NULL;
+  }
+
+  auto returnFromFunctionLikeType = [](SgType *candidate) -> SgType * {
+    if (candidate == NULL) {
+      return NULL;
+    }
+    if (SgFunctionType *functionType = isSgFunctionType(candidate)) {
+      return functionType->get_return_type();
+    }
+    if (SgMemberFunctionType *memberFunctionType =
+            isSgMemberFunctionType(candidate)) {
+      return memberFunctionType->get_return_type();
+    }
+    return NULL;
+  };
+
+  if (SgType *returnType = returnFromFunctionLikeType(type)) {
+    return returnType;
+  }
+
+  SgType *strippedType = type->stripType(
+      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+      SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE |
+      SgType::STRIP_ARRAY_TYPE | SgType::STRIP_TYPEDEF_TYPE);
+  if (SgType *returnType = returnFromFunctionLikeType(strippedType)) {
+    return returnType;
+  }
+
+  return type;
+}
+} // namespace
+
 void SgCallExpression::post_construction_initialization() {
   if (p_function != NULL)
     p_function->set_parent(this);
@@ -64,6 +100,8 @@ int SgCallExpression::replace_expression(SgExpression *o, SgExpression *n) {
 }
 
 SgType *SgCallExpression::get_type() const {
-
-  return SageBuilder::buildVoidType(); // TODO this is wrong
+  if (SgType *storedType = resolveStoredCallType(p_expression_type)) {
+    return storedType;
+  }
+  return SageBuilder::buildVoidType();
 }

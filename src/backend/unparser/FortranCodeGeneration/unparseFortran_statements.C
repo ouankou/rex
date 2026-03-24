@@ -675,6 +675,19 @@ bool unparseDimensionStatementForArrayVariable(
   SgVariableDeclaration *variableDeclaration =
       isSgVariableDeclaration(variableName->get_parent());
 
+  auto hasExplicitlyUnparsedDeclaration =
+      [](SgVariableDeclaration *decl) -> bool {
+    if (decl == nullptr) {
+      return false;
+    }
+    constexpr const char *kFortranImplicitDeclAttr =
+        "rose_fortran_implicit_declaration";
+    constexpr const char *kFortranEmitImplicitDeclAttr =
+        "rose_fortran_emit_implicit_declaration";
+    return decl->getAttribute(kFortranImplicitDeclAttr) == nullptr ||
+           decl->getAttribute(kFortranEmitImplicitDeclAttr) != nullptr;
+  };
+
   // If there is a SgVariableDeclaration then it is simpler to look for it in
   // the scope, else we have to look at each variable declaration for the
   // SgInitializedName (which is only more expensive).
@@ -687,7 +700,9 @@ bool unparseDimensionStatementForArrayVariable(
       SgStatementPtrList statementList = basicBlock->get_statements();
       SgStatementPtrList::iterator i =
           find(statementList.begin(), statementList.end(), variableDeclaration);
-      foundArrayVariableDeclaration = (i != statementList.end());
+      foundArrayVariableDeclaration =
+          (i != statementList.end()) &&
+          hasExplicitlyUnparsedDeclaration(variableDeclaration);
       break;
     }
     case V_SgFunctionParameterScope: {
@@ -697,7 +712,9 @@ bool unparseDimensionStatementForArrayVariable(
           paramScope->getDeclarationList();
       SgDeclarationStatementPtrList::iterator i = find(
           declarationList.begin(), declarationList.end(), variableDeclaration);
-      foundArrayVariableDeclaration = (i != declarationList.end());
+      foundArrayVariableDeclaration =
+          (i != declarationList.end()) &&
+          hasExplicitlyUnparsedDeclaration(variableDeclaration);
       break;
     }
 
@@ -734,7 +751,9 @@ bool unparseDimensionStatementForArrayVariable(
             variableDeclaration->get_variables();
         SgInitializedNamePtrList::iterator i =
             find(variableList.begin(), variableList.end(), variableName);
-        foundArrayVariableDeclaration = (i != variableList.end());
+        foundArrayVariableDeclaration =
+            (i != variableList.end()) &&
+            hasExplicitlyUnparsedDeclaration(variableDeclaration);
       }
     } else {
       SgFunctionDefinition *functionDefinition =
@@ -754,7 +773,9 @@ bool unparseDimensionStatementForArrayVariable(
             SgInitializedNamePtrList::iterator i =
                 find(variableList.begin(), variableList.end(), variableName);
 
-            foundArrayVariableDeclaration = (i != variableList.end());
+            foundArrayVariableDeclaration =
+                (i != variableList.end()) &&
+                hasExplicitlyUnparsedDeclaration(variableDeclaration);
           }
 
           i++;
@@ -771,7 +792,9 @@ bool unparseDimensionStatementForArrayVariable(
               variableDeclaration->get_variables();
           SgInitializedNamePtrList::iterator i =
               find(variableList.begin(), variableList.end(), variableName);
-          foundArrayVariableDeclaration = (i != variableList.end());
+          foundArrayVariableDeclaration =
+              (i != variableList.end()) &&
+              hasExplicitlyUnparsedDeclaration(variableDeclaration);
         }
       } else {
         printf("Default reached, variableScope = %p = %s \n", variableScope,

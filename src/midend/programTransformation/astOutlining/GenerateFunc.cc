@@ -1693,12 +1693,19 @@ SgFunctionDeclaration *Outliner::generateFunction(
     // SageInterface::markSubtreeToBeUnparsedTreeTraversal(func_body,
     // source_file_physical_file_id); DQ (7/13/2021): Save the dynamic library
     // file so that we can reference it elsewhere.
-    ROSE_ASSERT(saved_source_file_for_dynamic_library != NULL);
-    string filename = saved_source_file_for_dynamic_library->getFileName();
+    SgSourceFile *target_source_file = saved_source_file_for_dynamic_library;
+    if (target_source_file == NULL) {
+      target_source_file = SageInterface::getEnclosingSourceFile(scope, true);
+    }
+    if (target_source_file == NULL) {
+      target_source_file =
+          SageInterface::getEnclosingSourceFile(func_body, true);
+    }
+    ROSE_ASSERT(target_source_file != NULL);
+    string filename = target_source_file->getFileName();
     printf("filename = %s \n", filename.c_str());
 
-    string output_filename =
-        saved_source_file_for_dynamic_library->get_unparse_output_filename();
+    string output_filename = target_source_file->get_unparse_output_filename();
     printf("output_filename = %s \n", output_filename.c_str());
 
     int source_file_physical_file_id =
